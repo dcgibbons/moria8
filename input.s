@@ -3,7 +3,7 @@
 // Uses KERNAL GETIN ($FFE4) to read keyboard buffer.
 // Maps PETSCII key codes to internal command IDs.
 // Supports vi-keys (HJKLYUBN) for 8-direction movement
-// and numeric prefix for repeat counts.
+// Numeric prefix for repeat counts deferred to Phase 6+.
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
 // via a lookup table. The KERNAL IRQ handler must remain active
@@ -52,7 +52,6 @@
 .const CMD_QUIT      = $22  // Quit without saving (Q)
 .const CMD_HELP      = $23  // Help (?)
 .const CMD_VERSION   = $24  // Version (V)
-.const CMD_REPEAT    = $25  // Numeric prefix (0-9)
 
 // Direction offsets: dx, dy for each movement command
 // Index = CMD_MOVE_x - CMD_MOVE_N

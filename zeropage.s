@@ -120,7 +120,7 @@
 // --- Turn / game state ($40–$4f) ---
 .label zp_turn_lo      = $40   // Turn counter (lo)
 .label zp_turn_hi      = $41   // Turn counter (hi)
-.label zp_turn_phase   = $42   // Current turn phase (0=player, 1=monsters, 2=effects)
+.label zp_spare_42     = $42   // Spare (was zp_turn_phase, removed in Phase 3)
 .label zp_game_flags   = $43   // Global flags (bit 0: game over, bit 1: wizard mode)
 .label zp_current_tier = $44   // Currently loaded creature/item tier pair
 .label zp_speed_tick   = $45   // Speed counter tick for monster AI
@@ -133,7 +133,7 @@
 .label zp_depth_feeling = $4c  // Level feeling index
 .label zp_mon_count    = $4d   // Active monster count (0–32)
 .label zp_item_count   = $4e   // Floor item count (0–32)
-.label zp_turn_state   = $4f   // Turn sequencer sub-state
+.label zp_spare_4f     = $4f   // Spare (was zp_turn_state, removed in Phase 3)
 
 // --- Status effect timers ($50–$5f) ---
 .label zp_eff_poison   = $50   // Poison timer (0 = not poisoned)

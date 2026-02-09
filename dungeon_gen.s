@@ -13,8 +13,8 @@
 // Flag bits (lower nibble):
 //   Bit 3 = LIT (tile is illuminated)
 //   Bit 2 = VISITED (player has seen this tile)
-//   Bit 1 = OCCUPIED (monster on tile)
-//   Bit 0 = HAS_ITEM (item on tile)
+//   Bit 1 = HAS_ITEM (item on tile)
+//   Bit 0 = OCCUPIED (monster on tile)
 
 // ============================================================
 // Constants
