@@ -165,6 +165,9 @@ key_map_petscii:
     .byte $3f   // ? — help
     // Special
     .byte $58   // X — look / examine
+    // Shifted keys (C64 unshifted mode: SHIFT+letter = PETSCII $C1-$DA)
+    .byte $c3   // SHIFT+C — character info
+    .byte $d1   // SHIFT+Q — quit
 
 key_map_cmd:
     // Movement
@@ -204,6 +207,9 @@ key_map_cmd:
     .byte CMD_HELP
     // Special
     .byte CMD_LOOK
+    // Shifted keys
+    .byte CMD_CHAR_INFO
+    .byte CMD_QUIT
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

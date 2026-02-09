@@ -202,3 +202,22 @@ turn_tick_hunger:
     sta zp_hunger_state
     // TODO: starvation damage (Phase 5)
     rts
+
+// turn_post_action — Run end-of-turn processing after a player action
+// Called by the main loop after any action that consumes a turn.
+// Runs effect timers, hunger tick, increments turn counter, marks status dirty.
+// Preserves: nothing
+turn_post_action:
+    jsr turn_tick_effects
+    jsr turn_tick_hunger
+
+    // Increment turn counter
+    inc zp_turn_lo
+    bne !no_hi+
+    inc zp_turn_hi
+!no_hi:
+
+    // Mark status bar as dirty so it redraws
+    jsr status_mark_dirty
+
+    rts

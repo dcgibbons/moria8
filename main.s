@@ -33,8 +33,12 @@
 #import "ui_status.s"
 #import "ui_character.s"
 #import "player_create.s"
-#import "turn.s"
 #import "sound.s"
+#import "dungeon_gen.s"
+#import "dungeon_render.s"
+#import "dungeon_los.s"
+#import "player_move.s"
+#import "turn.s"
 
 // ============================================================
 // Entry point
@@ -116,35 +120,96 @@ entry:
     // --- Character creation ---
     jsr player_create
 
-    // --- Main game loop ---
-    // After character creation, show status bar and wait for commands.
-    // Full dungeon loop starts in Phase 3.
+    // --- Main game loop (Phase 3: Town level) ---
+    // Generate the town map
+    jsr town_generate
+
+    // Clear screen and do initial render
     jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
 
-    // Show instructions on message line
-    lda #<ready_str
+    // Welcome message
+    lda #<welcome_str
     sta zp_ptr0
-    lda #>ready_str
+    lda #>welcome_str
     sta zp_ptr0_hi
     jsr msg_print
 
 !main_loop:
-    jsr input_get_key
-    cmp #$51                // 'Q' in PETSCII — quit
+    jsr input_get_command
+
+    // --- Dispatch command ---
+
+    // Quit?
+    cmp #CMD_QUIT
     beq !quit+
-    cmp #$43                // 'C' in PETSCII — character sheet
+
+    // Character info?
+    cmp #CMD_CHAR_INFO
     bne !not_char+
     jsr ui_char_display
     jsr input_get_key
+    // Redraw map on return
     jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
-    lda #<ready_str
+    jmp !main_loop-
+!not_char:
+
+    // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
+    cmp #CMD_MOVE_N
+    bcc !not_move+
+    cmp #CMD_MOVE_SE + 1
+    bcs !not_move+
+    // Try to move
+    jsr player_try_move
+    bcc !move_blocked+
+    // Move succeeded — update display
+    jsr msg_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+!move_blocked:
+    // Bump sound already played by player_try_move
+    jmp !main_loop-
+!not_move:
+
+    // Stairs down?
+    cmp #CMD_STAIRS_DN
+    bne !not_stairs+
+    jsr check_stairs_at_player
+    cmp #9                  // Stairs down type
+    bne !no_stairs_here+
+    lda #<stairs_str
     sta zp_ptr0
-    lda #>ready_str
+    lda #>stairs_str
     sta zp_ptr0_hi
     jsr msg_print
-!not_char:
+    jmp !main_loop-
+!no_stairs_here:
+    lda #<no_stairs_str
+    sta zp_ptr0
+    lda #>no_stairs_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !main_loop-
+!not_stairs:
+
+    // Rest?
+    cmp #CMD_REST
+    bne !not_rest+
+    jsr msg_clear
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+!not_rest:
+
+    // Unknown command — ignore
     jmp !main_loop-
 !quit:
 
@@ -188,5 +253,11 @@ title_str:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-ready_str:
-    .text "READY. PRESS Q TO QUIT." ; .byte 0
+welcome_str:
+    .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0
+
+stairs_str:
+    .text "THE STAIRS LEAD DOWN INTO DARKNESS..." ; .byte 0
+
+no_stairs_str:
+    .text "YOU SEE NO STAIRS HERE." ; .byte 0
