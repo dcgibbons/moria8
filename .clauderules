@@ -1,0 +1,20 @@
+* Use canonical 6502 assembly conventions for the Kick Assembly
+
+* Keep source files small and targetted to specific functionality
+
+* Leverage the C64/C128 KERNAL routines, but do not use any of the BASIC
+  routines once the main program runs
+
+* Because we are not using BASIC after the initial loader, the assembly program
+  can freely use any of the zero page space dedicated to BASIC as needed, but
+  the program should be able to exit cleanly and return to BASIC if possible
+
+* Leverage the KickAss.Unit unit testing framework and always add unit testing
+  for every feature
+
+* Use vice --console for any automated testing as needde
+
+* Always refer to ARCHITECTURE.md for overall design and architecutre.
+
+* Always refer to README.md for overall program feature set and goal.
+
