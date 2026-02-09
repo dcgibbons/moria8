@@ -2,7 +2,7 @@
 //
 // 1. Race selection
 // 2. Class selection (filtered by race)
-// 3. Stat rolling (3d6 + race + class modifiers, re-roll option)
+// 3. Stat rolling (6d3 + race + class modifiers, re-roll option)
 // 4. Name entry (max 16 chars, uppercase only)
 // 5. Initialize starting HP, mana, gold, food, position
 
@@ -268,21 +268,21 @@ create_roll_stats:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Roll 3d6 for each base stat
+    // Roll 6d3 for each base stat (umoria formula)
     ldx #0
 !roll_loop:
     txa
     pha
 
-    // Roll 3d6
-    lda #3                  // 3 dice
-    ldx #6                  // 6 sides
+    // Roll 6d3 (matches umoria: range 6–18, mean 12)
+    lda #6                  // 6 dice
+    ldx #3                  // 3 sides
     ldy #0                  // +0 bonus
     jsr math_dice
     // Result in zp_math_a (we only need lo byte, max 18)
     lda zp_math_a
 
-    // Clamp to 3–18
+    // Clamp to 3–18 (6d3 naturally stays in 6–18, but clamp defensively)
     cmp #3
     bcs !min_ok+
     lda #3
