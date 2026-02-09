@@ -15,6 +15,10 @@
 // ============================================================
 .pc = $080e "Program"
 
+// All .text directives produce screen codes (not PETSCII) since
+// all output uses direct screen RAM writes at $0400+.
+.encoding "screencode_upper"
+
 #import "zeropage.s"
 #import "memory.s"
 #import "screen.s"
@@ -175,38 +179,14 @@ exit:
     rts
 
 // ============================================================
-// String data (screen codes, null-terminated)
+// String data (screen codes via .encoding "screencode_upper")
 // ============================================================
 
-// Screen code conversion: A=01, B=02, ... Z=1A, space=20,
-// 0=30, 1=31, etc. Punctuation in $20-$3F range same as PETSCII.
-
 title_str:
-    // "MORIA C=64"
-    .byte $0d, $0f, $12, $09, $01   // MORIA
-    .byte $20                       // space
-    .byte $03, $3d, $36, $34        // C=64
-    .byte $00                       // null terminator
+    .text "MORIA C=64" ; .byte 0
 
 press_key_str:
-    // "PRESS ANY KEY"
-    .byte $10, $12, $05, $13, $13   // PRESS
-    .byte $20                       // space
-    .byte $01, $0e, $19             // ANY
-    .byte $20                       // space
-    .byte $0b, $05, $19             // KEY
-    .byte $00
+    .text "PRESS ANY KEY" ; .byte 0
 
 ready_str:
-    // "READY. PRESS Q TO QUIT."
-    .byte $12, $05, $01, $04, $19   // READY
-    .byte $2e, $20                  // . (space)
-    .byte $10, $12, $05, $13, $13   // PRESS
-    .byte $20                       // space
-    .byte $11                       // Q
-    .byte $20                       // space
-    .byte $14, $0f                  // TO
-    .byte $20                       // space
-    .byte $11, $15, $09, $14        // QUIT
-    .byte $2e                       // .
-    .byte $00
+    .text "READY. PRESS Q TO QUIT." ; .byte 0

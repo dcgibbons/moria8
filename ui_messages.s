@@ -179,9 +179,4 @@ msg_save_history:
 // String data
 // ============================================================
 more_str:
-    // " -MORE-" in screen codes
-    .byte $20               // space
-    .byte $2d               // -
-    .byte $0d, $0f, $12, $05 // MORE
-    .byte $2d               // -
-    .byte $00
+    .text " -MORE-" ; .byte 0
