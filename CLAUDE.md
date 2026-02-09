@@ -9,7 +9,7 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 ## Build and Test
 
 - **Assembler:** Kick Assembler suite of tools
-- **Testing:** KickAss.Unit framework; use `vice --console` for automated testing via VICE emulator
+- **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests (`x64sc -console -nativemonitor`)
 - **Entry point:** `main.s`
 
 ## Architecture
@@ -23,4 +23,4 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 ## Coding Conventions
 
 - Use canonical 6502 assembly conventions for Kick Assembler
-- Every feature must have unit tests (KickAss.Unit)
+- Every feature must have unit tests (`.assert` for compile-time, VICE headless for runtime)
