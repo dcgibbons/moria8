@@ -23,6 +23,12 @@
 #import "input.s"
 #import "rng.s"
 #import "math.s"
+#import "tables.s"
+#import "player.s"
+#import "ui_messages.s"
+#import "ui_status.s"
+#import "ui_character.s"
+#import "player_create.s"
 #import "turn.s"
 #import "sound.s"
 
@@ -96,32 +102,47 @@ entry:
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
 
-    // Play bump sound as acknowledgment
+    // Play sound as acknowledgment
     lda #SFX_PICKUP
     jsr sound_play
 
-    // --- Placeholder main loop ---
-    // Phase 1 deliverable: just show we can boot, display, input, exit.
-    // Real game loop starts in Phase 3.
+    // Initialize message system
+    jsr msg_init
 
+    // --- Character creation ---
+    jsr player_create
+
+    // --- Main game loop ---
+    // After character creation, show status bar and wait for commands.
+    // Full dungeon loop starts in Phase 3.
     jsr screen_clear
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #0
-    sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
+    jsr status_draw
+
+    // Show instructions on message line
     lda #<ready_str
     sta zp_ptr0
     lda #>ready_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr msg_print
 
-    // Wait for 'Q' to quit
 !main_loop:
     jsr input_get_key
-    cmp #$51                // 'Q' in PETSCII
-    bne !main_loop-
+    cmp #$51                // 'Q' in PETSCII — quit
+    beq !quit+
+    cmp #$43                // 'C' in PETSCII — character sheet
+    bne !not_char+
+    jsr ui_char_display
+    jsr input_get_key
+    jsr screen_clear
+    jsr status_draw
+    lda #<ready_str
+    sta zp_ptr0
+    lda #>ready_str
+    sta zp_ptr0_hi
+    jsr msg_print
+!not_char:
+    jmp !main_loop-
+!quit:
 
     // --- Clean exit to BASIC ---
 exit:

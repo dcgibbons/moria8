@@ -19,11 +19,7 @@
 .const TURN_REGEN    = 3
 .const TURN_HUNGER   = 4
 
-// Hunger thresholds
-.const HUNGER_FULL      = 0
-.const HUNGER_HUNGRY    = 1
-.const HUNGER_WEAK      = 2
-.const HUNGER_FAINT     = 3
+// Hunger thresholds (constants defined in tables.s)
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
 .const FOOD_WEAK_AT     = 50    // Below this = weak
 .const FOOD_FAINT_AT    = 10    // Below this = faint
