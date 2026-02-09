@@ -75,8 +75,9 @@ math_div_16x8:
 math_dice:
     sta zp_math_tmp0        // N = dice count
     stx zp_math_tmp1        // S = sides
-    // Store bonus for later
-    sty zp_temp4
+    // Save bonus on stack (zp_temp4 is clobbered by rng_range)
+    tya
+    pha
     // Initialize result to 0
     lda #0
     sta zp_math_a
@@ -97,8 +98,8 @@ math_dice:
     dec zp_math_tmp0        // --N
     bne !roll-
 
-    // Add signed bonus
-    lda zp_temp4            // Bonus
+    // Add signed bonus (saved on stack, safe from rng_range)
+    pla                     // Bonus
     bpl !pos_bonus+
     // Negative bonus
     clc

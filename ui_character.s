@@ -22,10 +22,9 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
-    jsr screen_clear
-
     lda #COL_WHITE
     sta zp_text_color
+    jsr screen_clear            // Clear with white color RAM
 
     // Title
     lda #0
@@ -293,14 +292,19 @@ ui_char_draw_stats:
     lda #$3a
     jsr screen_put_char
 
-    // Print stat value
+    // Print stat value (right-justified, 18/xx aware)
     pla                     // Restore stat index
     pha
     tax
     lda #COL_WHITE
     sta zp_text_color
     lda player_data + PL_STR_CUR,x
-    jsr screen_put_decimal
+    ldy #0                  // No exceptional by default
+    cpx #0                  // STR?
+    bne !no_extra+
+    ldy player_data + PL_STR_EXTRA
+!no_extra:
+    jsr put_stat_val
 
     pla
     tax

@@ -65,8 +65,10 @@
 .const PL_SPELL_TYPE = 60  // Spell type (0=none, 1=mage, 2=priest)
 .const PL_SPELLS_KNOWN = 61 // Bitmask of spells learned (16 bits)
 .const PL_SPELLS_KNOWN_HI = 62
+// Exceptional STR (0 = none, 1–100 = percentage; 100 displayed as "18/00")
+.const PL_STR_EXTRA = 63
 // Reserved
-.const PL_RESERVED  = 63   // Start of reserved area
+.const PL_RESERVED  = 64   // Start of reserved area
 .const PL_STRUCT_SIZE = 80  // Total struct size (with padding)
 
 // Player flags
@@ -216,15 +218,16 @@ player_calc_stats:
     adc class_stat_adj,x    // Add class modifier (signed)
     ldx zp_temp2            // Restore race index
 
-    // Clamp to 3–18
+    // Clamp to 3–18 (handle signed underflow: negative wraps to 128+)
+    bmi !clamp_low+         // Bit 7 set = negative result → clamp to 3
     cmp #3
-    bcs !check_max+
-    lda #3
-    jmp !store+
-!check_max:
+    bcc !clamp_low+         // Below 3 → clamp to 3
     cmp #19
-    bcc !store+
-    lda #18
+    bcc !store+             // 3–18 → keep
+    lda #18                 // Above 18 → clamp to 18
+    jmp !store+
+!clamp_low:
+    lda #3
 !store:
     sta player_data + PL_STR_CUR,y
 
@@ -268,13 +271,20 @@ player_calc_combat:
     lda str_damage_bonus,x
     sta player_data + PL_TODMG
 
-    // DEX AC bonus
+    // DEX AC bonus (signed: negative means worse AC)
+    // AC starts at 0, DEX adds/subtracts. Clamp to min 0.
     lda player_data + PL_DEX_CUR
     sec
     sbc #3
     tax
     lda dex_ac_bonus,x
-    sta player_data + PL_AC  // Base AC from DEX (equipment adds later)
+    bmi !ac_zero+           // Negative bonus → AC stays 0
+    sta player_data + PL_AC
+    jmp !ac_done+
+!ac_zero:
+    lda #0
+    sta player_data + PL_AC
+!ac_done:
 
     // Blows: simplified lookup
     // Weight class based on STR (higher STR = lighter effective weight)

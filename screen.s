@@ -143,9 +143,13 @@ screen_set_cursor:
 // Output: cursor advances right by 1
 // Preserves: X
 screen_put_char:
-    pha
-    jsr screen_set_cursor
+    pha                     // Save char
+    txa
+    pha                     // Save X
+    jsr screen_set_cursor   // Clobbers X (ldx zp_cursor_row)
     pla
+    tax                     // Restore X
+    pla                     // Restore char
     ldy #0
     sta (zp_screen_lo),y
     lda zp_text_color
@@ -331,6 +335,32 @@ screen_put_decimal:
     ora #$30
     jmp screen_put_char     // Tail call — always print ones digit
 
+// screen_put_decimal_rj2 — Print 8-bit value right-justified in 2-char field
+// If value < 10, prints a leading space first.
+// Input:  A = value (0–255)
+// Preserves: nothing
+screen_put_decimal_rj2:
+    cmp #10
+    bcs screen_put_decimal      // 2+ digits, print normally
+    pha
+    lda #$20                    // Leading space
+    jsr screen_put_char
+    pla
+    jmp screen_put_decimal
+
+// screen_put_decimal_lz2 — Print 8-bit value with leading zero in 2-char field
+// If value < 10, prints a leading '0' first.
+// Input:  A = value (0–99)
+// Preserves: nothing
+screen_put_decimal_lz2:
+    cmp #10
+    bcs screen_put_decimal
+    pha
+    lda #$30                    // Leading zero
+    jsr screen_put_char
+    pla
+    jmp screen_put_decimal
+
 // screen_put_decimal_16 — Write a 16-bit value as decimal at cursor
 // Input:  zp_temp0 = lo byte, zp_temp1 = hi byte
 //         zp_cursor_row, zp_cursor_col = position
@@ -362,17 +392,11 @@ screen_put_decimal_16:
     lda zp_temp2
     beq !next_digit+        // Still leading zeros, skip
 !print_digit:
-    lda zp_temp3
-    ora #$30
-    pha
-    txa
-    pha
     lda #1
     sta zp_temp2            // No more leading zeros
-    pla
-    tax
-    pla
-    jsr screen_put_char
+    lda zp_temp3
+    ora #$30                // Digit → screen code
+    jsr screen_put_char     // X preserved by screen_put_char
 !next_digit:
     dex
     bne !digit_loop-

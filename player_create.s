@@ -23,8 +23,8 @@ player_create:
     jsr player_init
 
     jsr create_select_race
-    jsr create_select_class
     jsr create_roll_stats
+    jsr create_select_class
     jsr create_enter_name
     jsr create_init_character
 
@@ -147,12 +147,15 @@ create_select_class:
     sta zp_temp2            // Allowed class bitmask
 
     // List allowed classes
-    ldx #0                  // Class index
-    ldy #0                  // Display row counter
+    // Use ZP variables instead of X/Y — screen routines clobber both
+    lda #0
+    sta zp_temp3            // Class index (0..CLASS_COUNT-1)
+    sta zp_temp4            // Display row counter / valid class count
+
 !class_loop:
     // Check if this class is allowed
+    ldx zp_temp3
     lda #1
-    stx zp_temp3            // Save class index
 !shift:
     cpx #0
     beq !check+
@@ -160,26 +163,26 @@ create_select_class:
     dex
     jmp !shift-
 !check:
-    ldx zp_temp3            // Restore class index
     and zp_temp2            // Test bit
     beq !class_next+        // Not allowed, skip
 
     // Display this class
-    tya
+    lda zp_temp4
     clc
     adc #2                  // Row = display_row + 2
     sta zp_cursor_row
     lda #3
     sta zp_cursor_col
 
-    // Store mapping: display row Y → class index X
-    txa
-    sta create_class_map,y  // Save class index for this display position
+    // Store mapping: display position → class index
+    ldx zp_temp4
+    lda zp_temp3
+    sta create_class_map,x
 
     // Letter
     lda #COL_LGREY
     sta zp_text_color
-    tya
+    lda zp_temp4
     clc
     adc #$01                // A, B, C...
     jsr screen_put_char
@@ -191,26 +194,26 @@ create_select_class:
     // Class name
     lda #COL_WHITE
     sta zp_text_color
+    ldx zp_temp3
     lda class_name_ptrs_lo,x
     sta zp_ptr0
     lda class_name_ptrs_hi,x
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    iny                     // Next display row
+    inc zp_temp4            // Next display row
 
 !class_next:
-    inx
-    cpx #CLASS_COUNT
+    inc zp_temp3
+    lda zp_temp3
+    cmp #CLASS_COUNT
     bcc !class_loop-
 
-    // Y = number of valid classes displayed
-    sty zp_temp3            // Save count
-
+    // zp_temp4 = number of valid classes displayed
     // Prompt
     lda #COL_LGREY
     sta zp_text_color
-    tya
+    lda zp_temp4
     clc
     adc #3
     sta zp_cursor_row
@@ -228,7 +231,7 @@ create_select_class:
     sec
     sbc #$41                // Convert to index
     bmi !class_key-
-    cmp zp_temp3            // Compare to count of displayed classes
+    cmp zp_temp4            // Compare to count of displayed classes
     bcs !class_key-
 
     // Look up actual class index from display map
@@ -283,11 +286,36 @@ create_roll_stats:
     bcc !max_ok+
     lda #18
 !max_ok:
+    sta zp_temp4            // Save rolled value (pla would destroy A)
     pla
     tax
     pha
+    lda zp_temp4            // Restore rolled value
     // Store as base stat
     sta player_data + PL_STR_BASE,x
+
+    // Roll exceptional STR if base STR = 18
+    cpx #0                  // STR stat?
+    bne !display_stat+      // Not STR → skip exceptional handling
+    cmp #18                 // Rolled 18?
+    bne !no_exceptional+
+    // Roll 1d100 for exceptional
+    lda #1
+    ldx #100
+    ldy #0
+    jsr math_dice           // Result in zp_math_a (1–100)
+    lda zp_math_a
+    sta player_data + PL_STR_EXTRA
+    jmp !display_stat+
+!no_exceptional:
+    lda #0
+    sta player_data + PL_STR_EXTRA
+
+!display_stat:
+    // Restore stat_index (may have been clobbered by math_dice)
+    pla
+    tax
+    pha
 
     // Display: row = stat_index + 2, col 3
     txa
@@ -306,20 +334,23 @@ create_roll_stats:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // ": "
+    // ":"
     lda #$3a
     jsr screen_put_char
-    lda #$20
-    jsr screen_put_char
 
-    // Base value
+    // Base value (right-justified, 18/xx aware)
     lda #COL_WHITE
     sta zp_text_color
     pla
     tax
     pha
     lda player_data + PL_STR_BASE,x
-    jsr screen_put_decimal
+    ldy #0                  // No exceptional by default
+    cpx #0                  // STR?
+    bne !base_disp+
+    ldy player_data + PL_STR_EXTRA
+!base_disp:
+    jsr put_stat_val
 
     // Show modified value: base + race + class adjustments
     pla
@@ -336,8 +367,19 @@ create_roll_stats:
 
     lda #COL_CYAN
     sta zp_text_color
+    pla
+    tax
+    pha
+    ldy #0
+    cpx #0                  // STR?
+    bne !mod_disp+
     lda zp_temp4
-    jsr screen_put_decimal
+    cmp #18                 // Modified = 18?
+    bne !mod_disp+
+    ldy player_data + PL_STR_EXTRA
+!mod_disp:
+    lda zp_temp4
+    jsr put_stat_val
 
     lda #COL_LGREY
     sta zp_text_color
@@ -348,7 +390,9 @@ create_roll_stats:
     tax
     inx
     cpx #STAT_COUNT
-    bcc !roll_loop-
+    bcs !roll_done+
+    jmp !roll_loop-
+!roll_done:
 
     // Calculate final stats for display
     jsr player_calc_stats
@@ -376,89 +420,42 @@ create_roll_stats:
     bne !stat_key-
     rts
 
-// create_calc_modified_stat — Calculate stat with race+class modifiers
+// create_calc_modified_stat — Calculate stat with race modifiers only
+// Called during stat rolling (before class selection).
 // Input: X = stat index (0–5)
 // Output: A = modified stat (clamped 3–18)
 // Preserves: X
 create_calc_modified_stat:
-    // Get base stat
-    lda player_data + PL_STR_BASE,x
+    stx zp_temp3            // Save stat index
 
-    // Add race modifier
-    stx zp_temp3
-    // Race offset = race * 6 + stat_index
+    // Race adj offset = race * 6 + stat_index
     lda player_data + PL_RACE
     asl
     sta zp_temp0
     asl
     clc
-    adc zp_temp0            // x6
+    adc zp_temp0            // race * 6
     clc
-    adc zp_temp3            // + stat index
+    adc zp_temp3            // + stat_index
     tay
-    lda player_data + PL_STR_BASE,x   // Re-read base
-    clc
-    adc race_stat_adj,y     // + race modifier (signed)
 
-    // Add class modifier
-    lda player_data + PL_CLASS
-    asl
-    sta zp_temp0
-    asl
-    clc
-    adc zp_temp0            // class * 6
-    clc
-    adc zp_temp3            // + stat index
-    tay
-    ldx zp_temp3            // Restore X
-    lda player_data + PL_STR_BASE,x
-    clc
-    adc race_stat_adj + 0   // Oops, wrong — need to accumulate properly
-
-    // Let me redo this correctly
+    // Base + race modifier
     ldx zp_temp3
-    lda player_data + PL_STR_BASE,x
-
-    // Race adj offset
-    stx zp_temp0
-    lda player_data + PL_RACE
-    asl
-    sta zp_temp1
-    asl
-    clc
-    adc zp_temp1            // race * 6
-    clc
-    adc zp_temp0            // + stat_index
-    tay
-    ldx zp_temp0
     lda player_data + PL_STR_BASE,x
     clc
     adc race_stat_adj,y
 
-    // Class adj offset
-    pha
-    lda player_data + PL_CLASS
-    asl
-    sta zp_temp1
-    asl
-    clc
-    adc zp_temp1            // class * 6
-    clc
-    adc zp_temp0            // + stat_index
-    tay
-    pla
-    clc
-    adc class_stat_adj,y
-
-    // Clamp 3–18
+    // Clamp 3–18 (handle signed underflow: negative wraps to 128+)
+    bmi !clow+              // Bit 7 set = went negative
     cmp #3
-    bcs !cmin+
-    lda #3
-!cmin:
+    bcc !clow+
     cmp #19
-    bcc !cmax+
+    bcc !cdone+
     lda #18
-!cmax:
+    jmp !cdone+
+!clow:
+    lda #3
+!cdone:
     ldx zp_temp3            // Restore X
     rts
 
@@ -666,6 +663,33 @@ create_init_character:
     jsr player_sync_to_zp
 
     rts
+
+// put_stat_val — Display a stat value, handling 18/xx exceptional STR
+// Input:  A = stat value (3–18)
+//         Y = exceptional (0 = none, 1–100 = exceptional percentage)
+// If A=18 and Y>0: prints "18/XX" (5 chars)
+// Otherwise: prints value right-justified in 2 chars
+// Preserves: nothing
+put_stat_val:
+    cpy #0
+    beq !rj+                // No exceptional → right-justified normal
+    cmp #18
+    bne !rj+                // Not 18 → right-justified normal
+    // 18/xx format: A=18, Y=exceptional
+    tya
+    pha                     // Save exceptional on stack
+    lda #18
+    jsr screen_put_decimal  // Print "18"
+    lda #$2f                // '/'
+    jsr screen_put_char
+    pla                     // A = exceptional value
+    cmp #100
+    bne !not_100+
+    lda #0                  // 18/100 → display as "00"
+!not_100:
+    jmp screen_put_decimal_lz2  // Print with leading zero
+!rj:
+    jmp screen_put_decimal_rj2  // Right-justified in 2 chars
 
 // ============================================================
 // String data (screen codes)

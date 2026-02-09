@@ -147,9 +147,9 @@ sfx_miss:
 
 // Pickup: bright rising triangle
 sfx_pickup:
-    lda #$06                // Attack=0, Decay=6
+    lda #$0a                // Attack=0, Decay=10 (longer decay, no sustain)
     sta SID_V3_AD
-    lda #$50                // Sustain=5, Release=0
+    lda #$00                // Sustain=0, Release=0
     sta SID_V3_SR
     lda #$00
     sta SID_V3_FREQ_LO
@@ -175,9 +175,9 @@ sfx_death:
 
 // Level up: bright pulse chord
 sfx_levelup:
-    lda #$09                // Attack=0, Decay=9
+    lda #$0c                // Attack=0, Decay=12 (longer decay, no sustain)
     sta SID_V3_AD
-    lda #$a0                // Sustain=10, Release=0
+    lda #$00                // Sustain=0, Release=0
     sta SID_V3_SR
     lda #$00                // Pulse width 50%
     sta SID_V3_PW_LO
