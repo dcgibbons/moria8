@@ -80,22 +80,16 @@ input_get_key:
 input_get_command:
     lda #1
     sta zp_input_count      // Default repeat count = 1
+    // TODO: Numeric prefix (repeat count) deferred to Phase 6+.
+    // Requires: save PETSCII before conversion, accumulate digits,
+    // multiply count, then parse the actual command key.
 
-    // Check for numeric prefix
 !get_key:
     jsr input_get_key
     jsr petscii_to_command
-    cmp #CMD_REPEAT
-    bne !done+
+    cmp #CMD_NONE
+    beq !get_key-           // Unknown key, try again
 
-    // Accumulate numeric prefix
-    jsr input_get_key       // Get the original PETSCII back
-    // Actually, we need the digit value. Re-read the original key.
-    // Simpler approach: store PETSCII before conversion
-    jmp !get_key-           // For now, just get next key
-    // TODO: implement multi-digit prefix in Phase 3
-
-!done:
     sta zp_input_cmd
     rts
 

@@ -1,25 +1,14 @@
-// turn.s — Game turn sequencer
+// turn.s — Turn processing routines
 //
-// The game's heartbeat. Each call to turn_execute runs one full game turn:
-//   1. Player action (get input, execute command)
-//   2. Monster AI (for each active monster, check speed, run AI)
-//   3. Status effect timer tick (decrement timers, apply effects)
-//   4. Regeneration tick (HP/mana recovery based on CON/level)
-//   5. Hunger tick (decrement food counter)
-//   6. Increment turn counter
+// The main loop (main.s) dispatches player commands directly and calls
+// turn_post_action after each action that consumes a turn. This module
+// provides the post-action processing: effect timers, hunger, turn
+// counter, and status dirty flag.
 //
-// Phase 1 implements the skeleton: steps 1, 3, 5, 6.
-// Monster AI (step 2) is added in Phase 5.
-// Regeneration (step 4) is added in Phase 5.
+// Monster AI (Phase 5) will be called from turn_post_action.
+// Regeneration (Phase 5) will be added to turn_post_action.
 
-// Turn phases (stored in zp_turn_phase)
-.const TURN_PLAYER   = 0
-.const TURN_MONSTERS = 1
-.const TURN_EFFECTS  = 2
-.const TURN_REGEN    = 3
-.const TURN_HUNGER   = 4
-
-// Hunger thresholds (constants defined in tables.s)
+// Hunger thresholds
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
 .const FOOD_WEAK_AT     = 50    // Below this = weak
 .const FOOD_FAINT_AT    = 10    // Below this = faint
@@ -27,46 +16,6 @@
 // ============================================================
 // Subroutines
 // ============================================================
-
-// turn_execute — Run one full game turn
-// Preserves: nothing
-turn_execute:
-    // --- Phase 0: Player action ---
-    lda #TURN_PLAYER
-    sta zp_turn_phase
-
-    jsr input_get_command   // Get player's command
-    // TODO: dispatch command to appropriate handler (Phase 3+)
-    // For now, just accept the input and continue
-
-    // --- Phase 1: Monster AI ---
-    lda #TURN_MONSTERS
-    sta zp_turn_phase
-    // TODO: Phase 5 — iterate active monster table, run AI
-    // jsr monsters_take_turns
-
-    // --- Phase 2: Status effects ---
-    lda #TURN_EFFECTS
-    sta zp_turn_phase
-    jsr turn_tick_effects
-
-    // --- Phase 3: Regeneration ---
-    lda #TURN_REGEN
-    sta zp_turn_phase
-    // TODO: Phase 5 — HP/mana regeneration
-    // jsr turn_tick_regen
-
-    // --- Phase 4: Hunger ---
-    lda #TURN_HUNGER
-    sta zp_turn_phase
-    jsr turn_tick_hunger
-
-    // --- Increment turn counter ---
-    inc zp_turn_lo
-    bne !done+
-    inc zp_turn_hi
-!done:
-    rts
 
 // turn_tick_effects — Decrement all active status effect timers
 // Any timer that reaches 0 triggers removal of that effect.

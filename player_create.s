@@ -7,8 +7,8 @@
 // 5. Initialize starting HP, mana, gold, food, position
 
 // Starting values
-.const START_FOOD_LO  = $c8  // 200 turns of food (lo)
-.const START_FOOD_HI  = $00  // (hi)
+.const START_FOOD_LO  = <2000  // 2000 turns of food (lo = $D0)
+.const START_FOOD_HI  = >2000  // (hi = $07)
 .const START_GOLD     = 200  // Starting gold pieces
 .const START_LIGHT    = 1    // Starting light radius (torch)
 
@@ -98,7 +98,7 @@ create_select_race:
     cpx #RACE_COUNT
     bcc !race_loop-
 
-    // Prompt
+    // Prompt: "CHOOSE (A-H)"
     lda #COL_LGREY
     sta zp_text_color
     lda #12
@@ -110,6 +110,9 @@ create_select_race:
     lda #>create_choose_str
     sta zp_ptr0_hi
     jsr screen_put_string
+    // Append final letter and closing paren
+    lda #RACE_COUNT         // 8 options → last letter = 'H'
+    jsr put_choose_suffix
 
     // Wait for valid key (A-H = PETSCII $41-$48)
 !race_key:
@@ -210,7 +213,7 @@ create_select_class:
     bcc !class_loop-
 
     // zp_temp4 = number of valid classes displayed
-    // Prompt
+    // Prompt: "CHOOSE (A-X)" where X = last valid letter
     lda #COL_LGREY
     sta zp_text_color
     lda zp_temp4
@@ -224,6 +227,8 @@ create_select_class:
     lda #>create_choose_str
     sta zp_ptr0_hi
     jsr screen_put_string
+    lda zp_temp4            // Number of valid classes
+    jsr put_choose_suffix
 
     // Wait for valid key
 !class_key:
@@ -649,11 +654,7 @@ create_init_character:
     lda #START_LIGHT
     sta player_data + PL_LIGHT_RAD
 
-    // Starting position (town center, set properly in Phase 3)
-    lda #20
-    sta player_data + PL_MAP_X
-    lda #12
-    sta player_data + PL_MAP_Y
+    // Starting position is set by town_generate (called after player_create)
 
     // Flags: male by default
     lda #PLF_MALE
@@ -690,6 +691,21 @@ put_stat_val:
     jmp screen_put_decimal_lz2  // Print with leading zero
 !rj:
     jmp screen_put_decimal_rj2  // Right-justified in 2 chars
+
+// put_choose_suffix — Append final letter and ")" to "CHOOSE (A-" prompt
+// Input: A = count of options (e.g., 8 → prints "H)")
+// Cursor must be positioned after the "A-" part of the string.
+// Preserves: nothing
+put_choose_suffix:
+    // Convert count to last letter screen code: count-1 + $01 (A=$01)
+    sec
+    sbc #1
+    clc
+    adc #$01                // A=$01, B=$02, ..., H=$08
+    jsr screen_put_char
+    lda #$29                // ')'
+    jsr screen_put_char
+    rts
 
 // ============================================================
 // String data (screen codes)

@@ -206,16 +206,20 @@ player_calc_stats:
     sta zp_temp1  // zp_temp1 = class * 6
 
     // Process each stat
+    // NOTE: Both race and class modifiers are summed before clamping.
+    // No intermediate clamp occurs — the single clamp at the end handles
+    // the full range correctly (values are small enough to avoid 8-bit wrap
+    // issues: base 3-18, modifiers -6 to +5, so sum range is -8 to 28).
     ldy #0      // Stat index
 !stat_loop:
-    // Start with base stat
+    // Start with base stat, add race + class modifiers, then clamp once
     lda player_data + PL_STR_BASE,y
     clc
-    adc race_stat_adj,x     // Add race modifier (signed)
+    adc race_stat_adj,x     // + race modifier (signed)
     clc
     stx zp_temp2            // Save race index
     ldx zp_temp1
-    adc class_stat_adj,x    // Add class modifier (signed)
+    adc class_stat_adj,x    // + class modifier (signed)
     ldx zp_temp2            // Restore race index
 
     // Clamp to 3–18 (handle signed underflow: negative wraps to 128+)

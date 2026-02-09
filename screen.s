@@ -76,41 +76,39 @@ color_row_hi:
 // ============================================================
 
 // screen_clear — Clear entire screen (spaces) and color RAM (current color)
+// Screen RAM = 1000 bytes = 3 full pages (768) + 232 bytes ($E8)
 // Preserves: nothing
 screen_clear:
+    // Fill screen RAM with spaces
     lda #SC_SPACE
     ldx #0
 !loop:
     sta SCREEN_RAM,x
     sta SCREEN_RAM + $100,x
     sta SCREEN_RAM + $200,x
-    sta SCREEN_RAM + $2e8,x    // Last partial page
     inx
     bne !loop-
-    // Fill remaining 232 bytes of last page
-    ldx #$e8
+    // Remaining 232 bytes ($0700-$07E7)
+    ldx #232 - 1
 !last:
-    lda #SC_SPACE
     sta SCREEN_RAM + $300,x
-    inx
-    bne !last-
+    dex
+    bpl !last-
 
-    // Clear color RAM to current text color
+    // Fill color RAM to current text color
     lda zp_text_color
     ldx #0
 !col:
     sta COLOR_RAM,x
     sta COLOR_RAM + $100,x
     sta COLOR_RAM + $200,x
-    sta COLOR_RAM + $2e8,x
     inx
     bne !col-
-    ldx #$e8
+    ldx #232 - 1
 !col_last:
-    lda zp_text_color
     sta COLOR_RAM + $300,x
-    inx
-    bne !col_last-
+    dex
+    bpl !col_last-
     rts
 
 // screen_set_cursor — Set screen and color pointers for (row, col)

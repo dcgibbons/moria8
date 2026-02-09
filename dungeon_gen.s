@@ -42,10 +42,10 @@
 .const TILE_SECRET  = $F0
 
 // Flag bits (lower nibble)
-.const FLAG_HAS_ITEM = $01
-.const FLAG_OCCUPIED = $02
-.const FLAG_VISITED  = $04
-.const FLAG_LIT      = $08
+.const FLAG_OCCUPIED = $01  // Bit 0: creature present
+.const FLAG_HAS_ITEM = $02  // Bit 1: treasure/item present
+.const FLAG_VISITED  = $04  // Bit 2: player has seen this tile
+.const FLAG_LIT      = $08  // Bit 3: tile is illuminated
 
 // Town flags: all tiles are lit and visited
 .const TOWN_FLAGS    = FLAG_LIT | FLAG_VISITED  // $0C
