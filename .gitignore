@@ -1,0 +1,12 @@
+# Build artifacts
+*.prg
+*.sym
+*.vs
+*.dbg
+
+# VICE state
+*.vsf
+
+# Editor backups
+*~
+*.swp
