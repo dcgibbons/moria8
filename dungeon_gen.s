@@ -1,4 +1,4 @@
-// dungeon_gen.s — Town map generation
+// dungeon_gen.s — Town and dungeon map generation
 //
 // Populates the 3,840-byte map at $C000-$CEFF (80x48 tiles, 1 byte/tile).
 // Each map byte: bits 7-4 = tile type (0-15), bits 3-0 = flags.
@@ -331,9 +331,1122 @@ draw_store:
     rts
 
 // ============================================================
-// Compile-time validation
+// Compile-time validation (town)
 // ============================================================
 .assert "Map row table size", map_row_hi - map_row_lo, MAP_ROWS
 .assert "Map size = 3840", MAP_SIZE, 3840
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 6
+
+// ============================================================
+// Dungeon generation constants
+// ============================================================
+.const MAX_ROOMS        = 8
+.const ROOM_MIN_W       = 4
+.const ROOM_MAX_W       = 11    // 4 + rng(8)
+.const ROOM_MIN_H       = 3
+.const ROOM_MAX_H       = 7     // 3 + rng(5)
+.const ROOM_GAP         = 2     // Min gap between rooms
+.const MAX_ROOM_RETRIES = 20    // Retries per room attempt
+.const DUNGEON_FLAGS    = FLAG_LIT | FLAG_VISITED  // $0C (rooms are lit)
+
+// ============================================================
+// Dungeon room table — parallel arrays (SoA)
+// ============================================================
+room_count:  .byte 0
+room_x:      .fill MAX_ROOMS, 0   // Interior left column
+room_y:      .fill MAX_ROOMS, 0   // Interior top row
+room_w:      .fill MAX_ROOMS, 0   // Interior width
+room_h:      .fill MAX_ROOMS, 0   // Interior height
+
+// Stairs coordinates
+stairs_up_x:    .byte 0
+stairs_up_y:    .byte 0
+stairs_dn1_x:   .byte 0
+stairs_dn1_y:   .byte 0
+stairs_dn2_x:   .byte 0
+stairs_dn2_y:   .byte 0
+level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place at stairs_dn1)
+
+// Local scratch for dungeon generation (safe from rng_range clobbering zp_temp3/4)
+dg_room_x:   .byte 0   // Current room x being placed
+dg_room_y:   .byte 0   // Current room y being placed
+dg_room_w:   .byte 0   // Current room w being placed
+dg_room_h:   .byte 0   // Current room h being placed
+dg_idx:      .byte 0   // Current room index
+dg_retries:  .byte 0   // Retry counter
+dg_cx1:      .byte 0   // Corridor center x1
+dg_cy1:      .byte 0   // Corridor center y1
+dg_cx2:      .byte 0   // Corridor center x2
+dg_cy2:      .byte 0   // Corridor center y2
+
+// ============================================================
+// level_generate — Dispatch to town or dungeon generation
+// ============================================================
+level_generate:
+    lda zp_player_dlvl
+    bne !dungeon+
+    jmp town_generate
+!dungeon:
+    jmp dungeon_generate
+
+// ============================================================
+// dungeon_generate — Main dungeon generation routine
+// Steps: fill rock, place rooms, connect corridors, doors,
+//        stairs, streamers, position player
+// ============================================================
+dungeon_generate:
+    jsr fill_map_rock
+    jsr place_rooms
+    jsr connect_rooms
+    jsr place_doors
+    jsr place_stairs_dungeon
+    jsr place_streamers
+    jsr verify_stairs
+    jsr position_player_dungeon
+    rts
+
+// ============================================================
+// fill_map_rock — Fill entire map with solid rock (TILE_WALL_H, no flags)
+// ============================================================
+fill_map_rock:
+    lda #TILE_WALL_H            // $10 — solid rock, no flags
+    ldx #0
+!fill:
+    sta MAP_BASE,x
+    sta MAP_BASE + $100,x
+    sta MAP_BASE + $200,x
+    sta MAP_BASE + $300,x
+    sta MAP_BASE + $400,x
+    sta MAP_BASE + $500,x
+    sta MAP_BASE + $600,x
+    sta MAP_BASE + $700,x
+    sta MAP_BASE + $800,x
+    sta MAP_BASE + $900,x
+    sta MAP_BASE + $a00,x
+    sta MAP_BASE + $b00,x
+    sta MAP_BASE + $c00,x
+    sta MAP_BASE + $d00,x
+    sta MAP_BASE + $e00,x
+    inx
+    bne !fill-
+    rts
+
+// ============================================================
+// place_rooms — Place 4-8 rooms with overlap rejection
+// ============================================================
+place_rooms:
+    // Roll room count: rng_range(5) + 4 → [4, 8]
+    lda #5
+    jsr rng_range
+    clc
+    adc #4
+    sta room_count
+
+    lda #0
+    sta dg_idx                  // Start at room 0
+
+!room_loop:
+    lda #MAX_ROOM_RETRIES
+    sta dg_retries
+
+!retry:
+    // Roll width: rng_range(8) + 4 → [4, 11]
+    lda #8
+    jsr rng_range
+    clc
+    adc #ROOM_MIN_W
+    sta dg_room_w
+
+    // Roll height: rng_range(5) + 3 → [3, 7]
+    lda #5
+    jsr rng_range
+    clc
+    adc #ROOM_MIN_H
+    sta dg_room_h
+
+    // Roll x position: rng_range(77 - w) + 2
+    // Ensures wall at x-1 >= 1 and wall at x+w <= 78
+    lda #77
+    sec
+    sbc dg_room_w
+    jsr rng_range
+    clc
+    adc #2
+    sta dg_room_x
+
+    // Roll y position: rng_range(45 - h) + 2
+    // Ensures wall at y-1 >= 1 and wall at y+h <= 46
+    lda #45
+    sec
+    sbc dg_room_h
+    jsr rng_range
+    clc
+    adc #2
+    sta dg_room_y
+
+    // Check overlap with all existing rooms
+    jsr check_room_overlap
+    bcs !overlap+               // Carry set = overlap found
+
+    // No overlap — place the room
+    ldx dg_idx
+    lda dg_room_x
+    sta room_x,x
+    lda dg_room_y
+    sta room_y,x
+    lda dg_room_w
+    sta room_w,x
+    lda dg_room_h
+    sta room_h,x
+
+    // Draw the room
+    jsr draw_dungeon_room
+
+    // Next room
+    inc dg_idx
+    lda dg_idx
+    cmp room_count
+    bne !room_loop-
+    rts
+
+!overlap:
+    dec dg_retries
+    bne !retry-
+    // Max retries exhausted — skip this room, reduce count
+    dec room_count
+    lda dg_idx
+    cmp room_count
+    bne !room_loop-
+    rts
+
+// ============================================================
+// check_room_overlap — Check if dg_room_* overlaps any placed room
+// Output: carry set = overlap, carry clear = no overlap
+// ============================================================
+check_room_overlap:
+    ldx #0
+    cpx dg_idx
+    bne !check_loop+
+    jmp !no_overlap+            // No rooms placed yet
+
+!check_loop:
+    // Check bounding box + ROOM_GAP gap
+    // Room A: [dg_room_x - 1 - GAP, dg_room_x + dg_room_w + GAP]
+    // Room B: [room_x[x] - 1 - GAP, room_x[x] + room_w[x] + GAP]
+    // Overlap if: A.left <= B.right AND A.right >= B.left
+    //         AND A.top <= B.bottom AND A.bottom >= B.top
+
+    // Compute A.left = dg_room_x - 1 - GAP
+    lda dg_room_x
+    sec
+    sbc #1 + ROOM_GAP
+    sta dg_cx1                  // A.left (reusing scratch)
+
+    // Compute A.right = dg_room_x + dg_room_w + GAP
+    lda dg_room_x
+    clc
+    adc dg_room_w
+    adc #ROOM_GAP
+    sta dg_cy1                  // A.right
+
+    // Compute B.left = room_x[x] - 1 - GAP
+    lda room_x,x
+    sec
+    sbc #1 + ROOM_GAP
+    sta dg_cx2                  // B.left
+
+    // Compute B.right = room_x[x] + room_w[x] + GAP
+    lda room_x,x
+    clc
+    adc room_w,x
+    adc #ROOM_GAP
+    sta dg_cy2                  // B.right
+
+    // Test: A.left > B.right? (no overlap in X)
+    lda dg_cx1
+    cmp dg_cy2
+    beq !check_y+
+    bcs !next_room+             // A.left > B.right, no X overlap
+
+!check_y_entry:
+    // Test: A.right < B.left? (no overlap in X)
+    lda dg_cy1
+    cmp dg_cx2
+    bcc !next_room+             // A.right < B.left, no X overlap
+
+!check_y:
+    // Now check Y axis
+    // A.top = dg_room_y - 1 - GAP
+    lda dg_room_y
+    sec
+    sbc #1 + ROOM_GAP
+    sta dg_cx1                  // A.top
+
+    // A.bottom = dg_room_y + dg_room_h + GAP
+    lda dg_room_y
+    clc
+    adc dg_room_h
+    adc #ROOM_GAP
+    sta dg_cy1                  // A.bottom
+
+    // B.top = room_y[x] - 1 - GAP
+    lda room_y,x
+    sec
+    sbc #1 + ROOM_GAP
+    sta dg_cx2                  // B.top
+
+    // B.bottom = room_y[x] + room_h[x] + GAP
+    lda room_y,x
+    clc
+    adc room_h,x
+    adc #ROOM_GAP
+    sta dg_cy2                  // B.bottom
+
+    // Test: A.top > B.bottom? (no overlap in Y)
+    lda dg_cx1
+    cmp dg_cy2
+    beq !found_overlap+
+    bcs !next_room+
+
+    // Test: A.bottom < B.top? (no overlap in Y)
+    lda dg_cy1
+    cmp dg_cx2
+    bcc !next_room+
+
+!found_overlap:
+    sec                         // Overlap found
+    rts
+
+!next_room:
+    inx
+    cpx dg_idx
+    bne !check_loop-
+
+!no_overlap:
+    clc                         // No overlap
+    rts
+
+// ============================================================
+// draw_dungeon_room — Draw walls and floor for room at dg_room_*
+// Uses: zp_ptr0, zp_temp1-zp_temp4
+// ============================================================
+draw_dungeon_room:
+    // Compute wall coordinates
+    // Wall left = dg_room_x - 1
+    lda dg_room_x
+    sec
+    sbc #1
+    sta zp_temp1                // wall left col
+
+    // Wall top = dg_room_y - 1
+    lda dg_room_y
+    sec
+    sbc #1
+    sta zp_temp2                // wall top row
+
+    // Wall right = dg_room_x + dg_room_w
+    lda dg_room_x
+    clc
+    adc dg_room_w
+    sta zp_temp3                // wall right col
+
+    // Wall bottom = dg_room_y + dg_room_h
+    lda dg_room_y
+    clc
+    adc dg_room_h
+    sta zp_temp4                // wall bottom row
+
+    // --- Top wall ---
+    ldx zp_temp2
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Top-left corner
+    ldy zp_temp1
+    lda #TILE_CORNER_TL | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Top-right corner
+    ldy zp_temp3
+    lda #TILE_CORNER_TR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Horizontal wall between corners
+    ldy zp_temp1
+    iny
+    lda #TILE_WALL_H | DUNGEON_FLAGS
+!dr_top_h:
+    sta (zp_ptr0),y
+    iny
+    cpy zp_temp3
+    bne !dr_top_h-
+
+    // --- Bottom wall ---
+    ldx zp_temp4
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Bottom-left corner
+    ldy zp_temp1
+    lda #TILE_CORNER_BL | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Bottom-right corner
+    ldy zp_temp3
+    lda #TILE_CORNER_BR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Horizontal wall between corners
+    ldy zp_temp1
+    iny
+    lda #TILE_WALL_H | DUNGEON_FLAGS
+!dr_bot_h:
+    sta (zp_ptr0),y
+    iny
+    cpy zp_temp3
+    bne !dr_bot_h-
+
+    // --- Side walls + interior ---
+    lda zp_temp2
+    clc
+    adc #1
+    tax                         // Start row = wall_top + 1
+!dr_sides:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Left wall
+    ldy zp_temp1
+    lda #TILE_WALL_V | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Right wall
+    ldy zp_temp3
+    sta (zp_ptr0),y
+
+    // Fill interior with floor
+    ldy zp_temp1
+    iny
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+!dr_interior:
+    sta (zp_ptr0),y
+    iny
+    cpy zp_temp3
+    bne !dr_interior-
+
+    inx
+    cpx zp_temp4
+    bne !dr_sides-
+
+    rts
+
+// ============================================================
+// connect_rooms — Connect consecutive rooms with L-shaped corridors
+// ============================================================
+connect_rooms:
+    lda room_count
+    cmp #2
+    bcs !conn_start+
+    jmp !conn_done+             // Need at least 2 rooms
+!conn_start:
+    lda #0
+    sta dg_idx                  // Room pair index
+
+!conn_loop:
+    // Compute center of room[idx]
+    ldx dg_idx
+    lda room_w,x
+    lsr
+    clc
+    adc room_x,x
+    sta dg_cx1
+
+    lda room_h,x
+    lsr
+    clc
+    adc room_y,x
+    sta dg_cy1
+
+    // Compute center of room[idx+1]
+    lda dg_idx
+    clc
+    adc #1
+    tax
+    lda room_w,x
+    lsr
+    clc
+    adc room_x,x
+    sta dg_cx2
+
+    lda room_h,x
+    lsr
+    clc
+    adc room_y,x
+    sta dg_cy2
+
+    // Coin flip: horizontal-first or vertical-first
+    jsr rng_byte
+    and #1
+    beq !h_first+
+
+    // Vertical first, then horizontal
+    jsr carve_v_corridor         // Vertical from cy1 to cy2 at x=cx1
+    lda dg_cy2
+    sta dg_cy1                   // Now at cy2
+    jsr carve_h_corridor         // Horizontal from cx1 to cx2 at y=cy2
+    jmp !conn_next+
+
+!h_first:
+    // Horizontal first, then vertical
+    jsr carve_h_corridor         // Horizontal from cx1 to cx2 at y=cy1
+    lda dg_cx2
+    sta dg_cx1                   // Now at cx2
+    jsr carve_v_corridor         // Vertical from cy1 to cy2 at x=cx2
+!conn_next:
+    inc dg_idx
+    lda dg_idx
+    clc
+    adc #1
+    cmp room_count
+    bcs !conn_done+
+    jmp !conn_loop-
+
+!conn_done:
+    rts
+
+// ============================================================
+// carve_h_corridor — Carve horizontal corridor from cx1 to cx2 at row cy1
+// Input: dg_cx1 = start x, dg_cx2 = end x, dg_cy1 = row y
+// Always carves from smaller x to larger x using Y register.
+// ============================================================
+carve_h_corridor:
+    ldx dg_cy1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Ensure we iterate from smaller to larger
+    lda dg_cx1
+    cmp dg_cx2
+    bcc !hc_cx1_smaller+
+    beq !hc_single+
+    // cx1 > cx2: swap so we go from cx2 to cx1
+    ldy dg_cx2                  // Start at smaller
+    lda dg_cx1
+    sta dg_room_x               // End at larger (temp)
+    jmp !hc_loop+
+!hc_cx1_smaller:
+    ldy dg_cx1                  // Start at smaller
+    lda dg_cx2
+    sta dg_room_x               // End at larger (temp)
+!hc_loop:
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    cpy dg_room_x
+    beq !hc_done+
+    iny
+    jmp !hc_loop-
+!hc_single:
+    ldy dg_cx1
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!hc_done:
+    rts
+
+// ============================================================
+// carve_v_corridor — Carve vertical corridor from cy1 to cy2 at col cx1
+// Input: dg_cx1 = column x, dg_cy1 = start y, dg_cy2 = end y
+// Always carves from smaller y to larger y using X register.
+// ============================================================
+carve_v_corridor:
+    lda dg_cy1
+    cmp dg_cy2
+    bcc !vc_cy1_smaller+
+    beq !vc_single+
+    // cy1 > cy2: iterate from cy2 to cy1
+    ldx dg_cy2
+    lda dg_cy1
+    sta dg_room_y               // End row (temp)
+    jmp !vc_loop+
+!vc_cy1_smaller:
+    ldx dg_cy1
+    lda dg_cy2
+    sta dg_room_y               // End row (temp)
+!vc_loop:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy dg_cx1
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    cpx dg_room_y
+    beq !vc_done+
+    inx
+    jmp !vc_loop-
+!vc_single:
+    ldx dg_cy1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy dg_cx1
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!vc_done:
+    rts
+
+// ============================================================
+// place_doors — Scan room perimeters for corridor intersections
+// For each wall tile: if tile one step outside is floor, place door
+// ============================================================
+place_doors:
+    lda #0
+    sta dg_idx
+
+!pd_room_loop:
+    ldx dg_idx
+
+    // Load room bounds into scratch
+    lda room_x,x
+    sta dg_room_x
+    lda room_y,x
+    sta dg_room_y
+    lda room_w,x
+    sta dg_room_w
+    lda room_h,x
+    sta dg_room_h
+
+    // Compute wall coordinates
+    // wall_left = room_x - 1
+    lda dg_room_x
+    sec
+    sbc #1
+    sta zp_temp1                // wall_left
+
+    // wall_right = room_x + room_w
+    lda dg_room_x
+    clc
+    adc dg_room_w
+    sta zp_temp3                // wall_right
+
+    // wall_top = room_y - 1
+    lda dg_room_y
+    sec
+    sbc #1
+    sta zp_temp2                // wall_top
+
+    // wall_bottom = room_y + room_h
+    lda dg_room_y
+    clc
+    adc dg_room_h
+    sta zp_temp4                // wall_bottom
+
+    // --- Check top wall (row = wall_top, scan cols wall_left+1 to wall_right-1) ---
+    // Outside tile is at row wall_top - 1
+    lda zp_temp2
+    beq !pd_skip_top+           // wall_top = 0, can't check outside
+    sec
+    sbc #1
+    tax
+    lda map_row_lo,x
+    sta zp_ptr1                 // ptr1 = row above top wall
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+
+    ldx zp_temp2                // top wall row
+    lda map_row_lo,x
+    sta zp_ptr0                 // ptr0 = top wall row
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy zp_temp1
+    iny                         // Start at wall_left + 1
+!pd_top:
+    lda (zp_ptr1),y             // Tile above
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !pd_top_next+
+    // Outside is floor → place door
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!pd_top_next:
+    iny
+    cpy zp_temp3                // Stop before wall_right
+    bne !pd_top-
+
+!pd_skip_top:
+
+    // --- Check bottom wall (row = wall_bottom) ---
+    // Outside tile is at row wall_bottom + 1
+    lda zp_temp4
+    cmp #MAP_ROWS - 1
+    bcs !pd_skip_bot+           // At map edge
+
+    clc
+    adc #1
+    tax
+    lda map_row_lo,x
+    sta zp_ptr1                 // ptr1 = row below bottom wall
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+
+    ldx zp_temp4                // bottom wall row
+    lda map_row_lo,x
+    sta zp_ptr0                 // ptr0 = bottom wall row
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy zp_temp1
+    iny
+!pd_bot:
+    lda (zp_ptr1),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !pd_bot_next+
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!pd_bot_next:
+    iny
+    cpy zp_temp3
+    bne !pd_bot-
+
+!pd_skip_bot:
+
+    // --- Check left wall (col = wall_left, scan rows wall_top+1 to wall_bottom-1) ---
+    lda zp_temp1
+    beq !pd_skip_left+          // wall_left = 0, can't check outside
+
+    lda zp_temp2
+    clc
+    adc #1
+    tax                         // Start row = wall_top + 1
+!pd_left:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Check tile to left of wall
+    ldy zp_temp1
+    dey                         // col = wall_left - 1
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !pd_left_next+
+    // Outside is floor → place door
+    ldy zp_temp1                // col = wall_left
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!pd_left_next:
+    inx
+    cpx zp_temp4                // Stop before wall_bottom
+    bne !pd_left-
+
+!pd_skip_left:
+
+    // --- Check right wall (col = wall_right) ---
+    lda zp_temp3
+    cmp #MAP_COLS - 1
+    bcs !pd_skip_right+         // At map edge
+
+    lda zp_temp2
+    clc
+    adc #1
+    tax
+!pd_right:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    // Check tile to right of wall
+    ldy zp_temp3
+    iny                         // col = wall_right + 1
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !pd_right_next+
+    ldy zp_temp3                // col = wall_right
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!pd_right_next:
+    inx
+    cpx zp_temp4
+    bne !pd_right-
+
+!pd_skip_right:
+
+    // Next room
+    inc dg_idx
+    lda dg_idx
+    cmp room_count
+    beq !pd_done+
+    jmp !pd_room_loop-
+!pd_done:
+    rts
+
+// ============================================================
+// place_stairs_dungeon — Place 1 up-stairs + 2 down-stairs
+// ============================================================
+place_stairs_dungeon:
+    // Stairs up in room 0
+    ldx #0
+    jsr random_floor_in_room
+    sta stairs_up_x
+    sty stairs_up_y
+    // Write to map
+    jsr write_tile_at_xy
+    lda #TILE_STAIRS_UP | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Stairs down 1 — pick a different room
+    lda room_count
+    sec
+    sbc #1
+    jsr rng_range               // [0, count-2]
+    clc
+    adc #1                      // [1, count-1] — avoids room 0
+    tax
+    jsr random_floor_in_room
+    sta stairs_dn1_x
+    sty stairs_dn1_y
+    jsr write_tile_at_xy
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Stairs down 2 — pick another different room if possible
+    lda room_count
+    cmp #3
+    bcc !use_room0+             // Only 2 rooms, reuse room 0 area
+    lda room_count
+    sec
+    sbc #2
+    jsr rng_range               // [0, count-3]
+    clc
+    adc #2                      // [2, count-1]
+    tax
+    jmp !place_dn2+
+!use_room0:
+    ldx #0
+!place_dn2:
+    jsr random_floor_in_room
+    sta stairs_dn2_x
+    sty stairs_dn2_y
+    jsr write_tile_at_xy
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    rts
+
+// ============================================================
+// random_floor_in_room — Pick a random floor tile inside room X
+// Input: X = room index
+// Output: A = x coordinate, Y = y coordinate
+// Clobbers: zp_ptr0, zp_temp3, zp_temp4
+// ============================================================
+random_floor_in_room:
+    // Save room data to local scratch before calling rng_range
+    lda room_x,x
+    sta dg_room_x
+    lda room_y,x
+    sta dg_room_y
+    lda room_w,x
+    sta dg_room_w
+    lda room_h,x
+    sta dg_room_h
+
+    // Random x offset within room interior
+    lda dg_room_w
+    jsr rng_range               // [0, w-1]
+    clc
+    adc dg_room_x
+    pha                         // Save x on stack
+
+    // Random y offset within room interior
+    lda dg_room_h
+    jsr rng_range               // [0, h-1]
+    clc
+    adc dg_room_y
+    tay                         // Y = y coordinate
+
+    pla                         // A = x coordinate
+    rts
+
+// ============================================================
+// write_tile_at_xy — Set up zp_ptr0 for map tile at (A, Y)
+// Input: A = x, Y = y
+// Output: zp_ptr0 points to row Y, Y register = x offset
+// ============================================================
+write_tile_at_xy:
+    pha                         // Save x
+    tya
+    tax                         // X = row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    pla
+    tay                         // Y = column offset
+    rts
+
+// ============================================================
+// place_streamers — Place 1-2 mineral streamers
+// ============================================================
+place_streamers:
+    // Streamer 1
+    jsr carve_streamer
+
+    // 50% chance for streamer 2
+    jsr rng_byte
+    and #1
+    beq !ps_done+
+    jsr carve_streamer
+
+!ps_done:
+    rts
+
+// ============================================================
+// carve_streamer — Carve one mineral streamer across the map
+// Picks random edge start, walks diagonally with jitter
+// ============================================================
+carve_streamer:
+    // Pick mineral type: 50/50 magma or quartz
+    jsr rng_byte
+    and #1
+    beq !cs_magma+
+    lda #TILE_QUARTZ | DUNGEON_FLAGS
+    jmp !cs_type_set+
+!cs_magma:
+    lda #TILE_MAGMA | DUNGEON_FLAGS
+!cs_type_set:
+    sta dg_room_w               // Reuse as tile value
+
+    // Pick starting edge and position
+    // Start from a random edge
+    jsr rng_byte
+    and #3                      // 0=top, 1=bottom, 2=left, 3=right
+
+    cmp #0
+    bne !cs_not_top+
+    // Top edge: x = random, y = 1
+    lda #78
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_cx1                  // x
+    lda #1
+    sta dg_cy1                  // y
+    lda #1                      // dy = +1 (going down)
+    sta dg_room_h
+    jmp !cs_pick_dx+
+!cs_not_top:
+    cmp #1
+    bne !cs_not_bottom+
+    // Bottom edge
+    lda #78
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_cx1
+    lda #MAP_ROWS - 2
+    sta dg_cy1
+    lda #$ff                    // dy = -1 (going up)
+    sta dg_room_h
+    jmp !cs_pick_dx+
+!cs_not_bottom:
+    cmp #2
+    bne !cs_right+
+    // Left edge
+    lda #1
+    sta dg_cx1
+    lda #46
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_cy1
+    lda #1                      // dx = +1 (going right)
+    sta dg_room_x
+    jmp !cs_pick_dy+
+!cs_right:
+    // Right edge
+    lda #MAP_COLS - 2
+    sta dg_cx1
+    lda #46
+    jsr rng_range
+    clc
+    adc #1
+    sta dg_cy1
+    lda #$ff                    // dx = -1 (going left)
+    sta dg_room_x
+    jmp !cs_pick_dy+
+
+!cs_pick_dx:
+    // Pick random dx: -1 or +1
+    jsr rng_byte
+    and #1
+    beq !cs_dx_neg+
+    lda #1
+    jmp !cs_dx_set+
+!cs_dx_neg:
+    lda #$ff
+!cs_dx_set:
+    sta dg_room_x
+    jmp !cs_walk+
+
+!cs_pick_dy:
+    // Pick random dy: -1 or +1
+    jsr rng_byte
+    and #1
+    beq !cs_dy_neg+
+    lda #1
+    jmp !cs_dy_set+
+!cs_dy_neg:
+    lda #$ff
+!cs_dy_set:
+    sta dg_room_h
+
+!cs_walk:
+    // Walk 20-49 steps: rng_range(30) + 20
+    lda #30
+    jsr rng_range
+    clc
+    adc #20
+    sta dg_retries              // Step counter
+
+!cs_step:
+    // Bounds check
+    lda dg_cx1
+    cmp #1
+    bcc !cs_end+
+    cmp #MAP_COLS - 1
+    bcs !cs_end+
+    lda dg_cy1
+    cmp #1
+    bcc !cs_end+
+    cmp #MAP_ROWS - 1
+    bcs !cs_end+
+
+    // Write mineral tile
+    ldx dg_cy1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy dg_cx1
+    lda dg_room_w               // Mineral tile value
+    sta (zp_ptr0),y
+
+    // Advance position with jitter
+    // x += dx, with 25% chance of jitter on y
+    lda dg_cx1
+    clc
+    adc dg_room_x               // dx
+    sta dg_cx1
+
+    lda dg_cy1
+    clc
+    adc dg_room_h               // dy
+    sta dg_cy1
+
+    // 25% jitter: randomly shift x or y by 1
+    jsr rng_byte
+    and #3
+    cmp #0
+    bne !cs_no_jitter+
+    // Jitter x by +/-1
+    jsr rng_byte
+    and #2
+    sec
+    sbc #1                      // -1 or +1
+    clc
+    adc dg_cx1
+    sta dg_cx1
+!cs_no_jitter:
+
+    dec dg_retries
+    bne !cs_step-
+
+!cs_end:
+    rts
+
+// ============================================================
+// verify_stairs — Ensure all 3 stair tiles still exist after streamers
+// Re-place any that were overwritten
+// ============================================================
+verify_stairs:
+    // Check stairs up
+    lda stairs_up_x
+    ldy stairs_up_y
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_UP
+    beq !vs_dn1+
+    lda #TILE_STAIRS_UP | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+!vs_dn1:
+    lda stairs_dn1_x
+    ldy stairs_dn1_y
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_DN
+    beq !vs_dn2+
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+!vs_dn2:
+    lda stairs_dn2_x
+    ldy stairs_dn2_y
+    jsr write_tile_at_xy
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_DN
+    beq !vs_done+
+    lda #TILE_STAIRS_DN | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+!vs_done:
+    rts
+
+// ============================================================
+// position_player_dungeon — Place player at appropriate stairs
+// ============================================================
+position_player_dungeon:
+    lda level_entry_dir
+    bne !ascended+
+
+    // Descended — place at stairs up (where player came from)
+    lda stairs_up_x
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda stairs_up_y
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    rts
+
+!ascended:
+    // Ascended — place at stairs down 1
+    lda stairs_dn1_x
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda stairs_dn1_y
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    rts
+
+// ============================================================
+// Compile-time validation (dungeon)
+// ============================================================
+.assert "MAX_ROOMS", MAX_ROOMS, 8
+.assert "TILE_WALL_H = $10", TILE_WALL_H, $10
+.assert "DUNGEON_FLAGS = $0C", DUNGEON_FLAGS, $0c

@@ -128,7 +128,11 @@ render_viewport:
     jmp !write_tile+
 
 !not_player:
-    // Check if this is a store door (show store number)
+    // Skip store door check in dungeon levels (saves ~100 cycles/tile)
+    lda zp_player_dlvl
+    bne !write_tile+
+
+    // Check if this is a store door (show store number) — town only
     jsr check_store_door
     bcc !write_tile+        // Not a store door
 
@@ -284,6 +288,10 @@ render_single_tile:
     jmp !rst_write+
 
 !rst_store:
+    // Skip store door check in dungeon levels
+    lda zp_player_dlvl
+    bne !rst_write+
+
     // Check store doors (inline — check_store_door clobbers zp_temp2/3)
     ldx #0
 !rst_store_loop:

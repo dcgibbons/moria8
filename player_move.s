@@ -90,6 +90,17 @@ player_try_move:
     lsr
     lsr
 
+    // Auto-open closed doors on bump
+    cmp #8                      // TILE_DOOR_CLOSED >> 4
+    bne !not_closed_door+
+    // Open the door in-place
+    lda (zp_ptr0),y             // Re-read full map byte
+    and #TILE_FLAG_MASK         // Keep flags
+    ora #TILE_DOOR_OPEN         // Change to open door
+    sta (zp_ptr0),y
+    lda #7                      // TILE_DOOR_OPEN >> 4 (walkable)
+!not_closed_door:
+
     // Check walkability
     jsr tile_is_walkable
     bcc !blocked+

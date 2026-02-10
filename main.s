@@ -120,9 +120,14 @@ entry:
     // --- Character creation ---
     jsr player_create
 
-    // --- Main game loop (Phase 3: Town level) ---
-    // Generate the town map
-    jsr town_generate
+    // --- Main game loop ---
+    // Initialize dungeon level and generate map
+    lda #0
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    sta player_data + PL_MAX_DLVL
+    sta level_entry_dir
+    jsr level_generate
 
     // Clear screen and do initial render
     jsr screen_clear
@@ -221,24 +226,82 @@ entry:
 
     // Stairs down?
     cmp #CMD_STAIRS_DN
-    bne !not_stairs+
+    bne !not_stairs_dn+
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
-    bne !no_stairs_here+
-    lda #<stairs_str
+    bne !no_stairs_dn+
+    // Descend: increment dungeon level
+    inc zp_player_dlvl
+    lda zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    // Update max depth if deeper than before
+    cmp player_data + PL_MAX_DLVL
+    bcc !dn_not_deeper+
+    beq !dn_not_deeper+
+    sta player_data + PL_MAX_DLVL
+!dn_not_deeper:
+    lda #0
+    sta level_entry_dir         // 0 = descended
+    jsr level_generate
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    lda #<descend_str
     sta zp_ptr0
-    lda #>stairs_str
+    lda #>descend_str
     sta zp_ptr0_hi
     jsr msg_print
     jmp !main_loop-
-!no_stairs_here:
+!no_stairs_dn:
     lda #<no_stairs_str
     sta zp_ptr0
     lda #>no_stairs_str
     sta zp_ptr0_hi
     jsr msg_print
     jmp !main_loop-
-!not_stairs:
+!not_stairs_dn:
+
+    // Stairs up?
+    cmp #CMD_STAIRS_UP
+    bne !not_stairs_up+
+    jsr check_stairs_at_player
+    cmp #10                 // Stairs up type
+    bne !no_stairs_up+
+    // Ascend
+    lda zp_player_dlvl
+    beq !at_surface+
+    dec zp_player_dlvl
+    lda zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    lda #1
+    sta level_entry_dir         // 1 = ascended
+    jsr level_generate
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    lda #<ascend_str
+    sta zp_ptr0
+    lda #>ascend_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !main_loop-
+!at_surface:
+    lda #<at_surface_str
+    sta zp_ptr0
+    lda #>at_surface_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !main_loop-
+!no_stairs_up:
+    lda #<no_stairs_str
+    sta zp_ptr0
+    lda #>no_stairs_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !main_loop-
+!not_stairs_up:
 
     // Rest?
     cmp #CMD_REST
@@ -296,8 +359,14 @@ press_key_str:
 welcome_str:
     .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0
 
-stairs_str:
-    .text "THE STAIRS LEAD DOWN INTO DARKNESS..." ; .byte 0
+descend_str:
+    .text "YOU DESCEND THE STAIRCASE." ; .byte 0
+
+ascend_str:
+    .text "YOU ASCEND THE STAIRCASE." ; .byte 0
+
+at_surface_str:
+    .text "YOU ARE ALREADY AT THE SURFACE." ; .byte 0
 
 no_stairs_str:
     .text "YOU SEE NO STAIRS HERE." ; .byte 0
