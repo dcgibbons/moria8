@@ -1035,27 +1035,44 @@ are needed:
 
 #### Summary of required changes
 
-| # | Priority | Change |
-|---|----------|--------|
-| 1 | BLOCKER | Stub out `trap_count`, `place_traps`, `place_secrets` to restore buildability |
-| 2 | CRITICAL | Rewrite connectivity algorithm: shuffle rooms, connect as circular chain, use robust tunnel builder that can navigate around intervening rooms |
-| 3 | HIGH | Add flood-fill connectivity verification after generation; re-generate if any room unreachable |
-| 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests |
-| 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) |
-| 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) |
-| 7 | MEDIUM | Add wall-adjacency check for stairs placement |
-| 8 | LOW | Consider increasing room count range (e.g., 6-12) for better dungeon density |
-| 9 | LOW | Add dark room support (defer LIT flag to Phase 4.5 LOS implementation) |
+| # | Priority | Change | Status |
+|---|----------|--------|--------|
+| 1 | BLOCKER | Stub out `trap_count`, `place_traps`, `place_secrets` to restore buildability | **Fixed** — `dungeon_features.s` implements traps and secrets |
+| 2 | CRITICAL | Rewrite connectivity algorithm: shuffle rooms, connect as circular chain | **Fixed** — Fisher-Yates shuffle + circular chain in `connect_rooms` |
+| 3 | HIGH | Add flood-fill connectivity verification after generation; re-generate if unreachable | **Fixed** — BFS `verify_connectivity` with max 10 retries |
+| 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests | **Fixed** — 18 runtime tests covering rooms, corridors, connectivity, doors |
+| 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) | **Fixed** — 50/50 open/closed at junctions; `place_secrets` deferred to post-search-UX |
+| 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) | **Fixed** — 5 streamers (3 magma + 2 quartz) |
+| 7 | MEDIUM | Add wall-adjacency check for stairs placement | **Fixed** — `random_wall_adj_floor` with degrading threshold (>=3, >=2, >=1, any) |
+| 8 | LOW | Consider increasing room count range (e.g., 6-12) for better dungeon density | Deferred |
+| 9 | LOW | Add dark room support (defer LIT flag to Phase 4.5 LOS implementation) | Deferred — TODO comment at `DUNGEON_FLAGS` |
+
+**Additional fixes applied during QA:**
+
+| # | Issue | Resolution |
+|---|-------|------------|
+| DG-A | Corridors adjacent to rooms without doors | **Fixed** — `add_corridor_doors` iterates per-room-wall (max 1 door per wall side) |
+| DG-B | Secret doors at corridor junctions block passage | **Fixed** — `random_door_type` produces only open/closed; `place_secrets` deferred |
+| DG-C | Room overlap detection off-by-one | **Fixed** — `check_room_overlap` uses ROOM_GAP correctly |
 
 ---
 
 ## What's Next
 
-Phase 4 (Dungeon Generation and Navigation) is in progress but has critical
-issues. The build is currently broken (DG1). The corridor connectivity algorithm
-must be rewritten (DG2) before any further Phase 4 work proceeds. Priority order:
-1. Fix build (stub undefined symbols)
-2. Rewrite tunnel/connectivity algorithm
-3. Add connectivity verification
-4. Create dungeon generation test suite
-5. Continue with remaining Phase 4 deliverables
+Phase 4.1 (dungeon generation) is complete with all DG QA findings resolved.
+Remaining Phase 4 deliverables:
+
+| # | What | Status |
+|---|------|--------|
+| 4.1 | Room-and-corridor dungeon generation | **Complete** — rooms, corridors, doors, streamers, stairs, connectivity verification |
+| 4.2 | Dungeon features (doors, traps, stairs) | **Partially complete** — traps and door open/close implemented in `dungeon_features.s`; secret door search deferred; stair transitions working |
+| 4.3 | Data loader + fastloader | Not started — needed for tier boundary crossings |
+| 4.4 | Viewport scrolling for 80x48 map | **Complete** — dirty tile rendering, panel movement |
+| 4.5 | Line of sight (full) | Not started — lit rooms vs dark corridors, torch radius |
+| 4.6 | Player movement updates | **Partially complete** — stair transitions working; running, pit traps, search command deferred |
+
+**Suggested next steps (priority order):**
+1. **Phase 4.5 — LOS implementation** — dark corridors, lit rooms, torch radius. Prerequisite for dark room support (DG9) and meaningful gameplay.
+2. **Phase 4.6 — Running + search** — auto-move in corridors, search command for secret doors. Then re-enable `place_secrets`.
+3. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
+4. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
