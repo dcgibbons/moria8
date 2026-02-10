@@ -102,11 +102,28 @@ render_viewport:
     lsr
     tax                     // X = tile type index
 
+    // Wall types 1-6 without FLAG_LIT = corridor rock → render as '#'
+    // Room walls have FLAG_LIT from DUNGEON_FLAGS; corridor rock does not.
+    cpx #7
+    bcs !rv_normal+         // Type >= 7, not a wall
+    cpx #1
+    bcc !rv_normal+         // Type 0 = floor, not a wall
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !rv_normal+         // Lit = room wall, use box-drawing
+    // Corridor rock
+    lda #$23                // '#' screen code
+    sta zp_temp0
+    lda #COL_LGREY
+    sta zp_temp1
+    jmp !rv_tile_set+
+!rv_normal:
     // Look up screen code and color
     lda tile_screen_codes,x
     sta zp_temp0            // screen code
     lda tile_colors,x
     sta zp_temp1            // color
+!rv_tile_set:
 
     // Check if this is the player position
     lda zp_render_x
@@ -166,7 +183,9 @@ render_viewport:
     inc zp_render_x
     lda zp_render_x
     cmp #VIEWPORT_W
-    bne !col_loop-
+    beq !col_done+
+    jmp !col_loop-
+!col_done:
 
     // Next row
     inc zp_render_y
@@ -269,10 +288,26 @@ render_single_tile:
     lsr
     lsr
     tax
+
+    // Corridor rock check (same as render_viewport)
+    cpx #7
+    bcs !rst_normal+
+    cpx #1
+    bcc !rst_normal+
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !rst_normal+
+    lda #$23                // '#'
+    sta zp_temp3
+    lda #COL_LGREY
+    sta zp_temp4
+    jmp !rst_tile_set+
+!rst_normal:
     lda tile_screen_codes,x
     sta zp_temp3
     lda tile_colors,x
     sta zp_temp4
+!rst_tile_set:
 
     // Player position override?
     lda zp_temp0

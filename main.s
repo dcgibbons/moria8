@@ -35,6 +35,7 @@
 #import "player_create.s"
 #import "sound.s"
 #import "dungeon_gen.s"
+#import "dungeon_features.s"
 #import "dungeon_render.s"
 #import "dungeon_los.s"
 #import "player_move.s"
@@ -188,6 +189,7 @@ entry:
 
     // Move succeeded
     jsr msg_clear
+    jsr trap_check_at_player
     jsr viewport_update
 
     // Did viewport scroll?
@@ -302,6 +304,55 @@ entry:
     jsr msg_print
     jmp !main_loop-
 !not_stairs_up:
+
+    // Open door?
+    cmp #CMD_OPEN
+    bne !not_open+
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !open_no_turn+          // Invalid direction, no turn consumed
+    jsr door_try_open
+    bcc !open_no_turn+          // No door there, no turn consumed
+    // Door opened or stuck — consume turn and re-render
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+!open_no_turn:
+    jmp !main_loop-
+!not_open:
+
+    // Close door?
+    cmp #CMD_CLOSE
+    bne !not_close+
+    jsr msg_clear
+    jsr get_direction_target
+    bcc !close_no_turn+
+    jsr door_try_close
+    bcc !close_no_turn+
+    // Door closed — consume turn and re-render
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+!close_no_turn:
+    jmp !main_loop-
+!not_close:
+
+    // Search?
+    cmp #CMD_SEARCH
+    bne !not_search+
+    jsr msg_clear
+    jsr do_search
+    // Always consumes a turn
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+!not_search:
 
     // Rest?
     cmp #CMD_REST

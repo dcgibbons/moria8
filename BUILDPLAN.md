@@ -842,12 +842,220 @@ initial entropy. No changes needed.
 | 4 | Remove "cap at 18" constraint from `tables.s` | **Fixed** — Header comment updated |
 | 5 | Update plan Phase 2.3 | **Fixed** — Phase 2.3 now describes correct umoria algorithm |
 
+### Dungeon Generation Deep Dive (QA Review)
+
+Investigation of persistent dungeon generation bugs including rooms with no exits,
+incorrect algorithm vs. umoria, build breakage, and zero test coverage. Compared
+against actual umoria source (`src/dungeon_generate.cpp`, `src/dungeon_tile.h`,
+`src/config.cpp`).
+
+#### Finding DG1 — Build is broken (BLOCKER)
+
+`dungeon_gen.s` references three undefined symbols:
+- `trap_count` (lines 99, 404) — not allocated anywhere
+- `place_traps` (line 418) — subroutine doesn't exist
+- `place_secrets` (line 419) — subroutine doesn't exist
+
+These are forward references to Phase 4.2 features. The code cannot assemble.
+Must be stubbed out to restore a buildable state.
+
+#### Finding DG2 — Connectivity algorithm is fundamentally wrong (CRITICAL)
+
+**The reported bug** (rooms with no exits) traces directly to the corridor
+connection algorithm. The current code connects consecutive rooms (room 0→1,
+1→2, 2→3, etc.) in the order they were placed. This is a **linear chain**
+that does NOT guarantee all rooms are reachable if any corridor fails to connect.
+
+**Umoria's approach:**
+1. Place rooms into a 6x6 grid (typically 24-28 rooms)
+2. **Randomly shuffle** the room location list
+3. Connect room[0]→room[1]→...→room[N]→room[0] as a **circular chain**
+   (Hamiltonian cycle), guaranteeing every room has at least 2 connections
+4. The tunnel algorithm uses a biased random walk toward the destination with
+   up to 2000 iterations, ensuring it reaches the target even through winding
+   paths
+
+**Current code issues:**
+- Only 4-8 rooms (vs. umoria's ~24-28) — fewer rooms means longer corridors
+  between non-adjacent rooms, increasing failure risk
+- Rooms are connected in placement order, not shuffled — rooms placed far apart
+  in the grid may have extremely long tunnel distances
+- No circular chain — room 0 has only 1 connection (to room 1), making it
+  vulnerable to disconnection
+- L-shaped corridors (fixed 2-segment paths) can fail if the path crosses
+  multiple rooms — the corridor carver stops at the first perpendicular wall
+  it hits and places a door, but the corridor segment terminates without
+  reaching the target room's interior
+- The current algorithm has NO concept of reaching the destination — it just
+  carves to the target coordinate. If another room's wall is in the way, the
+  corridor dead-ends at a door in that room's wall, leaving the intended
+  destination room disconnected
+
+**Root cause of the screenshot bug:** When connecting rooms A and B with an
+L-shaped corridor, if room C sits between them, the horizontal segment hits
+C's vertical wall and places a door there. The corridor segment ends at room B's
+x-coordinate but that coordinate is inside room C, not room B. Room B gets
+no connecting corridor.
+
+#### Finding DG3 — Room placement algorithm differs from umoria (HIGH)
+
+| Aspect | Umoria | Current code |
+|--------|--------|-------------|
+| Grid system | 6x6 grid of slots, ~32 attempts → ~24-28 rooms | No grid; random placement with overlap rejection |
+| Room count | Mean 32 attempts into 36 slots | 4-8 rooms (rng(5)+4) |
+| Room sizing | Width: 2-22 interior, Height: 2-7 interior | Width: 4-11, Height: 3-7 |
+| Room types | Normal, overlapping rectangles, inner rooms, cross-shaped | Basic rectangle only |
+| Unusual rooms | Level/300 chance per room | None |
+| Level dimensions | 66x198 | 80x48 |
+
+The 80x48 map with 4-8 rooms is a reasonable C64 simplification, but the room
+count is too low and the placement algorithm creates pathological layouts where
+rooms cluster or spread too far apart.
+
+#### Finding DG4 — Tunnel algorithm differs from umoria (HIGH)
+
+| Aspect | Umoria | Current code |
+|--------|--------|-------------|
+| Path finding | Biased random walk toward target, 2000 iteration limit | Fixed L-shaped (2-segment) path |
+| Direction changes | 70% chance to redirect toward target, 1/9 random | None — always horizontal then vertical or vice versa |
+| Wall penetration | Marks adjacent granite as TMP2_WALL to prevent clustered entries | No tracking — can place multiple doors in adjacent wall tiles |
+| Room wall handling | Records wall crossings for later door placement | Inline door placement during carving |
+| Robustness | 2000-iteration walk guarantees reaching target even through complex geometry | Can dead-end when another room blocks the L-path |
+
+#### Finding DG5 — Door placement differs from umoria (MEDIUM)
+
+| Aspect | Umoria | Current code |
+|--------|--------|-------------|
+| Room entry doors | 25% chance at tunnel-granite intersection; rest become corridor floor | Always places closed door on perpendicular room wall |
+| Corridor intersection doors | Placed at tunnel-corridor crossings (15% chance) after all tunnels | Not implemented |
+| Door types | 1/3 open (3/4 normal, 1/4 broken), 1/3 closed (plain/stuck/locked), 1/3 secret | Always closed |
+| Wall detection | Uses FLAG_LIT to distinguish room walls from rock | Same — correct |
+
+#### Finding DG6 — Streamer generation order is wrong (MEDIUM)
+
+Current code comment says: *"Streamers BEFORE corridors ensures corridors
+always overwrite mineral veins they cross."* The actual call order is:
+
+```
+place_streamers     // line 413 — BEFORE connect_rooms
+connect_rooms       // line 415 — after streamers
+```
+
+But umoria does it the opposite way:
+1. Build tunnels (corridors)
+2. Fill empty space with TILE_GRANITE_WALL
+3. **Then** place streamers
+
+Umoria places streamers AFTER tunnels and granite fill, which means streamers
+can overwrite corridor floor tiles (creating obstacles). The current code places
+streamers before tunnels, so corridor carving will overwrite streamer tiles —
+meaning streamers never create obstacles in corridors. This is actually more
+player-friendly but differs from umoria.
+
+Additionally, umoria places 3 magma + 2 quartz streamers (5 total). Current
+code places 1 + 50% chance of a second (1-2 total).
+
+#### Finding DG7 — Stairs placement differences (MEDIUM)
+
+| Aspect | Umoria | Current code |
+|--------|--------|-------------|
+| Down stairs count | 3-4 (randomNumber(2)+2) | 2 |
+| Up stairs count | 1-2 (randomNumber(2)) | 1 |
+| Placement criteria | Random floor tile with >= 3 adjacent walls (degrades) | Random floor tile in specified room |
+| Wall adjacency check | Yes — prefers corner-like positions | No — any interior floor tile |
+
+#### Finding DG8 — fill_map_rock uses wrong fill tile (LOW)
+
+`fill_map_rock` fills with `TILE_WALL_H` ($10, "horizontal wall"). Umoria
+fills with `TILE_NULL_WALL` (0), then converts to `TILE_GRANITE_WALL` (12) after
+tunnels are carved. The current code uses a concrete wall type for uncarved rock,
+which means:
+
+1. The corridor carver's LIT-flag check (`and #FLAG_LIT / beq = rock`) works
+   correctly because unlit TILE_WALL_H distinguishes rock from room walls
+2. But all 6 wall types ($10-$60) share the same "is this a wall?" semantic,
+   which is fragile — the code relies on the LIT bit rather than tile type
+   to distinguish rock from structure
+
+Umoria uses the type value itself (>= MIN_CAVE_WALL=12) to identify walls vs.
+open space. A dedicated "rock" tile type would be cleaner but the current
+approach works.
+
+#### Finding DG9 — DUNGEON_FLAGS marks all rooms as lit+visited (LOW)
+
+`DUNGEON_FLAGS = FLAG_LIT | FLAG_VISITED` ($0C). Every room and corridor tile
+is placed with both flags set. This means:
+
+1. All rooms are always fully visible (no dark rooms)
+2. Umoria has dark rooms at deeper levels (lit if `level <= random(25)`)
+3. The visibility system (`dungeon_los.s`) is a stub returning "always visible"
+4. These are Phase 4.5 concerns, but the generation code bakes in visibility
+   at room creation time, making it harder to add dark rooms later
+
+#### Finding DG10 — Zero test coverage for dungeon generation (HIGH)
+
+No `test_dungeon.s` exists. Dungeon generation is the most algorithmically
+complex part of the codebase and has the most edge cases. The following tests
+are needed:
+
+**Room placement tests:**
+- `check_room_overlap` returns correct results for overlapping and non-overlapping rooms
+- `check_room_overlap` handles ROOM_GAP correctly
+- Rooms never placed outside map boundary (x >= 4, y >= 4, x+w <= 76, y+h <= 44)
+- `draw_dungeon_room` writes correct wall/floor tiles and flags
+- Room count never drops below 2 after retry exhaustion
+
+**Corridor tests:**
+- `carve_h_corridor` carves floor from cx1 to cx2 (both directions)
+- `carve_v_corridor` carves floor from cy1 to cy2 (both directions)
+- Corridor through room wall places door (not floor)
+- Corridor through rock places floor (not door)
+- Single-tile corridor (cx1 == cx2) handled correctly
+- L-shaped corridor reaches both endpoints
+
+**Connectivity tests:**
+- Every room has at least one floor tile adjacent to a corridor or door
+- Player start position is on a walkable tile
+- All stairs are on walkable tiles
+- Pathfinding from player start to each staircase succeeds (BFS/flood-fill)
+
+**Streamer tests:**
+- Streamers don't overwrite room floor tiles
+- Streamers don't overwrite doors or stairs
+- Streamer bounds checking works (doesn't write outside map)
+
+**Stairs tests:**
+- `verify_stairs` re-places overwritten stairs
+- Stairs placed inside room interiors (not on walls)
+- Up-stairs and down-stairs in different rooms
+
+**Integration test:**
+- Generate 100+ dungeons, verify all pass connectivity flood-fill
+- No room is fully enclosed (every room reachable from player start)
+
+#### Summary of required changes
+
+| # | Priority | Change |
+|---|----------|--------|
+| 1 | BLOCKER | Stub out `trap_count`, `place_traps`, `place_secrets` to restore buildability |
+| 2 | CRITICAL | Rewrite connectivity algorithm: shuffle rooms, connect as circular chain, use robust tunnel builder that can navigate around intervening rooms |
+| 3 | HIGH | Add flood-fill connectivity verification after generation; re-generate if any room unreachable |
+| 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests |
+| 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) |
+| 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) |
+| 7 | MEDIUM | Add wall-adjacency check for stairs placement |
+| 8 | LOW | Consider increasing room count range (e.g., 6-12) for better dungeon density |
+| 9 | LOW | Add dark room support (defer LIT flag to Phase 4.5 LOS implementation) |
+
 ---
 
 ## What's Next
 
-Phases 1–3 are complete. All audit and QA findings resolved. Phase 4 (Dungeon
-Generation and Navigation) is next. Key prerequisites: `dungeon_gen.s`
-room-and-corridor generation, `data_loader.s` + `fastload.s` for tiered data
-loading, full LOS in `dungeon_los.s`, and player movement updates (traps,
-searching, running).
+Phase 4 (Dungeon Generation and Navigation) is in progress but has critical
+issues. The build is currently broken (DG1). The corridor connectivity algorithm
+must be rewritten (DG2) before any further Phase 4 work proceeds. Priority order:
+1. Fix build (stub undefined symbols)
+2. Rewrite tunnel/connectivity algorithm
+3. Add connectivity verification
+4. Create dungeon generation test suite
+5. Continue with remaining Phase 4 deliverables

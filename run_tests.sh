@@ -15,6 +15,7 @@ run_test() {
     local src="$2"
     local result_range="$3"   # e.g. "0400 040b"
     local expected_count="$4"
+    local cycles="${5:-20000000}"  # Optional cycle limit (default 20M)
 
     echo -n "  $name: "
 
@@ -51,7 +52,7 @@ run_test() {
     result=$(echo -e "m ${result_range}\nquit\n" | \
         "$VICE" -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
-        -limitcycles 20000000 2>&1 | grep "^>C:0")
+        -limitcycles "$cycles" 2>&1 | grep "^>C:0")
 
     # Count $01 bytes (passes) in result
     local pass_count
@@ -92,6 +93,7 @@ run_test "math"   "tests/test_math.s"   "0400 040b" 12
 run_test "rng"    "tests/test_rng.s"    "0400 0403" 4
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "player" "tests/test_player.s" "0400 0409" 10
+run_test "dungeon" "tests/test_dungeon.s" "0400 040f" 16 200000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
