@@ -786,6 +786,18 @@ test_start:
     sta dg_room_h
     jsr draw_dungeon_room
 
+    // Also populate room arrays (add_corridor_doors iterates rooms)
+    lda #1
+    sta room_count
+    lda #20
+    sta room_x
+    lda #10
+    sta room_y
+    lda #4
+    sta room_w
+    lda #3
+    sta room_h
+
     // Room right wall is at x=24 (room_x + room_w = 20+4)
     // Place corridor floor at x=25, y=11 (adjacent to right wall)
     ldx #11
@@ -847,6 +859,18 @@ test_start:
     lda #3
     sta dg_room_h
     jsr draw_dungeon_room
+
+    // Also populate room arrays
+    lda #1
+    sta room_count
+    lda #20
+    sta room_x
+    lda #10
+    sta room_y
+    lda #4
+    sta room_w
+    lda #3
+    sta room_h
 
     // DON'T place any corridor floor — right wall has room floor on left, rock on right
 

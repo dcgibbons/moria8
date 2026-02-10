@@ -1251,99 +1251,185 @@ mcw_save_col: .byte 0
 
 // ============================================================
 // add_corridor_doors — Add doors where corridors are adjacent to room walls
-// Scans the entire map for lit wall tiles (TILE_WALL_V or TILE_WALL_H)
-// that have floor (TILE_FLOOR) on both perpendicular sides. These are
-// walls between a room interior and a corridor that passed alongside
-// the room without connecting to it. Converting them to doors ensures
-// the corridor connects to the room.
+// Iterates over each room's 4 walls. For each wall side, scans for
+// the first tile that has corridor floor on the outside and is still
+// a wall (not already a door). Places exactly ONE door per wall side.
+// If the wall already has a door (from corridor carving), skips it.
 // ============================================================
 add_corridor_doors:
-    ldx #1                          // Start at row 1 (skip map boundary)
-!acd_row:
-    stx acd_save_row
+    lda #0
+    sta acd_room_idx
+!acd_room_loop:
+    lda acd_room_idx
+    cmp room_count
+    bcc !acd_not_done+
+    jmp !acd_done+
+!acd_not_done:
+    tax
+
+    // --- Left wall: col = room_x-1, check col room_x-2 for corridor ---
+    lda room_x,x
+    sec
+    sbc #1
+    sta acd_wall_col
+    sec
+    sbc #1
+    sta acd_outer_col
+    lda room_y,x
+    sta acd_start
+    clc
+    adc room_h,x
+    sta acd_end
+    jsr acd_scan_v_wall
+
+    // --- Right wall: col = room_x+room_w, check col room_x+room_w+1 ---
+    ldx acd_room_idx
+    lda room_x,x
+    clc
+    adc room_w,x
+    sta acd_wall_col
+    clc
+    adc #1
+    sta acd_outer_col
+    lda room_y,x
+    sta acd_start
+    clc
+    adc room_h,x
+    sta acd_end
+    jsr acd_scan_v_wall
+
+    // --- Top wall: row = room_y-1, check row room_y-2 for corridor ---
+    ldx acd_room_idx
+    lda room_y,x
+    sec
+    sbc #1
+    sta acd_wall_row
+    sec
+    sbc #1
+    sta acd_outer_row
+    lda room_x,x
+    sta acd_start
+    clc
+    adc room_w,x
+    sta acd_end
+    jsr acd_scan_h_wall
+
+    // --- Bottom wall: row = room_y+room_h, check row room_y+room_h+1 ---
+    ldx acd_room_idx
+    lda room_y,x
+    clc
+    adc room_h,x
+    sta acd_wall_row
+    clc
+    adc #1
+    sta acd_outer_row
+    lda room_x,x
+    sta acd_start
+    clc
+    adc room_w,x
+    sta acd_end
+    jsr acd_scan_h_wall
+
+    inc acd_room_idx
+    jmp !acd_room_loop-
+!acd_done:
+    rts
+
+// acd_scan_v_wall — Scan a vertical wall segment, place at most one door
+// Input: acd_wall_col, acd_outer_col, acd_start (row), acd_end (row, exclusive)
+// Scans rows acd_start..acd_end-1. If an existing door is found, stops.
+// If a wall tile with corridor floor outside is found, places one door and stops.
+acd_scan_v_wall:
+    ldx acd_start
+!asvw_loop:
+    cpx acd_end
+    bcs !asvw_ret+
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-
-    ldy #1                          // Start at col 1
-!acd_col:
+    ldy acd_wall_col
     lda (zp_ptr0),y
-    sta acd_tile                    // Save full tile byte
-    and #FLAG_LIT
-    beq !acd_next+                  // Not lit → not a room wall → skip
-
-    lda acd_tile
     and #TILE_TYPE_MASK
+    // Already a door on this wall? → done (wall is connected)
+    cmp #TILE_DOOR_OPEN
+    beq !asvw_ret+
+    cmp #TILE_DOOR_CLOSED
+    beq !asvw_ret+
+    // Must be TILE_WALL_V to be eligible
     cmp #TILE_WALL_V
-    beq !acd_check_v+               // Vertical wall → check left/right
-    cmp #TILE_WALL_H
-    beq !acd_check_h+               // Horizontal wall → check above/below
-    jmp !acd_next+                  // Corner or other → skip
-
-!acd_check_v:
-    // Vertical wall: check if floor on both left (y-1) and right (y+1)
-    sty acd_save_col
-    dey
+    bne !asvw_next+
+    // Check outer column for corridor floor
+    ldy acd_outer_col
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    bne !acd_restore+               // Left is not floor → skip
-    ldy acd_save_col
-    iny
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    bne !acd_restore+               // Right is not floor → skip
-    // Both sides are floor → place door
-    jsr random_door_type            // A = door tile (preserves Y, clobbers X)
-    ldy acd_save_col
-    sta (zp_ptr0),y
-    jmp !acd_restore+
-
-!acd_check_h:
-    // Horizontal wall: check if floor above (row-1) and below (row+1)
-    sty acd_save_col
-    ldx acd_save_row
-    dex
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-    lda (zp_ptr1),y                 // Tile above
-    and #TILE_TYPE_MASK
-    bne !acd_restore+               // Above is not floor → skip
-    ldx acd_save_row
+    bne !asvw_next+             // Not floor → no corridor here
+    // Place door
+    jsr random_door_type        // A = door tile (clobbers X, preserves Y)
+    ldy acd_wall_col
+    sta (zp_ptr0),y             // zp_ptr0 still valid
+    rts                         // One door placed, done with this wall
+!asvw_next:
     inx
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-    lda (zp_ptr1),y                 // Tile below
-    and #TILE_TYPE_MASK
-    bne !acd_restore+               // Below is not floor → skip
-    // Both sides are floor → place door
-    jsr random_door_type            // A = door tile (preserves Y, clobbers X)
-    ldy acd_save_col
-    sta (zp_ptr0),y                 // zp_ptr0 still points to current row
-    // fall through to restore
-
-!acd_restore:
-    ldy acd_save_col
-!acd_next:
-    iny
-    cpy #MAP_COLS - 1
-    bne !acd_col-
-
-    ldx acd_save_row
-    inx
-    cpx #MAP_ROWS - 1
-    beq !acd_done+
-    jmp !acd_row-
-!acd_done:
+    jmp !asvw_loop-
+!asvw_ret:
     rts
 
-acd_save_row: .byte 0
-acd_save_col: .byte 0
-acd_tile:     .byte 0
+// acd_scan_h_wall — Scan a horizontal wall segment, place at most one door
+// Input: acd_wall_row, acd_outer_row, acd_start (col), acd_end (col, exclusive)
+// Scans cols acd_start..acd_end-1. If an existing door is found, stops.
+// If a wall tile with corridor floor outside is found, places one door and stops.
+acd_scan_h_wall:
+    // Set up row pointers
+    ldx acd_wall_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldx acd_outer_row
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+
+    ldy acd_start
+!ashw_loop:
+    cpy acd_end
+    bcs !ashw_ret+
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    // Already a door? → done
+    cmp #TILE_DOOR_OPEN
+    beq !ashw_ret+
+    cmp #TILE_DOOR_CLOSED
+    beq !ashw_ret+
+    // Must be TILE_WALL_H
+    cmp #TILE_WALL_H
+    bne !ashw_next+
+    // Check outer row for corridor floor
+    lda (zp_ptr1),y
+    and #TILE_TYPE_MASK
+    bne !ashw_next+             // Not floor → no corridor here
+    // Place door
+    sty acd_save_col
+    jsr random_door_type        // A = door tile (clobbers X, preserves Y)
+    ldy acd_save_col
+    sta (zp_ptr0),y             // zp_ptr0 still valid
+    rts                         // One door placed, done with this wall
+!ashw_next:
+    iny
+    jmp !ashw_loop-
+!ashw_ret:
+    rts
+
+acd_room_idx:  .byte 0
+acd_wall_col:  .byte 0
+acd_outer_col: .byte 0
+acd_wall_row:  .byte 0
+acd_outer_row: .byte 0
+acd_start:     .byte 0
+acd_end:       .byte 0
+acd_save_col:  .byte 0
 
 // ============================================================
 // random_wall_adj_floor — Pick a floor tile in room X, preferring wall-adjacent
