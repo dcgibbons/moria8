@@ -722,7 +722,7 @@ Findings are categorized as bugs, plan deviations, and minor issues.
 
 ### Status
 
-- **Phases 1–3 implemented:** 21 source files, 4 test files
+- **Phases 1–3 implemented and audited:** 21 source files, 4 test files
 
 **Bug fixes applied:**
 
@@ -760,18 +760,15 @@ races with large positive modifiers (e.g., Half-Troll STR +4, Elf INT +2).
 
 **Finding S1 — Wrong dice algorithm (HIGH)**
 
-| Aspect | Umoria (correct) | Current code (`player_create.s`) |
-|--------|------------------|----------------------------------|
-| Dice pool | 18 dice cycling d3, d4, d5 | 6 independent `math_dice(3,6,0)` calls |
-| Per-stat formula | 5 + three consecutive dice (one d3 + one d4 + one d5) | 3d6 |
-| Raw stat range | 8–17 | 3–18 |
-| Total constraint | Re-roll all 18 dice if sum < 43 or sum > 54 | None |
-| Distribution shape | Tight, correlated across stats (total constrained) | Independent, wide variance per stat |
+| Aspect | Umoria (correct) | Before fix | After fix |
+|--------|------------------|------------|-----------|
+| Dice pool | 18 dice cycling d3, d4, d5 | 6 independent `math_dice(3,6,0)` calls | d3+d4+d5 per stat |
+| Per-stat formula | 5 + three consecutive dice (one d3 + one d4 + one d5) | 3d6 | 5 + d3 + d4 + d5 (range 8–17) |
+| Raw stat range | 8–17 | 3–18 | 8–17 |
+| Total constraint | Re-roll all 18 dice if sum < 43 or sum > 54 | None | Re-roll if total not in 73–84 |
+| Distribution shape | Tight, correlated across stats (total constrained) | Independent, wide variance per stat | Constrained, tight distribution |
 
-The constraint is critical: umoria guarantees a reasonable total across all six stats,
-so players reliably see at least one or two stats at 15–17. With unconstrained 3d6,
-you can easily get six mediocre rolls. The range difference also matters: umoria's
-minimum is 8 (not 3), giving a much higher floor.
+**Status: FIXED.** Dice algorithm rewritten in `player_create.s`.
 
 **Finding S2 — Wrong race/class modifier application (CRITICAL)**
 
@@ -799,23 +796,31 @@ Internal encoding: values 3–18 stored as-is; 19–118 = 18/01 through 18/100.
 
 **Example**: Half-Troll STR modifier +4, base STR 16:
 - Umoria: 16 → 17 → 18 → 18/(06–20) → 18/(12–40). Easily reaches 18/30+.
-- Current code: `min(16 + 4, 18) = 18`. Can never reach 18/xx.
+- Old code: `min(16 + 4, 18) = 18`. Could never reach 18/xx.
 
 **Example**: Elf INT modifier +2, base INT 17:
 - Umoria: 17 → 18 → 18/(06–20). Reaches 18/06–18/20.
-- Current code: `min(17 + 2, 18) = 18`.
+- Old code: `min(17 + 2, 18) = 18`.
+
+**Status: FIXED.** `increment_stat`/`decrement_stat` implemented in `player.s` with
+umoria's exact randomized step logic. `apply_modifier` loops through each ±1.
+`player_calc_stats` and `create_calc_modified_stat` both use the new system.
 
 **Finding S3 — 18/xx support too limited (HIGH)**
 
 `tables.s` line 7 says: *"For C64 simplicity, we cap stats at 18 (no 18/xx
 percentile stats)."* This conflicts with faithful umoria behavior:
 
-| Aspect | Umoria | Current code |
-|--------|--------|-------------|
-| Stats that support 18/xx | All six (STR, INT, WIS, DEX, CON, CHR) | STR only (via `PL_STR_EXTRA`) |
-| How 18/xx is reached | Race/class modifiers via incrementStat | Only if base die roll is exactly 18 |
-| Player struct fields | Single uint8_t per stat (3–118 encoding) | Separate base + extra byte (STR only) |
-| Display support | All stats show 18/xx | Only STR shows 18/xx (`ui_character.s`) |
+| Aspect | Umoria | Before fix | After fix |
+|--------|--------|------------|-----------|
+| Stats that support 18/xx | All six (STR, INT, WIS, DEX, CON, CHR) | STR only (via `PL_STR_EXTRA`) | All six stats |
+| How 18/xx is reached | Race/class modifiers via incrementStat | Only if base die roll is exactly 18 | Via increment_stat during modifier application |
+| Player struct fields | Single uint8_t per stat (3–118 encoding) | Separate base + extra byte (STR only) | Single byte per stat (3–118 encoding) |
+| Display support | All stats show 18/xx | Only STR shows 18/xx (`ui_character.s`) | All stats via `put_stat_val` |
+
+**Status: FIXED.** `PL_STR_EXTRA` removed (now `PL_SPARE_63`). Single-byte encoding
+(3–118) for all stats. `put_stat_val` simplified to take A only (no Y param).
+`ui_character.s` updated. `stat_bonus_index` caps at index 15 for 18/xx stats.
 
 **Finding S4 — PRNG algorithm is acceptable (OK)**
 
@@ -823,31 +828,22 @@ The 32-bit Galois LFSR (polynomial $ED, period 2^32−1) with rejection sampling
 in `rng_range` is adequate for game use. CIA timer seeding provides reasonable
 initial entropy. No changes needed.
 
-**Required code changes:**
+**Required code changes (all resolved):**
 
-1. **Replace 3d6 with umoria's constrained multi-die system** — Roll 18 dice
-   (cycling d3, d4, d5), require total in 43–54, assign each stat = 5 + three
-   consecutive dice. Implement in `player_create.s`.
-
-2. **Implement `increment_stat` / `decrement_stat`** — Add to `player.s` or
-   `math.s` with umoria's randomized step logic. Apply race and class modifiers
-   via repeated calls to these routines instead of simple addition.
-
-3. **Extend 18/xx support to all six stats** — Either use umoria's single-byte
-   encoding (3–118) per stat (saves memory, simplifies math) or add `PL_xxx_EXTRA`
-   fields for all stats. Update `ui_character.s` to display 18/xx for all stats.
-   Update `player_calc_stats` to use the new increment/decrement system.
-
-4. **Remove the "cap at 18" constraint** from `tables.s` header comment.
-
-5. **Update plan Phase 2.3** — Change "3d6+modifier per stat" to describe the
-   correct umoria algorithm.
+| # | Change | Status |
+|---|--------|--------|
+| 1 | Replace 3d6 with umoria's constrained multi-die system | **Fixed** — `player_create.s` rolls d3+d4+d5 per stat (+5), total constrained 73–84 |
+| 2 | Implement `increment_stat` / `decrement_stat` | **Fixed** — Added to `player.s` with umoria's randomized step logic |
+| 3 | Extend 18/xx support to all six stats | **Fixed** — Single-byte encoding (3–118), `PL_STR_EXTRA` removed, `ui_character.s` + `put_stat_val` updated |
+| 4 | Remove "cap at 18" constraint from `tables.s` | **Fixed** — Header comment updated |
+| 5 | Update plan Phase 2.3 | **Fixed** — Phase 2.3 now describes correct umoria algorithm |
 
 ---
 
 ## What's Next
 
-Phases 1–3 are complete. Phase 4 (Dungeon Generation and Navigation) is next.
-Key prerequisites: `dungeon_gen.s` room-and-corridor generation, `data_loader.s`
-+ `fastload.s` for tiered data loading, full LOS in `dungeon_los.s`, and
-player movement updates (traps, searching, running).
+Phases 1–3 are complete. All audit and QA findings resolved. Phase 4 (Dungeon
+Generation and Navigation) is next. Key prerequisites: `dungeon_gen.s`
+room-and-corridor generation, `data_loader.s` + `fastload.s` for tiered data
+loading, full LOS in `dungeon_los.s`, and player movement updates (traps,
+searching, running).
