@@ -1,8 +1,15 @@
-# Build artifacts
+# Build output
+out/
+
+# Assembly artifacts (outside build dir)
 *.prg
 *.sym
 *.vs
 *.dbg
+
+# Disk images
+*.d64
+*.d81
 
 # VICE state
 *.vsf
