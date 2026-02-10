@@ -700,6 +700,8 @@ Findings are categorized as bugs, plan deviations, and minor issues.
 | A3 | Medium | `input.s:85-96` | **Numeric prefix parsing is broken.** `input_get_command` detects `CMD_REPEAT` but discards the digit value and loops back to `!get_key` without accumulating anything. Comment says "TODO: implement in Phase 3" but Phase 3 is complete. Plan 1.6 lists this as a Phase 1 deliverable. Fix: implement digit accumulation or remove the feature from Phase 1 scope and defer explicitly. |
 | A4 | Low | `player_create.s:706` | **"CHOOSE (A-" prompt is incomplete.** The string `create_choose_str` ends with `A-` and a null terminator — the closing range letter and `)` are never appended. Displays as `CHOOSE (A-` for both race and class selection. Fix: dynamically append the final letter and closing paren after the string, or use separate prompt strings per screen. |
 | A5 | Medium | `player.s` (player_calc_stats) | **Stat modifiers may be clamped prematurely between race and class additions.** If the intermediate result after adding the race modifier is clamped to 3–18 before the class modifier is added, edge cases produce wrong results. Example: base=17, race=+3, class=-3 → sequential clamping gives 15 (17→20→18→15) instead of correct 17 (17+3-3=17). Current tests use base=10 and don't hit this case. Fix: sum all modifiers first, then clamp once. |
+| A6 | High | `dungeon_render.s` / `main.s` | **Full viewport redraw on every move causes visible input lag.** `render_viewport` redraws all 760 tiles (38x20) on every movement keypress, even though typically only 2 tiles changed (old and new player position). Per-tile cost is ~80-120 cycles (map read, flag check, 4x LSR, two table lookups, player position check, `check_store_door` JSR with 6-entry linear scan, screen+color RAM writes), totaling 60,000-90,000 cycles (~3-5 frames). Fix: implement dirty tile rendering — only update changed tiles on move; reserve full redraw for viewport scroll and screen transitions. |
+| A7 | High | `input.s` / `main.s` | **Keyboard buffer not flushed before input poll causes key stacking.** While `render_viewport` runs for 3-5 frames, the KERNAL IRQ continues scanning the keyboard and queuing keypresses into the buffer at `$0277` (count at `$C6`). When `input_get_command` calls GETIN, it immediately dequeues stale buffered keys, triggering another full redraw, which buffers more keys — a snowball effect. Fix: flush the keyboard buffer (`lda #0 / sta $c6`) before polling for input. |
 
 ### Plan Deviations
 
@@ -733,6 +735,8 @@ Findings are categorized as bugs, plan deviations, and minor issues.
 | A3 | **Fixed** | Broken `CMD_REPEAT` handling removed. Numeric prefix explicitly deferred to Phase 6+. `input_get_command` now skips unknown keys cleanly. Dead `CMD_REPEAT` constant and stale header comment cleaned up. |
 | A4 | **Fixed** | Added `put_choose_suffix` helper. Race prompt now shows "CHOOSE (A-H)", class prompt shows "CHOOSE (A-X)" with correct final letter. |
 | A5 | **Not a bug** | Code already sums both modifiers before clamping — no intermediate clamp exists. Added clarifying comment documenting the valid range (sum -8 to 28, no 8-bit wrap). |
+| A6 | **Fixed** | Implemented dirty tile rendering: on player move without viewport scroll, only old and new player tiles are redrawn. Full viewport redraw reserved for scroll, screen transitions, and initial render. |
+| A7 | **Fixed** | Keyboard buffer flushed (`sta $c6`) before input polling in `input_get_command`. |
 
 **Plan deviation resolutions:**
 
