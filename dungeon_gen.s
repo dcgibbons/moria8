@@ -94,6 +94,9 @@ store_door_y:
 // Sets player start position.
 // Preserves: nothing
 town_generate:
+    // Clear trap table for safety (town has no traps)
+    lda #0
+    sta trap_count
     // --- Step 1: Fill entire map with floor + TOWN_FLAGS ---
     lda #TILE_FLOOR | TOWN_FLAGS    // $0C
     ldx #0
@@ -392,16 +395,28 @@ level_generate:
 
 // ============================================================
 // dungeon_generate — Main dungeon generation routine
-// Steps: fill rock, place rooms, connect corridors, doors,
-//        stairs, streamers, position player
+// Order matches umoria: fill, rooms, streamers, tunnels, doors,
+// then features and stairs.  Streamers BEFORE corridors ensures
+// corridors always overwrite mineral veins they cross.
 // ============================================================
 dungeon_generate:
+    lda #0
+    sta trap_count
     jsr fill_map_rock
     jsr place_rooms
+    // Safety: if fewer than 2 rooms placed, retry entire generation
+    lda room_count
+    cmp #2
+    bcs !rooms_ok+
+    jmp dungeon_generate        // Re-roll everything
+!rooms_ok:
+    jsr place_streamers         // Before corridors (umoria order):
+                                // corridors overwrite veins they cross
     jsr connect_rooms
-    jsr place_doors
+    jsr mark_corridor_walls     // Make walls adjacent to corridors visible
     jsr place_stairs_dungeon
-    jsr place_streamers
+    jsr place_traps
+    jsr place_secrets
     jsr verify_stairs
     jsr position_player_dungeon
     rts
@@ -465,24 +480,24 @@ place_rooms:
     adc #ROOM_MIN_H
     sta dg_room_h
 
-    // Roll x position: rng_range(77 - w) + 2
-    // Ensures wall at x-1 >= 1 and wall at x+w <= 78
-    lda #77
+    // Roll x position: rng_range(75 - w) + 4
+    // Ensures wall at x-1 >= 3 and overlap check (x - 3) >= 1 (no underflow)
+    lda #75
     sec
     sbc dg_room_w
     jsr rng_range
     clc
-    adc #2
+    adc #4
     sta dg_room_x
 
-    // Roll y position: rng_range(45 - h) + 2
-    // Ensures wall at y-1 >= 1 and wall at y+h <= 46
-    lda #45
+    // Roll y position: rng_range(43 - h) + 4
+    // Ensures wall at y-1 >= 3 and overlap check (y - 3) >= 1 (no underflow)
+    lda #43
     sec
     sbc dg_room_h
     jsr rng_range
     clc
-    adc #2
+    adc #4
     sta dg_room_y
 
     // Check overlap with all existing rooms
@@ -531,11 +546,10 @@ check_room_overlap:
     jmp !no_overlap+            // No rooms placed yet
 
 !check_loop:
-    // Check bounding box + ROOM_GAP gap
-    // Room A: [dg_room_x - 1 - GAP, dg_room_x + dg_room_w + GAP]
-    // Room B: [room_x[x] - 1 - GAP, room_x[x] + room_w[x] + GAP]
-    // Overlap if: A.left <= B.right AND A.right >= B.left
-    //         AND A.top <= B.bottom AND A.bottom >= B.top
+    // Check bounding box with ROOM_GAP separation
+    // Pad only room A (new room) by GAP; B (existing) uses raw wall bounds.
+    // No overlap if: A.left >= B.right OR A.right <= B.left
+    //            OR  A.top >= B.bottom OR A.bottom <= B.top
 
     // Compute A.left = dg_room_x - 1 - GAP
     lda dg_room_x
@@ -550,33 +564,30 @@ check_room_overlap:
     adc #ROOM_GAP
     sta dg_cy1                  // A.right
 
-    // Compute B.left = room_x[x] - 1 - GAP
+    // Compute B.left = room_x[x] - 1 (wall bound, no GAP)
     lda room_x,x
     sec
-    sbc #1 + ROOM_GAP
+    sbc #1
     sta dg_cx2                  // B.left
 
-    // Compute B.right = room_x[x] + room_w[x] + GAP
+    // Compute B.right = room_x[x] + room_w[x] (wall bound, no GAP)
     lda room_x,x
     clc
     adc room_w,x
-    adc #ROOM_GAP
     sta dg_cy2                  // B.right
 
-    // Test: A.left > B.right? (no overlap in X)
+    // Test: A.left >= B.right? (no X overlap)
     lda dg_cx1
     cmp dg_cy2
-    beq !check_y+
-    bcs !next_room+             // A.left > B.right, no X overlap
+    bcs !next_room+
 
-!check_y_entry:
-    // Test: A.right < B.left? (no overlap in X)
+    // Test: A.right <= B.left? (no X overlap)
     lda dg_cy1
     cmp dg_cx2
-    bcc !next_room+             // A.right < B.left, no X overlap
+    bcc !next_room+
+    beq !next_room+
 
-!check_y:
-    // Now check Y axis
+    // X overlaps — now check Y axis
     // A.top = dg_room_y - 1 - GAP
     lda dg_room_y
     sec
@@ -590,31 +601,30 @@ check_room_overlap:
     adc #ROOM_GAP
     sta dg_cy1                  // A.bottom
 
-    // B.top = room_y[x] - 1 - GAP
+    // B.top = room_y[x] - 1 (wall bound, no GAP)
     lda room_y,x
     sec
-    sbc #1 + ROOM_GAP
+    sbc #1
     sta dg_cx2                  // B.top
 
-    // B.bottom = room_y[x] + room_h[x] + GAP
+    // B.bottom = room_y[x] + room_h[x] (wall bound, no GAP)
     lda room_y,x
     clc
     adc room_h,x
-    adc #ROOM_GAP
     sta dg_cy2                  // B.bottom
 
-    // Test: A.top > B.bottom? (no overlap in Y)
+    // Test: A.top >= B.bottom? (no Y overlap)
     lda dg_cx1
     cmp dg_cy2
-    beq !found_overlap+
     bcs !next_room+
 
-    // Test: A.bottom < B.top? (no overlap in Y)
+    // Test: A.bottom <= B.top? (no Y overlap)
     lda dg_cy1
     cmp dg_cx2
     bcc !next_room+
+    beq !next_room+
 
-!found_overlap:
+    // Both axes overlap — rooms too close
     sec                         // Overlap found
     rts
 
@@ -848,15 +858,63 @@ carve_h_corridor:
     lda dg_cx2
     sta dg_room_x               // End at larger (temp)
 !hc_loop:
+    lda (zp_ptr0),y             // Read existing tile
+    tax                         // Stash full byte in X
+    and #TILE_TYPE_MASK
+    beq !hc_advance+            // $00 floor → skip
+    cmp #TILE_DOOR_OPEN
+    beq !hc_advance+            // $70 door open → skip
+    cmp #TILE_DOOR_CLOSED
+    beq !hc_advance+            // $80 door closed → skip
+    cmp #TILE_STAIRS_DN
+    bcs !hc_carve_floor+        // $90+ (streamers etc) → carve to floor
+    // Types $10-$60: wall tiles — check FLAG_LIT to distinguish room wall from rock
+    txa                         // Recover full byte
+    and #FLAG_LIT
+    beq !hc_carve_floor+        // Not lit = rock fill → carve to floor
+    // LIT room wall — only place door on perpendicular (vertical) wall
+    txa
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_V
+    beq !hc_place_door+         // Vertical wall → door
+    // Parallel wall (horiz) or corner → carve to floor
+!hc_carve_floor:
     lda #TILE_FLOOR | DUNGEON_FLAGS
     sta (zp_ptr0),y
+    jmp !hc_advance+
+!hc_place_door:
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!hc_advance:
     cpy dg_room_x
     beq !hc_done+
     iny
     jmp !hc_loop-
 !hc_single:
     ldy dg_cx1
+    lda (zp_ptr0),y             // Read existing tile
+    tax
+    and #TILE_TYPE_MASK
+    beq !hc_done+               // Floor → skip
+    cmp #TILE_DOOR_OPEN
+    beq !hc_done+
+    cmp #TILE_DOOR_CLOSED
+    beq !hc_done+
+    cmp #TILE_STAIRS_DN
+    bcs !hc_single_floor+       // $90+ → carve
+    txa
+    and #FLAG_LIT
+    beq !hc_single_floor+       // Not lit = rock → floor
+    txa
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_V
+    beq !hc_single_door+        // Perpendicular vertical wall → door
+!hc_single_floor:
     lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    jmp !hc_done+
+!hc_single_door:
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
     sta (zp_ptr0),y
 !hc_done:
     rts
@@ -886,8 +944,34 @@ carve_v_corridor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
+    lda (zp_ptr0),y             // Read existing tile
+    sta dg_retries              // Stash full byte (scratch — not live here)
+    and #TILE_TYPE_MASK
+    beq !vc_advance+            // $00 floor → skip
+    cmp #TILE_DOOR_OPEN
+    beq !vc_advance+            // $70 door open → skip
+    cmp #TILE_DOOR_CLOSED
+    beq !vc_advance+            // $80 door closed → skip
+    cmp #TILE_STAIRS_DN
+    bcs !vc_carve_floor+        // $90+ (streamers etc) → carve to floor
+    // Types $10-$60: wall tiles — check FLAG_LIT
+    lda dg_retries              // Recover full byte
+    and #FLAG_LIT
+    beq !vc_carve_floor+        // Not lit = rock fill → carve to floor
+    // LIT room wall — only place door on perpendicular (horizontal) wall
+    lda dg_retries
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !vc_place_door+         // Horizontal wall → door
+    // Parallel wall (vert) or corner → carve to floor
+!vc_carve_floor:
     lda #TILE_FLOOR | DUNGEON_FLAGS
     sta (zp_ptr0),y
+    jmp !vc_advance+
+!vc_place_door:
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+!vc_advance:
     cpx dg_room_y
     beq !vc_done+
     inx
@@ -899,200 +983,149 @@ carve_v_corridor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
+    lda (zp_ptr0),y             // Read existing tile
+    sta dg_retries
+    and #TILE_TYPE_MASK
+    beq !vc_done+               // Floor → skip
+    cmp #TILE_DOOR_OPEN
+    beq !vc_done+
+    cmp #TILE_DOOR_CLOSED
+    beq !vc_done+
+    cmp #TILE_STAIRS_DN
+    bcs !vc_single_floor+       // $90+ → carve
+    lda dg_retries
+    and #FLAG_LIT
+    beq !vc_single_floor+       // Not lit = rock → floor
+    lda dg_retries
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !vc_single_door+        // Perpendicular horizontal wall → door
+!vc_single_floor:
     lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+    jmp !vc_done+
+!vc_single_door:
+    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
     sta (zp_ptr0),y
 !vc_done:
     rts
 
 // ============================================================
-// place_doors — Scan room perimeters for corridor intersections
-// For each wall tile: if tile one step outside is floor, place door
+// mark_corridor_walls — Make walls adjacent to corridors visible
+//
+// Post-processing pass: scans entire map.  For each floor tile
+// with FLAG_VISITED set, marks all 8 adjacent non-floor tiles
+// with FLAG_VISITED so the renderer shows corridor boundaries
+// as stone walls.  Idempotent (room walls already have the flag).
 // ============================================================
-place_doors:
-    lda #0
-    sta dg_idx
-
-!pd_room_loop:
-    ldx dg_idx
-
-    // Load room bounds into scratch
-    lda room_x,x
-    sta dg_room_x
-    lda room_y,x
-    sta dg_room_y
-    lda room_w,x
-    sta dg_room_w
-    lda room_h,x
-    sta dg_room_h
-
-    // Compute wall coordinates
-    // wall_left = room_x - 1
-    lda dg_room_x
-    sec
-    sbc #1
-    sta zp_temp1                // wall_left
-
-    // wall_right = room_x + room_w
-    lda dg_room_x
-    clc
-    adc dg_room_w
-    sta zp_temp3                // wall_right
-
-    // wall_top = room_y - 1
-    lda dg_room_y
-    sec
-    sbc #1
-    sta zp_temp2                // wall_top
-
-    // wall_bottom = room_y + room_h
-    lda dg_room_y
-    clc
-    adc dg_room_h
-    sta zp_temp4                // wall_bottom
-
-    // --- Check top wall (row = wall_top, scan cols wall_left+1 to wall_right-1) ---
-    // Outside tile is at row wall_top - 1
-    lda zp_temp2
-    beq !pd_skip_top+           // wall_top = 0, can't check outside
-    sec
-    sbc #1
-    tax
-    lda map_row_lo,x
-    sta zp_ptr1                 // ptr1 = row above top wall
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-
-    ldx zp_temp2                // top wall row
-    lda map_row_lo,x
-    sta zp_ptr0                 // ptr0 = top wall row
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-
-    ldy zp_temp1
-    iny                         // Start at wall_left + 1
-!pd_top:
-    lda (zp_ptr1),y             // Tile above
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !pd_top_next+
-    // Outside is floor → place door
-    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
-    sta (zp_ptr0),y
-!pd_top_next:
-    iny
-    cpy zp_temp3                // Stop before wall_right
-    bne !pd_top-
-
-!pd_skip_top:
-
-    // --- Check bottom wall (row = wall_bottom) ---
-    // Outside tile is at row wall_bottom + 1
-    lda zp_temp4
-    cmp #MAP_ROWS - 1
-    bcs !pd_skip_bot+           // At map edge
-
-    clc
-    adc #1
-    tax
-    lda map_row_lo,x
-    sta zp_ptr1                 // ptr1 = row below bottom wall
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-
-    ldx zp_temp4                // bottom wall row
-    lda map_row_lo,x
-    sta zp_ptr0                 // ptr0 = bottom wall row
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-
-    ldy zp_temp1
-    iny
-!pd_bot:
-    lda (zp_ptr1),y
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !pd_bot_next+
-    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
-    sta (zp_ptr0),y
-!pd_bot_next:
-    iny
-    cpy zp_temp3
-    bne !pd_bot-
-
-!pd_skip_bot:
-
-    // --- Check left wall (col = wall_left, scan rows wall_top+1 to wall_bottom-1) ---
-    lda zp_temp1
-    beq !pd_skip_left+          // wall_left = 0, can't check outside
-
-    lda zp_temp2
-    clc
-    adc #1
-    tax                         // Start row = wall_top + 1
-!pd_left:
+mark_corridor_walls:
+    ldx #1                      // Start at row 1 (skip boundary)
+!mcw_row:
+    stx mcw_save_row
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
 
-    // Check tile to left of wall
-    ldy zp_temp1
-    dey                         // col = wall_left - 1
+    ldy #1                      // Start at col 1
+!mcw_col:
     lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !pd_left_next+
-    // Outside is floor → place door
-    ldy zp_temp1                // col = wall_left
-    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
-    sta (zp_ptr0),y
-!pd_left_next:
-    inx
-    cpx zp_temp4                // Stop before wall_bottom
-    bne !pd_left-
-
-!pd_skip_left:
-
-    // --- Check right wall (col = wall_right) ---
-    lda zp_temp3
-    cmp #MAP_COLS - 1
-    bcs !pd_skip_right+         // At map edge
-
-    lda zp_temp2
-    clc
-    adc #1
+    // Is this a visited floor tile?
     tax
-!pd_right:
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-
-    // Check tile to right of wall
-    ldy zp_temp3
-    iny                         // col = wall_right + 1
-    lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    bne !pd_right_next+
-    ldy zp_temp3                // col = wall_right
-    lda #TILE_DOOR_CLOSED | DUNGEON_FLAGS
-    sta (zp_ptr0),y
-!pd_right_next:
+    bne !mcw_next+              // Not floor type → skip
+    txa
+    and #FLAG_VISITED
+    beq !mcw_next+              // Floor but not visited → skip
+
+    // Found a visited floor tile — mark 8 adjacent walls
+    sty mcw_save_col
+
+    // --- Same row: left (Y-1) and right (Y+1) ---
+    dey
+    jsr mcw_mark_p0
+    ldy mcw_save_col
+    iny
+    jsr mcw_mark_p0
+
+    // --- Row above (X-1): 3 tiles ---
+    ldx mcw_save_row
+    dex
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy mcw_save_col
+    dey
+    jsr mcw_mark_p1
+    iny
+    jsr mcw_mark_p1
+    iny
+    jsr mcw_mark_p1
+
+    // --- Row below (X+1): 3 tiles ---
+    ldx mcw_save_row
     inx
-    cpx zp_temp4
-    bne !pd_right-
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy mcw_save_col
+    dey
+    jsr mcw_mark_p1
+    iny
+    jsr mcw_mark_p1
+    iny
+    jsr mcw_mark_p1
 
-!pd_skip_right:
+    // Restore Y for column scan
+    ldy mcw_save_col
 
-    // Next room
-    inc dg_idx
-    lda dg_idx
-    cmp room_count
-    beq !pd_done+
-    jmp !pd_room_loop-
-!pd_done:
+!mcw_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !mcw_col-
+
+    ldx mcw_save_row
+    inx
+    cpx #MAP_ROWS - 1
+    beq !mcw_done+
+    jmp !mcw_row-
+!mcw_done:
     rts
+
+// Mark tile at ptr0[Y] as visited if it's a non-floor, unvisited tile
+mcw_mark_p0:
+    lda (zp_ptr0),y
+    tax
+    and #FLAG_VISITED
+    bne !mcw_skip+              // Already visited
+    txa
+    and #TILE_TYPE_MASK
+    beq !mcw_skip+              // Floor → skip
+    txa
+    ora #FLAG_VISITED
+    sta (zp_ptr0),y
+!mcw_skip:
+    rts
+
+// Mark tile at ptr1[Y] as visited if it's a non-floor, unvisited tile
+mcw_mark_p1:
+    lda (zp_ptr1),y
+    tax
+    and #FLAG_VISITED
+    bne !mcw_skip+
+    txa
+    and #TILE_TYPE_MASK
+    beq !mcw_skip+
+    txa
+    ora #FLAG_VISITED
+    sta (zp_ptr1),y
+!mcw_skip:
+    rts
+
+mcw_save_row: .byte 0
+mcw_save_col: .byte 0
 
 // ============================================================
 // place_stairs_dungeon — Place 1 up-stairs + 2 down-stairs
@@ -1334,15 +1367,29 @@ carve_streamer:
     cmp #MAP_ROWS - 1
     bcs !cs_end+
 
-    // Write mineral tile
+    // Write mineral tile — only overwrite wall tiles (types 1-6)
+    // Matches umoria: streamers replace granite but never floors,
+    // corridors, doors, stairs, or other non-wall tiles.
     ldx dg_cy1
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
+    lda (zp_ptr0),y             // Read existing tile
+    tax                         // Save full byte
+    and #TILE_TYPE_MASK         // Extract type nibble
+    beq !cs_no_write+           // $00 = floor — skip
+    cmp #TILE_DOOR_OPEN         // $70 = first non-wall type
+    bcs !cs_no_write+           // Types 7-15 — skip
+    // Types 1-6 ($10-$60) are wall tiles — skip if room wall (FLAG_LIT)
+    txa
+    and #FLAG_LIT
+    bne !cs_no_write+           // Room wall → preserve
+    // Regular rock → overwrite with mineral
     lda dg_room_w               // Mineral tile value
     sta (zp_ptr0),y
+!cs_no_write:
 
     // Advance position with jitter
     // x += dx, with 25% chance of jitter on y
