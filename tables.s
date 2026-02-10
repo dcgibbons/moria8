@@ -4,9 +4,8 @@
 // All values from umoria source (data_player.cpp, player_stats.cpp).
 //
 // Stat encoding: values 3–18 stored as-is. 18/01–18/100 stored as 19–118.
-// For C64 simplicity, we cap stats at 18 (no 18/xx percentile stats).
-// This loses some granularity for exceptional stats but saves significant
-// table space and complexity.
+// Bonus tables indexed by stat-3 (16 entries for stats 3-18).
+// Stats above 18 (18/xx) use the same bonus as stat 18 (index 15).
 
 // ============================================================
 // Race indices

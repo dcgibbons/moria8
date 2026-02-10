@@ -187,8 +187,10 @@ test_start:
 !t4_done:
 
     // ==========================================
-    // Test 5: Stat clamping (high end)
-    // Half-Troll Warrior: STR base 18 → 18+4+5=27→clamp 18
+    // Test 5: 18/xx stats (high end)
+    // Half-Troll Warrior: STR base 18, race +4, class +5
+    // With increment_stat, each +1 above 18 uses random steps
+    // Result must be in 18/xx range (19-118)
     // ==========================================
     jsr player_init
     lda #RACE_HALF_TROLL
@@ -207,9 +209,13 @@ test_start:
 
     jsr player_calc_stats
 
+    // STR must be >= 19 (entered 18/xx range)
     lda player_data + PL_STR_CUR
-    cmp #18
-    bne !t5_fail+
+    cmp #19
+    bcc !t5_fail+
+    // STR must be <= 118 (capped at 18/100)
+    cmp #119
+    bcs !t5_fail+
     lda #$01
     sta $0404
     jmp !t5_done+

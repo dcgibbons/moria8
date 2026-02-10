@@ -247,7 +247,7 @@ sheet.
 |---|---|---|---|
 | 2.1 | `tables.s` | Race stat modifiers (8 races x 6 stats), class data (6 classes), XP level thresholds (40 levels), stat bonus tables | Data integrity checks |
 | 2.2 | `player.s` | Player struct in memory (~200 bytes), accessors for stats/HP/mana/gold/level, stat bonus lookups | Get/set round-trip |
-| 2.3 | `player_create.s` | Race selection, stat rolling (3d6+modifier per stat, allow re-roll), class selection (filtered by race), name entry (max 16 chars, uppercase only — matches unshifted character set), initialize starting HP/mana/inventory. Order: race → stats → class → name (stat roll shows race-adjusted previews before class is chosen). | Full creation flow in VICE |
+| 2.3 | `player_create.s` | Race selection, stat rolling (umoria algorithm: 18 dice cycling d3/d4/d5, constrained total 43–54, each stat = 5 + 3 consecutive dice, race modifiers via incrementStat/decrementStat — see Stat Generation Deep Dive in Audit Review), class selection (filtered by race), name entry (max 16 chars, uppercase only — matches unshifted character set), initialize starting HP/mana/inventory. Order: race → stats → class → name (stat roll shows race-adjusted previews before class is chosen). | Full creation flow in VICE |
 | 2.4 | `ui_character.s` | Character sheet display (name, race, class, stats, level, HP, mana, AC, gold), stat detail view | Screen output matches data |
 | 2.5 | `ui_status.s` | Bottom status line: HP, mana, dungeon level, player level. Update on change only (dirty flag). | Status reflects player state |
 | 2.6 | `ui_messages.s` | Top message line: display message, "—more—" prompt for overflow, message history buffer (last 8 messages) | Messages display, more works |
@@ -752,6 +752,96 @@ Findings are categorized as bugs, plan deviations, and minor issues.
 | M2 | **Deferred** | `.mon` scripts for VICE headless tests deferred — manual VICE testing used for now. |
 | M3 | **Deferred** | `test_memory.s` pass/fail convention fix deferred to test infrastructure pass. |
 | M4 | **Fixed** | Addressed with A1 — `screen_clear` no longer has overlap or OOB writes. |
+
+### Stat Generation Deep Dive (QA Review)
+
+Investigation into why character rolling never produces stats above 16, even for
+races with large positive modifiers (e.g., Half-Troll STR +4, Elf INT +2).
+
+**Finding S1 — Wrong dice algorithm (HIGH)**
+
+| Aspect | Umoria (correct) | Current code (`player_create.s`) |
+|--------|------------------|----------------------------------|
+| Dice pool | 18 dice cycling d3, d4, d5 | 6 independent `math_dice(3,6,0)` calls |
+| Per-stat formula | 5 + three consecutive dice (one d3 + one d4 + one d5) | 3d6 |
+| Raw stat range | 8–17 | 3–18 |
+| Total constraint | Re-roll all 18 dice if sum < 43 or sum > 54 | None |
+| Distribution shape | Tight, correlated across stats (total constrained) | Independent, wide variance per stat |
+
+The constraint is critical: umoria guarantees a reasonable total across all six stats,
+so players reliably see at least one or two stats at 15–17. With unconstrained 3d6,
+you can easily get six mediocre rolls. The range difference also matters: umoria's
+minimum is 8 (not 3), giving a much higher floor.
+
+**Finding S2 — Wrong race/class modifier application (CRITICAL)**
+
+This is the root cause of the user-reported defect.
+
+Umoria does NOT use simple addition for modifiers. Each +1 or −1 is applied as a
+separate call to `incrementStat()` / `decrementStat()`:
+
+```
+incrementStat(stat):
+    if stat < 18:       stat += 1
+    if stat 18–87:      stat += randomNumber(15) + 5   // adds 6–20
+    if stat 88–107:     stat += randomNumber(6) + 2    // adds 3–8
+    if stat > 107:      stat += 1
+
+decrementStat(stat):
+    if stat > 108:      stat -= 1
+    if stat 88–108:     stat -= randomNumber(6) + 2
+    if stat 19–88:      stat -= randomNumber(15) + 5
+    if stat > 18:       stat = 18
+    if stat > 3:        stat -= 1
+```
+
+Internal encoding: values 3–18 stored as-is; 19–118 = 18/01 through 18/100.
+
+**Example**: Half-Troll STR modifier +4, base STR 16:
+- Umoria: 16 → 17 → 18 → 18/(06–20) → 18/(12–40). Easily reaches 18/30+.
+- Current code: `min(16 + 4, 18) = 18`. Can never reach 18/xx.
+
+**Example**: Elf INT modifier +2, base INT 17:
+- Umoria: 17 → 18 → 18/(06–20). Reaches 18/06–18/20.
+- Current code: `min(17 + 2, 18) = 18`.
+
+**Finding S3 — 18/xx support too limited (HIGH)**
+
+`tables.s` line 7 says: *"For C64 simplicity, we cap stats at 18 (no 18/xx
+percentile stats)."* This conflicts with faithful umoria behavior:
+
+| Aspect | Umoria | Current code |
+|--------|--------|-------------|
+| Stats that support 18/xx | All six (STR, INT, WIS, DEX, CON, CHR) | STR only (via `PL_STR_EXTRA`) |
+| How 18/xx is reached | Race/class modifiers via incrementStat | Only if base die roll is exactly 18 |
+| Player struct fields | Single uint8_t per stat (3–118 encoding) | Separate base + extra byte (STR only) |
+| Display support | All stats show 18/xx | Only STR shows 18/xx (`ui_character.s`) |
+
+**Finding S4 — PRNG algorithm is acceptable (OK)**
+
+The 32-bit Galois LFSR (polynomial $ED, period 2^32−1) with rejection sampling
+in `rng_range` is adequate for game use. CIA timer seeding provides reasonable
+initial entropy. No changes needed.
+
+**Required code changes:**
+
+1. **Replace 3d6 with umoria's constrained multi-die system** — Roll 18 dice
+   (cycling d3, d4, d5), require total in 43–54, assign each stat = 5 + three
+   consecutive dice. Implement in `player_create.s`.
+
+2. **Implement `increment_stat` / `decrement_stat`** — Add to `player.s` or
+   `math.s` with umoria's randomized step logic. Apply race and class modifiers
+   via repeated calls to these routines instead of simple addition.
+
+3. **Extend 18/xx support to all six stats** — Either use umoria's single-byte
+   encoding (3–118) per stat (saves memory, simplifies math) or add `PL_xxx_EXTRA`
+   fields for all stats. Update `ui_character.s` to display 18/xx for all stats.
+   Update `player_calc_stats` to use the new increment/decrement system.
+
+4. **Remove the "cap at 18" constraint** from `tables.s` header comment.
+
+5. **Update plan Phase 2.3** — Change "3d6+modifier per stat" to describe the
+   correct umoria algorithm.
 
 ---
 

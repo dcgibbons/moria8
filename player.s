@@ -65,8 +65,8 @@
 .const PL_SPELL_TYPE = 60  // Spell type (0=none, 1=mage, 2=priest)
 .const PL_SPELLS_KNOWN = 61 // Bitmask of spells learned (16 bits)
 .const PL_SPELLS_KNOWN_HI = 62
-// Exceptional STR (0 = none, 1–100 = percentage; 100 displayed as "18/00")
-.const PL_STR_EXTRA = 63
+// Spare (was PL_STR_EXTRA — 18/xx now encoded in stat byte itself)
+.const PL_SPARE_63  = 63
 // Reserved
 .const PL_RESERVED  = 64   // Start of reserved area
 .const PL_STRUCT_SIZE = 80  // Total struct size (with padding)
@@ -183,66 +183,221 @@ player_sync_from_zp:
     rts
 
 // player_calc_stats — Recalculate current stats from base + modifiers
-// Applies race and class stat adjustments, clamps to 3–18.
+// Uses umoria's incrementStat/decrementStat for race and class modifiers.
+// Stats use single-byte encoding: 3-18 literal, 19-118 = 18/01 to 18/100.
 // Preserves: nothing
 player_calc_stats:
-    // Get race offset into stat adj table
+    // Precompute race*6 into zp_temp0 (safe across math_dice)
     lda player_data + PL_RACE
-    // Multiply by 6 (STAT_COUNT)
-    asl         // x2
-    sta zp_temp0
-    asl         // x4
-    clc
-    adc zp_temp0  // x4 + x2 = x6
-    tax         // X = race * 6
-
-    // Get class offset
-    lda player_data + PL_CLASS
     asl
     sta zp_temp0
     asl
     clc
     adc zp_temp0
-    sta zp_temp1  // zp_temp1 = class * 6
+    sta zp_temp0            // zp_temp0 = race * 6
 
-    // Process each stat
-    // NOTE: Both race and class modifiers are summed before clamping.
-    // No intermediate clamp occurs — the single clamp at the end handles
-    // the full range correctly (values are small enough to avoid 8-bit wrap
-    // issues: base 3-18, modifiers -6 to +5, so sum range is -8 to 28).
-    ldy #0      // Stat index
+    // Precompute class*6 into zp_temp2 (safe across math_dice)
+    lda player_data + PL_CLASS
+    asl
+    sta zp_temp2
+    asl
+    clc
+    adc zp_temp2
+    sta zp_temp2            // zp_temp2 = class * 6
+
+    ldy #0                  // Stat index
 !stat_loop:
-    // Start with base stat, add race + class modifiers, then clamp once
-    lda player_data + PL_STR_BASE,y
-    clc
-    adc race_stat_adj,x     // + race modifier (signed)
-    clc
-    stx zp_temp2            // Save race index
-    ldx zp_temp1
-    adc class_stat_adj,x    // + class modifier (signed)
-    ldx zp_temp2            // Restore race index
+    sty zp_temp1            // Save stat index (safe across math_dice)
 
-    // Clamp to 3–18 (handle signed underflow: negative wraps to 128+)
-    bmi !clamp_low+         // Bit 7 set = negative result → clamp to 3
-    cmp #3
-    bcc !clamp_low+         // Below 3 → clamp to 3
-    cmp #19
-    bcc !store+             // 3–18 → keep
-    lda #18                 // Above 18 → clamp to 18
-    jmp !store+
-!clamp_low:
-    lda #3
-!store:
+    // Start with base stat
+    lda player_data + PL_STR_BASE,y
+    sta stat_work
+
+    // Apply race modifier via increment/decrement
+    lda zp_temp0            // race*6
+    clc
+    adc zp_temp1            // + stat_index
+    tax
+    lda race_stat_adj,x
+    jsr apply_modifier
+
+    // Apply class modifier via increment/decrement
+    lda zp_temp2            // class*6
+    clc
+    adc zp_temp1            // + stat_index
+    tax
+    lda class_stat_adj,x
+    jsr apply_modifier
+
+    // Store result
+    ldy zp_temp1
+    lda stat_work
     sta player_data + PL_STR_CUR,y
 
-    inx         // Next race stat
-    inc zp_temp1 // Next class stat
     iny
     cpy #STAT_COUNT
     bne !stat_loop-
 
-    // Update to-hit and to-damage bonuses from stats
+    // Update combat bonuses from stats
     jsr player_calc_combat
+    rts
+
+// Working byte for stat modification (survives across increment/decrement calls)
+stat_work: .byte 0
+
+// apply_modifier — Apply a signed modifier to stat_work using increment/decrement
+// Each +1 or -1 is applied individually via incrementStat/decrementStat (umoria).
+// Input: A = signed modifier (-128 to +127)
+//        stat_work = current stat value
+// Output: stat_work = modified stat
+// Clobbers: X, zp_temp3, zp_temp4, zp_math*
+apply_modifier:
+    cmp #0
+    beq !done+
+    bpl !positive+
+    // Negative modifier: negate to get count
+    eor #$ff
+    clc
+    adc #1
+    tax
+!dec_loop:
+    lda stat_work
+    jsr decrement_stat
+    sta stat_work
+    dex
+    bne !dec_loop-
+    rts
+!positive:
+    tax
+!inc_loop:
+    lda stat_work
+    jsr increment_stat
+    sta stat_work
+    dex
+    bne !inc_loop-
+!done:
+    rts
+
+// increment_stat — Increment a stat using umoria's randomized step logic
+// Input: A = current stat value (3-118)
+// Output: A = new stat value
+// Clobbers: zp_temp3, zp_temp4, zp_math* (via math_dice)
+increment_stat:
+    cmp #18
+    bcs !above_17+
+    // stat < 18: simple +1
+    clc
+    adc #1
+    rts
+!above_17:
+    cmp #88
+    bcs !above_87+
+    // stat 18-87: add rng(15)+5 = add 6-20
+    pha
+    lda #1
+    ldx #15
+    ldy #5
+    jsr math_dice           // 1d15+5 = 6..20
+    pla
+    clc
+    adc zp_math_a
+    cmp #119
+    bcc !inc_ok+
+    lda #118                // Cap at 118 (18/100)
+!inc_ok:
+    rts
+!above_87:
+    cmp #108
+    bcs !above_107+
+    // stat 88-107: add rng(6)+2 = add 3-8
+    pha
+    lda #1
+    ldx #6
+    ldy #2
+    jsr math_dice           // 1d6+2 = 3..8
+    pla
+    clc
+    adc zp_math_a
+    cmp #119
+    bcc !inc_ok2+
+    lda #118
+!inc_ok2:
+    rts
+!above_107:
+    // stat > 107: +1
+    clc
+    adc #1
+    cmp #119
+    bcc !inc_ok3+
+    lda #118
+!inc_ok3:
+    rts
+
+// decrement_stat — Decrement a stat using umoria's randomized step logic
+// Input: A = current stat value (3-118)
+// Output: A = new stat value
+// Clobbers: zp_temp3, zp_temp4, zp_math* (via math_dice)
+decrement_stat:
+    cmp #109
+    bcs !above_108+
+    cmp #88
+    bcs !range_88_108+
+    cmp #19
+    bcs !range_19_87+
+    // stat <= 18
+    cmp #4
+    bcc !dec_done+          // stat <= 3: no change
+    // stat 4-18: simple -1
+    sec
+    sbc #1
+    rts
+!above_108:
+    // stat > 108: -1
+    sec
+    sbc #1
+    rts
+!range_88_108:
+    // stat 88-108: subtract rng(6)+2 = 3-8
+    pha
+    lda #1
+    ldx #6
+    ldy #2
+    jsr math_dice           // 1d6+2 = 3..8
+    pla
+    sec
+    sbc zp_math_a
+    rts
+!range_19_87:
+    // stat 19-87: subtract rng(15)+5 = 6-20
+    pha
+    lda #1
+    ldx #15
+    ldy #5
+    jsr math_dice           // 1d15+5 = 6..20
+    pla
+    sec
+    sbc zp_math_a
+    // If result < 19, clamp to 18
+    cmp #19
+    bcs !dec_done+
+    lda #18
+!dec_done:
+    rts
+
+// stat_bonus_index — Convert stat value to bonus table index (0-15)
+// Stats above 18 (18/xx encoded as 19-118) use index 15 (stat 18 bonus).
+// Input: A = stat value (3-118)
+// Output: X = bonus table index (0-15)
+// Preserves: Y
+stat_bonus_index:
+    cmp #19
+    bcc !normal+
+    ldx #15                 // 18/xx → use same bonus as stat 18
+    rts
+!normal:
+    sec
+    sbc #3                  // index = stat - 3
+    tax
     rts
 
 // player_calc_combat — Calculate combat bonuses from current stats
@@ -251,17 +406,13 @@ player_calc_stats:
 player_calc_combat:
     // STR to-hit bonus
     lda player_data + PL_STR_CUR
-    sec
-    sbc #3                  // Index = stat - 3
-    tax
+    jsr stat_bonus_index
     lda str_tohit_bonus,x
     sta zp_temp0            // Accumulate to-hit
 
     // DEX to-hit bonus
     lda player_data + PL_DEX_CUR
-    sec
-    sbc #3
-    tax
+    jsr stat_bonus_index
     lda dex_tohit_bonus,x
     clc
     adc zp_temp0
@@ -269,18 +420,14 @@ player_calc_combat:
 
     // STR damage bonus
     lda player_data + PL_STR_CUR
-    sec
-    sbc #3
-    tax
+    jsr stat_bonus_index
     lda str_damage_bonus,x
     sta player_data + PL_TODMG
 
     // DEX AC bonus (signed: negative means worse AC)
     // AC starts at 0, DEX adds/subtracts. Clamp to min 0.
     lda player_data + PL_DEX_CUR
-    sec
-    sbc #3
-    tax
+    jsr stat_bonus_index
     lda dex_ac_bonus,x
     bmi !ac_zero+           // Negative bonus → AC stays 0
     sta player_data + PL_AC
@@ -314,9 +461,7 @@ player_calc_hp:
 
     // CON HP bonus
     lda player_data + PL_CON_CUR
-    sec
-    sbc #3
-    tax
+    jsr stat_bonus_index
     lda con_hp_bonus,x
     sta zp_temp1            // CON bonus per level
 

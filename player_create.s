@@ -2,7 +2,7 @@
 //
 // 1. Race selection
 // 2. Class selection (filtered by race)
-// 3. Stat rolling (6d3 + race + class modifiers, re-roll option)
+// 3. Stat rolling (umoria: d3+d4+d5 per stat, constrained total, increment/decrement modifiers)
 // 4. Name entry (max 16 chars, uppercase only)
 // 5. Initialize starting HP, mana, gold, food, position
 
@@ -268,61 +268,84 @@ create_roll_stats:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Roll 6d3 for each base stat (umoria formula)
-    ldx #0
+    // Roll stats using umoria algorithm:
+    // Per stat: d3 + d4 + d5 + 5 (range 8-17)
+    // Constraint: sum of all 6 stats must be 73-84
+    // zp_temp0 = running stat total (safe across math_dice)
+!reroll_all:
+    lda #0
+    sta zp_temp0            // Stat total accumulator
+    ldx #0                  // Stat index
 !roll_loop:
+    txa
+    pha                     // Save stat index on stack
+
+    // Roll d3
+    lda #1
+    ldx #3
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    pha                     // Push d3 result
+
+    // Roll d4
+    lda #1
+    ldx #4
+    ldy #0
+    jsr math_dice
+    lda zp_math_a
+    pha                     // Push d4 result
+
+    // Roll d5
+    lda #1
+    ldx #5
+    ldy #0
+    jsr math_dice
+
+    // Sum: d3 + d4 + d5 + 5
+    pla                     // d4
+    clc
+    adc zp_math_a           // d4 + d5
+    sta zp_math_a
+    pla                     // d3
+    clc
+    adc zp_math_a           // d3 + d4 + d5
+    clc
+    adc #5                  // + 5 = stat value (range 8-17)
+    sta zp_temp1            // Save stat value (safe across math_dice)
+
+    // Store base stat
+    pla                     // stat index
+    tax
+    pha                     // re-save stat index
+    lda zp_temp1            // Retrieve stat value
+    sta player_data + PL_STR_BASE,x
+
+    // Accumulate total
+    clc
+    adc zp_temp0
+    sta zp_temp0
+
+    pla
+    tax
+    inx
+    cpx #STAT_COUNT
+    bcc !roll_loop-
+
+    // Check constraint: stat total must be 73-84
+    lda zp_temp0
+    cmp #73
+    bcc !reroll_all-        // Total < 73, re-roll
+    cmp #85
+    bcs !reroll_all-        // Total > 84, re-roll
+
+    // Display each stat
+    ldx #0
+!display_loop:
     txa
     pha
 
-    // Roll 6d3 (matches umoria: range 6–18, mean 12)
-    lda #6                  // 6 dice
-    ldx #3                  // 3 sides
-    ldy #0                  // +0 bonus
-    jsr math_dice
-    // Result in zp_math_a (we only need lo byte, max 18)
-    lda zp_math_a
-
-    // Clamp to 3–18 (6d3 naturally stays in 6–18, but clamp defensively)
-    cmp #3
-    bcs !min_ok+
-    lda #3
-!min_ok:
-    cmp #19
-    bcc !max_ok+
-    lda #18
-!max_ok:
-    sta zp_temp4            // Save rolled value (pla would destroy A)
-    pla
-    tax
-    pha
-    lda zp_temp4            // Restore rolled value
-    // Store as base stat
-    sta player_data + PL_STR_BASE,x
-
-    // Roll exceptional STR if base STR = 18
-    cpx #0                  // STR stat?
-    bne !display_stat+      // Not STR → skip exceptional handling
-    cmp #18                 // Rolled 18?
-    bne !no_exceptional+
-    // Roll 1d100 for exceptional
-    lda #1
-    ldx #100
-    ldy #0
-    jsr math_dice           // Result in zp_math_a (1–100)
-    lda zp_math_a
-    sta player_data + PL_STR_EXTRA
-    jmp !display_stat+
-!no_exceptional:
-    lda #0
-    sta player_data + PL_STR_EXTRA
-
-!display_stat:
-    // Restore stat_index (may have been clobbered by math_dice)
-    pla
-    tax
-    pha
-
-    // Display: row = stat_index + 2, col 3
+    // Row = stat_index + 2, col 3
     txa
     clc
     adc #2
@@ -331,6 +354,9 @@ create_roll_stats:
     sta zp_cursor_col
 
     // Stat name
+    pla
+    tax
+    pha
     lda #COL_LGREY
     sta zp_text_color
     lda stat_name_ptrs_lo,x
@@ -343,28 +369,22 @@ create_roll_stats:
     lda #$3a
     jsr screen_put_char
 
-    // Base value (right-justified, 18/xx aware)
+    // Base value (right-justified, always 8-17)
     lda #COL_WHITE
     sta zp_text_color
     pla
     tax
     pha
     lda player_data + PL_STR_BASE,x
-    ldy #0                  // No exceptional by default
-    cpx #0                  // STR?
-    bne !base_disp+
-    ldy player_data + PL_STR_EXTRA
-!base_disp:
     jsr put_stat_val
 
-    // Show modified value: base + race + class adjustments
+    // Show race-modified value in parens
     pla
     tax
     pha
-    jsr create_calc_modified_stat  // A = modified stat
-    sta zp_temp4
+    jsr create_calc_modified_stat  // A = modified stat (single-byte encoding)
+    pha                     // Save modified stat
 
-    // " (" then modified value then ")"
     lda #$20                // space
     jsr screen_put_char
     lda #$28                // '('
@@ -372,18 +392,7 @@ create_roll_stats:
 
     lda #COL_CYAN
     sta zp_text_color
-    pla
-    tax
-    pha
-    ldy #0
-    cpx #0                  // STR?
-    bne !mod_disp+
-    lda zp_temp4
-    cmp #18                 // Modified = 18?
-    bne !mod_disp+
-    ldy player_data + PL_STR_EXTRA
-!mod_disp:
-    lda zp_temp4
+    pla                     // Modified stat value
     jsr put_stat_val
 
     lda #COL_LGREY
@@ -395,12 +404,7 @@ create_roll_stats:
     tax
     inx
     cpx #STAT_COUNT
-    bcs !roll_done+
-    jmp !roll_loop-
-!roll_done:
-
-    // Calculate final stats for display
-    jsr player_calc_stats
+    bcc !display_loop-
 
     // Prompt: R to reroll, ENTER to accept
     lda #COL_LGREY
@@ -427,41 +431,32 @@ create_roll_stats:
 
 // create_calc_modified_stat — Calculate stat with race modifiers only
 // Called during stat rolling (before class selection).
+// Uses umoria incrementStat/decrementStat for each +1/-1 of the modifier.
 // Input: X = stat index (0–5)
-// Output: A = modified stat (clamped 3–18)
+// Output: A = modified stat (single-byte encoding, 3–118)
 // Preserves: X
 create_calc_modified_stat:
-    stx zp_temp3            // Save stat index
+    stx zp_temp1            // Save stat index (safe across math_dice)
+
+    // Start with base stat
+    lda player_data + PL_STR_BASE,x
+    sta stat_work
 
     // Race adj offset = race * 6 + stat_index
     lda player_data + PL_RACE
     asl
-    sta zp_temp0
+    sta zp_temp2
     asl
     clc
-    adc zp_temp0            // race * 6
+    adc zp_temp2            // race * 6
     clc
-    adc zp_temp3            // + stat_index
-    tay
+    adc zp_temp1            // + stat_index
+    tax
+    lda race_stat_adj,x     // Signed modifier
+    jsr apply_modifier
 
-    // Base + race modifier
-    ldx zp_temp3
-    lda player_data + PL_STR_BASE,x
-    clc
-    adc race_stat_adj,y
-
-    // Clamp 3–18 (handle signed underflow: negative wraps to 128+)
-    bmi !clow+              // Bit 7 set = went negative
-    cmp #3
-    bcc !clow+
-    cmp #19
-    bcc !cdone+
-    lda #18
-    jmp !cdone+
-!clow:
-    lda #3
-!cdone:
-    ldx zp_temp3            // Restore X
+    lda stat_work
+    ldx zp_temp1            // Restore X
     rts
 
 // ============================================================
@@ -665,32 +660,34 @@ create_init_character:
 
     rts
 
-// put_stat_val — Display a stat value, handling 18/xx exceptional STR
-// Input:  A = stat value (3–18)
-//         Y = exceptional (0 = none, 1–100 = exceptional percentage)
-// If A=18 and Y>0: prints "18/XX" (5 chars)
-// Otherwise: prints value right-justified in 2 chars
+// put_stat_val — Display a stat value with 18/xx support
+// Single-byte encoding: 3-18 literal, 19-118 = 18/01 through 18/100.
+// Input:  A = stat value (3–118)
+// If A <= 18: prints value right-justified in 2 chars
+// If A == 118: prints "18/00" (18/100 convention)
+// If A 19-117: prints "18/XX" where XX = A - 18
 // Preserves: nothing
 put_stat_val:
-    cpy #0
-    beq !rj+                // No exceptional → right-justified normal
-    cmp #18
-    bne !rj+                // Not 18 → right-justified normal
-    // 18/xx format: A=18, Y=exceptional
-    tya
-    pha                     // Save exceptional on stack
+    cmp #19
+    bcs !exceptional+
+    // Normal stat 3-18
+    jmp screen_put_decimal_rj2
+!exceptional:
+    // 18/xx display
+    pha
     lda #18
     jsr screen_put_decimal  // Print "18"
     lda #$2f                // '/'
     jsr screen_put_char
-    pla                     // A = exceptional value
-    cmp #100
+    pla
+    cmp #118                // 18/100?
     bne !not_100+
-    lda #0                  // 18/100 → display as "00"
+    lda #0                  // 18/100 displays as "00"
+    jmp screen_put_decimal_lz2
 !not_100:
-    jmp screen_put_decimal_lz2  // Print with leading zero
-!rj:
-    jmp screen_put_decimal_rj2  // Right-justified in 2 chars
+    sec
+    sbc #18                 // xx = stat - 18
+    jmp screen_put_decimal_lz2
 
 // put_choose_suffix — Append final letter and ")" to "CHOOSE (A-" prompt
 // Input: A = count of options (e.g., 8 → prints "H)")

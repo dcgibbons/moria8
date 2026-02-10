@@ -299,11 +299,6 @@ ui_char_draw_stats:
     lda #COL_WHITE
     sta zp_text_color
     lda player_data + PL_STR_CUR,x
-    ldy #0                  // No exceptional by default
-    cpx #0                  // STR?
-    bne !no_extra+
-    ldy player_data + PL_STR_EXTRA
-!no_extra:
     jsr put_stat_val
 
     pla
