@@ -215,6 +215,120 @@ check_store_door:
     clc                     // Clear carry = not found
     rts
 
+// render_single_tile — Render one tile at map coordinates
+// Used by dirty rendering to update only changed tiles.
+// Input: zp_temp0 = map_x, zp_temp1 = map_y
+// Preserves: zp_temp0, zp_temp1
+render_single_tile:
+    // Compute screen row
+    lda zp_temp1
+    sec
+    sbc zp_view_y
+    clc
+    adc #VIEWPORT_Y
+    tax
+    lda screen_row_lo,x
+    sta zp_screen_lo
+    lda screen_row_hi,x
+    sta zp_screen_hi
+    lda color_row_lo,x
+    sta zp_color_lo
+    lda color_row_hi,x
+    sta zp_color_hi
+
+    // Compute and save screen column offset
+    lda zp_temp0
+    sec
+    sbc zp_view_x
+    clc
+    adc #VIEWPORT_X
+    sta rst_col_tmp
+
+    // Read map byte at (map_x, map_y)
+    ldx zp_temp1
+    lda map_row_lo,x
+    sta zp_map_ptr_lo
+    lda map_row_hi,x
+    sta zp_map_ptr_hi
+    ldy zp_temp0
+    lda (zp_map_ptr_lo),y
+    sta zp_tile_tmp
+
+    // Check visited flag
+    and #FLAG_VISITED
+    beq !rst_blank+
+
+    // Extract tile type (bits 7-4)
+    lda zp_tile_tmp
+    lsr
+    lsr
+    lsr
+    lsr
+    tax
+    lda tile_screen_codes,x
+    sta zp_temp3
+    lda tile_colors,x
+    sta zp_temp4
+
+    // Player position override?
+    lda zp_temp0
+    cmp zp_player_x
+    bne !rst_store+
+    lda zp_temp1
+    cmp zp_player_y
+    bne !rst_store+
+    lda #SC_PLAYER
+    sta zp_temp3
+    lda #COL_PLAYER
+    sta zp_temp4
+    jmp !rst_write+
+
+!rst_store:
+    // Check store doors (inline — check_store_door clobbers zp_temp2/3)
+    ldx #0
+!rst_store_loop:
+    lda store_door_x,x
+    cmp zp_temp0
+    bne !rst_next_store+
+    lda store_door_y,x
+    cmp zp_temp1
+    bne !rst_next_store+
+    // Store door match
+    txa
+    clc
+    adc #$31                // '1'-'6' screen code
+    sta zp_temp3
+    lda #COL_STORE
+    sta zp_temp4
+    jmp !rst_write+
+!rst_next_store:
+    inx
+    cpx #STORE_COUNT
+    bne !rst_store_loop-
+    jmp !rst_write+
+
+!rst_blank:
+    lda #SC_SPACE
+    sta zp_temp3
+    lda #COL_BLACK
+    sta zp_temp4
+
+!rst_write:
+    ldy rst_col_tmp
+    lda zp_temp3
+    sta (zp_screen_lo),y
+    lda zp_temp4
+    sta (zp_color_lo),y
+    rts
+
+rst_col_tmp: .byte 0
+
+// Saved positions for dirty render detection
+old_view_x:    .byte 0
+old_view_y:    .byte 0
+old_player_x:  .byte 0
+old_player_y:  .byte 0
+
 // ============================================================
 // Compile-time validation
 // ============================================================

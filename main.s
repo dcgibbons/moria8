@@ -144,7 +144,9 @@ entry:
 
     // Quit?
     cmp #CMD_QUIT
-    beq !quit+
+    bne !not_quit+
+    jmp !quit+
+!not_quit:
 
     // Character info?
     cmp #CMD_CHAR_INFO
@@ -164,16 +166,54 @@ entry:
     bcc !not_move+
     cmp #CMD_MOVE_SE + 1
     bcs !not_move+
+
+    // Save positions before move for dirty render
+    ldx zp_player_x
+    stx old_player_x
+    ldx zp_player_y
+    stx old_player_y
+    ldx zp_view_x
+    stx old_view_x
+    ldx zp_view_y
+    stx old_view_y
+
     // Try to move
     jsr player_try_move
     bcc !move_blocked+
-    // Move succeeded — update display
+
+    // Move succeeded
     jsr msg_clear
     jsr viewport_update
+
+    // Did viewport scroll?
+    lda zp_view_x
+    cmp old_view_x
+    bne !full_redraw+
+    lda zp_view_y
+    cmp old_view_y
+    bne !full_redraw+
+
+    // No scroll — dirty render: redraw old tile and new tile only
+    lda old_player_x
+    sta zp_temp0
+    lda old_player_y
+    sta zp_temp1
+    jsr render_single_tile
+    lda zp_player_x
+    sta zp_temp0
+    lda zp_player_y
+    sta zp_temp1
+    jsr render_single_tile
+    jmp !post_move+
+
+!full_redraw:
     jsr render_viewport
+
+!post_move:
     jsr turn_post_action
     jsr status_draw
     jmp !main_loop-
+
 !move_blocked:
     // Bump sound already played by player_try_move
     jmp !main_loop-

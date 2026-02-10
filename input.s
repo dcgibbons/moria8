@@ -77,6 +77,10 @@ input_get_key:
 //         zp_input_count = repeat count (1 if no numeric prefix)
 // Preserves: nothing
 input_get_command:
+    // Flush keyboard buffer to discard keys pressed during rendering
+    lda #0
+    sta $c6                 // KERNAL keyboard buffer count
+
     lda #1
     sta zp_input_count      // Default repeat count = 1
     // TODO: Numeric prefix (repeat count) deferred to Phase 6+.
