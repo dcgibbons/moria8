@@ -767,5 +767,113 @@ test_start:
     sta $040f
 !t16_done:
 
+    // ==========================================
+    // Test 17: add_corridor_doors creates door when corridor is adjacent to room
+    // Set up a room, then manually place corridor floor tiles adjacent to the
+    // room's right wall. Call add_corridor_doors. The wall between them should
+    // become a door.
+    // ==========================================
+    jsr fill_map_rock
+
+    // Place room at x=20, y=10, w=4, h=3
+    lda #20
+    sta dg_room_x
+    lda #10
+    sta dg_room_y
+    lda #4
+    sta dg_room_w
+    lda #3
+    sta dg_room_h
+    jsr draw_dungeon_room
+
+    // Room right wall is at x=24 (room_x + room_w = 20+4)
+    // Place corridor floor at x=25, y=11 (adjacent to right wall)
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #25
+    lda #TILE_FLOOR | DUNGEON_FLAGS
+    sta (zp_ptr0),y
+
+    // Verify the wall at (24, 11) is currently TILE_WALL_V
+    ldy #24
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_V
+    bne !t17_fail+
+
+    // Run add_corridor_doors
+    jsr add_corridor_doors
+
+    // Now check (24, 11) — should be a door (TILE_DOOR_OPEN or TILE_DOOR_CLOSED)
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !t17_pass+
+    cmp #TILE_DOOR_CLOSED
+    beq !t17_pass+
+    jmp !t17_fail+
+
+!t17_pass:
+    lda #$01
+    sta $0410
+    jmp !t17_done+
+!t17_fail:
+    lda #$00
+    sta $0410
+!t17_done:
+
+    // ==========================================
+    // Test 18: add_corridor_doors does NOT create door when only one side is floor
+    // Wall with floor on one side and rock on the other should stay a wall.
+    // ==========================================
+    jsr fill_map_rock
+
+    // Place room at x=20, y=10, w=4, h=3
+    lda #20
+    sta dg_room_x
+    lda #10
+    sta dg_room_y
+    lda #4
+    sta dg_room_w
+    lda #3
+    sta dg_room_h
+    jsr draw_dungeon_room
+
+    // DON'T place any corridor floor — right wall has room floor on left, rock on right
+
+    // Run add_corridor_doors
+    jsr add_corridor_doors
+
+    // Wall at (24, 11) should still be TILE_WALL_V (no corridor on other side)
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_V
+    beq !t18_pass+
+    jmp !t18_fail+
+
+!t18_pass:
+    lda #$01
+    sta $0411
+    jmp !t18_done+
+!t18_fail:
+    lda #$00
+    sta $0411
+!t18_done:
+
     // Done — break into monitor
     brk

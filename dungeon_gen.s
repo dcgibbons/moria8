@@ -423,9 +423,10 @@ dungeon_generate:
                                 // corridors overwrite veins they cross
     jsr connect_rooms
     jsr mark_corridor_walls     // Make walls adjacent to corridors visible
+    jsr add_corridor_doors      // Doors where corridors touch room walls
     jsr place_stairs_dungeon
     jsr place_traps
-    jsr place_secrets           // Convert 1-3 closed doors to secret (DG5)
+    // TODO: Re-enable place_secrets when search UX is polished (DG5)
     jsr verify_stairs
     jsr position_player_dungeon
     jsr verify_connectivity
@@ -1247,6 +1248,102 @@ mcw_mark_p1:
 
 mcw_save_row: .byte 0
 mcw_save_col: .byte 0
+
+// ============================================================
+// add_corridor_doors — Add doors where corridors are adjacent to room walls
+// Scans the entire map for lit wall tiles (TILE_WALL_V or TILE_WALL_H)
+// that have floor (TILE_FLOOR) on both perpendicular sides. These are
+// walls between a room interior and a corridor that passed alongside
+// the room without connecting to it. Converting them to doors ensures
+// the corridor connects to the room.
+// ============================================================
+add_corridor_doors:
+    ldx #1                          // Start at row 1 (skip map boundary)
+!acd_row:
+    stx acd_save_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy #1                          // Start at col 1
+!acd_col:
+    lda (zp_ptr0),y
+    sta acd_tile                    // Save full tile byte
+    and #FLAG_LIT
+    beq !acd_next+                  // Not lit → not a room wall → skip
+
+    lda acd_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_V
+    beq !acd_check_v+               // Vertical wall → check left/right
+    cmp #TILE_WALL_H
+    beq !acd_check_h+               // Horizontal wall → check above/below
+    jmp !acd_next+                  // Corner or other → skip
+
+!acd_check_v:
+    // Vertical wall: check if floor on both left (y-1) and right (y+1)
+    sty acd_save_col
+    dey
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    bne !acd_restore+               // Left is not floor → skip
+    ldy acd_save_col
+    iny
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    bne !acd_restore+               // Right is not floor → skip
+    // Both sides are floor → place door
+    jsr random_door_type            // A = door tile (preserves Y, clobbers X)
+    ldy acd_save_col
+    sta (zp_ptr0),y
+    jmp !acd_restore+
+
+!acd_check_h:
+    // Horizontal wall: check if floor above (row-1) and below (row+1)
+    sty acd_save_col
+    ldx acd_save_row
+    dex
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    lda (zp_ptr1),y                 // Tile above
+    and #TILE_TYPE_MASK
+    bne !acd_restore+               // Above is not floor → skip
+    ldx acd_save_row
+    inx
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    lda (zp_ptr1),y                 // Tile below
+    and #TILE_TYPE_MASK
+    bne !acd_restore+               // Below is not floor → skip
+    // Both sides are floor → place door
+    jsr random_door_type            // A = door tile (preserves Y, clobbers X)
+    ldy acd_save_col
+    sta (zp_ptr0),y                 // zp_ptr0 still points to current row
+    // fall through to restore
+
+!acd_restore:
+    ldy acd_save_col
+!acd_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !acd_col-
+
+    ldx acd_save_row
+    inx
+    cpx #MAP_ROWS - 1
+    beq !acd_done+
+    jmp !acd_row-
+!acd_done:
+    rts
+
+acd_save_row: .byte 0
+acd_save_col: .byte 0
+acd_tile:     .byte 0
 
 // ============================================================
 // random_wall_adj_floor — Pick a floor tile in room X, preferring wall-adjacent
