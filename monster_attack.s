@@ -13,12 +13,12 @@ mon_atk_base_tohit:
     .byte 60    // 1: ATK_NORMAL
     .byte 0     // 2: unused
     .byte 10    // 3: ATK_CONFUSE
-    .byte 0     // 4: unused
+    .byte 10    // 4: ATK_FEAR
     .byte 0     // 5: unused
     .byte 0     // 6: ATK_ACID
     .byte 0     // 7: unused
     .byte 0     // 8: unused
-    .byte 0     // 9: unused
+    .byte 0     // 9: ATK_CORRODE
     .byte 0     // 10: unused
     .byte 2     // 11: ATK_PARALYZE
     .byte 0     // 12: unused
@@ -241,14 +241,13 @@ mon_atk_roll_tohit:
     cmp #20
     beq !mart_hit+
 
-    // Normal: rng_range(hit_chance) > player_AC → hit
+    // Normal: rng_range(hit_chance) >= player_AC → hit
     lda zp_combat_tohit
     cmp #2
     bcc !mart_miss+             // tohit too low
     jsr rng_range               // [0, tohit-1]
-    cmp zp_player_ac            // > AC?
-    beq !mart_miss+             // Equal = miss (strictly greater to hit)
-    bcs !mart_hit+              // Greater = hit
+    cmp zp_player_ac            // >= AC?
+    bcs !mart_hit+              // Greater or equal = hit
 
 !mart_miss:
     clc
@@ -329,6 +328,10 @@ mon_atk_effect_dispatch:
     beq !maed_paralyze+
     cmp #ATK_ACID
     beq !maed_acid+
+    cmp #ATK_FEAR
+    beq !maed_fear+
+    cmp #ATK_CORRODE
+    beq !maed_corrode+
     // Unknown type — treat as normal
     jmp !maed_normal+
 
@@ -340,8 +343,14 @@ mon_atk_effect_dispatch:
     jsr mon_atk_effect_poison
     rts
 !maed_confuse:
-    jsr mon_atk_ac_reduce
+    lda #0
+    sta zp_combat_dmg           // Confusion: no physical damage
     jsr mon_atk_effect_confuse
+    lda zp_eff_confuse
+    beq !maed_conf_done+
+    lda #1
+    sta mat_any_hit             // Confusion "hit" even though no damage
+!maed_conf_done:
     rts
 !maed_paralyze:
     // Paralysis does no physical damage, just the effect
@@ -352,6 +361,13 @@ mon_atk_effect_dispatch:
 !maed_acid:
     // Acid: full damage, no AC reduction
     jsr mon_atk_effect_acid
+    rts
+!maed_fear:
+    // Fear: AC-reduced damage. Fear effect deferred to Phase 6+.
+    jsr mon_atk_ac_reduce
+    rts
+!maed_corrode:
+    // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
     rts
 
 // mon_atk_effect_poison — Set poison timer
@@ -368,12 +384,24 @@ mon_atk_effect_poison:
     // Level 1: skip range, just use 5+1=6
     lda #6
     sta zp_eff_poison
-    jmp !mep_done+
+    jmp !mep_msg+
 !mep_roll:
     jsr rng_range               // [0, level-1]
     clc
     adc #5
     sta zp_eff_poison
+!mep_msg:
+    // Print "THE <name> POISONS YOU."
+    lda #<mat_poison_str
+    sta zp_ptr2
+    lda #>mat_poison_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
 !mep_done:
     rts
 
@@ -390,12 +418,24 @@ mon_atk_effect_confuse:
     bne !mec_roll+
     lda #3
     sta zp_eff_confuse
-    jmp !mec_done+
+    jmp !mec_msg+
 !mec_roll:
     jsr rng_range
     clc
     adc #2
     sta zp_eff_confuse
+!mec_msg:
+    // Print "THE <name> CONFUSES YOU."
+    lda #<mat_confuse_str
+    sta zp_ptr2
+    lda #>mat_confuse_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
 !mec_done:
     rts
 
@@ -440,12 +480,24 @@ mon_atk_effect_paralyze:
     bne !mepa_roll+
     lda #2
     sta zp_eff_paralyze
-    jmp !mepa_done+
+    jmp !mepa_msg+
 !mepa_roll:
     jsr rng_range               // [0, level-1]
     clc
     adc #1
     sta zp_eff_paralyze
+!mepa_msg:
+    // Print "THE <name> PARALYZES YOU."
+    lda #<mat_paralyze_str
+    sta zp_ptr2
+    lda #>mat_paralyze_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
 !mepa_done:
     rts
 !mepa_resist:

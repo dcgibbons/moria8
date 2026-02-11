@@ -84,18 +84,18 @@ test_start:
     sta $027e
 
     // ==========================================
-    // Test 1: mon_atk_calc_tohit type 1 (Normal), level 1
-    // Base 60 + 1*3 = 63
+    // Test 1: mon_atk_calc_tohit type 1 (Normal), level 2
+    // Base 60 + 2*3 = 66
     // ==========================================
     lda #ATK_NORMAL
     sta mat_atk_type
-    lda #0                      // Creature type 0 (Fruit bat, level 1)
+    lda #0                      // Creature type 0 (White harpy, level 2)
     sta mat_type2
 
     jsr mon_atk_calc_tohit
 
     lda zp_combat_tohit
-    cmp #63
+    cmp #66
     bne !t1_fail+
     lda #$01
     sta tc_results + 0
@@ -105,20 +105,20 @@ test_start:
     sta tc_results + 0
 
     // ==========================================
-    // Test 2: mon_atk_calc_tohit type 14 (Poison), level 3
-    // Base 5 + 3*3 = 14
-    // Creature type 12 = Giant White Rat, level 3
+    // Test 2: mon_atk_calc_tohit type 14 (Poison), level 4
+    // Base 5 + 4*3 = 17
+    // Creature type 12 = Giant White Rat, level 4
     // ==========================================
 !t2:
     lda #ATK_POISON
     sta mat_atk_type
-    lda #12                     // Giant White Rat (level 3)
+    lda #12                     // Giant White Rat (level 4)
     sta mat_type2
 
     jsr mon_atk_calc_tohit
 
     lda zp_combat_tohit
-    cmp #14
+    cmp #17
     bne !t2_fail+
     lda #$01
     sta tc_results + 1

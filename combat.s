@@ -169,6 +169,33 @@ combat_calc_tohit:
     lda class_properties,x
     sta zp_combat_tohit         // Start with base BTH
 
+    // Add race BTH (race_properties offset 7, signed byte)
+    lda player_data + PL_RACE
+    ldx #RACE_PROP_SIZE
+    jsr math_multiply           // A = race * RACE_PROP_SIZE
+    clc
+    adc #7                      // Offset to BTH field
+    tax
+    lda race_properties,x       // Race BTH (signed)
+    bmi !cct_race_neg+
+    clc
+    adc zp_combat_tohit
+    bcc !cct_race_done+
+    lda #255
+    jmp !cct_race_done+
+!cct_race_neg:
+    eor #$ff
+    clc
+    adc #1                      // abs(race BTH)
+    sta zp_temp0
+    lda zp_combat_tohit
+    sec
+    sbc zp_temp0
+    bcs !cct_race_done+
+    lda #0                      // Floor at 0
+!cct_race_done:
+    sta zp_combat_tohit
+
     // Add PL_TOHIT * 3
     lda player_data + PL_TOHIT
     // Check sign — PL_TOHIT can be negative (signed)
@@ -361,7 +388,7 @@ combat_apply_damage:
     rts
 
 // combat_award_xp — Award XP for killing a monster
-// Formula: xp_earned = (cr_xp * cr_level) / player_level, min 1
+// Formula: xp_earned = (cr_xp * cr_level) / player_level
 // Adds to 24-bit PL_XP_0/1/2.
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_award_xp:
@@ -382,13 +409,9 @@ combat_award_xp:
 !cax_div:
     jsr math_div_16x8           // zp_math_a/b = quotient
 
-    // Ensure min 1 XP
-    lda zp_math_a
-    ora zp_math_b
-    bne !cax_nonzero+
-    lda #1
-    sta zp_math_a
-!cax_nonzero:
+    // Integer-only XP — no min-1 floor (matches umoria behavior).
+    // Weak creatures may award 0 XP when player_level >> creature_level.
+    // Fractional XP accumulation not implemented (known simplification).
 
     // Add to 24-bit PL_XP
     lda player_data + PL_XP_0

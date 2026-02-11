@@ -19,6 +19,8 @@
 .const ATK_ACID      = 6
 .const ATK_PARALYZE  = 11
 .const ATK_POISON    = 14
+.const ATK_FEAR      = 4
+.const ATK_CORRODE   = 9
 .const ATK_AGGRAVATE = 20
 
 // Active monster entry offsets (12 bytes per entry)
@@ -45,7 +47,7 @@
 
 // Display character (screen codes)
 cr_display:
-    .byte $02   // 0: B (Fruit bat)
+    .byte $08   // 0: H (White harpy)
     .byte $12   // 1: R (Giant white mouse)
     .byte $17   // 2: W (White worm mass)
     .byte $13   // 3: S (Large white snake)
@@ -55,12 +57,12 @@ cr_display:
     .byte $03   // 7: C (Giant white centipede)
     .byte $05   // 8: E (Floating eye)
     .byte $0a   // 9: J (Jackal)
-    .byte $01   // 10: A (Soldier ant)
+    .byte $17   // 10: W (Green worm mass)
     .byte $06   // 11: F (Giant frog)
     .byte $12   // 12: R (Giant white rat)
-    .byte $0e   // 13: N (Green naga hatchling)
-    .byte $13   // 14: S (Cave spider)
-    .byte $06   // 15: F (Wild cat)
+    .byte $07   // 13: G (Poltergeist)
+    .byte $02   // 14: B (Huge brown bat)
+    .byte $24   // 15: $ (Creeping copper coins)
     .byte $0d   // 16: M (Grey mold)
     .byte $03   // 17: C (Metallic green centipede)
     .byte $0d   // 18: M (Yellow mold)
@@ -68,7 +70,7 @@ cr_display:
 
 // Color
 cr_color:
-    .byte COL_GREEN     // 0: Fruit bat
+    .byte COL_WHITE     // 0: White harpy
     .byte COL_GREEN     // 1: Giant white mouse
     .byte COL_WHITE     // 2: White worm mass
     .byte COL_GREEN     // 3: Large white snake
@@ -78,12 +80,12 @@ cr_color:
     .byte COL_GREEN     // 7: Giant white centipede
     .byte COL_GREEN     // 8: Floating eye
     .byte COL_YELLOW    // 9: Jackal
-    .byte COL_YELLOW    // 10: Soldier ant
+    .byte COL_GREEN     // 10: Green worm mass
     .byte COL_GREEN     // 11: Giant frog
     .byte COL_YELLOW    // 12: Giant white rat
-    .byte COL_GREEN     // 13: Green naga hatchling
-    .byte COL_YELLOW    // 14: Cave spider
-    .byte COL_YELLOW    // 15: Wild cat
+    .byte COL_LGREY     // 13: Poltergeist
+    .byte COL_ORANGE    // 14: Huge brown bat
+    .byte COL_YELLOW    // 15: Creeping copper coins
     .byte COL_GREY      // 16: Grey mold
     .byte COL_GREEN     // 17: Metallic green centipede
     .byte COL_YELLOW    // 18: Yellow mold
@@ -92,45 +94,45 @@ cr_color:
 // Speed (0=immobile, 1=normal, 2=fast)
 cr_speed:
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
-    .byte 1, 1, 1, 1, 1, 2, 0, 1, 0, 1
+    .byte 1, 1, 1, 2, 2, 1, 0, 2, 0, 1
 
 // Creature level
 cr_level:
-    .byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2
-    .byte 2, 2, 3, 3, 3, 3, 4, 4, 4, 5
+    .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4
+    .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
-    .byte 1, 1, 2, 2, 1, 2, 1, 2, 3, 1
-    .byte 2, 2, 1, 3, 1, 3, 4, 3, 4, 3
+    .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3
+    .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3
 
 // Hit dice sides
 cr_hd_sides:
-    .byte 1, 3, 4, 4, 8, 5, 1, 4, 6, 4
-    .byte 5, 6, 3, 5, 6, 4, 8, 6, 8, 6
+    .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8
+    .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6
 
 // Armor class
 cr_ac:
-    .byte 1, 1, 1, 2, 6, 2, 2, 5, 6, 3
-    .byte 3, 3, 7, 8, 8, 2, 12, 7, 12, 10
+    .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16
+    .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
-    .byte 10, 20, 10, 99, 10, 10, 0, 10, 10, 0
-    .byte 40, 20, 0, 40, 80, 0, 99, 10, 99, 40
+    .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30
+    .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80
 
 // Area affect radius (awareness factor)
 cr_aaf:
-    .byte 8, 8, 2, 2, 16, 12, 4, 7, 10, 12
-    .byte 10, 8, 12, 14, 5, 10, 2, 10, 2, 12
+    .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12
+    .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8
 
-// Experience value (16-bit)
+// Experience value (16-bit, all <=35 for tier 0 — hi bytes all 0)
 cr_xp_lo:
-    .byte <1, <2, <3, <4, <5, <6, <1, <8, <3, <8
-    .byte <9, <10, <2, <20, <7, <14, <20, <22, <28, <35
+    .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8
+    .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8
 cr_xp_hi:
-    .byte >1, >2, >3, >4, >5, >6, >1, >8, >3, >8
-    .byte >9, >10, >2, >20, >7, >14, >20, >22, >28, >35
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // Attack dice (slot 0 only for now; zeroed slots 1-3)
 cr_atk0_dice:
@@ -138,25 +140,25 @@ cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 cr_atk0_sides:
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
-    .byte 4, 3, 4, 8, 4, 3, 4, 1, 4, 4
+    .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4
 
 // Attack type for slot 0
 cr_atk0_type:
     .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL
     .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_POISON
+    .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL
     .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
-    .byte 0, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
-    .byte 0, 0, 0, ATK_ACID, 0, ATK_NORMAL, 0, 0, 0, 0
+    .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
+    .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0
 cr_atk1_dice:
-    .byte 0, 0, 0, 0, 0, 0, 0, 1, 0, 0
-    .byte 0, 0, 0, 2, 0, 1, 0, 0, 0, 0
+    .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0
+    .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0
 cr_atk1_sides:
-    .byte 0, 0, 0, 0, 0, 0, 0, 2, 0, 0
-    .byte 0, 0, 0, 6, 0, 3, 0, 0, 0, 0
+    .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
+    .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
 
 // Name pointer tables
 cr_name_lo:
@@ -171,7 +173,7 @@ cr_name_hi:
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19
 
 // Name strings (screen codes, null-terminated)
-crn_0:  .text "FRUIT BAT" ; .byte 0
+crn_0:  .text "WHITE HARPY" ; .byte 0
 crn_1:  .text "GIANT WHITE MOUSE" ; .byte 0
 crn_2:  .text "WHITE WORM MASS" ; .byte 0
 crn_3:  .text "LARGE WHITE SNAKE" ; .byte 0
@@ -181,12 +183,12 @@ crn_6:  .text "SHRIEKER MUSHROOM" ; .byte 0
 crn_7:  .text "GIANT WHITE CENTIPEDE" ; .byte 0
 crn_8:  .text "FLOATING EYE" ; .byte 0
 crn_9:  .text "JACKAL" ; .byte 0
-crn_10: .text "SOLDIER ANT" ; .byte 0
+crn_10: .text "GREEN WORM MASS" ; .byte 0
 crn_11: .text "GIANT FROG" ; .byte 0
 crn_12: .text "GIANT WHITE RAT" ; .byte 0
-crn_13: .text "GREEN NAGA HATCHLING" ; .byte 0
-crn_14: .text "CAVE SPIDER" ; .byte 0
-crn_15: .text "WILD CAT" ; .byte 0
+crn_13: .text "POLTERGEIST" ; .byte 0
+crn_14: .text "HUGE BROWN BAT" ; .byte 0
+crn_15: .text "CREEPING COPPER COINS" ; .byte 0
 crn_16: .text "GREY MOLD" ; .byte 0
 crn_17: .text "METALLIC GREEN CENTIPEDE" ; .byte 0
 crn_18: .text "YELLOW MOLD" ; .byte 0

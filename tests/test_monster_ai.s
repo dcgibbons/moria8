@@ -211,8 +211,10 @@ test_start:
     sta tc_results + 1
 
     // ==========================================
-    // Test 3: Wake check — monster with sleep=0 within AAF range wakes
-    // Type 9 (Jackal) — sleep=0, aaf=12
+    // Test 3: Wake check — monster within AAF range eventually wakes
+    // Type 0 (White harpy) — sleep=10, aaf=16
+    // Run up to 30 AI ticks; with sleep=10, P(wake per tick)~10%,
+    // so P(still asleep after 30) = 0.9^30 ~ 4%
     // ==========================================
 !t3:
     jsr monster_init_table
@@ -223,21 +225,25 @@ test_start:
     lda #8
     sta $c6
 
-    // Place floor at (25, 20)
+    // Place floor at (25, 20) and surrounding tiles for movement
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #25
+    ldy #24
+!t3_fill:
     lda #TILE_FLOOR | FLAG_LIT
     sta (zp_ptr0),y
+    iny
+    cpy #32
+    bne !t3_fill-
 
     lda #25
     sta ms_spawn_x
     lda #20
     sta ms_spawn_y
-    lda #9                      // Jackal (sleep=0, aaf=12)
+    lda #0                      // White harpy (sleep=10, aaf=16)
     jsr monster_spawn_one
 
     // Place player within AAF range (distance=5)
@@ -250,17 +256,32 @@ test_start:
     lda #200
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
 
-    // Run AI tick
+    // Run up to 30 AI ticks checking for wake
+    lda #30
+    sta tai_count
+!t3_loop:
+    // Restore keyboard buffer for -more- prompts
+    lda #8
+    sta $c6
+
     jsr monster_ai_tick
 
-    // Check MF_AWAKE is set
+    // Check MF_AWAKE
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
     lda (zp_ptr0),y
     and #MF_AWAKE
     bne !t3_pass+
+
+    dec tai_count
+    bne !t3_loop-
+
+    // 30 ticks and still asleep — fail
     lda #$00
     sta tc_results + 2
     jmp !t4+
@@ -546,7 +567,7 @@ test_start:
 
     // ==========================================
     // Test 8: Speed 2 monster moves twice per tick
-    // Type 15 (Wild cat) — speed=2
+    // Type 13 (Poltergeist) — speed=2
     // ==========================================
 !t8:
     jsr monster_init_table
@@ -567,12 +588,12 @@ test_start:
     cpy #31
     bne !t8_fill-
 
-    // Spawn wild cat at (20,15)
+    // Spawn poltergeist at (20,15)
     lda #20
     sta ms_spawn_x
     lda #15
     sta ms_spawn_y
-    lda #15                     // Wild cat (speed=2)
+    lda #13                     // Poltergeist (speed=2)
     jsr monster_spawn_one
 
     // Set awake

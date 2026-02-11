@@ -5,7 +5,7 @@
 // player (greedy movement) or randomly if confused. Speed 0 = immobile,
 // speed 1 = one move, speed 2 = two moves per turn.
 //
-// No combat — monsters stop adjacent to the player (Phase 5.3/5.4).
+// Combat handled via monster_attack_player when adjacent (Phase 5.4).
 
 // ============================================================
 // Scratch variables
