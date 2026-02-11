@@ -1060,22 +1060,20 @@ are needed:
 
 ## What's Next
 
-Phase 4.1 (dungeon generation) is complete with all DG QA findings resolved.
-Remaining Phase 4 deliverables:
+Phase 4 status:
 
 | # | What | Status |
 |---|------|--------|
 | 4.1 | Room-and-corridor dungeon generation | **Complete** — rooms, corridors, doors, streamers, stairs, connectivity verification |
-| 4.2 | Dungeon features (doors, traps, stairs) | **Partially complete** — traps and door open/close implemented in `dungeon_features.s`; secret door search deferred; stair transitions working |
+| 4.2 | Dungeon features (doors, traps, stairs) | **Complete** — open/close/stuck doors, 6 trap types, stair transitions, `place_secrets` + `do_search` (1-in-6 reveal) |
 | 4.3 | Data loader + fastloader | Not started — needed for tier boundary crossings |
 | 4.4 | Viewport scrolling for 80x48 map | **Complete** — dirty tile rendering, panel movement |
 | 4.5 | Line of sight (full) | **Complete** — three-state visibility (unseen/visible/remembered), torch radius, room reveal, dark rooms, dimmed rendering |
-| 4.6 | Player movement updates | **Partially complete** — stair transitions working; running, pit traps, search command deferred |
+| 4.6 | Player movement updates | **Complete** — corridor running (8 dirs, 6 stop conditions), trap signaling (carry flag), bump suppression, context-aware secret door rendering |
 
 **Suggested next steps (priority order):**
-1. **Phase 4.6 — Running + search** — auto-move in corridors, search command for secret doors. Then re-enable `place_secrets`.
-2. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
-3. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
+1. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
+2. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
 
 ---
 
