@@ -199,8 +199,36 @@ render_viewport:
     // Outside light radius → dimmed (remembered tile)
     lda #COL_DGREY
     sta zp_temp1                // Override color to dark grey
+    jmp !rv_no_monster+         // Dimmed tiles never show monsters
 
 !rv_vis_ok:
+    // Monster check (visible tiles only)
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rv_no_monster+
+    // Compute map x,y
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    sta rv_mon_x
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    tay                         // Y = map_y
+    lda rv_mon_x                // A = map_x
+    jsr monster_find_at
+    bcc !rv_no_monster+         // Not found (stale flag?)
+    // X = slot index — get creature type
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax                         // X = creature type
+    lda cr_display,x
+    sta zp_temp0
+    lda cr_color,x
+    sta zp_temp1
+
+!rv_no_monster:
     // Check if this is the player position
     lda zp_render_x
     clc
@@ -422,8 +450,29 @@ render_single_tile:
     // Dimmed
     lda #COL_DGREY
     sta zp_temp4
+    jmp !rst_no_monster+        // Dimmed tiles never show monsters
 
 !rst_vis_ok:
+    // Monster check (visible tiles only)
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    beq !rst_no_monster+
+    // zp_temp0 = map_x, zp_temp1 = map_y
+    ldy zp_temp1                // Y = map_y
+    lda zp_temp0                // A = map_x
+    jsr monster_find_at
+    bcc !rst_no_monster+        // Not found
+    // X = slot index
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_display,x
+    sta zp_temp3
+    lda cr_color,x
+    sta zp_temp4
+
+!rst_no_monster:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
@@ -481,6 +530,7 @@ render_single_tile:
 
 rst_col_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
+rv_mon_x:    .byte 0          // Monster check scratch
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0

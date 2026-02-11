@@ -36,6 +36,7 @@
 #import "sound.s"
 #import "dungeon_gen.s"
 #import "dungeon_features.s"
+#import "monster.s"
 #import "dungeon_render.s"
 #import "dungeon_los.s"
 #import "player_move.s"
@@ -131,6 +132,7 @@ entry:
     lda #$ff
     sta zp_run_dir              // Not running
     jsr level_generate
+    jsr monster_spawn_level
     jsr update_visibility       // Reveal starting area
 
     // Clear screen and do initial render
@@ -262,6 +264,7 @@ entry:
     lda #$ff
     sta zp_run_dir              // Stop running on level change
     jsr level_generate
+    jsr monster_spawn_level
     jsr update_visibility
     jsr screen_clear
     jsr viewport_update
@@ -299,6 +302,7 @@ entry:
     lda #$ff
     sta zp_run_dir              // Stop running on level change
     jsr level_generate
+    jsr monster_spawn_level
     jsr update_visibility
     jsr screen_clear
     jsr viewport_update

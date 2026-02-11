@@ -105,6 +105,12 @@ player_try_move:
     jsr tile_is_walkable
     bcc !blocked+
 
+    // Check FLAG_OCCUPIED (monster blocking)
+    ldy zp_temp3                // target_x (column offset)
+    lda (zp_ptr0),y             // Re-read map byte (zp_ptr0 still valid)
+    and #FLAG_OCCUPIED
+    bne !blocked+               // Monster present → blocked (combat in 5.3)
+
     // Move succeeded — update player position
     lda zp_temp3
     sta zp_player_x
@@ -209,7 +215,11 @@ run_check_stop:
     jsr run_check_adjacent_doors
     bcs !rcs_stop+
 
-    // 6. Intersection check (corridors only — unlit area)
+    // 6. Adjacent monster check (6 neighbors, skip forward/backward)
+    jsr run_check_adjacent_monsters
+    bcs !rcs_stop+
+
+    // 7. Intersection check (corridors only — unlit area)
     lda zp_temp0
     and #FLAG_LIT
     bne !rcs_continue+      // In lit room → no intersection check
@@ -292,6 +302,72 @@ run_check_adjacent_doors:
     sec
     rts
 !rcad_no_door:
+    clc
+    rts
+
+// run_check_adjacent_monsters — Check 6 neighbors for FLAG_OCCUPIED
+// Same pattern as run_check_adjacent_doors: skip forward/backward.
+// Input: zp_run_dir, zp_player_x/y
+// Output: carry set = monster adjacent, carry clear = no monsters
+// Clobbers: A, X, Y, zp_ptr0/hi, run_scratch, zp_temp1, zp_temp2
+run_check_adjacent_monsters:
+    lda #0
+    sta run_scratch
+
+!rcam_loop:
+    lda run_scratch
+    cmp #8
+    bcs !rcam_none+
+
+    // Skip forward direction
+    cmp zp_run_dir
+    beq !rcam_next+
+
+    // Skip backward direction
+    ldx zp_run_dir
+    cmp dir_opposite,x
+    beq !rcam_next+
+
+    // Compute adjacent position
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta zp_temp1
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta zp_temp2
+
+    // Bounds check
+    lda zp_temp1
+    beq !rcam_next+
+    cmp #MAP_COLS - 1
+    bcs !rcam_next+
+    lda zp_temp2
+    beq !rcam_next+
+    cmp #MAP_ROWS - 1
+    bcs !rcam_next+
+
+    // Read map tile and check FLAG_OCCUPIED
+    ldx zp_temp2
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_temp1
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !rcam_found+
+
+!rcam_next:
+    inc run_scratch
+    jmp !rcam_loop-
+
+!rcam_found:
+    sec
+    rts
+!rcam_none:
     clc
     rts
 

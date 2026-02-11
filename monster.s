@@ -1,0 +1,610 @@
+// monster.s — Creature data & active monster table
+//
+// Embedded creature types for dungeon levels 1-5 (20 types).
+// Active monster table: 32 slots x 12 bytes each.
+// Spawn, find, remove subroutines for the monster system.
+
+// ============================================================
+// Constants
+// ============================================================
+.const MAX_MONSTERS      = 32
+.const MONSTER_ENTRY_SIZE = 12
+.const CREATURE_COUNT    = 20
+.const EMPTY_SLOT        = $ff
+
+// Active monster entry offsets (12 bytes per entry)
+.const MX_X         = 0
+.const MX_Y         = 1
+.const MX_TYPE      = 2
+.const MX_HP_LO     = 3
+.const MX_HP_HI     = 4
+.const MX_FLAGS     = 5
+.const MX_SPEED_CNT = 6
+.const MX_SLEEP_CUR = 7
+.const MX_STUN      = 8
+.const MX_CONFUSE   = 9
+// Bytes 10-11 reserved
+
+// Monster flags
+.const MF_AWAKE     = $01
+.const MF_CONFUSED  = $02
+
+// ============================================================
+// Embedded creature data — Struct-of-Arrays
+// 20 creature types matching umoria early game (levels 1-5)
+// ============================================================
+
+// Display character (screen codes)
+cr_display:
+    .byte $02   // 0: B (Fruit bat)
+    .byte $12   // 1: R (Giant white mouse)
+    .byte $17   // 2: W (White worm mass)
+    .byte $13   // 3: S (Large white snake)
+    .byte $0b   // 4: K (Kobold)
+    .byte $09   // 5: I (White icky thing)
+    .byte $0d   // 6: M (Shrieker mushroom)
+    .byte $03   // 7: C (Giant white centipede)
+    .byte $05   // 8: E (Floating eye)
+    .byte $0a   // 9: J (Jackal)
+    .byte $01   // 10: A (Soldier ant)
+    .byte $06   // 11: F (Giant frog)
+    .byte $12   // 12: R (Giant white rat)
+    .byte $0e   // 13: N (Green naga hatchling)
+    .byte $13   // 14: S (Cave spider)
+    .byte $06   // 15: F (Wild cat)
+    .byte $0d   // 16: M (Grey mold)
+    .byte $03   // 17: C (Metallic green centipede)
+    .byte $0d   // 18: M (Yellow mold)
+    .byte $01   // 19: A (Giant black ant)
+
+// Color
+cr_color:
+    .byte COL_GREEN     // 0: Fruit bat
+    .byte COL_GREEN     // 1: Giant white mouse
+    .byte COL_WHITE     // 2: White worm mass
+    .byte COL_GREEN     // 3: Large white snake
+    .byte COL_GREEN     // 4: Kobold
+    .byte COL_WHITE     // 5: White icky thing
+    .byte COL_ORANGE    // 6: Shrieker mushroom
+    .byte COL_GREEN     // 7: Giant white centipede
+    .byte COL_GREEN     // 8: Floating eye
+    .byte COL_YELLOW    // 9: Jackal
+    .byte COL_YELLOW    // 10: Soldier ant
+    .byte COL_GREEN     // 11: Giant frog
+    .byte COL_YELLOW    // 12: Giant white rat
+    .byte COL_GREEN     // 13: Green naga hatchling
+    .byte COL_YELLOW    // 14: Cave spider
+    .byte COL_YELLOW    // 15: Wild cat
+    .byte COL_GREY      // 16: Grey mold
+    .byte COL_GREEN     // 17: Metallic green centipede
+    .byte COL_YELLOW    // 18: Yellow mold
+    .byte COL_LGREY     // 19: Giant black ant
+
+// Speed (0=immobile, 1=normal, 2=fast)
+cr_speed:
+    .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
+    .byte 1, 1, 1, 1, 1, 2, 0, 1, 0, 1
+
+// Creature level
+cr_level:
+    .byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2
+    .byte 2, 2, 3, 3, 3, 3, 4, 4, 4, 5
+
+// Hit dice count (number of dice for HP)
+cr_hd_num:
+    .byte 1, 1, 2, 2, 1, 2, 1, 2, 3, 1
+    .byte 2, 2, 1, 3, 1, 3, 4, 3, 4, 3
+
+// Hit dice sides
+cr_hd_sides:
+    .byte 1, 3, 4, 4, 8, 5, 1, 4, 6, 4
+    .byte 5, 6, 3, 5, 6, 4, 8, 6, 8, 6
+
+// Armor class
+cr_ac:
+    .byte 1, 1, 1, 2, 6, 2, 2, 5, 6, 3
+    .byte 3, 3, 7, 8, 8, 2, 12, 7, 12, 10
+
+// Base sleep value (higher = deeper sleeper)
+cr_sleep:
+    .byte 10, 20, 10, 99, 10, 10, 0, 10, 10, 0
+    .byte 40, 20, 0, 40, 80, 0, 99, 10, 99, 40
+
+// Area affect radius (awareness factor)
+cr_aaf:
+    .byte 8, 8, 2, 2, 16, 12, 4, 7, 10, 12
+    .byte 10, 8, 12, 14, 5, 10, 2, 10, 2, 12
+
+// Experience value (16-bit)
+cr_xp_lo:
+    .byte <1, <2, <3, <4, <5, <6, <1, <8, <3, <8
+    .byte <9, <10, <2, <20, <7, <14, <20, <22, <28, <35
+cr_xp_hi:
+    .byte >1, >2, >3, >4, >5, >6, >1, >8, >3, >8
+    .byte >9, >10, >2, >20, >7, >14, >20, >22, >28, >35
+
+// Attack dice (slot 0 only for now; zeroed slots 1-3)
+cr_atk0_dice:
+    .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
+    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+cr_atk0_sides:
+    .byte 1, 3, 4, 3, 6, 4, 0, 3, 0, 4
+    .byte 4, 5, 3, 4, 5, 3, 6, 5, 6, 5
+
+// Name pointer tables
+cr_name_lo:
+    .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4
+    .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9
+    .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14
+    .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19
+cr_name_hi:
+    .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4
+    .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9
+    .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14
+    .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19
+
+// Name strings (screen codes, null-terminated)
+crn_0:  .text "FRUIT BAT" ; .byte 0
+crn_1:  .text "GIANT WHITE MOUSE" ; .byte 0
+crn_2:  .text "WHITE WORM MASS" ; .byte 0
+crn_3:  .text "LARGE WHITE SNAKE" ; .byte 0
+crn_4:  .text "KOBOLD" ; .byte 0
+crn_5:  .text "WHITE ICKY THING" ; .byte 0
+crn_6:  .text "SHRIEKER MUSHROOM" ; .byte 0
+crn_7:  .text "GIANT WHITE CENTIPEDE" ; .byte 0
+crn_8:  .text "FLOATING EYE" ; .byte 0
+crn_9:  .text "JACKAL" ; .byte 0
+crn_10: .text "SOLDIER ANT" ; .byte 0
+crn_11: .text "GIANT FROG" ; .byte 0
+crn_12: .text "GIANT WHITE RAT" ; .byte 0
+crn_13: .text "GREEN NAGA HATCHLING" ; .byte 0
+crn_14: .text "CAVE SPIDER" ; .byte 0
+crn_15: .text "WILD CAT" ; .byte 0
+crn_16: .text "GREY MOLD" ; .byte 0
+crn_17: .text "METALLIC GREEN CENTIPEDE" ; .byte 0
+crn_18: .text "YELLOW MOLD" ; .byte 0
+crn_19: .text "GIANT BLACK ANT" ; .byte 0
+
+// ============================================================
+// Active monster table — 32 slots x 12 bytes
+// ============================================================
+monster_table:
+    .fill MAX_MONSTERS * MONSTER_ENTRY_SIZE, EMPTY_SLOT
+
+// Pre-computed offset tables for fast entry access
+monster_offset_lo:
+    .fill MAX_MONSTERS, <(i * MONSTER_ENTRY_SIZE)
+monster_offset_hi:
+    .fill MAX_MONSTERS, >(i * MONSTER_ENTRY_SIZE)
+
+// ============================================================
+// Scratch variables
+// ============================================================
+ms_spawn_x: .byte 0            // Spawn position for monster_spawn_one
+ms_spawn_y: .byte 0
+ms_type:    .byte 0             // Creature type for spawn
+ms_count:   .byte 0             // Loop counter for monster_spawn_level
+mfa_x:      .byte 0             // monster_find_at scratch
+mfa_y:      .byte 0
+
+// ============================================================
+// Subroutines
+// ============================================================
+
+// monster_get_ptr — Set zp_ptr0 to monster_table entry X
+// Input:  X = monster index (0-31)
+// Output: zp_ptr0/hi = pointer to entry
+// Preserves: X, Y
+monster_get_ptr:
+    lda monster_offset_lo,x
+    clc
+    adc #<monster_table
+    sta zp_ptr0
+    lda monster_offset_hi,x
+    adc #>monster_table
+    sta zp_ptr0_hi
+    rts
+
+// monster_init_table — Mark all 32 slots empty, reset count
+// Preserves: nothing
+monster_init_table:
+    ldx #0
+    lda #EMPTY_SLOT
+!loop:
+    sta monster_table,x
+    inx
+    cpx #MAX_MONSTERS * MONSTER_ENTRY_SIZE
+    bne !loop-
+    lda #0
+    sta zp_mon_count
+    rts
+
+// monster_find_free_slot — Find first empty slot
+// Output: carry set = found, X = index
+//         carry clear = table full
+// Preserves: Y
+monster_find_free_slot:
+    ldx #0
+!loop:
+    cpx #MAX_MONSTERS
+    bcs !full+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !found+
+    inx
+    jmp !loop-
+!found:
+    sec
+    rts
+!full:
+    clc
+    rts
+
+// find_monster_floor — Find a random floor tile suitable for monster placement
+// Requirements: TILE_FLOOR, no FLAG_OCCUPIED, not player position
+// Output: ms_spawn_x, ms_spawn_y = position
+//         carry set = found, carry clear = failed (200 tries)
+// Clobbers: A, X, Y, zp_ptr0, zp_temp3, zp_temp4
+find_monster_floor:
+    ldx #200                    // Max attempts
+!fmf_loop:
+    stx ms_count                // Save attempt counter (safe — not clobbered by rng_range)
+
+    // Random x in [1, MAP_COLS-2]
+    lda #MAP_COLS - 2           // 78
+    jsr rng_range               // [0, 77]
+    clc
+    adc #1                      // [1, 78]
+    sta ms_spawn_x
+
+    // Random y in [1, MAP_ROWS-2]
+    lda #MAP_ROWS - 2           // 46
+    jsr rng_range               // [0, 45]
+    clc
+    adc #1                      // [1, 46]
+    sta ms_spawn_y
+
+    // Check tile type = TILE_FLOOR
+    tax                         // X = y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy ms_spawn_x
+    lda (zp_ptr0),y
+
+    // Must be floor tile (upper nibble = $00) with no FLAG_OCCUPIED
+    and #TILE_TYPE_MASK | FLAG_OCCUPIED
+    bne !fmf_next+              // Not a clean floor tile
+
+    // Must not be player position
+    lda ms_spawn_x
+    cmp zp_player_x
+    bne !fmf_ok+
+    lda ms_spawn_y
+    cmp zp_player_y
+    beq !fmf_next+              // Same as player
+!fmf_ok:
+    sec                         // Found
+    rts
+
+!fmf_next:
+    ldx ms_count
+    dex
+    bne !fmf_loop-
+    clc                         // Failed
+    rts
+
+// pick_creature_type — Pick random creature type for current dungeon level
+// Range: cr_level in [max(1, dlvl-2), dlvl+3], capped to CREATURE_COUNT
+// Output: A = creature type index
+// Clobbers: X, Y, zp_temp3, zp_temp4
+pick_creature_type:
+    // Compute min_level = max(1, dlvl - 2)
+    lda zp_player_dlvl
+    sec
+    sbc #2
+    bcs !pct_minok+
+    lda #0                      // Underflow
+!pct_minok:
+    cmp #1
+    bcs !pct_min1+
+    lda #1                      // Floor at 1
+!pct_min1:
+    sta pct_min_lvl
+
+    // Compute max_level = dlvl + 3
+    lda zp_player_dlvl
+    clc
+    adc #3
+    sta pct_max_lvl
+
+!pct_retry:
+    // Pick random creature index [0, CREATURE_COUNT-1]
+    lda #CREATURE_COUNT
+    jsr rng_range
+    tax                         // X = candidate type
+
+    // Check cr_level in [min_lvl, max_lvl]
+    lda cr_level,x
+    cmp pct_min_lvl
+    bcc !pct_retry-             // Too low
+    cmp pct_max_lvl
+    beq !pct_accept+            // Equal to max = ok
+    bcs !pct_retry-             // Too high
+!pct_accept:
+    txa                         // A = type index
+    rts
+
+pct_min_lvl: .byte 0
+pct_max_lvl: .byte 0
+
+// monster_spawn_one — Create one monster at ms_spawn_x/y
+// Input:  A = creature type index
+//         ms_spawn_x, ms_spawn_y = position
+// Output: carry set = success, X = slot index
+//         carry clear = table full
+// Clobbers: A, X, Y, zp_ptr0, zp_math_a/b, zp_math_tmp0/1, zp_temp3, zp_temp4
+monster_spawn_one:
+    sta ms_type
+
+    // Find free slot
+    jsr monster_find_free_slot
+    bcs !mso_have_slot+
+    jmp !mso_fail+              // Table full
+!mso_have_slot:
+
+    // X = slot index, zp_ptr0 = entry pointer (from find_free_slot)
+    // Set position
+    ldy #MX_X
+    lda ms_spawn_x
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda ms_spawn_y
+    sta (zp_ptr0),y
+
+    // Set type
+    ldy #MX_TYPE
+    lda ms_type
+    sta (zp_ptr0),y
+
+    // Roll HP: cr_hd_num[type] d cr_hd_sides[type]
+    stx zp_mon_idx              // Save slot index
+    ldx ms_type
+    lda cr_hd_num,x             // N dice
+    pha                         // Save on stack
+    ldy cr_hd_sides,x           // S sides
+    pla                         // A = N
+    // math_dice(A=N, X=S, Y=bonus=0)
+    sty zp_temp0                // Save sides
+    ldx zp_temp0                // X = sides
+    ldy #0                      // No bonus
+    jsr math_dice               // Result in zp_math_a (lo), zp_math_b (hi)
+
+    // Restore slot pointer (math_dice does NOT clobber zp_ptr0)
+    ldx zp_mon_idx
+    jsr monster_get_ptr         // Restore zp_ptr0 (safe to re-derive)
+
+    ldy #MX_HP_LO
+    lda zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda zp_math_b
+    sta (zp_ptr0),y
+
+    // Set flags (start asleep)
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    // Set speed counter = 0
+    ldy #MX_SPEED_CNT
+    lda #0
+    sta (zp_ptr0),y
+
+    // Set sleep counter from creature sleep value
+    ldy #MX_SLEEP_CUR
+    ldx ms_type
+    lda cr_sleep,x
+    sta (zp_ptr0),y
+
+    // Set stun/confuse to 0
+    ldy #MX_STUN
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    sta (zp_ptr0),y
+
+    // Clear reserved bytes 10-11
+    ldy #10
+    sta (zp_ptr0),y
+    ldy #11
+    sta (zp_ptr0),y
+
+    // Set FLAG_OCCUPIED on map tile
+    ldx ms_spawn_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy ms_spawn_x
+    lda (zp_ptr0),y
+    ora #FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    // Increment monster count
+    inc zp_mon_count
+
+    ldx zp_mon_idx              // Return slot index in X
+    sec                         // Success
+    rts
+
+!mso_fail:
+    clc
+    rts
+
+// monster_spawn_level — Spawn monsters for current dungeon level
+// Count = 2 + rng(4) + dlvl/3, capped at 14. Town (dlvl=0) = 0.
+// Clobbers: everything
+monster_spawn_level:
+    // Initialize table
+    jsr monster_init_table
+
+    // Town = no monsters
+    lda zp_player_dlvl
+    bne !msl_dungeon+
+    rts
+
+!msl_dungeon:
+    // Base count = 2
+    lda #2
+    sta msl_target
+
+    // + rng(4) → [0,3]
+    lda #4
+    jsr rng_range
+    clc
+    adc msl_target
+    sta msl_target
+
+    // + dlvl / 3
+    lda zp_player_dlvl
+    sta zp_math_a
+    lda #0
+    sta zp_math_b
+    ldx #3
+    jsr math_div_16x8           // zp_math_a = quotient lo
+    lda zp_math_a
+    clc
+    adc msl_target
+    sta msl_target
+
+    // Cap at 14
+    cmp #15
+    bcc !msl_capped+
+    lda #14
+    sta msl_target
+!msl_capped:
+
+    lda #0
+    sta msl_idx
+
+!msl_loop:
+    lda msl_idx
+    cmp msl_target
+    bcs !msl_done+
+
+    // Find floor tile
+    jsr find_monster_floor
+    bcc !msl_skip+              // No tile found, skip
+
+    // Pick creature type
+    jsr pick_creature_type
+
+    // Spawn it
+    jsr monster_spawn_one
+    // Ignore failure (table could be full)
+
+!msl_skip:
+    inc msl_idx
+    jmp !msl_loop-
+
+!msl_done:
+    rts
+
+msl_target: .byte 0
+msl_idx:    .byte 0
+
+// monster_find_at — Find monster at map position
+// Input:  A = x, Y = y
+// Output: carry set = found, X = slot index
+//         carry clear = not found
+// Clobbers: zp_ptr0, mfa_x, mfa_y
+monster_find_at:
+    sta mfa_x
+    sty mfa_y
+    ldx #0
+!mfa_loop:
+    cpx #MAX_MONSTERS
+    bcs !mfa_miss+
+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !mfa_next+
+
+    // Check x
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp mfa_x
+    bne !mfa_next+
+
+    // Check y
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp mfa_y
+    bne !mfa_next+
+
+    // Found
+    sec
+    rts
+
+!mfa_next:
+    inx
+    jmp !mfa_loop-
+
+!mfa_miss:
+    clc
+    rts
+
+// monster_remove — Remove monster at slot X
+// Clears FLAG_OCCUPIED on map, marks slot empty, decrements count.
+// Input:  X = slot index
+// Clobbers: A, Y, zp_ptr0
+monster_remove:
+    jsr monster_get_ptr
+
+    // Get position for clearing flag
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta mfa_x                   // Reuse scratch
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sta mfa_y
+
+    // Mark slot empty (fill with $ff)
+    lda #EMPTY_SLOT
+    ldy #0
+!mr_clear:
+    sta (zp_ptr0),y
+    iny
+    cpy #MONSTER_ENTRY_SIZE
+    bne !mr_clear-
+
+    // Clear FLAG_OCCUPIED on map tile
+    ldx mfa_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy mfa_x
+    lda (zp_ptr0),y
+    and #~FLAG_OCCUPIED & $ff   // Clear bit 0
+    sta (zp_ptr0),y
+
+    // Decrement count
+    dec zp_mon_count
+    rts
+
+// ============================================================
+// Compile-time validation
+// ============================================================
+.assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
+.assert "Creature count", CREATURE_COUNT, 20
+.assert "cr_display size", cr_color - cr_display, CREATURE_COUNT
+.assert "cr_color size", cr_speed - cr_color, CREATURE_COUNT
+.assert "cr_speed size", cr_level - cr_speed, CREATURE_COUNT
+.assert "cr_level size", cr_hd_num - cr_level, CREATURE_COUNT
