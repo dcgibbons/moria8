@@ -1045,7 +1045,7 @@ are needed:
 | 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) | **Fixed** — 5 streamers (3 magma + 2 quartz) |
 | 7 | MEDIUM | Add wall-adjacency check for stairs placement | **Fixed** — `random_wall_adj_floor` with degrading threshold (>=3, >=2, >=1, any) |
 | 8 | LOW | Consider increasing room count range (e.g., 6-12) for better dungeon density | Deferred |
-| 9 | LOW | Add dark room support (defer LIT flag to Phase 4.5 LOS implementation) | Deferred — TODO comment at `DUNGEON_FLAGS` |
+| 9 | LOW | Add dark room support (defer LIT flag to Phase 4.5 LOS implementation) | **Fixed** — `room_lit[]` array, `darken_rooms` post-processing, umoria formula |
 
 **Additional fixes applied during QA:**
 
@@ -1068,11 +1068,10 @@ Remaining Phase 4 deliverables:
 | 4.2 | Dungeon features (doors, traps, stairs) | **Partially complete** — traps and door open/close implemented in `dungeon_features.s`; secret door search deferred; stair transitions working |
 | 4.3 | Data loader + fastloader | Not started — needed for tier boundary crossings |
 | 4.4 | Viewport scrolling for 80x48 map | **Complete** — dirty tile rendering, panel movement |
-| 4.5 | Line of sight (full) | Not started — lit rooms vs dark corridors, torch radius |
+| 4.5 | Line of sight (full) | **Complete** — three-state visibility (unseen/visible/remembered), torch radius, room reveal, dark rooms, dimmed rendering |
 | 4.6 | Player movement updates | **Partially complete** — stair transitions working; running, pit traps, search command deferred |
 
 **Suggested next steps (priority order):**
-1. **Phase 4.5 — LOS implementation** — dark corridors, lit rooms, torch radius. Prerequisite for dark room support (DG9) and meaningful gameplay.
-2. **Phase 4.6 — Running + search** — auto-move in corridors, search command for secret doors. Then re-enable `place_secrets`.
-3. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
-4. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
+1. **Phase 4.6 — Running + search** — auto-move in corridors, search command for secret doors. Then re-enable `place_secrets`.
+2. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
+3. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
