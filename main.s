@@ -129,6 +129,7 @@ entry:
     sta player_data + PL_MAX_DLVL
     sta level_entry_dir
     jsr level_generate
+    jsr update_visibility       // Reveal starting area
 
     // Clear screen and do initial render
     jsr screen_clear
@@ -190,6 +191,7 @@ entry:
     // Move succeeded
     jsr msg_clear
     jsr trap_check_at_player
+    jsr update_visibility
     jsr viewport_update
 
     // Did viewport scroll?
@@ -200,17 +202,12 @@ entry:
     cmp old_view_y
     bne !full_redraw+
 
-    // No scroll — dirty render: redraw old tile and new tile only
-    lda old_player_x
-    sta zp_temp0
-    lda old_player_y
-    sta zp_temp1
-    jsr render_single_tile
-    lda zp_player_x
-    sta zp_temp0
-    lda zp_player_y
-    sta zp_temp1
-    jsr render_single_tile
+    // Did a room get revealed?
+    lda vis_room_revealed
+    bne !full_redraw+
+
+    // No scroll, no room reveal — render local area around old+new position
+    jsr render_local_area
     jmp !post_move+
 
 !full_redraw:
@@ -245,6 +242,7 @@ entry:
     lda #0
     sta level_entry_dir         // 0 = descended
     jsr level_generate
+    jsr update_visibility
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
@@ -279,6 +277,7 @@ entry:
     lda #1
     sta level_entry_dir         // 1 = ascended
     jsr level_generate
+    jsr update_visibility
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport

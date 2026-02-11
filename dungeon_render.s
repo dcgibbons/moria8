@@ -92,7 +92,9 @@ render_viewport:
 
     // Check if visited (bit 2)
     and #FLAG_VISITED
-    beq !draw_blank+
+    bne !rv_visited+
+    jmp !draw_blank+
+!rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)
     lda zp_tile_tmp
@@ -125,6 +127,52 @@ render_viewport:
     sta zp_temp1            // color
 !rv_tile_set:
 
+    // --- Dimming check: remembered but not currently visible → dark grey ---
+    // Town tiles always have FLAG_LIT, so this is effectively a no-op on town.
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !rv_vis_ok+             // FLAG_LIT → permanently visible → full color
+
+    // Not lit — check if within torch radius (Chebyshev distance)
+    // dx = abs(map_x - player_x)
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    sec
+    sbc zp_player_x
+    bcs !rv_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!rv_dx_pos:
+    sta zp_temp2                // |dx| (safe — not used by tile lookup)
+
+    // dy = abs(map_y - player_y)
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    sec
+    sbc zp_player_y
+    bcs !rv_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!rv_dy_pos:
+    // A = |dy|, find max(|dx|, |dy|)
+    cmp zp_temp2
+    bcs !rv_use_dy+
+    lda zp_temp2
+!rv_use_dy:
+    // A = Chebyshev distance
+    cmp zp_light_radius
+    beq !rv_vis_ok+             // Exactly at radius → visible
+    bcc !rv_vis_ok+             // Within radius → visible
+
+    // Outside light radius → dimmed (remembered tile)
+    lda #COL_DGREY
+    sta zp_temp1                // Override color to dark grey
+
+!rv_vis_ok:
     // Check if this is the player position
     lda zp_render_x
     clc
@@ -279,7 +327,9 @@ render_single_tile:
 
     // Check visited flag
     and #FLAG_VISITED
-    beq !rst_blank+
+    bne !rst_visited+
+    jmp !rst_blank+
+!rst_visited:
 
     // Extract tile type (bits 7-4)
     lda zp_tile_tmp
@@ -309,6 +359,43 @@ render_single_tile:
     sta zp_temp4
 !rst_tile_set:
 
+    // --- Dimming check for single tile ---
+    lda zp_tile_tmp
+    and #FLAG_LIT
+    bne !rst_vis_ok+
+
+    // Chebyshev distance: max(|map_x - player_x|, |map_y - player_y|)
+    lda zp_temp0                // map_x
+    sec
+    sbc zp_player_x
+    bcs !rst_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!rst_dx_pos:
+    sta rst_dim_tmp         // Stash |dx| (byte after rst_col_tmp; safe scratch)
+
+    lda zp_temp1                // map_y
+    sec
+    sbc zp_player_y
+    bcs !rst_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!rst_dy_pos:
+    cmp rst_dim_tmp
+    bcs !rst_use_dy+
+    lda rst_dim_tmp
+!rst_use_dy:
+    cmp zp_light_radius
+    beq !rst_vis_ok+
+    bcc !rst_vis_ok+
+
+    // Dimmed
+    lda #COL_DGREY
+    sta zp_temp4
+
+!rst_vis_ok:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
@@ -365,12 +452,153 @@ render_single_tile:
     rts
 
 rst_col_tmp: .byte 0
+rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0
 old_view_y:    .byte 0
 old_player_x:  .byte 0
 old_player_y:  .byte 0
+
+// render_local_area — Render tiles around old and new player positions
+// Computes bounding box encompassing light_radius+1 around both positions,
+// clamped to viewport. Calls render_single_tile for each.
+// Uses old_player_x/y and zp_player_x/y.
+// Preserves: nothing
+render_local_area:
+    // Compute min_x = min(old_player_x, player_x) - light_radius - 1
+    lda old_player_x
+    cmp zp_player_x
+    bcc !rla_ox+
+    lda zp_player_x
+!rla_ox:
+    sec
+    sbc zp_light_radius
+    bcs !rla_mx1+
+    lda #0
+    jmp !rla_mx2+
+!rla_mx1:
+    sec
+    sbc #1
+    bcs !rla_mx2+
+    lda #0
+!rla_mx2:
+    // Clamp to viewport left
+    cmp zp_view_x
+    bcs !rla_mx3+
+    lda zp_view_x
+!rla_mx3:
+    sta rla_min_x
+
+    // Compute max_x = max(old_player_x, player_x) + light_radius + 1
+    lda old_player_x
+    cmp zp_player_x
+    bcs !rla_ox2+
+    lda zp_player_x
+!rla_ox2:
+    clc
+    adc zp_light_radius
+    clc
+    adc #1
+    // Clamp to viewport right
+    sta rla_max_x
+    lda zp_view_x
+    clc
+    adc #VIEWPORT_W - 1
+    cmp rla_max_x
+    bcs !rla_mx4+
+    sta rla_max_x
+!rla_mx4:
+    // Clamp to map right
+    lda rla_max_x
+    cmp #MAP_COLS
+    bcc !rla_mx5+
+    lda #MAP_COLS - 1
+    sta rla_max_x
+!rla_mx5:
+
+    // Compute min_y = min(old_player_y, player_y) - light_radius - 1
+    lda old_player_y
+    cmp zp_player_y
+    bcc !rla_oy+
+    lda zp_player_y
+!rla_oy:
+    sec
+    sbc zp_light_radius
+    bcs !rla_my1+
+    lda #0
+    jmp !rla_my2+
+!rla_my1:
+    sec
+    sbc #1
+    bcs !rla_my2+
+    lda #0
+!rla_my2:
+    cmp zp_view_y
+    bcs !rla_my3+
+    lda zp_view_y
+!rla_my3:
+    sta rla_min_y
+
+    // Compute max_y = max(old_player_y, player_y) + light_radius + 1
+    lda old_player_y
+    cmp zp_player_y
+    bcs !rla_oy2+
+    lda zp_player_y
+!rla_oy2:
+    clc
+    adc zp_light_radius
+    clc
+    adc #1
+    sta rla_max_y
+    lda zp_view_y
+    clc
+    adc #VIEWPORT_H - 1
+    cmp rla_max_y
+    bcs !rla_my4+
+    sta rla_max_y
+!rla_my4:
+    lda rla_max_y
+    cmp #MAP_ROWS
+    bcc !rla_my5+
+    lda #MAP_ROWS - 1
+    sta rla_max_y
+!rla_my5:
+
+    // Iterate the bounding box and render each tile
+    lda rla_min_y
+    sta rla_cur_y
+!rla_row:
+    lda rla_min_x
+    sta rla_cur_x
+!rla_col:
+    lda rla_cur_x
+    sta zp_temp0
+    lda rla_cur_y
+    sta zp_temp1
+    jsr render_single_tile
+
+    lda rla_cur_x
+    cmp rla_max_x
+    beq !rla_col_done+
+    inc rla_cur_x
+    jmp !rla_col-
+!rla_col_done:
+
+    lda rla_cur_y
+    cmp rla_max_y
+    beq !rla_done+
+    inc rla_cur_y
+    jmp !rla_row-
+!rla_done:
+    rts
+
+rla_min_x: .byte 0
+rla_max_x: .byte 0
+rla_min_y: .byte 0
+rla_max_y: .byte 0
+rla_cur_x: .byte 0
+rla_cur_y: .byte 0
 
 // ============================================================
 // Compile-time validation

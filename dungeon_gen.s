@@ -351,10 +351,9 @@ draw_store:
 .const ROOM_MAX_H       = 7     // 3 + rng(5)
 .const ROOM_GAP         = 2     // Min gap between rooms
 .const MAX_ROOM_RETRIES = 20    // Retries per room attempt
-// TODO DG9: Support dark rooms at deeper dungeon levels (Phase 4.5/LOS).
-// Umoria makes rooms dark when dlvl is high enough; omit FLAG_LIT on those.
-// Currently all rooms use DUNGEON_FLAGS which includes LIT+VISITED.
-.const DUNGEON_FLAGS    = FLAG_LIT | FLAG_VISITED  // $0C (rooms are lit)
+// Rooms start lit but not yet visited; update_visibility sets FLAG_VISITED
+// when the player enters. Dark rooms have FLAG_LIT stripped by darken_rooms.
+.const DUNGEON_FLAGS    = FLAG_LIT                  // $08 (rooms are lit)
 
 // ============================================================
 // Dungeon room table — parallel arrays (SoA)
@@ -364,6 +363,7 @@ room_x:      .fill MAX_ROOMS, 0   // Interior left column
 room_y:      .fill MAX_ROOMS, 0   // Interior top row
 room_w:      .fill MAX_ROOMS, 0   // Interior width
 room_h:      .fill MAX_ROOMS, 0   // Interior height
+room_lit:    .fill MAX_ROOMS, 0   // 0=dark, 1=lit (set by place_rooms)
 
 // Stairs coordinates
 stairs_up_x:    .byte 0
@@ -422,11 +422,11 @@ dungeon_generate:
     jsr place_streamers         // Before corridors (umoria order):
                                 // corridors overwrite veins they cross
     jsr connect_rooms
-    jsr mark_corridor_walls     // Make walls adjacent to corridors visible
     jsr add_corridor_doors      // Doors where corridors touch room walls
     jsr place_stairs_dungeon
     jsr place_traps
     // TODO: Re-enable place_secrets when search UX is polished (DG5)
+    jsr darken_rooms            // Strip FLAG_LIT from dark rooms (after all generation)
     jsr verify_stairs
     jsr position_player_dungeon
     jsr verify_connectivity
@@ -438,6 +438,78 @@ dungeon_generate:
     rts
 
 dg_gen_retries: .byte 0
+
+// ============================================================
+// darken_rooms — Strip FLAG_LIT from dark rooms
+// Called after all generation so corridors can detect room walls during
+// carving (FLAG_LIT distinguishes room wall from rock). For each dark
+// room (room_lit[i]==0), clears FLAG_LIT from the full rectangle
+// including walls (room_x-1 to room_x+room_w, room_y-1 to room_y+room_h).
+// ============================================================
+darken_rooms:
+    lda #0
+    sta dr_idx
+!dr_loop:
+    lda dr_idx
+    cmp room_count
+    bcs !dr_done+
+
+    tax
+    lda room_lit,x
+    bne !dr_next+               // Lit room → skip
+
+    // Dark room: clear FLAG_LIT from entire room rectangle
+    lda room_y,x
+    sec
+    sbc #1
+    sta dr_row                  // Start row (top wall)
+    lda room_y,x
+    clc
+    adc room_h,x
+    sta dr_end_row              // End row (bottom wall, inclusive)
+    lda room_x,x
+    sec
+    sbc #1
+    sta dr_start_col            // Start col (left wall)
+    lda room_x,x
+    clc
+    adc room_w,x
+    sta dr_end_col              // End col (right wall, inclusive)
+
+!dr_row_loop:
+    ldx dr_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy dr_start_col
+!dr_col_loop:
+    lda (zp_ptr0),y
+    and #~FLAG_LIT              // Clear FLAG_LIT
+    sta (zp_ptr0),y
+    cpy dr_end_col
+    beq !dr_row_done+
+    iny
+    jmp !dr_col_loop-
+!dr_row_done:
+    inc dr_row
+    lda dr_row
+    cmp dr_end_row
+    beq !dr_row_loop-           // Process end row too
+    bcc !dr_row_loop-
+
+!dr_next:
+    inc dr_idx
+    jmp !dr_loop-
+!dr_done:
+    rts
+
+dr_idx:       .byte 0
+dr_row:       .byte 0
+dr_end_row:   .byte 0
+dr_start_col: .byte 0
+dr_end_col:   .byte 0
 
 // ============================================================
 // fill_map_rock — Fill entire map with solid rock (TILE_WALL_H, no flags)
@@ -540,21 +612,41 @@ place_rooms:
     // Draw the room
     jsr draw_dungeon_room
 
+    // Determine if room is lit (umoria: lit if dlvl <= randint(1,25))
+    // rng_range(25) → [0,24], add 1 → [1,25]. Lit if dlvl <= result.
+    lda #25
+    jsr rng_range               // A = [0, 24]
+    clc
+    adc #1                      // A = [1, 25]
+    cmp zp_player_dlvl          // Compare threshold vs dungeon level
+    ldx dg_idx
+    lda #0                      // Default: dark
+    bcc !room_dark+             // threshold < dlvl → dark
+    lda #1                      // threshold >= dlvl → lit
+!room_dark:
+    sta room_lit,x
+
     // Next room
     inc dg_idx
     lda dg_idx
     cmp room_count
-    bne !room_loop-
+    beq !rooms_placed+
+    jmp !room_loop-
+!rooms_placed:
     rts
 
 !overlap:
     dec dg_retries
-    bne !retry-
+    beq !retries_exhausted+
+    jmp !retry-
+!retries_exhausted:
     // Max retries exhausted — skip this room, reduce count
     dec room_count
     lda dg_idx
     cmp room_count
-    bne !room_loop-
+    beq !rooms_placed2+
+    jmp !room_loop-
+!rooms_placed2:
     rts
 
 // ============================================================
@@ -971,7 +1063,7 @@ carve_h_corridor:
     beq !hc_place_door+         // Vertical wall → door
     // Parallel wall (horiz) or corner → carve to floor
 !hc_carve_floor:
-    lda #TILE_FLOOR | DUNGEON_FLAGS
+    lda #TILE_FLOOR               // No flags — corridor starts invisible
     sta (zp_ptr0),y
     jmp !hc_advance+
 !hc_place_door:
@@ -1004,7 +1096,7 @@ carve_h_corridor:
     cmp #TILE_WALL_V
     beq !hc_single_door+        // Perpendicular vertical wall → door
 !hc_single_floor:
-    lda #TILE_FLOOR | DUNGEON_FLAGS
+    lda #TILE_FLOOR               // No flags — corridor starts invisible
     sta (zp_ptr0),y
     jmp !hc_done+
 !hc_single_door:
@@ -1061,7 +1153,7 @@ carve_v_corridor:
     beq !vc_place_door+         // Horizontal wall → door
     // Parallel wall (vert) or corner → carve to floor
 !vc_carve_floor:
-    lda #TILE_FLOOR | DUNGEON_FLAGS
+    lda #TILE_FLOOR               // No flags — corridor starts invisible
     sta (zp_ptr0),y
     jmp !vc_advance+
 !vc_place_door:
@@ -1101,7 +1193,7 @@ carve_v_corridor:
     cmp #TILE_WALL_H
     beq !vc_single_door+        // Perpendicular horizontal wall → door
 !vc_single_floor:
-    lda #TILE_FLOOR | DUNGEON_FLAGS
+    lda #TILE_FLOOR               // No flags — corridor starts invisible
     sta (zp_ptr0),y
     jmp !vc_done+
 !vc_single_door:
@@ -2278,4 +2370,4 @@ position_player_dungeon:
 // ============================================================
 .assert "MAX_ROOMS", MAX_ROOMS, 8
 .assert "TILE_WALL_H = $10", TILE_WALL_H, $10
-.assert "DUNGEON_FLAGS = $0C", DUNGEON_FLAGS, $0c
+.assert "DUNGEON_FLAGS = $08", DUNGEON_FLAGS, $08

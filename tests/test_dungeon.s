@@ -44,6 +44,9 @@ t9_sum_before: .byte 0
 t14_magma:     .byte 0
 t14_quartz:    .byte 0
 t16_counter:   .byte 0
+t19_found:     .byte 0
+t19_save_row:  .byte 0
+t19_tile:      .byte 0
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
@@ -806,7 +809,7 @@ test_start:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #25
-    lda #TILE_FLOOR | DUNGEON_FLAGS
+    lda #TILE_FLOOR                 // Corridors have no flags
     sta (zp_ptr0),y
 
     // Verify the wall at (24, 11) is currently TILE_WALL_V
@@ -898,6 +901,351 @@ test_start:
     lda #$00
     sta $0411
 !t18_done:
+
+    // ==========================================
+    // Test 19: Corridor floor has no FLAG_VISITED after generation
+    // After dungeon_generate, corridor floor tiles should have no flags.
+    // ==========================================
+    // Generate a fresh dungeon
+    lda #1
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr dungeon_generate
+
+    // Find a corridor floor tile: scan for TILE_FLOOR without FLAG_LIT
+    // (Room floors have FLAG_LIT; corridor floors do not)
+    lda #0
+    sta t19_found
+    ldx #1
+!t19_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx t19_save_row
+
+    ldy #1
+!t19_col:
+    lda (zp_ptr0),y
+    sta t19_tile
+    and #TILE_TYPE_MASK
+    bne !t19_next_col+          // Not floor → skip
+    // It's a floor tile — check if it has FLAG_LIT
+    lda t19_tile
+    and #FLAG_LIT
+    bne !t19_next_col+          // Has FLAG_LIT → room floor, skip
+    // Corridor floor found — check FLAG_VISITED is NOT set
+    lda t19_tile
+    and #FLAG_VISITED
+    bne !t19_fail+              // FLAG_VISITED set → FAIL
+    lda #1
+    sta t19_found
+    jmp !t19_check+             // Found one good tile, that's enough
+!t19_next_col:
+    iny
+    cpy #MAP_COLS - 1
+    bne !t19_col-
+
+    ldx t19_save_row
+    inx
+    cpx #MAP_ROWS - 1
+    bne !t19_row-
+
+!t19_check:
+    lda t19_found
+    beq !t19_fail+              // Didn't find any corridor floor (unlikely)
+
+    lda #$01
+    sta $0412
+    jmp !t19_done+
+!t19_fail:
+    lda #$00
+    sta $0412
+!t19_done:
+
+    // ==========================================
+    // Test 20: Lit room floor has FLAG_LIT but no FLAG_VISITED
+    // After generation, room floors with FLAG_LIT should NOT have FLAG_VISITED.
+    // ==========================================
+    // Use the dungeon from test 19 (still valid)
+    lda #0
+    sta t19_found               // Reuse as found flag
+    ldx #0
+!t20_room_loop:
+    cpx room_count
+    bcs !t20_check+
+
+    // Only check lit rooms
+    lda room_lit,x
+    beq !t20_next_room+
+
+    // Check floor tile at (room_x[i], room_y[i])
+    stx t19_save_row            // Save room index
+    ldy room_y,x
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy room_x,x
+    lda (zp_ptr0),y
+    sta t19_tile
+
+    // Should have FLAG_LIT
+    and #FLAG_LIT
+    beq !t20_fail+
+
+    // Should NOT have FLAG_VISITED
+    lda t19_tile
+    and #FLAG_VISITED
+    bne !t20_fail+
+
+    lda #1
+    sta t19_found
+    ldx t19_save_row
+    jmp !t20_next_room+
+
+!t20_next_room:
+    inx
+    jmp !t20_room_loop-
+
+!t20_check:
+    lda t19_found
+    beq !t20_fail+
+
+    lda #$01
+    sta $0413
+    jmp !t20_done+
+!t20_fail:
+    lda #$00
+    sta $0413
+!t20_done:
+
+    // ==========================================
+    // Test 21: update_visibility sets FLAG_VISITED within torch radius
+    // Set player at known position, call update_visibility, verify tiles.
+    // ==========================================
+    // Generate fresh dungeon to have clean flags
+    lda #1
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr dungeon_generate
+
+    // Player is positioned by dungeon_generate
+    // Set light radius to 1
+    lda #1
+    sta zp_light_radius
+
+    // Ensure player tile does NOT have FLAG_VISITED before update
+    // (It shouldn't, since we removed FLAG_VISITED from generation)
+    // Call update_visibility
+    jsr update_visibility
+
+    // Check that tile at player position now has FLAG_VISITED
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t21_fail+
+
+    // Check an adjacent tile (player_x+1, player_y) — within radius 1
+    ldy zp_player_x
+    iny
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t21_fail+
+
+    lda #$01
+    sta $0414
+    jmp !t21_done+
+!t21_fail:
+    lda #$00
+    sta $0414
+!t21_done:
+
+    // ==========================================
+    // Test 22: reveal_room sets FLAG_VISITED on all room tiles
+    // Set up a room, call reveal_room, check corner and floor tiles.
+    // ==========================================
+    jsr fill_map_rock
+
+    // Place room at x=20, y=10, w=5, h=3
+    lda #1
+    sta room_count
+    lda #20
+    sta room_x
+    sta dg_room_x
+    lda #10
+    sta room_y
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta dg_room_w
+    lda #3
+    sta room_h
+    sta dg_room_h
+    lda #1
+    sta room_lit                // Mark as lit
+
+    jsr draw_dungeon_room
+
+    // Verify tiles DON'T have FLAG_VISITED yet (DUNGEON_FLAGS = FLAG_LIT only)
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    bne !t22_fail+              // Should NOT be visited yet
+
+    // Now reveal the room
+    ldx #0
+    jsr reveal_room
+
+    // Check floor at (20, 10) — should now have FLAG_VISITED
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t22_fail+
+
+    // Check top-left corner at (19, 9) — should also have FLAG_VISITED
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t22_fail+
+
+    // Check bottom-right corner at (25, 13)
+    ldx #13
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #25
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t22_fail+
+
+    lda #$01
+    sta $0415
+    jmp !t22_done+
+!t22_fail:
+    lda #$00
+    sta $0415
+!t22_done:
+
+    // ==========================================
+    // Test 23: Dark room has no FLAG_LIT after darken_rooms
+    // Set up rooms, set one as dark, call darken_rooms.
+    // ==========================================
+    jsr fill_map_rock
+
+    lda #2
+    sta room_count
+
+    // Room 0: x=10, y=10, w=5, h=3 — dark
+    lda #10
+    sta room_x
+    sta room_y
+    sta dg_room_x
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta dg_room_w
+    lda #3
+    sta room_h
+    sta dg_room_h
+    lda #0
+    sta room_lit                // Dark room
+    jsr draw_dungeon_room
+
+    // Room 1: x=30, y=10, w=5, h=3 — lit
+    lda #30
+    sta room_x + 1
+    sta dg_room_x
+    lda #10
+    sta room_y + 1
+    sta dg_room_y
+    lda #5
+    sta room_w + 1
+    sta dg_room_w
+    lda #3
+    sta room_h + 1
+    sta dg_room_h
+    lda #1
+    sta room_lit + 1            // Lit room
+    jsr draw_dungeon_room
+
+    // Before darken_rooms, dark room floor at (10,10) should have FLAG_LIT
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    beq !t23_fail+              // Should be lit before darken
+
+    // Call darken_rooms
+    jsr darken_rooms
+
+    // Dark room floor at (10,10) should NOT have FLAG_LIT
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    bne !t23_fail+              // Should be dark now
+
+    // Dark room wall at (9,9) should also NOT have FLAG_LIT
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #9
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    bne !t23_fail+              // Wall should be dark too
+
+    // Lit room floor at (30,10) should STILL have FLAG_LIT
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    beq !t23_fail+              // Lit room should be unchanged
+
+    lda #$01
+    sta $0416
+    jmp !t23_done+
+!t23_fail:
+    lda #$00
+    sta $0416
+!t23_done:
 
     // Done — break into monitor
     brk
