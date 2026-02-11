@@ -125,6 +125,34 @@ render_viewport:
     sta zp_temp0            // screen code
     lda tile_colors,x
     sta zp_temp1            // color
+
+    // Secret door orientation fix: TILE_SECRET defaults to '─' but
+    // should render as '│' when on a vertical wall (left/right of room).
+    // Check tile above: if it's a wall/corner type (1-6), we're on a
+    // vertical wall and should use '│' instead.
+    cpx #15                     // TILE_SECRET type index
+    bne !rv_tile_set+
+    // Peek at tile above (map_ptr - MAP_COLS, same column)
+    lda zp_map_ptr_lo
+    sec
+    sbc #MAP_COLS
+    sta zp_ptr2
+    lda zp_map_ptr_hi
+    sbc #0
+    sta zp_ptr2_hi
+    lda (zp_ptr2),y             // Tile above, same column (Y preserved)
+    lsr
+    lsr
+    lsr
+    lsr                         // Extract type index
+    // Types 1-6 = wall/corner tiles
+    cmp #1
+    bcc !rv_tile_set+           // Type 0 (floor) → horizontal wall, keep '─'
+    cmp #7
+    bcs !rv_tile_set+           // Type >= 7 → not a wall, keep '─'
+    // Tile above is a wall → this is on a vertical wall → render as '│'
+    lda #$5d                    // '│' screen code
+    sta zp_temp0
 !rv_tile_set:
 
     // --- Dimming check: remembered but not currently visible → dark grey ---
