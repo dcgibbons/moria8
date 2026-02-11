@@ -159,6 +159,7 @@ turn_tick_hunger:
 turn_post_action:
     jsr turn_tick_effects
     jsr turn_tick_hunger
+    jsr monster_ai_tick
 
     // Increment turn counter
     inc zp_turn_lo
