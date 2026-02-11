@@ -226,7 +226,32 @@ render_viewport:
     jmp !rv_no_monster+         // Dimmed tiles never show monsters
 
 !rv_vis_ok:
-    // Monster check (visible tiles only)
+    // Item check (visible tiles only)
+    lda zp_tile_tmp
+    and #FLAG_HAS_ITEM
+    beq !rv_no_item+
+    // Compute map x,y for item lookup
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    pha                         // Save map_x
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    tay                         // Y = map_y
+    pla                         // A = map_x
+    jsr floor_item_find_at
+    bcc !rv_no_item+
+    // X = slot — look up item type
+    lda fi_item_id,x
+    tax
+    lda it_display,x
+    sta zp_temp0
+    lda it_color,x
+    sta zp_temp1
+!rv_no_item:
+
+    // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rv_no_monster+
@@ -477,7 +502,24 @@ render_single_tile:
     jmp !rst_no_monster+        // Dimmed tiles never show monsters
 
 !rst_vis_ok:
-    // Monster check (visible tiles only)
+    // Item check (visible tiles only)
+    lda zp_tile_tmp
+    and #FLAG_HAS_ITEM
+    beq !rst_no_item+
+    ldy zp_temp1                // Y = map_y
+    lda zp_temp0                // A = map_x
+    jsr floor_item_find_at
+    bcc !rst_no_item+
+    // X = slot — look up item type
+    lda fi_item_id,x
+    tax
+    lda it_display,x
+    sta zp_temp3
+    lda it_color,x
+    sta zp_temp4
+!rst_no_item:
+
+    // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rst_no_monster+

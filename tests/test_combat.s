@@ -34,6 +34,7 @@
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../monster_ai.s"
+#import "../item.s"
 #import "../dungeon_render.s"
 #import "../dungeon_los.s"
 #import "../player_move.s"
