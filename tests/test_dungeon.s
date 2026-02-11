@@ -47,6 +47,8 @@ t16_counter:   .byte 0
 t19_found:     .byte 0
 t19_save_row:  .byte 0
 t19_tile:      .byte 0
+t24_carry_result: .byte 0
+t24_result_save:  .fill 28, 0   // Buffer to save $0400-$041b from msg_print clobbering
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
@@ -1229,6 +1231,298 @@ test_start:
     lda #$00
     sta $0416
 !t23_done:
+
+    // ==========================================
+    // Test 24: trap_check_at_player sets carry on trap
+    // Place a trap at player position, verify carry is set.
+    // NOTE: trap_check_at_player calls msg_print which writes to $0400
+    // (screen row 0), so we save/restore existing test results.
+    // ==========================================
+
+    // Save test results 1-23 from screen row 0 before trap clobbers them
+    ldx #27
+!t24_save:
+    lda $0400,x
+    sta t24_result_save,x
+    dex
+    bpl !t24_save-
+
+    jsr fill_map_rock
+
+    // Set up a floor tile at player position
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    // Write floor tile at player position
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+
+    // Place trap at player's position in the trap table
+    lda #1
+    sta trap_count
+    lda #20
+    sta trap_x
+    sta trap_y
+    lda #TRAP_OPEN_PIT
+    sta trap_type
+
+    // Set up enough player state so trap_apply_damage won't crash
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Clear message state so -more- prompt doesn't wait for keypress.
+    // msg_print sets MSG_PENDING, so the second msg_print in trap handler
+    // will trigger -more- and call input_get_key. Pre-stuff keyboard buffer.
+    lda #0
+    sta zp_msg_flags
+    lda #4
+    sta $c6                     // Keyboard buffer count (enough for multiple -more-)
+    lda #$20                    // Space key
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+
+    jsr trap_check_at_player
+    // Save carry result immediately (screen may be clobbered)
+    lda #$00
+    bcc !t24_no_carry+
+    lda #$01
+!t24_no_carry:
+    sta t24_carry_result
+
+    // Restore test results 1-23
+    ldx #27
+!t24_restore:
+    lda t24_result_save,x
+    sta $0400,x
+    dex
+    bpl !t24_restore-
+
+    // Now write test 24 result
+    lda t24_carry_result
+    sta $0417
+
+    // ==========================================
+    // Test 25: trap_check_at_player clears carry on no trap
+    // No traps in table → carry should be clear.
+    // ==========================================
+    lda #0
+    sta trap_count              // Empty trap table
+
+    jsr trap_check_at_player
+    bcc !t25_pass+
+    jmp !t25_fail+
+
+!t25_pass:
+    lda #$01
+    sta $0418
+    jmp !t25_done+
+!t25_fail:
+    lda #$00
+    sta $0418
+!t25_done:
+
+    // ==========================================
+    // Test 26: place_secrets creates TILE_SECRET tiles
+    // Generate a dungeon, then count secret tiles on the map.
+    // (place_secrets is called by dungeon_generate now)
+    // ==========================================
+
+    // Save test results again — dungeon_generate may call msg-related code
+    ldx #27
+!t26_save:
+    lda $0400,x
+    sta t24_result_save,x
+    dex
+    bpl !t26_save-
+
+    lda #3
+    sta zp_player_dlvl          // Use deeper level for more doors
+    lda #0
+    sta level_entry_dir
+    jsr dungeon_generate
+
+    // Scan map for TILE_SECRET tiles
+    lda #0
+    sta t19_found               // Reuse as counter
+    ldx #1
+!t26_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx t19_save_row
+    ldy #1
+!t26_col:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !t26_next+
+    inc t19_found
+!t26_next:
+    iny
+    cpy #MAP_COLS - 1
+    bne !t26_col-
+    ldx t19_save_row
+    inx
+    cpx #MAP_ROWS - 1
+    bne !t26_row-
+
+    // Should have at least 1 secret door (place_secrets converts 1-3)
+    // Note: might be 0 if no closed doors were found; try multiple times
+    lda t19_found
+    bne !t26_pass+
+    // Retry with a different seed
+    lda #$aa
+    sta zp_rng_0
+    lda #$55
+    sta zp_rng_1
+    jsr dungeon_generate
+    // Scan again
+    lda #0
+    sta t19_found
+    ldx #1
+!t26_row2:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    stx t19_save_row
+    ldy #1
+!t26_col2:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !t26_next2+
+    inc t19_found
+!t26_next2:
+    iny
+    cpy #MAP_COLS - 1
+    bne !t26_col2-
+    ldx t19_save_row
+    inx
+    cpx #MAP_ROWS - 1
+    bne !t26_row2-
+    lda t19_found
+    bne !t26_pass+
+    jmp !t26_fail+
+
+!t26_pass:
+    lda #$01
+    sta t19_tile                // Reuse as test 26 result
+    jmp !t26_write+
+!t26_fail:
+    lda #$00
+    sta t19_tile
+!t26_write:
+    // Restore test results, then write 26
+    ldx #27
+!t26_restore:
+    lda t24_result_save,x
+    sta $0400,x
+    dex
+    bpl !t26_restore-
+    lda t19_tile
+    sta $0419
+
+    // ==========================================
+    // Test 27: run_check_stop stops at stairs
+    // Place player on stairs tile, verify carry set.
+    // ==========================================
+    jsr fill_map_rock
+
+    // Create a small corridor with stairs
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    // Place stairs tile at player position
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_STAIRS_DN
+    sta (zp_ptr0),y
+
+    // Set up running direction (east)
+    lda #3                      // DIR_E
+    sta zp_run_dir
+
+    // Set run_was_lit to 0 (corridor)
+    lda #0
+    sta run_was_lit
+
+    jsr run_check_stop
+    bcs !t27_pass+
+    jmp !t27_fail+
+
+!t27_pass:
+    lda #$01
+    sta $041a
+    jmp !t27_done+
+!t27_fail:
+    lda #$00
+    sta $041a
+!t27_done:
+
+    // ==========================================
+    // Test 28: run_check_stop continues on straight corridor
+    // Place player on floor tile in a straight corridor with no
+    // intersections, doors, or special tiles → carry clear.
+    // ==========================================
+    jsr fill_map_rock
+
+    // Create a straight horizontal corridor at y=20, x=18..22
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #18
+!t28_carve:
+    lda #TILE_FLOOR             // No flags (corridor)
+    sta (zp_ptr0),y
+    iny
+    cpy #23
+    bne !t28_carve-
+
+    // Player at (20, 20), running east
+    lda #20
+    sta zp_player_x
+    sta zp_player_y
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #0
+    sta run_was_lit             // Corridor (unlit)
+
+    jsr run_check_stop
+    bcc !t28_pass+
+    jmp !t28_fail+
+
+!t28_pass:
+    lda #$01
+    sta $041b
+    jmp !t28_done+
+!t28_fail:
+    lda #$00
+    sta $041b
+!t28_done:
 
     // Done — break into monitor
     brk

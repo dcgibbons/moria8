@@ -128,6 +128,8 @@ entry:
     sta player_data + PL_DLEVEL
     sta player_data + PL_MAX_DLVL
     sta level_entry_dir
+    lda #$ff
+    sta zp_run_dir              // Not running
     jsr level_generate
     jsr update_visibility       // Reveal starting area
 
@@ -145,6 +147,22 @@ entry:
     jsr msg_print
 
 !main_loop:
+    // --- Running continuation ---
+    lda zp_run_dir
+    cmp #$ff
+    beq !not_running+
+
+    // Any keypress cancels running
+    lda $c6                     // Keyboard buffer count
+    bne !run_cancel+
+    jmp run_step
+
+!run_cancel:
+    lda #0
+    sta $c6                     // Flush keyboard buffer
+    lda #$ff
+    sta zp_run_dir
+!not_running:
     jsr input_get_command
 
     // --- Dispatch command ---
@@ -241,6 +259,8 @@ entry:
 !dn_not_deeper:
     lda #0
     sta level_entry_dir         // 0 = descended
+    lda #$ff
+    sta zp_run_dir              // Stop running on level change
     jsr level_generate
     jsr update_visibility
     jsr screen_clear
@@ -276,6 +296,8 @@ entry:
     sta player_data + PL_DLEVEL
     lda #1
     sta level_entry_dir         // 1 = ascended
+    lda #$ff
+    sta zp_run_dir              // Stop running on level change
     jsr level_generate
     jsr update_visibility
     jsr screen_clear
@@ -362,8 +384,129 @@ entry:
     jmp !main_loop-
 !not_rest:
 
+    // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
+    cmp #CMD_RUN_N
+    bcc !not_run+
+    cmp #CMD_RUN_SE + 1
+    bcs !not_run+
+
+    sec
+    sbc #CMD_RUN_N              // Direction index 0-7
+    sta zp_run_dir
+    jmp run_step                // Take first step
+!not_run:
+
     // Unknown command — ignore
     jmp !main_loop-
+
+// ============================================================
+// run_step — Execute one step of corridor running
+// ============================================================
+run_step:
+    // Save positions before move for dirty render
+    ldx zp_player_x
+    stx old_player_x
+    ldx zp_player_y
+    stx old_player_y
+    ldx zp_view_x
+    stx old_view_x
+    ldx zp_view_y
+    stx old_view_y
+
+    // Save current tile's lit status for room entry/exit detection
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    sta run_was_lit
+
+    // Convert running direction to movement command
+    lda zp_run_dir
+    clc
+    adc #CMD_MOVE_N
+
+    // Try to move
+    jsr player_try_move
+    bcc !run_blocked+           // Wall → stop, no turn consumed
+
+    // Check trap
+    jsr msg_clear
+    jsr trap_check_at_player
+    bcs !run_trap_stop+         // Trap fired → stop, turn consumed
+
+    // Check other stop conditions
+    jsr run_check_stop
+    bcs !run_stop_move+         // Should stop → final move
+
+    // Continue running → render + turn
+    jsr update_visibility
+    jsr viewport_update
+
+    // Check for viewport scroll or room reveal
+    lda zp_view_x
+    cmp old_view_x
+    bne !run_full_redraw+
+    lda zp_view_y
+    cmp old_view_y
+    bne !run_full_redraw+
+    lda vis_room_revealed
+    bne !run_full_redraw+
+
+    jsr render_local_area
+    jmp !run_post+
+
+!run_full_redraw:
+    jsr render_viewport
+
+!run_post:
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+
+!run_blocked:
+    lda #$ff
+    sta zp_run_dir
+    jmp !main_loop-
+
+!run_trap_stop:
+    lda #$ff
+    sta zp_run_dir
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+
+!run_stop_move:
+    lda #$ff
+    sta zp_run_dir
+    jsr update_visibility
+    jsr viewport_update
+
+    // Check for viewport scroll or room reveal
+    lda zp_view_x
+    cmp old_view_x
+    bne !rsm_full+
+    lda zp_view_y
+    cmp old_view_y
+    bne !rsm_full+
+    lda vis_room_revealed
+    bne !rsm_full+
+
+    jsr render_local_area
+    jmp !rsm_post+
+!rsm_full:
+    jsr render_viewport
+!rsm_post:
+    jsr turn_post_action
+    jsr status_draw
+    jmp !main_loop-
+
 !quit:
 
     // --- Clean exit to BASIC ---

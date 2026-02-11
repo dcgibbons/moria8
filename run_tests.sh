@@ -93,7 +93,7 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0405" 6
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0416" 23 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 041b" 28 500000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

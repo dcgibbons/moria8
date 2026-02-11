@@ -52,11 +52,20 @@
 .const CMD_QUIT      = $22  // Quit without saving (Q)
 .const CMD_HELP      = $23  // Help (?)
 .const CMD_VERSION   = $24  // Version (V)
+.const CMD_RUN_N     = $25  // Run north
+.const CMD_RUN_S     = $26  // Run south
+.const CMD_RUN_W     = $27  // Run west
+.const CMD_RUN_E     = $28  // Run east
+.const CMD_RUN_NW    = $29  // Run northwest
+.const CMD_RUN_NE    = $2a  // Run northeast
+.const CMD_RUN_SW    = $2b  // Run southwest
+.const CMD_RUN_SE    = $2c  // Run southeast
 
 // Direction offsets: dx, dy for each movement command
 // Index = CMD_MOVE_x - CMD_MOVE_N
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1  // N S W E NW NE SW SE
 dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
+dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 
 // ============================================================
 // Subroutines
@@ -165,6 +174,15 @@ key_map_petscii:
     // Shifted keys (C64 unshifted mode: SHIFT+letter = PETSCII $C1-$DA)
     .byte $c3   // SHIFT+C — character info
     .byte $d1   // SHIFT+Q — quit
+    // Shifted vi-keys (running)
+    .byte $cb   // SHIFT+K — run north
+    .byte $ca   // SHIFT+J — run south
+    .byte $c8   // SHIFT+H — run west
+    .byte $cc   // SHIFT+L — run east
+    .byte $d9   // SHIFT+Y — run northwest
+    .byte $d5   // SHIFT+U — run northeast
+    .byte $c2   // SHIFT+B — run southwest
+    .byte $ce   // SHIFT+N — run southeast
 
 key_map_cmd:
     // Movement
@@ -207,6 +225,15 @@ key_map_cmd:
     // Shifted keys
     .byte CMD_CHAR_INFO
     .byte CMD_QUIT
+    // Shifted vi-keys (running)
+    .byte CMD_RUN_N
+    .byte CMD_RUN_S
+    .byte CMD_RUN_W
+    .byte CMD_RUN_E
+    .byte CMD_RUN_NW
+    .byte CMD_RUN_NE
+    .byte CMD_RUN_SW
+    .byte CMD_RUN_SE
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

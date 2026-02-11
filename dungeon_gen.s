@@ -425,7 +425,7 @@ dungeon_generate:
     jsr add_corridor_doors      // Doors where corridors touch room walls
     jsr place_stairs_dungeon
     jsr place_traps
-    // TODO: Re-enable place_secrets when search UX is polished (DG5)
+    jsr place_secrets
     jsr darken_rooms            // Strip FLAG_LIT from dark rooms (after all generation)
     jsr verify_stairs
     jsr position_player_dungeon

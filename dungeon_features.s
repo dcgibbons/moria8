@@ -376,6 +376,7 @@ trap_check_at_player:
     sta trap_type,x
 
     // Done (only one trap per tile)
+    sec                     // Carry set = trap fired
     rts
 
 !tcp_next:
@@ -383,6 +384,7 @@ trap_check_at_player:
     jmp !tcp_loop-
 
 !tcp_done:
+    clc                     // Carry clear = no trap
     rts
 
 // ============================================================
