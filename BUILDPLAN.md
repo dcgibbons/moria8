@@ -981,16 +981,17 @@ Umoria uses the type value itself (>= MIN_CAVE_WALL=12) to identify walls vs.
 open space. A dedicated "rock" tile type would be cleaner but the current
 approach works.
 
-#### Finding DG9 — DUNGEON_FLAGS marks all rooms as lit+visited (LOW)
+#### Finding DG9 — DUNGEON_FLAGS marks all rooms as lit+visited (LOW) — RESOLVED
 
-`DUNGEON_FLAGS = FLAG_LIT | FLAG_VISITED` ($0C). Every room and corridor tile
-is placed with both flags set. This means:
+Originally `DUNGEON_FLAGS = FLAG_LIT | FLAG_VISITED` ($0C), baking full
+visibility into every tile at generation time. **Fixed in Phase 4.5:**
 
-1. All rooms are always fully visible (no dark rooms)
-2. Umoria has dark rooms at deeper levels (lit if `level <= random(25)`)
-3. The visibility system (`dungeon_los.s`) is a stub returning "always visible"
-4. These are Phase 4.5 concerns, but the generation code bakes in visibility
-   at room creation time, making it harder to add dark rooms later
+- `DUNGEON_FLAGS = FLAG_LIT` ($08) — rooms start lit but NOT visited
+- Corridors start with NO flags (invisible until the player's torch reveals them)
+- `dungeon_los.s` implements three-state visibility: unseen → visible → remembered
+- `darken_rooms` strips FLAG_LIT from dark rooms (umoria formula: lit if dlvl <= rng(25)+1)
+- `update_visibility` sets FLAG_VISITED via torch radius (Phase A) and room reveal (Phase B)
+- Rendering dims remembered tiles (FLAG_VISITED but outside torch and not FLAG_LIT) to dark grey
 
 #### Finding DG10 — Zero test coverage for dungeon generation (HIGH)
 
@@ -1040,7 +1041,7 @@ are needed:
 | 1 | BLOCKER | Stub out `trap_count`, `place_traps`, `place_secrets` to restore buildability | **Fixed** — `dungeon_features.s` implements traps and secrets |
 | 2 | CRITICAL | Rewrite connectivity algorithm: shuffle rooms, connect as circular chain | **Fixed** — Fisher-Yates shuffle + circular chain in `connect_rooms` |
 | 3 | HIGH | Add flood-fill connectivity verification after generation; re-generate if unreachable | **Fixed** — BFS `verify_connectivity` with max 10 retries |
-| 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests | **Fixed** — 18 runtime tests covering rooms, corridors, connectivity, doors |
+| 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests | **Fixed** — 23 runtime tests covering rooms, corridors, connectivity, doors, visibility, dark rooms |
 | 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) | **Fixed** — 50/50 open/closed at junctions; `place_secrets` deferred to post-search-UX |
 | 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) | **Fixed** — 5 streamers (3 magma + 2 quartz) |
 | 7 | MEDIUM | Add wall-adjacency check for stairs placement | **Fixed** — `random_wall_adj_floor` with degrading threshold (>=3, >=2, >=1, any) |
@@ -1075,3 +1076,35 @@ Remaining Phase 4 deliverables:
 1. **Phase 4.6 — Running + search** — auto-move in corridors, search command for secret doors. Then re-enable `place_secrets`.
 2. **Phase 4.3 — Data loader** — can be deferred until Phase 5 (monsters need creature data from disk).
 3. **Phase 5 — Monsters** — monster spawning, AI, combat. The core gameplay loop.
+
+---
+
+### Review Pass 5 — Post-Phase 4.5 Full Codebase Review (2026-02-10)
+
+Reviewed all 32 files (~12,400 lines). All tests pass (6/6 suites, 52/52 tests).
+No blocking bugs found.
+
+#### Test coverage gaps
+
+| Module | Gap | Severity |
+|--------|-----|----------|
+| math.s | `math_dice` is completely untested — no tests for bonus handling, negative bonuses, or edge cases | Medium |
+| test_dungeon.s Test 14 | Streamer scan only checks 3 of 15 map pages ($C000, $C400, $C800) — streamers in unscanned pages would be missed | Low |
+| test_memory.s | ZP save/restore only validates 4 of 142 bytes ($02–$05) | Low |
+| test_rng.s | `rng_range` boundary cases (N=1, N=255) not tested | Low |
+
+#### Code quality notes (non-blocking)
+
+| File | Issue | Severity |
+|------|-------|----------|
+| dungeon_render.s | `render_single_tile` (lines 289–452) duplicates ~150 lines from `render_viewport` — extract shared subroutine when code next changes | Low |
+| dungeon_features.s:196 | `find_random_floor` returns last (possibly non-floor) coordinates if 200 attempts exhausted — trap could land on wall tile (extremely rare) | Low |
+| dungeon_gen.s:2062 | BFS queue has no overflow guard — safe in practice (max ~2000 passable tiles vs 4000 queue capacity on 80x48 map) | Low |
+
+#### False positives investigated and cleared
+
+Three findings were flagged by automated review and manually verified as correct:
+
+1. **Room lit/dark logic (dungeon_gen.s:621–624):** `ldx`/`lda` between `cmp` and `bcc` do NOT affect the carry flag. Logic correctly implements "lit if dlvl <= threshold".
+2. **math_dice negative bonus (math.s:103–110):** Sign-extension via `adc #$ff` on the high byte is the standard 6502 pattern for 16-bit addition of a sign-extended 8-bit negative value. Verified with worked examples.
+3. **Corridor swap infinite loop (dungeon_gen.s:1031–1043):** All coordinates are valid map positions (0–79), so the Y register always reaches the target. No wrap-around possible.
