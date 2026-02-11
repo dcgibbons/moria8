@@ -621,15 +621,20 @@ test_start:
 
     // ==========================================
     // Test 14: Map has both magma and quartz tiles after generation
-    // Scan map for at least one magma ($C0) and one quartz ($D0)
+    // Scan entire map ($C000-$CEFF, 15 pages) for magma and quartz
     // ==========================================
     lda #0
     sta t14_magma
     sta t14_quartz
 
-    ldx #0
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+
+    ldy #0
 !t14_scan:
-    lda MAP_BASE,x
+    lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_MAGMA
     bne !t14_not_m+
@@ -639,35 +644,13 @@ test_start:
     bne !t14_not_q+
     inc t14_quartz
 !t14_not_q:
-    inx
+    iny
     bne !t14_scan-
 
-    // Scan pages 1-14 (we already scanned page 0)
-    // Just check a subset for efficiency — scan page $C4 and $C8
-    ldx #0
-!t14_scan2:
-    lda MAP_BASE + $400,x
-    and #TILE_TYPE_MASK
-    cmp #TILE_MAGMA
-    bne !t14_not_m2+
-    inc t14_magma
-!t14_not_m2:
-    cmp #TILE_QUARTZ
-    bne !t14_not_q2+
-    inc t14_quartz
-!t14_not_q2:
-    lda MAP_BASE + $800,x
-    and #TILE_TYPE_MASK
-    cmp #TILE_MAGMA
-    bne !t14_not_m3+
-    inc t14_magma
-!t14_not_m3:
-    cmp #TILE_QUARTZ
-    bne !t14_not_q3+
-    inc t14_quartz
-!t14_not_q3:
-    inx
-    bne !t14_scan2-
+    inc zp_ptr0_hi
+    lda zp_ptr0_hi
+    cmp #$cf                // Pages $C0-$CE = 15 pages = 3840 bytes
+    bne !t14_scan-
 
     // Need both types present
     lda t14_magma

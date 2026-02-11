@@ -70,45 +70,46 @@ test_start:
 !t2_done:
 
     // ==========================================
-    // Test 3: ZP save/restore round-trip
-    // Write known values to ZP, save, overwrite, restore, verify.
+    // Test 3: ZP save/restore round-trip (full range $02–$8F)
+    // Write recognizable pattern to all 142 ZP bytes, save,
+    // overwrite with zeros, restore, verify all match.
     // ==========================================
-    // Write test pattern to $02–$05
-    lda #$de
-    sta $02
-    lda #$ad
-    sta $03
-    lda #$be
-    sta $04
-    lda #$ef
-    sta $05
+    // Write test pattern: each byte = index XOR $A5
+    ldx #0
+!t3_write:
+    txa
+    eor #$a5
+    sta $02,x
+    inx
+    cpx #ZP_SAVE_SIZE
+    bne !t3_write-
 
     // Save ZP
     jsr save_zp
 
-    // Overwrite with different values
+    // Overwrite all with zeros
+    ldx #0
     lda #$00
-    sta $02
-    sta $03
-    sta $04
-    sta $05
+!t3_zero:
+    sta $02,x
+    inx
+    cpx #ZP_SAVE_SIZE
+    bne !t3_zero-
 
     // Restore ZP
     jsr restore_zp
 
-    // Verify
-    lda $02
-    cmp #$de
+    // Verify all 142 bytes match expected pattern
+    ldx #0
+!t3_verify:
+    txa
+    eor #$a5
+    cmp $02,x
     bne !t3_fail+
-    lda $03
-    cmp #$ad
-    bne !t3_fail+
-    lda $04
-    cmp #$be
-    bne !t3_fail+
-    lda $05
-    cmp #$ef
-    bne !t3_fail+
+    inx
+    cpx #ZP_SAVE_SIZE
+    bne !t3_verify-
+
     lda #$01
     sta $0402
     jmp !t3_done+

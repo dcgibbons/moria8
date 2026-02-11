@@ -301,5 +301,148 @@ test_start:
     sta $02
 !t12_done:
 
+    // ==========================================
+    // Tests 13-16: math_dice
+    // Seed RNG for reproducibility
+    // ==========================================
+    lda #$42
+    sta zp_rng_0
+    lda #$13
+    sta zp_rng_1
+    lda #$7a
+    sta zp_rng_2
+    lda #$f1
+    sta zp_rng_3
+
+    // ==========================================
+    // Test 13: math_dice 1d6+0 — basic dice roll
+    // 20 iterations, each result in [1, 6]
+    // ==========================================
+    ldx #20
+!t13_loop:
+    txa
+    pha
+    lda #1
+    ldx #6
+    ldy #0
+    jsr math_dice
+    lda zp_math_b
+    bne !t13_fail+
+    lda zp_math_a
+    cmp #1
+    bcc !t13_fail+
+    cmp #7
+    bcs !t13_fail+
+    pla
+    tax
+    dex
+    bne !t13_loop-
+    lda #$01
+    sta $040c
+    jmp !t13_done+
+!t13_fail:
+    pla
+    lda #$00
+    sta $040c
+    sta $02
+!t13_done:
+
+    // ==========================================
+    // Test 14: math_dice 1d6+10 — positive bonus
+    // 20 iterations, each result in [11, 16]
+    // ==========================================
+    ldx #20
+!t14_loop:
+    txa
+    pha
+    lda #1
+    ldx #6
+    ldy #10
+    jsr math_dice
+    lda zp_math_b
+    bne !t14_fail+
+    lda zp_math_a
+    cmp #11
+    bcc !t14_fail+
+    cmp #17
+    bcs !t14_fail+
+    pla
+    tax
+    dex
+    bne !t14_loop-
+    lda #$01
+    sta $040d
+    jmp !t14_done+
+!t14_fail:
+    pla
+    lda #$00
+    sta $040d
+    sta $02
+!t14_done:
+
+    // ==========================================
+    // Test 15: math_dice 1d6-1 — negative bonus (Y=$FF)
+    // 20 iterations, each result in [0, 5]
+    // ==========================================
+    ldx #20
+!t15_loop:
+    txa
+    pha
+    lda #1
+    ldx #6
+    ldy #$ff
+    jsr math_dice
+    lda zp_math_b
+    bne !t15_fail+
+    lda zp_math_a
+    cmp #6
+    bcs !t15_fail+
+    pla
+    tax
+    dex
+    bne !t15_loop-
+    lda #$01
+    sta $040e
+    jmp !t15_done+
+!t15_fail:
+    pla
+    lda #$00
+    sta $040e
+    sta $02
+!t15_done:
+
+    // ==========================================
+    // Test 16: math_dice 10d8+0 — multi-dice accumulation
+    // 20 iterations, each result in [10, 80]
+    // ==========================================
+    ldx #20
+!t16_loop:
+    txa
+    pha
+    lda #10
+    ldx #8
+    ldy #0
+    jsr math_dice
+    lda zp_math_b
+    bne !t16_fail+
+    lda zp_math_a
+    cmp #10
+    bcc !t16_fail+
+    cmp #81
+    bcs !t16_fail+
+    pla
+    tax
+    dex
+    bne !t16_loop-
+    lda #$01
+    sta $040f
+    jmp !t16_done+
+!t16_fail:
+    pla
+    lda #$00
+    sta $040f
+    sta $02
+!t16_done:
+
     // Done — break into monitor
     brk

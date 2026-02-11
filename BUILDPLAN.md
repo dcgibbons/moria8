@@ -1086,12 +1086,12 @@ No blocking bugs found.
 
 #### Test coverage gaps
 
-| Module | Gap | Severity |
-|--------|-----|----------|
-| math.s | `math_dice` is completely untested — no tests for bonus handling, negative bonuses, or edge cases | Medium |
-| test_dungeon.s Test 14 | Streamer scan only checks 3 of 15 map pages ($C000, $C400, $C800) — streamers in unscanned pages would be missed | Low |
-| test_memory.s | ZP save/restore only validates 4 of 142 bytes ($02–$05) | Low |
-| test_rng.s | `rng_range` boundary cases (N=1, N=255) not tested | Low |
+| Module | Gap | Severity | Status |
+|--------|-----|----------|--------|
+| math.s | `math_dice` is completely untested — no tests for bonus handling, negative bonuses, or edge cases | Medium | **Fixed** — Tests 13-16: basic 1d6+0, positive bonus 1d6+10, negative bonus 1d6-1, multi-dice 10d8+0 (20 iterations each) |
+| test_dungeon.s Test 14 | Streamer scan only checks 3 of 15 map pages ($C000, $C400, $C800) — streamers in unscanned pages would be missed | Low | **Fixed** — Pointer-based full map scan ($C000-$CEFF, 15 pages) |
+| test_memory.s | ZP save/restore only validates 4 of 142 bytes ($02–$05) | Low | **Fixed** — Loop-based test covers all 142 ZP bytes ($02-$8F) using X^$A5 pattern |
+| test_rng.s | `rng_range` boundary cases (N=1, N=255) not tested | Low | **Fixed** — Tests 5-6: rng_range(1) always 0, rng_range(255) always <255 (100 iterations each) |
 
 #### Code quality notes (non-blocking)
 

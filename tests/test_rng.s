@@ -138,4 +138,56 @@ test_start:
     sta $0403
 !t4_done:
 
+    // ==========================================
+    // Test 5: rng_range(1) always returns 0
+    // N=1 means the only possible value is 0.
+    // ==========================================
+    ldx #100
+!t5_loop:
+    txa
+    pha
+    lda #1
+    jsr rng_range
+    cmp #0
+    bne !t5_fail+
+    pla
+    tax
+    dex
+    bne !t5_loop-
+    lda #$01
+    sta $0404
+    jmp !t5_done+
+!t5_fail:
+    pla
+    lda #$00
+    sta $0404
+    sta $02
+!t5_done:
+
+    // ==========================================
+    // Test 6: rng_range(255) returns values in [0, 254]
+    // Result must never equal 255.
+    // ==========================================
+    ldx #100
+!t6_loop:
+    txa
+    pha
+    lda #255
+    jsr rng_range
+    cmp #255
+    beq !t6_fail+
+    pla
+    tax
+    dex
+    bne !t6_loop-
+    lda #$01
+    sta $0405
+    jmp !t6_done+
+!t6_fail:
+    pla
+    lda #$00
+    sta $0405
+    sta $02
+!t6_done:
+
     brk
