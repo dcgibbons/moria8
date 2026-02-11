@@ -658,6 +658,14 @@ create_init_character:
     // Sync to ZP
     jsr player_sync_to_zp
 
+    // Initialize HP regen counter from CON
+    lda player_data + PL_CON_CUR
+    sec
+    sbc #3                      // Index = CON - 3
+    tax
+    lda regen_rate,x
+    sta zp_regen_counter
+
     rts
 
 // put_stat_val — Display a stat value with 18/xx support

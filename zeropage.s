@@ -120,7 +120,7 @@
 // --- Turn / game state ($40–$4f) ---
 .label zp_turn_lo      = $40   // Turn counter (lo)
 .label zp_turn_hi      = $41   // Turn counter (hi)
-.label zp_spare_42     = $42   // Spare (was zp_turn_phase, removed in Phase 3)
+.label zp_regen_counter = $42  // HP regen countdown (turns until next 1 HP heal)
 .label zp_game_flags   = $43   // Global flags (bit 0: game over, bit 1: wizard mode)
 .label zp_current_tier = $44   // Currently loaded creature/item tier pair
 .label zp_speed_tick   = $45   // Speed counter tick for monster AI

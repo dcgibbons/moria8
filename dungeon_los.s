@@ -36,6 +36,12 @@ town_light_all:
 // Dungeon: Phase A (torch radius) + Phase B (room reveal).
 // Preserves: nothing
 update_visibility:
+    // Blindness — skip all visibility updates
+    lda zp_eff_blind
+    beq !uv_not_blind+
+    jmp !uv_blind_skip+
+!uv_not_blind:
+
     lda zp_player_dlvl
     bne !uv_dungeon+
     rts                         // Town: everything pre-lit
@@ -174,6 +180,7 @@ update_visibility:
     inc vis_min_x
     jmp !uv_room_loop-
 
+!uv_blind_skip:
 !uv_done:
     rts
 

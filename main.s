@@ -158,6 +158,14 @@ entry:
     cmp #$ff
     beq !not_running+
 
+    // Confusion cancels running
+    lda zp_eff_confuse
+    beq !not_conf_run+
+    lda #$ff
+    sta zp_run_dir
+    jmp !not_running+
+!not_conf_run:
+
     // Any keypress cancels running
     lda $c6                     // Keyboard buffer count
     bne !run_cancel+

@@ -286,6 +286,14 @@ hunger_2: .text "WEAK  " ; .byte 0
 hunger_3: .text "FAINT " ; .byte 0
 
 // ============================================================
+// HP regeneration rate: turns per 1 HP healed, indexed by CON-3
+// CON 3 = slow (50 turns), CON 18 = fast (8 turns)
+// ============================================================
+regen_rate:
+    .byte 50, 45, 40, 35, 30, 28, 25, 22  // CON 3-10
+    .byte 20, 18, 16, 14, 12, 10,  9,  8  // CON 11-18
+
+// ============================================================
 // Compile-time validation
 // ============================================================
 .assert "Race stat table size", RACE_COUNT * STAT_COUNT, 48

@@ -3,10 +3,7 @@
 // The main loop (main.s) dispatches player commands directly and calls
 // turn_post_action after each action that consumes a turn. This module
 // provides the post-action processing: effect timers, hunger, turn
-// counter, and status dirty flag.
-//
-// Monster AI (Phase 5) will be called from turn_post_action.
-// Regeneration (Phase 5) will be added to turn_post_action.
+// counter, HP regeneration, and status dirty flag.
 
 // Hunger thresholds
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
@@ -18,15 +15,23 @@
 // ============================================================
 
 // turn_tick_effects — Decrement all active status effect timers
-// Any timer that reaches 0 triggers removal of that effect.
+// When a timer reaches 0, prints expiration message.
 // Preserves: nothing
 turn_tick_effects:
     // Poison
     lda zp_eff_poison
     beq !no_poison+
     dec zp_eff_poison
-
-    // Poison tick: 1 HP damage per turn
+    bne !poison_still+
+    // Just expired — print message
+    lda #<eff_poison_end
+    sta zp_ptr0
+    lda #>eff_poison_end
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !no_poison+
+!poison_still:
+    // Poison tick: 1 HP damage per turn (only while timer > 0)
     lda zp_player_hp_lo
     sec
     sbc #1
@@ -44,19 +49,41 @@ turn_tick_effects:
     lda zp_eff_blind
     beq !no_blind+
     dec zp_eff_blind
-    // TODO: if just expired, redraw screen (Phase 5)
+    bne !no_blind+
+    // Just expired — print message and trigger viewport redraw
+    lda #<eff_blind_end
+    sta zp_ptr0
+    lda #>eff_blind_end
+    sta zp_ptr0_hi
+    jsr msg_print
+    lda #1
+    sta vis_room_revealed       // Trigger full viewport redraw
 !no_blind:
 
     // Confusion
     lda zp_eff_confuse
     beq !no_confuse+
     dec zp_eff_confuse
+    bne !no_confuse+
+    // Just expired — print message
+    lda #<eff_confuse_end
+    sta zp_ptr0
+    lda #>eff_confuse_end
+    sta zp_ptr0_hi
+    jsr msg_print
 !no_confuse:
 
     // Paralysis
     lda zp_eff_paralyze
     beq !no_para+
     dec zp_eff_paralyze
+    bne !no_para+
+    // Just expired — print message
+    lda #<eff_paralyze_end
+    sta zp_ptr0
+    lda #>eff_paralyze_end
+    sta zp_ptr0_hi
+    jsr msg_print
 !no_para:
 
     // Haste/slow
@@ -161,16 +188,106 @@ turn_tick_hunger:
     // Food is 0 — player takes damage each turn
     lda #HUNGER_FAINT
     sta zp_hunger_state
-    // TODO: starvation damage (Phase 5)
+
+    // Starvation: 1 HP damage per turn
+    lda zp_player_hp_lo
+    sec
+    sbc #1
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    bcs !starve_no_borrow+
+    dec zp_player_hp_hi
+    lda zp_player_hp_hi
+    sta player_data + PL_HP_HI
+!starve_no_borrow:
+    jsr player_death_check
+    rts
+
+// turn_tick_regen — HP regeneration each turn
+// Decrements zp_regen_counter. When it expires, heal 1 HP (capped at max).
+// Poison suppresses regeneration. zp_eff_regen active = double tick rate.
+// Preserves: nothing
+turn_tick_regen:
+    // Skip if poisoned (poison suppresses regen)
+    lda zp_eff_poison
+    bne !ttr_done+
+
+    // Skip if at max HP (16-bit compare)
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !ttr_not_max+           // HP hi < MHP hi → not at max
+    bne !ttr_done+              // HP hi > MHP hi → over max (shouldn't happen)
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcs !ttr_done+              // HP lo >= MHP lo → at or over max
+!ttr_not_max:
+
+    // Decrement counter (by 2 if zp_eff_regen active, else by 1)
+    lda zp_regen_counter
+    ldx zp_eff_regen
+    beq !ttr_dec1+
+    // Extra regen: subtract 2
+    sec
+    sbc #2
+    jmp !ttr_check+
+!ttr_dec1:
+    sec
+    sbc #1
+!ttr_check:
+    beq !ttr_heal+              // Counter hit 0 → heal
+    bpl !ttr_store+             // Counter still positive → store and done
+!ttr_heal:
+
+    // Counter expired (or went negative) → heal 1 HP
+    // 16-bit increment: zp_player_hp += 1
+    inc zp_player_hp_lo
+    bne !ttr_no_carry+
+    inc zp_player_hp_hi
+!ttr_no_carry:
+    // Cap at max HP
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !ttr_cap_ok+            // HP hi < MHP hi → under max
+    bne !ttr_clamp+             // HP hi > MHP hi → over max
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcc !ttr_cap_ok+            // HP lo < MHP lo → under max
+    beq !ttr_cap_ok+            // Equal → exactly at max
+!ttr_clamp:
+    // Clamp to max
+    lda zp_player_mhp_lo
+    sta zp_player_hp_lo
+    lda zp_player_mhp_hi
+    sta zp_player_hp_hi
+!ttr_cap_ok:
+    // Sync to player_data
+    lda zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Reset counter from regen_rate table
+    lda player_data + PL_CON_CUR
+    sec
+    sbc #3                      // Index = CON - 3
+    tax
+    lda regen_rate,x
+    sta zp_regen_counter
+    rts
+
+!ttr_store:
+    sta zp_regen_counter
+!ttr_done:
     rts
 
 // turn_post_action — Run end-of-turn processing after a player action
 // Called by the main loop after any action that consumes a turn.
-// Runs effect timers, hunger tick, increments turn counter, marks status dirty.
+// Runs effect timers, hunger tick, regen, monster AI, turn counter, status dirty.
 // Preserves: nothing
 turn_post_action:
     jsr turn_tick_effects
     jsr turn_tick_hunger
+    jsr turn_tick_regen
     jsr monster_ai_tick
 
     // Increment turn counter
@@ -183,3 +300,11 @@ turn_post_action:
     jsr status_mark_dirty
 
     rts
+
+// ============================================================
+// Effect expiration strings
+// ============================================================
+eff_poison_end:   .text "YOU FEEL BETTER." ; .byte 0
+eff_blind_end:    .text "YOU CAN SEE AGAIN." ; .byte 0
+eff_confuse_end:  .text "YOU FEEL LESS CONFUSED." ; .byte 0
+eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0

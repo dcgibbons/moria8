@@ -51,6 +51,14 @@ player_try_move:
     sbc #CMD_MOVE_N         // Now A = 0 for N, 1 for S, etc.
     tax
 
+    // Confused? Randomize direction
+    lda zp_eff_confuse
+    beq !not_confused+
+    lda #8
+    jsr rng_range           // A = random [0,7]
+    tax
+!not_confused:
+
     // Compute target position
     lda zp_player_x
     clc
