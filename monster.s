@@ -12,6 +12,15 @@
 .const CREATURE_COUNT    = 20
 .const EMPTY_SLOT        = $ff
 
+// Attack type constants
+.const ATK_NONE      = 0
+.const ATK_NORMAL    = 1
+.const ATK_CONFUSE   = 3
+.const ATK_ACID      = 6
+.const ATK_PARALYZE  = 11
+.const ATK_POISON    = 14
+.const ATK_AGGRAVATE = 20
+
 // Active monster entry offsets (12 bytes per entry)
 .const MX_X         = 0
 .const MX_Y         = 1
@@ -128,8 +137,26 @@ cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 cr_atk0_sides:
-    .byte 1, 3, 4, 3, 6, 4, 0, 3, 0, 4
-    .byte 4, 5, 3, 4, 5, 3, 6, 5, 6, 5
+    .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
+    .byte 4, 3, 4, 8, 4, 3, 4, 1, 4, 4
+
+// Attack type for slot 0
+cr_atk0_type:
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL
+    .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_POISON
+    .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL
+
+// Attack slot 1 (type, dice, sides — 0 = no second attack)
+cr_atk1_type:
+    .byte 0, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
+    .byte 0, 0, 0, ATK_ACID, 0, ATK_NORMAL, 0, 0, 0, 0
+cr_atk1_dice:
+    .byte 0, 0, 0, 0, 0, 0, 0, 1, 0, 0
+    .byte 0, 0, 0, 2, 0, 1, 0, 0, 0, 0
+cr_atk1_sides:
+    .byte 0, 0, 0, 0, 0, 0, 0, 2, 0, 0
+    .byte 0, 0, 0, 6, 0, 3, 0, 0, 0, 0
 
 // Name pointer tables
 cr_name_lo:

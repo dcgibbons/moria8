@@ -25,7 +25,19 @@ turn_tick_effects:
     lda zp_eff_poison
     beq !no_poison+
     dec zp_eff_poison
-    // TODO: apply poison damage (Phase 5)
+
+    // Poison tick: 1 HP damage per turn
+    lda zp_player_hp_lo
+    sec
+    sbc #1
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    bcs !poison_no_borrow+
+    dec zp_player_hp_hi
+    lda zp_player_hp_hi
+    sta player_data + PL_HP_HI
+!poison_no_borrow:
+    jsr player_death_check
 !no_poison:
 
     // Blindness

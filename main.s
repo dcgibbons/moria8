@@ -43,6 +43,7 @@
 #import "dungeon_los.s"
 #import "player_move.s"
 #import "combat.s"
+#import "monster_attack.s"
 #import "turn.s"
 
 // ============================================================
@@ -168,6 +169,19 @@ entry:
     lda #$ff
     sta zp_run_dir
 !not_running:
+    // Paralysis check — skip input, just tick the turn
+    lda zp_eff_paralyze
+    beq !not_paralyzed+
+    jsr msg_clear
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!not_paralyzed:
     jsr input_get_command
 
     // --- Dispatch command ---
@@ -257,6 +271,11 @@ entry:
 
 !post_move:
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 
@@ -364,6 +383,11 @@ entry:
     jsr viewport_update
     jsr render_viewport
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 !open_no_turn:
@@ -382,6 +406,11 @@ entry:
     jsr viewport_update
     jsr render_viewport
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 !close_no_turn:
@@ -397,6 +426,11 @@ entry:
     jsr viewport_update
     jsr render_viewport
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 !not_search:
@@ -406,6 +440,11 @@ entry:
     bne !not_rest+
     jsr msg_clear
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 !not_rest:
@@ -490,6 +529,11 @@ run_step:
 
 !run_post:
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 
@@ -505,6 +549,11 @@ run_step:
     jsr viewport_update
     jsr render_viewport
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
 
@@ -530,8 +579,30 @@ run_step:
     jsr render_viewport
 !rsm_post:
     jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr status_draw
     jmp !main_loop-
+
+!player_died:
+    // Death screen
+    jsr screen_clear
+    lda #10
+    sta zp_cursor_row
+    lda #10
+    sta zp_cursor_col
+    lda #COL_RED
+    sta zp_text_color
+    lda #<mat_dead_str
+    sta zp_ptr0
+    lda #>mat_dead_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    jsr input_get_key
+    jmp !quit+
 
 !quit:
 

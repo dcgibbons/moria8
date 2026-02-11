@@ -65,11 +65,21 @@ monster_ai_tick:
     // Process once
     jsr monster_process_one
 
+    // Check if player died
+    lda zp_game_flags
+    and #$01
+    bne !mat_done+
+
     // Speed 2 → process again
     lda zp_mon_speed
     cmp #2
     bne !mat_next+
     jsr monster_process_one
+
+    // Check if player died on second move
+    lda zp_game_flags
+    and #$01
+    bne !mat_done+
 
 !mat_next:
     inc zp_mon_idx
@@ -298,7 +308,11 @@ monster_try_step:
     bne !mts_not_player+
     lda mat_target_y
     cmp zp_player_y
-    beq !mts_blocked+           // On player → blocked (combat is Phase 5.3)
+    bne !mts_not_player+
+
+    // Monster is adjacent → attack player
+    jsr monster_attack_player
+    jmp !mts_blocked+           // Monster stays in place
 !mts_not_player:
 
     // Bounds check

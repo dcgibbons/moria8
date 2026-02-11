@@ -4,6 +4,8 @@
 //        confused movement.
 //
 // Results at $0400-$0409: $01 = pass, $00 = fail per test
+// NOTE: msg_print writes to screen row 0 ($0400+), so we store results
+// in tc_results[] and copy to $0400 at the very end.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -35,6 +37,7 @@
 #import "../dungeon_los.s"
 #import "../player_move.s"
 #import "../combat.s"
+#import "../monster_attack.s"
 #import "../turn.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -46,18 +49,11 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
+tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
     :BankOutBasic()
-
-    // Initialize result area to $ff (untested)
-    ldx #15
-    lda #$ff
-!clr:
-    sta $0400,x
-    dex
-    bpl !clr-
 
     // Seed RNG deterministically
     lda #$42
@@ -69,6 +65,23 @@ test_start:
     lda #$f1
     sta zp_rng_3
 
+    // Initialize message system and sound
+    jsr msg_init
+    jsr sound_init
+
+    // Pre-stuff keyboard buffer for -more- prompts
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
     // Set player dungeon level to 1
     lda #1
     sta zp_player_dlvl
@@ -76,6 +89,27 @@ test_start:
     // Set light radius
     lda #1
     sta zp_light_radius
+
+    // Set player HP high to survive monster attacks during tests
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Set player AC to 0 (default)
+    lda #0
+    sta zp_player_ac
+    sta player_data + PL_AC
+    sta zp_game_flags
+
+    // Set warrior class for saving throw calculations
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
 
     // Generate a dungeon level for all tests
     lda #0
@@ -86,6 +120,8 @@ test_start:
     // Test 1: monster_ai_tick with empty table — no crash
     // ==========================================
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Put player somewhere
     lda #20
@@ -100,11 +136,11 @@ test_start:
     lda zp_mon_count
     bne !t1_fail+
     lda #$01
-    sta $0400
+    sta tc_results + 0
     jmp !t2+
 !t1_fail:
     lda #$00
-    sta $0400
+    sta tc_results + 0
 
     // ==========================================
     // Test 2: Immobile monster (speed=0) doesn't move
@@ -112,6 +148,12 @@ test_start:
     // ==========================================
 !t2:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
 
     // Place a floor tile at (30, 20) and spawn mushroom there
     ldx #20
@@ -162,11 +204,11 @@ test_start:
     bne !t2_fail+
 
     lda #$01
-    sta $0401
+    sta tc_results + 1
     jmp !t3+
 !t2_fail:
     lda #$00
-    sta $0401
+    sta tc_results + 1
 
     // ==========================================
     // Test 3: Wake check — monster with sleep=0 within AAF range wakes
@@ -174,6 +216,12 @@ test_start:
     // ==========================================
 !t3:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
 
     // Place floor at (25, 20)
     ldx #20
@@ -198,6 +246,11 @@ test_start:
     lda #20
     sta zp_player_y
 
+    // Reset HP before combat
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+
     // Run AI tick
     jsr monster_ai_tick
 
@@ -209,11 +262,11 @@ test_start:
     and #MF_AWAKE
     bne !t3_pass+
     lda #$00
-    sta $0402
+    sta tc_results + 2
     jmp !t4+
 !t3_pass:
     lda #$01
-    sta $0402
+    sta tc_results + 2
 
     // ==========================================
     // Test 4: Wake check — monster outside AAF range stays asleep
@@ -221,6 +274,8 @@ test_start:
     // ==========================================
 !t4:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Place floor at (10, 10)
     ldx #10
@@ -256,11 +311,11 @@ test_start:
     and #MF_AWAKE
     beq !t4_pass+
     lda #$00
-    sta $0403
+    sta tc_results + 3
     jmp !t5+
 !t4_pass:
     lda #$01
-    sta $0403
+    sta tc_results + 3
 
     // ==========================================
     // Test 5: Awake monster moves toward player
@@ -268,6 +323,8 @@ test_start:
     // ==========================================
 !t5:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Create a clear corridor: floor tiles from (20,15) to (30,15)
     ldx #15
@@ -315,11 +372,11 @@ test_start:
     cmp #21                     // Should have moved from 20 to 21
     bne !t5_fail+
     lda #$01
-    sta $0404
+    sta tc_results + 4
     jmp !t6+
 !t5_fail:
     lda #$00
-    sta $0404
+    sta tc_results + 4
 
     // ==========================================
     // Test 6: Monster blocked by wall finds alternate path
@@ -327,6 +384,8 @@ test_start:
     // ==========================================
 !t6:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Set up: monster at (20,15), player at (22,14)
     // Block diagonal (21,14) with a wall, leave (21,15) and (20,14) as floor
@@ -402,18 +461,32 @@ test_start:
     bne !t6_fail+
 
     lda #$01
-    sta $0405
+    sta tc_results + 5
     jmp !t7+
 !t6_fail:
     lda #$00
-    sta $0405
+    sta tc_results + 5
 
     // ==========================================
-    // Test 7: Monster doesn't step on player position
-    // Monster adjacent to player — should NOT move onto player
+    // Test 7: Monster stays in place when adjacent to player
+    // (now it attacks instead of just blocking, but still stays put)
     // ==========================================
 !t7:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Reset HP before combat
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
 
     // Floor at (25,15) and (26,15)
     ldx #15
@@ -449,10 +522,10 @@ test_start:
     lda #15
     sta zp_player_y
 
-    // Run AI tick
+    // Run AI tick — monster attacks but stays in place
     jsr monster_ai_tick
 
-    // Monster should stay at (25,15) — can't step on player
+    // Monster should stay at (25,15)
     ldx #0
     jsr monster_get_ptr
     ldy #MX_X
@@ -465,11 +538,11 @@ test_start:
     bne !t7_fail+
 
     lda #$01
-    sta $0406
+    sta tc_results + 6
     jmp !t8+
 !t7_fail:
     lda #$00
-    sta $0406
+    sta tc_results + 6
 
     // ==========================================
     // Test 8: Speed 2 monster moves twice per tick
@@ -477,6 +550,8 @@ test_start:
     // ==========================================
 !t8:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Create floor corridor from (20,15) to (30,15)
     ldx #15
@@ -525,11 +600,11 @@ test_start:
     bne !t8_fail+
 
     lda #$01
-    sta $0407
+    sta tc_results + 7
     jmp !t9+
 !t8_fail:
     lda #$00
-    sta $0407
+    sta tc_results + 7
 
     // ==========================================
     // Test 9: FLAG_OCCUPIED updated correctly on move
@@ -537,6 +612,8 @@ test_start:
     // ==========================================
 !t9:
     jsr monster_init_table
+    lda #0
+    sta zp_game_flags
 
     // Floor at (20,20) and (21,20)
     ldx #20
@@ -593,11 +670,11 @@ test_start:
     beq !t9_fail+
 
     lda #$01
-    sta $0408
+    sta tc_results + 8
     jmp !t10+
 !t9_fail:
     lda #$00
-    sta $0408
+    sta tc_results + 8
 
     // ==========================================
     // Test 10: Confused monster moves randomly
@@ -606,6 +683,7 @@ test_start:
 !t10:
     lda #0
     sta tai_ok                  // Track if any movement happened
+    sta zp_game_flags
 
     lda #5
     sta tai_count               // Try up to 5 iterations
@@ -679,11 +757,19 @@ test_start:
     lda tai_ok
     beq !t10_fail+
     lda #$01
-    sta $0409
+    sta tc_results + 9
     jmp !tests_done+
 !t10_fail:
     lda #$00
-    sta $0409
+    sta tc_results + 9
 
 !tests_done:
+    // Copy results from tc_results to $0400 (screen row 0)
+    ldx #9
+!copy_results:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !copy_results-
+
     brk
