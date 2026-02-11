@@ -32,6 +32,7 @@
 #import "ui_messages.s"
 #import "ui_status.s"
 #import "ui_character.s"
+#import "ui_help.s"
 #import "player_create.s"
 #import "sound.s"
 #import "dungeon_gen.s"
@@ -188,6 +189,21 @@ entry:
     jsr status_draw
     jmp !main_loop-
 !not_char:
+
+    // Help?
+    cmp #CMD_HELP
+    bne !not_help+
+    jsr ui_help_display
+    jsr input_get_key
+    // Redraw map on return — clear all rows then redraw
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!not_help:
 
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
     cmp #CMD_MOVE_N
