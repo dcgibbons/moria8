@@ -42,6 +42,7 @@
 #import "dungeon_render.s"
 #import "dungeon_los.s"
 #import "player_move.s"
+#import "combat.s"
 #import "turn.s"
 
 // ============================================================
@@ -221,12 +222,16 @@ entry:
     ldx zp_view_y
     stx old_view_y
 
+    // Clear message before move so combat messages survive
+    pha                         // Save command ID (A) — msg_clear clobbers A
+    jsr msg_clear
+    pla                         // Restore command ID for player_try_move
+
     // Try to move
     jsr player_try_move
     bcc !move_blocked+
 
-    // Move succeeded
-    jsr msg_clear
+    // Move or attack succeeded
     jsr trap_check_at_player
     jsr update_visibility
     jsr viewport_update

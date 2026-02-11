@@ -53,9 +53,21 @@ msg_print:
     and #MSG_PENDING
     beq !no_more+
 
+    // Save incoming message pointer (msg_show_more clobbers zp_ptr0)
+    lda zp_ptr0
+    pha
+    lda zp_ptr0_hi
+    pha
+
     // Show "-MORE-" prompt and wait
     jsr msg_show_more
     jsr input_get_key       // Wait for any keypress
+
+    // Restore message pointer
+    pla
+    sta zp_ptr0_hi
+    pla
+    sta zp_ptr0
     // Fall through to display new message
 
 !no_more:

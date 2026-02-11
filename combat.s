@@ -1,0 +1,683 @@
+// combat.s — Player melee combat
+//
+// Bump-to-attack: to-hit rolls, damage, monster death, XP awards, level-up.
+// Faithful to umoria formulas. Monsters don't attack back yet (Phase 5.4).
+
+// ============================================================
+// Scratch variables (static RAM, safe across subroutine calls)
+// ============================================================
+cmb_slot:        .byte 0        // Monster slot index
+cmb_type:        .byte 0        // Creature type index
+cmb_damage:      .byte 0        // Damage for current blow
+cmb_dead:        .byte 0        // Monster died flag
+cmb_any_hit:     .byte 0        // Any blow connected this round
+cmb_buf_idx:     .byte 0        // Buffer write index for msg builder
+
+// Message composition buffer (42 bytes for longest msg)
+combat_msg_buf:  .fill 42, 0
+
+// ============================================================
+// Combat strings (screen codes via inherited encoding)
+// ============================================================
+cmb_you_str:     .text "YOU " ; .byte 0
+cmb_the_str:     .text " THE " ; .byte 0
+cmb_hit_str:     .text "HIT" ; .byte 0
+cmb_miss_str:    .text "MISS" ; .byte 0
+cmb_kill_str:    .text "HAVE SLAIN" ; .byte 0
+cmb_lvlup_str:   .text "WELCOME TO LEVEL " ; .byte 0
+cmb_period:      .byte $2e, 0   // "."
+
+// ============================================================
+// Subroutines
+// ============================================================
+
+// player_attack_monster — Entry point for melee attack
+// Input:  A = target_x, Y = target_y
+// Output: always returns with carry SET (turn consumed)
+// Clobbers: everything
+player_attack_monster:
+    // Find the monster at this position
+    jsr monster_find_at         // A=x, Y=y → carry set, X=slot
+    bcs !pam_found+
+    // No monster found (shouldn't happen, but be safe)
+    sec
+    rts
+
+!pam_found:
+    // Save slot index and load creature type
+    stx cmb_slot
+    jsr monster_get_ptr         // zp_ptr0 = entry
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+
+    // Wake the monster (set MF_AWAKE flag)
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+
+    // Calculate to-hit chance and number of blows
+    jsr combat_calc_tohit       // → zp_combat_tohit
+    jsr combat_calc_blows       // → zp_combat_blows
+
+    lda #0
+    sta cmb_dead
+    sta cmb_any_hit
+
+    // Load monster AC for all rolls
+    ldx cmb_type
+    lda cr_ac,x
+    sta zp_combat_atk           // AC storage for combat_roll_tohit
+
+    // --- Blow loop (silent — no messages until end) ---
+!pam_blow_loop:
+    lda cmb_dead
+    bne !pam_summary+
+    lda zp_combat_blows
+    beq !pam_summary+
+
+    jsr combat_roll_tohit       // carry set = hit
+    bcc !pam_next_blow+         // Miss — continue to next blow
+
+    // --- Hit ---
+    lda #1
+    sta cmb_any_hit
+    jsr combat_roll_damage      // → cmb_damage
+
+    // Apply damage to monster
+    ldx cmb_slot
+    lda cmb_damage
+    jsr combat_apply_damage     // carry set = dead
+    bcc !pam_next_blow+
+
+    // Monster killed
+    lda #1
+    sta cmb_dead
+
+    ldx cmb_slot
+    jsr monster_remove
+
+!pam_next_blow:
+    dec zp_combat_blows
+    jmp !pam_blow_loop-
+
+    // --- Print one summary message for the round ---
+!pam_summary:
+    lda cmb_dead
+    beq !pam_not_dead+
+
+    // Killed: "YOU HAVE SLAIN THE <name>."
+    jsr msg_build_kill
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    jsr combat_award_xp
+    jsr combat_check_levelup
+
+    lda #SFX_HIT
+    jsr sound_play
+    jmp !pam_done+
+
+!pam_not_dead:
+    lda cmb_any_hit
+    beq !pam_all_miss+
+
+    // Hit but alive: "YOU HIT THE <name>."
+    jsr msg_build_hit
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #SFX_HIT
+    jsr sound_play
+    jmp !pam_done+
+
+!pam_all_miss:
+    // All blows missed: "YOU MISS THE <name>."
+    jsr msg_build_miss
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #SFX_MISS
+    jsr sound_play
+
+!pam_done:
+    sec                         // Turn consumed
+    rts
+
+// combat_calc_tohit — Compute hit chance
+// hit_chance = class_bth + PL_TOHIT*3 + player_level * class_bth_per_level
+// Output: zp_combat_tohit = hit chance (capped at 255)
+// Clobbers: A, X, Y, zp_math_a/b
+combat_calc_tohit:
+    // Get class BTH (class_properties offset 3)
+    lda player_data + PL_CLASS
+    ldx #CLASS_PROP_SIZE
+    jsr math_multiply           // A = class * 10
+    clc
+    adc #3                      // Offset to BTH field
+    tax
+    lda class_properties,x
+    sta zp_combat_tohit         // Start with base BTH
+
+    // Add PL_TOHIT * 3
+    lda player_data + PL_TOHIT
+    // Check sign — PL_TOHIT can be negative (signed)
+    bmi !cct_neg_tohit+
+
+    // Positive: multiply by 3
+    sta zp_temp0
+    asl                         // *2
+    clc
+    adc zp_temp0                // *3
+    clc
+    adc zp_combat_tohit
+    bcc !cct_tohit_ok+
+    lda #255                    // Cap at 255
+    jmp !cct_tohit_ok+
+
+!cct_neg_tohit:
+    // Negative to-hit: negate, *3, then subtract
+    eor #$ff
+    clc
+    adc #1                      // abs(PL_TOHIT)
+    sta zp_temp0
+    asl                         // *2
+    clc
+    adc zp_temp0                // *3 (positive value)
+    sta zp_temp0
+    // Subtract from tohit
+    lda zp_combat_tohit
+    sec
+    sbc zp_temp0
+    bcs !cct_tohit_ok+
+    lda #0                      // Floor at 0
+
+!cct_tohit_ok:
+    sta zp_combat_tohit
+
+    // Add player_level * class_bth_per_level (class_level_adj offset 0)
+    lda player_data + PL_CLASS
+    ldx #CLASS_LVL_SIZE
+    jsr math_multiply           // A = class * 5
+    tax
+    lda class_level_adj,x       // BTH per level
+    ldx zp_player_lvl
+    jsr math_multiply           // zp_math_a = level * bth_per_level
+    lda zp_math_a
+    clc
+    adc zp_combat_tohit
+    bcc !cct_done+
+    lda #255                    // Cap at 255
+!cct_done:
+    sta zp_combat_tohit
+    rts
+
+// combat_calc_blows — Calculate number of blows per round
+// Unarmed = weight class 4 (lightest). DEX bracket lookup.
+// Output: zp_combat_blows
+// Clobbers: A, X
+combat_calc_blows:
+    // DEX bracket: <10→0, 10-14→1, 15-17→2, 18+→3
+    lda player_data + PL_DEX_CUR
+    cmp #18
+    bcs !ccb_dex3+
+    cmp #15
+    bcs !ccb_dex2+
+    cmp #10
+    bcs !ccb_dex1+
+    // DEX < 10
+    ldx #0
+    jmp !ccb_lookup+
+!ccb_dex1:
+    ldx #1
+    jmp !ccb_lookup+
+!ccb_dex2:
+    ldx #2
+    jmp !ccb_lookup+
+!ccb_dex3:
+    ldx #3
+!ccb_lookup:
+    // Weight class 4 (unarmed) = row 4, offset = 4*4 + dex_bracket
+    txa
+    clc
+    adc #(4 * BLOWS_COLS)       // Row 4 offset = 16
+    tax
+    lda blows_table,x
+    sta zp_combat_blows
+    rts
+
+// combat_roll_tohit — Roll d20 to determine if attack hits
+// Input:  zp_combat_tohit = hit chance
+//         zp_combat_atk = monster AC
+// Output: carry set = hit, carry clear = miss
+// Clobbers: A, X, zp_temp3, zp_temp4
+combat_roll_tohit:
+    // Roll d20 (1-20)
+    lda #20
+    jsr rng_range               // [0,19]
+    clc
+    adc #1                      // [1,20]
+
+    // Natural 1 = always miss
+    cmp #1
+    beq !crt_miss+
+
+    // Natural 20 = always hit
+    cmp #20
+    beq !crt_hit+
+
+    // Normal roll: rng_range(hit_chance) >= monster_ac → hit
+    lda zp_combat_tohit
+    cmp #2                      // Need at least 2 to have a valid range
+    bcc !crt_miss+              // tohit too low
+    jsr rng_range               // [0, tohit-1]
+    cmp zp_combat_atk           // >= AC?
+    bcs !crt_hit+
+
+!crt_miss:
+    clc
+    rts
+!crt_hit:
+    sec
+    rts
+
+// combat_roll_damage — Roll unarmed damage
+// Damage = 1d2 + PL_TODMG, min 0
+// Output: cmb_damage = damage amount
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
+combat_roll_damage:
+    // Roll 1d2
+    lda #1
+    ldx #2
+    ldy #0
+    jsr math_dice               // result in zp_math_a (1 or 2)
+
+    // Add PL_TODMG (signed)
+    lda player_data + PL_TODMG
+    bmi !crd_neg+
+    // Positive bonus
+    clc
+    adc zp_math_a
+    sta cmb_damage
+    rts
+
+!crd_neg:
+    // Negative bonus — clamp to min 0
+    clc
+    adc zp_math_a               // Signed add (may underflow)
+    bpl !crd_pos+
+    lda #0                      // Clamp to 0
+!crd_pos:
+    sta cmb_damage
+    rts
+
+// combat_apply_damage — Subtract damage from monster HP
+// Input:  X = monster slot index, A = damage amount
+// Output: carry set = monster dead (HP <= 0)
+//         carry clear = monster still alive
+// Clobbers: A, Y, zp_ptr0
+combat_apply_damage:
+    sta zp_temp0                // Save damage
+
+    jsr monster_get_ptr         // zp_ptr0 = entry
+
+    // 16-bit subtraction: HP -= damage
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_temp0
+    sta (zp_ptr0),y
+
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc #0                      // Borrow from hi byte
+    sta (zp_ptr0),y
+
+    // Check if dead: hi byte negative (bit 7 set) OR both bytes zero
+    bmi !cad_dead+              // Hi byte went negative → dead
+
+    // Check if both bytes are zero
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    beq !cad_dead+              // HP = 0 → dead
+
+    clc                         // Alive
+    rts
+
+!cad_dead:
+    sec                         // Dead
+    rts
+
+// combat_award_xp — Award XP for killing a monster
+// Formula: xp_earned = (cr_xp * cr_level) / player_level, min 1
+// Adds to 24-bit PL_XP_0/1/2.
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
+combat_award_xp:
+    // cr_xp is 16-bit but early values are <=35, fits in 8 bits
+    // Compute: xp_lo * cr_level (8x8 → 16-bit)
+    ldx cmb_type
+    lda cr_xp_lo,x              // XP value (lo byte, fits in 8 bits)
+    sta zp_temp0                // Save XP
+    lda cr_level,x              // creature level
+    ldx zp_temp0                // X = XP value
+    jsr math_multiply           // zp_math_a/b = xp * level (16-bit)
+
+    // Divide by player_level
+    ldx zp_player_lvl
+    cpx #0
+    bne !cax_div+
+    ldx #1                      // Safety: prevent div by 0
+!cax_div:
+    jsr math_div_16x8           // zp_math_a/b = quotient
+
+    // Ensure min 1 XP
+    lda zp_math_a
+    ora zp_math_b
+    bne !cax_nonzero+
+    lda #1
+    sta zp_math_a
+!cax_nonzero:
+
+    // Add to 24-bit PL_XP
+    lda player_data + PL_XP_0
+    clc
+    adc zp_math_a
+    sta player_data + PL_XP_0
+
+    lda player_data + PL_XP_1
+    adc zp_math_b
+    sta player_data + PL_XP_1
+
+    lda player_data + PL_XP_2
+    adc #0
+    sta player_data + PL_XP_2
+
+    rts
+
+// combat_check_levelup — Check if XP exceeds level threshold
+// Compares 16-bit PL_XP (bytes 0-1) against xp_level[level-1].
+// Levels up if exceeded. Recursive check for multi-level jumps.
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
+combat_check_levelup:
+    // Get threshold for current level
+    lda zp_player_lvl
+    sec
+    sbc #1                      // Index = level - 1
+    tax
+    lda xp_level_lo,x
+    sta zp_temp0
+    lda xp_level_hi,x
+    sta zp_temp1
+
+    // Compare 16-bit: PL_XP >= threshold?
+    // Compare hi byte first
+    lda player_data + PL_XP_1
+    cmp zp_temp1
+    bcc !ccl_no+                // XP_hi < threshold_hi → no
+    bne !ccl_yes+               // XP_hi > threshold_hi → yes
+    // Hi bytes equal, compare lo
+    lda player_data + PL_XP_0
+    cmp zp_temp0
+    bcc !ccl_no+                // XP_lo < threshold_lo → no
+
+!ccl_yes:
+    // Level up!
+    inc zp_player_lvl
+    lda zp_player_lvl
+    sta player_data + PL_LEVEL
+
+    // Recalculate HP
+    jsr player_calc_hp
+
+    // Heal to full
+    lda player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    lda player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_hp_hi
+
+    // Sync max HP to ZP
+    lda player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    lda player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+
+    // Recalculate combat bonuses (may change with level)
+    jsr player_calc_combat
+
+    // Play level-up sound
+    lda #SFX_LEVELUP
+    jsr sound_play
+
+    // Print level-up message: "WELCOME TO LEVEL N."
+    jsr msg_build_levelup
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Check again for multi-level jumps
+    jmp combat_check_levelup
+
+!ccl_no:
+    rts
+
+// ============================================================
+// Message builders — compose strings in combat_msg_buf
+// ============================================================
+
+// msg_build_hit — "YOU HIT THE <name>."
+msg_build_hit:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str       // "YOU "
+
+    lda #<cmb_hit_str
+    ldy #>cmb_hit_str
+    jsr combat_append_str       // "HIT"
+
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str       // " THE "
+
+    jsr combat_append_monster_name
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str       // "."
+
+    // Null-terminate
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
+
+// msg_build_miss — "YOU MISS THE <name>."
+msg_build_miss:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str
+
+    lda #<cmb_miss_str
+    ldy #>cmb_miss_str
+    jsr combat_append_str
+
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str
+
+    jsr combat_append_monster_name
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
+
+// msg_build_kill — "YOU HAVE SLAIN THE <name>."
+msg_build_kill:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_you_str
+    ldy #>cmb_you_str
+    jsr combat_append_str
+
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr combat_append_str
+
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str
+
+    jsr combat_append_monster_name
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
+
+// msg_build_levelup — "WELCOME TO LEVEL N."
+msg_build_levelup:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<cmb_lvlup_str
+    ldy #>cmb_lvlup_str
+    jsr combat_append_str
+
+    lda zp_player_lvl
+    jsr combat_append_decimal
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    rts
+
+// combat_append_str — Append null-terminated string to combat_msg_buf
+// Input: A = string ptr lo, Y = string ptr hi
+// Clobbers: A, X, Y, zp_ptr1
+combat_append_str:
+    sta zp_ptr1
+    sty zp_ptr1_hi
+    ldx cmb_buf_idx
+    ldy #0
+!cas_loop:
+    lda (zp_ptr1),y
+    beq !cas_done+
+    sta combat_msg_buf,x
+    inx
+    iny
+    cpx #41                     // Buffer overflow protection
+    bcs !cas_done+
+    jmp !cas_loop-
+!cas_done:
+    stx cmb_buf_idx
+    rts
+
+// combat_append_monster_name — Append current monster's name to buffer
+// Uses cmb_type to look up cr_name_lo/hi
+// Clobbers: A, X, Y, zp_ptr1
+combat_append_monster_name:
+    ldx cmb_type
+    lda cr_name_lo,x
+    ldy cr_name_hi,x
+    jsr combat_append_str
+    rts
+
+// combat_append_decimal — Append 8-bit decimal number to buffer
+// Input: A = value (0-255)
+// Clobbers: A, X
+combat_append_decimal:
+    sta zp_temp0                // Save value
+    ldx cmb_buf_idx
+    lda #0
+    sta zp_temp1                // Leading zero flag
+
+    // Hundreds
+    lda zp_temp0
+    ldy #0
+!cad_hundreds:
+    cmp #100
+    bcc !cad_tens+
+    sbc #100
+    iny
+    jmp !cad_hundreds-
+!cad_tens:
+    sta zp_temp0                // Remainder
+    tya
+    beq !cad_skip_h+
+    ora #$30                    // Digit screen code
+    sta combat_msg_buf,x
+    inx
+    lda #1
+    sta zp_temp1                // Printed a digit
+!cad_skip_h:
+
+    // Tens
+    lda zp_temp0
+    ldy #0
+!cad_tens_loop:
+    cmp #10
+    bcc !cad_ones+
+    sbc #10
+    iny
+    jmp !cad_tens_loop-
+!cad_ones:
+    sta zp_temp0                // Remainder (ones)
+    tya
+    bne !cad_print_t+
+    // Check if we need a leading zero for tens
+    ldy zp_temp1
+    beq !cad_skip_t+
+!cad_print_t:
+    ora #$30
+    sta combat_msg_buf,x
+    inx
+!cad_skip_t:
+
+    // Ones (always printed)
+    lda zp_temp0
+    ora #$30
+    sta combat_msg_buf,x
+    inx
+
+    stx cmb_buf_idx
+    rts
+
+// ============================================================
+// Compile-time validation
+// ============================================================
+.assert "combat_msg_buf size", cmb_you_str - combat_msg_buf, 42

@@ -105,12 +105,24 @@ player_try_move:
     jsr tile_is_walkable
     bcc !blocked+
 
-    // Check FLAG_OCCUPIED (monster blocking)
+    // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)
     lda (zp_ptr0),y             // Re-read map byte (zp_ptr0 still valid)
     and #FLAG_OCCUPIED
-    bne !blocked+               // Monster present → blocked (combat in 5.3)
+    beq !not_occupied+          // No monster → continue to move
 
+    // Monster present — attack if not running
+    lda zp_run_dir
+    cmp #$ff
+    bne !blocked+               // Running → just block, don't attack
+
+    lda zp_temp3                // target_x
+    ldy zp_temp4                // target_y
+    jsr player_attack_monster
+    sec                         // Turn consumed
+    rts
+
+!not_occupied:
     // Move succeeded — update player position
     lda zp_temp3
     sta zp_player_x

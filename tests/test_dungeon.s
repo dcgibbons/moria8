@@ -35,6 +35,7 @@
 #import "../dungeon_render.s"
 #import "../dungeon_los.s"
 #import "../player_move.s"
+#import "../combat.s"
 #import "../turn.s"
 
 // Strings referenced by imported modules but defined in main.s
