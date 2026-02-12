@@ -288,6 +288,7 @@ turn_post_action:
     jsr turn_tick_effects
     jsr turn_tick_hunger
     jsr turn_tick_regen
+    jsr turn_tick_light
     jsr monster_ai_tick
 
     // Increment turn counter
@@ -301,6 +302,57 @@ turn_post_action:
 
     rts
 
+// turn_tick_light — Decrement light charges if torch/lantern equipped
+// When charges reach 0, unequip and set light radius to 0.
+// Warning at 10 charges.
+// Preserves: nothing
+turn_tick_light:
+    ldx #EQUIP_LIGHT
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !ttl_done+              // No light equipped
+
+    // Decrement charges
+    lda inv_p1,x
+    beq !ttl_done+              // Already 0 (shouldn't happen)
+    sec
+    sbc #1
+    sta inv_p1,x
+
+    // Check for warning at 10
+    cmp #10
+    bne !ttl_not_dim+
+    // Print "YOUR LIGHT IS GROWING DIM."
+    lda #<ttl_dim_str
+    sta zp_ptr0
+    lda #>ttl_dim_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp !ttl_done+
+
+!ttl_not_dim:
+    // Check for depletion at 0
+    cmp #0
+    bne !ttl_done+
+
+    // Light expired
+    lda #0
+    sta zp_light_radius
+
+    // Clear equip slot
+    ldx #EQUIP_LIGHT
+    jsr inv_remove_item
+
+    // Print "YOUR LIGHT HAS GONE OUT."
+    lda #<ttl_out_str
+    sta zp_ptr0
+    lda #>ttl_out_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+!ttl_done:
+    rts
+
 // ============================================================
 // Effect expiration strings
 // ============================================================
@@ -308,3 +360,5 @@ eff_poison_end:   .text "YOU FEEL BETTER." ; .byte 0
 eff_blind_end:    .text "YOU CAN SEE AGAIN." ; .byte 0
 eff_confuse_end:  .text "YOU FEEL LESS CONFUSED." ; .byte 0
 eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0
+ttl_dim_str:      .text "YOUR LIGHT IS GROWING DIM." ; .byte 0
+ttl_out_str:      .text "YOUR LIGHT HAS GONE OUT." ; .byte 0

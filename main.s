@@ -129,6 +129,28 @@ entry:
     // --- Character creation ---
     jsr player_create
 
+    // --- Starting equipment ---
+    // Wooden torch (type 13) in EQUIP_LIGHT with 40 charges
+    lda #13
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+    lda #40
+    sta inv_p1 + EQUIP_LIGHT
+    lda #0
+    sta inv_flags + EQUIP_LIGHT
+    lda #1
+    sta zp_light_radius
+
+    // Ration of food (type 15) in carried slot 0
+    lda #15
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
     // --- Main game loop ---
     // Initialize dungeon level and generate map
     lda #0

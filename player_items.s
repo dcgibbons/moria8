@@ -167,6 +167,14 @@ item_wear:
     lda piw_flags
     sta inv_flags,x
 
+    // If equipping a light, set light radius
+    lda piw_equip
+    cmp #EQUIP_LIGHT
+    bne !iw_not_light+
+    lda #1
+    sta zp_light_radius
+!iw_not_light:
+
     // Recalculate combat stats
     jsr player_recalc_equipment
 
@@ -330,6 +338,14 @@ item_takeoff:
     // Clear equipment slot
     ldx piw_equip
     jsr inv_remove_item
+
+    // If removing a light, clear light radius
+    lda piw_equip
+    cmp #EQUIP_LIGHT
+    bne !ito_not_light+
+    lda #0
+    sta zp_light_radius
+!ito_not_light:
 
     // Recalculate
     jsr player_recalc_equipment

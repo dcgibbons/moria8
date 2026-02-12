@@ -47,14 +47,16 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 24, $ff
+tc_results: .fill 30, $ff
+tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
+tc_valid_ctr: .byte 0         // Valid item counter for test 22
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
     :BankOutBasic()
 
     // Initialize result area to $ff (untested)
-    ldx #23
+    ldx #29
     lda #$ff
 !clr:
     sta tc_results,x
@@ -963,14 +965,209 @@ test_start:
 
     lda #$00
     sta tc_results + 19
-    jmp !tests_done+
+    jmp !t21+
 !t20_pass:
     lda #$01
     sta tc_results + 19
 
+    // ==========================================
+    // Test 21: pick_item_type returns valid type in range 2-24
+    // ==========================================
+!t21:
+    lda #3
+    sta zp_player_dlvl
+
+    lda #20
+    sta tc_loop_ctr             // Use static RAM for counter (zp_temp0 clobbered by pick_item_type)
+!t21_loop:
+    jsr pick_item_type
+    cmp #2
+    bcc !t21_fail+
+    cmp #25
+    bcs !t21_fail+
+    dec tc_loop_ctr
+    bne !t21_loop-
+
+    lda #$01
+    sta tc_results + 20
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // ==========================================
+    // Test 22: pick_item_type respects min_level
+    // ==========================================
+!t22:
+    lda #1
+    sta zp_player_dlvl
+
+    lda #0
+    sta tc_valid_ctr            // Count of valid items
+    lda #20
+    sta tc_loop_ctr
+!t22_loop:
+    jsr pick_item_type
+    // Check if min_level <= 3 (dlvl=1+2)
+    tax
+    lda it_min_level,x
+    cmp #4
+    bcs !t22_over+
+    inc tc_valid_ctr
+!t22_over:
+    dec tc_loop_ctr
+    bne !t22_loop-
+
+    // At least 15 of 20 should respect min_level
+    lda tc_valid_ctr
+    cmp #15
+    bcs !t22_pass+
+    lda #$00
+    sta tc_results + 21
+    jmp !t23+
+!t22_pass:
+    lda #$01
+    sta tc_results + 21
+
+    // ==========================================
+    // Test 23: roll_enchantment returns 0 for food
+    // ==========================================
+!t23:
+    lda #1
+    sta zp_player_dlvl
+
+    lda #15                     // Ration of food
+    jsr roll_enchantment
+    cmp #0
+    beq !t23_pass+
+    lda #$00
+    sta tc_results + 22
+    jmp !t24+
+!t23_pass:
+    lda #$01
+    sta tc_results + 22
+
+    // ==========================================
+    // Test 24: roll_enchantment returns charges for torch
+    // ==========================================
+!t24:
+    lda #13                     // Wooden torch
+    jsr roll_enchantment
+    // Should be in range [20, 49]
+    cmp #20
+    bcc !t24_fail+
+    cmp #50
+    bcs !t24_fail+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: item_spawn_level spawns non-gold items
+    // ==========================================
+!t25:
+    lda #3
+    sta zp_player_dlvl
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Generate map
+    lda #0
+    sta level_entry_dir
+    jsr level_generate
+
+    // Set player position
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    // Stuff keyboard buffer for -more-
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr monster_spawn_level
+    jsr item_spawn_level
+
+    // Scan fi_item_id for any type >= 2
+    ldx #0
+    lda #0
+    sta tc_valid_ctr            // Found flag
+!t25_scan:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !t25_check+
+    lda fi_item_id,x
+    cmp #FI_EMPTY
+    beq !t25_next+
+    cmp #2
+    bcc !t25_next+
+    // Found non-gold item
+    inc tc_valid_ctr
+!t25_next:
+    inx
+    jmp !t25_scan-
+!t25_check:
+    lda tc_valid_ctr
+    bne !t25_pass+
+    lda #$00
+    sta tc_results + 24
+    jmp !t26+
+!t25_pass:
+    lda #$01
+    sta tc_results + 24
+
+    // ==========================================
+    // Test 26: Treasure room: extra items placed (dlvl >= 3)
+    // ==========================================
+!t26:
+    lda #5
+    sta zp_player_dlvl
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Generate map
+    lda #0
+    sta level_entry_dir
+    jsr level_generate
+
+    // Set player position
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    // Stuff keyboard buffer for -more-
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr monster_spawn_level
+    jsr item_spawn_level
+
+    // Count total items — gold + non-gold + treasure
+    // With dlvl=5: gold = 2+rng(3)+2 = 4-6, non-gold = 1+rng(2)+1 = 2-3, treasure = 2-4
+    // Total should be >= 6 items minimum
+    lda zp_item_count
+    cmp #6
+    bcs !t26_pass+
+    lda #$00
+    sta tc_results + 25
+    jmp !tests_done+
+!t26_pass:
+    lda #$01
+    sta tc_results + 25
+
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #23
+    ldx #29
 !copy:
     lda tc_results,x
     sta $0400,x
