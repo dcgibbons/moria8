@@ -733,26 +733,53 @@ item_pickup:
     sec
     rts
 
-// item_drop — Drop first carried inventory item to floor
+// item_drop — Drop a carried item to the floor (prompted)
+// Prompts "DROP WHICH ITEM (A-V)?", waits for keypress.
 // Output: carry set = turn consumed, carry clear = no action
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
 item_drop:
-    // Find first non-empty carried slot (0-21)
-    ldx #0
-!idr_scan:
-    cpx #MAX_INV_SLOTS
-    bcs !idr_empty+
+    // Print prompt
+    lda #<idr_prompt_str
+    sta zp_ptr0
+    lda #>idr_prompt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Wait for keypress
+    jsr input_get_key
+
+    // Check for ESC ($03) or space ($20) -> cancel
+    cmp #$03
+    beq !idr_cancel+
+    cmp #$20
+    beq !idr_cancel+
+
+    // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
+    sec
+    sbc #$41
+    bcc !idr_cancel+
+    cmp #MAX_INV_SLOTS
+    bcs !idr_cancel+
+
+    // Check slot occupied
+    tax
     lda inv_item_id,x
     cmp #FI_EMPTY
     bne !idr_found+
-    inx
-    jmp !idr_scan-
 
-!idr_empty:
-    // No items to drop
+    // Empty slot
     lda #<idr_no_items_str
     sta zp_ptr0
     lda #>idr_no_items_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!idr_cancel:
+    lda #<idr_cancel_str
+    sta zp_ptr0
+    lda #>idr_cancel_str
     sta zp_ptr0_hi
     jsr msg_print
     clc
@@ -843,8 +870,10 @@ ipu_found_str:     .text "YOU FOUND " ; .byte 0
 ipu_gold_str:      .text " GOLD PIECES." ; .byte 0
 ipu_picked_str:    .text "YOU PICKED UP A " ; .byte 0
 ipu_pack_full_str: .text "YOUR PACK IS FULL." ; .byte 0
+idr_prompt_str:    .text "DROP WHICH ITEM (A-V)?" ; .byte 0
 idr_drop_str:      .text "YOU DROP A " ; .byte 0
-idr_no_items_str:  .text "YOU HAVE NOTHING TO DROP." ; .byte 0
+idr_no_items_str:  .text "YOU HAVE NOTHING THERE." ; .byte 0
+idr_cancel_str:    .text "NEVER MIND." ; .byte 0
 idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
 
 // ============================================================

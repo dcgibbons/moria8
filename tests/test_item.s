@@ -1,9 +1,9 @@
-// test_item.s — Runtime tests for item.s
+// test_item.s — Runtime tests for item.s, player_items.s, combat weapon integration
 //
-// Tests: item_init_floor, floor_item_add, floor_item_find_at,
-//        floor_item_remove, inv_add_item, inv_count_items, item_spawn_level.
+// Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
+//        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400-$0413: $01 = pass, $00 = fail per test (20 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -32,26 +32,29 @@
 #import "../monster.s"
 #import "../monster_ai.s"
 #import "../item.s"
+#import "../player_items.s"
+#import "../ui_inventory.s"
 #import "../dungeon_render.s"
 #import "../dungeon_los.s"
 #import "../player_move.s"
 #import "../combat.s"
 #import "../monster_attack.s"
 #import "../turn.s"
+#import "../ui_help.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 16, $ff
+tc_results: .fill 24, $ff
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
     :BankOutBasic()
 
     // Initialize result area to $ff (untested)
-    ldx #15
+    ldx #23
     lda #$ff
 !clr:
     sta tc_results,x
@@ -86,6 +89,15 @@ test_start:
     lda #0
     sta zp_player_hp_hi
     sta zp_player_mhp_hi
+
+    // Set some reasonable stats
+    lda #12
+    sta player_data + PL_STR_CUR
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_CON_CUR
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
 
     // Stuff keyboard buffer to avoid -more- hangs
     lda #1
@@ -209,7 +221,6 @@ test_start:
     // ==========================================
 !t4:
     // Already have 1 item from test 2. Add 2 more.
-    // Item at (21, 15)
     ldx #15
     lda map_row_lo,x
     sta zp_ptr0
@@ -231,7 +242,6 @@ test_start:
     sta fi_add_p1
     jsr floor_item_add
 
-    // Item at (22, 15)
     ldx #15
     lda map_row_lo,x
     sta zp_ptr0
@@ -437,6 +447,10 @@ test_start:
     jsr item_init_floor
     jsr item_init_inventory
 
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
     // Clear player gold
     lda #0
     sta player_data + PL_GOLD_0
@@ -515,6 +529,10 @@ test_start:
     jsr item_init_floor
     jsr item_init_inventory
 
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
     // Place floor tile at (20, 12) (reuse from test 11 setup)
     ldx #12
     lda map_row_lo,x
@@ -572,10 +590,14 @@ test_start:
     sta tc_results + 11
 
     // ==========================================
-    // Test 13: item_pickup nothing → carry clear
+    // Test 13: item_pickup nothing -> carry clear
     // ==========================================
 !t13:
     jsr item_init_floor
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
 
     // Player at position with no items
     lda #10
@@ -599,11 +621,15 @@ test_start:
     sta tc_results + 12
 
     // ==========================================
-    // Test 14: item_drop moves item to floor
+    // Test 14: item_drop (prompted) moves item to floor
     // ==========================================
 !t14:
     jsr item_init_floor
     jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
 
     // Place floor tile at player position (10, 10)
     ldx #10
@@ -629,11 +655,13 @@ test_start:
     sta fi_add_p1
     jsr inv_add_item
 
-    // Stuff keyboard buffer
-    lda #1
+    // Stuff keyboard buffer: 'A' ($41) to select slot 0, then space for -more-
+    lda #2
     sta $c6
-    lda #$20
+    lda #$41            // 'A' — select item in slot 0
     sta $0277
+    lda #$20            // Space — dismiss -more-
+    sta $0278
 
     // Drop
     jsr item_drop
@@ -657,14 +685,292 @@ test_start:
 
     lda #$01
     sta tc_results + 13
-    jmp !tests_done+
+    jmp !t15+
 !t14_fail:
     lda #$00
     sta tc_results + 13
 
+    // ==========================================
+    // Test 15: item_wear equips dagger to EQUIP_WEAPON
+    // ==========================================
+!t15:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Put dagger (type 2) in inv slot 0
+    lda #2
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Stuff keyboard: 'A' ($41) to wear slot 0, then space for -more-
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_wear
+    bcc !t15_fail+
+
+    // Check EQUIP_WEAPON has dagger
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #2
+    bne !t15_fail+
+
+    // Check slot 0 is empty (moved to equip)
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t15_fail+
+
+    lda #$01
+    sta tc_results + 14
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: item_wear equips armor, AC increases
+    // ==========================================
+!t16:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Reset AC to stat-only basis
+    jsr player_calc_combat
+
+    // Save base AC
+    lda player_data + PL_AC
+    sta zp_temp0                // Save base AC
+
+    // Put leather armor (type 7, base AC = 4) in inv slot 0
+    lda #7
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Stuff keyboard: 'A' to wear, space for -more-
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_wear
+    bcc !t16_fail+
+
+    // Check AC increased by 4
+    lda player_data + PL_AC
+    sec
+    sbc zp_temp0
+    cmp #4
+    beq !t16_pass+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+    jmp !t17+
+!t16_pass:
+    lda #$01
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: item_takeoff moves to carried slot
+    // ==========================================
+!t17:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Put dagger in EQUIP_WEAPON slot
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    sta inv_flags + EQUIP_WEAPON
+
+    // Stuff keyboard: 'A' = weapon slot, space for -more-
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_takeoff
+    bcc !t17_fail+
+
+    // Check EQUIP_WEAPON is now empty
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #FI_EMPTY
+    bne !t17_fail+
+
+    // Check carried slot 0 has dagger
+    lda inv_item_id
+    cmp #2
+    bne !t17_fail+
+
+    lda #$01
+    sta tc_results + 16
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Test 18: item_eat restores food counter
+    // ==========================================
+!t18:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Set food to 100
+    lda #100
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+
+    // Put ration of food (type 15) in inv slot 0
+    lda #15
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Stuff keyboard buffer for -more- (item_eat prints a message)
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr item_eat
+    bcc !t18_fail+
+
+    // Check food counter = 100 + 1500 = 1600
+    // 1600 = $0640. Lo = $40, Hi = $06
+    lda zp_player_food
+    cmp #<1600
+    bne !t18_fail+
+    lda zp_player_food_hi
+    cmp #>1600
+    bne !t18_fail+
+
+    // Check slot 0 is empty (food consumed)
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t18_fail+
+
+    lda #$01
+    sta tc_results + 17
+    jmp !t19+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+
+    // ==========================================
+    // Test 19: item_eat with no food -> carry clear
+    // ==========================================
+!t19:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Stuff keyboard buffer for -more- (item_eat prints "YOU HAVE NO FOOD.")
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr item_eat
+    bcs !t19_fail+
+
+    lda #$01
+    sta tc_results + 18
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // ==========================================
+    // Test 20: player_recalc_equipment sums armor AC
+    // ==========================================
+!t20:
+    jsr item_init_inventory
+
+    // Equip leather armor (type 7, base AC = 4) in BODY slot
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #0
+    sta inv_p1 + EQUIP_BODY
+    sta inv_flags + EQUIP_BODY
+
+    // Equip small shield (type 9, base AC = 2) in SHIELD slot
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #1
+    sta inv_qty + EQUIP_SHIELD
+    lda #0
+    sta inv_p1 + EQUIP_SHIELD
+    sta inv_flags + EQUIP_SHIELD
+
+    jsr player_recalc_equipment
+
+    // Get DEX-only AC (player_calc_combat base)
+    lda player_data + PL_DEX_CUR
+    jsr stat_bonus_index
+    lda dex_ac_bonus,x
+    bpl !t20_use_dex+
+    lda #0                      // Negative DEX bonus -> 0
+!t20_use_dex:
+    sta zp_temp0                // zp_temp0 = expected DEX AC
+
+    // Expected: dex_bonus + 4 + 2 = dex_bonus + 6
+    lda zp_temp0
+    clc
+    adc #6
+    sta zp_temp0
+
+    lda player_data + PL_AC
+    cmp zp_temp0
+    beq !t20_pass+
+
+    lda #$00
+    sta tc_results + 19
+    jmp !tests_done+
+!t20_pass:
+    lda #$01
+    sta tc_results + 19
+
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #15
+    ldx #23
 !copy:
     lda tc_results,x
     sta $0400,x

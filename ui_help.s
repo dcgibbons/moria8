@@ -129,7 +129,7 @@ help_l11: .text "G GET ITEM       ? THIS HELP" ; .byte 0
 help_l12: .text "D DROP ITEM" ; .byte 0
 help_l13: .text "I INVENTORY      COMBAT" ; .byte 0
 help_l14: .text "E EQUIPMENT      WALK INTO MONSTER" ; .byte 0
-help_l15: .text "W WEAR/WIELD" ; .byte 0
+help_l15: .text "W WEAR/WIELD     SHIFT+E EAT FOOD" ; .byte 0
 help_l16: .text "T TAKE OFF       OTHER" ; .byte 0
 help_l17: .text "Q QUAFF POTION   SHIFT+Q QUIT" ; .byte 0
 help_l18: .text "R READ SCROLL" ; .byte 0

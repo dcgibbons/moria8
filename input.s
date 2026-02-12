@@ -174,6 +174,7 @@ key_map_petscii:
     // Shifted keys (C64 unshifted mode: SHIFT+letter = PETSCII $C1-$DA)
     .byte $c3   // SHIFT+C — character info
     .byte $d1   // SHIFT+Q — quit
+    .byte $c5   // SHIFT+E — eat
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -225,6 +226,7 @@ key_map_cmd:
     // Shifted keys
     .byte CMD_CHAR_INFO
     .byte CMD_QUIT
+    .byte CMD_EAT
     // Shifted vi-keys (running)
     .byte CMD_RUN_N
     .byte CMD_RUN_S

@@ -250,9 +250,9 @@ combat_calc_tohit:
     rts
 
 // combat_calc_blows — Calculate number of blows per round
-// Unarmed = weight class 4 (lightest). DEX bracket lookup.
+// Checks equipped weapon weight for weight class, unarmed = class 4.
 // Output: zp_combat_blows
-// Clobbers: A, X
+// Clobbers: A, X, Y
 combat_calc_blows:
     // DEX bracket: <10→0, 10-14→1, 15-17→2, 18+→3
     lda player_data + PL_DEX_CUR
@@ -264,20 +264,61 @@ combat_calc_blows:
     bcs !ccb_dex1+
     // DEX < 10
     ldx #0
-    jmp !ccb_lookup+
+    jmp !ccb_weight+
 !ccb_dex1:
     ldx #1
-    jmp !ccb_lookup+
+    jmp !ccb_weight+
 !ccb_dex2:
     ldx #2
-    jmp !ccb_lookup+
+    jmp !ccb_weight+
 !ccb_dex3:
     ldx #3
+!ccb_weight:
+    // X = dex bracket (0-3). Save it.
+    stx zp_temp0
+
+    // Determine weight class from weapon
+    // If no weapon: weight class 4 (lightest)
+    ldy #EQUIP_WEAPON
+    lda inv_item_id,y
+    cmp #FI_EMPTY
+    beq !ccb_unarmed+
+
+    // Get weapon weight
+    tay                         // Y = weapon type
+    lda it_weight,y             // Weight in 1/10 lbs
+    // Weight class: <30→4, <50→3, <80→2, <120→1, else→0
+    cmp #30
+    bcc !ccb_wc4+
+    cmp #50
+    bcc !ccb_wc3+
+    cmp #80
+    bcc !ccb_wc2+
+    cmp #120
+    bcc !ccb_wc1+
+    lda #0
+    jmp !ccb_lookup+
+!ccb_wc1:
+    lda #1
+    jmp !ccb_lookup+
+!ccb_wc2:
+    lda #2
+    jmp !ccb_lookup+
+!ccb_wc3:
+    lda #3
+    jmp !ccb_lookup+
+!ccb_wc4:
+    lda #4
+    jmp !ccb_lookup+
+!ccb_unarmed:
+    lda #4                      // Weight class 4 (lightest)
 !ccb_lookup:
-    // Weight class 4 (unarmed) = row 4, offset = 4*4 + dex_bracket
-    txa
+    // A = weight class (row), zp_temp0 = dex bracket (col)
+    // Offset = weight_class * 4 + dex_bracket
+    asl
+    asl                         // * 4
     clc
-    adc #(4 * BLOWS_COLS)       // Row 4 offset = 16
+    adc zp_temp0
     tax
     lda blows_table,x
     sta zp_combat_blows
@@ -318,17 +359,37 @@ combat_roll_tohit:
     sec
     rts
 
-// combat_roll_damage — Roll unarmed damage
-// Damage = 1d2 + PL_TODMG, min 0
-// Output: cmb_damage = damage amount
+// combat_roll_damage — Roll weapon or unarmed damage
+// If weapon equipped: it_dmg_dice[type] d it_dmg_sides[type] + PL_TODMG
+// If unarmed: 1d2 + PL_TODMG
+// Output: cmb_damage = damage amount (min 0)
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
 combat_roll_damage:
+    // Check for equipped weapon
+    ldx #EQUIP_WEAPON
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !crd_unarmed+
+
+    // Weapon equipped — use weapon dice
+    tax                         // X = weapon type
+    lda it_dmg_dice,x           // Dice count
+    pha                         // Save dice count
+    lda it_dmg_sides,x          // Dice sides
+    tax                         // X = sides
+    pla                         // A = dice count
+    ldy #0                      // No bonus on dice roll itself
+    jsr math_dice               // Result in zp_math_a
+    jmp !crd_add_bonus+
+
+!crd_unarmed:
     // Roll 1d2
     lda #1
     ldx #2
     ldy #0
     jsr math_dice               // result in zp_math_a (1 or 2)
 
+!crd_add_bonus:
     // Add PL_TODMG (signed)
     lda player_data + PL_TODMG
     bmi !crd_neg+

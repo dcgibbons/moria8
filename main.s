@@ -40,6 +40,8 @@
 #import "monster.s"
 #import "monster_ai.s"
 #import "item.s"
+#import "player_items.s"
+#import "ui_inventory.s"
 #import "dungeon_render.s"
 #import "dungeon_los.s"
 #import "player_move.s"
@@ -500,6 +502,94 @@ entry:
 !drop_no_turn:
     jmp !main_loop-
 !not_drop:
+
+    // Inventory? (display only, no turn consumed)
+    cmp #CMD_INVENTORY
+    bne !not_inventory+
+    jsr ui_inv_display
+    jsr input_get_key
+    // Redraw map on return
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!not_inventory:
+
+    // Equipment? (display only, no turn consumed)
+    cmp #CMD_EQUIPMENT
+    bne !not_equipment+
+    jsr ui_equip_display
+    jsr input_get_key
+    // Redraw map on return
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!not_equipment:
+
+    // Wear/Wield?
+    cmp #CMD_WEAR
+    bne !not_wear+
+    jsr msg_clear
+    jsr item_wear
+    bcc !wear_no_turn+
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!wear_no_turn:
+    jmp !main_loop-
+!not_wear:
+
+    // Take off?
+    cmp #CMD_TAKEOFF
+    bne !not_takeoff+
+    jsr msg_clear
+    jsr item_takeoff
+    bcc !takeoff_no_turn+
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!takeoff_no_turn:
+    jmp !main_loop-
+!not_takeoff:
+
+    // Eat?
+    cmp #CMD_EAT
+    bne !not_eat+
+    jsr msg_clear
+    jsr item_eat
+    bcc !eat_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!eat_no_turn:
+    jmp !main_loop-
+!not_eat:
 
     // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
     cmp #CMD_RUN_N
