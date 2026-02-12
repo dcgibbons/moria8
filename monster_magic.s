@@ -299,19 +299,6 @@ mm_print_spell_msg:
     rts
 
 // ============================================================
-// mm_check_death — Check if player died from spell damage
-// Input: carry from mon_atk_apply_damage
-// Clobbers: A
-// ============================================================
-mm_check_death:
-    bcc !mm_alive+
-    lda zp_game_flags
-    ora #$01                  // GF_PLAYER_DEAD
-    sta zp_game_flags
-!mm_alive:
-    rts
-
-// ============================================================
 // Spell handler 1: monster_cast_bolt
 // Bolt does 2d8 + creature level damage to player
 // ============================================================
@@ -334,10 +321,13 @@ monster_cast_bolt:
     lda zp_math_a
     sta zp_combat_dmg
     jsr mon_atk_apply_damage
-    jsr mm_check_death
+    bcs !mcb_dead+
 
     lda #SFX_HIT
     jsr sound_play
+    rts
+!mcb_dead:
+    jsr player_death_check
     rts
 
 // ============================================================
@@ -376,10 +366,13 @@ monster_cast_breath:
 !mcb_apply:
     sta zp_combat_dmg
     jsr mon_atk_apply_damage
-    jsr mm_check_death
+    bcs !mcbr_dead+
 
     lda #SFX_HIT
     jsr sound_play
+    rts
+!mcbr_dead:
+    jsr player_death_check
     rts
 
 // ============================================================
