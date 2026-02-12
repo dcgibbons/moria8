@@ -711,36 +711,9 @@ item_quaff:
     adc #4                          // [4, 11]
     sta piw_qty                     // Reuse as heal amount
 
-    // Add to player HP (16-bit)
-    lda zp_player_hp_lo
-    clc
-    adc piw_qty
-    sta zp_player_hp_lo
-    lda zp_player_hp_hi
-    adc #0
-    sta zp_player_hp_hi
-
-    // Cap at max HP
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !iq_hp_ok+
-    bne !iq_hp_clamp+
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !iq_hp_ok+
-    beq !iq_hp_ok+
-!iq_hp_clamp:
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-!iq_hp_ok:
-
-    // Sync to player_data
-    lda zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
+    // Heal player HP (shared subroutine)
+    lda piw_qty
+    jsr eff_heal
 
     lda #<piq_feel_better_str
     sta zp_ptr0
@@ -856,8 +829,6 @@ item_quaff:
 // Output: carry set = turn consumed, carry clear = cancelled
 // Clobbers: everything
 // ============================================================
-irs_target_slot: .byte 0           // Target slot for Identify scroll
-
 item_read_scroll:
     // Print prompt
     lda #<piq_read_prompt
@@ -942,60 +913,8 @@ item_read_scroll:
     jmp !irs_generic_msg+
 
 !irs_light:
-    // Light the room the player is in
-    // Scan rooms for player position (same bounds check as LOS)
-    lda #0
-    sta piw_qty                     // Reuse as room loop index
-
-!irs_light_loop:
-    ldx piw_qty
-    cpx room_count
-    bcs !irs_light_corridor+        // Player not in any room
-
-    // Check bounds: player_x in [room_x-1, room_x+room_w]
-    lda room_x,x
-    sec
-    sbc #1
-    cmp zp_player_x
-    beq !irs_lx_ok+
-    bcs !irs_light_next+
-!irs_lx_ok:
-    lda room_x,x
-    clc
-    adc room_w,x
-    cmp zp_player_x
-    bcc !irs_light_next+
-
-    // Check bounds: player_y in [room_y-1, room_y+room_h]
-    lda room_y,x
-    sec
-    sbc #1
-    cmp zp_player_y
-    beq !irs_ly_ok+
-    bcs !irs_light_next+
-!irs_ly_ok:
-    lda room_y,x
-    clc
-    adc room_h,x
-    cmp zp_player_y
-    bcc !irs_light_next+
-
-    // Player is in room X — light it
-    lda #1
-    sta room_lit,x
-    sta vis_room_revealed           // Trigger full redraw
-    jmp !irs_light_msg+
-
-!irs_light_next:
-    inc piw_qty
-    jmp !irs_light_loop-
-
-!irs_light_corridor:
-    // In corridor — just set vis_room_revealed for redraw
-    lda #1
-    sta vis_room_revealed
-
-!irs_light_msg:
+    // Light the room the player is in (shared subroutine)
+    jsr eff_light_room
     lda #<piq_light_str
     sta zp_ptr0
     lda #>piq_light_str
@@ -1006,122 +925,14 @@ item_read_scroll:
     rts
 
 !irs_identify:
-    // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
-    lda #<piq_identify_prompt
-    sta zp_ptr0
-    lda #>piq_identify_prompt
-    sta zp_ptr0_hi
-    jsr msg_print
-
-    jsr input_get_key
-
-    // Cancel check
-    cmp #$03
-    beq !irs_id_cancel+
-    cmp #$20
-    beq !irs_id_cancel+
-
-    // Convert to slot
-    sec
-    sbc #$41
-    bcc !irs_id_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !irs_id_cancel+
-
-    sta irs_target_slot
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !irs_id_cancel+
-
-    // Identify that item type
-    tax
-    lda #1
-    sta id_known,x
-
-    // Set IF_IDENTIFIED on the item instance
-    ldx irs_target_slot
-    lda inv_flags,x
-    ora #IF_IDENTIFIED
-    sta inv_flags,x
-
-    // Build message: "THIS IS A <real name>."
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<piq_thisis_str
-    ldy #>piq_thisis_str
-    jsr combat_append_str
-
-    ldx irs_target_slot
-    lda inv_item_id,x
-    tax
-    lda it_name_lo,x                // Always real name (type is now known)
-    ldy it_name_hi,x
-    jsr combat_append_str
-
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
-
-    sec
-    rts
-
-!irs_id_cancel:
-    // Scroll already consumed — just print generic message
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    // Interactive item identification (shared subroutine)
+    jsr eff_identify_prompt
     sec
     rts
 
 !irs_teleport:
-    // Teleport player to random floor tile
-    jsr find_random_floor
-
-    // Clear FLAG_OCCUPIED at old position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    lda (zp_ptr0),y
-    and #~FLAG_OCCUPIED & $ff
-    sta (zp_ptr0),y
-
-    // Move player
-    lda df_target_x
-    sta zp_player_x
-    lda df_target_y
-    sta zp_player_y
-
-    // Set FLAG_OCCUPIED at new position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    lda (zp_ptr0),y
-    ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
-
-    // Trigger full visibility update and redraw
-    lda #1
-    sta vis_room_revealed
+    // Teleport player to random floor tile (shared subroutine)
+    jsr eff_teleport_self
 
     lda #<piq_teleport_str
     sta zp_ptr0
