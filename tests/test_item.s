@@ -35,6 +35,7 @@
 #import "../player_items.s"
 #import "../spell_data.s"
 #import "../spell_effects.s"
+#import "../player_magic.s"
 #import "../ui_inventory.s"
 #import "../dungeon_render.s"
 #import "../dungeon_los.s"

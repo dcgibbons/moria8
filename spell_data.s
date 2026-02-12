@@ -111,6 +111,13 @@ psn_14: .text "CURE SERIOUS WOUNDS" ; .byte 0
 psn_15: .text "DISPEL UNDEAD" ; .byte 0
 
 // ============================================================
+// Bit mask helper for spell known checks
+// Index 0-7 maps to bits within a byte (lo or hi)
+// ============================================================
+spell_bit_mask:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
+
+// ============================================================
 // Compile-time asserts
 // ============================================================
 

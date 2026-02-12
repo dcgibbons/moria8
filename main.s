@@ -43,6 +43,7 @@
 #import "player_items.s"
 #import "spell_data.s"
 #import "spell_effects.s"
+#import "player_magic.s"
 #import "ui_inventory.s"
 #import "dungeon_render.s"
 #import "dungeon_los.s"
@@ -657,6 +658,57 @@ entry:
 !read_no_turn:
     jmp !main_loop-
 !not_read:
+
+    // Cast spell?
+    cmp #CMD_CAST
+    bne !not_cast+
+    jsr msg_clear
+    jsr player_cast_spell
+    bcc !cast_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!cast_no_turn:
+    // Restore screen after spell list overlay
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!not_cast:
+
+    // Pray?
+    cmp #CMD_PRAY
+    bne !not_pray+
+    jsr msg_clear
+    jsr player_pray
+    bcc !pray_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!pray_no_turn:
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!not_pray:
 
     // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
     cmp #CMD_RUN_N
