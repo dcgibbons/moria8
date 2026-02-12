@@ -83,6 +83,18 @@ player_attack_monster:
     // --- Hit ---
     lda #1
     sta cmb_any_hit
+
+    // Check confuse-on-hit from Monster Confusion scroll
+    lda zp_confuse_melee
+    beq !pam_no_confuse+
+    lda #0
+    sta zp_confuse_melee            // Clear — one-time use
+    // Set monster's confusion timer
+    ldy #MX_CONFUSE
+    lda #20                         // 20 turns confused
+    sta (zp_ptr0),y
+!pam_no_confuse:
+
     jsr combat_roll_damage      // → cmb_damage
 
     // Apply damage to monster

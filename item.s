@@ -47,7 +47,7 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 25
+.const ITEM_TYPE_COUNT = 39
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -80,6 +80,20 @@ it_category:
     .byte ICAT_SCROLL   // 22: Teleportation
     .byte ICAT_RING     // 23: Protection
     .byte ICAT_RING     // 24: Strength
+    .byte ICAT_POTION   // 25: Cure Serious Wounds
+    .byte ICAT_POTION   // 26: Restore Mana
+    .byte ICAT_POTION   // 27: Heroism
+    .byte ICAT_POTION   // 28: Blindness
+    .byte ICAT_POTION   // 29: Confusion
+    .byte ICAT_POTION   // 30: Detect Monsters
+    .byte ICAT_POTION   // 31: Infravision
+    .byte ICAT_SCROLL   // 32: Word of Recall
+    .byte ICAT_SCROLL   // 33: Remove Curse
+    .byte ICAT_SCROLL   // 34: Enchant Weapon
+    .byte ICAT_SCROLL   // 35: Enchant Armor
+    .byte ICAT_SCROLL   // 36: Monster Confusion
+    .byte ICAT_SCROLL   // 37: Aggravate
+    .byte ICAT_SCROLL   // 38: Protect from Evil
 
 // Display character (screen codes)
 it_display:
@@ -108,6 +122,20 @@ it_display:
     .byte $3f   // 22: '?' Teleportation
     .byte $3d   // 23: '=' Protection
     .byte $3d   // 24: '=' Strength
+    .byte $21   // 25: '!' Cure Serious Wounds
+    .byte $21   // 26: '!' Restore Mana
+    .byte $21   // 27: '!' Heroism
+    .byte $21   // 28: '!' Blindness
+    .byte $21   // 29: '!' Confusion
+    .byte $21   // 30: '!' Detect Monsters
+    .byte $21   // 31: '!' Infravision
+    .byte $3f   // 32: '?' Word of Recall
+    .byte $3f   // 33: '?' Remove Curse
+    .byte $3f   // 34: '?' Enchant Weapon
+    .byte $3f   // 35: '?' Enchant Armor
+    .byte $3f   // 36: '?' Monster Confusion
+    .byte $3f   // 37: '?' Aggravate
+    .byte $3f   // 38: '?' Protect from Evil
 
 // Color
 it_color:
@@ -136,48 +164,71 @@ it_color:
     .byte COL_CYAN      // 22: Teleportation
     .byte COL_YELLOW    // 23: Protection
     .byte COL_LRED      // 24: Strength
+    .byte COL_WHITE     // 25: Cure Serious Wounds
+    .byte COL_BLUE      // 26: Restore Mana
+    .byte COL_LRED      // 27: Heroism
+    .byte COL_GREY      // 28: Blindness
+    .byte COL_PURPLE    // 29: Confusion
+    .byte COL_YELLOW    // 30: Detect Monsters
+    .byte COL_ORANGE    // 31: Infravision
+    .byte COL_LGREY     // 32: Word of Recall
+    .byte COL_CYAN      // 33: Remove Curse
+    .byte COL_WHITE     // 34: Enchant Weapon
+    .byte COL_WHITE     // 35: Enchant Armor
+    .byte COL_LGREEN    // 36: Monster Confusion
+    .byte COL_LRED      // 37: Aggravate
+    .byte COL_YELLOW    // 38: Protect from Evil
 
 // Weight (in 1/10 lbs)
 it_weight:
     .byte 0, 0, 12, 30, 50, 50, 20, 80, 120, 50
     .byte 30, 5, 10, 10, 30, 10, 5, 4, 4, 4
-    .byte 2, 2, 2, 2, 2
+    .byte 2, 2, 2, 2, 2, 4, 4, 4, 4, 4
+    .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
 
 // Damage dice count
 it_dmg_dice:
     .byte 0, 0, 1, 1, 1, 2, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // Damage dice sides
 it_dmg_sides:
     .byte 0, 0, 4, 6, 8, 4, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // Base armor class
 it_base_ac:
     .byte 0, 0, 0, 0, 0, 0, 2, 4, 6, 2
     .byte 1, 1, 1, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 1, 0
+    .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 // Base cost (lo)
 it_cost_lo:
     .byte <0, <0, <10, <25, <60, <45, <15, <30, <80, <20
     .byte <15, <8, <10, <2, <20, <3, <2, <50, <75, <5
     .byte <15, <50, <40, <100, <120
+    .byte <100, <150, <80, <5, <5, <60, <40
+    .byte <200, <80, <250, <250, <50, <5, <100
 
 // Base cost (hi)
 it_cost_hi:
     .byte >0, >0, >10, >25, >60, >45, >15, >30, >80, >20
     .byte >15, >8, >10, >2, >20, >3, >2, >50, >75, >5
     .byte >15, >50, >40, >100, >120
+    .byte >100, >150, >80, >5, >5, >60, >40
+    .byte >200, >80, >250, >250, >50, >5, >100
 
 // Minimum dungeon level to appear
 it_min_level:
     .byte 0, 0, 1, 1, 3, 2, 1, 2, 4, 2
     .byte 3, 1, 1, 0, 2, 0, 1, 1, 3, 1
-    .byte 1, 2, 3, 4, 5
+    .byte 1, 2, 3, 4, 5, 3, 5, 4, 1, 1
+    .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
 
 // Name pointer tables
 it_name_lo:
@@ -186,12 +237,18 @@ it_name_lo:
     .byte <itn_10, <itn_11, <itn_12, <itn_13, <itn_14
     .byte <itn_15, <itn_16, <itn_17, <itn_18, <itn_19
     .byte <itn_20, <itn_21, <itn_22, <itn_23, <itn_24
+    .byte <itn_25, <itn_26, <itn_27, <itn_28, <itn_29
+    .byte <itn_30, <itn_31, <itn_32, <itn_33, <itn_34
+    .byte <itn_35, <itn_36, <itn_37, <itn_38
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
     .byte >itn_10, >itn_11, >itn_12, >itn_13, >itn_14
     .byte >itn_15, >itn_16, >itn_17, >itn_18, >itn_19
     .byte >itn_20, >itn_21, >itn_22, >itn_23, >itn_24
+    .byte >itn_25, >itn_26, >itn_27, >itn_28, >itn_29
+    .byte >itn_30, >itn_31, >itn_32, >itn_33, >itn_34
+    .byte >itn_35, >itn_36, >itn_37, >itn_38
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -219,6 +276,20 @@ itn_21: .text "IDENTIFY" ; .byte 0
 itn_22: .text "TELEPORTATION" ; .byte 0
 itn_23: .text "PROTECTION" ; .byte 0
 itn_24: .text "STRENGTH" ; .byte 0
+itn_25: .text "CURE SERIOUS WOUNDS" ; .byte 0
+itn_26: .text "RESTORE MANA" ; .byte 0
+itn_27: .text "HEROISM" ; .byte 0
+itn_28: .text "BLINDNESS" ; .byte 0
+itn_29: .text "CONFUSION" ; .byte 0
+itn_30: .text "DETECT MONSTERS" ; .byte 0
+itn_31: .text "INFRAVISION" ; .byte 0
+itn_32: .text "WORD OF RECALL" ; .byte 0
+itn_33: .text "REMOVE CURSE" ; .byte 0
+itn_34: .text "ENCHANT WEAPON" ; .byte 0
+itn_35: .text "ENCHANT ARMOR" ; .byte 0
+itn_36: .text "MONSTER CONFUSION" ; .byte 0
+itn_37: .text "AGGRAVATE" ; .byte 0
+itn_38: .text "PROTECT FROM EVIL" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1069,10 +1140,10 @@ idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
 
 // ============================================================
 // pick_item_type — Select a random non-gold item type for floor spawning
-// Rejection sampling: roll random type 2-24, accept if min_level <= dlvl+2.
+// Rejection sampling: roll random type 2-38, accept if min_level <= dlvl+2.
 // 1-in-12 "great item" chance bypasses min_level check.
 // Fallback after 50 tries: return type 15 (ration of food).
-// Output: A = item type ID (2-24)
+// Output: A = item type ID (2-38)
 // Clobbers: A, X, Y
 // ============================================================
 pit_attempts: .byte 0
@@ -1082,8 +1153,8 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(23) + 2 → range [2, 24]
-    lda #23
+    // Roll type = rng_range(37) + 2 → range [2, 38]
+    lda #37
     jsr rng_range
     clc
     adc #2
@@ -1235,25 +1306,56 @@ id_known:
     .byte 0, 0, 0           // 17-19: Potions — unknown at start
     .byte 0, 0, 0           // 20-22: Scrolls — unknown at start
     .byte 0, 0              // 23-24: Rings — unknown at start
+    .byte 0, 0, 0, 0, 0, 0, 0  // 25-31: Potions — unknown at start
+    .byte 0, 0, 0, 0, 0, 0, 0  // 32-38: Scrolls — unknown at start
 
 // Shuffle tables: map category-local index → description index
-// 5 potions, 5 scrolls, 4 rings — full pool shuffled, first N used
-potion_shuffle: .byte 0, 1, 2, 3, 4   // Shuffled at game start (3 potions → 5 desc)
-scroll_shuffle: .byte 0, 1, 2, 3, 4   // Shuffled at game start (3 scrolls → 5 desc)
+// 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
+potion_shuffle: .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+scroll_shuffle: .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
 ring_shuffle:   .byte 0, 1, 2, 3      // Shuffled at game start (2 rings → 4 desc)
 
-// Unidentified name strings (screen codes, null-terminated)
-pn_0: .text "A BLUE POTION" ; .byte 0
-pn_1: .text "A RED POTION" ; .byte 0
-pn_2: .text "A GREEN POTION" ; .byte 0
-pn_3: .text "A YELLOW POTION" ; .byte 0
-pn_4: .text "A CLEAR POTION" ; .byte 0
+// Lookup tables: item type ID → local category index ($FF = not that category)
+potion_local_idx:
+    .fill 17, $ff       // 0-16: not potions
+    .byte 0, 1, 2       // 17-19: CLW, Speed, Poison
+    .fill 5, $ff        // 20-24: not potions
+    .byte 3, 4, 5, 6, 7, 8, 9  // 25-31: CSW, RestMana, Hero, Blind, Conf, DetMon, Infra
+    .fill 7, $ff        // 32-38: not potions
 
-sn_0: .text "A WHITE SCROLL" ; .byte 0
-sn_1: .text "A BROWN SCROLL" ; .byte 0
-sn_2: .text "A GREY SCROLL" ; .byte 0
-sn_3: .text "A FADED SCROLL" ; .byte 0
-sn_4: .text "A GLOWING SCROLL" ; .byte 0
+scroll_local_idx:
+    .fill 20, $ff       // 0-19: not scrolls
+    .byte 0, 1, 2       // 20-22: Light, Identify, Teleport
+    .fill 2, $ff        // 23-24: not scrolls
+    .fill 7, $ff        // 25-31: not scrolls
+    .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
+
+// Unidentified name strings (screen codes, null-terminated)
+pn_0:  .text "A BLUE POTION" ; .byte 0
+pn_1:  .text "A RED POTION" ; .byte 0
+pn_2:  .text "A GREEN POTION" ; .byte 0
+pn_3:  .text "A YELLOW POTION" ; .byte 0
+pn_4:  .text "A CLEAR POTION" ; .byte 0
+pn_5:  .text "AN AZURE POTION" ; .byte 0
+pn_6:  .text "A SMOKY POTION" ; .byte 0
+pn_7:  .text "A BROWN POTION" ; .byte 0
+pn_8:  .text "A SILVER POTION" ; .byte 0
+pn_9:  .text "A PINK POTION" ; .byte 0
+pn_10: .text "A CLOUDY POTION" ; .byte 0
+pn_11: .text "A GOLDEN POTION" ; .byte 0
+
+sn_0:  .text "A WHITE SCROLL" ; .byte 0
+sn_1:  .text "A BROWN SCROLL" ; .byte 0
+sn_2:  .text "A GREY SCROLL" ; .byte 0
+sn_3:  .text "A FADED SCROLL" ; .byte 0
+sn_4:  .text "A GLOWING SCROLL" ; .byte 0
+sn_5:  .text "A SCROLL OF LUMEN" ; .byte 0
+sn_6:  .text "A SCROLL OF VERITAS" ; .byte 0
+sn_7:  .text "A SCROLL OF DURA" ; .byte 0
+sn_8:  .text "A SCROLL OF LIBERA" ; .byte 0
+sn_9:  .text "A SCROLL OF ACUTA" ; .byte 0
+sn_10: .text "A SCROLL OF FEROX" ; .byte 0
+sn_11: .text "A SCROLL OF TUTELA" ; .byte 0
 
 rn_0: .text "A GOLD RING" ; .byte 0
 rn_1: .text "A SILVER RING" ; .byte 0
@@ -1261,18 +1363,30 @@ rn_2: .text "A BRONZE RING" ; .byte 0
 rn_3: .text "A COPPER RING" ; .byte 0
 
 // Pointer tables for unidentified names
-potion_name_lo: .byte <pn_0, <pn_1, <pn_2, <pn_3, <pn_4
-potion_name_hi: .byte >pn_0, >pn_1, >pn_2, >pn_3, >pn_4
+potion_name_lo:
+    .byte <pn_0, <pn_1, <pn_2, <pn_3, <pn_4, <pn_5
+    .byte <pn_6, <pn_7, <pn_8, <pn_9, <pn_10, <pn_11
+potion_name_hi:
+    .byte >pn_0, >pn_1, >pn_2, >pn_3, >pn_4, >pn_5
+    .byte >pn_6, >pn_7, >pn_8, >pn_9, >pn_10, >pn_11
 
-scroll_name_lo: .byte <sn_0, <sn_1, <sn_2, <sn_3, <sn_4
-scroll_name_hi: .byte >sn_0, >sn_1, >sn_2, >sn_3, >sn_4
+scroll_name_lo:
+    .byte <sn_0, <sn_1, <sn_2, <sn_3, <sn_4, <sn_5
+    .byte <sn_6, <sn_7, <sn_8, <sn_9, <sn_10, <sn_11
+scroll_name_hi:
+    .byte >sn_0, >sn_1, >sn_2, >sn_3, >sn_4, >sn_5
+    .byte >sn_6, >sn_7, >sn_8, >sn_9, >sn_10, >sn_11
 
 ring_name_lo: .byte <rn_0, <rn_1, <rn_2, <rn_3
 ring_name_hi: .byte >rn_0, >rn_1, >rn_2, >rn_3
 
 // Unidentified color tables (indexed by shuffle output)
-potion_colors: .byte COL_BLUE, COL_LRED, COL_GREEN, COL_YELLOW, COL_WHITE
-scroll_colors: .byte COL_WHITE, COL_BROWN, COL_GREY, COL_LGREY, COL_LGREEN
+potion_colors:
+    .byte COL_BLUE, COL_LRED, COL_GREEN, COL_YELLOW, COL_WHITE, COL_CYAN
+    .byte COL_GREY, COL_BROWN, COL_LGREY, COL_LRED, COL_WHITE, COL_YELLOW
+scroll_colors:
+    .byte COL_WHITE, COL_BROWN, COL_GREY, COL_LGREY, COL_LGREEN, COL_CYAN
+    .byte COL_BLUE, COL_ORANGE, COL_PURPLE, COL_LRED, COL_RED, COL_YELLOW
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // ============================================================
@@ -1296,8 +1410,8 @@ item_init_identification:
     cpx #ITEM_TYPE_COUNT
     bcc !iid_unknown-
 
-    // Initialize shuffle tables to identity (0,1,2,3,4 / 0,1,2,3)
-    ldx #4
+    // Initialize shuffle tables to identity (0..11 / 0..3)
+    ldx #11
 !iid_init_ps:
     txa
     sta potion_shuffle,x
@@ -1311,8 +1425,8 @@ item_init_identification:
     dex
     bpl !iid_init_rs-
 
-    // Fisher-Yates shuffle: potions (5 elements)
-    ldx #4                          // i = 4 down to 1
+    // Fisher-Yates shuffle: potions (12 elements)
+    ldx #11                         // i = 11 down to 1
 !iid_pot_loop:
     txa
     clc
@@ -1331,8 +1445,8 @@ item_init_identification:
     dex
     bne !iid_pot_loop-
 
-    // Fisher-Yates shuffle: scrolls (5 elements)
-    ldx #4
+    // Fisher-Yates shuffle: scrolls (12 elements)
+    ldx #11
 !iid_scr_loop:
     txa
     clc
@@ -1403,10 +1517,7 @@ item_get_name_ptr:
     rts
 
 !ignp_potion:
-    // Local index = type - 17
-    txa
-    sec
-    sbc #17
+    lda potion_local_idx,x          // Local index for this potion type
     tax
     lda potion_shuffle,x            // Shuffled description index
     tax
@@ -1417,10 +1528,7 @@ item_get_name_ptr:
     rts
 
 !ignp_scroll:
-    // Local index = type - 20
-    txa
-    sec
-    sbc #20
+    lda scroll_local_idx,x          // Local index for this scroll type
     tax
     lda scroll_shuffle,x
     tax
@@ -1470,9 +1578,7 @@ item_get_floor_color:
     rts
 
 !igfc_potion:
-    txa
-    sec
-    sbc #17
+    lda potion_local_idx,x
     tax
     lda potion_shuffle,x
     tax
@@ -1480,9 +1586,7 @@ item_get_floor_color:
     rts
 
 !igfc_scroll:
-    txa
-    sec
-    sbc #20
+    lda scroll_local_idx,x
     tax
     lda scroll_shuffle,x
     tax
@@ -1502,7 +1606,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 25
+.assert "Item type count", ITEM_TYPE_COUNT, 39
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
