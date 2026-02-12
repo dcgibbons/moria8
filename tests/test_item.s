@@ -3,7 +3,7 @@
 // Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
 //        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$0413: $01 = pass, $00 = fail per test (20 tests)
+// Results at $0400-$041f: $01 = pass, $00 = fail per test (32 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -1165,9 +1165,290 @@ test_start:
     lda #$01
     sta tc_results + 25
 
+    // ==========================================
+    // Test 27: item_get_name_ptr returns real name for known type
+    // ==========================================
+!t27:
+    // Set dagger (type 2) as known (it already should be)
+    lda #1
+    sta id_known + 2
+
+    lda #2                          // Dagger
+    jsr item_get_name_ptr
+    // zp_ptr0 should point to itn_2 ("DAGGER")
+    lda zp_ptr0
+    cmp #<itn_2
+    bne !t27_fail+
+    lda zp_ptr0_hi
+    cmp #>itn_2
+    bne !t27_fail+
+
+    lda #$01
+    sta tc_results + 26
+    jmp !t28+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
+
+    // ==========================================
+    // Test 28: item_get_name_ptr returns unid name for unknown potion
+    // ==========================================
+!t28:
+    // Set type 17 (CLW) as unknown
+    lda #0
+    sta id_known + 17
+
+    lda #17
+    jsr item_get_name_ptr
+    // zp_ptr0 should NOT point to itn_17
+    lda zp_ptr0
+    cmp #<itn_17
+    bne !t28_pass+
+    lda zp_ptr0_hi
+    cmp #>itn_17
+    bne !t28_pass+
+    // Both match — that means we got the real name (fail)
+    lda #$00
+    sta tc_results + 27
+    jmp !t29+
+!t28_pass:
+    lda #$01
+    sta tc_results + 27
+
+    // ==========================================
+    // Test 29: item_init_identification sets known/unknown correctly
+    // ==========================================
+!t29:
+    jsr item_init_identification
+
+    // Check type 2 (dagger) is known
+    lda id_known + 2
+    cmp #1
+    bne !t29_fail+
+
+    // Check type 17 (CLW potion) is unknown
+    lda id_known + 17
+    cmp #0
+    bne !t29_fail+
+
+    // Check type 23 (Protection ring) is unknown
+    lda id_known + 23
+    cmp #0
+    bne !t29_fail+
+
+    lda #$01
+    sta tc_results + 28
+    jmp !t30+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // ==========================================
+    // Test 30: Pickup preserves flags (IF_CURSED)
+    // ==========================================
+!t30:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Generate map
+    lda #1
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr level_generate
+
+    // Place floor tile at (20, 12)
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    // Put player at (20, 12)
+    lda #20
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+
+    // Add cursed item to floor at player position
+    lda #20
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #4                          // Long sword
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #$fd                        // -3 enchant
+    sta fi_add_p1
+    jsr floor_item_add
+
+    // Set IF_CURSED flag on floor item
+    lda #IF_CURSED
+    sta fi_flags                    // Slot 0
+
+    // Stuff keyboard buffer for -more-
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    // Pick up
+    jsr item_pickup
+
+    // Check inventory slot 0 has IF_CURSED
+    lda inv_flags
+    and #IF_CURSED
+    bne !t30_pass+
+    lda #$00
+    sta tc_results + 29
+    jmp !t31+
+!t30_pass:
+    lda #$01
+    sta tc_results + 29
+
+    // ==========================================
+    // Test 31: item_quaff heals HP (cure light wounds)
+    // ==========================================
+!t31:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Set HP to 50/200
+    lda #50
+    sta zp_player_hp_lo
+    lda #0
+    sta zp_player_hp_hi
+    lda #200
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    // Make cure light wounds known so we can verify
+    lda #1
+    sta id_known + 17
+
+    // Put CLW potion (type 17) in inv slot 0
+    lda #17
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Stuff keyboard: 'A' ($41) to select slot 0, then space for -more-
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    // HP should be > 50 (healed by 4-11)
+    lda zp_player_hp_lo
+    cmp #51
+    bcc !t31_fail+
+
+    // Slot 0 should be empty (consumed)
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t31_fail+
+
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
+    // ==========================================
+    // Test 32: item_read_scroll identifies item (identify scroll)
+    // ==========================================
+!t32:
+    jsr item_init_inventory
+
+    // Clear message state
+    lda #0
+    sta zp_msg_flags
+
+    // Reset id_known for type 17 to unknown
+    lda #0
+    sta id_known + 17
+
+    // Put identify scroll (type 21) in inv slot 0
+    lda #21
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Put unknown potion (type 17) in inv slot 1
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    // Stuff keyboard buffer:
+    // 1. 'A' ($41) — select scroll in slot 0
+    // 2. Space ($20) — dismiss -more- before identify prompt
+    // 3. 'B' ($42) — select potion in slot 1 to identify
+    // 4. Space ($20) — dismiss -more- after "THIS IS A..." message
+    lda #4
+    sta $c6
+    lda #$41                        // 'A' — read the scroll in slot 0
+    sta $0277
+    lda #$20                        // Space — dismiss -more-
+    sta $0278
+    lda #$42                        // 'B' — identify the potion in slot 1
+    sta $0279
+    lda #$20                        // Space — dismiss -more- after result
+    sta $027a
+
+    jsr item_read_scroll
+
+    // id_known[17] should now be 1
+    lda id_known + 17
+    cmp #1
+    bne !t32_fail+
+
+    // Scroll in slot 0 should be consumed
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t32_fail+
+
+    // Scroll type 21 should also be known (auto-identified on use)
+    lda id_known + 21
+    cmp #1
+    bne !t32_fail+
+
+    lda #$01
+    sta tc_results + 31
+    jmp !tests_done+
+!t32_fail:
+    lda #$00
+    sta tc_results + 31
+
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #29
+    ldx #31
 !copy:
     lda tc_results,x
     sta $0400,x

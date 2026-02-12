@@ -151,6 +151,9 @@ entry:
     sta inv_p1
     sta inv_flags
 
+    // Randomize item identification (shuffle potion/scroll/ring descriptors)
+    jsr item_init_identification
+
     // --- Main game loop ---
     // Initialize dungeon level and generate map
     lda #0
@@ -612,6 +615,46 @@ entry:
 !eat_no_turn:
     jmp !main_loop-
 !not_eat:
+
+    // Quaff potion?
+    cmp #CMD_QUAFF
+    bne !not_quaff+
+    jsr msg_clear
+    jsr item_quaff
+    bcc !quaff_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!quaff_no_turn:
+    jmp !main_loop-
+!not_quaff:
+
+    // Read scroll?
+    cmp #CMD_READ
+    bne !not_read+
+    jsr msg_clear
+    jsr item_read_scroll
+    bcc !read_no_turn+
+    // After teleportation or light, need visibility + render
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!read_no_turn:
+    jmp !main_loop-
+!not_read:
 
     // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
     cmp #CMD_RUN_N

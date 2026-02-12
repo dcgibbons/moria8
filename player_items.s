@@ -618,6 +618,541 @@ pre_add_ac:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
+// ============================================================
+// item_quaff — Quaff a potion from inventory
+// Prompts "QUAFF WHICH POTION (A-V)?", waits for keypress.
+// Output: carry set = turn consumed, carry clear = cancelled
+// Clobbers: everything
+// ============================================================
+item_quaff:
+    // Print prompt
+    lda #<piq_quaff_prompt
+    sta zp_ptr0
+    lda #>piq_quaff_prompt
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Wait for keypress
+    jsr input_get_key
+
+    // Check for ESC ($03) or space ($20) -> cancel
+    cmp #$03
+    beq !iq_cancel_tramp+
+    cmp #$20
+    beq !iq_cancel_tramp+
+
+    // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
+    sec
+    sbc #$41
+    bcc !iq_cancel_tramp+
+    cmp #MAX_INV_SLOTS
+    bcc !iq_in_range+
+!iq_cancel_tramp:
+    jmp !iq_cancel+
+!iq_in_range:
+    sta piw_slot
+
+    // Check slot occupied
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !iq_has_item+
+
+    lda #<piw_nothing_str
+    sta zp_ptr0
+    lda #>piw_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!iq_has_item:
+    sta piw_item_id
+
+    // Check it's a potion
+    tax
+    lda it_category,x
+    cmp #ICAT_POTION
+    beq !iq_is_potion+
+
+    lda #<piq_not_potion_str
+    sta zp_ptr0
+    lda #>piq_not_potion_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!iq_is_potion:
+    // Identify this potion type
+    ldx piw_item_id
+    lda #1
+    sta id_known,x
+
+    // Remove from inventory
+    ldx piw_slot
+    jsr inv_remove_item
+
+    // Apply effect based on item type
+    lda piw_item_id
+    cmp #17                         // Cure Light Wounds
+    beq !iq_cure+
+    cmp #18                         // Speed
+    beq !iq_speed+
+    cmp #19                         // Poison
+    beq !iq_poison+
+    jmp !iq_generic_msg+            // Shouldn't happen
+
+!iq_cure:
+    // Heal rng(8) + 4 HP
+    lda #8
+    jsr rng_range                   // [0, 7]
+    clc
+    adc #4                          // [4, 11]
+    sta piw_qty                     // Reuse as heal amount
+
+    // Add to player HP (16-bit)
+    lda zp_player_hp_lo
+    clc
+    adc piw_qty
+    sta zp_player_hp_lo
+    lda zp_player_hp_hi
+    adc #0
+    sta zp_player_hp_hi
+
+    // Cap at max HP
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bcc !iq_hp_ok+
+    bne !iq_hp_clamp+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bcc !iq_hp_ok+
+    beq !iq_hp_ok+
+!iq_hp_clamp:
+    lda zp_player_mhp_lo
+    sta zp_player_hp_lo
+    lda zp_player_mhp_hi
+    sta zp_player_hp_hi
+!iq_hp_ok:
+
+    // Sync to player_data
+    lda zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    lda #<piq_feel_better_str
+    sta zp_ptr0
+    lda #>piq_feel_better_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!iq_speed:
+    // Set speed effect timer: rng(20) + 10
+    lda #20
+    jsr rng_range                   // [0, 19]
+    clc
+    adc #10                         // [10, 29]
+    // Add to existing timer (stacks)
+    clc
+    adc zp_eff_speed
+    bcc !iq_speed_ok+
+    lda #255                        // Cap at 255
+!iq_speed_ok:
+    sta zp_eff_speed
+
+    lda #<piq_speed_str
+    sta zp_ptr0
+    lda #>piq_speed_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!iq_poison:
+    // Deal rng(6) + 3 damage
+    lda #6
+    jsr rng_range                   // [0, 5]
+    clc
+    adc #3                          // [3, 8]
+    sta piw_qty                     // Reuse as damage
+
+    // Subtract from HP (16-bit)
+    lda zp_player_hp_lo
+    sec
+    sbc piw_qty
+    sta zp_player_hp_lo
+    lda zp_player_hp_hi
+    sbc #0
+    sta zp_player_hp_hi
+
+    // Check for death (HP <= 0)
+    bmi !iq_poison_death+
+    bne !iq_poison_alive+
+    lda zp_player_hp_lo
+    bne !iq_poison_alive+
+!iq_poison_death:
+    lda #0
+    sta zp_player_hp_lo
+    sta zp_player_hp_hi
+    lda zp_game_flags
+    ora #$01                        // GF_DEAD
+    sta zp_game_flags
+
+!iq_poison_alive:
+    // Sync to player_data
+    lda zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Set poison timer: rng(10) + 5
+    lda #10
+    jsr rng_range
+    clc
+    adc #5
+    clc
+    adc zp_eff_poison               // Stack with existing
+    bcc !iq_poi_ok+
+    lda #255
+!iq_poi_ok:
+    sta zp_eff_poison
+
+    lda #<piq_terrible_str
+    sta zp_ptr0
+    lda #>piq_terrible_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!iq_generic_msg:
+    lda #<piq_nothing_str
+    sta zp_ptr0
+    lda #>piq_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_cancel:
+    lda #<piw_nevermind_str
+    sta zp_ptr0
+    lda #>piw_nevermind_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+// ============================================================
+// item_read_scroll — Read a scroll from inventory
+// Prompts "READ WHICH SCROLL (A-V)?", waits for keypress.
+// Output: carry set = turn consumed, carry clear = cancelled
+// Clobbers: everything
+// ============================================================
+irs_target_slot: .byte 0           // Target slot for Identify scroll
+
+item_read_scroll:
+    // Print prompt
+    lda #<piq_read_prompt
+    sta zp_ptr0
+    lda #>piq_read_prompt
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Wait for keypress
+    jsr input_get_key
+
+    // Check for ESC or space -> cancel
+    cmp #$03
+    beq !irs_cancel_tramp+
+    cmp #$20
+    beq !irs_cancel_tramp+
+
+    // Convert PETSCII letter to slot index
+    sec
+    sbc #$41
+    bcc !irs_cancel_tramp+
+    cmp #MAX_INV_SLOTS
+    bcc !irs_in_range+
+!irs_cancel_tramp:
+    jmp !irs_cancel+
+!irs_in_range:
+    sta piw_slot
+
+    // Check slot occupied
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !irs_has_item+
+
+    lda #<piw_nothing_str
+    sta zp_ptr0
+    lda #>piw_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!irs_has_item:
+    sta piw_item_id
+
+    // Check it's a scroll
+    tax
+    lda it_category,x
+    cmp #ICAT_SCROLL
+    beq !irs_is_scroll+
+
+    lda #<piq_not_scroll_str
+    sta zp_ptr0
+    lda #>piq_not_scroll_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!irs_is_scroll:
+    // Identify this scroll type
+    ldx piw_item_id
+    lda #1
+    sta id_known,x
+
+    // Remove from inventory
+    ldx piw_slot
+    jsr inv_remove_item
+
+    // Apply effect based on item type
+    lda piw_item_id
+    cmp #20                         // Light
+    beq !irs_light+
+    cmp #21                         // Identify
+    bne !irs_not_identify+
+    jmp !irs_identify+
+!irs_not_identify:
+    cmp #22                         // Teleportation
+    bne !irs_not_teleport+
+    jmp !irs_teleport+
+!irs_not_teleport:
+    jmp !irs_generic_msg+
+
+!irs_light:
+    // Light the room the player is in
+    // Scan rooms for player position (same bounds check as LOS)
+    lda #0
+    sta piw_qty                     // Reuse as room loop index
+
+!irs_light_loop:
+    ldx piw_qty
+    cpx room_count
+    bcs !irs_light_corridor+        // Player not in any room
+
+    // Check bounds: player_x in [room_x-1, room_x+room_w]
+    lda room_x,x
+    sec
+    sbc #1
+    cmp zp_player_x
+    beq !irs_lx_ok+
+    bcs !irs_light_next+
+!irs_lx_ok:
+    lda room_x,x
+    clc
+    adc room_w,x
+    cmp zp_player_x
+    bcc !irs_light_next+
+
+    // Check bounds: player_y in [room_y-1, room_y+room_h]
+    lda room_y,x
+    sec
+    sbc #1
+    cmp zp_player_y
+    beq !irs_ly_ok+
+    bcs !irs_light_next+
+!irs_ly_ok:
+    lda room_y,x
+    clc
+    adc room_h,x
+    cmp zp_player_y
+    bcc !irs_light_next+
+
+    // Player is in room X — light it
+    lda #1
+    sta room_lit,x
+    sta vis_room_revealed           // Trigger full redraw
+    jmp !irs_light_msg+
+
+!irs_light_next:
+    inc piw_qty
+    jmp !irs_light_loop-
+
+!irs_light_corridor:
+    // In corridor — just set vis_room_revealed for redraw
+    lda #1
+    sta vis_room_revealed
+
+!irs_light_msg:
+    lda #<piq_light_str
+    sta zp_ptr0
+    lda #>piq_light_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!irs_identify:
+    // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
+    lda #<piq_identify_prompt
+    sta zp_ptr0
+    lda #>piq_identify_prompt
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    jsr input_get_key
+
+    // Cancel check
+    cmp #$03
+    beq !irs_id_cancel+
+    cmp #$20
+    beq !irs_id_cancel+
+
+    // Convert to slot
+    sec
+    sbc #$41
+    bcc !irs_id_cancel+
+    cmp #MAX_INV_SLOTS
+    bcs !irs_id_cancel+
+
+    sta irs_target_slot
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !irs_id_cancel+
+
+    // Identify that item type
+    tax
+    lda #1
+    sta id_known,x
+
+    // Set IF_IDENTIFIED on the item instance
+    ldx irs_target_slot
+    lda inv_flags,x
+    ora #IF_IDENTIFIED
+    sta inv_flags,x
+
+    // Build message: "THIS IS A <real name>."
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<piq_thisis_str
+    ldy #>piq_thisis_str
+    jsr combat_append_str
+
+    ldx irs_target_slot
+    lda inv_item_id,x
+    tax
+    lda it_name_lo,x                // Always real name (type is now known)
+    ldy it_name_hi,x
+    jsr combat_append_str
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!irs_id_cancel:
+    // Scroll already consumed — just print generic message
+    lda #<piq_nothing_str
+    sta zp_ptr0
+    lda #>piq_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_teleport:
+    // Teleport player to random floor tile
+    jsr find_random_floor
+
+    // Clear FLAG_OCCUPIED at old position
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    and #~FLAG_OCCUPIED & $ff
+    sta (zp_ptr0),y
+
+    // Move player
+    lda df_target_x
+    sta zp_player_x
+    lda df_target_y
+    sta zp_player_y
+
+    // Set FLAG_OCCUPIED at new position
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    ora #FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    // Trigger full visibility update and redraw
+    lda #1
+    sta vis_room_revealed
+
+    lda #<piq_teleport_str
+    sta zp_ptr0
+    lda #>piq_teleport_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    sec
+    rts
+
+!irs_generic_msg:
+    lda #<piq_nothing_str
+    sta zp_ptr0
+    lda #>piq_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_cancel:
+    lda #<piw_nevermind_str
+    sta zp_ptr0
+    lda #>piw_nevermind_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+// ============================================================
+// String data (screen codes via inherited encoding)
+// ============================================================
 piw_wear_prompt:    .text "WEAR WHICH ITEM (A-V)?" ; .byte 0
 piw_takeoff_prompt: .text "TAKE OFF WHICH ITEM (A-H)?" ; .byte 0
 piw_nothing_str:    .text "YOU HAVE NOTHING THERE." ; .byte 0
@@ -631,3 +1166,17 @@ piw_takeoff_str:    .text "YOU TAKE OFF THE " ; .byte 0
 piw_eat_str:        .text "YOU EAT THE " ; .byte 0
 piw_delicious_str:  .text ". DELICIOUS!" ; .byte 0
 piw_yuck_str:       .text ". YUCK!" ; .byte 0
+
+// Quaff/Read strings
+piq_quaff_prompt:   .text "QUAFF WHICH POTION (A-V)?" ; .byte 0
+piq_read_prompt:    .text "READ WHICH SCROLL (A-V)?" ; .byte 0
+piq_not_potion_str: .text "THAT IS NOT A POTION." ; .byte 0
+piq_not_scroll_str: .text "THAT IS NOT A SCROLL." ; .byte 0
+piq_feel_better_str:.text "YOU FEEL BETTER." ; .byte 0
+piq_speed_str:      .text "YOU FEEL YOURSELF MOVING FASTER." ; .byte 0
+piq_terrible_str:   .text "THAT TASTED TERRIBLE!" ; .byte 0
+piq_nothing_str:    .text "NOTHING SEEMS TO HAPPEN." ; .byte 0
+piq_light_str:      .text "THE AREA FILLS WITH LIGHT." ; .byte 0
+piq_identify_prompt:.text "IDENTIFY WHICH ITEM (A-V)?" ; .byte 0
+piq_thisis_str:     .text "THIS IS A " ; .byte 0
+piq_teleport_str:   .text "YOU FEEL DISORIENTED." ; .byte 0

@@ -78,14 +78,10 @@ ui_inv_display:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name
+    // Item name (identification-aware)
     ldx uinv_slot
     lda inv_item_id,x
-    tax
-    lda it_name_lo,x
-    sta zp_ptr0
-    lda it_name_hi,x
-    sta zp_ptr0_hi
+    jsr item_get_name_ptr           // zp_ptr0 = name string
     jsr screen_put_string
 
     inc uinv_row
@@ -191,15 +187,11 @@ ui_equip_display:
     cmp #FI_EMPTY
     beq !ueq_none+
 
-    // Print item name
+    // Print item name (identification-aware)
     lda #COL_WHITE
     sta zp_text_color
     lda inv_item_id,x
-    tax
-    lda it_name_lo,x
-    sta zp_ptr0
-    lda it_name_hi,x
-    sta zp_ptr0_hi
+    jsr item_get_name_ptr           // zp_ptr0 = name string
     jsr screen_put_string
     jmp !ueq_next+
 

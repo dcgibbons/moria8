@@ -247,7 +247,8 @@ render_viewport:
     tax
     lda it_display,x
     sta zp_temp0
-    lda it_color,x
+    txa                             // A = item type ID
+    jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp1
 !rv_no_item:
 
@@ -515,7 +516,8 @@ render_single_tile:
     tax
     lda it_display,x
     sta zp_temp3
-    lda it_color,x
+    txa                             // A = item type ID
+    jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp4
 !rst_no_item:
 
