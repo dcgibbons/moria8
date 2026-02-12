@@ -931,7 +931,13 @@ mage_effect_dispatch:
     lda (zp_ptr0),y
     sbc zp_math_b
     sta (zp_ptr0),y
-    bpl !med_rts+
+    bmi !med_0_dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !med_rts+               // Still alive (HP > 0)
+!med_0_dead:
     ldx zp_temp2
     jsr eff_kill_monster
 !med_rts:

@@ -395,6 +395,10 @@ stat_bonus_index:
     ldx #15                 // 18/xx → use same bonus as stat 18
     rts
 !normal:
+    cmp #3
+    bcs !above_min+
+    lda #3                  // Clamp stat minimum to 3
+!above_min:
     sec
     sbc #3                  // index = stat - 3
     tax

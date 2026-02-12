@@ -372,36 +372,8 @@ eff_phase_door:
     bne !epd_loop-
 
 !epd_ok:
-    // Move player to new position (reuse eff_teleport_self logic)
-    // Clear FLAG_OCCUPIED at old position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    lda (zp_ptr0),y
-    and #~FLAG_OCCUPIED & $ff
-    sta (zp_ptr0),y
-
-    lda df_target_x
-    sta zp_player_x
-    lda df_target_y
-    sta zp_player_y
-
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    lda (zp_ptr0),y
-    ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
-
-    lda #1
-    sta vis_room_revealed
-    rts
+    // Move player (df_target_x/y already set by find_random_floor)
+    jmp eff_teleport_self
 
 // ============================================================
 // eff_find_traps — Reveal all hidden traps in LOS range
@@ -631,7 +603,9 @@ eff_bolt:
 
 !eb_trace:
     dec eff_bolt_steps
-    beq !eb_fizzle+
+    bne !eb_has_steps+
+    jmp !eb_fizzle+
+!eb_has_steps:
 
     // Step in direction
     ldx eff_bolt_dir
@@ -646,15 +620,18 @@ eff_bolt:
 
     // Bounds check
     lda eff_bolt_cx
-    beq !eb_fizzle+
+    beq !eb_oob+
     cmp #MAP_COLS - 1
-    bcs !eb_fizzle+
+    bcs !eb_oob+
     lda eff_bolt_cy
-    beq !eb_fizzle+
+    beq !eb_oob+
     cmp #MAP_ROWS - 1
-    bcs !eb_fizzle+
+    bcc !eb_bounds_ok+
+!eb_oob:
+    jmp !eb_fizzle+
+!eb_bounds_ok:
 
-    // Read map tile
+    // Read map tile — use walkable_table to determine passability
     ldx eff_bolt_cy
     lda map_row_lo,x
     sta zp_ptr0
@@ -663,12 +640,14 @@ eff_bolt:
     ldy eff_bolt_cx
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_FLOOR
-    beq !eb_check_mon+
-    cmp #TILE_DOOR_OPEN
-    beq !eb_check_mon+
-    // Hit a wall or other obstacle
-    jmp !eb_fizzle+
+    lsr
+    lsr
+    lsr
+    lsr                             // Tile type index 0-15
+    tax
+    lda walkable_table,x
+    bne !eb_check_mon+
+    jmp !eb_fizzle+                 // Blocked tile
 
 !eb_check_mon:
     // Check for monster at this position
@@ -698,9 +677,14 @@ eff_bolt:
     sbc zp_math_b
     sta (zp_ptr0),y
 
-    // Check if dead (HP < 0)
-    bpl !eb_fizzle+             // Still alive
-
+    // Check if dead (HP <= 0)
+    bmi !eb_dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !eb_fizzle+             // Still alive (HP > 0)
+!eb_dead:
     // Monster killed — award XP and remove
     ldx zp_temp2
     jsr eff_kill_monster
@@ -762,8 +746,13 @@ eff_damage_adjacent:
     sbc zp_math_b
     sta (zp_ptr0),y
 
-    bpl !eda_next+
-
+    bmi !eda_dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !eda_next+              // Still alive (HP > 0)
+!eda_dead:
     // Monster killed
     ldx zp_temp2
     jsr eff_kill_monster
@@ -862,8 +851,59 @@ eff_destroy_traps_doors:
     jmp !edtd_loop-
 
 !edtd_done:
-    // Also remove hidden traps from trap table at adjacent positions
-    // (simplified: clear the whole trap table since most are revealed)
+    // Remove matching traps from trap table for all 8 adjacent positions
+    lda #0
+    sta eff_dtd_dir              // Reuse as direction counter
+
+!edtd_trap_dir:
+    lda eff_dtd_dir
+    cmp #8
+    bcs !edtd_trap_done+
+
+    // Compute adjacent position for this direction
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta df_target_y
+
+    // Scan trap table for match
+    ldx #0
+!edtd_scan:
+    cpx trap_count
+    bcs !edtd_scan_done+
+
+    lda trap_x,x
+    cmp df_target_x
+    bne !edtd_scan_next+
+    lda trap_y,x
+    cmp df_target_y
+    bne !edtd_scan_next+
+
+    // Match — swap with last entry, decrement count
+    dec trap_count
+    ldy trap_count
+    lda trap_x,y
+    sta trap_x,x
+    lda trap_y,y
+    sta trap_y,x
+    lda trap_type,y
+    sta trap_type,x
+    jmp !edtd_scan-             // Re-check this index (swapped entry)
+
+!edtd_scan_next:
+    inx
+    jmp !edtd_scan-
+
+!edtd_scan_done:
+    inc eff_dtd_dir
+    jmp !edtd_trap_dir-
+
+!edtd_trap_done:
     lda #1
     sta vis_room_revealed
     rts
@@ -915,31 +955,13 @@ eff_wall_to_mud:
 eff_kill_monster:
     stx zp_temp2                    // Save slot
 
-    // Get monster type
+    // Get monster type for XP award
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     sta cmb_type                    // Set cmb_type for combat_award_xp
 
-    // Clear FLAG_OCCUPIED at monster position
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    tax
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-
-    ldx zp_temp2
-    jsr monster_get_ptr
-    ldy #MX_X
-    lda (zp_ptr0),y
-    tay
-    lda (zp_ptr1),y
-    and #~FLAG_OCCUPIED & $ff
-    sta (zp_ptr1),y
-
-    // Remove monster from active list
+    // Remove monster from active list (clears FLAG_OCCUPIED + slot)
     ldx zp_temp2
     jsr monster_remove
 
@@ -998,9 +1020,14 @@ eff_dispel_undead:
     sbc zp_math_b
     sta (zp_ptr0),y
 
-    // Check if dead (HP < 0)
-    bpl !edu_next+
-
+    // Check if dead (HP <= 0)
+    bmi !edu_dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !edu_next+              // Still alive (HP > 0)
+!edu_dead:
     // Monster killed
     ldx eff_du_idx
     jsr eff_kill_monster
@@ -1010,4 +1037,27 @@ eff_dispel_undead:
     jmp !edu_loop-
 
 !edu_done:
+    rts
+
+// ============================================================
+// eff_aggravate — Wake all monsters (clear sleep timer)
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_aggravate:
+    ldx #0
+!eag_loop:
+    cpx #MAX_MONSTERS
+    bcs !eag_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !eag_next+
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y             // Clear sleep
+!eag_next:
+    inx
+    jmp !eag_loop-
+!eag_done:
     rts
