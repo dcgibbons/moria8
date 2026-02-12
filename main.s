@@ -659,6 +659,48 @@ entry:
     jmp !main_loop-
 !not_read:
 
+    // Aim wand?
+    cmp #CMD_AIM
+    bne !not_aim+
+    jsr msg_clear
+    jsr item_aim_wand
+    bcc !aim_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!aim_no_turn:
+    jmp !main_loop-
+!not_aim:
+
+    // Use staff?
+    cmp #CMD_USE
+    bne !not_use+
+    jsr msg_clear
+    jsr item_use_staff
+    bcc !use_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!use_no_turn:
+    jmp !main_loop-
+!not_use:
+
     // Cast spell?
     cmp #CMD_CAST
     bne !not_cast+

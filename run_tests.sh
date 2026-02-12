@@ -99,7 +99,7 @@ run_test "monster_ai" "tests/test_monster_ai.s" "0400 0409" 10 500000000
 run_test "combat" "tests/test_combat.s" "0400 0409" 10 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0409" 10 500000000
 run_test "effects" "tests/test_effects.s" "0400 0409" 10 500000000
-run_test "item" "tests/test_item.s" "0400 0425" 38 1000000000
+run_test "item" "tests/test_item.s" "0400 042f" 46 1000000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

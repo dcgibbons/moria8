@@ -2632,12 +2632,12 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.7 — Wands and Staves
+#### Step 7.7 — Wands and Staves ✅ IMPLEMENTED
 
 **Goal:** Implement wand aiming and staff usage with charge tracking.
 
-**Files:** `player_items.s` (new `item_aim_wand`, `item_use_staff`), `main.s`
-(dispatch), `item.s` (SoA entries)
+**Files modified:** `item.s`, `player_items.s`, `main.s`, `tests/test_item.s`,
+`run_tests.sh`
 
 **Charge tracking:** Use `inv_p1` as charge count (already exists per inventory
 slot). When item is spawned, set p1 to initial charge count. Each use decrements
@@ -2708,11 +2708,45 @@ descriptors): "IRON", "COPPER", "SILVER", "BONE", "OAK". For staves:
 5. Add CMD_AIM + CMD_USE dispatch in `main.s`.
 6. Update spawn tables to include wands/staves.
 
-**Tests:**
-- Runtime: Aim Wand of Lightning at monster → verify damage applied, charges decremented.
-- Runtime: Aim Wand with 0 charges → verify "NO CHARGES" message, no turn consumed.
-- Runtime: Use Staff of Teleportation → verify player moved, charges decremented.
-- Runtime: Verify wand/staff identification on first use.
+**Tests (8 new, tests 39-46):**
+- Test 39: Verify it_category[39]==ICAT_WAND, [42]==ICAT_WAND, [43]==ICAT_STAFF, [46]==ICAT_STAFF.
+- Test 40: roll_enchantment(40) returns wand charges in [5,8].
+- Test 41: roll_enchantment(44) returns staff charges in [3,8].
+- Test 42: roll_enchantment(39) returns Wand of Light charges in [10,15].
+- Test 43: item_aim_wand with 0 charges → carry clear (no turn consumed).
+- Test 44: item_aim_wand with charges → charges decremented, item preserved.
+- Test 45: item_aim_wand auto-identifies wand type (id_known[39]=1).
+- Test 46: item_use_staff (Staff of CLW) heals HP and decrements charges.
+
+**Implementation details:**
+- ITEM_TYPE_COUNT: 39 → 47 (8 new types, IDs 39-46).
+- Added ICAT_WAND=14, ICAT_STAFF=15 category constants.
+- Extended all 13 SoA arrays (it_category through id_known) with 8 entries.
+- Identification: 5 wand descriptors (iron/copper/silver/bone/oak), 5 staff
+  descriptors (birch/pine/maple/willow/ash), Fisher-Yates shuffled at init.
+- Wand display char: '-' ($2d). Staff display char: '/' ($2f).
+- equip_slot_for_cat extended with 2× $ff (wands/staves not equippable).
+- item_wear range check updated from 14 to 16.
+- pick_item_type range: [2,38] → [2,46].
+- Charge ranges: Wand of Light [10,15], other wands [5,8], Staff of Light
+  [10,15], Staff of Teleportation [3,5], other staves [3,8].
+- Wand effects call eff_bolt/eff_directional_monster (direction prompted
+  internally by those subroutines).
+- Staff of CLW uses math_dice(1,8,1) → eff_heal.
+- Both item_aim_wand and item_use_staff auto-identify on use.
+- CMD_AIM and CMD_USE dispatch added in main.s after !not_read.
+
+**Shared subroutines reused from `spell_effects.s`:**
+- `eff_light_room` (line 64) — light current room
+- `eff_bolt` (line 559) — directional bolt (A=dice, X=sides)
+- `eff_directional_monster` (line 773) — find monster in direction
+- `eff_detect_monsters` (line 264) — reveal monsters on map
+- `eff_teleport_self` (line 123) — teleport player
+- `eff_heal` (line 28) — heal HP by amount in A
+
+**Verification:**
+- `make build` → 56 asserts, 0 failed ✅
+- `make test` → 12/12 suites pass (item: 46/46 tests) ✅
 
 ---
 
