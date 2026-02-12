@@ -1977,6 +1977,42 @@ status should be updated to Resolved.
 
 ---
 
+### Review Pass 12 — RP11 Fix Verification
+
+**Scope:** `player_items.s`, `tests/test_item.s`, `run_tests.sh`, `BUILDPLAN.md`
+**Reviewer:** Claude (automated)
+**Date:** 2025-02-12
+**Commit reviewed:** `b94e59e Fix Review Pass 11 findings for Step 7.6 potions/scrolls`
+
+All six RP11 fixes verified correct. No bugs found.
+
+- **RP11-1 fix (CSW heal):** `math_dice(5, 8, 5)` produces correct [10,45] range.
+  `zp_math_a` low byte (max 45) fits 8 bits. Test 33's [60,95] check now consistent.
+- **RP11-2 fix (Enchant on cursed items):** Both weapon and armor handlers check
+  `IF_CURSED` before the unsigned cap comparison. Cursed path correctly clears flag
+  via `and #~IF_CURSED & $ff`, sets p1=0, calls `player_recalc_equipment`, jumps to
+  shared `!irs_ew_msg` / `!irs_ea_msg` glow message label. Normal-increment path
+  unchanged.
+- **RP11-3 fix (New tests 39-40):** Test 39 sets p1=$FD with IF_CURSED, verifies
+  p1=0 and flag cleared. Test 40 sets p1=5, verifies no increment past cap. Copy
+  loop `ldx #39` (40 bytes) and run_tests.sh `"0400 0427" 40` both correct.
+- **RP11-4/5/6 (Comments and status updates):** Infrastructure NOTE comments and
+  WoR overwrite comment all correctly placed.
+
+#### RP12-1 (LOW): Armor enchant cursed/cap paths lack dedicated tests
+
+Tests 39-40 only cover the **weapon** enchant path. The armor handlers
+(`!irs_ea_has` cursed branch and cap check) are structurally identical but untested.
+Adding tests 41-42 mirroring tests 39-40 for EQUIP_BODY would complete coverage.
+
+#### Summary of Review Pass 12 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP12-1 | LOW | Armor enchant cursed/cap paths untested (weapon-only coverage) | Easy — mirror tests 39-40 for EQUIP_BODY | Open |
+
+---
+
 ## Phase 7 — Magic System: Detailed Implementation Plan
 
 ### Current State Summary
