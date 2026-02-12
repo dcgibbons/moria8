@@ -1481,3 +1481,98 @@ for rng_range's [0,N-1] vs randomNumber's [1,N]). Update level-1 special case fr
 | RP8-1 | **MEDIUM** | Poltergeist speed=1, should be 2 | Trivial — 1 byte |
 | RP8-2 | LOW | Paralysis zeroes damage (no practical impact) | Trivial — remove 2 lines |
 | RP8-3 | LOW | Paralysis timer +1 should be +4 | Trivial — change 2 constants |
+
+### Review Pass 9 — Post-RP8-Fix + Phase 6.5 Review (2026-02-11)
+
+Verified RP8 fixes (commit `d63dc07`) and reviewed Phase 6.5 item identification system
+(commit `d1788f4`). RP8 fixes confirmed correct with one residual off-by-one. Phase 6.5
+identification system (Fisher-Yates shuffle, name/color resolution, quaff, read scroll,
+inventory/render integration) is well-structured and correct. Found 3 issues.
+
+#### RP8 fix verification results
+
+| # | Finding | Status |
+|---|---------|--------|
+| RP8-1 | Poltergeist speed wrong | **FIXED** — `cr_speed[13]` changed from 1 to 2 (monster.s:97). Correct. |
+| RP8-2 | Paralysis zeroes damage | **FIXED** — `lda #0; sta zp_combat_dmg` removed from `!maed_paralyze` (monster_attack.s:355). Full dice damage passes through. |
+| RP8-3 | Paralysis timer offset wrong | **PARTIALLY FIXED** — General formula changed from `+1` to `+4`. Correct for level >= 2. However, **level-1 special case hardcodes 5 instead of 4** — see RP9-1. |
+
+#### Phase 6.5 items verified correct
+
+1. **Fisher-Yates shuffle** (item.s:1283-1370) — Correct implementation. Loop from i=N-1 down
+   to 1, pick j in [0, i] via `rng_range(i+1)`, swap. X saved/restored around `rng_range` call.
+   5 potion descriptors, 5 scroll descriptors, 4 ring descriptors — more descriptors than item
+   types ensures unique assignments.
+
+2. **`item_get_name_ptr`** (item.s:1382-1445) — Correctly maps type → id_known check → local
+   index (subtract category base) → shuffle table → name pointer. Returns real name for known
+   types, randomized description for unknown.
+
+3. **`item_get_floor_color`** (item.s:1453-1500) — Same pattern as name resolution. Clobbers X
+   (documented), verified safe in both render_viewport (dungeon_render.s:250-252) and
+   render_single_tile (dungeon_render.s:519-521) — X not needed after color stored.
+
+4. **Flag preservation on pickup** (item.s:886-887, 451) — `fi_flags,x → fi_add_flags →
+   inv_flags,x` chain correctly preserves IF_CURSED through pickup. Test 30 validates.
+
+5. **Quaff effects** (player_items.s) — Cure Light Wounds HP cap (16-bit comparison handles all
+   cases), Speed timer stacking with 255 cap, Poison damage+death+timer stacking all correct.
+
+6. **Scroll effects** (player_items.s) — Light room bounds check correct, Identify scroll
+   consumes before second prompt (matches classic Moria), Teleport clears/sets FLAG_OCCUPIED.
+
+7. **Inventory/render integration** — `ui_inv_display`, `ui_equip_display`, `item_append_name`,
+   and both render functions all correctly delegate to `item_get_name_ptr`/`item_get_floor_color`.
+
+#### RP9-1: Paralysis timer off-by-one for level 1 — LOW
+
+Residual from RP8-3 fix. The general formula `rng_range(level) + 4` gives [4, level+3], correctly
+matching umoria's `randomNumber(level) + 3` = [4, level+3]. But the level-1 special case
+(monster_attack.s:504) hardcodes 5:
+
+```
+lda #5                      // Level 1: 0 + 4 + 1 = 5
+```
+
+The comment's arithmetic "0 + 4 + 1 = 5" is wrong — there's no "+1" in the formula. For level 1,
+`rng_range(1)` always returns 0, so the result should be `0 + 4 = 4`. umoria confirms:
+`randomNumber(1) + 3 = 1 + 3 = 4`.
+
+The special case is also unnecessary — `rng_range(1)` safely returns 0, so the general path
+would give the correct result for level 1.
+
+**Practical impact:** Floating Eye paralysis lasts 5 turns instead of 4. Minor balance difference.
+
+**Fix:** Remove the level-1 special case entirely, or change `lda #5` to `lda #4`.
+
+#### RP9-2: `item_drop` doesn't preserve flags — MEDIUM
+
+`item_drop` (item.s:982-994) copies `inv_item_id`, `inv_qty`, and `inv_p1` to `fi_add_*`
+variables before calling `floor_item_add`, but does NOT copy `inv_flags` to `fi_add_flags`.
+Since `floor_item_add` always writes 0 to `fi_flags,x` (item.s:311), a drop+pickup round-trip
+loses IF_CURSED (and IF_IDENTIFIED).
+
+This means a player could uncurse an item by dropping and picking it back up.
+
+**Fix:** Add `lda inv_flags,x` / `sta fi_add_flags` in `item_drop` before the `floor_item_add`
+call, then post-hoc set `fi_flags,x` from `fi_add_flags` after `floor_item_add` succeeds
+(same pattern used in `item_spawn_level` at item.s:664-667).
+
+#### RP9-3: `floor_item_add` ignores `fi_add_flags` — LOW (design debt)
+
+Root cause of RP9-2. `floor_item_add` (item.s:311) unconditionally writes `lda #0; sta fi_flags,x`
+instead of copying `fi_add_flags`. Every caller must remember to post-hoc patch `fi_flags,x`
+after the call — currently `item_spawn_level` does this (item.s:664-667 and 766-768) but
+`item_drop` does not.
+
+**Fix (optional cleanup):** Change `floor_item_add` to copy `fi_add_flags` instead of hardcoding
+0. This would eliminate the need for post-hoc patching in callers, making the API less error-prone.
+If done, also update the function's input comment to document `fi_add_flags`.
+
+#### Summary of Review Pass 9 findings
+
+| # | Severity | Issue | Fix complexity |
+|---|----------|-------|----------------|
+| RP9-1 | LOW | Paralysis timer level-1 special case: 5 should be 4 | Trivial — change 1 constant or remove special case |
+| RP9-2 | **MEDIUM** | `item_drop` loses IF_CURSED/IF_IDENTIFIED flags | Easy — add 2 lines + post-hoc patch (4 lines) |
+| RP9-3 | LOW | `floor_item_add` ignores `fi_add_flags` (design debt) | Easy — change 1 line in `floor_item_add`, remove post-hoc patches |
