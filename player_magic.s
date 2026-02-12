@@ -166,6 +166,7 @@ pm_do_cast:
     lda #16
     jsr rng_range                    // A = random [0, 15]
     sta pm_spell_idx
+    jmp !pm_known+                   // Skip known check when confused
 !pm_not_confused:
 
     // Check if spell is known
@@ -223,6 +224,10 @@ pm_do_cast:
     rts
 
 !pm_mana_ok:
+    // Confused? Skip level check (umoria behavior)
+    lda zp_eff_confuse
+    bne !pm_lvl_ok+
+
     // Check minimum level
     lda pm_lvl_tbl_lo
     sta zp_ptr0

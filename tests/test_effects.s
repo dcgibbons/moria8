@@ -55,7 +55,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 18, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 21, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
@@ -899,14 +899,222 @@ test_start:
     bcs !t18_fail+
     lda #$01
     sta tc_results + 17
-    jmp !tests_done+
+    jmp !t19+
 !t18_fail:
     lda #$00
     sta tc_results + 17
 
+    // ==========================================
+    // Test 19: Confused casting bypasses known/level checks
+    // Set confusion, all 16 spells known, mana=50, mage, level 1
+    // Stuff keyboard 'A' → pm_do_cast should cast (mana decreases)
+    // ==========================================
+!t19:
+    // Refill keyboard buffer for spell list display + -more- prompts
+    lda #8
+    sta $c6
+    lda #$41                         // 'A' to select spell
+    sta $0277
+    lda #$20                         // Spaces for -more- prompts
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    // Clear death flag, clear blindness
+    lda #0
+    sta zp_game_flags
+    sta zp_eff_blind
+
+    // Set up as mage with all 16 spells known
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    sta player_data + PL_SPELL_TYPE
+    lda #$ff
+    sta player_data + PL_SPELLS_KNOWN
+    sta player_data + PL_SPELLS_KNOWN_HI
+
+    // Set up mage table pointers
+    lda #<mage_spell_mana
+    sta pm_mana_tbl_lo
+    lda #>mage_spell_mana
+    sta pm_mana_tbl_hi
+    lda #<mage_spell_level
+    sta pm_lvl_tbl_lo
+    lda #>mage_spell_level
+    sta pm_lvl_tbl_hi
+    lda #<mage_spell_fail
+    sta pm_fail_tbl_lo
+    lda #>mage_spell_fail
+    sta pm_fail_tbl_hi
+    lda #<mage_spell_name_lo
+    sta pm_name_lo_lo
+    lda #>mage_spell_name_lo
+    sta pm_name_lo_hi
+    lda #<mage_spell_name_hi
+    sta pm_name_hi_lo
+    lda #>mage_spell_name_hi
+    sta pm_name_hi_hi
+
+    // Mana=50, level=1, confusion active
+    lda #50
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    lda #50
+    sta zp_player_mmp
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #10
+    sta zp_eff_confuse
+    lda #18
+    sta player_data + PL_INT_CUR
+
+    // HP high so monster effects don't kill
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    jsr pm_do_cast
+
+    // Mana should have decreased (any random spell costs >= 1)
+    lda zp_player_mp
+    cmp #50
+    bcs !t19_fail+                   // Mana didn't decrease → bug
+    lda #$01
+    sta tc_results + 18
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // ==========================================
+    // Test 20: Extra regen on odd turn increases mana
+    // Set zp_eff_regen=5, zp_turn_lo=1 (odd), mage MP=5/20
+    // Extra regen bypasses even-turn check → MP should become 6
+    // ==========================================
+!t20:
+    // Clear all effects
+    lda #0
+    sta zp_eff_poison
+    sta zp_eff_blind
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    sta zp_eff_speed
+    sta zp_eff_protect
+    sta zp_eff_invis
+    sta zp_eff_infra
+    sta zp_eff_bless
+    sta zp_eff_hero
+    sta zp_eff_word_recall
+    sta zp_game_flags
+
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #5
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_eff_regen                 // Extra regen active!
+    lda #20
+    sta zp_player_mmp
+    lda #1
+    sta zp_turn_lo                   // Odd turn
+
+    jsr turn_tick_effects
+
+    lda zp_player_mp
+    cmp #6
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp !t21+
+!t20_fail:
+    lda #$00
+    sta tc_results + 19
+
+    // ==========================================
+    // Test 21: Word of Recall fizzle (town, never visited dungeon)
+    // Set dlvl=0, PL_MAX_DLVL=0, recall timer=1 → fizzle, dlvl stays 0
+    // ==========================================
+!t21:
+    // Refill keyboard buffer for -more- prompts
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    // Clear all effects except recall
+    lda #0
+    sta zp_eff_poison
+    sta zp_eff_blind
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    sta zp_eff_speed
+    sta zp_eff_protect
+    sta zp_eff_invis
+    sta zp_eff_infra
+    sta zp_eff_bless
+    sta zp_eff_hero
+    sta zp_eff_regen
+    sta zp_game_flags
+
+    // Set player in town, never been to dungeon
+    lda #0
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    sta player_data + PL_MAX_DLVL    // Never visited dungeon
+
+    // Set recall timer to 1 (will fire this tick)
+    lda #1
+    sta zp_eff_word_recall
+
+    // Warrior so mana regen doesn't interfere
+    lda #0
+    sta player_data + PL_SPELL_TYPE
+
+    // HP high so death check doesn't trigger
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Place player at (10,10) with floor tile
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    sta player_data + PL_MAP_X
+    sta player_data + PL_MAP_Y
+
+    jsr turn_tick_effects
+
+    // dlvl should still be 0 (recall fizzled)
+    lda zp_player_dlvl
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !tests_done+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+
 !tests_done:
     // Copy results from tc_results to $0400 (screen row 0)
-    ldx #17
+    ldx #20
 !copy_results:
     lda tc_results,x
     sta $0400,x

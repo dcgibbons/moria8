@@ -2148,12 +2148,12 @@ No issues found in this commit.
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP13-1 | **HIGH** | Confused casting blocked by known-spell and level checks (confusion is harmless) | Easy — add `jmp !pm_known+` in confused branch + confusion bypass at level check | Open |
-| RP13-2 | **MEDIUM** | BUILDPLAN says "1 per 3 turns" but code/implementation do 1 per 2 turns | Trivial — fix BUILDPLAN prose | Open |
-| RP13-3 | **MEDIUM** | PL_MAX_DLVL at offset 56, BUILDPLAN says offset 63 (PL_SPARE_63) | Trivial — update BUILDPLAN | Open |
-| RP13-4 | LOW | No test for confused casting interaction | Easy — add test with confusion + known spells | Open |
-| RP13-5 | LOW | No test for extra regen on odd turn | Trivial — same as test 11 with regen=5 and odd turn | Open |
-| RP13-6 | LOW | No test for Word of Recall fizzle (town, never visited dungeon) | Trivial — set PL_MAX_DLVL=0, verify dlvl unchanged | Open |
+| RP13-1 | **HIGH** | Confused casting blocked by known-spell and level checks (confusion is harmless) | Easy — add `jmp !pm_known+` in confused branch + confusion bypass at level check | **Fixed** |
+| RP13-2 | **MEDIUM** | BUILDPLAN says "1 per 3 turns" but code/implementation do 1 per 2 turns | Trivial — fix BUILDPLAN prose | **Fixed** |
+| RP13-3 | **MEDIUM** | PL_MAX_DLVL at offset 56, BUILDPLAN says offset 63 (PL_SPARE_63) | Trivial — update BUILDPLAN | **Fixed** |
+| RP13-4 | LOW | No test for confused casting interaction | Easy — add test with confusion + known spells | **Fixed** (test 19) |
+| RP13-5 | LOW | No test for extra regen on odd turn | Trivial — same as test 11 with regen=5 and odd turn | **Fixed** (test 20) |
+| RP13-6 | LOW | No test for Word of Recall fizzle (town, never visited dungeon) | Trivial — set PL_MAX_DLVL=0, verify dlvl unchanged | **Fixed** (test 21) |
 
 ---
 
@@ -3005,8 +3005,8 @@ teleports the player between town and dungeon.
 
 **Mana regeneration** (add to `turn_tick_effects` after HP regen):
 ```
-// Mana regen: spell-casting classes recover 1 mana per 3 turns
-// (Modified by zp_eff_regen: if active, recover 1 per 2 turns)
+// Mana regen: spell-casting classes recover 1 mana per 2 turns
+// (Modified by zp_eff_regen: if active, recover 1 every turn)
     lda player_data + PL_SPELL_TYPE
     beq !no_mana_regen+              // Warriors don't regen mana
     lda zp_player_mp
@@ -3051,8 +3051,8 @@ teleports the player between town and dungeon.
 !no_recall:
 ```
 
-**Max depth tracking:** Use `PL_SPARE_63` (player struct offset 63) to store
-`PL_MAX_DLVL`. Update when descending stairs:
+**Max depth tracking:** Use `PL_MAX_DLVL` (player struct offset 56) to store
+the deepest dungeon level reached. Update when descending stairs:
 ```
 // In main.s stairs-down handler, after incrementing zp_player_dlvl:
     lda zp_player_dlvl
@@ -3063,7 +3063,7 @@ teleports the player between town and dungeon.
 ```
 
 **Steps:**
-1. Rename `PL_SPARE_63` to `PL_MAX_DLVL` in `player.s`. Initialize to 0 in
+1. `PL_MAX_DLVL` is at offset 56 in `player.s`. Initialize to 0 in
    `player_create.s`.
 2. Add max depth tracking to stairs-down handler in `main.s`.
 3. Add mana regen block to `turn_tick_effects` in `turn.s`.
