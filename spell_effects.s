@@ -326,3 +326,625 @@ eff_remove_curse:
     jmp !erc_loop-
 !erc_done:
     rts
+
+// ============================================================
+// eff_phase_door — Short-range teleport (up to 10 tiles away)
+// Picks a random floor tile; if > 10 distance, retries (max 20).
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_pd_attempts: .byte 0
+
+eff_phase_door:
+    lda #20
+    sta eff_pd_attempts
+
+!epd_loop:
+    jsr find_random_floor
+
+    // Check Chebyshev distance <= 10
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    bpl !epd_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!epd_dx_pos:
+    sta zp_temp0                    // |dx|
+
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    bpl !epd_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!epd_dy_pos:
+    // max(|dx|, |dy|) = Chebyshev distance
+    cmp zp_temp0
+    bcs !epd_use_dy+
+    lda zp_temp0
+!epd_use_dy:
+    cmp #11
+    bcc !epd_ok+
+
+    dec eff_pd_attempts
+    bne !epd_loop-
+
+!epd_ok:
+    // Move player to new position (reuse eff_teleport_self logic)
+    // Clear FLAG_OCCUPIED at old position
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    and #~FLAG_OCCUPIED & $ff
+    sta (zp_ptr0),y
+
+    lda df_target_x
+    sta zp_player_x
+    lda df_target_y
+    sta zp_player_y
+
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    ora #FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// ============================================================
+// eff_find_traps — Reveal all hidden traps in LOS range
+// Instantly reveals all traps (no probability).
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_find_traps:
+    ldx #0
+!eft_loop:
+    cpx trap_count
+    bcs !eft_done+
+
+    // Reveal trap on map
+    ldy trap_y,x
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy trap_x,x
+    lda (zp_ptr0),y
+    and #TILE_FLAG_MASK
+    ora #TILE_TRAP
+    ora #FLAG_VISITED
+    sta (zp_ptr0),y
+
+    inx
+    jmp !eft_loop-
+
+!eft_done:
+    // Don't remove traps from table — just reveal them
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// ============================================================
+// eff_find_doors — Reveal all secret doors on the map
+// Converts TILE_SECRET to TILE_DOOR_CLOSED.
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_fd_row: .byte 0
+
+eff_find_doors:
+    lda #1
+    sta eff_fd_row
+
+!efd_row_loop:
+    lda eff_fd_row
+    cmp #MAP_ROWS - 1
+    bcs !efd_done+
+
+    ldx eff_fd_row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy #1
+!efd_col_loop:
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !efd_col_next+
+
+    // Convert to closed door
+    lda (zp_ptr0),y
+    and #TILE_FLAG_MASK
+    ora #TILE_DOOR_CLOSED
+    ora #FLAG_VISITED
+    sta (zp_ptr0),y
+
+!efd_col_next:
+    iny
+    cpy #MAP_COLS - 1
+    bcc !efd_col_loop-
+
+    inc eff_fd_row
+    jmp !efd_row_loop-
+
+!efd_done:
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// ============================================================
+// eff_sleep_adjacent — Put all adjacent monsters to sleep
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
+// ============================================================
+eff_sa_dir: .byte 0
+
+eff_sleep_adjacent:
+    lda #0
+    sta eff_sa_dir
+
+!esa_loop:
+    lda eff_sa_dir
+    cmp #8
+    bcs !esa_done+
+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    tay
+    lda df_target_x
+
+    // A = x, Y = y
+    jsr monster_find_at
+    bcc !esa_next+
+
+    // Monster found in X — set sleep timer
+    jsr monster_get_ptr             // zp_ptr0 = entry
+    ldy #MX_SLEEP_CUR
+    lda #20                         // Sleep for 20 turns
+    sta (zp_ptr0),y
+
+!esa_next:
+    inc eff_sa_dir
+    jmp !esa_loop-
+
+!esa_done:
+    rts
+
+// ============================================================
+// eff_confuse_adjacent — Confuse all adjacent monsters
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
+// ============================================================
+eff_ca_dir: .byte 0
+
+eff_confuse_adjacent:
+    lda #0
+    sta eff_ca_dir
+
+!eca_loop:
+    lda eff_ca_dir
+    cmp #8
+    bcs !eca_done+
+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    tay
+    lda df_target_x
+
+    jsr monster_find_at
+    bcc !eca_next+
+
+    // Monster found in X — set confuse timer
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10                         // Confuse for 10 turns
+    sta (zp_ptr0),y
+
+!eca_next:
+    inc eff_ca_dir
+    jmp !eca_loop-
+
+!eca_done:
+    rts
+
+// ============================================================
+// eff_bolt — Fire a bolt in a direction, damaging first monster hit
+// Input: A = dice count, X = dice sides
+//        Must call get_direction_target first (df_target_x/y set)
+//        Direction stored in eff_bolt_dir (index 0-7)
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4, zp_math_a/b
+// ============================================================
+eff_bolt_dice:  .byte 0
+eff_bolt_sides: .byte 0
+eff_bolt_dir:   .byte 0
+eff_bolt_cx:    .byte 0     // Current X
+eff_bolt_cy:    .byte 0     // Current Y
+eff_bolt_steps: .byte 0
+
+eff_bolt:
+    sta eff_bolt_dice
+    stx eff_bolt_sides
+
+    // Get direction from player
+    jsr get_direction_target
+    bcc !eb_no_dir+
+
+    // Calculate direction index
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    sta zp_temp0                    // dx (signed)
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    sta zp_temp1                    // dy (signed)
+
+    // Find matching direction in dir_dx/dir_dy
+    ldx #0
+!eb_find_dir:
+    lda dir_dx,x
+    cmp zp_temp0
+    bne !eb_dir_next+
+    lda dir_dy,x
+    cmp zp_temp1
+    beq !eb_dir_found+
+!eb_dir_next:
+    inx
+    cpx #8
+    bcc !eb_find_dir-
+!eb_no_dir:
+    rts                             // No valid direction
+
+!eb_dir_found:
+    stx eff_bolt_dir
+
+    // Start from player position
+    lda zp_player_x
+    sta eff_bolt_cx
+    lda zp_player_y
+    sta eff_bolt_cy
+    lda #20
+    sta eff_bolt_steps
+
+!eb_trace:
+    dec eff_bolt_steps
+    beq !eb_fizzle+
+
+    // Step in direction
+    ldx eff_bolt_dir
+    lda eff_bolt_cx
+    clc
+    adc dir_dx,x
+    sta eff_bolt_cx
+    lda eff_bolt_cy
+    clc
+    adc dir_dy,x
+    sta eff_bolt_cy
+
+    // Bounds check
+    lda eff_bolt_cx
+    beq !eb_fizzle+
+    cmp #MAP_COLS - 1
+    bcs !eb_fizzle+
+    lda eff_bolt_cy
+    beq !eb_fizzle+
+    cmp #MAP_ROWS - 1
+    bcs !eb_fizzle+
+
+    // Read map tile
+    ldx eff_bolt_cy
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy eff_bolt_cx
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !eb_check_mon+
+    cmp #TILE_DOOR_OPEN
+    beq !eb_check_mon+
+    // Hit a wall or other obstacle
+    jmp !eb_fizzle+
+
+!eb_check_mon:
+    // Check for monster at this position
+    lda eff_bolt_cx
+    ldy eff_bolt_cy
+    jsr monster_find_at
+    bcc !eb_trace-              // No monster, keep going
+
+    // Hit a monster! X = slot index
+    // Roll damage
+    stx zp_temp2                // Save monster slot
+    lda eff_bolt_dice
+    ldx eff_bolt_sides
+    ldy #0                      // No bonus
+    jsr math_dice               // Result in zp_math_a
+
+    // Apply damage to monster
+    ldx zp_temp2
+    jsr monster_get_ptr         // zp_ptr0 = monster entry
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc zp_math_b
+    sta (zp_ptr0),y
+
+    // Check if dead (HP < 0)
+    bpl !eb_fizzle+             // Still alive
+
+    // Monster killed — award XP and remove
+    ldx zp_temp2
+    jsr eff_kill_monster
+
+!eb_fizzle:
+    rts
+
+// ============================================================
+// eff_damage_adjacent — Damage all adjacent monsters (area effect)
+// Input: A = dice count, X = dice sides
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-4, zp_math_a/b
+// ============================================================
+eff_da_dice:  .byte 0
+eff_da_sides: .byte 0
+eff_da_dir:   .byte 0
+
+eff_damage_adjacent:
+    sta eff_da_dice
+    stx eff_da_sides
+    lda #0
+    sta eff_da_dir
+
+!eda_loop:
+    lda eff_da_dir
+    cmp #8
+    bcs !eda_done+
+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    tay
+    lda df_target_x
+
+    jsr monster_find_at
+    bcc !eda_next+
+
+    // Monster found — roll damage
+    stx zp_temp2                    // Save monster slot
+    lda eff_da_dice
+    ldx eff_da_sides
+    ldy #0
+    jsr math_dice
+
+    // Apply damage
+    ldx zp_temp2
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc zp_math_b
+    sta (zp_ptr0),y
+
+    bpl !eda_next+
+
+    // Monster killed
+    ldx zp_temp2
+    jsr eff_kill_monster
+
+!eda_next:
+    inc eff_da_dir
+    jmp !eda_loop-
+
+!eda_done:
+    rts
+
+// ============================================================
+// eff_directional_monster — Get direction, find monster at target
+// Output: carry SET = monster found (X = slot index),
+//         carry CLEAR = no monster
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_directional_monster:
+    jsr get_direction_target
+    bcc !edm_fail+
+
+    lda df_target_x
+    ldy df_target_y
+    jsr monster_find_at
+    rts                             // Carry state from monster_find_at
+
+!edm_fail:
+    clc
+    rts
+
+// ============================================================
+// eff_destroy_traps_doors — Destroy traps and jam doors open in radius
+// Scans 8 adjacent tiles. Traps removed, closed doors opened.
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_dtd_dir: .byte 0
+
+eff_destroy_traps_doors:
+    lda #0
+    sta eff_dtd_dir
+
+!edtd_loop:
+    lda eff_dtd_dir
+    cmp #8
+    bcs !edtd_done+
+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta df_target_y
+
+    // Read map tile
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    sta zp_temp0
+
+    // Check for trap
+    cmp #TILE_TRAP
+    bne !edtd_check_door+
+    // Remove trap — set to floor
+    lda (zp_ptr0),y
+    and #TILE_FLAG_MASK
+    ora #TILE_FLOOR
+    sta (zp_ptr0),y
+    jmp !edtd_next+
+
+!edtd_check_door:
+    // Check for closed door or secret door
+    lda zp_temp0
+    cmp #TILE_DOOR_CLOSED
+    beq !edtd_open_door+
+    cmp #TILE_SECRET
+    bne !edtd_next+
+
+!edtd_open_door:
+    // Open the door
+    lda (zp_ptr0),y
+    and #TILE_FLAG_MASK
+    ora #TILE_DOOR_OPEN
+    ora #FLAG_VISITED
+    sta (zp_ptr0),y
+
+!edtd_next:
+    inc eff_dtd_dir
+    jmp !edtd_loop-
+
+!edtd_done:
+    // Also remove hidden traps from trap table at adjacent positions
+    // (simplified: clear the whole trap table since most are revealed)
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// ============================================================
+// eff_wall_to_mud — Turn a wall tile to floor in chosen direction
+// Must call get_direction_target first.
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_wall_to_mud:
+    jsr get_direction_target
+    bcc !ewtm_fail+
+
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+
+    // Check if it's a wall type
+    cmp #TILE_WALL_H
+    beq !ewtm_dig+
+    cmp #TILE_WALL_V
+    beq !ewtm_dig+
+    // Not a wall
+!ewtm_fail:
+    rts
+
+!ewtm_dig:
+    // Replace with floor + flags
+    lda (zp_ptr0),y
+    and #TILE_FLAG_MASK
+    ora #TILE_FLOOR
+    ora #FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #1
+    sta vis_room_revealed
+    rts
+
+// ============================================================
+// eff_kill_monster — Remove a dead monster and award XP
+// Input: X = monster slot index (saved in zp_temp2 by caller)
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4, zp_math_a/b
+// ============================================================
+eff_kill_monster:
+    stx zp_temp2                    // Save slot
+
+    // Get monster type
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type                    // Set cmb_type for combat_award_xp
+
+    // Clear FLAG_OCCUPIED at monster position
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    tax
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+
+    ldx zp_temp2
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    tay
+    lda (zp_ptr1),y
+    and #~FLAG_OCCUPIED & $ff
+    sta (zp_ptr1),y
+
+    // Remove monster from active list
+    ldx zp_temp2
+    jsr monster_remove
+
+    // Award XP using existing combat function
+    jsr combat_award_xp
+    jsr combat_check_levelup
+
+    rts

@@ -311,6 +311,18 @@ pm_do_cast:
     sta zp_ptr0_hi
     jsr msg_print
 
+    // Dispatch to spell effect
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_priest_dispatch+
+    lda pm_spell_idx
+    jsr mage_effect_dispatch
+    jmp !pm_effect_done+
+!pm_priest_dispatch:
+    lda pm_spell_idx
+    jsr priest_effect_dispatch
+!pm_effect_done:
+
     // Turn consumed
     sec
     rts
@@ -886,6 +898,178 @@ magic_recalc_mana:
     sta player_data + PL_MANA
 
 !mrm_done:
+    rts
+
+// ============================================================
+// mage_effect_dispatch — Dispatch mage spell effect by index
+// Input: A = spell index (0-15)
+// Clobbers: everything
+// ============================================================
+mage_effect_dispatch:
+    cmp #0
+    bne !med_1+
+    // 0: Magic Missile — directional, 1d4 + level/2
+    jsr eff_directional_monster
+    bcc !med_rts+
+    stx zp_temp2
+    lda #1                          // 1 die
+    ldx #4                          // d4
+    ldy zp_player_lvl
+    tya
+    lsr                             // level/2
+    tay                             // Y = bonus
+    lda #1
+    jsr math_dice
+    ldx zp_temp2
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc zp_math_b
+    sta (zp_ptr0),y
+    bpl !med_rts+
+    ldx zp_temp2
+    jsr eff_kill_monster
+!med_rts:
+    rts
+
+!med_1:
+    cmp #1
+    bne !med_2+
+    // 1: Detect Monsters
+    jsr eff_detect_monsters
+    rts
+
+!med_2:
+    cmp #2
+    bne !med_3+
+    // 2: Phase Door
+    jsr eff_phase_door
+    rts
+
+!med_3:
+    cmp #3
+    bne !med_4+
+    // 3: Light Area
+    jsr eff_light_room
+    rts
+
+!med_4:
+    cmp #4
+    bne !med_5+
+    // 4: Cure Light Wounds — 1d8+1
+    lda #1
+    ldx #8
+    ldy #1
+    jsr math_dice
+    lda zp_math_a
+    jsr eff_heal
+    rts
+
+!med_5:
+    cmp #5
+    bne !med_6+
+    // 5: Find Traps/Doors
+    jsr eff_find_traps
+    jsr eff_find_doors
+    rts
+
+!med_6:
+    cmp #6
+    bne !med_7+
+    // 6: Stinking Cloud — confuse adjacent
+    jsr eff_confuse_adjacent
+    rts
+
+!med_7:
+    cmp #7
+    bne !med_8+
+    // 7: Confusion — directional, set MX_CONFUSE
+    jsr eff_directional_monster
+    bcc !med_7_rts+
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10
+    sta (zp_ptr0),y
+!med_7_rts:
+    rts
+
+!med_8:
+    cmp #8
+    bne !med_9+
+    // 8: Lightning Bolt — 3d8
+    lda #3
+    ldx #8
+    jsr eff_bolt
+    rts
+
+!med_9:
+    cmp #9
+    bne !med_10+
+    // 9: Trap/Door Destroy
+    jsr eff_destroy_traps_doors
+    rts
+
+!med_10:
+    cmp #10
+    bne !med_11+
+    // 10: Sleep I — sleep adjacent
+    jsr eff_sleep_adjacent
+    rts
+
+!med_11:
+    cmp #11
+    bne !med_12+
+    // 11: Cure Poison
+    jsr eff_cure_poison
+    rts
+
+!med_12:
+    cmp #12
+    bne !med_13+
+    // 12: Teleport Self
+    jsr eff_teleport_self
+    rts
+
+!med_13:
+    cmp #13
+    bne !med_14+
+    // 13: Frost Bolt — 5d8
+    lda #5
+    ldx #8
+    jsr eff_bolt
+    rts
+
+!med_14:
+    cmp #14
+    bne !med_15+
+    // 14: Wall to Mud
+    jsr eff_wall_to_mud
+    rts
+
+!med_15:
+    cmp #15
+    bne !med_unknown+
+    // 15: Fire Ball — 7d8 area damage to adjacent
+    lda #7
+    ldx #8
+    jsr eff_damage_adjacent
+    rts
+
+!med_unknown:
+    rts
+
+// ============================================================
+// priest_effect_dispatch — Dispatch priest prayer effect by index
+// Input: A = spell index (0-15)
+// Clobbers: everything
+// NOTE: Implemented in step 7.5
+// ============================================================
+priest_effect_dispatch:
     rts
 
 // ============================================================
