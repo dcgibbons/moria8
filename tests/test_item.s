@@ -31,7 +31,6 @@
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../monster_ai.s"
-#import "../monster_magic.s"
 #import "../item.s"
 #import "../player_items.s"
 #import "../spell_data.s"
@@ -51,7 +50,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 48, $ff
+tc_results: .fill 40, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 
@@ -176,7 +175,6 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
-    sta fi_add_flags
 
     jsr floor_item_add
     bcc !t2_fail+
@@ -247,7 +245,6 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
-    sta fi_add_flags
     jsr floor_item_add
 
     ldx #15
@@ -269,7 +266,6 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
-    sta fi_add_flags
     jsr floor_item_add
 
     // Count should be 3
@@ -500,7 +496,6 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
-    sta fi_add_flags
     jsr floor_item_add
 
     // Stuff keyboard buffer for -more- prompt
@@ -570,7 +565,6 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
-    sta fi_add_flags
     jsr floor_item_add
 
     // Stuff keyboard buffer
@@ -980,7 +974,7 @@ test_start:
     sta tc_results + 19
 
     // ==========================================
-    // Test 21: pick_item_type returns valid type in range 2-46
+    // Test 21: pick_item_type returns valid type in range 2-38
     // ==========================================
 !t21:
     lda #3
@@ -992,7 +986,7 @@ test_start:
     jsr pick_item_type
     cmp #2
     bcc !t21_fail+
-    cmp #47
+    cmp #39
     bcs !t21_fail+
     dec tc_loop_ctr
     bne !t21_loop-
@@ -1297,9 +1291,11 @@ test_start:
     sta fi_add_qty
     lda #$fd                        // -3 enchant
     sta fi_add_p1
-    lda #IF_CURSED
-    sta fi_add_flags
     jsr floor_item_add
+
+    // Set IF_CURSED flag on floor item
+    lda #IF_CURSED
+    sta fi_flags                    // Slot 0
 
     // Stuff keyboard buffer for -more-
     lda #1
@@ -1724,24 +1720,49 @@ test_start:
     sta tc_results + 37
 
     // ==========================================
-    // Test 39: Wand/Staff categories in SoA table
+    // Test 39: Enchant Weapon on cursed item clears curse, sets p1=0
     // ==========================================
 !t39:
-    // Verify it_category[39] == ICAT_WAND
-    lda it_category + 39
-    cmp #ICAT_WAND
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Equip a cursed long sword (type 4) with p1=$FD (-3)
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #$fd                        // -3 enchantment
+    sta inv_p1 + EQUIP_WEAPON
+    lda #IF_CURSED
+    sta inv_flags + EQUIP_WEAPON
+
+    // Put Enchant Weapon scroll (type 34) in inv slot 0
+    lda #34
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 at EQUIP_WEAPON should be 0 (curse removed, reset)
+    lda inv_p1 + EQUIP_WEAPON
     bne !t39_fail+
-    // Verify it_category[42] == ICAT_WAND
-    lda it_category + 42
-    cmp #ICAT_WAND
-    bne !t39_fail+
-    // Verify it_category[43] == ICAT_STAFF
-    lda it_category + 43
-    cmp #ICAT_STAFF
-    bne !t39_fail+
-    // Verify it_category[46] == ICAT_STAFF
-    lda it_category + 46
-    cmp #ICAT_STAFF
+
+    // IF_CURSED should be cleared
+    lda inv_flags + EQUIP_WEAPON
+    and #IF_CURSED
     bne !t39_fail+
 
     lda #$01
@@ -1752,239 +1773,57 @@ test_start:
     sta tc_results + 38
 
     // ==========================================
-    // Test 40: roll_enchantment returns wand charges [5,8]
+    // Test 40: Enchant Weapon at cap (p1=5) does nothing
     // ==========================================
 !t40:
-    lda #1
-    sta zp_player_dlvl
+    jsr item_init_inventory
 
-    lda #40                     // Wand of Lightning
-    jsr roll_enchantment
-    // Should be in range [5, 8]
+    lda #0
+    sta zp_msg_flags
+
+    // Equip dagger (type 2) with p1=5 (at cap)
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #5
+    sta inv_p1 + EQUIP_WEAPON
+    lda #0
+    sta inv_flags + EQUIP_WEAPON
+
+    // Put Enchant Weapon scroll (type 34) in inv slot 0
+    lda #34
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 should still be 5 (not 6)
+    lda inv_p1 + EQUIP_WEAPON
     cmp #5
-    bcc !t40_fail+
-    cmp #9
-    bcs !t40_fail+
+    bne !t40_fail+
+
     lda #$01
     sta tc_results + 39
-    jmp !t41+
+    jmp !tests_done+
 !t40_fail:
     lda #$00
     sta tc_results + 39
 
-    // ==========================================
-    // Test 41: roll_enchantment returns staff charges [3,8]
-    // ==========================================
-!t41:
-    lda #44                     // Staff of Detect Monsters
-    jsr roll_enchantment
-    // Should be in range [3, 8]
-    cmp #3
-    bcc !t41_fail+
-    cmp #9
-    bcs !t41_fail+
-    lda #$01
-    sta tc_results + 40
-    jmp !t42+
-!t41_fail:
-    lda #$00
-    sta tc_results + 40
-
-    // ==========================================
-    // Test 42: roll_enchantment Wand of Light returns [10,15]
-    // ==========================================
-!t42:
-    lda #39                     // Wand of Light
-    jsr roll_enchantment
-    // Should be in range [10, 15]
-    cmp #10
-    bcc !t42_fail+
-    cmp #16
-    bcs !t42_fail+
-    lda #$01
-    sta tc_results + 41
-    jmp !t43+
-!t42_fail:
-    lda #$00
-    sta tc_results + 41
-
-    // ==========================================
-    // Test 43: item_aim_wand with 0 charges -> carry clear
-    // ==========================================
-!t43:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    // Put Wand of Lightning (type 40) in inv slot 0, charges = 0
-    lda #40
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    // Stuff keyboard: 'A' to select, space for -more-
-    lda #2
-    sta $c6
-    lda #$41
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_aim_wand
-
-    // Should return carry clear (no turn consumed)
-    bcs !t43_fail+
-
-    lda #$01
-    sta tc_results + 42
-    jmp !t44+
-!t43_fail:
-    lda #$00
-    sta tc_results + 42
-
-    // ==========================================
-    // Test 44: item_aim_wand with charges -> charges decremented, item not consumed
-    // ==========================================
-!t44:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    // Put Wand of Light (type 39) in inv slot 0, charges = 5
-    lda #39
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #5
-    sta inv_p1
-    lda #0
-    sta inv_flags
-
-    // Stuff keyboard: 'A' to select, space for -more-
-    lda #2
-    sta $c6
-    lda #$41
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_aim_wand
-
-    // Should return carry set (turn consumed)
-    bcc !t44_fail+
-
-    // Item should still be in slot 0 (not consumed)
-    lda inv_item_id
-    cmp #39
-    bne !t44_fail+
-
-    // Charges should be 4 (decremented from 5)
-    lda inv_p1
-    cmp #4
-    bne !t44_fail+
-
-    lda #$01
-    sta tc_results + 43
-    jmp !t45+
-!t44_fail:
-    lda #$00
-    sta tc_results + 43
-
-    // ==========================================
-    // Test 45: item_aim_wand auto-identifies wand type
-    // ==========================================
-!t45:
-    // id_known[39] should now be 1 from test 44
-    lda id_known + 39
-    cmp #1
-    beq !t45_pass+
-    lda #$00
-    sta tc_results + 44
-    jmp !t46+
-!t45_pass:
-    lda #$01
-    sta tc_results + 44
-
-    // ==========================================
-    // Test 46: item_use_staff (Staff of CLW) heals HP and decrements charges
-    // ==========================================
-!t46:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    // Set HP to 50/200
-    lda #50
-    sta zp_player_hp_lo
-    lda #0
-    sta zp_player_hp_hi
-    lda #200
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-    lda #50
-    sta player_data + PL_HP_LO
-    lda #0
-    sta player_data + PL_HP_HI
-    lda #200
-    sta player_data + PL_MHP_LO
-    lda #0
-    sta player_data + PL_MHP_HI
-
-    // Put Staff of CLW (type 46) in inv slot 0, charges = 3
-    lda #46
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #3
-    sta inv_p1
-    lda #0
-    sta inv_flags
-
-    // Stuff keyboard: 'A' to select, space for -more-
-    lda #2
-    sta $c6
-    lda #$41
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_use_staff
-
-    // Should return carry set (turn consumed)
-    bcc !t46_fail+
-
-    // HP should be > 50 (healed by 1d8+1 = [2, 9])
-    lda zp_player_hp_lo
-    cmp #51
-    bcc !t46_fail+
-
-    // Charges should be 2 (decremented from 3)
-    lda inv_p1
-    cmp #2
-    bne !t46_fail+
-
-    // Item should still exist (not consumed)
-    lda inv_item_id
-    cmp #46
-    bne !t46_fail+
-
-    lda #$01
-    sta tc_results + 45
-    jmp !tests_done+
-!t46_fail:
-    lda #$00
-    sta tc_results + 45
-
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #47
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x

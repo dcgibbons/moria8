@@ -1968,47 +1968,12 @@ status should be updated to Resolved.
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP11-1 | **HIGH** | CSW heal [5,40] instead of [10,45]; Test 33 fails intermittently | Easy — use math_dice(5,8,5) or change adc #5 → adc #10 | Open |
-| RP11-2 | **HIGH** | Enchant Weapon/Armor broken on cursed items (unsigned cmp treats -N as >5) | Medium — add IF_CURSED branch before cap check in both handlers | Open |
-| RP11-3 | **MEDIUM** | No test for enchant on cursed items | Easy — add test with negative p1 + IF_CURSED | Open |
-| RP11-4 | **MEDIUM** | Heroism/Infravision/Protect timers are stubs — no code checks them for gameplay effects | Design — document as stubs or implement consumption | Open |
-| RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | Open |
-| RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | Open |
-
-### Review Pass 12 — Step 7.8 Bug Fix (2026-02-12)
-
-#### RP12-1 (BUG, FIXED): Spurious "YOU CAN MOVE AGAIN." on new game start
-
-**Symptom:** After character creation, when spells are auto-learned and a "-more-"
-prompt appears, the next message is "YOU CAN MOVE AGAIN." — even though the player
-was never paralyzed.
-
-**Root cause:** Status effect timers live in BASIC's freed zero page (`$50`–`$5f`).
-After BASIC ROM is banked out, these bytes retain whatever residual values BASIC
-left behind. If `zp_eff_paralyze` (`$53`) happened to hold the value 1, the first
-call to `turn_tick_effects` decremented it to 0 and printed the expiration message.
-Same issue could affect any effect timer (poison, blind, confuse, etc.) depending
-on BASIC's ZP state at the time of program launch.
-
-**Fix:** Added a 16-byte zero-fill loop clearing `$50`–`$5f` in `main.s` entry
-point, after `msg_init` but before `player_create`:
-```asm
-    ldx #0
-    lda #0
-!clear_effects:
-    sta zp_eff_poison,x
-    inx
-    cpx #16
-    bne !clear_effects-
-```
-
-**Verification:** Build passes (57 asserts, 0 failed). All 12 test suites pass.
-
-#### Summary of Review Pass 12 findings
-
-| # | Severity | Issue | Fix complexity | Status |
-|---|----------|-------|----------------|--------|
-| RP12-1 | **HIGH** | Uninitialized ZP effect timers cause spurious expiration messages on startup | Trivial — 7-instruction zero-fill loop | **Fixed** |
+| RP11-1 | **HIGH** | CSW heal [5,40] instead of [10,45]; Test 33 fails intermittently | Easy — use math_dice(5,8,5) or change adc #5 → adc #10 | **Fixed** — replaced manual loop with `math_dice(5,8,5)` giving correct [10,45] range |
+| RP11-2 | **HIGH** | Enchant Weapon/Armor broken on cursed items (unsigned cmp treats -N as >5) | Medium — add IF_CURSED branch before cap check in both handlers | **Fixed** — added IF_CURSED check before cap comparison; cursed items get curse cleared + p1 set to 0 |
+| RP11-3 | **MEDIUM** | No test for enchant on cursed items | Easy — add test with negative p1 + IF_CURSED | **Fixed** — added test 39 (enchant cursed weapon: p1→0, flag cleared) and test 40 (enchant at cap: p1 stays 5) |
+| RP11-4 | **MEDIUM** | Heroism/Infravision/Protect timers are stubs — no code checks them for gameplay effects | Design — document as stubs or implement consumption | **Documented** — added NOTE comments to all three handlers marking timers as infrastructure-only until effect consumption phase |
+| RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | **Fixed** — added comment documenting overwrite-not-stack behavior matches umoria |
+| RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | **Resolved** — RP10-12 already marked as resolved in prior pass |
 
 ---
 
@@ -2667,12 +2632,12 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.7 — Wands and Staves ✅ IMPLEMENTED
+#### Step 7.7 — Wands and Staves
 
 **Goal:** Implement wand aiming and staff usage with charge tracking.
 
-**Files modified:** `item.s`, `player_items.s`, `main.s`, `tests/test_item.s`,
-`run_tests.sh`
+**Files:** `player_items.s` (new `item_aim_wand`, `item_use_staff`), `main.s`
+(dispatch), `item.s` (SoA entries)
 
 **Charge tracking:** Use `inv_p1` as charge count (already exists per inventory
 slot). When item is spawned, set p1 to initial charge count. Each use decrements
@@ -2743,45 +2708,11 @@ descriptors): "IRON", "COPPER", "SILVER", "BONE", "OAK". For staves:
 5. Add CMD_AIM + CMD_USE dispatch in `main.s`.
 6. Update spawn tables to include wands/staves.
 
-**Tests (8 new, tests 39-46):**
-- Test 39: Verify it_category[39]==ICAT_WAND, [42]==ICAT_WAND, [43]==ICAT_STAFF, [46]==ICAT_STAFF.
-- Test 40: roll_enchantment(40) returns wand charges in [5,8].
-- Test 41: roll_enchantment(44) returns staff charges in [3,8].
-- Test 42: roll_enchantment(39) returns Wand of Light charges in [10,15].
-- Test 43: item_aim_wand with 0 charges → carry clear (no turn consumed).
-- Test 44: item_aim_wand with charges → charges decremented, item preserved.
-- Test 45: item_aim_wand auto-identifies wand type (id_known[39]=1).
-- Test 46: item_use_staff (Staff of CLW) heals HP and decrements charges.
-
-**Implementation details:**
-- ITEM_TYPE_COUNT: 39 → 47 (8 new types, IDs 39-46).
-- Added ICAT_WAND=14, ICAT_STAFF=15 category constants.
-- Extended all 13 SoA arrays (it_category through id_known) with 8 entries.
-- Identification: 5 wand descriptors (iron/copper/silver/bone/oak), 5 staff
-  descriptors (birch/pine/maple/willow/ash), Fisher-Yates shuffled at init.
-- Wand display char: '-' ($2d). Staff display char: '/' ($2f).
-- equip_slot_for_cat extended with 2× $ff (wands/staves not equippable).
-- item_wear range check updated from 14 to 16.
-- pick_item_type range: [2,38] → [2,46].
-- Charge ranges: Wand of Light [10,15], other wands [5,8], Staff of Light
-  [10,15], Staff of Teleportation [3,5], other staves [3,8].
-- Wand effects call eff_bolt/eff_directional_monster (direction prompted
-  internally by those subroutines).
-- Staff of CLW uses math_dice(1,8,1) → eff_heal.
-- Both item_aim_wand and item_use_staff auto-identify on use.
-- CMD_AIM and CMD_USE dispatch added in main.s after !not_read.
-
-**Shared subroutines reused from `spell_effects.s`:**
-- `eff_light_room` (line 64) — light current room
-- `eff_bolt` (line 559) — directional bolt (A=dice, X=sides)
-- `eff_directional_monster` (line 773) — find monster in direction
-- `eff_detect_monsters` (line 264) — reveal monsters on map
-- `eff_teleport_self` (line 123) — teleport player
-- `eff_heal` (line 28) — heal HP by amount in A
-
-**Verification:**
-- `make build` → 56 asserts, 0 failed ✅
-- `make test` → 12/12 suites pass (item: 46/46 tests) ✅
+**Tests:**
+- Runtime: Aim Wand of Lightning at monster → verify damage applied, charges decremented.
+- Runtime: Aim Wand with 0 charges → verify "NO CHARGES" message, no turn consumed.
+- Runtime: Use Staff of Teleportation → verify player moved, charges decremented.
+- Runtime: Verify wand/staff identification on first use.
 
 ---
 
