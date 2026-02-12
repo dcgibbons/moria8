@@ -171,6 +171,14 @@ cr_atk1_sides:
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
 
+// Spell chance (probability out of 100 that monster casts instead of melee)
+cr_spell_chance:
+    .fill CREATURE_COUNT, 0     // Tier 0: no spellcasters
+
+// Spell flags (bitmask of available spells)
+cr_spell_flags:
+    .fill CREATURE_COUNT, 0     // Tier 0: all zero
+
 // Name pointer tables
 cr_name_lo:
     .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4
@@ -649,3 +657,4 @@ monster_remove:
 .assert "cr_speed size", cr_mflags - cr_speed, CREATURE_COUNT
 .assert "cr_mflags size", cr_level - cr_mflags, CREATURE_COUNT
 .assert "cr_level size", cr_hd_num - cr_level, CREATURE_COUNT
+.assert "cr_spell_chance size", cr_spell_flags - cr_spell_chance, CREATURE_COUNT

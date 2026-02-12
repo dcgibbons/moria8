@@ -52,6 +52,8 @@ equip_slot_for_cat:
     .byte $ff              // ICAT_SCROLL (11) -> invalid
     .byte EQUIP_RING       // ICAT_RING (12) -> slot 29
     .byte $ff              // ICAT_CLOAK (13) -> invalid
+    .byte $ff              // ICAT_WAND (14) -> not equippable
+    .byte $ff              // ICAT_STAFF (15) -> not equippable
 
 // ============================================================
 // Subroutines
@@ -119,7 +121,7 @@ item_wear:
     // Look up category -> equipment slot
     ldx piw_item_id
     lda it_category,x
-    cmp #14                     // Out of range check
+    cmp #16                     // Out of range check
     bcc !iw_cat_ok+
     jmp !iw_cant_wear+
 !iw_cat_ok:
@@ -988,6 +990,17 @@ item_quaff:
 // Clobbers: everything
 // ============================================================
 item_read_scroll:
+    // Blindness check — can't read while blind
+    lda zp_eff_blind
+    beq !irs_can_see+
+    lda #<piq_cant_read_str
+    sta zp_ptr0
+    lda #>piq_cant_read_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+!irs_can_see:
     // Print prompt
     lda #<piq_read_prompt
     sta zp_ptr0
@@ -1340,6 +1353,334 @@ item_read_scroll:
     rts
 
 // ============================================================
+// item_aim_wand — Aim a wand from inventory
+// Prompts "AIM WHICH WAND (A-V)?", waits for keypress.
+// Output: carry set = turn consumed, carry clear = cancelled
+// Clobbers: everything
+// ============================================================
+item_aim_wand:
+    // Print prompt
+    lda #<piw_aim_prompt
+    sta zp_ptr0
+    lda #>piw_aim_prompt
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Wait for keypress
+    jsr input_get_key
+
+    // Check for ESC or space -> cancel
+    cmp #$03
+    beq !iaw_cancel_tramp+
+    cmp #$20
+    beq !iaw_cancel_tramp+
+
+    // Convert PETSCII letter to slot index
+    sec
+    sbc #$41
+    bcc !iaw_cancel_tramp+
+    cmp #MAX_INV_SLOTS
+    bcc !iaw_in_range+
+!iaw_cancel_tramp:
+    jmp !iaw_cancel+
+!iaw_in_range:
+    sta piw_slot
+
+    // Check slot occupied
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !iaw_has_item+
+
+    lda #<piw_nothing_str
+    sta zp_ptr0
+    lda #>piw_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!iaw_has_item:
+    sta piw_item_id
+
+    // Check it's a wand
+    tax
+    lda it_category,x
+    cmp #ICAT_WAND
+    beq !iaw_is_wand+
+
+    lda #<piw_not_wand_str
+    sta zp_ptr0
+    lda #>piw_not_wand_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!iaw_is_wand:
+    // Check charges > 0
+    ldx piw_slot
+    lda inv_p1,x
+    bne !iaw_has_charges+
+
+    lda #<piw_no_charges_str
+    sta zp_ptr0
+    lda #>piw_no_charges_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!iaw_has_charges:
+    // Decrement charges
+    ldx piw_slot
+    dec inv_p1,x
+
+    // Auto-identify wand type
+    ldx piw_item_id
+    lda #1
+    sta id_known,x
+
+    // Dispatch by item type
+    lda piw_item_id
+    cmp #39                         // Wand of Light
+    beq !iaw_light+
+    cmp #40                         // Wand of Lightning
+    beq !iaw_lightning+
+    cmp #41                         // Wand of Frost
+    beq !iaw_frost+
+    cmp #42                         // Wand of Stinking Cloud
+    beq !iaw_cloud+
+    // Unknown wand type — shouldn't happen
+    sec
+    rts
+
+!iaw_light:
+    jsr eff_light_room
+    lda #<piq_light_str
+    sta zp_ptr0
+    lda #>piq_light_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iaw_lightning:
+    lda #3
+    ldx #8
+    jsr eff_bolt
+    lda #<piw_wand_bolt_str
+    sta zp_ptr0
+    lda #>piw_wand_bolt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iaw_frost:
+    lda #4
+    ldx #8
+    jsr eff_bolt
+    lda #<piw_wand_frost_str
+    sta zp_ptr0
+    lda #>piw_wand_frost_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iaw_cloud:
+    jsr eff_directional_monster
+    bcc !iaw_cloud_miss+
+    // Monster found — set MX_CONFUSE
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10
+    sta (zp_ptr0),y
+    lda #<piw_wand_cloud_str
+    sta zp_ptr0
+    lda #>piw_wand_cloud_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+!iaw_cloud_miss:
+    lda #<piw_wand_miss_str
+    sta zp_ptr0
+    lda #>piw_wand_miss_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iaw_cancel:
+    lda #<piw_nevermind_str
+    sta zp_ptr0
+    lda #>piw_nevermind_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+// ============================================================
+// item_use_staff — Use a staff from inventory
+// Prompts "USE WHICH STAFF (A-V)?", waits for keypress.
+// Output: carry set = turn consumed, carry clear = cancelled
+// Clobbers: everything
+// ============================================================
+item_use_staff:
+    // Print prompt
+    lda #<piw_use_prompt
+    sta zp_ptr0
+    lda #>piw_use_prompt
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Wait for keypress
+    jsr input_get_key
+
+    // Check for ESC or space -> cancel
+    cmp #$03
+    beq !ius_cancel_tramp+
+    cmp #$20
+    beq !ius_cancel_tramp+
+
+    // Convert PETSCII letter to slot index
+    sec
+    sbc #$41
+    bcc !ius_cancel_tramp+
+    cmp #MAX_INV_SLOTS
+    bcc !ius_in_range+
+!ius_cancel_tramp:
+    jmp !ius_cancel+
+!ius_in_range:
+    sta piw_slot
+
+    // Check slot occupied
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !ius_has_item+
+
+    lda #<piw_nothing_str
+    sta zp_ptr0
+    lda #>piw_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!ius_has_item:
+    sta piw_item_id
+
+    // Check it's a staff
+    tax
+    lda it_category,x
+    cmp #ICAT_STAFF
+    beq !ius_is_staff+
+
+    lda #<piw_not_staff_str
+    sta zp_ptr0
+    lda #>piw_not_staff_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!ius_is_staff:
+    // Check charges > 0
+    ldx piw_slot
+    lda inv_p1,x
+    bne !ius_has_charges+
+
+    lda #<piw_staff_empty_str
+    sta zp_ptr0
+    lda #>piw_staff_empty_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!ius_has_charges:
+    // Decrement charges
+    ldx piw_slot
+    dec inv_p1,x
+
+    // Auto-identify staff type
+    ldx piw_item_id
+    lda #1
+    sta id_known,x
+
+    // Dispatch by item type
+    lda piw_item_id
+    cmp #43                         // Staff of Light
+    beq !ius_light+
+    cmp #44                         // Staff of Detect Monsters
+    beq !ius_detect+
+    cmp #45                         // Staff of Teleportation
+    beq !ius_teleport+
+    cmp #46                         // Staff of Cure Light Wounds
+    beq !ius_clw+
+    // Unknown staff type
+    sec
+    rts
+
+!ius_light:
+    jsr eff_light_room
+    lda #<piq_light_str
+    sta zp_ptr0
+    lda #>piq_light_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!ius_detect:
+    jsr eff_detect_monsters
+    lda #<piq_sense_str
+    sta zp_ptr0
+    lda #>piq_sense_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!ius_teleport:
+    jsr eff_teleport_self
+    lda #<piq_teleport_str
+    sta zp_ptr0
+    lda #>piq_teleport_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!ius_clw:
+    // Roll 1d8+1 for healing
+    lda #1
+    ldx #8
+    ldy #1
+    jsr math_dice
+    lda zp_math_a                   // Low byte of result (sufficient for 2-9)
+    jsr eff_heal
+    lda #<piq_feel_better_str
+    sta zp_ptr0
+    lda #>piq_feel_better_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!ius_cancel:
+    lda #<piw_nevermind_str
+    sta zp_ptr0
+    lda #>piw_nevermind_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+// ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
 piw_wear_prompt:    .text "WEAR WHICH ITEM (A-V)?" ; .byte 0
@@ -1384,3 +1725,16 @@ piq_hands_glow_str:   .text "YOUR HANDS BEGIN TO GLOW." ; .byte 0
 piq_humming_str:      .text "YOU HEAR A HIGH-PITCHED HUMMING." ; .byte 0
 piq_protected_str:    .text "YOU FEEL PROTECTED." ; .byte 0
 piq_vibration_str:    .text "YOU FEEL A STRANGE VIBRATION." ; .byte 0
+
+// Wand/Staff strings
+piw_aim_prompt:       .text "AIM WHICH WAND (A-V)?" ; .byte 0
+piw_use_prompt:       .text "USE WHICH STAFF (A-V)?" ; .byte 0
+piw_not_wand_str:     .text "THAT IS NOT A WAND." ; .byte 0
+piw_not_staff_str:    .text "THAT IS NOT A STAFF." ; .byte 0
+piw_no_charges_str:   .text "NO CHARGES LEFT." ; .byte 0
+piw_staff_empty_str:  .text "THE STAFF IS EMPTY." ; .byte 0
+piw_wand_bolt_str:    .text "A BOLT OF LIGHTNING SHOOTS FORTH!" ; .byte 0
+piw_wand_frost_str:   .text "A BOLT OF FROST SHOOTS FORTH!" ; .byte 0
+piw_wand_cloud_str:   .text "THE MONSTER LOOKS CONFUSED." ; .byte 0
+piw_wand_miss_str:    .text "THE CLOUD DISSIPATES." ; .byte 0
+piq_cant_read_str:    .text "YOU CAN'T SEE TO READ!" ; .byte 0

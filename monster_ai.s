@@ -114,6 +114,13 @@ monster_process_one:
     beq !mpo_done+              // Still asleep, done
 
 !mpo_awake:
+    // Check if monster wants to cast a spell
+    jsr monster_can_cast
+    bcc !mpo_no_cast+
+    jsr monster_pick_spell
+    jmp !mpo_writeback+         // Casting used the monster's turn
+!mpo_no_cast:
+
     // Check confused
     lda zp_mon_flags
     and #MF_CONFUSED

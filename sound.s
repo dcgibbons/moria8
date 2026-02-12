@@ -42,7 +42,9 @@
 .const SFX_MISS     = $02  // Melee miss
 .const SFX_PICKUP   = $03  // Item picked up
 .const SFX_DEATH    = $04  // Player death
-.const SFX_LEVELUP  = $05  // Level up
+.const SFX_LEVELUP     = $05  // Level up
+.const SFX_SPELL      = $06  // Spell cast success
+.const SFX_SPELL_FAIL = $07  // Spell fizzle
 
 // ============================================================
 // Subroutines
@@ -99,6 +101,8 @@ sfx_table:
     .word sfx_pickup
     .word sfx_death
     .word sfx_levelup
+    .word sfx_spell
+    .word sfx_spell_fail
 
 // --- Individual effect setups ---
 // Each sets frequency, ADSR, waveform, then gates on.
@@ -188,5 +192,33 @@ sfx_levelup:
     lda #$1c
     sta SID_V3_FREQ_HI
     lda #WAVE_PULSE | WAVE_GATE
+    sta SID_V3_CTRL
+    rts
+
+// Spell: ethereal triangle wave
+sfx_spell:
+    lda #$08
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    lda #$00
+    sta SID_V3_FREQ_LO
+    lda #$14
+    sta SID_V3_FREQ_HI
+    lda #WAVE_TRIANGLE | WAVE_GATE
+    sta SID_V3_CTRL
+    rts
+
+// Spell fail: short noise buzz
+sfx_spell_fail:
+    lda #$06
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    lda #$00
+    sta SID_V3_FREQ_LO
+    lda #$0c
+    sta SID_V3_FREQ_HI
+    lda #WAVE_NOISE | WAVE_GATE
     sta SID_V3_CTRL
     rts

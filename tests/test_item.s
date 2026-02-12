@@ -31,6 +31,7 @@
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../monster_ai.s"
+#import "../monster_magic.s"
 #import "../item.s"
 #import "../player_items.s"
 #import "../spell_data.s"
@@ -974,7 +975,7 @@ test_start:
     sta tc_results + 19
 
     // ==========================================
-    // Test 21: pick_item_type returns valid type in range 2-38
+    // Test 21: pick_item_type returns valid type in range 2-46
     // ==========================================
 !t21:
     lda #3
@@ -986,7 +987,7 @@ test_start:
     jsr pick_item_type
     cmp #2
     bcc !t21_fail+
-    cmp #39
+    cmp #ITEM_TYPE_COUNT
     bcs !t21_fail+
     dec tc_loop_ctr
     bne !t21_loop-
@@ -1727,6 +1728,7 @@ test_start:
 
     lda #0
     sta zp_msg_flags
+    sta zp_eff_blind                 // Clear blindness from test 37
 
     // Equip a cursed long sword (type 4) with p1=$FD (-3)
     lda #4
@@ -1780,6 +1782,7 @@ test_start:
 
     lda #0
     sta zp_msg_flags
+    sta zp_eff_blind                 // Ensure blindness is clear
 
     // Equip dagger (type 2) with p1=5 (at cap)
     lda #2

@@ -223,10 +223,36 @@ ui_char_display:
     sta zp_temp1
     jsr screen_put_decimal_16
 
+    // --- Spells Known (row 11, spell-casters only) ---
+    lda player_data + PL_SPELL_TYPE
+    beq !ucd_no_spells+
+
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #11
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda #<char_spells_label
+    sta zp_ptr0
+    lda #>char_spells_label
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #COL_WHITE
+    sta zp_text_color
+    jsr count_spells_known       // Returns count in A
+    jsr screen_put_decimal
+    lda #$2f                     // '/'
+    jsr screen_put_char
+    lda #16
+    jsr screen_put_decimal
+!ucd_no_spells:
+
     // --- Press any key ---
     lda #COL_LGREY
     sta zp_text_color
-    lda #14
+    lda #16
     sta zp_cursor_row
     lda #10
     sta zp_cursor_col
@@ -325,3 +351,32 @@ char_mana_label:
     .text "MANA: " ; .byte $00
 char_gold_label:
     .text "GOLD: " ; .byte $00
+char_spells_label:
+    .text "SPELLS: " ; .byte $00
+
+// count_spells_known — Count set bits in PL_SPELLS_KNOWN (16 bits)
+// Returns: A = count (0-16)
+// Clobbers: X, zp_temp0
+count_spells_known:
+    lda #0
+    sta zp_temp0
+    ldx #7
+!csk_lo:
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN
+    beq !csk_lo_skip+
+    inc zp_temp0
+!csk_lo_skip:
+    dex
+    bpl !csk_lo-
+    ldx #7
+!csk_hi:
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN_HI
+    beq !csk_hi_skip+
+    inc zp_temp0
+!csk_hi_skip:
+    dex
+    bpl !csk_hi-
+    lda zp_temp0
+    rts

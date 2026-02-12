@@ -21,6 +21,8 @@
 .const ICAT_SCROLL   = 11
 .const ICAT_RING     = 12
 .const ICAT_CLOAK    = 13
+.const ICAT_WAND     = 14
+.const ICAT_STAFF    = 15
 
 // Item Instance Flags
 .const IF_CURSED     = $01
@@ -47,7 +49,7 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 39
+.const ITEM_TYPE_COUNT = 47
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -94,6 +96,14 @@ it_category:
     .byte ICAT_SCROLL   // 36: Monster Confusion
     .byte ICAT_SCROLL   // 37: Aggravate
     .byte ICAT_SCROLL   // 38: Protect from Evil
+    .byte ICAT_WAND     // 39: Wand of Light
+    .byte ICAT_WAND     // 40: Wand of Lightning
+    .byte ICAT_WAND     // 41: Wand of Frost
+    .byte ICAT_WAND     // 42: Wand of Stinking Cloud
+    .byte ICAT_STAFF    // 43: Staff of Light
+    .byte ICAT_STAFF    // 44: Staff of Detect Monsters
+    .byte ICAT_STAFF    // 45: Staff of Teleportation
+    .byte ICAT_STAFF    // 46: Staff of Cure Light Wounds
 
 // Display character (screen codes)
 it_display:
@@ -136,6 +146,14 @@ it_display:
     .byte $3f   // 36: '?' Monster Confusion
     .byte $3f   // 37: '?' Aggravate
     .byte $3f   // 38: '?' Protect from Evil
+    .byte $2d   // 39: '-' Wand of Light
+    .byte $2d   // 40: '-' Wand of Lightning
+    .byte $2d   // 41: '-' Wand of Frost
+    .byte $2d   // 42: '-' Wand of Stinking Cloud
+    .byte $2f   // 43: '/' Staff of Light
+    .byte $2f   // 44: '/' Staff of Detect Monsters
+    .byte $2f   // 45: '/' Staff of Teleportation
+    .byte $2f   // 46: '/' Staff of Cure Light Wounds
 
 // Color
 it_color:
@@ -178,6 +196,14 @@ it_color:
     .byte COL_LGREEN    // 36: Monster Confusion
     .byte COL_LRED      // 37: Aggravate
     .byte COL_YELLOW    // 38: Protect from Evil
+    .byte COL_YELLOW    // 39: Wand of Light
+    .byte COL_CYAN      // 40: Wand of Lightning
+    .byte COL_BLUE      // 41: Wand of Frost
+    .byte COL_GREEN     // 42: Wand of Stinking Cloud
+    .byte COL_YELLOW    // 43: Staff of Light
+    .byte COL_LGREEN    // 44: Staff of Detect Monsters
+    .byte COL_CYAN      // 45: Staff of Teleportation
+    .byte COL_WHITE     // 46: Staff of Cure Light Wounds
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -185,6 +211,7 @@ it_weight:
     .byte 30, 5, 10, 10, 30, 10, 5, 4, 4, 4
     .byte 2, 2, 2, 2, 2, 4, 4, 4, 4, 4
     .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
+    .byte 10, 10, 10, 10, 50, 50, 50, 50
 
 // Damage dice count
 it_dmg_dice:
@@ -192,6 +219,7 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0
 
 // Damage dice sides
 it_dmg_sides:
@@ -199,6 +227,7 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0
 
 // Base armor class
 it_base_ac:
@@ -206,6 +235,7 @@ it_base_ac:
     .byte 1, 1, 1, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0
 
 // Base cost (lo)
 it_cost_lo:
@@ -214,6 +244,7 @@ it_cost_lo:
     .byte <15, <50, <40, <100, <120
     .byte <100, <150, <80, <5, <5, <60, <40
     .byte <200, <80, <250, <250, <50, <5, <100
+    .byte <50, <200, <250, <150, <60, <100, <300, <200
 
 // Base cost (hi)
 it_cost_hi:
@@ -222,6 +253,7 @@ it_cost_hi:
     .byte >15, >50, >40, >100, >120
     .byte >100, >150, >80, >5, >5, >60, >40
     .byte >200, >80, >250, >250, >50, >5, >100
+    .byte >50, >200, >250, >150, >60, >100, >300, >200
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -229,6 +261,7 @@ it_min_level:
     .byte 3, 1, 1, 0, 2, 0, 1, 1, 3, 1
     .byte 1, 2, 3, 4, 5, 3, 5, 4, 1, 1
     .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
+    .byte 3, 4, 5, 4, 3, 3, 5, 3
 
 // Name pointer tables
 it_name_lo:
@@ -240,6 +273,8 @@ it_name_lo:
     .byte <itn_25, <itn_26, <itn_27, <itn_28, <itn_29
     .byte <itn_30, <itn_31, <itn_32, <itn_33, <itn_34
     .byte <itn_35, <itn_36, <itn_37, <itn_38
+    .byte <itn_39, <itn_40, <itn_41, <itn_42
+    .byte <itn_43, <itn_44, <itn_45, <itn_46
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -249,6 +284,8 @@ it_name_hi:
     .byte >itn_25, >itn_26, >itn_27, >itn_28, >itn_29
     .byte >itn_30, >itn_31, >itn_32, >itn_33, >itn_34
     .byte >itn_35, >itn_36, >itn_37, >itn_38
+    .byte >itn_39, >itn_40, >itn_41, >itn_42
+    .byte >itn_43, >itn_44, >itn_45, >itn_46
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -290,6 +327,14 @@ itn_35: .text "ENCHANT ARMOR" ; .byte 0
 itn_36: .text "MONSTER CONFUSION" ; .byte 0
 itn_37: .text "AGGRAVATE" ; .byte 0
 itn_38: .text "PROTECT FROM EVIL" ; .byte 0
+itn_39: .text "WAND OF LIGHT" ; .byte 0
+itn_40: .text "WAND OF LIGHTNING" ; .byte 0
+itn_41: .text "WAND OF FROST" ; .byte 0
+itn_42: .text "WAND OF STINKING CLOUD" ; .byte 0
+itn_43: .text "STAFF OF LIGHT" ; .byte 0
+itn_44: .text "STAFF OF DETECT MONSTERS" ; .byte 0
+itn_45: .text "STAFF OF TELEPORTATION" ; .byte 0
+itn_46: .text "STAFF OF CURE LIGHT WOUNDS" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -352,7 +397,7 @@ item_init_inventory:
     rts
 
 // floor_item_add — Add an item to the floor item table
-// Input: fi_add_x, fi_add_y, fi_add_id, fi_add_qty, fi_add_p1
+// Input: fi_add_x, fi_add_y, fi_add_id, fi_add_qty, fi_add_p1, fi_add_flags
 // Output: carry set = success (X = slot), carry clear = table full
 // Clobbers: A, X, Y, zp_ptr0
 floor_item_add:
@@ -379,8 +424,9 @@ floor_item_add:
     sta fi_qty,x
     lda fi_add_p1
     sta fi_p1,x
-    lda #0
+    lda fi_add_flags
     sta fi_flags,x
+    lda #0
     sta fi_spare1,x
     sta fi_spare2,x
 
@@ -654,6 +700,7 @@ item_spawn_level:
 
     lda #0
     sta fi_add_p1               // No enchantment for gold
+    sta fi_add_flags            // No flags for gold
 
     jsr floor_item_add
     // Ignore failure (table full)
@@ -721,9 +768,7 @@ item_spawn_level:
     jsr roll_enchantment
     sta fi_add_p1
 
-    // Copy flags from roll_enchantment scratch
-    // (fi_add_flags is set by roll_enchantment for cursed items)
-    // We write flags after floor_item_add, which clears fi_flags
+    // fi_add_flags set by roll_enchantment (IF_CURSED for cursed items)
 
     // Set qty: equipment = 1, everything = 1 (lights get charges via p1)
     lda #1
@@ -731,11 +776,6 @@ item_spawn_level:
 
     jsr floor_item_add
     bcc !isl_ngold_skip+        // Table full — skip
-
-    // Set cursed flag if roll_enchantment flagged it
-    lda fi_add_flags
-    beq !isl_ngold_skip+
-    sta fi_flags,x              // X = slot from floor_item_add
 
 !isl_ngold_skip:
     inc isl_idx
@@ -832,11 +872,6 @@ item_spawn_level:
 
     jsr floor_item_add
     bcc !isl_treasure_skip+
-
-    // Set cursed flag if needed
-    lda fi_add_flags
-    beq !isl_treasure_skip+
-    sta fi_flags,x
 
 !isl_treasure_skip:
     inc isl_target
@@ -1061,6 +1096,8 @@ item_drop:
     sta fi_add_qty
     lda inv_p1,x
     sta fi_add_p1
+    lda inv_flags,x
+    sta fi_add_flags
 
     jsr floor_item_add
     bcs !idr_placed+
@@ -1140,10 +1177,10 @@ idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
 
 // ============================================================
 // pick_item_type — Select a random non-gold item type for floor spawning
-// Rejection sampling: roll random type 2-38, accept if min_level <= dlvl+2.
+// Rejection sampling: roll random type 2-46, accept if min_level <= dlvl+2.
 // 1-in-12 "great item" chance bypasses min_level check.
 // Fallback after 50 tries: return type 15 (ration of food).
-// Output: A = item type ID (2-38)
+// Output: A = item type ID (2-46)
 // Clobbers: A, X, Y
 // ============================================================
 pit_attempts: .byte 0
@@ -1153,8 +1190,8 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(37) + 2 → range [2, 38]
-    lda #37
+    // Roll type = rng_range(45) + 2 → range [2, 46]
+    lda #45
     jsr rng_range
     clc
     adc #2
@@ -1208,6 +1245,12 @@ roll_enchantment:
     cmp #ICAT_LIGHT
     beq !re_light+
 
+    // Special case: wands and staves get charges
+    cmp #ICAT_WAND
+    beq !re_wand+
+    cmp #ICAT_STAFF
+    beq !re_staff+
+
     // Equipment categories: WEAPON(2) through BOOTS(7), RING(12)
     cmp #ICAT_WEAPON
     bcc !re_zero+               // NONE(0) or GOLD(1) → no enchant
@@ -1237,6 +1280,46 @@ roll_enchantment:
     jsr rng_range
     clc
     adc #50
+    rts
+
+!re_wand:
+    lda zp_temp0
+    cmp #39                         // Wand of Light: [10,15]
+    beq !re_wand_light+
+    lda #4                          // Others: [5,8]
+    jsr rng_range
+    clc
+    adc #5
+    rts
+!re_wand_light:
+    lda #6
+    jsr rng_range
+    clc
+    adc #10
+    rts
+
+!re_staff:
+    lda zp_temp0
+    cmp #43                         // Staff of Light: [10,15]
+    beq !re_staff_light+
+    cmp #45                         // Staff of Teleportation: [3,5]
+    beq !re_staff_tele+
+    lda #6                          // Others: [3,8]
+    jsr rng_range
+    clc
+    adc #3
+    rts
+!re_staff_tele:
+    lda #3
+    jsr rng_range
+    clc
+    adc #3
+    rts
+!re_staff_light:
+    lda #6
+    jsr rng_range
+    clc
+    adc #10
     rts
 
 !re_equip:
@@ -1308,6 +1391,8 @@ id_known:
     .byte 0, 0              // 23-24: Rings — unknown at start
     .byte 0, 0, 0, 0, 0, 0, 0  // 25-31: Potions — unknown at start
     .byte 0, 0, 0, 0, 0, 0, 0  // 32-38: Scrolls — unknown at start
+    .byte 0, 0, 0, 0           // 39-42: Wands — unknown at start
+    .byte 0, 0, 0, 0           // 43-46: Staves — unknown at start
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -1389,6 +1474,32 @@ scroll_colors:
     .byte COL_BLUE, COL_ORANGE, COL_PURPLE, COL_LRED, COL_RED, COL_YELLOW
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
+// Wand identification
+wand_shuffle:  .byte 0, 1, 2, 3, 4
+
+wn_0: .text "AN IRON WAND" ; .byte 0
+wn_1: .text "A COPPER WAND" ; .byte 0
+wn_2: .text "A SILVER WAND" ; .byte 0
+wn_3: .text "A BONE WAND" ; .byte 0
+wn_4: .text "AN OAK WAND" ; .byte 0
+
+wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
+wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
+wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
+
+// Staff identification
+staff_shuffle: .byte 0, 1, 2, 3, 4
+
+sfn_0: .text "A BIRCH STAFF" ; .byte 0
+sfn_1: .text "A PINE STAFF" ; .byte 0
+sfn_2: .text "A MAPLE STAFF" ; .byte 0
+sfn_3: .text "A WILLOW STAFF" ; .byte 0
+sfn_4: .text "AN ASH STAFF" ; .byte 0
+
+staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
+staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
+staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
+
 // ============================================================
 // item_init_identification — Reset id_known and shuffle tables
 // Called once at new game start.
@@ -1424,6 +1535,13 @@ item_init_identification:
     sta ring_shuffle,x
     dex
     bpl !iid_init_rs-
+    ldx #4
+!iid_init_ws:
+    txa
+    sta wand_shuffle,x
+    sta staff_shuffle,x
+    dex
+    bpl !iid_init_ws-
 
     // Fisher-Yates shuffle: potions (12 elements)
     ldx #11                         // i = 11 down to 1
@@ -1483,6 +1601,44 @@ item_init_identification:
     dex
     bne !iid_ring_loop-
 
+    // Fisher-Yates shuffle: wands (5 elements)
+    ldx #4
+!iid_wand_loop:
+    txa
+    clc
+    adc #1
+    stx iid_save_x
+    jsr rng_range
+    ldx iid_save_x
+    tay
+    lda wand_shuffle,x
+    pha
+    lda wand_shuffle,y
+    sta wand_shuffle,x
+    pla
+    sta wand_shuffle,y
+    dex
+    bne !iid_wand_loop-
+
+    // Fisher-Yates shuffle: staves (5 elements)
+    ldx #4
+!iid_staff_loop:
+    txa
+    clc
+    adc #1
+    stx iid_save_x
+    jsr rng_range
+    ldx iid_save_x
+    tay
+    lda staff_shuffle,x
+    pha
+    lda staff_shuffle,y
+    sta staff_shuffle,x
+    pla
+    sta staff_shuffle,y
+    dex
+    bne !iid_staff_loop-
+
     rts
 
 iid_save_x: .byte 0                // Scratch for Fisher-Yates
@@ -1507,6 +1663,10 @@ item_get_name_ptr:
     beq !ignp_scroll+
     cmp #ICAT_RING
     beq !ignp_ring+
+    cmp #ICAT_WAND
+    beq !ignp_wand+
+    cmp #ICAT_STAFF
+    beq !ignp_staff+
 
     // Fallback (shouldn't happen): return real name
 !ignp_known:
@@ -1552,6 +1712,34 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     rts
 
+!ignp_wand:
+    // Local index = type - 39
+    txa
+    sec
+    sbc #39
+    tax
+    lda wand_shuffle,x
+    tax
+    lda wand_name_lo,x
+    sta zp_ptr0
+    lda wand_name_hi,x
+    sta zp_ptr0_hi
+    rts
+
+!ignp_staff:
+    // Local index = type - 43
+    txa
+    sec
+    sbc #43
+    tax
+    lda staff_shuffle,x
+    tax
+    lda staff_name_lo,x
+    sta zp_ptr0
+    lda staff_name_hi,x
+    sta zp_ptr0_hi
+    rts
+
 // ============================================================
 // item_get_floor_color — Get display color for a floor item
 // Input: A = item type ID
@@ -1572,6 +1760,10 @@ item_get_floor_color:
     beq !igfc_scroll+
     cmp #ICAT_RING
     beq !igfc_ring+
+    cmp #ICAT_WAND
+    beq !igfc_wand+
+    cmp #ICAT_STAFF
+    beq !igfc_staff+
 
 !igfc_known:
     lda it_color,x
@@ -1603,10 +1795,30 @@ item_get_floor_color:
     lda ring_colors,x
     rts
 
+!igfc_wand:
+    txa
+    sec
+    sbc #39
+    tax
+    lda wand_shuffle,x
+    tax
+    lda wand_colors,x
+    rts
+
+!igfc_staff:
+    txa
+    sec
+    sbc #43
+    tax
+    lda staff_shuffle,x
+    tax
+    lda staff_colors,x
+    rts
+
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 39
+.assert "Item type count", ITEM_TYPE_COUNT, 47
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

@@ -138,8 +138,81 @@ turn_tick_effects:
     beq !no_recall+
     dec zp_eff_word_recall
     bne !no_recall+
-    // TODO: teleport to town / back to dungeon (Phase 7)
+
+    // Word of recall expired — teleport between town and dungeon
+    // Clear FLAG_OCCUPIED at old position
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    lda (zp_ptr0),y
+    and #~FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    lda zp_player_dlvl
+    beq !recall_to_dungeon+
+
+    // In dungeon → go to town (dlvl 0)
+    lda #0
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    lda #1
+    sta level_entry_dir              // Ascending (town)
+    jmp !recall_generate+
+
+!recall_to_dungeon:
+    // In town → go to max depth reached
+    lda player_data + PL_MAX_DLVL
+    beq !no_recall+                  // Never been to dungeon — fizzle
+    sta zp_player_dlvl
+    sta player_data + PL_DLEVEL
+    lda #0
+    sta level_entry_dir              // Descending (arrive at up stairs)
+
+!recall_generate:
+    lda #$ff
+    sta zp_run_dir                   // Stop running
+    jsr level_generate
+    jsr monster_spawn_level
+    jsr item_spawn_level
+    jsr update_visibility
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+
+    lda #<recall_arrive_str
+    sta zp_ptr0
+    lda #>recall_arrive_str
+    sta zp_ptr0_hi
+    jsr msg_print
 !no_recall:
+
+    // Mana regen: spell-casting classes recover 1 MP per 2 turns
+    // Extra regen (zp_eff_regen > 0): recover 1 MP every turn
+    lda player_data + PL_SPELL_TYPE
+    beq !no_mana_regen+              // Warriors (type 0) don't regen mana
+
+    lda zp_player_mp
+    cmp zp_player_mmp
+    bcs !no_mana_regen+              // Already at max
+
+    // Extra regen: skip turn check, always regen
+    lda zp_eff_regen
+    bne !do_mana_regen+
+
+    // Normal rate: every 2 turns
+    lda zp_turn_lo
+    and #$01
+    bne !no_mana_regen+
+
+!do_mana_regen:
+    inc zp_player_mp
+    lda zp_player_mp
+    sta player_data + PL_MANA
+!no_mana_regen:
 
     rts
 
@@ -362,3 +435,4 @@ eff_confuse_end:  .text "YOU FEEL LESS CONFUSED." ; .byte 0
 eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0
 ttl_dim_str:      .text "YOUR LIGHT IS GROWING DIM." ; .byte 0
 ttl_out_str:      .text "YOUR LIGHT HAS GONE OUT." ; .byte 0
+recall_arrive_str: .text "YOU FEEL YOURSELF YANKED AWAY!" ; .byte 0

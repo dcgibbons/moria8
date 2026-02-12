@@ -33,6 +33,7 @@
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../monster_ai.s"
+#import "../monster_magic.s"
 #import "../item.s"
 #import "../player_items.s"
 #import "../spell_data.s"
@@ -56,7 +57,7 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 15, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
@@ -786,14 +787,321 @@ test_start:
     beq !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp !tests_done+
+    jmp !t11+
 !t10_fail:
     lda #$00
     sta tc_results + 9
 
+    // ==========================================
+    // Test 11: monster_can_cast with spell_chance=0 → carry clear
+    // All tier 0 creatures have spell_chance=0
+    // ==========================================
+!t11:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Set up a monster (type 0, spell_chance=0)
+    lda #0
+    sta zp_mon_type
+    lda #20
+    sta zp_mon_x
+    lda #20
+    sta zp_mon_y
+
+    // Player nearby
+    lda #21
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    jsr monster_can_cast
+    bcs !t11_fail+
+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // ==========================================
+    // Test 12: monster_can_cast with spell_chance=100 and in range/LOS
+    // → carry set
+    // ==========================================
+!t12:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Temporarily set spell_chance[0] = 100, spell_flags[0] = 1
+    lda #100
+    sta cr_spell_chance
+    lda #MSF_BOLT
+    sta cr_spell_flags
+
+    // Create floor tiles between monster and player for LOS
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+!t12_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #20
+    bne !t12_fill-
+
+    // Set up monster at (10, 15)
+    lda #0
+    sta zp_mon_type
+    lda #10
+    sta zp_mon_x
+    lda #15
+    sta zp_mon_y
+
+    // Player at (15, 15) — distance 5, within MAX_CAST_RANGE
+    lda #15
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_can_cast
+    bcc !t12_fail+
+
+    lda #$01
+    sta tc_results + 11
+    jmp !t12_cleanup+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+!t12_cleanup:
+    // Restore spell_chance and flags
+    lda #0
+    sta cr_spell_chance
+    sta cr_spell_flags
+
+    // ==========================================
+    // Test 13: monster_can_cast with LOS blocked by wall → carry clear
+    // ==========================================
+!t13:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Set spell_chance[0] = 100
+    lda #100
+    sta cr_spell_chance
+    lda #MSF_BOLT
+    sta cr_spell_flags
+
+    // Create floor at (10,15) and (12,15), wall at (11,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    ldy #11
+    lda #TILE_WALL_H | FLAG_LIT   // Wall blocks LOS
+    sta (zp_ptr0),y
+    ldy #12
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    // Monster at (10, 15)
+    lda #0
+    sta zp_mon_type
+    lda #10
+    sta zp_mon_x
+    lda #15
+    sta zp_mon_y
+
+    // Player at (12, 15) — wall at (11,15) blocks LOS
+    lda #12
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_can_cast
+    bcs !t13_fail+
+
+    lda #$01
+    sta tc_results + 12
+    jmp !t13_cleanup+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+
+!t13_cleanup:
+    lda #0
+    sta cr_spell_chance
+    sta cr_spell_flags
+
+    // ==========================================
+    // Test 14: Breath weapon damage = HP/3
+    // Set monster HP to 30, breath should do 10 damage
+    // ==========================================
+!t14:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Reset player HP
+    lda #200
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+
+    // Set spell data for creature type 0
+    lda #100
+    sta cr_spell_chance
+    lda #MSF_BREATH
+    sta cr_spell_flags
+
+    // Create floor at spawn position
+    ldx #18
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    // Spawn monster type 0 at (10, 18)
+    lda #10
+    sta ms_spawn_x
+    lda #18
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+
+    // Set monster HP to 30 (known value)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #30
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+
+    // Set up ZP scratch for monster_pick_spell
+    lda #0
+    sta zp_mon_type
+    sta zp_mon_idx
+
+    // Call monster_pick_spell directly (breath handler)
+    jsr monster_pick_spell
+
+    // Player HP should be 200 - 10 = 190
+    lda zp_player_hp_lo
+    cmp #190
+    bne !t14_fail+
+    lda zp_player_hp_hi
+    cmp #0
+    bne !t14_fail+
+
+    lda #$01
+    sta tc_results + 13
+    jmp !t14_cleanup+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+
+!t14_cleanup:
+    lda #0
+    sta cr_spell_chance
+    sta cr_spell_flags
+
+    // ==========================================
+    // Test 15: monster_cast_heal restores monster HP
+    // ==========================================
+!t15:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Set spell data for creature type 0 — heal only
+    lda #100
+    sta cr_spell_chance
+    lda #MSF_HEAL
+    sta cr_spell_flags
+
+    // Create floor at spawn position
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    // Spawn monster type 0 at (10, 19)
+    lda #10
+    sta ms_spawn_x
+    lda #19
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+
+    // Set monster HP to 1 (reduced HP)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+
+    // Set up ZP scratch for monster_pick_spell
+    lda #0
+    sta zp_mon_type
+    sta zp_mon_idx
+
+    // Call monster_pick_spell (will pick heal since it's the only spell)
+    jsr monster_pick_spell
+
+    // Monster HP should be > 1 (healed by 3d8 = 3-24)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    cmp #2
+    bcc !t15_fail+             // HP < 2 means heal didn't work
+
+    lda #$01
+    sta tc_results + 14
+    jmp !tests_done+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
 !tests_done:
     // Copy results from tc_results to $0400 (screen row 0)
-    ldx #9
+    ldx #14
 !copy_results:
     lda tc_results,x
     sta $0400,x

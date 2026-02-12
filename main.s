@@ -39,6 +39,7 @@
 #import "dungeon_features.s"
 #import "monster.s"
 #import "monster_ai.s"
+#import "monster_magic.s"
 #import "item.s"
 #import "player_items.s"
 #import "spell_data.s"
@@ -128,6 +129,15 @@ entry:
 
     // Initialize message system
     jsr msg_init
+
+    // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
+    ldx #0
+    lda #0
+!clear_effects:
+    sta zp_eff_poison,x
+    inx
+    cpx #16                 // $50–$5f = 16 bytes
+    bne !clear_effects-
 
     // --- Character creation ---
     jsr player_create
@@ -658,6 +668,48 @@ entry:
 !read_no_turn:
     jmp !main_loop-
 !not_read:
+
+    // Aim wand?
+    cmp #CMD_AIM
+    bne !not_aim+
+    jsr msg_clear
+    jsr item_aim_wand
+    bcc !aim_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!aim_no_turn:
+    jmp !main_loop-
+!not_aim:
+
+    // Use staff?
+    cmp #CMD_USE
+    bne !not_use+
+    jsr msg_clear
+    jsr item_use_staff
+    bcc !use_no_turn+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!use_no_turn:
+    jmp !main_loop-
+!not_use:
 
     // Cast spell?
     cmp #CMD_CAST

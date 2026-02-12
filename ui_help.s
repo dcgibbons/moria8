@@ -11,7 +11,7 @@
 // ============================================================
 // Constants
 // ============================================================
-.const HELP_LINE_COUNT = 21
+.const HELP_LINE_COUNT = 22
 
 // ============================================================
 // Subroutines
@@ -135,6 +135,7 @@ help_l17: .text "Q QUAFF POTION   SHIFT+Q QUIT" ; .byte 0
 help_l18: .text "R READ SCROLL" ; .byte 0
 help_l19: .text "A AIM WAND" ; .byte 0
 help_l20: .text "Z USE STAFF" ; .byte 0
+help_l21: .text "M CAST SPELL     P PRAY" ; .byte 0
 
 // Pointer tables (lo/hi split)
 help_line_ptrs_lo:
@@ -142,11 +143,11 @@ help_line_ptrs_lo:
     .byte <help_l5,  <help_l6,  <help_l7,  <help_l8,  <help_l9
     .byte <help_l10, <help_l11, <help_l12, <help_l13, <help_l14
     .byte <help_l15, <help_l16, <help_l17, <help_l18, <help_l19
-    .byte <help_l20
+    .byte <help_l20, <help_l21
 
 help_line_ptrs_hi:
     .byte >help_l0,  >help_l1,  >help_l2,  >help_l3,  >help_l4
     .byte >help_l5,  >help_l6,  >help_l7,  >help_l8,  >help_l9
     .byte >help_l10, >help_l11, >help_l12, >help_l13, >help_l14
     .byte >help_l15, >help_l16, >help_l17, >help_l18, >help_l19
-    .byte >help_l20
+    .byte >help_l20, >help_l21
