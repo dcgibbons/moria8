@@ -658,6 +658,9 @@ create_init_character:
     // Sync to ZP
     jsr player_sync_to_zp
 
+    // Learn starting spells (level-1 spells for spell-casting classes)
+    jsr magic_check_new_spells
+
     // Initialize HP regen counter from CON
     lda player_data + PL_CON_CUR
     sec

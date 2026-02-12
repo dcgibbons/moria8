@@ -636,6 +636,259 @@ calc_spell_failure:
     rts
 
 // ============================================================
+// magic_check_new_spells — Learn any spells the player qualifies for
+// Checks each spell 0-15: if spell_level <= player_level and not
+// already known, set the known bit and print message.
+// Called on level-up and at character creation.
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr2
+// ============================================================
+pm_learn_idx:    .byte 0     // Loop counter for learn check
+
+magic_check_new_spells:
+    lda player_data + PL_SPELL_TYPE
+    bne !mcns_has_type+
+    rts                             // SPELL_NONE — nothing to learn
+!mcns_has_type:
+    cmp #SPELL_MAGE
+    bne !mcns_priest+
+
+    // Mage: use mage tables
+    lda #<mage_spell_level
+    sta pm_lvl_tbl_lo
+    lda #>mage_spell_level
+    sta pm_lvl_tbl_hi
+    lda #<mage_spell_name_lo
+    sta pm_name_lo_lo
+    lda #>mage_spell_name_lo
+    sta pm_name_lo_hi
+    lda #<mage_spell_name_hi
+    sta pm_name_hi_lo
+    lda #>mage_spell_name_hi
+    sta pm_name_hi_hi
+    jmp !mcns_scan+
+
+!mcns_priest:
+    // Priest: use priest tables
+    lda #<priest_spell_level
+    sta pm_lvl_tbl_lo
+    lda #>priest_spell_level
+    sta pm_lvl_tbl_hi
+    lda #<priest_spell_name_lo
+    sta pm_name_lo_lo
+    lda #>priest_spell_name_lo
+    sta pm_name_lo_hi
+    lda #<priest_spell_name_hi
+    sta pm_name_hi_lo
+    lda #>priest_spell_name_hi
+    sta pm_name_hi_hi
+
+!mcns_scan:
+    lda #0
+    sta pm_learn_idx
+
+!mcns_loop:
+    lda pm_learn_idx
+    cmp #16
+    bcc !mcns_cont+
+    rts
+!mcns_cont:
+
+    // Check if already known
+    lda pm_learn_idx
+    cmp #8
+    bcs !mcns_hi_check+
+
+    // Spells 0-7: check lo byte
+    tax
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN
+    beq !mcns_check_level+
+    jmp !mcns_next+             // Already known, skip
+
+!mcns_hi_check:
+    // Spells 8-15: check hi byte
+    sec
+    sbc #8
+    tax
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN_HI
+    beq !mcns_check_level+
+    jmp !mcns_next+             // Already known, skip
+
+!mcns_check_level:
+    // Check spell_level[i] <= player_level
+    lda pm_lvl_tbl_lo
+    sta zp_ptr0
+    lda pm_lvl_tbl_hi
+    sta zp_ptr0_hi
+    ldy pm_learn_idx
+    lda (zp_ptr0),y             // Spell min level
+    cmp zp_player_lvl
+    beq !mcns_learn+
+    bcc !mcns_learn+
+    jmp !mcns_next+             // Spell level too high
+
+!mcns_learn:
+    // Set known bit
+    lda pm_learn_idx
+    cmp #8
+    bcs !mcns_set_hi+
+
+    // Set bit in lo byte
+    tax
+    lda player_data + PL_SPELLS_KNOWN
+    ora spell_bit_mask,x
+    sta player_data + PL_SPELLS_KNOWN
+    jmp !mcns_msg+
+
+!mcns_set_hi:
+    // Set bit in hi byte
+    sec
+    sbc #8
+    tax
+    lda player_data + PL_SPELLS_KNOWN_HI
+    ora spell_bit_mask,x
+    sta player_data + PL_SPELLS_KNOWN_HI
+
+!mcns_msg:
+    // Print "YOU HAVE LEARNED <spell name>!"
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<pm_learned_str
+    ldy #>pm_learned_str
+    jsr combat_append_str       // "YOU HAVE LEARNED "
+
+    // Append spell name
+    lda pm_name_lo_lo
+    sta zp_ptr0
+    lda pm_name_lo_hi
+    sta zp_ptr0_hi
+    ldy pm_learn_idx
+    lda (zp_ptr0),y
+    sta zp_ptr2
+
+    lda pm_name_hi_lo
+    sta zp_ptr0
+    lda pm_name_hi_hi
+    sta zp_ptr0_hi
+    ldy pm_learn_idx
+    lda (zp_ptr0),y
+
+    tay
+    lda zp_ptr2
+    jsr combat_append_str
+
+    // Append "!"
+    lda #<pm_bang_str
+    ldy #>pm_bang_str
+    jsr combat_append_str
+
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+!mcns_next:
+    inc pm_learn_idx
+    jmp !mcns_loop-
+
+// ============================================================
+// magic_recalc_mana — Recalculate max mana based on level + stat
+// Formula: max_mana = (level * stat) / 8 + spell_stat_bonus[stat-3]
+// Clamped to [1, 255]. Called on level-up.
+// Clobbers: A, X, Y, zp_math_a/b
+// ============================================================
+magic_recalc_mana:
+    lda player_data + PL_SPELL_TYPE
+    bne !mrm_has_spells+
+
+    // No spell type — max_mana = 0
+    lda #0
+    sta player_data + PL_MAX_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MANA
+    sta zp_player_mp
+    rts
+
+!mrm_has_spells:
+    // Get relevant stat
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_MAGE
+    bne !mrm_wis+
+    lda player_data + PL_INT_CUR
+    jmp !mrm_got_stat+
+!mrm_wis:
+    lda player_data + PL_WIS_CUR
+
+!mrm_got_stat:
+    sta pm_cost_tmp                 // Save stat value
+
+    // max_mana = (level * stat) / 8
+    lda zp_player_lvl              // A = level
+    ldx pm_cost_tmp                // X = stat
+    jsr math_multiply              // zp_math_a = lo, zp_math_b = hi
+
+    // Divide by 8: shift right 3 times
+    lsr zp_math_b
+    ror zp_math_a
+    lsr zp_math_b
+    ror zp_math_a
+    lsr zp_math_b
+    ror zp_math_a
+
+    // If hi byte > 0 after division, clamp to 255
+    lda zp_math_b
+    bne !mrm_clamp_max+
+    lda zp_math_a
+    sta pm_cost_tmp                 // base mana
+
+    // Add spell_stat_bonus[stat-3]
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_MAGE
+    bne !mrm_wis_bonus+
+    lda player_data + PL_INT_CUR
+    jmp !mrm_bonus+
+!mrm_wis_bonus:
+    lda player_data + PL_WIS_CUR
+!mrm_bonus:
+    jsr stat_bonus_index            // X = index
+    lda spell_stat_bonus,x
+    clc
+    adc pm_cost_tmp
+    bcs !mrm_clamp_max+             // Overflow → 255
+
+    // Clamp minimum to 1
+    cmp #1
+    bcs !mrm_store+
+    lda #1
+    jmp !mrm_store+
+
+!mrm_clamp_max:
+    lda #255
+
+!mrm_store:
+    sta player_data + PL_MAX_MANA
+    sta zp_player_mmp
+
+    // If current mana > new max, clamp
+    lda zp_player_mp
+    cmp player_data + PL_MAX_MANA
+    bcc !mrm_done+
+    beq !mrm_done+
+    lda player_data + PL_MAX_MANA
+    sta zp_player_mp
+    sta player_data + PL_MANA
+
+!mrm_done:
+    rts
+
+// ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
 pm_no_cast_str:
@@ -664,6 +917,10 @@ pm_footer_cast_str:
     .text "CAST WHICH? (A-P, ESC)" ; .byte 0
 pm_footer_pray_str:
     .text "PRAY WHICH? (A-P, ESC)" ; .byte 0
+pm_learned_str:
+    .text "YOU HAVE LEARNED " ; .byte 0
+pm_bang_str:
+    .byte $21, 0    // "!"
 
 // ============================================================
 // Compile-time asserts

@@ -32,12 +32,18 @@
 #import "../monster.s"
 #import "../monster_ai.s"
 #import "../item.s"
+#import "../player_items.s"
+#import "../spell_data.s"
+#import "../spell_effects.s"
+#import "../player_magic.s"
+#import "../ui_inventory.s"
 #import "../dungeon_render.s"
 #import "../dungeon_los.s"
 #import "../player_move.s"
 #import "../combat.s"
 #import "../monster_attack.s"
 #import "../turn.s"
+#import "../ui_help.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
