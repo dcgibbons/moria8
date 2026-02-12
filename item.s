@@ -281,7 +281,7 @@ item_init_inventory:
     rts
 
 // floor_item_add — Add an item to the floor item table
-// Input: fi_add_x, fi_add_y, fi_add_id, fi_add_qty, fi_add_p1
+// Input: fi_add_x, fi_add_y, fi_add_id, fi_add_qty, fi_add_p1, fi_add_flags
 // Output: carry set = success (X = slot), carry clear = table full
 // Clobbers: A, X, Y, zp_ptr0
 floor_item_add:
@@ -308,8 +308,9 @@ floor_item_add:
     sta fi_qty,x
     lda fi_add_p1
     sta fi_p1,x
-    lda #0
+    lda fi_add_flags
     sta fi_flags,x
+    lda #0
     sta fi_spare1,x
     sta fi_spare2,x
 
@@ -583,6 +584,7 @@ item_spawn_level:
 
     lda #0
     sta fi_add_p1               // No enchantment for gold
+    sta fi_add_flags            // No flags for gold
 
     jsr floor_item_add
     // Ignore failure (table full)
@@ -650,9 +652,7 @@ item_spawn_level:
     jsr roll_enchantment
     sta fi_add_p1
 
-    // Copy flags from roll_enchantment scratch
-    // (fi_add_flags is set by roll_enchantment for cursed items)
-    // We write flags after floor_item_add, which clears fi_flags
+    // fi_add_flags set by roll_enchantment (IF_CURSED for cursed items)
 
     // Set qty: equipment = 1, everything = 1 (lights get charges via p1)
     lda #1
@@ -660,11 +660,6 @@ item_spawn_level:
 
     jsr floor_item_add
     bcc !isl_ngold_skip+        // Table full — skip
-
-    // Set cursed flag if roll_enchantment flagged it
-    lda fi_add_flags
-    beq !isl_ngold_skip+
-    sta fi_flags,x              // X = slot from floor_item_add
 
 !isl_ngold_skip:
     inc isl_idx
@@ -761,11 +756,6 @@ item_spawn_level:
 
     jsr floor_item_add
     bcc !isl_treasure_skip+
-
-    // Set cursed flag if needed
-    lda fi_add_flags
-    beq !isl_treasure_skip+
-    sta fi_flags,x
 
 !isl_treasure_skip:
     inc isl_target
@@ -990,6 +980,8 @@ item_drop:
     sta fi_add_qty
     lda inv_p1,x
     sta fi_add_p1
+    lda inv_flags,x
+    sta fi_add_flags
 
     jsr floor_item_add
     bcs !idr_placed+

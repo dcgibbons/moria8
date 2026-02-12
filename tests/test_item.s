@@ -172,6 +172,7 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    sta fi_add_flags
 
     jsr floor_item_add
     bcc !t2_fail+
@@ -242,6 +243,7 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    sta fi_add_flags
     jsr floor_item_add
 
     ldx #15
@@ -263,6 +265,7 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    sta fi_add_flags
     jsr floor_item_add
 
     // Count should be 3
@@ -493,6 +496,7 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    sta fi_add_flags
     jsr floor_item_add
 
     // Stuff keyboard buffer for -more- prompt
@@ -562,6 +566,7 @@ test_start:
     sta fi_add_qty
     lda #0
     sta fi_add_p1
+    sta fi_add_flags
     jsr floor_item_add
 
     // Stuff keyboard buffer
@@ -1288,11 +1293,9 @@ test_start:
     sta fi_add_qty
     lda #$fd                        // -3 enchant
     sta fi_add_p1
-    jsr floor_item_add
-
-    // Set IF_CURSED flag on floor item
     lda #IF_CURSED
-    sta fi_flags                    // Slot 0
+    sta fi_add_flags
+    jsr floor_item_add
 
     // Stuff keyboard buffer for -more-
     lda #1

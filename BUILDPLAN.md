@@ -1571,8 +1571,8 @@ If done, also update the function's input comment to document `fi_add_flags`.
 
 #### Summary of Review Pass 9 findings
 
-| # | Severity | Issue | Fix complexity |
-|---|----------|-------|----------------|
-| RP9-1 | LOW | Paralysis timer level-1 special case: 5 should be 4 | Trivial — change 1 constant or remove special case |
-| RP9-2 | **MEDIUM** | `item_drop` loses IF_CURSED/IF_IDENTIFIED flags | Easy — add 2 lines + post-hoc patch (4 lines) |
-| RP9-3 | LOW | `floor_item_add` ignores `fi_add_flags` (design debt) | Easy — change 1 line in `floor_item_add`, remove post-hoc patches |
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP9-1 | LOW | Paralysis timer level-1 special case: 5 should be 4 | Trivial — remove special case | **FIXED** — removed level-1 special case; general formula handles it |
+| RP9-2 | **MEDIUM** | `item_drop` loses IF_CURSED/IF_IDENTIFIED flags | Easy — add `inv_flags→fi_add_flags` copy | **FIXED** — added flags copy in `item_drop` before `floor_item_add` |
+| RP9-3 | LOW | `floor_item_add` ignores `fi_add_flags` (design debt) | Easy — copy `fi_add_flags` instead of hardcoding 0 | **FIXED** — `floor_item_add` now copies `fi_add_flags`; removed post-hoc patches; added init to gold path + all tests |

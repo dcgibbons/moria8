@@ -499,15 +499,9 @@ mon_atk_effect_paralyze:
     // rng_range(level) gives [0, level-1], + 4 gives [4, level+3]
     ldx mat_type2
     lda cr_level,x
-    cmp #1
-    bne !mepa_roll+
-    lda #5                      // Level 1: 0 + 4 + 1 = 5
-    sta zp_eff_paralyze
-    jmp !mepa_msg+
-!mepa_roll:
     jsr rng_range               // [0, level-1]
     clc
-    adc #4
+    adc #4                      // [4, level+3] — matches umoria
     sta zp_eff_paralyze
 !mepa_msg:
     // Print "THE <name> PARALYZES YOU."
