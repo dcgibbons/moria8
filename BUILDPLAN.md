@@ -1849,7 +1849,131 @@ or individual spell effects. The following runtime tests should be added:
 | RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | Open |
 | RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | Open |
 | RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | Open |
-| RP10-12 | LOW | `eff_aggravate` not implemented despite being listed in Step 7.0 | Easy — ~20 bytes | Open |
+| RP10-12 | LOW | `eff_aggravate` not implemented despite being listed in Step 7.0 | Easy — ~20 bytes | Resolved (see RP11-6) |
+
+---
+
+### Review Pass 11 — Step 7.6 (Expanded Potions and Scrolls)
+
+**Scope:** `item.s`, `player_items.s`, `combat.s`, `zeropage.s`, `tests/test_item.s`, `run_tests.sh`
+**Reviewer:** Claude (automated)
+**Date:** 2025-02-12
+
+#### RP11-1 (HIGH): CSW heal computes [5,40] instead of intended [10,45]
+
+**Location:** `player_items.s:836-856`
+
+The comment says "heal 5d8 (5× rng(8)) + 5" and BUILDPLAN line 2408 says "Heal 5d8+5".
+The code rolls 5×rng(8) = 5×[0,7] = [0,35], then adds 5, giving **[5,40]**.
+The +5 only compensates for `rng_range(8)` returning [0,7] instead of [1,8] — the actual
++5 bonus from the design is lost.
+
+Intended range: 5d8+5 = [10, 45]. Actual range: [5, 40]. Off by 5 at both ends.
+
+**Test impact:** Test 33 checks HP in [60,95] (expects 50 + [10,45] heal). With the actual
+[5,40] range, heal values 5-9 produce HP 55-59 which fails the `cmp #60; bcc` lower bound
+check. The test will fail intermittently (~14% of runs).
+
+**Fix:** Replace the manual loop with `math_dice(5, 8, 5)`:
+```
+lda #5           ; N=5 dice
+ldx #8           ; S=8 sides
+ldy #5           ; bonus=5
+jsr math_dice
+lda zp_math_a    ; low byte (max 45, fits in 8 bits)
+jsr eff_heal
+```
+This also saves ~14 bytes versus the manual loop.
+
+#### RP11-2 (HIGH): Enchant Weapon/Armor broken on cursed items
+
+**Location:** `player_items.s:1184-1198` (weapon), `player_items.s:1228-1242` (armor)
+
+The cap check uses unsigned comparison: `lda inv_p1,x; cmp #5; bcc`. Cursed items store
+negative p1 as two's complement (e.g., -3 = $FD). Unsigned $FD = 253 ≥ 5, so BCC does not
+branch. The handler falls through to "already at cap" and does nothing.
+
+In umoria, enchanting a cursed weapon/armor should: (1) clear IF_CURSED flag, (2) set p1=0,
+(3) recalculate equipment, (4) display glow message.
+
+**Fix:** Before the unsigned cap check, add a cursed-item branch:
+```
+!irs_ew_has:
+    ldx #EQUIP_WEAPON
+    lda inv_flags,x
+    and #IF_CURSED
+    beq !irs_ew_not_cursed+
+    // Cursed → remove curse + reset to 0
+    lda inv_flags,x
+    and #~IF_CURSED & $ff
+    sta inv_flags,x
+    lda #0
+    sta inv_p1,x
+    jsr player_recalc_equipment
+    jmp !irs_ew_msg+         ; print glow message
+!irs_ew_not_cursed:
+    lda inv_p1,x
+    cmp #5
+    bcc !irs_ew_inc+
+    ...
+```
+Same pattern needed for Enchant Armor with EQUIP_BODY.
+
+#### RP11-3 (MEDIUM): No test coverage for enchant on cursed items
+
+Test 35 (Enchant Weapon) only tests with positive p1=2. No test exists for:
+- Enchant weapon with negative p1 ($FD = -3) and IF_CURSED flag set → should remove curse, set p1=0
+- Enchant armor with IF_CURSED flag → same behavior
+- Enchant at exact cap (p1=5) → should print "nothing happens", p1 unchanged
+
+#### RP11-4 (MEDIUM): Heroism, Infravision, Protect from Evil timers have no game effect
+
+`zp_eff_hero`, `zp_eff_infra`, and `zp_eff_protect` are set by their respective
+potions/scrolls and decremented each turn by `turn.s`, but **no code checks these timers
+to apply gameplay effects:**
+- Heroism: should grant +1 to-hit and +10 max HP while active (per umoria)
+- Infravision: should reveal monsters within range while active
+- Protect from Evil: should reduce damage from evil monsters while active
+
+The timers are pure stubs — using these items currently has no gameplay effect. Either the
+consumption code should be added (likely a Phase 8+ concern) or the BUILDPLAN should
+explicitly note these as infrastructure-only stubs awaiting integration.
+
+#### RP11-5 (LOW): Word of Recall overwrites timer (correct but undocumented)
+
+`zp_eff_word_recall` is stored directly (`sta`), not added to existing value. Reading a
+second Word of Recall scroll overwrites the timer rather than extending it. This matches
+umoria behavior but differs from other timer effects (Heroism, Blindness, etc.) which
+stack via `clc; adc`. Should be documented as intentional.
+
+#### RP11-6 (LOW): RP10-12 resolved — eff_aggravate IS implemented
+
+RP10-12 stated eff_aggravate was not implemented. It exists at `spell_effects.s:1046` and
+is successfully called by the Aggravate scroll handler at `player_items.s:1270`. RP10-12
+status should be updated to Resolved.
+
+#### Suggested tests for Step 7.6
+
+1. **CSW heal range [10,45]:** After fixing RP11-1, verify heal from HP=50 gives HP in
+   [60,95]. Run multiple iterations to catch edge cases.
+2. **Enchant Weapon on cursed item:** Set EQUIP_WEAPON p1=$FD (-3), inv_flags=IF_CURSED.
+   Read Enchant Weapon scroll. Verify p1=0, IF_CURSED cleared.
+3. **Enchant Armor on cursed item:** Same test for EQUIP_BODY slot.
+4. **Enchant at exact cap:** Set p1=5, read Enchant scroll → verify p1 stays 5.
+5. **Heroism timer stacking:** Drink two Heroism potions → verify timer in [50,98] range
+   (not overflow beyond 98).
+6. **Protect from Evil timer range:** Verify timer in [25,49] after reading scroll.
+
+#### Summary of Review Pass 11 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP11-1 | **HIGH** | CSW heal [5,40] instead of [10,45]; Test 33 fails intermittently | Easy — use math_dice(5,8,5) or change adc #5 → adc #10 | Open |
+| RP11-2 | **HIGH** | Enchant Weapon/Armor broken on cursed items (unsigned cmp treats -N as >5) | Medium — add IF_CURSED branch before cap check in both handlers | Open |
+| RP11-3 | **MEDIUM** | No test for enchant on cursed items | Easy — add test with negative p1 + IF_CURSED | Open |
+| RP11-4 | **MEDIUM** | Heroism/Infravision/Protect timers are stubs — no code checks them for gameplay effects | Design — document as stubs or implement consumption | Open |
+| RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | Open |
+| RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | Open |
 
 ---
 
