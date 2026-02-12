@@ -144,8 +144,8 @@ test_start:
     sta tc_results + 0
 
     // ==========================================
-    // Test 2: Immobile monster (speed=0) doesn't move
-    // Type 6 (Shrieker mushroom) — speed=0
+    // Test 2: Attack-only monster (CF_ATTACK_ONLY) doesn't move
+    // Type 6 (Shrieker mushroom) — speed=1, CF_ATTACK_ONLY
     // ==========================================
 !t2:
     jsr monster_init_table
@@ -170,7 +170,7 @@ test_start:
     sta ms_spawn_x
     lda #20
     sta ms_spawn_y
-    lda #6                      // Shrieker mushroom (speed=0)
+    lda #6                      // Shrieker mushroom (speed=1, CF_ATTACK_ONLY)
     jsr monster_spawn_one
 
     // Save position
@@ -568,7 +568,7 @@ test_start:
 
     // ==========================================
     // Test 8: Speed 2 monster moves twice per tick
-    // Type 13 (Poltergeist) — speed=2
+    // Type 14 (Huge brown bat) — speed=2
     // ==========================================
 !t8:
     jsr monster_init_table
@@ -589,12 +589,12 @@ test_start:
     cpy #31
     bne !t8_fill-
 
-    // Spawn poltergeist at (20,15)
+    // Spawn huge brown bat at (20,15)
     lda #20
     sta ms_spawn_x
     lda #15
     sta ms_spawn_y
-    lda #13                     // Poltergeist (speed=2)
+    lda #14                     // Huge brown bat (speed=2)
     jsr monster_spawn_one
 
     // Set awake

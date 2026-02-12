@@ -339,17 +339,16 @@ mon_atk_effect_dispatch:
     jsr mon_atk_ac_reduce
     rts
 !maed_poison:
-    jsr mon_atk_ac_reduce
+    // Full dice damage, no AC reduction (matches umoria)
     jsr mon_atk_effect_poison
     rts
 !maed_confuse:
-    lda #0
-    sta zp_combat_dmg           // Confusion: no physical damage
+    // Full dice damage, no AC reduction (matches umoria)
+    // 50% chance of applying confusion effect
+    lda #2
+    jsr rng_range               // [0, 1]
+    bne !maed_conf_done+        // 0 = apply, 1 = skip
     jsr mon_atk_effect_confuse
-    lda zp_eff_confuse
-    beq !maed_conf_done+
-    lda #1
-    sta mat_any_hit             // Confusion "hit" even though no damage
 !maed_conf_done:
     rts
 !maed_paralyze:
@@ -363,34 +362,48 @@ mon_atk_effect_dispatch:
     jsr mon_atk_effect_acid
     rts
 !maed_fear:
-    // Fear: AC-reduced damage. Fear effect deferred to Phase 6+.
-    jsr mon_atk_ac_reduce
+    // Fear: full dice damage, no AC reduction (matches umoria)
+    // Fear effect deferred to Phase 6+.
     rts
 !maed_corrode:
     // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
     rts
 
-// mon_atk_effect_poison — Set poison timer
-// Timer = rng_range(cr_level) + 5, if not already poisoned
+// mon_atk_effect_poison — Set/stack poison timer (umoria stacking)
+// Always adds rng_range(cr_level) + 5 to poison timer.
+// Message only printed on first poisoning.
 // Clobbers: A, X, zp_temp3, zp_temp4
+mep_was_poisoned: .byte 0
+
 mon_atk_effect_poison:
     lda zp_eff_poison
-    bne !mep_done+              // Already poisoned
+    sta mep_was_poisoned        // Save whether already poisoned
 
+    // Compute addition: rng_range(cr_level) + 5
     ldx mat_type2
     lda cr_level,x
     cmp #1
     bne !mep_roll+
-    // Level 1: skip range, just use 5+1=6
+    // Level 1: 0 + 5 + 1 = 6
     lda #6
-    sta zp_eff_poison
-    jmp !mep_msg+
+    jmp !mep_add+
 !mep_roll:
     jsr rng_range               // [0, level-1]
     clc
     adc #5
+!mep_add:
+    // Add to existing poison timer
+    clc
+    adc zp_eff_poison
+    bcc !mep_store+
+    lda #255                    // Cap at 255
+!mep_store:
     sta zp_eff_poison
-!mep_msg:
+
+    // Only print message if newly poisoned (wasn't before)
+    lda mep_was_poisoned
+    bne !mep_done+
+
     // Print "THE <name> POISONS YOU."
     lda #<mat_poison_str
     sta zp_ptr2
@@ -405,24 +418,25 @@ mon_atk_effect_poison:
 !mep_done:
     rts
 
-// mon_atk_effect_confuse — Set confusion timer
-// Timer = rng_range(cr_level) + 2, if not already confused
+// mon_atk_effect_confuse — Set/stack confusion timer (umoria stacking)
+// First: timer = rng_range(cr_level) + 3. Stacking: timer += 3.
 // Clobbers: A, X, zp_temp3, zp_temp4
 mon_atk_effect_confuse:
     lda zp_eff_confuse
-    bne !mec_done+
+    bne !mec_stack+
 
+    // First confusion: rng_range(cr_level) + 3
     ldx mat_type2
     lda cr_level,x
     cmp #1
     bne !mec_roll+
-    lda #3
+    lda #4                      // Level 1: 0 + 3 + 1 = 4
     sta zp_eff_confuse
     jmp !mec_msg+
 !mec_roll:
-    jsr rng_range
+    jsr rng_range               // [0, level-1]
     clc
-    adc #2
+    adc #3
     sta zp_eff_confuse
 !mec_msg:
     // Print "THE <name> CONFUSES YOU."
@@ -436,7 +450,17 @@ mon_atk_effect_confuse:
     lda #>combat_msg_buf
     sta zp_ptr0_hi
     jsr msg_print
-!mec_done:
+    rts
+
+!mec_stack:
+    // Already confused: add 3 turns (umoria stacking)
+    lda zp_eff_confuse
+    clc
+    adc #3
+    bcc !mec_stack_ok+
+    lda #255                    // Cap at 255
+!mec_stack_ok:
+    sta zp_eff_confuse
     rts
 
 // mon_atk_effect_paralyze — Saving throw, then set paralysis timer

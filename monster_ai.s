@@ -2,8 +2,9 @@
 //
 // Called once per turn from turn_post_action. Iterates all 32 monster
 // slots, performs wake checks, and moves awake monsters toward the
-// player (greedy movement) or randomly if confused. Speed 0 = immobile,
-// speed 1 = one move, speed 2 = two moves per turn.
+// player (greedy movement) or randomly if confused. Speed 0 = slow
+// (every other turn), speed 1 = normal, speed 2 = fast (two moves).
+// CF_ATTACK_ONLY creatures can attack adjacent player but not move.
 //
 // Combat handled via monster_attack_player when adjacent (Phase 5.4).
 
@@ -19,7 +20,7 @@ mat_sign_dy:  .byte 0
 
 // ============================================================
 // monster_ai_tick — Main AI loop
-// Iterates all 32 slots. Skips empty and immobile (speed=0).
+// Iterates all 32 slots. Skips empty. Speed 0 = slow (every other turn).
 // Speed 2 monsters get processed twice.
 // Clobbers: everything
 // ============================================================
@@ -55,11 +56,18 @@ monster_ai_tick:
     lda (zp_ptr0),y
     sta zp_mon_flags
 
-    // Check speed — skip immobile (speed=0)
+    // Check speed
     ldx zp_mon_type
     lda cr_speed,x
-    beq !mat_next+              // Immobile, skip entirely
+    bne !mat_not_slow+
 
+    // Speed 0 = slow: act every other turn (even turns only)
+    lda zp_turn_lo
+    and #$01
+    bne !mat_next+              // Skip on odd turns
+    lda #1                      // Treat as speed 1 this turn
+
+!mat_not_slow:
     sta zp_mon_speed            // Save speed for double-move check
 
     // Process once
@@ -347,6 +355,12 @@ monster_try_step:
     lda zp_mon_scratch1
     and #FLAG_OCCUPIED
     bne !mts_blocked+           // Another monster there
+
+    // Check CF_ATTACK_ONLY — prevent actual movement
+    ldx zp_mon_type
+    lda cr_mflags,x
+    and #CF_ATTACK_ONLY
+    bne !mts_blocked+           // Can't move (but player attack above still fires)
 
     // --- Move is valid --- execute it
 

@@ -91,10 +91,20 @@ cr_color:
     .byte COL_YELLOW    // 18: Yellow mold
     .byte COL_LGREY     // 19: Giant black ant
 
-// Speed (0=immobile, 1=normal, 2=fast)
+// Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
-    .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
-    .byte 1, 1, 1, 2, 2, 1, 0, 2, 0, 1
+    .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
+    .byte 0, 1, 1, 1, 2, 0, 1, 2, 1, 1
+//         ^White Worm  ^Shrieker ^Eye            ^GreenWorm     ^Copper ^Mold    ^YMold
+
+// Movement flags (CF_ATTACK_ONLY = can attack but not move)
+.const CF_ATTACK_ONLY = $01
+
+cr_mflags:
+    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
+    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
+//                                 ^Shrieker         ^Floating Eye
+//                                                    ^Grey Mold       ^Yellow Mold
 
 // Creature level
 cr_level:
@@ -635,5 +645,6 @@ monster_remove:
 .assert "Creature count", CREATURE_COUNT, 20
 .assert "cr_display size", cr_color - cr_display, CREATURE_COUNT
 .assert "cr_color size", cr_speed - cr_color, CREATURE_COUNT
-.assert "cr_speed size", cr_level - cr_speed, CREATURE_COUNT
+.assert "cr_speed size", cr_mflags - cr_speed, CREATURE_COUNT
+.assert "cr_mflags size", cr_level - cr_mflags, CREATURE_COUNT
 .assert "cr_level size", cr_hd_num - cr_level, CREATURE_COUNT
