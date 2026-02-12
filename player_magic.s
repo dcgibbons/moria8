@@ -160,6 +160,14 @@ pm_do_cast:
 !pm_valid_key:
     sta pm_spell_idx
 
+    // Confused? Random spell instead of player's choice
+    lda zp_eff_confuse
+    beq !pm_not_confused+
+    lda #16
+    jsr rng_range                    // A = random [0, 15]
+    sta pm_spell_idx
+!pm_not_confused:
+
     // Check if spell is known
     lda pm_spell_idx
     cmp #8
@@ -253,6 +261,8 @@ pm_do_cast:
     lda #>pm_fail_str
     sta zp_ptr0_hi
     jsr msg_print
+    lda #SFX_SPELL_FAIL
+    jsr sound_play
     sec
     rts
 
@@ -322,6 +332,10 @@ pm_do_cast:
     lda pm_spell_idx
     jsr priest_effect_dispatch
 !pm_effect_done:
+
+    // Spell success sound
+    lda #SFX_SPELL
+    jsr sound_play
 
     // Turn consumed
     sec
@@ -630,6 +644,20 @@ calc_spell_failure:
     lda #95
     sta pm_fail_work
 !csf_max_ok:
+
+    // Faint hunger penalty: +20 to failure
+    lda zp_hunger_state
+    cmp #HUNGER_FAINT
+    bcc !csf_hunger_ok+
+    lda pm_fail_work
+    clc
+    adc #20
+    cmp #96
+    bcc !csf_hunger_store+
+    lda #95
+!csf_hunger_store:
+    sta pm_fail_work
+!csf_hunger_ok:
 
     // Roll rng_range(100)
     lda #100

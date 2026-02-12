@@ -1728,6 +1728,7 @@ test_start:
 
     lda #0
     sta zp_msg_flags
+    sta zp_eff_blind                 // Clear blindness from test 37
 
     // Equip a cursed long sword (type 4) with p1=$FD (-3)
     lda #4
@@ -1781,6 +1782,7 @@ test_start:
 
     lda #0
     sta zp_msg_flags
+    sta zp_eff_blind                 // Ensure blindness is clear
 
     // Equip dagger (type 2) with p1=5 (at cap)
     lda #2

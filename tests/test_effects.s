@@ -55,7 +55,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 14, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 18, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Bank out BASIC ROM (needed for $A000 area used by BFS)
@@ -766,14 +766,147 @@ test_start:
     bne !t14_fail+
     lda #$01
     sta tc_results + 13
-    jmp !tests_done+
+    jmp !t15+
 !t14_fail:
     lda #$00
     sta tc_results + 13
 
+    // ==========================================
+    // Test 15: Hunger penalty increases spell failure value
+    // Set up mage tables, high level player, spell 0: base clamps to 5
+    // Set HUNGER_FAINT → +20 penalty → pm_fail_work >= 25
+    // ==========================================
+!t15:
+    // Refill keyboard buffer for -more- prompts
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    // Clear death flag
+    lda #0
+    sta zp_game_flags
+
+    // Set up mage spell tables
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #<mage_spell_fail
+    sta pm_fail_tbl_lo
+    lda #>mage_spell_fail
+    sta pm_fail_tbl_hi
+    lda #<mage_spell_level
+    sta pm_lvl_tbl_lo
+    lda #>mage_spell_level
+    sta pm_lvl_tbl_hi
+    lda #0
+    sta pm_spell_idx                 // Spell 0: fail_base=22, level=1
+
+    // High level player so base failure clamps to 5
+    lda #10
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR     // High INT → bonus=3, still clamps to 5
+
+    // Set hunger to FAINT
+    lda #HUNGER_FAINT
+    sta zp_hunger_state
+
+    jsr calc_spell_failure
+
+    // pm_fail_work should be >= 25 (5 base + 20 hunger penalty)
+    lda pm_fail_work
+    cmp #25
+    bcc !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: No hunger penalty at HUNGER_FULL
+    // Same setup but HUNGER_FULL → pm_fail_work == 5 (minimum, no penalty)
+    // ==========================================
+!t16:
+    // Same table setup as test 15 (already set)
+    lda #0
+    sta pm_spell_idx
+    lda #10
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+
+    // Set hunger to FULL
+    lda #HUNGER_FULL
+    sta zp_hunger_state
+
+    jsr calc_spell_failure
+
+    // pm_fail_work should be exactly 5 (minimum, no penalty)
+    lda pm_fail_work
+    cmp #5
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: count_spells_known returns correct count
+    // Set PL_SPELLS_KNOWN=$07 (3 spells), PL_SPELLS_KNOWN_HI=$01 (1 spell)
+    // Expected: A == 4
+    // ==========================================
+!t17:
+    lda #$07
+    sta player_data + PL_SPELLS_KNOWN
+    lda #$01
+    sta player_data + PL_SPELLS_KNOWN_HI
+
+    jsr count_spells_known
+
+    cmp #4
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Test 18: Blindness blocks scroll reading (turn not consumed)
+    // Set zp_eff_blind=5, call item_read_scroll, verify carry clear
+    // ==========================================
+!t18:
+    lda #5
+    sta zp_eff_blind
+
+    jsr item_read_scroll
+
+    // Carry should be clear (no turn consumed)
+    bcs !t18_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !tests_done+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+
 !tests_done:
     // Copy results from tc_results to $0400 (screen row 0)
-    ldx #13
+    ldx #17
 !copy_results:
     lda tc_results,x
     sta $0400,x

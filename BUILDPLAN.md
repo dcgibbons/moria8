@@ -2934,46 +2934,54 @@ teleports the player between town and dungeon.
 
 ---
 
-#### Step 7.10 — Integration, Polish, and Full Test Pass
+#### Step 7.10 — Integration, Polish, and Full Test Pass ✅
+
+**Status:** COMPLETE — All edge cases wired, SFX added, UI updated,
+18/18 effects tests pass, 12/12 suites pass.
 
 **Goal:** Wire everything together, verify all commands work end-to-end,
 fix edge cases.
 
-**Checklist:**
+**What was implemented:**
 
-1. **Verify all 4 new commands work** (m=cast, p=pray, a=aim, z=use):
-   - Each prints appropriate message on success/failure.
-   - Each correctly consumes/doesn't consume a turn.
-   - Cancellation works cleanly at every prompt.
+1. **Confusion override in `pm_do_cast`** (`player_magic.s`):
+   - After player selects a spell, if `zp_eff_confuse > 0`, spell index is
+     replaced with `rng_range(16)`. If random spell isn't known, normal
+     "YOU DON'T KNOW THAT SPELL" path handles it. Faithful to umoria.
 
-2. **Confusion interaction with casting:**
-   - If `zp_eff_confuse > 0`, casting should have a high chance of failure or
-     random spell selection (umoria randomly picks a spell when confused).
-   - Add confusion check at start of `player_cast_spell`/`player_pray`.
+2. **Blindness blocks scroll reading** (`player_items.s`):
+   - `item_read_scroll` checks `zp_eff_blind` at entry; prints
+     "YOU CAN'T SEE TO READ!" and returns carry clear (no turn consumed).
+   - Potions, staves, and casting from memory still work while blind.
 
-3. **Blindness interaction:**
-   - Blind player can't read scrolls (`item_read_scroll` should check
-     `zp_eff_blind` and refuse: "YOU CAN'T SEE TO READ.").
-   - Blind player can still quaff potions, use staves, cast from memory.
+3. **Hunger penalty on spell failure** (`player_magic.s`):
+   - In `calc_spell_failure`, after [5,95] clamp and before RNG roll:
+     if `zp_hunger_state >= HUNGER_FAINT`, adds +20 to failure rate
+     (re-clamped to 95 max).
 
-4. **Hunger interaction:**
-   - At "FAINT" hunger level, spell casting should have increased failure rate
-     (add +20 to failure roll when `zp_hunger_state >= HUNGER_FAINT`).
+4. **Sound effects** (`sound.s`):
+   - `SFX_SPELL` ($06): ethereal triangle wave on voice 3.
+   - `SFX_SPELL_FAIL` ($07): short noise buzz on voice 3.
+   - Called after spell success/failure messages in `player_magic.s`.
 
-5. **Sound effects:**
-   - Add `SFX_SPELL` to `sound.s` — short mystical tone for successful cast.
-   - Add `SFX_SPELL_FAIL` — low buzz for failed cast.
+5. **Help screen** (`ui_help.s`):
+   - Added line 21: "M CAST SPELL     P PRAY".
+   - `HELP_LINE_COUNT` updated from 21 to 22.
 
-6. **Update help screen** (`ui_help.s`):
-   - Add M=cast spell, P=pray, A=aim wand, Z=use staff to key listing.
+6. **Character sheet** (`ui_character.s`):
+   - Row 11 shows "SPELLS: N/16" for spell-casting classes.
+   - `count_spells_known` helper counts set bits in PL_SPELLS_KNOWN (16 bits).
+   - "PRESS ANY KEY" moved from row 14 to row 16 for spacing.
 
-7. **Update character sheet** (`ui_character.s`):
-   - Add "Spells Known: N/16" line.
+7. **Tests** (`tests/test_effects.s`):
+   - Test 15: Hunger penalty increases `pm_fail_work` (FAINT → +20).
+   - Test 16: No hunger penalty at HUNGER_FULL (fail_work == 5 min).
+   - Test 17: `count_spells_known` returns 4 for $07/$01 bitmask.
+   - Test 18: Blindness blocks `item_read_scroll` (carry clear).
+   - Also fixed `tests/test_item.s` tests 39-40 to clear `zp_eff_blind`
+     before calling `item_read_scroll` (regression from new blindness check).
 
-8. **Status bar** (`ui_status.s`):
-   - Already displays mana. Verify it updates after casting.
-
-9. **Save/load compatibility note** (for future Phase 9):
+8. **Save/load compatibility note** (for future Phase 9):
    - Document that save format must include: PL_SPELLS_KNOWN (2 bytes),
      PL_MAX_DLVL (1 byte), all effect timers, inventory charges.
 

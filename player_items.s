@@ -990,6 +990,17 @@ item_quaff:
 // Clobbers: everything
 // ============================================================
 item_read_scroll:
+    // Blindness check — can't read while blind
+    lda zp_eff_blind
+    beq !irs_can_see+
+    lda #<piq_cant_read_str
+    sta zp_ptr0
+    lda #>piq_cant_read_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+!irs_can_see:
     // Print prompt
     lda #<piq_read_prompt
     sta zp_ptr0
@@ -1726,3 +1737,4 @@ piw_wand_bolt_str:    .text "A BOLT OF LIGHTNING SHOOTS FORTH!" ; .byte 0
 piw_wand_frost_str:   .text "A BOLT OF FROST SHOOTS FORTH!" ; .byte 0
 piw_wand_cloud_str:   .text "THE MONSTER LOOKS CONFUSED." ; .byte 0
 piw_wand_miss_str:    .text "THE CLOUD DISSIPATES." ; .byte 0
+piq_cant_read_str:    .text "YOU CAN'T SEE TO READ!" ; .byte 0
