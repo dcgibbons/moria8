@@ -2013,6 +2013,150 @@ Adding tests 41-42 mirroring tests 39-40 for EQUIP_BODY would complete coverage.
 
 ---
 
+### Review Pass 13 — Steps 7.9 and 7.10 (Mana Regen, WoR, Integration, Polish)
+
+**Scope:** `turn.s`, `player_magic.s`, `player_items.s`, `sound.s`, `ui_character.s`,
+`ui_help.s`, `monster_magic.s`, `tests/test_effects.s`, `run_tests.sh`
+**Reviewer:** Claude (automated)
+**Date:** 2026-02-12
+
+#### RP13-1 (HIGH): Confused casting blocked by known-spell and level checks
+
+**Location:** `player_magic.s:160-236`
+
+When confused, a random spell index (0-15) is selected at line 166-168, replacing the
+player's choice. However, the code falls through to the known-spell check (line 164-191)
+and the minimum level check (line 218-236). If the random spell isn't known (the common
+case for most players), the handler prints "YOU DON'T KNOW THAT SPELL" and returns CLC
+(no turn consumed, no mana deducted). If the spell is too high level, same result.
+
+**In umoria**, confused casting:
+- Bypasses both known and level requirements
+- Deducts mana for the random spell (checked normally)
+- Rolls for failure normally
+- Executes the random spell's effect on success
+
+**Current behavior:** Confusion during casting is effectively harmless — most random spells
+will be unknown, so the player just gets an error message and no turn is consumed. This
+defeats the entire purpose of the confusion mechanic during spellcasting.
+
+**Fix:** Two changes needed:
+1. In the confused branch, add `jmp !pm_known+` to skip the known-spell check:
+```
+    lda zp_eff_confuse
+    beq !pm_not_confused+
+    lda #16
+    jsr rng_range
+    sta pm_spell_idx
+    jmp !pm_known+             ; Skip known check when confused
+!pm_not_confused:
+```
+2. Before the level check at `!pm_mana_ok`, add a confusion bypass:
+```
+!pm_mana_ok:
+    lda zp_eff_confuse
+    bne !pm_lvl_ok+            ; Skip level check when confused
+    // Normal level check follows...
+```
+
+#### RP13-2 (MEDIUM): BUILDPLAN mana regen rate contradicts implementation
+
+**Location:** BUILDPLAN line ~2864 vs `turn.s` implementation
+
+BUILDPLAN prose says "recover 1 mana per 3 turns" with regen making it "1 per 2 turns".
+BUILDPLAN code block says "Every 2 turns (basic rate)" with `and #$01`.
+Implementation matches the code block: normal = 1 per 2 turns, with regen = 1 per turn.
+
+The prose and code block within the BUILDPLAN contradict each other. The code block and
+implementation agree. Fix: update the prose from "per 3 turns" to "per 2 turns" and
+regen from "per 2 turns" to "every turn".
+
+#### RP13-3 (MEDIUM): PL_MAX_DLVL offset differs from BUILDPLAN
+
+BUILDPLAN step 7.9 line ~2910 says "Use `PL_SPARE_63` (player struct offset 63)".
+Implementation uses `PL_MAX_DLVL = 56` (offset 56). `PL_SPARE_63` remains unused at
+offset 63. Not a code bug — the architect chose a different offset — but the BUILDPLAN
+should be updated to match.
+
+#### RP13-4 (LOW): No test for confused casting
+
+The confusion-during-casting interaction (Step 7.10 checklist item 2) has no dedicated
+test. A test should:
+1. Set zp_eff_confuse > 0, put all 16 spells known, sufficient mana
+2. Call pm_do_cast with keyboard input for spell 'A'
+3. Verify a spell was actually cast (mana decreased, turn consumed)
+4. This would also expose the RP13-1 bug if spells were NOT all known
+
+#### RP13-5 (LOW): No test for extra regen on odd turn
+
+Tests 11-12 cover normal regen (even turn) and warrior no-regen. Missing:
+- Set zp_eff_regen > 0, zp_turn_lo = 1 (odd turn), verify MP still increases
+  (extra regen bypasses the even-turn check)
+
+#### RP13-6 (LOW): No test for Word of Recall fizzle
+
+When recalling from town (dlvl=0) with PL_MAX_DLVL=0 (player has never entered the
+dungeon), the recall should fizzle (jump to `!no_recall`). No test covers this path.
+
+#### RP13-7 (LOW): Intermediate fix commit (e427147) notes
+
+The fix commit between RP12 and Step 7.9 correctly:
+- Replaced `mm_check_death` with `player_death_check` in `monster_magic.s` bolt and
+  breath handlers (carries through from `mon_atk_apply_damage`)
+- Hit sound no longer plays on player death (correct — death has its own SFX)
+- Added missing `monster_magic.s` import to `test_item.s`
+- Updated stale test bounds
+
+No issues found in this commit.
+
+#### Verified correct in Steps 7.9/7.10
+
+- **Word of Recall teleportation:** Clears FLAG_OCCUPIED at old position, sets
+  level_entry_dir correctly (1=ascending for dungeon→town, 0=descending for
+  town→dungeon), calls full level regeneration chain, stops running, redraws UI.
+- **Mana regen logic:** Warriors excluded (PL_SPELL_TYPE=0), max cap check correct,
+  extra regen skips turn parity check, syncs to player_data.
+- **Blindness blocks scroll reading:** Returns CLC immediately (no turn consumed).
+- **Hunger penalty:** +20 to failure rate at HUNGER_FAINT or worse, capped at 95.
+  Applied after the base [5,95] clamp, so max effective failure with hunger is 95%.
+- **Sound effects:** SFX_SPELL and SFX_SPELL_FAIL correctly added to sfx_table at
+  indices 6-7. Triangle wave for spell, noise buzz for fizzle. Both use voice 3.
+- **Help screen:** New line "M CAST SPELL     P PRAY", HELP_LINE_COUNT=22, pointer
+  tables extended correctly in both lo and hi arrays.
+- **Character sheet:** Spells Known (N/16) displayed for spell-casters only (row 11).
+  count_spells_known correctly iterates all 16 bits via spell_bit_mask. "Press any key"
+  moved to row 16 to accommodate.
+- **Max depth tracking:** Already present in main.s (lines 338-341), updates on
+  stairs-down. PL_MAX_DLVL initialized to 0 at player creation (line 165).
+- **Tests 11-18:** All structurally correct — mana regen, warrior no-regen, recall
+  both directions, hunger penalty, no-hunger baseline, count_spells_known, blindness
+  blocks scrolls.
+
+#### Suggested tests for Steps 7.9/7.10
+
+1. **Confused cast (all spells known):** Set 16 spells known, confuse > 0, cast →
+   verify mana decreased and turn consumed (currently fails due to RP13-1).
+2. **Confused cast (few spells known):** Set 3 spells known, confuse > 0, cast →
+   should still cast random spell (currently blocked by known check).
+3. **Extra regen on odd turn:** zp_eff_regen=5, zp_turn_lo=1, mage MP=5/20 →
+   verify MP becomes 6 (bypass even-turn check).
+4. **Recall fizzle:** dlvl=0, PL_MAX_DLVL=0, recall timer=1 → verify dlvl stays 0.
+5. **Mana regen stops at max:** MP=19, MMP=20, tick even turn → MP=20. Tick again →
+   MP stays 20.
+
+#### Summary of Review Pass 13 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP13-1 | **HIGH** | Confused casting blocked by known-spell and level checks (confusion is harmless) | Easy — add `jmp !pm_known+` in confused branch + confusion bypass at level check | Open |
+| RP13-2 | **MEDIUM** | BUILDPLAN says "1 per 3 turns" but code/implementation do 1 per 2 turns | Trivial — fix BUILDPLAN prose | Open |
+| RP13-3 | **MEDIUM** | PL_MAX_DLVL at offset 56, BUILDPLAN says offset 63 (PL_SPARE_63) | Trivial — update BUILDPLAN | Open |
+| RP13-4 | LOW | No test for confused casting interaction | Easy — add test with confusion + known spells | Open |
+| RP13-5 | LOW | No test for extra regen on odd turn | Trivial — same as test 11 with regen=5 and odd turn | Open |
+| RP13-6 | LOW | No test for Word of Recall fizzle (town, never visited dungeon) | Trivial — set PL_MAX_DLVL=0, verify dlvl unchanged | Open |
+
+---
+
 ## Phase 7 — Magic System: Detailed Implementation Plan
 
 ### Current State Summary
