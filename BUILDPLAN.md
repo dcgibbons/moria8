@@ -1576,3 +1576,977 @@ If done, also update the function's input comment to document `fi_add_flags`.
 | RP9-1 | LOW | Paralysis timer level-1 special case: 5 should be 4 | Trivial — remove special case | **FIXED** — removed level-1 special case; general formula handles it |
 | RP9-2 | **MEDIUM** | `item_drop` loses IF_CURSED/IF_IDENTIFIED flags | Easy — add `inv_flags→fi_add_flags` copy | **FIXED** — added flags copy in `item_drop` before `floor_item_add` |
 | RP9-3 | LOW | `floor_item_add` ignores `fi_add_flags` (design debt) | Easy — copy `fi_add_flags` instead of hardcoding 0 | **FIXED** — `floor_item_add` now copies `fi_add_flags`; removed post-hoc patches; added init to gold path + all tests |
+
+---
+
+## Phase 7 — Magic System: Detailed Implementation Plan
+
+### Current State Summary
+
+**What exists:**
+- Player struct has mana fields (`PL_MANA`=$31, `PL_MAX_MANA`=$32), spell type
+  (`PL_SPELL_TYPE`=60), and `PL_SPELLS_KNOWN` 16-bit bitmask (offsets 61-62).
+  16 spare bytes in player struct (offsets 63-79).
+- Mana initialized in `player_create.s` (spell_stat/2, min 1). Displayed in
+  `ui_status.s` and `ui_character.s`. Synced to/from ZP by `player_sync_*`.
+- Command IDs defined: `CMD_CAST=$1A`, `CMD_PRAY=$1B`, `CMD_AIM=$18`,
+  `CMD_USE=$19`. Key mappings exist in `input.s` but **not dispatched** in `main.s`.
+- 14 status effect timers at ZP $50-$5E already ticked by `turn_tick_effects`
+  in `turn.s`. Spells only need to SET timers — decrement/expiry is done.
+- 3 potions (Cure Light, Speed, Poison) and 3 scrolls (Light, Identify,
+  Teleportation) working with full identification system (Fisher-Yates shuffle).
+- `get_direction_target` provides directional prompt (8 directions) + target
+  tile calculation. `dir_dx`/`dir_dy` tables in `input.s`.
+- `find_random_floor` finds an unoccupied floor tile (used by teleport scroll).
+- LOS scratch at ZP $84-$87 reserved but Bresenham line trace **not implemented**.
+- 20 creature types (levels 1-5). No spell/breath data in creature tables.
+  Active monster entry has 2 reserved bytes (10-11).
+- ~13.8 KB code space remaining ($6A00-$9FFF). 8 KB under KERNAL ROM available
+  for spell tables if needed (but tables are small enough for main area).
+- 5 spare ZP bytes ($4F, $5F, $6F, $8E, $8F) + scratch reuse.
+
+**What's missing:**
+- No cast/pray command dispatch. No spell list UI.
+- No spell data tables (costs, levels, failure rates, effects).
+- No learn-spells-on-level-up logic. No mana recalculation on level-up.
+- No mana regeneration in turn processing.
+- No Bresenham line trace for bolt/breath targeting.
+- No wand/staff item categories or charge mechanics.
+- No monster spell/breath data or ranged attack logic.
+- Word of Recall timer ticks but the teleport TODO is unimplemented.
+
+### Memory Budget
+
+| Component | Estimated bytes |
+|-----------|-----------------|
+| Spell data tables (32 spells × 5 bytes + 32 name ptrs) | ~230 |
+| Spell name strings (32 × avg 15 chars) | ~500 |
+| `player_magic.s` (cast/pray, spell list UI, learn, failure roll) | ~1,500 |
+| Shared effect subroutines (extracted + new) | ~800 |
+| 16 mage spell effect handlers | ~1,200 |
+| 16 priest prayer effect handlers | ~800 (many share w/ mage) |
+| Expanded potions (7 new types, effect code) | ~600 |
+| Expanded scrolls (7 new types, effect code) | ~700 |
+| Wand/staff items + aim/use handlers + Bresenham | ~1,200 |
+| Monster magic (spell data, ranged AI, breath) | ~1,500 |
+| New item type SoA entries (~22 types × 8 arrays) | ~180 |
+| Identification shuffle tables for new types | ~100 |
+| Integration (mana regen, level-up, Word of Recall) | ~300 |
+| **Total estimate** | **~9,600** |
+| **Available** | **~14,100** |
+| **Margin** | **~4,500 (32%)** |
+
+### Spell Lists
+
+#### Mage Spells (16) — indexed 0-15, requires `PL_SPELL_TYPE == SPELL_MAGE`
+
+| # | Name | Mana | Min Lvl | Fail% | Effect |
+|---|------|------|---------|-------|--------|
+| 0 | Magic Missile | 1 | 1 | 22 | 1d4+level/2 damage to target (directional) |
+| 1 | Detect Monsters | 1 | 1 | 23 | Reveal all monsters on map for 1 turn |
+| 2 | Phase Door | 2 | 1 | 24 | Teleport to random floor within 10 tiles |
+| 3 | Light Area | 2 | 1 | 26 | Light current room (share with scroll) |
+| 4 | Cure Light Wounds | 3 | 3 | 25 | Heal 1d8+1 (share with potion) |
+| 5 | Find Traps/Doors | 3 | 3 | 28 | Reveal traps + secret doors in radius |
+| 6 | Stinking Cloud | 3 | 5 | 30 | Confuse all adjacent monsters |
+| 7 | Confusion | 4 | 5 | 32 | Confuse target monster (directional) |
+| 8 | Lightning Bolt | 5 | 7 | 34 | Bolt: 3d8 damage along line |
+| 9 | Trap/Door Destruction | 5 | 7 | 36 | Destroy traps+doors in radius |
+| 10 | Sleep I | 6 | 9 | 38 | Sleep all adjacent monsters |
+| 11 | Cure Poison | 6 | 9 | 40 | Set zp_eff_poison = 0 |
+| 12 | Teleport Self | 7 | 11 | 42 | Random teleport (share with scroll) |
+| 13 | Frost Bolt | 8 | 13 | 44 | Bolt: 5d8 damage along line |
+| 14 | Wall to Mud | 10 | 15 | 46 | Destroy one wall tile (directional) |
+| 15 | Fire Ball | 12 | 17 | 50 | 7d8 damage to all adjacent monsters |
+
+#### Priest Prayers (16) — indexed 0-15, requires `PL_SPELL_TYPE == SPELL_PRIEST`
+
+| # | Name | Mana | Min Lvl | Fail% | Effect |
+|---|------|------|---------|-------|--------|
+| 0 | Detect Evil | 1 | 1 | 10 | Reveal monsters (same as mage Detect) |
+| 1 | Cure Light Wounds | 1 | 1 | 15 | Heal 1d8+1 (shared subroutine) |
+| 2 | Bless | 2 | 1 | 20 | Set zp_eff_bless = 12+1d12 |
+| 3 | Remove Fear | 2 | 3 | 24 | (Future: clear fear status) |
+| 4 | Call Light | 2 | 3 | 25 | Light room (shared subroutine) |
+| 5 | Find Traps | 3 | 5 | 27 | Reveal traps in radius |
+| 6 | Detect Doors/Stairs | 3 | 5 | 30 | Reveal doors + stairs in radius |
+| 7 | Slow Poison | 4 | 7 | 32 | Halve zp_eff_poison (round up) |
+| 8 | Blind Creature | 5 | 7 | 36 | Blind target monster (directional) |
+| 9 | Portal | 5 | 9 | 38 | Short teleport (share Phase Door) |
+| 10 | Cure Medium Wounds | 6 | 9 | 38 | Heal 3d8+3 |
+| 11 | Chant | 6 | 11 | 42 | Set zp_eff_bless = 24+1d24 (stronger) |
+| 12 | Sanctuary | 7 | 11 | 44 | Sleep all adjacent monsters |
+| 13 | Remove Curse | 8 | 13 | 46 | Clear IF_CURSED on all equipped items |
+| 14 | Cure Serious Wounds | 10 | 15 | 48 | Heal 5d8+5 |
+| 15 | Dispel Undead | 12 | 17 | 52 | Damage all undead monsters in room |
+
+#### Expanded Item Types (22 new, IDs 25-46)
+
+**New Potions (IDs 25-31) — 7 new + 3 existing = 10 total:**
+
+| ID | Name | Effect |
+|----|------|--------|
+| 25 | Cure Serious Wounds | Heal 5d8+5 |
+| 26 | Restore Strength | Restore STR to base value |
+| 27 | Heroism | Set zp_eff_hero = 10+1d10 |
+| 28 | Restore Mana | Restore mana to max |
+| 29 | Resist Heat/Cold | Set zp_eff_resist = 20+1d20 |
+| 30 | See Invisible | Set zp_eff_see_inv = 20+1d20 |
+| 31 | Blindness | Set zp_eff_blind = 10+1d10 (harmful) |
+
+**New Scrolls (IDs 32-38) — 7 new + 3 existing = 10 total:**
+
+| ID | Name | Effect |
+|----|------|--------|
+| 32 | Word of Recall | Set zp_eff_word_recall = 15+1d10 |
+| 33 | Remove Curse | Clear IF_CURSED on equipped items |
+| 34 | Enchant Weapon | +1 to equipped weapon p1 |
+| 35 | Enchant Armor | +1 to equipped armor p1 |
+| 36 | Monster Confusion | Next melee hit confuses monster |
+| 37 | Aggravate Monsters | Wake all monsters on level |
+| 38 | Protect from Evil | Set zp_eff_protect = 20+1d20 |
+
+**Wands (IDs 39-42) — `ICAT_WAND = 14`:**
+
+| ID | Name | Charges | Effect |
+|----|------|---------|--------|
+| 39 | Light | 10-15 | Light room (directional not needed) |
+| 40 | Lightning | 5-8 | Bolt: 3d8 along line |
+| 41 | Frost | 5-8 | Bolt: 4d8 along line |
+| 42 | Stinking Cloud | 5-8 | Confuse target monster |
+
+**Staves (IDs 43-46) — `ICAT_STAFF = 15`:**
+
+| ID | Name | Charges | Effect |
+|----|------|---------|--------|
+| 43 | Light | 10-15 | Light room |
+| 44 | Detect Monsters | 5-8 | Reveal monsters |
+| 45 | Teleportation | 3-5 | Teleport self |
+| 46 | Cure Light Wounds | 5-8 | Heal 1d8+1 |
+
+### Implementation Steps
+
+---
+
+#### Step 7.0 — Extract Shared Effect Subroutines
+
+**Goal:** Refactor existing potion/scroll effect code into reusable subroutines
+callable from spells, potions, scrolls, wands, and staves. This is the foundation
+that prevents code duplication across all of Phase 7.
+
+**File:** `spell_effects.s` (new)
+
+**Subroutines to extract/create:**
+
+| Subroutine | Source | What it does |
+|------------|--------|--------------|
+| `eff_heal(A=dice, X=sides, Y=bonus)` | `player_items.s` quaff cure | Roll dice, add to HP, cap at max HP (16-bit) |
+| `eff_light_room` | `player_items.s` scroll of light | Light current room tiles |
+| `eff_teleport_self` | `player_items.s` scroll of teleport | find_random_floor, move player, update occupied flags |
+| `eff_phase_door` | New | find_random_floor within 10 tiles of player |
+| `eff_identify_prompt` | `player_items.s` scroll of identify | Prompt for slot, set id_known + IF_IDENTIFIED |
+| `eff_cure_poison` | New (trivial) | `lda #0; sta zp_eff_poison` |
+| `eff_detect_monsters` | New | Scan active monster table, mark positions FLAG_VISITED |
+| `eff_confuse_adjacent` | New | Scan adjacent tiles, set MX_CONFUSE on monsters found |
+| `eff_sleep_adjacent` | New | Scan adjacent tiles, clear MF_AWAKE + set MX_SLEEP_CUR |
+| `eff_find_traps` | New | Scan visible radius, reveal hidden traps |
+| `eff_find_doors` | New | Scan visible radius, reveal secret doors |
+| `eff_bolt(dir, dice, sides)` | New | Bresenham line trace, damage first monster hit |
+| `eff_remove_curse` | New | Scan equipment slots, clear IF_CURSED flags |
+| `eff_aggravate` | New | Wake all monsters on level (set MF_AWAKE) |
+
+**Steps:**
+1. Create `spell_effects.s`. Add `#import` to `main.s`.
+2. Extract `eff_heal` from `player_items.s:712-762` (the Cure Light Wounds HP
+   addition + 16-bit cap logic). Parameterize: A=dice count, X=sides, Y=bonus.
+   Replace original quaff code with `lda #1; ldx #8; ldy #1; jsr eff_heal`.
+3. Extract `eff_light_room` from `player_items.s:910-960` (the Light scroll
+   room-lighting loop). Replace original scroll code with `jsr eff_light_room`.
+4. Extract `eff_teleport_self` from `player_items.s:1050-1100` (find_random_floor,
+   clear old FLAG_OCCUPIED, move player, set new FLAG_OCCUPIED). Replace original
+   with `jsr eff_teleport_self`.
+5. Extract `eff_identify_prompt` from `player_items.s:980-1040` (prompt for
+   inventory slot, set id_known, set IF_IDENTIFIED). Replace with call.
+6. Write new subroutines: `eff_cure_poison`, `eff_detect_monsters`,
+   `eff_confuse_adjacent`, `eff_sleep_adjacent`, `eff_find_traps`, `eff_find_doors`,
+   `eff_remove_curse`, `eff_aggravate`. Each is ~30-60 bytes.
+7. Write `eff_phase_door` — like `eff_teleport_self` but with distance check:
+   call find_random_floor in a loop, accept first result within Chebyshev
+   distance 10 of player (max 20 attempts, fall back to any floor).
+
+**Tests:**
+- Existing potion/scroll tests must still pass (verify refactor didn't break).
+- New compile-time asserts for each new subroutine.
+- Runtime test: `eff_heal` with known dice → verify HP change.
+- Runtime test: `eff_detect_monsters` → verify monster tile gets FLAG_VISITED.
+
+---
+
+#### Step 7.1 — Spell Data Tables
+
+**Goal:** Define the 32 spell/prayer data tables and name strings.
+
+**File:** `spell_data.s` (new)
+
+**Data structures:**
+
+```
+// Per-spell table (one array per field, 16 entries each for mage + priest)
+mage_spell_mana:    .byte 1, 1, 2, 2, 3, 3, 3, 4, 5, 5, 6, 6, 7, 8, 10, 12
+mage_spell_level:   .byte 1, 1, 1, 1, 3, 3, 5, 5, 7, 7, 9, 9, 11, 13, 15, 17
+mage_spell_fail:    .byte 22, 23, 24, 26, 25, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 50
+priest_spell_mana:  .byte 1, 1, 2, 2, 2, 3, 3, 4, 5, 5, 6, 6, 7, 8, 10, 12
+priest_spell_level: .byte 1, 1, 1, 3, 3, 5, 5, 7, 7, 9, 9, 11, 11, 13, 15, 17
+priest_spell_fail:  .byte 10, 15, 20, 24, 25, 27, 30, 32, 36, 38, 38, 42, 44, 46, 48, 52
+
+// Name pointer tables (lo/hi, 16 entries each)
+mage_spell_name_lo:  .byte <msn_0, <msn_1, ...
+mage_spell_name_hi:  .byte >msn_0, >msn_1, ...
+priest_spell_name_lo: .byte <psn_0, <psn_1, ...
+priest_spell_name_hi: .byte >psn_0, >psn_1, ...
+
+// Name strings (null-terminated PETSCII)
+msn_0: .text "MAGIC MISSILE" ; .byte 0
+msn_1: .text "DETECT MONSTERS" ; .byte 0
+... (16 mage + 16 priest)
+```
+
+**Steps:**
+1. Create `spell_data.s` with all tables above.
+2. Add `#import` to `main.s`.
+3. Compile-time asserts: table sizes match (16 entries each), mana values > 0,
+   levels monotonically non-decreasing.
+
+**Tests:**
+- `.assert` for table element counts.
+- `.assert` spot-checks: `mage_spell_mana[0] == 1`, `priest_spell_fail[15] == 52`.
+
+---
+
+#### Step 7.2 — Cast/Pray Commands (`player_magic.s`)
+
+**Goal:** Implement the `m` (cast) and `p` (pray) commands. Player sees spell
+list, selects a spell, failure/success is rolled, mana is deducted.
+
+**File:** `player_magic.s` (new)
+
+**Entry points:**
+- `player_cast_spell` — called from main.s CMD_CAST dispatch
+- `player_pray` — called from main.s CMD_PRAY dispatch
+  (Both share most logic; only the table pointers and spell_type check differ.)
+
+**Detailed logic for `player_cast_spell`:**
+```
+1. Check PL_SPELL_TYPE != SPELL_MAGE → print "YOU CANNOT CAST SPELLS." → clc, rts
+2. Call spell_list_display (mage tables) — show known spells with mana costs
+3. Prompt: "CAST WHICH SPELL? (A-P, ESC)" → input_get_key
+4. ESC/space → cancel, clc, rts
+5. Convert letter to spell index (A=0, B=1, ...)
+6. Check bit in PL_SPELLS_KNOWN → if not known, "YOU DON'T KNOW THAT SPELL.", clc, rts
+7. Check mana cost <= zp_player_mp → if insufficient, "NOT ENOUGH MANA.", clc, rts
+8. Check spell min_level <= zp_player_lvl → if too low, "YOU'RE NOT EXPERIENCED ENOUGH.", clc, rts
+9. Deduct mana: zp_player_mp -= cost; sync to player_data + PL_MANA
+10. Roll failure: adjusted_fail = fail_base - 3*(level - spell_level) - spell_stat_bonus
+    Clamp to [5, 95]. Roll rng_range(100): if roll < adjusted_fail → "YOUR SPELL FAILS.", sec, rts
+11. Dispatch spell effect: jsr mage_effect_dispatch (CMP/BEQ chain on spell index)
+12. Print effect-specific message. sec, rts (turn consumed)
+```
+
+**`spell_list_display` subroutine:**
+```
+1. screen_clear (or use message area — could use full-screen overlay like inventory)
+2. Print header: "  SPELLS  MANA  LVL"
+3. For each spell 0-15:
+   a. Check if bit set in PL_SPELLS_KNOWN → if not, skip (or show "???" for unknown)
+   b. Print letter (A-P), spell name, mana cost, min level
+   c. If mana cost > zp_player_mp, show in dim color
+4. Wait for keypress (the selection key, handled by caller)
+```
+
+**`player_pray` — identical structure but:**
+- Check `PL_SPELL_TYPE == SPELL_PRIEST`
+- Use `priest_spell_*` tables
+- Use `priest_effect_dispatch`
+- Messages say "PRAY" instead of "CAST"
+
+**main.s dispatch additions** (insert before "Unknown command" at line ~659):
+```
+    // Cast spell?
+    cmp #CMD_CAST
+    bne !not_cast+
+    jsr msg_clear
+    jsr player_cast_spell
+    bcc !cast_no_turn+
+    jsr update_visibility     // Some spells change visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!cast_no_turn:
+    jmp !main_loop-
+!not_cast:
+
+    // Pray?
+    cmp #CMD_PRAY
+    bne !not_pray+
+    (same pattern, calling player_pray)
+!not_pray:
+```
+
+**Steps:**
+1. Create `player_magic.s`. Add `#import` to `main.s`.
+2. Implement `spell_list_display` — full-screen overlay showing spell list.
+   Use inventory display pattern from `ui_inventory.s` as template.
+3. Implement `player_cast_spell` with the 12-step logic above.
+4. Implement `player_pray` (thin wrapper changing table pointers + spell type).
+5. Add `CMD_CAST` and `CMD_PRAY` dispatch blocks in `main.s` (before line 659).
+6. Implement `calc_spell_failure` — the failure adjustment formula:
+   `adjusted = fail_base - 3*(player_level - spell_level) - spell_stat_bonus[stat-3]`
+   Clamped to [5, 95]. Uses `spell_stat_bonus` table already in `tables.s`.
+
+**Tests:**
+- Compile-time: assert mana deduction arithmetic.
+- Runtime test: Set player as Mage, give all spells known (PL_SPELLS_KNOWN=$FFFF),
+  set mana=10, cast spell 0 (Magic Missile, cost 1). Verify mana becomes 9.
+- Runtime test: Set mana=0, attempt cast → verify "NOT ENOUGH MANA", carry clear.
+- Runtime test: Warrior (SPELL_NONE) attempts cast → verify rejection message.
+- Runtime test: Cast unknown spell (bit not set) → verify rejection.
+
+---
+
+#### Step 7.3 — Learn Spells on Level-Up + Mana Recalc
+
+**Goal:** When the player levels up, check if new spells become available.
+Recalculate max mana based on level + spell stat.
+
+**File:** `player_magic.s` (append)
+
+**Learn-spells logic (`magic_check_new_spells`):**
+```
+1. Get player's spell_type. If SPELL_NONE, rts.
+2. Select table pointer (mage_spell_level or priest_spell_level).
+3. For each spell index 0-15:
+   a. If already known (bit set in PL_SPELLS_KNOWN), skip.
+   b. If spell_level[i] <= zp_player_lvl:
+      - Set bit in PL_SPELLS_KNOWN (use ORA with bit mask)
+      - Print "YOU HAVE LEARNED <spell name>!"
+4. Sync PL_SPELLS_KNOWN to player_data.
+```
+
+**Mana recalculation (`magic_recalc_mana`):**
+```
+1. Get spell_type. If SPELL_NONE → max_mana = 0, rts.
+2. Get spell stat (INT for mage, WIS for priest): stat = zp_player_int or zp_player_wis
+3. max_mana = (level * stat) / 8 + spell_stat_bonus[stat-3]
+   (Simplified from umoria; gives reasonable progression)
+4. Clamp max_mana to [1, 255]
+5. Store to PL_MAX_MANA and zp_player_mmp
+6. If PL_MANA > max_mana, set PL_MANA = max_mana (stat drain case)
+```
+
+**Bit mask helper table:**
+```
+spell_bit_mask:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80  // Bits 0-7 (lo byte)
+spell_bit_hi_mask:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80  // Bits 8-15 (hi byte)
+```
+Spells 0-7 use lo byte with `spell_bit_mask`, spells 8-15 use hi byte with
+`spell_bit_hi_mask`.
+
+**Integration into level-up** (`combat.s:519-558`):
+After `jsr player_calc_combat` (line 543), add:
+```
+    jsr magic_recalc_mana
+    jsr magic_check_new_spells
+```
+
+**Starting spells** (`player_create.s`):
+After mana initialization (~line 624), add:
+```
+    jsr magic_check_new_spells  // Learn level-1 spells at character creation
+```
+
+**Steps:**
+1. Add `spell_bit_mask` table to `spell_data.s`.
+2. Implement `magic_check_new_spells` in `player_magic.s`.
+3. Implement `magic_recalc_mana` in `player_magic.s`.
+4. Hook `magic_recalc_mana` + `magic_check_new_spells` into `combat_check_levelup`.
+5. Hook `magic_check_new_spells` into `player_create.s` after mana init.
+
+**Tests:**
+- Runtime: Create Mage at level 1 → verify spells 0-3 known (all have min_level 1).
+- Runtime: Set Mage to level 3, call `magic_check_new_spells` → verify spells 4-5
+  now known.
+- Runtime: Verify `magic_recalc_mana` with INT=12, level=5 → expected max_mana
+  = (5*12)/8 + bonus[12-3] = 7 + 2 = 9.
+
+---
+
+#### Step 7.4 — Mage Spell Effect Dispatch
+
+**Goal:** Implement the 16 mage spell effects.
+
+**File:** `player_magic.s` (effect dispatch) + `spell_effects.s` (shared code)
+
+**Dispatch table** (called after successful cast):
+```
+mage_effect_dispatch:
+    cmp #0
+    beq !mage_eff_0+    // Magic Missile
+    cmp #1
+    beq !mage_eff_1+    // Detect Monsters
+    ... (CMP/BEQ chain)
+    rts                  // Unknown — no effect (safety)
+```
+
+**Effect implementations:**
+
+| Spell | Implementation | Shared? |
+|-------|---------------|---------|
+| 0 Magic Missile | `get_direction_target` → find monster at target → `math_dice(1,4,level/2)` → apply damage → kill check | New |
+| 1 Detect Monsters | `jsr eff_detect_monsters` | Shared |
+| 2 Phase Door | `jsr eff_phase_door` | Shared |
+| 3 Light Area | `jsr eff_light_room` | Shared |
+| 4 Cure Light Wounds | `lda #1; ldx #8; ldy #1; jsr eff_heal` | Shared |
+| 5 Find Traps/Doors | `jsr eff_find_traps; jsr eff_find_doors` | Shared |
+| 6 Stinking Cloud | `jsr eff_confuse_adjacent` | Shared |
+| 7 Confusion | `get_direction_target` → find monster → set MX_CONFUSE | Partly new |
+| 8 Lightning Bolt | `get_direction_target` → `lda #3; ldx #8; jsr eff_bolt` | Shared bolt |
+| 9 Trap/Door Destroy | Scan radius, destroy traps + jam doors open | New |
+| 10 Sleep I | `jsr eff_sleep_adjacent` | Shared |
+| 11 Cure Poison | `jsr eff_cure_poison` | Shared |
+| 12 Teleport Self | `jsr eff_teleport_self` | Shared |
+| 13 Frost Bolt | `get_direction_target` → `lda #5; ldx #8; jsr eff_bolt` | Shared bolt |
+| 14 Wall to Mud | `get_direction_target` → if wall tile, replace with floor | New |
+| 15 Fire Ball | `lda #7; ldx #8; jsr eff_damage_adjacent` | New area dmg |
+
+**New subroutines needed for this step:**
+- `eff_bolt(A=dice, X=sides)` — Bresenham line trace from player in chosen
+  direction. Step through tiles; stop at wall. If monster found, roll damage,
+  apply to monster HP, check kill. Uses ZP $84-$87 for line state.
+- `eff_damage_adjacent(A=dice, X=sides)` — Scan 8 adjacent tiles for monsters,
+  roll damage for each, apply, check kills.
+- `eff_directional_monster` — `get_direction_target`, find monster at target
+  tile. Returns monster index in X or carry clear if no monster.
+
+**Bresenham bolt algorithm (`eff_bolt`):**
+```
+1. Get direction from get_direction_target. Extract dx, dy from dir_dx/dir_dy.
+2. Start at player position (px, py). Step: x += dx, y += dy each iteration.
+3. For each step (max 20 iterations — longest dungeon dimension):
+   a. Check bounds (0 < x < MAP_W-1, 0 < y < MAP_H-1).
+   b. Read map tile. If wall → stop (bolt hits wall, no damage).
+   c. Check for monster at (x, y) via monster_find_at.
+   d. If monster found → roll damage, apply, check kill. Stop.
+4. If bolt exits map or reaches max range → fizzle.
+```
+Note: This is a simplified "straight-line" bolt, not a full Bresenham with
+fractional error — movement is exactly along the 8 cardinal/diagonal directions,
+one tile per step. This matches how `dir_dx`/`dir_dy` work and is sufficient
+for the dungeon's grid-based geometry.
+
+**Steps:**
+1. Implement `eff_bolt` in `spell_effects.s`.
+2. Implement `eff_damage_adjacent` in `spell_effects.s`.
+3. Implement `eff_directional_monster` in `spell_effects.s`.
+4. Implement `mage_effect_dispatch` in `player_magic.s` with all 16 effects.
+5. Hook up to `player_cast_spell` (JSR to dispatch after successful cast).
+
+**Tests:**
+- Runtime test: Cast Magic Missile with monster adjacent → verify damage applied.
+- Runtime test: Cast Light Area → verify room tiles get FLAG_LIT.
+- Runtime test: Cast Teleport Self → verify player moved.
+- Runtime test: Cast Lightning Bolt toward monster 3 tiles away → verify damage.
+- Runtime test: Cast Lightning Bolt toward wall → verify no damage, bolt stops.
+- Runtime test: Cast Cure Light Wounds → verify HP increases.
+
+---
+
+#### Step 7.5 — Priest Prayer Effect Dispatch
+
+**Goal:** Implement the 16 priest prayer effects. Many share code with mage spells.
+
+**File:** `player_magic.s` (append)
+
+**Dispatch + implementations:**
+
+| Prayer | Implementation | Shared with |
+|--------|---------------|-------------|
+| 0 Detect Evil | `jsr eff_detect_monsters` | Mage #1 |
+| 1 Cure Light Wounds | `lda #1; ldx #8; ldy #1; jsr eff_heal` | Mage #4 |
+| 2 Bless | `lda #12; jsr rng_range; clc; adc #12; sta zp_eff_bless` | New (tiny) |
+| 3 Remove Fear | (Placeholder — clear future fear timer) | New (tiny) |
+| 4 Call Light | `jsr eff_light_room` | Mage #3 |
+| 5 Find Traps | `jsr eff_find_traps` | Mage #5 (half) |
+| 6 Detect Doors/Stairs | `jsr eff_find_doors` (incl stairs) | Mage #5 (half) |
+| 7 Slow Poison | `lda zp_eff_poison; lsr; ora #1; sta zp_eff_poison` | New (tiny) |
+| 8 Blind Creature | `jsr eff_directional_monster` → set stun on monster | New |
+| 9 Portal | `jsr eff_phase_door` | Mage #2 |
+| 10 Cure Medium Wounds | `lda #3; ldx #8; ldy #3; jsr eff_heal` | Shared heal |
+| 11 Chant | `lda #24; jsr rng_range; clc; adc #24; sta zp_eff_bless` | Like Bless |
+| 12 Sanctuary | `jsr eff_sleep_adjacent` | Mage #10 |
+| 13 Remove Curse | `jsr eff_remove_curse` | Shared |
+| 14 Cure Serious Wounds | `lda #5; ldx #8; ldy #5; jsr eff_heal` | Shared heal |
+| 15 Dispel Undead | Scan visible monsters, if undead → 1d3*level damage | New |
+
+**New monster flag needed:** `CF_UNDEAD = $02` in `cr_mflags`. No current tier-0
+monsters are undead, but the flag is needed for future tiers. Dispel Undead will
+check `cr_mflags[type] & CF_UNDEAD` before applying damage. For now, this spell
+effectively does nothing (no undead in levels 1-5), which is correct — priests
+learn it at level 17 and should be in deeper tiers by then.
+
+**Steps:**
+1. Add `CF_UNDEAD` constant to `monster.s`.
+2. Implement `priest_effect_dispatch` in `player_magic.s`.
+3. Each shared effect is a JSR to the corresponding subroutine.
+4. Implement Bless/Chant (set `zp_eff_bless` timer with different durations).
+5. Implement Blind Creature (directional monster + set MX_STUN timer).
+6. Implement Dispel Undead (scan active monsters, check CF_UNDEAD, damage).
+
+**Tests:**
+- Runtime: Priest casts Bless → verify zp_eff_bless > 0.
+- Runtime: Priest casts Cure Medium Wounds → verify HP gain is in [6, 27] range.
+- Runtime: Priest casts Remove Curse with cursed equipped item → verify IF_CURSED
+  cleared.
+- Runtime: Priest casts Slow Poison with poison timer 10 → verify timer becomes 5.
+
+---
+
+#### Step 7.6 — Expanded Potions and Scrolls
+
+**Goal:** Add 7 new potions and 7 new scrolls. Expand item type tables and
+identification system.
+
+**File:** `item.s` (extend SoA tables), `player_items.s` (new dispatch entries),
+`spell_effects.s` (shared subroutines already written)
+
+**Steps:**
+
+1. **Extend item type constants** in `item.s`:
+   - Increment `ITEM_TYPE_COUNT` from 25 to 47 (25 existing + 22 new).
+   - Add `ICAT_WAND = 14`, `ICAT_STAFF = 15` constants.
+   - Extend all SoA arrays: `it_category`, `it_display`, `it_color`,
+     `it_weight`, `it_base_value`, `it_name_lo`, `it_name_hi`, `it_sort_key`.
+   - New potion entries (IDs 25-31): category=ICAT_POTION, display=`!`,
+     colors vary by potion type.
+   - New scroll entries (IDs 32-38): category=ICAT_SCROLL, display=`?`,
+     colors vary.
+
+2. **Extend identification shuffle** in `item.s`:
+   - Currently: 5 potion descriptors, 5 scroll descriptors (for 3 types each).
+   - Expand to: 12 potion descriptors (for 10 types), 12 scroll descriptors
+     (for 10 types). More descriptors than types ensures unique assignments.
+   - New potion descriptions: "AZURE", "SMOKY", "BROWN", "SILVER", "PINK",
+     "CLOUDY", "GOLDEN" (7 new + 5 existing).
+   - New scroll descriptions: "LUMEN", "VERITAS", "DURA", "LIBERA", "ACUTA",
+     "FEROX", "TUTELA" (7 new + 5 existing; Latin-themed for variety).
+
+3. **Add new potion effects** to `player_items.s` `item_quaff`:
+   - Extend the CMP/BEQ dispatch chain after existing potions.
+   - Each new potion → JSR to appropriate shared subroutine from `spell_effects.s`.
+   - Blindness potion: harmful effect (player drinks and gets blinded).
+
+4. **Add new scroll effects** to `player_items.s` `item_read_scroll`:
+   - Extend dispatch chain.
+   - Word of Recall: `lda #15; jsr rng_range; clc; adc #15; sta zp_eff_word_recall`.
+   - Remove Curse: `jsr eff_remove_curse`.
+   - Enchant Weapon/Armor: find equipped weapon/armor slot, increment p1 (cap at +5).
+   - Monster Confusion: set a flag (use `zp_spare_4f`) that makes next melee hit
+     auto-confuse the target.
+   - Aggravate: `jsr eff_aggravate`.
+   - Protect from Evil: set `zp_eff_protect` timer.
+
+5. **Update `item_spawn_level`** — add new item types to the spawn pool
+   (roll_item_type table needs extending with appropriate rarity weights).
+
+**Tests:**
+- Runtime: Quaff Cure Serious Wounds → verify heal amount in [10, 45] range.
+- Runtime: Quaff Restore Mana → verify mana restored to max.
+- Runtime: Read Scroll of Enchant Weapon with weapon equipped → verify p1 incremented.
+- Runtime: Read Scroll of Word of Recall → verify zp_eff_word_recall > 0.
+- Runtime: Quaff Blindness → verify zp_eff_blind > 0.
+- All existing item tests still pass.
+
+---
+
+#### Step 7.7 — Wands and Staves
+
+**Goal:** Implement wand aiming and staff usage with charge tracking.
+
+**Files:** `player_items.s` (new `item_aim_wand`, `item_use_staff`), `main.s`
+(dispatch), `item.s` (SoA entries)
+
+**Charge tracking:** Use `inv_p1` as charge count (already exists per inventory
+slot). When item is spawned, set p1 to initial charge count. Each use decrements
+p1. At 0 charges, "THE WAND HAS NO CHARGES LEFT." or "THE STAFF IS EMPTY."
+
+**`item_aim_wand` logic:**
+```
+1. Prompt: "AIM WHICH WAND? (A-V, ESC)"
+2. Validate: slot occupied, category == ICAT_WAND.
+3. If charges (inv_p1) == 0 → "NO CHARGES LEFT.", clc, rts.
+4. jsr get_direction_target → get direction for bolt/effect.
+5. Decrement inv_p1. Auto-identify wand type (set id_known).
+6. Dispatch by item ID:
+   - Wand of Light (39): jsr eff_light_room (direction ignored)
+   - Wand of Lightning (40): lda #3; ldx #8; jsr eff_bolt
+   - Wand of Frost (41): lda #4; ldx #8; jsr eff_bolt
+   - Wand of Stinking Cloud (42): jsr eff_directional_monster → set MX_CONFUSE
+7. sec, rts (turn consumed).
+```
+
+**`item_use_staff` logic:**
+```
+1. Prompt: "USE WHICH STAFF? (A-V, ESC)"
+2. Validate: slot occupied, category == ICAT_STAFF.
+3. If charges == 0 → "THE STAFF IS EMPTY.", clc, rts.
+4. Decrement inv_p1. Auto-identify.
+5. Dispatch by item ID:
+   - Staff of Light (43): jsr eff_light_room
+   - Staff of Detect Monsters (44): jsr eff_detect_monsters
+   - Staff of Teleportation (45): jsr eff_teleport_self
+   - Staff of Cure Light Wounds (46): lda #1; ldx #8; ldy #1; jsr eff_heal
+6. sec, rts.
+```
+
+**main.s dispatch** (add before CMD_CAST):
+```
+    cmp #CMD_AIM
+    bne !not_aim+
+    jsr msg_clear
+    jsr item_aim_wand
+    bcc !aim_no_turn+
+    ... (standard post-action block)
+!not_aim:
+
+    cmp #CMD_USE
+    bne !not_use+
+    jsr msg_clear
+    jsr item_use_staff
+    bcc !use_no_turn+
+    ... (standard post-action block)
+!not_use:
+```
+
+**Wand/staff spawning:** Add to `roll_item_type` — wands and staves appear
+starting at dungeon level 3. Initial charges set in spawn: wands get
+`rng_range(4)+5` charges (5-8), staves get `rng_range(6)+3` (3-8), except
+Light variants get `rng_range(6)+10` (10-15).
+
+**Identification:** Add unidentified name shuffle for wands (4 types need 5+
+descriptors): "IRON", "COPPER", "SILVER", "BONE", "OAK". For staves:
+"BIRCH", "PINE", "MAPLE", "WILLOW", "ASH".
+
+**Steps:**
+1. Add SoA entries for wand/staff item types (IDs 39-46) to `item.s`.
+2. Add wand/staff descriptor tables and shuffle to `item.s`.
+3. Implement `item_aim_wand` in `player_items.s`.
+4. Implement `item_use_staff` in `player_items.s`.
+5. Add CMD_AIM + CMD_USE dispatch in `main.s`.
+6. Update spawn tables to include wands/staves.
+
+**Tests:**
+- Runtime: Aim Wand of Lightning at monster → verify damage applied, charges decremented.
+- Runtime: Aim Wand with 0 charges → verify "NO CHARGES" message, no turn consumed.
+- Runtime: Use Staff of Teleportation → verify player moved, charges decremented.
+- Runtime: Verify wand/staff identification on first use.
+
+---
+
+#### Step 7.8 — Monster Magic (`monster_magic.s`)
+
+**Goal:** Monsters with spellcasting ability can use ranged spells and breath
+weapons instead of (or in addition to) melee attacks.
+
+**File:** `monster_magic.s` (new)
+
+**New creature data arrays** (add to `monster.s`):
+```
+// Spell chance: probability out of 100 that monster casts instead of moving.
+// 0 = never casts (melee only). Only checked when monster is awake and in range.
+cr_spell_chance:
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // Tier 0: no spellcasters
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+// Spell flags: bitmask of available spells/abilities.
+// Bit 0: bolt attack, Bit 1: breath weapon, Bit 2: summon,
+// Bit 3: teleport-to, Bit 4: blind, Bit 5: confuse, Bit 6: heal self
+cr_spell_flags:
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // Tier 0: all zero
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+```
+
+All tier-0 values are 0 (no spellcasters in levels 1-5). The infrastructure is
+built now so that future creature tiers can set non-zero values.
+
+**Range/LOS check (`monster_can_cast`):**
+```
+1. Check cr_spell_chance[type] > 0. If 0 → carry clear, rts.
+2. Calculate Chebyshev distance between monster and player.
+   If distance > MAX_CAST_RANGE (8) → carry clear, rts.
+3. Check line-of-sight: step from monster toward player using dir_dx/dir_dy
+   (same as bolt trace). If any wall tile blocks → carry clear, rts.
+4. Roll rng_range(100). If >= cr_spell_chance → carry clear, rts (chose melee).
+5. Carry set → monster casts a spell.
+```
+
+**Monster spell selection (`monster_pick_spell`):**
+```
+1. Get cr_spell_flags[type].
+2. Count set bits. Pick random one via rng_range(count).
+3. Map selected bit to spell handler:
+   - Bit 0 (bolt): monster_cast_bolt — 2d8 + level damage along line to player
+   - Bit 1 (breath): monster_cast_breath — damage = current HP / 3, along line
+   - Bit 2 (summon): monster_cast_summon — spawn a new monster adjacent to caster
+   - Bit 3 (teleport-to): monster_cast_teleport — move player to random location
+   - Bit 4 (blind): monster_cast_blind — set zp_eff_blind = 10+1d10
+   - Bit 5 (confuse): monster_cast_confuse — set zp_eff_confuse = 5+1d5
+   - Bit 6 (heal): monster_cast_heal — heal self 3d8 HP
+```
+
+**Integration into `monster_ai.s`:**
+
+In `monster_process_one`, before the movement/melee decision (~the point where
+an awake monster decides to approach or attack):
+```
+    // Check if monster wants to cast a spell
+    jsr monster_can_cast
+    bcc !no_cast+
+    jsr monster_pick_spell
+    jmp !mon_done+          // Casting used the monster's turn
+!no_cast:
+    // Normal movement/melee continues...
+```
+
+**Breath weapon damage:**
+```
+monster_cast_breath:
+    // Damage = current HP / 3 (integer division)
+    // Load HP (16-bit), divide by 3 using math_div_16x8
+    lda mx_hp_lo,x    → zp_math_a
+    lda mx_hp_hi,x    → zp_math_b
+    ldx #3
+    jsr math_div_16x8
+    // Result in zp_math_a (lo). Apply as damage to player.
+    // Cap at 255 for single-byte damage.
+```
+
+**Steps:**
+1. Create `monster_magic.s`. Add `#import` to `main.s`.
+2. Add `cr_spell_chance` and `cr_spell_flags` arrays to `monster.s` (all zeros
+   for tier 0).
+3. Implement `monster_can_cast` (range check + LOS + probability roll).
+4. Implement `monster_pick_spell` (select from available spells).
+5. Implement individual monster spell handlers (bolt, breath, summon, teleport,
+   blind, confuse, heal).
+6. Hook into `monster_process_one` in `monster_ai.s`.
+7. Add monster spell messages: "THE <name> BREATHES FIRE!", "THE <name> CASTS
+   A SPELL!", etc.
+
+**Tests:**
+- Compile-time: assert cr_spell_chance/cr_spell_flags table sizes = CREATURE_COUNT.
+- Runtime: Set up monster with spell_chance=100, spell_flags=1 (bolt only), place
+  within range. Run monster_process_one → verify player takes damage.
+- Runtime: Set spell_chance=0 → verify monster_can_cast returns carry clear.
+- Runtime: Place wall between monster and player → verify LOS blocked.
+- Runtime: Breath weapon with monster at 30 HP → verify damage = 10.
+
+---
+
+#### Step 7.9 — Mana Regeneration + Word of Recall
+
+**Goal:** Mana regenerates over time. Word of Recall timer, when expired,
+teleports the player between town and dungeon.
+
+**File:** `turn.s` (extend `turn_tick_effects`)
+
+**Mana regeneration** (add to `turn_tick_effects` after HP regen):
+```
+// Mana regen: spell-casting classes recover 1 mana per 3 turns
+// (Modified by zp_eff_regen: if active, recover 1 per 2 turns)
+    lda player_data + PL_SPELL_TYPE
+    beq !no_mana_regen+              // Warriors don't regen mana
+    lda zp_player_mp
+    cmp zp_player_mmp
+    bcs !no_mana_regen+              // Already at max
+    lda zp_turn_lo
+    and #$01                         // Every 2 turns (basic rate)
+    bne !no_mana_regen+
+    inc zp_player_mp
+    lda zp_player_mp
+    sta player_data + PL_MANA
+!no_mana_regen:
+```
+
+**Word of Recall implementation** (in `turn.s`, replace TODO at line ~141):
+```
+// Word of Recall expired — teleport
+    lda zp_player_dlvl
+    beq !recall_to_dungeon+
+    // In dungeon → go to town (dlvl 0)
+    lda #0
+    sta zp_player_dlvl
+    jmp !recall_generate+
+!recall_to_dungeon:
+    // In town → go to max depth reached
+    lda player_data + PL_MAX_DLVL   // Need to track max depth
+    beq !no_recall+                  // Never been to dungeon
+    sta zp_player_dlvl
+!recall_generate:
+    jsr level_generate
+    jsr monster_spawn_level
+    jsr item_spawn_level
+    jsr update_visibility
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    lda #<recall_arrive_str
+    sta zp_ptr0
+    lda #>recall_arrive_str
+    sta zp_ptr0_hi
+    jsr msg_print
+!no_recall:
+```
+
+**Max depth tracking:** Use `PL_SPARE_63` (player struct offset 63) to store
+`PL_MAX_DLVL`. Update when descending stairs:
+```
+// In main.s stairs-down handler, after incrementing zp_player_dlvl:
+    lda zp_player_dlvl
+    cmp player_data + PL_MAX_DLVL
+    bcc !no_update_max+
+    sta player_data + PL_MAX_DLVL
+!no_update_max:
+```
+
+**Steps:**
+1. Rename `PL_SPARE_63` to `PL_MAX_DLVL` in `player.s`. Initialize to 0 in
+   `player_create.s`.
+2. Add max depth tracking to stairs-down handler in `main.s`.
+3. Add mana regen block to `turn_tick_effects` in `turn.s`.
+4. Replace Word of Recall TODO with full implementation in `turn.s`.
+5. Add recall message strings.
+
+**Tests:**
+- Runtime: Mage with mp < mmp, tick 2 turns → verify mp increased by 1.
+- Runtime: Warrior → verify no mana regen.
+- Runtime: Set zp_eff_word_recall = 1, tick one turn → verify dungeon level changed.
+- Runtime: In town (dlvl 0) with max_dlvl=3, recall → verify dlvl becomes 3.
+
+---
+
+#### Step 7.10 — Integration, Polish, and Full Test Pass
+
+**Goal:** Wire everything together, verify all commands work end-to-end,
+fix edge cases.
+
+**Checklist:**
+
+1. **Verify all 4 new commands work** (m=cast, p=pray, a=aim, z=use):
+   - Each prints appropriate message on success/failure.
+   - Each correctly consumes/doesn't consume a turn.
+   - Cancellation works cleanly at every prompt.
+
+2. **Confusion interaction with casting:**
+   - If `zp_eff_confuse > 0`, casting should have a high chance of failure or
+     random spell selection (umoria randomly picks a spell when confused).
+   - Add confusion check at start of `player_cast_spell`/`player_pray`.
+
+3. **Blindness interaction:**
+   - Blind player can't read scrolls (`item_read_scroll` should check
+     `zp_eff_blind` and refuse: "YOU CAN'T SEE TO READ.").
+   - Blind player can still quaff potions, use staves, cast from memory.
+
+4. **Hunger interaction:**
+   - At "FAINT" hunger level, spell casting should have increased failure rate
+     (add +20 to failure roll when `zp_hunger_state >= HUNGER_FAINT`).
+
+5. **Sound effects:**
+   - Add `SFX_SPELL` to `sound.s` — short mystical tone for successful cast.
+   - Add `SFX_SPELL_FAIL` — low buzz for failed cast.
+
+6. **Update help screen** (`ui_help.s`):
+   - Add M=cast spell, P=pray, A=aim wand, Z=use staff to key listing.
+
+7. **Update character sheet** (`ui_character.s`):
+   - Add "Spells Known: N/16" line.
+
+8. **Status bar** (`ui_status.s`):
+   - Already displays mana. Verify it updates after casting.
+
+9. **Save/load compatibility note** (for future Phase 9):
+   - Document that save format must include: PL_SPELLS_KNOWN (2 bytes),
+     PL_MAX_DLVL (1 byte), all effect timers, inventory charges.
+
+**Final test matrix:**
+
+| Test | Command | Scenario | Expected |
+|------|---------|----------|----------|
+| Cast all 16 mage spells | M | Sufficient mana, spell known | Each effect applies |
+| Pray all 16 prayers | P | Sufficient mana, prayer known | Each effect applies |
+| Cast with no mana | M | mp=0 | "NOT ENOUGH MANA", no turn |
+| Cast as Warrior | M | class=Warrior | "YOU CANNOT CAST SPELLS" |
+| Pray as Mage | P | class=Mage | "YOU CANNOT PRAY" |
+| Aim wand at monster | A | Monster in line, charges > 0 | Damage/effect, charge-1 |
+| Aim empty wand | A | charges=0 | "NO CHARGES LEFT", no turn |
+| Use staff | Z | charges > 0 | Effect applies, charge-1 |
+| Quaff new potions | Q | Each new type | Effect applies correctly |
+| Read new scrolls | R | Each new type | Effect applies correctly |
+| Level-up spell learn | — | Mage gains level 3 | Spells 4-5 now known |
+| Mana regen | — | mp < mmp, 2 turns | mp+1 |
+| Word of Recall | — | Timer expires in dungeon | Return to town |
+| Monster spell (future) | — | Spell-capable monster in range | Player takes damage |
+| Confusion + cast | M | Confused | Random spell or auto-fail |
+| Blind + read scroll | R | Blind | "CAN'T SEE TO READ" |
+
+---
+
+### Implementation Order and Dependencies
+
+```
+Step 7.0 (Shared Effects) ──────────┐
+                                     │
+Step 7.1 (Spell Tables) ───────┐    │
+                                │    │
+Step 7.2 (Cast/Pray Commands) ─┤    │
+         depends on 7.0, 7.1   │    │
+                                │    │
+Step 7.3 (Learn/Mana Recalc) ──┤    │
+         depends on 7.1        │    │
+                                ▼    ▼
+Step 7.4 (Mage Effects) ───────────────┐
+         depends on 7.0, 7.2           │
+                                        │
+Step 7.5 (Priest Effects) ─────────────┤
+         depends on 7.0, 7.2           │
+                                        │
+Step 7.6 (Potions/Scrolls) ───────────┤
+         depends on 7.0                │
+                                        │
+Step 7.7 (Wands/Staves) ──────────────┤
+         depends on 7.0, bolt from 7.4 │
+                                        │
+Step 7.8 (Monster Magic) ─────────────┤
+         depends on bolt from 7.4      │
+                                        │
+Step 7.9 (Mana Regen/Recall) ─────────┤
+         depends on 7.3                │
+                                        ▼
+Step 7.10 (Integration/Polish) ─── all steps complete
+```
+
+**Recommended implementation sequence:**
+1. **7.0** → 2. **7.1** → 3. **7.2** + **7.3** → 4. **7.4** → 5. **7.5** →
+6. **7.6** → 7. **7.7** → 8. **7.8** → 9. **7.9** → 10. **7.10**
+
+Each step is independently testable and committable. Steps 7.4 and 7.5 can
+potentially be done in one pass since they share the dispatch pattern. Steps
+7.6 and 7.7 are largely independent of the spell system (they're item-based)
+and could be parallelized.
