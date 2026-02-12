@@ -1076,17 +1076,17 @@ Phase 5 status (monster/combat):
 | # | What | Status |
 |---|------|--------|
 | 5.1 | Monster data structures | **Complete** — 20 creature types (all real umoria creatures), 32 active slots, spawn/find/remove. All stats match umoria (see MC1 resolved). |
-| 5.2 | Monster AI | **Implemented** — wake/sleep, greedy movement, confused random movement, speed 0/1/2. Has speed=0 attack bug (see RP7-1). |
+| 5.2 | Monster AI | **Complete** — wake/sleep, greedy movement, confused random movement, speed 0/1/2, CF_ATTACK_ONLY flag. All RP7 speed/movement bugs fixed. Poltergeist speed wrong (see RP8-1). |
 | 5.3 | Player melee combat | **Complete** — to-hit (class+race BTH), damage, death, XP (integer-only), level-up. Missing critical hits (MC4.1). |
-| 5.4 | Monster melee attacks | **Implemented** — 2 attack slots, effects (poison/confuse/paralyze/acid/aggravate). Has AC reduction and effect bugs (see RP7-2 through RP7-6). |
-| 5.5 | Status effects & regen | **Partial** — effect timers tick. Missing: HP/MP regen, starvation damage. |
+| 5.4 | Monster melee attacks | **Complete** — 2 attack slots, effects (poison/confuse/paralyze/acid/aggravate). AC reduction correctly limited to ATK_NORMAL only. Poison/confusion stacking matches umoria. Paralysis timer slightly short (see RP8-3). |
+| 5.5 | Status effects & regen | **Complete** — effect timers tick with expiration messages (poison, blind, confuse, paralyze). HP regen implemented (CON-based counter, poison suppresses, extra-regen doubles rate). Starvation damage (1 HP/turn). Light source charge tracking with dim warning at 10. |
 | 5.6 | Monster rendering | **Complete** — FLAG_OCCUPIED check, cr_display/cr_color lookup in viewport renderer. |
 
 **Suggested next steps (priority order):**
-1. **Fix RP7-1 — Speed=0 attack bug** — 4 creatures (Floating Eye, Shrieker, Grey Mold, Yellow Mold) are completely non-functional. Highest impact.
-2. **Fix RP7-2 through RP7-6 — Effect dispatch bugs** — AC reduction on wrong attack types, confusion damage/chance, poison/confusion stacking.
-3. **Fix RP7-7 — Slow creature speeds** — 3 creatures run at double their intended speed.
-4. **Implement MC4.2 — HP/MP regeneration** — Core gameplay mechanic still missing.
+1. **Fix RP8-1 — Poltergeist speed** — Should be speed=2 (fast), currently speed=1. Trivial fix.
+2. **Fix RP8-2/RP8-3 — Paralysis damage and timer** — Should apply full damage and use +3 timer offset. Low practical impact now (Floating Eye has 0d0 dice) but correct pattern matters for future creatures.
+3. **Implement MC4.1 — Critical hits** — Player critical hit system not yet implemented.
+4. **Phase 6 — Items and inventory** — Partially implemented, needs review.
 5. **Phase 4.3 — Data loader** — can be deferred until more creature tiers are needed.
 
 ---
@@ -1185,34 +1185,37 @@ but C64 only supports 2 slots (claw 1d1, claw 1d1). Third attack lost. Low impac
    hits do flat damage. Critical chance formula: `(weapon_weight + 5*plus_to_hit +
    class_level_adj[class][BTH]*level) / 5000`. Tiers: 2× (+5), 3× (+10), 4× (+15), 5× (+20).
 
-2. **No HP/MP regeneration.** `turn.s` has the effect timer infrastructure but no actual
-   regeneration logic. In umoria, HP regen per turn = `(max_hp * percent + 1442) / 65536`
-   where percent = 197 (normal), ×1.5 (regen item), ×2 (resting). Uses 16-bit fixed-point
-   fractional accumulation. Mana regen uses same formula with base 524 instead of 1442.
+2. ~~**No HP/MP regeneration.**~~ **HP REGEN IMPLEMENTED** — `turn_tick_regen` (turn.s:210-281)
+   implements CON-based regen counter (8-50 turns per 1 HP depending on CON). Poison suppresses
+   regen. `zp_eff_regen` doubles tick rate. Simplified vs umoria's 16-bit fixed-point fractional
+   accumulation — C64 uses integer counter per CON. Starvation damage (1 HP/turn at food=0)
+   also implemented. MP regen not yet needed (spells not implemented).
 
 3. ~~**Missing effect-specific messages.**~~ **VERIFIED CORRECT** — Effect handlers DO print
-   messages: `mon_atk_effect_poison` calls `mon_atk_build_effect_msg` (monster_attack.s:394-404),
-   `mon_atk_effect_confuse` prints at lines 428-438, `mon_atk_effect_paralyze` prints at
-   lines 490-500. Player sees both "THE X HITS YOU." and "THE X POISONS YOU." etc.
+   messages: `mon_atk_effect_poison` calls `mon_atk_build_effect_msg` (monster_attack.s:408-417),
+   `mon_atk_effect_confuse` prints at lines 442-452, `mon_atk_effect_paralyze` prints at
+   lines 514-524. Player sees both "THE X HITS YOU." and "THE X POISONS YOU." etc.
+   Effect expiration messages also print: "YOU FEEL BETTER." (poison), "YOU CAN SEE AGAIN."
+   (blind), "YOU FEEL LESS CONFUSED." (confuse), "YOU CAN MOVE AGAIN." (paralyze).
 
 4. **Monster confusion/stun timers never decremented.** `MX_CONFUSE` and `MX_STUN` fields
    exist in the monster entry struct but no code decrements them per turn or clears MF_CONFUSED
    when the timer expires. (Currently dead code — no way to confuse a monster yet.)
 
-#### MC5: Design simplifications — LOW (speed issues escalated to RP7)
+#### MC5: Design simplifications — LOW (speed issues mostly resolved)
 
-1. **Speed model oversimplified.** C64 uses 0/1/2 (immobile/normal/fast). umoria uses speed
-   relative to 10 (speed 11 = normal, 10 = half-speed, 12 = double, 13 = very fast). The
-   speed=0 "immobile" category is **critically broken** — see RP7-1. Three slow creatures
-   (umoria speed=10) run at normal speed — see RP7-7. Very fast creatures (umoria speed=13,
-   e.g. Poltergeist, Huge Brown Bat) are capped at 2 moves instead of 3.
+1. ~~**Speed model oversimplified.**~~ **MOSTLY FIXED** — Speed model now uses 0=slow (every other
+   turn), 1=normal, 2=fast (double move). CF_ATTACK_ONLY flag separates "can't move" from "slow".
+   Three slow creatures correctly at speed=0. Remaining issue: Poltergeist speed=1 should be 2
+   (see RP8-1). Huge Brown Bat correctly at speed=2. Very fast creatures (umoria speed=13) capped
+   at 2 moves instead of 3 — acceptable simplification for C64.
 
 2. **Blows table simplified.** C64 uses 5×4 (5 weight classes, 4 DEX brackets). umoria uses
    7×6 (7 weight classes, 6 DEX brackets including 18/xx ranges). Fine for now since weapons
    and 18/xx DEX aren't in play yet.
 
-3. **Stale header comment in monster_ai.s:8.** Says "No combat — monsters stop adjacent to the
-   player (Phase 5.3/5.4)." But `monster_try_step` already calls `monster_attack_player`.
+3. ~~**Stale header comment in monster_ai.s:8.**~~ **FIXED** — Header now correctly documents
+   CF_ATTACK_ONLY behavior and updated speed model.
 
 #### Verified correct
 
@@ -1386,3 +1389,95 @@ Low priority — the flat 1 HP/turn is a reasonable simplification that averages
 | RP7-7 | **MEDIUM** | 3 slow creatures at normal speed | Medium — requires speed model change |
 | RP7-8 | LOW | Fear AC reduction wrong | Trivial — remove 1 JSR |
 | RP7-9 | LOW | Poison tick ignores CON | Low priority simplification |
+
+---
+
+### Review Pass 8 — Post-RP7-Fix Verification (2026-02-11)
+
+Verified all RP7 fixes (commit `37552c0`) against umoria source. All 8 actionable RP7 bugs
+confirmed fixed correctly. Also verified new Phase 5 additions (HP regen, starvation, light
+tracking, effect expiration messages). Found 3 remaining issues.
+
+#### RP7 fix verification results
+
+| # | Finding | Status |
+|---|---------|--------|
+| RP7-1 | Speed=0 creatures can't attack | **FIXED** — CF_ATTACK_ONLY flag added to `cr_mflags`. Attack-only creatures set to speed=1. `monster_try_step` checks CF_ATTACK_ONLY to block movement while still allowing adjacency attacks. |
+| RP7-2 | Poison AC reduction wrong | **FIXED** — `mon_atk_effect_dispatch` routes poison directly to `mon_atk_effect_poison`, no AC reduction. |
+| RP7-3 | Confusion deals no damage | **FIXED** — Confusion handler no longer zeroes `zp_combat_dmg`. Full dice damage passes through. |
+| RP7-4 | Confusion missing 50% chance | **FIXED** — `rng_range(2)` check added: 0 = apply confusion, 1 = skip. |
+| RP7-5 | Confusion doesn't stack | **FIXED** — Already confused: `+= 3`. New confusion: `rng_range(cr_level) + 3`. |
+| RP7-6 | Poison doesn't stack | **FIXED** — Always adds `rng_range(cr_level) + 5` to existing timer. Message only on first poisoning. |
+| RP7-7 | 3 slow creatures at normal speed | **FIXED** — White Worm (#2), Green Worm (#10), Copper Coins (#15) now speed=0. `monster_ai_tick` skips speed=0 on odd turns (acts every other turn). Verified against umoria speed=10 (half speed). |
+| RP7-8 | Fear AC reduction wrong | **FIXED** — Fear handler passes through full dice damage, no AC reduction. |
+| RP7-9 | Poison tick ignores CON | **Accepted simplification** — flat 1 HP/turn. |
+
+#### New additions verified correct
+
+1. **HP regeneration** (`turn_tick_regen`, turn.s:210-281) — CON-based counter (8-50 turns per
+   1 HP heal). Poison suppresses regen. `zp_eff_regen` active doubles tick rate. Caps at max HP
+   with 16-bit comparison. Resets counter from `regen_rate` table indexed by CON-3.
+
+2. **Starvation damage** (`turn_tick_hunger`, turn.s:187-204) — When food counter reaches 0,
+   deals 1 HP/turn and calls `player_death_check`. Correct behavior.
+
+3. **Effect expiration messages** (turn.s:20-144) — Poison ("YOU FEEL BETTER."), blindness
+   ("YOU CAN SEE AGAIN." + viewport redraw), confusion ("YOU FEEL LESS CONFUSED."), paralysis
+   ("YOU CAN MOVE AGAIN.") all print correctly when their timers reach 0.
+
+4. **Light source tracking** (`turn_tick_light`, turn.s:309-354) — Decrements charges per turn,
+   warns at 10 ("YOUR LIGHT IS GROWING DIM."), expires at 0 ("YOUR LIGHT HAS GONE OUT." +
+   sets `zp_light_radius` to 0 + unequips light).
+
+#### RP8-1: Poltergeist speed wrong — MEDIUM
+
+Poltergeist (#13) has `cr_speed` = 1 (normal) in monster.s:97. In umoria (`data_creatures.cpp`),
+Poltergeist has speed = 13, meaning +3 over normal (very fast). The C64's maximum speed is 2
+(double move), so the correct mapping is speed=2.
+
+Huge Brown Bat (#14) is already correctly at speed=2 (umoria speed=12, double speed).
+
+**Fix:** Change `cr_speed` index 13 from 1 to 2. One byte change.
+
+#### RP8-2: Paralysis zeroes damage — LOW
+
+`mon_atk_effect_dispatch` (monster_attack.s:356-357) zeroes `zp_combat_dmg` for paralysis:
+```
+!maed_paralyze:
+    lda #0
+    sta zp_combat_dmg
+```
+
+In umoria (monster.cpp:1620-1634), paralysis calls `playerTakesHit(damage, death_description)`
+FIRST (applying full dice damage), then checks saving throw and applies paralysis effect.
+Damage should not be zeroed.
+
+**Practical impact: NONE currently.** The only paralysis creature (Floating Eye, #8) has 0d0
+attack dice, so damage is already 0 before zeroing. However, the pattern is wrong for
+correctness — future paralysis creatures with non-zero dice would be affected.
+
+**Fix:** Remove `lda #0; sta zp_combat_dmg` from `!maed_paralyze`. Let dice damage pass through.
+
+#### RP8-3: Paralysis timer offset wrong — LOW
+
+C64 `mon_atk_effect_paralyze` uses `rng_range(cr_level) + 1`, giving a range of [1, level].
+For the level-1 special case, it hardcodes 2.
+
+umoria uses `randomNumber(creature_level) + 3`, giving a range of [4, level+3].
+
+For Floating Eye (level 1): C64 = 2 turns, umoria = 4 turns.
+For a hypothetical level 3 creature: C64 = [1, 3], umoria = [4, 6].
+
+Paralysis is consistently ~2-3 turns shorter than umoria intends. This makes paralysis less
+threatening than it should be.
+
+**Fix:** Change `adc #1` to `adc #4` (equivalent to umoria's randomNumber offset after accounting
+for rng_range's [0,N-1] vs randomNumber's [1,N]). Update level-1 special case from 2 to 5.
+
+#### Summary of Review Pass 8 findings
+
+| # | Severity | Issue | Fix complexity |
+|---|----------|-------|----------------|
+| RP8-1 | **MEDIUM** | Poltergeist speed=1, should be 2 | Trivial — 1 byte |
+| RP8-2 | LOW | Paralysis zeroes damage (no practical impact) | Trivial — remove 2 lines |
+| RP8-3 | LOW | Paralysis timer +1 should be +4 | Trivial — change 2 constants |
