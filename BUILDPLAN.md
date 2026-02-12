@@ -1577,6 +1577,280 @@ If done, also update the function's input comment to document `fi_add_flags`.
 | RP9-2 | **MEDIUM** | `item_drop` loses IF_CURSED/IF_IDENTIFIED flags | Easy — add `inv_flags→fi_add_flags` copy | **FIXED** — added flags copy in `item_drop` before `floor_item_add` |
 | RP9-3 | LOW | `floor_item_add` ignores `fi_add_flags` (design debt) | Easy — copy `fi_add_flags` instead of hardcoding 0 | **FIXED** — `floor_item_add` now copies `fi_add_flags`; removed post-hoc patches; added init to gold path + all tests |
 
+### Review Pass 10 — Phase 7 Steps 7.0–7.5 Implementation Review (2026-02-12)
+
+Reviewed all three new Phase 7 files (`spell_effects.s` ~1014 lines, `spell_data.s` ~137 lines,
+`player_magic.s` ~1258 lines) plus integration points in `main.s`, `combat.s`, and `player_create.s`.
+Cross-referenced against BUILDPLAN steps 7.0–7.5, calling conventions of all referenced functions
+(`math_dice`, `monster_find_at`, `monster_get_ptr`, `monster_remove`, `rng_range`, `get_direction_target`,
+`stat_bonus_index`, `combat_append_str`, `combat_award_xp`, `combat_check_levelup`, `find_random_floor`),
+zero-page allocations (`zp_math_tmp0/1` at $20/$21 confirmed separate from `zp_temp0-2` at $02-$04),
+and encoding (`.encoding "screencode_upper"` confirmed set globally in `main.s` line 20).
+
+**Files reviewed:** `spell_effects.s`, `spell_data.s`, `player_magic.s`, `main.s` (dispatch),
+`combat.s` (level-up hooks), `player_create.s` (starting spells), `monster.s` (CF_UNDEAD),
+`dungeon_features.s` (find_random_floor, trap_check_at_player), `dungeon_render.s` (monster
+rendering), `math.s` (math_dice/math_multiply), `player.s` (stat_bonus_index), `tables.s`
+(spell_stat_bonus), `screen.s` (screen_put_string), `zeropage.s`.
+
+#### Findings
+
+**RP10-1 (BUG): Monster HP=0 treated as alive in spell effect damage**
+
+In `spell_effects.s`, the death check after 16-bit HP subtraction uses only `bpl` (branch if
+HP_HI >= 0), meaning a monster at exactly 0 HP survives. This is INCONSISTENT with `combat.s`
+`combat_apply_damage` (lines 412–449), which checks BOTH `bmi` (HP < 0) AND `ora` for exact
+zero (HP == 0), treating HP <= 0 as dead.
+
+Affected locations:
+- `eff_bolt` line 702: `bpl !eb_fizzle+`
+- `eff_damage_adjacent` line 765: `bpl !eda_next+`
+- `eff_dispel_undead` line 1002: `bpl !edu_next+`
+- `mage_effect_dispatch` effect 0 (Magic Missile) line 934: `bpl !med_rts+`
+
+**Fix:** After each `bpl !alive+`, add an explicit zero check:
+```
+    bmi !dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !alive+
+!dead:
+```
+Or extract a shared `eff_check_monster_dead` subroutine since this pattern repeats 4 times.
+Alternatively, match the `combat_apply_damage` pattern: `bmi` then `beq` on the OR of both bytes.
+
+**RP10-2 (BUG): `eff_destroy_traps_doors` does not remove traps from trap table**
+
+`eff_destroy_traps_doors` (spell_effects.s lines 804–869) changes adjacent TILE_TRAP map tiles
+to TILE_FLOOR, but does NOT modify or remove the corresponding entries in `trap_x`/`trap_y`/
+`trap_type` arrays. The comment at line 865 acknowledges this: "simplified: clear the whole trap
+table since most are revealed" — but the code doesn't actually do it.
+
+`trap_check_at_player` (dungeon_features.s line 330) triggers traps by scanning the
+`trap_x`/`trap_y` table, NOT by checking map tile types. Therefore, a trap that was "destroyed"
+on the map (tile changed to TILE_FLOOR) will STILL TRIGGER when the player steps on it.
+
+**Fix:** After the direction loop, scan `trap_x`/`trap_y` for entries matching each of the 8
+adjacent positions and remove them (swap with last entry + decrement `trap_count`):
+```
+    // Remove matching traps from trap table
+    ldx #0
+!scan:
+    cpx trap_count
+    bcs !scan_done
+    // For each of 8 directions, check if trap_x[x],trap_y[x] matches
+    // If match: swap with last entry, dec trap_count, don't inc x
+    ...
+```
+
+**RP10-3 (BUG): `find_random_floor` does not check FLAG_OCCUPIED**
+
+`find_random_floor` (dungeon_features.s lines 165–200) selects a random floor tile by checking
+only `TILE_TYPE_MASK == TILE_FLOOR`. It does NOT check that `FLAG_OCCUPIED` is clear. This means
+`eff_teleport_self` and `eff_phase_door` can teleport the player onto a tile already occupied by
+a monster, resulting in both entities sharing a tile.
+
+Compare with `find_monster_floor` (monster.s lines 285–338) which correctly checks
+`TILE_TYPE_MASK | FLAG_OCCUPIED` before accepting a tile.
+
+**Fix:** In `find_random_floor`, change the tile check from:
+```
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+```
+to:
+```
+    sta zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !frf_next+
+    lda zp_temp0
+    and #FLAG_OCCUPIED
+    bne !frf_next+
+```
+
+**RP10-4 (MEDIUM): BUILDPLAN test expectation for `magic_recalc_mana` is wrong**
+
+Step 7.3 test says: "Verify `magic_recalc_mana` with INT=12, level=5 → expected max_mana
+= (5*12)/8 + bonus[12-3] = 7 + 2 = 9."
+
+The `spell_stat_bonus` table in `tables.s` (lines 196–198) has:
+```
+    .byte  0,  0,  0,  0,  0,  1,  1,  1  // indices 0-7 (stats 3-10)
+    .byte  1,  1,  1,  2,  2,  3,  3,  3  // indices 8-15 (stats 11-18)
+```
+Index 9 (stat 12) = **1**, not 2. Correct expected value: (5×12)/8 + 1 = 7 + 1 = **8**.
+
+**RP10-5 (MEDIUM): `eff_phase_door` duplicates teleport code instead of calling `eff_teleport_self`**
+
+`eff_phase_door` (spell_effects.s lines 376–404) contains a full copy of the FLAG_OCCUPIED
+clear/move/set logic from `eff_teleport_self`. After the distance-check loop selects a target
+(stored in `df_target_x`/`df_target_y`), it should simply `jsr eff_teleport_self` which does
+the exact same thing. The duplicated code is 28 bytes of wasted space and a maintenance hazard
+(a bug fix in one copy won't automatically apply to the other).
+
+**Fix:** Replace lines 376–404 with `jsr eff_teleport_self; rts` (or `jmp eff_teleport_self`).
+
+**RP10-6 (MEDIUM): `eff_heal` API diverges from BUILDPLAN — 8-bit only**
+
+The BUILDPLAN (Step 7.0) describes `eff_heal(A=dice, X=sides, Y=bonus)` with integrated dice
+rolling. The implementation takes a pre-rolled 8-bit heal amount in A. This means all callers
+must call `math_dice` separately, then pass `zp_math_a` to `eff_heal`. The 16-bit high byte
+(`zp_math_b`) is silently discarded.
+
+Current max heal is 5d8+5 = 45, well within 8 bits. However, the function signature mismatch
+between plan and code should be documented. The current approach is arguably better (simpler
+function, separation of concerns), but the BUILDPLAN should be updated to match reality.
+
+**RP10-7 (LOW): `eff_detect_monsters` makes monster tiles permanently FLAG_VISITED**
+
+After `eff_detect_monsters` sets FLAG_VISITED on each monster's tile, those tiles remain
+permanently marked as visited. When the monster moves away, the old tile still shows as visited
+floor. This is not harmful (the renderer checks FLAG_OCCUPIED before drawing a monster glyph,
+so no phantom monsters appear), but it does reveal map layout in areas the player hasn't
+explored — a minor information leak.
+
+In umoria, Detect Monster is a temporary effect with a duration. Consider adding a timer
+(`zp_eff_detect`, already in the ZP effect block) and only showing monsters while the timer
+is active, rather than permanently marking tiles.
+
+**RP10-8 (LOW): CMP/BEQ dispatch chains for 16 spell effects**
+
+Both `mage_effect_dispatch` and `priest_effect_dispatch` use a linear CMP/BEQ chain (16
+comparisons worst case for spell index 15). A jump table would be O(1):
+```
+    asl                   // index * 2
+    tax
+    lda mage_jmp_tbl+1,x
+    pha
+    lda mage_jmp_tbl,x
+    pha
+    rts                   // jump via RTS trick
+```
+This saves ~48 bytes and is faster for higher-index spells. Not critical at 16 entries but
+worth considering since the same pattern will be used for potions, scrolls, wands, and staves
+in steps 7.6–7.7, potentially expanding to 40+ dispatch entries total.
+
+**RP10-9 (LOW): `stat_bonus_index` has no lower-bounds check**
+
+`stat_bonus_index` (player.s lines 392–401) computes `stat - 3` without checking if stat < 3.
+If a stat ever reaches 2 or below, the subtraction underflows to 253+ and indexes far past the
+16-byte `spell_stat_bonus` table (buffer over-read).
+
+Current stat drain code (dungeon_features.s line 500) guards with `cmp #4; bcc !no_drain+`,
+preventing stats from dropping below 3. But this is an implicit contract — `stat_bonus_index`
+itself is fragile.
+
+**Fix:** Add a defensive clamp:
+```
+    cmp #3
+    bcs !ok+
+    lda #3
+!ok:
+```
+
+**RP10-10 (LOW): `eff_bolt` tile passability check is too narrow**
+
+`eff_bolt` (spell_effects.s lines 664–671) only allows bolts through `TILE_FLOOR` and
+`TILE_DOOR_OPEN`. If any other passable tile types exist or are added later (e.g., stairs,
+rubble), bolts would stop on them. The check should probably use a "not wall" test instead:
+```
+    cmp #TILE_WALL_H
+    beq !eb_wall+
+    cmp #TILE_WALL_V
+    beq !eb_wall+
+    cmp #TILE_DOOR_CLOSED
+    beq !eb_wall+
+    jmp !eb_check_mon+
+!eb_wall:
+    jmp !eb_fizzle+
+```
+Or better, use a tile-passability helper. For now, TILE_FLOOR covers corridors (they use the
+same tile type), so this works for the current map generator. Flag for future review.
+
+**RP10-11 (LOW): `eff_kill_monster` clears FLAG_OCCUPIED redundantly**
+
+`eff_kill_monster` manually clears FLAG_OCCUPIED (lines 924–940), then calls `monster_remove`
+(line 944) which also clears FLAG_OCCUPIED (monster.s lines 619–625). The first clear is
+redundant. Removing the manual clear saves ~17 bytes.
+
+**RP10-12 (LOW): No `eff_aggravate` implementation**
+
+Step 7.0 lists `eff_aggravate` (wake all monsters, set MF_AWAKE) as a shared subroutine to
+create. It's not used in steps 7.4/7.5, but step 7.6 needs it for Scroll of Aggravation.
+It should be implemented now to keep step 7.0 complete. Implementation is trivial:
+```
+eff_aggravate:
+    ldx #0
+!loop:
+    cpx #MAX_MONSTERS
+    bcs !done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !next+
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y       // Clear sleep
+!next:
+    inx
+    jmp !loop-
+!done:
+    rts
+```
+
+#### Suggested Additional Tests
+
+The existing test suites (`test_effects.s`, `test_combat.s`) do not cover the spell casting flow
+or individual spell effects. The following runtime tests should be added:
+
+1. **Spell dispatch correctness:** Cast each mage spell 0–15 in a controlled setup; verify the
+   expected side effect occurred (e.g., Magic Missile: monster HP decreased; Light: room_lit set;
+   Teleport: player position changed).
+2. **Mana deduction on failure:** Set player to Mage, mana=10, force spell failure (set fail_base
+   to 100), verify mana decreased but no effect applied.
+3. **HP=0 kill check:** Place monster with exactly N HP, deal exactly N damage via bolt/Fire Ball,
+   verify monster is removed (once RP10-1 is fixed).
+4. **Phase door distance:** Set player at (40, 24), call eff_phase_door, verify new position is
+   within Chebyshev distance 10 (or verify fallback behavior after 20 failed attempts).
+5. **Occupied tile teleport:** Place monster on every floor tile except one, call
+   eff_teleport_self, verify player lands on the unoccupied tile (once RP10-3 is fixed).
+6. **Spell known bitmask boundary:** Set PL_SPELLS_KNOWN = $00/$00, player_level = 9. Call
+   magic_check_new_spells. Verify spells 0–7 (lo byte) AND spells 8–9 (hi byte) are all learned
+   correctly (tests the 8-bit boundary crossing).
+7. **Bless/Chant timer ranges:** Cast Bless 100 times, verify all values in [12, 23]. Cast Chant
+   100 times, verify all values in [24, 47].
+8. **Slow Poison edge cases:** Test with poison=1 → stays 1. Test with poison=0 → stays 0
+   (guard check). Test with poison=255 → becomes 128 (127 | 1).
+9. **Remove Curse coverage:** Equip cursed weapon + cursed armor + non-cursed ring. Cast
+   Remove Curse. Verify cursed flags cleared on weapon and armor, ring unchanged.
+10. **Bolt wall stop:** Fire Lightning Bolt toward wall 2 tiles away with monster behind wall.
+    Verify bolt stops at wall, monster takes no damage.
+11. **Trap/Door Destroy + trigger:** Destroy adjacent trap via spell, then step on that tile.
+    Verify trap does NOT trigger (once RP10-2 is fixed).
+12. **Failure rate clamp:** Test with very high level (level 40, spell level 1): verify failure
+    rate is clamped to 5%, not negative. Test with very low stat (stat 3): verify no underflow.
+
+#### Summary of Review Pass 10 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP10-1 | **HIGH** | Monster HP=0 treated as alive in spell damage (inconsistent with combat.s) | Easy — add zero check after `bpl` in 4 locations, or extract helper | Open |
+| RP10-2 | **HIGH** | `eff_destroy_traps_doors` doesn't remove traps from trap table; traps still trigger | Medium — add trap table scan after direction loop | Open |
+| RP10-3 | **HIGH** | `find_random_floor` doesn't check FLAG_OCCUPIED; teleport can land on monsters | Easy — add FLAG_OCCUPIED check in find_random_floor | Open |
+| RP10-4 | **MEDIUM** | BUILDPLAN test expectation wrong: spell_stat_bonus[9]=1, not 2; expected mana=8, not 9 | Trivial — fix test expectation text | Open |
+| RP10-5 | **MEDIUM** | `eff_phase_door` duplicates 28 bytes of teleport code; should call `eff_teleport_self` | Trivial — replace with JSR/JMP | Open |
+| RP10-6 | **MEDIUM** | `eff_heal` API takes pre-rolled A (8-bit) not dice params as BUILDPLAN describes | Documentation — update BUILDPLAN to match implementation | Open |
+| RP10-7 | LOW | `eff_detect_monsters` permanently marks tiles FLAG_VISITED (minor map info leak) | Medium — add timer-based detect effect | Open |
+| RP10-8 | LOW | CMP/BEQ dispatch chains are O(n); jump table would be O(1) and smaller | Medium — rewrite as jump table | Open |
+| RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | Open |
+| RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | Open |
+| RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | Open |
+| RP10-12 | LOW | `eff_aggravate` not implemented despite being listed in Step 7.0 | Easy — ~20 bytes | Open |
+
 ---
 
 ## Phase 7 — Magic System: Detailed Implementation Plan
@@ -1740,7 +2014,7 @@ that prevents code duplication across all of Phase 7.
 
 | Subroutine | Source | What it does |
 |------------|--------|--------------|
-| `eff_heal(A=dice, X=sides, Y=bonus)` | `player_items.s` quaff cure | Roll dice, add to HP, cap at max HP (16-bit) |
+| `eff_heal(A=amount)` | `player_items.s` quaff cure | Add pre-rolled 8-bit amount to HP, cap at max HP (16-bit). Callers roll dice separately via `math_dice`. (RP10-6: simplified from plan's dice-param API.) |
 | `eff_light_room` | `player_items.s` scroll of light | Light current room tiles |
 | `eff_teleport_self` | `player_items.s` scroll of teleport | find_random_floor, move player, update occupied flags |
 | `eff_phase_door` | New | find_random_floor within 10 tiles of player |
@@ -1985,7 +2259,7 @@ After mana initialization (~line 624), add:
 - Runtime: Set Mage to level 3, call `magic_check_new_spells` → verify spells 4-5
   now known.
 - Runtime: Verify `magic_recalc_mana` with INT=12, level=5 → expected max_mana
-  = (5*12)/8 + bonus[12-3] = 7 + 2 = 9.
+  = (5*12)/8 + bonus[12-3] = 7 + 1 = 8. (RP10-4: bonus[9]=1 per `spell_stat_bonus` table.)
 
 ---
 
