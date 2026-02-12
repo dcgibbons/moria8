@@ -948,3 +948,66 @@ eff_kill_monster:
     jsr combat_check_levelup
 
     rts
+
+// ============================================================
+// eff_dispel_undead — Damage all active undead monsters
+// Damage = (1d3) * player_level per monster
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4, zp_math_a/b
+// ============================================================
+eff_du_idx: .byte 0
+
+eff_dispel_undead:
+    lda #0
+    sta eff_du_idx
+
+!edu_loop:
+    ldx eff_du_idx
+    cpx #MAX_MONSTERS
+    bcs !edu_done+
+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !edu_next+
+
+    // Check CF_UNDEAD flag
+    tax                             // X = creature type
+    lda cr_mflags,x
+    and #CF_UNDEAD
+    beq !edu_next+
+
+    // Undead monster — roll 1d3 * player_level
+    lda #3
+    jsr rng_range                   // A = [0, 2]
+    clc
+    adc #1                          // A = [1, 3]
+    ldx zp_player_lvl              // X = level
+    jsr math_multiply               // zp_math_a = lo, zp_math_b = hi
+
+    // Apply damage
+    ldx eff_du_idx
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc zp_math_b
+    sta (zp_ptr0),y
+
+    // Check if dead (HP < 0)
+    bpl !edu_next+
+
+    // Monster killed
+    ldx eff_du_idx
+    jsr eff_kill_monster
+
+!edu_next:
+    inc eff_du_idx
+    jmp !edu_loop-
+
+!edu_done:
+    rts

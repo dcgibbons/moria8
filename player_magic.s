@@ -1067,9 +1067,153 @@ mage_effect_dispatch:
 // priest_effect_dispatch — Dispatch priest prayer effect by index
 // Input: A = spell index (0-15)
 // Clobbers: everything
-// NOTE: Implemented in step 7.5
 // ============================================================
 priest_effect_dispatch:
+    cmp #0
+    bne !ped_1+
+    // 0: Detect Evil (= detect monsters)
+    jsr eff_detect_monsters
+    rts
+
+!ped_1:
+    cmp #1
+    bne !ped_2+
+    // 1: Cure Light Wounds — 1d8+1
+    lda #1
+    ldx #8
+    ldy #1
+    jsr math_dice
+    lda zp_math_a
+    jsr eff_heal
+    rts
+
+!ped_2:
+    cmp #2
+    bne !ped_3+
+    // 2: Bless — random [12, 23] turn timer
+    lda #12
+    jsr rng_range                   // [0, 11]
+    clc
+    adc #12                         // [12, 23]
+    sta zp_eff_bless
+    rts
+
+!ped_3:
+    cmp #3
+    bne !ped_4+
+    // 3: Remove Fear — placeholder (no fear timer yet)
+    rts
+
+!ped_4:
+    cmp #4
+    bne !ped_5+
+    // 4: Call Light
+    jsr eff_light_room
+    rts
+
+!ped_5:
+    cmp #5
+    bne !ped_6+
+    // 5: Find Traps
+    jsr eff_find_traps
+    rts
+
+!ped_6:
+    cmp #6
+    bne !ped_7+
+    // 6: Detect Doors/Stairs
+    jsr eff_find_doors
+    rts
+
+!ped_7:
+    cmp #7
+    bne !ped_8+
+    // 7: Slow Poison — halve poison timer (min 1)
+    lda zp_eff_poison
+    beq !ped_7_rts+                 // Not poisoned
+    lsr
+    ora #1                          // Ensure at least 1
+    sta zp_eff_poison
+!ped_7_rts:
+    rts
+
+!ped_8:
+    cmp #8
+    bne !ped_9+
+    // 8: Blind Creature — directional, set MX_STUN
+    jsr eff_directional_monster
+    bcc !ped_8_rts+
+    jsr monster_get_ptr
+    ldy #MX_STUN
+    lda #10
+    sta (zp_ptr0),y
+!ped_8_rts:
+    rts
+
+!ped_9:
+    cmp #9
+    bne !ped_10+
+    // 9: Portal
+    jsr eff_phase_door
+    rts
+
+!ped_10:
+    cmp #10
+    bne !ped_11+
+    // 10: Cure Medium Wounds — 3d8+3
+    lda #3
+    ldx #8
+    ldy #3
+    jsr math_dice
+    lda zp_math_a
+    jsr eff_heal
+    rts
+
+!ped_11:
+    cmp #11
+    bne !ped_12+
+    // 11: Chant — random [24, 47] turn timer
+    lda #24
+    jsr rng_range                   // [0, 23]
+    clc
+    adc #24                         // [24, 47]
+    sta zp_eff_bless
+    rts
+
+!ped_12:
+    cmp #12
+    bne !ped_13+
+    // 12: Sanctuary — sleep adjacent monsters
+    jsr eff_sleep_adjacent
+    rts
+
+!ped_13:
+    cmp #13
+    bne !ped_14+
+    // 13: Remove Curse
+    jsr eff_remove_curse
+    rts
+
+!ped_14:
+    cmp #14
+    bne !ped_15+
+    // 14: Cure Serious Wounds — 5d8+5
+    lda #5
+    ldx #8
+    ldy #5
+    jsr math_dice
+    lda zp_math_a
+    jsr eff_heal
+    rts
+
+!ped_15:
+    cmp #15
+    bne !ped_unknown+
+    // 15: Dispel Undead — damage all undead monsters
+    jsr eff_dispel_undead
+    rts
+
+!ped_unknown:
     rts
 
 // ============================================================
