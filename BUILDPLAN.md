@@ -1975,6 +1975,41 @@ status should be updated to Resolved.
 | RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | Open |
 | RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | Open |
 
+### Review Pass 12 — Step 7.8 Bug Fix (2026-02-12)
+
+#### RP12-1 (BUG, FIXED): Spurious "YOU CAN MOVE AGAIN." on new game start
+
+**Symptom:** After character creation, when spells are auto-learned and a "-more-"
+prompt appears, the next message is "YOU CAN MOVE AGAIN." — even though the player
+was never paralyzed.
+
+**Root cause:** Status effect timers live in BASIC's freed zero page (`$50`–`$5f`).
+After BASIC ROM is banked out, these bytes retain whatever residual values BASIC
+left behind. If `zp_eff_paralyze` (`$53`) happened to hold the value 1, the first
+call to `turn_tick_effects` decremented it to 0 and printed the expiration message.
+Same issue could affect any effect timer (poison, blind, confuse, etc.) depending
+on BASIC's ZP state at the time of program launch.
+
+**Fix:** Added a 16-byte zero-fill loop clearing `$50`–`$5f` in `main.s` entry
+point, after `msg_init` but before `player_create`:
+```asm
+    ldx #0
+    lda #0
+!clear_effects:
+    sta zp_eff_poison,x
+    inx
+    cpx #16
+    bne !clear_effects-
+```
+
+**Verification:** Build passes (57 asserts, 0 failed). All 12 test suites pass.
+
+#### Summary of Review Pass 12 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP12-1 | **HIGH** | Uninitialized ZP effect timers cause spurious expiration messages on startup | Trivial — 7-instruction zero-fill loop | **Fixed** |
+
 ---
 
 ## Phase 7 — Magic System: Detailed Implementation Plan

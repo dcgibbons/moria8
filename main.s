@@ -130,6 +130,15 @@ entry:
     // Initialize message system
     jsr msg_init
 
+    // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
+    ldx #0
+    lda #0
+!clear_effects:
+    sta zp_eff_poison,x
+    inx
+    cpx #16                 // $50–$5f = 16 bytes
+    bne !clear_effects-
+
     // --- Character creation ---
     jsr player_create
 
