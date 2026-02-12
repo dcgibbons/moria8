@@ -94,8 +94,8 @@ cr_color:
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
     .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
-    .byte 0, 1, 1, 1, 2, 0, 1, 2, 1, 1
-//         ^White Worm  ^Shrieker ^Eye            ^GreenWorm     ^Copper ^Mold    ^YMold
+    .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1
+//         ^White Worm  ^Shrieker ^Eye  ^Poltergeist    ^GreenWorm     ^Copper ^Mold    ^YMold
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01

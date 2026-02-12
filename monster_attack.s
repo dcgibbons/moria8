@@ -352,9 +352,7 @@ mon_atk_effect_dispatch:
 !maed_conf_done:
     rts
 !maed_paralyze:
-    // Paralysis does no physical damage, just the effect
-    lda #0
-    sta zp_combat_dmg
+    // Full dice damage passes through (matches umoria), then apply effect
     jsr mon_atk_effect_paralyze
     rts
 !maed_acid:
@@ -497,18 +495,19 @@ mon_atk_effect_paralyze:
     cmp zp_temp0
     bcc !mepa_resist+           // roll < saving → resist
 
-    // Failed save — set paralysis timer
+    // Failed save — set paralysis timer (umoria: randomNumber(level) + 3)
+    // rng_range(level) gives [0, level-1], + 4 gives [4, level+3]
     ldx mat_type2
     lda cr_level,x
     cmp #1
     bne !mepa_roll+
-    lda #2
+    lda #5                      // Level 1: 0 + 4 + 1 = 5
     sta zp_eff_paralyze
     jmp !mepa_msg+
 !mepa_roll:
     jsr rng_range               // [0, level-1]
     clc
-    adc #1
+    adc #4
     sta zp_eff_paralyze
 !mepa_msg:
     // Print "THE <name> PARALYZES YOU."
