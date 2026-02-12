@@ -50,7 +50,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 30, $ff
+tc_results: .fill 40, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 
@@ -979,7 +979,7 @@ test_start:
     sta tc_results + 19
 
     // ==========================================
-    // Test 21: pick_item_type returns valid type in range 2-24
+    // Test 21: pick_item_type returns valid type in range 2-38
     // ==========================================
 !t21:
     lda #3
@@ -991,7 +991,7 @@ test_start:
     jsr pick_item_type
     cmp #2
     bcc !t21_fail+
-    cmp #25
+    cmp #39
     bcs !t21_fail+
     dec tc_loop_ctr
     bne !t21_loop-
@@ -1168,7 +1168,7 @@ test_start:
     bcs !t26_pass+
     lda #$00
     sta tc_results + 25
-    jmp !tests_done+
+    jmp !t27+
 !t26_pass:
     lda #$01
     sta tc_results + 25
@@ -1447,14 +1447,284 @@ test_start:
 
     lda #$01
     sta tc_results + 31
-    jmp !tests_done+
+    jmp !t33+
 !t32_fail:
     lda #$00
     sta tc_results + 31
 
+    // ==========================================
+    // Test 33: CSW potion heals in range [10, 45]
+    // ==========================================
+!t33:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Set HP to 50/200
+    lda #50
+    sta zp_player_hp_lo
+    lda #0
+    sta zp_player_hp_hi
+    lda #200
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    // Sync to player_data
+    lda #50
+    sta player_data + PL_HP_LO
+    lda #0
+    sta player_data + PL_HP_HI
+    lda #200
+    sta player_data + PL_MHP_LO
+    lda #0
+    sta player_data + PL_MHP_HI
+
+    // Put CSW potion (type 25) in inv slot 0
+    lda #25
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    // Stuff keyboard: 'A' and space
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    // HP should be in [60, 95] (50 + [10, 45])
+    lda zp_player_hp_lo
+    cmp #60
+    bcc !t33_fail+
+    cmp #96
+    bcs !t33_fail+
+
+    lda #$01
+    sta tc_results + 32
+    jmp !t34+
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+
+    // ==========================================
+    // Test 34: Restore Mana sets MP = max MP
+    // ==========================================
+!t34:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Set mana to 5/30
+    lda #5
+    sta zp_player_mp
+    lda #30
+    sta zp_player_mmp
+
+    // Put Restore Mana potion (type 26) in inv slot 0
+    lda #26
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    // MP should be 30
+    lda zp_player_mp
+    cmp #30
+    bne !t34_fail+
+
+    lda #$01
+    sta tc_results + 33
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+
+    // ==========================================
+    // Test 35: Enchant Weapon increments p1
+    // ==========================================
+!t35:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Equip a dagger (type 2) with p1=2 in weapon slot
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #2
+    sta inv_p1 + EQUIP_WEAPON
+    lda #0
+    sta inv_flags + EQUIP_WEAPON
+
+    // Put Enchant Weapon scroll (type 34) in inv slot 0
+    lda #34
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 at EQUIP_WEAPON should be 3
+    lda inv_p1 + EQUIP_WEAPON
+    cmp #3
+    bne !t35_fail+
+
+    lda #$01
+    sta tc_results + 34
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+
+    // ==========================================
+    // Test 36: Word of Recall sets timer
+    // ==========================================
+!t36:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_word_recall
+
+    // Put Word of Recall scroll (type 32) in inv slot 0
+    lda #32
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // zp_eff_word_recall should be in [15, 29]
+    lda zp_eff_word_recall
+    cmp #15
+    bcc !t36_fail+
+    cmp #30
+    bcs !t36_fail+
+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+
+    // ==========================================
+    // Test 37: Blindness potion sets zp_eff_blind
+    // ==========================================
+!t37:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+
+    // Put Blindness potion (type 28) in inv slot 0
+    lda #28
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_quaff
+
+    // zp_eff_blind should be in [100, 199]
+    lda zp_eff_blind
+    cmp #100
+    bcc !t37_fail+
+    cmp #200
+    bcs !t37_fail+
+
+    lda #$01
+    sta tc_results + 36
+    jmp !t38+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+
+    // ==========================================
+    // Test 38: pick_item_type returns new types (25+) on deep levels
+    // ==========================================
+!t38:
+    lda #10
+    sta zp_player_dlvl
+
+    lda #0
+    sta tc_valid_ctr            // Count types >= 25
+    lda #50
+    sta tc_loop_ctr
+!t38_loop:
+    jsr pick_item_type
+    cmp #25
+    bcc !t38_under+
+    inc tc_valid_ctr
+!t38_under:
+    dec tc_loop_ctr
+    bne !t38_loop-
+
+    // At least 1 of 50 should be >= 25
+    lda tc_valid_ctr
+    bne !t38_pass+
+    lda #$00
+    sta tc_results + 37
+    jmp !tests_done+
+!t38_pass:
+    lda #$01
+    sta tc_results + 37
+
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #31
+    ldx #37
 !copy:
     lda tc_results,x
     sta $0400,x

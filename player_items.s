@@ -701,7 +701,35 @@ item_quaff:
     beq !iq_speed+
     cmp #19                         // Poison
     beq !iq_poison+
-    jmp !iq_generic_msg+            // Shouldn't happen
+    cmp #25                         // Cure Serious Wounds
+    bne !iq_not_csw+
+    jmp !iq_csw+
+!iq_not_csw:
+    cmp #26                         // Restore Mana
+    bne !iq_not_rmana+
+    jmp !iq_restore_mana+
+!iq_not_rmana:
+    cmp #27                         // Heroism
+    bne !iq_not_hero+
+    jmp !iq_heroism+
+!iq_not_hero:
+    cmp #28                         // Blindness
+    bne !iq_not_blind+
+    jmp !iq_blindness+
+!iq_not_blind:
+    cmp #29                         // Confusion
+    bne !iq_not_confuse+
+    jmp !iq_confusion+
+!iq_not_confuse:
+    cmp #30                         // Detect Monsters
+    bne !iq_not_detmon+
+    jmp !iq_detect_mon+
+!iq_not_detmon:
+    cmp #31                         // Infravision
+    bne !iq_not_infra+
+    jmp !iq_infravision+
+!iq_not_infra:
+    jmp !iq_generic_msg+
 
 !iq_cure:
     // Heal rng(8) + 4 HP
@@ -802,6 +830,145 @@ item_quaff:
     sta zp_ptr0_hi
     jsr msg_print
 
+    sec
+    rts
+
+!iq_csw:
+    // Cure Serious Wounds: heal 5d8 (5× rng(8)) + 5
+    lda #0
+    sta piw_qty                     // Accumulator
+    lda #5
+    sta piw_p1                      // Loop counter
+!iq_csw_loop:
+    lda #8
+    jsr rng_range                   // [0, 7]
+    clc
+    adc piw_qty
+    sta piw_qty
+    dec piw_p1
+    bne !iq_csw_loop-
+    lda piw_qty
+    clc
+    adc #5                          // +5 base
+    bcc !iq_csw_ok+
+    lda #255                        // Cap at 255
+!iq_csw_ok:
+    jsr eff_heal
+
+    lda #<piq_much_better_str
+    sta zp_ptr0
+    lda #>piq_much_better_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_restore_mana:
+    // Restore Mana: set MP = max MP
+    lda zp_player_mmp
+    sta zp_player_mp
+    sta player_data + PL_MANA
+
+    lda #<piq_mind_clear_str
+    sta zp_ptr0
+    lda #>piq_mind_clear_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_heroism:
+    // Set zp_eff_hero timer (rng(25)+25), stacks
+    lda #25
+    jsr rng_range                   // [0, 24]
+    clc
+    adc #25                         // [25, 49]
+    clc
+    adc zp_eff_hero
+    bcc !iq_hero_ok+
+    lda #255
+!iq_hero_ok:
+    sta zp_eff_hero
+
+    lda #<piq_heroic_str
+    sta zp_ptr0
+    lda #>piq_heroic_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_blindness:
+    // Set zp_eff_blind timer (rng(100)+100)
+    lda #100
+    jsr rng_range                   // [0, 99]
+    clc
+    adc #100                        // [100, 199]
+    clc
+    adc zp_eff_blind
+    bcc !iq_blind_ok+
+    lda #255
+!iq_blind_ok:
+    sta zp_eff_blind
+
+    lda #<piq_cant_see_str
+    sta zp_ptr0
+    lda #>piq_cant_see_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_confusion:
+    // Set zp_eff_confuse timer (rng(15)+10)
+    lda #15
+    jsr rng_range                   // [0, 14]
+    clc
+    adc #10                         // [10, 24]
+    clc
+    adc zp_eff_confuse
+    bcc !iq_conf_ok+
+    lda #255
+!iq_conf_ok:
+    sta zp_eff_confuse
+
+    lda #<piq_dizzy_str
+    sta zp_ptr0
+    lda #>piq_dizzy_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_detect_mon:
+    jsr eff_detect_monsters
+
+    lda #<piq_sense_str
+    sta zp_ptr0
+    lda #>piq_sense_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!iq_infravision:
+    // Set zp_eff_infra timer (rng(50)+50)
+    lda #50
+    jsr rng_range                   // [0, 49]
+    clc
+    adc #50                         // [50, 99]
+    clc
+    adc zp_eff_infra
+    bcc !iq_infra_ok+
+    lda #255
+!iq_infra_ok:
+    sta zp_eff_infra
+
+    lda #<piq_eyes_tingle_str
+    sta zp_ptr0
+    lda #>piq_eyes_tingle_str
+    sta zp_ptr0_hi
+    jsr msg_print
     sec
     rts
 
@@ -910,6 +1077,34 @@ item_read_scroll:
     bne !irs_not_teleport+
     jmp !irs_teleport+
 !irs_not_teleport:
+    cmp #32                         // Word of Recall
+    bne !irs_not_wor+
+    jmp !irs_wor+
+!irs_not_wor:
+    cmp #33                         // Remove Curse
+    bne !irs_not_remcurse+
+    jmp !irs_remove_curse+
+!irs_not_remcurse:
+    cmp #34                         // Enchant Weapon
+    bne !irs_not_enchw+
+    jmp !irs_enchant_weapon+
+!irs_not_enchw:
+    cmp #35                         // Enchant Armor
+    bne !irs_not_encha+
+    jmp !irs_enchant_armor+
+!irs_not_encha:
+    cmp #36                         // Monster Confusion
+    bne !irs_not_monconf+
+    jmp !irs_mon_confuse+
+!irs_not_monconf:
+    cmp #37                         // Aggravate
+    bne !irs_not_aggrav+
+    jmp !irs_aggravate+
+!irs_not_aggrav:
+    cmp #38                         // Protect from Evil
+    bne !irs_not_protect+
+    jmp !irs_protect+
+!irs_not_protect:
     jmp !irs_generic_msg+
 
 !irs_light:
@@ -940,6 +1135,166 @@ item_read_scroll:
     sta zp_ptr0_hi
     jsr msg_print
 
+    sec
+    rts
+
+!irs_wor:
+    // Word of Recall: set timer rng(15)+15
+    lda #15
+    jsr rng_range                   // [0, 14]
+    clc
+    adc #15                         // [15, 29]
+    sta zp_eff_word_recall
+
+    lda #<piq_air_crackle_str
+    sta zp_ptr0
+    lda #>piq_air_crackle_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_remove_curse:
+    jsr eff_remove_curse
+
+    lda #<piq_cleansed_str
+    sta zp_ptr0
+    lda #>piq_cleansed_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_enchant_weapon:
+    // Find weapon in EQUIP_WEAPON slot
+    ldx #EQUIP_WEAPON
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !irs_ew_has+
+
+    // No weapon equipped
+    lda #<piq_vibration_str
+    sta zp_ptr0
+    lda #>piq_vibration_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_ew_has:
+    // Check if already at +5 cap
+    ldx #EQUIP_WEAPON
+    lda inv_p1,x
+    cmp #5
+    bcc !irs_ew_inc+
+
+    // Already at cap
+    lda #<piq_nothing_str
+    sta zp_ptr0
+    lda #>piq_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_ew_inc:
+    inc inv_p1 + EQUIP_WEAPON
+    jsr player_recalc_equipment
+
+    lda #<piq_wpn_glow_str
+    sta zp_ptr0
+    lda #>piq_wpn_glow_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_enchant_armor:
+    // Find armor in EQUIP_BODY slot
+    ldx #EQUIP_BODY
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !irs_ea_has+
+
+    // No armor equipped
+    lda #<piq_vibration_str
+    sta zp_ptr0
+    lda #>piq_vibration_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_ea_has:
+    // Check if already at +5 cap
+    ldx #EQUIP_BODY
+    lda inv_p1,x
+    cmp #5
+    bcc !irs_ea_inc+
+
+    // Already at cap
+    lda #<piq_nothing_str
+    sta zp_ptr0
+    lda #>piq_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_ea_inc:
+    inc inv_p1 + EQUIP_BODY
+    jsr player_recalc_equipment
+
+    lda #<piq_arm_glow_str
+    sta zp_ptr0
+    lda #>piq_arm_glow_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_mon_confuse:
+    // Set confuse-on-melee flag
+    lda #1
+    sta zp_confuse_melee
+
+    lda #<piq_hands_glow_str
+    sta zp_ptr0
+    lda #>piq_hands_glow_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_aggravate:
+    jsr eff_aggravate
+
+    lda #<piq_humming_str
+    sta zp_ptr0
+    lda #>piq_humming_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!irs_protect:
+    // Protect from Evil: timer rng(25)+25
+    lda #25
+    jsr rng_range                   // [0, 24]
+    clc
+    adc #25                         // [25, 49]
+    clc
+    adc zp_eff_protect
+    bcc !irs_prot_ok+
+    lda #255
+!irs_prot_ok:
+    sta zp_eff_protect
+
+    lda #<piq_protected_str
+    sta zp_ptr0
+    lda #>piq_protected_str
+    sta zp_ptr0_hi
+    jsr msg_print
     sec
     rts
 
@@ -991,3 +1346,18 @@ piq_light_str:      .text "THE AREA FILLS WITH LIGHT." ; .byte 0
 piq_identify_prompt:.text "IDENTIFY WHICH ITEM (A-V)?" ; .byte 0
 piq_thisis_str:     .text "THIS IS A " ; .byte 0
 piq_teleport_str:   .text "YOU FEEL DISORIENTED." ; .byte 0
+piq_much_better_str:  .text "YOU FEEL MUCH BETTER." ; .byte 0
+piq_mind_clear_str:   .text "YOUR MIND FEELS CLEAR." ; .byte 0
+piq_heroic_str:       .text "YOU FEEL HEROIC!" ; .byte 0
+piq_cant_see_str:     .text "YOU CAN'T SEE!" ; .byte 0
+piq_dizzy_str:        .text "YOU FEEL DIZZY." ; .byte 0
+piq_sense_str:        .text "YOU SENSE NEARBY CREATURES." ; .byte 0
+piq_eyes_tingle_str:  .text "YOUR EYES TINGLE." ; .byte 0
+piq_air_crackle_str:  .text "THE AIR CRACKLES AROUND YOU." ; .byte 0
+piq_cleansed_str:     .text "YOU FEEL CLEANSED." ; .byte 0
+piq_wpn_glow_str:     .text "YOUR WEAPON GLOWS BRIEFLY." ; .byte 0
+piq_arm_glow_str:     .text "YOUR ARMOR GLOWS BRIEFLY." ; .byte 0
+piq_hands_glow_str:   .text "YOUR HANDS BEGIN TO GLOW." ; .byte 0
+piq_humming_str:      .text "YOU HEAR A HIGH-PITCHED HUMMING." ; .byte 0
+piq_protected_str:    .text "YOU FEEL PROTECTED." ; .byte 0
+piq_vibration_str:    .text "YOU FEEL A STRANGE VIBRATION." ; .byte 0

@@ -2393,60 +2393,118 @@ learn it at level 17 and should be in deeper tiers by then.
 
 ---
 
-#### Step 7.6 — Expanded Potions and Scrolls
+#### Step 7.6 — Expanded Potions and Scrolls ✅ IMPLEMENTED
 
 **Goal:** Add 7 new potions and 7 new scrolls. Expand item type tables and
-identification system.
+identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
-**File:** `item.s` (extend SoA tables), `player_items.s` (new dispatch entries),
-`spell_effects.s` (shared subroutines already written)
+**Files modified:** `item.s`, `player_items.s`, `zeropage.s`, `combat.s`,
+`tests/test_item.s`, `run_tests.sh`
 
-**Steps:**
+**New item types (14 total, IDs 25-38):**
 
-1. **Extend item type constants** in `item.s`:
-   - Increment `ITEM_TYPE_COUNT` from 25 to 47 (25 existing + 22 new).
-   - Add `ICAT_WAND = 14`, `ICAT_STAFF = 15` constants.
-   - Extend all SoA arrays: `it_category`, `it_display`, `it_color`,
-     `it_weight`, `it_base_value`, `it_name_lo`, `it_name_hi`, `it_sort_key`.
-   - New potion entries (IDs 25-31): category=ICAT_POTION, display=`!`,
-     colors vary by potion type.
-   - New scroll entries (IDs 32-38): category=ICAT_SCROLL, display=`?`,
-     colors vary.
+| ID | Category | Name | Effect |
+|----|----------|------|--------|
+| 25 | Potion | Cure Serious Wounds | Heal 5d8+5 via eff_heal |
+| 26 | Potion | Restore Mana | Set zp_player_mp = zp_player_mmp |
+| 27 | Potion | Heroism | Set zp_eff_hero timer (rng(25)+25) |
+| 28 | Potion | Blindness | Set zp_eff_blind timer (rng(100)+100) — harmful |
+| 29 | Potion | Confusion | Set zp_eff_confuse timer (rng(15)+10) — harmful |
+| 30 | Potion | Detect Monsters | jsr eff_detect_monsters |
+| 31 | Potion | Infravision | Set zp_eff_infra timer (rng(50)+50) |
+| 32 | Scroll | Word of Recall | Set zp_eff_word_recall (rng(15)+15) |
+| 33 | Scroll | Remove Curse | jsr eff_remove_curse |
+| 34 | Scroll | Enchant Weapon | Find EQUIP_WEAPON, inc inv_p1 (cap +5) |
+| 35 | Scroll | Enchant Armor | Find EQUIP_BODY, inc inv_p1 (cap +5) |
+| 36 | Scroll | Monster Confusion | Set zp_confuse_melee = 1 |
+| 37 | Scroll | Aggravate | jsr eff_aggravate |
+| 38 | Scroll | Protect from Evil | Set zp_eff_protect timer (rng(25)+25) |
 
-2. **Extend identification shuffle** in `item.s`:
-   - Currently: 5 potion descriptors, 5 scroll descriptors (for 3 types each).
-   - Expand to: 12 potion descriptors (for 10 types), 12 scroll descriptors
-     (for 10 types). More descriptors than types ensures unique assignments.
-   - New potion descriptions: "AZURE", "SMOKY", "BROWN", "SILVER", "PINK",
-     "CLOUDY", "GOLDEN" (7 new + 5 existing).
-   - New scroll descriptions: "LUMEN", "VERITAS", "DURA", "LIBERA", "ACUTA",
-     "FEROX", "TUTELA" (7 new + 5 existing; Latin-themed for variety).
+**What was implemented:**
 
-3. **Add new potion effects** to `player_items.s` `item_quaff`:
-   - Extend the CMP/BEQ dispatch chain after existing potions.
-   - Each new potion → JSR to appropriate shared subroutine from `spell_effects.s`.
-   - Blindness potion: harmful effect (player drinks and gets blinded).
+1. **`zeropage.s`** — Renamed `zp_spare_4f` → `zp_confuse_melee` ($4f): flag for
+   Monster Confusion scroll's one-time confuse-on-melee-hit effect.
 
-4. **Add new scroll effects** to `player_items.s` `item_read_scroll`:
-   - Extend dispatch chain.
-   - Word of Recall: `lda #15; jsr rng_range; clc; adc #15; sta zp_eff_word_recall`.
-   - Remove Curse: `jsr eff_remove_curse`.
-   - Enchant Weapon/Armor: find equipped weapon/armor slot, increment p1 (cap at +5).
-   - Monster Confusion: set a flag (use `zp_spare_4f`) that makes next melee hit
-     auto-confuse the target.
-   - Aggravate: `jsr eff_aggravate`.
-   - Protect from Evil: set `zp_eff_protect` timer.
+2. **`item.s` — SoA table extensions (14 new entries):**
+   - Extended all 10 SoA arrays (`it_category`, `it_display`, `it_color`,
+     `it_weight`, `it_dmg_dice`, `it_dmg_sides`, `it_base_ac`, `it_cost_lo/hi`,
+     `it_min_level`) from 25 → 39 entries.
+   - Added 14 name strings (`itn_25`..`itn_38`), extended `it_name_lo/hi`.
+   - Extended `id_known` with 14× 0 (unknown at start).
 
-5. **Update `item_spawn_level`** — add new item types to the spawn pool
-   (roll_item_type table needs extending with appropriate rarity weights).
+3. **`item.s` — Lookup tables for non-contiguous type IDs:**
+   - Potion types at IDs 17-19 and 25-31 are non-contiguous; scrolls at 20-22
+     and 32-38. The old `sbc #17` / `sbc #20` approach breaks.
+   - Added two 39-byte lookup tables: `potion_local_idx` and `scroll_local_idx`.
+     Indexed by type ID → local category index (0-9), or $FF if not that category.
+   - Rewrote `item_get_name_ptr` and `item_get_floor_color` potion/scroll branches
+     to use lookup tables instead of subtraction.
 
-**Tests:**
-- Runtime: Quaff Cure Serious Wounds → verify heal amount in [10, 45] range.
-- Runtime: Quaff Restore Mana → verify mana restored to max.
-- Runtime: Read Scroll of Enchant Weapon with weapon equipped → verify p1 incremented.
-- Runtime: Read Scroll of Word of Recall → verify zp_eff_word_recall > 0.
-- Runtime: Quaff Blindness → verify zp_eff_blind > 0.
-- All existing item tests still pass.
+4. **`item.s` — Expanded identification system:**
+   - Expanded shuffle tables from 5 to 12 entries each (10 types, 12 descriptors).
+   - Added 7 new potion descriptors: "AZURE", "SMOKY", "BROWN", "SILVER", "PINK",
+     "CLOUDY", "GOLDEN".
+   - Added 7 new scroll descriptors: "LUMEN", "VERITAS", "DURA", "LIBERA",
+     "ACUTA", "FEROX", "TUTELA" (Latin-themed).
+   - Expanded `potion_name_lo/hi`, `scroll_name_lo/hi` from 5 to 12 entries.
+   - Expanded `potion_colors`, `scroll_colors` from 5 to 12 entries.
+   - Updated `item_init_identification`: shuffle init `ldx #4` → `ldx #11`,
+     Fisher-Yates loops `ldx #4` → `ldx #11`.
+
+5. **`item.s` — Updated `pick_item_type`:**
+   - Changed range from `rng_range(23) + 2` → `rng_range(37) + 2` (giving [2,38]).
+
+6. **`item.s` — Updated compile-time asserts:**
+   - `ITEM_TYPE_COUNT` assert from 25 to 39.
+
+7. **`player_items.s` — 7 new potion handlers in `item_quaff`:**
+   - CSW: Roll 5d8 via loop, add 5, jsr eff_heal. Msg: "YOU FEEL MUCH BETTER."
+   - Restore Mana: Set MP=max MP. Msg: "YOUR MIND FEELS CLEAR."
+   - Heroism: Timer → zp_eff_hero. Msg: "YOU FEEL HEROIC!"
+   - Blindness: Timer → zp_eff_blind. Msg: "YOU CAN'T SEE!"
+   - Confusion: Timer → zp_eff_confuse. Msg: "YOU FEEL DIZZY."
+   - Detect Monsters: jsr eff_detect_monsters. Msg: "YOU SENSE NEARBY CREATURES."
+   - Infravision: Timer → zp_eff_infra. Msg: "YOUR EYES TINGLE."
+   - Dispatch uses JMP trampolines for branch distance.
+
+8. **`player_items.s` — 7 new scroll handlers in `item_read_scroll`:**
+   - Word of Recall: Timer → zp_eff_word_recall. Msg: "THE AIR CRACKLES AROUND YOU."
+   - Remove Curse: jsr eff_remove_curse. Msg: "YOU FEEL CLEANSED."
+   - Enchant Weapon: Inc inv_p1 at EQUIP_WEAPON (cap +5). Msg: "YOUR WEAPON GLOWS BRIEFLY."
+   - Enchant Armor: Inc inv_p1 at EQUIP_BODY (cap +5). Msg: "YOUR ARMOR GLOWS BRIEFLY."
+   - Monster Confusion: Set zp_confuse_melee=1. Msg: "YOUR HANDS BEGIN TO GLOW."
+   - Aggravate: jsr eff_aggravate. Msg: "YOU HEAR A HIGH-PITCHED HUMMING."
+   - Protect from Evil: Timer → zp_eff_protect. Msg: "YOU FEEL PROTECTED."
+   - No weapon/armor → "YOU FEEL A STRANGE VIBRATION." (enchant scrolls).
+   - 17 new message strings added.
+
+9. **`combat.s` — Confuse-on-hit check:**
+   - After `sta cmb_any_hit` (first hit scored), checks `zp_confuse_melee`.
+   - If set: clears flag (one-time use), sets monster MX_CONFUSE timer to 20.
+   - zp_ptr0 still points to monster entry (set by `monster_get_ptr` earlier).
+
+10. **`tests/test_item.s` — 6 new runtime tests (tests 33-38):**
+    - Test 33: CSW potion heals HP in [60, 95] (from 50, heal 10-45).
+    - Test 34: Restore Mana sets MP = max MP (5 → 30).
+    - Test 35: Enchant Weapon scroll increments p1 (2 → 3).
+    - Test 36: Word of Recall sets zp_eff_word_recall in [15, 29].
+    - Test 37: Blindness potion sets zp_eff_blind in [100, 199].
+    - Test 38: pick_item_type returns new types (>= 25) at deep dungeon levels.
+    - Updated test 21 range check from `cmp #25` → `cmp #39`.
+    - Expanded tc_results buffer from 30 → 40, copy loop from 31 → 37.
+
+11. **`run_tests.sh`** — Updated item test expected count from 32 → 38,
+    result range from `0400 041f` → `0400 0425`.
+
+**Shared subroutines reused from `spell_effects.s`:**
+- `eff_heal` (line 28) — add pre-rolled amount to player HP
+- `eff_detect_monsters` (line 264) — reveal monsters on map
+- `eff_remove_curse` (line 313) — clear IF_CURSED on equipment
+- `eff_aggravate` (line 1046) — wake all monsters
+
+**Verification:**
+- `make build` → 56 asserts, 0 failed ✅
+- `make test` → 12/12 suites pass (item: 38/38 tests) ✅
 
 ---
 

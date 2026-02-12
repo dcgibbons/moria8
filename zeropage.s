@@ -133,7 +133,7 @@
 .label zp_depth_feeling = $4c  // Level feeling index
 .label zp_mon_count    = $4d   // Active monster count (0–32)
 .label zp_item_count   = $4e   // Floor item count (0–32)
-.label zp_spare_4f     = $4f   // Spare (was zp_turn_state, removed in Phase 3)
+.label zp_confuse_melee = $4f  // Monster Confusion scroll: 1 = next melee hit confuses
 
 // --- Status effect timers ($50–$5f) ---
 .label zp_eff_poison   = $50   // Poison timer (0 = not poisoned)
