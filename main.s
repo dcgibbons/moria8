@@ -41,6 +41,7 @@
 #import "monster_ai.s"
 #import "item.s"
 #import "player_items.s"
+#import "spell_data.s"
 #import "spell_effects.s"
 #import "ui_inventory.s"
 #import "dungeon_render.s"
