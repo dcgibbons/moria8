@@ -542,6 +542,10 @@ combat_check_levelup:
     // Recalculate combat bonuses (may change with level)
     jsr player_calc_combat
 
+    // Recalculate mana and learn new spells
+    jsr magic_recalc_mana
+    jsr magic_check_new_spells
+
     // Play level-up sound
     lda #SFX_LEVELUP
     jsr sound_play

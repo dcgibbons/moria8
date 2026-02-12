@@ -99,6 +99,7 @@ cr_speed:
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01
+.const CF_UNDEAD      = $02
 
 cr_mflags:
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
