@@ -181,7 +181,7 @@ find_random_floor:
     adc #1                  // [1, 46]
     sta df_target_y
 
-    // Check if tile is floor
+    // Check if tile is unoccupied floor
     ldx df_target_y
     lda map_row_lo,x
     sta zp_ptr0
@@ -189,9 +189,15 @@ find_random_floor:
     sta zp_ptr0_hi
     ldy df_target_x
     lda (zp_ptr0),y
+    sta zp_temp0
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
-    beq !frf_found+
+    bne !frf_next+
+    lda zp_temp0
+    and #FLAG_OCCUPIED
+    bne !frf_next+
+    jmp !frf_found+
+!frf_next:
 
     dec frf_attempts
     bne !frf_loop-
