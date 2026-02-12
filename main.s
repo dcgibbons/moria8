@@ -461,6 +461,46 @@ entry:
     jmp !main_loop-
 !not_rest:
 
+    // Pickup?
+    cmp #CMD_PICKUP
+    bne !not_pickup+
+    jsr msg_clear
+    jsr item_pickup
+    bcc !pickup_no_turn+
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!pickup_no_turn:
+    jmp !main_loop-
+!not_pickup:
+
+    // Drop?
+    cmp #CMD_DROP
+    bne !not_drop+
+    jsr msg_clear
+    jsr item_drop
+    bcc !drop_no_turn+
+    jsr viewport_update
+    jsr render_viewport
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!drop_no_turn:
+    jmp !main_loop-
+!not_drop:
+
     // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
     cmp #CMD_RUN_N
     bcc !not_run+

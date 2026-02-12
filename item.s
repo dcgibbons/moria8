@@ -587,6 +587,267 @@ item_spawn_level:
     rts
 
 // ============================================================
+// Pickup and Drop
+// ============================================================
+
+// item_pickup — Pick up item at player's position
+// Output: carry set = turn consumed, carry clear = no action
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
+item_pickup:
+    // Find item at player position
+    lda zp_player_x
+    ldy zp_player_y
+    jsr floor_item_find_at
+    bcs !ipu_found+
+
+    // Nothing here
+    lda #<ipu_nothing_str
+    sta zp_ptr0
+    lda #>ipu_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!ipu_found:
+    // X = floor slot index. Save it.
+    stx ipu_slot
+
+    // Check if it's gold
+    lda fi_item_id,x
+    tax
+    lda it_category,x
+    cmp #ICAT_GOLD
+    bne !ipu_not_gold+
+
+    // --- Gold pickup ---
+    // Add fi_qty to 24-bit player gold
+    ldx ipu_slot
+    lda player_data + PL_GOLD_0
+    clc
+    adc fi_qty,x
+    sta player_data + PL_GOLD_0
+    lda player_data + PL_GOLD_1
+    adc #0
+    sta player_data + PL_GOLD_1
+    lda player_data + PL_GOLD_2
+    adc #0
+    sta player_data + PL_GOLD_2
+
+    // Build message: "YOU FOUND N GOLD PIECES."
+    lda #0
+    sta cmb_buf_idx
+    lda #<ipu_found_str
+    ldy #>ipu_found_str
+    jsr combat_append_str
+
+    ldx ipu_slot
+    lda fi_qty,x
+    jsr combat_append_decimal
+
+    lda #<ipu_gold_str
+    ldy #>ipu_gold_str
+    jsr combat_append_str
+
+    // Null-terminate
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Remove from floor
+    ldx ipu_slot
+    jsr floor_item_remove
+
+    lda #SFX_PICKUP
+    jsr sound_play
+
+    sec
+    rts
+
+!ipu_not_gold:
+    // --- Non-gold item pickup ---
+    // Check if inventory full
+    jsr inv_count_items
+    cmp #MAX_INV_SLOTS
+    bcc !ipu_has_room+
+
+    // Pack full
+    lda #<ipu_pack_full_str
+    sta zp_ptr0
+    lda #>ipu_pack_full_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!ipu_has_room:
+    // Copy item to inventory
+    ldx ipu_slot
+    lda fi_item_id,x
+    sta fi_add_id
+    lda fi_qty,x
+    sta fi_add_qty
+    lda fi_p1,x
+    sta fi_add_p1
+    jsr inv_add_item
+    // carry set = success (should always succeed since we checked)
+
+    // Build message: "YOU PICKED UP A <name>."
+    lda #0
+    sta cmb_buf_idx
+    lda #<ipu_picked_str
+    ldy #>ipu_picked_str
+    jsr combat_append_str
+
+    lda fi_add_id
+    jsr item_append_name
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    // Null-terminate
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Remove from floor
+    ldx ipu_slot
+    jsr floor_item_remove
+
+    lda #SFX_PICKUP
+    jsr sound_play
+
+    sec
+    rts
+
+// item_drop — Drop first carried inventory item to floor
+// Output: carry set = turn consumed, carry clear = no action
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
+item_drop:
+    // Find first non-empty carried slot (0-21)
+    ldx #0
+!idr_scan:
+    cpx #MAX_INV_SLOTS
+    bcs !idr_empty+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !idr_found+
+    inx
+    jmp !idr_scan-
+
+!idr_empty:
+    // No items to drop
+    lda #<idr_no_items_str
+    sta zp_ptr0
+    lda #>idr_no_items_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!idr_found:
+    // X = inventory slot. Save it.
+    stx ipu_slot
+
+    // Set up floor item from inventory data
+    lda zp_player_x
+    sta fi_add_x
+    lda zp_player_y
+    sta fi_add_y
+    lda inv_item_id,x
+    sta fi_add_id
+    lda inv_qty,x
+    sta fi_add_qty
+    lda inv_p1,x
+    sta fi_add_p1
+
+    jsr floor_item_add
+    bcs !idr_placed+
+
+    // Floor full
+    lda #<idr_floor_full_str
+    sta zp_ptr0
+    lda #>idr_floor_full_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!idr_placed:
+    // Remove from inventory
+    ldx ipu_slot
+    jsr inv_remove_item
+
+    // Build message: "YOU DROP A <name>."
+    lda #0
+    sta cmb_buf_idx
+    lda #<idr_drop_str
+    ldy #>idr_drop_str
+    jsr combat_append_str
+
+    lda fi_add_id
+    jsr item_append_name
+
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+
+    // Null-terminate
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #SFX_PICKUP
+    jsr sound_play
+
+    sec
+    rts
+
+// item_append_name — Append item type name to combat_msg_buf
+// Input: A = item type ID
+// Clobbers: A, X, Y, zp_ptr1
+item_append_name:
+    tax
+    lda it_name_lo,x
+    ldy it_name_hi,x
+    jsr combat_append_str
+    rts
+
+// Scratch variables for pickup/drop
+ipu_slot: .byte 0              // Floor/inventory slot being processed
+
+// ============================================================
+// Pickup/Drop strings (screen codes via inherited encoding)
+// ============================================================
+ipu_nothing_str:   .text "YOU SEE NOTHING HERE." ; .byte 0
+ipu_found_str:     .text "YOU FOUND " ; .byte 0
+ipu_gold_str:      .text " GOLD PIECES." ; .byte 0
+ipu_picked_str:    .text "YOU PICKED UP A " ; .byte 0
+ipu_pack_full_str: .text "YOUR PACK IS FULL." ; .byte 0
+idr_drop_str:      .text "YOU DROP A " ; .byte 0
+idr_no_items_str:  .text "YOU HAVE NOTHING TO DROP." ; .byte 0
+idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
+
+// ============================================================
 // Compile-time validation
 // ============================================================
 .assert "Item type count", ITEM_TYPE_COUNT, 25

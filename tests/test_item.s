@@ -425,10 +425,242 @@ test_start:
 
     lda #$01
     sta tc_results + 9
-    jmp !tests_done+
+    jmp !t11+
 !t10_fail:
     lda #$00
     sta tc_results + 9
+
+    // ==========================================
+    // Test 11: item_pickup gold adds to player gold
+    // ==========================================
+!t11:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    // Clear player gold
+    lda #0
+    sta player_data + PL_GOLD_0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+
+    // Generate map and set player position
+    lda #1
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr level_generate
+
+    // Place floor tile at (20, 12)
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    // Put player at (20, 12)
+    lda #20
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+
+    // Add gold to floor at player position
+    lda #20
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #0              // Gold (small)
+    sta fi_add_id
+    lda #50             // 50 gold pieces
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    jsr floor_item_add
+
+    // Stuff keyboard buffer for -more- prompt
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    // Pick up
+    jsr item_pickup
+    bcc !t11_fail+
+
+    // Check player gold = 50
+    lda player_data + PL_GOLD_0
+    cmp #50
+    bne !t11_fail+
+    lda player_data + PL_GOLD_1
+    bne !t11_fail+
+
+    // Check floor slot 0 is empty
+    lda fi_item_id
+    cmp #FI_EMPTY
+    bne !t11_fail+
+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // ==========================================
+    // Test 12: item_pickup non-gold adds to inventory
+    // ==========================================
+!t12:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    // Place floor tile at (20, 12) (reuse from test 11 setup)
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    // Player at (20, 12)
+    lda #20
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+
+    // Add dagger (type 2) to floor at player position
+    lda #20
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #2              // Dagger
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    jsr floor_item_add
+
+    // Stuff keyboard buffer
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    // Pick up
+    jsr item_pickup
+    bcc !t12_fail+
+
+    // Check inventory slot 0 has dagger
+    lda inv_item_id
+    cmp #2
+    bne !t12_fail+
+
+    // Check floor slot is empty
+    lda fi_item_id
+    cmp #FI_EMPTY
+    bne !t12_fail+
+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // ==========================================
+    // Test 13: item_pickup nothing → carry clear
+    // ==========================================
+!t13:
+    jsr item_init_floor
+
+    // Player at position with no items
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    // Stuff keyboard buffer
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr item_pickup
+    bcs !t13_fail+
+
+    lda #$01
+    sta tc_results + 12
+    jmp !t14+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+
+    // ==========================================
+    // Test 14: item_drop moves item to floor
+    // ==========================================
+!t14:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    // Place floor tile at player position (10, 10)
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    // Player at (10, 10)
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    // Add dagger to inventory slot 0
+    lda #2              // Dagger
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    jsr inv_add_item
+
+    // Stuff keyboard buffer
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    // Drop
+    jsr item_drop
+    bcc !t14_fail+
+
+    // Check inventory slot 0 is empty
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t14_fail+
+
+    // Check floor has an item at player position
+    lda #10
+    ldy #10
+    jsr floor_item_find_at
+    bcc !t14_fail+
+
+    // Check it's a dagger
+    lda fi_item_id,x
+    cmp #2
+    bne !t14_fail+
+
+    lda #$01
+    sta tc_results + 13
+    jmp !tests_done+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
 
 !tests_done:
     // Copy results to $0400 for VICE memory dump

@@ -137,19 +137,19 @@ status_draw:
     lda zp_player_ac
     jsr screen_put_decimal
 
-    // "EXP:"
+    // "AU:"
     lda #15
     sta zp_cursor_col
-    lda #<status_exp_str
+    lda #<status_au_str
     sta zp_ptr0
-    lda #>status_exp_str
+    lda #>status_au_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // XP (16-bit for now, low 2 bytes of 24-bit)
-    lda player_data + PL_XP_0
+    // Gold (16-bit for now, low 2 bytes of 24-bit)
+    lda player_data + PL_GOLD_0
     sta zp_temp0
-    lda player_data + PL_XP_1
+    lda player_data + PL_GOLD_1
     sta zp_temp1
     jsr screen_put_decimal_16
 
@@ -262,5 +262,7 @@ status_str_str:
     .text "STR:" ; .byte $00
 status_ac_str:
     .text "AC:" ; .byte $00
+status_au_str:
+    .text "AU:" ; .byte $00
 status_exp_str:
     .text "EXP:" ; .byte $00
