@@ -1714,14 +1714,116 @@ test_start:
     bne !t38_pass+
     lda #$00
     sta tc_results + 37
-    jmp !tests_done+
+    jmp !t39+
 !t38_pass:
     lda #$01
     sta tc_results + 37
 
+    // ==========================================
+    // Test 39: Enchant Weapon on cursed item clears curse, sets p1=0
+    // ==========================================
+!t39:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Equip a cursed long sword (type 4) with p1=$FD (-3)
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #$fd                        // -3 enchantment
+    sta inv_p1 + EQUIP_WEAPON
+    lda #IF_CURSED
+    sta inv_flags + EQUIP_WEAPON
+
+    // Put Enchant Weapon scroll (type 34) in inv slot 0
+    lda #34
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 at EQUIP_WEAPON should be 0 (curse removed, reset)
+    lda inv_p1 + EQUIP_WEAPON
+    bne !t39_fail+
+
+    // IF_CURSED should be cleared
+    lda inv_flags + EQUIP_WEAPON
+    and #IF_CURSED
+    bne !t39_fail+
+
+    lda #$01
+    sta tc_results + 38
+    jmp !t40+
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
+
+    // ==========================================
+    // Test 40: Enchant Weapon at cap (p1=5) does nothing
+    // ==========================================
+!t40:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Equip dagger (type 2) with p1=5 (at cap)
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #5
+    sta inv_p1 + EQUIP_WEAPON
+    lda #0
+    sta inv_flags + EQUIP_WEAPON
+
+    // Put Enchant Weapon scroll (type 34) in inv slot 0
+    lda #34
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 should still be 5 (not 6)
+    lda inv_p1 + EQUIP_WEAPON
+    cmp #5
+    bne !t40_fail+
+
+    lda #$01
+    sta tc_results + 39
+    jmp !tests_done+
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
+
 !tests_done:
     // Copy results to $0400 for VICE memory dump
-    ldx #37
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x

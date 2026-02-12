@@ -834,25 +834,12 @@ item_quaff:
     rts
 
 !iq_csw:
-    // Cure Serious Wounds: heal 5d8 (5× rng(8)) + 5
-    lda #0
-    sta piw_qty                     // Accumulator
-    lda #5
-    sta piw_p1                      // Loop counter
-!iq_csw_loop:
-    lda #8
-    jsr rng_range                   // [0, 7]
-    clc
-    adc piw_qty
-    sta piw_qty
-    dec piw_p1
-    bne !iq_csw_loop-
-    lda piw_qty
-    clc
-    adc #5                          // +5 base
-    bcc !iq_csw_ok+
-    lda #255                        // Cap at 255
-!iq_csw_ok:
+    // Cure Serious Wounds: heal 5d8+5 = [10, 45]
+    lda #5                          // N = 5 dice
+    ldx #8                          // S = 8 sides
+    ldy #5                          // bonus = 5
+    jsr math_dice                   // Result in zp_math_a (max 45, fits 8 bits)
+    lda zp_math_a
     jsr eff_heal
 
     lda #<piq_much_better_str
@@ -879,6 +866,8 @@ item_quaff:
 
 !iq_heroism:
     // Set zp_eff_hero timer (rng(25)+25), stacks
+    // NOTE: Timer is infrastructure only — gameplay effects (to-hit/HP bonus)
+    // will be integrated when effect consumption is added in a later phase.
     lda #25
     jsr rng_range                   // [0, 24]
     clc
@@ -953,6 +942,8 @@ item_quaff:
 
 !iq_infravision:
     // Set zp_eff_infra timer (rng(50)+50)
+    // NOTE: Timer is infrastructure only — monster reveal effect will be
+    // integrated when effect consumption is added in a later phase.
     lda #50
     jsr rng_range                   // [0, 49]
     clc
@@ -1139,7 +1130,7 @@ item_read_scroll:
     rts
 
 !irs_wor:
-    // Word of Recall: set timer rng(15)+15
+    // Word of Recall: set timer rng(15)+15 (overwrites, not stacks — matches umoria)
     lda #15
     jsr rng_range                   // [0, 14]
     clc
@@ -1182,6 +1173,20 @@ item_read_scroll:
     rts
 
 !irs_ew_has:
+    // If cursed: remove curse, set p1=0, recalc
+    ldx #EQUIP_WEAPON
+    lda inv_flags,x
+    and #IF_CURSED
+    beq !irs_ew_not_cursed+
+    lda inv_flags + EQUIP_WEAPON
+    and #~IF_CURSED & $ff
+    sta inv_flags + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    jsr player_recalc_equipment
+    jmp !irs_ew_msg+
+
+!irs_ew_not_cursed:
     // Check if already at +5 cap
     ldx #EQUIP_WEAPON
     lda inv_p1,x
@@ -1201,6 +1206,7 @@ item_read_scroll:
     inc inv_p1 + EQUIP_WEAPON
     jsr player_recalc_equipment
 
+!irs_ew_msg:
     lda #<piq_wpn_glow_str
     sta zp_ptr0
     lda #>piq_wpn_glow_str
@@ -1226,6 +1232,20 @@ item_read_scroll:
     rts
 
 !irs_ea_has:
+    // If cursed: remove curse, set p1=0, recalc
+    ldx #EQUIP_BODY
+    lda inv_flags,x
+    and #IF_CURSED
+    beq !irs_ea_not_cursed+
+    lda inv_flags + EQUIP_BODY
+    and #~IF_CURSED & $ff
+    sta inv_flags + EQUIP_BODY
+    lda #0
+    sta inv_p1 + EQUIP_BODY
+    jsr player_recalc_equipment
+    jmp !irs_ea_msg+
+
+!irs_ea_not_cursed:
     // Check if already at +5 cap
     ldx #EQUIP_BODY
     lda inv_p1,x
@@ -1245,6 +1265,7 @@ item_read_scroll:
     inc inv_p1 + EQUIP_BODY
     jsr player_recalc_equipment
 
+!irs_ea_msg:
     lda #<piq_arm_glow_str
     sta zp_ptr0
     lda #>piq_arm_glow_str
@@ -1279,6 +1300,8 @@ item_read_scroll:
 
 !irs_protect:
     // Protect from Evil: timer rng(25)+25
+    // NOTE: Timer is infrastructure only — damage reduction from evil monsters
+    // will be integrated when effect consumption is added in a later phase.
     lda #25
     jsr rng_range                   // [0, 24]
     clc

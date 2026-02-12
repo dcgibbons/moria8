@@ -1968,12 +1968,12 @@ status should be updated to Resolved.
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP11-1 | **HIGH** | CSW heal [5,40] instead of [10,45]; Test 33 fails intermittently | Easy — use math_dice(5,8,5) or change adc #5 → adc #10 | Open |
-| RP11-2 | **HIGH** | Enchant Weapon/Armor broken on cursed items (unsigned cmp treats -N as >5) | Medium — add IF_CURSED branch before cap check in both handlers | Open |
-| RP11-3 | **MEDIUM** | No test for enchant on cursed items | Easy — add test with negative p1 + IF_CURSED | Open |
-| RP11-4 | **MEDIUM** | Heroism/Infravision/Protect timers are stubs — no code checks them for gameplay effects | Design — document as stubs or implement consumption | Open |
-| RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | Open |
-| RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | Open |
+| RP11-1 | **HIGH** | CSW heal [5,40] instead of [10,45]; Test 33 fails intermittently | Easy — use math_dice(5,8,5) or change adc #5 → adc #10 | **Fixed** — replaced manual loop with `math_dice(5,8,5)` giving correct [10,45] range |
+| RP11-2 | **HIGH** | Enchant Weapon/Armor broken on cursed items (unsigned cmp treats -N as >5) | Medium — add IF_CURSED branch before cap check in both handlers | **Fixed** — added IF_CURSED check before cap comparison; cursed items get curse cleared + p1 set to 0 |
+| RP11-3 | **MEDIUM** | No test for enchant on cursed items | Easy — add test with negative p1 + IF_CURSED | **Fixed** — added test 39 (enchant cursed weapon: p1→0, flag cleared) and test 40 (enchant at cap: p1 stays 5) |
+| RP11-4 | **MEDIUM** | Heroism/Infravision/Protect timers are stubs — no code checks them for gameplay effects | Design — document as stubs or implement consumption | **Documented** — added NOTE comments to all three handlers marking timers as infrastructure-only until effect consumption phase |
+| RP11-5 | LOW | Word of Recall overwrites (not stacks) timer — correct but undocumented | Trivial — add comment | **Fixed** — added comment documenting overwrite-not-stack behavior matches umoria |
+| RP11-6 | LOW | RP10-12 wrong: eff_aggravate IS implemented at spell_effects.s:1046 | Trivial — update RP10-12 status | **Resolved** — RP10-12 already marked as resolved in prior pass |
 
 ---
 
