@@ -1075,18 +1075,19 @@ Phase 5 status (monster/combat):
 
 | # | What | Status |
 |---|------|--------|
-| 5.1 | Monster data structures | **Implemented** — 20 creature types, 32 active slots, spawn/find/remove. Creature STATS need correction (see MC1). |
-| 5.2 | Monster AI | **Implemented** — wake/sleep, greedy movement, confused random movement, speed 0/1/2. |
-| 5.3 | Player melee combat | **Implemented** — to-hit, damage, death, XP, level-up. Needs race BTH fix (MC3.2), critical hits (MC4.1). |
-| 5.4 | Monster melee attacks | **Implemented** — 2 attack slots, effects (poison/confuse/paralyze/acid/aggravate). Needs to-hit fix (MC3.1), effect messages (MC4.3). |
-| 5.5 | Status effects & regen | **Partial** — effect timers tick. Missing: HP regen, effect messages, starvation damage. |
-| 5.6 | Monster rendering | **Implemented** — FLAG_OCCUPIED check, cr_display/cr_color lookup in viewport renderer. |
+| 5.1 | Monster data structures | **Complete** — 20 creature types (all real umoria creatures), 32 active slots, spawn/find/remove. All stats match umoria (see MC1 resolved). |
+| 5.2 | Monster AI | **Implemented** — wake/sleep, greedy movement, confused random movement, speed 0/1/2. Has speed=0 attack bug (see RP7-1). |
+| 5.3 | Player melee combat | **Complete** — to-hit (class+race BTH), damage, death, XP (integer-only), level-up. Missing critical hits (MC4.1). |
+| 5.4 | Monster melee attacks | **Implemented** — 2 attack slots, effects (poison/confuse/paralyze/acid/aggravate). Has AC reduction and effect bugs (see RP7-2 through RP7-6). |
+| 5.5 | Status effects & regen | **Partial** — effect timers tick. Missing: HP/MP regen, starvation damage. |
+| 5.6 | Monster rendering | **Complete** — FLAG_OCCUPIED check, cr_display/cr_color lookup in viewport renderer. |
 
 **Suggested next steps (priority order):**
-1. **Fix MC1 — Creature stats** — Replace all creature data with values from umoria. Replace 5 invented creatures with actual umoria creatures. This is the highest-impact fix.
-2. **Fix MC2 — XP system** — Remove min-1 floor. Implement fractional XP (or accept integer-only as a known simplification with a note).
-3. **Fix MC3 — Combat formulas** — Remove monster to-hit beq, add race BTH to player to-hit, fix confusion damage.
-4. **Phase 4.3 — Data loader** — can be deferred until more creature tiers are needed.
+1. **Fix RP7-1 — Speed=0 attack bug** — 4 creatures (Floating Eye, Shrieker, Grey Mold, Yellow Mold) are completely non-functional. Highest impact.
+2. **Fix RP7-2 through RP7-6 — Effect dispatch bugs** — AC reduction on wrong attack types, confusion damage/chance, poison/confusion stacking.
+3. **Fix RP7-7 — Slow creature speeds** — 3 creatures run at double their intended speed.
+4. **Implement MC4.2 — HP/MP regeneration** — Core gameplay mechanic still missing.
+5. **Phase 4.3 — Data loader** — can be deferred until more creature tiers are needed.
 
 ---
 
@@ -1128,168 +1129,83 @@ Reviewed all Phase 5 implementation (monster.s, combat.s, monster_attack.s, mons
 against umoria source (data_creatures.cpp, monster.h, monster.cpp, player.cpp).
 All 10 test suites pass. Attack types verified by manually decoding umoria's monster_attacks[] array.
 
-#### MC1: Creature stat data — CRITICAL
+#### MC1: Creature stat data — RESOLVED
 
-**Attack types and attack damage dice are mostly CORRECT** — verified against umoria's
-monster_attacks[] array indices. The implementor got the attack system right.
+**Status: FIXED.** All 20 creature types now match umoria. The 5 invented creatures (Fruit bat,
+Soldier ant, Green naga hatchling, Cave spider, Wild cat) have been replaced with real umoria
+creatures (White Harpy, Green Worm mass, Poltergeist, Huge Brown Bat, Creeping Copper Coins).
 
-**However, most other creature stats do NOT match umoria.** XP, AC, HP dice, creature levels,
-sleep values, and awareness radii are widely wrong. This causes fundamental game balance issues:
-inflated XP (faster leveling), lower AC (monsters too easy to hit), and wrong HP (most too fragile).
+All stats verified correct against umoria `data_creatures.cpp`:
+- **XP values**: 20/20 match (kill_exp_value)
+- **AC values**: 20/20 match
+- **HP dice**: 20/20 match (hd_num, hd_sides)
+- **Creature levels**: 20/20 match
+- **Sleep values**: 20/20 match
+- **Awareness radii**: 20/20 match
+- **Attack types**: 20/20 match (slot 0 and slot 1)
+- **Attack dice**: 20/20 match
 
-**XP values (kill_exp_value):**
+**Naming note:** C64 "Grey Mold" = umoria "Grey Mushroom patch" (same stats, display 'm'/M).
+C64 "Giant Frog" = umoria "Giant Green Frog" (same stats).
 
-| # | Name | C64 | umoria | Status |
-|---|------|-----|--------|--------|
-| 0 | Fruit bat | 1 | N/A (invented) | — |
-| 1 | Giant white mouse | 2 | 1 | **Wrong** |
-| 2 | White worm mass | 3 | 2 | **Wrong** |
-| 3 | Large white snake | 4 | 2 | **Wrong** |
-| 4 | Kobold | 5 | 5 | OK |
-| 5 | White icky thing | 6 | 2 | **Wrong** |
-| 6 | Shrieker mushroom | 1 | 1 | OK |
-| 7 | Giant white centipede | 8 | 2 | **Wrong** |
-| 8 | Floating eye | 3 | 1 | **Wrong** |
-| 9 | Jackal | 8 | 8 | OK |
-| 10 | Soldier ant | 9 | N/A (invented) | — |
-| 11 | Giant frog | 10 | 6 | **Wrong** |
-| 12 | Giant white rat | 2 | 1 | **Wrong** |
-| 13 | Green naga hatchling | 20 | 30 (Green Naga) | **Wrong** |
-| 14 | Cave spider | 7 | N/A (invented) | — |
-| 15 | Wild cat | 14 | N/A (invented) | — |
-| 16 | Grey mold | 20 | 1 | **Wrong** |
-| 17 | Metallic green centipede | 22 | 3 | **Wrong** |
-| 18 | Yellow mold | 28 | 9 | **Wrong** |
-| 19 | Giant black ant | 35 | 8 | **Wrong** |
+**Multi-attack limitation:** White Harpy has 3 attacks in umoria (claw 1d1, claw 1d1, bite 1d2)
+but C64 only supports 2 slots (claw 1d1, claw 1d1). Third attack lost. Low impact (1d2 normal).
 
-Only 3/15 matched creatures have correct XP. Most values are heavily inflated.
+#### MC2: XP system bugs — PARTIALLY RESOLVED
 
-**AC values:**
+1. ~~**Min-1 XP floor not in umoria.**~~ **FIXED** — `combat_award_xp` (combat.s:473) no longer
+   forces minimum 1 XP. Weak creatures correctly award 0 XP when player level >> creature level.
 
-| # | Name | C64 | umoria | Status |
-|---|------|-----|--------|--------|
-| 1 | Giant white mouse | 1 | 4 | **Wrong** |
-| 2 | White worm mass | 1 | 1 | OK |
-| 3 | Large white snake | 2 | 30 | **Very wrong** |
-| 4 | Kobold | 6 | 16 | **Wrong** |
-| 5 | White icky thing | 2 | 7 | **Wrong** |
-| 6 | Shrieker mushroom | 2 | 1 | **Wrong** |
-| 7 | Giant white centipede | 5 | 10 | **Wrong** |
-| 8 | Floating eye | 6 | 6 | OK |
-| 9 | Jackal | 3 | 16 | **Very wrong** |
-| 11 | Giant frog | 3 | 8 | **Wrong** |
-| 12 | Giant white rat | 7 | 7 | OK |
-| 16 | Grey mold | 12 | 1 | **Wrong** |
-| 17 | Metallic green centipede | 7 | 4 | **Wrong** |
-| 18 | Yellow mold | 12 | 10 | **Wrong** |
-| 19 | Giant black ant | 10 | 20 | **Wrong** |
+2. **No fractional XP accumulation (known simplification).** umoria uses 16-bit fixed-point
+   fractions (`exp_fraction`) to preserve partial XP. The C64 uses integer division only.
+   This means small XP amounts from weak creatures are lost entirely (0 instead of accumulating
+   fractions). Documented in code comment at combat.s:475. Impact is minor for early game
+   since creature XP values are high enough relative to player level.
 
-Only 3/15 correct. Most ACs are too low (monsters too easy to hit).
+3. **Only uses cr_xp_lo, ignores cr_xp_hi** (combat.s:459). Safe for current creatures
+   (max XP=9) but will break when higher-tier creatures are added.
 
-**HP dice:**
+#### MC3: Combat formula bugs — PARTIALLY RESOLVED
 
-| # | Name | C64 | umoria | Status |
-|---|------|-----|--------|--------|
-| 1 | Giant white mouse | 1d3 | 1d3 | OK |
-| 2 | White worm mass | 2d4 | 4d4 | **Wrong** |
-| 3 | Large white snake | 2d4 | 3d6 | **Wrong** |
-| 4 | Kobold | 1d8 | 3d7 | **Wrong** |
-| 5 | White icky thing | 2d5 | 3d5 | **Wrong** |
-| 6 | Shrieker mushroom | 1d1 | 1d1 | OK |
-| 7 | Giant white centipede | 2d4 | 3d5 | **Wrong** |
-| 8 | Floating eye | 3d6 | 3d6 | OK |
-| 9 | Jackal | 1d4 | 3d8 | **Very wrong** |
-| 11 | Giant frog | 2d6 | 2d8 | **Wrong** |
-| 12 | Giant white rat | 1d3 | 2d2 | **Wrong** |
-| 16 | Grey mold | 4d8 | 1d2 | **Very wrong** |
-| 17 | Metallic green centipede | 3d6 | 4d4 | **Wrong** |
-| 18 | Yellow mold | 4d8 | 8d8 | **Wrong** |
-| 19 | Giant black ant | 3d6 | 3d6 | OK |
+1. ~~**Monster to-hit off-by-one.**~~ **FIXED** — `mon_atk_roll_tohit` (monster_attack.s:249-250)
+   now uses `cmp zp_player_ac; bcs !mart_hit+` correctly (`>=` check). No extra `beq`.
 
-Only 4/15 correct. Jackal (1d4 vs 3d8) and Grey Mold (4d8 vs 1d2) are dramatically wrong.
+2. ~~**Player to-hit missing race BTH.**~~ **FIXED** — `combat_calc_tohit` (combat.s:172-197)
+   now adds race BTH from `race_properties` offset 7, with signed handling and clamping.
 
-**Creature levels:**
-
-| # | Name | C64 | umoria | Status |
-|---|------|-----|--------|--------|
-| 7 | Giant white centipede | 2 | 1 | **Wrong** |
-| 8 | Floating eye | 2 | 1 | **Wrong** |
-| 9 | Jackal | 2 | 4 | **Wrong** |
-| 12 | Giant white rat | 3 | 4 | **Wrong** |
-| 16 | Grey mold | 4 | 1 | **Very wrong** |
-| 17 | Metallic green centipede | 4 | 2 | **Wrong** |
-| 18 | Yellow mold | 4 | 3 | **Wrong** |
-| 19 | Giant black ant | 5 | 2 | **Very wrong** |
-
-(Only showing mismatches; 7 of 15 matched creatures have wrong levels.)
-
-**Five creatures don't exist in umoria:** Fruit bat (#0), Soldier ant (#10), Green naga hatchling (#13),
-Cave spider (#14), Wild cat (#15). These need to be replaced with actual umoria creatures or
-their stats need to be derived from similar umoria creatures.
-
-**Attack data verified correct (minor exceptions):**
-All 15 matched creatures have correct attack TYPE. Two have minor damage discrepancies:
-- Giant white rat: C64 1d4 vs umoria 1d3 (Poison, index 153)
-- Green naga hatchling slot 0: C64 1d8 vs umoria Green Naga 1d6 (Normal, index 75)
-
-#### MC2: XP system bugs — CRITICAL
-
-1. **No fractional XP accumulation.** umoria uses 16-bit fixed-point fractions (`exp_fraction`)
-   to preserve partial XP from integer division. The C64 uses integer division only, then
-   applies a `min 1` floor. This makes weak-creature kills award far too much XP.
-   Example: Level 5 player kills 1 XP / level 1 creature. umoria: 0 XP (fraction accumulates,
-   giving 1 XP after 5 kills). C64: 1 XP per kill (5× too much).
-
-2. **Min-1 XP floor not in umoria.** The `combat_award_xp` function (combat.s:386-390) forces
-   a minimum of 1 XP per kill. umoria has no such floor — the fractional system handles it.
-   Combined with #1, this causes significantly faster leveling.
-
-3. **Only uses cr_xp_lo, ignores cr_xp_hi** (combat.s:371). Safe for current creatures
-   (max XP=35) but will break when higher-tier creatures are added.
-
-#### MC3: Combat formula bugs — MEDIUM
-
-1. **Monster to-hit off-by-one** (monster_attack.s:250). The `beq !mart_miss+` line causes
-   `rng_range` result == AC to miss. But since `rng_range` returns [0, N-1] (not [1, N] like
-   umoria's `randomNumber`), the correct check should be `>=` (like the player's combat code
-   at combat.s:284 uses). The extra `beq` makes monsters ~5% less likely to hit than umoria
-   intends. Fix: remove the `beq !mart_miss+` line.
-
-2. **Player to-hit missing race BTH modifier** (combat.s:161-223). The `combat_calc_tohit`
-   function uses only the class base BTH (`class_properties[class].bth`). umoria calculates
-   `py.misc.bth = class_bth + race_bth` at character creation. Race BTH ranges from -10
-   (Halfling) to +20 (Half-Troll), so this is significant. The race BTH is stored in
-   `race_properties` at offset 7 but never added to the to-hit calculation.
-
-3. **Confusion attack wrongly applies AC reduction and physical damage**
-   (monster_attack.s:342-344). In umoria, confusion attacks (type 3) apply ONLY the confusion
-   effect — no physical damage, no AC reduction. The C64 treats confusion like a normal attack
-   that also confuses.
+3. **Confusion damage handling still wrong (see RP7-3).** The original finding was inverted:
+   the code does NOT apply AC reduction + physical damage. Instead it applies NO damage at all
+   (`lda #0; sta zp_combat_dmg`). In umoria, confusion deals FULL dice damage (no AC reduction)
+   plus 50% chance of confusion effect. See Review Pass 7 for details.
 
 #### MC4: Missing features — MEDIUM
 
 1. **No critical hit system.** umoria's `playerWeaponCriticalBlow` (chance based on weapon
    weight + to-hit + class_adj × level, damage multiplier 2-5×) is not implemented. All player
-   hits do flat damage.
+   hits do flat damage. Critical chance formula: `(weapon_weight + 5*plus_to_hit +
+   class_level_adj[class][BTH]*level) / 5000`. Tiers: 2× (+5), 3× (+10), 4× (+15), 5× (+20).
 
 2. **No HP/MP regeneration.** `turn.s` has the effect timer infrastructure but no actual
-   regeneration logic. In umoria, the player regenerates HP each turn (rate depends on CON and
-   regen bonus).
+   regeneration logic. In umoria, HP regen per turn = `(max_hp * percent + 1442) / 65536`
+   where percent = 197 (normal), ×1.5 (regen item), ×2 (resting). Uses 16-bit fixed-point
+   fractional accumulation. Mana regen uses same formula with base 524 instead of 1442.
 
-3. **Missing effect-specific messages.** When poison/confuse/paralyze effects trigger, the code
-   sets the timer but doesn't print the specific message. The strings exist (`mat_poison_str`,
-   etc.) and `mon_atk_build_effect_msg` is implemented, but the effect handlers don't call them.
-   Player only sees "THE X HITS YOU." even when poisoned.
+3. ~~**Missing effect-specific messages.**~~ **VERIFIED CORRECT** — Effect handlers DO print
+   messages: `mon_atk_effect_poison` calls `mon_atk_build_effect_msg` (monster_attack.s:394-404),
+   `mon_atk_effect_confuse` prints at lines 428-438, `mon_atk_effect_paralyze` prints at
+   lines 490-500. Player sees both "THE X HITS YOU." and "THE X POISONS YOU." etc.
 
 4. **Monster confusion/stun timers never decremented.** `MX_CONFUSE` and `MX_STUN` fields
    exist in the monster entry struct but no code decrements them per turn or clears MF_CONFUSED
    when the timer expires. (Currently dead code — no way to confuse a monster yet.)
 
-#### MC5: Design simplifications — LOW
+#### MC5: Design simplifications — LOW (speed issues escalated to RP7)
 
 1. **Speed model oversimplified.** C64 uses 0/1/2 (immobile/normal/fast). umoria uses speed
-   relative to 10 (speed 11 = normal, 10 = half-speed, 12 = double, etc). Many creatures that
-   are slow in umoria (e.g. White Worm mass speed=10) are treated as normal speed in C64.
+   relative to 10 (speed 11 = normal, 10 = half-speed, 12 = double, 13 = very fast). The
+   speed=0 "immobile" category is **critically broken** — see RP7-1. Three slow creatures
+   (umoria speed=10) run at normal speed — see RP7-7. Very fast creatures (umoria speed=13,
+   e.g. Poltergeist, Huge Brown Bat) are capped at 2 moves instead of 3.
 
 2. **Blows table simplified.** C64 uses 5×4 (5 weight classes, 4 DEX brackets). umoria uses
    7×6 (7 weight classes, 6 DEX brackets including 18/xx ranges). Fine for now since weapons
@@ -1307,9 +1223,166 @@ All 15 matched creatures have correct attack TYPE. Two have minor damage discrep
 3. **Monster to-hit formula** (`base_tohit + creature_level × 3`) correctly derives from
    umoria's `playerTestBeingHit(base, level, 0, AC, CLASS_MISC_HIT)` with CLASS_MISC_HIT=3.
 4. **AC damage reduction formula** (`damage -= (AC × damage) / 200`) matches umoria exactly.
-5. **Player to-hit roll** (combat.s:266-292) correctly compensates for rng_range's [0,N-1]
+5. **Player to-hit roll** (combat.s:332-360) correctly compensates for rng_range's [0,N-1]
    range vs umoria's [1,N] by using `>=` instead of `>`.
-6. **Paralysis saving throw** logic (monster_attack.s:407-452) correctly implements
-   class_save_base + player_level with rng_range(100) check.
-7. **Monster rendering** is implemented in dungeon_render.s (checks FLAG_OCCUPIED, looks up
+6. **Monster to-hit roll** (monster_attack.s:229-257) also correctly uses `>=` check.
+7. **Paralysis saving throw** logic (monster_attack.s:447-504) correctly implements
+   class_save_base + player_level with rng_range(100) check. (Simplified vs umoria's
+   full formula that includes WIS adjustment — acceptable simplification.)
+8. **Monster rendering** is implemented in dungeon_render.s (checks FLAG_OCCUPIED, looks up
    cr_display/cr_color).
+9. **Player to-hit formula** (combat.s:161-250) now correctly includes class BTH + race BTH +
+   PL_TOHIT × 3 + player_level × class_bth_per_level, matching umoria's full calculation.
+10. **All 20 creature stats** match umoria source (XP, AC, HP dice, levels, sleep, aaf, attack
+    types, attack dice). Verified against `data_creatures.cpp` and `monster_attacks[]` array.
+11. **Effect messages** are printed: poison, confusion, and paralysis handlers all call
+    `mon_atk_build_effect_msg` with the appropriate strings.
+12. **XP award formula** (`cr_xp * cr_level / player_level`) correctly matches umoria.
+    Min-1 floor removed. Integer-only is a documented simplification.
+
+---
+
+### Review Pass 7 — Verification of Review Pass 6 Findings (2026-02-11)
+
+Cross-referenced Review Pass 6 findings against current code and umoria source (`data_creatures.cpp`,
+`monster.cpp`, `player.cpp`, `game_run.cpp`). Found that MC1-MC3 have been substantially fixed in
+code but the BUILDPLAN was not updated to reflect this. Additionally found 8 new bugs not identified
+in Review Pass 6, mostly in `mon_atk_effect_dispatch` (attack type routing) and the speed model.
+
+All 10 test suites still pass.
+
+#### RP7-1: Speed=0 creatures cannot attack — CRITICAL
+
+Four creatures have `cr_speed` = 0: Shrieker Mushroom (#6), Floating Eye (#8), Grey Mold (#16),
+Yellow Mold (#18). In `monster_ai_tick` (monster_ai.s:60-61), speed=0 causes the monster to be
+**completely skipped** — no wake check, no attack processing, nothing. These creatures are
+decorative scenery that can be killed without any resistance.
+
+In umoria, these creatures have speed=11 (normal) with `CM_ATTACK_ONLY` movement flag — they cannot
+move but DO attack when the player is adjacent. The distinction between "can't move" and "can't act"
+is missing from the C64's speed model.
+
+**Impact:** Floating Eye never paralyzes (its entire purpose). Shrieker Mushroom never aggravates.
+Grey Mold never confuses. Yellow Mold never attacks. These are 4/20 creatures rendered harmless.
+
+**Fix options:**
+1. Add `MF_ATTACK_ONLY` flag. In `monster_ai_tick`, process speed=0 monsters with a simplified
+   path: wake check → if awake and player adjacent → attack. Skip movement entirely.
+2. Set speed=1 and add a `CM_NO_MOVE` flag checked in `monster_move_toward`/`monster_move_random`.
+   Simpler: monster wakes, tries to move, flag prevents actual movement, but adjacency check
+   in `monster_try_step` still triggers `monster_attack_player`.
+
+Option 2 is simpler to implement — just check a flag before moving and skip movement but still
+process the monster normally otherwise.
+
+#### RP7-2: Poison attacks wrongly apply AC reduction — MEDIUM
+
+`mon_atk_effect_dispatch` routes poison (ATK_POISON) through `mon_atk_ac_reduce` before applying
+the poison effect (monster_attack.s:341-344):
+```
+!maed_poison:
+    jsr mon_atk_ac_reduce       // WRONG — poison has no AC reduction in umoria
+    jsr mon_atk_effect_poison
+```
+
+In umoria (monster.cpp:1665-1668), poison attacks call `playerTakesHit(damage, ...)` with the full
+dice damage — NO AC reduction. Only attack type 1 (Normal) gets AC reduction.
+
+**Fix:** Remove `jsr mon_atk_ac_reduce` from the poison handler.
+
+#### RP7-3: Confusion attacks deal no damage — MEDIUM
+
+`mon_atk_effect_dispatch` sets confusion damage to 0 (monster_attack.s:346-347):
+```
+!maed_confuse:
+    lda #0
+    sta zp_combat_dmg           // Confusion: no physical damage
+```
+
+In umoria (monster.cpp:1563-1576), confusion attacks deal **full dice damage** (no AC reduction)
+AND have a 50% chance (`randomNumber(2) == 1`) of applying confusion. The C64 applies 0 damage
+and always applies confusion.
+
+**Fix:** Remove the `lda #0; sta zp_combat_dmg` lines. Add 50% roll before applying confusion
+(see RP7-4).
+
+#### RP7-4: Confusion missing 50% chance — MEDIUM
+
+In umoria, confusion only applies 50% of the time:
+```cpp
+if (randomNumber(2) == 1) {
+    // apply confusion
+}
+```
+
+The C64 `mon_atk_effect_confuse` always applies confusion when the attack hits (no random check).
+This makes confusion effects twice as frequent as umoria intends.
+
+**Fix:** Add `lda #2; jsr rng_range; cmp #0; bne !mec_done+` before applying confusion effect.
+
+#### RP7-5: Confusion doesn't stack — LOW
+
+In umoria, confusion stacks: `py.flags.confused += 3` always runs (even if already confused),
+and if not previously confused, also adds `randomNumber(creature_level)`. The C64 returns
+immediately if already confused (`bne !mec_done+` at monster_attack.s:413).
+
+**Fix:** Remove the early return. If already confused, add 3 turns. If not, add
+`rng_range(creature_level) + 3`.
+
+#### RP7-6: Poison doesn't stack — LOW
+
+In umoria (monster.cpp:1668): `py.flags.poisoned += randomNumber(creature_level) + 5` — poison
+always adds to the existing counter. The C64 returns immediately if already poisoned
+(`bne !mep_done+` at monster_attack.s:378).
+
+**Fix:** Remove the early return. Always add `rng_range(cr_level) + 5` to poison timer.
+
+#### RP7-7: Three slow creatures run at normal speed — MEDIUM
+
+White Worm Mass (#2), Green Worm Mass (#10), and Creeping Copper Coins (#15) have umoria speed=10
+(half speed — acts every other player turn). The C64 has them at speed=1 (normal — acts every turn).
+This makes them move twice as often as umoria intends.
+
+In umoria, speed < 11 means the creature acts less frequently (speed 10 = every other turn).
+The C64 has no "slow" category — only 0 (broken, see RP7-1), 1 (normal), 2 (fast).
+
+**Fix options:**
+1. Add speed=0 handling (see RP7-1) that includes "slow" via a fractional counter.
+2. Simpler: keep the 0/1/2 model but make 0 = "slow" (acts every other turn), 1 = normal,
+   2 = fast. Rename from "immobile" to "slow". Attack-only creatures (RP7-1) need a separate
+   flag regardless.
+
+#### RP7-8: Fear attack wrongly applies AC reduction — LOW
+
+`mon_atk_effect_dispatch` routes fear (ATK_FEAR) through `mon_atk_ac_reduce` (monster_attack.s:367):
+```
+!maed_fear:
+    jsr mon_atk_ac_reduce
+```
+
+In umoria (monster.cpp:1577-1588), fear attacks call `playerTakesHit(damage, ...)` with full dice
+damage — no AC reduction. Only currently impacts Poltergeist (#13, 1d1 fear attack) so low impact.
+
+**Fix:** Remove `jsr mon_atk_ac_reduce` from the fear handler.
+
+#### RP7-9: Poison tick ignores CON — LOW
+
+C64 (turn.s:30-32) deals flat 1 HP/turn poison damage. In umoria (`playerUpdatePoisonedState` in
+game_run.cpp:550), poison damage per turn varies by CON adjustment: 0-4 HP/turn. High CON
+characters take damage every 2-4 turns, low CON characters take 2-4 HP/turn.
+
+Low priority — the flat 1 HP/turn is a reasonable simplification that averages out over time.
+
+#### Summary of Review Pass 7 findings
+
+| # | Severity | Issue | Fix complexity |
+|---|----------|-------|----------------|
+| RP7-1 | **CRITICAL** | Speed=0 creatures can't attack (4 of 20 broken) | Medium — add flag + special processing |
+| RP7-2 | **MEDIUM** | Poison AC reduction wrong | Trivial — remove 1 JSR |
+| RP7-3 | **MEDIUM** | Confusion deals no damage | Trivial — remove 2 lines |
+| RP7-4 | **MEDIUM** | Confusion missing 50% chance | Easy — add rng check |
+| RP7-5 | LOW | Confusion doesn't stack | Easy — restructure handler |
+| RP7-6 | LOW | Poison doesn't stack | Easy — remove early return |
+| RP7-7 | **MEDIUM** | 3 slow creatures at normal speed | Medium — requires speed model change |
+| RP7-8 | LOW | Fear AC reduction wrong | Trivial — remove 1 JSR |
+| RP7-9 | LOW | Poison tick ignores CON | Low priority simplification |
