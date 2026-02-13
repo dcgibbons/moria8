@@ -202,6 +202,12 @@ chr_price_adj:
     .byte 130, 125, 122, 120, 118, 116, 114, 112  // CHR 3-10
     .byte 110, 108, 106, 104, 103, 102, 101, 100  // CHR 11-18
 
+// CHR sell price adjustment (percentage of base price stores will pay)
+// Index = CHR - 3. CHR 3 = 25%, CHR 18 = 50%.
+chr_sell_adj:
+    .byte 25, 27, 29, 31, 33, 35, 37, 39   // CHR 3-10
+    .byte 41, 43, 44, 45, 46, 47, 48, 50   // CHR 11-18
+
 // ============================================================
 // Attack blows table (simplified from umoria's 7x6)
 // Rows: adjusted weight class (STR*10/weapon_weight), 0-4

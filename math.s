@@ -119,6 +119,42 @@ math_dice:
 !done:
     rts
 
+// math_mul_16x8 — Unsigned 16-bit × 8-bit → 24-bit multiply
+// Input:  zp_temp0 = multiplicand lo, zp_temp1 = multiplicand hi
+//         X = multiplier (8-bit)
+// Output: mul_result_0/1/2 = 24-bit result (little-endian)
+// Method: Two 8×8 multiplies chained together
+// Preserves: Y
+math_mul_16x8:
+    // Save multiplier (X is clobbered by math_multiply)
+    stx mul_saved_x
+
+    // Step 1: zp_temp0 × X → 16-bit partial result
+    lda zp_temp0
+    jsr math_multiply           // A=result lo, zp_math_b=result hi
+    sta mul_result_0            // Store low byte of final result
+    lda zp_math_b
+    sta mul_result_1            // Partial result_1
+
+    // Step 2: zp_temp1 × X → 16-bit partial result, add to result_1/2
+    lda zp_temp1
+    ldx mul_saved_x             // Restore multiplier
+    jsr math_multiply           // A=result lo, zp_math_b=result hi
+
+    // Add to result_1:result_2
+    clc
+    adc mul_result_1
+    sta mul_result_1
+    lda zp_math_b
+    adc #0
+    sta mul_result_2
+    rts
+
+mul_result_0: .byte 0
+mul_result_1: .byte 0
+mul_result_2: .byte 0
+mul_saved_x:  .byte 0
+
 // math_min — Return min(A, X)
 // Output: A = min value
 math_min:

@@ -52,6 +52,8 @@
 #import "combat.s"
 #import "monster_attack.s"
 #import "turn.s"
+#import "store.s"
+#import "ui_store.s"
 
 // ============================================================
 // Entry point
@@ -166,6 +168,7 @@ entry:
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
+    jsr store_init_all
 
     // --- Main game loop ---
     // Initialize dungeon level and generate map
@@ -320,6 +323,16 @@ entry:
     jsr render_viewport
 
 !post_move:
+    // Check if player stepped on a store door (town only)
+    lda zp_player_dlvl
+    bne !not_store_entry+
+    jsr check_player_on_store_door
+    bcc !not_store_entry+
+    sta zp_store_idx
+    jsr store_enter
+    jsr viewport_update
+    jsr render_viewport
+!not_store_entry:
     jsr turn_post_action
     lda zp_game_flags
     and #$01
@@ -389,6 +402,10 @@ entry:
     dec zp_player_dlvl
     lda zp_player_dlvl
     sta player_data + PL_DLEVEL
+    // Restock stores when returning to town
+    bne !not_entering_town+
+    jsr store_restock_all
+!not_entering_town:
     lda #1
     sta level_entry_dir         // 1 = ascended
     lda #$ff
