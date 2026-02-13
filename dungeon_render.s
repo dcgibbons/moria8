@@ -570,6 +570,7 @@ render_single_tile:
     sta zp_temp3
     lda #COL_PLAYER
     sta zp_temp4
+    jmp !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
