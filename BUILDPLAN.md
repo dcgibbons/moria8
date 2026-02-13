@@ -398,15 +398,25 @@ Hunger system functional.
 
 ---
 
-### Phase 8 — Stores
+### Phase 8 — Stores ✅ IMPLEMENTED
 
 **Goal:** Town stores buy and sell items.
 
 | # | File | What it does | Tests |
 |---|---|---|---|
-| 8.1 | `store.s` | 6 stores with inventory (12 items each — reduced from 24). Store owner data (name, race, max gold). Inventory restocking on town re-entry. (Design deviation: original Moria restocks based on game turns elapsed, not on re-entry. Simplified for implementation; acceptable because the net effect is similar — stores refresh between dungeon visits.) | Stores stock correct items |
-| 8.2 | Store UI | Store screen: list items with prices, buy/sell interface. Simplified haggling (accept/decline at offered price, no multi-round bidding — optional enhancement later). | Buy/sell transactions work |
-| 8.3 | Price calculation | Base price x charisma modifier x race modifier. Buy markup, sell markdown. | Prices match formula |
+| 8.1 | `store.s` | 6 stores with inventory (12 items each — reduced from 24). Store owner data (name only — race and max gold deferred, see RP14-2/RP14-5). Inventory restocking on town re-entry. (Design deviation: original Moria restocks based on game turns elapsed, not on re-entry. Simplified for implementation; acceptable because the net effect is similar — stores refresh between dungeon visits.) | Stores stock correct items |
+| 8.2 | `ui_store.s` | Store screen: list items with prices, buy/sell interface. Simplified haggling (accept/decline at offered price, no multi-round bidding — optional enhancement later). Store entry detected via `check_player_on_store_door` at `!post_move:` in main loop. Sell flow uses sub-screen to show full 22-slot player inventory. | Buy/sell transactions work |
+| 8.3 | Price calculation | Base price × charisma modifier only (race modifier deferred, see RP14-2). Buy: `base_price × chr_price_adj[CHR-3] / 100` (100-130%). Sell: `base_price × chr_sell_adj[CHR-3] / 100` (25-50%). Uses `math_mul_16x8` (16×8→24-bit multiply, added to `math.s`) and existing `math_div_16x8`. | Prices match formula (17 tests) |
+
+**Implementation details:**
+- **New files:** `store.s` (474 lines — data, restock, pricing, gold ops), `ui_store.s` (~500 lines — entry detection, screen rendering, buy/sell flows), `tests/test_store.s` (17 runtime tests)
+- **Modified files:** `main.s` (imports + 3 hooks: init, restock on ascend, door check at post_move), `math.s` (added `math_mul_16x8`), `tables.s` (added `chr_sell_adj` 16-byte table), `run_tests.sh` (added store suite)
+- **Store inventory:** SoA layout — `si_item_id`, `si_qty`, `si_p1`, `si_flags` (72 slots = 6 stores × 12). Category matching via 16-bit bitmasks (`store_cat_mask_lo/hi`).
+- **Restocking:** `store_init_all` at game start; `store_restock_all` on stair ascent to town. Each empty slot has 50% chance to stock. Item selection via rejection sampling (`rng_range(45)+2`, check category, max 30 retries, fallback table).
+- **Branch distance issues:** Several routines required `bcc/jmp` patterns and subroutine extraction to stay within 6502's ±128 byte relative branch limit.
+- **math_multiply clobbers X:** `math_mul_16x8` saves X in `mul_saved_x` before first `math_multiply` call.
+- **Test framework note:** Data bytes after `brk` shift segment end address, breaking `run_tests.sh` VICE breakpoint detection. All scratch data must be placed before `brk`. (See RP14-6.)
+- **Verification:** `make build` → 57 asserts, 0 failed. `make test` → 13/13 suites pass (186 total tests, store 17/17).
 
 **Deliverable:** Player can buy equipment and sell loot in town.
 
@@ -2154,6 +2164,137 @@ No issues found in this commit.
 | RP13-4 | LOW | No test for confused casting interaction | Easy — add test with confusion + known spells | **Fixed** (test 19) |
 | RP13-5 | LOW | No test for extra regen on odd turn | Trivial — same as test 11 with regen=5 and odd turn | **Fixed** (test 20) |
 | RP13-6 | LOW | No test for Word of Recall fizzle (town, never visited dungeon) | Trivial — set PL_MAX_DLVL=0, verify dlvl unchanged | **Fixed** (test 21) |
+
+### Review Pass 14 — Phase 8 (Stores) Implementation Review (2026-02-12)
+
+Full review of Phase 8 store implementation: `store.s`, `ui_store.s`, `math.s` (math_mul_16x8),
+`tables.s` (chr_price_adj/chr_sell_adj), main.s integration, and test files. Cross-referenced
+against umoria source (`store.cpp`, `store_inventory.cpp`, `data_store_owners.cpp`,
+`data_stores.cpp`, `player_stats.cpp`) for pricing formulas, store categories, restocking,
+and haggling behavior.
+
+**Files reviewed:**
+- `store.s` — 6 stores, SoA inventory (72 slots), category bitmasks, restocking, pricing, gold ops
+- `ui_store.s` — Store UI loop, buy/sell flows, door detection, screen drawing
+- `math.s` — math_mul_16x8 (16×8→24-bit multiply)
+- `tables.s` — chr_price_adj (100-130%), chr_sell_adj (25-50%)
+- `item.s` — it_cost_lo/hi (47 entries), it_category, ICAT constants
+- `main.s` — store_init_all at startup, store door check in main loop, restock on stair ascent
+- `turn.s` — Word of Recall code path (missing restock)
+- `player_items.s` — inv_add_item, inv_remove_item, inv_count_items
+- `dungeon_gen.s` — STORE_COUNT, store_door_x/y, store positions
+- `zeropage.s` — zp_store_idx ($8C), zp_store_slot ($8D)
+- `tests/test_store.s` — 17 tests (all pass; VICE detection issue only)
+- `tests/test_store_debug.s` — 13 deterministic tests (pass)
+- `tests/test_store_iso.s` — 9 isolation tests (pass)
+
+**Verification approach:** Built test_store.s, confirmed segment layout ($0810-$90D0),
+checked symbol addresses (tc_results=$8E25, test_start=$8E39, BRK=$90CF, tc_count=$90D0),
+ran all tests in VICE with correct breakpoint — all 17 pass in 3.1M cycles. Verified
+store door positions match building geometry. Verified price arithmetic for boundary cases
+(max cost 300 × max adj 130 = 39,000 fits 16-bit intermediate).
+
+**Documented design deviations (acceptable):**
+- 12 items per store vs 24 in umoria (noted in BUILDPLAN)
+- No haggling (accept/decline at offered price, noted in BUILDPLAN)
+- Restock on town re-entry vs umoria's turn-based (every 1000 turns, noted in BUILDPLAN)
+- No item identification affecting prices (C64 scope limitation)
+- No item stacking in store slots (each item takes one slot)
+
+#### Findings
+
+**RP14-1 (HIGH — Word of Recall to town skips store restock)**
+
+`turn.s:157-163`: When Word of Recall teleports the player from dungeon to town, the code
+sets `zp_player_dlvl=0`, sets `level_entry_dir=1`, and jumps to `recall_generate` which
+calls `level_generate`, `monster_spawn_level`, `item_spawn_level`, etc. — but does NOT
+call `store_restock_all`. In contrast, `main.s:405-407` correctly calls `store_restock_all`
+when ascending stairs to town (dlvl becomes 0).
+
+The BUILDPLAN Step 8.1 says "Inventory restocking on town re-entry." Word of Recall is a
+form of town re-entry. The fix is to add `jsr store_restock_all` in the WoR-to-town path,
+after setting dlvl=0 and before `jmp !recall_generate+`.
+
+**RP14-2 (MEDIUM — BUILDPLAN says "race modifier" but implementation omits it)**
+
+BUILDPLAN Step 8.3: "Base price x charisma modifier x **race modifier**." The implementation
+uses ONLY charisma adjustment (`chr_price_adj` for buying, `chr_sell_adj` for selling).
+No race-based price modifier exists.
+
+In umoria, a `race_gold_adjustments[8][8]` table adjusts prices by ±5-35% based on
+owner_race × player_race. The C64 store owners have names but no race data. This is a
+reasonable simplification for the C64 scope, but the BUILDPLAN should be updated to remove
+the "race modifier" reference to match the implementation, or a race modifier should be added.
+
+**RP14-3 (MEDIUM — Enchantment and charges ignored in pricing)**
+
+`calc_buy_price` and `calc_sell_price` use only the base item type cost (`it_cost_lo/hi`).
+Enchantment level (`si_p1` / `inv_p1`) and item flags are completely ignored.
+
+Impact: A +3 enchanted sword and a +0 sword of the same type cost the same to buy and sell.
+A wand with 8 charges and a wand with 0 charges cost the same. In umoria, enchanted
+weapons/armor get `(to_hit + to_damage + to_ac) × 100` added to base value, and
+wands/staves get `(cost/20) × charges` added.
+
+This is a design simplification but notable — players get no extra gold for selling superior
+items, and store-stocked enchanted items are underpriced. Consider adding at least
+`p1 × enchant_bonus_per_category` to the price calculation.
+
+**RP14-4 (MEDIUM — Cursed items sellable at full base price)**
+
+`calc_sell_price` does not check the `IF_CURSED` flag. A cursed item sells for the same
+price as a normal item of the same type. In umoria, `storeItemValue()` returns 0 for
+cursed items (identified as `ID_DAMD`), preventing sale.
+
+The fix is to check `IF_CURSED` at the start of the sell flow (in `store_sell` at
+`!ssell_cat_ok`) and either refuse the sale or set the price to 0. Additionally, when
+a cursed item is sold to a store, it pollutes the store inventory — another player could
+buy it back.
+
+**RP14-5 (LOW — Store owner max gold not implemented)**
+
+BUILDPLAN Step 8.1 mentions "Store owner data (name, race, max gold)." The implementation
+has owner names (displayed in UI) but no race or max gold. Stores will buy items of
+unlimited value. In umoria, each owner has `max_cost` (250-32,000 gold) which limits
+both what items appear in auto-generated stock and the maximum price the owner will pay.
+
+Update the BUILDPLAN to remove "race, max gold" from the owner data description if these
+features are intentionally deferred.
+
+**RP14-6 (LOW — test_store.s VICE breakpoint detection failure)**
+
+All 17 tests in `test_store.s` pass correctly (verified by running in VICE with breakpoint
+at BRK address $90CF). The apparent "hang" is caused by `tc_count: .byte 0` being defined
+AFTER the `brk` instruction (line 478). This pushes the "Test Code" segment end address
+to $90D0 (tc_count) instead of $90CF (brk). The `run_tests.sh` script extracts the segment
+end address and sets a VICE breakpoint there — but $90D0 is data that's never executed, so
+the breakpoint never fires. VICE hits the cycle limit and exits without processing monitor
+commands (no memory dump occurs).
+
+Fix: Move `tc_count` before `brk` (e.g., next to `tc_results`), so `brk` is the last byte
+in the segment and the breakpoint fires correctly. Alternatively, eliminate tc_results and
+write directly to $0400 (no store functions call msg_print, so screen RAM is safe).
+
+**RP14-7 (LOW — inv_count_items clobbers fi_add_p1)**
+
+`player_items.s`: `inv_count_items` reuses `fi_add_p1` as a scratch counter. This is
+currently safe because `store_buy` re-sets `fi_add_p1` from the store slot data after
+calling `inv_count_items` and before calling `inv_add_item`. However, this coupling is
+fragile — any future caller that sets `fi_add_p1`, calls `inv_count_items`, then calls
+`inv_add_item` without re-setting `fi_add_p1` would get corrupted data. Consider using
+a dedicated scratch variable or a ZP temp instead.
+
+#### Summary of Review Pass 14 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP14-1 | **HIGH** | Word of Recall to town skips store_restock_all | Trivial — add `jsr store_restock_all` in WoR-to-town path | Open |
+| RP14-2 | **MEDIUM** | BUILDPLAN says "race modifier" for prices; implementation has charisma only | Trivial — update BUILDPLAN prose to match implementation | **RESOLVED** — Phase 8 table updated to say "charisma modifier only (race modifier deferred)" |
+| RP14-3 | **MEDIUM** | Enchantment/charges ignored in pricing — all items of same type priced identically | Medium — add p1-based price bonus per category | Open |
+| RP14-4 | **MEDIUM** | Cursed items sellable at full base price (umoria: value 0) | Easy — check IF_CURSED in sell flow, refuse or set price 0 | Open |
+| RP14-5 | LOW | Store owner "max gold" mentioned in BUILDPLAN but not implemented | Trivial — update BUILDPLAN if intentionally deferred | **RESOLVED** — Phase 8 table updated to say "name only — race and max gold deferred" |
+| RP14-6 | LOW | test_store.s VICE breakpoint fails — tc_count after brk shifts segment end | Trivial — move tc_count before brk | **RESOLVED** — tc_count moved before brk |
+| RP14-7 | LOW | inv_count_items clobbers fi_add_p1 scratch (currently safe, fragile) | Easy — use dedicated scratch variable | Open |
 
 ---
 
