@@ -24,7 +24,7 @@
 ui_char_display:
     lda #COL_WHITE
     sta zp_text_color
-    jsr screen_clear            // Clear with white color RAM
+    jsr ui_help_clear_all       // Clear row by row (same as help/inventory)
 
     // Title
     lda #0
@@ -53,11 +53,16 @@ ui_char_display:
 
     lda #COL_WHITE
     sta zp_text_color
-    lda #<player_data + PL_NAME
-    sta zp_ptr0
-    lda #>player_data + PL_NAME
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    // Print name using absolute addressing (avoids pointer indirection)
+    ldx #0
+!ucd_name_loop:
+    lda player_data + PL_NAME,x
+    beq !ucd_name_done+
+    jsr screen_put_char
+    inx
+    cpx #16
+    bcc !ucd_name_loop-
+!ucd_name_done:
 
     // --- Race / Class ---
     lda #COL_LGREY
