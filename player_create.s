@@ -498,9 +498,11 @@ create_enter_name:
     lda #COL_WHITE
     sta zp_text_color
 
-    ldx #0                  // Character count
+    lda #0
+    sta cen_count           // Character count (X clobbered by GETIN)
 !name_loop:
     jsr input_get_key
+    ldx cen_count           // Restore count after GETIN
 
     // RETURN = accept (if at least 1 char)
     cmp #$0d
@@ -516,6 +518,7 @@ create_enter_name:
     cpx #0
     beq !name_loop-         // Nothing to delete
     dex
+    stx cen_count
     // Erase char on screen
     dec zp_cursor_col
     lda #$20                // Space
@@ -559,6 +562,7 @@ create_enter_name:
     // Display it
     jsr screen_put_char
     inx
+    stx cen_count
     jmp !name_loop-
 
 !name_done:
@@ -566,6 +570,8 @@ create_enter_name:
     lda #0
     sta player_data + PL_NAME,x
     rts
+
+cen_count: .byte 0          // Name char count (survives GETIN clobber)
 
 // ============================================================
 // Initialize character
