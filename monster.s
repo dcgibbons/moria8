@@ -9,7 +9,10 @@
 // ============================================================
 .const MAX_MONSTERS      = 32
 .const MONSTER_ENTRY_SIZE = 12
-.const CREATURE_COUNT    = 20
+.const DUNGEON_CREATURES = 20   // Types 0-19: dungeon monsters
+.const TOWN_CREATURE_BASE = 20 // First town creature index
+.const TOWN_CREATURE_COUNT = 6 // Types 20-25: townspeople
+.const CREATURE_COUNT    = 26  // Total creature types
 .const EMPTY_SLOT        = $ff
 
 // Attack type constants
@@ -42,7 +45,8 @@
 
 // ============================================================
 // Embedded creature data — Struct-of-Arrays
-// 20 creature types matching umoria early game (levels 1-5)
+// Types 0-19: dungeon monsters (levels 1-5)
+// Types 20-25: townspeople (level 0, umoria town mobs)
 // ============================================================
 
 // Display character (screen codes)
@@ -67,6 +71,13 @@ cr_display:
     .byte $03   // 17: C (Metallic green centipede)
     .byte $0d   // 18: M (Yellow mold)
     .byte $01   // 19: A (Giant black ant)
+    // Town creatures (P = person, $10)
+    .byte $10   // 20: P (Filthy street urchin)
+    .byte $10   // 21: P (Singing happy drunk)
+    .byte $10   // 22: P (Mangy leper)
+    .byte $10   // 23: P (Squint-eyed rogue)
+    .byte $10   // 24: P (Mean mercenary)
+    .byte $10   // 25: P (Boil-covered wretch)
 
 // Color
 cr_color:
@@ -90,12 +101,19 @@ cr_color:
     .byte COL_GREEN     // 17: Metallic green centipede
     .byte COL_YELLOW    // 18: Yellow mold
     .byte COL_LGREY     // 19: Giant black ant
+    // Town creatures
+    .byte COL_ORANGE    // 20: Filthy street urchin
+    .byte COL_LGREY     // 21: Singing happy drunk
+    .byte COL_GREEN     // 22: Mangy leper
+    .byte COL_RED       // 23: Squint-eyed rogue
+    .byte COL_YELLOW    // 24: Mean mercenary
+    .byte COL_PURPLE    // 25: Boil-covered wretch
 
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
     .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
     .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1
-//         ^White Worm  ^Shrieker ^Eye  ^Poltergeist    ^GreenWorm     ^Copper ^Mold    ^YMold
+    .byte 1, 0, 0, 1, 1, 0              // Town creatures
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01
@@ -104,54 +122,63 @@ cr_speed:
 cr_mflags:
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
-//                                 ^Shrieker         ^Floating Eye
-//                                                    ^Grey Mold       ^Yellow Mold
+    .byte  0,  0,  0,  0,  0,  0                  // Town: all mobile
 
 // Creature level
 cr_level:
     .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4
     .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2
+    .byte 0, 0, 0, 0, 0, 0              // Town: level 0
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
     .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3
     .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3
+    .byte 1, 1, 1, 2, 3, 1              // Town creatures
 
 // Hit dice sides
 cr_hd_sides:
     .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8
     .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6
+    .byte 4, 2, 1, 8, 8, 2              // Town creatures
 
 // Armor class
 cr_ac:
     .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16
     .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20
+    .byte  2, 1, 1, 8, 16, 1            // Town creatures
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
     .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30
     .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80
+    .byte 10,  0, 40,  0,  0, 40         // Town: rogue/merc awake, others light sleep
 
 // Area affect radius (awareness factor)
 cr_aaf:
     .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12
     .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8
+    .byte 12,  4,  6, 20, 20,  6           // Town creatures
 
 // Experience value (16-bit, all <=35 for tier 0 — hi bytes all 0)
 cr_xp_lo:
     .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8
     .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8
+    .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
 cr_xp_hi:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
 
 // Attack dice (slot 0 only for now; zeroed slots 1-3)
 cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    .byte 1, 1, 1, 1, 2, 1              // Town creatures
 cr_atk0_sides:
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
     .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4
+    .byte 2, 1, 1, 6, 6, 1              // Town creatures
 
 // Attack type for slot 0
 cr_atk0_type:
@@ -159,25 +186,29 @@ cr_atk0_type:
     .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL
     .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL
     .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // Town: all normal
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
     .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
     .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0
+    .byte          0, 0, 0, 0, 0, 0           // Town: no second attack
 cr_atk1_dice:
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0
     .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0                    // Town
 cr_atk1_sides:
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0                    // Town
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:
-    .fill CREATURE_COUNT, 0     // Tier 0: no spellcasters
+    .fill CREATURE_COUNT, 0     // No spellcasters (including town)
 
 // Spell flags (bitmask of available spells)
 cr_spell_flags:
-    .fill CREATURE_COUNT, 0     // Tier 0: all zero
+    .fill CREATURE_COUNT, 0     // All zero (including town)
 
 // Name pointer tables
 cr_name_lo:
@@ -185,11 +216,13 @@ cr_name_lo:
     .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9
     .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14
     .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19
+    .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25
 cr_name_hi:
     .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4
     .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9
     .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19
+    .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25
 
 // Name strings (screen codes, null-terminated)
 crn_0:  .text "WHITE HARPY" ; .byte 0
@@ -212,6 +245,13 @@ crn_16: .text "GREY MOLD" ; .byte 0
 crn_17: .text "METALLIC GREEN CENTIPEDE" ; .byte 0
 crn_18: .text "YELLOW MOLD" ; .byte 0
 crn_19: .text "GIANT BLACK ANT" ; .byte 0
+// Town creatures
+crn_20: .text "FILTHY STREET URCHIN" ; .byte 0
+crn_21: .text "SINGING HAPPY DRUNK" ; .byte 0
+crn_22: .text "MANGY LEPER" ; .byte 0
+crn_23: .text "SQUINT-EYED ROGUE" ; .byte 0
+crn_24: .text "MEAN MERCENARY" ; .byte 0
+crn_25: .text "BOIL-COVERED WRETCH" ; .byte 0
 
 // ============================================================
 // Active monster table — 32 slots x 12 bytes
@@ -346,8 +386,8 @@ find_monster_floor:
     rts
 
 // pick_creature_type — Pick random creature type for current dungeon level
-// Range: cr_level in [max(1, dlvl-2), dlvl+3], capped to CREATURE_COUNT
-// Output: A = creature type index
+// Range: cr_level in [max(1, dlvl-2), dlvl+3], from dungeon creatures only
+// Output: A = creature type index (0-19)
 // Clobbers: X, Y, zp_temp3, zp_temp4
 pick_creature_type:
     // Compute min_level = max(1, dlvl - 2)
@@ -370,8 +410,8 @@ pick_creature_type:
     sta pct_max_lvl
 
 !pct_retry:
-    // Pick random creature index [0, CREATURE_COUNT-1]
-    lda #CREATURE_COUNT
+    // Pick random creature index [0, DUNGEON_CREATURES-1]
+    lda #DUNGEON_CREATURES
     jsr rng_range
     tax                         // X = candidate type
 
@@ -494,16 +534,17 @@ monster_spawn_one:
     rts
 
 // monster_spawn_level — Spawn monsters for current dungeon level
-// Count = 2 + rng(4) + dlvl/3, capped at 14. Town (dlvl=0) = 0.
+// Dungeon: count = 2 + rng(4) + dlvl/3, capped at 14.
+// Town (dlvl=0): 4 + rng(4) townspeople.
 // Clobbers: everything
 monster_spawn_level:
     // Initialize table
     jsr monster_init_table
 
-    // Town = no monsters
+    // Town = townspeople
     lda zp_player_dlvl
     bne !msl_dungeon+
-    rts
+    jmp monster_spawn_town
 
 !msl_dungeon:
     // Base count = 2
@@ -564,6 +605,43 @@ monster_spawn_level:
 
 msl_target: .byte 0
 msl_idx:    .byte 0
+
+// monster_spawn_town — Spawn 4-7 townspeople for dlvl=0
+// Clobbers: everything
+monster_spawn_town:
+    // Count = 4 + rng(4) = [4, 7]
+    lda #4
+    jsr rng_range               // [0, 3]
+    clc
+    adc #4                      // [4, 7]
+    sta msl_target
+
+    lda #0
+    sta msl_idx
+
+!mst_loop:
+    lda msl_idx
+    cmp msl_target
+    bcs !mst_done+
+
+    // Find a floor tile
+    jsr find_monster_floor
+    bcc !mst_skip+
+
+    // Pick random town creature [TOWN_CREATURE_BASE, TOWN_CREATURE_BASE+5]
+    lda #TOWN_CREATURE_COUNT    // 6
+    jsr rng_range               // [0, 5]
+    clc
+    adc #TOWN_CREATURE_BASE     // [20, 25]
+
+    jsr monster_spawn_one
+
+!mst_skip:
+    inc msl_idx
+    jmp !mst_loop-
+
+!mst_done:
+    rts
 
 // monster_find_at — Find monster at map position
 // Input:  A = x, Y = y
@@ -651,7 +729,7 @@ monster_remove:
 // Compile-time validation
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
-.assert "Creature count", CREATURE_COUNT, 20
+.assert "Creature count", CREATURE_COUNT, 26
 .assert "cr_display size", cr_color - cr_display, CREATURE_COUNT
 .assert "cr_color size", cr_speed - cr_color, CREATURE_COUNT
 .assert "cr_speed size", cr_mflags - cr_speed, CREATURE_COUNT

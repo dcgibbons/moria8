@@ -383,15 +383,26 @@ test_start:
     sta $0408
 
     // ==========================================
-    // Test 10: monster_spawn_level skips town (dlvl=0)
+    // Test 10: monster_spawn_level spawns townspeople (dlvl=0)
+    // Count should be 4-7 (4 + rng(4))
     // ==========================================
 !t10:
     lda #0
     sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr level_generate          // Need a town map for floor tiles
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
     jsr monster_spawn_level
 
+    // Count should be >= 4 and <= 7
     lda zp_mon_count
-    bne !t10_fail+
+    cmp #4
+    bcc !t10_fail+
+    cmp #8
+    bcs !t10_fail+
     lda #$01
     sta $0409
     jmp !tests_done+
