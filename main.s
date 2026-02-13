@@ -54,6 +54,7 @@
 #import "turn.s"
 #import "store.s"
 #import "ui_store.s"
+#import "save.s"
 
 // ============================================================
 // Entry point
@@ -106,7 +107,45 @@ entry:
     sta zp_cursor_col
     jsr screen_put_string
 
-    // "PRESS ANY KEY" prompt
+    // Check for existing save file
+    jsr check_savefile_exists
+    bcc !no_save_exists+
+
+    // --- Save exists: show New/Load menu ---
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #12
+    sta zp_cursor_row
+    lda #9                  // Center: (40-22)/2 = 9
+    sta zp_cursor_col
+    lda #<save_newgame_str
+    sta zp_ptr0
+    lda #>save_newgame_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+!title_menu_loop:
+    jsr input_get_key
+    cmp #$4e                // 'N' — new game
+    beq !title_new+
+    cmp #$4c                // 'L' — load game
+    beq !title_load+
+    jmp !title_menu_loop-
+
+!title_load:
+    jsr rng_seed
+    lda #SFX_PICKUP
+    jsr sound_play
+    jsr msg_init
+    jsr load_game
+    bcc !title_load_fail+
+    jmp load_resume_game
+!title_load_fail:
+    // Load failed — fall through to new game
+    jmp !title_new+
+
+!no_save_exists:
+    // --- No save: original "PRESS ANY KEY" flow ---
     lda #COL_LGREY
     sta zp_text_color
     lda #12
@@ -119,9 +158,9 @@ entry:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Wait for keypress (adds entropy to RNG seed from timing)
     jsr input_get_key
 
+!title_new:
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
 
@@ -171,7 +210,7 @@ entry:
     jsr store_init_all
 
     // --- Main game loop ---
-    // Initialize dungeon level and generate map
+    // Initialize dungeon level and generate map (new game only)
     lda #0
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
@@ -197,6 +236,37 @@ entry:
     lda #<welcome_str
     sta zp_ptr0
     lda #>welcome_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    jmp !main_loop+
+
+// ============================================================
+// load_resume_game — Entry point after successful load
+// ============================================================
+load_resume_game:
+    // Recalculate derived stats from loaded base values
+    jsr player_calc_stats
+    jsr player_calc_hp
+
+    // Stop any running
+    lda #$ff
+    sta zp_run_dir
+
+    // Re-init SID
+    jsr sound_init
+
+    // Clear screen and render the loaded level
+    jsr screen_clear
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+
+    // Welcome back message
+    lda #<save_welcome_str
+    sta zp_ptr0
+    lda #>save_welcome_str
     sta zp_ptr0_hi
     jsr msg_print
 
@@ -241,6 +311,13 @@ entry:
     jsr input_get_command
 
     // --- Dispatch command ---
+
+    // Save and quit?
+    cmp #CMD_SAVE
+    bne !not_save+
+    jsr save_game
+    jmp !quit+
+!not_save:
 
     // Quit?
     cmp #CMD_QUIT
@@ -948,6 +1025,8 @@ run_step:
     jmp !main_loop-
 
 !player_died:
+    // Delete save file on death (permadeath)
+    jsr delete_savefile
     // Death screen
     jsr screen_clear
     lda #10

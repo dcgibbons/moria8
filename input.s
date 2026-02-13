@@ -177,6 +177,7 @@ key_map_petscii:
     .byte $c3   // SHIFT+C — character info
     .byte $d1   // SHIFT+Q — quit
     .byte $c5   // SHIFT+E — eat
+    .byte $d3   // SHIFT+S — save and quit
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -230,6 +231,7 @@ key_map_cmd:
     .byte CMD_CHAR_INFO
     .byte CMD_QUIT
     .byte CMD_EAT
+    .byte CMD_SAVE
     // Shifted vi-keys (running)
     .byte CMD_RUN_N
     .byte CMD_RUN_S
