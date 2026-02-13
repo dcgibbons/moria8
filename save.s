@@ -11,7 +11,8 @@
 // ============================================================
 // Constants
 // ============================================================
-.const SAVE_FILE_NUM  = 2       // Logical file number for save data
+.const SAVE_FILE_NUM  = 2       // Logical file number for save/load data
+.const CHECK_FILE_NUM = 3       // Separate file number for check_savefile_exists
 .const SAVE_DEVICE    = 8       // Device 8 = first disk drive
 .const SAVE_SEC_ADDR  = 2       // Secondary address for write
 .const LOAD_SEC_ADDR  = 0       // Secondary address for read
@@ -697,7 +698,7 @@ load_read_byte:
 // Clobbers: A, X, Y
 // ============================================================
 delete_savefile:
-    // Open command channel
+    // Open command channel — scratch command executes on OPEN
     lda #scratch_cmd_len
     ldx #<scratch_cmd
     ldy #>scratch_cmd
@@ -707,9 +708,10 @@ delete_savefile:
     ldy #CMD_CHANNEL
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
-    // Close immediately (command executes on OPEN)
+    bcs !dsf_done+          // OPEN failed — nothing to close
     lda #CMD_CHANNEL
     jsr KERNAL_CLOSE
+!dsf_done:
     jsr KERNAL_CLRCHN
     rts
 
@@ -723,15 +725,15 @@ check_savefile_exists:
     ldx #<check_filename
     ldy #>check_filename
     jsr KERNAL_SETNAM
-    lda #SAVE_FILE_NUM
+    lda #CHECK_FILE_NUM     // Use separate file# to avoid conflict with load_game
     ldx #SAVE_DEVICE
     ldy #LOAD_SEC_ADDR
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
-    bcs !csf_no+            // OPEN itself failed
+    bcs !csf_close_no+      // OPEN failed — still close to clear file table
 
     // Try to read one byte to see if file has data
-    ldx #SAVE_FILE_NUM
+    ldx #CHECK_FILE_NUM
     jsr KERNAL_CHKIN
     bcs !csf_close_no+
 
@@ -740,7 +742,7 @@ check_savefile_exists:
     jsr KERNAL_READST
     sta zp_temp0            // Save status
     jsr KERNAL_CLRCHN
-    lda #SAVE_FILE_NUM
+    lda #CHECK_FILE_NUM
     jsr KERNAL_CLOSE
 
     pla                     // Discard byte read
@@ -753,7 +755,7 @@ check_savefile_exists:
 
 !csf_close_no:
     jsr KERNAL_CLRCHN
-    lda #SAVE_FILE_NUM
+    lda #CHECK_FILE_NUM
     jsr KERNAL_CLOSE
 !csf_no:
     clc                     // No file

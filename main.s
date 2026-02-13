@@ -22,6 +22,27 @@ entry:
     sta $01
     jmp entry_main          // Now code past $A000 is accessible
 
+// Exit trampoline — MUST live below $A000 because it banks BASIC
+// ROM back in. If this ran from $A000+ the CPU would start executing
+// BASIC ROM the instant we set bit 0 of $01.
+exit_trampoline:
+    lda #0
+    sta $d418               // Silence SID
+    lda $01
+    ora #%00000001          // Set bit 0 (LORAM) — bank in BASIC ROM
+    sta $01
+    jsr restore_zp          // restore_zp is at $0822, safe
+    lda #$0e
+    sta $d020               // Restore default border (light blue)
+    lda #$06
+    sta $d021               // Restore default background (blue)
+    lda $d018
+    ora #%00000010          // Lowercase mode (BASIC default)
+    sta $d018
+    lda #$93                // PETSCII clear screen
+    jsr $ffd2               // KERNAL CHROUT
+    rts                     // Return to BASIC
+
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
 .encoding "screencode_upper"
@@ -1053,33 +1074,7 @@ run_step:
 
     // --- Clean exit to BASIC ---
 exit:
-    // Silence SID
-    lda #0
-    sta SID_VOLUME
-
-    // Restore BASIC ROM
-    :BankInBasic()
-
-    // Restore saved zero page
-    jsr restore_zp
-
-    // Restore default screen colors
-    lda #$0e                // Light blue (C64 default border)
-    sta $d020
-    lda #$06                // Blue (C64 default background)
-    sta $d021
-
-    // Restore default character set
-    lda $d018
-    ora #%00000010          // Set bit 1 → lowercase mode (BASIC default)
-    sta $d018
-
-    // Clear screen via KERNAL
-    lda #$93                // PETSCII clear screen
-    jsr $ffd2               // KERNAL CHROUT
-
-    // Return to BASIC
-    rts
+    jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
 
 // ============================================================
 // String data (screen codes via .encoding "screencode_upper")
@@ -1105,3 +1100,7 @@ at_surface_str:
 
 no_stairs_str:
     .text "YOU SEE NO STAIRS HERE." ; .byte 0
+
+// Safety: ensure assembled code doesn't overlap runtime data areas
+program_end:
+.assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true

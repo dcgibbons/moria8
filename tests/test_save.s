@@ -20,6 +20,20 @@ bootstrap:
     sta $01
     jmp test_start
 
+// test_finish — Copy results to $0400 and halt.
+// Must be in low memory (before imports) so BRK address is below $A000.
+// VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
+test_finish:
+    ldx #9
+!copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !copy-
+    brk
+
+.pc = * "Test Body"
+
 #import "../zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
@@ -500,7 +514,7 @@ test_start:
     lda #$01
     jmp !t6_store+
 !t6_fail:
-    lda #$01
+    lda #$00
 !t6_store:
     sta tc_results + 5
 
@@ -658,14 +672,4 @@ t7_set_slot31:
 !t10_store:
     sta tc_results + 9
 
-    // ============================================================
-    // Copy results to $0400 and halt
-    // ============================================================
-    ldx #9
-!copy:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy-
-
-    brk
+    jmp test_finish

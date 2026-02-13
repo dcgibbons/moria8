@@ -1979,7 +1979,7 @@ verify_stairs:
 // Uses: BFS queue at CREATURE_BASE ($A000, safe during generation)
 // ============================================================
 .const BFS_QUEUE = CREATURE_BASE   // $A100 — room for code below
-.const BFS_QUEUE_MAX = 3840        // Max queue entries (64×60 tiles, x,y pairs = 7680 bytes)
+.const BFS_QUEUE_MAX = 2800        // Max queue entries (×2 bytes must fit $AA00–$BFFF)
 
 verify_connectivity:
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---
