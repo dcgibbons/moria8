@@ -22,6 +22,18 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
+    // DEBUG: Force known name bytes to test display
+    lda #$14            // 'T' screen code
+    sta player_data + 0
+    lda #$05            // 'E'
+    sta player_data + 1
+    lda #$13            // 'S'
+    sta player_data + 2
+    lda #$14            // 'T'
+    sta player_data + 3
+    lda #$00
+    sta player_data + 4
+
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all       // Clear row by row (same as help/inventory)
@@ -53,16 +65,24 @@ ui_char_display:
 
     lda #COL_WHITE
     sta zp_text_color
-    // Print name using absolute addressing (avoids pointer indirection)
-    ldx #0
+    // Print name inline — same approach as screen_put_string
+    // (set cursor once, write chars via indirect indexed Y)
+    jsr screen_set_cursor
+    ldy #0
 !ucd_name_loop:
-    lda player_data + PL_NAME,x
+    lda player_data + PL_NAME,y
     beq !ucd_name_done+
-    jsr screen_put_char
-    inx
-    cpx #16
+    sta (zp_screen_lo),y
+    lda zp_text_color
+    sta (zp_color_lo),y
+    iny
+    cpy #16
     bcc !ucd_name_loop-
 !ucd_name_done:
+    tya
+    clc
+    adc zp_cursor_col
+    sta zp_cursor_col
 
     // --- Race / Class ---
     lda #COL_LGREY
