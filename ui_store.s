@@ -10,6 +10,7 @@
 .const PETSCII_S      = $53
 .const PETSCII_Y      = $59
 .const PETSCII_N      = $4e
+.const PETSCII_Q      = $51
 .const PETSCII_ESC    = $1b   // RUN/STOP mapped as ESC
 .const PETSCII_SPACE  = $20
 .const PETSCII_A      = $41
@@ -67,7 +68,9 @@ store_enter:
     jmp !se_loop-
 !se_not_sell:
 
-    // ESC or space = exit
+    // Q, ESC, or space = exit
+    cmp #PETSCII_Q
+    beq !se_exit+
     cmp #PETSCII_ESC
     beq !se_exit+
     cmp #PETSCII_SPACE
@@ -318,7 +321,11 @@ store_buy:
     // Get key
     jsr input_get_key
 
-    // ESC/space = cancel
+    // Q/ESC/space = cancel
+    cmp #PETSCII_Q
+    bne !sb_not_q+
+    rts
+!sb_not_q:
     cmp #PETSCII_ESC
     bne !sb_not_esc+
     rts
@@ -604,7 +611,11 @@ store_sell:
     // Get key
     jsr input_get_key
 
-    // ESC/space = cancel
+    // Q/ESC/space = cancel
+    cmp #PETSCII_Q
+    bne !ss_not_q+
+    rts
+!ss_not_q:
     cmp #PETSCII_ESC
     bne !ss_not_esc+
     rts
@@ -809,7 +820,7 @@ uis_gold_str:
 uis_big_gold_str:
     .text ">65535" ; .byte 0
 uis_menu_str:
-    .text "B)UY  S)ELL  ESC)EXIT" ; .byte 0
+    .text "B)UY  S)ELL  Q)UIT" ; .byte 0
 uis_buy_which_str:
     .text "BUY WHICH ITEM? (A-L)" ; .byte 0
 uis_price_str:
