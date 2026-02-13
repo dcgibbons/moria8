@@ -2416,6 +2416,176 @@ store.s. These are both straightforward fixes.
 
 ---
 
+### Review Pass 16 — Save/Load System Review (Phase 9.1) (2026-02-13)
+
+Reviewed save.s (1118 lines), main.s integration (title screen, load_resume_game),
+and supporting files (memory.s, zeropage.s, player.s, dungeon_gen.s, dungeon_render.s).
+Commits: `24b2df8` (initial save/load), `3cfa751` (crash fixes).
+
+**Context:** User reports loading a save game crashes. The crash fix commit `3cfa751`
+already addressed several issues: entry point under BASIC ROM, CREATURE_BASE overlap
+with program code ($A100 → $AA00), file number conflict in check_savefile_exists, and
+delete_savefile closing when OPEN failed. This review looks for remaining issues.
+
+---
+
+**RP16-1 (HIGH — player_sync_from_zp doesn't save light_radius; load overwrites it)**
+
+In `save_game` (save.s:164), `player_sync_from_zp` is called before saving. But
+`player_sync_from_zp` (player.s:153-183) does NOT copy `zp_light_radius` ($4B) back
+to `player_data + PL_LIGHT_RAD`. It saves X, Y, HP, MHP, MP, level, dlvl, AC, and
+food — but not light_radius, STR/INT/WIS/DEX/CON/CHR, race, or class.
+
+The ZP state block ($40-$5F) IS saved, which includes $4B (correct light_radius value).
+But during `load_game`, the load order is:
+1. Step 3: load ZP $40-$5F from file → $4B gets correct saved value
+2. Step s (save.s:499): `player_sync_to_zp` → overwrites $4B with
+   `player_data + PL_LIGHT_RAD` (stale struct value)
+
+Since PL_LIGHT_RAD is only set during player creation (via `player_sync_to_zp` copying
+it from the struct), and the main.s new-game code sets `zp_light_radius = 1` directly
+in ZP (main.s:224) without updating the struct, PL_LIGHT_RAD in the struct is likely 0.
+
+**Result:** After loading, `zp_light_radius = 0`. `update_visibility` creates a 0-tile
+visibility radius — the player can only see their own tile. The screen appears almost
+entirely blank. While this doesn't cause a CPU crash, it makes the game unplayable and
+likely appears as a "crash" to the user.
+
+**Fix (two options):**
+- **(A)** Add `lda zp_light_radius / sta player_data + PL_LIGHT_RAD` to
+  `player_sync_from_zp`, so the struct always has the current value.
+- **(B)** In `load_game`, move `player_sync_to_zp` BEFORE loading ZP $40-$5F, so the
+  ZP state block has final authority. But this breaks other fields — option A is better.
+- Also add the same line to `main.s` new-game init (after `lda #1 / sta zp_light_radius`,
+  add `sta player_data + PL_LIGHT_RAD`).
+
+---
+
+**RP16-2 (HIGH — save filename is "MORIA SAV", should be "moria.sav")**
+
+All four filename strings in save.s use the PETSCII sequence for "MORIA SAV" (with
+space, no dot). The user requires the filename to be "moria.sav". On the 1541, filenames
+can contain dots and lowercase letters. PETSCII lowercase letters are $41-$5A (same
+codes as uppercase in PETSCII — the 1541 stores them as-is).
+
+Affected strings (save.s lines 77-99):
+- `save_filename`: `@0:MORIA SAV,S,W` → `@0:MORIA.SAV,S,W`
+- `load_filename`: `0:MORIA SAV,S,R` → `0:MORIA.SAV,S,R`
+- `scratch_cmd`: `S0:MORIA SAV` → `S0:MORIA.SAV`
+- `check_filename`: `0:MORIA SAV,S,R` → `0:MORIA.SAV,S,R`
+
+Fix: Replace `$20` (space) with `$2E` (PETSCII dot) in all four strings. Lengths
+remain the same.
+
+---
+
+**RP16-3 (MEDIUM — READST EOF bit not checked during load)**
+
+`load_read_block` (save.s:651-654) and `load_read_byte` (save.s:688-691) check
+READST with `and #$03` (timeout/error bits only). They do not check bit 6 ($40)
+which indicates EOF. If the save file is truncated, CHRIN will return $0D or
+unpredictable values after EOF without flagging an error.
+
+The checksum verification (save.s:484-493) provides a secondary defense — truncated
+data will almost certainly fail the checksum. However, defense-in-depth requires
+detecting the I/O error at the source.
+
+Fix: Change mask from `$03` to `$43` to include EOF detection. This affects 4 locations:
+save.s lines 567, 605, 653, 689 (write-side $03 checks can stay as-is since writes
+don't encounter EOF).
+
+---
+
+**RP16-4 (MEDIUM — no RLE decompression output bounds check)**
+
+`rle_decompress_map` (save.s:1021-1094) writes decompressed data to `MAP_BASE`
+($C000) using `zp_ptr1` without checking that output doesn't exceed `MAP_SIZE` (3840
+bytes). If the compressed data is corrupt (despite passing checksum), the output could
+write past `MAP_END` ($CEFF) into `FLOOR_ITEM_BASE` ($CF00), corrupting floor item
+data loaded moments earlier.
+
+The checksum should catch most corruption, but this is a defense-in-depth issue.
+
+Fix: Add a decompressed-byte counter. After decompression, assert the counter equals
+MAP_SIZE. Or add bounds checking on `zp_ptr1_hi` during the write loop.
+
+---
+
+**RP16-5 (MEDIUM — player_sync_from_zp / player_sync_to_zp asymmetry)**
+
+`player_sync_to_zp` (player.s:106-151) copies 20 fields from struct to ZP:
+map X/Y, HP, MHP, MP, MMP, level, dlvl, AC, STR/INT/WIS/DEX/CON/CHR, race, class,
+food, and light_radius.
+
+`player_sync_from_zp` (player.s:153-183) copies only 13 fields back:
+map X/Y, HP, MHP, MP, MMP, level, dlvl, AC, food.
+
+Missing from sync_from_zp: STR/INT/WIS/DEX/CON/CHR (recalculated — OK), race/class
+(immutable — OK), **light_radius** (mutable — BUG, see RP16-1).
+
+The asymmetry means any future mutable field added to sync_to_zp but not sync_from_zp
+will silently break save/load. Consider adding a comment documenting which fields are
+intentionally excluded and why, or making the functions fully symmetric.
+
+---
+
+**RP16-6 (LOW — ZP $60-$8F not saved, mostly OK but fragile)**
+
+The save system saves ZP $40-$5F (game state + effect timers) and the player struct
+($2B-$3F via sync). But ZP $60-$8F (viewport, sound, monster AI, combat, inventory
+scratch) is not saved. This is currently safe because:
+- Viewport ($60-$63): recalculated by `viewport_update`
+- Sound ($6C-$6F): reinitialized by `sound_init`
+- Monster/combat/inv scratch ($70-$8F): transient, recalculated on use
+- Dirty tiles ($69-$6B): `render_viewport` does full redraw, not dirty update
+
+But `zp_ui_dirty` ($19) and `zp_msg_flags` ($18) are in the safe zone ($13-$19) which
+is NOT covered by either the ZP save block ($40-$5F) or player sync ($2B-$3F). After
+load, `msg_init` resets $18, and `zp_ui_dirty` should be 0 (no pending updates). This
+is currently safe but the gap should be documented.
+
+---
+
+**RP16-7 (LOW — rle_flush_literals page-crossing handler tests X not Y)**
+
+In `rle_flush_literals` (save.s:978-988), the page-crossing code:
+```
+    sta (zp_ptr1),y
+    iny
+    inx
+    bne !rfl_copy-          // Tests INX result, not INY
+    inc zp_ptr1_hi
+```
+
+The `bne` tests the Z flag from `inx`, not `iny`. The comment says "Handle page
+crossing in dest" but the actual page crossing (Y wrapping from $FF to $00) is not
+detected. This is currently harmless because the maximum literal length is 128, so Y
+ranges from 1 to 129 ($81) and never wraps. But the logic is misleading and would
+break if RLE_LITERAL_MAX were ever increased above 254.
+
+---
+
+#### Summary of Review Pass 16 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP16-1 | **HIGH** | player_sync_from_zp doesn't save light_radius — load reverts to 0, screen blank | Easy — add light_radius to sync_from_zp + init struct in main.s | **Fixed** |
+| RP16-2 | **HIGH** | Filename "MORIA SAV" should be "moria.sav" per user requirement | Trivial — change $20 to $2E in 4 filename strings | **Fixed** |
+| RP16-3 | **MEDIUM** | READST EOF bit ($40) not checked — truncated files not detected at I/O level | Easy — change mask from $03 to $43 in load_read_block/byte | **Fixed** |
+| RP16-4 | **MEDIUM** | No RLE decompression output bounds check — corrupt data writes past MAP_END | Medium — add decompressed-byte counter or ptr bounds check | **Fixed** |
+| RP16-5 | **MEDIUM** | sync_from_zp / sync_to_zp asymmetry — light_radius (and future fields) lost | Easy — document intentional exclusions, fix light_radius | **Fixed** |
+| RP16-6 | LOW | ZP $60-$8F and $13-$19 not saved — currently safe, gaps undocumented | Trivial — add comments documenting the gap | **Fixed** |
+| RP16-7 | LOW | rle_flush_literals page-crossing tests X not Y — dead code, misleading | Trivial — fix or add comment noting it's intentionally dead | **Fixed** |
+
+**Likely crash cause:** RP16-1. After loading, `zp_light_radius` reverts to 0 (struct
+value), making the screen appear almost completely blank. The player sees only their own
+tile — this effectively looks like a crash or freeze. The root cause is that
+`player_sync_from_zp` doesn't save light_radius to the struct, so when
+`player_sync_to_zp` runs during load and copies the stale struct value (0) to ZP, it
+overwrites the correct value that was loaded from the ZP state block.
+
+---
+
 ## Phase 7 — Magic System: Detailed Implementation Plan
 
 ### Current State Summary

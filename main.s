@@ -222,6 +222,7 @@ entry_main:
     sta inv_flags + EQUIP_LIGHT
     lda #1
     sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
 
     // Ration of food (type 15) in carried slot 0
     lda #15

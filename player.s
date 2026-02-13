@@ -152,6 +152,9 @@ player_sync_to_zp:
 
 // player_sync_from_zp — Copy ZP hot fields back to struct
 // Called before saving.
+// Note: intentionally does NOT sync STR/INT/WIS/DEX/CON/CHR (recalculated
+// by player_calc_stats) or race/class (immutable after creation).
+// light_radius IS synced because it's mutable (torch/lamp/spell).
 // Preserves: nothing
 player_sync_from_zp:
     lda zp_player_x
@@ -180,6 +183,8 @@ player_sync_from_zp:
     sta player_data + PL_FOOD_LO
     lda zp_player_food_hi
     sta player_data + PL_FOOD_HI
+    lda zp_light_radius
+    sta player_data + PL_LIGHT_RAD
     rts
 
 // player_calc_stats — Recalculate current stats from base + modifiers

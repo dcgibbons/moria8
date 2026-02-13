@@ -22,6 +22,12 @@
 .const SAVE_VERSION    = $01
 
 // ZP game state range to save ($40–$5f = 32 bytes)
+// Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
+//   ZP $40-$5F saved directly (turn counter, effect timers, game flags).
+//   ZP $1A-$1D saved directly (RNG state).
+// NOT saved (intentionally):
+//   $13-$19: zp_ui_dirty/zp_msg_flags — reset by msg_init/status_draw on load.
+//   $60-$8F: viewport/sound/combat scratch — recalculated or transient.
 .const ZP_STATE_START = $40
 .const ZP_STATE_SIZE  = 32      // $40–$5f inclusive
 
@@ -77,24 +83,24 @@ rle_lit_buf:    .fill 128, 0
 save_filename:
     .byte $40               // "@" — replace existing file prefix
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $20, $53, $41, $56  // "MORIA SAV"
+    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
 .label save_filename_len = * - save_filename
 
 load_filename:
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $20, $53, $41, $56  // "MORIA SAV"
+    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
     .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
 .label load_filename_len = * - load_filename
 
 scratch_cmd:
     .byte $53, $30, $3a     // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $20, $53, $41, $56  // "MORIA SAV"
+    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
 .label scratch_cmd_len = * - scratch_cmd
 
 check_filename:
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $20, $53, $41, $56  // "MORIA SAV"
+    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
     .byte $2c, $53, $2c, $52  // ",S,R"
 .label check_filename_len = * - check_filename
 
@@ -647,9 +653,9 @@ load_read_block:
     bcc !lrb_no_carry+
     inc save_cksum_hi
 !lrb_no_carry:
-    // Check status
+    // Check status (bit 6 = EOF, bits 1-0 = timeout/error)
     jsr KERNAL_READST
-    and #$03
+    and #$43
     beq !lrb_ok+
     inc save_io_error
 !lrb_ok:
@@ -684,9 +690,9 @@ load_read_byte:
     bcc !lrby_no_carry+
     inc save_cksum_hi
 !lrby_no_carry:
-    // Check status
+    // Check status (bit 6 = EOF, bits 1-0 = timeout/error)
     jsr KERNAL_READST
-    and #$03
+    and #$43
     beq !lrby_ok+
     inc save_io_error
 !lrby_ok:
@@ -980,9 +986,10 @@ rle_flush_literals:
     bcs !rfl_copied+
     lda rle_lit_buf,x
     sta (zp_ptr1),y
-    iny
     inx
-    // Handle page crossing in dest
+    iny
+    // Handle dest page crossing (Y wrap from $FF→$00)
+    // Currently dead code: max literal is 128, Y starts at 1, max Y=129.
     bne !rfl_copy-
     inc zp_ptr1_hi
     jmp !rfl_copy-
@@ -1031,6 +1038,10 @@ rle_decompress_map:
     lda #>MAP_BASE
     sta zp_ptr1_hi
 
+    // Reset I/O error flag (bounds check may set this)
+    lda #0
+    sta save_io_error
+
     // Remaining compressed bytes
     lda rle_size_lo
     sta save_count_lo
@@ -1042,6 +1053,9 @@ rle_decompress_map:
     lda save_count_lo
     ora save_count_hi
     beq !rle_d_done+
+    // Abort if output has exceeded MAP_END (corrupt compressed data)
+    lda save_io_error
+    bne !rle_d_done+
 
     // Read header byte
     ldy #0
@@ -1108,10 +1122,16 @@ rle_d_advance_src:
 !rdas_done:
     rts
 
-// Helper: advance dest pointer by 1
+// Helper: advance dest pointer by 1, check bounds
 rle_d_advance_dst:
     inc zp_ptr1
     bne !rdad_no+
     inc zp_ptr1_hi
 !rdad_no:
+    // Bounds check: dest must not exceed MAP_END ($CEFF)
+    lda zp_ptr1_hi
+    cmp #>(MAP_END + 1)     // $CF = past end of map
+    bcc !rdad_ok+
+    inc save_io_error       // Flag overflow — corrupt compressed data
+!rdad_ok:
     rts
