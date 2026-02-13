@@ -251,6 +251,8 @@ stat_work: .byte 0
 //        stat_work = current stat value
 // Output: stat_work = modified stat
 // Clobbers: X, zp_temp3, zp_temp4, zp_math*
+// Note: Uses am_count instead of X for loop counter because
+//       increment_stat/decrement_stat clobber X via math_dice.
 apply_modifier:
     cmp #0
     beq !done+
@@ -259,24 +261,26 @@ apply_modifier:
     eor #$ff
     clc
     adc #1
-    tax
+    sta am_count
 !dec_loop:
     lda stat_work
     jsr decrement_stat
     sta stat_work
-    dex
+    dec am_count
     bne !dec_loop-
     rts
 !positive:
-    tax
+    sta am_count
 !inc_loop:
     lda stat_work
     jsr increment_stat
     sta stat_work
-    dex
+    dec am_count
     bne !inc_loop-
 !done:
     rts
+
+am_count: .byte 0  // Loop counter for apply_modifier (safe from X clobber)
 
 // increment_stat — Increment a stat using umoria's randomized step logic
 // Input: A = current stat value (3-118)
