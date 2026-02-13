@@ -1062,6 +1062,13 @@ item_drop:
     // Wait for keypress
     jsr input_get_key
 
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !idr_not_inv+
+    jsr show_inv_and_restore
+    jmp item_drop
+!idr_not_inv:
+
     // Check for ESC ($03) or space ($20) -> cancel
     cmp #$03
     beq !idr_cancel+

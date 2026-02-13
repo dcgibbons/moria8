@@ -59,6 +59,20 @@ equip_slot_for_cat:
 // Subroutines
 // ============================================================
 
+// show_inv_and_restore — Show inventory overlay, wait for key, restore screen
+// Used by item selection dialogs when player presses '?'.
+// Preserves: nothing
+show_inv_and_restore:
+    jsr ui_inv_display
+    jsr input_get_key
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    rts
+
 // item_wear — Wear/wield an item from carried inventory
 // Prompts "WEAR WHICH ITEM (A-V)?", waits for keypress.
 // Output: carry set = turn consumed, carry clear = cancelled
@@ -73,6 +87,13 @@ item_wear:
 
     // Wait for keypress
     jsr input_get_key
+
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !iw_not_inv+
+    jsr show_inv_and_restore
+    jmp item_wear
+!iw_not_inv:
 
     // Check for ESC ($03) or space ($20) -> cancel
     cmp #$03
@@ -252,6 +273,13 @@ item_takeoff:
 
     // Wait for keypress
     jsr input_get_key
+
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !ito_not_inv+
+    jsr show_inv_and_restore
+    jmp item_takeoff
+!ito_not_inv:
 
     // Check for ESC or space -> cancel
     cmp #$03
@@ -637,6 +665,13 @@ item_quaff:
     // Wait for keypress
     jsr input_get_key
 
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !iq_not_inv+
+    jsr show_inv_and_restore
+    jmp item_quaff
+!iq_not_inv:
+
     // Check for ESC ($03) or space ($20) -> cancel
     cmp #$03
     beq !iq_cancel_tramp+
@@ -1011,6 +1046,13 @@ item_read_scroll:
     // Wait for keypress
     jsr input_get_key
 
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !irs_not_inv+
+    jsr show_inv_and_restore
+    jmp !irs_can_see-
+!irs_not_inv:
+
     // Check for ESC or space -> cancel
     cmp #$03
     beq !irs_cancel_tramp+
@@ -1369,6 +1411,13 @@ item_aim_wand:
     // Wait for keypress
     jsr input_get_key
 
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !iaw_not_inv+
+    jsr show_inv_and_restore
+    jmp item_aim_wand
+!iaw_not_inv:
+
     // Check for ESC or space -> cancel
     cmp #$03
     beq !iaw_cancel_tramp+
@@ -1538,6 +1587,13 @@ item_use_staff:
 
     // Wait for keypress
     jsr input_get_key
+
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !ius_not_inv+
+    jsr show_inv_and_restore
+    jmp item_use_staff
+!ius_not_inv:
 
     // Check for ESC or space -> cancel
     cmp #$03
@@ -1768,6 +1824,13 @@ item_gain_spell:
     jsr msg_print
 
     jsr input_get_key
+
+    // '?' shows inventory and re-prompts
+    cmp #$3f
+    bne !igs_not_inv+
+    jsr show_inv_and_restore
+    jmp !igs_can_cast-
+!igs_not_inv:
 
     // ESC or space → cancel
     cmp #$20
