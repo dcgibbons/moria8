@@ -184,6 +184,9 @@ entry:
     jsr item_spawn_level
     jsr update_visibility       // Reveal starting area
 
+    // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
+    jsr sound_init
+
     // Clear screen and do initial render
     jsr screen_clear
     jsr viewport_update
