@@ -10,9 +10,11 @@
 .const MAX_MONSTERS      = 32
 .const MONSTER_ENTRY_SIZE = 12
 .const DUNGEON_CREATURES = 20   // Types 0-19: dungeon monsters
-.const TOWN_CREATURE_BASE = 20 // First town creature index
+.const TOWN_CREATURE_BASE = 20 // First town creature index (must == DUNGEON_CREATURES)
 .const TOWN_CREATURE_COUNT = 6 // Types 20-25: townspeople
 .const CREATURE_COUNT    = 26  // Total creature types
+.assert "Town creatures start after dungeon creatures", TOWN_CREATURE_BASE, DUNGEON_CREATURES
+.assert "Creature count = dungeon + town", CREATURE_COUNT, DUNGEON_CREATURES + TOWN_CREATURE_COUNT
 .const EMPTY_SLOT        = $ff
 
 // Attack type constants

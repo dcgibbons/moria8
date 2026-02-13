@@ -32,9 +32,9 @@ store_base_idx:
 // Store 4 Alchemy:  POTION(10)                = $0400
 // Store 5 Magic:    WAND(14), STAFF(15), RING(12) = $D000
 store_cat_mask_lo:
-    .byte <$0300, <$20F8, <$0004, <$0C00, <$0400, <$F000
+    .byte <$0300, <$00F8, <$0004, <$0C00, <$0400, <$F000
 store_cat_mask_hi:
-    .byte >$0300, >$20F8, >$0004, >$0C00, >$0400, >$F000
+    .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000
 
 // Fallback items per store (used when rejection sampling fails)
 store_fallback:
@@ -432,8 +432,6 @@ price_add_p1_bonus:
     cmp #ICAT_GLOVES
     beq !pap_equip+
     cmp #ICAT_BOOTS
-    beq !pap_equip+
-    cmp #ICAT_BOOK
     beq !pap_equip+
 
     // Check wand/staff
