@@ -22,18 +22,6 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
-    // DEBUG: Force known name bytes to test display
-    lda #$14            // 'T' screen code
-    sta player_data + 0
-    lda #$05            // 'E'
-    sta player_data + 1
-    lda #$13            // 'S'
-    sta player_data + 2
-    lda #$14            // 'T'
-    sta player_data + 3
-    lda #$00
-    sta player_data + 4
-
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all       // Clear row by row (same as help/inventory)
