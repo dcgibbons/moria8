@@ -428,10 +428,19 @@ Hunger system functional.
 
 | # | File | What it does | Tests |
 |---|---|---|---|
-| 9.1 | `save.s` | Save game: write player struct, current dungeon map, active monsters, floor item table, inventory, current tier recall data, game flags to sequential file on disk. Compress map (RLE on tile bytes). Estimated save size: ~3–5 KB. | Save and reload match, all floor items and monsters persist |
-| 9.2 | Load game | Load from disk, validate file integrity (checksum), **delete savefile immediately after successful load** (before resuming play — this enforces permadeath and prevents save-scumming via machine reset), restore all state, resume play. | Game resumes correctly, savefile gone |
+| 9.1 | `save.s` ✅ | Save game: write player struct, current dungeon map, active monsters, floor item table, inventory, current tier recall data, game flags to sequential file on disk. Compress map (RLE on tile bytes). Estimated save size: ~3–5 KB. | Save and reload match, all floor items and monsters persist |
+| 9.2 | Load game ✅ | Load from disk, validate file integrity (checksum), **delete savefile immediately after successful load** (before resuming play — this enforces permadeath and prevents save-scumming via machine reset), restore all state, resume play. | Game resumes correctly, savefile gone |
 | 9.3 | Death and scores | Death screen with killer info. High score table (top 10, stored on disk). Score = XP + gold + depth bonus. | Scores persist |
 | 9.4 | Game polish | Title screen with ASCII art (PETSCII). Help screen (command reference). Difficulty tuning pass. | Screens display |
+
+**9.1/9.2 Implementation details:**
+- **New files:** `save.s` (~1,120 lines — KERNAL I/O, RLE compress/decompress, save/load orchestration, checksum, recount routines), `tests/test_save.s` (10 runtime tests: RLE round-trips, checksum, recount_monsters, recount_floor_items)
+- **Modified files:** `main.s` (bootstrap trampoline, exit trampoline, CMD_SAVE dispatch, title screen New/Load menu, load_resume_game, death handler delete, program_end assert), `input.s` (SHIFT+S → CMD_SAVE), `ui_help.s` (SHIFT+S SAVE in help screen), `memory.s` (CREATURE_BASE $A100→$AB00), `dungeon_gen.s` (BFS_QUEUE_MAX 3840→2650), `player.s` (light_radius in sync_from_zp), `run_tests.sh` (added save suite)
+- **Save file format:** Binary sequential file "MORIA.SAV" on device 8. ~4,100 bytes: magic header, player struct, ZP game state, RNG state, inventory, id_known, shuffle tables, store inventory, stairs, rooms, traps, monster table, floor items, RLE-compressed map, 16-bit additive checksum.
+- **RLE compression:** Literal packets (header < $80, len = header+1) and repeat packets (header >= $80, len = header−$7D). Workspace at CREATURE_BASE ($AB00). Output bounds check prevents corrupt data from overwriting FLOOR_ITEM_BASE.
+- **Memory safety:** Bootstrap trampoline at $080E banks out BASIC ROM before entry. Exit trampoline in low RAM banks BASIC ROM back in safely. CREATURE_BASE must be past program_end (compile-time assert). check_savefile_exists uses separate file number (3) to avoid KERNAL file table conflict with load_game (file 2).
+- **Test framework fix:** Tests with BRK above $A000 can false-trigger during BASIC ROM execution in VICE autostart. test_save.s splits into "Test Code" (bootstrap + finish with BRK at $0824) and "Test Body" (imports + logic) segments.
+- **Verification:** `make build` → 61 asserts, 0 failed. `make test` → 14/14 suites pass (save: 10/10). See Review Pass 16 for post-implementation fixes.
 
 **Deliverable:** Complete, playable game loop from title screen through death
 and high scores.
