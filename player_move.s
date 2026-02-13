@@ -462,7 +462,9 @@ run_check_intersection:
     rts
 
 // ============================================================
-// do_look — Look at an adjacent tile and describe what's there
+// do_look — Scan along a direction and describe the first thing found
+// Skips over empty floor tiles. Reports monsters, items, doors, stairs,
+// traps, rubble, or walls. Stops at non-visible tiles or map edge.
 // Free action: does not consume a turn.
 // Output: carry clear always (no turn consumed)
 // ============================================================
@@ -472,7 +474,30 @@ do_look:
     clc
     rts                         // Invalid direction
 !dl_valid:
-    // Read map tile at target
+    // Compute direction delta for multi-tile scanning
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    sta dl_dx
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    sta dl_dy
+
+!dl_scan:
+    // Bounds check (unsigned: negative wraps to >128, > MAP size)
+    lda df_target_x
+    cmp #MAP_COLS
+    bcc !dl_x_ok+
+    jmp !dl_nothing+
+!dl_x_ok:
+    lda df_target_y
+    cmp #MAP_ROWS
+    bcc !dl_y_ok+
+    jmp !dl_nothing+
+!dl_y_ok:
+
+    // Read map tile at (df_target_x, df_target_y)
     ldx df_target_y
     lda map_row_lo,x
     sta zp_ptr0
@@ -480,16 +505,22 @@ do_look:
     sta zp_ptr0_hi
     ldy df_target_x
     lda (zp_ptr0),y
-    sta dl_tile                 // Save full tile byte
+    sta dl_tile
 
-    // Check for monster first (most interesting)
+    // Must be visible (lit or visited)
+    and #(FLAG_LIT | FLAG_VISITED)
+    bne !dl_visible+
+    jmp !dl_nothing+
+!dl_visible:
+
+    // Check for monster (highest priority)
     lda df_target_x
     ldy df_target_y
     jsr monster_find_at
     bcc !dl_no_monster+
 
     // Found a monster — "YOU SEE A <name>."
-    stx dl_scratch              // Save slot index
+    stx dl_scratch
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
@@ -511,7 +542,7 @@ do_look:
 
     // Found an item — get its name
     lda fi_item_id,x
-    jsr item_get_name_ptr       // zp_ptr0 = name ptr
+    jsr item_get_name_ptr
     lda zp_ptr0
     sta dl_name_lo
     lda zp_ptr0_hi
@@ -521,9 +552,12 @@ do_look:
     rts
 
 !dl_no_item:
-    // Check tile type
+    // Check tile type — floor tiles continue, everything else stops
     lda dl_tile
     and #TILE_TYPE_MASK
+
+    cmp #TILE_FLOOR
+    beq !dl_step+               // Empty floor — keep scanning
 
     cmp #TILE_DOOR_OPEN
     bne !dl_not_open+
@@ -561,7 +595,24 @@ do_look:
     ldy #>dl_rubble_str
     jmp dl_print_tile
 !dl_not_rubble:
-    // Wall or floor — nothing special
+    // Wall (any type) — report it
+    lda #<dl_wall_str
+    ldy #>dl_wall_str
+    jmp dl_print_tile
+
+!dl_step:
+    // Step to next tile along scan direction
+    lda df_target_x
+    clc
+    adc dl_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc dl_dy
+    sta df_target_y
+    jmp !dl_scan-
+
+!dl_nothing:
     lda #<dl_nothing_str
     ldy #>dl_nothing_str
     jmp dl_print_tile
@@ -605,6 +656,8 @@ dl_tile:     .byte 0
 dl_scratch:  .byte 0
 dl_name_lo:  .byte 0
 dl_name_hi:  .byte 0
+dl_dx:       .byte 0
+dl_dy:       .byte 0
 
 // Look command strings
 dl_you_see_str:
@@ -621,6 +674,8 @@ dl_trap_str:
     .text "YOU SEE A TRAP." ; .byte 0
 dl_rubble_str:
     .text "YOU SEE RUBBLE." ; .byte 0
+dl_wall_str:
+    .text "YOU SEE A WALL." ; .byte 0
 dl_nothing_str:
     .text "YOU SEE NOTHING SPECIAL." ; .byte 0
 

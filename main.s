@@ -301,8 +301,15 @@ entry:
     jsr player_try_move
     bcc !move_blocked+
 
-    // Move or attack succeeded
+    // Move or attack succeeded — run AI before render so screen
+    // reflects post-AI monster positions (BUG-17 fix)
     jsr trap_check_at_player
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr update_visibility
     jsr viewport_update
 
@@ -336,12 +343,6 @@ entry:
     jsr viewport_update
     jsr render_viewport
 !not_store_entry:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
     jsr status_draw
     jmp !main_loop-
 
@@ -452,14 +453,14 @@ entry:
     jsr door_try_open
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !open_no_turn:
@@ -475,14 +476,14 @@ entry:
     jsr door_try_close
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !close_no_turn:
@@ -495,14 +496,14 @@ entry:
     jsr msg_clear
     jsr do_search
     // Always consumes a turn
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !not_search:
@@ -527,14 +528,14 @@ entry:
     jsr msg_clear
     jsr item_pickup
     bcc !pickup_no_turn+
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !pickup_no_turn:
@@ -547,14 +548,14 @@ entry:
     jsr msg_clear
     jsr item_drop
     bcc !drop_no_turn+
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !drop_no_turn:
@@ -597,14 +598,14 @@ entry:
     jsr msg_clear
     jsr item_wear
     bcc !wear_no_turn+
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !wear_no_turn:
@@ -617,14 +618,14 @@ entry:
     jsr msg_clear
     jsr item_takeoff
     bcc !takeoff_no_turn+
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !takeoff_no_turn:
@@ -674,15 +675,15 @@ entry:
     jsr item_read_scroll
     bcc !read_no_turn+
     // After teleportation or light, need visibility + render
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !read_no_turn:
@@ -695,15 +696,15 @@ entry:
     jsr msg_clear
     jsr item_aim_wand
     bcc !aim_no_turn+
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !aim_no_turn:
@@ -716,15 +717,15 @@ entry:
     jsr msg_clear
     jsr item_use_staff
     bcc !use_no_turn+
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !use_no_turn:
@@ -737,15 +738,15 @@ entry:
     jsr msg_clear
     jsr player_cast_spell
     bcc !cast_no_turn+
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !cast_no_turn:
@@ -763,15 +764,15 @@ entry:
     jsr msg_clear
     jsr player_pray
     bcc !pray_no_turn+
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 !pray_no_turn:
@@ -866,7 +867,13 @@ run_step:
     jsr run_check_stop
     bcs !run_stop_move+         // Should stop → final move
 
-    // Continue running → render + turn
+    // Continue running — run AI before render (BUG-17 fix)
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr update_visibility
     jsr viewport_update
 
@@ -887,12 +894,6 @@ run_step:
     jsr render_viewport
 
 !run_post:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
     jsr status_draw
     jmp !main_loop-
 
@@ -904,21 +905,27 @@ run_step:
 !run_trap_stop:
     lda #$ff
     sta zp_run_dir
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
     jsr turn_post_action
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
     jsr status_draw
     jmp !main_loop-
 
 !run_stop_move:
     lda #$ff
     sta zp_run_dir
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
     jsr update_visibility
     jsr viewport_update
 
@@ -937,12 +944,6 @@ run_step:
 !rsm_full:
     jsr render_viewport
 !rsm_post:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
     jsr status_draw
     jmp !main_loop-
 
