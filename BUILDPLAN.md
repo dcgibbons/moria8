@@ -1068,6 +1068,20 @@ are needed:
 
 ---
 
+## Known Bugs
+
+Open issues observed during playtesting. Not yet assigned to a review pass.
+
+| # | Severity | Description | Notes |
+|---|----------|-------------|-------|
+| BUG-1 | **HIGH** | Any 18 stat turns into 18/99 (or close) after class selection — suspiciously high every time | Likely a bug in stat adjustment or the 18/xx exceptional strength roll. Should only apply to STR, and the xx value should be random 1-100, not always near max. Investigate `player_create.s` race/class stat adjustments and the 18/xx logic. |
+| BUG-2 | **MEDIUM** | Stats display screen does not match umoria's stat screen layout (status bars at bottom) | Compare `ui_status.s` / `ui_character.s` rendering against umoria's `io.cpp` display format. The bottom status bars should show: name, race, class, level on one line; STR, INT, WIS, DEX, CON, CHR stats; then HP, MP, AC, XP, dungeon level, gold. |
+| BUG-3 | **MEDIUM** | Town has no townspeople (rogues, fighters, drunks, etc.) | umoria spawns 4-8 townspeople as level-0 creatures on dlvl=0. These are harmless/low-threat flavor mobs. Currently `monster_spawn_level` may skip dlvl=0 or no creatures are defined for town level. |
+| BUG-4 | **LOW** | Town renders very slowly | Likely full-screen redraw on every frame. Investigate whether dirty-tile optimization is working for the town level, or if the viewport is being fully redrawn each turn. May also be related to the large open space of the town map. |
+| BUG-5 | **LOW** | Town shows periods (`.`) inside store walls instead of empty space | The store interior tiles should be floor or empty space, not the dungeon floor character. Check `dungeon_gen.s` town generation — store interiors may be filled with `TILE_FLOOR` (which renders as `.`) instead of `TILE_ROOM_FLOOR` or a blank tile. |
+
+---
+
 ## What's Next
 
 Phase 4 status:
