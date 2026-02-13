@@ -20,7 +20,7 @@
 .const ICAT_POTION   = 10
 .const ICAT_SCROLL   = 11
 .const ICAT_RING     = 12
-.const ICAT_CLOAK    = 13
+.const ICAT_BOOK     = 13
 .const ICAT_WAND     = 14
 .const ICAT_STAFF    = 15
 
@@ -49,7 +49,7 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 47
+.const ITEM_TYPE_COUNT = 49
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -104,6 +104,8 @@ it_category:
     .byte ICAT_STAFF    // 44: Staff of Detect Monsters
     .byte ICAT_STAFF    // 45: Staff of Teleportation
     .byte ICAT_STAFF    // 46: Staff of Cure Light Wounds
+    .byte ICAT_BOOK     // 47: Beginner's Spellbook
+    .byte ICAT_BOOK     // 48: Holy Prayer Book
 
 // Display character (screen codes)
 it_display:
@@ -154,6 +156,8 @@ it_display:
     .byte $2f   // 44: '/' Staff of Detect Monsters
     .byte $2f   // 45: '/' Staff of Teleportation
     .byte $2f   // 46: '/' Staff of Cure Light Wounds
+    .byte $3f   // 47: '?' Beginner's Spellbook
+    .byte $3f   // 48: '?' Holy Prayer Book
 
 // Color
 it_color:
@@ -204,6 +208,8 @@ it_color:
     .byte COL_LGREEN    // 44: Staff of Detect Monsters
     .byte COL_CYAN      // 45: Staff of Teleportation
     .byte COL_WHITE     // 46: Staff of Cure Light Wounds
+    .byte COL_PURPLE    // 47: Beginner's Spellbook
+    .byte COL_YELLOW    // 48: Holy Prayer Book
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -212,6 +218,7 @@ it_weight:
     .byte 2, 2, 2, 2, 2, 4, 4, 4, 4, 4
     .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
     .byte 10, 10, 10, 10, 50, 50, 50, 50
+    .byte 30, 30                            // Books
 
 // Damage dice count
 it_dmg_dice:
@@ -220,6 +227,7 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0                              // Books
 
 // Damage dice sides
 it_dmg_sides:
@@ -228,6 +236,7 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0                              // Books
 
 // Base armor class
 it_base_ac:
@@ -236,6 +245,7 @@ it_base_ac:
     .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0                              // Books
 
 // Base cost (lo)
 it_cost_lo:
@@ -245,6 +255,7 @@ it_cost_lo:
     .byte <100, <150, <80, <5, <5, <60, <40
     .byte <200, <80, <250, <250, <50, <5, <100
     .byte <50, <200, <250, <150, <60, <100, <300, <200
+    .byte <100, <100                        // Books
 
 // Base cost (hi)
 it_cost_hi:
@@ -254,6 +265,7 @@ it_cost_hi:
     .byte >100, >150, >80, >5, >5, >60, >40
     .byte >200, >80, >250, >250, >50, >5, >100
     .byte >50, >200, >250, >150, >60, >100, >300, >200
+    .byte >100, >100                        // Books
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -262,6 +274,7 @@ it_min_level:
     .byte 1, 2, 3, 4, 5, 3, 5, 4, 1, 1
     .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
     .byte 3, 4, 5, 4, 3, 3, 5, 3
+    .byte 2, 2                              // Books
 
 // Name pointer tables
 it_name_lo:
@@ -275,6 +288,7 @@ it_name_lo:
     .byte <itn_35, <itn_36, <itn_37, <itn_38
     .byte <itn_39, <itn_40, <itn_41, <itn_42
     .byte <itn_43, <itn_44, <itn_45, <itn_46
+    .byte <itn_47, <itn_48
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -286,6 +300,7 @@ it_name_hi:
     .byte >itn_35, >itn_36, >itn_37, >itn_38
     .byte >itn_39, >itn_40, >itn_41, >itn_42
     .byte >itn_43, >itn_44, >itn_45, >itn_46
+    .byte >itn_47, >itn_48
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -335,6 +350,8 @@ itn_43: .text "STAFF OF LIGHT" ; .byte 0
 itn_44: .text "STAFF OF DETECT MONSTERS" ; .byte 0
 itn_45: .text "STAFF OF TELEPORTATION" ; .byte 0
 itn_46: .text "STAFF OF CURE LIGHT WOUNDS" ; .byte 0
+itn_47: .text "BEGINNER'S SPELLBOOK" ; .byte 0
+itn_48: .text "HOLY PRAYER BOOK" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1191,8 +1208,8 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(45) + 2 → range [2, 46]
-    lda #45
+    // Roll type = rng_range(47) + 2 → range [2, 48]
+    lda #47
     jsr rng_range
     clc
     adc #2
@@ -1246,6 +1263,10 @@ roll_enchantment:
     cmp #ICAT_LIGHT
     beq !re_light+
 
+    // Special case: books get random spell index
+    cmp #ICAT_BOOK
+    beq !re_book+
+
     // Special case: wands and staves get charges
     cmp #ICAT_WAND
     beq !re_wand+
@@ -1259,7 +1280,7 @@ roll_enchantment:
     bcc !re_equip+              // WEAPON..BOOTS (2-7) → enchant
     cmp #ICAT_RING
     beq !re_equip+              // RING(12) → enchant
-    // FOOD, POTION, SCROLL, CLOAK → no enchant
+    // FOOD, POTION, SCROLL → no enchant
 !re_zero:
     lda #0
     rts
@@ -1321,6 +1342,12 @@ roll_enchantment:
     jsr rng_range
     clc
     adc #10
+    rts
+
+!re_book:
+    // Books get a random spell index (0-15) in p1
+    lda #16
+    jsr rng_range               // [0, 15]
     rts
 
 !re_equip:
@@ -1394,6 +1421,7 @@ id_known:
     .byte 0, 0, 0, 0, 0, 0, 0  // 32-38: Scrolls — unknown at start
     .byte 0, 0, 0, 0           // 39-42: Wands — unknown at start
     .byte 0, 0, 0, 0           // 43-46: Staves — unknown at start
+    .byte 1, 1                  // 47-48: Books — always known
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -1819,7 +1847,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 47
+.assert "Item type count", ITEM_TYPE_COUNT, 49
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

@@ -125,17 +125,17 @@ help_l7:  .text "RUNNING          < GO UP STAIRS" ; .byte 0
 help_l8:  .text "SHIFT+DIRECTION" ; .byte 0
 help_l9:  .text "                 INFORMATION" ; .byte 0
 help_l10: .text "COMMANDS         SHIFT+C CHARACTER" ; .byte 0
-help_l11: .text "G GET ITEM       ? THIS HELP" ; .byte 0
-help_l12: .text "D DROP ITEM" ; .byte 0
+help_l11: .text "G GET ITEM       X LOOK" ; .byte 0
+help_l12: .text "D DROP ITEM      ? THIS HELP" ; .byte 0
 help_l13: .text "I INVENTORY      COMBAT" ; .byte 0
 help_l14: .text "E EQUIPMENT      WALK INTO MONSTER" ; .byte 0
 help_l15: .text "W WEAR/WIELD     SHIFT+E EAT FOOD" ; .byte 0
 help_l16: .text "T TAKE OFF       OTHER" ; .byte 0
 help_l17: .text "Q QUAFF POTION   SHIFT+Q QUIT" ; .byte 0
-help_l18: .text "R READ SCROLL" ; .byte 0
+help_l18: .text "R READ SCROLL    P PRAY" ; .byte 0
 help_l19: .text "A AIM WAND" ; .byte 0
 help_l20: .text "Z USE STAFF" ; .byte 0
-help_l21: .text "M CAST SPELL     P PRAY" ; .byte 0
+help_l21: .text "M CAST SPELL     F STUDY BOOK" ; .byte 0
 
 // Pointer tables (lo/hi split)
 help_line_ptrs_lo:

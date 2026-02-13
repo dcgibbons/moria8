@@ -462,6 +462,169 @@ run_check_intersection:
     rts
 
 // ============================================================
+// do_look — Look at an adjacent tile and describe what's there
+// Free action: does not consume a turn.
+// Output: carry clear always (no turn consumed)
+// ============================================================
+do_look:
+    jsr get_direction_target
+    bcs !dl_valid+
+    clc
+    rts                         // Invalid direction
+!dl_valid:
+    // Read map tile at target
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    lda (zp_ptr0),y
+    sta dl_tile                 // Save full tile byte
+
+    // Check for monster first (most interesting)
+    lda df_target_x
+    ldy df_target_y
+    jsr monster_find_at
+    bcc !dl_no_monster+
+
+    // Found a monster — "YOU SEE A <name>."
+    stx dl_scratch              // Save slot index
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_name_lo,x
+    sta dl_name_lo
+    lda cr_name_hi,x
+    sta dl_name_hi
+    jsr dl_print_you_see
+    clc
+    rts
+
+!dl_no_monster:
+    // Check for floor item
+    lda df_target_x
+    ldy df_target_y
+    jsr floor_item_find_at
+    bcc !dl_no_item+
+
+    // Found an item — get its name
+    lda fi_item_id,x
+    jsr item_get_name_ptr       // zp_ptr0 = name ptr
+    lda zp_ptr0
+    sta dl_name_lo
+    lda zp_ptr0_hi
+    sta dl_name_hi
+    jsr dl_print_you_see
+    clc
+    rts
+
+!dl_no_item:
+    // Check tile type
+    lda dl_tile
+    and #TILE_TYPE_MASK
+
+    cmp #TILE_DOOR_OPEN
+    bne !dl_not_open+
+    lda #<dl_open_door_str
+    ldy #>dl_open_door_str
+    jmp dl_print_tile
+!dl_not_open:
+    cmp #TILE_DOOR_CLOSED
+    bne !dl_not_closed+
+    lda #<dl_closed_door_str
+    ldy #>dl_closed_door_str
+    jmp dl_print_tile
+!dl_not_closed:
+    cmp #TILE_STAIRS_DN
+    bne !dl_not_sdn+
+    lda #<dl_stairs_dn_str
+    ldy #>dl_stairs_dn_str
+    jmp dl_print_tile
+!dl_not_sdn:
+    cmp #TILE_STAIRS_UP
+    bne !dl_not_sup+
+    lda #<dl_stairs_up_str
+    ldy #>dl_stairs_up_str
+    jmp dl_print_tile
+!dl_not_sup:
+    cmp #TILE_TRAP
+    bne !dl_not_trap+
+    lda #<dl_trap_str
+    ldy #>dl_trap_str
+    jmp dl_print_tile
+!dl_not_trap:
+    cmp #TILE_RUBBLE
+    bne !dl_not_rubble+
+    lda #<dl_rubble_str
+    ldy #>dl_rubble_str
+    jmp dl_print_tile
+!dl_not_rubble:
+    // Wall or floor — nothing special
+    lda #<dl_nothing_str
+    ldy #>dl_nothing_str
+    jmp dl_print_tile
+
+// dl_print_tile — Print a tile description message
+// Input: A = string ptr lo, Y = string ptr hi
+dl_print_tile:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+// dl_print_you_see — Print "YOU SEE A <name>."
+// Input: dl_name_lo/hi = name string pointer
+dl_print_you_see:
+    lda #<dl_you_see_str
+    sta zp_ptr0
+    lda #>dl_you_see_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    // Append name inline on message row
+    lda zp_text_color
+    pha
+    lda #COL_MSG_TEXT
+    sta zp_text_color
+    lda dl_name_lo
+    sta zp_ptr0
+    lda dl_name_hi
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    // Append "."
+    lda #$2e
+    jsr screen_put_char
+    pla
+    sta zp_text_color
+    rts
+
+// Look command scratch
+dl_tile:     .byte 0
+dl_scratch:  .byte 0
+dl_name_lo:  .byte 0
+dl_name_hi:  .byte 0
+
+// Look command strings
+dl_you_see_str:
+    .text "YOU SEE A " ; .byte 0
+dl_open_door_str:
+    .text "YOU SEE AN OPEN DOOR." ; .byte 0
+dl_closed_door_str:
+    .text "YOU SEE A CLOSED DOOR." ; .byte 0
+dl_stairs_dn_str:
+    .text "YOU SEE A STAIRCASE DOWN." ; .byte 0
+dl_stairs_up_str:
+    .text "YOU SEE A STAIRCASE UP." ; .byte 0
+dl_trap_str:
+    .text "YOU SEE A TRAP." ; .byte 0
+dl_rubble_str:
+    .text "YOU SEE RUBBLE." ; .byte 0
+dl_nothing_str:
+    .text "YOU SEE NOTHING SPECIAL." ; .byte 0
+
+// ============================================================
 // Compile-time validation
 // ============================================================
 .assert "Walkable table = 16 entries", tile_is_walkable - walkable_table, 16

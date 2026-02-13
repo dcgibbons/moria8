@@ -51,7 +51,7 @@ equip_slot_for_cat:
     .byte $ff              // ICAT_POTION (10) -> invalid
     .byte $ff              // ICAT_SCROLL (11) -> invalid
     .byte EQUIP_RING       // ICAT_RING (12) -> slot 29
-    .byte $ff              // ICAT_CLOAK (13) -> invalid
+    .byte $ff              // ICAT_BOOK (13) -> not equippable
     .byte $ff              // ICAT_WAND (14) -> not equippable
     .byte $ff              // ICAT_STAFF (15) -> not equippable
 
@@ -1738,3 +1738,225 @@ piw_wand_frost_str:   .text "A BOLT OF FROST SHOOTS FORTH!" ; .byte 0
 piw_wand_cloud_str:   .text "THE MONSTER LOOKS CONFUSED." ; .byte 0
 piw_wand_miss_str:    .text "THE CLOUD DISSIPATES." ; .byte 0
 piq_cant_read_str:    .text "YOU CAN'T SEE TO READ!" ; .byte 0
+
+// ============================================================
+// item_gain_spell — Study a spell book to learn a spell
+// Prompts "STUDY WHICH BOOK (A-V)?", waits for slot selection.
+// Output: carry set = turn consumed, carry clear = cancelled
+// Clobbers: everything
+// ============================================================
+.const ITEM_MAGE_BOOK   = 47
+.const ITEM_PRAYER_BOOK = 48
+
+item_gain_spell:
+    // Check if player has a spell type at all
+    lda player_data + PL_SPELL_TYPE
+    bne !igs_can_cast+
+    lda #<igs_no_magic_str
+    sta zp_ptr0
+    lda #>igs_no_magic_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!igs_can_cast:
+    lda #<igs_prompt_str
+    sta zp_ptr0
+    lda #>igs_prompt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    jsr input_get_key
+
+    // ESC or space → cancel
+    cmp #$20
+    beq !igs_cancel_early+
+    cmp #$1b
+    beq !igs_cancel_early+
+
+    // Convert PETSCII to slot index (A=0, V=21)
+    sec
+    sbc #$41
+    bcc !igs_cancel_early+
+    cmp #MAX_INV_SLOTS
+    bcc !igs_slot_ok+
+!igs_cancel_early:
+    clc
+    rts
+!igs_slot_ok:
+    sta piw_slot
+
+    // Check if slot has an item
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    bne !igs_have_item+
+    lda #<igs_nothing_str
+    sta zp_ptr0
+    lda #>igs_nothing_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!igs_have_item:
+    sta piw_item_id             // Save item type
+
+    // Check if it's a book (ICAT_BOOK)
+    tax
+    lda it_category,x
+    cmp #ICAT_BOOK
+    beq !igs_is_book+
+    lda #<igs_not_book_str
+    sta zp_ptr0
+    lda #>igs_not_book_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!igs_is_book:
+    // Check if book matches player's spell type
+    // Item 47 = mage book → requires SPELL_MAGE
+    // Item 48 = prayer book → requires SPELL_PRIEST
+    lda piw_item_id
+    cmp #ITEM_MAGE_BOOK
+    bne !igs_check_priest+
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_MAGE
+    beq !igs_type_ok+
+    jmp !igs_wrong_type+
+!igs_check_priest:
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_PRIEST
+    beq !igs_type_ok+
+!igs_wrong_type:
+    lda #<igs_wrong_type_str
+    sta zp_ptr0
+    lda #>igs_wrong_type_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc
+    rts
+
+!igs_type_ok:
+    // Get spell index from book's p1
+    ldx piw_slot
+    lda inv_p1,x
+    and #$0f                    // Safety: mask to 0-15
+    sta igs_spell_idx
+
+    // Check if spell already known
+    lda igs_spell_idx
+    cmp #8
+    bcs !igs_check_hi+
+
+    // Check lo byte
+    tax
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN
+    bne !igs_already_known+
+    jmp !igs_learn+
+
+!igs_check_hi:
+    sec
+    sbc #8
+    tax
+    lda spell_bit_mask,x
+    and player_data + PL_SPELLS_KNOWN_HI
+    bne !igs_already_known+
+
+!igs_learn:
+    // Set the spell known bit
+    lda igs_spell_idx
+    cmp #8
+    bcs !igs_set_hi+
+
+    // Set bit in lo byte
+    tax
+    lda player_data + PL_SPELLS_KNOWN
+    ora spell_bit_mask,x
+    sta player_data + PL_SPELLS_KNOWN
+    jmp !igs_learned+
+
+!igs_set_hi:
+    sec
+    sbc #8
+    tax
+    lda player_data + PL_SPELLS_KNOWN_HI
+    ora spell_bit_mask,x
+    sta player_data + PL_SPELLS_KNOWN_HI
+
+!igs_learned:
+    // Remove book from inventory
+    ldx piw_slot
+    jsr inv_remove_item
+
+    // Print "YOU LEARNED <spell name>!"
+    lda #<igs_learned_str
+    sta zp_ptr0
+    lda #>igs_learned_str
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    // Append spell name inline
+    lda zp_text_color
+    pha
+    lda #COL_MSG_TEXT
+    sta zp_text_color
+
+    // Get spell name pointer based on spell type
+    lda player_data + PL_SPELL_TYPE
+    cmp #SPELL_MAGE
+    bne !igs_priest_name+
+    ldx igs_spell_idx
+    lda mage_spell_name_lo,x
+    sta zp_ptr0
+    lda mage_spell_name_hi,x
+    sta zp_ptr0_hi
+    jmp !igs_print_name+
+!igs_priest_name:
+    ldx igs_spell_idx
+    lda priest_spell_name_lo,x
+    sta zp_ptr0
+    lda priest_spell_name_hi,x
+    sta zp_ptr0_hi
+!igs_print_name:
+    jsr screen_put_string
+    // Append "!"
+    lda #$21
+    jsr screen_put_char
+    pla
+    sta zp_text_color
+
+    lda #SFX_LEVELUP
+    jsr sound_play
+
+    sec                         // Turn consumed
+    rts
+
+!igs_already_known:
+    lda #<igs_already_str
+    sta zp_ptr0
+    lda #>igs_already_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc                         // Not consumed — player can try again
+    rts
+
+!igs_cancel:
+    clc
+    rts
+
+// Gain spell scratch
+igs_spell_idx:  .byte 0
+
+// Gain spell strings
+igs_prompt_str:     .text "STUDY WHICH BOOK (A-V)?" ; .byte 0
+igs_no_magic_str:   .text "YOU CANNOT USE MAGIC." ; .byte 0
+igs_nothing_str:    .text "YOU HAVE NOTHING THERE." ; .byte 0
+igs_not_book_str:   .text "THAT IS NOT A BOOK." ; .byte 0
+igs_wrong_type_str: .text "YOU CANNOT READ THAT BOOK." ; .byte 0
+igs_already_str:    .text "YOU ALREADY KNOW THAT SPELL." ; .byte 0
+igs_learned_str:    .text "YOU LEARNED " ; .byte 0

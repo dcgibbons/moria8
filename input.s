@@ -60,6 +60,7 @@
 .const CMD_RUN_NE    = $2a  // Run northeast
 .const CMD_RUN_SW    = $2b  // Run southwest
 .const CMD_RUN_SE    = $2c  // Run southeast
+.const CMD_GAIN      = $2d  // Gain spell from book (f)
 
 // Direction offsets: dx, dy for each movement command
 // Index = CMD_MOVE_x - CMD_MOVE_N
@@ -171,6 +172,7 @@ key_map_petscii:
     .byte $3f   // ? — help
     // Special
     .byte $58   // X — look / examine
+    .byte $46   // F — gain spell from book
     // Shifted keys (C64 unshifted mode: SHIFT+letter = PETSCII $C1-$DA)
     .byte $c3   // SHIFT+C — character info
     .byte $d1   // SHIFT+Q — quit
@@ -223,6 +225,7 @@ key_map_cmd:
     .byte CMD_HELP
     // Special
     .byte CMD_LOOK
+    .byte CMD_GAIN
     // Shifted keys
     .byte CMD_CHAR_INFO
     .byte CMD_QUIT

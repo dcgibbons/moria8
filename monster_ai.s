@@ -126,6 +126,17 @@ monster_process_one:
     and #MF_CONFUSED
     bne !mpo_confused+
 
+    // Town creatures wander randomly unless provoked
+    lda zp_mon_type
+    cmp #TOWN_CREATURE_BASE
+    bcc !mpo_not_town+
+    lda zp_mon_flags
+    and #MF_PROVOKED
+    bne !mpo_not_town+
+    jsr monster_move_random
+    jmp !mpo_writeback+
+!mpo_not_town:
+
     // Normal movement: move toward player
     jsr monster_move_toward
     jmp !mpo_writeback+
@@ -325,6 +336,15 @@ monster_try_step:
     cmp zp_player_y
     bne !mts_not_player+
 
+    // Town creatures don't attack unless provoked
+    lda zp_mon_type
+    cmp #TOWN_CREATURE_BASE
+    bcc !mts_do_attack+
+    lda zp_mon_flags
+    and #MF_PROVOKED
+    bne !mts_do_attack+         // Provoked — attack
+    jmp !mts_blocked+           // Not provoked — don't attack
+!mts_do_attack:
     // Monster is adjacent → attack player
     jsr monster_attack_player
     jmp !mts_blocked+           // Monster stays in place

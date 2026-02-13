@@ -32,9 +32,9 @@ store_base_idx:
 // Store 4 Alchemy:  POTION(10)                = $0400
 // Store 5 Magic:    WAND(14), STAFF(15), RING(12) = $D000
 store_cat_mask_lo:
-    .byte <$0300, <$20F8, <$0004, <$0C00, <$0400, <$D000
+    .byte <$0300, <$20F8, <$0004, <$0C00, <$0400, <$F000
 store_cat_mask_hi:
-    .byte >$0300, >$20F8, >$0004, >$0C00, >$0400, >$D000
+    .byte >$0300, >$20F8, >$0004, >$0C00, >$0400, >$F000
 
 // Fallback items per store (used when rejection sampling fails)
 store_fallback:
@@ -199,8 +199,8 @@ sro_set_p1:
     beq !sro_enchant+
     cmp #ICAT_BOOTS
     beq !sro_enchant+
-    cmp #ICAT_CLOAK
-    beq !sro_enchant+
+    cmp #ICAT_BOOK
+    beq !sro_book+
 
     // Wands/staffs get charges 3-8
     cmp #ICAT_WAND
@@ -235,6 +235,16 @@ sro_set_p1:
     sta si_flags,y
     rts
 
+!sro_book:
+    // Books get random spell index 0-15
+    lda #16
+    jsr rng_range               // [0, 15]
+    ldy sb_abs_slot
+    sta si_p1,y
+    lda #0
+    sta si_flags,y
+    rts
+
 // store_pick_item — Pick a random item suitable for store zp_store_idx
 // Output: A = item type ID
 // Uses rejection sampling with fallback.
@@ -244,11 +254,11 @@ store_pick_item:
     sta sr_retry
 
 !spi_loop:
-    // Random item type [2, 46] (skip gold types 0-1)
-    lda #45                     // 45 possible types (2..46)
-    jsr rng_range               // 0-44
+    // Random item type [2, 48] (skip gold types 0-1)
+    lda #47                     // 47 possible types (2..48)
+    jsr rng_range               // 0-46
     clc
-    adc #2                      // 2-46
+    adc #2                      // 2-48
 
     // Check if this item's category matches the store
     pha                         // Save item type on stack
@@ -423,7 +433,7 @@ price_add_p1_bonus:
     beq !pap_equip+
     cmp #ICAT_BOOTS
     beq !pap_equip+
-    cmp #ICAT_CLOAK
+    cmp #ICAT_BOOK
     beq !pap_equip+
 
     // Check wand/staff

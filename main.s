@@ -782,6 +782,32 @@ entry:
     jmp !main_loop-
 !not_pray:
 
+    // Gain spell from book?
+    cmp #CMD_GAIN
+    bne !not_gain+
+    jsr msg_clear
+    jsr item_gain_spell
+    bcc !gain_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!gain_no_turn:
+    jmp !main_loop-
+!not_gain:
+
+    // Look?
+    cmp #CMD_LOOK
+    bne !not_look+
+    jsr msg_clear
+    jsr do_look
+    jmp !main_loop-
+!not_look:
+
     // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
     cmp #CMD_RUN_N
     bcc !not_run+

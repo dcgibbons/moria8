@@ -51,10 +51,10 @@ player_attack_monster:
     lda (zp_ptr0),y
     sta cmb_type
 
-    // Wake the monster (set MF_AWAKE flag)
+    // Wake the monster and mark provoked (town creatures need this to fight back)
     ldy #MX_FLAGS
     lda (zp_ptr0),y
-    ora #MF_AWAKE
+    ora #MF_AWAKE | MF_PROVOKED
     sta (zp_ptr0),y
 
     // Calculate to-hit chance and number of blows

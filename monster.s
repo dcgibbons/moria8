@@ -42,6 +42,7 @@
 // Monster flags
 .const MF_AWAKE     = $01
 .const MF_CONFUSED  = $02
+.const MF_PROVOKED  = $04   // Player attacked this monster; town creatures need this to fight back
 
 // ============================================================
 // Embedded creature data — Struct-of-Arrays
