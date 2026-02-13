@@ -1,8 +1,9 @@
-// ui_status.s — Bottom status bar rendering
+// ui_status.s — Bottom status bar rendering (umoria-style, 3 lines)
 //
-// Two-line status bar at rows 21–22:
-//   Row 21: "MORIA  DLVL:nn  HP:nnn/nnn  MP:nn/nn"
-//   Row 22: "STR:nn  AC:nn  EXP:nnnnn   HUNGRY"
+// Three-line status bar at rows 21–23:
+//   Row 21: Race, Class, Level, Dungeon Level
+//   Row 22: ST:nn IN:nn WI:nn DX:nn CO:nn CH:nn
+//   Row 23: HP:nn/nn  MP:nn/nn  AC:nn  AU:nnnnn  HUNGRY
 //
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
@@ -10,7 +11,7 @@
 // Subroutines
 // ============================================================
 
-// status_draw — Redraw the full status bar
+// status_draw — Redraw the full status bar (3 rows)
 // Preserves: nothing
 status_draw:
     // Save cursor state
@@ -21,39 +22,172 @@ status_draw:
     lda zp_text_color
     pha
 
-    lda #COL_STATUS
-    sta zp_text_color
-
-    // --- Row 21 ---
+    // ========== Row 21: Race / Class / Level / Dungeon Level ==========
     lda #STATUS_ROW
     jsr screen_clear_row
-
-    // "MORIA"
     lda #STATUS_ROW
     sta zp_cursor_row
+
+    // Race name
+    lda #COL_STATUS
+    sta zp_text_color
     lda #0
     sta zp_cursor_col
-    lda #<status_moria_str
+    ldx zp_player_race
+    lda race_name_ptrs_lo,x
     sta zp_ptr0
-    lda #>status_moria_str
+    lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // "DLVL:"
-    lda #7
+    // Space separator
+    lda #$20
+    jsr screen_put_char
+
+    // Class name
+    ldx zp_player_class
+    lda class_name_ptrs_lo,x
+    sta zp_ptr0
+    lda class_name_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    // "LV:" at col 28
+    lda #28
     sta zp_cursor_col
-    lda #<status_dlvl_str
+    lda #<status_lv_str
     sta zp_ptr0
-    lda #>status_dlvl_str
+    lda #>status_lv_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Dungeon level number
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_lvl
+    jsr screen_put_decimal
+
+    // "DL:" at col 34
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #34
+    sta zp_cursor_col
+    lda #<status_dl_str
+    sta zp_ptr0
+    lda #>status_dl_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #COL_WHITE
+    sta zp_text_color
     lda zp_player_dlvl
     jsr screen_put_decimal
 
-    // "HP:"
-    lda #16
+    // ========== Row 22: All 6 stats ==========
+    lda #STATUS_ROW + 1
+    jsr screen_clear_row
+    lda #STATUS_ROW + 1
+    sta zp_cursor_row
+    lda #COL_STATUS
+    sta zp_text_color
+
+    // ST: at col 0
+    lda #0
+    sta zp_cursor_col
+    lda #<stat_st_str
+    sta zp_ptr0
+    lda #>stat_st_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_str
+    jsr status_put_stat_val
+
+    // IN: at col 7
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #7
+    sta zp_cursor_col
+    lda #<stat_in_str
+    sta zp_ptr0
+    lda #>stat_in_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_int
+    jsr status_put_stat_val
+
+    // WI: at col 14
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #14
+    sta zp_cursor_col
+    lda #<stat_wi_str
+    sta zp_ptr0
+    lda #>stat_wi_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_wis
+    jsr status_put_stat_val
+
+    // DX: at col 21
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #21
+    sta zp_cursor_col
+    lda #<stat_dx_str
+    sta zp_ptr0
+    lda #>stat_dx_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_dex
+    jsr status_put_stat_val
+
+    // CO: at col 28
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #28
+    sta zp_cursor_col
+    lda #<stat_co_str
+    sta zp_ptr0
+    lda #>stat_co_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_con
+    jsr status_put_stat_val
+
+    // CH: at col 35
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #35
+    sta zp_cursor_col
+    lda #<stat_ch_str
+    sta zp_ptr0
+    lda #>stat_ch_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda zp_player_chr
+    jsr status_put_stat_val
+
+    // ========== Row 23: HP / MP / AC / Gold / Hunger ==========
+    lda #STATUS_ROW + 2
+    jsr screen_clear_row
+    lda #STATUS_ROW + 2
+    sta zp_cursor_row
+    lda #COL_STATUS
+    sta zp_text_color
+
+    // "HP:" at col 0
+    lda #0
     sta zp_cursor_col
     lda #<status_hp_str
     sta zp_ptr0
@@ -64,7 +198,7 @@ status_draw:
     // Color HP by percentage
     jsr status_hp_color
 
-    // Current HP
+    // Current HP (16-bit)
     lda zp_player_hp_lo
     sta zp_temp0
     lda zp_player_hp_hi
@@ -74,7 +208,7 @@ status_draw:
     // "/"
     lda #COL_STATUS
     sta zp_text_color
-    lda #$2f                // '/'
+    lda #$2f
     jsr screen_put_char
 
     // Max HP
@@ -84,8 +218,10 @@ status_draw:
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // "MP:"
-    lda #29
+    // "MP:" at col 12
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #12
     sta zp_cursor_col
     lda #<status_mp_str
     sta zp_ptr0
@@ -93,40 +229,23 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Current mana
+    lda #COL_WHITE
+    sta zp_text_color
     lda zp_player_mp
     jsr screen_put_decimal
-
-    lda #$2f                // '/'
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #$2f
     jsr screen_put_char
-
-    // Max mana
+    lda #COL_WHITE
+    sta zp_text_color
     lda zp_player_mmp
     jsr screen_put_decimal
 
-    // --- Row 22 ---
-    lda #STATUS_ROW + 1
-    jsr screen_clear_row
-
+    // "AC:" at col 22
     lda #COL_STATUS
     sta zp_text_color
-    lda #STATUS_ROW + 1
-    sta zp_cursor_row
-
-    // "STR:"
-    lda #0
-    sta zp_cursor_col
-    lda #<status_str_str
-    sta zp_ptr0
-    lda #>status_str_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    lda zp_player_str
-    jsr screen_put_decimal
-
-    // "AC:"
-    lda #8
+    lda #22
     sta zp_cursor_col
     lda #<status_ac_str
     sta zp_ptr0
@@ -134,11 +253,15 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
+    lda #COL_WHITE
+    sta zp_text_color
     lda zp_player_ac
     jsr screen_put_decimal
 
-    // "AU:"
-    lda #15
+    // "AU:" at col 28
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #28
     sta zp_cursor_col
     lda #<status_au_str
     sta zp_ptr0
@@ -146,15 +269,14 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // Gold (16-bit for now, low 2 bytes of 24-bit)
     lda player_data + PL_GOLD_0
     sta zp_temp0
     lda player_data + PL_GOLD_1
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // Hunger state
-    lda #28
+    // Hunger state at col 34
+    lda #34
     sta zp_cursor_col
     // Color-code hunger
     lda zp_hunger_state
@@ -184,7 +306,7 @@ status_draw:
 
     // Clear dirty flag
     lda zp_ui_dirty
-    and #%11111110          // Clear bit 0
+    and #%11111110
     sta zp_ui_dirty
 
     // Restore cursor state
@@ -196,11 +318,21 @@ status_draw:
     sta zp_cursor_row
     rts
 
+// status_put_stat_val — Display stat value for status bar (cap 18/xx to 18)
+// Input: A = stat value (3-118)
+// Output: prints right-justified 2-char number
+status_put_stat_val:
+    cmp #19
+    bcc !sv_normal+
+    lda #18                 // 18/xx → show 18
+!sv_normal:
+    jsr screen_put_decimal_rj2
+    rts
+
 // status_hp_color — Set text color based on HP percentage
 // Preserves: nothing (sets zp_text_color)
 status_hp_color:
     // Simple comparison: if HP >= MHP, green. If HP >= MHP/2, yellow. Else red.
-    // Compare current HP to max HP
     lda zp_player_hp_hi
     cmp zp_player_mhp_hi
     bcc !check_half+
@@ -216,11 +348,10 @@ status_hp_color:
     // HP < max. Check if >= max/2
     lda zp_player_mhp_hi
     lsr
-    sta zp_temp0            // max_hi / 2
+    sta zp_temp0
     lda zp_player_mhp_lo
     ror
-    sta zp_temp1            // max_lo / 2 (with carry from hi)
-    // Compare HP to max/2
+    sta zp_temp1
     lda zp_player_hp_hi
     cmp zp_temp0
     bcc !critical+
@@ -250,16 +381,26 @@ status_mark_dirty:
 // ============================================================
 // String data (screen codes, null-terminated)
 // ============================================================
-status_moria_str:
-    .text "MORIA" ; .byte $20, $00
-status_dlvl_str:
-    .text "DLVL:" ; .byte $00
+status_lv_str:
+    .text "LV:" ; .byte $00
+status_dl_str:
+    .text "DL:" ; .byte $00
+stat_st_str:
+    .text "ST:" ; .byte $00
+stat_in_str:
+    .text "IN:" ; .byte $00
+stat_wi_str:
+    .text "WI:" ; .byte $00
+stat_dx_str:
+    .text "DX:" ; .byte $00
+stat_co_str:
+    .text "CO:" ; .byte $00
+stat_ch_str:
+    .text "CH:" ; .byte $00
 status_hp_str:
     .text "HP:" ; .byte $00
 status_mp_str:
     .text "MP:" ; .byte $00
-status_str_str:
-    .text "STR:" ; .byte $00
 status_ac_str:
     .text "AC:" ; .byte $00
 status_au_str:

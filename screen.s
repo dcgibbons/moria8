@@ -9,8 +9,8 @@
 // Screen layout (40-col):
 //   Row  0:      Message line
 //   Rows 1–20:   Game viewport (38x20, columns 1–38)
-//   Rows 21–22:  Status bar (2 lines)
-//   Row  23:     Input prompt line
+//   Rows 21–23:  Status bar (3 lines, umoria-style)
+//   Row  24:     Input prompt line / spare
 //   Cols 0, 39:  Border columns (unused/clear)
 
 // ============================================================
@@ -24,7 +24,7 @@
 .const VIEWPORT_H  = 20     // Viewport height
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
-.const INPUT_ROW   = 23     // Input prompt row
+.const INPUT_ROW   = 24     // Input prompt row (row 23 now used by status bar)
 
 // Colors
 .const COL_BLACK    = $00
