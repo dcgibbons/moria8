@@ -1079,6 +1079,7 @@ Open issues observed during playtesting. Not yet assigned to a review pass.
 | BUG-3 | **MEDIUM** | Town has no townspeople (rogues, fighters, drunks, etc.) | umoria spawns 4-8 townspeople as level-0 creatures on dlvl=0. These are harmless/low-threat flavor mobs. Currently `monster_spawn_level` may skip dlvl=0 or no creatures are defined for town level. |
 | BUG-4 | **LOW** | Town renders very slowly | Likely full-screen redraw on every frame. Investigate whether dirty-tile optimization is working for the town level, or if the viewport is being fully redrawn each turn. May also be related to the large open space of the town map. |
 | BUG-5 | **LOW** | Town shows periods (`.`) inside store walls instead of empty space | The store interior tiles should be floor or empty space, not the dungeon floor character. Check `dungeon_gen.s` town generation — store interiors may be filled with `TILE_FLOOR` (which renders as `.`) instead of `TILE_ROOM_FLOOR` or a blank tile. |
+| BUG-6 | **MEDIUM** | Store exit requires ESC key, which the C64 doesn't have (CTRL-[ works but is awkward) | The store UI uses PETSCII $1B (ESC) as the exit key. C64 keyboards have no dedicated ESC key. Add STOP/RUN-STOP ($03) or a letter key like Q as an alternative exit. Space bar already works per the code but the menu text only shows "ESC)EXIT". Update `ui_store.s` key check and menu string. |
 
 ---
 
