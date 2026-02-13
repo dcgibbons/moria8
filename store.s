@@ -251,16 +251,18 @@ store_pick_item:
     adc #2                      // 2-46
 
     // Check if this item's category matches the store
-    tax                         // Save item type in X
+    pha                         // Save item type on stack
+    tax
     lda it_category,x           // A = item category
-    jsr check_store_category    // Carry set = match
+    jsr check_store_category    // Carry set = match (clobbers X)
     bcc !spi_reject+
 
     // Match — return item type
-    txa
+    pla
     rts
 
 !spi_reject:
+    pla                         // Discard saved item type
     dec sr_retry
     bne !spi_loop-
 

@@ -142,16 +142,31 @@ test_start:
     sta tc_results + 2
 
     // ============================================================
-    // Test 4: store_pick_item returns valid type for store 2 (Weaponsmith)
+    // Test 4: store_pick_item returns valid type for store 1 (Armory)
+    // Uses store 1 to catch the X-clobber bug (store idx 1 = gold type)
     // ============================================================
-    lda #2
+    lda #1
     sta zp_store_idx
     jsr store_pick_item
-    // Returned A should be a weapon category item
+    // Returned A should be an armor-category item (not gold!)
+    cmp #2                      // Must be >= 2 (skip gold types 0-1)
+    bcc !t4_fail+
     tax
     lda it_category,x
-    cmp #ICAT_WEAPON
+    // Must match one of armory categories: ARMOR, SHIELD, HELM, GLOVES, BOOTS, CLOAK
+    cmp #ICAT_ARMOR
     beq !t4_pass+
+    cmp #ICAT_SHIELD
+    beq !t4_pass+
+    cmp #ICAT_HELM
+    beq !t4_pass+
+    cmp #ICAT_GLOVES
+    beq !t4_pass+
+    cmp #ICAT_BOOTS
+    beq !t4_pass+
+    cmp #ICAT_CLOAK
+    beq !t4_pass+
+!t4_fail:
     lda #$00
     jmp !t4_store+
 !t4_pass:
