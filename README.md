@@ -19,7 +19,9 @@ graphics; bitmap graphics may be an option in a future version.
 
 This game is based upon the umoria version of the Moria game (which was
 originally written in PASCAL for the VAX/VMS plataform). The source code for the
-umoria project can be found at https://github.com/dungeons-of-moria/umoria
+umoria project can be found at https://github.com/dungeons-of-moria/umoria and
+the source code for the original VMS version in PASCAL is found at
+https://github.com/dungeons-of-moria/vms-moria
 
 Unlike the original Moria / umoria implementation, the C64 only has a 40 column
 display so the game will target that screen resolution. On the C128, the game
