@@ -2288,13 +2288,13 @@ a dedicated scratch variable or a ZP temp instead.
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP14-1 | **HIGH** | Word of Recall to town skips store_restock_all | Trivial — add `jsr store_restock_all` in WoR-to-town path | Open |
+| RP14-1 | **HIGH** | Word of Recall to town skips store_restock_all | Trivial — add `jsr store_restock_all` in WoR-to-town path | **RESOLVED** — added `jsr store_restock_all` in turn.s WoR-to-town path |
 | RP14-2 | **MEDIUM** | BUILDPLAN says "race modifier" for prices; implementation has charisma only | Trivial — update BUILDPLAN prose to match implementation | **RESOLVED** — Phase 8 table updated to say "charisma modifier only (race modifier deferred)" |
-| RP14-3 | **MEDIUM** | Enchantment/charges ignored in pricing — all items of same type priced identically | Medium — add p1-based price bonus per category | Open |
-| RP14-4 | **MEDIUM** | Cursed items sellable at full base price (umoria: value 0) | Easy — check IF_CURSED in sell flow, refuse or set price 0 | Open |
+| RP14-3 | **MEDIUM** | Enchantment/charges ignored in pricing — all items of same type priced identically | Medium — add p1-based price bonus per category | **RESOLVED** — added `price_add_p1_bonus` in store.s: equipment +100 GP/enchant, wand/staff +10 GP/charge. New tests 18-19 verify. |
+| RP14-4 | **MEDIUM** | Cursed items sellable at full base price (umoria: value 0) | Easy — check IF_CURSED in sell flow, refuse or set price 0 | **RESOLVED** — added IF_CURSED check in store_sell, displays "THAT ITEM IS CURSED." |
 | RP14-5 | LOW | Store owner "max gold" mentioned in BUILDPLAN but not implemented | Trivial — update BUILDPLAN if intentionally deferred | **RESOLVED** — Phase 8 table updated to say "name only — race and max gold deferred" |
 | RP14-6 | LOW | test_store.s VICE breakpoint fails — tc_count after brk shifts segment end | Trivial — move tc_count before brk | **RESOLVED** — tc_count moved before brk |
-| RP14-7 | LOW | inv_count_items clobbers fi_add_p1 scratch (currently safe, fragile) | Easy — use dedicated scratch variable | Open |
+| RP14-7 | LOW | inv_count_items clobbers fi_add_p1 scratch (currently safe, fragile) | Easy — use dedicated scratch variable | **RESOLVED** — added `ici_count` dedicated scratch in item.s |
 
 ---
 

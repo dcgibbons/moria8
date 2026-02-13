@@ -191,6 +191,8 @@ store_draw_screen:
     sta zp_text_color
 
     ldy sb_abs_slot
+    lda si_p1,y
+    sta sb_item_p1              // Pass enchantment/charges for pricing
     lda si_item_id,y
     jsr calc_buy_price          // sb_price_lo/hi = buy price
 
@@ -355,6 +357,10 @@ store_buy:
 !sb_occupied:
 
     // Calculate buy price
+    ldx sb_abs_slot
+    lda si_p1,x
+    sta sb_item_p1              // Pass enchantment/charges for pricing
+    lda si_item_id,x
     jsr calc_buy_price          // sb_price_lo/hi
 
     // Display price and confirm
@@ -643,7 +649,22 @@ store_sell:
     rts
 
 !ssell_cat_ok:
+    // Check if item is cursed (RP14-4)
+    ldx ss_inv_slot
+    lda inv_flags,x
+    and #IF_CURSED
+    beq !ssell_not_cursed+
+
+    lda #<uis_cursed_str
+    ldx #>uis_cursed_str
+    jsr ssell_show_error
+    rts
+
+!ssell_not_cursed:
     // Calculate sell price
+    ldx ss_inv_slot
+    lda inv_p1,x
+    sta sb_item_p1              // Pass enchantment/charges for pricing
     lda ss_item_id
     jsr calc_sell_price
 
@@ -817,3 +838,5 @@ uis_worthless_str:
     .text "THAT IS WORTHLESS." ; .byte 0
 uis_store_full_str:
     .text "THE STORE IS FULL." ; .byte 0
+uis_cursed_str:
+    .text "THAT ITEM IS CURSED." ; .byte 0

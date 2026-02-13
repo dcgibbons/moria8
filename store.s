@@ -86,6 +86,8 @@ sd_row:        .byte 0     // Current screen row during drawing
 sd_save_x:     .byte 0     // Saved index register
 sr_retry:      .byte 0     // Rejection sampling retry counter
 sr_store_idx:  .byte 0     // Store index for restock loop
+sb_item_p1:    .byte 0     // Item enchantment/charges for pricing (RP14-3)
+sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
 
 // ============================================================
 // Subroutines
@@ -307,11 +309,12 @@ check_store_category:
 // ============================================================
 
 // calc_buy_price — Calculate buy price for item type
-// Input: A = item type ID
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
 // Output: sb_price_lo/hi = price (16-bit)
-// Formula: base_price × chr_price_adj[CHR-3] / 100
+// Formula: (base_price × chr_price_adj[CHR-3] / 100) + p1_bonus
 // Clobbers: everything
 calc_buy_price:
+    sta sb_item_type            // Save for p1 bonus lookup
     tax
     lda it_cost_lo,x
     sta zp_temp0
@@ -346,14 +349,17 @@ calc_buy_price:
     sta sb_price_lo
     lda zp_math_b
     sta sb_price_hi
-    rts
+
+    // Add enchantment/charges bonus (RP14-3)
+    jmp price_add_p1_bonus      // Tail call
 
 // calc_sell_price — Calculate sell price for item type
-// Input: A = item type ID
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
 // Output: sb_price_lo/hi = price (16-bit)
-// Formula: base_price × chr_sell_adj[CHR-3] / 100
+// Formula: (base_price × chr_sell_adj[CHR-3] / 100) + p1_bonus
 // Clobbers: everything
 calc_sell_price:
+    sta sb_item_type            // Save for p1 bonus lookup
     tax
     lda it_cost_lo,x
     sta zp_temp0
@@ -381,6 +387,79 @@ calc_sell_price:
     lda zp_math_a
     sta sb_price_lo
     lda zp_math_b
+    sta sb_price_hi
+
+    // Add enchantment/charges bonus (RP14-3)
+    jmp price_add_p1_bonus      // Tail call
+
+// price_add_p1_bonus — Add enchantment/charges bonus to price (RP14-3)
+// Input: sb_price_lo/hi = base adjusted price, sb_item_p1 = p1,
+//        sb_item_type = item type ID
+// Output: sb_price_lo/hi updated with bonus
+// Equipment (weapon/armor/shield/helm/gloves/boots/cloak): +100 GP per p1
+// Wand/Staff: +10 GP per charge (p1)
+// Other: no bonus
+// Clobbers: A, X
+price_add_p1_bonus:
+    lda sb_item_p1
+    beq !pap_done+              // p1=0, no bonus
+
+    // Look up category
+    ldx sb_item_type
+    lda it_category,x
+
+    // Check equipment categories
+    cmp #ICAT_WEAPON
+    beq !pap_equip+
+    cmp #ICAT_ARMOR
+    beq !pap_equip+
+    cmp #ICAT_SHIELD
+    beq !pap_equip+
+    cmp #ICAT_HELM
+    beq !pap_equip+
+    cmp #ICAT_GLOVES
+    beq !pap_equip+
+    cmp #ICAT_BOOTS
+    beq !pap_equip+
+    cmp #ICAT_CLOAK
+    beq !pap_equip+
+
+    // Check wand/staff
+    cmp #ICAT_WAND
+    beq !pap_charges+
+    cmp #ICAT_STAFF
+    beq !pap_charges+
+
+    // Other categories: no bonus
+!pap_done:
+    rts
+
+!pap_equip:
+    // Add p1 × 100 to price
+    lda sb_item_p1
+    ldx #100
+    jsr math_multiply           // A = lo, zp_math_b = hi
+    clc
+    adc sb_price_lo
+    sta sb_price_lo
+    lda zp_math_b
+    adc sb_price_hi
+    sta sb_price_hi
+    rts
+
+!pap_charges:
+    // Add p1 × 10 to price (max 8×10 = 80, fits in byte)
+    lda sb_item_p1
+    asl                         // ×2
+    asl                         // ×4
+    clc
+    adc sb_item_p1              // ×5
+    asl                         // ×10
+    clc
+    adc sb_price_lo
+    sta sb_price_lo
+    lda #0
+    adc sb_price_hi
     sta sb_price_hi
     rts
 

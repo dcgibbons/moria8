@@ -366,6 +366,7 @@ fi_add_qty: .byte 0       // Quantity / gold amount
 fi_add_p1:  .byte 0       // Enchantment / charges
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
+ici_count:  .byte 0       // inv_count_items scratch counter (RP14-7)
 
 // ============================================================
 // Subroutines
@@ -590,7 +591,7 @@ inv_remove_item:
 // Clobbers: X
 inv_count_items:
     lda #0
-    sta fi_add_p1               // Reuse scratch as counter
+    sta ici_count               // Dedicated scratch counter (RP14-7)
     ldx #0
 !ici_loop:
     cpx #MAX_INV_SLOTS
@@ -598,12 +599,12 @@ inv_count_items:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !ici_next+
-    inc fi_add_p1
+    inc ici_count
 !ici_next:
     inx
     jmp !ici_loop-
 !ici_done:
-    lda fi_add_p1
+    lda ici_count
     rts
 
 // ============================================================

@@ -251,10 +251,12 @@ test_start:
 
     // ============================================================
     // Test 8: calc_buy_price at CHR 18 — price = base_price (adj=100)
-    // Item 2 (Dagger) has base cost 10.
+    // Item 2 (Dagger) has base cost 10, p1=0.
     // ============================================================
     lda #18
     sta player_data + PL_CHR_CUR
+    lda #0
+    sta sb_item_p1              // No enchantment
     lda #2                      // Dagger
     jsr calc_buy_price
     lda sb_price_lo
@@ -275,6 +277,8 @@ test_start:
     // ============================================================
     lda #3
     sta player_data + PL_CHR_CUR
+    lda #0
+    sta sb_item_p1              // No enchantment
     lda #2                      // Dagger
     jsr calc_buy_price
     lda sb_price_lo
@@ -295,6 +299,8 @@ test_start:
     // ============================================================
     lda #18
     sta player_data + PL_CHR_CUR
+    lda #0
+    sta sb_item_p1              // No enchantment
     lda #2                      // Dagger (base 10)
     jsr calc_sell_price
     lda sb_price_lo
@@ -462,9 +468,55 @@ test_start:
     sta tc_results + 16
 
     // ============================================================
+    // Test 18: calc_buy_price with enchantment — dagger +2 at CHR 18
+    // base=10, p1=2, bonus=2×100=200, total=10+200=210
+    // ============================================================
+    lda #18
+    sta player_data + PL_CHR_CUR
+    lda #2
+    sta sb_item_p1              // +2 enchantment
+    lda #2                      // Dagger (base 10)
+    jsr calc_buy_price
+    lda sb_price_lo
+    cmp #<210
+    bne !t18_fail+
+    lda sb_price_hi
+    cmp #>210
+    bne !t18_fail+
+    lda #$01
+    jmp !t18_store+
+!t18_fail:
+    lda #$00
+!t18_store:
+    sta tc_results + 17
+
+    // ============================================================
+    // Test 19: calc_sell_price with enchantment — dagger +2 at CHR 18
+    // base sell=10×50/100=5, p1=2, bonus=200, total=5+200=205
+    // ============================================================
+    lda #18
+    sta player_data + PL_CHR_CUR
+    lda #2
+    sta sb_item_p1              // +2 enchantment
+    lda #2                      // Dagger (base 10)
+    jsr calc_sell_price
+    lda sb_price_lo
+    cmp #<205
+    bne !t19_fail+
+    lda sb_price_hi
+    cmp #>205
+    bne !t19_fail+
+    lda #$01
+    jmp !t19_store+
+!t19_fail:
+    lda #$00
+!t19_store:
+    sta tc_results + 18
+
+    // ============================================================
     // Copy results to $0400 and halt
     // ============================================================
-    ldx #16
+    ldx #18
 !copy:
     lda tc_results,x
     sta $0400,x

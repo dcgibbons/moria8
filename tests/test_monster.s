@@ -44,6 +44,8 @@
 #import "../combat.s"
 #import "../monster_attack.s"
 #import "../turn.s"
+#import "../store.s"
+#import "../ui_store.s"
 #import "../ui_help.s"
 
 // Strings referenced by imported modules but defined in main.s
