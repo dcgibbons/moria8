@@ -15,6 +15,13 @@
 // ============================================================
 .pc = $080e "Program"
 
+// Bootstrap — MUST live below $A000 so BASIC's SYS can reach it
+// before BASIC ROM is banked out.
+entry:
+    lda #$36                // Bank out BASIC ROM (keep KERNAL + I/O)
+    sta $01
+    jmp entry_main          // Now code past $A000 is accessible
+
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
 .encoding "screencode_upper"
@@ -59,12 +66,11 @@
 // ============================================================
 // Entry point
 // ============================================================
-entry:
+entry_main:
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
 
-    // Disable BASIC ROM — exposes RAM at $A000–$BFFF
-    :BankOutBasic()
+    // BASIC ROM already banked out by bootstrap above
 
     // Select unshifted character set (uppercase + graphics)
     // Bit 1 of $D018 selects character set: 0=uppercase, 1=lowercase
