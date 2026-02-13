@@ -2315,6 +2315,107 @@ a dedicated scratch variable or a ZP temp instead.
 
 ---
 
+### Review Pass 15 — Staff Engineer Review of 18 Bug Fixes (2026-02-12)
+
+Reviewed commit range `62e8480..a7b0712` (23 files changed, 1128 additions, 274 deletions).
+Each bug fix was verified for 6502 assembly correctness, semantic correctness against umoria
+behavior, and potential regressions. Also reviewed the RP14 fix commit (`ecdb78b`) and the
+`store_pick_item` fix (`d21e376`).
+
+**BUG-1 (18 stats inflating) — CORRECT.** Exceptional strength logic was being applied to
+all stats, not just STR. Fix correctly gates the exceptional check on stat index == 0.
+
+**BUG-2 (status bar redesign) — CORRECT.** Complete rewrite to 3-line umoria-style status
+bar. 273 lines changed. Layout matches umoria conventions.
+
+**BUG-3 (no townspeople) — CORRECT.** Added 6 town creature types (indices 20-25) and
+`TOWN_CREATURE_BASE = 20` threshold for spawning. Town creatures use `MF_PROVOKED` flag
+for aggression.
+
+**BUG-4 (store door rendering) — CORRECT.** Per-tile store door check replaced with a
+`render_store_doors` post-pass. More efficient and avoids disrupting dirty-tile rendering.
+
+**BUG-5 (direction/diagonal key mapping) — CORRECT.** Directional keys now consistent.
+
+**BUG-6 (no Q-to-quit in stores) — CORRECT.** Added `PETSCII_Q` ($51) as exit key in
+store UI menu. Menu string updated to "Q)UIT".
+
+**BUG-7 (auto-open door removes interactivity) — CORRECT.** Removed 10 lines of
+auto-open door code; closed doors now block movement via `walkable_table[8]=0`.
+
+**BUG-8 (sound_init not called) — CORRECT.** Added `jsr sound_init` in main.s init
+sequence.
+
+**BUG-9 (player '@' drawn as blank) — CORRECT.** Classic 6502 fall-through bug: missing
+`jmp !rst_write+` after setting player tile caused execution to fall into blank-tile code.
+
+**BUG-10 (look command) — CORRECT.** Direction scanning, monster/item/tile identification
+all implemented. No assembly issues.
+
+**BUG-11 (town creature provocation) — CORRECT, minor fragility note.** `MF_PROVOKED`
+flag mechanism is correct. However, `TOWN_CREATURE_BASE = 20` is a magic number that
+must stay synchronized with the creature table layout — any creature table reordering
+will silently break the town/dungeon threshold. Consider a comment or `.assert`.
+
+**BUG-12 (spell books) — CORRECT implementation, but introduced TWO side-effect bugs:**
+
+> **RP15-1 (MEDIUM — Armory stocks spell books):** `ICAT_CLOAK` was renamed to `ICAT_BOOK`
+> (value 13), but the Armory's category mask in `store_cat_mask_lo/hi` was not updated.
+> Store 1 (Armory) has mask `$20F8` which has bit 13 set — this was intentional for cloaks,
+> but now means the Armory unintentionally stocks spell books. Fix: change Armory mask from
+> `$20F8` to `$00F8` (store.s line 35-37).
+
+> **RP15-2 (MEDIUM — books get equipment pricing):** In `price_add_p1_bonus` (store.s
+> line 436-437), `cmp #ICAT_BOOK / beq !pap_equip+` routes books to the equipment pricing
+> handler that adds `p1 × 100` GP as an enchantment bonus. But book `p1` is a spell index
+> (0-15), not an enchantment level — this creates up to 1500 GP of incorrect price inflation
+> based on which spell the book teaches. Fix: remove the `ICAT_BOOK` branch from the
+> equipment handler, or add a separate book pricing branch (e.g., flat 100 GP or base cost
+> only, since spell books don't have enchantment).
+
+**BUG-13 (folded into BUG-12 commit) — CORRECT.** No separate issues.
+
+**BUG-14 (KERNAL GETIN clobbers X during name entry) — CORRECT.** Fix uses `cen_count`
+byte to preserve character count across `input_get_key` calls. Clean solution that avoids
+relying on X register surviving KERNAL calls.
+
+**BUG-15 (debug hardcoded name) — CORRECT.** Removed test/debug name.
+
+**BUG-16 (store screen clearing) — CORRECT.** Replaced `screen_clear` with
+`ui_help_clear_all` for full 25-row clearing.
+
+**BUG-17 (look command distance) — CORRECT.** Extended look to scan multiple tiles along
+direction, not just adjacent tile. Turn-consuming actions reordered so AI runs before render.
+
+**BUG-18 (inventory popup in selection dialogs) — CORRECT, minor note.** Added `'?'`
+($3F) key check in 8 item selection dialogs to show inventory via `show_inv_and_restore`.
+After the popup, the dialog re-prompts without re-validating state — this is safe because
+inventory display can't modify game state, but worth noting as an assumption.
+
+**store_pick_item fix (d21e376) — CORRECT.** `pha`/`pla` properly preserves item type
+across `check_store_category` (which clobbers X). Previously returned store index (0-5)
+instead of the item type.
+
+**RP14 fixes (ecdb78b) — CORRECT.** All 7 RP14 findings addressed: WoR restock, plan
+prose updates, enchantment pricing, cursed item check, tc_count position, and
+`ici_count` dedicated scratch.
+
+#### Summary of Review Pass 15 findings
+
+| # | Severity | Issue | Fix complexity | Status |
+|---|----------|-------|----------------|--------|
+| RP15-1 | **MEDIUM** | Armory mask $20F8 has bit 13 (ICAT_BOOK) — stocks spell books | Trivial — change to $00F8 in store_cat_mask_lo/hi | Open |
+| RP15-2 | **MEDIUM** | price_add_p1_bonus routes ICAT_BOOK to equipment handler (p1×100 GP) | Easy — remove ICAT_BOOK from equipment branch or add flat book pricing | Open |
+| RP15-3 | LOW | TOWN_CREATURE_BASE=20 is a magic number synced to creature table layout | Trivial — add .assert or comment | Open |
+| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation (currently safe) | N/A — document assumption only | Open |
+
+**Overall verdict:** All 18 bug fixes are correct at the 6502 assembly level. No register
+clobbering, branch range, or logic errors found. Two semantic bugs (RP15-1, RP15-2)
+were introduced as side effects of the BUG-12 (spell books) implementation, both in
+store.s. These are both straightforward fixes.
+
+---
+
 ## Phase 7 — Magic System: Detailed Implementation Plan
 
 ### Current State Summary
