@@ -3,7 +3,7 @@
 // Three-line status bar at rows 21–23:
 //   Row 21: Race, Class, Level, Dungeon Level
 //   Row 22: ST:nn IN:nn WI:nn DX:nn CO:nn CH:nn
-//   Row 23: HP:nn/nn  MP:nn/nn  AC:nn  AU:nnnnn  HUNGRY
+//   Row 23: HP:nn/nn MP:nn/nn AC:nn AU:nnnnn HUNGRY
 //
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
@@ -218,10 +218,10 @@ status_draw:
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // "MP:" at col 12
+    // "MP:" at col 10
     lda #COL_STATUS
     sta zp_text_color
-    lda #12
+    lda #10
     sta zp_cursor_col
     lda #<status_mp_str
     sta zp_ptr0
@@ -242,10 +242,10 @@ status_draw:
     lda zp_player_mmp
     jsr screen_put_decimal
 
-    // "AC:" at col 22
+    // "AC:" at col 19
     lda #COL_STATUS
     sta zp_text_color
-    lda #22
+    lda #19
     sta zp_cursor_col
     lda #<status_ac_str
     sta zp_ptr0
@@ -258,10 +258,10 @@ status_draw:
     lda zp_player_ac
     jsr screen_put_decimal
 
-    // "AU:" at col 28
+    // "AU:" at col 25
     lda #COL_YELLOW
     sta zp_text_color
-    lda #28
+    lda #25
     sta zp_cursor_col
     lda #<status_au_str
     sta zp_ptr0
