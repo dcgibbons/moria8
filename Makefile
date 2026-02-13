@@ -32,7 +32,7 @@ KA_FLAGS    = -showmem -vicesymbols
 
 # ── VICE flags ────────────────────────────────────────────
 # For interactive play
-RUN_FLAGS   = +confirmexit -autostartprgmode 1 -sound
+RUN_FLAGS   = +confirmexit -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
 .PHONY: all build run test disk clean
