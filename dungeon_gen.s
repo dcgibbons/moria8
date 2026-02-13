@@ -304,10 +304,10 @@ draw_store:
     // Right wall
     ldy zp_temp3
     sta (zp_ptr0),y
-    // Fill interior with floor (already floor, but ensure correct flags)
+    // Fill interior with opaque wall (no flags → invisible, non-walkable)
     ldy zp_temp1
     iny
-    lda #TILE_FLOOR | TOWN_FLAGS
+    lda #TILE_WALL_H
 !interior:
     sta (zp_ptr0),y
     iny
