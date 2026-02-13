@@ -14,8 +14,9 @@
 .const SAVE_FILE_NUM  = 2       // Logical file number for save/load data
 .const CHECK_FILE_NUM = 3       // Separate file number for check_savefile_exists
 .const SAVE_DEVICE    = 8       // Device 8 = first disk drive
-.const SAVE_SEC_ADDR  = 2       // Secondary address for write
-.const LOAD_SEC_ADDR  = 0       // Secondary address for read
+.const SAVE_SEC_ADDR  = 2       // Secondary address for write (1541 channel 2)
+.const LOAD_SEC_ADDR  = 5       // Secondary address for read (1541 channel 5)
+.const CHECK_SEC_ADDR = 6       // Secondary address for existence check (1541 channel 6)
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
@@ -336,6 +337,7 @@ save_game:
 // Output: carry set = success, carry clear = failure
 // Clobbers: A, X, Y, all scratch
 // ============================================================
+
 load_game:
     // Show "LOADING GAME..." message
     lda #<save_load_str
@@ -733,7 +735,7 @@ check_savefile_exists:
     jsr KERNAL_SETNAM
     lda #CHECK_FILE_NUM     // Use separate file# to avoid conflict with load_game
     ldx #SAVE_DEVICE
-    ldy #LOAD_SEC_ADDR
+    ldy #CHECK_SEC_ADDR     // Separate 1541 channel from load_game
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcs !csf_close_no+      // OPEN failed — still close to clear file table

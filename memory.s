@@ -29,7 +29,7 @@
 .const MAP_END          = $ceff
 .const FLOOR_ITEM_BASE  = $cf00 // Floor item table (256 bytes)
 .const FLOOR_ITEM_END   = $cfff
-.const CREATURE_BASE    = $ab00 // Runtime scratch area (BFS, RLE) — must be past program_end
+.const CREATURE_BASE    = $ac00 // Runtime scratch area (BFS, RLE) — must be past program_end
 .const CREATURE_END     = $bfff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
@@ -37,7 +37,8 @@
 .const COLOR_RAM        = $d800
 
 // ZP save buffer — stores $02–$8F during game, restored on exit
-.const ZP_SAVE_BUF      = $9e00 // 142 bytes at top of program area
+// Allocated as program data so it can't collide with code.
+// Located under BASIC ROM when above $A000 — must read before banking BASIC in.
 .const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
 
 // ============================================================
@@ -94,24 +95,27 @@
 // Subroutines
 // ============================================================
 
-// save_zp — Copy $02–$8F to ZP_SAVE_BUF
+// Buffer allocated as program data — address assigned by assembler
+zp_save_buf: .fill ZP_SAVE_SIZE, 0
+
+// save_zp — Copy $02–$8F to zp_save_buf
 // Preserves: nothing (uses A, X)
 save_zp:
     ldx #0
 !loop:
     lda $02,x
-    sta ZP_SAVE_BUF,x
+    sta zp_save_buf,x
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
     rts
 
-// restore_zp — Copy ZP_SAVE_BUF back to $02–$8F
+// restore_zp — Copy zp_save_buf back to $02–$8F
 // Preserves: nothing (uses A, X)
 restore_zp:
     ldx #0
 !loop:
-    lda ZP_SAVE_BUF,x
+    lda zp_save_buf,x
     sta $02,x
     inx
     cpx #ZP_SAVE_SIZE
@@ -188,4 +192,5 @@ copy_to_e000:
 // ============================================================
 .assert "Map fits in $C000 region", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
+.assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

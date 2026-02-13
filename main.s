@@ -28,10 +28,10 @@ entry:
 exit_trampoline:
     lda #0
     sta $d418               // Silence SID
+    jsr restore_zp          // Must run BEFORE banking BASIC in (buffer may be under BASIC ROM)
     lda $01
     ora #%00000001          // Set bit 0 (LORAM) — bank in BASIC ROM
     sta $01
-    jsr restore_zp          // restore_zp is at $0822, safe
     lda #$0e
     sta $d020               // Restore default border (light blue)
     lda #$06
