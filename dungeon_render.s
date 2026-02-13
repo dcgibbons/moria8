@@ -299,20 +299,7 @@ render_viewport:
     jmp !write_tile+
 
 !not_player:
-    // Skip store door check in dungeon levels (saves ~100 cycles/tile)
-    lda zp_player_dlvl
-    bne !write_tile+
-
-    // Check if this is a store door (show store number) — town only
-    jsr check_store_door
-    bcc !write_tile+        // Not a store door
-
-    // A = store number (1-6), convert to screen code ($31-$36)
-    clc
-    adc #$30
-    sta zp_temp0
-    lda #COL_STORE
-    sta zp_temp1
+    // Store door numbers rendered by render_store_doors post-pass
     jmp !write_tile+
 
 !draw_blank:
@@ -348,49 +335,80 @@ render_viewport:
     beq !done+
     jmp !row_loop-
 !done:
-    rts
+    jmp render_store_doors  // Overlay store door numbers (town only)
 
-// check_store_door — Check if current map position is a store door
-// Input: map position from zp_view_x + zp_render_x, zp_view_y + zp_render_y
-// Output: carry set if store door, A = store number (1-6)
-//         carry clear if not a store door
-// Preserves: zp_temp0, zp_temp1
-check_store_door:
-    // Compute map x
-    lda zp_render_x
-    clc
-    adc zp_view_x
-    sta zp_temp2            // map x
+// render_store_doors — Overlay store door numbers on screen (town only)
+// Called after render_viewport or render_local_area as a post-pass.
+// Only 6 iterations instead of per-tile checks (was O(760×6), now O(6)).
+// Preserves: nothing
+render_store_doors:
+    lda zp_player_dlvl
+    bne !rsd_done+
 
-    // Compute map y
-    lda zp_render_y
-    clc
-    adc zp_view_y
-    sta zp_temp3            // map y
+    ldx #0
+!rsd_loop:
+    stx rsd_save_x
 
-    ldx #0                  // Store index
-!check_loop:
+    // Skip if player is standing on this door
     lda store_door_x,x
-    cmp zp_temp2
-    bne !next+
+    cmp zp_player_x
+    bne !rsd_not_player+
     lda store_door_y,x
-    cmp zp_temp3
-    bne !next+
+    cmp zp_player_y
+    beq !rsd_next+
+!rsd_not_player:
 
-    // Match! Return store number (1-based)
-    txa
+    // Check x within viewport
+    lda store_door_x,x
+    sec
+    sbc zp_view_x
+    bcc !rsd_next+          // Left of viewport
+    cmp #VIEWPORT_W
+    bcs !rsd_next+          // Right of viewport
     clc
-    adc #1
-    sec                     // Set carry = found
-    rts
+    adc #VIEWPORT_X
+    sta rsd_col
 
-!next:
+    // Check y within viewport
+    lda store_door_y,x
+    sec
+    sbc zp_view_y
+    bcc !rsd_next+          // Above viewport
+    cmp #VIEWPORT_H
+    bcs !rsd_next+          // Below viewport
+    clc
+    adc #VIEWPORT_Y
+    tay                     // Y = screen row index
+
+    // Get screen/color row addresses
+    lda screen_row_lo,y
+    sta zp_ptr0
+    lda screen_row_hi,y
+    sta zp_ptr0_hi
+    lda color_row_lo,y
+    sta zp_ptr2
+    lda color_row_hi,y
+    sta zp_ptr2_hi
+
+    // Write store number and color
+    ldy rsd_col
+    lda rsd_save_x
+    clc
+    adc #$31                // '1'-'6' screen code
+    sta (zp_ptr0),y
+    lda #COL_STORE
+    sta (zp_ptr2),y
+
+!rsd_next:
+    ldx rsd_save_x
     inx
     cpx #STORE_COUNT
-    bne !check_loop-
-
-    clc                     // Clear carry = not found
+    bne !rsd_loop-
+!rsd_done:
     rts
+
+rsd_col:    .byte 0
+rsd_save_x: .byte 0
 
 // render_single_tile — Render one tile at map coordinates
 // Used by dirty rendering to update only changed tiles.
@@ -544,43 +562,14 @@ render_single_tile:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
-    bne !rst_store+
+    bne !rst_write+
     lda zp_temp1
     cmp zp_player_y
-    bne !rst_store+
+    bne !rst_write+
     lda #SC_PLAYER
     sta zp_temp3
     lda #COL_PLAYER
     sta zp_temp4
-    jmp !rst_write+
-
-!rst_store:
-    // Skip store door check in dungeon levels
-    lda zp_player_dlvl
-    bne !rst_write+
-
-    // Check store doors (inline — check_store_door clobbers zp_temp2/3)
-    ldx #0
-!rst_store_loop:
-    lda store_door_x,x
-    cmp zp_temp0
-    bne !rst_next_store+
-    lda store_door_y,x
-    cmp zp_temp1
-    bne !rst_next_store+
-    // Store door match
-    txa
-    clc
-    adc #$31                // '1'-'6' screen code
-    sta zp_temp3
-    lda #COL_STORE
-    sta zp_temp4
-    jmp !rst_write+
-!rst_next_store:
-    inx
-    cpx #STORE_COUNT
-    bne !rst_store_loop-
-    jmp !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
@@ -737,7 +726,7 @@ render_local_area:
     inc rla_cur_y
     jmp !rla_row-
 !rla_done:
-    rts
+    jmp render_store_doors  // Overlay store door numbers (town only)
 
 rla_min_x: .byte 0
 rla_max_x: .byte 0
