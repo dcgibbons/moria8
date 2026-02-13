@@ -80,7 +80,9 @@ store_enter:
     jmp !se_loop-
 
 !se_exit:
-    jsr screen_clear
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
     rts
 
 // ============================================================
@@ -91,7 +93,9 @@ store_enter:
 // Input: zp_store_idx
 // Clobbers: everything
 store_draw_screen:
-    jsr screen_clear
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
 
     // Row 0: Store name (white)
     lda #COL_WHITE
@@ -503,7 +507,9 @@ sbuy_full:
 // Clobbers: everything
 store_sell:
     // Draw sell sub-screen: inventory list
-    jsr screen_clear
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
 
     lda #COL_WHITE
     sta zp_text_color
