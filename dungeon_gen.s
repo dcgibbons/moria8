@@ -2276,6 +2276,18 @@ bfs_enqueue_nb:
     sta bfs_eq_y
 
 bfs_enqueue_do:
+    // Bounds check: drop entry if queue is full
+    lda bfs_tail_hi
+    cmp #>BFS_QUEUE_MAX
+    bcc !bfe_ok+
+    bne !bfe_full+
+    lda bfs_tail_lo
+    cmp #<BFS_QUEUE_MAX
+    bcc !bfe_ok+
+!bfe_full:
+    rts
+!bfe_ok:
+
     // Address = BFS_QUEUE + tail * 2
     lda bfs_tail_lo
     asl
