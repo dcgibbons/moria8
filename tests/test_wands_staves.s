@@ -13,6 +13,7 @@
 
 #import "../zeropage.s"
 #import "../memory.s"
+#import "../reu.s"
 #import "../screen.s"
 #import "../color.s"
 #import "../config.s"
@@ -30,6 +31,7 @@
 #import "../dungeon_gen.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
+#import "../tier_manager.s"
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"

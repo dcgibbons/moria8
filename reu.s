@@ -351,6 +351,7 @@ reu_load_all_tiers:
     sta reu_tier_start_hi,x
 
     // Load tier file from disk to $E000
+    stx current_tier            // tier_load_disk reads current_tier for filename
     jsr tier_load_disk
     bcs !rlt_skip+              // Skip if load failed
 

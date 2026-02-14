@@ -177,6 +177,9 @@ turn_tick_effects:
 !recall_generate:
     lda #$ff
     sta zp_run_dir                   // Stop running
+    lda #0
+    sta current_tier                 // Force first-entry tier lookup
+    jsr tier_check_transition        // Load correct tier for new dlvl
     jsr level_generate
     jsr monster_spawn_level
     jsr item_spawn_level

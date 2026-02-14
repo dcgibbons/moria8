@@ -105,6 +105,7 @@ run_test "save"  "tests/test_save.s"  "0400 0409" 10 500000000
 run_test "score" "tests/test_score.s" "0400 0409" 10 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
+run_test "tier" "tests/test_tier.s" "0400 0409" 10 500000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

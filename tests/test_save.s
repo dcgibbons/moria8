@@ -36,6 +36,7 @@ test_finish:
 
 #import "../zeropage.s"
 #import "../memory.s"
+#import "../reu.s"
 #import "../screen.s"
 #import "../color.s"
 #import "../config.s"
@@ -52,6 +53,7 @@ test_finish:
 #import "../dungeon_gen.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
+#import "../tier_manager.s"
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
@@ -79,8 +81,8 @@ press_key_str:
 tc_results: .fill 12, $ff
 tc_count: .byte 0
 
-// Verification buffer — 256 bytes at $AF00 (past code end ~$A6xx, before RLE buf)
-.const VERIFY_BUF = $AF00
+// Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
+.const VERIFY_BUF = $CF00
 
 // RLE workspace — use $B000, safely past VERIFY_BUF
 // Worst case: 3840 alternating bytes → 3870 compressed → extends to $BF1E

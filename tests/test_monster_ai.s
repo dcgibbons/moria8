@@ -8,14 +8,34 @@
 // in tc_results[] and copy to $0400 at the very end.
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(bootstrap)
 
 .pc = $0810 "Test Code"
 
 .encoding "screencode_upper"
 
+// Bootstrap — must be before imports so it's in RAM below $A000.
+bootstrap:
+    lda $01
+    and #%11111110          // Clear bit 0 -> bank out BASIC ROM
+    sta $01
+    jmp test_start
+
+// test_finish — Copy results to $0400 and halt.
+test_finish:
+    ldx #14
+!copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !copy-
+    brk
+
+.pc = * "Test Body"
+
 #import "../zeropage.s"
 #import "../memory.s"
+#import "../reu.s"
 #import "../screen.s"
 #import "../color.s"
 #import "../config.s"
@@ -32,6 +52,7 @@
 #import "../dungeon_gen.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
+#import "../tier_manager.s"
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
@@ -62,8 +83,6 @@ tai_count:  .byte 0
 tc_results: .fill 15, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
-    // Bank out BASIC ROM (needed for $A000 area used by BFS)
-    :BankOutBasic()
 
     // Seed RNG deterministically
     lda #$42
@@ -1102,12 +1121,4 @@ test_start:
     sta tc_results + 14
 
 !tests_done:
-    // Copy results from tc_results to $0400 (screen row 0)
-    ldx #14
-!copy_results:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy_results-
-
-    brk
+    jmp test_finish
