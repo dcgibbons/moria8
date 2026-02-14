@@ -13,7 +13,7 @@
 .const MAX_TOWN_CREATURES    = 8  // Town creature slots
 .const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
 .const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
-.const TOWN_CREATURE_COUNT   = 6  // Currently populated town creatures (will become 8 with tier0)
+.const TOWN_CREATURE_COUNT   = 8  // All 8 umoria town creatures
 .const NUM_SOA_FIELDS        = 22 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
 
@@ -73,8 +73,7 @@ cr_display:
     .byte $17, $06, $12, $07, $02, $24, $0d, $03, $0d, $01  // 10-19
     .byte $0b, $01, $10, $10, $13, $0f                       // 20-25
     .fill 31, 0                                              // 26-56: unused
-    .byte $10, $10, $10, $10, $10, $10                       // 57-62: town (P)
-    .fill 2, 0                                               // 63-64: unused
+    .byte $10, $10, $10, $10, $10, $10, $10, $10              // 57-64: town (P)
 
 // Color
 cr_color:
@@ -84,8 +83,7 @@ cr_color:
     .byte COL_YELLOW, COL_GREY, COL_GREEN, COL_YELLOW, COL_LGREY   // 15-19
     .byte COL_RED, COL_WHITE, COL_CYAN, COL_LGREEN, COL_RED, COL_GREEN  // 20-25
     .fill 31, 0                                                     // 26-56: unused
-    .byte COL_ORANGE, COL_LGREY, COL_GREEN, COL_RED, COL_YELLOW, COL_PURPLE  // 57-62: town
-    .fill 2, 0                                                      // 63-64
+    .byte COL_LGREY, COL_LGREY, COL_LGREY, COL_LGREY, COL_CYAN, COL_LGREY, COL_CYAN, COL_RED  // 57-64: town
 
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
@@ -93,8 +91,7 @@ cr_speed:
     .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1                     // 10-19
     .byte 1, 1, 1, 1, 1, 1                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 1, 0, 0, 1, 1, 0                                  // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 1, 1, 1, 1, 1, 1, 1, 1                             // 57-64: town
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01
@@ -105,8 +102,7 @@ cr_mflags:
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0  // 10-19
     .byte  0,  0,  0,  0,  0,  0                                         // 20-25
     .fill 31, 0                                                           // 26-56
-    .byte  0,  0,  0,  0,  0,  0                                         // 57-62: town
-    .fill 2, 0                                                            // 63-64
+    .byte  0,  0,  0,  0,  0,  0,  0,  0                                  // 57-64: town
 
 // Creature level
 cr_level:
@@ -114,8 +110,7 @@ cr_level:
     .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2                     // 10-19
     .byte 3, 4, 4, 4, 5, 5                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 0, 0, 0, 0, 0, 0                                  // 57-62: town level 0
-    .fill 2, 0                                               // 63-64
+    .byte 0, 0, 0, 0, 0, 0, 0, 0                             // 57-64: town level 0
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
@@ -123,8 +118,7 @@ cr_hd_num:
     .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3                     // 10-19
     .byte 3, 5, 3, 4, 6, 5                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 1, 2, 1, 2, 5, 1                                  // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 1, 1, 1, 1, 2, 2, 5, 7                             // 57-64: town
 
 // Hit dice sides
 cr_hd_sides:
@@ -132,8 +126,7 @@ cr_hd_sides:
     .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6                     // 10-19
     .byte 6, 8, 6, 6, 8, 8                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 4, 3, 4, 8, 8, 4                                  // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 4, 2, 4, 1, 8, 3, 8, 8                             // 57-64: town
 
 // Armor class
 cr_ac:
@@ -141,8 +134,7 @@ cr_ac:
     .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20               // 10-19
     .byte 14, 20, 6, 10, 18, 16                             // 20-25
     .fill 31, 0                                              // 26-56
-    .byte  2, 1, 1, 8, 16, 1                                // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte  1, 1, 1, 1, 8, 1, 20, 30                          // 57-64: town
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
@@ -150,8 +142,7 @@ cr_sleep:
     .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80           // 10-19
     .byte 20, 40, 10, 10, 30, 15                            // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 10,  0, 40,  0,  0, 40                            // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 40,  0, 40, 50, 99,  0, 250, 250                   // 57-64: town
 
 // Area affect radius (awareness factor)
 cr_aaf:
@@ -159,8 +150,7 @@ cr_aaf:
     .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8           // 10-19
     .byte 15, 10, 16, 14, 10, 16                            // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 12,  4,  6, 20, 20,  6                            // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte  4,  6, 10, 10, 10, 10, 10, 10                     // 57-64: town
 
 // Experience value (16-bit)
 cr_xp_lo:
@@ -168,13 +158,11 @@ cr_xp_lo:
     .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8                     // 10-19
     .byte 12, 15, 18, 16, 25, 22                            // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 0, 0, 0, 0, 0, 0                                  // 57-62: town 0 XP
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town 0 XP
 cr_xp_hi:
     .fill 26, 0                                              // 0-25: all zero
     .fill 31, 0                                              // 26-56
-    .fill 6, 0                                               // 57-62: town 0 XP
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town 0 XP
 
 // Attack 0 dice
 cr_atk0_dice:
@@ -182,15 +170,13 @@ cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1                     // 10-19
     .byte 1, 2, 1, 1, 2, 1                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 1, 1, 1, 1, 2, 1                                  // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 0, 0, 0, 0, 1, 0, 1, 2                             // 57-64: town
 cr_atk0_sides:
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6                     // 0-9
     .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4                     // 10-19
     .byte 4, 4, 6, 5, 6, 8                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 2, 2, 2, 6, 6, 2                                  // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte 0, 0, 0, 0, 6, 0, 10, 6                            // 57-64: town
 
 // Attack 0 type
 cr_atk0_type:
@@ -200,8 +186,7 @@ cr_atk0_type:
     .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL    // 15-19
     .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 20-25
     .fill 31, 0                                                           // 26-56
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 57-62: town
-    .fill 2, 0                                                            // 63-64
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 57-64: town
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
@@ -209,22 +194,19 @@ cr_atk1_type:
     .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0   // 10-19
     .byte          0, 0, 0, 0, 0, 0                          // 20-25
     .fill 31, 0                                              // 26-56
-    .byte          0, 0, 0, 0, ATK_NORMAL, 0                // 57-62: merc has 2nd
-    .fill 2, 0                                               // 63-64
+    .byte ATK_NORMAL, 0, 0, 0, ATK_NORMAL, 0, 0, 0           // 57-64: town
 cr_atk1_dice:
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0                     // 0-9
     .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0                     // 10-19
     .byte 0, 0, 0, 0, 0, 0                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 0, 0, 0, 0, 3, 0                                  // 57-62: merc 3d5
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town
 cr_atk1_sides:
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0                     // 0-9
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0                     // 10-19
     .byte 0, 0, 0, 0, 0, 0                                  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte 0, 0, 0, 0, 5, 0                                  // 57-62: merc 3d5
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:
@@ -232,8 +214,7 @@ cr_spell_chance:
     .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
     .byte 30,  0, 40, 35, 25, 35                            // 20-25: spellcasters
     .fill 31, 0                                              // 26-56
-    .fill 6, 0                                               // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town
 
 // Spell flags (bitmask of available spells)
 cr_spell_flags:
@@ -246,8 +227,7 @@ cr_spell_flags:
     .byte MSF_BREATH                                        // 24: Giant salamander
     .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL                 // 25: Orc shaman
     .fill 31, 0                                              // 26-56
-    .fill 6, 0                                               // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .fill 8, 0                                               // 57-64: town
 
 // Name pointer tables (lo/hi)
 cr_name_lo:
@@ -257,8 +237,7 @@ cr_name_lo:
     .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19       // 15-19
     .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte <crn_t0, <crn_t1, <crn_t2, <crn_t3, <crn_t4, <crn_t5 // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte <crn_t0, <crn_t1, <crn_t2, <crn_t3, <crn_t4, <crn_t5, <crn_t6, <crn_t7 // 57-64: town
 cr_name_hi:
     .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4       // 0-4
     .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9       // 5-9
@@ -266,8 +245,7 @@ cr_name_hi:
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19       // 15-19
     .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25  // 20-25
     .fill 31, 0                                              // 26-56
-    .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5 // 57-62: town
-    .fill 2, 0                                               // 63-64
+    .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
 
 // Name strings (screen codes, null-terminated)
 // Dungeon creatures
@@ -297,13 +275,15 @@ crn_22: .text "NOVICE MAGE" ; .byte 0
 crn_23: .text "NOVICE PRIEST" ; .byte 0
 crn_24: .text "GIANT SALAMANDER" ; .byte 0
 crn_25: .text "ORC SHAMAN" ; .byte 0
-// Town creatures (referenced from indices 57-62)
+// Town creatures (referenced from indices 57-64)
 crn_t0: .text "FILTHY STREET URCHIN" ; .byte 0
-crn_t1: .text "SINGING HAPPY DRUNK" ; .byte 0
-crn_t2: .text "MANGY LEPER" ; .byte 0
-crn_t3: .text "SQUINT-EYED ROGUE" ; .byte 0
-crn_t4: .text "MEAN MERCENARY" ; .byte 0
-crn_t5: .text "BOIL-COVERED WRETCH" ; .byte 0
+crn_t1: .text "BLUBBERING IDIOT" ; .byte 0
+crn_t2: .text "PITIFUL-LOOKING BEGGAR" ; .byte 0
+crn_t3: .text "MANGY-LOOKING LEPER" ; .byte 0
+crn_t4: .text "SQUINT-EYED ROGUE" ; .byte 0
+crn_t5: .text "SINGING, HAPPY DRUNK" ; .byte 0
+crn_t6: .text "MEAN-LOOKING MERCENARY" ; .byte 0
+crn_t7: .text "BATTLE-SCARRED VETERAN" ; .byte 0
 
 // ============================================================
 // Active monster table — 32 slots x 12 bytes
@@ -680,11 +660,11 @@ monster_spawn_town:
     jsr find_monster_floor
     bcc !mst_skip+
 
-    // Pick random town creature [TOWN_CREATURE_BASE, TOWN_CREATURE_BASE+5]
-    lda #TOWN_CREATURE_COUNT    // 6
-    jsr rng_range               // [0, 5]
+    // Pick random town creature [TOWN_CREATURE_BASE, TOWN_CREATURE_BASE+7]
+    lda #TOWN_CREATURE_COUNT    // 8
+    jsr rng_range               // [0, 7]
     clc
-    adc #TOWN_CREATURE_BASE     // [57, 62]
+    adc #TOWN_CREATURE_BASE     // [57, 64]
 
     jsr monster_spawn_one
 

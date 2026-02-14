@@ -66,7 +66,7 @@ tier0_cr_xp_hi:
 
 // Attack 0 type
 tier0_cr_atk0_type:
-    .byte $00, $00, $00, $00, $00, $00, $00, $00
+    .byte $01, $01, $01, $01, $01, $01, $01, $01
 
 // Attack 0 dice count
 tier0_cr_atk0_dice:
@@ -78,7 +78,7 @@ tier0_cr_atk0_sides:
 
 // Attack 1 type
 tier0_cr_atk1_type:
-    .byte $08, $00, $00, $00, $00, $00, $00, $00
+    .byte $01, $00, $00, $00, $01, $00, $00, $00
 
 // Attack 1 dice count
 tier0_cr_atk1_dice:

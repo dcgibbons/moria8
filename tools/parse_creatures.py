@@ -32,24 +32,21 @@ import os
 #  19=Lose XP, 20=Aggravation, 21=Disenchant, 22=Eat food,
 #  23=Eat light, 24=Eat charges, 99=Blank
 
-# Our C64 attack effect types
-ATK_NORMAL    = 0
-ATK_POISON    = 1
-ATK_PARALYZE  = 2
-ATK_FEAR      = 3
-ATK_CONFUSE   = 4
-ATK_CORRODE   = 5
-ATK_AGGRAVATE = 6
-ATK_BLIND     = 7
-ATK_STEAL_GOLD= 8
-ATK_DRAIN_XP  = 9
-ATK_FIRE      = 10
-ATK_COLD      = 11
+# Our C64 attack effect types — must match monster.s:21-29
+ATK_NONE      = 0
+ATK_NORMAL    = 1
+ATK_CONFUSE   = 3
+ATK_FEAR      = 4
+ATK_ACID      = 6
+ATK_CORRODE   = 9
+ATK_PARALYZE  = 11
+ATK_POISON    = 14
+ATK_AGGRAVATE = 20
 
 ATK_NAMES = {
-    0: "NORMAL", 1: "POISON", 2: "PARALYZE", 3: "FEAR",
-    4: "CONFUSE", 5: "CORRODE", 6: "AGGRAVATE", 7: "BLIND",
-    8: "STEAL_GOLD", 9: "DRAIN_XP", 10: "FIRE", 11: "COLD",
+    0: "NONE", 1: "NORMAL", 3: "CONFUSE", 4: "FEAR",
+    6: "ACID", 9: "CORRODE", 11: "PARALYZE", 14: "POISON",
+    20: "AGGRAVATE",
 }
 
 UMORIA_TO_C64_ATK = {
@@ -57,27 +54,27 @@ UMORIA_TO_C64_ATK = {
     2:  ATK_POISON,     # Poison STR
     3:  ATK_CONFUSE,    # Confusion
     4:  ATK_FEAR,       # Fear
-    5:  ATK_FIRE,       # Fire
-    6:  ATK_CORRODE,    # Acid
-    7:  ATK_COLD,       # Cold
-    8:  ATK_NORMAL,     # Lightning → normal (simplified)
+    5:  ATK_NORMAL,     # Fire → normal (no C64 handler)
+    6:  ATK_ACID,       # Acid
+    7:  ATK_NORMAL,     # Cold → normal (no C64 handler)
+    8:  ATK_NORMAL,     # Lightning → normal (no C64 handler)
     9:  ATK_CORRODE,    # Corrosion
-    10: ATK_BLIND,      # Blindness
+    10: ATK_NORMAL,     # Blindness → normal (no C64 handler)
     11: ATK_PARALYZE,   # Paralysis
-    12: ATK_STEAL_GOLD, # Steal Money
-    13: ATK_NORMAL,     # Steal Object → normal (simplified)
+    12: ATK_NORMAL,     # Steal Money → normal (no C64 handler)
+    13: ATK_NORMAL,     # Steal Object → normal (no C64 handler)
     14: ATK_POISON,     # Poison
     15: ATK_POISON,     # Lose DEX → poison (simplified)
     16: ATK_POISON,     # Lose CON → poison (simplified)
     17: ATK_NORMAL,     # Lose INT → normal (simplified)
     18: ATK_NORMAL,     # Lose WIS → normal (simplified)
-    19: ATK_DRAIN_XP,   # Lose experience
+    19: ATK_NORMAL,     # Lose experience → normal (no C64 handler)
     20: ATK_AGGRAVATE,  # Aggravation
     21: ATK_NORMAL,     # Disenchant → normal (simplified)
     22: ATK_NORMAL,     # Eat food → normal (simplified)
     23: ATK_NORMAL,     # Eat light → normal (simplified)
     24: ATK_NORMAL,     # Eat charges → normal (simplified)
-    99: ATK_NORMAL,     # Blank
+    99: ATK_NONE,       # Blank → no attack
 }
 
 # ============================================================
