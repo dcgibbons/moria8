@@ -3540,7 +3540,7 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R6.1 | Haggling | **(deferred)** | Fixed-price by design (see Design Decision #4). Multi-round bidding omitted for 40-col display. |
+| R6.1 | Haggling | **(TODO)** | Replace fixed-price with umoria-style multi-round haggling. Shopkeeper has asking price (markup from base), player offers counter-price, back-and-forth until agreement or walk-away. CHR affects initial markup and shopkeeper patience. Bad-offer reputation tracking (shopkeeper refuses if player wastes too much time). Fits on 40-col using message line for offers + row 24 for player input. |
 | R6.2 | Black Market (Store 7) | **(TODO)** | Missing. Sells rare items at inflated prices. Need new store with special stock rules. |
 | R6.3 | Player Home (Store 8) | **(TODO)** | Missing. Storage for items between dungeon runs. Need home inventory (disk-persisted). |
 | R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
@@ -3559,6 +3559,7 @@ design; items marked **(TODO)** need implementation.
 - R2.2 Mineral streamers — treasure variety
 - R3.4 Monster fleeing — tactical depth
 - R4.1 Ego items — item variety and excitement
+- R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
 - R6.2 Black Market — economy depth
 
 **Low priority (polish/completeness):**
