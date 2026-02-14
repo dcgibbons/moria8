@@ -3260,87 +3260,34 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.7 — Wands and Staves
+#### Step 7.7 — Wands and Staves ✅ IMPLEMENTED
 
 **Goal:** Implement wand aiming and staff usage with charge tracking.
 
-**Files:** `player_items.s` (new `item_aim_wand`, `item_use_staff`), `main.s`
-(dispatch), `item.s` (SoA entries)
+**Files modified:** `player_items.s`, `main.s`, `item.s`, `tests/test_wands_staves.s`, `run_tests.sh`
 
-**Charge tracking:** Use `inv_p1` as charge count (already exists per inventory
-slot). When item is spawned, set p1 to initial charge count. Each use decrements
-p1. At 0 charges, "THE WAND HAS NO CHARGES LEFT." or "THE STAFF IS EMPTY."
+**What was implemented:**
 
-**`item_aim_wand` logic:**
-```
-1. Prompt: "AIM WHICH WAND? (A-V, ESC)"
-2. Validate: slot occupied, category == ICAT_WAND.
-3. If charges (inv_p1) == 0 → "NO CHARGES LEFT.", clc, rts.
-4. jsr get_direction_target → get direction for bolt/effect.
-5. Decrement inv_p1. Auto-identify wand type (set id_known).
-6. Dispatch by item ID:
-   - Wand of Light (39): jsr eff_light_room (direction ignored)
-   - Wand of Lightning (40): lda #3; ldx #8; jsr eff_bolt
-   - Wand of Frost (41): lda #4; ldx #8; jsr eff_bolt
-   - Wand of Stinking Cloud (42): jsr eff_directional_monster → set MX_CONFUSE
-7. sec, rts (turn consumed).
-```
+1. **`item.s` — Wands and Staves data:**
+   - Added SoA entries for item IDs 39-46 (4 wands, 4 staves).
+   - Added descriptor tables and shuffling logic (wands: metal/wood types; staves: wood types).
+   - Updated `pick_item_type` to include the new range [39, 46].
+   - Updated `roll_enchantment` to initialize charges (p1).
 
-**`item_use_staff` logic:**
-```
-1. Prompt: "USE WHICH STAFF? (A-V, ESC)"
-2. Validate: slot occupied, category == ICAT_STAFF.
-3. If charges == 0 → "THE STAFF IS EMPTY.", clc, rts.
-4. Decrement inv_p1. Auto-identify.
-5. Dispatch by item ID:
-   - Staff of Light (43): jsr eff_light_room
-   - Staff of Detect Monsters (44): jsr eff_detect_monsters
-   - Staff of Teleportation (45): jsr eff_teleport_self
-   - Staff of Cure Light Wounds (46): lda #1; ldx #8; ldy #1; jsr eff_heal
-6. sec, rts.
-```
+2. **`player_items.s` — Logic:**
+   - Implemented `item_aim_wand`: prompts for direction, checks charges, consumes charge, fires effect.
+   - Implemented `item_use_staff`: checks charges, consumes charge, fires effect.
+   - Effects wired: Light, Lightning, Frost, Stinking Cloud (Wands); Light, Detect Monsters, Teleport, Cure Light Wounds (Staves).
 
-**main.s dispatch** (add before CMD_CAST):
-```
-    cmp #CMD_AIM
-    bne !not_aim+
-    jsr msg_clear
-    jsr item_aim_wand
-    bcc !aim_no_turn+
-    ... (standard post-action block)
-!not_aim:
+3. **`main.s` — Dispatch:**
+   - Added `CMD_AIM` ('a') key dispatch.
+   - Added `CMD_USE` ('Z') key dispatch.
 
-    cmp #CMD_USE
-    bne !not_use+
-    jsr msg_clear
-    jsr item_use_staff
-    bcc !use_no_turn+
-    ... (standard post-action block)
-!not_use:
-```
-
-**Wand/staff spawning:** Add to `roll_item_type` — wands and staves appear
-starting at dungeon level 3. Initial charges set in spawn: wands get
-`rng_range(4)+5` charges (5-8), staves get `rng_range(6)+3` (3-8), except
-Light variants get `rng_range(6)+10` (10-15).
-
-**Identification:** Add unidentified name shuffle for wands (4 types need 5+
-descriptors): "IRON", "COPPER", "SILVER", "BONE", "OAK". For staves:
-"BIRCH", "PINE", "MAPLE", "WILLOW", "ASH".
-
-**Steps:**
-1. Add SoA entries for wand/staff item types (IDs 39-46) to `item.s`.
-2. Add wand/staff descriptor tables and shuffle to `item.s`.
-3. Implement `item_aim_wand` in `player_items.s`.
-4. Implement `item_use_staff` in `player_items.s`.
-5. Add CMD_AIM + CMD_USE dispatch in `main.s`.
-6. Update spawn tables to include wands/staves.
-
-**Tests:**
-- Runtime: Aim Wand of Lightning at monster → verify damage applied, charges decremented.
-- Runtime: Aim Wand with 0 charges → verify "NO CHARGES" message, no turn consumed.
-- Runtime: Use Staff of Teleportation → verify player moved, charges decremented.
-- Runtime: Verify wand/staff identification on first use.
+**Verification:**
+- Created `tests/test_wands_staves.s` runtime test suite.
+- Verified generation of wands/staves with charges.
+- Verified consumption of charges and effect triggering.
+- `make test` pass.
 
 ---
 

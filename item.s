@@ -1215,8 +1215,9 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(47) + 2 → range [2, 48]
-    lda #47
+    // Roll type = rng_range(45) + 2 → range [2, 46]
+    // Types 2-46 cover weapons, armor, food, potions, scrolls, rings, wands, staves
+    lda #45
     jsr rng_range
     clc
     adc #2
@@ -1432,9 +1433,11 @@ id_known:
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
-potion_shuffle: .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
-scroll_shuffle: .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
-ring_shuffle:   .byte 0, 1, 2, 3      // Shuffled at game start (2 rings → 4 desc)
+potion_shuffle: .fill 12, 0
+scroll_shuffle: .fill 12, 0
+ring_shuffle:   .fill 4, 0
+wand_shuffle:   .fill 5, 0
+staff_shuffle:  .fill 5, 0
 
 // Lookup tables: item type ID → local category index ($FF = not that category)
 potion_local_idx:
@@ -1442,7 +1445,7 @@ potion_local_idx:
     .byte 0, 1, 2       // 17-19: CLW, Speed, Poison
     .fill 5, $ff        // 20-24: not potions
     .byte 3, 4, 5, 6, 7, 8, 9  // 25-31: CSW, RestMana, Hero, Blind, Conf, DetMon, Infra
-    .fill 7, $ff        // 32-38: not potions
+    .fill 18, $ff       // 32-48: not potions
 
 scroll_local_idx:
     .fill 20, $ff       // 0-19: not scrolls
@@ -1450,6 +1453,7 @@ scroll_local_idx:
     .fill 2, $ff        // 23-24: not scrolls
     .fill 7, $ff        // 25-31: not scrolls
     .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
+    .fill 10, $ff       // 39-48: not scrolls
 
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .text "A BLUE POTION" ; .byte 0
@@ -1511,8 +1515,6 @@ scroll_colors:
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
-wand_shuffle:  .byte 0, 1, 2, 3, 4
-
 wn_0: .text "AN IRON WAND" ; .byte 0
 wn_1: .text "A COPPER WAND" ; .byte 0
 wn_2: .text "A SILVER WAND" ; .byte 0
@@ -1524,8 +1526,6 @@ wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
-staff_shuffle: .byte 0, 1, 2, 3, 4
-
 sfn_0: .text "A BIRCH STAFF" ; .byte 0
 sfn_1: .text "A PINE STAFF" ; .byte 0
 sfn_2: .text "A MAPLE STAFF" ; .byte 0
@@ -1542,36 +1542,43 @@ staff_colors:  .byte COL_WHITE, COL_BROWN, COL_ORANGE, COL_LGREEN, COL_LGREY
 // Clobbers: A, X, Y
 // ============================================================
 item_init_identification:
-    // Reset id_known: types 0-16 = known(1), 17-24 = unknown(0)
+    // Reset id_known: types 0-16 = known(1), 17-46 = unknown(0), 47-48 = known(1)
     ldx #16
     lda #1
-!iid_known:
+!iid_known_1:
     sta id_known,x
     dex
-    bpl !iid_known-
+    bpl !iid_known_1-
     ldx #17
     lda #0
 !iid_unknown:
     sta id_known,x
     inx
-    cpx #ITEM_TYPE_COUNT
+    cpx #47                     // Up to type 46 (inclusive)
     bcc !iid_unknown-
+    ldx #47
+    lda #1
+!iid_known_2:
+    sta id_known,x
+    inx
+    cpx #ITEM_TYPE_COUNT
+    bcc !iid_known_2-
 
-    // Initialize shuffle tables to identity (0..11 / 0..3)
-    ldx #11
+    // Initialize shuffle tables to identity (0..11 / 0..3 / 0..4)
+    ldx #11                         // For 12 elements (0-11)
 !iid_init_ps:
     txa
     sta potion_shuffle,x
     sta scroll_shuffle,x
     dex
     bpl !iid_init_ps-
-    ldx #3
+    ldx #3                          // For 4 elements (0-3)
 !iid_init_rs:
     txa
     sta ring_shuffle,x
     dex
     bpl !iid_init_rs-
-    ldx #4
+    ldx #4                          // For 5 elements (0-4)
 !iid_init_ws:
     txa
     sta wand_shuffle,x
@@ -1609,6 +1616,7 @@ item_init_identification:
     jsr rng_range
     ldx iid_save_x
     tay
+    // Swap scroll_shuffle[i] and scroll_shuffle[j]
     lda scroll_shuffle,x
     pha
     lda scroll_shuffle,y
@@ -1618,7 +1626,7 @@ item_init_identification:
     dex
     bne !iid_scr_loop-
 
-    // Fisher-Yates shuffle: rings (4 elements, pick from 4 descriptors)
+    // Fisher-Yates shuffle: rings (4 elements)
     ldx #3
 !iid_ring_loop:
     txa
