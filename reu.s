@@ -339,6 +339,7 @@ reu_load_all_tiers:
     lda #0
     sta reu_tier_offset_lo
     sta reu_tier_offset_hi
+    sta reu_tiers_loaded
 
     ldx #1                      // Start with tier 1
 !rlt_loop:
@@ -354,6 +355,7 @@ reu_load_all_tiers:
     stx current_tier            // tier_load_disk reads current_tier for filename
     jsr tier_load_disk
     bcs !rlt_skip+              // Skip if load failed
+    inc reu_tiers_loaded
 
     // Stash from $E000 to REU at current offset
     sei
@@ -401,6 +403,17 @@ reu_load_all_tiers:
     inx
     cpx #5                      // Tiers 1-4
     bne !rlt_loop-
+
+    // Reset game state — no tier active yet (player starts in town)
+    lda #0
+    sta current_tier
+
+    // If no tiers loaded successfully, disable REU tier path
+    // so tier_load falls back to disk → embedded creature fallback
+    lda reu_tiers_loaded
+    bne !rlt_done+
+    sta reu_present             // A is already 0
+!rlt_done:
     rts
 
 // Scratch for REU tier loading
@@ -408,6 +421,7 @@ reu_tier_idx:       .byte 0
 reu_tier_offset_lo: .byte 0
 reu_tier_offset_hi: .byte 0
 reu_tier_bank:      .byte 0
+reu_tiers_loaded:   .byte 0     // Count of successfully loaded tiers
 
 // REU start offsets for each tier (filled during reu_load_all_tiers)
 // Index 0 unused; tier 1 always starts at offset 0
