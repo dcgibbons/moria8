@@ -24,6 +24,9 @@ MAIN_SRC    = main.s
 MAIN_PRG    = $(OUT)/moria.prg
 TITLE_SRC   = title_data.s
 TITLE_PRG   = $(OUT)/title
+TIER_SRCS   = creature_data/tier1_prg.s creature_data/tier2_prg.s \
+              creature_data/tier3_prg.s creature_data/tier4_prg.s
+TIER_PRGS   = $(OUT)/cr_t1 $(OUT)/cr_t2 $(OUT)/cr_t3 $(OUT)/cr_t4
 DISK_IMAGE  = $(OUT)/moria.d64
 DISK_NAME   = "moria,m6"
 
@@ -55,6 +58,16 @@ $(MAIN_PRG): $(SOURCES) | $(OUT)
 $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(TITLE_PRG)
 
+# Creature tier data — standalone PRGs loaded at runtime ($E000)
+$(OUT)/cr_t1: creature_data/tier1_prg.s creature_data/tier1.s | $(OUT)
+	$(JAVA) -jar $(KICKASS) creature_data/tier1_prg.s -o $@
+$(OUT)/cr_t2: creature_data/tier2_prg.s creature_data/tier2.s | $(OUT)
+	$(JAVA) -jar $(KICKASS) creature_data/tier2_prg.s -o $@
+$(OUT)/cr_t3: creature_data/tier3_prg.s creature_data/tier3.s | $(OUT)
+	$(JAVA) -jar $(KICKASS) creature_data/tier3_prg.s -o $@
+$(OUT)/cr_t4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
+	$(JAVA) -jar $(KICKASS) creature_data/tier4_prg.s -o $@
+
 # Launch in VICE emulator
 run: $(MAIN_PRG)
 	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
@@ -71,12 +84,16 @@ debug: $(MAIN_PRG) disk
 test: $(MAIN_PRG)
 	./run_tests.sh
 
-# Create a 1541 .d64 disk image (includes title screen art)
-disk: $(MAIN_PRG) $(TITLE_PRG) | $(OUT)
+# Create a 1541 .d64 disk image (includes title screen art + tier data)
+disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
 	         -write $(MAIN_PRG) "moria" \
-	         -write $(TITLE_PRG) "title"
+	         -write $(TITLE_PRG) "title" \
+	         -write $(OUT)/cr_t1 "cr t1" \
+	         -write $(OUT)/cr_t2 "cr t2" \
+	         -write $(OUT)/cr_t3 "cr t3" \
+	         -write $(OUT)/cr_t4 "cr t4"
 
 $(OUT):
 	mkdir -p $(OUT)

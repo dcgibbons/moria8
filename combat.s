@@ -712,8 +712,7 @@ combat_append_str:
 // Clobbers: A, X, Y, zp_ptr1
 combat_append_monster_name:
     ldx cmb_type
-    lda cr_name_lo,x
-    ldy cr_name_hi,x
+    jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     jsr combat_append_str
     rts
 

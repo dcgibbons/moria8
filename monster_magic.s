@@ -261,8 +261,7 @@ mm_print_monster_name:
     jsr combat_append_str
 
     ldx zp_mon_type
-    lda cr_name_lo,x
-    ldy cr_name_hi,x
+    jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     jsr combat_append_str
     rts
 
@@ -422,7 +421,7 @@ monster_cast_summon:
     bne !mcs_fail+
 
     // Spawn random dungeon creature (not town)
-    lda #DUNGEON_CREATURES
+    lda active_dungeon_count
     jsr rng_range
     jsr monster_spawn_one
     // Ignore failure (table could be full)

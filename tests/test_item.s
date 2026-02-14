@@ -8,7 +8,22 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 
-.pc = $0810 "Test Code"
+// Exit trampoline at $080E (right after BASIC stub).
+// MUST be in "Test Code" segment so run_tests.sh sets breakpoint here (below $A000).
+// This avoids BASIC ROM breakpoint conflict when main code extends above $A000.
+// Placed at $080E (not $033C) to keep PRG load address at $0801 for VICE autostart.
+.pc = $080E "Test Code"
+test_exit_trampoline:
+    :BankOutBasic()
+    ldx #39
+!tc_copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !tc_copy-
+    brk
+
+.pc = $0825 "Main"
 
 .encoding "screencode_upper"
 
@@ -1827,12 +1842,5 @@ test_start:
     sta tc_results + 39
 
 !tests_done:
-    // Copy results to $0400 for VICE memory dump
-    ldx #39
-!copy:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy-
-
-    brk
+    // Jump to trampoline at $033C (below $A000) to copy results + BRK
+    jmp test_exit_trampoline

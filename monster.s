@@ -9,12 +9,12 @@
 // ============================================================
 .const MAX_MONSTERS      = 32
 .const MONSTER_ENTRY_SIZE = 12
-.const DUNGEON_CREATURES = 26   // Types 0-25: dungeon monsters
-.const TOWN_CREATURE_BASE = 26 // First town creature index (must == DUNGEON_CREATURES)
-.const TOWN_CREATURE_COUNT = 6 // Types 26-31: townspeople
-.const CREATURE_COUNT    = 32  // Total creature types
-.assert "Town creatures start after dungeon creatures", TOWN_CREATURE_BASE, DUNGEON_CREATURES
-.assert "Creature count = dungeon + town", CREATURE_COUNT, DUNGEON_CREATURES + TOWN_CREATURE_COUNT
+.const MAX_DUNGEON_CREATURES = 57 // Largest tier (tier 4)
+.const MAX_TOWN_CREATURES    = 8  // Town creature slots
+.const MAX_CREATURES         = MAX_DUNGEON_CREATURES + MAX_TOWN_CREATURES  // 65
+.const TOWN_CREATURE_BASE    = MAX_DUNGEON_CREATURES  // First town index = 57
+.const TOWN_CREATURE_COUNT   = 6  // Currently populated town creatures (will become 8 with tier0)
+.const NUM_SOA_FIELDS        = 22 // Number of SoA arrays for tier loading
 .const EMPTY_SLOT        = $ff
 
 // Attack type constants
@@ -56,228 +56,221 @@
 .const MSF_HEAL       = $40    // Bit 6: heal self
 
 // ============================================================
-// Embedded creature data — Struct-of-Arrays
-// Types 0-25: dungeon monsters (levels 1-5)
-// Types 26-31: townspeople (level 0, umoria town mobs)
+// Active creature buffers — Struct-of-Arrays (65 entries)
+//
+// Layout: [0..56] = dungeon creatures (loaded from tier data)
+//         [57..64] = town creatures (always resident)
+// Indices [active_dungeon_count..56] are unused (zeroed).
+// Town creatures at TOWN_CREATURE_BASE (57) are pre-populated below.
 // ============================================================
+
+// How many dungeon creatures are currently loaded in the active buffer
+active_dungeon_count: .byte 26  // Initial: 26 embedded dungeon creatures
 
 // Display character (screen codes)
 cr_display:
-    .byte $08   // 0: H (White harpy)
-    .byte $12   // 1: R (Giant white mouse)
-    .byte $17   // 2: W (White worm mass)
-    .byte $13   // 3: S (Large white snake)
-    .byte $0b   // 4: K (Kobold)
-    .byte $09   // 5: I (White icky thing)
-    .byte $0d   // 6: M (Shrieker mushroom)
-    .byte $03   // 7: C (Giant white centipede)
-    .byte $05   // 8: E (Floating eye)
-    .byte $0a   // 9: J (Jackal)
-    .byte $17   // 10: W (Green worm mass)
-    .byte $06   // 11: F (Giant frog)
-    .byte $12   // 12: R (Giant white rat)
-    .byte $07   // 13: G (Poltergeist)
-    .byte $02   // 14: B (Huge brown bat)
-    .byte $24   // 15: $ (Creeping copper coins)
-    .byte $0d   // 16: M (Grey mold)
-    .byte $03   // 17: C (Metallic green centipede)
-    .byte $0d   // 18: M (Yellow mold)
-    .byte $01   // 19: A (Giant black ant)
-    .byte $0b   // 20: K (Kobold shaman)
-    .byte $01   // 21: A (Giant white ant lion)
-    .byte $10   // 22: P (Novice mage)
-    .byte $10   // 23: P (Novice priest)
-    .byte $13   // 24: S (Giant salamander)
-    .byte $0f   // 25: O (Orc shaman)
-    // Town creatures (P = person, $10)
-    .byte $10   // 26: P (Filthy street urchin)
-    .byte $10   // 27: P (Singing happy drunk)
-    .byte $10   // 28: P (Mangy leper)
-    .byte $10   // 29: P (Squint-eyed rogue)
-    .byte $10   // 30: P (Mean mercenary)
-    .byte $10   // 31: P (Boil-covered wretch)
+    .byte $08, $12, $17, $13, $0b, $09, $0d, $03, $05, $0a  // 0-9
+    .byte $17, $06, $12, $07, $02, $24, $0d, $03, $0d, $01  // 10-19
+    .byte $0b, $01, $10, $10, $13, $0f                       // 20-25
+    .fill 31, 0                                              // 26-56: unused
+    .byte $10, $10, $10, $10, $10, $10                       // 57-62: town (P)
+    .fill 2, 0                                               // 63-64: unused
 
 // Color
 cr_color:
-    .byte COL_WHITE     // 0: White harpy
-    .byte COL_GREEN     // 1: Giant white mouse
-    .byte COL_WHITE     // 2: White worm mass
-    .byte COL_GREEN     // 3: Large white snake
-    .byte COL_GREEN     // 4: Kobold
-    .byte COL_WHITE     // 5: White icky thing
-    .byte COL_ORANGE    // 6: Shrieker mushroom
-    .byte COL_GREEN     // 7: Giant white centipede
-    .byte COL_GREEN     // 8: Floating eye
-    .byte COL_YELLOW    // 9: Jackal
-    .byte COL_GREEN     // 10: Green worm mass
-    .byte COL_GREEN     // 11: Giant frog
-    .byte COL_YELLOW    // 12: Giant white rat
-    .byte COL_LGREY     // 13: Poltergeist
-    .byte COL_ORANGE    // 14: Huge brown bat
-    .byte COL_YELLOW    // 15: Creeping copper coins
-    .byte COL_GREY      // 16: Grey mold
-    .byte COL_GREEN     // 17: Metallic green centipede
-    .byte COL_YELLOW    // 18: Yellow mold
-    .byte COL_LGREY     // 19: Giant black ant
-    .byte COL_RED       // 20: Kobold shaman
-    .byte COL_WHITE     // 21: Giant white ant lion
-    .byte COL_CYAN      // 22: Novice mage
-    .byte COL_LGREEN    // 23: Novice priest
-    .byte COL_RED       // 24: Giant salamander
-    .byte COL_GREEN     // 25: Orc shaman
-    // Town creatures
-    .byte COL_ORANGE    // 26: Filthy street urchin
-    .byte COL_LGREY     // 27: Singing happy drunk
-    .byte COL_GREEN     // 28: Mangy leper
-    .byte COL_RED       // 29: Squint-eyed rogue
-    .byte COL_YELLOW    // 30: Mean mercenary
-    .byte COL_PURPLE    // 31: Boil-covered wretch
+    .byte COL_WHITE, COL_GREEN, COL_WHITE, COL_GREEN, COL_GREEN     // 0-4
+    .byte COL_WHITE, COL_ORANGE, COL_GREEN, COL_GREEN, COL_YELLOW   // 5-9
+    .byte COL_GREEN, COL_GREEN, COL_YELLOW, COL_LGREY, COL_ORANGE   // 10-14
+    .byte COL_YELLOW, COL_GREY, COL_GREEN, COL_YELLOW, COL_LGREY   // 15-19
+    .byte COL_RED, COL_WHITE, COL_CYAN, COL_LGREEN, COL_RED, COL_GREEN  // 20-25
+    .fill 31, 0                                                     // 26-56: unused
+    .byte COL_ORANGE, COL_LGREY, COL_GREEN, COL_RED, COL_YELLOW, COL_PURPLE  // 57-62: town
+    .fill 2, 0                                                      // 63-64
 
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
-    .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
-    .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1
-    .byte 1, 1, 1, 1, 1, 1              // New dungeon creatures 20-25
-    .byte 1, 0, 0, 1, 1, 0              // Town creatures 26-31
+    .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1                     // 0-9
+    .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1                     // 10-19
+    .byte 1, 1, 1, 1, 1, 1                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 1, 0, 0, 1, 1, 0                                  // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01
 .const CF_UNDEAD      = $02
 
 cr_mflags:
-    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
-    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
-    .byte  0,  0,  0,  0,  0,  0                  // Dungeon creatures 20-25
-    .byte  0,  0,  0,  0,  0,  0                  // Town: all mobile
+    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0  // 0-9
+    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0  // 10-19
+    .byte  0,  0,  0,  0,  0,  0                                         // 20-25
+    .fill 31, 0                                                           // 26-56
+    .byte  0,  0,  0,  0,  0,  0                                         // 57-62: town
+    .fill 2, 0                                                            // 63-64
 
 // Creature level
 cr_level:
-    .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4
-    .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2
-    .byte 3, 4, 4, 4, 5, 5              // Dungeon creatures 20-25
-    .byte 0, 0, 0, 0, 0, 0              // Town: level 0
+    .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4                     // 0-9
+    .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2                     // 10-19
+    .byte 3, 4, 4, 4, 5, 5                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 0, 0, 0, 0, 0, 0                                  // 57-62: town level 0
+    .fill 2, 0                                               // 63-64
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
-    .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3
-    .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3
-    .byte 3, 5, 3, 4, 6, 5              // Dungeon creatures 20-25
-    .byte 1, 2, 1, 2, 5, 1              // Town: urch 1, drunk 2, leper 1, rogue 2, merc 5, wretch 1
+    .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3                     // 0-9
+    .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3                     // 10-19
+    .byte 3, 5, 3, 4, 6, 5                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 1, 2, 1, 2, 5, 1                                  // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Hit dice sides
 cr_hd_sides:
-    .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8
-    .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6
-    .byte 6, 8, 6, 6, 8, 8              // Dungeon creatures 20-25
-    .byte 4, 3, 4, 8, 8, 4              // Town: urch 1d4, drunk 2d3, leper 1d4, rogue 2d8, merc 5d8, wretch 1d4
+    .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8                     // 0-9
+    .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6                     // 10-19
+    .byte 6, 8, 6, 6, 8, 8                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 4, 3, 4, 8, 8, 4                                  // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Armor class
 cr_ac:
-    .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16
-    .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20
-    .byte 14, 20, 6, 10, 18, 16         // Dungeon creatures 20-25
-    .byte  2, 1, 1, 8, 16, 1            // Town creatures
+    .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16                // 0-9
+    .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20               // 10-19
+    .byte 14, 20, 6, 10, 18, 16                             // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte  2, 1, 1, 8, 16, 1                                // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
-    .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30
-    .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80
-    .byte 20, 40, 10, 10, 30, 15         // Dungeon creatures 20-25
-    .byte 10,  0, 40,  0,  0, 40         // Town: rogue/merc awake, others light sleep
+    .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30           // 0-9
+    .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80           // 10-19
+    .byte 20, 40, 10, 10, 30, 15                            // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 10,  0, 40,  0,  0, 40                            // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Area affect radius (awareness factor)
 cr_aaf:
-    .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12
-    .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8
-    .byte 15, 10, 16, 14, 10, 16           // Dungeon creatures 20-25
-    .byte 12,  4,  6, 20, 20,  6           // Town creatures
+    .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12           // 0-9
+    .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8           // 10-19
+    .byte 15, 10, 16, 14, 10, 16                            // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 12,  4,  6, 20, 20,  6                            // 57-62: town
+    .fill 2, 0                                               // 63-64
 
-// Experience value (16-bit, all <=35 for tier 0 — hi bytes all 0)
+// Experience value (16-bit)
 cr_xp_lo:
-    .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8
-    .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8
-    .byte 12, 15, 18, 16, 25, 22         // Dungeon creatures 20-25
-    .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
+    .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8                     // 0-9
+    .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8                     // 10-19
+    .byte 12, 15, 18, 16, 25, 22                            // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 0, 0, 0, 0, 0, 0                                  // 57-62: town 0 XP
+    .fill 2, 0                                               // 63-64
 cr_xp_hi:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0              // Dungeon creatures 20-25
-    .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
+    .fill 26, 0                                              // 0-25: all zero
+    .fill 31, 0                                              // 26-56
+    .fill 6, 0                                               // 57-62: town 0 XP
+    .fill 2, 0                                               // 63-64
 
-// Attack dice (slot 0 only for now; zeroed slots 1-3)
+// Attack 0 dice
 cr_atk0_dice:
-    .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
-    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    .byte 1, 2, 1, 1, 2, 1              // Dungeon creatures 20-25
-    .byte 1, 1, 1, 1, 2, 1              // Town: urch 1d2, drunk 1d2, leper 1d2, rogue 1d6, merc 2d6, wretch 1d2
+    .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1                     // 0-9
+    .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1                     // 10-19
+    .byte 1, 2, 1, 1, 2, 1                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 1, 1, 1, 1, 2, 1                                  // 57-62: town
+    .fill 2, 0                                               // 63-64
 cr_atk0_sides:
-    .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
-    .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4
-    .byte 4, 4, 6, 5, 6, 8              // Dungeon creatures 20-25
-    .byte 2, 2, 2, 6, 6, 2              // Town: drunk/leper/wretch buffed to 1d2 (from 1d1)
+    .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6                     // 0-9
+    .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4                     // 10-19
+    .byte 4, 4, 6, 5, 6, 8                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 2, 2, 2, 6, 6, 2                                  // 57-62: town
+    .fill 2, 0                                               // 63-64
 
-// Attack type for slot 0
+// Attack 0 type
 cr_atk0_type:
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL
-    .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL
-    .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL
-    .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // Dungeon 20-25
-    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // Town: all normal
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_POISON, ATK_NORMAL, ATK_NORMAL     // 0-4
+    .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL // 5-9
+    .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL      // 10-14
+    .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL    // 15-19
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 20-25
+    .fill 31, 0                                                           // 26-56
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // 57-62: town
+    .fill 2, 0                                                            // 63-64
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
-    .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
-    .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0
-    .byte          0, 0, 0, 0, 0, 0           // Dungeon 20-25: no second attack
-    .byte          0, 0, 0, 0, ATK_NORMAL, 0  // Town: mercenary has 2nd attack
+    .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0   // 0-9
+    .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0   // 10-19
+    .byte          0, 0, 0, 0, 0, 0                          // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte          0, 0, 0, 0, ATK_NORMAL, 0                // 57-62: merc has 2nd
+    .fill 2, 0                                               // 63-64
 cr_atk1_dice:
-    .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0
-    .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
-    .byte 0, 0, 0, 0, 3, 0                    // Town: merc 2nd atk = 3d5
+    .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0                     // 0-9
+    .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0                     // 10-19
+    .byte 0, 0, 0, 0, 0, 0                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 0, 0, 0, 0, 3, 0                                  // 57-62: merc 3d5
+    .fill 2, 0                                               // 63-64
 cr_atk1_sides:
-    .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
-    .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
-    .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
-    .byte 0, 0, 0, 0, 5, 0                    // Town: merc 2nd atk = 3d5
+    .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0                     // 0-9
+    .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0                     // 10-19
+    .byte 0, 0, 0, 0, 0, 0                                  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte 0, 0, 0, 0, 5, 0                                  // 57-62: merc 3d5
+    .fill 2, 0                                               // 63-64
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:
-    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 0-9: no spells
-    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 10-19: no spells
-    .byte 30,  0, 40, 35, 25, 35                   // Types 20-25: spellcasters
-    .byte  0,  0,  0,  0,  0,  0                   // Types 26-31: town
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
+    .byte 30,  0, 40, 35, 25, 35                            // 20-25: spellcasters
+    .fill 31, 0                                              // 26-56
+    .fill 6, 0                                               // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Spell flags (bitmask of available spells)
 cr_spell_flags:
-    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 0-9
-    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 10-19
-    .byte MSF_BOLT | MSF_HEAL                      // 20: Kobold shaman
-    .byte 0                                        // 21: Giant white ant lion
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_BLIND       // 22: Novice mage
-    .byte MSF_HEAL | MSF_SUMMON                    // 23: Novice priest
-    .byte MSF_BREATH                               // 24: Giant salamander
-    .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL        // 25: Orc shaman
-    .byte  0,  0,  0,  0,  0,  0                   // Types 26-31: town
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 0-9
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0           // 10-19
+    .byte MSF_BOLT | MSF_HEAL                               // 20: Kobold shaman
+    .byte 0                                                  // 21: Giant white ant lion
+    .byte MSF_BOLT | MSF_CONFUSE | MSF_BLIND                // 22: Novice mage
+    .byte MSF_HEAL | MSF_SUMMON                             // 23: Novice priest
+    .byte MSF_BREATH                                        // 24: Giant salamander
+    .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL                 // 25: Orc shaman
+    .fill 31, 0                                              // 26-56
+    .fill 6, 0                                               // 57-62: town
+    .fill 2, 0                                               // 63-64
 
-// Name pointer tables
+// Name pointer tables (lo/hi)
 cr_name_lo:
-    .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4
-    .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9
-    .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14
-    .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19
-    .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25
-    .byte <crn_26, <crn_27, <crn_28, <crn_29, <crn_30, <crn_31
+    .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4       // 0-4
+    .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9       // 5-9
+    .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14       // 10-14
+    .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19       // 15-19
+    .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte <crn_t0, <crn_t1, <crn_t2, <crn_t3, <crn_t4, <crn_t5 // 57-62: town
+    .fill 2, 0                                               // 63-64
 cr_name_hi:
-    .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4
-    .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9
-    .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14
-    .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19
-    .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25
-    .byte >crn_26, >crn_27, >crn_28, >crn_29, >crn_30, >crn_31
+    .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4       // 0-4
+    .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9       // 5-9
+    .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14       // 10-14
+    .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19       // 15-19
+    .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25  // 20-25
+    .fill 31, 0                                              // 26-56
+    .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5 // 57-62: town
+    .fill 2, 0                                               // 63-64
 
 // Name strings (screen codes, null-terminated)
+// Dungeon creatures
 crn_0:  .text "WHITE HARPY" ; .byte 0
 crn_1:  .text "GIANT WHITE MOUSE" ; .byte 0
 crn_2:  .text "WHITE WORM MASS" ; .byte 0
@@ -304,13 +297,13 @@ crn_22: .text "NOVICE MAGE" ; .byte 0
 crn_23: .text "NOVICE PRIEST" ; .byte 0
 crn_24: .text "GIANT SALAMANDER" ; .byte 0
 crn_25: .text "ORC SHAMAN" ; .byte 0
-// Town creatures
-crn_26: .text "FILTHY STREET URCHIN" ; .byte 0
-crn_27: .text "SINGING HAPPY DRUNK" ; .byte 0
-crn_28: .text "MANGY LEPER" ; .byte 0
-crn_29: .text "SQUINT-EYED ROGUE" ; .byte 0
-crn_30: .text "MEAN MERCENARY" ; .byte 0
-crn_31: .text "BOIL-COVERED WRETCH" ; .byte 0
+// Town creatures (referenced from indices 57-62)
+crn_t0: .text "FILTHY STREET URCHIN" ; .byte 0
+crn_t1: .text "SINGING HAPPY DRUNK" ; .byte 0
+crn_t2: .text "MANGY LEPER" ; .byte 0
+crn_t3: .text "SQUINT-EYED ROGUE" ; .byte 0
+crn_t4: .text "MEAN MERCENARY" ; .byte 0
+crn_t5: .text "BOIL-COVERED WRETCH" ; .byte 0
 
 // ============================================================
 // Active monster table — 32 slots x 12 bytes
@@ -469,8 +462,8 @@ pick_creature_type:
     sta pct_max_lvl
 
 !pct_retry:
-    // Pick random creature index [0, DUNGEON_CREATURES-1]
-    lda #DUNGEON_CREATURES
+    // Pick random creature index [0, active_dungeon_count-1]
+    lda active_dungeon_count
     jsr rng_range
     tax                         // X = candidate type
 
@@ -691,7 +684,7 @@ monster_spawn_town:
     lda #TOWN_CREATURE_COUNT    // 6
     jsr rng_range               // [0, 5]
     clc
-    adc #TOWN_CREATURE_BASE     // [20, 25]
+    adc #TOWN_CREATURE_BASE     // [57, 62]
 
     jsr monster_spawn_one
 
@@ -788,10 +781,135 @@ monster_remove:
 // Compile-time validation
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
-.assert "Creature count", CREATURE_COUNT, 32
-.assert "cr_display size", cr_color - cr_display, CREATURE_COUNT
-.assert "cr_color size", cr_speed - cr_color, CREATURE_COUNT
-.assert "cr_speed size", cr_mflags - cr_speed, CREATURE_COUNT
-.assert "cr_mflags size", cr_level - cr_mflags, CREATURE_COUNT
-.assert "cr_level size", cr_hd_num - cr_level, CREATURE_COUNT
-.assert "cr_spell_chance size", cr_spell_flags - cr_spell_chance, CREATURE_COUNT
+.assert "Max creatures", MAX_CREATURES, 65
+.assert "Town creature base", TOWN_CREATURE_BASE, 57
+.assert "cr_display size", cr_color - cr_display, MAX_CREATURES
+.assert "cr_color size", cr_speed - cr_color, MAX_CREATURES
+.assert "cr_speed size", cr_mflags - cr_speed, MAX_CREATURES
+.assert "cr_mflags size", cr_level - cr_mflags, MAX_CREATURES
+.assert "cr_level size", cr_hd_num - cr_level, MAX_CREATURES
+.assert "cr_spell_chance size", cr_spell_flags - cr_spell_chance, MAX_CREATURES
+
+// ============================================================
+// load_tier_to_buffer — Copy tier SoA data into active creature buffers
+// ============================================================
+// Input: zp_ptr0 = pointer to tier data start
+//        A = creature count for this tier
+// The tier data is sequential SoA arrays in this order:
+//   display, color, speed, mflags, level, hd_num, hd_sides, ac, sleep, aaf,
+//   xp_lo, xp_hi, atk0_type, atk0_dice, atk0_sides,
+//   atk1_type, atk1_dice, atk1_sides, spell_chance, spell_flags,
+//   name_lo, name_hi
+// Each array is `count` bytes long.
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+load_tier_to_buffer:
+    sta active_dungeon_count
+    sta ltb_count
+
+    ldx #0                      // Array index
+!ltb_array:
+    // Get destination base from table
+    lda ltb_dst_lo,x
+    sta zp_ptr1
+    lda ltb_dst_hi,x
+    sta zp_ptr1_hi
+
+    // Copy ltb_count bytes from (zp_ptr0) to (zp_ptr1)
+    stx ltb_array_idx           // Save array counter
+    ldy #0
+!ltb_byte:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    cpy ltb_count
+    bne !ltb_byte-
+
+    // Advance source pointer by count
+    clc
+    lda zp_ptr0
+    adc ltb_count
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
+
+    ldx ltb_array_idx           // Restore array counter
+    inx
+    cpx #NUM_SOA_FIELDS         // 22 arrays
+    bne !ltb_array-
+
+    rts
+
+ltb_count:     .byte 0
+ltb_array_idx: .byte 0
+
+// Destination pointer table — maps field index to active buffer base address
+ltb_dst_lo:
+    .byte <cr_display, <cr_color, <cr_speed, <cr_mflags, <cr_level
+    .byte <cr_hd_num, <cr_hd_sides, <cr_ac, <cr_sleep, <cr_aaf
+    .byte <cr_xp_lo, <cr_xp_hi
+    .byte <cr_atk0_type, <cr_atk0_dice, <cr_atk0_sides
+    .byte <cr_atk1_type, <cr_atk1_dice, <cr_atk1_sides
+    .byte <cr_spell_chance, <cr_spell_flags
+    .byte <cr_name_lo, <cr_name_hi
+ltb_dst_hi:
+    .byte >cr_display, >cr_color, >cr_speed, >cr_mflags, >cr_level
+    .byte >cr_hd_num, >cr_hd_sides, >cr_ac, >cr_sleep, >cr_aaf
+    .byte >cr_xp_lo, >cr_xp_hi
+    .byte >cr_atk0_type, >cr_atk0_dice, >cr_atk0_sides
+    .byte >cr_atk1_type, >cr_atk1_dice, >cr_atk1_sides
+    .byte >cr_spell_chance, >cr_spell_flags
+    .byte >cr_name_lo, >cr_name_hi
+
+
+// ============================================================
+// creature_get_name — Get creature name with KERNAL ROM banking
+// ============================================================
+// Input: X = creature type index
+// Output: A = name string ptr lo, Y = name string ptr hi
+// If the name pointer is in $E000+ (under KERNAL ROM), copies the
+// string to creature_name_buf and returns the buffer address.
+// If the name is in normal RAM (embedded/town), returns directly.
+// Clobbers: A, Y, zp_ptr1
+creature_get_name:
+    lda cr_name_hi,x
+    cmp #$e0
+    bcs !cgn_banked+
+
+    // Name is in normal program RAM — return pointer directly
+    tay                         // Y = hi byte
+    lda cr_name_lo,x            // A = lo byte
+    rts
+
+!cgn_banked:
+    // Name is under KERNAL ROM — copy to buffer via banking
+    sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+
+    sei
+    lda $01
+    pha                         // Save current bank config
+    lda #$35                    // Bank out KERNAL + BASIC (RAM everywhere)
+    sta $01
+
+    ldy #0
+!cgn_copy:
+    lda (zp_ptr1),y
+    sta creature_name_buf,y
+    beq !cgn_done+
+    iny
+    cpy #31                     // Safety limit (names never exceed 30 chars)
+    bne !cgn_copy-
+    lda #0
+    sta creature_name_buf,y     // Null-terminate at limit
+!cgn_done:
+    pla
+    sta $01                     // Restore bank config
+    cli
+
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
+    rts
+
+creature_name_buf: .fill 32, 0

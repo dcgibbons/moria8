@@ -525,10 +525,9 @@ do_look:
     ldy #MX_TYPE
     lda (zp_ptr0),y
     tax
-    lda cr_name_lo,x
+    jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     sta dl_name_lo
-    lda cr_name_hi,x
-    sta dl_name_hi
+    sty dl_name_hi
     jsr dl_print_you_see
     clc
     rts

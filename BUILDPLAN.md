@@ -3650,16 +3650,16 @@ whether they'll get the full creature roster or the tiered subset.
 
 | Step | Description |
 |------|-------------|
-| R3.5.1 | **Define creature roster.** Select ~120 creatures from umoria covering levels 0–40. Map each creature's SoA fields (display, color, speed, flags, level, HP dice, AC, sleep, aaf, XP, attacks, spells). Assign to tier groups with overlapping level ranges. |
-| R3.5.2 | **Creature data file format.** Design binary format for tier files: header (count, level range, SoA block offsets) + SoA data blocks + name string table. Write assembler tool or standalone .s files that produce tier .dat files. |
-| R3.5.3 | **REU detection + size probe.** New `reu.s` module: `reu_detect` (sets `reu_present` flag + `reu_size_kb`), `reu_stash` (C64→REU), `reu_fetch` (REU→C64). Call `reu_detect` at startup before title screen. |
-| R3.5.4 | **Title screen REU display.** If `reu_present`, render "REU DETECTED: xxxKB" on the title screen below "COMMODORE 64 EDITION". |
-| R3.5.5 | **Active creature buffer.** Designate working RAM for loaded creature data. Refactor `pick_creature_type`, `monster_spawn_one`, combat, AI, and render to read from the active buffer instead of hardcoded SoA labels. Use pointer indirection so the same code works for both embedded and loaded data. |
-| R3.5.6 | **REU loading path.** At startup (after REU detect), load all tier files from disk sequentially into REU memory. On tier change, DMA the needed segment into the active creature buffer. |
-| R3.5.7 | **Disk loading path.** On tier boundary crossing, KERNAL LOAD tier file from disk into the active creature buffer. Show status message during load. Handle load failure gracefully (retry or use previous tier). |
-| R3.5.8 | **Tier transition logic.** Detect tier boundary on staircase use. Handle active monsters from old tier: monsters already spawned retain their stats in the monster table (MX_TYPE stores global creature ID); new spawns use the freshly loaded tier data. |
-| R3.5.9 | **Town creatures always resident.** Keep the 6 town creatures embedded in program code (never loaded from disk). They're needed on every surface visit and are small (~210 bytes). |
-| R3.5.10 | **Full roster data entry.** Transcribe all ~120–247 creatures from umoria source into tier data files. Verify stats against umoria. |
+| R3.5.1 | ✅ **Define creature roster.** Select ~120 creatures from umoria covering levels 0–40. Map each creature's SoA fields (display, color, speed, flags, level, HP dice, AC, sleep, aaf, XP, attacks, spells). Assign to tier groups with overlapping level ranges. |
+| R3.5.2 | ✅ **Creature data file format.** Design binary format for tier files: header (count, level range, SoA block offsets) + SoA data blocks + name string table. Write assembler tool or standalone .s files that produce tier .dat files. |
+| R3.5.3 | ✅ **REU detection + size probe.** New `reu.s` module: `reu_detect` (sets `reu_present` flag + `reu_size_kb`), `reu_stash` (C64→REU), `reu_fetch` (REU→C64). Call `reu_detect` at startup before title screen. |
+| R3.5.4 | ✅ **Title screen REU display.** If `reu_present`, render "REU: xxxKB DETECTED" on the title screen below "COMMODORE 64 EDITION". |
+| R3.5.5 | ✅ **Active creature buffer.** Expanded SoA arrays from 32→65 entries (57 dungeon + 8 town). `active_dungeon_count` variable, `load_tier_to_buffer` copies 22 SoA arrays from source to active buffer. All existing `lda cr_xxx,x` code works unchanged. |
+| R3.5.6 | ✅ **REU loading path.** `reu_load_all_tiers` at startup loads 4 tier PRGs from disk → $E000 → REU DMA stash. `reu_fetch_tier` DMAs tier from REU → $E000 on transition. |
+| R3.5.7 | ✅ **Disk loading path.** `tier_load_disk` uses KERNAL LOAD to load tier PRG from disk to $E000 (RAM under KERNAL ROM). Graceful fallback on failure. |
+| R3.5.8 | ✅ **Tier transition logic.** `tier_check_transition` in stair handlers detects tier boundary crossings. Hysteresis via overlapping tier ranges prevents thrashing. `creature_get_name` handles KERNAL banking for name strings at $E000+. |
+| R3.5.9 | ✅ **Town creatures always resident.** 6 town creatures embedded at indices 57-62 in program code (never loaded from disk). |
+| R3.5.10 | **Full roster data entry.** Transcribe all ~120–247 creatures from umoria source into tier data files. Verify stats against umoria. **(Done — 120 creatures via parse_creatures.py)** |
 | R3.5.11 | **Testing.** Test both paths in VICE: with REU (`-reu -reusize 256`) and without. Verify spawning, combat, names, tier transitions, edge cases (boundary levels, ascending back across tier). |
 
 ### Future: C128 Native Memory (Phase 10.2)

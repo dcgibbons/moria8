@@ -49,6 +49,7 @@ exit_trampoline:
 
 #import "zeropage.s"
 #import "memory.s"
+#import "reu.s"
 #import "screen.s"
 #import "color.s"
 #import "config.s"
@@ -66,6 +67,7 @@ exit_trampoline:
 #import "dungeon_gen.s"
 #import "dungeon_features.s"
 #import "monster.s"
+#import "tier_manager.s"
 #import "monster_ai.s"
 #import "monster_magic.s"
 #import "item.s"
@@ -110,6 +112,8 @@ entry_main:
 
     // --- Initialize subsystems ---
     jsr detect_machine
+    jsr reu_detect
+    jsr tier_init
     jsr sound_init
     jsr rng_seed
 
@@ -120,6 +124,32 @@ entry_main:
     // Clear screen and display title
     jsr screen_clear
     jsr title_load_and_draw
+
+    // Show REU status on title screen (row 12) if detected
+    lda reu_present
+    beq !no_reu_display+
+    lda #12
+    sta zp_cursor_row
+    lda #13                     // Center: (40 - 14) / 2 = 13
+    sta zp_cursor_col
+    lda #COL_DGREY
+    sta zp_text_color
+    lda #<reu_status_str
+    sta zp_ptr0
+    lda #>reu_status_str
+    sta zp_ptr0_hi
+    jsr screen_put_string       // "REU: "
+    lda reu_size_kb
+    sta zp_temp0
+    lda reu_size_kb + 1
+    sta zp_temp1
+    jsr screen_put_decimal_16   // Print KB value
+    lda #<reu_kb_str
+    sta zp_ptr0
+    lda #>reu_kb_str
+    sta zp_ptr0_hi
+    jsr screen_put_string       // "KB DETECTED"
+!no_reu_display:
 
     // Check for existing save file
     jsr check_savefile_exists
@@ -299,6 +329,9 @@ entry_main:
 // load_resume_game — Entry point after successful load
 // ============================================================
 load_resume_game:
+    // Load creature tier for the resumed dungeon level
+    jsr tier_check_transition
+
     // Recalculate derived stats from loaded base values
     jsr player_calc_stats
     jsr player_calc_hp
@@ -498,6 +531,7 @@ load_resume_game:
     beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
+    jsr tier_check_transition   // Load new tier if crossing boundary
     lda #0
     sta level_entry_dir         // 0 = descended
     lda #$ff
@@ -541,6 +575,7 @@ load_resume_game:
     bne !not_entering_town+
     jsr store_restock_all
 !not_entering_town:
+    jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
     sta level_entry_dir         // 1 = ascended
     lda #$ff
@@ -1116,6 +1151,11 @@ title_str:
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
+
+reu_status_str:
+    .text "REU: " ; .byte 0
+reu_kb_str:
+    .text "KB DETECTED" ; .byte 0
 
 welcome_str:
     .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0

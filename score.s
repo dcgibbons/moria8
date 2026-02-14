@@ -448,10 +448,9 @@ sds_print_death_source:
     jsr screen_put_string
     pla
     tax                         // Restore creature type
-    lda cr_name_lo,x
+    jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
     sta zp_ptr0
-    lda cr_name_hi,x
-    sta zp_ptr0_hi
+    sty zp_ptr0_hi
     jsr screen_put_string
     rts
 !sds_poison:
