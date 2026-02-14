@@ -190,11 +190,13 @@ test_start:
     lda #0
     sta inv_flags
 
-    // Stuff input: 'A' ($41)
-    lda #1
+    // Stuff input: 'A' ($41) + space for -more- after effect message
+    lda #2
     sta $c6
     lda #$41
     sta $0277
+    lda #$20
+    sta $0278
 
     jsr item_aim_wand
     bcc !t4_fail+               // Should consume turn
@@ -233,11 +235,13 @@ test_start:
     lda #0
     sta inv_p1                  // 0 charges
 
-    // Stuff input: 'A'
-    lda #1
+    // Stuff input: 'A' + space for -more- after "NO CHARGES" message
+    lda #2
     sta $c6
     lda #$41
     sta $0277
+    lda #$20
+    sta $0278
 
     jsr item_aim_wand
     bcs !t5_fail+               // Should NOT consume turn
@@ -270,11 +274,13 @@ test_start:
     lda #0
     sta inv_flags
 
-    // Stuff input: 'A'
-    lda #1
+    // Stuff input: 'A' + space for -more- after effect message
+    lda #2
     sta $c6
     lda #$41
     sta $0277
+    lda #$20
+    sta $0278
 
     jsr item_use_staff
     bcc !t6_fail+               // Should consume turn
@@ -313,11 +319,13 @@ test_start:
     lda #0
     sta inv_p1
 
-    // Stuff input: 'A'
-    lda #1
+    // Stuff input: 'A' + space for -more- after "NO CHARGES" message
+    lda #2
     sta $c6
     lda #$41
     sta $0277
+    lda #$20
+    sta $0278
 
     jsr item_use_staff
     bcs !t7_fail+               // Should NOT consume turn
@@ -338,4 +346,4 @@ test_start:
     dex
     bpl !res_loop-
 
-    rts
+    brk
