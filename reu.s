@@ -71,85 +71,153 @@ reu_detect:
     lda #1
     sta reu_present
 
-    // --- Phase 2: Probe bank count ---
-    // Write unique marker to bank 0 of each 64KB bank via 1-byte stash,
-    // then read back. Banks that wrap show a marker from a lower bank.
+    // --- Phase 2: Probe bank count (staged) ---
+    // Each stage writes markers (bank+1) to a range of banks, then checks
+    // bank 0 for aliasing (wrapping HW) and verifies the boundary bank
+    // independently (VICE discard). Supports 128KB–2048KB (2–32 banks).
+    //
+    // Stage 1: banks 0-7   → detects 2, 4, or 8+ banks
+    // Stage 2: banks 8-15  → detects 8 or 16+ banks
+    // Stage 3: banks 16-31 → detects 16 or 32 banks
 
-    lda #0
-    sta REU_CONTROL     // Both addresses increment (normal mode)
-
-    // Write markers: store bank_number+1 to REU[bank, $0000]
-    ldy #0              // Bank counter
-!write_bank:
-    // Marker = Y+1 (so bank 0 gets $01, bank 1 gets $02, etc.)
-    tya
-    clc
-    adc #1
-    sta reu_probe_byte
-
-    // Set up 1-byte stash: C64 → REU
-    lda #<reu_probe_byte
-    sta REU_C64LO
-    lda #>reu_probe_byte
-    sta REU_C64HI
-    lda #0
-    sta REU_REULO       // REU addr = $0000
-    sta REU_REUHI
-    sty REU_BANK        // REU bank = Y
-    lda #1
-    sta REU_LENLO       // Length = 1 byte
-    lda #0
-    sta REU_LENHI
-    lda #REU_CMD_STASH
-    sta REU_COMMAND     // Execute stash
-
-    iny
-    cpy #8              // Test up to 8 banks (512KB)
-    bne !write_bank-
-
-    // Read back markers from each bank
+    // === Stage 1: Write markers to banks 0-7 ===
     ldy #0
-!read_bank:
-    // Clear probe byte to detect actual transfer
-    lda #0
-    sta reu_probe_byte
-
-    // Set up 1-byte fetch: REU → C64
-    lda #<reu_probe_byte
-    sta REU_C64LO
-    lda #>reu_probe_byte
-    sta REU_C64HI
-    lda #0
-    sta REU_REULO
-    sta REU_REUHI
-    sty REU_BANK
-    lda #1
-    sta REU_LENLO
-    lda #0
-    sta REU_LENHI
-    lda #REU_CMD_FETCH
-    sta REU_COMMAND     // Execute fetch
-
-    // Check: marker should equal Y+1
+!write_s1:
     tya
     clc
-    adc #1
-    cmp reu_probe_byte
-    bne !found_size+    // Mismatch = this bank wraps (doesn't exist)
-
+    adc #1              // Marker = bank + 1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
     iny
     cpy #8
-    bne !read_bank-
+    bne !write_s1-
+
+    // Check bank 0: should be $01 if 8+ banks
+    lda #0
+    sta reu_probe_byte
+    ldy #0
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    bne !s1_aliased+
+
+    // Bank 0 OK. Verify bank 4 ($05)
+    lda #0
+    sta reu_probe_byte
+    ldy #4
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$05
+    beq !at_least_8+
+
+    // Bank 4 failed. Check bank 2.
+    jsr reu_check_bank2
+    beq !s1_got_4+
+    jmp !is_2+
+!s1_got_4:
+    jmp !is_4+
+
+!s1_aliased:
+    // Bank 0 overwritten by alias. Check bank 2.
+    jsr reu_check_bank2
+    beq !s1a_got_4+
+    jmp !is_2+
+!s1a_got_4:
+    jmp !is_4+
+
+!at_least_8:
+    // === Stage 2: Write markers to banks 8-15 ===
+    ldy #8
+!write_s2:
+    tya
+    clc
+    adc #1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
+    iny
+    cpy #16
+    bne !write_s2-
+
+    // Check bank 0: aliased by bank 8? ($01 → $09)
+    lda #0
+    sta reu_probe_byte
+    ldy #0
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    bne !is_8+          // Aliased → 8 banks
+
+    // Bank 0 OK. Verify bank 8 ($09)
+    lda #0
+    sta reu_probe_byte
+    ldy #8
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$09
+    bne !is_8+          // Discarded → 8 banks
+
+    // === Stage 3: Write markers to banks 16-31 ===
+    ldy #16
+!write_s3:
+    tya
+    clc
+    adc #1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
+    iny
+    cpy #32
+    bne !write_s3-
+
+    // Check bank 0: aliased by bank 16? ($01 → $11)
+    lda #0
+    sta reu_probe_byte
+    ldy #0
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    bne !is_16+         // Aliased → 16 banks
+
+    // Bank 0 OK. Verify bank 16 ($11)
+    lda #0
+    sta reu_probe_byte
+    ldy #16
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$11
+    bne !is_16+         // Discarded → 16 banks
+
+    // 32 banks (2048KB)
+    ldy #32
+    jmp !found_size+
+
+!is_16:
+    ldy #16
+    jmp !found_size+
+!is_8:
+    ldy #8
+    jmp !found_size+
+!is_4:
+    ldy #4
+    jmp !found_size+
+!is_2:
+    ldy #2
 
 !found_size:
-    // Y = number of valid banks
     sty reu_banks
 
     // Convert banks to KB: banks * 64
-    // Y is small (2/4/8), so multiply by 64 using shifts
+    // Y is 2/4/8/16/32; max 32*64=2048 which fits in 16 bits
     tya
-    // A * 64: shift left 6 times = put in high byte * 64
-    // Since max A=8: 8*64=512 which fits in 16 bits
+    // A * 64 = (A * 256) / 4. Store A in high byte, shift right 2.
     // A*64 = (A*256)/4. Store A in high byte, shift right 2.
     sta reu_size_kb + 1 // High byte = A (banks)
     lda #0
@@ -167,6 +235,44 @@ reu_detect:
     sta reu_banks
     sta reu_size_kb
     sta reu_size_kb + 1
+    rts
+
+
+// reu_check_bank2 — Fetch bank 2 and check for marker $03
+// Output: Z flag set if bank 2 holds $03 (4+ banks)
+// Clobbers: A, Y
+reu_check_bank2:
+    lda #0
+    sta reu_probe_byte
+    ldy #2
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$03
+    rts
+
+// reu_probe_xfer — 1-byte DMA transfer for bank probing
+// Input: A = command ($90=stash, $91=fetch), Y = bank number
+// Uses reu_probe_byte as C64 address, REU offset $0000, length 1.
+// Explicitly sets ALL registers (no autoload dependency).
+// Preserves: nothing
+reu_probe_xfer:
+    pha                     // Save command
+    lda #<reu_probe_byte
+    sta REU_C64LO
+    lda #>reu_probe_byte
+    sta REU_C64HI
+    lda #0
+    sta REU_REULO
+    sta REU_REUHI
+    sty REU_BANK
+    lda #1
+    sta REU_LENLO
+    lda #0
+    sta REU_LENHI
+    sta REU_CONTROL         // Both addresses increment
+    pla
+    sta REU_COMMAND         // Execute DMA
     rts
 
 
