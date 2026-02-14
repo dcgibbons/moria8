@@ -3287,7 +3287,8 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 - Created `tests/test_wands_staves.s` runtime test suite.
 - Verified generation of wands/staves with charges.
 - Verified consumption of charges and effect triggering.
-- `make test` pass.
+- Fixed test bugs (Step 9.4): `rts`→`brk` terminator; keyboard buffer needs 2 keys (slot + -more-).
+- `make test` pass (17/17 suites).
 
 ---
 
