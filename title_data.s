@@ -162,8 +162,8 @@
 .byte 13, 1, TC_LGREY
 .byte $5d
 .byte $00
-.byte 13, 4, TC_DGREY
-.text "BASED ON UMORIA BY R.A. KOENEKE"
+.byte 13, 5, TC_DGREY
+.text "BASED ON MORIA BY R.A. KOENEKE"
 .byte $00
 .byte 13, 38, TC_LGREY
 .byte $5d
