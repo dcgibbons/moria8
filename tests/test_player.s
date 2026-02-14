@@ -226,8 +226,8 @@ test_start:
 
     // ==========================================
     // Test 6: HP calculation — Warrior level 1
-    // Warrior HD=9, CON=12 → CON bonus=0
-    // Max HP = 9 (hit die only at level 1)
+    // Human HD=10, Warrior HD=9, combined=19, CON=12 → CON bonus=0
+    // Max HP = 19 (combined hit die at level 1)
     // ==========================================
     jsr player_init
     lda #RACE_HUMAN
@@ -242,7 +242,7 @@ test_start:
     jsr player_calc_hp
 
     lda player_data + PL_MHP_LO
-    cmp #9
+    cmp #19
     bne !t6_fail+
     lda player_data + PL_MHP_HI
     cmp #0
@@ -257,7 +257,7 @@ test_start:
 
     // ==========================================
     // Test 7: HP calculation — Warrior level 5
-    // HD=9, CON=12→bonus=0. HP = 9 + 4*(9/2+0) = 9+4*4 = 25
+    // Combined HD=19, CON=12→bonus=0. HP = 19 + 4*(19/2+0) = 19+4*9 = 55
     // ==========================================
     lda #5
     sta player_data + PL_LEVEL
@@ -265,7 +265,7 @@ test_start:
     jsr player_calc_hp
 
     lda player_data + PL_MHP_LO
-    cmp #25
+    cmp #55
     bne !t7_fail+
     lda #$01
     sta $0406

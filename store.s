@@ -26,7 +26,7 @@ store_base_idx:
 // Store category bitmasks (16-bit, bit N = ICAT N)
 // ============================================================
 // Store 0 General:  FOOD(9), LIGHT(8)         = $0300
-// Store 1 Armory:   ARMOR(3), SHIELD(4), HELM(5), GLOVES(6), BOOTS(7), CLOAK(13) = $20F8
+// Store 1 Armory:   ARMOR(3), SHIELD(4), HELM(5), GLOVES(6), BOOTS(7) = $00F8
 // Store 2 Weapon:   WEAPON(2)                 = $0004
 // Store 3 Temple:   SCROLL(11), POTION(10)    = $0C00
 // Store 4 Alchemy:  POTION(10)                = $0400

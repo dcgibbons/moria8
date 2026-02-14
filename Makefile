@@ -22,6 +22,8 @@ JAVA        ?= java
 OUT         = out
 MAIN_SRC    = main.s
 MAIN_PRG    = $(OUT)/moria.prg
+TITLE_SRC   = title_data.s
+TITLE_PRG   = $(OUT)/title
 DISK_IMAGE  = $(OUT)/moria.d64
 DISK_NAME   = "moria,m6"
 
@@ -49,6 +51,10 @@ build: $(MAIN_PRG)
 $(MAIN_PRG): $(SOURCES) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(MAIN_SRC) $(KA_FLAGS) -o $(MAIN_PRG)
 
+# Title screen art — standalone PRG loaded from disk at runtime
+$(TITLE_PRG): $(TITLE_SRC) | $(OUT)
+	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(TITLE_PRG)
+
 # Launch in VICE emulator
 run: $(MAIN_PRG)
 	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
@@ -65,11 +71,12 @@ debug: $(MAIN_PRG) disk
 test: $(MAIN_PRG)
 	./run_tests.sh
 
-# Create a 1541 .d64 disk image
-disk: $(MAIN_PRG) | $(OUT)
+# Create a 1541 .d64 disk image (includes title screen art)
+disk: $(MAIN_PRG) $(TITLE_PRG) | $(OUT)
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
-	         -write $(MAIN_PRG) "moria"
+	         -write $(MAIN_PRG) "moria" \
+	         -write $(TITLE_PRG) "title"
 
 $(OUT):
 	mkdir -p $(OUT)

@@ -431,7 +431,7 @@ Hunger system functional.
 | 9.1 | `save.s` ✅ | Save game: write player struct, current dungeon map, active monsters, floor item table, inventory, current tier recall data, game flags to sequential file on disk. Compress map (RLE on tile bytes). Estimated save size: ~3–5 KB. | Save and reload match, all floor items and monsters persist |
 | 9.2 | Load game ✅ | Load from disk, validate file integrity (checksum), **delete savefile immediately after successful load** (before resuming play — this enforces permadeath and prevents save-scumming via machine reset), restore all state, resume play. | Game resumes correctly, savefile gone |
 | 9.3 | Death and scores ✅ | Death screen with killer info. High score table (top 10, stored on disk). Score = XP + gold + depth bonus. | Scores persist |
-| 9.4 | Game polish | Title screen with ASCII art (PETSCII). Help screen (command reference). Difficulty tuning pass. | Screens display |
+| 9.4 | Game polish ✅ | PETSCII title screen (disk-loaded art), HP calculation bug fix (race HD), starting equipment (dagger, leather armor, spellbook), RP15 store fixes. | Title displays, HP correct, equipment works |
 
 **9.1/9.2 Implementation details:**
 - **New files:** `save.s` (~1,120 lines — KERNAL I/O, RLE compress/decompress, save/load orchestration, checksum, recount routines), `tests/test_save.s` (10 runtime tests: RLE round-trips, checksum, recount_monsters, recount_floor_items)
@@ -2423,9 +2423,9 @@ prose updates, enchantment pricing, cursed item check, tc_count position, and
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP15-1 | **MEDIUM** | Armory mask $20F8 has bit 13 (ICAT_BOOK) — stocks spell books | Trivial — change to $00F8 in store_cat_mask_lo/hi | Open |
-| RP15-2 | **MEDIUM** | price_add_p1_bonus routes ICAT_BOOK to equipment handler (p1×100 GP) | Easy — remove ICAT_BOOK from equipment branch or add flat book pricing | Open |
-| RP15-3 | LOW | TOWN_CREATURE_BASE=20 is a magic number synced to creature table layout | Trivial — add .assert or comment | Open |
+| RP15-1 | **MEDIUM** | Armory mask $20F8 has bit 13 (ICAT_BOOK) — stocks spell books | Trivial — change to $00F8 in store_cat_mask_lo/hi | **Fixed** (Step 9.4) — mask data was already $00F8; fixed stale comment + test |
+| RP15-2 | **MEDIUM** | price_add_p1_bonus routes ICAT_BOOK to equipment handler (p1×100 GP) | Easy — remove ICAT_BOOK from equipment branch or add flat book pricing | **Resolved** — ICAT_BOOK not in equipment branch; books fall through to no-bonus |
+| RP15-3 | LOW | TOWN_CREATURE_BASE=20 is a magic number synced to creature table layout | Trivial — add .assert or comment | **Resolved** — already protected by .assert at monster.s:16 |
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation (currently safe) | N/A — document assumption only | Open |
 
 **Overall verdict:** All 18 bug fixes are correct at the 6502 assembly level. No register

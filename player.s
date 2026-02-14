@@ -469,8 +469,19 @@ player_calc_hp:
     lda #CLASS_PROP_SIZE
     jsr mul_x_by_a          // A = class * CLASS_PROP_SIZE
     tax
-    lda class_properties,x  // Hit die
-    sta zp_temp0            // Save hit die
+    lda class_properties,x  // Class hit die
+    sta zp_temp0            // Save class HD
+
+    // Add race hit die (umoria: combined HD = race_HD + class_HD)
+    lda player_data + PL_RACE
+    tax
+    lda #RACE_PROP_SIZE
+    jsr mul_x_by_a          // A = race * RACE_PROP_SIZE
+    tax
+    lda race_properties,x   // Race HD (offset 0)
+    clc
+    adc zp_temp0
+    sta zp_temp0            // Combined HD
 
     // CON HP bonus
     lda player_data + PL_CON_CUR

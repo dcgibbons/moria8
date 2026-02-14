@@ -164,8 +164,6 @@ test_start:
     beq !t4_pass+
     cmp #ICAT_BOOTS
     beq !t4_pass+
-    cmp #ICAT_BOOK
-    beq !t4_pass+
 !t4_fail:
     lda #$00
     jmp !t4_store+

@@ -84,6 +84,7 @@ exit_trampoline:
 #import "ui_store.s"
 #import "save.s"
 #import "score.s"
+#import "title_screen.s"
 
 // ============================================================
 // Entry point
@@ -116,33 +117,18 @@ entry_main:
     lda #COL_LGREY
     sta zp_text_color
 
-    // Clear screen
+    // Clear screen and display title
     jsr screen_clear
-
-    // --- Display title ---
-    // "MORIA" in screen codes (M=0d, O=0f, R=12, I=09, A=01)
-    lda #0
-    sta zp_cursor_col
-    lda #10
-    sta zp_cursor_row
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #<title_str
-    sta zp_ptr0
-    lda #>title_str
-    sta zp_ptr0_hi
-    lda #15                 // Center: (40-10)/2 = 15
-    sta zp_cursor_col
-    jsr screen_put_string
+    jsr title_load_and_draw
 
     // Check for existing save file
     jsr check_savefile_exists
     bcc !no_save_exists+
 
     // --- Save exists: show New/Load menu ---
-    lda #COL_LGREY
+    lda #COL_WHITE
     sta zp_text_color
-    lda #12
+    lda #17
     sta zp_cursor_row
     lda #9                  // Center: (40-22)/2 = 9
     sta zp_cursor_col
@@ -173,12 +159,12 @@ entry_main:
     jmp !title_new+
 
 !no_save_exists:
-    // --- No save: original "PRESS ANY KEY" flow ---
-    lda #COL_LGREY
+    // --- No save: "PRESS ANY KEY" ---
+    lda #COL_WHITE
     sta zp_text_color
-    lda #12
+    lda #17
     sta zp_cursor_row
-    lda #12                 // Center: (40-16)/2 = 12
+    lda #13                 // Center: (40-14)/2 = 13
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0
@@ -233,6 +219,45 @@ entry_main:
     lda #0
     sta inv_p1
     sta inv_flags
+
+    // Dagger (type 2) in EQUIP_WEAPON
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    sta inv_flags + EQUIP_WEAPON
+
+    // Leather armor (type 7) in EQUIP_BODY
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #0
+    sta inv_p1 + EQUIP_BODY
+    sta inv_flags + EQUIP_BODY
+
+    // Starting spellbook for casters (carried slot 1)
+    lda player_data + PL_SPELL_TYPE
+    beq !no_book+
+    cmp #SPELL_MAGE
+    bne !priest_book+
+    lda #47                 // Beginner's Spellbook
+    jmp !store_book+
+!priest_book:
+    lda #48                 // Holy Prayer Book
+!store_book:
+    sta inv_item_id + 1     // Carried slot 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+!no_book:
+
+    // Recalculate combat stats with equipped items
+    jsr player_recalc_equipment
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
