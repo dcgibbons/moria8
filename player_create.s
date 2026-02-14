@@ -39,6 +39,16 @@ player_create:
 // ============================================================
 create_select_race:
     jsr screen_clear
+    // Clear bottom rows explicitly (JiffyDOS progress bar residue from title LOAD)
+    lda #COL_BLACK
+    sta zp_text_color
+    lda #20
+!csr_bottom:
+    jsr screen_clear_row
+    clc
+    adc #1
+    cmp #25
+    bcc !csr_bottom-
 
     lda #COL_WHITE
     sta zp_text_color
