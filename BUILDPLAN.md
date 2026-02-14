@@ -3634,3 +3634,110 @@ Each step is independently testable and committable. Steps 7.4 and 7.5 can
 potentially be done in one pass since they share the dispatch pattern. Steps
 7.6 and 7.7 are largely independent of the spell system (they're item-based)
 and could be parallelized.
+
+---
+
+## Review Pass — Missing Features & Known Gaps
+
+Findings from code review against full umoria feature set. Organized by system.
+Items marked **(deferred)** are intentional simplifications documented in the
+design; items marked **(TODO)** need implementation.
+
+### 1. Combat System
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R1.1 | Ranged combat (bows, crossbows, slings) | **(TODO)** | `combat.s` only handles melee. Need fire/aim command, projectile flight along LOS, ammo consumption. |
+| R1.2 | Throwing items | **(TODO)** | Throw potions, rocks, weapons. Shares LOS projectile path with R1.1. |
+| R1.3 | Monster attacks | **(TODO)** | `combat.s` explicitly states "Monsters don't attack back yet (Phase 5.4)". `monster_attack.s` exists but needs wiring/verification. |
+| R1.4 | Monster spells | **(TODO)** | `cr_spell_chance` and `cr_spell_flags` are all zero in `monster.s`. No breath weapons or casting AI active. `monster_magic.s` exists but creature data has no spell entries. |
+
+**Issues:**
+
+| # | Issue | Status | Notes |
+|---|-------|--------|-------|
+| R1.5 | Blows calculation simplified | **(deferred)** | Currently a 4×5 table (weight class × DEX). Original uses STR, weapon weight, and character level. Consider upgrading if combat feels flat. |
+| R1.6 | AC calculation simplified | **(deferred)** | Review whether current AC formula produces adequate difficulty curve. |
+
+### 2. Dungeon Generation
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R2.1 | Special rooms (vaults, pits, nests) | **(TODO)** | Only standard rectangular rooms generated. Vaults add late-game interest. |
+| R2.2 | Magma/quartz streamers with treasure | **(TODO)** | Tile types exist (types 12, 13) but `dungeon_gen.s` doesn't place mineral veins. Need streamer generation pass. |
+| R2.3 | Level persistence on stair transitions | **(deferred)** | Levels regenerate on each visit. True persistence would require per-level disk save — too much I/O for 1541. Acceptable simplification. |
+| R2.4 | Secret door generation | **(TODO)** | `eff_find_doors` exists, tile type 15 (secret door) defined, but verify `dungeon_gen.s` actually places them during room/corridor generation. |
+
+### 3. Monsters & AI
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R3.1 | Pathfinding | **(deferred)** | Greedy movement (try diagonal, then cardinal). No A*/flow maps. Monsters can get stuck on corners. A* is expensive at 1 MHz; greedy + unstick heuristic may be sufficient. |
+| R3.2 | Group/pack tactics | **(TODO)** | No pack instinct, escort behavior, or group spawning beyond random clusters. |
+| R3.3 | Explosive breeders | **(TODO)** | No breeding logic (lice, mice, etc.). Need spawn-on-turn mechanic with population cap. |
+| R3.4 | Monster fleeing | **(TODO)** | Monsters do not flee at low HP. Need flee threshold check in AI + reversed movement. |
+| R3.5 | Limited creature roster | **(TODO)** | Only 26 creature types (20 dungeon + 6 town). Full Moria has hundreds. Expand creature tables in `monster.s` to at least 80–100 types across tiers. |
+
+### 4. Items & Inventory
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R4.1 | Ego items | **(TODO)** | No "Holy Avenger", "Defender", "Slay Evil", etc. Need ego flag + modifier table + name generation. |
+| R4.2 | Artifacts | **(TODO)** | No fixed artifacts (Phial of Galadriel, etc.). Need unique item table, generation check (only one per game), special powers. |
+| R4.3 | Rods | **(TODO)** | Wands and Staves exist but Rods (rechargeable, non-consumable) missing. Need new item category + recharge-over-time mechanic. |
+| R4.4 | Pseudo-ID | **(TODO)** | No "feeling" about items (excellent, terrible, etc.). Need carry-time counter + quality hint based on hidden enchantment. |
+| R4.5 | Thorough identification | **(TODO)** | `eff_identify_prompt` sets identified flag but doesn't reveal hidden powers (since ego items don't exist yet). Depends on R4.1. |
+
+### 5. Magic System
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R5.1 | Advanced spells | **(TODO)** | Only basic offensive (Bolt) and utility (Heal, Light, Teleport) implemented. Missing ball spells, advanced enchantments, summoning, etc. |
+| R5.2 | Full spellbook set | **(TODO)** | Only "Beginner's Spellbook" and "Holy Prayer Book" implemented. Full game has 4 books per class (8 total). |
+
+### 6. Town & Stores
+
+**Missing features:**
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R6.1 | Haggling | **(deferred)** | Fixed-price by design (see Design Decision #4). Multi-round bidding omitted for 40-col display. |
+| R6.2 | Black Market (Store 7) | **(TODO)** | Missing. Sells rare items at inflated prices. Need new store with special stock rules. |
+| R6.3 | Player Home (Store 8) | **(TODO)** | Missing. Storage for items between dungeon runs. Need home inventory (disk-persisted). |
+| R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
+
+### Priority Triage
+
+**High priority (core gameplay gaps):**
+- R1.3 Monster attacks — combat is non-functional without this
+- R1.4 Monster spells — needed for mid/late game difficulty
+- R3.5 Creature roster expansion — 26 types is too few for variety
+- R5.1/R5.2 Spell expansion — magic users need more options
+
+**Medium priority (significant missing content):**
+- R1.1 Ranged combat — important tactical option
+- R2.1 Special rooms — late-game dungeon variety
+- R2.2 Mineral streamers — treasure variety
+- R3.4 Monster fleeing — tactical depth
+- R4.1 Ego items — item variety and excitement
+- R6.2 Black Market — economy depth
+
+**Low priority (polish/completeness):**
+- R1.2 Throwing — niche mechanic
+- R2.4 Secret doors — verify current state first
+- R3.2 Group tactics — nice-to-have
+- R3.3 Breeders — nice-to-have
+- R4.2 Artifacts — late addition
+- R4.3 Rods — minor item category
+- R4.4 Pseudo-ID — QoL feature
+- R6.3 Player Home — QoL feature
