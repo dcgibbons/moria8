@@ -3511,7 +3511,7 @@ design; items marked **(TODO)** need implementation.
 | R3.2 | Group/pack tactics | **(TODO)** | No pack instinct, escort behavior, or group spawning beyond random clusters. |
 | R3.3 | Explosive breeders | **(TODO)** | No breeding logic (lice, mice, etc.). Need spawn-on-turn mechanic with population cap. |
 | R3.4 | Monster fleeing | **(TODO)** | Monsters do not flee at low HP. Need flee threshold check in AI + reversed movement. |
-| R3.5 | Limited creature roster | **(TODO)** | Only 26 creature types (20 dungeon + 6 town). Full Moria has hundreds. Expand creature tables in `monster.s` to at least 80–100 types across tiers. |
+| R3.5 | Limited creature roster | **(TODO)** | Only 32 creature types (26 dungeon + 6 town). Umoria has 247. See **R3.5 Detailed Plan** below. |
 
 ### 4. Items & Inventory
 
@@ -3571,3 +3571,106 @@ design; items marked **(TODO)** need implementation.
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
 - R6.3 Player Home — QoL feature
+
+---
+
+## R3.5 Detailed Plan — Creature Roster Expansion + REU Support
+
+### Problem
+
+Only 32 creature types (26 dungeon levels 1–5, 6 town). Umoria has 247 covering
+levels 0–100. The dungeon becomes stale quickly once the player outlevelscreatures.
+All creature data is currently embedded in program code (~1,097 bytes).
+
+### Data Budget
+
+Per-creature cost: 20 bytes (SoA arrays) + ~15 bytes (name string avg) = ~35 bytes.
+
+| Roster size | SoA bytes | Name bytes | Total |
+|-------------|-----------|------------|-------|
+| 32 (current) | 640 | 457 | ~1.1 KB |
+| 120 (target) | 2,400 | ~1,800 | ~4.2 KB |
+| 247 (full umoria) | 4,940 | ~3,700 | ~8.5 KB |
+
+Any REU (128 KB minimum) can trivially hold the full 8.5 KB roster plus item
+tiers, recall data, etc. The C128's native 128 KB can also hold everything.
+
+### Architecture: Two Paths
+
+**Path A — REU detected (or C128 expanded memory):**
+- At startup, load ALL creature data from disk into REU in one batch (~8.5 KB,
+  ~3 sec with fastloader, one-time cost).
+- On dungeon level change, DMA the needed creature data from REU → working RAM
+  buffer. DMA transfer is near-instant (~1 cycle/byte, <10ms for a tier).
+- No disk I/O after startup. Seamless tier transitions.
+- Full 247-creature roster available.
+
+**Path B — Unexpanded C64 (no REU):**
+- Creature data split into overlapping tier files on disk:
+  - `cr_tier0.dat`: Town creatures (level 0) — always resident in program code
+  - `cr_tier1.dat`: Levels 1–8 (~30 creatures, ~1 KB)
+  - `cr_tier2.dat`: Levels 5–15 (~35 creatures, ~1.2 KB)
+  - `cr_tier3.dat`: Levels 11–25 (~35 creatures, ~1.2 KB)
+  - `cr_tier4.dat`: Levels 20–40 (~30 creatures, ~1 KB)
+- Tiers overlap by ~4 levels so the spawn window (`dlvl-2` to `dlvl+3`) never
+  falls outside loaded data.
+- Two adjacent tiers loaded simultaneously into $A000 bank (~2.2 KB).
+- Tier change triggered on staircase transition when new dlvl crosses a tier
+  boundary. Show "DESCENDING..." during the 1–3 sec disk load.
+- Reduced roster (~120 creatures) to keep tier files small for stock 1541 speed.
+
+### REU Interface
+
+REU registers at $DF00–$DF0A (memory-mapped I/O):
+- $DF00: Status register (read-only)
+- $DF01: Command register (transfer type + execute/trigger mode)
+- $DF02–$DF03: C64 base address (16-bit)
+- $DF04–$DF06: REU base address (24-bit: lo, hi, bank)
+- $DF07–$DF08: Transfer length (16-bit)
+
+DMA transfer types: 00 = C64→REU (stash), 01 = REU→C64 (fetch), 10 = swap.
+
+REU detection: write test pattern to $DF02/$DF03, read back, verify. If match,
+REU is present. Size detection: attempt writes at bank boundaries ($DF06) to
+determine 128 KB / 256 KB / 512 KB.
+
+### Title Screen Display
+
+When REU is detected, show on the title screen (e.g., row 12 or below the
+"COMMODORE 64 EDITION" line):
+
+```
+REU DETECTED: 256KB
+```
+
+If no REU, show nothing (or optionally "UNEXPANDED C64"). This tells the player
+whether they'll get the full creature roster or the tiered subset.
+
+### Implementation Steps
+
+| Step | Description |
+|------|-------------|
+| R3.5.1 | **Define creature roster.** Select ~120 creatures from umoria covering levels 0–40. Map each creature's SoA fields (display, color, speed, flags, level, HP dice, AC, sleep, aaf, XP, attacks, spells). Assign to tier groups with overlapping level ranges. |
+| R3.5.2 | **Creature data file format.** Design binary format for tier files: header (count, level range, SoA block offsets) + SoA data blocks + name string table. Write assembler tool or standalone .s files that produce tier .dat files. |
+| R3.5.3 | **REU detection + size probe.** New `reu.s` module: `reu_detect` (sets `reu_present` flag + `reu_size_kb`), `reu_stash` (C64→REU), `reu_fetch` (REU→C64). Call `reu_detect` at startup before title screen. |
+| R3.5.4 | **Title screen REU display.** If `reu_present`, render "REU DETECTED: xxxKB" on the title screen below "COMMODORE 64 EDITION". |
+| R3.5.5 | **Active creature buffer.** Designate working RAM for loaded creature data. Refactor `pick_creature_type`, `monster_spawn_one`, combat, AI, and render to read from the active buffer instead of hardcoded SoA labels. Use pointer indirection so the same code works for both embedded and loaded data. |
+| R3.5.6 | **REU loading path.** At startup (after REU detect), load all tier files from disk sequentially into REU memory. On tier change, DMA the needed segment into the active creature buffer. |
+| R3.5.7 | **Disk loading path.** On tier boundary crossing, KERNAL LOAD tier file from disk into the active creature buffer. Show status message during load. Handle load failure gracefully (retry or use previous tier). |
+| R3.5.8 | **Tier transition logic.** Detect tier boundary on staircase use. Handle active monsters from old tier: monsters already spawned retain their stats in the monster table (MX_TYPE stores global creature ID); new spawns use the freshly loaded tier data. |
+| R3.5.9 | **Town creatures always resident.** Keep the 6 town creatures embedded in program code (never loaded from disk). They're needed on every surface visit and are small (~210 bytes). |
+| R3.5.10 | **Full roster data entry.** Transcribe all ~120–247 creatures from umoria source into tier data files. Verify stats against umoria. |
+| R3.5.11 | **Testing.** Test both paths in VICE: with REU (`-reu -reusize 256`) and without. Verify spawning, combat, names, tier transitions, edge cases (boundary levels, ascending back across tier). |
+
+### Future: C128 Native Memory (Phase 10.2)
+
+The C128 has 128 KB natively (two 64 KB banks). With MMU bank switching,
+the second bank can hold all creature + item data without REU or disk tier
+loading — same benefit as the REU path but using built-in hardware. If the
+C128 has an REU as well, even more data can be resident (larger item roster,
+full monster recall, etc.).
+
+**TODO (Phase 10.2):** Add C128 MMU bank-switch path alongside REU path.
+Detect C128 mode at startup (check $D030 or MMU register at $FF00).
+Load creature data into bank 1 via MMU configuration. Fetch via bank
+switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
