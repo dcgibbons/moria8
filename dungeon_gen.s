@@ -1978,8 +1978,8 @@ verify_stairs:
 // Output: carry set = failed (unreachable room), carry clear = OK
 // Uses: BFS queue at CREATURE_BASE ($A000, safe during generation)
 // ============================================================
-.const BFS_QUEUE = CREATURE_BASE   // $A100 — room for code below
-.const BFS_QUEUE_MAX = 2560        // Max queue entries (×2 bytes must fit $AC00–$BFFF)
+.const BFS_QUEUE = CREATURE_BASE
+.const BFS_QUEUE_MAX = 1792        // Max queue entries (×2 bytes must fit CREATURE_BASE–$BFFF)
 
 verify_connectivity:
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---

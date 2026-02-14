@@ -151,7 +151,7 @@
 .label zp_eff_free_act = $5c   // Free action flag
 .label zp_eff_see_inv  = $5d   // See invisible flag
 .label zp_eff_word_recall = $5e // Word of recall timer
-.label zp_eff_spare    = $5f   // Spare effect slot
+.label zp_death_source = $5f   // Death cause ($00=alive, $01-FC=monster, $FD-FF=special)
 
 // --- Viewport / map rendering ($60–$6b) ---
 .label zp_view_x       = $60   // Viewport top-left X in map coords

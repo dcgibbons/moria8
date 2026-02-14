@@ -42,6 +42,8 @@ turn_tick_effects:
     lda zp_player_hp_hi
     sta player_data + PL_HP_HI
 !poison_no_borrow:
+    lda #DEATH_POISON
+    sta zp_death_source
     jsr player_death_check
 !no_poison:
 
@@ -274,6 +276,8 @@ turn_tick_hunger:
     lda zp_player_hp_hi
     sta player_data + PL_HP_HI
 !starve_no_borrow:
+    lda #DEATH_STARVE
+    sta zp_death_source
     jsr player_death_check
     rts
 

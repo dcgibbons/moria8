@@ -430,7 +430,7 @@ Hunger system functional.
 |---|---|---|---|
 | 9.1 | `save.s` ✅ | Save game: write player struct, current dungeon map, active monsters, floor item table, inventory, current tier recall data, game flags to sequential file on disk. Compress map (RLE on tile bytes). Estimated save size: ~3–5 KB. | Save and reload match, all floor items and monsters persist |
 | 9.2 | Load game ✅ | Load from disk, validate file integrity (checksum), **delete savefile immediately after successful load** (before resuming play — this enforces permadeath and prevents save-scumming via machine reset), restore all state, resume play. | Game resumes correctly, savefile gone |
-| 9.3 | Death and scores | Death screen with killer info. High score table (top 10, stored on disk). Score = XP + gold + depth bonus. | Scores persist |
+| 9.3 | Death and scores ✅ | Death screen with killer info. High score table (top 10, stored on disk). Score = XP + gold + depth bonus. | Scores persist |
 | 9.4 | Game polish | Title screen with ASCII art (PETSCII). Help screen (command reference). Difficulty tuning pass. | Screens display |
 
 **9.1/9.2 Implementation details:**
@@ -441,6 +441,16 @@ Hunger system functional.
 - **Memory safety:** Bootstrap trampoline at $080E banks out BASIC ROM before entry. Exit trampoline in low RAM banks BASIC ROM back in safely. CREATURE_BASE must be past program_end (compile-time assert). check_savefile_exists uses separate file number (3) to avoid KERNAL file table conflict with load_game (file 2).
 - **Test framework fix:** Tests with BRK above $A000 can false-trigger during BASIC ROM execution in VICE autostart. test_save.s splits into "Test Code" (bootstrap + finish with BRK at $0824) and "Test Body" (imports + logic) segments.
 - **Verification:** `make build` → 61 asserts, 0 failed. `make test` → 14/14 suites pass (save: 10/10). See Review Pass 16 for post-implementation fixes.
+
+**9.3 Implementation details:**
+- **New files:** `score.s` (~988 lines — 24-bit math, score calculation, death screen, high score table insert/display, disk I/O for MORIA.HI), `tests/test_score.s` (10 runtime tests: math_add_24, math_cmp_24, score_calculate, hiscore_insert empty/ordering/overflow, screen_put_decimal_24)
+- **Modified files:** `zeropage.s` (renamed `zp_eff_spare` → `zp_death_source`), `config.s` (death source constants DEATH_ALIVE/CURSED/POISON/STARVE), `monster_attack.s` (+2 lines: set death source from `mat_type2`), `monster_magic.s` (+4 lines: set death source from `zp_mon_type` for bolt/breath), `turn.s` (+4 lines: set death source for poison/starvation), `player_items.s` (+2 lines: set death source for poison potion), `main.s` (import score.s, replaced death handler with score flow), `memory.s` (CREATURE_BASE $AC00→$B200), `dungeon_gen.s` (BFS_QUEUE_MAX 2560→1792), `run_tests.sh` (added score suite)
+- **Death source tracking:** `zp_death_source` ($5F, in ZP save range) encodes killer identity: $00=alive, $01–$FC=monster creature type index (→ cr_name_lo/hi for name), $FD=cursed item, $FE=poison, $FF=starvation. Set at each death source before `player_death_check`.
+- **Score formula:** `score = XP(24-bit) + gold(24-bit) + max_depth × 50`. Uses `math_multiply` (8×8→16) for depth bonus, then 24-bit addition.
+- **Death screen:** 40×25 layout: title, player name/race/class/level, dungeon depth, death source ("KILLED BY A KOBOLD" / "POISON" / "STARVATION" / "A CURSED ITEM"), XP/gold/depth bonus/total score breakdown, high score table with new entry highlighted, "PRESS ANY KEY".
+- **High score table:** 10 entries × 23 bytes (16-byte name, 3-byte score LE, level, depth, race, class). File format: 4-byte header ("MH" + version $01 + count) + entries. Sequential file "MORIA.HI" on device 8. Scratch-and-rewrite on save.
+- **Memory optimization:** `hiscore_table` (230 bytes) placed at CREATURE_BASE instead of in program image — safe because BFS/RLE (gameplay) and hiscore (game over) never overlap temporally. This kept program_end ($B191) within the raised CREATURE_BASE ($B200).
+- **Verification:** `make build` → 62 asserts, 0 failed. `make test` → 15/15 suites pass (score: 10/10).
 
 **Deliverable:** Complete, playable game loop from title screen through death
 and high scores.

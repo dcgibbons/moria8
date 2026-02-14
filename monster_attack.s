@@ -195,6 +195,8 @@ monster_attack_player:
     rts
 
 !map_player_dead:
+    lda mat_type2
+    sta zp_death_source
     jsr player_death_check
     rts
 

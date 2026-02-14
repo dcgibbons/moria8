@@ -54,3 +54,11 @@ detect_machine:
 
 !done:
     rts
+
+// ============================================================
+// Death source constants (used by turn.s, player_items.s, score.s)
+// ============================================================
+.const DEATH_ALIVE   = $00    // Player is alive
+.const DEATH_CURSED  = $FD    // Killed by cursed item
+.const DEATH_POISON  = $FE    // Killed by poison
+.const DEATH_STARVE  = $FF    // Killed by starvation

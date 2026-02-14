@@ -838,6 +838,8 @@ item_quaff:
     lda #0
     sta zp_player_hp_lo
     sta zp_player_hp_hi
+    lda #DEATH_POISON
+    sta zp_death_source
     lda zp_game_flags
     ora #$01                        // GF_DEAD
     sta zp_game_flags

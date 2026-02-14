@@ -83,6 +83,7 @@ exit_trampoline:
 #import "store.s"
 #import "ui_store.s"
 #import "save.s"
+#import "score.s"
 
 // ============================================================
 // Entry point
@@ -1053,21 +1054,14 @@ run_step:
     jmp !main_loop-
 
 !player_died:
-    // Delete save file on death (permadeath)
     jsr delete_savefile
-    // Death screen
-    jsr screen_clear
-    lda #10
-    sta zp_cursor_row
-    lda #10
-    sta zp_cursor_col
-    lda #COL_RED
-    sta zp_text_color
-    lda #<mat_dead_str
-    sta zp_ptr0
-    lda #>mat_dead_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr player_sync_from_zp
+    jsr score_calculate
+    jsr hiscore_load
+    jsr hiscore_insert
+    sta score_new_rank
+    jsr hiscore_save
+    jsr score_death_screen
     jsr input_get_key
     jmp !quit+
 

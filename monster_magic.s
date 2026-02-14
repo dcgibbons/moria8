@@ -327,6 +327,8 @@ monster_cast_bolt:
     jsr sound_play
     rts
 !mcb_dead:
+    lda zp_mon_type
+    sta zp_death_source
     jsr player_death_check
     rts
 
@@ -372,6 +374,8 @@ monster_cast_breath:
     jsr sound_play
     rts
 !mcbr_dead:
+    lda zp_mon_type
+    sta zp_death_source
     jsr player_death_check
     rts
 
