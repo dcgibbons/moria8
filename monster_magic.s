@@ -4,20 +4,12 @@
 // handlers for monster casters. Called from monster_process_one when
 // the monster is awake, before confused/movement logic.
 //
-// All tier-0 creature data has spell_chance=0, so this code is never
-// reached in levels 1-5. Framework for future creature tiers.
+// Six spellcasting creatures (IDs 20-25) have nonzero spell_chance,
+// active on dungeon levels 3-5.
 
 // ============================================================
-// Spell flag constants
+// Spell constants (MSF_* flags defined in monster.s)
 // ============================================================
-.const MSF_BOLT       = $01    // Bit 0: bolt (2d8 + level)
-.const MSF_BREATH     = $02    // Bit 1: breath (HP/3)
-.const MSF_SUMMON     = $04    // Bit 2: summon
-.const MSF_TELEPORT   = $08    // Bit 3: teleport-to
-.const MSF_BLIND      = $10    // Bit 4: blind
-.const MSF_CONFUSE    = $20    // Bit 5: confuse
-.const MSF_HEAL       = $40    // Bit 6: heal self
-
 .const MAX_CAST_RANGE = 8
 .const MM_SPELL_COUNT = 7      // Total spell types
 
@@ -429,8 +421,8 @@ monster_cast_summon:
     and #FLAG_OCCUPIED
     bne !mcs_fail+
 
-    // Spawn random creature
-    lda #CREATURE_COUNT
+    // Spawn random dungeon creature (not town)
+    lda #DUNGEON_CREATURES
     jsr rng_range
     jsr monster_spawn_one
     // Ignore failure (table could be full)

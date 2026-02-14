@@ -1,6 +1,6 @@
 // monster.s — Creature data & active monster table
 //
-// Embedded creature types for dungeon levels 1-5 (20 types).
+// Embedded creature types for dungeon levels 1-5 (26 types).
 // Active monster table: 32 slots x 12 bytes each.
 // Spawn, find, remove subroutines for the monster system.
 
@@ -9,10 +9,10 @@
 // ============================================================
 .const MAX_MONSTERS      = 32
 .const MONSTER_ENTRY_SIZE = 12
-.const DUNGEON_CREATURES = 20   // Types 0-19: dungeon monsters
-.const TOWN_CREATURE_BASE = 20 // First town creature index (must == DUNGEON_CREATURES)
-.const TOWN_CREATURE_COUNT = 6 // Types 20-25: townspeople
-.const CREATURE_COUNT    = 26  // Total creature types
+.const DUNGEON_CREATURES = 26   // Types 0-25: dungeon monsters
+.const TOWN_CREATURE_BASE = 26 // First town creature index (must == DUNGEON_CREATURES)
+.const TOWN_CREATURE_COUNT = 6 // Types 26-31: townspeople
+.const CREATURE_COUNT    = 32  // Total creature types
 .assert "Town creatures start after dungeon creatures", TOWN_CREATURE_BASE, DUNGEON_CREATURES
 .assert "Creature count = dungeon + town", CREATURE_COUNT, DUNGEON_CREATURES + TOWN_CREATURE_COUNT
 .const EMPTY_SLOT        = $ff
@@ -46,10 +46,19 @@
 .const MF_CONFUSED  = $02
 .const MF_PROVOKED  = $04   // Player attacked this monster; town creatures need this to fight back
 
+// Spell flag constants (needed by cr_spell_flags data below)
+.const MSF_BOLT       = $01    // Bit 0: bolt (2d8 + level)
+.const MSF_BREATH     = $02    // Bit 1: breath (HP/3)
+.const MSF_SUMMON     = $04    // Bit 2: summon
+.const MSF_TELEPORT   = $08    // Bit 3: teleport-to
+.const MSF_BLIND      = $10    // Bit 4: blind
+.const MSF_CONFUSE    = $20    // Bit 5: confuse
+.const MSF_HEAL       = $40    // Bit 6: heal self
+
 // ============================================================
 // Embedded creature data — Struct-of-Arrays
-// Types 0-19: dungeon monsters (levels 1-5)
-// Types 20-25: townspeople (level 0, umoria town mobs)
+// Types 0-25: dungeon monsters (levels 1-5)
+// Types 26-31: townspeople (level 0, umoria town mobs)
 // ============================================================
 
 // Display character (screen codes)
@@ -74,13 +83,19 @@ cr_display:
     .byte $03   // 17: C (Metallic green centipede)
     .byte $0d   // 18: M (Yellow mold)
     .byte $01   // 19: A (Giant black ant)
+    .byte $0b   // 20: K (Kobold shaman)
+    .byte $01   // 21: A (Giant white ant lion)
+    .byte $10   // 22: P (Novice mage)
+    .byte $10   // 23: P (Novice priest)
+    .byte $13   // 24: S (Giant salamander)
+    .byte $0f   // 25: O (Orc shaman)
     // Town creatures (P = person, $10)
-    .byte $10   // 20: P (Filthy street urchin)
-    .byte $10   // 21: P (Singing happy drunk)
-    .byte $10   // 22: P (Mangy leper)
-    .byte $10   // 23: P (Squint-eyed rogue)
-    .byte $10   // 24: P (Mean mercenary)
-    .byte $10   // 25: P (Boil-covered wretch)
+    .byte $10   // 26: P (Filthy street urchin)
+    .byte $10   // 27: P (Singing happy drunk)
+    .byte $10   // 28: P (Mangy leper)
+    .byte $10   // 29: P (Squint-eyed rogue)
+    .byte $10   // 30: P (Mean mercenary)
+    .byte $10   // 31: P (Boil-covered wretch)
 
 // Color
 cr_color:
@@ -104,19 +119,26 @@ cr_color:
     .byte COL_GREEN     // 17: Metallic green centipede
     .byte COL_YELLOW    // 18: Yellow mold
     .byte COL_LGREY     // 19: Giant black ant
+    .byte COL_RED       // 20: Kobold shaman
+    .byte COL_WHITE     // 21: Giant white ant lion
+    .byte COL_CYAN      // 22: Novice mage
+    .byte COL_LGREEN    // 23: Novice priest
+    .byte COL_RED       // 24: Giant salamander
+    .byte COL_GREEN     // 25: Orc shaman
     // Town creatures
-    .byte COL_ORANGE    // 20: Filthy street urchin
-    .byte COL_LGREY     // 21: Singing happy drunk
-    .byte COL_GREEN     // 22: Mangy leper
-    .byte COL_RED       // 23: Squint-eyed rogue
-    .byte COL_YELLOW    // 24: Mean mercenary
-    .byte COL_PURPLE    // 25: Boil-covered wretch
+    .byte COL_ORANGE    // 26: Filthy street urchin
+    .byte COL_LGREY     // 27: Singing happy drunk
+    .byte COL_GREEN     // 28: Mangy leper
+    .byte COL_RED       // 29: Squint-eyed rogue
+    .byte COL_YELLOW    // 30: Mean mercenary
+    .byte COL_PURPLE    // 31: Boil-covered wretch
 
 // Speed (0=slow/every-other-turn, 1=normal, 2=fast)
 cr_speed:
     .byte 1, 1, 0, 1, 1, 1, 1, 1, 1, 1
     .byte 0, 1, 1, 2, 2, 0, 1, 2, 1, 1
-    .byte 1, 0, 0, 1, 1, 0              // Town creatures
+    .byte 1, 1, 1, 1, 1, 1              // New dungeon creatures 20-25
+    .byte 1, 0, 0, 1, 1, 0              // Town creatures 26-31
 
 // Movement flags (CF_ATTACK_ONLY = can attack but not move)
 .const CF_ATTACK_ONLY = $01
@@ -125,62 +147,73 @@ cr_speed:
 cr_mflags:
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
     .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0
+    .byte  0,  0,  0,  0,  0,  0                  // Dungeon creatures 20-25
     .byte  0,  0,  0,  0,  0,  0                  // Town: all mobile
 
 // Creature level
 cr_level:
     .byte 2, 1, 1, 1, 1, 1, 2, 1, 1, 4
     .byte 2, 2, 4, 3, 3, 4, 1, 2, 3, 2
+    .byte 3, 4, 4, 4, 5, 5              // Dungeon creatures 20-25
     .byte 0, 0, 0, 0, 0, 0              // Town: level 0
 
 // Hit dice count (number of dice for HP)
 cr_hd_num:
     .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3
     .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3
+    .byte 3, 5, 3, 4, 6, 5              // Dungeon creatures 20-25
     .byte 1, 1, 1, 2, 3, 1              // Town creatures
 
 // Hit dice sides
 cr_hd_sides:
     .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8
     .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6
+    .byte 6, 8, 6, 6, 8, 8              // Dungeon creatures 20-25
     .byte 4, 2, 1, 8, 8, 2              // Town creatures
 
 // Armor class
 cr_ac:
     .byte 17, 4, 1, 30, 16, 7, 1, 10, 6, 16
     .byte  3, 8, 7, 15, 12, 24, 1, 4, 10, 20
+    .byte 14, 20, 6, 10, 18, 16         // Dungeon creatures 20-25
     .byte  2, 1, 1, 8, 16, 1            // Town creatures
 
 // Base sleep value (higher = deeper sleeper)
 cr_sleep:
     .byte 10, 20, 10, 99, 10, 10,  0, 40, 10, 30
     .byte 10, 30, 30, 10, 40, 10,  0, 10, 99, 80
+    .byte 20, 40, 10, 10, 30, 15         // Dungeon creatures 20-25
     .byte 10,  0, 40,  0,  0, 40         // Town: rogue/merc awake, others light sleep
 
 // Area affect radius (awareness factor)
 cr_aaf:
     .byte 16,  8,  7,  4, 20, 12,  2,  7,  2, 12
     .byte  7, 12,  8,  8,  8,  3,  2,  5,  2,  8
+    .byte 15, 10, 16, 14, 10, 16           // Dungeon creatures 20-25
     .byte 12,  4,  6, 20, 20,  6           // Town creatures
 
 // Experience value (16-bit, all <=35 for tier 0 — hi bytes all 0)
 cr_xp_lo:
     .byte 5, 1, 2, 2, 5, 2, 1, 2, 1, 8
     .byte 3, 6, 1, 6, 4, 9, 1, 3, 9, 8
+    .byte 12, 15, 18, 16, 25, 22         // Dungeon creatures 20-25
     .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
 cr_xp_hi:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0              // Dungeon creatures 20-25
     .byte 0, 0, 0, 0, 0, 0              // Town: 0 XP
 
 // Attack dice (slot 0 only for now; zeroed slots 1-3)
 cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    .byte 1, 2, 1, 1, 2, 1              // Dungeon creatures 20-25
     .byte 1, 1, 1, 1, 2, 1              // Town creatures
 cr_atk0_sides:
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
     .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4
+    .byte 4, 4, 6, 5, 6, 8              // Dungeon creatures 20-25
     .byte 2, 1, 1, 6, 6, 1              // Town creatures
 
 // Attack type for slot 0
@@ -189,29 +222,44 @@ cr_atk0_type:
     .byte ATK_NORMAL, ATK_AGGRAVATE, ATK_NORMAL, ATK_PARALYZE, ATK_NORMAL
     .byte ATK_CORRODE, ATK_NORMAL, ATK_POISON, ATK_FEAR, ATK_NORMAL
     .byte ATK_NORMAL, ATK_CONFUSE, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL
+    .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // Dungeon 20-25
     .byte ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL, ATK_NORMAL // Town: all normal
 
 // Attack slot 1 (type, dice, sides — 0 = no second attack)
 cr_atk1_type:
     .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
     .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0
+    .byte          0, 0, 0, 0, 0, 0           // Dungeon 20-25: no second attack
     .byte          0, 0, 0, 0, 0, 0           // Town: no second attack
 cr_atk1_dice:
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0
     .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
     .byte 0, 0, 0, 0, 0, 0                    // Town
 cr_atk1_sides:
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
     .byte 0, 0, 0, 0, 0, 0                    // Town
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:
-    .fill CREATURE_COUNT, 0     // No spellcasters (including town)
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 0-9: no spells
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 10-19: no spells
+    .byte 30,  0, 40, 35, 25, 35                   // Types 20-25: spellcasters
+    .byte  0,  0,  0,  0,  0,  0                   // Types 26-31: town
 
 // Spell flags (bitmask of available spells)
 cr_spell_flags:
-    .fill CREATURE_COUNT, 0     // All zero (including town)
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 0-9
+    .byte  0,  0,  0,  0,  0,  0,  0,  0,  0,  0  // Types 10-19
+    .byte MSF_BOLT | MSF_HEAL                      // 20: Kobold shaman
+    .byte 0                                        // 21: Giant white ant lion
+    .byte MSF_BOLT | MSF_CONFUSE | MSF_BLIND       // 22: Novice mage
+    .byte MSF_HEAL | MSF_SUMMON                    // 23: Novice priest
+    .byte MSF_BREATH                               // 24: Giant salamander
+    .byte MSF_BOLT | MSF_CONFUSE | MSF_HEAL        // 25: Orc shaman
+    .byte  0,  0,  0,  0,  0,  0                   // Types 26-31: town
 
 // Name pointer tables
 cr_name_lo:
@@ -220,12 +268,14 @@ cr_name_lo:
     .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14
     .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19
     .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25
+    .byte <crn_26, <crn_27, <crn_28, <crn_29, <crn_30, <crn_31
 cr_name_hi:
     .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4
     .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9
     .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19
     .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25
+    .byte >crn_26, >crn_27, >crn_28, >crn_29, >crn_30, >crn_31
 
 // Name strings (screen codes, null-terminated)
 crn_0:  .text "WHITE HARPY" ; .byte 0
@@ -248,13 +298,19 @@ crn_16: .text "GREY MOLD" ; .byte 0
 crn_17: .text "METALLIC GREEN CENTIPEDE" ; .byte 0
 crn_18: .text "YELLOW MOLD" ; .byte 0
 crn_19: .text "GIANT BLACK ANT" ; .byte 0
+crn_20: .text "KOBOLD SHAMAN" ; .byte 0
+crn_21: .text "GIANT WHITE ANT LION" ; .byte 0
+crn_22: .text "NOVICE MAGE" ; .byte 0
+crn_23: .text "NOVICE PRIEST" ; .byte 0
+crn_24: .text "GIANT SALAMANDER" ; .byte 0
+crn_25: .text "ORC SHAMAN" ; .byte 0
 // Town creatures
-crn_20: .text "FILTHY STREET URCHIN" ; .byte 0
-crn_21: .text "SINGING HAPPY DRUNK" ; .byte 0
-crn_22: .text "MANGY LEPER" ; .byte 0
-crn_23: .text "SQUINT-EYED ROGUE" ; .byte 0
-crn_24: .text "MEAN MERCENARY" ; .byte 0
-crn_25: .text "BOIL-COVERED WRETCH" ; .byte 0
+crn_26: .text "FILTHY STREET URCHIN" ; .byte 0
+crn_27: .text "SINGING HAPPY DRUNK" ; .byte 0
+crn_28: .text "MANGY LEPER" ; .byte 0
+crn_29: .text "SQUINT-EYED ROGUE" ; .byte 0
+crn_30: .text "MEAN MERCENARY" ; .byte 0
+crn_31: .text "BOIL-COVERED WRETCH" ; .byte 0
 
 // ============================================================
 // Active monster table — 32 slots x 12 bytes
@@ -732,7 +788,7 @@ monster_remove:
 // Compile-time validation
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
-.assert "Creature count", CREATURE_COUNT, 26
+.assert "Creature count", CREATURE_COUNT, 32
 .assert "cr_display size", cr_color - cr_display, CREATURE_COUNT
 .assert "cr_color size", cr_speed - cr_color, CREATURE_COUNT
 .assert "cr_speed size", cr_mflags - cr_speed, CREATURE_COUNT

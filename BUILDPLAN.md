@@ -3291,103 +3291,46 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.8 — Monster Magic (`monster_magic.s`)
+#### Step 7.8 — Monster Magic (`monster_magic.s`) ✅ IMPLEMENTED
 
 **Goal:** Monsters with spellcasting ability can use ranged spells and breath
 weapons instead of (or in addition to) melee attacks.
 
-**File:** `monster_magic.s` (new)
+**What was done:**
 
-**New creature data arrays** (add to `monster.s`):
-```
-// Spell chance: probability out of 100 that monster casts instead of moving.
-// 0 = never casts (melee only). Only checked when monster is awake and in range.
-cr_spell_chance:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // Tier 0: no spellcasters
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+The `monster_magic.s` framework (monster_can_cast, monster_pick_spell, 7 spell
+handlers, AI hook) was already fully implemented. This step activated it by:
 
-// Spell flags: bitmask of available spells/abilities.
-// Bit 0: bolt attack, Bit 1: breath weapon, Bit 2: summon,
-// Bit 3: teleport-to, Bit 4: blind, Bit 5: confuse, Bit 6: heal self
-cr_spell_flags:
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // Tier 0: all zero
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-```
+1. **Added 6 spellcasting dungeon creatures** (IDs 20-25) to `monster.s`:
+   - Kobold Shaman (L3): 30% spell, bolt + heal
+   - Giant White Ant Lion (L4): no spells, pure melee 2d4
+   - Novice Mage (L4): 40% spell, bolt + confuse + blind
+   - Novice Priest (L4): 35% spell, heal + summon
+   - Giant Salamander (L5): 25% spell, breath
+   - Orc Shaman (L5): 35% spell, bolt + confuse + heal
 
-All tier-0 values are 0 (no spellcasters in levels 1-5). The infrastructure is
-built now so that future creature tiers can set non-zero values.
+2. **Updated constants:** DUNGEON_CREATURES=26, TOWN_CREATURE_BASE=26,
+   CREATURE_COUNT=32. Town creatures shifted to IDs 26-31.
 
-**Range/LOS check (`monster_can_cast`):**
-```
-1. Check cr_spell_chance[type] > 0. If 0 → carry clear, rts.
-2. Calculate Chebyshev distance between monster and player.
-   If distance > MAX_CAST_RANGE (8) → carry clear, rts.
-3. Check line-of-sight: step from monster toward player using dir_dx/dir_dy
-   (same as bolt trace). If any wall tile blocks → carry clear, rts.
-4. Roll rng_range(100). If >= cr_spell_chance → carry clear, rts (chose melee).
-5. Carry set → monster casts a spell.
-```
+3. **Fixed bug:** `monster_cast_summon` used CREATURE_COUNT (included town
+   creatures); changed to DUNGEON_CREATURES.
 
-**Monster spell selection (`monster_pick_spell`):**
-```
-1. Get cr_spell_flags[type].
-2. Count set bits. Pick random one via rng_range(count).
-3. Map selected bit to spell handler:
-   - Bit 0 (bolt): monster_cast_bolt — 2d8 + level damage along line to player
-   - Bit 1 (breath): monster_cast_breath — damage = current HP / 3, along line
-   - Bit 2 (summon): monster_cast_summon — spawn a new monster adjacent to caster
-   - Bit 3 (teleport-to): monster_cast_teleport — move player to random location
-   - Bit 4 (blind): monster_cast_blind — set zp_eff_blind = 10+1d10
-   - Bit 5 (confuse): monster_cast_confuse — set zp_eff_confuse = 5+1d5
-   - Bit 6 (heal): monster_cast_heal — heal self 3d8 HP
-```
+4. **Moved MSF_* spell flag constants** from `monster_magic.s` to `monster.s`
+   (needed by cr_spell_flags data arrays at assembly time).
 
-**Integration into `monster_ai.s`:**
+5. **Bumped CREATURE_BASE** from $B200 to $B300 in `memory.s` to accommodate
+   larger program. Reduced BFS_QUEUE_MAX from 1792 to 1664 (still far exceeds
+   typical dungeon floor tile counts of ~400).
 
-In `monster_process_one`, before the movement/melee decision (~the point where
-an awake monster decides to approach or attack):
-```
-    // Check if monster wants to cast a spell
-    jsr monster_can_cast
-    bcc !no_cast+
-    jsr monster_pick_spell
-    jmp !mon_done+          // Casting used the monster's turn
-!no_cast:
-    // Normal movement/melee continues...
-```
-
-**Breath weapon damage:**
-```
-monster_cast_breath:
-    // Damage = current HP / 3 (integer division)
-    // Load HP (16-bit), divide by 3 using math_div_16x8
-    lda mx_hp_lo,x    → zp_math_a
-    lda mx_hp_hi,x    → zp_math_b
-    ldx #3
-    jsr math_div_16x8
-    // Result in zp_math_a (lo). Apply as damage to player.
-    // Cap at 255 for single-byte damage.
-```
-
-**Steps:**
-1. Create `monster_magic.s`. Add `#import` to `main.s`.
-2. Add `cr_spell_chance` and `cr_spell_flags` arrays to `monster.s` (all zeros
-   for tier 0).
-3. Implement `monster_can_cast` (range check + LOS + probability roll).
-4. Implement `monster_pick_spell` (select from available spells).
-5. Implement individual monster spell handlers (bolt, breath, summon, teleport,
-   blind, confuse, heal).
-6. Hook into `monster_process_one` in `monster_ai.s`.
-7. Add monster spell messages: "THE <name> BREATHES FIRE!", "THE <name> CASTS
-   A SPELL!", etc.
-
-**Tests:**
-- Compile-time: assert cr_spell_chance/cr_spell_flags table sizes = CREATURE_COUNT.
-- Runtime: Set up monster with spell_chance=100, spell_flags=1 (bolt only), place
-  within range. Run monster_process_one → verify player takes damage.
-- Runtime: Set spell_chance=0 → verify monster_can_cast returns carry clear.
-- Runtime: Place wall between monster and player → verify LOS blocked.
-- Runtime: Breath weapon with monster at 30 HP → verify damage = 10.
+**Tests:** `tests/test_monster_magic.s` — 8 runtime tests:
+1. monster_can_cast returns clear for spell_chance=0
+2. monster_can_cast returns set for 100% chance + clear LOS
+3. monster_can_cast fails when out of range (>8 tiles)
+4. monster_can_cast fails with wall blocking LOS
+5. Bolt damage in expected range [5, 19] (2d8+3)
+6. Breath damage = HP/3 (30 HP → 10 damage)
+7. Blind sets timer in [11, 20] (1d10+10)
+8. Heal increases monster HP, capped at max
 
 ---
 
