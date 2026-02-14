@@ -326,15 +326,21 @@ monster_get_ptr:
     rts
 
 // monster_init_table — Mark all 32 slots empty, reset count
+// Clears 384 bytes (32 slots × 12 bytes). Two-pass loop because
+// cpx #384 truncates to cpx #128 on 6502 (8-bit immediate).
 // Preserves: nothing
 monster_init_table:
     ldx #0
     lda #EMPTY_SLOT
-!loop:
+!loop1:
     sta monster_table,x
     inx
-    cpx #MAX_MONSTERS * MONSTER_ENTRY_SIZE
-    bne !loop-
+    bne !loop1-                 // Clear bytes 0-255
+!loop2:
+    sta monster_table + 256,x
+    inx
+    cpx #(MAX_MONSTERS * MONSTER_ENTRY_SIZE - 256)  // 128
+    bne !loop2-                 // Clear bytes 256-383
     lda #0
     sta zp_mon_count
     rts
@@ -761,6 +767,7 @@ monster_remove:
 // Compile-time validation
 // ============================================================
 .assert "Monster table size", MAX_MONSTERS * MONSTER_ENTRY_SIZE, 384
+.assert "Monster table >256 bytes", MAX_MONSTERS * MONSTER_ENTRY_SIZE > 256, true
 .assert "Max creatures", MAX_CREATURES, 65
 .assert "Town creature base", TOWN_CREATURE_BASE, 57
 .assert "cr_display size", cr_color - cr_display, MAX_CREATURES
