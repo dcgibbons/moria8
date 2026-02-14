@@ -1,9 +1,0 @@
-// VICE monitor script for Phase 1 smoke test
-// Verify title screen renders, then inject 'Q' keystroke to quit
-// Check screen RAM for title text and clean exit
-
-// Set breakpoint at the main loop's input_get_key call
-// We'll inject a key instead and check screen RAM
-
-// Just let it run briefly, inject Q, and verify exit
-keybuf Q
