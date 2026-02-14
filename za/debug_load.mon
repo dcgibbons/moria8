@@ -1,0 +1,32 @@
+// VICE monitor commands for debugging save/load
+// Usage: x64sc -moncommands debug_load.mon out/moria.prg
+//
+// === Diagnostic markers written to $D02F ===
+//
+// diag() markers (pairs: marker + $01 banking value):
+//   '1' ($31) = load_game entered
+//   '!' ($21) = OPEN failed
+//   '2' ($32) = OPEN succeeded
+//   '3' ($33) = CHKIN succeeded
+//   '4' ($34) = magic verified
+//   'P' ($50) = player_data read
+//   'Z' ($5A) = ZP state read
+//   'R' ($52) = RNG read
+//   '5' ($35) = all blocks read
+//   '6'/$36 = I/O ERROR  |  '7'/$37 = I/O OK  |  '8'/$38 = closed
+//   'C' ($43) = checksum BAD  |  '9' ($39) = checksum OK
+//   'A' ($41) = decompress  |  'B' ($42) = player sync
+//   'D' ($44) = recount  |  'E' ($45) = delete done
+//   'F' ($46) = load_resume_game  |  'X' ($58) = exit_trampoline
+//
+// load_read_block markers (single values, NOT pairs):
+//   $01-$1F = block entry counter (1=magic, 2=player, 3=ZP, 4=RNG,
+//             5=inv_item_id, 6=inv_qty, 7=inv_p1, 8=inv_flags,
+//             9=id_known, 10=pot_shuffle, ...)
+//   $AA     = block read complete
+//   $1E-$01 = remaining byte count (for blocks 5+, after each CHRIN)
+//
+// Sequence for a successful block: counter → (byte counts if >=5) → $AA
+// If counter appears but $AA doesn't, crash is inside that block read.
+
+watch store d02f
