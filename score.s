@@ -197,7 +197,18 @@ dec24_pow10_2:
 // Clobbers: everything
 // ============================================================
 score_death_screen:
-    jsr screen_clear
+    // Full row-by-row clear (avoids screen_clear absolute-indexed residue issue)
+    lda #COL_BLACK
+    sta zp_text_color
+    lda #0
+!sds_clear:
+    pha
+    jsr screen_clear_row
+    pla
+    clc
+    adc #1
+    cmp #25
+    bcc !sds_clear-
 
     // Row 1: "* YOU HAVE DIED *"
     lda #1

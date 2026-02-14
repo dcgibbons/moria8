@@ -38,18 +38,18 @@ player_create:
 // Race selection
 // ============================================================
 create_select_race:
-    jsr screen_clear
-    // Clear bottom rows explicitly (JiffyDOS progress bar residue from title LOAD)
-    // screen_clear_row clobbers A, so save/restore via stack
-    lda #20
-!csr_bottom:
+    // Full row-by-row clear (avoids screen_clear absolute-indexed residue issue)
+    lda #COL_BLACK
+    sta zp_text_color
+    lda #0
+!csr_clear:
     pha
     jsr screen_clear_row
     pla
     clc
     adc #1
     cmp #25
-    bcc !csr_bottom-
+    bcc !csr_clear-
 
     lda #COL_WHITE
     sta zp_text_color

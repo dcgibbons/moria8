@@ -1079,6 +1079,17 @@ run_step:
     jmp !main_loop-
 
 !player_died:
+    // Show "YOU HAVE BEEN SLAIN." with -more- BEFORE disk I/O
+    // so the player isn't staring at a frozen screen during file ops
+    lda #<slain_str
+    sta zp_ptr0
+    lda #>slain_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jsr msg_show_more
+    jsr input_get_key
+
+    // Now do disk I/O (player sees -more- prompt, knows they died)
     jsr delete_savefile
     jsr player_sync_from_zp
     jsr score_calculate
@@ -1120,6 +1131,9 @@ at_surface_str:
 
 no_stairs_str:
     .text "YOU SEE NO STAIRS HERE." ; .byte 0
+
+slain_str:
+    .text "YOU HAVE BEEN SLAIN." ; .byte 0
 
 // Safety: ensure assembled code doesn't overlap runtime data areas
 program_end:
