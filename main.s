@@ -125,31 +125,8 @@ entry_main:
     jsr screen_clear
     jsr title_load_and_draw
 
-    // Show REU status on title screen (row 12) if detected
-    lda reu_present
-    beq !no_reu_display+
-    lda #12
-    sta zp_cursor_row
-    lda #13                     // Center: (40 - 14) / 2 = 13
-    sta zp_cursor_col
-    lda #COL_DGREY
-    sta zp_text_color
-    lda #<reu_status_str
-    sta zp_ptr0
-    lda #>reu_status_str
-    sta zp_ptr0_hi
-    jsr screen_put_string       // "REU: "
-    lda reu_size_kb
-    sta zp_temp0
-    lda reu_size_kb + 1
-    sta zp_temp1
-    jsr screen_put_decimal_16   // Print KB value
-    lda #<reu_kb_str
-    sta zp_ptr0
-    lda #>reu_kb_str
-    sta zp_ptr0_hi
-    jsr screen_put_string       // "KB DETECTED"
-!no_reu_display:
+    // Show system info on row 23 (machine type, KERNAL rev, REU)
+    jsr title_show_sysinfo
 
     // Check for existing save file
     jsr check_savefile_exists
@@ -1143,6 +1120,77 @@ exit:
     jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
 
 // ============================================================
+// title_show_sysinfo — Display machine/KERNAL/REU info on row 23
+// ============================================================
+title_show_sysinfo:
+    lda #COL_DGREY
+    sta zp_text_color
+    lda #23
+    sta zp_cursor_row
+    // Start column: 7 if REU, 12 if not
+    ldx #12
+    lda reu_present
+    beq !+
+    ldx #7
+!:  stx zp_cursor_col
+
+    // Machine type: X = 0(C64), 1(C128), 2(SX-64)
+    ldx #0                      // Default: C64
+    lda zp_machine_type
+    bmi !c128+
+    // C64 — check for SX-64 ($FF80 = $43)
+    lda KERNAL_REV
+    cmp #$43
+    bne !pm+
+    ldx #2                      // SX-64
+    .byte $2c                   // BIT abs — skip ldx #1
+!c128:
+    ldx #1
+!pm:
+    lda tsi_mach_lo,x
+    ldy tsi_mach_hi,x
+    jsr tsi_print
+
+    // "  KERNAL R"
+    lda #<tsi_kernal_str
+    ldy #>tsi_kernal_str
+    jsr tsi_print
+
+    // Revision digit lookup
+    lda KERNAL_REV
+    ldx #3
+!kl: cmp tsi_krev_table,x
+    beq !kf+
+    dex
+    bpl !kl-
+    lda #$3f                    // '?' screen code
+    bne !kp+                    // always taken (A != 0)
+!kf: lda tsi_krev_chars,x
+!kp: jsr screen_put_char
+
+    // REU info if present
+    lda reu_present
+    beq !done+
+    lda #<tsi_reu_str
+    ldy #>tsi_reu_str
+    jsr tsi_print
+    lda reu_size_kb
+    sta zp_temp0
+    lda reu_size_kb + 1
+    sta zp_temp1
+    jsr screen_put_decimal_16
+    lda #<tsi_kb_str
+    ldy #>tsi_kb_str
+    jsr tsi_print
+!done:
+    rts
+
+tsi_print:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp screen_put_string
+
+// ============================================================
 // String data (screen codes via .encoding "screencode_upper")
 // ============================================================
 
@@ -1152,10 +1200,16 @@ title_str:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-reu_status_str:
-    .text "REU: " ; .byte 0
-reu_kb_str:
-    .text "KB DETECTED" ; .byte 0
+tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
+tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
+tsi_c64_str:    .text "C64"  ; .byte 0
+tsi_c128_str:   .text "C128" ; .byte 0
+tsi_sx64_str:   .text "SX-64" ; .byte 0
+tsi_kernal_str: .text "  KERNAL R" ; .byte 0
+tsi_reu_str:    .text "  REU " ; .byte 0
+tsi_kb_str:     .text "KB" ; .byte 0
+tsi_krev_table: .byte $aa, $00, $03, $43    // KERNAL rev bytes
+tsi_krev_chars: .byte $31, $32, $33, $31    // '1', '2', '3', '1' in screen codes
 
 welcome_str:
     .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0

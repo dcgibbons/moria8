@@ -1,21 +1,20 @@
 // config.s — System detection (C64 vs C128, column mode)
 //
-// Detection method: Read $D030 (C128 test register). On a C128 in C64
-// mode, $D030 is the VIC-II test register and reads back non-zero when
-// written. On a real C64, $D030 is open bus and reads back differently.
-// However, the most reliable method is checking the KERNAL revision byte
-// at $FF80: C128 KERNAL stores $03 there, C64 stores $AA (rev 3) or
-// other values. We use $FF80 since it works regardless of VIC-II state.
+// Detection method: Probe for the C128 VDC (8563) at $D600. The VDC
+// status register bit 7 (ready flag) is high most of the time. On a C64
+// or C128 in GO64 mode, $D600 is a SID mirror (write-only Voice 1 Freq
+// Lo) and reads ~0. This correctly identifies C128 NATIVE mode only —
+// C128 in GO64 (C64 mode) is treated as C64, which matches user intent.
 //
-// C128 column mode: If C128 detected, check if the 80-column (VDC) screen
-// is active by reading $D7 (C128: 40/80 column flag, 0=40, $FF=80).
-// On C64 this address is unused, but we only check it after confirming C128.
+// Previous $FF80 method was broken: C64 KERNAL rev 3 also has $FF80=$03,
+// causing false C128 detection on the most common C64 KERNAL.
+//
+// C128 column mode: If C128 detected, check $D7 (40/80 column flag).
 
-// KERNAL revision byte
+// KERNAL revision byte (used for revision display + SX-64 detection)
 .const KERNAL_REV = $ff80
-.const C128_REV   = $03
 
-// C128 40/80 column flag (only valid on C128)
+// C128 40/80 column flag (only valid on C128 native mode)
 .const C128_MODE_FLAG = $d7
 
 // Machine type constants (stored in zp_machine_type)
@@ -37,12 +36,19 @@ detect_machine:
     lda #COLUMNS_40
     sta zp_column_mode
 
-    // Check KERNAL revision byte
-    lda KERNAL_REV
-    cmp #C128_REV
-    bne !done+          // Not C128, we're done
+    // Probe for C128 VDC at $D600
+    // On C128 native: VDC status register, bit 7 = ready (usually high)
+    // On C64 or C128-GO64: SID mirror, reads ~0
+    lda #18             // VDC register 18 (Update Address Hi — safe to select)
+    sta $d600           // Set VDC register index (harmless SID write on C64)
+    nop
+    nop
+    lda $d600           // Read VDC status (or SID mirror)
+    ora $d600
+    ora $d600           // OR multiple reads to catch ready flag
+    bpl !done+          // Bit 7 clear → no VDC → not C128 native
 
-    // C128 detected
+    // C128 native mode detected
     lda #MACHINE_C128
     sta zp_machine_type
 
