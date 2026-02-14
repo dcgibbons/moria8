@@ -162,14 +162,14 @@ cr_hd_num:
     .byte 2, 1, 4, 3, 3, 3, 1, 3, 3, 3
     .byte 6, 2, 2, 2, 2, 7, 1, 4, 8, 3
     .byte 3, 5, 3, 4, 6, 5              // Dungeon creatures 20-25
-    .byte 1, 1, 1, 2, 3, 1              // Town creatures
+    .byte 1, 2, 1, 2, 5, 1              // Town: urch 1, drunk 2, leper 1, rogue 2, merc 5, wretch 1
 
 // Hit dice sides
 cr_hd_sides:
     .byte 5, 3, 4, 6, 7, 5, 1, 5, 6, 8
     .byte 4, 8, 2, 5, 6, 8, 2, 4, 8, 6
     .byte 6, 8, 6, 6, 8, 8              // Dungeon creatures 20-25
-    .byte 4, 2, 1, 8, 8, 2              // Town creatures
+    .byte 4, 3, 4, 8, 8, 4              // Town: urch 1d4, drunk 2d3, leper 1d4, rogue 2d8, merc 5d8, wretch 1d4
 
 // Armor class
 cr_ac:
@@ -209,12 +209,12 @@ cr_atk0_dice:
     .byte 1, 1, 1, 1, 1, 1, 0, 1, 0, 1
     .byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     .byte 1, 2, 1, 1, 2, 1              // Dungeon creatures 20-25
-    .byte 1, 1, 1, 1, 2, 1              // Town creatures
+    .byte 1, 1, 1, 1, 2, 1              // Town: urch 1d2, drunk 1d2, leper 1d2, rogue 1d6, merc 2d6, wretch 1d2
 cr_atk0_sides:
     .byte 1, 2, 2, 1, 6, 2, 0, 2, 0, 6
     .byte 3, 3, 3, 1, 2, 4, 4, 1, 4, 4
     .byte 4, 4, 6, 5, 6, 8              // Dungeon creatures 20-25
-    .byte 2, 1, 1, 6, 6, 1              // Town creatures
+    .byte 2, 2, 2, 6, 6, 2              // Town: drunk/leper/wretch buffed to 1d2 (from 1d1)
 
 // Attack type for slot 0
 cr_atk0_type:
@@ -230,17 +230,17 @@ cr_atk1_type:
     .byte ATK_NORMAL, 0, 0, 0, 0, 0, 0, ATK_NORMAL, 0, 0
     .byte          0, 0, 0, 0, 0, ATK_POISON, 0, 0, 0, 0
     .byte          0, 0, 0, 0, 0, 0           // Dungeon 20-25: no second attack
-    .byte          0, 0, 0, 0, 0, 0           // Town: no second attack
+    .byte          0, 0, 0, 0, ATK_NORMAL, 0  // Town: mercenary has 2nd attack
 cr_atk1_dice:
     .byte 1, 0, 0, 0, 0, 0, 0, 1, 0, 0
     .byte 0, 0, 0, 0, 0, 2, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
-    .byte 0, 0, 0, 0, 0, 0                    // Town
+    .byte 0, 0, 0, 0, 3, 0                    // Town: merc 2nd atk = 3d5
 cr_atk1_sides:
     .byte 1, 0, 0, 0, 0, 0, 0, 2, 0, 0
     .byte 0, 0, 0, 0, 0, 4, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0                    // Dungeon 20-25
-    .byte 0, 0, 0, 0, 0, 0                    // Town
+    .byte 0, 0, 0, 0, 5, 0                    // Town: merc 2nd atk = 3d5
 
 // Spell chance (probability out of 100 that monster casts instead of melee)
 cr_spell_chance:

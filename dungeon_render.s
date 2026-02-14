@@ -179,6 +179,41 @@ render_viewport:
     sta zp_temp0
 !rv_tile_set:
 
+    // Store door number override (town only, open door tiles only)
+    // Rendered as part of the tile so items/monsters/player take priority.
+    lda zp_player_dlvl
+    bne !rv_no_store+
+    cpx #7                      // TILE_DOOR_OPEN type index
+    bne !rv_no_store+
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    sta rsd_col
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    sta rsd_save_x
+    ldx #0
+!rv_store_chk:
+    lda store_door_x,x
+    cmp rsd_col
+    bne !rv_store_nxt+
+    lda store_door_y,x
+    cmp rsd_save_x
+    bne !rv_store_nxt+
+    txa
+    clc
+    adc #$31                    // '1'-'6' screen code
+    sta zp_temp0
+    lda #COL_STORE
+    sta zp_temp1
+    jmp !rv_no_store+
+!rv_store_nxt:
+    inx
+    cpx #STORE_COUNT
+    bne !rv_store_chk-
+!rv_no_store:
+
     // --- Dimming check: remembered but not currently visible → dark grey ---
     // Town tiles always have FLAG_LIT, so this is effectively a no-op on town.
     lda zp_tile_tmp
@@ -299,7 +334,6 @@ render_viewport:
     jmp !write_tile+
 
 !not_player:
-    // Store door numbers rendered by render_store_doors post-pass
     jmp !write_tile+
 
 !draw_blank:
@@ -335,78 +369,9 @@ render_viewport:
     beq !done+
     jmp !row_loop-
 !done:
-    jmp render_store_doors  // Overlay store door numbers (town only)
-
-// render_store_doors — Overlay store door numbers on screen (town only)
-// Called after render_viewport or render_local_area as a post-pass.
-// Only 6 iterations instead of per-tile checks (was O(760×6), now O(6)).
-// Preserves: nothing
-render_store_doors:
-    lda zp_player_dlvl
-    bne !rsd_done+
-
-    ldx #0
-!rsd_loop:
-    stx rsd_save_x
-
-    // Skip if player is standing on this door
-    lda store_door_x,x
-    cmp zp_player_x
-    bne !rsd_not_player+
-    lda store_door_y,x
-    cmp zp_player_y
-    beq !rsd_next+
-!rsd_not_player:
-
-    // Check x within viewport
-    lda store_door_x,x
-    sec
-    sbc zp_view_x
-    bcc !rsd_next+          // Left of viewport
-    cmp #VIEWPORT_W
-    bcs !rsd_next+          // Right of viewport
-    clc
-    adc #VIEWPORT_X
-    sta rsd_col
-
-    // Check y within viewport
-    lda store_door_y,x
-    sec
-    sbc zp_view_y
-    bcc !rsd_next+          // Above viewport
-    cmp #VIEWPORT_H
-    bcs !rsd_next+          // Below viewport
-    clc
-    adc #VIEWPORT_Y
-    tay                     // Y = screen row index
-
-    // Get screen/color row addresses
-    lda screen_row_lo,y
-    sta zp_ptr0
-    lda screen_row_hi,y
-    sta zp_ptr0_hi
-    lda color_row_lo,y
-    sta zp_ptr2
-    lda color_row_hi,y
-    sta zp_ptr2_hi
-
-    // Write store number and color
-    ldy rsd_col
-    lda rsd_save_x
-    clc
-    adc #$31                // '1'-'6' screen code
-    sta (zp_ptr0),y
-    lda #COL_STORE
-    sta (zp_ptr2),y
-
-!rsd_next:
-    ldx rsd_save_x
-    inx
-    cpx #STORE_COUNT
-    bne !rsd_loop-
-!rsd_done:
     rts
 
+// Scratch bytes for store door check in render_viewport
 rsd_col:    .byte 0
 rsd_save_x: .byte 0
 
@@ -482,6 +447,32 @@ render_single_tile:
     lda tile_colors,x
     sta zp_temp4
 !rst_tile_set:
+
+    // Store door number override (town only, open door tiles only)
+    lda zp_player_dlvl
+    bne !rst_no_store+
+    cpx #7                      // TILE_DOOR_OPEN type index
+    bne !rst_no_store+
+    ldx #0
+!rst_store_chk:
+    lda store_door_x,x
+    cmp zp_temp0                // map_x
+    bne !rst_store_nxt+
+    lda store_door_y,x
+    cmp zp_temp1                // map_y
+    bne !rst_store_nxt+
+    txa
+    clc
+    adc #$31                    // '1'-'6' screen code
+    sta zp_temp3
+    lda #COL_STORE
+    sta zp_temp4
+    jmp !rst_no_store+
+!rst_store_nxt:
+    inx
+    cpx #STORE_COUNT
+    bne !rst_store_chk-
+!rst_no_store:
 
     // --- Dimming check for single tile ---
     lda zp_tile_tmp
@@ -727,7 +718,7 @@ render_local_area:
     inc rla_cur_y
     jmp !rla_row-
 !rla_done:
-    jmp render_store_doors  // Overlay store door numbers (town only)
+    rts
 
 rla_min_x: .byte 0
 rla_max_x: .byte 0

@@ -443,7 +443,11 @@ sds_print_death_source:
     sta zp_ptr0
     lda #>sds_a_str
     sta zp_ptr0_hi
+    txa
+    pha                         // Save creature type (screen_put_string clobbers X)
     jsr screen_put_string
+    pla
+    tax                         // Restore creature type
     lda cr_name_lo,x
     sta zp_ptr0
     lda cr_name_hi,x
