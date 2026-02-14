@@ -123,6 +123,7 @@ title_render_data:
 !trd_done:
     rts
 
-// Filename for KERNAL LOAD (NOT null-terminated — KERNAL uses length)
+// Filename for KERNAL LOAD (PETSCII, NOT null-terminated — KERNAL uses length)
+// Must use explicit PETSCII bytes — .text produces screen codes under screencode_upper
 title_filename:
-    .text "TITLE"
+    .byte $54, $49, $54, $4c, $45   // "TITLE" in PETSCII
