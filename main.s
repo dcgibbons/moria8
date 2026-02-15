@@ -99,6 +99,10 @@ entry_main:
 
     // BASIC ROM already banked out by bootstrap above
 
+    // Copy banked code payload to $F000 (must happen before any
+    // trampoline calls — payload stored inline after program code)
+    jsr init_copy_banked
+
     // Select unshifted character set (uppercase + graphics)
     // Bit 1 of $D018 selects character set: 0=uppercase, 1=lowercase
     lda $d018
@@ -1304,17 +1308,64 @@ title_show_sysinfo:
     rts
 tsi_krev_cached: .byte 0
 
-// Safety: ensure assembled code doesn't overlap runtime data areas
+// Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
 .assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true
 
 // ============================================================
-// Banked code — RAM under KERNAL ROM at $F000
-// Accessed through trampolines above (SEI + bank-out KERNAL).
-// VICE autostartprgmode 1 injects PRG directly into RAM,
-// safely spanning the I/O gap at $D000.
+// Init-only code below — lives past CREATURE_BASE, safe because
+// it runs once at startup before dungeon map or RLE workspace
+// are used. Overwritten during normal gameplay.
 // ============================================================
-*= $f000 "Banked Code"
-#import "special_rooms.s"
-#import "ego_items.s"
-#import "title_sysinfo_banked.s"
+
+// init_copy_banked — Copy banked code payload to $F000
+// Called once at startup before any $F000 trampoline is used.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
+init_copy_banked:
+    sei
+    lda #BANK_NO_ROMS           // $34 — bank out all ROMs to write $F000
+    sta $01
+    lda #<banked_payload
+    sta zp_ptr0
+    lda #>banked_payload
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$F0
+    sta zp_ptr1_hi
+    ldx #((banked_payload_end - banked_payload + 255) / 256)
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    iny
+    bne !copy-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dex
+    bne !copy-
+    lda #BANK_NO_BASIC          // $36 — restore normal banking
+    sta $01
+    cli
+    rts
+
+// ============================================================
+// Banked code payload — stored inline here, copied to $F000
+// at startup by init_copy_banked.
+//
+// Using .pseudopc so labels resolve to $F000+ addresses (where
+// the code runs) but bytes are stored contiguously after the
+// main program. This avoids spanning $D000 (I/O registers) in
+// the PRG file, which would corrupt the serial bus during
+// KERNAL LOAD from disk.
+// ============================================================
+banked_payload:
+.pseudopc $F000 {
+    #import "special_rooms.s"
+    #import "ego_items.s"
+    #import "title_sysinfo_banked.s"
+}
+banked_payload_end:
+
+.print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
+.assert "Payload fits below I/O ($D000)", banked_payload_end < $D000, true
