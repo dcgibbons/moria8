@@ -86,7 +86,7 @@ ui_inv_display:
     // Append ego suffix if item has one
     ldx uinv_slot
     lda inv_ego,x
-    jsr tramp_ego_put_suffix
+    jsr banked_ego_put_suffix
 
     inc uinv_row
     lda #1
@@ -201,7 +201,7 @@ ui_equip_display:
     // Append ego suffix if equipped item has one
     ldx uinv_equip_idx
     lda inv_ego,x
-    jsr tramp_ego_put_suffix
+    jsr banked_ego_put_suffix
     jmp !ueq_next+
 
 !ueq_none:
@@ -267,3 +267,27 @@ ueq_label_ptrs_lo:
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
+
+// ============================================================
+// banked_ego_put_suffix — Write ego suffix to screen (runs at $F000)
+// Calls ego_get_suffix_ptr directly (also $F000) without banking
+// changes, since KERNAL is already banked out by the UI trampoline.
+// Input: A = ego type (0 = no ego)
+// Clobbers: A, Y, zp_ptr0
+// ============================================================
+banked_ego_put_suffix:
+    cmp #0
+    beq !beps_done+
+    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
+    ldy #0
+!beps_loop:
+    lda (zp_ptr0),y
+    beq !beps_done+
+    sty beps_save_y
+    jsr screen_put_char         // Main RAM — always accessible
+    ldy beps_save_y
+    iny
+    jmp !beps_loop-
+!beps_done:
+    rts
+beps_save_y: .byte 0

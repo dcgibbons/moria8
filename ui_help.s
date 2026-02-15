@@ -17,22 +17,6 @@
 // Subroutines
 // ============================================================
 
-// ui_help_clear_all — Clear all 25 rows using screen_clear_row
-// Uses indirect addressing per row (via screen_row_lo/hi tables).
-// Input: zp_text_color must be set to desired clear color
-// Clobbers: A, X, Y, zp_screen_lo/hi, zp_color_lo/hi
-ui_help_clear_all:
-    lda #0
-    sta help_line_idx
-!hca_loop:
-    lda help_line_idx
-    jsr screen_clear_row
-    inc help_line_idx
-    lda help_line_idx
-    cmp #SCREEN_ROWS
-    bcc !hca_loop-
-    rts
-
 // ui_help_display — Show help screen
 // Preserves: nothing
 ui_help_display:
@@ -90,27 +74,19 @@ ui_help_display:
     sta zp_cursor_row
     lda #12
     sta zp_cursor_col
-    lda #<help_footer_str
+    lda #<press_key_str
     sta zp_ptr0
-    lda #>help_footer_str
+    lda #>press_key_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
     rts
 
 // ============================================================
-// Scratch
-// ============================================================
-help_line_idx: .byte 0
-
-// ============================================================
 // String data
 // ============================================================
 help_title_str:
     .text "COMMAND REFERENCE" ; .byte 0
-
-help_footer_str:
-    .text "PRESS ANY KEY" ; .byte 0
 
 // Help lines — two-column layout
 // Left column: movement/nav, Right column: actions

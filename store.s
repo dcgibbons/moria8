@@ -1,26 +1,12 @@
-// store.s — Store data, inventory, restocking, price calculation, gold ops
+// store.s — Store restocking, price calculation, gold ops
 //
 // 6 town stores with persistent inventory (SoA layout, 12 slots each).
 // Restocking on town re-entry. Buy/sell price adjusted by CHR stat.
+//
+// Inventory arrays and check_player_on_store_door live in store_data.s
+// (main RAM) so they persist across $E000 overlay loads.
 
-// ============================================================
-// Constants
-// ============================================================
-.const STORE_MAX_ITEMS  = 12
-.const STORE_TOTAL_SLOTS = 72   // 6 × 12
-.const STORE_PICK_RETRIES = 30  // Max rejection sampling attempts
-
-// ============================================================
-// Store inventory arrays (Struct-of-Arrays, 288 bytes)
-// ============================================================
-si_item_id:     .fill STORE_TOTAL_SLOTS, $FF   // $FF = empty
-si_qty:         .fill STORE_TOTAL_SLOTS, 0
-si_p1:          .fill STORE_TOTAL_SLOTS, 0
-si_flags:       .fill STORE_TOTAL_SLOTS, 0
-
-// Base index into SoA arrays for each store (store * 12)
-store_base_idx:
-    .byte 0, 12, 24, 36, 48, 60
+// Constants defined in store_data.s (imported in main RAM before overlay)
 
 // ============================================================
 // Store category bitmasks (16-bit, bit N = ICAT N)

@@ -162,7 +162,7 @@ turn_tick_effects:
     sta player_data + PL_DLEVEL
     lda #1
     sta level_entry_dir              // Ascending (town)
-    jsr store_restock_all            // Restock stores on town re-entry (RP14-1)
+    jsr tramp_store_restock_all      // Restock stores on town re-entry (RP14-1)
     jmp !recall_generate+
 
 !recall_to_dungeon:

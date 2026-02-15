@@ -157,6 +157,9 @@ tier_check_transition:
 // Name strings remain at $E000+ (accessed via creature_get_name).
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
 tier_load:
+    // Invalidate overlay — tier data will overwrite $E000
+    jsr overlay_invalidate
+
     // Show loading message
     lda #<tier_loading_str
     sta zp_ptr0

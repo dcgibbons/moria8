@@ -64,7 +64,7 @@ equip_slot_for_cat:
 // Used by item selection dialogs when player presses '?'.
 // Preserves: nothing
 show_inv_and_restore:
-    jsr ui_inv_display
+    jsr tramp_ui_inv_display
     jsr input_get_key
     lda #COL_BLACK
     sta zp_text_color

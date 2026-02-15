@@ -40,13 +40,16 @@ test_exit_trampoline:
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"
+#import "../ui_help_clear.s"
 #import "../ui_character.s"
+#import "../stat_display.s"
 #import "../player_create.s"
 #import "../sound.s"
 #import "../dungeon_gen.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../tier_manager.s"
+#import "../overlay.s"
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
@@ -64,9 +67,11 @@ test_exit_trampoline:
 #import "../combat.s"
 #import "../monster_attack.s"
 #import "../turn.s"
+#import "../store_data.s"
 #import "../store.s"
 #import "../ui_store.s"
 #import "../ui_help.s"
+#import "../ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

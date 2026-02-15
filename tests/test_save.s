@@ -47,13 +47,16 @@ test_finish:
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"
+#import "../ui_help_clear.s"
 #import "../ui_character.s"
+#import "../stat_display.s"
 #import "../player_create.s"
 #import "../sound.s"
 #import "../dungeon_gen.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../tier_manager.s"
+#import "../overlay.s"
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
@@ -71,9 +74,11 @@ test_finish:
 #import "../combat.s"
 #import "../monster_attack.s"
 #import "../turn.s"
+#import "../store_data.s"
 #import "../store.s"
 #import "../ui_store.s"
 #import "../ui_help.s"
+#import "../ui_trampoline_stubs.s"
 #import "../save.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -162,11 +167,11 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — must be past test body end (currently ~$B44B after imports).
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$C61E
+// RLE workspace — must be past test body end (currently ~$B602 after imports).
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$C71E
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $B600
+.const RLE_TEST_BUF = $B800
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

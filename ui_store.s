@@ -18,30 +18,7 @@
 // ============================================================
 // Subroutines
 // ============================================================
-
-// check_player_on_store_door — Check if player is on a store door
-// Input: zp_player_x/y
-// Output: carry set + A = store index (0-5) if on door
-//         carry clear if not on any door
-// Clobbers: A, X
-check_player_on_store_door:
-    ldx #5
-!cpsd_loop:
-    lda zp_player_x
-    cmp store_door_x,x
-    bne !cpsd_next+
-    lda zp_player_y
-    cmp store_door_y,x
-    bne !cpsd_next+
-    // Match
-    txa
-    sec
-    rts
-!cpsd_next:
-    dex
-    bpl !cpsd_loop-
-    clc
-    rts
+// Note: check_player_on_store_door is in store_data.s (main RAM)
 
 // store_enter — Main store mode loop
 // Input: zp_store_idx = store index (0-5)

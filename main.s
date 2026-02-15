@@ -7,6 +7,13 @@
 // ============================================================
 // BASIC stub — SYS 2062 ($080E)
 // ============================================================
+// Overlay segments: produce separate PRGs at $E000.
+// Assembled in same pass as main program — full symbol access.
+// Only ONE overlay is active at a time (they share $E000-$EFFF).
+.segmentdef StartupOverlay [outPrg="out/ovl_start", start=$e000, min=$e000, max=$efff]
+.segmentdef TownOverlay [outPrg="out/ovl_town", start=$e000, min=$e000, max=$efff]
+.segmentdef DeathOverlay [outPrg="out/ovl_death", start=$e000, min=$e000, max=$efff]
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
 
@@ -60,14 +67,13 @@ exit_trampoline:
 #import "player.s"
 #import "ui_messages.s"
 #import "ui_status.s"
-#import "ui_character.s"
-#import "ui_help.s"
-#import "player_create.s"
+#import "stat_display.s"
 #import "sound.s"
 #import "dungeon_gen.s"
 #import "dungeon_features.s"
 #import "monster.s"
 #import "tier_manager.s"
+#import "overlay.s"
 #import "monster_ai.s"
 #import "monster_magic.s"
 #import "item.s"
@@ -75,7 +81,6 @@ exit_trampoline:
 #import "spell_data.s"
 #import "spell_effects.s"
 #import "player_magic.s"
-#import "ui_inventory.s"
 #import "dungeon_render.s"
 #import "dungeon_los.s"
 #import "player_move.s"
@@ -83,11 +88,10 @@ exit_trampoline:
 #import "ranged_fire.s"
 #import "monster_attack.s"
 #import "turn.s"
-#import "store.s"
-#import "ui_store.s"
+#import "store_data.s"
 #import "save.s"
 #import "disk_swap.s"
-#import "score.s"
+#import "score_io.s"
 #import "title_screen.s"
 
 // ============================================================
@@ -210,7 +214,7 @@ entry_main:
     bne !clear_effects-
 
     // --- Character creation ---
-    jsr player_create
+    jsr tramp_player_create
 
     // --- Starting equipment ---
     // Wooden torch (type 13) in EQUIP_LIGHT with 40 charges
@@ -276,7 +280,7 @@ entry_main:
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
-    jsr store_init_all
+    jsr tramp_store_init_all
 
     // --- Main game loop ---
     // Initialize dungeon level and generate map (new game only)
@@ -401,7 +405,7 @@ load_resume_game:
     // Character info?
     cmp #CMD_CHAR_INFO
     bne !not_char+
-    jsr ui_char_display
+    jsr tramp_ui_char_display
     jsr input_get_key
     // Redraw map on return
     jsr screen_clear
@@ -411,7 +415,7 @@ load_resume_game:
     // Help?
     cmp #CMD_HELP
     bne !not_help+
-    jsr ui_help_display
+    jsr tramp_ui_help_display
     jsr input_get_key
     // Redraw map on return — clear all rows then redraw
     lda #COL_BLACK
@@ -483,7 +487,7 @@ load_resume_game:
     jsr check_player_on_store_door
     bcc !not_store_entry+
     sta zp_store_idx
-    jsr store_enter
+    jsr tramp_store_enter
     jsr viewport_update
     jsr render_viewport
 !not_store_entry:
@@ -553,7 +557,7 @@ load_resume_game:
     sta player_data + PL_DLEVEL
     // Restock stores when returning to town
     bne !not_entering_town+
-    jsr store_restock_all
+    jsr tramp_store_restock_all
 !not_entering_town:
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
@@ -696,7 +700,7 @@ load_resume_game:
     // Inventory? (display only, no turn consumed)
     cmp #CMD_INVENTORY
     bne !not_inventory+
-    jsr ui_inv_display
+    jsr tramp_ui_inv_display
     jsr input_get_key
     // Redraw map on return
     lda #COL_BLACK
@@ -708,7 +712,7 @@ load_resume_game:
     // Equipment? (display only, no turn consumed)
     cmp #CMD_EQUIPMENT
     bne !not_equipment+
-    jsr ui_equip_display
+    jsr tramp_ui_equip_display
     jsr input_get_key
     // Redraw map on return
     lda #COL_BLACK
@@ -1075,12 +1079,7 @@ run_step:
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr delete_savefile
     jsr player_sync_from_zp
-    jsr score_calculate
-    jsr hiscore_load
-    jsr hiscore_insert
-    sta score_new_rank
-    jsr hiscore_save
-    jsr score_death_screen
+    jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
     jsr input_get_key
     jmp !quit+
 
@@ -1308,6 +1307,130 @@ title_show_sysinfo:
     rts
 tsi_krev_cached: .byte 0
 
+#import "ui_help_clear.s"
+
+// ============================================================
+// UI screen trampolines — SEI + bank out KERNAL, call $F000+
+// ============================================================
+tramp_ui_help_display:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr ui_help_display
+    jmp tramp_sr_epilogue
+
+tramp_ui_char_display:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr ui_char_display
+    jmp tramp_sr_epilogue
+
+tramp_ui_inv_display:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr ui_inv_display
+    jmp tramp_sr_epilogue
+
+tramp_ui_equip_display:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr ui_equip_display
+    jmp tramp_sr_epilogue
+
+// ============================================================
+// Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
+// ============================================================
+// Shared preamble: ensure town overlay is loaded, then bank out KERNAL
+store_overlay_preamble:
+    lda #OVL_TOWN
+    jsr overlay_load
+    sei
+    lda #BANK_NO_ROMS           // $34 — $E000 = RAM (overlay code)
+    sta $01
+    rts
+
+tramp_store_init_all:
+    jsr store_overlay_preamble
+    jsr store_init_all
+    jmp tramp_sr_epilogue
+
+tramp_store_restock_all:
+    jsr store_overlay_preamble
+    jsr store_restock_all
+    jmp tramp_sr_epilogue
+
+tramp_store_enter:
+    jsr store_overlay_preamble
+    jsr store_enter
+    jmp tramp_sr_epilogue
+
+// ============================================================
+// Startup overlay trampoline — load overlay, bank out KERNAL, call $E000+
+// ============================================================
+tramp_player_create:
+    lda #OVL_STARTUP
+    jsr overlay_load
+    sei
+    lda #BANK_NO_ROMS           // $34 — $E000 = RAM (overlay code)
+    sta $01
+    jsr player_create
+    jmp tramp_sr_epilogue
+
+// ============================================================
+// Death overlay trampoline — orchestrates the full game-over sequence
+// ============================================================
+// Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
+// Pre-resolves creature name before overlay overwrites tier data.
+tramp_game_over:
+    // 1. Resolve creature name while tier data still at $E000
+    lda zp_death_source
+    cmp #DEATH_CURSED           // Special sources ($FD-$FF) don't need name
+    bcs !tgo_load_overlay+
+    tax
+    jsr creature_get_name       // Copies name to creature_name_buf in main RAM
+
+!tgo_load_overlay:
+    // 2. Load death overlay (replaces tier data at $E000)
+    lda #OVL_DEATH
+    jsr overlay_load
+
+    // 3. Calculate score (overlay code, no KERNAL needed)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr score_calculate
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+
+    // 4. Load high scores from disk (main RAM, needs KERNAL)
+    jsr hiscore_load
+
+    // 5. Insert into high score table (overlay code)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr hiscore_insert
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+
+    // 6. Save high scores to disk (main RAM, needs KERNAL)
+    jsr hiscore_save
+
+    // 7. Display death screen (overlay code)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr score_death_screen
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    rts
+
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
 .assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true
@@ -1364,8 +1487,49 @@ banked_payload:
     #import "special_rooms.s"
     #import "ego_items.s"
     #import "title_sysinfo_banked.s"
+    #import "ui_help.s"
+    #import "ui_character.s"
+    #import "ui_inventory.s"
+banked_code_end:
 }
 banked_payload_end:
 
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Payload fits below I/O ($D000)", banked_payload_end < $D000, true
+.assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
+
+// ============================================================
+// Town overlay — store code at $E000, output to separate PRG
+// ============================================================
+// This segment produces out/ovl_town (loaded from disk as OVL.TOWN).
+// Labels resolve to $E000+ but bytes go to the overlay PRG file,
+// not the main moria.prg. All main RAM symbols are accessible.
+.segment TownOverlay
+    #import "store.s"
+    #import "ui_store.s"
+ovl_town_end:
+.print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
+.assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $F000, true
+
+// ============================================================
+// Startup overlay — character creation at $E000, output to separate PRG
+// ============================================================
+// This segment produces out/ovl_start (loaded from disk as OVL.START).
+// Used once during new game, then replaced by town/death overlays.
+.segment StartupOverlay
+    #import "player_create.s"
+ovl_start_end:
+.print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)
+.assert "Startup overlay fits in $E000-$EFFF", ovl_start_end <= $F000, true
+
+// ============================================================
+// Death overlay — score + high score display at $E000
+// ============================================================
+// This segment produces out/ovl_death (loaded from disk as OVL.DEATH).
+// Used once at game over. Contains scoring math, death screen display,
+// and high score insertion/display. KERNAL I/O stays in score_io.s.
+.segment DeathOverlay
+    #import "score.s"
+ovl_death_end:
+.print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
+.assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true

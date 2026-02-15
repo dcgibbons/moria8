@@ -29,6 +29,9 @@ TITLE_PRG   = $(OUT)/title
 TIER_SRCS   = creature_data/tier1_prg.s creature_data/tier2_prg.s \
               creature_data/tier3_prg.s creature_data/tier4_prg.s
 TIER_PRGS   = $(OUT)/cr_t1 $(OUT)/cr_t2 $(OUT)/cr_t3 $(OUT)/cr_t4
+OVL_TOWN    = $(OUT)/ovl_town
+OVL_START   = $(OUT)/ovl_start
+OVL_DEATH   = $(OUT)/ovl_death
 DISK_IMAGE  = $(OUT)/moria.d64
 DISK_NAME   = "moria,m8"
 DISKART     = tools/diskart.py
@@ -56,6 +59,11 @@ build: $(MAIN_PRG)
 # so there are no intermediate .o files to track.
 $(MAIN_PRG): $(SOURCES) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(MAIN_SRC) $(KA_FLAGS) -o $(MAIN_PRG)
+
+# Overlays — produced as side-effect of main assembly (segment outPrg)
+$(OVL_TOWN): $(MAIN_PRG)
+$(OVL_START): $(MAIN_PRG)
+$(OVL_DEATH): $(MAIN_PRG)
 
 # Title screen art — standalone PRG loaded from disk at runtime
 $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
@@ -92,7 +100,7 @@ test: $(MAIN_PRG)
 	./run_tests.sh
 
 # Create a 1541 .d64 disk image with PETSCII directory art
-disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
+disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) | $(OUT)
 	printf '\x01\x08' > $(OUT)/empty.prg
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
@@ -101,13 +109,25 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	         -write $(OUT)/empty.prg "art3" \
 	         -write $(OUT)/empty.prg "art4" \
 	         -write $(OUT)/empty.prg "art5" \
+	         -write $(OUT)/empty.prg "art6" \
+	         -write $(OUT)/empty.prg "art7" \
+	         -write $(OUT)/empty.prg "art8" \
+	         -write $(OUT)/empty.prg "art9" \
+	         -write $(OUT)/empty.prg "art10" \
+	         -write $(OUT)/empty.prg "art11" \
+	         -write $(OUT)/empty.prg "art12" \
+	         -write $(OUT)/empty.prg "art13" \
+	         -write $(OUT)/empty.prg "art14" \
 	         -write $(BOOT_PRG) "moria" \
 	         -write $(MAIN_PRG) "moria64" \
 	         -write $(TITLE_PRG) "title" \
 	         -write $(OUT)/cr_t1 "monster.db.1" \
 	         -write $(OUT)/cr_t2 "monster.db.2" \
 	         -write $(OUT)/cr_t3 "monster.db.3" \
-	         -write $(OUT)/cr_t4 "monster.db.4"
+	         -write $(OUT)/cr_t4 "monster.db.4" \
+	         -write $(OVL_TOWN) "ovl.town" \
+	         -write $(OVL_START) "ovl.start" \
+	         -write $(OVL_DEATH) "ovl.death"
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(OUT)/empty.prg
 

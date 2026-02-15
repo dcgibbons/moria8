@@ -75,12 +75,24 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 
 // input_get_key — Wait for a keypress, return PETSCII code
 // Output: A = PETSCII code of key pressed
+// Banking-safe: temporarily ensures KERNAL ROM is visible for GETIN,
+// then restores original banking state. Works from any banking context
+// ($E000 overlays, $F000 banked code, or normal main RAM).
 // Preserves: X, Y
 input_get_key:
+    lda $01
+    pha
+    ora #%00000010          // Set HIRAM bit — bank in KERNAL ROM
+    sta $01
     jsr KERNAL_GETIN
+    sta igk_key             // Save key (can't use stack — PHA'd bank byte)
+    pla
+    sta $01                 // Restore original banking state
+    lda igk_key
     cmp #0
     beq input_get_key       // No key in buffer, keep polling
     rts
+igk_key: .byte 0
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)
