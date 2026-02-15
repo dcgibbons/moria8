@@ -134,7 +134,7 @@ help_l16: .text "T TAKE OFF       OTHER" ; .byte 0
 help_l17: .text "Q QUAFF POTION   SHIFT+S SAVE" ; .byte 0
 help_l18: .text "R READ SCROLL    SHIFT+Q QUIT" ; .byte 0
 help_l19: .text "A AIM WAND       P PRAY" ; .byte 0
-help_l20: .text "Z USE STAFF" ; .byte 0
+help_l20: .text "Z USE STAFF SHIFT+F FIRE" ; .byte 0
 help_l21: .text "M CAST SPELL     F STUDY BOOK" ; .byte 0
 
 // Pointer tables (lo/hi split)

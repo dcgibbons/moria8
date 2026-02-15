@@ -6,15 +6,15 @@
 // Results at $0400-$041f: $01 = pass, $00 = fail per test (32 tests)
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-// Exit trampoline at $080E (right after BASIC stub).
+// Bootstrap + exit trampoline at $080E (right after BASIC stub).
 // MUST be in "Test Code" segment so run_tests.sh sets breakpoint here (below $A000).
-// This avoids BASIC ROM breakpoint conflict when main code extends above $A000.
-// Placed at $080E (not $033C) to keep PRG load address at $0801 for VICE autostart.
 .pc = $080E "Test Code"
-test_exit_trampoline:
+test_bootstrap:
     :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
     ldx #39
 !tc_copy:
     lda tc_results,x
@@ -23,7 +23,7 @@ test_exit_trampoline:
     bpl !tc_copy-
     brk
 
-.pc = $0825 "Main"
+.pc = $0828 "Main"
 
 .encoding "screencode_upper"
 
@@ -75,9 +75,6 @@ tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 
 test_start:
-    // Bank out BASIC ROM (needed for $A000 area used by BFS)
-    :BankOutBasic()
-
     // Initialize result area to $ff (untested)
     ldx #29
     lda #$ff

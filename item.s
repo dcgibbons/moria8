@@ -49,7 +49,7 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 49
+.const ITEM_TYPE_COUNT = 55
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -106,6 +106,12 @@ it_category:
     .byte ICAT_STAFF    // 46: Staff of Cure Light Wounds
     .byte ICAT_BOOK     // 47: Beginner's Spellbook
     .byte ICAT_BOOK     // 48: Holy Prayer Book
+    .byte ICAT_WEAPON   // 49: Short Bow
+    .byte ICAT_WEAPON   // 50: Light Crossbow
+    .byte ICAT_WEAPON   // 51: Sling
+    .byte ICAT_WEAPON   // 52: Arrow
+    .byte ICAT_WEAPON   // 53: Bolt
+    .byte ICAT_WEAPON   // 54: Rock
 
 // Display character (screen codes)
 it_display:
@@ -158,6 +164,12 @@ it_display:
     .byte $2f   // 46: '/' Staff of Cure Light Wounds
     .byte $3f   // 47: '?' Beginner's Spellbook
     .byte $3f   // 48: '?' Holy Prayer Book
+    .byte $1c   // 49: '}' Short Bow
+    .byte $1c   // 50: '}' Light Crossbow
+    .byte $1c   // 51: '}' Sling
+    .byte $1b   // 52: '{' Arrow
+    .byte $1b   // 53: '{' Bolt
+    .byte $1b   // 54: '{' Rock
 
 // Color
 it_color:
@@ -210,6 +222,12 @@ it_color:
     .byte COL_WHITE     // 46: Staff of Cure Light Wounds
     .byte COL_PURPLE    // 47: Beginner's Spellbook
     .byte COL_YELLOW    // 48: Holy Prayer Book
+    .byte COL_BROWN     // 49: Short Bow
+    .byte COL_LGREY     // 50: Light Crossbow
+    .byte COL_BROWN     // 51: Sling
+    .byte COL_BROWN     // 52: Arrow
+    .byte COL_LGREY     // 53: Bolt
+    .byte COL_GREY      // 54: Rock
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -219,6 +237,7 @@ it_weight:
     .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
     .byte 10, 10, 10, 10, 50, 50, 50, 50
     .byte 30, 30                            // Books
+    .byte 30, 50, 5, 2, 2, 4               // Bows, ammo
 
 // Damage dice count
 it_dmg_dice:
@@ -228,6 +247,7 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0                              // Books
+    .byte 0, 0, 0, 1, 1, 1                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
 
 // Damage dice sides
 it_dmg_sides:
@@ -237,6 +257,7 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0                              // Books
+    .byte 0, 0, 0, 4, 5, 2                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
 
 // Base armor class
 it_base_ac:
@@ -246,6 +267,7 @@ it_base_ac:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0                              // Books
+    .byte 0, 0, 0, 0, 0, 0                  // Bows, ammo: no AC
 
 // Base cost (lo)
 it_cost_lo:
@@ -256,6 +278,7 @@ it_cost_lo:
     .byte <200, <80, <250, <250, <50, <5, <100
     .byte <50, <200, <250, <150, <60, <100, <300, <200
     .byte <100, <100                        // Books
+    .byte <50, <120, <10, <1, <2, <1        // Bows, ammo
 
 // Base cost (hi)
 it_cost_hi:
@@ -266,6 +289,7 @@ it_cost_hi:
     .byte >200, >80, >250, >250, >50, >5, >100
     .byte >50, >200, >250, >150, >60, >100, >300, >200
     .byte >100, >100                        // Books
+    .byte >50, >120, >10, >1, >2, >1        // Bows, ammo
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -275,6 +299,34 @@ it_min_level:
     .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
     .byte 3, 4, 5, 4, 3, 3, 5, 3
     .byte 2, 2                              // Books
+    .byte 2, 3, 1, 1, 2, 1                  // Bows, ammo
+
+// Missile type table — encodes ranged weapon/ammo relationships
+// Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
+// Access via item_get_missile subroutine, NOT direct indexing.
+// 0=not ranged, 1=fires arrows, 2=fires bolts, 3=fires rocks
+// $81=IS arrow, $82=IS bolt, $83=IS rock
+.const IT_MISSILE_BASE = 49     // First type with missile data
+it_missile:
+    .byte 1             // 49: Short Bow — fires arrows
+    .byte 2             // 50: Light Crossbow — fires bolts
+    .byte 3             // 51: Sling — fires rocks
+    .byte $81           // 52: Arrow — IS arrow ammo
+    .byte $82           // 53: Bolt — IS bolt ammo
+    .byte $83           // 54: Rock — IS rock ammo
+
+// item_get_missile — Get missile type for an item
+// Input: X = item type ID
+// Output: A = missile value (0 if not ranged)
+// Preserves: X, Y
+item_get_missile:
+    cpx #IT_MISSILE_BASE
+    bcc !igm_zero+
+    lda it_missile - IT_MISSILE_BASE,x
+    rts
+!igm_zero:
+    lda #0
+    rts
 
 // Name pointer tables
 it_name_lo:
@@ -289,6 +341,7 @@ it_name_lo:
     .byte <itn_39, <itn_40, <itn_41, <itn_42
     .byte <itn_43, <itn_44, <itn_45, <itn_46
     .byte <itn_47, <itn_48
+    .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -301,6 +354,7 @@ it_name_hi:
     .byte >itn_39, >itn_40, >itn_41, >itn_42
     .byte >itn_43, >itn_44, >itn_45, >itn_46
     .byte >itn_47, >itn_48
+    .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -352,6 +406,12 @@ itn_45: .text "STAFF OF TELEPORTATION" ; .byte 0
 itn_46: .text "STAFF OF CURE LIGHT WOUNDS" ; .byte 0
 itn_47: .text "BEGINNER'S SPELLBOOK" ; .byte 0
 itn_48: .text "HOLY PRAYER BOOK" ; .byte 0
+itn_49: .text "SHORT BOW" ; .byte 0
+itn_50: .text "LIGHT CROSSBOW" ; .byte 0
+itn_51: .text "SLING" ; .byte 0
+itn_52: .text "ARROW" ; .byte 0
+itn_53: .text "BOLT" ; .byte 0
+itn_54: .text "ROCK" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -788,9 +848,19 @@ item_spawn_level:
 
     // fi_add_flags set by roll_enchantment (IF_CURSED for cursed items)
 
-    // Set qty: equipment = 1, everything = 1 (lights get charges via p1)
+    // Set qty: ammo spawns in stacks, everything else = 1
     lda #1
     sta fi_add_qty
+    ldx fi_add_id
+    jsr item_get_missile
+    bpl !isl_qty_done+          // Bit 7 clear = not ammo
+    // Ammo: qty = rng(6) + 5 → [5, 10]
+    lda #6
+    jsr rng_range
+    clc
+    adc #5
+    sta fi_add_qty
+!isl_qty_done:
 
     jsr floor_item_add
     bcc !isl_ngold_skip+        // Table full — skip
@@ -1215,9 +1285,9 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(45) + 2 → range [2, 46]
-    // Types 2-46 cover weapons, armor, food, potions, scrolls, rings, wands, staves
-    lda #45
+    // Roll type = rng_range(53) + 2 → range [2, 54]
+    // Types 2-54 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo
+    lda #53
     jsr rng_range
     clc
     adc #2
@@ -1430,6 +1500,7 @@ id_known:
     .byte 0, 0, 0, 0           // 39-42: Wands — unknown at start
     .byte 0, 0, 0, 0           // 43-46: Staves — unknown at start
     .byte 1, 1                  // 47-48: Books — always known
+    .byte 1, 1, 1, 1, 1, 1      // 49-54: Ranged weapons/ammo — always known
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -1446,6 +1517,7 @@ potion_local_idx:
     .fill 5, $ff        // 20-24: not potions
     .byte 3, 4, 5, 6, 7, 8, 9  // 25-31: CSW, RestMana, Hero, Blind, Conf, DetMon, Infra
     .fill 18, $ff       // 32-48: not potions
+    .fill 6, $ff        // 49-54: not potions
 
 scroll_local_idx:
     .fill 20, $ff       // 0-19: not scrolls
@@ -1454,6 +1526,7 @@ scroll_local_idx:
     .fill 7, $ff        // 25-31: not scrolls
     .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
     .fill 10, $ff       // 39-48: not scrolls
+    .fill 6, $ff        // 49-54: not scrolls
 
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .text "A BLUE POTION" ; .byte 0
@@ -1862,7 +1935,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 49
+.assert "Item type count", ITEM_TYPE_COUNT, 55
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

@@ -7,9 +7,25 @@
 // Results at $0400: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+// Exit trampoline at $080E (right after BASIC stub).
+// MUST be in "Test Code" segment so run_tests.sh sets breakpoint here (below $A000).
+// This avoids BASIC ROM breakpoint conflict when main code extends above $A000.
+.pc = $080E "Test Code"
+test_bootstrap:
+    :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
+    ldx #27
+!tc_copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !tc_copy-
+    brk
+
+.pc = $0828 "Main"
 
 .encoding "screencode_upper"
 
@@ -63,18 +79,15 @@ t16_counter:   .byte 0
 t19_found:     .byte 0
 t19_save_row:  .byte 0
 t19_tile:      .byte 0
-t24_carry_result: .byte 0
-t24_result_save:  .fill 28, 0   // Buffer to save $0400-$041b from msg_print clobbering
+t24_carry_result: .byte 0               // Carry result for test 24 (survives subroutine calls)
+tc_results: .fill 28, $ff              // Test results buffer (copied to $0400 before brk)
 
 test_start:
-    // Bank out BASIC ROM (needed for $A000 area used by BFS)
-    :BankOutBasic()
-
     // Initialize result area to $ff (untested)
-    ldx #31
+    ldx #27
     lda #$ff
 !clr:
-    sta $0400,x
+    sta tc_results,x
     dex
     bpl !clr-
 
@@ -111,11 +124,11 @@ test_start:
     cmp #TILE_WALL_H
     bne !t1_fail+
     lda #$01
-    sta $0400
+    sta tc_results
     jmp !t1_done+
 !t1_fail:
     lda #$00
-    sta $0400
+    sta tc_results
 !t1_done:
 
     // ==========================================
@@ -165,11 +178,11 @@ test_start:
     bne !t2_fail+
 
     lda #$01
-    sta $0401
+    sta tc_results+1
     jmp !t2_done+
 !t2_fail:
     lda #$00
-    sta $0401
+    sta tc_results+1
 !t2_done:
 
     // ==========================================
@@ -198,11 +211,11 @@ test_start:
     bcs !t3_fail+               // Carry set = overlap (bad)
 
     lda #$01
-    sta $0402
+    sta tc_results+2
     jmp !t3_done+
 !t3_fail:
     lda #$00
-    sta $0402
+    sta tc_results+2
 !t3_done:
 
     // ==========================================
@@ -222,11 +235,11 @@ test_start:
     bcc !t4_fail+               // Carry clear = no overlap (bad)
 
     lda #$01
-    sta $0403
+    sta tc_results+3
     jmp !t4_done+
 !t4_fail:
     lda #$00
-    sta $0403
+    sta tc_results+3
 !t4_done:
 
     // ==========================================
@@ -257,11 +270,11 @@ test_start:
     bne !t5_fail+
 
     lda #$01
-    sta $0404
+    sta tc_results+4
     jmp !t5_done+
 !t5_fail:
     lda #$00
-    sta $0404
+    sta tc_results+4
 !t5_done:
 
     // ==========================================
@@ -292,11 +305,11 @@ test_start:
     bne !t6_fail+
 
     lda #$01
-    sta $0405
+    sta tc_results+5
     jmp !t6_done+
 !t6_fail:
     lda #$00
-    sta $0405
+    sta tc_results+5
 !t6_done:
 
     // ==========================================
@@ -342,11 +355,11 @@ test_start:
     jmp !t7_fail+
 !t7_pass:
     lda #$01
-    sta $0406
+    sta tc_results+6
     jmp !t7_done+
 !t7_fail:
     lda #$00
-    sta $0406
+    sta tc_results+6
 !t7_done:
 
     // ==========================================
@@ -377,11 +390,11 @@ test_start:
     bne !t8_fail+
 
     lda #$01
-    sta $0407
+    sta tc_results+7
     jmp !t8_done+
 !t8_fail:
     lda #$00
-    sta $0407
+    sta tc_results+7
 !t8_done:
 
     // ==========================================
@@ -459,11 +472,11 @@ test_start:
     bne !t9_fail+
 
     lda #$01
-    sta $0408
+    sta tc_results+8
     jmp !t9_done+
 !t9_fail:
     lda #$00
-    sta $0408
+    sta tc_results+8
 !t9_done:
     // ==========================================
     // Test 10: verify_connectivity returns clear for connected layout
@@ -523,11 +536,11 @@ test_start:
     bcs !t10_fail+
 
     lda #$01
-    sta $0409
+    sta tc_results+9
     jmp !t10_done+
 !t10_fail:
     lda #$00
-    sta $0409
+    sta tc_results+9
 !t10_done:
 
     // ==========================================
@@ -578,11 +591,11 @@ test_start:
     bcc !t11_fail+               // Should be carry SET (unreachable)
 
     lda #$01
-    sta $040a
+    sta tc_results+10
     jmp !t11_done+
 !t11_fail:
     lda #$00
-    sta $040a
+    sta tc_results+10
 !t11_done:
 
     // ==========================================
@@ -601,11 +614,11 @@ test_start:
     jmp !t12_fail+
 !t12_pass:
     lda #$01
-    sta $040b
+    sta tc_results+11
     jmp !t12_done+
 !t12_fail:
     lda #$00
-    sta $040b
+    sta tc_results+11
 !t12_done:
 
     // ==========================================
@@ -630,11 +643,11 @@ test_start:
     bne !t13_fail+
 
     lda #$01
-    sta $040c
+    sta tc_results+12
     jmp !t13_done+
 !t13_fail:
     lda #$00
-    sta $040c
+    sta tc_results+12
 !t13_done:
 
     // ==========================================
@@ -677,11 +690,11 @@ test_start:
     beq !t14_fail+
 
     lda #$01
-    sta $040d
+    sta tc_results+13
     jmp !t14_done+
 !t14_fail:
     lda #$00
-    sta $040d
+    sta tc_results+13
 !t14_done:
 
     // ==========================================
@@ -710,11 +723,11 @@ test_start:
     bne !t15_fail+
 
     lda #$01
-    sta $040e
+    sta tc_results+14
     jmp !t15_done+
 !t15_fail:
     lda #$00
-    sta $040e
+    sta tc_results+14
 !t15_done:
 
     // ==========================================
@@ -764,11 +777,11 @@ test_start:
 
     // All 10 iterations passed — no secret doors at junctions
     lda #$01
-    sta $040f
+    sta tc_results+15
     jmp !t16_done+
 !t16_fail:
     lda #$00
-    sta $040f
+    sta tc_results+15
 !t16_done:
 
     // ==========================================
@@ -840,11 +853,11 @@ test_start:
 
 !t17_pass:
     lda #$01
-    sta $0410
+    sta tc_results+16
     jmp !t17_done+
 !t17_fail:
     lda #$00
-    sta $0410
+    sta tc_results+16
 !t17_done:
 
     // ==========================================
@@ -896,11 +909,11 @@ test_start:
 
 !t18_pass:
     lda #$01
-    sta $0411
+    sta tc_results+17
     jmp !t18_done+
 !t18_fail:
     lda #$00
-    sta $0411
+    sta tc_results+17
 !t18_done:
 
     // ==========================================
@@ -958,11 +971,11 @@ test_start:
     beq !t19_fail+              // Didn't find any corridor floor (unlikely)
 
     lda #$01
-    sta $0412
+    sta tc_results+18
     jmp !t19_done+
 !t19_fail:
     lda #$00
-    sta $0412
+    sta tc_results+18
 !t19_done:
 
     // ==========================================
@@ -1015,11 +1028,11 @@ test_start:
     beq !t20_fail+
 
     lda #$01
-    sta $0413
+    sta tc_results+19
     jmp !t20_done+
 !t20_fail:
     lda #$00
-    sta $0413
+    sta tc_results+19
 !t20_done:
 
     // ==========================================
@@ -1062,11 +1075,11 @@ test_start:
     beq !t21_fail+
 
     lda #$01
-    sta $0414
+    sta tc_results+20
     jmp !t21_done+
 !t21_fail:
     lda #$00
-    sta $0414
+    sta tc_results+20
 !t21_done:
 
     // ==========================================
@@ -1144,11 +1157,11 @@ test_start:
     beq !t22_fail+
 
     lda #$01
-    sta $0415
+    sta tc_results+21
     jmp !t22_done+
 !t22_fail:
     lda #$00
-    sta $0415
+    sta tc_results+21
 !t22_done:
 
     // ==========================================
@@ -1241,27 +1254,17 @@ test_start:
     beq !t23_fail+              // Lit room should be unchanged
 
     lda #$01
-    sta $0416
+    sta tc_results+22
     jmp !t23_done+
 !t23_fail:
     lda #$00
-    sta $0416
+    sta tc_results+22
 !t23_done:
 
     // ==========================================
     // Test 24: trap_check_at_player sets carry on trap
     // Place a trap at player position, verify carry is set.
-    // NOTE: trap_check_at_player calls msg_print which writes to $0400
-    // (screen row 0), so we save/restore existing test results.
     // ==========================================
-
-    // Save test results 1-23 from screen row 0 before trap clobbers them
-    ldx #27
-!t24_save:
-    lda $0400,x
-    sta t24_result_save,x
-    dex
-    bpl !t24_save-
 
     jsr fill_map_rock
 
@@ -1319,17 +1322,9 @@ test_start:
 !t24_no_carry:
     sta t24_carry_result
 
-    // Restore test results 1-23
-    ldx #27
-!t24_restore:
-    lda t24_result_save,x
-    sta $0400,x
-    dex
-    bpl !t24_restore-
-
     // Now write test 24 result
     lda t24_carry_result
-    sta $0417
+    sta tc_results+23
 
     // ==========================================
     // Test 25: trap_check_at_player clears carry on no trap
@@ -1344,11 +1339,11 @@ test_start:
 
 !t25_pass:
     lda #$01
-    sta $0418
+    sta tc_results+24
     jmp !t25_done+
 !t25_fail:
     lda #$00
-    sta $0418
+    sta tc_results+24
 !t25_done:
 
     // ==========================================
@@ -1356,14 +1351,6 @@ test_start:
     // Generate a dungeon, then count secret tiles on the map.
     // (place_secrets is called by dungeon_generate now)
     // ==========================================
-
-    // Save test results again — dungeon_generate may call msg-related code
-    ldx #27
-!t26_save:
-    lda $0400,x
-    sta t24_result_save,x
-    dex
-    bpl !t26_save-
 
     lda #3
     sta zp_player_dlvl          // Use deeper level for more doors
@@ -1438,21 +1425,12 @@ test_start:
 
 !t26_pass:
     lda #$01
-    sta t19_tile                // Reuse as test 26 result
-    jmp !t26_write+
+    sta tc_results+25
+    jmp !t26_done+
 !t26_fail:
     lda #$00
-    sta t19_tile
-!t26_write:
-    // Restore test results, then write 26
-    ldx #27
-!t26_restore:
-    lda t24_result_save,x
-    sta $0400,x
-    dex
-    bpl !t26_restore-
-    lda t19_tile
-    sta $0419
+    sta tc_results+25
+!t26_done:
 
     // ==========================================
     // Test 27: run_check_stop stops at stairs
@@ -1490,11 +1468,11 @@ test_start:
 
 !t27_pass:
     lda #$01
-    sta $041a
+    sta tc_results+26
     jmp !t27_done+
 !t27_fail:
     lda #$00
-    sta $041a
+    sta tc_results+26
 !t27_done:
 
     // ==========================================
@@ -1533,12 +1511,12 @@ test_start:
 
 !t28_pass:
     lda #$01
-    sta $041b
+    sta tc_results+27
     jmp !t28_done+
 !t28_fail:
     lda #$00
-    sta $041b
+    sta tc_results+27
 !t28_done:
 
-    // Done — break into monitor
-    brk
+    // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
+    jmp test_exit_trampoline

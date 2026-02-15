@@ -8,9 +8,22 @@
 // in tc_results[] and copy to $0400 at the very end.
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+.pc = $080E "Test Code"
+test_bootstrap:
+    :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
+    ldx #7
+!tc_copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !tc_copy-
+    brk
+
+.pc = $0828 "Main"
 
 .encoding "screencode_upper"
 
@@ -62,9 +75,6 @@ tc_ok:      .byte 0
 tc_results: .fill 8, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
-    // Bank out BASIC ROM (needed for $A000 area used by BFS)
-    :BankOutBasic()
-
     // Seed RNG deterministically
     lda #$42
     sta zp_rng_0
@@ -568,12 +578,4 @@ test_start:
     sta tc_results + 7
 
 !tests_done:
-    // Copy results from tc_results to $0400 (screen row 0)
-    ldx #7
-!copy_results:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy_results-
-
-    brk
+    jmp test_exit_trampoline

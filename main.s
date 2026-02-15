@@ -80,6 +80,7 @@ exit_trampoline:
 #import "dungeon_los.s"
 #import "player_move.s"
 #import "combat.s"
+#import "ranged_fire.s"
 #import "monster_attack.s"
 #import "turn.s"
 #import "store.s"
@@ -943,6 +944,27 @@ load_resume_game:
 !gain_no_turn:
     jmp !main_loop-
 !not_gain:
+
+    // Fire ranged weapon?
+    cmp #CMD_FIRE
+    bne !not_fire+
+    jsr msg_clear
+    jsr ranged_fire
+    bcc !fire_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+!fire_no_turn:
+    jmp !main_loop-
+!not_fire:
 
     // Look?
     cmp #CMD_LOOK

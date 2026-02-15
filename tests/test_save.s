@@ -84,10 +84,10 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — use $B000, safely past VERIFY_BUF
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to $BF1E
+// RLE workspace — use $B080, safely past test body end (~$B073)
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to $BF9E
 // This fits within BASIC ROM area ($A000-$BFFF).
-.const RLE_TEST_BUF = $B000
+.const RLE_TEST_BUF = $B080
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

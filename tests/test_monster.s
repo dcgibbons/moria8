@@ -6,9 +6,24 @@
 // Results at $0400-$0409: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+// Exit trampoline at $080E — banks out BASIC, copies results, breaks.
+// MUST be in "Test Code" segment so run_tests.sh sets breakpoint here (below $A000).
+.pc = $080E "Test Code"
+test_bootstrap:
+    :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
+    ldx #9
+!tc_copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !tc_copy-
+    brk
+
+.pc = $0828 "Main"
 
 .encoding "screencode_upper"
 
@@ -58,16 +73,14 @@ press_key_str:
 t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
+tc_results: .fill 10, $ff       // Test results buffer (copied to $0400 by trampoline)
 
 test_start:
-    // Bank out BASIC ROM (needed for $A000 area used by BFS)
-    :BankOutBasic()
-
     // Initialize result area to $ff (untested)
-    ldx #15
+    ldx #9
     lda #$ff
 !clr:
-    sta $0400,x
+    sta tc_results,x
     dex
     bpl !clr-
 
@@ -115,11 +128,11 @@ test_start:
     bne !t1_fail+
 
     lda #$01
-    sta $0400
+    sta tc_results+0
     jmp !t2+
 !t1_fail:
     lda #$00
-    sta $0400
+    sta tc_results+0
 
     // ==========================================
     // Test 2: monster_spawn_one places monster correctly
@@ -191,11 +204,11 @@ test_start:
 
 !t2_pass:
     lda #$01
-    sta $0401
+    sta tc_results+1
     jmp !t3+
 !t2_fail:
     lda #$00
-    sta $0401
+    sta tc_results+1
 
     // ==========================================
     // Test 3: monster_spawn_one sets FLAG_OCCUPIED
@@ -212,11 +225,11 @@ test_start:
     and #FLAG_OCCUPIED
     bne !t3_pass+
     lda #$00
-    sta $0402
+    sta tc_results+2
     jmp !t4+
 !t3_pass:
     lda #$01
-    sta $0402
+    sta tc_results+2
 
     // ==========================================
     // Test 4: monster_find_at returns correct index
@@ -229,11 +242,11 @@ test_start:
     cpx #0                      // Should be slot 0
     bne !t4_fail+
     lda #$01
-    sta $0403
+    sta tc_results+3
     jmp !t5+
 !t4_fail:
     lda #$00
-    sta $0403
+    sta tc_results+3
 
     // ==========================================
     // Test 5: monster_find_at miss returns carry clear
@@ -244,11 +257,11 @@ test_start:
     jsr monster_find_at
     bcs !t5_fail+
     lda #$01
-    sta $0404
+    sta tc_results+4
     jmp !t6+
 !t5_fail:
     lda #$00
-    sta $0404
+    sta tc_results+4
 
     // ==========================================
     // Test 6: monster_remove clears slot, flag, and count
@@ -286,11 +299,11 @@ test_start:
     bne !t6_fail+
 
     lda #$01
-    sta $0405
+    sta tc_results+5
     jmp !t7+
 !t6_fail:
     lda #$00
-    sta $0405
+    sta tc_results+5
 
     // ==========================================
     // Test 7: pick_creature_type within range (dlvl=1)
@@ -323,7 +336,7 @@ test_start:
     bne !t7_loop-
 
     lda t7_ok
-    sta $0406
+    sta tc_results+6
 
     // ==========================================
     // Test 8: pick_creature_type within range (dlvl=3)
@@ -353,7 +366,7 @@ test_start:
     bne !t8_loop-
 
     lda t7_ok
-    sta $0407
+    sta tc_results+7
 
     // ==========================================
     // Test 9: monster_spawn_level correct count (dlvl=1)
@@ -378,11 +391,11 @@ test_start:
     cmp #15
     bcs !t9_fail+               // Must be <= 14
     lda #$01
-    sta $0408
+    sta tc_results+8
     jmp !t10+
 !t9_fail:
     lda #$00
-    sta $0408
+    sta tc_results+8
 
     // ==========================================
     // Test 10: monster_spawn_level spawns townspeople (dlvl=0)
@@ -406,11 +419,11 @@ test_start:
     cmp #8
     bcs !t10_fail+
     lda #$01
-    sta $0409
+    sta tc_results+9
     jmp !tests_done+
 !t10_fail:
     lda #$00
-    sta $0409
+    sta tc_results+9
 
 !tests_done:
-    brk
+    jmp test_exit_trampoline

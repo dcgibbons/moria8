@@ -383,8 +383,15 @@ combat_roll_damage:
     cmp #FI_EMPTY
     beq !crd_unarmed+
 
-    // Weapon equipped — use weapon dice
+    // Check if weapon is a ranged launcher (it_missile 1-3) — use unarmed for melee
     tax                         // X = weapon type
+    jsr item_get_missile
+    beq !crd_has_melee+         // 0 = normal melee weapon
+    cmp #4
+    bcc !crd_unarmed+           // 1-3 = ranged launcher → unarmed in melee
+!crd_has_melee:
+
+    // Weapon equipped — use weapon dice
     lda it_dmg_dice,x           // Dice count
     pha                         // Save dice count
     lda it_dmg_sides,x          // Dice sides

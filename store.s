@@ -254,11 +254,11 @@ store_pick_item:
     sta sr_retry
 
 !spi_loop:
-    // Random item type [2, 48] (skip gold types 0-1)
-    lda #47                     // 47 possible types (2..48)
-    jsr rng_range               // 0-46
+    // Random item type [2, 54] (skip gold types 0-1)
+    lda #53                     // 53 possible types (2..54)
+    jsr rng_range               // 0-52
     clc
-    adc #2                      // 2-48
+    adc #2                      // 2-54
 
     // Check if this item's category matches the store
     pha                         // Save item type on stack

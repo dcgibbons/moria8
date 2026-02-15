@@ -6,9 +6,22 @@
 // Results at $0400-$0410: $01 = pass, $00 = fail per test (17 tests)
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+.pc = $080E "Test Code"
+test_bootstrap:
+    :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
+    ldx #18
+!tc_copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !tc_copy-
+    brk
+
+.pc = $0828 "Main"
 
 .encoding "screencode_upper"
 
@@ -59,8 +72,6 @@ tc_results: .fill 20, $ff
 tc_count: .byte 0
 
 test_start:
-    :BankOutBasic()
-
     // Initialize result area to $ff (untested)
     ldx #16
     lda #$ff
@@ -528,14 +539,4 @@ test_start:
 !t19_store:
     sta tc_results + 18
 
-    // ============================================================
-    // Copy results to $0400 and halt
-    // ============================================================
-    ldx #18
-!copy:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy-
-
-    brk
+    jmp test_exit_trampoline

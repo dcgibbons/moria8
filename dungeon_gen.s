@@ -1976,12 +1976,13 @@ verify_stairs:
 // Starts from stairs_up position, floods through passable tiles.
 // Checks that every room has at least one reachable interior tile.
 // Output: carry set = failed (unreachable room), carry clear = OK
-// Uses: BFS queue at CREATURE_BASE (safe during generation)
+// Uses: BFS queue at $0400 (screen RAM — safe, screen redrawn after generation)
 // ============================================================
-.const BFS_QUEUE = CREATURE_BASE
-.const BFS_QUEUE_MAX = 512         // Max queue entries (×2 bytes = 1024, fits CREATURE_BASE–$BFFF)
+.const BFS_QUEUE = $0400
+.const BFS_QUEUE_MAX = 512         // Max queue entries (×2 bytes = 1024, fits $0400–$07FF)
 
 verify_connectivity:
+    sei                          // Disable IRQ — cursor blink writes to $0400 (BFS queue)
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---
     // We reuse bit 0 as "visited" marker for BFS
     ldx #0
@@ -2150,11 +2151,13 @@ verify_connectivity:
     // --- Step 4: Clean up FLAG_OCCUPIED from all tiles ---
     jsr vc_cleanup
     clc                          // All rooms reachable
+    cli
     rts
 
 !vc_unreachable:
     jsr vc_cleanup
     sec                          // Unreachable room found
+    cli
     rts
 
 // vc_cleanup — Clear FLAG_OCCUPIED from entire map
