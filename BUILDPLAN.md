@@ -16,7 +16,7 @@ Every design decision flows from these two constraints.
 | Program code | $0801–$BFFF | ~46 KB | Code + resident data (BASIC ROM banked out at startup) |
 | *(of which $A000–$BFFF)* | | *(8 KB)* | *(RAM under BASIC ROM — usable because ROM is banked out)* |
 | Free RAM (no banking) | $C000–$CFFF | 4 KB | Dungeon map (3,840 bytes at $C000–$CEFF) + floor item table (256 bytes at $CF00–$CFFF) — always accessible |
-| RAM under KERNAL ROM | $E000–$FFFF | 8 KB | Banked data (creature tier loading buffer — 8 KB workspace for loading tier PRGs from disk/REU) |
+| RAM under KERNAL ROM | $E000–$FFFF | 8 KB | Banked data: `$E000`–`$EFFF` = phase overlays (creature tiers in dungeon, store code in town — see OPT-2); `$F000`–`$FFFA` = permanent banked code (special rooms, ego items, UI screens) |
 | Screen RAM | $0400–$07E7 | 1 KB | Display |
 | Color RAM | $D800–$DBE7 | 1 KB | Display colors |
 | **Total usable** | | **~58 KB** | With banking (code + all banked regions) |
@@ -1141,6 +1141,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | Open |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7) | ✅ Done (OPT-1.1 deferred) |
+| OPT-2 | MED | Phase overlay code banking — move stores, char create, score to `$E000` overlays; move help/char/inv screens to permanent `$F000`. Est. ~6.8KB freed from main region. | TODO — see Code Banking Architecture section |
 
 ### What's Next
 
@@ -1156,9 +1157,10 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
 | ~~7~~ | R4.1 | ~~Ego items~~ — ✅ 7 enchanted weapon types with slay/elemental/AC bonuses | Done |
 | ~~8~~ | OPT-1 | ~~Code size optimization~~ — ✅ 182 bytes reclaimed ($BFF7→$BF41), 20/20 tests pass | Done |
-| **9** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
-| **10** | R6.1 | Store haggling | Medium |
-| **11** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| **9** | OPT-2 | Code banking — phase overlays at `$E000` + permanent `$F000` expansion. Frees ~6.8KB from main region for new features. | Medium-Large |
+| **10** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
+| **11** | R6.1 | Store haggling | Medium |
+| **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
 R1.2 Throwing, R3.2 Group tactics, R3.3 Breeders, R4.2 Artifacts, R4.3 Rods, R4.4 Pseudo-ID, R6.2 Black Market, R6.3 Player Home
@@ -4018,3 +4020,178 @@ After OPT-1.2–1.7 optimizations. `program_end` = $BF41. PRG file = 48,060 byte
 | Total free (expandable) | 3,212 bytes |
 | RAM used (code+map+items+ZP+screen) | ~53 KB |
 | Test suites | 20 (259 tests, all passing) |
+
+---
+
+## Code Banking Architecture — OPT-2 (2026-02-15)
+
+**Context:** With 223 bytes of main region headroom and ~3KB free at `$F000`, the project cannot add significant new features without first moving infrequently-used code out of the main region. This section designs a phase-based overlay system that reclaims ~6.8KB from `$0801`–`$BFFF`.
+
+### Key Insight: Game Phases
+
+The game has four distinct phases where different code modules are active. Modules that only run in one phase are dead weight in every other phase.
+
+| Phase | When | Active code | Dead weight |
+|-------|------|-------------|-------------|
+| **Startup** | Once | Title screen, char creation | Everything else |
+| **Town** | Between dungeon trips | Stores, restocking | Creature tier data (tier 0 is embedded in `monster.s`!) |
+| **Dungeon** | 95% of play | Combat, AI, spells, movement | Stores, char creation, title, score |
+| **Death** | Once | Score, high scores, disk I/O | Everything else |
+
+**Critical observation:** Town creatures (tier 0, indices 57-64) are always resident in `monster.s`. The `$E000`–`$EFFF` region used for creature tier data is **completely idle during town time**. This makes it available for store code overlays at zero cost.
+
+### Three-Region Architecture
+
+**Region 1: Main RAM (`$0801`–`$BF41`) — always resident**
+
+Core gameplay that must be callable at all times: combat, monster AI, spells, spell effects, movement, dungeon gen/render, LOS, item logic, player state, math, screen routines, RNG, input, messages, turn management. No changes.
+
+**Region 2: Permanent banked at `$F000` — always callable (via trampoline)**
+
+Currently: special rooms (435 lines), ego items (214 lines), title sysinfo (84 lines). Total 1,101 bytes, 2,989 bytes free.
+
+Expand with **gameplay UI screens** that are called during play but only on user keypress:
+
+| Module | Lines | Est. bytes | Entry points |
+|--------|-------|-----------|-------------|
+| `ui_help.s` | 153 | ~400 | `ui_help_display` |
+| `ui_character.s` | 395 | ~700 | `ui_char_display` |
+| `ui_inventory.s` | 269 | ~500 | `ui_inv_display`, `ui_equip_display` |
+| **Total** | 817 | ~1,600 | 4 trampolines |
+
+These fit comfortably in the 2,989 free bytes. They can't be phase-overlayed because they're callable during both town and dungeon gameplay.
+
+**Note:** `ui_help_clear_all` is used by multiple modules (help, character, inventory, store). It must either stay in main RAM or be duplicated. At ~20 bytes, keeping it in main RAM is simpler.
+
+**Region 3: Phase overlays at `$E000`–`$EFFF` — swapped per game phase**
+
+Four overlays share the same 4KB window, loaded at phase transitions:
+
+| Overlay | Phase | Modules | Est. bytes | Entry points |
+|---------|-------|---------|-----------|-------------|
+| **Startup** | Game start | `title_screen.s` + `player_create.s` | ~1,600 | 2 (`title_load_and_draw`, `player_create`) |
+| **Town** | In town | `store.s` + `ui_store.s` | ~2,300 | 4 (`store_init_all`, `store_restock_all`, `check_player_on_store_door`, `store_enter`) |
+| **Dungeon** | In dungeon | Creature tier data (tiers 1-4) | ~2,500 | Existing `load_tier_to_buffer` path |
+| **Death** | Game over | `score.s` | ~1,600 | 5 (`score_calculate`, `hiscore_load`, `hiscore_insert`, `hiscore_save`, `score_death_screen`) |
+
+All overlays fit well within the 4KB window.
+
+### Overlay Loading Mechanism
+
+**REU path (expanded C64):** All overlays are stashed in REU at startup alongside creature tiers. Phase transitions use `reu_fetch` DMA — microseconds for a few KB, effectively instant.
+
+**Disk path (stock C64):** Overlay PRGs loaded from disk via KERNAL LOAD on phase transition. Acceptable because:
+- Startup overlay: loaded once before gameplay begins
+- Town overlay: loaded when ascending to town (already a "loading moment" if coming from dungeon)
+- Dungeon overlay: existing tier loading behavior (unchanged)
+- Death overlay: loaded once at game over
+
+**REU memory map (128KB minimum):**
+
+| REU offset | Size | Contents |
+|-----------|------|----------|
+| `$00000`–`$009FF` | ~2.5KB | Creature tier 1 |
+| `$00A00`–`$013FF` | ~2.5KB | Creature tier 2 |
+| `$01400`–`$01DFF` | ~2.5KB | Creature tier 3 |
+| `$01E00`–`$027FF` | ~2.5KB | Creature tier 4 |
+| `$02800`–`$02DFF` | ~1.6KB | Startup overlay (title + char create) |
+| `$02E00`–`$036FF` | ~2.3KB | Town overlay (stores) |
+| `$03700`–`$03CFF` | ~1.6KB | Death overlay (score) |
+| `$03D00`+ | ~113KB+ | Free (future: save state, undo, monster recall) |
+
+### Trampoline Pattern for `$E000` Overlays
+
+Same pattern as existing `$F000` trampolines. Banked code at `$E000` runs with KERNAL ROM banked out (`$01=$34`). It can freely JSR to main RAM routines (`$0801`–`$BFFF`).
+
+```asm
+// In main RAM — trampoline for store entry
+tramp_store_enter:
+    sei
+    lda #BANK_NO_ROMS           // $34 — bank out KERNAL, exposing $E000 RAM
+    sta $01
+    jsr store_enter             // at $E000+
+    lda #BANK_NO_BASIC          // $36 — restore normal banking
+    sta $01
+    cli
+    rts
+```
+
+**KERNAL access from banked code:** Banked code cannot directly call KERNAL routines (ROM is banked out). Two solutions:
+
+1. **Thin wrappers in main RAM** (~15 bytes each) — for KERNAL GETIN, SETNAM, etc.:
+```asm
+// In main RAM — callable from $E000 overlay
+banked_get_key:
+    lda #BANK_NO_BASIC          // Bank in KERNAL
+    sta $01
+    jsr $ffe4                   // GETIN
+    pha
+    lda #BANK_NO_ROMS           // Bank out KERNAL again
+    sta $01
+    pla
+    rts
+```
+
+2. **Existing main-RAM routines** — `screen_put_string`, `screen_put_char`, `rng_range`, `math_dice` etc. are custom code in main RAM, not KERNAL. These work without wrapping.
+
+Only `input_get_key` (KERNAL GETIN) and disk I/O (score.s hiscore save/load) need KERNAL wrappers. Store code does not do disk I/O.
+
+### Why Stores ARE Bankable
+
+Store code is deeply integrated with gameplay systems but only through **function calls to main RAM**, not through shared state that must be simultaneously accessible:
+
+- `screen_put_string`, `screen_put_char` — custom code in main RAM, always callable
+- `inv_item_id[]`, `it_cost_lo[]` arrays — in main RAM, always readable
+- `math_multiply`, `rng_range` — in main RAM
+- `player_recalc_equipment` — in main RAM
+
+The store code itself is orchestration logic and UI rendering. All data and utility routines it depends on stay in main RAM. The only KERNAL need is keyboard input (`input_get_key`), solved with one 15-byte wrapper.
+
+Store entry is naturally gated by `zp_player_dlvl == 0` (town only), and `store_init_all` / `store_restock_all` are called at transition points where loading an overlay is expected.
+
+### Freed Space Estimate
+
+| What | Freed from main | Trampoline + wrapper cost | Net gain |
+|------|----------------|--------------------------|----------|
+| `player_create.s` → `$E000` overlay | ~1,200 | ~20 | ~1,180 |
+| `title_screen.s` → `$E000` overlay | ~400 | ~20 | ~380 |
+| `store.s` + `ui_store.s` → `$E000` overlay | ~2,300 | ~80 | ~2,220 |
+| `score.s` → `$E000` overlay | ~1,600 | ~100 | ~1,500 |
+| `ui_help.s` + `ui_character.s` + `ui_inventory.s` → `$F000` permanent | ~1,600 | ~60 | ~1,540 |
+| **Total** | **~7,100** | **~280** | **~6,820** |
+
+**Result:** Main region headroom goes from **223 bytes** to approximately **7KB free** — enough for significant new feature development (spells, haggling, throwing, group AI, artifacts, etc.).
+
+### Modules NOT Recommended for Banking
+
+| Module | Why it must stay resident |
+|--------|-------------------------|
+| `combat.s` | Core dungeon gameplay, called every turn |
+| `monster_ai.s` / `monster_magic.s` / `monster_attack.s` | Core dungeon gameplay |
+| `player_move.s` / `player_items.s` / `player_magic.s` | Core dungeon gameplay |
+| `dungeon_gen.s` / `dungeon_render.s` / `dungeon_los.s` | Core dungeon gameplay |
+| `spell_effects.s` | Called during dungeon combat |
+| `item.s` | SoA tables read by many modules |
+| `save.s` | Used in both town (save) and dungeon (save before quit). Could overlay, but touches ALL game state — high complexity, moderate payoff. Defer. |
+| `turn.s` | Core game loop |
+
+### Implementation Steps (OPT-2)
+
+| Step | Description | Depends on |
+|------|-------------|-----------|
+| OPT-2.1 | **Overlay infrastructure.** Add `overlay_load` routine: REU DMA or disk LOAD to `$E000` based on `reu_present`. Track current overlay ID to skip redundant loads. Add KERNAL wrapper routines (`banked_get_key`, `banked_disk_io_*`) in main RAM. | — |
+| OPT-2.2 | **REU overlay stash.** At startup, load all overlay PRGs (startup, town, death) and stash to REU alongside creature tiers. Define REU offset table. Non-REU path: overlay PRGs loaded from disk on demand. | OPT-2.1 |
+| OPT-2.3 | **Move `ui_help.s` + `ui_character.s` + `ui_inventory.s` to `$F000`.** Add trampolines for 4 entry points. Keep `ui_help_clear_all` in main RAM. Update all call sites. | — |
+| OPT-2.4 | **Move `player_create.s` to startup overlay at `$E000`.** Load overlay before `player_create` call. Add 1 trampoline. Title screen code can share this overlay. | OPT-2.1 |
+| OPT-2.5 | **Move `store.s` + `ui_store.s` to town overlay at `$E000`.** Load overlay on ascent to town / game start. Add trampolines for 4 entry points. Gate `store_enter` trampoline on overlay-loaded check. | OPT-2.1 |
+| OPT-2.6 | **Move `score.s` to death overlay at `$E000`.** Load overlay at death. Add trampolines for 5 entry points. Score disk I/O needs KERNAL wrappers. | OPT-2.1 |
+| OPT-2.7 | **Disk image update.** Add overlay PRG files to .d64: `OVL.START`, `OVL.TOWN`, `OVL.DEATH`. Update Makefile to build overlays as separate PRGs. | OPT-2.4–2.6 |
+| OPT-2.8 | **Testing.** Verify all overlay transitions: startup→town, town→dungeon, dungeon→town, death. Test both REU and non-REU paths. Add overlay-specific tests. | OPT-2.7 |
+
+### Interaction with Existing Systems
+
+- **Creature tier loading (unchanged in dungeon):** The dungeon phase uses `$E000` exactly as today — `tier_load` fetches tier data from REU/disk. No overlay infrastructure needed for this path; it's the existing behavior.
+- **Town → dungeon transition:** Store overlay at `$E000` gets overwritten by `tier_load` when player descends. Natural and safe — store code isn't needed in dungeon.
+- **Dungeon → town transition:** `tier_load` is skipped for dlvl=0 (tier 0 embedded). Load town overlay to `$E000` instead.
+- **Word of Recall:** If recalling to town from deep dungeon, load town overlay. If recalling from town to dungeon, load appropriate tier.
+- **`$F000` permanent code:** No interaction — `$F000` contents are independent of `$E000` overlays. Both regions can be banked simultaneously with `$01=$34` (BANK_NO_ROMS).
