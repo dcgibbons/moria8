@@ -1118,7 +1118,7 @@ All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 
 - **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
 - **Compile-time asserts:** 62
 - **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
-- **Program size:** $BF13 (program_end), CREATURE_BASE at $BF40 — **45 bytes headroom**
+- **Program size:** $BFC4 (program_end), CREATURE_BASE at $BFD0 — **12 bytes headroom**
 - **Memory pressure:** Critical. Any significant code addition requires either moving CREATURE_BASE higher or code size optimization.
 
 ### Known Remaining Issues
@@ -1139,7 +1139,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~1~~ | A1 | ~~File naming cleanup~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4 | Done |
 | ~~2~~ | A2 | ~~Directory art~~ — ✅ PETSCII title card in d64 directory listing | Done |
 | **3** | A5 | Stack depth audit (trace deep call chains) | Small |
-| **4** | A3 | Character disk strategy (separate game/save disks) | Medium |
+| ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
 | **5** | R3.4 | Monster fleeing at low HP | Medium |
 | **6** | R2.1 | Special rooms (vaults, pits, nests) | Medium |
 | **7** | R4.1 | Ego items | Medium |
@@ -3808,7 +3808,7 @@ whether they'll get the full creature roster or the tiered subset.
 - 19 test suites (17 at time of R3.5 review + test_tier + test_ranged); 13+ import reu.s + tier_manager.s; test_tier has 500M cycle limit
 
 **Minor observations (non-blocking):**
-- **Tight memory margin:** Program ends at $BEF0, CREATURE_BASE at $BF10 — only 32 bytes of headroom (after R1.1 ranged combat). The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
+- **Tight memory margin:** Program ends at $BFC4, CREATURE_BASE at $BFD0 — only 12 bytes of headroom (after A3 dual-disk). The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
 - ~~**`monster_init_table` cpx #384:**~~ **Fixed in R3.5.12** — 6502 `cpx #imm` is 8-bit, so `cpx #384` silently became `cpx #128`, only clearing 128 of 384 bytes. Fixed with two-pass loop + compile-time assert.
 
 **Issue found (2026-02-14): `test_dungeon.s` timeout.**

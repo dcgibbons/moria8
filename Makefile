@@ -43,7 +43,7 @@ KA_FLAGS    = -showmem -vicesymbols
 RUN_FLAGS   = -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: all build run rundisk debug test disk clean
+.PHONY: all build run rundisk debug test disk savedisk clean
 
 all: build
 
@@ -103,6 +103,11 @@ disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	         -write $(OUT)/cr_t4 "monster.db.4"
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(OUT)/empty.prg
+
+SAVE_IMAGE  = $(OUT)/moria_save.d64
+
+savedisk: | $(OUT)
+	$(C1541) -format "moria save,sv" d64 $(SAVE_IMAGE)
 
 $(OUT):
 	mkdir -p $(OUT)

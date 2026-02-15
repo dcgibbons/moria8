@@ -124,8 +124,8 @@ save_ioerr_str:
     .text "DISK ERROR!" ; .byte 0
 save_welcome_str:
     .text "WELCOME BACK TO MORIA!" ; .byte 0
-save_newgame_str:
-    .text "N)EW GAME  L)OAD GAME" ; .byte 0
+title_menu_str:
+    .text "N)EW  L)OAD  D)UAL DISK" ; .byte 0
 
 // ============================================================
 // Macros for concise block I/O

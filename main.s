@@ -86,6 +86,7 @@ exit_trampoline:
 #import "store.s"
 #import "ui_store.s"
 #import "save.s"
+#import "disk_swap.s"
 #import "score.s"
 #import "title_screen.s"
 
@@ -129,20 +130,16 @@ entry_main:
     // Show system info on row 23 (machine type, KERNAL rev, REU)
     jsr title_show_sysinfo
 
-    // Check for existing save file
-    jsr check_savefile_exists
-    bcc !no_save_exists+
-
-    // --- Save exists: show New/Load menu ---
+    // --- Show title menu: N)EW  L)OAD  D)UAL DISK ---
     lda #COL_WHITE
     sta zp_text_color
     lda #17
     sta zp_cursor_row
-    lda #9                  // Center: (40-22)/2 = 9
+    lda #8                  // Center: (40-23)/2 ≈ 8
     sta zp_cursor_col
-    lda #<save_newgame_str
+    lda #<title_menu_str
     sta zp_ptr0
-    lda #>save_newgame_str
+    lda #>title_menu_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
@@ -152,6 +149,26 @@ entry_main:
     beq !title_new+
     cmp #$4c                // 'L' — load game
     beq !title_load+
+    cmp #$44                // 'D' — dual disk mode
+    bne !title_menu_loop-
+
+    // Set dual disk mode
+    lda #1
+    sta disk_mode
+    // Show "[SAVE DISK]" indicator on row 18
+    lda #COL_CYAN
+    sta zp_text_color
+    lda #18
+    sta zp_cursor_row
+    lda #14                 // Center: (40-11)/2 ≈ 14
+    sta zp_cursor_col
+    lda #<ds_dual_str
+    sta zp_ptr0
+    lda #>ds_dual_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
     jmp !title_menu_loop-
 
 !title_load:
@@ -159,28 +176,14 @@ entry_main:
     lda #SFX_PICKUP
     jsr sound_play
     jsr msg_init
+    jsr disk_prompt_save        // Swap to save disk if dual
     jsr load_game
     bcc !title_load_fail+
+    jsr disk_prompt_game        // Swap back for tier loading
     jmp load_resume_game
 !title_load_fail:
-    // Load failed — fall through to new game
+    jsr disk_prompt_game        // Swap back even on failure
     jmp !title_new+
-
-!no_save_exists:
-    // --- No save: "PRESS ANY KEY" ---
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #17
-    sta zp_cursor_row
-    lda #13                 // Center: (40-14)/2 = 13
-    sta zp_cursor_col
-    lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    jsr input_get_key
 
 !title_new:
     // Re-seed RNG after user input for better entropy
@@ -380,6 +383,7 @@ load_resume_game:
     // Save and quit?
     cmp #CMD_SAVE
     bne !not_save+
+    jsr disk_prompt_save        // Swap to save disk if dual
     jsr save_game
     jmp !quit+
 !not_save:
@@ -1124,6 +1128,7 @@ run_step:
     jsr input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
+    jsr disk_prompt_save        // Swap to save disk if dual
     jsr delete_savefile
     jsr player_sync_from_zp
     jsr score_calculate

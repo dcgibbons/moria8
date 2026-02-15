@@ -29,7 +29,7 @@
 .const MAP_END          = $ceff
 .const FLOOR_ITEM_BASE  = $cf00 // Floor item table (256 bytes)
 .const FLOOR_ITEM_END   = $cfff
-.const CREATURE_BASE    = $bf40 // Runtime scratch area (BFS, RLE, hiscore) — must be past program_end
+.const CREATURE_BASE    = $bfd0 // Runtime scratch area (BFS, RLE, hiscore) — must be past program_end
 .const CREATURE_END     = $bfff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
