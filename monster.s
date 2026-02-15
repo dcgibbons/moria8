@@ -39,7 +39,8 @@
 .const MX_SLEEP_CUR = 7
 .const MX_STUN      = 8
 .const MX_CONFUSE   = 9
-// Bytes 10-11 reserved
+.const MX_FLEE_LO  = 10   // Flee threshold HP (lo byte)
+.const MX_FLEE_HI  = 11   // Flee threshold HP (hi byte)
 
 // Monster flags
 .const MF_AWAKE     = $01
@@ -543,10 +544,19 @@ monster_spawn_one:
     ldy #MX_CONFUSE
     sta (zp_ptr0),y
 
-    // Clear reserved bytes 10-11
-    ldy #10
+    // Compute flee threshold = rolled_HP / 4
+    // zp_math_a/b still hold HP from math_dice
+    lda zp_math_b           // HP hi byte
+    lsr                     // /2 hi
+    sta zp_mon_scratch0     // temp hi
+    lda zp_math_a           // HP lo byte
+    ror                     // /2 lo (carry from hi)
+    lsr zp_mon_scratch0     // /4 hi
+    ror                     // /4 lo (carry from hi)
+    ldy #MX_FLEE_LO
     sta (zp_ptr0),y
-    ldy #11
+    lda zp_mon_scratch0
+    ldy #MX_FLEE_HI
     sta (zp_ptr0),y
 
     // Set FLAG_OCCUPIED on map tile

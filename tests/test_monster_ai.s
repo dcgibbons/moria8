@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #14
+    ldx #18
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -80,7 +80,7 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 15, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 19, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
 
@@ -1115,10 +1115,337 @@ test_start:
 
     lda #$01
     sta tc_results + 14
-    jmp !tests_done+
+    jmp !t16+
 !t15_fail:
     lda #$00
     sta tc_results + 14
+
+    // ==========================================
+    // Test 16: Full HP monster moves TOWARD player (regression guard)
+    // Spawn with full HP, flee_threshold = HP/4, so HP > threshold
+    // ==========================================
+!t16:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Create floor corridor from (20,15) to (30,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t16_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t16_fill-
+
+    // Spawn Kobold at (20,15) — full HP
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold (speed=1, mobile)
+    jsr monster_spawn_one
+
+    // Set awake
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    // Player at (30, 15) — monster should move toward
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    // Run AI tick
+    jsr monster_ai_tick
+
+    // Monster should have moved from x=20 to x=21 (toward player)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21
+    bne !t16_fail+
+
+    lda #$01
+    sta tc_results + 15
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: Low HP monster moves AWAY from player
+    // Set HP=1, flee_threshold=5 → HP < threshold → flees
+    // ==========================================
+!t17:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Create floor corridor from (20,15) to (30,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #15
+!t17_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #35
+    bne !t17_fill-
+
+    // Spawn Kobold at (25,15)
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4                      // Kobold
+    jsr monster_spawn_one
+
+    // Set awake, set HP=1, set flee_threshold=5
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    lda #5
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    lda #0
+    sta (zp_ptr0),y
+
+    // Player at (30, 15) — monster should move AWAY (toward lower x)
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    // Run AI tick
+    jsr monster_ai_tick
+
+    // Monster should have moved from x=25 to x=24 (away from player)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #24
+    bne !t17_fail+
+
+    lda #$01
+    sta tc_results + 16
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Test 18: CF_ATTACK_ONLY monster at low HP stays put
+    // Type 6 (Shrieker) — can't move even when fleeing
+    // ==========================================
+!t18:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Restore keyboard buffer
+    lda #8
+    sta $c6
+
+    // Place floor at (30, 20)
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    // Also place floor at (29, 20) for potential flee target
+    ldy #29
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    // Spawn Shrieker at (30, 20)
+    lda #30
+    sta ms_spawn_x
+    lda #20
+    sta ms_spawn_y
+    lda #6                      // Shrieker mushroom (CF_ATTACK_ONLY)
+    jsr monster_spawn_one
+
+    // Set awake, low HP, high flee threshold
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    lda #5
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    lda #0
+    sta (zp_ptr0),y
+
+    // Player at (31, 20)
+    lda #31
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    // Run AI tick
+    jsr monster_ai_tick
+
+    // Monster should still be at (30, 20) — CF_ATTACK_ONLY can't move
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #30
+    bne !t18_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #20
+    bne !t18_fail+
+
+    lda #$01
+    sta tc_results + 17
+    jmp !t19+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+
+    // ==========================================
+    // Test 19: Confused + low HP → moves randomly (confusion overrides flee)
+    // Confused movement picks random direction, NOT flee direction
+    // Run multiple times, check position differs from flee path
+    // ==========================================
+!t19:
+    lda #0
+    sta tai_ok
+    sta zp_game_flags
+
+    lda #5
+    sta tai_count
+
+!t19_retry:
+    jsr monster_init_table
+
+    // Create a 5x5 floor area around (25,25)
+    ldx #23
+!t19_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+!t19_col:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #28
+    bne !t19_col-
+    inx
+    cpx #28
+    bne !t19_row-
+
+    // Spawn Kobold at (25,25)
+    lda #25
+    sta ms_spawn_x
+    lda #25
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+
+    // Set awake + confused, low HP, high flee threshold
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE | MF_CONFUSED
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    lda #10
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    lda #0
+    sta (zp_ptr0),y
+
+    // Player at (24, 25) — flee direction would be +x (to 26,25)
+    // Confused movement should sometimes go other directions
+    lda #24
+    sta zp_player_x
+    lda #25
+    sta zp_player_y
+
+    // Run AI tick
+    jsr monster_ai_tick
+
+    // Check if monster moved at all (confused might fail to move)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #25
+    bne !t19_moved+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #25
+    beq !t19_nomove+
+
+!t19_moved:
+    lda #1
+    sta tai_ok
+
+!t19_nomove:
+    dec tai_count
+    bne !t19_retry-
+
+    // After 5 tries, check if at least one moved (proves confusion path taken)
+    lda tai_ok
+    beq !t19_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp !tests_done+
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
 
 !tests_done:
     jmp test_finish

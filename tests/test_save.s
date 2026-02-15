@@ -159,10 +159,11 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — use $B0A0, safely past test body end (~$B08B)
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to $BFBE
-// This fits within BASIC ROM area ($A000-$BFFF).
-.const RLE_TEST_BUF = $B0A0
+// RLE workspace — use $B200, safely past test body end (~$B176)
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to $C11E
+// BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
+// at $C000+ is fine since map is being compressed from it during test.
+.const RLE_TEST_BUF = $B200
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

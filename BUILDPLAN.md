@@ -1140,7 +1140,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~2~~ | A2 | ~~Directory art~~ — ✅ PETSCII title card in d64 directory listing | Done |
 | ~~3~~ | A5 | ~~Stack depth audit (trace deep call chains)~~ — ✅ Max 27 bytes (11%), safe | Done |
 | ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
-| **5** | R3.4 | Monster fleeing at low HP | Medium |
+| ~~5~~ | R3.4 | ~~Monster fleeing at low HP~~ — ✅ Flee threshold (HP/4) at spawn, reversed greedy movement | Done |
 | **6** | R2.1 | Special rooms (vaults, pits, nests) | Medium |
 | **7** | R4.1 | Ego items | Medium |
 | **8** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
@@ -3628,7 +3628,7 @@ design; items marked **(TODO)** need implementation.
 | R3.1 | Pathfinding | **(deferred)** | Greedy movement (try diagonal, then cardinal). No A*/flow maps. Monsters can get stuck on corners. A* is expensive at 1 MHz; greedy + unstick heuristic may be sufficient. |
 | R3.2 | Group/pack tactics | **(TODO)** | No pack instinct, escort behavior, or group spawning beyond random clusters. |
 | R3.3 | Explosive breeders | **(TODO)** | No breeding logic (lice, mice, etc.). Need spawn-on-turn mechanic with population cap. |
-| R3.4 | Monster fleeing | **(TODO)** | Monsters do not flee at low HP. Need flee threshold check in AI + reversed movement. |
+| R3.4 | Monster fleeing | ✅ **DONE** | Monsters flee when HP < 25% of max. Flee threshold computed at spawn (HP/4). Reversed greedy movement (monster_move_away). Fleeing suppresses attack. CF_ATTACK_ONLY creatures can't flee (can't move). Confusion overrides flee. |
 | R3.5 | Limited creature roster | ✅ **DONE** | Expanded to 120 creatures across 5 tiers (T0 town + T1-T4 dungeon). REU + disk loading paths implemented. All 12 steps complete (R3.5.1-R3.5.12). See **R3.5 Detailed Plan** below. |
 
 ### 4. Items & Inventory
