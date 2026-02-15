@@ -256,8 +256,8 @@ mm_print_monster_name:
     lda #0
     sta cmb_buf_idx
 
-    lda #<mat_the_str
-    ldy #>mat_the_str
+    lda #<cmb_the_str + 1
+    ldy #>cmb_the_str + 1
     jsr combat_append_str
 
     ldx zp_mon_type

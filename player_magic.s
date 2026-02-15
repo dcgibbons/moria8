@@ -49,35 +49,10 @@ player_cast_spell:
     rts
 
 !pm_can_cast:
-    // Set up table pointers to mage spell tables
     lda #SPELL_MAGE
     sta pm_spell_type
-
-    lda #<mage_spell_mana
-    sta pm_mana_tbl_lo
-    lda #>mage_spell_mana
-    sta pm_mana_tbl_hi
-
-    lda #<mage_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>mage_spell_level
-    sta pm_lvl_tbl_hi
-
-    lda #<mage_spell_fail
-    sta pm_fail_tbl_lo
-    lda #>mage_spell_fail
-    sta pm_fail_tbl_hi
-
-    lda #<mage_spell_name_lo
-    sta pm_name_lo_lo
-    lda #>mage_spell_name_lo
-    sta pm_name_lo_hi
-
-    lda #<mage_spell_name_hi
-    sta pm_name_hi_lo
-    lda #>mage_spell_name_hi
-    sta pm_name_hi_hi
-
+    ldx #0                      // Mage tables at offset 0
+    jsr pm_setup
     jmp pm_do_cast
 
 // ============================================================
@@ -100,36 +75,40 @@ player_pray:
     rts
 
 !pm_can_pray:
-    // Set up table pointers to priest prayer tables
     lda #SPELL_PRIEST
     sta pm_spell_type
-
-    lda #<priest_spell_mana
-    sta pm_mana_tbl_lo
-    lda #>priest_spell_mana
-    sta pm_mana_tbl_hi
-
-    lda #<priest_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>priest_spell_level
-    sta pm_lvl_tbl_hi
-
-    lda #<priest_spell_fail
-    sta pm_fail_tbl_lo
-    lda #>priest_spell_fail
-    sta pm_fail_tbl_hi
-
-    lda #<priest_spell_name_lo
-    sta pm_name_lo_lo
-    lda #>priest_spell_name_lo
-    sta pm_name_lo_hi
-
-    lda #<priest_spell_name_hi
-    sta pm_name_hi_lo
-    lda #>priest_spell_name_hi
-    sta pm_name_hi_hi
-
+    ldx #10                     // Priest tables at offset 10
+    jsr pm_setup
     jmp pm_do_cast
+
+// pm_setup — Copy 10 table pointer bytes from pm_tables+X to pm_mana_tbl_lo+
+// Input: X = offset into pm_tables (0=mage, 10=priest)
+// Clobbers: A, X, Y
+pm_setup:
+    ldy #9
+!pms_loop:
+    lda pm_tables,x
+    sta pm_mana_tbl_lo,y
+    inx
+    dey
+    bpl !pms_loop-
+    rts
+
+// Table pointer data: 10 bytes per spell type (stored in reverse order for dey loop)
+// Order: name_hi_hi, name_hi_lo, name_lo_hi, name_lo_lo, fail_hi, fail_lo, lvl_hi, lvl_lo, mana_hi, mana_lo
+pm_tables:
+    // Mage (offset 0)
+    .byte >mage_spell_name_hi, <mage_spell_name_hi
+    .byte >mage_spell_name_lo, <mage_spell_name_lo
+    .byte >mage_spell_fail,    <mage_spell_fail
+    .byte >mage_spell_level,   <mage_spell_level
+    .byte >mage_spell_mana,    <mage_spell_mana
+    // Priest (offset 10)
+    .byte >priest_spell_name_hi, <priest_spell_name_hi
+    .byte >priest_spell_name_lo, <priest_spell_name_lo
+    .byte >priest_spell_fail,    <priest_spell_fail
+    .byte >priest_spell_level,   <priest_spell_level
+    .byte >priest_spell_mana,    <priest_spell_mana
 
 // ============================================================
 // pm_do_cast — Shared cast/pray logic

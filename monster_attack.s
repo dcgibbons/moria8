@@ -43,7 +43,6 @@ mat_total_dmg:    .byte 0   // Total damage accumulated this round
 // ============================================================
 // Strings (screen codes via inherited encoding)
 // ============================================================
-mat_the_str:      .text "THE " ; .byte 0
 mat_hits_str:     .text " HITS YOU." ; .byte 0
 mat_miss_str:     .text " MISSES YOU." ; .byte 0
 mat_poison_str:   .text " POISONS YOU." ; .byte 0
@@ -162,16 +161,22 @@ monster_attack_player:
     beq !map_miss_msg+
 
     // Hit message: "THE <name> HITS YOU."
-    jsr mon_atk_build_hit_msg
-    jsr cmb_print_buf
+    lda #<mat_hits_str
+    sta zp_ptr2
+    lda #>mat_hits_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
     lda #SFX_HIT
     jsr sound_play
     rts
 
 !map_miss_msg:
     // Miss message: "THE <name> MISSES YOU."
-    jsr mon_atk_build_miss_msg
-    jsr cmb_print_buf
+    lda #<mat_miss_str
+    sta zp_ptr2
+    lda #>mat_miss_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
     lda #SFX_MISS
     jsr sound_play
     rts
@@ -402,7 +407,6 @@ mon_atk_effect_poison:
     lda #>mat_poison_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
-    jsr cmb_print_buf
 !mep_done:
     rts
 
@@ -432,9 +436,7 @@ mon_atk_effect_confuse:
     sta zp_ptr2
     lda #>mat_confuse_str
     sta zp_ptr2_hi
-    jsr mon_atk_build_effect_msg
-    jsr cmb_print_buf
-    rts
+    jmp mon_atk_build_effect_msg
 
 !mec_stack:
     // Already confused: add 3 turns (umoria stacking)
@@ -496,7 +498,6 @@ mon_atk_effect_paralyze:
     lda #>mat_paralyze_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
-    jsr cmb_print_buf
 !mepa_done:
     rts
 !mepa_resist:
@@ -559,54 +560,14 @@ player_death_check:
 // Message builders
 // ============================================================
 
-// mon_atk_build_hit_msg — "THE <name> HITS YOU."
-mon_atk_build_hit_msg:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<mat_the_str
-    ldy #>mat_the_str
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda #<mat_hits_str
-    ldy #>mat_hits_str
-    jsr combat_append_str
-
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
-
-// mon_atk_build_miss_msg — "THE <name> MISSES YOU."
-mon_atk_build_miss_msg:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<mat_the_str
-    ldy #>mat_the_str
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda #<mat_miss_str
-    ldy #>mat_miss_str
-    jsr combat_append_str
-
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
-
 // mon_atk_build_effect_msg — "THE <name> <effect string>"
 // Input: zp_ptr2 = effect string pointer (lo/hi)
 mon_atk_build_effect_msg:
     lda #0
     sta cmb_buf_idx
 
-    lda #<mat_the_str
-    ldy #>mat_the_str
+    lda #<cmb_the_str + 1
+    ldy #>cmb_the_str + 1
     jsr combat_append_str
 
     jsr combat_append_monster_name
@@ -615,10 +576,7 @@ mon_atk_build_effect_msg:
     ldy zp_ptr2_hi
     jsr combat_append_str
 
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
+    jmp cmb_term_and_print
 
 // ============================================================
 // Compile-time validation

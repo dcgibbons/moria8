@@ -74,10 +74,10 @@ priest_spell_name_hi:
 // Mage Spell Name Strings (screen codes, null-terminated)
 // ============================================================
 msn_0:  .text "MAGIC MISSILE" ; .byte 0
-msn_1:  .text "DETECT MONSTERS" ; .byte 0
+.label msn_1 = itn_30   // "DETECT MONSTERS" — shared with item.s
 msn_2:  .text "PHASE DOOR" ; .byte 0
 msn_3:  .text "LIGHT AREA" ; .byte 0
-msn_4:  .text "CURE LIGHT WOUNDS" ; .byte 0
+.label msn_4 = itn_17   // "CURE LIGHT WOUNDS" — shared with item.s
 msn_5:  .text "FIND TRAPS/DOORS" ; .byte 0
 msn_6:  .text "STINKING CLOUD" ; .byte 0
 msn_7:  .text "CONFUSION" ; .byte 0
@@ -94,7 +94,7 @@ msn_15: .text "FIRE BALL" ; .byte 0
 // Priest Prayer Name Strings (screen codes, null-terminated)
 // ============================================================
 psn_0:  .text "DETECT EVIL" ; .byte 0
-psn_1:  .text "CURE LIGHT WOUNDS" ; .byte 0
+.label psn_1 = itn_17   // "CURE LIGHT WOUNDS" — shared with item.s
 psn_2:  .text "BLESS" ; .byte 0
 psn_3:  .text "REMOVE FEAR" ; .byte 0
 psn_4:  .text "CALL LIGHT" ; .byte 0

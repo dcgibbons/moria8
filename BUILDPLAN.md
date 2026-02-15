@@ -1096,9 +1096,9 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 
 ---
 
-## Current State (2026-02-14)
+## Current State (2026-02-15)
 
-**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added.
+**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 code size optimizations applied (excluding OPT-1.1).
 
 ### Phase Completion Summary
 
@@ -1118,15 +1118,16 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | R3.4 | Monster Fleeing | ✅ Complete — flee threshold (HP/4) at spawn, reversed greedy movement |
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
+| OPT-1 | Code Size Optimization | ✅ Complete (excluding OPT-1.1) — 182 bytes reclaimed |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
-- **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
-- **Compile-time asserts:** 62
-- **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
-- **Program size:** ~$BFF3 (program_end), CREATURE_BASE at $C020 — **~45 bytes headroom**
-- **Memory pressure:** Critical. Code size audit (2026-02-15) identified ~188 bytes of reclaimable space via OPT-1. See Code Size Audit section.
+- **Test suites:** 20 (259 runtime tests)
+- **Compile-time asserts:** 63
+- **Source files:** ~42 .s files
+- **Program size:** $BF41 (program_end), CREATURE_BASE at $C020 — **223 bytes headroom**
+- **PRG file:** 48,060 bytes (47 KB on disk)
 
 ### Known Remaining Issues
 
@@ -1136,10 +1137,10 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | Open — currently safe, document-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
-| BUG-20 | LOW | Dead strings `mat_acid_str` + `mat_dead_str` waste 42 bytes | Open — OPT-1.1 |
+| BUG-20 | LOW | Dead strings `mat_acid_str` + `mat_dead_str` waste 42 bytes | Open — OPT-1.1 (deferred) |
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | Open |
-| BUG-22 | LOW | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | Open — OPT-1.7 |
-| OPT-1 | MED | Code size optimization — ~188 bytes reclaimable (see Code Size Audit) | Open |
+| BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
+| OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7) | ✅ Done (OPT-1.1 deferred) |
 
 ### What's Next
 
@@ -1154,7 +1155,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~5~~ | R3.4 | ~~Monster fleeing at low HP~~ — ✅ Flee threshold (HP/4) at spawn, reversed greedy movement | Done |
 | ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
 | ~~7~~ | R4.1 | ~~Ego items~~ — ✅ 7 enchanted weapon types with slay/elemental/AC bonuses | Done |
-| **8** | **OPT-1** | **Code size optimization (reclaim ~188 bytes)** — see Code Size Audit below | **Low–Medium** |
+| ~~8~~ | OPT-1 | ~~Code size optimization~~ — ✅ 182 bytes reclaimed ($BFF7→$BF41), 20/20 tests pass | Done |
 | **9** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
 | **10** | R6.1 | Store haggling | Medium |
 | **11** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
@@ -3846,7 +3847,9 @@ switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
 
 ## Code Size Audit (2026-02-15)
 
-**Context:** Program ends at ~$BFF3, CREATURE_BASE at $C020 — approximately **45 bytes free**. Any new feature requires reclaiming space first. This audit identified **~188 bytes of verified, low-risk savings** across 7 optimizations plus 3 bugs (BUG-20, BUG-21, BUG-22).
+**Context:** Program ended at ~$BFF7, CREATURE_BASE at $C020 — approximately **45 bytes free**. This audit identified ~188 bytes of verified, low-risk savings across 7 optimizations plus 3 bugs.
+
+**Result:** OPT-1.2–1.7 implemented on 2026-02-15. Actual savings: **182 bytes** ($BFF7→$BF41). OPT-1.1 (dead string deletion) deferred. All 20 test suites pass. See Memory Usage Overview below for full post-optimization memory map.
 
 ### Bugs Found
 
@@ -3868,18 +3871,19 @@ switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
 
 Seven optimizations totaling ~188 bytes. All preserve existing behavior and are independently testable.
 
-| # | What | Where | Bytes | Risk | Effort |
-|---|------|-------|-------|------|--------|
-| OPT-1.1 | **Delete dead strings** `mat_acid_str` + `mat_dead_str` | monster_attack.s:52-54 | **42** | None | Trivial |
-| OPT-1.2 | **Parameterize cast/pray table setup** — replace duplicate 58-byte initialization blocks with table-driven copy loop | player_magic.s:51-132 | **~55** | Low | Medium |
-| OPT-1.3 | **Deduplicate "CURE LIGHT WOUNDS"** — 3 identical copies across spell_data.s:80, spell_data.s:97, item.s:377. Define once, share via pointer tables. | spell_data.s, item.s | **36** | Low | Low |
-| OPT-1.4 | **Unify `mon_atk_build_hit/miss_msg`** into `mon_atk_build_effect_msg` — both are structurally identical, just with hardcoded suffix strings instead of zp_ptr2. Eliminate two 18-byte routines, replace with 8-byte inline setups at 2 call sites. | monster_attack.s:562-600 | **~20** | Low | Low |
-| OPT-1.5 | **Deduplicate "DETECT MONSTERS"** — 2 copies: spell_data.s:77, item.s:390. Define once, share. | spell_data.s, item.s | **16** | Low | Low |
-| OPT-1.6 | **Self-printing `mon_atk_build_effect_msg`** — replace null-terminate+rts (8 bytes) with `jmp cmb_term_and_print` (3 bytes). Removes 5 `jsr cmb_print_buf` at call sites (5×3=15 bytes). | monster_attack.s:602-621 + 5 call sites | **~14** | Low | Low |
-| OPT-1.7 | **Eliminate `mat_the_str`** — replace 4 references with `cmb_the_str + 1` (already used by ranged_fire.s). | monster_attack.s:46 + 4 refs, monster_magic.s:259 | **5** | None | Trivial |
-| | **TOTAL** | | **~188** | | |
+| # | What | Where | Est. | Status |
+|---|------|-------|------|--------|
+| OPT-1.1 | **Delete dead strings** `mat_acid_str` + `mat_dead_str` | monster_attack.s | **42** | Deferred |
+| OPT-1.2 | **Parameterize cast/pray table setup** — table-driven copy loop | player_magic.s | **~55** | ✅ Done |
+| OPT-1.3 | **Deduplicate "CURE LIGHT WOUNDS"** — `.label` alias to `itn_17` | spell_data.s | **36** | ✅ Done |
+| OPT-1.4 | **Unify `mon_atk_build_hit/miss_msg`** into `mon_atk_build_effect_msg` | monster_attack.s | **~20** | ✅ Done |
+| OPT-1.5 | **Deduplicate "DETECT MONSTERS"** — `.label` alias to `itn_30` | spell_data.s | **16** | ✅ Done |
+| OPT-1.6 | **Self-printing `mon_atk_build_effect_msg`** — `jmp cmb_term_and_print` | monster_attack.s | **~14** | ✅ Done |
+| OPT-1.7 | **Eliminate `mat_the_str`** — use `cmb_the_str + 1` | monster_attack.s, monster_magic.s | **5** | ✅ Done |
+| | **Estimated total (1.2–1.7)** | | **~146** | |
+| | **Actual savings** | $BFF7 → $BF41 | **182** | ✅ Verified |
 
-**Net effect:** Headroom increases from ~45 bytes to ~233 bytes — enough room for the next feature work.
+**Net effect:** Headroom increased from ~45 bytes to **223 bytes**. All 20 test suites pass (259 tests).
 
 ### OPT-1.2 Detail: Cast/Pray Table Parameterization
 
@@ -3970,3 +3974,47 @@ These were identified but deferred due to complexity or diminishing returns:
 | Stat bonus table formulas | Replace 16-byte lookup tables with computed values | 30-50 | Risky — umoria fidelity requirement |
 | String pool / dictionary | Central string deduplication system | 50-100 | Major refactor, error-prone |
 | Creature name prefix extraction | Share "GIANT ", "SKELETON " prefixes | 40-60 | Only applies to tier data files (loaded from disk, not in main PRG) |
+
+## Memory Usage Overview (Post-OPT-1, 2026-02-15)
+
+After OPT-1.2–1.7 optimizations. `program_end` = $BF41. PRG file = 48,060 bytes.
+
+### Code + Data Size
+
+| Region | Address Range | Size | Notes |
+|--------|--------------|------|-------|
+| Main code+data | `$0801`–`$BF41` | 46,912 | Program image (code, tables, strings, static RAM) |
+| Banked at `$F000` | `$F000`–`$F44C` | 1,101 | Special rooms, ego items, title sysinfo (under KERNAL ROM) |
+| **Total code+data** | | **48,013** | |
+
+### Runtime RAM Map
+
+| Address Range | Size | Contents |
+|--------------|------|----------|
+| `$00`–`$01` | 2 | 6510 CPU port (hardware) |
+| `$02`–`$8F` | 142 | Zero page: game state, pointers, scratch |
+| `$90`–`$FF` | 112 | KERNAL zero page (volatile, caller-save) |
+| `$0100`–`$01FF` | 256 | 6502 stack |
+| `$0200`–`$03FF` | 512 | KERNAL buffers (input, file tables) |
+| `$0400`–`$07FF` | 1,024 | Screen RAM (shared: display + BFS queue during dungeon gen) |
+| `$0801`–`$BF41` | 46,912 | Main code + data |
+| `$BF42`–`$C01F` | 223 | **Free** (headroom before CREATURE_BASE) |
+| `$C000`–`$CEFF` | 3,840 | Dungeon map (64×60 tiles, always RAM) |
+| `$CF00`–`$CFFF` | 256 | Floor item table (32 slots × 8 arrays) |
+| `$D000`–`$DFFF` | 4,096 | I/O region (VIC-II, SID, CIA, color RAM) |
+| `$E000`–`$EFFF` | — | KERNAL ROM (banked in by default) |
+| `$F000`–`$F44C` | 1,101 | Banked code (copied here at startup, under KERNAL ROM) |
+| `$F44D`–`$FFFA` | 2,989 | **Free** (banked region, available for expansion) |
+| `$FFFB`–`$FFFF` | 5 | CPU vectors (NMI, RESET, IRQ) |
+
+### Summary
+
+| Metric | Value |
+|--------|-------|
+| Total code + data | 48,013 bytes (46.9 KB) |
+| PRG file on disk | 48,060 bytes (47.0 KB) |
+| Main region free | 223 bytes (`$BF42`–`$C01F`) |
+| Banked region free | 2,989 bytes (`$F44D`–`$FFFA`) |
+| Total free (expandable) | 3,212 bytes |
+| RAM used (code+map+items+ZP+screen) | ~53 KB |
+| Test suites | 20 (259 tests, all passing) |
