@@ -84,24 +84,24 @@ rle_lit_buf:    .fill 128, 0
 save_filename:
     .byte $40               // "@" — replace existing file prefix
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
 .label save_filename_len = * - save_filename
 
 load_filename:
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
 .label load_filename_len = * - load_filename
 
 scratch_cmd:
     .byte $53, $30, $3a     // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
 .label scratch_cmd_len = * - scratch_cmd
 
 check_filename:
     .byte $30, $3a          // "0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $53, $41, $56  // "MORIA.SAV"
+    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $52  // ",S,R"
 .label check_filename_len = * - check_filename
 

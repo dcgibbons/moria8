@@ -90,10 +90,10 @@ disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	         -attach $(DISK_IMAGE) \
 	         -write $(MAIN_PRG) "moria" \
 	         -write $(TITLE_PRG) "title" \
-	         -write $(OUT)/cr_t1 "cr t1" \
-	         -write $(OUT)/cr_t2 "cr t2" \
-	         -write $(OUT)/cr_t3 "cr t3" \
-	         -write $(OUT)/cr_t4 "cr t4"
+	         -write $(OUT)/cr_t1 "monster.db.1" \
+	         -write $(OUT)/cr_t2 "monster.db.2" \
+	         -write $(OUT)/cr_t3 "monster.db.3" \
+	         -write $(OUT)/cr_t4 "monster.db.4"
 
 $(OUT):
 	mkdir -p $(OUT)

@@ -1118,7 +1118,7 @@ All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 
 - **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
 - **Compile-time asserts:** 62
 - **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
-- **Program size:** $BEF0 (program_end), CREATURE_BASE at $BF10 — **32 bytes headroom**
+- **Program size:** $BF13 (program_end), CREATURE_BASE at $BF40 — **45 bytes headroom**
 - **Memory pressure:** Critical. Any significant code addition requires either moving CREATURE_BASE higher or code size optimization.
 
 ### Known Remaining Issues
@@ -1136,7 +1136,7 @@ Priority order based on AUDIT review (see Audit Response below):
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| **1** | A1 | File naming cleanup (thematic save/tier filenames) | Small |
+| ~~1~~ | A1 | ~~File naming cleanup~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4 | Done |
 | **2** | A2 | Directory art (PETSCII art in d64 listing) | Small |
 | **3** | A5 | Stack depth audit (trace deep call chains) | Small |
 | **4** | A3 | Character disk strategy (separate game/save disks) | Medium |
@@ -1229,9 +1229,9 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 
 | Finding | Disposition |
 |---------|------------|
-| MORIA.SAV → THE.GAME | **Action item A1** |
-| MORIA.HI → HALL.OF.FAME | **Action item A1** |
-| CR T1-T4 → MONSTER.DB.1-4 | **Action item A1** |
+| MORIA.SAV → THE.GAME | ✅ **Done** (save.s) |
+| MORIA.HI → HALL.OF.FAME | ✅ **Done** (score.s) |
+| CR T1-T4 → MONSTER.DB.1-4 | ✅ **Done** (tier_manager.s, Makefile) |
 
 ### AUDIT §8 — Release Strategy
 
@@ -1243,7 +1243,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 
 | # | Description | Effort | Files |
 |---|-------------|--------|-------|
-| A1 | File naming: MORIA.SAV→THE.GAME, MORIA.HI→HALL.OF.FAME, CR T1-T4→MONSTER.DB.1-4 | Small | save.s, score.s, tier_manager.s, Makefile |
+| A1 | ~~File naming: MORIA.SAV→THE.GAME, MORIA.HI→HALL.OF.FAME, CR T1-T4→MONSTER.DB.1-4~~ | ✅ Done | save.s, score.s, tier_manager.s, Makefile, memory.s |
 | A2 | Directory art: PETSCII art in d64 listing | Small | Makefile |
 | A3 | Character disk: separate game/save disks with swap prompts | Medium | save.s, score.s, new disk_swap.s |
 | A4 | Separate binaries: BOOT.PRG + MORIA64 + MORIA128 | Major | Makefile, main.s, new boot.s — Phase 10 scope |
@@ -3672,9 +3672,9 @@ design; items marked **(TODO)** need implementation.
 - ~~R2.2 Mineral streamers~~ — ✅ 5 streamers per level (3 magma + 2 quartz)
 - ~~R2.4 Secret doors~~ — ✅ Phase 4.6 (place_secrets + do_search)
 - ~~R3.5 Creature roster~~ — ✅ R3.5.1-R3.5.12 (120 creatures, 5 tiers, REU + disk)
+- ~~A1 File naming~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4
 
 **High priority (from AUDIT — polish & release readiness):**
-- A1 File naming cleanup — thematic save/tier filenames
 - A2 Directory art — PETSCII art in d64 listing
 - A5 Stack depth audit — trace deep call chains, document max nesting
 - A3 Character disk strategy — separate game/save disks for update safety

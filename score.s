@@ -967,20 +967,20 @@ hiscore_save:
 // ============================================================
 hi_read_fname:
     .byte $30, $3a              // "0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $48, $49  // "MORIA.HI"
+    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
     .byte $2c, $53, $2c, $52   // ",S,R"
 .label hi_read_fname_len = * - hi_read_fname
 
 hi_write_fname:
     .byte $40                   // "@"
     .byte $30, $3a              // "0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $48, $49  // "MORIA.HI"
+    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
     .byte $2c, $53, $2c, $57   // ",S,W"
 .label hi_write_fname_len = * - hi_write_fname
 
 hi_scratch_cmd:
     .byte $53, $30, $3a         // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $2e, $48, $49  // "MORIA.HI"
+    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
 .label hi_scratch_len = * - hi_scratch_cmd
 
 // ============================================================

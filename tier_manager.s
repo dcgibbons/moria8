@@ -224,8 +224,8 @@ tier_load_disk:
     pla
     tax                         // X = filename addr lo, Y = hi
 
-    // SETNAM: 5-character filename
-    lda #5
+    // SETNAM: 12-character filename
+    lda #12
     jsr $ffbd                   // KERNAL SETNAM
 
     // SETLFS: file 2, device 8, secondary 1 (load to header address)
@@ -246,11 +246,11 @@ tier_load_disk:
 // ============================================================
 // Filename data (PETSCII — NOT screen codes)
 // ============================================================
-// "CR T1" through "CR T4" — matches d64 directory entries
-tier_fn_1:  .byte $43, $52, $20, $54, $31  // "CR T1"
-tier_fn_2:  .byte $43, $52, $20, $54, $32  // "CR T2"
-tier_fn_3:  .byte $43, $52, $20, $54, $33  // "CR T3"
-tier_fn_4:  .byte $43, $52, $20, $54, $34  // "CR T4"
+// "MONSTER.DB.1" through "MONSTER.DB.4" — matches d64 directory entries
+tier_fn_1:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $31  // "MONSTER.DB.1"
+tier_fn_2:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $32  // "MONSTER.DB.2"
+tier_fn_3:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $33  // "MONSTER.DB.3"
+tier_fn_4:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $34  // "MONSTER.DB.4"
 
 tier_fn_addr_lo:
     .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
