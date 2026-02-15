@@ -1090,6 +1090,9 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-17 | Look command distance | ✅ Fixed — multi-tile scan |
 | BUG-18 | Inventory popup in selection dialogs | ✅ Fixed — '?' key added |
 | BUG-19 | Garbage characters flash on screen when descending to dungeon level 1 | **Open** — screen fills with garbage briefly before dungeon renders correctly. Occurs on first descent from town. Likely screen not cleared before dungeon generation/render, or visibility buffer contains stale data. |
+| BUG-20 | Dead strings `mat_acid_str` and `mat_dead_str` in monster_attack.s (42 bytes wasted) | **Open** — both strings defined but never referenced. `mat_acid_str` was intended for acid effect message; `mat_dead_str` superseded by death handling in score.s. Delete both to reclaim 42 bytes. |
+| BUG-21 | Acid attack effect (`mon_atk_effect_acid`) is a no-op with no message | **Open** — when a monster hits with ATK_ACID, the player sees generic "THE X HITS YOU." but no acid-specific feedback. Poison/confuse/paralyze all print distinct messages. Either wire up `mat_acid_str` or accept as intentional simplification. |
+| BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | **Open** — monster_attack.s:46 defines `mat_the_str: "THE "` but combat.s:23 already has `cmb_the_str: " THE "` and ranged_fire.s demonstrates using `cmb_the_str + 1` for "THE ". Replace 4 references to save 5 bytes. |
 
 ---
 
@@ -1112,6 +1115,9 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | 9 | Save/Load and Game Polish | ✅ Complete (9.1-9.4, BUG-1 through BUG-18 fixed) |
 | R3.5 | Creature Tier System + REU | ✅ Complete (R3.5.1-R3.5.12, 120 creatures across 5 tiers) |
 | R1.1 | Ranged Combat | ✅ Complete — bows, crossbows, slings, 3 ammo types, fire command, ammo stacking |
+| R3.4 | Monster Fleeing | ✅ Complete — flee threshold (HP/4) at spawn, reversed greedy movement |
+| R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
+| R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
@@ -1119,8 +1125,8 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 - **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
 - **Compile-time asserts:** 62
 - **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
-- **Program size:** $BF3F (program_end), CREATURE_BASE at $BFD0 — **145 bytes headroom**
-- **Memory pressure:** Critical. Any significant code addition requires either moving CREATURE_BASE higher or code size optimization.
+- **Program size:** ~$BFF3 (program_end), CREATURE_BASE at $C020 — **~45 bytes headroom**
+- **Memory pressure:** Critical. Code size audit (2026-02-15) identified ~188 bytes of reclaimable space via OPT-1. See Code Size Audit section.
 
 ### Known Remaining Issues
 
@@ -1130,6 +1136,10 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | Open — currently safe, document-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
+| BUG-20 | LOW | Dead strings `mat_acid_str` + `mat_dead_str` waste 42 bytes | Open — OPT-1.1 |
+| BUG-21 | LOW | Acid attack effect is a no-op (no player message) | Open |
+| BUG-22 | LOW | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | Open — OPT-1.7 |
+| OPT-1 | MED | Code size optimization — ~188 bytes reclaimable (see Code Size Audit) | Open |
 
 ### What's Next
 
@@ -1143,10 +1153,11 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
 | ~~5~~ | R3.4 | ~~Monster fleeing at low HP~~ — ✅ Flee threshold (HP/4) at spawn, reversed greedy movement | Done |
 | ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
-| **7** | R4.1 | Ego items | Medium |
-| **8** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
-| **9** | R6.1 | Store haggling | Medium |
-| **10** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| ~~7~~ | R4.1 | ~~Ego items~~ — ✅ 7 enchanted weapon types with slay/elemental/AC bonuses | Done |
+| **8** | **OPT-1** | **Code size optimization (reclaim ~188 bytes)** — see Code Size Audit below | **Low–Medium** |
+| **9** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
+| **10** | R6.1 | Store haggling | Medium |
+| **11** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
 R1.2 Throwing, R3.2 Group tactics, R3.3 Breeders, R4.2 Artifacts, R4.3 Rods, R4.4 Pseudo-ID, R6.2 Black Market, R6.3 Player Home
@@ -3830,3 +3841,132 @@ full monster recall, etc.).
 Detect C128 mode at startup (check $D030 or MMU register at $FF00).
 Load creature data into bank 1 via MMU configuration. Fetch via bank
 switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
+
+---
+
+## Code Size Audit (2026-02-15)
+
+**Context:** Program ends at ~$BFF3, CREATURE_BASE at $C020 — approximately **45 bytes free**. Any new feature requires reclaiming space first. This audit identified **~188 bytes of verified, low-risk savings** across 7 optimizations plus 3 bugs (BUG-20, BUG-21, BUG-22).
+
+### Bugs Found
+
+| # | File | Description | Bytes |
+|---|------|-------------|-------|
+| BUG-20 | monster_attack.s:52-54 | Dead strings `mat_acid_str` (" SPITS ACID ON YOU.", 21 bytes) and `mat_dead_str` ("YOU HAVE BEEN SLAIN.", 21 bytes) — defined but never referenced anywhere in codebase. `mat_acid_str` was intended for `mon_atk_effect_acid` (which is a stub RTS). `mat_dead_str` was superseded by `zp_death_source` + score.s death handling. | 42 free |
+| BUG-21 | monster_attack.s:507 | `mon_atk_effect_acid` is just `rts`. Monster acid attacks deal damage but print only the generic "THE X HITS YOU." — no acid-specific message. Poison, confuse, and paralyze all print distinct messages. | N/A |
+| BUG-22 | monster_attack.s:46 | `mat_the_str: .text "THE "` duplicates `cmb_the_str + 1` from combat.s:23. `ranged_fire.s:320` already demonstrates the `cmb_the_str + 1` pattern. 4 references in monster_attack.s + 1 in monster_magic.s need updating. | 5 free |
+
+### Additional Issues Noted
+
+| Issue | File | Description |
+|-------|------|-------------|
+| `rng_range_word` not implemented | rng.s:115 | Needed for gold amounts >255. Currently gold drops are 8-bit only (max 255), which is a gameplay fidelity gap vs umoria. |
+| `mon_atk_effect_fear` is a no-op | monster_attack.s:356-359 | Fear attacks deal damage but don't apply fear status. Marked "deferred to Phase 6+". |
+| `mon_atk_effect_corrode` is a no-op | monster_attack.s:360-362 | Corrode attacks deal damage but don't damage equipment. Marked "deferred". |
+
+### Optimization Plan (OPT-1)
+
+Seven optimizations totaling ~188 bytes. All preserve existing behavior and are independently testable.
+
+| # | What | Where | Bytes | Risk | Effort |
+|---|------|-------|-------|------|--------|
+| OPT-1.1 | **Delete dead strings** `mat_acid_str` + `mat_dead_str` | monster_attack.s:52-54 | **42** | None | Trivial |
+| OPT-1.2 | **Parameterize cast/pray table setup** — replace duplicate 58-byte initialization blocks with table-driven copy loop | player_magic.s:51-132 | **~55** | Low | Medium |
+| OPT-1.3 | **Deduplicate "CURE LIGHT WOUNDS"** — 3 identical copies across spell_data.s:80, spell_data.s:97, item.s:377. Define once, share via pointer tables. | spell_data.s, item.s | **36** | Low | Low |
+| OPT-1.4 | **Unify `mon_atk_build_hit/miss_msg`** into `mon_atk_build_effect_msg` — both are structurally identical, just with hardcoded suffix strings instead of zp_ptr2. Eliminate two 18-byte routines, replace with 8-byte inline setups at 2 call sites. | monster_attack.s:562-600 | **~20** | Low | Low |
+| OPT-1.5 | **Deduplicate "DETECT MONSTERS"** — 2 copies: spell_data.s:77, item.s:390. Define once, share. | spell_data.s, item.s | **16** | Low | Low |
+| OPT-1.6 | **Self-printing `mon_atk_build_effect_msg`** — replace null-terminate+rts (8 bytes) with `jmp cmb_term_and_print` (3 bytes). Removes 5 `jsr cmb_print_buf` at call sites (5×3=15 bytes). | monster_attack.s:602-621 + 5 call sites | **~14** | Low | Low |
+| OPT-1.7 | **Eliminate `mat_the_str`** — replace 4 references with `cmb_the_str + 1` (already used by ranged_fire.s). | monster_attack.s:46 + 4 refs, monster_magic.s:259 | **5** | None | Trivial |
+| | **TOTAL** | | **~188** | | |
+
+**Net effect:** Headroom increases from ~45 bytes to ~233 bytes — enough room for the next feature work.
+
+### OPT-1.2 Detail: Cast/Pray Table Parameterization
+
+Lines 51-81 (`player_cast_spell`) and 102-132 (`player_pray`) are near-identical 58-byte blocks that initialize 10 consecutive pointer bytes (`pm_mana_tbl_lo` through `pm_name_hi_hi`) for mage vs priest spell tables. Replace with:
+
+```asm
+// Table of source addresses (10 per spell type, mage then priest)
+pm_tables:                              // 20 bytes
+    .byte <mage_spell_mana, >mage_spell_mana
+    .byte <mage_spell_level, >mage_spell_level
+    .byte <mage_spell_fail, >mage_spell_fail
+    .byte <mage_spell_name_lo, >mage_spell_name_lo
+    .byte <mage_spell_name_hi, >mage_spell_name_hi
+    .byte <priest_spell_mana, >priest_spell_mana
+    .byte <priest_spell_level, >priest_spell_level
+    .byte <priest_spell_fail, >priest_spell_fail
+    .byte <priest_spell_name_lo, >priest_spell_name_lo
+    .byte <priest_spell_name_hi, >priest_spell_name_hi
+
+// Copy 10 bytes from pm_tables+X into pm_mana_tbl_lo..pm_name_hi_hi
+pm_setup:                               // 15 bytes
+    ldy #0
+!loop:
+    lda pm_tables,x
+    sta pm_mana_tbl_lo,y
+    inx
+    iny
+    cpy #10
+    bne !loop-
+    rts
+
+// Callers become:                      // 13 bytes each
+player_cast_spell:
+    ...
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    ldx #0                  // Offset 0 = mage tables
+    jsr pm_setup
+    jmp pm_do_cast
+
+player_pray:
+    ...
+    lda #SPELL_PRIEST
+    sta pm_spell_type
+    ldx #10                 // Offset 10 = priest tables
+    jsr pm_setup
+    jmp pm_do_cast
+```
+
+New total: 20 (table) + 15 (helper) + 13 + 13 (callers) = **61 bytes** vs current **116 bytes**. Savings: **~55 bytes**.
+
+### OPT-1.4 Detail: Unify Hit/Miss Message Builders
+
+`mon_atk_build_hit_msg` and `mon_atk_build_miss_msg` (monster_attack.s:562-600) are structurally identical to `mon_atk_build_effect_msg`, just with hardcoded suffix strings. Replace:
+
+```asm
+// Before (2 × 18-byte routines + 2 × 3-byte call sites = 42 bytes):
+    jsr mon_atk_build_hit_msg
+    jsr cmb_print_buf
+
+// After (2 × 11-byte inline setups = 22 bytes):
+    lda #<mat_hits_str
+    sta zp_ptr2
+    lda #>mat_hits_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg    // (self-printing per OPT-1.6)
+```
+
+Delete `mon_atk_build_hit_msg` and `mon_atk_build_miss_msg` entirely. **~20 bytes saved.**
+
+### Non-Issues Verified
+
+Items investigated that turned out to be correct:
+- **`cpx #41` in `combat_append_str`:** Buffer is 42 bytes (indices 0-41). After writing at index 40, x=41 triggers bcs exit. Null terminator at 41 via `cmb_term_and_print` is within bounds. **Correct.**
+- **Zero-page clobbering:** Known hazards in MEMORY.md are accurate. No new zp conflicts found.
+- **Stack balance:** All JSR/RTS and PHA/PLA pairs are balanced across all audited paths.
+- **Screen code vs PETSCII:** Properly separated — `.text` with inherited encoding for screen RAM, raw bytes for KERNAL I/O.
+- **`mon_atk_base_tohit` sparse table** (21 bytes, mostly zeros): Direct-index access pattern makes this already optimal; a compact search table would cost more than 21 bytes.
+
+### Lower-Priority Savings (Not in OPT-1 Scope)
+
+These were identified but deferred due to complexity or diminishing returns:
+
+| Category | Technique | Est. Savings | Why Deferred |
+|----------|-----------|-------------|--------------|
+| Shared " YOU." suffix | Build monster attack messages from fragments | 25-35 | Adds runtime complexity, small payoff |
+| Compute XP tables at init | Replace 80-byte `xp_level_lo/hi` with init-time computation | ~20 net | 80 bytes table - ~60 bytes init code = small net win |
+| Stat bonus table formulas | Replace 16-byte lookup tables with computed values | 30-50 | Risky — umoria fidelity requirement |
+| String pool / dictionary | Central string deduplication system | 50-100 | Major refactor, error-prone |
+| Creature name prefix extraction | Share "GIANT ", "SKELETON " prefixes | 40-60 | Only applies to tier data files (loaded from disk, not in main PRG) |
