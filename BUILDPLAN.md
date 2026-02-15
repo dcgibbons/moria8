@@ -13,10 +13,10 @@ Every design decision flows from these two constraints.
 | Region | Address | Size | Use |
 |---|---|---|---|
 | Zero page (BASIC area) | $02–$8F | ~140 bytes | Hot variables, pointers (see ZP notes below) |
-| Program code | $0801–$9FFF | ~38 KB | Code + resident data |
-| RAM under BASIC ROM | $A000–$BFFF | 8 KB | Banked data (creature tiers) |
+| Program code | $0801–$BFFF | ~46 KB | Code + resident data (BASIC ROM banked out at startup) |
+| *(of which $A000–$BFFF)* | | *(8 KB)* | *(RAM under BASIC ROM — usable because ROM is banked out)* |
 | Free RAM (no banking) | $C000–$CFFF | 4 KB | Dungeon map (3,840 bytes at $C000–$CEFF) + floor item table (256 bytes at $CF00–$CFFF) — always accessible |
-| RAM under KERNAL ROM | $E000–$FFFF | 8 KB | Banked data (item tiers 4,000 bytes, monster recall 1,200 bytes, spell tables ~1 KB, ~1.8 KB free) |
+| RAM under KERNAL ROM | $E000–$FFFF | 8 KB | Banked data (creature tier loading buffer — 8 KB workspace for loading tier PRGs from disk/REU) |
 | Screen RAM | $0400–$07E7 | 1 KB | Display |
 | Color RAM | $D800–$DBE7 | 1 KB | Display colors |
 | **Total usable** | | **~58 KB** | With banking (code + all banked regions) |
@@ -28,7 +28,7 @@ much more room. The design should target C64 as the constrained baseline.
 some locations are clobbered by KERNAL routines. In particular, $22–$25 are used
 by KERNAL LOAD/SAVE, $14–$15 by KERNAL OPEN, and several others by KERNAL I/O.
 The `zeropage.s` module must document which ZP locations are safe to use freely
-vs. which must be saved/restored around KERNAL calls (especially data_loader.s
+vs. which must be saved/restored around KERNAL calls (especially tier_manager.s
 and save.s). Divide ZP into "permanent" variables (never touched by KERNAL) and
 "volatile" variables (caller-save around KERNAL calls).
 
@@ -78,138 +78,125 @@ scan the corresponding runtime table for a position match:
 
 Original: 351 creatures x ~45 bytes = ~15.8 KB.
 
-**Tiered loading:** Group creatures into depth tiers:
-- Tier 0 (town): creatures 0–19 (~20 types)
-- Tier 1 (levels 1–5): creatures 20–69 (~50 types)
-- Tier 2 (levels 6–10): creatures 70–129 (~60 types)
-- Tier 3 (levels 11–20): creatures 130–209 (~80 types)
-- Tier 4 (levels 21–50): creatures 210–279 (~70 types)
+**Tiered loading (as implemented in R3.5):** 120 creatures across 5 tiers:
+- Tier 0 (town): 8 creatures — always resident in program code (indices 57-62)
+- Tier 1 (DL 1–8): 24 creatures — loaded from disk/REU
+- Tier 2 (DL 5–15): 32 creatures — loaded from disk/REU
+- Tier 3 (DL 11–25): 39 creatures — loaded from disk/REU
+- Tier 4 (DL 20–100): 57 creatures — loaded from disk/REU
 
-Only 2 adjacent tiers are in memory at once. Compressed to ~24 bytes per creature
-(2-byte tokenized name index into string dictionary, pack flags into 2 bytes,
-pack attacks into 8 bytes, remaining fields in 12 bytes). Do NOT truncate names
-to 8 characters — use the PETSCII token compression system (see Text and Names
-below) to preserve full creature names while storing only a 2-byte dictionary
-index per creature:
-- Largest pair: Tier 3 + Tier 4 = 150 types x 24 bytes = 3,600 bytes
+One dungeon tier active at a time. SoA layout: 22 arrays × up to 65 entries
+(57 dungeon + 8 town = MAX_CREATURES). ~20 bytes per creature + ~15 bytes
+for name string. Tier PRGs load to $E000 (RAM under KERNAL ROM), then
+`load_tier_to_buffer` copies SoA data to active creature buffers in program RAM.
+Name strings remain at $E000+ (read via `creature_get_name` with KERNAL banking).
 
-Stored in RAM under BASIC ROM ($A000–$BFFF). This region is dedicated to creature
-data only. Item data is stored separately in RAM under KERNAL ROM ($E000–$FFFF)
-to avoid overflowing the 8 KB BASIC ROM region (creature + item data combined
-would be 7,600 bytes — too tight for a single 8 KB region with no margin).
+REU path: all 4 tiers preloaded at startup → DMA fetch on transition (instant).
+Disk path: KERNAL LOAD tier PRG on each transition.
+Tier overlap ranges prevent thrashing: T1=[1,8], T2=[5,15], T3=[11,25], T4=[20,100].
 
 ### Item/Treasure Data
 
 Original: 420 items x ~35 bytes = ~14.7 KB.
 
-**Same tiered approach:** Items grouped by minimum dungeon level, loaded alongside
-creature tiers. Compressed to ~20 bytes per item (tokenized names, packed fields):
-- ~200 items in any 2-tier window x 20 bytes = 4,000 bytes
+**Simplified approach (as implemented):** 55 item types stored entirely in program
+code as SoA arrays (no tiered loading). Items include 16 equipment types, 10
+potions, 10 scrolls, 4 wands, 4 staves, 4 rings, and 7 ranged weapons/ammo.
+~12 bytes per item type in SoA arrays + name strings. Total ~1.5 KB.
 
-Item tier data is stored in RAM under KERNAL ROM ($E000–$FFFF), separate from
-creature tier data ($A000–$BFFF). Item lookups are less frequent than creature
-lookups (AI runs every turn; item lookups happen on player action), so the
-SEI/bank overhead for KERNAL RAM access is acceptable here.
+Item tiered loading was planned but not implemented — the reduced item count
+(55 vs 420) fits comfortably in program RAM without banking. Future item
+expansion (ego items, artifacts) may eventually require tiered loading.
 
 ### Text and Names
 
 Monster names, item names, class titles, spell names, store dialogue — the
 original has several KB of strings.
 
-**PETSCII token compression:** Build a dictionary of common fragments (e.g.,
-"potion of ", "scroll of ", " resistance", "sword", "dagger"). Names are stored
-as sequences of token indices + literal bytes. Expect 40-60% compression.
+**Inline strings (as implemented):** Names are stored as null-terminated strings
+in program code using `.encoding "screencode_upper"` and `.text` directives.
+No token compression was implemented — the reduced roster (120 creatures, 55
+items) keeps total string data manageable (~3 KB). Creature name strings for
+tier data are stored at $E000+ in the tier PRG files and accessed via
+`creature_get_name` with KERNAL banking (SEI/$35 for reads).
 
-**String dictionary location:** The compressed dictionary (`strings.bin`, estimated
-~2–3 KB) must be **always resident in the main code region** ($0801–$9FFF).
-Creature and item names are displayed during combat, LOS reveal, inventory, and
-store screens — too frequently to tolerate banking overhead. Creature/item records
-store a 2-byte index into this dictionary. The decompression routine expands
-tokens to screen codes on the fly during display.
+*Original plan called for PETSCII token compression with a shared dictionary,
+but the simpler inline approach proved sufficient for the reduced data set.*
 
 ### Monster Recall
 
 Original: 351 creatures x ~16 bytes = 5.6 KB.
 
-**On disk:** Only the current tier pair's recall data is in memory (~150 x 8
-bytes = 1,200 bytes, reduced fields). Recall is stored in the $E000 banked
-region alongside item data.
-
-**Recall lifecycle on tier change:** When the player crosses a tier boundary,
-the outgoing tier pair's accumulated recall must be written to disk before
-loading the incoming tier's recall. On tier change: (1) save current recall
-to a per-tier file on disk (e.g., `recall_t1.bin`), (2) load new tier's
-creature + item data, (3) load new tier's recall from disk (if file exists;
-otherwise initialize to zero). On game save, the current tier's recall is
-saved in the save file as before — the per-tier recall files on disk handle
-the other tiers. This preserves accumulated recall across the full game,
-matching original Moria behavior where recall is cumulative and permanent.
-The extra disk I/O for recall save/load adds ~4 seconds stock (~1 second
-with fastloader) per tier change — acceptable given tier changes already
-require disk access.
+**Not implemented.** Monster recall (accumulated knowledge about creature
+abilities) was planned but deferred. The per-tier recall files on disk
+(`recall_t0.bin` through `recall_t4.bin`) described in the original plan
+were never created. This is a missing feature, not a bug — the game plays
+fine without it, but players don't accumulate creature knowledge across
+encounters.
 
 ---
 
 ## Architecture Overview
 
 ```
-main.s                    Entry point, BASIC stub, initialization
+main.s                    Entry point, BASIC stub, initialization, command dispatch
 ├── config.s              System detection (C64/C128), column mode selection
 ├── memory.s              Bank switching routines, memory map management
 ├── zeropage.s            Zero page variable declarations (with KERNAL-safe zones)
-├── turn.s                Game turn sequencer (player → monsters → effects → regen)
+├── turn.s                Turn post-action (effects → hunger → regen → AI → turn counter)
 │
-├── screen.s              Screen output routines (40-col and 80-col)
+├── screen.s              Screen output routines (40-col)
 ├── input.s               Keyboard input, command parsing
-├── ui_status.s           Status bar rendering
-├── ui_messages.s         Message line management (top of screen)
-├── ui_inventory.s        Inventory display screens
-├── ui_character.s        Character info screens
+├── ui_status.s           Status bar rendering (3-line umoria-style)
+├── ui_messages.s         Message line management (top of screen, "—more—" prompt)
+├── ui_inventory.s        Inventory and equipment display screens
+├── ui_character.s        Character info and spell list screens
+├── ui_store.s            Store buy/sell UI screens
+├── ui_help.s             Help screen overlay (22 lines of key bindings)
 ├── color.s               Color palette definitions and color RAM management
 │
 ├── rng.s                 Random number generator (32-bit LFSR)
-├── math.s                16-bit multiply/divide, dice rolling
-├── tables.s              Lookup tables (stats, XP thresholds, etc.)
-├── sound.s               Minimal SID sound effects (hit, miss, bump, death)
+├── math.s                16-bit multiply/divide, dice rolling, 24-bit math
+├── tables.s              Lookup tables (stats, XP thresholds, price adjustments, etc.)
+├── sound.s               Minimal SID sound effects (hit, miss, bump, spell, death)
 │
-├── player.s              Player struct, stat calculations
-├── player_create.s       Character creation (race, class, stats)
-├── player_move.s         Movement, running, searching
-├── player_combat.s       Melee attacks, blow count calculation
-├── player_magic.s        Spell/prayer casting, mana management
-├── player_items.s        Item use (eat, quaff, read, zap)
-├── player_effects.s      Status effect timers, regeneration
+├── player.s              Player struct, stat calculations, increment/decrement_stat
+├── player_create.s       Character creation (race, stats, class, name)
+├── player_move.s         Movement, running, searching, bump-to-attack
+├── combat.s              Player melee combat (to-hit, damage, blows, XP, level-up)
+├── player_magic.s        Spell/prayer casting, mana management, spell learning
+├── player_items.s        Item use (eat, quaff, read, aim, use, equip, drop)
 │
-├── dungeon_gen.s         Dungeon generation (rooms, corridors, doors)
-├── dungeon_render.s      Viewport scrolling, tile-to-screen-code mapping
-├── dungeon_los.s         Line of sight, lighting
-├── dungeon_features.s    Traps, stairs, doors
+├── dungeon_gen.s         Dungeon generation (rooms, corridors, doors, streamers, stairs)
+├── dungeon_render.s      Viewport scrolling, tile-to-screen-code mapping, dirty render
+├── dungeon_los.s         Line of sight, lighting, torch radius, room reveal
+├── dungeon_features.s    Traps, stairs, doors, secret doors, searching
 │
-├── monster.s             Monster data structures, spawning
-├── monster_ai.s          Monster movement, pathfinding
-├── monster_attack.s      Monster attack execution, special effects
-├── monster_magic.s       Monster spellcasting
+├── monster.s             Monster data structures (SoA), spawning, creature tier buffers
+├── monster_ai.s          Monster movement, wake/sleep, speed model, confused wandering
+├── monster_attack.s      Monster melee attacks (8 types, poison, confuse, paralyze)
+├── monster_magic.s       Monster spellcasting (bolts, breath, summon, blind, heal)
 │
-├── inventory.s           Item data structures, stacking, identification
-├── store.s               Store system, buying/selling, haggling
+├── item.s                Item SoA tables (55 types), floor items, identification, stacking
+├── store.s               Store system (6 stores), pricing, restocking, category masks
+├── spell_data.s          Spell/prayer data tables (32 spells, names, costs, levels)
+├── spell_effects.s       Shared effect subroutines (bolt, heal, teleport, detect, etc.)
+├── ranged_fire.s         Ranged combat (bow/crossbow/sling fire command, ammo matching)
 │
-├── save.s                Save/load game state to disk
-├── data_loader.s         Tiered data loading from disk
-├── fastload.s            Fast IEC serial loader (required for tier transitions)
+├── save.s                Save/load game state to disk (RLE map compression, checksum)
+├── score.s               Death screen, high score table, 24-bit score calculation
+├── reu.s                 REU detection, DMA stash/fetch for tier data
+├── tier_manager.s        Creature tier loading (disk KERNAL LOAD or REU DMA)
 │
 └── data/
-    ├── creatures_t0.bin  Creature data tier 0 (town)
-    ├── creatures_t1.bin  Creature data tier 1
-    ├── creatures_t2.bin  ...through t4
-    ├── items_t0.bin      Item data tier 0
-    ├── items_t1.bin      ...through t4
-    ├── strings.bin       Compressed string dictionary (resident in main code area)
-    ├── spells.bin        Spell/prayer tables (loaded to $E000 region)
-    └── (runtime)
-        └── recall_t0.bin ...through t4 — per-tier recall saves (created at runtime)
+    ├── cr_tier1.s        Creature tier 1 data (DL 1-8, 24 creatures) → CR T1 on disk
+    ├── cr_tier2.s        Creature tier 2 data (DL 5-15, 32 creatures) → CR T2 on disk
+    ├── cr_tier3.s        Creature tier 3 data (DL 11-25, 39 creatures) → CR T3 on disk
+    ├── cr_tier4.s        Creature tier 4 data (DL 20-100, 57 creatures) → CR T4 on disk
+    └── parse_creatures.py  Python script to generate tier .s files from umoria data
 ```
 
-36 source files, plus binary data files generated at build time.
+~42 source files. Creature tier data assembled separately and loaded at runtime.
 
 ---
 
@@ -224,7 +211,7 @@ can be tested.
 |---|---|---|---|
 | 1.1 | `main.s` | BASIC stub ($0801), SYS entry, save BASIC ZP state ($02–$8F) to buffer, disable BASIC ROM, call init, main loop. IRQ: keep the default KERNAL IRQ handler active (required for keyboard scanning used by GETIN in `input.s`). If a custom raster IRQ is needed later (e.g., for split-screen effects), chain it to the KERNAL handler via the saved vector. Clean exit: restore ZP state, re-enable BASIC ROM, RTS to BASIC warm start. Select unshifted character set mode (uppercase + graphics) at startup. | Boots in VICE, exits cleanly, BASIC works after exit, keyboard responsive |
 | 1.2 | `config.s` | Detect C64 vs C128, detect 40/80 column mode, store machine type in ZP | Returns correct machine ID |
-| 1.3 | `zeropage.s` | Define ZP variable locations for all modules using BASIC's freed space ($02–$8F). Document two zones: "safe" (never touched by KERNAL) and "volatile" (clobbered by KERNAL LOAD/SAVE/OPEN — $14–$15, $22–$25, etc.). Volatile ZP must be caller-saved around KERNAL calls in data_loader.s and save.s. | Symbols resolve, no overlap, KERNAL-safe zones documented |
+| 1.3 | `zeropage.s` | Define ZP variable locations for all modules using BASIC's freed space ($02–$8F). Document two zones: "safe" (never touched by KERNAL) and "volatile" (clobbered by KERNAL LOAD/SAVE/OPEN — $14–$15, $22–$25, etc.). Volatile ZP must be caller-saved around KERNAL calls in tier_manager.s and save.s. | Symbols resolve, no overlap, KERNAL-safe zones documented |
 | 1.4 | `memory.s` | Bank switching macros: bank out BASIC ROM, bank out KERNAL ROM (with SEI/CLI protection), copy routines for banked RAM | Read/write behind ROM works |
 | 1.5 | `screen.s` | Clear screen, print string at (row,col), print char, set colors, scroll message area. Uses direct screen memory writes (not KERNAL CHROUT) for performance. All output goes through a vector table (`put_char`, `put_string`, `clear_screen`, `set_color`) so the VDC 80-column backend can be swapped in for Phase 10 without changing callers. Overhead is ~6 cycles per indirect JMP — negligible. | Text appears correctly |
 | 1.6 | `input.s` | Wait for keypress (KERNAL GETIN), key-to-command mapping table, handle direction keys. Numeric prefix for repeats deferred to Phase 6+. | Correct key codes returned |
@@ -355,9 +342,9 @@ lighting. Player can descend and ascend.
 |---|---|---|---|
 | 5.1 | `monster.s` | Active monster table (up to 32 simultaneous — reduced from 125 for C64 RAM). Spawn routine: pick creature type appropriate to depth, place in valid empty tile. Monster display characters. | Monsters spawn at correct depth |
 | 5.2 | `monster_ai.s` | Monster movement: awake/sleep check (noise radius), greedy step toward player, confused wandering, wall-phasing for ghosts. Variable speed: each creature type has a speed value (1 = normal, 2 = fast/moves twice per player turn, 0 = slow/moves every other turn). The turn sequencer (`turn.s`) checks speed counters and calls AI accordingly. Speed is a core tactical mechanic — fast hounds are dangerous because they outrun you, slow molds are manageable because you can kite them. | Monsters approach player, fast monsters move twice per turn |
-| 5.3 | `player_combat.s` | Melee attack: blow count from table (dex x weight ratio), to-hit roll (d20 + bonuses vs AC), damage roll (weapon dice + str bonus). Kill awards XP, check level-up. | Damage/kill/XP correct |
+| 5.3 | `combat.s` | Melee attack: blow count from table (dex x weight ratio), to-hit roll (d20 + bonuses vs AC), damage roll (weapon dice + str bonus). Kill awards XP, check level-up. | Damage/kill/XP correct |
 | 5.4 | `monster_attack.s` | Monster melee: up to 4 attacks per creature, damage types (normal, poison, stat drain, gold theft, item theft). Attack messages. Player death check. | Attacks deal correct damage |
-| 5.5 | `player_effects.s` | Status effect application and timers: poison tick, blindness (hide map), confusion (random movement), paralysis (skip turns), regeneration (HP/mana per turn based on CON). | Timers decrement, effects apply |
+| 5.5 | `turn.s` (effects) | Status effect application and timers: poison tick, blindness (hide map), confusion (random movement), paralysis (skip turns), regeneration (HP/mana per turn based on CON). | Timers decrement, effects apply |
 | 5.6 | `dungeon_render.s` (monsters) | Show monster characters on map. Monster visibility (only in LOS and lit). Monsters blink or highlight on attack. | Monsters visible when expected |
 
 **Deliverable:** Monsters wander the dungeon, attack the player, the player can
@@ -371,7 +358,7 @@ fight back. Status effects work. Combat is functional.
 
 | # | File | What it does | Tests |
 |---|---|---|---|
-| 6.1 | `inventory.s` | Inventory data structure: 22 carried slots + 8 equipment slots (reduced from umoria). Item struct (~16 bytes: type, subtype, flags, plus/damage/AC, quantity, id-status). Add/remove/stack operations. | Add/remove/stack correct |
+| 6.1 | `item.s` | Item SoA tables (55 types) + inventory data structure: 22 carried slots + 8 equipment slots. Floor item table (32 slots at $CF00). Add/remove/stack operations. | Add/remove/stack correct |
 | 6.2 | `ui_inventory.s` | Display inventory list (letter-indexed a–v), equipment list, item detail view. 40-column formatting with scrolling for overflow. | Display matches contents |
 | 6.3 | `player_items.s` | Equip/remove/drop/pick-up commands. Wear/wield calculates AC and to-hit changes. Cursed items cannot be removed. Eat food (hunger system: full → hungry → weak → fainting → dead). | Equip changes stats |
 | 6.4 | Item generation | Floor item spawning during dungeon gen. Gold pile generation. Treasure rooms. Chest contents. Item enchantment rolling (+1 to +N based on depth). | Items spawn at correct depth |
@@ -398,7 +385,7 @@ Hunger system functional.
 
 ---
 
-### Phase 8 — Stores ✅ IMPLEMENTED
+### Phase 8 — Stores ✅ COMPLETE
 
 **Goal:** Town stores buy and sell items.
 
@@ -512,7 +499,7 @@ placement.
 
 ### 2. Reduced Monster/Item Counts
 
-Active monsters capped at 32 (vs 125). Item templates reduced to ~250 (vs 420).
+Active monsters capped at 32 (vs 125). Item templates reduced to 55 (vs 420).
 Inventory slots reduced to 22+8 (vs 34+11). These keep memory under control while
 preserving the core Moria experience.
 
@@ -524,23 +511,16 @@ crossings (every 5–10 dungeon levels), not on every level change. Most level
 transitions require zero disk I/O.
 
 **Disk speed reality:** Standard 1541 KERNAL LOAD runs at ~300 bytes/sec. A
-full tier change (creature tier ~3,600 bytes + item tier ~4,000 bytes + recall
-save ~1,200 bytes + recall load ~1,200 bytes) totals ~10 KB, which would take
-~33 seconds stock. This is unacceptable. **A fastloader is required
-infrastructure, not optional.** With a fastloader (~3–5 KB/sec), a full tier
-change takes ~2–3 seconds — acceptable given it only happens at tier boundaries.
-Tier change sequence: (1) save current recall to `recall_tN.bin`, (2) load
-new creature tier, (3) load new item tier, (4) load new recall from
-`recall_tN.bin` (if exists; else zero-init). See Design Decision #11.
+creature tier file (~2 KB) takes ~7 seconds stock. With JiffyDOS or equivalent
+fastloader (~3–5 KB/sec), tier changes take ~1 second — acceptable given they
+only happen at tier boundaries. The REU path eliminates disk I/O entirely after
+the initial preload.
 
-The fastloader (`fastload.s`) should be implemented in Phase 4 alongside
-`data_loader.s`. A host-side-only optimization of the standard Commodore
-serial protocol is sufficient for ~2x speedup (tighter CIA bit timing,
-optimized handshake loops). For ~3–5x, a minimal custom protocol with a
-small drive-side routine uploaded to the 1541's RAM on startup is needed.
-Start with host-side-only; upgrade to drive-side if 2x is not fast enough.
-Note: custom drive code may not work with all drive types (SD2IEC, Pi1541);
-test compatibility or provide a KERNAL LOAD fallback.
+**As implemented:** Tier loading uses `tier_manager.s` with standard KERNAL
+LOAD (no custom fastloader). The REU path (`reu.s`) preloads all 4 tiers at
+startup, making subsequent transitions near-instant via DMA. Without REU,
+JiffyDOS is recommended for acceptable load times. A custom fastloader was
+planned but deferred — JiffyDOS compatibility covers most real-hardware users.
 
 ### 4. Simplified Haggling
 
@@ -615,46 +595,36 @@ Minimal SID sound effects provide gameplay feedback without music:
 - Simple waveform + ADSR envelope per effect, stateless (fire and forget)
 - No background music — preserves the quiet tension of dungeon crawling
 
-### 11. Cumulative Monster Recall
+### 11. Monster Recall (Not Implemented)
 
-Monster recall accumulates permanently across the entire game, matching
-original Moria behavior. Because only the current tier pair's recall fits in
-memory (1,200 bytes), recall for other tiers is persisted to individual disk
-files (`recall_t0.bin` through `recall_t4.bin`) on tier change. This adds a
-small amount of disk I/O to tier transitions (~1,200 bytes written + ~1,200
-bytes read = ~1 second with fastloader) but preserves a key game feature:
-knowledge gained about monsters is never lost. On a new game, these files do
-not exist and recall initializes to zero. On game save, the current tier's
-recall is included in the save file; on game load, it is restored to memory.
-The per-tier recall files are separate from the save file and persist
-independently (they are NOT deleted on death — this is intentional, as a
-quality-of-life concession: recall knowledge carries across characters, same
-as original Moria).
+Monster recall was planned to accumulate permanently across the entire game,
+matching original Moria behavior. Per-tier recall files on disk would persist
+knowledge across tier transitions. **This feature was deferred** — the
+infrastructure for per-tier disk files and recall data structures was not
+built. This is a missing feature tracked for future implementation.
 
 ---
 
 ## Build System
 
-**Kick Assembler** is invoked from the command line:
+**Kick Assembler** via Makefile:
 
 ```bash
-# Assemble
-java -jar KickAss.jar main.s -o moria.prg
-
-# Run tests (assemble test file, run in VICE headless with monitor script)
-java -jar KickAss.jar tests/test_rng.s -o tests/test_rng.prg
-x64sc -console -nativemonitor -autostartprgmode 1 \
-  -autostart tests/test_rng.prg \
-  -moncommands tests/test_rng.mon \
-  -limitcycles 10000000 2>&1 | grep "^>C:"
-
-# Run in VICE
-x64sc moria.prg
+make            # Build main.s → out/moria.prg (+ tier PRGs)
+make run        # Build and launch in VICE (x64sc)
+make test       # Assemble + run all 19 test suites in VICE headless
+make disk       # Create .d64 disk image with all files
+make clean      # Remove build artifacts in out/
 ```
 
+Override tool paths: `make KICKASS=/path/to/KickAss.jar VICE=/path/to/x64sc`
+
 The `main.s` file uses `#import` directives to include all module files.
-Data files (`.bin`) are included with `.import binary` directives and can be
-generated by helper scripts or assembled separately.
+Creature tier data files are assembled separately as standalone PRGs
+(`cr_tier1.s` through `cr_tier4.s`) and loaded at runtime.
+
+Testing uses `run_tests.sh` which assembles each test, runs in VICE headless
+with `-limitcycles`, and checks screen RAM at $0400+ for pass/fail bytes.
 
 ---
 
@@ -662,40 +632,48 @@ generated by helper scripts or assembled separately.
 
 Testing uses two complementary approaches:
 
-**1. Assembly-time `.assert` directives** — Kick Assembler's built-in assertions
-validate constants, table sizes, macros, and compile-time expressions during
-assembly. These run as part of the normal build with zero overhead.
+**1. Assembly-time `.assert` directives** (62 asserts) — Kick Assembler's built-in
+assertions validate constants, table sizes, memory layout, and compile-time
+expressions during assembly. Run as part of every build with zero overhead.
 
 ```asm
 .assert "tile type count", TILE_TYPE_COUNT, 16
 .assert "map size", MAP_COLS * MAP_ROWS, 3840
+.assert "program fits", program_end < CREATURE_BASE, true
 ```
 
-**2. Runtime tests via VICE headless** — Test programs are assembled to `.prg`,
-run in VICE with `-console -nativemonitor`, and results are verified by dumping
-memory at a known address after a BRK breakpoint triggers. Each test file has a
-corresponding `.mon` monitor script that sets breakpoints and dumps results.
+**2. Runtime tests via VICE headless** (19 suites, 241+ tests) — Test programs
+are assembled to `.prg`, run in VICE with `-limitcycles`, and `run_tests.sh`
+verifies results by reading screen RAM at $0400+ for pass/fail bytes ($01=pass,
+$00=fail) after BRK triggers.
 
 ```
 tests/
-├── test_rng.s          RNG distribution, range bounds
-├── test_rng.mon        VICE monitor script for test_rng
-├── test_math.s         Multiply, divide, dice roll edge cases
-├── test_math.mon
-├── test_memory.s       Bank switching read/write verification
-├── test_player.s       Stat get/set, bonus lookups, level-up
-├── test_dungeon.s      Room placement, connectivity, door placement
-├── test_combat.s       Hit/miss, damage ranges, XP awards
-├── test_inventory.s    Add/remove/stack, capacity limits
-├── test_los.s          Visibility calculations
-└── ...
+├── test_rng.s              RNG distribution, range bounds (6 tests)
+├── test_math.s             Multiply, divide, dice roll edge cases (16 tests)
+├── test_memory.s           Bank switching read/write verification
+├── test_player.s           Stat get/set, bonus lookups, level-up
+├── test_dungeon.s          Room placement, connectivity, door placement (23 tests)
+├── test_combat.s           Hit/miss, damage ranges, XP awards
+├── test_monster.s          Monster spawning, creature types
+├── test_monster_ai.s       AI movement, wake/sleep, speed
+├── test_monster_attack.s   Monster melee, effect application
+├── test_monster_magic.s    Monster spellcasting, bolt/breath
+├── test_effects.s          Status effects, regen, Word of Recall (21 tests)
+├── test_item.s             Item lifecycle, identification, enchant (40 tests)
+├── test_wands_staves.s     Wand/staff charge tracking
+├── test_store.s            Store buy/sell, pricing (17 tests)
+├── test_save.s             Save/load RLE compression, checksum (10 tests)
+├── test_score.s            Score calculation, high score table (10 tests)
+├── test_tier.s             Creature tier loading, REU/disk paths (10 tests)
+├── test_ranged.s           Ranged combat, ammo matching (8 tests)
+└── test_los.s              Visibility calculations
 ```
 
-Runtime test convention: tests write a result byte to `$02` ($01 = all pass,
-$00 = fail) and individual pass/fail flags to `$0400`+ (screen RAM), then
-execute BRK. The `.mon` script sets a breakpoint at the BRK address, dumps
-`$02` and the result area, and quits. A shell script parses the output for
-pass/fail.
+**Bootstrap trampoline requirement:** Tests whose assembled code crosses $A000
+must use a bootstrap trampoline (small stub at $080E that banks out BASIC ROM
+before jumping to test_start). See `test_item.s` for the reference pattern.
+`run_tests.sh` extracts the breakpoint address from the "Test Code" segment.
 
 ---
 
@@ -705,13 +683,13 @@ pass/fail.
 |---|---|---|
 | Dungeon generation too slow on 6502 | Player waits >5s on level change | Pre-compute room positions in table, minimize random calls, generate during stairs transition animation |
 | Memory overrun | Crashes, corruption | Track allocation in spreadsheet, test with VICE memory monitor, enforce byte-level budgets for banked regions |
-| Disk loading too slow on 1541 | Frustrating delays (33 sec stock for full tier change) | Fastloader is **required** (see Design Decision #3). With fastloader (~3–5 KB/sec), tier changes take 2–3 sec. Minimize tier transitions via tier pair caching. Provide KERNAL LOAD fallback for drive compatibility (slower but functional). |
+| Disk loading too slow on 1541 | Frustrating delays (33 sec stock for full tier change) | JiffyDOS or equivalent fastloader is **recommended** (see Design Decision #3). With JiffyDOS (~3–5 KB/sec), tier changes take 2–3 sec. REU path eliminates disk I/O entirely after startup. Minimize tier transitions via overlapping tier ranges. Standard KERNAL LOAD used as fallback for drives without JiffyDOS (slower but functional). |
 | Game too hard without full spell set | Poor balance | Playtesting pass in Phase 9, adjust creature stats |
 | PETSCII map unreadable | Poor UX | Iterate on tile characters, test on real hardware or accurate emulator, use color coding to differentiate elements |
 | Runtime test flakiness | VICE cycle count too low/high for reliable BRK trigger | Tune `-limitcycles` per test, add fallback timeout. Use `.assert` for anything testable at assembly time. |
 | Stack overflow from deep call nesting | Crash, corruption | 6502 stack is 256 bytes ($0100–$01FF). Deep chains (main→input→move→combat→effects→message→scroll) consume 3-6 bytes per level. Use flat state machine for monster AI loop (32 monsters per turn). Profile stack high-water mark in VICE. Target max 20 nesting levels. |
-| ZP clobbered by KERNAL calls | Corrupted game state | Document KERNAL-volatile ZP locations in zeropage.s. Caller-save volatile ZP before KERNAL LOAD/SAVE/OPEN calls in data_loader.s and save.s. |
-| Save file write speed on 1541 | 10+ second save delay at stock speed | Expect 3–5 KB save file. Stock 1541 writes at ~300 bytes/sec (10–17 sec). With fastloader write support, 2–4 sec. RLE compress map data. Warn player before save ("SAVING..."). Acceptable delay for infrequent operation. |
+| ZP clobbered by KERNAL calls | Corrupted game state | Document KERNAL-volatile ZP locations in zeropage.s. Caller-save volatile ZP before KERNAL LOAD/SAVE/OPEN calls in tier_manager.s and save.s. |
+| Save file write speed on 1541 | 10+ second save delay at stock speed | Expect 3–5 KB save file. Stock 1541 writes at ~300 bytes/sec (10–17 sec). With JiffyDOS write support, 2–4 sec. RLE compress map data. Warn player before save ("SAVING..."). Acceptable delay for infrequent operation. |
 
 ---
 
@@ -1071,7 +1049,7 @@ are needed:
 | 2 | CRITICAL | Rewrite connectivity algorithm: shuffle rooms, connect as circular chain | **Fixed** — Fisher-Yates shuffle + circular chain in `connect_rooms` |
 | 3 | HIGH | Add flood-fill connectivity verification after generation; re-generate if unreachable | **Fixed** — BFS `verify_connectivity` with max 10 retries |
 | 4 | HIGH | Create `test_dungeon.s` with room placement, corridor, and connectivity tests | **Fixed** — 23 runtime tests covering rooms, corridors, connectivity, doors, visibility, dark rooms |
-| 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) | **Fixed** — 50/50 open/closed at junctions; `place_secrets` deferred to post-search-UX |
+| 5 | MEDIUM | Add door type variety (open/closed/secret per umoria probabilities) | **Fixed** — 50/50 open/closed at junctions; `place_secrets` enabled in Phase 4.6 (1-3 secret doors per level) |
 | 6 | MEDIUM | Increase streamer count to match umoria (3 magma + 2 quartz) | **Fixed** — 5 streamers (3 magma + 2 quartz) |
 | 7 | MEDIUM | Add wall-adjacency check for stairs placement | **Fixed** — `random_wall_adj_floor` with degrading threshold (>=3, >=2, >=1, any) |
 | 8 | LOW | Consider increasing room count range (e.g., 6-12) for better dungeon density | Deferred |
@@ -1082,7 +1060,7 @@ are needed:
 | # | Issue | Resolution |
 |---|-------|------------|
 | DG-A | Corridors adjacent to rooms without doors | **Fixed** — `add_corridor_doors` iterates per-room-wall (max 1 door per wall side) |
-| DG-B | Secret doors at corridor junctions block passage | **Fixed** — `random_door_type` produces only open/closed; `place_secrets` deferred |
+| DG-B | Secret doors at corridor junctions block passage | **Fixed** — `random_door_type` produces only open/closed for door placement; `place_secrets` converts 1-3 closed doors to TILE_SECRET per level (Phase 4.6) |
 | DG-C | Room overlap detection off-by-one | **Fixed** — `check_room_overlap` uses ROOM_GAP correctly |
 
 ---
@@ -1369,11 +1347,11 @@ but C64 only supports 2 slots (claw 1d1, claw 1d1). Third attack lost. Low impac
    hits do flat damage. Critical chance formula: `(weapon_weight + 5*plus_to_hit +
    class_level_adj[class][BTH]*level) / 5000`. Tiers: 2× (+5), 3× (+10), 4× (+15), 5× (+20).
 
-2. ~~**No HP/MP regeneration.**~~ **HP REGEN IMPLEMENTED** — `turn_tick_regen` (turn.s:210-281)
+2. ~~**No HP/MP regeneration.**~~ **HP + MP REGEN IMPLEMENTED** — `turn_tick_regen` (turn.s)
    implements CON-based regen counter (8-50 turns per 1 HP depending on CON). Poison suppresses
    regen. `zp_eff_regen` doubles tick rate. Simplified vs umoria's 16-bit fixed-point fractional
    accumulation — C64 uses integer counter per CON. Starvation damage (1 HP/turn at food=0)
-   also implemented. MP regen not yet needed (spells not implemented).
+   also implemented. Mana regen implemented in Step 7.9 (turn.s: INT-based, non-warriors only).
 
 3. ~~**Missing effect-specific messages.**~~ **VERIFIED CORRECT** — Effect handlers DO print
    messages: `mon_atk_effect_poison` calls `mon_atk_build_effect_msg` (monster_attack.s:408-417),
@@ -1383,8 +1361,10 @@ but C64 only supports 2 slots (claw 1d1, claw 1d1). Third attack lost. Low impac
    (blind), "YOU FEEL LESS CONFUSED." (confuse), "YOU CAN MOVE AGAIN." (paralyze).
 
 4. **Monster confusion/stun timers never decremented.** `MX_CONFUSE` and `MX_STUN` fields
-   exist in the monster entry struct but no code decrements them per turn or clears MF_CONFUSED
-   when the timer expires. (Currently dead code — no way to confuse a monster yet.)
+   exist in the monster entry struct. Multiple sources SET `MX_CONFUSE` (combat.s confuse-on-melee,
+   spell 7 Confusion, wand of confusion, Monster Confusion scroll), and `MF_CONFUSED` is checked
+   in monster_ai.s (line 126), but no code decrements `MX_CONFUSE` per turn or clears `MF_CONFUSED`
+   when the timer expires. Once confused, monsters stay confused permanently.
 
 #### MC5: Design simplifications — LOW (speed issues mostly resolved)
 
@@ -2023,16 +2003,16 @@ or individual spell effects. The following runtime tests should be added:
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
 | RP10-1 | **HIGH** | Monster HP=0 treated as alive in spell damage (inconsistent with combat.s) | Easy — add zero check after `bpl` in 4 locations, or extract helper | Open |
-| RP10-2 | **HIGH** | `eff_destroy_traps_doors` doesn't remove traps from trap table; traps still trigger | Medium — add trap table scan after direction loop | Open |
-| RP10-3 | **HIGH** | `find_random_floor` doesn't check FLAG_OCCUPIED; teleport can land on monsters | Easy — add FLAG_OCCUPIED check in find_random_floor | Open |
+| RP10-2 | **HIGH** | `eff_destroy_traps_doors` doesn't remove traps from trap table; traps still trigger | Medium — add trap table scan after direction loop | **Fixed** — trap table entries scanned and removed via swap-with-last logic (spell_effects.s:854-906) |
+| RP10-3 | **HIGH** | `find_random_floor` doesn't check FLAG_OCCUPIED; teleport can land on monsters | Easy — add FLAG_OCCUPIED check in find_random_floor | **Fixed** — FLAG_OCCUPIED check added (dungeon_features.s:197-198) |
 | RP10-4 | **MEDIUM** | BUILDPLAN test expectation wrong: spell_stat_bonus[9]=1, not 2; expected mana=8, not 9 | Trivial — fix test expectation text | Open |
-| RP10-5 | **MEDIUM** | `eff_phase_door` duplicates 28 bytes of teleport code; should call `eff_teleport_self` | Trivial — replace with JSR/JMP | Open |
-| RP10-6 | **MEDIUM** | `eff_heal` API takes pre-rolled A (8-bit) not dice params as BUILDPLAN describes | Documentation — update BUILDPLAN to match implementation | Open |
+| RP10-5 | **MEDIUM** | `eff_phase_door` duplicates 28 bytes of teleport code; should call `eff_teleport_self` | Trivial — replace with JSR/JMP | **Fixed** — now calls find_random_floor (spell_effects.s:342) |
+| RP10-6 | **MEDIUM** | `eff_heal` API takes pre-rolled A (8-bit) not dice params as BUILDPLAN describes | Documentation — update BUILDPLAN to match implementation | **Fixed** — BUILDPLAN step 7.1 updated to match actual 8-bit API |
 | RP10-7 | LOW | `eff_detect_monsters` permanently marks tiles FLAG_VISITED (minor map info leak) | Medium — add timer-based detect effect | Open |
 | RP10-8 | LOW | CMP/BEQ dispatch chains are O(n); jump table would be O(1) and smaller | Medium — rewrite as jump table | Open |
 | RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | Open |
 | RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | Open |
-| RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | Open |
+| RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | **Fixed** — redundant clear removed |
 | RP10-12 | LOW | `eff_aggravate` not implemented despite being listed in Step 7.0 | Easy — ~20 bytes | Resolved (see RP11-6) |
 
 ---
@@ -3283,7 +3263,7 @@ learn it at level 17 and should be in deeper tiers by then.
 
 ---
 
-#### Step 7.6 — Expanded Potions and Scrolls ✅ IMPLEMENTED
+#### Step 7.6 — Expanded Potions and Scrolls ✅ COMPLETE
 
 **Goal:** Add 7 new potions and 7 new scrolls. Expand item type tables and
 identification system. ITEM_TYPE_COUNT goes from 25 → 39.
@@ -3398,7 +3378,7 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.7 — Wands and Staves ✅ IMPLEMENTED
+#### Step 7.7 — Wands and Staves ✅ COMPLETE
 
 **Goal:** Implement wand aiming and staff usage with charge tracking.
 
@@ -3430,7 +3410,7 @@ identification system. ITEM_TYPE_COUNT goes from 25 → 39.
 
 ---
 
-#### Step 7.8 — Monster Magic (`monster_magic.s`) ✅ IMPLEMENTED
+#### Step 7.8 — Monster Magic (`monster_magic.s`) ✅ COMPLETE
 
 **Goal:** Monsters with spellcasting ability can use ranged spells and breath
 weapons instead of (or in addition to) melee attacks.
@@ -3473,7 +3453,7 @@ handlers, AI hook) was already fully implemented. This step activated it by:
 
 ---
 
-#### Step 7.9 — Mana Regeneration + Word of Recall ✅ IMPLEMENTED
+#### Step 7.9 — Mana Regeneration + Word of Recall ✅ COMPLETE
 
 **Goal:** Mana regenerates over time. Word of Recall timer, when expired,
 teleports the player between town and dungeon.
@@ -3516,7 +3496,7 @@ teleports the player between town and dungeon.
 
 ---
 
-#### Step 7.10 — Integration, Polish, and Full Test Pass ✅ IMPLEMENTED
+#### Step 7.10 — Integration, Polish, and Full Test Pass ✅ COMPLETE
 
 **Goal:** Wire everything together, verify all commands work end-to-end,
 fix edge cases.
@@ -3824,12 +3804,12 @@ whether they'll get the full creature roster or the tiered subset.
 - `tier_load_disk`: KERNAL LOAD with PETSCII filenames "CR T1"-"CR T4"
 - Tier transition hysteresis: T1=[1,8], T2=[5,15], T3=[11,25], T4=[20,100] — overlaps prevent thrashing
 - Town creatures at indices 57-62 always resident (never loaded from disk)
-- BFS queue at CREATURE_BASE ($BC00), 512 entries × 2 bytes = 1024 bytes, correctly bounded
-- 17 test suites; 13 import reu.s + tier_manager.s; test_tier has 500M cycle limit
+- BFS queue now at screen RAM $0400-$07FF (512 entries × 2 bytes = 1024 bytes), moved from CREATURE_BASE to free up program space. SEI/CLI wraps prevent KERNAL IRQ cursor blink from corrupting queue.
+- 19 test suites (17 at time of R3.5 review + test_tier + test_ranged); 13+ import reu.s + tier_manager.s; test_tier has 500M cycle limit
 
 **Minor observations (non-blocking):**
-- **Tight memory margin:** Program ends at ~$BBBE, CREATURE_BASE at $BC00 — only 66 bytes of headroom. The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
-- **`monster_init_table` cpx #384:** Pre-existing potential issue — 6502 `cpx #imm` is 8-bit, so `cpx #384` assembles as `cpx #$80` (128). The loop would clear 128 bytes, not 384. However, `monster_table` is pre-filled with `.fill 384, $ff` at assembly time, so this only matters for mid-game re-initialization (which currently doesn't happen). Worth verifying if monster table clearing is needed at runtime.
+- **Tight memory margin:** Program ends at $BEF0, CREATURE_BASE at $BF10 — only 32 bytes of headroom (after R1.1 ranged combat). The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
+- ~~**`monster_init_table` cpx #384:**~~ **Fixed in R3.5.12** — 6502 `cpx #imm` is 8-bit, so `cpx #384` silently became `cpx #128`, only clearing 128 of 384 bytes. Fixed with two-pass loop + compile-time assert.
 
 **Issue found (2026-02-14): `test_dungeon.s` timeout.**
 - R3.5 imports (`reu.s`, `tier_manager.s`) pushed `test_start` to $A032 — inside BASIC ROM ($A000-$BFFF). `BasicUpstart2(test_start)` generates `SYS 40994`, which jumps into BASIC ROM instead of the test code, causing an infinite hang until the cycle limit.
