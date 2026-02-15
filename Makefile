@@ -28,7 +28,8 @@ TIER_SRCS   = creature_data/tier1_prg.s creature_data/tier2_prg.s \
               creature_data/tier3_prg.s creature_data/tier4_prg.s
 TIER_PRGS   = $(OUT)/cr_t1 $(OUT)/cr_t2 $(OUT)/cr_t3 $(OUT)/cr_t4
 DISK_IMAGE  = $(OUT)/moria.d64
-DISK_NAME   = "moria,m6"
+DISK_NAME   = "moria,m8"
+DISKART     = tools/diskart.py
 
 # All source files that main.s imports (dependency list)
 SOURCES     = $(wildcard *.s)
@@ -84,16 +85,24 @@ debug: $(MAIN_PRG) disk
 test: $(MAIN_PRG)
 	./run_tests.sh
 
-# Create a 1541 .d64 disk image (includes title screen art + tier data)
+# Create a 1541 .d64 disk image with PETSCII directory art
 disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
+	printf '\x01\x08' > $(OUT)/empty.prg
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
+	         -write $(OUT)/empty.prg "art1" \
+	         -write $(OUT)/empty.prg "art2" \
+	         -write $(OUT)/empty.prg "art3" \
+	         -write $(OUT)/empty.prg "art4" \
+	         -write $(OUT)/empty.prg "art5" \
 	         -write $(MAIN_PRG) "moria" \
 	         -write $(TITLE_PRG) "title" \
 	         -write $(OUT)/cr_t1 "monster.db.1" \
 	         -write $(OUT)/cr_t2 "monster.db.2" \
 	         -write $(OUT)/cr_t3 "monster.db.3" \
 	         -write $(OUT)/cr_t4 "monster.db.4"
+	python3 $(DISKART) $(DISK_IMAGE)
+	rm -f $(OUT)/empty.prg
 
 $(OUT):
 	mkdir -p $(OUT)

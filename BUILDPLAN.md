@@ -1137,7 +1137,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | Priority | # | What | Effort |
 |----------|---|------|--------|
 | ~~1~~ | A1 | ~~File naming cleanup~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4 | Done |
-| **2** | A2 | Directory art (PETSCII art in d64 listing) | Small |
+| ~~2~~ | A2 | ~~Directory art~~ — ✅ PETSCII title card in d64 directory listing | Done |
 | **3** | A5 | Stack depth audit (trace deep call chains) | Small |
 | **4** | A3 | Character disk strategy (separate game/save disks) | Medium |
 | **5** | R3.4 | Monster fleeing at low HP | Medium |
@@ -1244,7 +1244,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | # | Description | Effort | Files |
 |---|-------------|--------|-------|
 | A1 | ~~File naming: MORIA.SAV→THE.GAME, MORIA.HI→HALL.OF.FAME, CR T1-T4→MONSTER.DB.1-4~~ | ✅ Done | save.s, score.s, tier_manager.s, Makefile, memory.s |
-| A2 | Directory art: PETSCII art in d64 listing | Small | Makefile |
+| A2 | ~~Directory art: PETSCII art in d64 listing~~ | ✅ Done | Makefile, tools/diskart.py |
 | A3 | Character disk: separate game/save disks with swap prompts | Medium | save.s, score.s, new disk_swap.s |
 | A4 | Separate binaries: BOOT.PRG + MORIA64 + MORIA128 | Major | Makefile, main.s, new boot.s — Phase 10 scope |
 | A5 | Stack depth audit: trace deep call chains, document max nesting | Small | Documentation only (or canary code) |
@@ -3673,9 +3673,9 @@ design; items marked **(TODO)** need implementation.
 - ~~R2.4 Secret doors~~ — ✅ Phase 4.6 (place_secrets + do_search)
 - ~~R3.5 Creature roster~~ — ✅ R3.5.1-R3.5.12 (120 creatures, 5 tiers, REU + disk)
 - ~~A1 File naming~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4
+- ~~A2 Directory art~~ — ✅ PETSCII title card via tools/diskart.py
 
 **High priority (from AUDIT — polish & release readiness):**
-- A2 Directory art — PETSCII art in d64 listing
 - A5 Stack depth audit — trace deep call chains, document max nesting
 - A3 Character disk strategy — separate game/save disks for update safety
 
