@@ -22,6 +22,8 @@ JAVA        ?= java
 OUT         = out
 MAIN_SRC    = main.s
 MAIN_PRG    = $(OUT)/moria.prg
+BOOT_SRC    = boot.s
+BOOT_PRG    = $(OUT)/boot.prg
 TITLE_SRC   = title_data.s
 TITLE_PRG   = $(OUT)/title
 TIER_SRCS   = creature_data/tier1_prg.s creature_data/tier2_prg.s \
@@ -69,6 +71,10 @@ $(OUT)/cr_t3: creature_data/tier3_prg.s creature_data/tier3.s | $(OUT)
 $(OUT)/cr_t4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
 	$(JAVA) -jar $(KICKASS) creature_data/tier4_prg.s -o $@
 
+# Bootloader — chain-loads MORIA64 from disk
+$(BOOT_PRG): $(BOOT_SRC) | $(OUT)
+	$(JAVA) -jar $(KICKASS) $(BOOT_SRC) -o $(BOOT_PRG)
+
 # Launch in VICE emulator
 run: $(MAIN_PRG)
 	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
@@ -86,7 +92,7 @@ test: $(MAIN_PRG)
 	./run_tests.sh
 
 # Create a 1541 .d64 disk image with PETSCII directory art
-disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
+disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	printf '\x01\x08' > $(OUT)/empty.prg
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
@@ -95,7 +101,8 @@ disk: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS) | $(OUT)
 	         -write $(OUT)/empty.prg "art3" \
 	         -write $(OUT)/empty.prg "art4" \
 	         -write $(OUT)/empty.prg "art5" \
-	         -write $(MAIN_PRG) "moria" \
+	         -write $(BOOT_PRG) "moria" \
+	         -write $(MAIN_PRG) "moria64" \
 	         -write $(TITLE_PRG) "title" \
 	         -write $(OUT)/cr_t1 "monster.db.1" \
 	         -write $(OUT)/cr_t2 "monster.db.2" \

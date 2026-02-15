@@ -1246,7 +1246,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | A1 | ~~File naming: MORIA.SAV→THE.GAME, MORIA.HI→HALL.OF.FAME, CR T1-T4→MONSTER.DB.1-4~~ | ✅ Done | save.s, score.s, tier_manager.s, Makefile, memory.s |
 | A2 | ~~Directory art: PETSCII art in d64 listing~~ | ✅ Done | Makefile, tools/diskart.py |
 | A3 | Character disk: separate game/save disks with swap prompts | Medium | save.s, score.s, new disk_swap.s |
-| A4 | Separate binaries: BOOT.PRG + MORIA64 + MORIA128 | Major | Makefile, main.s, new boot.s — Phase 10 scope |
+| A4 | ~~Separate binaries: BOOT.PRG + MORIA64~~ | ✅ Done | boot.s, main.s, Makefile |
 | A5 | Stack depth audit: trace deep call chains, document max nesting | Small | Documentation only (or canary code) |
 | A6 | Large file split: dungeon_gen.s, item.s into sub-modules | Low | Opportunistic refactoring |
 | A7 | Item generation distribution review vs umoria curves | Small | Documentation / item.s tuning |

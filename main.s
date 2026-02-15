@@ -41,7 +41,7 @@ exit_trampoline:
     sta $d018
     lda #$93                // PETSCII clear screen
     jsr $ffd2               // KERNAL CHROUT
-    rts                     // Return to BASIC
+    jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)
 
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
