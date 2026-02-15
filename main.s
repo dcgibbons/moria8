@@ -1169,91 +1169,140 @@ tramp_sr_epilogue:
     rts
 
 // ============================================================
-// Init-only code below — safe above $C000 (overwritten by map
-// after first level_generate, never called again).
+// Ego item trampolines — SEI + bank out KERNAL, call $F000+
 // ============================================================
+tramp_roll_ego_type:
+    pha                         // Save A (item type input)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla                         // Restore A
+    jsr roll_ego_type
+    pha                         // Save result
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    pla                         // Restore result
+    rts
 
+// tramp_ego_append_suffix — Append ego suffix to combat_msg_buf
+// Input: A = ego type
+// Copies suffix string from $F000 region to combat_msg_buf while banked out.
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+tramp_ego_append_suffix:
+    cmp #0
+    beq !teas_done+             // No ego → nothing to append
+    pha
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla
+    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
+    // Copy string to combat_msg_buf (while banked out so we can read $F000)
+    ldx cmb_buf_idx
+    ldy #0
+!teas_loop:
+    lda (zp_ptr0),y
+    beq !teas_end+
+    sta combat_msg_buf,x
+    inx
+    iny
+    cpx #41                     // Buffer overflow protection
+    bcs !teas_end+
+    jmp !teas_loop-
+!teas_end:
+    stx cmb_buf_idx
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+!teas_done:
+    rts
+
+// tramp_ego_put_suffix — Write ego suffix directly to screen
+// Input: A = ego type
+// Uses screen_put_char to write each char while KERNAL banked out.
+// Clobbers: A, X, Y, zp_ptr0
+tramp_ego_put_suffix:
+    cmp #0
+    beq !teps_done+
+    pha
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla
+    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
+    // Read chars from $F000 and write to screen
+    ldy #0
+!teps_loop:
+    lda (zp_ptr0),y
+    beq !teps_end+
+    sty teps_save_y
+    jsr screen_put_char         // Clobbers Y
+    ldy teps_save_y
+    iny
+    jmp !teps_loop-
+!teps_end:
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+!teps_done:
+    rts
+teps_save_y: .byte 0
+
+// ============================================================
+// tramp_ego_apply_damage — Apply ego slay/bonus damage (banked at $F000)
+// Input: A = ego type (1-7), cmb_damage and cmb_type set
+// Output: cmb_damage updated
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp3, zp_temp4
+tramp_ego_apply_damage:
+    pha
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla
+    jsr ego_apply_damage
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    rts
+
+// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000)
+// Input: A = ego type (1-7)
+// Output: A = AC bonus (0 if none)
+// Clobbers: X
+tramp_ego_get_ac_bonus:
+    pha
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla
+    jsr ego_get_ac_bonus
+    pha
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    pla
+    rts
+
+// Init-only strings — kept in main RAM (small, referenced by title_screen.s)
+// ============================================================
 title_str:
     .text "MORIA C=64" ; .byte 0
 
+// title_show_sysinfo — Trampoline to call banked version at $F000
+// Reads KERNAL_REV while KERNAL is still banked in, then banks out.
 title_show_sysinfo:
-    lda #COL_DGREY
-    sta zp_text_color
-    lda #23
-    sta zp_cursor_row
-    // Start column: 7 if REU, 12 if not
-    ldx #12
-    lda reu_present
-    beq !+
-    ldx #7
-!:  stx zp_cursor_col
-
-    // Machine type: X = 0(C64), 1(C128), 2(SX-64)
-    ldx #0                      // Default: C64
-    lda zp_machine_type
-    bmi !c128+
-    // C64 — check for SX-64 ($FF80 = $43)
-    lda KERNAL_REV
-    cmp #$43
-    bne !pm+
-    ldx #2                      // SX-64
-    .byte $2c                   // BIT abs — skip ldx #1
-!c128:
-    ldx #1
-!pm:
-    lda tsi_mach_lo,x
-    ldy tsi_mach_hi,x
-    jsr tsi_print
-
-    // "  KERNAL R"
-    lda #<tsi_kernal_str
-    ldy #>tsi_kernal_str
-    jsr tsi_print
-
-    // Revision digit lookup
-    lda KERNAL_REV
-    ldx #3
-!kl: cmp tsi_krev_table,x
-    beq !kf+
-    dex
-    bpl !kl-
-    lda #$3f                    // '?' screen code
-    bne !kp+                    // always taken (A != 0)
-!kf: lda tsi_krev_chars,x
-!kp: jsr screen_put_char
-
-    // REU info if present
-    lda reu_present
-    beq !done+
-    lda #<tsi_reu_str
-    ldy #>tsi_reu_str
-    jsr tsi_print
-    lda reu_size_kb
-    sta zp_temp0
-    lda reu_size_kb + 1
-    sta zp_temp1
-    jsr screen_put_decimal_16
-    lda #<tsi_kb_str
-    ldy #>tsi_kb_str
-    jsr tsi_print
-!done:
+    lda KERNAL_REV              // Read from ROM while KERNAL banked in
+    sta tsi_krev_cached
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr title_show_sysinfo_banked
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
     rts
-
-tsi_print:
-    sta zp_ptr0
-    sty zp_ptr0_hi
-    jmp screen_put_string
-
-tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
-tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
-tsi_c64_str:    .text "C64"  ; .byte 0
-tsi_c128_str:   .text "C128" ; .byte 0
-tsi_sx64_str:   .text "SX-64" ; .byte 0
-tsi_kernal_str: .text "  KERNAL R" ; .byte 0
-tsi_reu_str:    .text "  REU " ; .byte 0
-tsi_kb_str:     .text "KB" ; .byte 0
-tsi_krev_table: .byte $aa, $00, $03, $43    // KERNAL rev bytes
-tsi_krev_chars: .byte $31, $32, $33, $31    // '1', '2', '3', '1' in screen codes
+tsi_krev_cached: .byte 0
 
 // Safety: ensure assembled code doesn't overlap runtime data areas
 program_end:
@@ -1267,3 +1316,5 @@ program_end:
 // ============================================================
 *= $f000 "Banked Code"
 #import "special_rooms.s"
+#import "ego_items.s"
+#import "title_sysinfo_banked.s"

@@ -120,12 +120,10 @@ player_attack_monster:
     beq !pam_not_dead+
 
     // Killed: "YOU HAVE SLAIN THE <name>."
-    jsr msg_build_kill
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action
+    jsr cmb_print_buf
 
     jsr combat_award_xp
     jsr combat_check_levelup
@@ -139,12 +137,10 @@ player_attack_monster:
     beq !pam_all_miss+
 
     // Hit but alive: "YOU HIT THE <name>."
-    jsr msg_build_hit
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    lda #<cmb_hit_str
+    ldy #>cmb_hit_str
+    jsr msg_build_action
+    jsr cmb_print_buf
 
     lda #SFX_HIT
     jsr sound_play
@@ -152,12 +148,10 @@ player_attack_monster:
 
 !pam_all_miss:
     // All blows missed: "YOU MISS THE <name>."
-    jsr msg_build_miss
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    lda #<cmb_miss_str
+    ldy #>cmb_miss_str
+    jsr msg_build_action
+    jsr cmb_print_buf
 
     lda #SFX_MISS
     jsr sound_play
@@ -415,17 +409,25 @@ combat_roll_damage:
     // Positive bonus
     clc
     adc zp_math_a
-    sta cmb_damage
-    rts
+    jmp !crd_ego+
 
 !crd_neg:
     // Negative bonus — clamp to min 0
     clc
     adc zp_math_a               // Signed add (may underflow)
-    bpl !crd_pos+
+    bpl !crd_ego+
     lda #0                      // Clamp to 0
-!crd_pos:
+
+!crd_ego:
     sta cmb_damage
+
+    // --- Ego damage modifiers (banked at $F000) ---
+    ldx #EQUIP_WEAPON
+    lda inv_ego,x
+    beq !crd_ego_done+
+    jsr tramp_ego_apply_damage  // Reads/writes cmb_damage, cmb_type
+
+!crd_ego_done:
     rts
 
 // combat_apply_damage — Subtract damage from monster HP
@@ -571,11 +573,7 @@ combat_check_levelup:
 
     // Print level-up message: "WELCOME TO LEVEL N."
     jsr msg_build_levelup
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
 
     // Check again for multi-level jumps
     jmp combat_check_levelup
@@ -587,8 +585,12 @@ combat_check_levelup:
 // Message builders — compose strings in combat_msg_buf
 // ============================================================
 
-// msg_build_hit — "YOU HIT THE <name>."
-msg_build_hit:
+// msg_build_action — "YOU <action> THE <name>."
+// Input: A = action string ptr lo, Y = action string ptr hi
+// Clobbers: A, X, Y, zp_ptr1
+msg_build_action:
+    sta mba_action_lo
+    sty mba_action_hi
     lda #0
     sta cmb_buf_idx
 
@@ -596,9 +598,9 @@ msg_build_hit:
     ldy #>cmb_you_str
     jsr combat_append_str       // "YOU "
 
-    lda #<cmb_hit_str
-    ldy #>cmb_hit_str
-    jsr combat_append_str       // "HIT"
+    lda mba_action_lo
+    ldy mba_action_hi
+    jsr combat_append_str       // action verb
 
     lda #<cmb_the_str
     ldy #>cmb_the_str
@@ -610,67 +612,27 @@ msg_build_hit:
     ldy #>cmb_period
     jsr combat_append_str       // "."
 
-    // Null-terminate
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
     rts
+mba_action_lo: .byte 0
+mba_action_hi: .byte 0
 
-// msg_build_miss — "YOU MISS THE <name>."
-msg_build_miss:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<cmb_you_str
-    ldy #>cmb_you_str
-    jsr combat_append_str
-
-    lda #<cmb_miss_str
-    ldy #>cmb_miss_str
-    jsr combat_append_str
-
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-
+// cmb_term_and_print — Null-terminate combat_msg_buf and print it
+// Clobbers: A, X
+cmb_term_and_print:
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
-    rts
-
-// msg_build_kill — "YOU HAVE SLAIN THE <name>."
-msg_build_kill:
-    lda #0
-    sta cmb_buf_idx
-
-    lda #<cmb_you_str
-    ldy #>cmb_you_str
-    jsr combat_append_str
-
-    lda #<cmb_kill_str
-    ldy #>cmb_kill_str
-    jsr combat_append_str
-
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str
-
-    jsr combat_append_monster_name
-
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    rts
+// cmb_print_buf — Print combat_msg_buf via msg_print
+// Clobbers: A
+cmb_print_buf:
+    lda #<combat_msg_buf
+    sta zp_ptr0
+    lda #>combat_msg_buf
+    sta zp_ptr0_hi
+    jmp msg_print
 
 // msg_build_levelup — "WELCOME TO LEVEL N."
 msg_build_levelup:

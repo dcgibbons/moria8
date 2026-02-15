@@ -54,6 +54,7 @@ test_exit_trampoline:
 #import "../monster_magic.s"
 #import "../item.s"
 #import "../special_rooms.s"
+#import "../ego_items.s"
 #import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"
@@ -375,7 +376,9 @@ test_start:
     lda #4
     sta cmb_type
 
-    jsr msg_build_hit
+    lda #<cmb_hit_str
+    ldy #>cmb_hit_str
+    jsr msg_build_action
 
     // Check: "YOU HIT THE KOBOLD."
     // Y(19) O(0f) U(15) ' '(20) H(08) I(09) T(14) ' '(20) T(14) H(08) E(05) ' '(20)

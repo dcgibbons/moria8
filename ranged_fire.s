@@ -223,7 +223,9 @@ ranged_fire:
     // Monster killed — "YOU HAVE SLAIN THE <name>."
     ldx cmb_slot
     jsr eff_kill_monster
-    jsr msg_build_kill              // Reuse melee kill message builder
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action            // Reuse melee kill message builder
     jsr rf_print_msg
     lda #SFX_HIT
     jsr sound_play
@@ -318,6 +320,8 @@ rf_msg_ammo_prefix:
     lda #<(cmb_the_str + 1)         // Skip leading space: "THE " not " THE "
     ldy #>(cmb_the_str + 1)
     jsr combat_append_str
+    lda #0
+    sta fi_add_ego              // Ammo has no ego
     lda rf_ammo_id
     jsr item_append_name
     rts
@@ -325,12 +329,4 @@ rf_msg_ammo_prefix:
 // rf_print_msg — Null-terminate and print combat_msg_buf
 // Clobbers: A, X
 rf_print_msg:
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
-    rts
+    jmp cmb_term_and_print

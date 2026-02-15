@@ -181,8 +181,9 @@ def assign_color(name):
 # ============================================================
 CF_ATTACK_ONLY = 0x01  # Our flag for stationary attackers
 CF_UNDEAD      = 0x02  # Our undead flag
-CF_INVISIBLE   = 0x04  # Invisible
-CF_PASS_WALL   = 0x08  # Can pass through walls
+CF_EVIL        = 0x04  # Evil creature (ego slay)
+CF_ANIMAL      = 0x08  # Animal creature (ego slay)
+CF_DRAGON      = 0x10  # Dragon creature (future ego slay)
 
 def map_mflags(cmove, cdefense, name):
     """Map umoria CMOVE/CDEFENSE flags to our cr_mflags byte."""
@@ -194,9 +195,15 @@ def map_mflags(cmove, cdefense, name):
     # Undead check: CDEFENSE bit 3 (0x0008) = hurt by slay undead
     if cdefense & 0x0008:
         flags |= CF_UNDEAD
-    # Invisible: CMOVE bit 16 (0x10000)
-    if cmove & 0x00010000:
-        flags |= CF_INVISIBLE
+    # Evil check: CDEFENSE bit 2 (0x0004) = hurt by slay evil
+    if cdefense & 0x0004:
+        flags |= CF_EVIL
+    # Animal check: CDEFENSE bit 4 (0x0010) = animal
+    if cdefense & 0x0010:
+        flags |= CF_ANIMAL
+    # Dragon check: CDEFENSE bit 1 (0x0002) = dragon
+    if cdefense & 0x0002:
+        flags |= CF_DRAGON
     return flags
 
 # ============================================================

@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $02
+.const SAVE_VERSION    = $03
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -214,11 +214,12 @@ save_game:
     // 4. RNG state $1a-$1d (4 bytes)
     :save_block(ZP_RNG_START, ZP_RNG_SIZE)
 
-    // 5. Inventory (4 × 30 = 120 bytes)
+    // 5. Inventory (5 × 30 = 150 bytes)
     :save_block(inv_item_id, TOTAL_INV_SLOTS)
     :save_block(inv_qty, TOTAL_INV_SLOTS)
     :save_block(inv_p1, TOTAL_INV_SLOTS)
     :save_block(inv_flags, TOTAL_INV_SLOTS)
+    :save_block(inv_ego, TOTAL_INV_SLOTS)
 
     // 6. id_known (49 bytes)
     :save_block(id_known, ITEM_TYPE_COUNT)
@@ -264,13 +265,14 @@ save_game:
     // 15. Monster table (32 × 12 = 384 bytes)
     :save_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 
-    // 16. Floor items (6 × 32 = 192 bytes)
+    // 16. Floor items (7 × 32 = 224 bytes)
     :save_block(fi_item_id, MAX_FLOOR_ITEMS)
     :save_block(fi_x, MAX_FLOOR_ITEMS)
     :save_block(fi_y, MAX_FLOOR_ITEMS)
     :save_block(fi_qty, MAX_FLOOR_ITEMS)
     :save_block(fi_p1, MAX_FLOOR_ITEMS)
     :save_block(fi_flags, MAX_FLOOR_ITEMS)
+    :save_block(fi_ego, MAX_FLOOR_ITEMS)
 
     // 17. RLE map size (2 bytes, little-endian)
     lda rle_size_lo
@@ -398,6 +400,7 @@ load_game:
     :load_block(inv_qty, TOTAL_INV_SLOTS)
     :load_block(inv_p1, TOTAL_INV_SLOTS)
     :load_block(inv_flags, TOTAL_INV_SLOTS)
+    :load_block(inv_ego, TOTAL_INV_SLOTS)
 
     // 6. id_known
     :load_block(id_known, ITEM_TYPE_COUNT)
@@ -450,6 +453,7 @@ load_game:
     :load_block(fi_qty, MAX_FLOOR_ITEMS)
     :load_block(fi_p1, MAX_FLOOR_ITEMS)
     :load_block(fi_flags, MAX_FLOOR_ITEMS)
+    :load_block(fi_ego, MAX_FLOOR_ITEMS)
 
     // 17. RLE map size (2 bytes)
     jsr load_read_byte

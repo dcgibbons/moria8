@@ -58,6 +58,7 @@ test_finish:
 #import "../monster_magic.s"
 #import "../item.s"
 #import "../special_rooms.s"
+#import "../ego_items.s"
 #import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"
@@ -165,7 +166,7 @@ tc_count: .byte 0
 // Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$C61E
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $B500
+.const RLE_TEST_BUF = $B600
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

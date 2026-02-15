@@ -94,14 +94,19 @@ cr_speed:
     .fill 31, 0                                              // 26-56
     .byte 1, 1, 1, 1, 1, 1, 1, 1                             // 57-64: town
 
-// Movement flags (CF_ATTACK_ONLY = can attack but not move)
+// Movement/classification flags
 .const CF_ATTACK_ONLY = $01
 .const CF_UNDEAD      = $02
+.const CF_EVIL        = $04
+.const CF_ANIMAL      = $08
+.const CF_DRAGON      = $10
 
 cr_mflags:
-    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0  // 0-9
-    .byte  0,  0,  0,  0,  0,  0, CF_ATTACK_ONLY, 0, CF_ATTACK_ONLY, 0  // 10-19
-    .byte  0,  0,  0,  0,  0,  0                                         // 20-25
+    .byte CF_EVIL, CF_ANIMAL, CF_ANIMAL, CF_ANIMAL, CF_EVIL              // 0-4
+    .byte 0, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL       // 5-9
+    .byte CF_ANIMAL, CF_ANIMAL, CF_ANIMAL, CF_UNDEAD|CF_EVIL, CF_ANIMAL  // 10-14
+    .byte 0, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL       // 15-19
+    .byte CF_EVIL, CF_ANIMAL, CF_EVIL, CF_EVIL, CF_ANIMAL, CF_EVIL      // 20-25
     .fill 31, 0                                                           // 26-56
     .byte  0,  0,  0,  0,  0,  0,  0,  0                                  // 57-64: town
 

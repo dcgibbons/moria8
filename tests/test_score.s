@@ -56,6 +56,7 @@ test_finish:
 #import "../monster_magic.s"
 #import "../item.s"
 #import "../special_rooms.s"
+#import "../ego_items.s"
 #import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"

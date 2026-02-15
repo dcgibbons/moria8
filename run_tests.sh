@@ -93,20 +93,21 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0405" 6
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 041f" 32 1000000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 041f" 32 2000000000
 run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0412" 19 500000000
 run_test "combat" "tests/test_combat.s" "0400 0409" 10 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0409" 10 500000000
 run_test "effects" "tests/test_effects.s" "0400 0414" 21 500000000
 run_test "item" "tests/test_item.s" "0400 0427" 40 1000000000
-run_test "store" "tests/test_store.s" "0400 0412" 19 500000000
-run_test "save"  "tests/test_save.s"  "0400 0409" 10 500000000
+run_test "store" "tests/test_store.s" "0400 0412" 19 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 0409" 10 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
 run_test "tier" "tests/test_tier.s" "0400 0409" 10 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
+run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

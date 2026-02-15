@@ -83,6 +83,10 @@ ui_inv_display:
     lda inv_item_id,x
     jsr item_get_name_ptr           // zp_ptr0 = name string
     jsr screen_put_string
+    // Append ego suffix if item has one
+    ldx uinv_slot
+    lda inv_ego,x
+    jsr tramp_ego_put_suffix
 
     inc uinv_row
     lda #1
@@ -188,11 +192,16 @@ ui_equip_display:
     beq !ueq_none+
 
     // Print item name (identification-aware)
+    stx uinv_equip_idx              // Save absolute slot index
     lda #COL_WHITE
     sta zp_text_color
     lda inv_item_id,x
     jsr item_get_name_ptr           // zp_ptr0 = name string
     jsr screen_put_string
+    // Append ego suffix if equipped item has one
+    ldx uinv_equip_idx
+    lda inv_ego,x
+    jsr tramp_ego_put_suffix
     jmp !ueq_next+
 
 !ueq_none:
@@ -226,9 +235,10 @@ ui_equip_display:
 // ============================================================
 // Scratch
 // ============================================================
-uinv_slot: .byte 0
-uinv_row:  .byte 0
-uinv_any:  .byte 0
+uinv_slot:      .byte 0
+uinv_row:       .byte 0
+uinv_any:       .byte 0
+uinv_equip_idx: .byte 0
 
 // ============================================================
 // String data (screen codes via inherited encoding)

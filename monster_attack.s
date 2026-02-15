@@ -163,11 +163,7 @@ monster_attack_player:
 
     // Hit message: "THE <name> HITS YOU."
     jsr mon_atk_build_hit_msg
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
     lda #SFX_HIT
     jsr sound_play
     rts
@@ -175,11 +171,7 @@ monster_attack_player:
 !map_miss_msg:
     // Miss message: "THE <name> MISSES YOU."
     jsr mon_atk_build_miss_msg
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
     lda #SFX_MISS
     jsr sound_play
     rts
@@ -410,11 +402,7 @@ mon_atk_effect_poison:
     lda #>mat_poison_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
 !mep_done:
     rts
 
@@ -445,11 +433,7 @@ mon_atk_effect_confuse:
     lda #>mat_confuse_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
     rts
 
 !mec_stack:
@@ -512,11 +496,7 @@ mon_atk_effect_paralyze:
     lda #>mat_paralyze_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_print_buf
 !mepa_done:
     rts
 !mepa_resist:

@@ -222,15 +222,7 @@ eff_identify_prompt:
     ldy #>cmb_period
     jsr combat_append_str
 
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     rts
 

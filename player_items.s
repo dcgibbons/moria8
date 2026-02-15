@@ -33,6 +33,7 @@ piw_item_id:  .byte 0          // Item type ID being processed
 piw_qty:      .byte 0          // Item qty being processed
 piw_p1:       .byte 0          // Item p1 being processed
 piw_flags:    .byte 0          // Item flags being processed
+piw_ego:      .byte 0          // Item ego type being processed
 
 // ============================================================
 // Category -> equipment slot mapping table
@@ -138,6 +139,8 @@ item_wear:
     sta piw_p1
     lda inv_flags,x
     sta piw_flags
+    lda inv_ego,x
+    sta piw_ego
 
     // Look up category -> equipment slot
     ldx piw_item_id
@@ -171,6 +174,8 @@ item_wear:
     sta inv_p1,y
     lda inv_flags,x
     sta inv_flags,y
+    lda inv_ego,x
+    sta inv_ego,y
     jmp !iw_write_equip+
 
 !iw_no_swap:
@@ -189,6 +194,8 @@ item_wear:
     sta inv_p1,x
     lda piw_flags
     sta inv_flags,x
+    lda piw_ego
+    sta inv_ego,x
 
     // If equipping a light, set light radius
     lda piw_equip
@@ -218,6 +225,8 @@ item_wear:
 !iw_msg:
     jsr combat_append_str
 
+    lda piw_ego
+    sta fi_add_ego
     lda piw_item_id
     jsr item_append_name
 
@@ -225,15 +234,7 @@ item_wear:
     ldy #>cmb_period
     jsr combat_append_str
 
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     lda #SFX_PICKUP
     jsr sound_play
@@ -333,10 +334,12 @@ item_takeoff:
     rts
 
 !ito_not_cursed:
-    // Save equipped item's flags before inv_add_item
+    // Save equipped item's fields before inv_add_item
     ldx piw_equip
     lda inv_flags,x
     sta piw_flags
+    lda inv_ego,x
+    sta piw_ego
 
     // Set up fi_add scratch for inv_add_item
     lda inv_item_id,x
@@ -345,6 +348,8 @@ item_takeoff:
     sta fi_add_qty
     lda inv_p1,x
     sta fi_add_p1
+    lda inv_ego,x
+    sta fi_add_ego
 
     // Find empty carried slot and add
     jsr inv_add_item
@@ -387,6 +392,8 @@ item_takeoff:
     ldy #>piw_takeoff_str
     jsr combat_append_str
 
+    lda piw_ego
+    sta fi_add_ego
     lda piw_item_id
     jsr item_append_name
 
@@ -394,15 +401,7 @@ item_takeoff:
     ldy #>cmb_period
     jsr combat_append_str
 
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     lda #SFX_PICKUP
     jsr sound_play
@@ -545,6 +544,8 @@ item_eat:
     ldy #>piw_eat_str
     jsr combat_append_str
 
+    lda #0
+    sta fi_add_ego              // Food has no ego
     lda piw_item_id
     jsr item_append_name
 
@@ -562,15 +563,7 @@ item_eat:
 !ie_end_msg:
     jsr combat_append_str
 
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     sec                         // Turn consumed
     rts
@@ -613,6 +606,17 @@ player_recalc_equipment:
     clc
     adc player_data + PL_TODMG
     sta player_data + PL_TODMG
+
+    // Ego AC bonus (Defender/HA — checked in banked code at $F000)
+    ldx #EQUIP_WEAPON
+    lda inv_ego,x
+    beq !pre_no_ego_ac+
+    jsr tramp_ego_get_ac_bonus
+    beq !pre_no_ego_ac+
+    clc
+    adc player_data + PL_AC
+    sta player_data + PL_AC
+!pre_no_ego_ac:
 !pre_no_weapon:
 
     // Sync back to ZP

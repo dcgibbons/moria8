@@ -422,7 +422,7 @@ itn_54: .text "ROCK" ; .byte 0
 .label fi_qty     = FLOOR_ITEM_BASE + 96      // $CF60: quantity / gold amount
 .label fi_p1      = FLOOR_ITEM_BASE + 128     // $CF80: enchantment / charges
 .label fi_flags   = FLOOR_ITEM_BASE + 160     // $CFA0: instance flags
-.label fi_spare1  = FLOOR_ITEM_BASE + 192     // $CFC0: reserved
+.label fi_ego     = FLOOR_ITEM_BASE + 192     // $CFC0: ego type (0=none)
 .label fi_spare2  = FLOOR_ITEM_BASE + 224     // $CFE0: reserved
 
 // ============================================================
@@ -432,6 +432,7 @@ inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_flags:   .fill TOTAL_INV_SLOTS, 0
+inv_ego:     .fill TOTAL_INV_SLOTS, 0
 
 // ============================================================
 // Scratch variables
@@ -441,6 +442,7 @@ fi_add_y:   .byte 0
 fi_add_id:  .byte 0       // Item type ID
 fi_add_qty: .byte 0       // Quantity / gold amount
 fi_add_p1:  .byte 0       // Enchantment / charges
+fi_add_ego: .byte 0       // Ego type (0=none)
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
 ici_count:  .byte 0       // inv_count_items scratch counter (RP14-7)
@@ -504,8 +506,9 @@ floor_item_add:
     sta fi_p1,x
     lda fi_add_flags
     sta fi_flags,x
+    lda fi_add_ego
+    sta fi_ego,x
     lda #0
-    sta fi_spare1,x
     sta fi_spare2,x
 
     // Set FLAG_HAS_ITEM on map tile at (x, y)
@@ -645,6 +648,8 @@ inv_add_item:
     sta inv_p1,x
     lda fi_add_flags                // Copy flags (preserves IF_CURSED etc.)
     sta inv_flags,x
+    lda fi_add_ego
+    sta inv_ego,x
     sec
     rts
 !iai_full:
@@ -661,6 +666,7 @@ inv_remove_item:
     sta inv_qty,x
     sta inv_p1,x
     sta inv_flags,x
+    sta inv_ego,x
     rts
 
 // inv_count_items — Count used carried slots (0-21)
@@ -779,6 +785,7 @@ item_spawn_level:
     lda #0
     sta fi_add_p1               // No enchantment for gold
     sta fi_add_flags            // No flags for gold
+    sta fi_add_ego              // No ego for gold
 
     jsr floor_item_add
     // Ignore failure (table full)
@@ -847,6 +854,11 @@ item_spawn_level:
     sta fi_add_p1
 
     // fi_add_flags set by roll_enchantment (IF_CURSED for cursed items)
+
+    // Roll ego type for weapons (0=none for non-weapons)
+    lda fi_add_id
+    jsr tramp_roll_ego_type
+    sta fi_add_ego
 
     // Set qty: ammo spawns in stacks, everything else = 1
     lda #1
@@ -975,6 +987,11 @@ item_spawn_level:
     jsr roll_enchantment
     sta fi_add_p1
 
+    // Roll ego type for treasure room items
+    lda fi_add_id
+    jsr tramp_roll_ego_type
+    sta fi_add_ego
+
     pla                         // Restore real dlvl
     sta zp_player_dlvl
 
@@ -1055,15 +1072,7 @@ item_pickup:
     jsr combat_append_str
 
     // Null-terminate
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     // Remove from floor
     ldx ipu_slot
@@ -1102,6 +1111,8 @@ item_pickup:
     sta fi_add_p1
     lda fi_flags,x
     sta fi_add_flags                // Preserve floor item flags (IF_CURSED etc.)
+    lda fi_ego,x
+    sta fi_add_ego
     jsr inv_add_item
     // carry set = success (should always succeed since we checked)
 
@@ -1120,15 +1131,7 @@ item_pickup:
     jsr combat_append_str
 
     // Null-terminate
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     // Remove from floor
     ldx ipu_slot
@@ -1216,6 +1219,8 @@ item_drop:
     sta fi_add_p1
     lda inv_flags,x
     sta fi_add_flags
+    lda inv_ego,x
+    sta fi_add_ego
 
     jsr floor_item_add
     bcs !idr_placed+
@@ -1249,15 +1254,7 @@ item_drop:
     jsr combat_append_str
 
     // Null-terminate
-    ldx cmb_buf_idx
-    lda #0
-    sta combat_msg_buf,x
-
-    lda #<combat_msg_buf
-    sta zp_ptr0
-    lda #>combat_msg_buf
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr cmb_term_and_print
 
     lda #SFX_PICKUP
     jsr sound_play
@@ -1274,6 +1271,9 @@ item_append_name:
     lda zp_ptr0
     ldy zp_ptr0_hi
     jsr combat_append_str
+    // Append ego suffix if present (reads fi_add_ego set by caller)
+    lda fi_add_ego
+    jsr tramp_ego_append_suffix
     rts
 
 // Scratch variables for pickup/drop
