@@ -215,7 +215,7 @@ main.s                    Entry point, BASIC stub, initialization
 
 ## Phase Plan
 
-### Phase 1 — Skeleton and Infrastructure
+### Phase 1 — Skeleton and Infrastructure ✅ COMPLETE
 
 **Goal:** A program that boots on C64/C128, displays text, accepts input, and
 can be tested.
@@ -238,7 +238,7 @@ to BASIC. All infrastructure routines have passing unit tests.
 
 ---
 
-### Phase 2 — Player and Character Creation
+### Phase 2 — Player and Character Creation ✅ COMPLETE
 
 **Goal:** Create a character with race, class, stats, and display the character
 sheet.
@@ -257,7 +257,7 @@ and message system work.
 
 ---
 
-### Phase 3 — The Town Level
+### Phase 3 — The Town Level ✅ COMPLETE
 
 **Goal:** Generate and display the town, move the player around it.
 
@@ -329,7 +329,7 @@ walls, store numbers visible, stairs visible.
 
 ---
 
-### Phase 4 — Dungeon Generation and Navigation
+### Phase 4 — Dungeon Generation and Navigation ✅ COMPLETE
 
 **Goal:** Generate dungeon levels and navigate between them.
 
@@ -337,7 +337,7 @@ walls, store numbers visible, stairs visible.
 |---|---|---|---|
 | 4.1 | `dungeon_gen.s` (full) | Room-and-corridor generation for dungeon levels. 80x48 map. Place N rooms (4–8 for simplicity), connect with tunnels, add doors, place stairs (2 down, 1 up), add mineral streamers. Room types: basic rectangle + overlapping. | Rooms connected, stairs present |
 | 4.2 | `dungeon_features.s` | Door open/close/lock/jam logic, trap placement (6 types: pit, arrow, gas, teleport, dart, rockfall), staircase level transitions, secret door detection | Traps trigger correctly |
-| 4.3 | `data_loader.s` + `fastload.s` | Load creature/item tier data from disk to banked RAM on level change using fast IEC loader. Track current tier pair — only reload on tier boundary crossing, and skip the load entirely if the same tier pair is re-requested (prevents repeated disk I/O when player yo-yos between adjacent tier-boundary levels like 5↔6). **Banking note:** On the 6502, CPU writes always go to RAM regardless of ROM banking state — only reads are affected. This means KERNAL LOAD (or the fastloader) can write directly to $A000 or $E000 without banking out ROM first. However, **bank out BASIC ROM before loading to $A000** so the data can be read back immediately after load (reads from $A000 with BASIC ROM banked in return ROM contents, not the loaded data). For $E000, the same principle applies: writes land in RAM automatically, but KERNAL ROM must be banked out (with SEI/CLI) to read the data back. **File organization:** Creature data, item data, and recall data are separate files per tier (`creatures_tN.bin`, `items_tN.bin`, `recall_tN.bin`). Recall files are created at runtime as the player accumulates knowledge. **Tier change sequence:** (1) save current recall to disk, (2) load new creature tier to $A000, (3) load new item tier to $E000, (4) load new recall from disk if it exists (else zero-init). See Monster Recall section and Design Decision #11. | Correct data after load, tier caching works, recall persists across tier changes, load time <3s with fastloader |
+| 4.3 | `tier_manager.s` + `reu.s` | ✅ **COMPLETE** (implemented as R3.5). Creature tier data loaded from disk via KERNAL LOAD or REU DMA on tier boundary crossings. `tier_check_transition` detects boundary; hysteresis via overlapping tier ranges prevents thrashing. REU path: all tiers preloaded at startup, DMA fetch on transition (near-instant). Disk path: KERNAL LOAD on each transition. Graceful fallback to embedded creatures if no d64. | 10 automated tests in test_tier.s |
 | 4.4 | `dungeon_render.s` (viewport) | Viewport scrolling for 80x48 map on 38x20 screen. Panel movement when player nears edge. Draw only changed tiles (dirty tile tracking). | Viewport scrolls correctly |
 | 4.5 | `dungeon_los.s` (full) | Hybrid LOS matching original Moria behavior: lit rooms reveal fully when player enters (check room membership, not per-tile rays). Dark corridors reveal only adjacent tiles. Bresenham ray casting reserved for specific checks (ranged attacks, bolt spells in Phase 7) — not used for general visibility, as per-tile ray casting is too expensive at 1 MHz for every player move. Torch/lamp extends corridor visibility to light-radius adjacent tiles. | LOS matches expected pattern |
 | 4.6 | Player movement updates | Walking into darkness, falling in pits, hitting traps, going up/down stairs transitions. Searching reveals secret doors (1-in-6 base). Running: auto-move in a direction until interrupted by wall, intersection, visible monster, or item on floor. Running is essential QoL for traversing explored corridors. | Transitions work, running stops at obstacles |
@@ -347,7 +347,7 @@ lighting. Player can descend and ascend.
 
 ---
 
-### Phase 5 — Monsters
+### Phase 5 — Monsters ✅ COMPLETE
 
 **Goal:** Monsters appear, move, and can be fought.
 
@@ -365,7 +365,7 @@ fight back. Status effects work. Combat is functional.
 
 ---
 
-### Phase 6 — Items and Inventory
+### Phase 6 — Items and Inventory ✅ COMPLETE
 
 **Goal:** Items can be found, carried, equipped, used, and dropped.
 
@@ -382,7 +382,7 @@ Hunger system functional.
 
 ---
 
-### Phase 7 — Magic System
+### Phase 7 — Magic System ✅ COMPLETE
 
 **Goal:** Mages cast spells, priests pray, scrolls/potions/wands work.
 
@@ -422,7 +422,7 @@ Hunger system functional.
 
 ---
 
-### Phase 9 — Save/Load and Game Polish
+### Phase 9 — Save/Load and Game Polish ✅ COMPLETE
 
 **Goal:** Game state persists across sessions. Death and scoring work.
 
@@ -1089,51 +1089,189 @@ are needed:
 
 ## Known Bugs
 
-Open issues observed during playtesting. Not yet assigned to a review pass.
+All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 for verification details.
 
-| # | Severity | Description | Notes |
-|---|----------|-------------|-------|
-| BUG-1 | **HIGH** | Any 18 stat turns into 18/99 (or close) after class selection — suspiciously high every time | Likely a bug in stat adjustment or the 18/xx exceptional strength roll. Should only apply to STR, and the xx value should be random 1-100, not always near max. Investigate `player_create.s` race/class stat adjustments and the 18/xx logic. |
-| BUG-2 | **MEDIUM** | Stats display screen does not match umoria's stat screen layout (status bars at bottom) | Compare `ui_status.s` / `ui_character.s` rendering against umoria's `io.cpp` display format. The bottom status bars should show: name, race, class, level on one line; STR, INT, WIS, DEX, CON, CHR stats; then HP, MP, AC, XP, dungeon level, gold. |
-| BUG-3 | **MEDIUM** | Town has no townspeople (rogues, fighters, drunks, etc.) | umoria spawns 4-8 townspeople as level-0 creatures on dlvl=0. These are harmless/low-threat flavor mobs. Currently `monster_spawn_level` may skip dlvl=0 or no creatures are defined for town level. |
-| BUG-4 | **LOW** | Town renders very slowly | Likely full-screen redraw on every frame. Investigate whether dirty-tile optimization is working for the town level, or if the viewport is being fully redrawn each turn. May also be related to the large open space of the town map. |
-| BUG-5 | **LOW** | Town shows periods (`.`) inside store walls instead of empty space | The store interior tiles should be floor or empty space, not the dungeon floor character. Check `dungeon_gen.s` town generation — store interiors may be filled with `TILE_FLOOR` (which renders as `.`) instead of `TILE_ROOM_FLOOR` or a blank tile. |
-| BUG-6 | **MEDIUM** | Store exit requires ESC key, which the C64 doesn't have (CTRL-[ works but is awkward) | The store UI uses PETSCII $1B (ESC) as the exit key. C64 keyboards have no dedicated ESC key. Add STOP/RUN-STOP ($03) or a letter key like Q as an alternative exit. Space bar already works per the code but the menu text only shows "ESC)EXIT". Update `ui_store.s` key check and menu string. |
-| BUG-7 | **MEDIUM** | Doors auto-open when player walks into them instead of requiring explicit open command | In umoria, closed doors block movement and the player must use the 'o' (open) command to open them. Currently `player_move.s` treats closed doors as passable and opens them automatically on bump. This removes a tactical element (stuck doors, failed open attempts, noise alerting monsters). |
-| BUG-8 | **MEDIUM** | Sound effects no longer work | SFX were working previously but have stopped. Investigate `sound.s` — could be a regression from a recent phase (SID register clobbering, sound_play not being called, or SID init being overwritten). Check if VICE sound is enabled and whether `jsr sound_play` calls are still reaching the SID. |
+| # | Description | Status |
+|---|-------------|--------|
+| BUG-1 | 18 stat inflating to 18/99 | ✅ Fixed — exceptional strength gated to STR only |
+| BUG-2 | Status bar layout mismatch | ✅ Fixed — rewritten to 3-line umoria-style |
+| BUG-3 | No townspeople | ✅ Fixed — 6 town creature types added |
+| BUG-4 | Town render speed / store doors | ✅ Fixed — render_store_doors post-pass |
+| BUG-5 | Direction/diagonal key mapping | ✅ Fixed |
+| BUG-6 | Store exit requires ESC | ✅ Fixed — Q key added |
+| BUG-7 | Doors auto-open | ✅ Fixed — closed doors block movement |
+| BUG-8 | Sound effects broken | ✅ Fixed — sound_init added to main.s |
+| BUG-9 | Player '@' drawn as blank | ✅ Fixed — missing jmp (fall-through bug) |
+| BUG-10 | Look command | ✅ Fixed — direction scanning implemented |
+| BUG-11 | Town creature provocation | ✅ Fixed — MF_PROVOKED flag |
+| BUG-12 | Spell books | ✅ Fixed (side-effect bugs RP15-1/2 also resolved) |
+| BUG-13 | (folded into BUG-12) | ✅ Fixed |
+| BUG-14 | KERNAL GETIN clobbers X in name entry | ✅ Fixed — cen_count byte |
+| BUG-15 | Debug hardcoded name | ✅ Fixed — removed |
+| BUG-16 | Store screen clearing | ✅ Fixed — ui_help_clear_all |
+| BUG-17 | Look command distance | ✅ Fixed — multi-tile scan |
+| BUG-18 | Inventory popup in selection dialogs | ✅ Fixed — '?' key added |
 
 ---
 
-## What's Next
+## Current State (2026-02-14)
 
-Phase 4 status:
+**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added.
 
-| # | What | Status |
-|---|------|--------|
-| 4.1 | Room-and-corridor dungeon generation | **Complete** — rooms, corridors, doors, streamers, stairs, connectivity verification |
-| 4.2 | Dungeon features (doors, traps, stairs) | **Complete** — open/close/stuck doors, 6 trap types, stair transitions, `place_secrets` + `do_search` (1-in-6 reveal) |
-| 4.3 | Data loader + fastloader | Not started — needed for tier boundary crossings |
-| 4.4 | Viewport scrolling for 80x48 map | **Complete** — dirty tile rendering, panel movement |
-| 4.5 | Line of sight (full) | **Complete** — three-state visibility (unseen/visible/remembered), torch radius, room reveal, dark rooms, dimmed rendering |
-| 4.6 | Player movement updates | **Complete** — corridor running (8 dirs, 6 stop conditions), trap signaling (carry flag), bump suppression, context-aware secret door rendering |
+### Phase Completion Summary
 
-Phase 5 status (monster/combat):
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Skeleton and Infrastructure | ✅ Complete |
+| 2 | Player and Character Creation | ✅ Complete |
+| 3 | The Town Level | ✅ Complete |
+| 4 | Dungeon Generation and Navigation | ✅ Complete |
+| 5 | Monsters | ✅ Complete |
+| 6 | Items and Inventory | ✅ Complete |
+| 7 | Magic System | ✅ Complete (steps 7.0-7.10) |
+| 8 | Stores | ✅ Complete |
+| 9 | Save/Load and Game Polish | ✅ Complete (9.1-9.4, BUG-1 through BUG-18 fixed) |
+| R3.5 | Creature Tier System + REU | ✅ Complete (R3.5.1-R3.5.12, 120 creatures across 5 tiers) |
+| R1.1 | Ranged Combat | ✅ Complete — bows, crossbows, slings, 3 ammo types, fire command, ammo stacking |
+| 10 | C128 Enhancements | Not started |
 
-| # | What | Status |
-|---|------|--------|
-| 5.1 | Monster data structures | **Complete** — 20 creature types (all real umoria creatures), 32 active slots, spawn/find/remove. All stats match umoria (see MC1 resolved). |
-| 5.2 | Monster AI | **Complete** — wake/sleep, greedy movement, confused random movement, speed 0/1/2, CF_ATTACK_ONLY flag. All RP7 speed/movement bugs fixed. Poltergeist speed wrong (see RP8-1). |
-| 5.3 | Player melee combat | **Complete** — to-hit (class+race BTH), damage, death, XP (integer-only), level-up. Missing critical hits (MC4.1). |
-| 5.4 | Monster melee attacks | **Complete** — 2 attack slots, effects (poison/confuse/paralyze/acid/aggravate). AC reduction correctly limited to ATK_NORMAL only. Poison/confusion stacking matches umoria. Paralysis timer slightly short (see RP8-3). |
-| 5.5 | Status effects & regen | **Complete** — effect timers tick with expiration messages (poison, blind, confuse, paralyze). HP regen implemented (CON-based counter, poison suppresses, extra-regen doubles rate). Starvation damage (1 HP/turn). Light source charge tracking with dim warning at 10. |
-| 5.6 | Monster rendering | **Complete** — FLAG_OCCUPIED check, cr_display/cr_color lookup in viewport renderer. |
+### Build Stats
 
-**Suggested next steps (priority order):**
-1. **Fix RP8-1 — Poltergeist speed** — Should be speed=2 (fast), currently speed=1. Trivial fix.
-2. **Fix RP8-2/RP8-3 — Paralysis damage and timer** — Should apply full damage and use +3 timer offset. Low practical impact now (Floating Eye has 0d0 dice) but correct pattern matters for future creatures.
-3. **Implement MC4.1 — Critical hits** — Player critical hit system not yet implemented.
-4. **Phase 6 — Items and inventory** — Partially implemented, needs review.
-5. **Phase 4.3 — Data loader** — can be deferred until more creature tiers are needed.
+- **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
+- **Compile-time asserts:** 62
+- **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
+- **Program size:** $BEF0 (program_end), CREATURE_BASE at $BF10 — **32 bytes headroom**
+- **Memory pressure:** Critical. Any significant code addition requires either moving CREATURE_BASE higher or code size optimization.
+
+### Known Remaining Issues
+
+| # | Severity | Description | Status |
+|---|----------|-------------|--------|
+| MC4.1 | LOW | No player critical hit system | TODO — not urgent, combat works without it |
+| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | Open — currently safe, document-only |
+| MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
+| MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
+
+### What's Next
+
+Priority order based on AUDIT review (see Audit Response below):
+
+| Priority | # | What | Effort |
+|----------|---|------|--------|
+| **1** | A1 | File naming cleanup (thematic save/tier filenames) | Small |
+| **2** | A2 | Directory art (PETSCII art in d64 listing) | Small |
+| **3** | A5 | Stack depth audit (trace deep call chains) | Small |
+| **4** | A3 | Character disk strategy (separate game/save disks) | Medium |
+| **5** | R3.4 | Monster fleeing at low HP | Medium |
+| **6** | R2.1 | Special rooms (vaults, pits, nests) | Medium |
+| **7** | R4.1 | Ego items | Medium |
+| **8** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
+| **9** | R6.1 | Store haggling | Medium |
+| **10** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+
+**Lower priority content** (tracked but not scheduled):
+R1.2 Throwing, R3.2 Group tactics, R3.3 Breeders, R4.2 Artifacts, R4.3 Rods, R4.4 Pseudo-ID, R6.2 Black Market, R6.3 Player Home
+
+**Phase 10 — C128 Enhancements** (not started):
+
+| # | What | Summary |
+|---|------|---------|
+| 10.1 | 80-column VDC mode | Second rendering backend for VDC 80x25 display |
+| 10.2 | Extended memory | C128 128KB MMU bank-switch path (no disk tier loading) |
+| 10.3 | Larger dungeon | Expand map to 120x80+, more rooms, up to 64 active monsters |
+| 10.4 | Enhanced display | VDC color attributes for threat-coded monsters |
+
+---
+
+## Audit Response (2026-02-14)
+
+Full review of AUDIT.md findings. Each item is categorized as **done**, **action item**, **tracked TODO**, or **deferred**.
+
+### AUDIT §1 — Feature Comparison
+
+| Finding | Disposition |
+|---------|------------|
+| Map size (48x80 vs 66x198) | **Deferred** — intentional C64 constraint. Phase 10.3 expands for C128. |
+| Monster count (120 vs 351) | **Done** — R3.5 expanded to 120 across 5 tiers. Further expansion possible with more tier data. |
+| Item count (55 vs 400+) | **Tracked** — R4.1 (ego items) and R4.2 (artifacts) address this. 55 base types is adequate for C64 memory. |
+| Active monsters cap (32) | **Deferred** — RAM constraint. Phase 10.3 raises to 64 on C128. |
+| Haggling simplified | **Tracked** — R6.1 is medium-priority TODO. |
+| Missing stores (Black Market, Player Home) | **Tracked** — R6.2, R6.3 are low-priority TODOs. |
+| Character history | **Deferred** — nice-to-have, not gameplay-critical. |
+| Save scumming prevention | **Done** — save file deleted on load, enforcing permadeath. |
+
+### AUDIT §2 — Bugs in Implemented Features
+
+| Finding | Disposition |
+|---------|------------|
+| Input lag (viewport redraw) | **Done** — fixed with dirty render (render_local_area). Verify in playtesting. |
+| Key stacking (keyboard buffer) | **Done** — fixed. |
+| Monster AI stack depth | **Action item A5** — stack depth audit. Trace main→move→combat→effects→messages chain, document max depth, add canary if needed. |
+| screen_clear memory safety | **Done** — fixed (ui_help_clear_all pattern). |
+| Item generation distribution | **Action item A7** — review spawn curves vs umoria. Low priority, informational. |
+
+### AUDIT §3 — Code Quality
+
+| Finding | Disposition |
+|---------|------------|
+| Numeric prefix parsing | **Deferred** — not needed for core gameplay. |
+| Phase 10 TODOs | **Tracked** — Phase 10 plan exists. |
+| Missing stores | **Tracked** — R6.2, R6.3. |
+| Spellbook expansion | **Tracked** — R5.2. |
+| Room placement grid logic | **Deferred** — random placement works; grid would need significant rework. |
+| Large files (dungeon_gen.s, item.s) | **Action item A6** — split opportunistically when touching these files. Low priority. |
+| Magic numbers / hardcoded values | **Deferred** — adding symbolic constants everywhere would be nice but is low-impact on a stable codebase. Address incrementally. |
+
+### AUDIT §4 — Product Quality / Playability
+
+| Finding | Disposition |
+|---------|------------|
+| 40-column display | **Deferred** — fundamental hardware limit. Phase 10.1 adds 80-col on C128. |
+| Message truncation | **Deferred** — "—more—" prompt handles overflow. Monitor for intrusiveness. |
+| Disk I/O performance | **Done** — JiffyDOS fastloader required and documented. REU path eliminates tier load pauses entirely. |
+| Turn speed at 1 MHz | **Deferred** — monitor in playtesting. AI loop processes max 32 monsters; should be fast enough. |
+| Balance (fewer monsters/items) | **Deferred** — tuning pass after all content features are in place. |
+| Spell variety | **Tracked** — R5.1/R5.2. |
+| Lack of artifacts | **Tracked** — R4.2 (low priority). |
+
+### AUDIT §5 — Architecture & Physical Build
+
+| Finding | Disposition |
+|---------|------------|
+| Single binary tax (~2-4KB C128 dead code) | **Action item A4** — separate binaries (BOOT.PRG + MORIA64 + MORIA128). Aligned with Phase 10. Major effort, deferred until C128 work begins. |
+| REU support | **Done** — keep as-is. ~400 bytes for massive playability gain. |
+
+### AUDIT §6 — UX & Polish
+
+| Finding | Disposition |
+|---------|------------|
+| Directory art | **Action item A2** — add PETSCII art filenames to d64 image. Small effort, high first-impression impact. |
+
+### AUDIT §7 — File Naming
+
+| Finding | Disposition |
+|---------|------------|
+| MORIA.SAV → THE.GAME | **Action item A1** |
+| MORIA.HI → HALL.OF.FAME | **Action item A1** |
+| CR T1-T4 → MONSTER.DB.1-4 | **Action item A1** |
+
+### AUDIT §8 — Release Strategy
+
+| Finding | Disposition |
+|---------|------------|
+| Character Disk (separate game/save disks) | **Action item A3** — medium effort. Requires disk-swap prompts, save disk ID validation, and code changes to save.s/score.s. Improves update experience. |
+
+### Action Items Summary
+
+| # | Description | Effort | Files |
+|---|-------------|--------|-------|
+| A1 | File naming: MORIA.SAV→THE.GAME, MORIA.HI→HALL.OF.FAME, CR T1-T4→MONSTER.DB.1-4 | Small | save.s, score.s, tier_manager.s, Makefile |
+| A2 | Directory art: PETSCII art in d64 listing | Small | Makefile |
+| A3 | Character disk: separate game/save disks with swap prompts | Medium | save.s, score.s, new disk_swap.s |
+| A4 | Separate binaries: BOOT.PRG + MORIA64 + MORIA128 | Major | Makefile, main.s, new boot.s — Phase 10 scope |
+| A5 | Stack depth audit: trace deep call chains, document max nesting | Small | Documentation only (or canary code) |
+| A6 | Large file split: dungeon_gen.s, item.s into sub-modules | Low | Opportunistic refactoring |
+| A7 | Item generation distribution review vs umoria curves | Small | Documentation / item.s tuning |
 
 ---
 
@@ -3478,10 +3616,10 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R1.1 | Ranged combat (bows, crossbows, slings) | **(TODO)** | `combat.s` only handles melee. Need fire/aim command, projectile flight along LOS, ammo consumption. |
+| R1.1 | Ranged combat (bows, crossbows, slings) | ✅ **DONE** | `ranged_fire.s` — 3 launchers (bow, crossbow, sling), 3 ammo types (arrow, bolt, rock), SHIFT+F fire command, ammo stacking on pickup, melee unarmed fallback for ranged weapons. 6 new item types (IDs 49-54), `it_missile[]` SoA array. |
 | R1.2 | Throwing items | **(TODO)** | Throw potions, rocks, weapons. Shares LOS projectile path with R1.1. |
-| R1.3 | Monster attacks | **(TODO)** | `combat.s` explicitly states "Monsters don't attack back yet (Phase 5.4)". `monster_attack.s` exists but needs wiring/verification. |
-| R1.4 | Monster spells | **(TODO)** | `cr_spell_chance` and `cr_spell_flags` are all zero in `monster.s`. No breath weapons or casting AI active. `monster_magic.s` exists but creature data has no spell entries. |
+| R1.3 | Monster attacks | ✅ **DONE** | `monster_attack.s` fully implemented (Phase 5.4). 8 attack types, 2 slots per creature, all effects (poison, confuse, paralyze, acid, aggravate). |
+| R1.4 | Monster spells | ✅ **DONE** | `monster_magic.s` fully implemented (Phase 7.8). Breath weapons, bolts, summoning, blindness, confusion. Creature tier data has spell entries. |
 
 **Issues:**
 
@@ -3497,9 +3635,9 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R2.1 | Special rooms (vaults, pits, nests) | **(TODO)** | Only standard rectangular rooms generated. Vaults add late-game interest. |
-| R2.2 | Magma/quartz streamers with treasure | **(TODO)** | Tile types exist (types 12, 13) but `dungeon_gen.s` doesn't place mineral veins. Need streamer generation pass. |
+| R2.2 | Magma/quartz streamers with treasure | ✅ **DONE** | 5 streamers per level (3 magma + 2 quartz), placed during dungeon generation. Treasure in veins not yet implemented. |
 | R2.3 | Level persistence on stair transitions | **(deferred)** | Levels regenerate on each visit. True persistence would require per-level disk save — too much I/O for 1541. Acceptable simplification. |
-| R2.4 | Secret door generation | **(TODO)** | `eff_find_doors` exists, tile type 15 (secret door) defined, but verify `dungeon_gen.s` actually places them during room/corridor generation. |
+| R2.4 | Secret door generation | ✅ **DONE** | `place_secrets` enabled (Phase 4.6). 1-3 closed doors converted to TILE_SECRET per level. Context-aware rendering. `do_search` reveals with 1-in-6 chance. |
 
 ### 3. Monsters & AI
 
@@ -3511,7 +3649,7 @@ design; items marked **(TODO)** need implementation.
 | R3.2 | Group/pack tactics | **(TODO)** | No pack instinct, escort behavior, or group spawning beyond random clusters. |
 | R3.3 | Explosive breeders | **(TODO)** | No breeding logic (lice, mice, etc.). Need spawn-on-turn mechanic with population cap. |
 | R3.4 | Monster fleeing | **(TODO)** | Monsters do not flee at low HP. Need flee threshold check in AI + reversed movement. |
-| R3.5 | Limited creature roster | **(TODO)** | Only 32 creature types (26 dungeon + 6 town). Umoria has 247. See **R3.5 Detailed Plan** below. |
+| R3.5 | Limited creature roster | ✅ **DONE** | Expanded to 120 creatures across 5 tiers (T0 town + T1-T4 dungeon). REU + disk loading paths implemented. All 12 steps complete (R3.5.1-R3.5.12). See **R3.5 Detailed Plan** below. |
 
 ### 4. Items & Inventory
 
@@ -3545,32 +3683,41 @@ design; items marked **(TODO)** need implementation.
 | R6.3 | Player Home (Store 8) | **(TODO)** | Missing. Storage for items between dungeon runs. Need home inventory (disk-persisted). |
 | R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
 
-### Priority Triage
+### Priority Triage (updated 2026-02-14)
 
-**High priority (core gameplay gaps):**
-- R1.3 Monster attacks — combat is non-functional without this
-- R1.4 Monster spells — needed for mid/late game difficulty
-- R3.5 Creature roster expansion — 26 types is too few for variety
-- R5.1/R5.2 Spell expansion — magic users need more options
+**Completed since original triage:**
+- ~~R1.1 Ranged combat~~ — ✅ ranged_fire.s (bows, crossbows, slings, ammo stacking)
+- ~~R1.3 Monster attacks~~ — ✅ Phase 5.4
+- ~~R1.4 Monster spells~~ — ✅ Phase 7.8 (monster_magic.s)
+- ~~R2.2 Mineral streamers~~ — ✅ 5 streamers per level (3 magma + 2 quartz)
+- ~~R2.4 Secret doors~~ — ✅ Phase 4.6 (place_secrets + do_search)
+- ~~R3.5 Creature roster~~ — ✅ R3.5.1-R3.5.12 (120 creatures, 5 tiers, REU + disk)
+
+**High priority (from AUDIT — polish & release readiness):**
+- A1 File naming cleanup — thematic save/tier filenames
+- A2 Directory art — PETSCII art in d64 listing
+- A5 Stack depth audit — trace deep call chains, document max nesting
+- A3 Character disk strategy — separate game/save disks for update safety
 
 **Medium priority (significant missing content):**
-- R1.1 Ranged combat — important tactical option
-- R2.1 Special rooms — late-game dungeon variety
-- R2.2 Mineral streamers — treasure variety
-- R3.4 Monster fleeing — tactical depth
+- R3.4 Monster fleeing — tactical depth (flee at low HP)
+- R2.1 Special rooms — late-game dungeon variety (vaults, pits, nests)
 - R4.1 Ego items — item variety and excitement
+- R5.1/R5.2 Spell expansion — more spells and spellbooks
 - R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
-- R6.2 Black Market — economy depth
 
 **Low priority (polish/completeness):**
 - R1.2 Throwing — niche mechanic
-- R2.4 Secret doors — verify current state first
 - R3.2 Group tactics — nice-to-have
-- R3.3 Breeders — nice-to-have
+- R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
 - R4.2 Artifacts — late addition
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
+- R6.2 Black Market — economy depth
 - R6.3 Player Home — QoL feature
+- A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
+- A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
+- A7 Item generation distribution review vs umoria curves
 
 ---
 
@@ -3659,8 +3806,36 @@ whether they'll get the full creature roster or the tiered subset.
 | R3.5.7 | ✅ **Disk loading path.** `tier_load_disk` uses KERNAL LOAD to load tier PRG from disk to $E000 (RAM under KERNAL ROM). Graceful fallback on failure. |
 | R3.5.8 | ✅ **Tier transition logic.** `tier_check_transition` in stair handlers detects tier boundary crossings. Hysteresis via overlapping tier ranges prevents thrashing. `creature_get_name` handles KERNAL banking for name strings at $E000+. |
 | R3.5.9 | ✅ **Town creatures always resident.** 6 town creatures embedded at indices 57-62 in program code (never loaded from disk). |
-| R3.5.10 | **Full roster data entry.** Transcribe all ~120–247 creatures from umoria source into tier data files. Verify stats against umoria. **(Done — 120 creatures via parse_creatures.py)** |
-| R3.5.11 | **Testing.** Test both paths in VICE: with REU (`-reu -reusize 256`) and without. Verify spawning, combat, names, tier transitions, edge cases (boundary levels, ascending back across tier). |
+| R3.5.10 | ✅ **Full roster data entry.** Transcribe all ~120–247 creatures from umoria source into tier data files. Verify stats against umoria. **(Done — 120 creatures via parse_creatures.py)** |
+| R3.5.11 | ✅ **Testing + bug fixes.** Fixed REU preload bug (`current_tier` not set before `tier_load_disk`), fixed post-loop `current_tier=4` stale state, added `reu_tiers_loaded` fallback counter, fixed Word of Recall skipping tier transition. 10 automated tests in `test_tier.s`. Tested both REU and non-REU paths in VICE. |
+| R3.5.12 | ✅ **Fix `monster_init_table` cpx #384 truncation.** 6502 `cpx #imm` is 8-bit — `cpx #384` silently became `cpx #128`, only clearing 128 of 384 bytes. Fixed with two-pass loop. Added compile-time assert. |
+
+### R3.5 Review Findings (2026-02-14)
+
+**Architecture verified correct.** Comprehensive code review of monster.s, reu.s, tier_manager.s, memory.s, dungeon_gen.s, monster_magic.s, and all 5 tier data files.
+
+**Confirmed working:**
+- All 22 SoA arrays consistent across 5 tiers; compile-time assertions verify array sizes = MAX_CREATURES (65)
+- `active_dungeon_count` variable correctly replaces old `DUNGEON_CREATURES` constant in `pick_creature_type` and `monster_cast_summon`
+- `load_tier_to_buffer` copies all 22 arrays from $E000 source to active buffers
+- `creature_get_name` properly handles KERNAL banking (SEI/$35) for name strings at $E000+
+- REU detection: 3-stage bank probing (0-7, 8-15, 16-31), stash/fetch DMA verified
+- `reu_load_all_tiers`: loads tiers 1-4 from disk → $E000 → REU bank 0 with sequential offsets
+- `tier_load_disk`: KERNAL LOAD with PETSCII filenames "CR T1"-"CR T4"
+- Tier transition hysteresis: T1=[1,8], T2=[5,15], T3=[11,25], T4=[20,100] — overlaps prevent thrashing
+- Town creatures at indices 57-62 always resident (never loaded from disk)
+- BFS queue at CREATURE_BASE ($BC00), 512 entries × 2 bytes = 1024 bytes, correctly bounded
+- 17 test suites; 13 import reu.s + tier_manager.s; test_tier has 500M cycle limit
+
+**Minor observations (non-blocking):**
+- **Tight memory margin:** Program ends at ~$BBBE, CREATURE_BASE at $BC00 — only 66 bytes of headroom. The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
+- **`monster_init_table` cpx #384:** Pre-existing potential issue — 6502 `cpx #imm` is 8-bit, so `cpx #384` assembles as `cpx #$80` (128). The loop would clear 128 bytes, not 384. However, `monster_table` is pre-filled with `.fill 384, $ff` at assembly time, so this only matters for mid-game re-initialization (which currently doesn't happen). Worth verifying if monster table clearing is needed at runtime.
+
+**Issue found (2026-02-14): `test_dungeon.s` timeout.**
+- R3.5 imports (`reu.s`, `tier_manager.s`) pushed `test_start` to $A032 — inside BASIC ROM ($A000-$BFFF). `BasicUpstart2(test_start)` generates `SYS 40994`, which jumps into BASIC ROM instead of the test code, causing an infinite hang until the cycle limit.
+- **Fix:** Apply the bootstrap trampoline pattern from `test_item.s` — small stub at $080E banks out BASIC ROM, then `jmp test_start`. Any test with `test_start` >= $A000 needs this.
+
+**No other critical issues found.**
 
 ### Future: C128 Native Memory (Phase 10.2)
 
