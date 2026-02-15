@@ -1138,7 +1138,7 @@ Priority order based on AUDIT review (see Audit Response below):
 |----------|---|------|--------|
 | ~~1~~ | A1 | ~~File naming cleanup~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4 | Done |
 | ~~2~~ | A2 | ~~Directory art~~ — ✅ PETSCII title card in d64 directory listing | Done |
-| **3** | A5 | Stack depth audit (trace deep call chains) | Small |
+| ~~3~~ | A5 | ~~Stack depth audit (trace deep call chains)~~ — ✅ Max 27 bytes (11%), safe | Done |
 | ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
 | **5** | R3.4 | Monster fleeing at low HP | Medium |
 | **6** | R2.1 | Special rooms (vaults, pits, nests) | Medium |
@@ -1184,7 +1184,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 |---------|------------|
 | Input lag (viewport redraw) | **Done** — fixed with dirty render (render_local_area). Verify in playtesting. |
 | Key stacking (keyboard buffer) | **Done** — fixed. |
-| Monster AI stack depth | **Action item A5** — stack depth audit. Trace main→move→combat→effects→messages chain, document max depth, add canary if needed. |
+| Monster AI stack depth | ✅ **Done (A5)** — Audited. Deepest chain: monster_ai_tick → monster_attack_player → mon_atk_effect_confuse → msg_print → screen_put_string (14 JSR levels, 27 bytes = 11% of stack). 224 bytes free. No canary needed. |
 | screen_clear memory safety | **Done** — fixed (ui_help_clear_all pattern). |
 | Item generation distribution | **Action item A7** — review spawn curves vs umoria. Low priority, informational. |
 
@@ -1247,7 +1247,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | A2 | ~~Directory art: PETSCII art in d64 listing~~ | ✅ Done | Makefile, tools/diskart.py |
 | A3 | Character disk: separate game/save disks with swap prompts | Medium | save.s, score.s, new disk_swap.s |
 | A4 | ~~Separate binaries: BOOT.PRG + MORIA64~~ | ✅ Done | boot.s, main.s, Makefile |
-| A5 | Stack depth audit: trace deep call chains, document max nesting | Small | Documentation only (or canary code) |
+| A5 | ~~Stack depth audit: trace deep call chains, document max nesting~~ | ✅ Done | Max 27 bytes (14 JSR levels), 87% margin — no canary needed |
 | A6 | Large file split: dungeon_gen.s, item.s into sub-modules | Low | Opportunistic refactoring |
 | A7 | Item generation distribution review vs umoria curves | Small | Documentation / item.s tuning |
 
@@ -3676,8 +3676,8 @@ design; items marked **(TODO)** need implementation.
 - ~~A2 Directory art~~ — ✅ PETSCII title card via tools/diskart.py
 
 **High priority (from AUDIT — polish & release readiness):**
-- A5 Stack depth audit — trace deep call chains, document max nesting
-- A3 Character disk strategy — separate game/save disks for update safety
+- ~~A5 Stack depth audit~~ — ✅ max 27 bytes (11%), safe, no canary needed
+- ~~A3 Character disk strategy~~ — ✅ dual-disk mode with swap prompts
 
 **Medium priority (significant missing content):**
 - R3.4 Monster fleeing — tactical depth (flee at low HP)
