@@ -1118,7 +1118,7 @@ All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 
 - **Test suites:** 19 (241+ runtime tests, 8 new ranged tests)
 - **Compile-time asserts:** 62
 - **Source files:** ~42 .s files (ranged_fire.s, test_ranged.s added)
-- **Program size:** $BFC4 (program_end), CREATURE_BASE at $BFD0 — **12 bytes headroom**
+- **Program size:** $BF3F (program_end), CREATURE_BASE at $BFD0 — **145 bytes headroom**
 - **Memory pressure:** Critical. Any significant code addition requires either moving CREATURE_BASE higher or code size optimization.
 
 ### Known Remaining Issues
@@ -3808,7 +3808,7 @@ whether they'll get the full creature roster or the tiered subset.
 - 19 test suites (17 at time of R3.5 review + test_tier + test_ranged); 13+ import reu.s + tier_manager.s; test_tier has 500M cycle limit
 
 **Minor observations (non-blocking):**
-- **Tight memory margin:** Program ends at $BFC4, CREATURE_BASE at $BFD0 — only 12 bytes of headroom (after A3 dual-disk). The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
+- **Tight memory margin:** Program ends at $BF3F, CREATURE_BASE at $BFD0 — 145 bytes of headroom (after A3 dual-disk + streaming RLE fix). The compile-time assertion `program_end < CREATURE_BASE` catches overflow, but future code additions should be mindful of this margin.
 - ~~**`monster_init_table` cpx #384:**~~ **Fixed in R3.5.12** — 6502 `cpx #imm` is 8-bit, so `cpx #384` silently became `cpx #128`, only clearing 128 of 384 bytes. Fixed with two-pass loop + compile-time assert.
 
 **Issue found (2026-02-14): `test_dungeon.s` timeout.**

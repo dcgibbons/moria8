@@ -99,12 +99,6 @@ scratch_cmd:
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
 .label scratch_cmd_len = * - scratch_cmd
 
-check_filename:
-    .byte $30, $3a          // "0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-    .byte $2c, $53, $2c, $52  // ",S,R"
-.label check_filename_len = * - check_filename
-
 save_magic:
     .byte $4d, $4f, $52, $49, $41, $30, $31  // "MORIA01"
     .byte SAVE_VERSION                          // Version byte
@@ -461,16 +455,9 @@ load_game:
     jsr load_read_byte
     sta rle_size_hi
 
-    // 18. RLE compressed map → workspace
-    lda rle_work_lo
-    sta zp_ptr0
-    lda rle_work_hi
-    sta zp_ptr0_hi
-    lda rle_size_lo
-    sta save_count_lo
-    lda rle_size_hi
-    sta save_count_hi
-    jsr load_read_block
+    // 18. Decompress RLE map directly from file → MAP_BASE
+    // (Streaming decompressor avoids workspace/MAP_BASE overlap)
+    jsr rle_decompress_from_file
 
     // 19. Read stored checksum (2 bytes, NOT accumulated)
     jsr KERNAL_CHRIN
@@ -484,7 +471,7 @@ load_game:
     jmp !load_fail_close+
 !load_io_ok:
 
-    // Close file before decompression
+    // Close file (map already decompressed from file stream)
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
@@ -499,9 +486,6 @@ load_game:
 !load_cksum_bad:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
-
-    // Decompress map
-    jsr rle_decompress_map
 
     // Sync struct → ZP
     jsr player_sync_to_zp
@@ -721,52 +705,6 @@ delete_savefile:
     jsr KERNAL_CLOSE
 !dsf_done:
     jsr KERNAL_CLRCHN
-    rts
-
-// ============================================================
-// check_savefile_exists — Try to open save for read
-// Output: carry set = file exists, carry clear = no file
-// Clobbers: A, X, Y
-// ============================================================
-check_savefile_exists:
-    lda #check_filename_len
-    ldx #<check_filename
-    ldy #>check_filename
-    jsr KERNAL_SETNAM
-    lda #CHECK_FILE_NUM     // Use separate file# to avoid conflict with load_game
-    ldx #SAVE_DEVICE
-    ldy #CHECK_SEC_ADDR     // Separate 1541 channel from load_game
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
-    bcs !csf_close_no+      // OPEN failed — still close to clear file table
-
-    // Try to read one byte to see if file has data
-    ldx #CHECK_FILE_NUM
-    jsr KERNAL_CHKIN
-    bcs !csf_close_no+
-
-    jsr KERNAL_CHRIN
-    pha
-    jsr KERNAL_READST
-    sta zp_temp0            // Save status
-    jsr KERNAL_CLRCHN
-    lda #CHECK_FILE_NUM
-    jsr KERNAL_CLOSE
-
-    pla                     // Discard byte read
-    lda zp_temp0
-    and #$42                // EOF or error
-    bne !csf_no+
-
-    sec                     // File exists
-    rts
-
-!csf_close_no:
-    jsr KERNAL_CLRCHN
-    lda #CHECK_FILE_NUM
-    jsr KERNAL_CLOSE
-!csf_no:
-    clc                     // No file
     rts
 
 // ============================================================
@@ -1023,26 +961,18 @@ rle_flush_literals:
     rts
 
 // ============================================================
-// rle_decompress_map — Decompress workspace → MAP_BASE
-// Input: rle_size_lo/hi = compressed data size, rle_work_lo/hi = source
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
+// rle_decompress_from_file — Stream-decompress RLE from open file → MAP_BASE
+// Reads compressed bytes via load_read_byte (accumulates checksum).
+// Avoids workspace/MAP_BASE overlap by reading directly from disk.
+// Input: rle_size_lo/hi = compressed data size (file must be open with CHKIN)
+// Clobbers: A, Y, zp_ptr1/hi, save_count_lo/hi, rle_run_len, rle_run_byte
 // ============================================================
-rle_decompress_map:
-    // Source: workspace (rle_work_lo/hi)
-    lda rle_work_lo
-    sta zp_ptr0
-    lda rle_work_hi
-    sta zp_ptr0_hi
-
+rle_decompress_from_file:
     // Dest: MAP_BASE
     lda #<MAP_BASE
     sta zp_ptr1
     lda #>MAP_BASE
     sta zp_ptr1_hi
-
-    // Reset I/O error flag (bounds check may set this)
-    lda #0
-    sta save_io_error
 
     // Remaining compressed bytes
     lda rle_size_lo
@@ -1050,78 +980,64 @@ rle_decompress_map:
     lda rle_size_hi
     sta save_count_hi
 
-!rle_d_loop:
-    // Any compressed data left?
+!rdff_loop:
+    // Done?
     lda save_count_lo
     ora save_count_hi
-    beq !rle_d_done+
-    // Abort if output has exceeded MAP_END (corrupt compressed data)
+    beq !rdff_done+
     lda save_io_error
-    bne !rle_d_done+
+    bne !rdff_done+
 
-    // Read header byte
-    ldy #0
-    lda (zp_ptr0),y
-    pha                     // Save header byte (advance_src clobbers A)
-    jsr rle_d_advance_src
-    pla                     // Restore header byte
-
+    // Read header byte from file
+    jsr rdff_read_byte
     cmp #$80
-    bcs !rle_d_repeat+
+    bcs !rdff_repeat+
 
-    // --- Literal run ---
-    // Length = header + 1
+    // --- Literal run: length = header + 1 ---
     clc
     adc #1
     sta rle_run_len
-!rle_d_lit:
+!rdff_lit:
     lda rle_run_len
-    beq !rle_d_loop-
+    beq !rdff_loop-
+    jsr rdff_read_byte
     ldy #0
-    lda (zp_ptr0),y
     sta (zp_ptr1),y
-    jsr rle_d_advance_src
     jsr rle_d_advance_dst
     dec rle_run_len
-    jmp !rle_d_lit-
+    jmp !rdff_lit-
 
-!rle_d_repeat:
-    // --- Repeat run ---
-    // Length = header - $7D
+!rdff_repeat:
+    // --- Repeat run: length = header - $7D ---
     sec
     sbc #$7d
     sta rle_run_len
-    // Read the byte to repeat
-    ldy #0
-    lda (zp_ptr0),y
+    jsr rdff_read_byte
     sta rle_run_byte
-    jsr rle_d_advance_src
-!rle_d_rep:
+!rdff_rep:
     lda rle_run_len
-    beq !rle_d_loop-
+    beq !rdff_loop-
     lda rle_run_byte
     ldy #0
     sta (zp_ptr1),y
     jsr rle_d_advance_dst
     dec rle_run_len
-    jmp !rle_d_rep-
+    jmp !rdff_rep-
 
-!rle_d_done:
+!rdff_done:
     rts
 
-// Helper: advance source pointer by 1, decrement remaining count
-rle_d_advance_src:
-    inc zp_ptr0
-    bne !rdas_no+
-    inc zp_ptr0_hi
-!rdas_no:
+// Helper: read one RLE byte from file with checksum + count decrement
+rdff_read_byte:
+    jsr load_read_byte
+    pha
     lda save_count_lo
     sec
     sbc #1
     sta save_count_lo
-    bcs !rdas_done+
+    bcs !+
     dec save_count_hi
-!rdas_done:
+!:  pla
     rts
 
 // Helper: advance dest pointer by 1, check bounds
@@ -1137,3 +1053,4 @@ rle_d_advance_dst:
     inc save_io_error       // Flag overflow — corrupt compressed data
 !rdad_ok:
     rts
+

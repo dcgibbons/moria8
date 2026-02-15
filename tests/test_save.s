@@ -77,6 +77,81 @@ test_finish:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+// Workspace-based RLE decompressor for test use only.
+// The game uses rle_decompress_from_file (streaming from disk) instead.
+// Tests set rle_work_lo/hi to $B0A0 so there's no workspace/MAP_BASE overlap.
+rle_decompress_map:
+    lda rle_work_lo
+    sta zp_ptr0
+    lda rle_work_hi
+    sta zp_ptr0_hi
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    lda #0
+    sta save_io_error
+    lda rle_size_lo
+    sta save_count_lo
+    lda rle_size_hi
+    sta save_count_hi
+!rle_d_loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !rle_d_done+
+    lda save_io_error
+    bne !rle_d_done+
+    ldy #0
+    lda (zp_ptr0),y
+    pha
+    jsr !rle_d_adv_src+
+    pla
+    cmp #$80
+    bcs !rle_d_repeat+
+    clc
+    adc #1
+    sta rle_run_len
+!rle_d_lit:
+    lda rle_run_len
+    beq !rle_d_loop-
+    ldy #0
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    jsr !rle_d_adv_src+
+    jsr rle_d_advance_dst
+    dec rle_run_len
+    jmp !rle_d_lit-
+!rle_d_repeat:
+    sec
+    sbc #$7d
+    sta rle_run_len
+    ldy #0
+    lda (zp_ptr0),y
+    sta rle_run_byte
+    jsr !rle_d_adv_src+
+!rle_d_rep:
+    lda rle_run_len
+    beq !rle_d_loop-
+    lda rle_run_byte
+    ldy #0
+    sta (zp_ptr1),y
+    jsr rle_d_advance_dst
+    dec rle_run_len
+    jmp !rle_d_rep-
+!rle_d_done:
+    rts
+!rle_d_adv_src:
+    inc zp_ptr0
+    bne !+
+    inc zp_ptr0_hi
+!:  lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !+
+    dec save_count_hi
+!:  rts
+
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
 tc_results: .fill 12, $ff
 tc_count: .byte 0
