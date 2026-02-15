@@ -29,7 +29,7 @@
 .const MAP_END          = $ceff
 .const FLOOR_ITEM_BASE  = $cf00 // Floor item table (256 bytes)
 .const FLOOR_ITEM_END   = $cfff
-.const CREATURE_BASE    = $c030 // Runtime scratch area (RLE, hiscore) — overlaps map but only used at save/game-over
+.const CREATURE_BASE    = $c020 // Runtime scratch area (RLE, hiscore) — overlaps map but only used at save/game-over
 .const CREATURE_END     = $c0ff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff

@@ -57,6 +57,8 @@ test_finish:
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
+#import "../special_rooms.s"
+#import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"
 #import "../spell_effects.s"
@@ -159,11 +161,11 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — use $B200, safely past test body end (~$B176)
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to $C11E
+// RLE workspace — must be past test body end (currently ~$B44B after imports).
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$C61E
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $B200
+.const RLE_TEST_BUF = $B500
 
 test_start:
     // BASIC ROM already banked out by bootstrap above
@@ -273,30 +275,17 @@ test_start:
     sta tc_results + 0
 
     // ============================================================
-    // Test 2: RLE round-trip — alternating tiles (worst case)
-    // Fill with $0C/$10 pattern, compress, decompress, verify
+    // Test 2: RLE round-trip — mixed pattern (alternating + uniform)
+    // First page alternating $0C/$10, rest uniform $10.
+    // Compressed output stays below MAP_BASE (avoids decompressor
+    // overwriting its own source when workspace extends past $C000).
     // ============================================================
 
-    // Fill with alternating pattern
+    // Fill all pages with uniform wall ($10) first
+    lda #$10
     ldx #0
-    ldy #0                  // Toggle
-!t2_fill:
-    tya
-    and #$01
-    beq !t2_even+
-    lda #$10                // wall
-    jmp !t2_store_byte+
-!t2_even:
-    lda #$0C                // floor
-!t2_store_byte:
+!t2_base:
     sta MAP_BASE,x
-    iny
-    inx
-    bne !t2_fill-
-    // Fill remaining pages with same pattern (just use first page pattern repeated)
-    ldx #0
-!t2_fill_rest:
-    lda MAP_BASE,x
     sta MAP_BASE + $100,x
     sta MAP_BASE + $200,x
     sta MAP_BASE + $300,x
@@ -312,7 +301,24 @@ test_start:
     sta MAP_BASE + $d00,x
     sta MAP_BASE + $e00,x
     inx
-    bne !t2_fill_rest-
+    bne !t2_base-
+
+    // Overwrite first page with alternating $0C/$10
+    ldx #0
+    ldy #0
+!t2_fill:
+    tya
+    and #$01
+    beq !t2_even+
+    lda #$10
+    jmp !t2_store_byte+
+!t2_even:
+    lda #$0C
+!t2_store_byte:
+    sta MAP_BASE,x
+    iny
+    inx
+    bne !t2_fill-
 
     // Save first 256 bytes for verification
     ldx #0

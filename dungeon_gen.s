@@ -364,6 +364,13 @@ room_y:      .fill MAX_ROOMS, 0   // Interior top row
 room_w:      .fill MAX_ROOMS, 0   // Interior width
 room_h:      .fill MAX_ROOMS, 0   // Interior height
 room_lit:    .fill MAX_ROOMS, 0   // 0=dark, 1=lit (set by place_rooms)
+room_type:   .fill MAX_ROOMS, 0   // 0=normal, 1=pit, 2=vault, 3=nest
+
+// Special room type constants
+.const RT_NORMAL = 0
+.const RT_PIT    = 1
+.const RT_VAULT  = 2
+.const RT_NEST   = 3
 
 // Stairs coordinates
 stairs_up_x:    .byte 0
@@ -419,10 +426,12 @@ dungeon_generate:
     jmp !dg_gen_done+           // Give up, use whatever we have
 !rooms_ok:
     jsr shuffle_rooms           // Randomize connection order (DG2)
+    jsr tramp_assign_special_room   // Pick special room type (if any)
     jsr place_streamers         // Before corridors (umoria order):
                                 // corridors overwrite veins they cross
     jsr connect_rooms
     jsr add_corridor_doors      // Doors where corridors touch room walls
+    jsr tramp_vault_seal_entrance   // Seal vault entrance with secret door
     jsr place_stairs_dungeon
     jsr place_traps
     jsr place_secrets

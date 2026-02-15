@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $01
+.const SAVE_VERSION    = $02
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -251,6 +251,7 @@ save_game:
     :save_block(room_w, MAX_ROOMS)
     :save_block(room_h, MAX_ROOMS)
     :save_block(room_lit, MAX_ROOMS)
+    :save_block(room_type, MAX_ROOMS)
 
     // 13. Trap count (1 byte)
     :save_block(trap_count, 1)
@@ -429,6 +430,7 @@ load_game:
     :load_block(room_w, MAX_ROOMS)
     :load_block(room_h, MAX_ROOMS)
     :load_block(room_lit, MAX_ROOMS)
+    :load_block(room_type, MAX_ROOMS)
 
     // 13. Trap count
     :load_block(trap_count, 1)

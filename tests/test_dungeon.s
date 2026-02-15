@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #27
+    ldx #31
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -52,6 +52,8 @@ test_exit_trampoline:
 #import "../monster_ai.s"
 #import "../monster_magic.s"
 #import "../item.s"
+#import "../special_rooms.s"
+#import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"
 #import "../spell_effects.s"
@@ -80,11 +82,15 @@ t19_found:     .byte 0
 t19_save_row:  .byte 0
 t19_tile:      .byte 0
 t24_carry_result: .byte 0               // Carry result for test 24 (survives subroutine calls)
-tc_results: .fill 28, $ff              // Test results buffer (copied to $0400 before brk)
+t29_retry:     .byte 0                   // Retry counter for test 29
+t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
+t32_post_count:.byte 0                   // Post-spawn monster count for test 32
+t32_check_type:.byte 0                   // Saved creature type for test 32
+tc_results: .fill 32, $ff              // Test results buffer (copied to $0400 before brk)
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #27
+    ldx #31
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1517,6 +1523,245 @@ test_start:
     lda #$00
     sta tc_results+27
 !t28_done:
+
+    // ============================================================
+    // Test 29: assign_special_room on dlvl=8 sets at least one
+    //          room_type != RT_NORMAL (100 fast iterations,
+    //          RNG evolves naturally from previous tests)
+    // ============================================================
+    lda #0
+    sta t29_retry
+!t29_loop:
+    // Set up conditions for assign_special_room (no reseed)
+    lda #8
+    sta zp_player_dlvl
+    lda #5
+    sta room_count
+
+    jsr assign_special_room
+
+    // Check if any room_type != RT_NORMAL
+    ldx room_count
+    dex
+!t29_scan:
+    lda room_type,x
+    bne !t29_found+             // Non-zero = special
+    dex
+    bpl !t29_scan-
+    // Not found this iteration — try again
+    inc t29_retry
+    lda t29_retry
+    cmp #100
+    bne !t29_loop-
+    // Failed all 100 attempts
+    lda #$00
+    sta tc_results+28
+    jmp !t29_done+
+!t29_found:
+    lda #$01
+    sta tc_results+28
+!t29_done:
+
+    // ============================================================
+    // Test 30: assign_special_room on dlvl=1 leaves all RT_NORMAL
+    //          (dlvl < 3 → early exit, 10 fast iterations)
+    // ============================================================
+    lda #10
+    sta t29_retry
+!t30_loop:
+    lda #1
+    sta zp_player_dlvl
+    lda #5
+    sta room_count
+
+    jsr assign_special_room
+
+    // All room_type should be RT_NORMAL
+    ldx room_count
+    dex
+!t30_scan:
+    lda room_type,x
+    bne !t30_fail+              // Non-zero = unexpected special
+    dex
+    bpl !t30_scan-
+    dec t29_retry
+    bne !t30_loop-
+    // All 10 passes were normal
+    lda #$01
+    sta tc_results+29
+    jmp !t30_done+
+!t30_fail:
+    lda #$00
+    sta tc_results+29
+!t30_done:
+
+    // ============================================================
+    // Test 31: vault_seal_entrance converts a door to TILE_SECRET
+    //          on vault room perimeter
+    // ============================================================
+    // Generate at dlvl=5, then force a vault on room 1
+    lda #5
+    sta zp_player_dlvl
+    jsr dungeon_generate
+
+    // Force room 1 as vault (regardless of what assign_special_room picked)
+    lda room_count
+    cmp #2
+    bcc !t31_skip+              // Need at least 2 rooms
+
+    // Clear all room types, set room 1 to vault
+    ldx room_count
+    dex
+    lda #RT_NORMAL
+!t31_clear:
+    sta room_type,x
+    dex
+    bpl !t31_clear-
+    lda #RT_VAULT
+    sta room_type + 1
+
+    // Place a door on the top wall of room 1
+    // Top wall row = room_y[1] - 1
+    lda room_y + 1
+    sec
+    sbc #1
+    tax                         // X = wall row
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy room_x + 1             // First column of room
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+
+    // Call vault_seal_entrance
+    jsr vault_seal_entrance
+
+    // Verify tile is now TILE_SECRET ($F0)
+    lda room_y + 1
+    sec
+    sbc #1
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy room_x + 1
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    beq !t31_pass+
+!t31_skip:
+    lda #$00
+    sta tc_results+30
+    jmp !t31_done+
+!t31_pass:
+    lda #$01
+    sta tc_results+30
+!t31_done:
+
+    // ============================================================
+    // Test 32: spawn_special_room_monsters with RT_PIT creates
+    //          monsters (verify count increased, all same type)
+    // ============================================================
+    // Generate at dlvl=4 (embedded creatures go to level ~5,
+    // pick_creature_type needs cr_level in [max(1,dlvl-2), dlvl+3])
+    lda #4
+    sta zp_player_dlvl
+    jsr dungeon_generate
+
+    // Force room 1 as pit
+    lda room_count
+    cmp #2
+    bcs !t32_has_rooms+
+    jmp !t32_skip+
+!t32_has_rooms:
+    ldx room_count
+    dex
+    lda #RT_NORMAL
+!t32_clear:
+    sta room_type,x
+    dex
+    bpl !t32_clear-
+    lda #RT_PIT
+    sta room_type + 1
+
+    // Clear monster table
+    jsr monster_init_table
+    lda #0
+    sta zp_mon_count
+
+    // Place player away from room 1 (at 1,1)
+    lda #1
+    sta zp_player_x
+    sta zp_player_y
+
+    // Save pre-spawn count
+    lda zp_mon_count
+    sta t32_pre_count
+
+    // Spawn special room monsters
+    jsr spawn_special_room_monsters
+
+    // Recount monsters (inline — save.s not imported)
+    lda #0
+    sta zp_mon_count
+    ldx #0
+!t32_recount:
+    cpx #MAX_MONSTERS
+    bcs !t32_rc_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t32_rc_next+
+    inc zp_mon_count
+!t32_rc_next:
+    inx
+    jmp !t32_recount-
+!t32_rc_done:
+    lda zp_mon_count
+    sta t32_post_count
+
+    // Must have spawned at least 1 (pit spawns 4-8)
+    lda t32_post_count
+    cmp t32_pre_count
+    beq !t32_skip+              // No new monsters = fail
+    bcc !t32_skip+              // Somehow fewer = fail
+
+    // Verify all spawned monsters are the same type (pit property)
+    // Read first monster's type
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t32_skip+              // No monster in slot 0
+    sta t32_check_type
+
+    // Check remaining slots
+    ldx #1
+!t32_type_loop:
+    cpx #MAX_MONSTERS
+    bcs !t32_type_ok+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !t32_next+
+    cmp t32_check_type
+    bne !t32_skip+              // Different type = not a proper pit
+!t32_next:
+    inx
+    jmp !t32_type_loop-
+!t32_type_ok:
+    lda #$01
+    sta tc_results+31
+    jmp !t32_done+
+!t32_skip:
+    lda #$00
+    sta tc_results+31
+!t32_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

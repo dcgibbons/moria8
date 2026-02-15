@@ -401,10 +401,7 @@ load_resume_game:
     jsr input_get_key
     // Redraw map on return
     jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_char:
 
     // Help?
@@ -416,10 +413,7 @@ load_resume_game:
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_help:
 
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
@@ -607,10 +601,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !open_no_turn:
     jmp !main_loop-
 !not_open:
@@ -630,10 +621,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !close_no_turn:
     jmp !main_loop-
 !not_close:
@@ -650,10 +638,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_search:
 
     // Rest?
@@ -682,10 +667,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !pickup_no_turn:
     jmp !main_loop-
 !not_pickup:
@@ -702,10 +684,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !drop_no_turn:
     jmp !main_loop-
 !not_drop:
@@ -719,10 +698,7 @@ load_resume_game:
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_inventory:
 
     // Equipment? (display only, no turn consumed)
@@ -734,10 +710,7 @@ load_resume_game:
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_equipment:
 
     // Wear/Wield?
@@ -752,10 +725,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !wear_no_turn:
     jmp !main_loop-
 !not_wear:
@@ -772,10 +742,7 @@ load_resume_game:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !takeoff_no_turn:
     jmp !main_loop-
 !not_takeoff:
@@ -830,10 +797,7 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !read_no_turn:
     jmp !main_loop-
 !not_read:
@@ -851,10 +815,7 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !aim_no_turn:
     jmp !main_loop-
 !not_aim:
@@ -872,10 +833,7 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !use_no_turn:
     jmp !main_loop-
 !not_use:
@@ -893,17 +851,11 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !cast_no_turn:
     // Restore screen after spell list overlay
     jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_cast:
 
     // Pray?
@@ -919,16 +871,10 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !pray_no_turn:
     jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !not_pray:
 
     // Gain spell from book?
@@ -962,10 +908,7 @@ load_resume_game:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 !fire_no_turn:
     jmp !main_loop-
 !not_fire:
@@ -1081,10 +1024,7 @@ run_step:
     jmp !player_died+
 !not_dead:
     jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp !main_loop-
+    jmp vp_render_status_loop
 
 !run_stop_move:
     lda #$ff
@@ -1147,8 +1087,95 @@ exit:
     jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
 
 // ============================================================
-// title_show_sysinfo — Display machine/KERNAL/REU info on row 23
+// Shared tail — viewport update + render + status + main loop
+// Used by most command handlers after turn_post_action.
 // ============================================================
+vp_render_status_loop:
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    jmp !main_loop-
+
+// ============================================================
+// String data — gameplay strings (MUST stay below $C000)
+// ============================================================
+
+press_key_str:
+    .text "PRESS ANY KEY" ; .byte 0
+
+welcome_str:
+    .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0
+
+descend_str:
+    .text "YOU DESCEND THE STAIRCASE." ; .byte 0
+
+ascend_str:
+    .text "YOU ASCEND THE STAIRCASE." ; .byte 0
+
+at_surface_str:
+    .text "YOU ARE ALREADY AT THE SURFACE." ; .byte 0
+
+no_stairs_str:
+    .text "YOU SEE NO STAIRS HERE." ; .byte 0
+
+slain_str:
+    .text "YOU HAVE BEEN SLAIN." ; .byte 0
+
+// ============================================================
+// Special rooms trampolines — SEI + bank out KERNAL, call $F000+
+// ============================================================
+tramp_assign_special_room:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr assign_special_room
+    jmp tramp_sr_epilogue
+
+tramp_vault_seal_entrance:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr vault_seal_entrance
+    jmp tramp_sr_epilogue
+
+tramp_spawn_special_room_monsters:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr spawn_special_room_monsters
+    jmp tramp_sr_epilogue
+
+tramp_spawn_nest_gold:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr spawn_nest_gold
+    jmp tramp_sr_epilogue
+
+tramp_find_special_room:
+    pha                         // Save A (room type input)
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    pla                         // Restore A
+    jsr find_special_room
+    // Carry flag preserved — lda/sta don't affect carry
+    jmp tramp_sr_epilogue
+
+tramp_sr_epilogue:
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    rts
+
+// ============================================================
+// Init-only code below — safe above $C000 (overwritten by map
+// after first level_generate, never called again).
+// ============================================================
+
+title_str:
+    .text "MORIA C=64" ; .byte 0
+
 title_show_sysinfo:
     lda #COL_DGREY
     sta zp_text_color
@@ -1217,16 +1244,6 @@ tsi_print:
     sty zp_ptr0_hi
     jmp screen_put_string
 
-// ============================================================
-// String data (screen codes via .encoding "screencode_upper")
-// ============================================================
-
-title_str:
-    .text "MORIA C=64" ; .byte 0
-
-press_key_str:
-    .text "PRESS ANY KEY" ; .byte 0
-
 tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
 tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
 tsi_c64_str:    .text "C64"  ; .byte 0
@@ -1238,24 +1255,15 @@ tsi_kb_str:     .text "KB" ; .byte 0
 tsi_krev_table: .byte $aa, $00, $03, $43    // KERNAL rev bytes
 tsi_krev_chars: .byte $31, $32, $33, $31    // '1', '2', '3', '1' in screen codes
 
-welcome_str:
-    .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0
-
-descend_str:
-    .text "YOU DESCEND THE STAIRCASE." ; .byte 0
-
-ascend_str:
-    .text "YOU ASCEND THE STAIRCASE." ; .byte 0
-
-at_surface_str:
-    .text "YOU ARE ALREADY AT THE SURFACE." ; .byte 0
-
-no_stairs_str:
-    .text "YOU SEE NO STAIRS HERE." ; .byte 0
-
-slain_str:
-    .text "YOU HAVE BEEN SLAIN." ; .byte 0
-
 // Safety: ensure assembled code doesn't overlap runtime data areas
 program_end:
 .assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true
+
+// ============================================================
+// Banked code — RAM under KERNAL ROM at $F000
+// Accessed through trampolines above (SEI + bank-out KERNAL).
+// VICE autostartprgmode 1 injects PRG directly into RAM,
+// safely spanning the I/O gap at $D000.
+// ============================================================
+*= $f000 "Banked Code"
+#import "special_rooms.s"

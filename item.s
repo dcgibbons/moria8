@@ -879,7 +879,29 @@ item_spawn_level:
     jmp !isl_all_done+
 !isl_has_treasure:
 
-    // Pick a random room
+    // Check for vault room → enhanced treasure
+    lda #RT_VAULT
+    jsr tramp_find_special_room
+    bcc !isl_no_vault+
+
+    // Vault: use vault room, dlvl+8, 4-8 items
+    stx isl_idx
+    lda zp_player_dlvl
+    clc
+    adc #8                      // dlvl+8
+    sta isl_treasure_dlvl
+    lda #5
+    jsr rng_range               // [0, 4]
+    clc
+    adc #4                      // [4, 8]
+    sta isl_ngold_target
+    jmp !isl_treasure_setup_done+
+
+!isl_no_vault:
+    // Spawn nest gold if applicable (no-op if no nest)
+    jsr tramp_spawn_nest_gold
+
+    // Normal treasure room (pick random room)
     lda room_count
     bne !isl_has_rooms+
     jmp !isl_all_done+
@@ -900,6 +922,7 @@ item_spawn_level:
     adc #2                      // [2, 4]
     sta isl_ngold_target        // Reuse as treasure count
 
+!isl_treasure_setup_done:
     lda #0
     sta isl_target              // Reuse as treasure loop counter
 

@@ -649,6 +649,7 @@ monster_spawn_level:
     jmp !msl_loop-
 
 !msl_done:
+    jsr tramp_spawn_special_room_monsters
     rts
 
 msl_target: .byte 0

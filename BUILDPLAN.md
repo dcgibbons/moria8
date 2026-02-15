@@ -1067,7 +1067,7 @@ are needed:
 
 ## Known Bugs
 
-All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 for verification details.
+Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for verification details.
 
 | # | Description | Status |
 |---|-------------|--------|
@@ -1089,6 +1089,7 @@ All playtesting bugs (BUG-1 through BUG-18) have been fixed. See Review Pass 15 
 | BUG-16 | Store screen clearing | ✅ Fixed — ui_help_clear_all |
 | BUG-17 | Look command distance | ✅ Fixed — multi-tile scan |
 | BUG-18 | Inventory popup in selection dialogs | ✅ Fixed — '?' key added |
+| BUG-19 | Garbage characters flash on screen when descending to dungeon level 1 | **Open** — screen fills with garbage briefly before dungeon renders correctly. Occurs on first descent from town. Likely screen not cleared before dungeon generation/render, or visibility buffer contains stale data. |
 
 ---
 
@@ -1141,7 +1142,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~3~~ | A5 | ~~Stack depth audit (trace deep call chains)~~ — ✅ Max 27 bytes (11%), safe | Done |
 | ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
 | ~~5~~ | R3.4 | ~~Monster fleeing at low HP~~ — ✅ Flee threshold (HP/4) at spawn, reversed greedy movement | Done |
-| **6** | R2.1 | Special rooms (vaults, pits, nests) | Medium |
+| ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
 | **7** | R4.1 | Ego items | Medium |
 | **8** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
 | **9** | R6.1 | Store haggling | Medium |
@@ -3614,7 +3615,7 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R2.1 | Special rooms (vaults, pits, nests) | **(TODO)** | Only standard rectangular rooms generated. Vaults add late-game interest. |
+| R2.1 | Special rooms (vaults, pits, nests) | ✅ **DONE** | Monster pits (dlvl>=5, 4-8 same type), treasure vaults (dlvl>=8, secret door entrance, enhanced loot), nests (dlvl>=3, 3-6 mixed weak monsters + gold). At most 1 per level. Code at $F000 (RAM under KERNAL ROM) with trampolines. |
 | R2.2 | Magma/quartz streamers with treasure | ✅ **DONE** | 5 streamers per level (3 magma + 2 quartz), placed during dungeon generation. Treasure in veins not yet implemented. |
 | R2.3 | Level persistence on stair transitions | **(deferred)** | Levels regenerate on each visit. True persistence would require per-level disk save — too much I/O for 1541. Acceptable simplification. |
 | R2.4 | Secret door generation | ✅ **DONE** | `place_secrets` enabled (Phase 4.6). 1-3 closed doors converted to TILE_SECRET per level. Context-aware rendering. `do_search` reveals with 1-in-6 chance. |
@@ -3680,8 +3681,8 @@ design; items marked **(TODO)** need implementation.
 - ~~A3 Character disk strategy~~ — ✅ dual-disk mode with swap prompts
 
 **Medium priority (significant missing content):**
-- R3.4 Monster fleeing — tactical depth (flee at low HP)
-- R2.1 Special rooms — late-game dungeon variety (vaults, pits, nests)
+- ~~R3.4 Monster fleeing~~ — ✅ Done
+- ~~R2.1 Special rooms~~ — ✅ Done (pits, vaults, nests with $F000 banking)
 - R4.1 Ego items — item variety and excitement
 - R5.1/R5.2 Spell expansion — more spells and spellbooks
 - R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
