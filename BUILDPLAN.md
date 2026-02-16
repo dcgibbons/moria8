@@ -1137,8 +1137,8 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | Open — currently safe, document-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
-| BUG-20 | LOW | Dead strings `mat_acid_str` + `mat_dead_str` waste 42 bytes | Open — OPT-1.1 (deferred) |
-| BUG-21 | LOW | Acid attack effect is a no-op (no player message) | Open |
+| BUG-20 | LOW | Dead string `mat_dead_str` wastes 21 bytes (`mat_acid_str` now used by BUG-21 fix) | Open — OPT-1.1 (deferred) |
+| BUG-21 | LOW | Acid attack effect is a no-op (no player message) | **Fixed** — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7) | ✅ Done (OPT-1.1 deferred) |
 | OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
@@ -1853,7 +1853,7 @@ to:
 **RP10-4 (MEDIUM): BUILDPLAN test expectation for `magic_recalc_mana` is wrong**
 
 Step 7.3 test says: "Verify `magic_recalc_mana` with INT=12, level=5 → expected max_mana
-= (5*12)/8 + bonus[12-3] = 7 + 2 = 9."
+= (5*12)/8 + bonus[12-3] = 7 + 1 = 8." (Corrected: bonus[9]=1 per `spell_stat_bonus` table.)
 
 The `spell_stat_bonus` table in `tables.s` (lines 196–198) has:
 ```
@@ -2017,16 +2017,16 @@ or individual spell effects. The following runtime tests should be added:
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP10-1 | **HIGH** | Monster HP=0 treated as alive in spell damage (inconsistent with combat.s) | Easy — add zero check after `bpl` in 4 locations, or extract helper | Open |
+| RP10-1 | **HIGH** | Monster HP=0 treated as alive in spell damage (inconsistent with combat.s) | Easy — add zero check after `bpl` in 4 locations, or extract helper | **Fixed** — all 3 locations already use `bmi`+`ora` zero-check; Magic Missile now uses shared `eff_bolt` |
 | RP10-2 | **HIGH** | `eff_destroy_traps_doors` doesn't remove traps from trap table; traps still trigger | Medium — add trap table scan after direction loop | **Fixed** — trap table entries scanned and removed via swap-with-last logic (spell_effects.s:854-906) |
 | RP10-3 | **HIGH** | `find_random_floor` doesn't check FLAG_OCCUPIED; teleport can land on monsters | Easy — add FLAG_OCCUPIED check in find_random_floor | **Fixed** — FLAG_OCCUPIED check added (dungeon_features.s:197-198) |
-| RP10-4 | **MEDIUM** | BUILDPLAN test expectation wrong: spell_stat_bonus[9]=1, not 2; expected mana=8, not 9 | Trivial — fix test expectation text | Open |
+| RP10-4 | **MEDIUM** | BUILDPLAN test expectation wrong: spell_stat_bonus[9]=1, not 2; expected mana=8, not 9 | Trivial — fix test expectation text | **Fixed** — corrected both test spec (line 3147) and RP description (line 1856) |
 | RP10-5 | **MEDIUM** | `eff_phase_door` duplicates 28 bytes of teleport code; should call `eff_teleport_self` | Trivial — replace with JSR/JMP | **Fixed** — now calls find_random_floor (spell_effects.s:342) |
 | RP10-6 | **MEDIUM** | `eff_heal` API takes pre-rolled A (8-bit) not dice params as BUILDPLAN describes | Documentation — update BUILDPLAN to match implementation | **Fixed** — BUILDPLAN step 7.1 updated to match actual 8-bit API |
-| RP10-7 | LOW | `eff_detect_monsters` permanently marks tiles FLAG_VISITED (minor map info leak) | Medium — add timer-based detect effect | Open |
+| RP10-7 | LOW | `eff_detect_monsters` permanently marks tiles FLAG_VISITED (minor map info leak) | Medium — add timer-based detect effect | **Fixed** — timer-based: `eff_detect_timer` counts down 20 turns, renderer shows detected monsters on unvisited tiles |
 | RP10-8 | LOW | CMP/BEQ dispatch chains are O(n); jump table would be O(1) and smaller | Medium — rewrite as jump table | Open |
-| RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | Open |
-| RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | Open |
+| RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | **Fixed** — guard already present (player.s:407-409) |
+| RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | **Fixed** — already uses `walkable_table` (allows floor, doors, rubble, stairs, traps) |
 | RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | **Fixed** — redundant clear removed |
 | RP10-12 | LOW | `eff_aggravate` not implemented despite being listed in Step 7.0 | Easy — ~20 bytes | Resolved (see RP11-6) |
 

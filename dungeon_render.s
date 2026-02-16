@@ -93,7 +93,23 @@ render_viewport:
     // Check if visited (bit 2)
     and #FLAG_VISITED
     bne !rv_visited+
+
+    // Not visited — check if detect monsters reveals an occupant
+    lda eff_detect_timer
+    bne !rv_detect_chk+
     jmp !draw_blank+
+!rv_detect_chk:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne !rv_detect_render+
+    jmp !draw_blank+
+!rv_detect_render:
+    // Detected monster on unvisited tile — blank background, then monster
+    lda #$20                    // Space (blank tile)
+    sta zp_temp0
+    lda #0                      // Black background
+    sta zp_temp1
+    jmp !rv_no_item+            // Skip to monster check
 !rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)

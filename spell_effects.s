@@ -247,51 +247,18 @@ eff_cure_poison:
     rts
 
 // ============================================================
-// eff_detect_monsters — Reveal all active monsters on map
-// Sets FLAG_VISITED on each active monster's tile so it renders.
+// eff_detect_monsters — Activate detect monsters effect (timer)
+// While timer > 0, renderer shows all active monsters regardless
+// of tile visibility. No permanent FLAG_VISITED side-effect.
 // Input: none
-// Output: vis_room_revealed = 1
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0
+// Output: eff_detect_timer set, vis_room_revealed = 1
+// Clobbers: A
 // ============================================================
+eff_detect_timer: .byte 0              // Turns remaining (0 = inactive)
+
 eff_detect_monsters:
-    ldx #0
-!edm_loop:
-    cpx #MAX_MONSTERS
-    bcs !edm_done+
-
-    stx zp_temp0                    // Save monster index
-    jsr monster_get_ptr             // zp_ptr0 = pointer to monster entry
-
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edm_next+
-
-    // Get monster Y coordinate -> map row pointer
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    tax                             // X = monster Y coord
-    lda map_row_lo,x
-    sta zp_ptr1
-    lda map_row_hi,x
-    sta zp_ptr1_hi
-
-    // Get monster X coordinate
-    ldy #MX_X
-    lda (zp_ptr0),y
-    tay                             // Y = monster X coord
-
-    // Set FLAG_VISITED on tile
-    lda (zp_ptr1),y
-    ora #FLAG_VISITED
-    sta (zp_ptr1),y
-
-!edm_next:
-    ldx zp_temp0                    // Restore monster index
-    inx
-    jmp !edm_loop-
-
-!edm_done:
+    lda #20
+    sta eff_detect_timer
     lda #1
     sta vis_room_revealed
     rts

@@ -196,6 +196,16 @@ turn_tick_effects:
     jsr msg_print
 !no_recall:
 
+    // Detect monsters timer
+    lda eff_detect_timer
+    beq !no_detect+
+    dec eff_detect_timer
+    bne !no_detect+
+    // Expired — trigger redraw to hide detected monsters
+    lda #1
+    sta vis_room_revealed
+!no_detect:
+
     // Mana regen: spell-casting classes recover 1 MP per 2 turns
     // Extra regen (zp_eff_regen > 0): recover 1 MP every turn
     lda player_data + PL_SPELL_TYPE

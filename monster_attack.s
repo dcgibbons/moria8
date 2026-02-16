@@ -504,8 +504,13 @@ mon_atk_effect_paralyze:
     rts
 
 // mon_atk_effect_acid — Acid attack (no AC reduction, full damage)
-// Currently just passes through (damage already in zp_combat_dmg)
+// Damage already applied; print effect message.
 mon_atk_effect_acid:
+    lda #<mat_acid_str
+    sta zp_ptr2
+    lda #>mat_acid_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
     rts
 
 // mon_atk_effect_aggravate — Wake all sleeping monsters
