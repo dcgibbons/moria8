@@ -163,7 +163,9 @@ ui_equip_display:
 !ueq_loop:
     lda uinv_slot
     cmp #MAX_EQUIP_SLOTS
-    bcs !ueq_done+
+    bcc !ueq_cont+
+    jmp !ueq_done+
+!ueq_cont:
 
     // Row = slot + 2
     clc
@@ -202,6 +204,31 @@ ui_equip_display:
     ldx uinv_equip_idx
     lda inv_ego,x
     jsr banked_ego_put_suffix
+    // Pseudo-ID quality tag for unidentified items with IF_TRIED
+    ldx uinv_equip_idx
+    lda inv_flags,x
+    and #IF_IDENTIFIED
+    bne !ueq_no_pid+
+    lda inv_flags,x
+    and #IF_TRIED
+    beq !ueq_no_pid+
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #$20                    // Space
+    jsr screen_put_char
+    lda #$28                    // '('
+    jsr screen_put_char
+    // X still = uinv_equip_idx (screen_put_char only clobbers Y)
+    jsr pid_get_quality         // A = quality index 0-4, X preserved
+    tax
+    lda pid_w_ptrs_lo,x
+    sta zp_ptr0
+    lda pid_w_ptrs_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #$29                    // ')'
+    jsr screen_put_char
+!ueq_no_pid:
     jmp !ueq_next+
 
 !ueq_none:

@@ -148,6 +148,8 @@ player_sync_to_zp:
     sta zp_player_food_hi
     lda player_data + PL_LIGHT_RAD
     sta zp_light_radius
+    lda player_data + PL_RESERVED
+    sta zp_pseudo_id_timer
     rts
 
 // player_sync_from_zp — Copy ZP hot fields back to struct

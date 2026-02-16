@@ -380,6 +380,7 @@ turn_post_action:
     jsr turn_tick_hunger
     jsr turn_tick_regen
     jsr turn_tick_light
+    jsr turn_tick_pseudo_id
     jsr monster_ai_tick
 
     // Increment turn counter
@@ -454,3 +455,113 @@ eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0
 ttl_dim_str:      .text "YOUR LIGHT IS GROWING DIM." ; .byte 0
 ttl_out_str:      .text "YOUR LIGHT HAS GONE OUT." ; .byte 0
 recall_arrive_str: .text "YOU FEEL YOURSELF YANKED AWAY!" ; .byte 0
+
+// ============================================================
+// Pseudo-identification system
+// ============================================================
+
+// turn_tick_pseudo_id — Pseudo-identify equipped items over time
+// Each turn, decrements zp_pseudo_id_timer. When it reaches 0, scans
+// equipment for the first unidentified item without IF_TRIED.
+// Sets IF_TRIED, prints quality message, and resets timer.
+// Preserves: nothing
+turn_tick_pseudo_id:
+    lda zp_pseudo_id_timer
+    beq !pid_done+              // Timer 0 = inactive
+    dec zp_pseudo_id_timer
+    bne !pid_done+              // Not expired yet
+
+    // Timer expired — scan equipment slots
+    ldx #EQUIP_WEAPON
+!pid_scan:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pid_next+
+    lda inv_flags,x
+    and #IF_IDENTIFIED
+    bne !pid_next+              // Already fully identified
+    lda inv_flags,x
+    and #IF_TRIED
+    bne !pid_next+              // Already pseudo-ID'd
+
+    // Found unID'd item — set IF_TRIED
+    lda inv_flags,x
+    ora #IF_TRIED
+    sta inv_flags,x
+
+    // Get quality index
+    stx pid_save_x
+    jsr pid_get_quality         // A = quality index 0-4
+    sta pid_save_q
+
+    // Build message: "SENSE: <QUALITY>"
+    lda #0
+    sta cmb_buf_idx
+    lda #<pid_sense_str
+    ldy #>pid_sense_str
+    jsr combat_append_str
+    ldx pid_save_q
+    lda pid_w_ptrs_lo,x
+    ldy pid_w_ptrs_hi,x
+    jsr combat_append_str
+    jsr cmb_term_and_print
+    jmp !pid_reset+
+
+!pid_next:
+    inx
+    cpx #EQUIP_RING + 1
+    bcc !pid_scan-
+    // No unID'd items found — still reset timer
+!pid_reset:
+    lda player_data + PL_RESERVED
+    sta zp_pseudo_id_timer
+!pid_done:
+    rts
+
+pid_save_x: .byte 0
+pid_save_q: .byte 0
+
+// pid_get_quality — Determine quality level from item enchantment
+// Input: X = inventory slot index
+// Output: A = quality index (0=TERRIBLE, 1=BAD, 2=AVERAGE, 3=GOOD, 4=EXCELLENT)
+// Preserves: X
+pid_get_quality:
+    lda inv_flags,x
+    and #IF_CURSED
+    bne !pgq_bad+
+    lda inv_p1,x
+    bmi !pgq_neg+
+    // Positive or zero
+    beq !pgq_avg+
+    cmp #3
+    bcs !pgq_exc+
+    lda #3                      // GOOD (p1 = 1 or 2)
+    rts
+!pgq_exc:
+    lda #4                      // EXCELLENT (p1 >= 3)
+    rts
+!pgq_neg:
+    cmp #$FF
+    beq !pgq_bad+
+    lda #0                      // TERRIBLE (p1 <= -2)
+    rts
+!pgq_bad:
+    lda #1                      // BAD (p1 = -1 or cursed)
+    rts
+!pgq_avg:
+    lda #2                      // AVERAGE (p1 = 0)
+    rts
+
+// Quality word strings (screen codes via inherited encoding)
+pid_w_terrible: .text "TERRIBLE" ; .byte 0
+pid_w_bad:      .text "BAD" ; .byte 0
+pid_w_average:  .text "AVERAGE" ; .byte 0
+pid_w_good:     .text "GOOD" ; .byte 0
+pid_w_excellent:.text "EXCELLENT" ; .byte 0
+
+pid_w_ptrs_lo:
+    .byte <pid_w_terrible, <pid_w_bad, <pid_w_average, <pid_w_good, <pid_w_excellent
+pid_w_ptrs_hi:
+    .byte >pid_w_terrible, >pid_w_bad, >pid_w_average, >pid_w_good, >pid_w_excellent
+
+pid_sense_str: .text "SENSE: " ; .byte 0

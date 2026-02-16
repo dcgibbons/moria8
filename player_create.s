@@ -712,7 +712,17 @@ create_init_character:
     lda regen_rate,x
     sta zp_regen_counter
 
+    // Pseudo-ID rate based on class
+    ldx player_data + PL_CLASS
+    lda pid_class_rate,x
+    sta player_data + PL_RESERVED
+
     rts
+
+// Pseudo-ID class rates (turns between pseudo-ID attempts)
+// Warrior=50, Mage=150, Priest=100, Rogue=75, Ranger=75, Paladin=100
+pid_class_rate:
+    .byte 50, 150, 100, 75, 75, 100
 
 // put_stat_val — extracted to stat_display.s (main RAM, always accessible)
 

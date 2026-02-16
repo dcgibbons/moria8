@@ -208,7 +208,7 @@
 .label zp_inv_qty      = $8b   // Item quantity
 .label zp_store_idx    = $8c   // Current store index (0–5)
 .label zp_store_slot   = $8d   // Current store inventory slot
-.label zp_spare_8e     = $8e   // Spare
+.label zp_pseudo_id_timer = $8e // Pseudo-ID turn countdown
 .label zp_spare_8f     = $8f   // Spare
 
 // ============================================================
