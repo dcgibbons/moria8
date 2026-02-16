@@ -1126,8 +1126,8 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 - **Test suites:** 20 (261 runtime tests)
 - **Compile-time asserts:** 67
 - **Source files:** ~42 .s files
-- **Program size:** $B54A (program_end), CREATURE_BASE at $C020 — **2,774 bytes headroom**
-- **PRG file:** 44,364 bytes (43 KB on disk)
+- **Program size:** $B4C2 (program_end), CREATURE_BASE at $C020 — **2,910 bytes headroom**
+- **PRG file:** 44,228 bytes (43 KB on disk)
 
 ### Known Remaining Issues
 
@@ -2025,7 +2025,7 @@ or individual spell effects. The following runtime tests should be added:
 | RP10-5 | **MEDIUM** | `eff_phase_door` duplicates 28 bytes of teleport code; should call `eff_teleport_self` | Trivial — replace with JSR/JMP | **Fixed** — now calls find_random_floor (spell_effects.s:342) |
 | RP10-6 | **MEDIUM** | `eff_heal` API takes pre-rolled A (8-bit) not dice params as BUILDPLAN describes | Documentation — update BUILDPLAN to match implementation | **Fixed** — BUILDPLAN step 7.1 updated to match actual 8-bit API |
 | RP10-7 | LOW | `eff_detect_monsters` permanently marks tiles FLAG_VISITED (minor map info leak) | Medium — add timer-based detect effect | **Fixed** — timer-based: `eff_detect_timer` counts down 20 turns, renderer shows detected monsters on unvisited tiles |
-| RP10-8 | LOW | CMP/BEQ dispatch chains are O(n); jump table would be O(1) and smaller | Medium — rewrite as jump table | Open |
+| RP10-8 | LOW | CMP/BEQ dispatch chains are O(n); jump table would be O(1) and smaller | Medium — rewrite as jump table | **Fixed** — RTS-trick jump tables replace 32 CMP/BNE entries; shared `heal_dice` helper; saves ~136 bytes |
 | RP10-9 | LOW | `stat_bonus_index` has no lower-bounds check (stat < 3 causes buffer over-read) | Trivial — add `cmp #3; bcs` guard | **Fixed** — guard already present (player.s:407-409) |
 | RP10-10 | LOW | `eff_bolt` only passes through TILE_FLOOR and TILE_DOOR_OPEN | Easy — invert check to block walls instead | **Fixed** — already uses `walkable_table` (allows floor, doors, rubble, stairs, traps) |
 | RP10-11 | LOW | `eff_kill_monster` clears FLAG_OCCUPIED redundantly (also done by monster_remove) | Trivial — remove manual clear | **Fixed** — redundant clear removed |

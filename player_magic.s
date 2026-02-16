@@ -951,300 +951,155 @@ magic_recalc_mana:
 // ============================================================
 // mage_effect_dispatch — Dispatch mage spell effect by index
 // Input: A = spell index (0-15)
+// Uses RTS-trick jump table: O(1) dispatch, no CMP/BNE chain
 // Clobbers: everything
 // ============================================================
 mage_effect_dispatch:
-    cmp #0
-    bne !med_1+
-    // 0: Magic Missile — bolt, 1d4 + level/2
+    tax
+    lda med_tbl_hi,x
+    pha
+    lda med_tbl_lo,x
+    pha
+    rts                             // Jump to (table entry)+1
+
+med_tbl_lo:
+    .byte <(med_s0-1),  <(eff_detect_monsters-1), <(eff_phase_door-1)
+    .byte <(eff_light_room-1), <(med_s4-1), <(med_s5-1)
+    .byte <(eff_confuse_adjacent-1), <(med_s7-1), <(med_s8-1)
+    .byte <(eff_destroy_traps_doors-1), <(eff_sleep_adjacent-1)
+    .byte <(eff_cure_poison-1), <(eff_teleport_self-1)
+    .byte <(med_s13-1), <(eff_wall_to_mud-1), <(med_s15-1)
+med_tbl_hi:
+    .byte >(med_s0-1),  >(eff_detect_monsters-1), >(eff_phase_door-1)
+    .byte >(eff_light_room-1), >(med_s4-1), >(med_s5-1)
+    .byte >(eff_confuse_adjacent-1), >(med_s7-1), >(med_s8-1)
+    .byte >(eff_destroy_traps_doors-1), >(eff_sleep_adjacent-1)
+    .byte >(eff_cure_poison-1), >(eff_teleport_self-1)
+    .byte >(med_s13-1), >(eff_wall_to_mud-1), >(med_s15-1)
+
+// Mage stubs (inline setup before effect call)
+med_s0:    // 0: Magic Missile — bolt, 1d4 + level/2
     lda zp_player_lvl
-    lsr                             // level/2
-    tay                             // Y = bonus
-    lda #1                          // 1d4
+    lsr
+    tay
+    lda #1
     ldx #4
-    jsr eff_bolt
-    rts
-
-!med_1:
-    cmp #1
-    bne !med_2+
-    // 1: Detect Monsters
-    jsr eff_detect_monsters
-    rts
-
-!med_2:
-    cmp #2
-    bne !med_3+
-    // 2: Phase Door
-    jsr eff_phase_door
-    rts
-
-!med_3:
-    cmp #3
-    bne !med_4+
-    // 3: Light Area
-    jsr eff_light_room
-    rts
-
-!med_4:
-    cmp #4
-    bne !med_5+
-    // 4: Cure Light Wounds — 1d8+1
+    jmp eff_bolt
+med_s4:    // 4: Cure Light Wounds — 1d8+1
     lda #1
     ldx #8
     ldy #1
-    jsr math_dice
-    lda zp_math_a
-    jsr eff_heal
-    rts
-
-!med_5:
-    cmp #5
-    bne !med_6+
-    // 5: Find Traps/Doors
+    jmp heal_dice
+med_s5:    // 5: Find Traps/Doors
     jsr eff_find_traps
-    jsr eff_find_doors
-    rts
-
-!med_6:
-    cmp #6
-    bne !med_7+
-    // 6: Stinking Cloud — confuse adjacent
-    jsr eff_confuse_adjacent
-    rts
-
-!med_7:
-    cmp #7
-    bne !med_8+
-    // 7: Confusion — directional, set MX_CONFUSE
+    jmp eff_find_doors
+med_s7:    // 7: Confusion — directional, set MX_CONFUSE
     jsr eff_directional_monster
-    bcc !med_7_rts+
+    bcc !med_s7_rts+
     jsr monster_get_ptr
     ldy #MX_CONFUSE
     lda #10
     sta (zp_ptr0),y
-!med_7_rts:
+!med_s7_rts:
     rts
-
-!med_8:
-    cmp #8
-    bne !med_9+
-    // 8: Lightning Bolt — 3d8
+med_s8:    // 8: Lightning Bolt — 3d8
     lda #3
     ldx #8
     ldy #0
-    jsr eff_bolt
-    rts
-
-!med_9:
-    cmp #9
-    bne !med_10+
-    // 9: Trap/Door Destroy
-    jsr eff_destroy_traps_doors
-    rts
-
-!med_10:
-    cmp #10
-    bne !med_11+
-    // 10: Sleep I — sleep adjacent
-    jsr eff_sleep_adjacent
-    rts
-
-!med_11:
-    cmp #11
-    bne !med_12+
-    // 11: Cure Poison
-    jsr eff_cure_poison
-    rts
-
-!med_12:
-    cmp #12
-    bne !med_13+
-    // 12: Teleport Self
-    jsr eff_teleport_self
-    rts
-
-!med_13:
-    cmp #13
-    bne !med_14+
-    // 13: Frost Bolt — 5d8
+    jmp eff_bolt
+med_s13:   // 13: Frost Bolt — 5d8
     lda #5
     ldx #8
     ldy #0
-    jsr eff_bolt
-    rts
-
-!med_14:
-    cmp #14
-    bne !med_15+
-    // 14: Wall to Mud
-    jsr eff_wall_to_mud
-    rts
-
-!med_15:
-    cmp #15
-    bne !med_unknown+
-    // 15: Fire Ball — 7d8 area damage to adjacent
+    jmp eff_bolt
+med_s15:   // 15: Fire Ball — 7d8 area damage to adjacent
     lda #7
     ldx #8
-    jsr eff_damage_adjacent
-    rts
-
-!med_unknown:
-    rts
+    jmp eff_damage_adjacent
 
 // ============================================================
 // priest_effect_dispatch — Dispatch priest prayer effect by index
 // Input: A = spell index (0-15)
+// Uses RTS-trick jump table: O(1) dispatch, no CMP/BNE chain
 // Clobbers: everything
 // ============================================================
 priest_effect_dispatch:
-    cmp #0
-    bne !ped_1+
-    // 0: Detect Evil (= detect monsters)
-    jsr eff_detect_monsters
+    tax
+    lda ped_tbl_hi,x
+    pha
+    lda ped_tbl_lo,x
+    pha
     rts
 
-!ped_1:
-    cmp #1
-    bne !ped_2+
-    // 1: Cure Light Wounds — 1d8+1
+ped_tbl_lo:
+    .byte <(eff_detect_monsters-1), <(ped_s1-1), <(ped_s2-1)
+    .byte <(ped_noop-1), <(eff_light_room-1), <(eff_find_traps-1)
+    .byte <(eff_find_doors-1), <(ped_s7-1), <(ped_s8-1)
+    .byte <(eff_phase_door-1), <(ped_s10-1), <(ped_s11-1)
+    .byte <(eff_sleep_adjacent-1), <(eff_remove_curse-1)
+    .byte <(ped_s14-1), <(eff_dispel_undead-1)
+ped_tbl_hi:
+    .byte >(eff_detect_monsters-1), >(ped_s1-1), >(ped_s2-1)
+    .byte >(ped_noop-1), >(eff_light_room-1), >(eff_find_traps-1)
+    .byte >(eff_find_doors-1), >(ped_s7-1), >(ped_s8-1)
+    .byte >(eff_phase_door-1), >(ped_s10-1), >(ped_s11-1)
+    .byte >(eff_sleep_adjacent-1), >(eff_remove_curse-1)
+    .byte >(ped_s14-1), >(eff_dispel_undead-1)
+
+// Priest stubs
+ped_s1:    // 1: Cure Light Wounds — 1d8+1
     lda #1
     ldx #8
     ldy #1
-    jsr math_dice
-    lda zp_math_a
-    jsr eff_heal
-    rts
-
-!ped_2:
-    cmp #2
-    bne !ped_3+
-    // 2: Bless — random [12, 23] turn timer
+    jmp heal_dice
+ped_s2:    // 2: Bless — random [12, 23] turn timer
     lda #12
-    jsr rng_range                   // [0, 11]
+    jsr rng_range
     clc
-    adc #12                         // [12, 23]
+    adc #12
     sta zp_eff_bless
     rts
-
-!ped_3:
-    cmp #3
-    bne !ped_4+
-    // 3: Remove Fear — placeholder (no fear timer yet)
-    rts
-
-!ped_4:
-    cmp #4
-    bne !ped_5+
-    // 4: Call Light
-    jsr eff_light_room
-    rts
-
-!ped_5:
-    cmp #5
-    bne !ped_6+
-    // 5: Find Traps
-    jsr eff_find_traps
-    rts
-
-!ped_6:
-    cmp #6
-    bne !ped_7+
-    // 6: Detect Doors/Stairs
-    jsr eff_find_doors
-    rts
-
-!ped_7:
-    cmp #7
-    bne !ped_8+
-    // 7: Slow Poison — halve poison timer (min 1)
+ped_s7:    // 7: Slow Poison — halve poison timer (min 1)
     lda zp_eff_poison
-    beq !ped_7_rts+                 // Not poisoned
+    beq ped_noop
     lsr
-    ora #1                          // Ensure at least 1
+    ora #1
     sta zp_eff_poison
-!ped_7_rts:
+ped_noop:  // 3: Remove Fear — placeholder (also shared RTS)
     rts
-
-!ped_8:
-    cmp #8
-    bne !ped_9+
-    // 8: Blind Creature — directional, set MX_STUN
+ped_s8:    // 8: Blind Creature — directional, set MX_STUN
     jsr eff_directional_monster
-    bcc !ped_8_rts+
+    bcc !ped_s8_rts+
     jsr monster_get_ptr
     ldy #MX_STUN
     lda #10
     sta (zp_ptr0),y
-!ped_8_rts:
+!ped_s8_rts:
     rts
-
-!ped_9:
-    cmp #9
-    bne !ped_10+
-    // 9: Portal
-    jsr eff_phase_door
-    rts
-
-!ped_10:
-    cmp #10
-    bne !ped_11+
-    // 10: Cure Medium Wounds — 3d8+3
+ped_s10:   // 10: Cure Medium Wounds — 3d8+3
     lda #3
     ldx #8
     ldy #3
-    jsr math_dice
-    lda zp_math_a
-    jsr eff_heal
-    rts
-
-!ped_11:
-    cmp #11
-    bne !ped_12+
-    // 11: Chant — random [24, 47] turn timer
+    jmp heal_dice
+ped_s11:   // 11: Chant — random [24, 47] turn timer
     lda #24
-    jsr rng_range                   // [0, 23]
+    jsr rng_range
     clc
-    adc #24                         // [24, 47]
+    adc #24
     sta zp_eff_bless
     rts
-
-!ped_12:
-    cmp #12
-    bne !ped_13+
-    // 12: Sanctuary — sleep adjacent monsters
-    jsr eff_sleep_adjacent
-    rts
-
-!ped_13:
-    cmp #13
-    bne !ped_14+
-    // 13: Remove Curse
-    jsr eff_remove_curse
-    rts
-
-!ped_14:
-    cmp #14
-    bne !ped_15+
-    // 14: Cure Serious Wounds — 5d8+5
+ped_s14:   // 14: Cure Serious Wounds — 5d8+5
     lda #5
     ldx #8
     ldy #5
+    jmp heal_dice
+
+// Shared helper: roll NdS+B dice and heal
+// Input: A=N, X=S, Y=B
+heal_dice:
     jsr math_dice
     lda zp_math_a
-    jsr eff_heal
-    rts
-
-!ped_15:
-    cmp #15
-    bne !ped_unknown+
-    // 15: Dispel Undead — damage all undead monsters
-    jsr eff_dispel_undead
-    rts
-
-!ped_unknown:
-    rts
+    jmp eff_heal
 
 // ============================================================
 // String data (screen codes via inherited encoding)
