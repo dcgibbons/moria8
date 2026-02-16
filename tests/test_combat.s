@@ -348,6 +348,8 @@ test_start:
     sta player_data + PL_LEVEL
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
+    lda #100                    // Human Warrior = 100+0 = 100
+    sta player_data + PL_EXPFACT
     // Set base stats for HP calc
     lda #12
     sta player_data + PL_STR_CUR

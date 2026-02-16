@@ -648,6 +648,22 @@ create_init_character:
     lda #0
     sta player_data + PL_GOLD_2
 
+    // Experience factor = race_xp% + class_xp% (range 100-165)
+    ldx player_data + PL_RACE
+    lda #RACE_PROP_SIZE
+    jsr mul_x_by_a
+    tax
+    lda race_properties + 2,x      // Race XP%
+    sta player_data + PL_EXPFACT
+    ldx player_data + PL_CLASS
+    lda #CLASS_PROP_SIZE
+    jsr mul_x_by_a
+    tax
+    lda class_properties + 2,x     // Class XP%
+    clc
+    adc player_data + PL_EXPFACT
+    sta player_data + PL_EXPFACT
+
     // Starting XP = 0
     lda #0
     sta player_data + PL_XP_0

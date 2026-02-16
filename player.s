@@ -65,8 +65,8 @@
 .const PL_SPELL_TYPE = 60  // Spell type (0=none, 1=mage, 2=priest)
 .const PL_SPELLS_KNOWN = 61 // Bitmask of spells learned (16 bits)
 .const PL_SPELLS_KNOWN_HI = 62
-// Spare (was PL_STR_EXTRA — 18/xx now encoded in stat byte itself)
-.const PL_SPARE_63  = 63
+// Experience factor (race_xp% + class_xp%, range 100-165)
+.const PL_EXPFACT   = 63
 // Reserved
 .const PL_RESERVED  = 64   // Start of reserved area
 .const PL_STRUCT_SIZE = 80  // Total struct size (with padding)

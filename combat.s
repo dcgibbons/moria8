@@ -511,12 +511,13 @@ combat_award_xp:
 
     rts
 
-// combat_check_levelup — Check if XP exceeds level threshold
-// Compares 16-bit PL_XP (bytes 0-1) against xp_level[level-1].
+// combat_check_levelup — Check if XP exceeds adjusted level threshold
+// Adjusted threshold = base_threshold * PL_EXPFACT / 100
+// Compares 16-bit PL_XP against adjusted threshold.
 // Levels up if exceeded. Recursive check for multi-level jumps.
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_check_levelup:
-    // Get threshold for current level
+    // Get base threshold for current level
     lda zp_player_lvl
     sec
     sbc #1                      // Index = level - 1
@@ -526,15 +527,48 @@ combat_check_levelup:
     lda xp_level_hi,x
     sta zp_temp1
 
-    // Compare 16-bit: PL_XP >= threshold?
-    // Compare hi byte first
+    // Multiply threshold by expfact: 16×8 → 24-bit
+    // Step 1: threshold_lo * expfact
+    lda zp_temp0
+    ldx player_data + PL_EXPFACT
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda zp_math_a
+    sta ccl_adj_0
+    lda zp_math_b
+    sta ccl_adj_1
+    lda #0
+    sta ccl_adj_2
+
+    // Step 2: threshold_hi * expfact, add shifted left 8
+    lda zp_temp1
+    ldx player_data + PL_EXPFACT
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda ccl_adj_1
+    clc
+    adc zp_math_a
+    sta ccl_adj_1
+    lda ccl_adj_2
+    adc zp_math_b
+    sta ccl_adj_2
+
+    // Divide 24-bit product by 100 → adjusted threshold
+    jsr ccl_div_24x100
+
+    // Result in ccl_adj_0/1 (16-bit). Cap at $FFFF if overflow.
+    lda ccl_adj_2
+    beq !ccl_no_cap+
+    lda #$ff
+    sta ccl_adj_0
+    sta ccl_adj_1
+!ccl_no_cap:
+
+    // Compare 16-bit: PL_XP >= adjusted threshold?
     lda player_data + PL_XP_1
-    cmp zp_temp1
+    cmp ccl_adj_1
     bcc !ccl_no+                // XP_hi < threshold_hi → no
     bne !ccl_yes+               // XP_hi > threshold_hi → yes
-    // Hi bytes equal, compare lo
     lda player_data + PL_XP_0
-    cmp zp_temp0
+    cmp ccl_adj_0
     bcc !ccl_no+                // XP_lo < threshold_lo → no
 
 !ccl_yes:
@@ -579,6 +613,35 @@ combat_check_levelup:
     jmp combat_check_levelup
 
 !ccl_no:
+    rts
+
+// Scratch for 24-bit threshold computation
+ccl_adj_0: .byte 0             // 24-bit product / result (lo)
+ccl_adj_1: .byte 0             // (mid)
+ccl_adj_2: .byte 0             // (hi)
+
+// ccl_div_24x100 — Divide ccl_adj_0/1/2 by 100
+// Uses shift-subtract algorithm (24 iterations)
+// Result: quotient overwrites ccl_adj_0/1/2
+// Clobbers: A, X
+ccl_div_24x100:
+    lda #0
+    sta zp_temp4                // Remainder
+    ldx #24                     // 24 bits
+!cd24_loop:
+    asl ccl_adj_0               // Shift dividend left
+    rol ccl_adj_1
+    rol ccl_adj_2
+    rol zp_temp4                // MSB into remainder
+    lda zp_temp4
+    cmp #100                    // Try subtract divisor
+    bcc !cd24_skip+
+    sbc #100
+    sta zp_temp4
+    inc ccl_adj_0               // Set quotient bit
+!cd24_skip:
+    dex
+    bne !cd24_loop-
     rts
 
 // ============================================================
