@@ -1123,11 +1123,11 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 
 ### Build Stats
 
-- **Test suites:** 20 (259 runtime tests)
-- **Compile-time asserts:** 63
+- **Test suites:** 20 (261 runtime tests)
+- **Compile-time asserts:** 67
 - **Source files:** ~42 .s files
-- **Program size:** $BF41 (program_end), CREATURE_BASE at $C020 — **223 bytes headroom**
-- **PRG file:** 48,060 bytes (47 KB on disk)
+- **Program size:** $B4E3 (program_end), CREATURE_BASE at $C020 — **2,877 bytes headroom**
+- **PRG file:** 44,261 bytes (43 KB on disk)
 
 ### Known Remaining Issues
 
