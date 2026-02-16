@@ -351,8 +351,16 @@ reu_load_all_tiers:
     lda reu_tier_offset_hi
     sta reu_tier_start_hi,x
 
-    // Load tier file from disk to $E000
+    // Display tier filename
     stx current_tier            // tier_load_disk reads current_tier for filename
+    dex                         // 0-based index for display table
+    lda reu_fn_tier_lo,x
+    sta zp_ptr0
+    lda reu_fn_tier_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
+    // Load tier file from disk to $E000
     jsr tier_load_disk
     bcs !rlt_skip+              // Skip if load failed
     inc reu_tiers_loaded
@@ -402,7 +410,9 @@ reu_load_all_tiers:
     ldx reu_tier_idx
     inx
     cpx #5                      // Tiers 1-4
-    bne !rlt_loop-
+    beq !rlt_all_done+
+    jmp !rlt_loop-
+!rlt_all_done:
 
     // Reset game state — no tier active yet (player starts in town)
     lda #0
@@ -492,7 +502,16 @@ reu_stash_overlays:
     lda reu_tier_offset_hi
     sta ovl_reu_start_hi,x
 
+    // Display overlay filename
+    dex                         // 0-based index
+    lda reu_fn_ovl_lo,x
+    sta zp_ptr0
+    lda reu_fn_ovl_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
     // Load overlay PRG from disk to $E000
+    ldx reu_ovl_idx
     dex                         // 0-based index for overlay_load_disk
     jsr overlay_load_disk
     bcs !rso_skip+              // Skip stash if load failed
@@ -556,3 +575,41 @@ reu_stash_overlays:
 
 // Scratch for overlay stashing
 reu_ovl_idx: .byte 0
+
+
+// ============================================================
+// REU loading display
+// ============================================================
+
+// reu_show_file — Display filename during REU stashing
+// Input: zp_ptr0 = screen-code string (null-terminated)
+// Uses reu_loading_row for current row, increments after display.
+// Clobbers: A, X, Y
+reu_show_file:
+    lda reu_loading_row
+    sta zp_cursor_row
+    lda #2
+    sta zp_cursor_col
+    jsr screen_put_string
+    inc reu_loading_row
+    rts
+
+reu_loading_row: .byte 0
+
+// Screen-code filename strings for display
+reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
+reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
+reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
+reu_fn_t4: .text "MONSTER.DB.4" ; .byte 0
+reu_fn_o1: .text "OVL.START" ; .byte 0
+reu_fn_o2: .text "OVL.TOWN" ; .byte 0
+reu_fn_o3: .text "OVL.DEATH" ; .byte 0
+
+// Pointer tables (0-based index)
+reu_fn_tier_lo: .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4
+reu_fn_tier_hi: .byte >reu_fn_t1, >reu_fn_t2, >reu_fn_t3, >reu_fn_t4
+reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3
+reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3
+
+// Header string (displayed by tier_init)
+reu_loading_hdr: .text "LOADING:" ; .byte 0

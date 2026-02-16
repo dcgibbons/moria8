@@ -46,6 +46,9 @@ exit_trampoline:
     lda $d018
     ora #%00000010          // Lowercase mode (BASIC default)
     sta $d018
+    lda $dd00
+    ora #%00000011          // Restore VIC-II bank 0 (serial I/O may have corrupted)
+    sta $dd00
     lda #$93                // PETSCII clear screen
     jsr $ffd2               // KERNAL CHROUT
     jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)

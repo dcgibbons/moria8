@@ -306,6 +306,9 @@ save_game:
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
 
     // Show success
     lda #<save_done_str
@@ -319,6 +322,9 @@ save_game:
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
 !save_error:
     lda #<save_ioerr_str
     sta zp_ptr0
@@ -510,6 +516,9 @@ load_game:
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
 !load_corrupt_nocl:
     lda #<save_corrupt_str
     sta zp_ptr0
@@ -523,6 +532,9 @@ load_game:
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
 !load_fail:
     lda #<save_ioerr_str
     sta zp_ptr0
@@ -711,6 +723,9 @@ delete_savefile:
     jsr KERNAL_CLOSE
 !dsf_done:
     jsr KERNAL_CLRCHN
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
     rts
 
 // ============================================================

@@ -76,6 +76,24 @@ tier_init:
     lda reu_present
     beq !ti_done+
 
+    // Clear screen and show loading progress
+    jsr screen_clear
+    lda #1
+    sta $cc                     // Suppress cursor blink during loading
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #1
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda #<reu_loading_hdr
+    sta zp_ptr0
+    lda #>reu_loading_hdr
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #3
+    sta reu_loading_row
+
     // REU present: load all 4 tier files from disk into REU
     jsr reu_load_all_tiers
     jsr reu_stash_overlays
