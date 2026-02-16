@@ -36,9 +36,17 @@ exit_trampoline:
     lda #0
     sta $d418               // Silence SID
     jsr restore_zp          // Must run BEFORE banking BASIC in (buffer may be under BASIC ROM)
+    sei
+    // Restore default IRQ vector — our handler (irq_no_blink) is in the
+    // $A000-$BFFF region, hidden once BASIC ROM is banked in.
+    lda #$31
+    sta $0314
+    lda #$ea
+    sta $0315
     lda $01
     ora #%00000001          // Set bit 0 (LORAM) — bank in BASIC ROM
     sta $01
+    cli
     lda #$0e
     sta $d020               // Restore default border (light blue)
     lda #$06
