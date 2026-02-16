@@ -155,6 +155,32 @@ monster_process_one:
 
 !mpo_writeback:
     jsr monster_write_back
+    // Breeder check: clone if CF_BREEDER, room, and lucky roll
+    ldx zp_mon_type
+    lda cr_mflags,x
+    and #CF_BREEDER
+    beq !mpo_done+
+    lda zp_mon_count
+    cmp #MAX_MONSTERS - 4
+    bcs !mpo_done+
+    lda #12
+    jsr rng_range
+    cmp #0
+    bne !mpo_done+
+    // Spawn clone adjacent
+    lda zp_mon_x
+    sta fae_cx
+    lda zp_mon_y
+    sta fae_cy
+    lda zp_mon_idx
+    pha                         // Save original monster index
+    jsr find_adjacent_empty
+    bcc !breed_fail+
+    lda zp_mon_type
+    jsr monster_spawn_one
+!breed_fail:
+    pla
+    sta zp_mon_idx              // Restore original monster index
 
 !mpo_done:
     rts
@@ -217,9 +243,75 @@ monster_wake_check:
     sta zp_mon_flags
     // Write back flags immediately (wake persists)
     jsr monster_write_back
+    // Group wake propagation
+    ldx zp_mon_type
+    lda cr_mflags,x
+    and #CF_GROUP
+    beq !mwc_too_far+
+    jsr wake_group_nearby
 
 !mwc_too_far:
     rts
+
+// wake_group_nearby — Wake same-type monsters within Chebyshev distance 5
+// Input: zp_mon_type, zp_mon_x, zp_mon_y
+// Clobbers: A, X, Y, zp_ptr0
+wake_group_nearby:
+    ldx #0
+!wgn_loop:
+    cpx #MAX_MONSTERS
+    bcs !wgn_done+
+    cpx zp_mon_idx
+    beq !wgn_next+
+    jsr monster_get_ptr         // Preserves X
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !wgn_next+
+    cmp zp_mon_type
+    bne !wgn_next+
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE
+    bne !wgn_next+
+    // Chebyshev distance: max(|dx|, |dy|) <= 5
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sec
+    sbc zp_mon_x
+    bcs !wdx+
+    eor #$ff
+    adc #1                      // Carry clear from bcs not taken
+!wdx:
+    cmp #6
+    bcs !wgn_next+
+    sta wgn_dist
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sec
+    sbc zp_mon_y
+    bcs !wdy+
+    eor #$ff
+    adc #1
+!wdy:
+    cmp wgn_dist
+    bcc !wmax+
+    sta wgn_dist
+!wmax:
+    lda wgn_dist
+    cmp #6
+    bcs !wgn_next+
+    // Wake it
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+!wgn_next:
+    inx
+    jmp !wgn_loop-
+!wgn_done:
+    rts
+wgn_dist: .byte 0
 
 // ============================================================
 // monster_move_toward — Greedy 3-try movement toward player

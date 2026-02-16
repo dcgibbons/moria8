@@ -171,7 +171,7 @@ tc_count: .byte 0
 // Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$C91E
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $BA00
+.const RLE_TEST_BUF = $BB00
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

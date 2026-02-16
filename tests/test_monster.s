@@ -396,8 +396,8 @@ test_start:
     lda zp_mon_count
     cmp #2
     bcc !t9_fail+
-    cmp #15
-    bcs !t9_fail+               // Must be <= 14
+    cmp #MAX_MONSTERS+1
+    bcs !t9_fail+               // Must be <= MAX_MONSTERS (group spawn adds extras)
     lda #$01
     sta tc_results+8
     jmp !t10+

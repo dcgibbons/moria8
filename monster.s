@@ -100,13 +100,15 @@ cr_speed:
 .const CF_EVIL        = $04
 .const CF_ANIMAL      = $08
 .const CF_DRAGON      = $10
+.const CF_GROUP       = $20   // Pack creature: spawns extras, wakes neighbors
+.const CF_BREEDER     = $40   // Multiplying creature: chance to clone each turn
 
 cr_mflags:
-    .byte CF_EVIL, CF_ANIMAL, CF_ANIMAL, CF_ANIMAL, CF_EVIL              // 0-4
-    .byte 0, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL       // 5-9
-    .byte CF_ANIMAL, CF_ANIMAL, CF_ANIMAL, CF_UNDEAD|CF_EVIL, CF_ANIMAL  // 10-14
-    .byte 0, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL       // 15-19
-    .byte CF_EVIL, CF_ANIMAL, CF_EVIL, CF_EVIL, CF_ANIMAL, CF_EVIL      // 20-25
+    .byte CF_EVIL, CF_ANIMAL, CF_ANIMAL|CF_BREEDER, CF_ANIMAL, CF_EVIL|CF_GROUP         // 0-4
+    .byte CF_BREEDER, CF_ATTACK_ONLY, CF_ANIMAL, CF_ATTACK_ONLY, CF_ANIMAL|CF_GROUP     // 5-9
+    .byte CF_ANIMAL|CF_BREEDER, CF_ANIMAL, CF_ANIMAL, CF_UNDEAD|CF_EVIL, CF_ANIMAL      // 10-14
+    .byte 0, CF_ATTACK_ONLY|CF_BREEDER, CF_ANIMAL, CF_ATTACK_ONLY|CF_BREEDER, CF_ANIMAL // 15-19
+    .byte CF_EVIL|CF_GROUP, CF_ANIMAL, CF_EVIL, CF_EVIL, CF_ANIMAL, CF_EVIL|CF_GROUP    // 20-25
     .fill 31, 0                                                           // 26-56
     .byte  0,  0,  0,  0,  0,  0,  0,  0                                  // 57-64: town
 
@@ -586,6 +588,86 @@ monster_spawn_one:
     clc
     rts
 
+// find_adjacent_empty — Find adjacent empty floor tile
+// Input: fae_cx, fae_cy = center position
+// Output: carry set = found (ms_spawn_x/y set), carry clear = none
+// Tries 8 adjacent tiles starting at random direction
+// Clobbers: A, X, Y, zp_ptr0, zp_temp3, zp_temp4
+find_adjacent_empty:
+    lda #8
+    jsr rng_range               // Random start [0,7]
+    sta fae_dir
+    lda #8
+    sta fae_tries
+!fae_loop:
+    ldx fae_dir
+    lda fae_cx
+    clc
+    adc dir_dx,x
+    sta ms_spawn_x
+    lda fae_cy
+    clc
+    adc dir_dy,x
+    sta ms_spawn_y
+    // Check tile: floor + unoccupied
+    ldx ms_spawn_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy ms_spawn_x
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK | FLAG_OCCUPIED
+    bne !fae_next+
+    // Not player pos
+    lda ms_spawn_x
+    cmp zp_player_x
+    bne !fae_found+
+    lda ms_spawn_y
+    cmp zp_player_y
+    beq !fae_next+
+!fae_found:
+    sec
+    rts
+!fae_next:
+    inc fae_dir
+    lda fae_dir
+    and #$07
+    sta fae_dir
+    dec fae_tries
+    bne !fae_loop-
+    clc
+    rts
+fae_cx:    .byte 0
+fae_cy:    .byte 0
+fae_dir:   .byte 0
+fae_tries: .byte 0
+
+// spawn_group_extras — Spawn 1-3 extra same-type monsters adjacent
+// Input: ms_type = creature type, ms_spawn_x/y = center position
+// Clobbers: everything
+spawn_group_extras:
+    lda ms_spawn_x
+    sta fae_cx
+    lda ms_spawn_y
+    sta fae_cy
+    lda #3
+    jsr rng_range               // [0,2]
+    clc
+    adc #1                      // [1,3]
+    sta sge_count
+!sge_loop:
+    jsr find_adjacent_empty
+    bcc !sge_done+
+    lda ms_type
+    jsr monster_spawn_one
+    bcc !sge_done+              // Table full
+    dec sge_count
+    bne !sge_loop-
+!sge_done:
+    rts
+sge_count: .byte 0
+
 // monster_spawn_level — Spawn monsters for current dungeon level
 // Dungeon: count = 2 + rng(4) + dlvl/3, capped at 14.
 // Town (dlvl=0): 4 + rng(4) townspeople.
@@ -647,7 +729,13 @@ monster_spawn_level:
 
     // Spawn it
     jsr monster_spawn_one
-    // Ignore failure (table could be full)
+    bcc !msl_skip+              // Spawn failed
+    // Group spawn check
+    ldx ms_type
+    lda cr_mflags,x
+    and #CF_GROUP
+    beq !msl_skip+
+    jsr spawn_group_extras
 
 !msl_skip:
     inc msl_idx
