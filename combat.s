@@ -609,6 +609,26 @@ combat_check_levelup:
     jsr msg_build_levelup
     jsr cmb_print_buf
 
+    // Halve excess XP above new threshold (umoria behavior).
+    // Prevents a single big kill from cascading through many levels.
+    // ccl_adj_0/1 still holds the adjusted threshold from the comparison.
+    lda player_data + PL_XP_0
+    sec
+    sbc ccl_adj_0
+    sta zp_temp0                    // excess_lo
+    lda player_data + PL_XP_1
+    sbc ccl_adj_1
+    sta zp_temp1                    // excess_hi
+    lsr zp_temp1                    // 16-bit halve
+    ror zp_temp0
+    lda ccl_adj_0                   // new XP = threshold + excess/2
+    clc
+    adc zp_temp0
+    sta player_data + PL_XP_0
+    lda ccl_adj_1
+    adc zp_temp1
+    sta player_data + PL_XP_1
+
     // Check again for multi-level jumps
     jmp combat_check_levelup
 
