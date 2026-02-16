@@ -10,9 +10,9 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
-.segmentdef StartupOverlay [outPrg="out/ovl_start", start=$e000, min=$e000, max=$efff]
-.segmentdef TownOverlay [outPrg="out/ovl_town", start=$e000, min=$e000, max=$efff]
-.segmentdef DeathOverlay [outPrg="out/ovl_death", start=$e000, min=$e000, max=$efff]
+.segmentdef StartupOverlay [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
+.segmentdef TownOverlay [outPrg="out/ovl.town", start=$e000, min=$e000, max=$efff]
+.segmentdef DeathOverlay [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
@@ -127,12 +127,23 @@ entry_main:
     jsr sound_init
     jsr rng_seed
 
+    // Install IRQ wedge: suppress KERNAL cursor blink permanently.
+    // KERNAL routines (CHROUT, LOAD) constantly reset $CC=0 which
+    // re-enables cursor blink. Our wedge forces $CC non-zero on every
+    // IRQ tick BEFORE the KERNAL handler checks it, so the blink code
+    // never executes and never corrupts color RAM.
+    sei
+    lda #<irq_no_blink
+    sta $0314
+    lda #>irq_no_blink
+    sta $0315
+    cli
+
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
 
-    // Clear screen and display title
-    jsr screen_clear
+    // Load and display title (clears screen internally after KERNAL LOAD)
     jsr title_load_and_draw
 
     // Show system info on row 23 (machine type, KERNAL rev, REU)
@@ -278,6 +289,12 @@ entry_main:
     // Recalculate combat stats with equipped items
     jsr player_recalc_equipment
 
+    // Blank screen during lengthy init (hides BFS queue garbage + KERNAL messages)
+    lda $d011
+    and #%11101111              // Clear bit 4 — DEN off
+    sta $d011
+    jsr screen_clear
+
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
     jsr tramp_store_init_all
@@ -303,6 +320,9 @@ entry_main:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
+    lda $d011
+    ora #%00010000              // Set bit 4 — DEN on, show rendered screen
+    sta $d011
     jsr status_draw
 
     // Welcome message
@@ -515,6 +535,10 @@ load_resume_game:
     beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
+    lda $d011
+    and #%11101111              // Blank screen (clear bit 4 — DEN)
+    sta $d011
+    jsr screen_clear            // Clear old level before lengthy load/generate
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #0
     sta level_entry_dir         // 0 = descended
@@ -527,6 +551,9 @@ load_resume_game:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
+    lda $d011
+    ora #%00010000              // Restore screen (set bit 4 — DEN)
+    sta $d011
     jsr status_draw
     lda #<descend_str
     sta zp_ptr0
@@ -559,6 +586,10 @@ load_resume_game:
     bne !not_entering_town+
     jsr tramp_store_restock_all
 !not_entering_town:
+    lda $d011
+    and #%11101111              // Blank screen (clear bit 4 — DEN)
+    sta $d011
+    jsr screen_clear            // Clear old level before lengthy load/generate
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
     sta level_entry_dir         // 1 = ascended
@@ -571,6 +602,9 @@ load_resume_game:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
+    lda $d011
+    ora #%00010000              // Restore screen (set bit 4 — DEN)
+    sta $d011
     jsr status_draw
     lda #<ascend_str
     sta zp_ptr0
@@ -1094,10 +1128,22 @@ exit:
 // Used by most command handlers after turn_post_action.
 // ============================================================
 vp_render_status_loop:
+    lda #INPUT_ROW
+    jsr screen_clear_row
     jsr viewport_update
     jsr render_viewport
     jsr status_draw
     jmp !main_loop-
+
+// ============================================================
+// IRQ wedge — suppress KERNAL cursor blink
+// Forces $CC non-zero before KERNAL IRQ handler checks it.
+// Must live in main RAM (always accessible during IRQ).
+// ============================================================
+irq_no_blink:
+    lda #1
+    sta $cc                 // Force non-zero (inc wraps $FF→$00, re-enabling blink)
+    jmp $ea31               // Continue to standard KERNAL IRQ handler
 
 // ============================================================
 // String data — gameplay strings (MUST stay below $C000)
@@ -1230,7 +1276,7 @@ tramp_ego_put_suffix:
     beq !teps_done+
     pha
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
     pla
     jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
@@ -1298,7 +1344,7 @@ title_show_sysinfo:
     lda KERNAL_REV              // Read from ROM while KERNAL banked in
     sta tsi_krev_cached
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
     jsr title_show_sysinfo_banked
     lda #BANK_NO_BASIC
@@ -1314,28 +1360,28 @@ tsi_krev_cached: .byte 0
 // ============================================================
 tramp_ui_help_display:
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_help_display
     jmp tramp_sr_epilogue
 
 tramp_ui_char_display:
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_char_display
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_display:
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_inv_display
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_display:
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_equip_display
     jmp tramp_sr_epilogue
@@ -1348,7 +1394,7 @@ store_overlay_preamble:
     lda #OVL_TOWN
     jsr overlay_load
     sei
-    lda #BANK_NO_ROMS           // $34 — $E000 = RAM (overlay code)
+    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
     sta $01
     rts
 
@@ -1374,7 +1420,7 @@ tramp_player_create:
     lda #OVL_STARTUP
     jsr overlay_load
     sei
-    lda #BANK_NO_ROMS           // $34 — $E000 = RAM (overlay code)
+    lda #BANK_NO_KERNAL         // $35 — $E000 = RAM + I/O for color RAM
     sta $01
     jsr player_create
     jmp tramp_sr_epilogue
@@ -1422,8 +1468,14 @@ tramp_game_over:
     jsr hiscore_save
 
     // 7. Display death screen (overlay code)
+    // Defensive: restore VIC-II bank 0 after KERNAL serial I/O
+    // KERNAL uses CIA2 ($DD00) bits 3-5 for serial bus;
+    // bits 0-1 select VIC bank. Ensure bank 0 ($0000-$3FFF).
+    lda $dd00
+    ora #%00000011              // Bits 0-1 = %11 → bank 0
+    sta $dd00
     sei
-    lda #BANK_NO_ROMS
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
     jsr score_death_screen
     lda #BANK_NO_BASIC

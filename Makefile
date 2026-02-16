@@ -26,12 +26,10 @@ BOOT_SRC    = boot.s
 BOOT_PRG    = $(OUT)/boot.prg
 TITLE_SRC   = title_data.s
 TITLE_PRG   = $(OUT)/title
-TIER_SRCS   = creature_data/tier1_prg.s creature_data/tier2_prg.s \
-              creature_data/tier3_prg.s creature_data/tier4_prg.s
-TIER_PRGS   = $(OUT)/cr_t1 $(OUT)/cr_t2 $(OUT)/cr_t3 $(OUT)/cr_t4
-OVL_TOWN    = $(OUT)/ovl_town
-OVL_START   = $(OUT)/ovl_start
-OVL_DEATH   = $(OUT)/ovl_death
+TIER_PRGS   = $(OUT)/monster.db.1 $(OUT)/monster.db.2 $(OUT)/monster.db.3 $(OUT)/monster.db.4
+OVL_TOWN    = $(OUT)/ovl.town
+OVL_START   = $(OUT)/ovl.start
+OVL_DEATH   = $(OUT)/ovl.death
 DISK_IMAGE  = $(OUT)/moria.d64
 DISK_NAME   = "moria,m8"
 DISKART     = tools/diskart.py
@@ -70,13 +68,14 @@ $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(TITLE_PRG)
 
 # Creature tier data — standalone PRGs loaded at runtime ($E000)
-$(OUT)/cr_t1: creature_data/tier1_prg.s creature_data/tier1.s | $(OUT)
+# Output filenames match PETSCII names for VICE FileSystemDevice compatibility
+$(OUT)/monster.db.1: creature_data/tier1_prg.s creature_data/tier1.s | $(OUT)
 	$(JAVA) -jar $(KICKASS) creature_data/tier1_prg.s -o $@
-$(OUT)/cr_t2: creature_data/tier2_prg.s creature_data/tier2.s | $(OUT)
+$(OUT)/monster.db.2: creature_data/tier2_prg.s creature_data/tier2.s | $(OUT)
 	$(JAVA) -jar $(KICKASS) creature_data/tier2_prg.s -o $@
-$(OUT)/cr_t3: creature_data/tier3_prg.s creature_data/tier3.s | $(OUT)
+$(OUT)/monster.db.3: creature_data/tier3_prg.s creature_data/tier3.s | $(OUT)
 	$(JAVA) -jar $(KICKASS) creature_data/tier3_prg.s -o $@
-$(OUT)/cr_t4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
+$(OUT)/monster.db.4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
 	$(JAVA) -jar $(KICKASS) creature_data/tier4_prg.s -o $@
 
 # Bootloader — chain-loads MORIA64 from disk
@@ -84,7 +83,7 @@ $(BOOT_PRG): $(BOOT_SRC) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(BOOT_SRC) -o $(BOOT_PRG)
 
 # Launch in VICE emulator
-run: $(MAIN_PRG)
+run: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS)
 	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
 
 # Launch with D64 disk image + true drive emulation (bypasses FileSystemDevice)
@@ -109,22 +108,13 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START)
 	         -write $(OUT)/empty.prg "art3" \
 	         -write $(OUT)/empty.prg "art4" \
 	         -write $(OUT)/empty.prg "art5" \
-	         -write $(OUT)/empty.prg "art6" \
-	         -write $(OUT)/empty.prg "art7" \
-	         -write $(OUT)/empty.prg "art8" \
-	         -write $(OUT)/empty.prg "art9" \
-	         -write $(OUT)/empty.prg "art10" \
-	         -write $(OUT)/empty.prg "art11" \
-	         -write $(OUT)/empty.prg "art12" \
-	         -write $(OUT)/empty.prg "art13" \
-	         -write $(OUT)/empty.prg "art14" \
 	         -write $(BOOT_PRG) "moria" \
 	         -write $(MAIN_PRG) "moria64" \
 	         -write $(TITLE_PRG) "title" \
-	         -write $(OUT)/cr_t1 "monster.db.1" \
-	         -write $(OUT)/cr_t2 "monster.db.2" \
-	         -write $(OUT)/cr_t3 "monster.db.3" \
-	         -write $(OUT)/cr_t4 "monster.db.4" \
+	         -write $(OUT)/monster.db.1 "monster.db.1" \
+	         -write $(OUT)/monster.db.2 "monster.db.2" \
+	         -write $(OUT)/monster.db.3 "monster.db.3" \
+	         -write $(OUT)/monster.db.4 "monster.db.4" \
 	         -write $(OVL_TOWN) "ovl.town" \
 	         -write $(OVL_START) "ovl.start" \
 	         -write $(OVL_DEATH) "ovl.death"

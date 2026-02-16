@@ -243,6 +243,11 @@ tier_load_disk:
     ldy #$e0
     jsr $FFD5                   // KERNAL LOAD
     // Carry clear = success, carry set = error
+    php                         // Save carry (load result)
+    lda $dd00
+    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
+    plp                         // Restore carry
     rts
 
 

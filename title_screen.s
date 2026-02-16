@@ -31,12 +31,21 @@ title_load_and_draw:
     jsr $FFD5               // KERNAL LOAD
     bcs !title_fallback+    // Carry set = error
 
+    // Restore VIC-II bank 0 after serial I/O
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+
+    // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
+    jsr screen_clear
+
     // Render the loaded art data
     jsr title_render_data
     rts
 
 !title_fallback:
     // Simple text title (no disk art available)
+    jsr screen_clear        // Clear KERNAL residue from failed load too
     lda #0
     sta zp_cursor_col
     lda #10

@@ -75,22 +75,30 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 
 // input_get_key — Wait for a keypress, return PETSCII code
 // Output: A = PETSCII code of key pressed
-// Banking-safe: temporarily ensures KERNAL ROM is visible for GETIN,
-// then restores original banking state. Works from any banking context
-// ($E000 overlays, $F000 banked code, or normal main RAM).
+// Banking-safe + IRQ-safe: banks in KERNAL, enables IRQ for keyboard
+// scanning, polls until key available, then restores original banking
+// and interrupt state. Works from ANY context — main game (CLI/$36),
+// overlays (SEI/$34), or banked code (SEI/$34).
+// NOTE: Polls $C6 (keyboard buffer count) before calling GETIN.
+// GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
+// non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
 input_get_key:
     lda $01
     pha
-    ora #%00000010          // Set HIRAM bit — bank in KERNAL ROM
+    php                     // Save processor flags (preserves I flag)
+    lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
     sta $01
-    jsr KERNAL_GETIN
-    sta igk_key             // Save key (can't use stack — PHA'd bank byte)
+    cli                     // Enable IRQ — keyboard scan needs it
+!igk_poll:
+    lda $c6                 // Keyboard buffer count (filled by IRQ handler)
+    beq !igk_poll-          // No key yet, keep polling
+    jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
+    sta igk_key
+    plp                     // Restore original I flag (SEI if was SEI)
     pla
     sta $01                 // Restore original banking state
     lda igk_key
-    cmp #0
-    beq input_get_key       // No key in buffer, keep polling
     rts
 igk_key: .byte 0
 

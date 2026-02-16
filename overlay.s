@@ -26,6 +26,7 @@
 // State
 // ============================================================
 current_overlay: .byte OVL_NONE
+reu_overlays_stashed: .byte 0   // Set to 1 after overlays are stashed in REU
 
 // ============================================================
 // overlay_load — Load a phase overlay to $E000
@@ -43,7 +44,7 @@ overlay_load:
     lda #0
     sta current_tier
 
-    lda reu_present
+    lda reu_overlays_stashed
     bne !ol_reu+
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
@@ -102,6 +103,14 @@ overlay_load_disk:
     ldy #$e0
     jsr $ffd5               // KERNAL LOAD
     // Carry clear = success, carry set = error
+    php                     // Save carry (load result)
+    // Restore VIC-II bank 0 — KERNAL serial I/O uses CIA2 ($DD00)
+    // bits 3-5 for the serial bus; bits 0-1 select VIC bank.
+    // Ensure bank 0 ($0000-$3FFF) so VIC sees screen RAM at $0400.
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    plp                     // Restore carry
     rts
 
 
@@ -142,24 +151,6 @@ overlay_fetch_reu:
     pla
     sta $01
     cli
-    rts
-
-
-// ============================================================
-// banked_get_key — Input wrapper for $E000 overlay code
-// ============================================================
-// Temporarily banks in KERNAL to call input_get_key, then
-// banks out again. Callable from $E000 overlay code.
-// Output: A = key (screen code)
-// Clobbers: flags
-banked_get_key:
-    lda #BANK_NO_BASIC      // $36 — bank in KERNAL
-    sta $01
-    jsr input_get_key       // Uses KERNAL GETIN
-    pha
-    lda #BANK_NO_ROMS       // $34 — bank out KERNAL again
-    sta $01
-    pla
     rts
 
 
