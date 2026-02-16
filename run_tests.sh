@@ -99,7 +99,7 @@ run_test "monster_ai" "tests/test_monster_ai.s" "0400 0412" 19 500000000
 run_test "combat" "tests/test_combat.s" "0400 0409" 10 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 0409" 10 500000000
 run_test "effects" "tests/test_effects.s" "0400 0414" 21 500000000
-run_test "item" "tests/test_item.s" "0400 0427" 40 1000000000
+run_test "item" "tests/test_item.s" "0400 0429" 42 1000000000
 run_test "store" "tests/test_store.s" "0400 0412" 19 1000000000
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 0409" 10 500000000

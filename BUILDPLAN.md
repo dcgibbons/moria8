@@ -1134,7 +1134,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | MC4.1 | LOW | No player critical hit system | TODO — not urgent, combat works without it |
-| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | Open — currently safe, document-only |
+| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | **Resolved** — documented in show_inv_and_restore comment; overlay is read-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
 | BUG-20 | LOW | Dead string `mat_dead_str` wastes 21 bytes (`mat_acid_str` now used by BUG-21 fix) | Open — OPT-1.1 (deferred) |
@@ -2188,7 +2188,7 @@ Adding tests 41-42 mirroring tests 39-40 for EQUIP_BODY would complete coverage.
 
 | # | Severity | Issue | Fix complexity | Status |
 |---|----------|-------|----------------|--------|
-| RP12-1 | LOW | Armor enchant cursed/cap paths untested (weapon-only coverage) | Easy — mirror tests 39-40 for EQUIP_BODY | Open |
+| RP12-1 | LOW | Armor enchant cursed/cap paths untested (weapon-only coverage) | Easy — mirror tests 39-40 for EQUIP_BODY | **Fixed** — tests 41-42 added (cursed armor + cap check) |
 
 ---
 
@@ -2559,7 +2559,7 @@ prose updates, enchantment pricing, cursed item check, tc_count position, and
 | RP15-1 | **MEDIUM** | Armory mask $20F8 has bit 13 (ICAT_BOOK) — stocks spell books | Trivial — change to $00F8 in store_cat_mask_lo/hi | **Fixed** (Step 9.4) — mask data was already $00F8; fixed stale comment + test |
 | RP15-2 | **MEDIUM** | price_add_p1_bonus routes ICAT_BOOK to equipment handler (p1×100 GP) | Easy — remove ICAT_BOOK from equipment branch or add flat book pricing | **Resolved** — ICAT_BOOK not in equipment branch; books fall through to no-bonus |
 | RP15-3 | LOW | TOWN_CREATURE_BASE=20 is a magic number synced to creature table layout | Trivial — add .assert or comment | **Resolved** — already protected by .assert at monster.s:16 |
-| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation (currently safe) | N/A — document assumption only | Open |
+| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation (currently safe) | N/A — document assumption only | **Resolved** — comment added to show_inv_and_restore (player_items.s:65) |
 
 **Overall verdict:** All 18 bug fixes are correct at the 6502 assembly level. No register
 clobbering, branch range, or logic errors found. Two semantic bugs (RP15-1, RP15-2)

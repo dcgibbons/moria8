@@ -62,6 +62,8 @@ equip_slot_for_cat:
 
 // show_inv_and_restore — Show inventory overlay, wait for key, restore screen
 // Used by item selection dialogs when player presses '?'.
+// NOTE (RP15-4): After return, callers re-prompt without re-validating game
+// state. This is safe because the overlay is read-only (no state mutation).
 // Preserves: nothing
 show_inv_and_restore:
     jsr tramp_ui_inv_display

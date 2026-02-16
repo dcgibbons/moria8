@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #39
+    ldx #41
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -1843,10 +1843,114 @@ test_start:
 
     lda #$01
     sta tc_results + 39
-    jmp !tests_done+
+    jmp !t41+
 !t40_fail:
     lda #$00
     sta tc_results + 39
+
+    // ==========================================
+    // Test 41: Enchant Armor on cursed item clears curse, sets p1=0
+    // ==========================================
+!t41:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+
+    // Equip cursed leather armor (type 7) at EQUIP_BODY with p1=$FD (-3)
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #$fd                        // -3 enchantment
+    sta inv_p1 + EQUIP_BODY
+    lda #IF_CURSED
+    sta inv_flags + EQUIP_BODY
+
+    // Put Enchant Armor scroll (type 35) in inv slot 0
+    lda #35
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 at EQUIP_BODY should be 0 (curse removed, reset)
+    lda inv_p1 + EQUIP_BODY
+    bne !t41_fail+
+
+    // IF_CURSED should be cleared
+    lda inv_flags + EQUIP_BODY
+    and #IF_CURSED
+    bne !t41_fail+
+
+    lda #$01
+    sta tc_results + 40
+    jmp !t42+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // ==========================================
+    // Test 42: Enchant Armor at cap (p1=5) does nothing
+    // ==========================================
+!t42:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+
+    // Equip leather armor (type 7) at EQUIP_BODY with p1=5 (at cap)
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #5
+    sta inv_p1 + EQUIP_BODY
+    lda #0
+    sta inv_flags + EQUIP_BODY
+
+    // Put Enchant Armor scroll (type 35) in inv slot 0
+    lda #35
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // p1 should still be 5 (not 6)
+    lda inv_p1 + EQUIP_BODY
+    cmp #5
+    bne !t42_fail+
+
+    lda #$01
+    sta tc_results + 41
+    jmp !tests_done+
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
