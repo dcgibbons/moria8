@@ -1138,6 +1138,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
 | BUG-19b | **HIGH** | XP awards too generous — player levels up too quickly on low dungeon levels | **Fixed** — experience factor (race_xp% + class_xp%) was never applied to thresholds; now computed at character creation (PL_EXPFACT) and used in combat_check_levelup via 16×8→24-bit multiply + div-by-100 |
+| BUG-23 | **HIGH** | Players still level up too fast despite BUG-19b fix — XP economy not matching umoria | Open — audit needed: (1) missing multi-level XP halving (umoria halves excess XP above each new threshold on level-up, we preserve full XP), (2) verify cr_xp values against umoria creature table, (3) verify xp_level threshold table matches umoria. NOT related to MC2.2 (fractional XP loss makes leveling slower, not faster). See also MC2.3 (8-bit cr_xp caps at 255, umoria uses 16-bit up to 55,000). |
 | BUG-20 | LOW | Dead string `mat_dead_str` wastes 21 bytes (`mat_acid_str` now used by BUG-21 fix) | Open — OPT-1.1 (deferred) |
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | **Fixed** — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
