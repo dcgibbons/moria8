@@ -1,8 +1,11 @@
 // test_score.s — Runtime tests for score calculation, 24-bit math, and hiscore
 //
 // Tests: math_add_24 basic, math_add_24 carry, math_cmp_24 equal/lt/gt,
-//        score_calculate, hiscore_insert empty/ordering/overflow,
-//        screen_put_decimal_24
+//        score_calculate, screen_put_decimal_24,
+//        hiscore_insert empty/ordering/overflow
+// NOTE: score_io.s is NOT imported — hiscore_table aliases CREATURE_BASE
+//       ($C020) which overlaps test code. Local definitions redirect
+//       hiscore_table to a safe buffer within the test body.
 //
 // Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
 
@@ -78,7 +81,20 @@ test_finish:
 #import "../ui_help.s"
 #import "../ui_trampoline_stubs.s"
 #import "../save.s"
-#import "../score_io.s"
+
+// --- Test-local hiscore definitions (replaces score_io.s) ---
+// score_io.s aliases hiscore_table to CREATURE_BASE ($C020) which
+// overlaps the tail of test code. Define a safe buffer instead.
+.const HISCORE_ENTRY_SIZE = 23
+.const HISCORE_MAX_ENTRIES = 10
+test_hiscore_buf: .fill HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE, 0
+.label hiscore_table = test_hiscore_buf
+hiscore_count:  .byte 0
+// Stub I/O functions (not under test)
+hiscore_load:
+hiscore_save:
+    rts
+
 #import "../score.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -305,17 +321,70 @@ test_start:
     sta tc_results + 5
 
     // ============================================================
-    // Test 7: hiscore_insert — into empty table
+    // Test 7: screen_put_decimal_24 — verify screen RAM output
+    // Value = 12345 ($003039), display at row 0, col 0
+    // Should write "12345" as screen codes $31,$32,$33,$34,$35
+    // (Runs before hiscore tests for logical grouping)
+    // ============================================================
+    // Clear screen area
+    lda #$20
+    ldx #39
+!t7_clr:
+    sta $0400,x
+    dex
+    bpl !t7_clr-
+
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    lda #COL_WHITE
+    sta zp_text_color
+
+    lda #$39                    // lo byte of 12345
+    sta score_accum_0
+    lda #$30                    // mid byte of 12345
+    sta score_accum_1
+    lda #$00
+    sta score_accum_2
+
+    jsr screen_put_decimal_24
+
+    // Verify screen RAM at $0400: '1','2','3','4','5'
+    lda $0400
+    cmp #$31                    // '1'
+    bne !t7_fail+
+    lda $0401
+    cmp #$32                    // '2'
+    bne !t7_fail+
+    lda $0402
+    cmp #$33                    // '3'
+    bne !t7_fail+
+    lda $0403
+    cmp #$34                    // '4'
+    bne !t7_fail+
+    lda $0404
+    cmp #$35                    // '5'
+    bne !t7_fail+
+    lda #$01
+    jmp !t7_store+
+!t7_fail:
+    lda #$00
+!t7_store:
+    sta tc_results + 6
+
+    // ============================================================
+    // Test 8: hiscore_insert — into empty table
     // Should insert at index 0, count should be 1
+    // hiscore_table now points to safe buffer (not CREATURE_BASE).
     // ============================================================
     lda #0
     sta hiscore_count
     tax
-!t7_clr:
+!t8_clr:
     sta hiscore_table,x
     inx
     cpx #HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE
-    bne !t7_clr-
+    bne !t8_clr-
 
     // Set player name
     lda #$14                    // 'T' screencode
@@ -351,29 +420,29 @@ test_start:
     // Check result
     lda score_new_rank
     cmp #0
-    bne !t7_fail+
+    bne !t8_fail+
     lda hiscore_count
     cmp #1
-    bne !t7_fail+
+    bne !t8_fail+
     // Verify score in table
     lda hiscore_table + 16
     cmp #$E8
-    bne !t7_fail+
+    bne !t8_fail+
     lda hiscore_table + 17
     cmp #$03
-    bne !t7_fail+
+    bne !t8_fail+
     lda #$01
-    jmp !t7_store+
-!t7_fail:
+    jmp !t8_store+
+!t8_fail:
     lda #$00
-!t7_store:
-    sta tc_results + 6
+!t8_store:
+    sta tc_results + 7
 
     // ============================================================
-    // Test 8: hiscore_insert — ordering (higher score goes first)
+    // Test 9: hiscore_insert — ordering (higher score goes first)
     // Table has score 1000, insert score 2000 → should be at index 0
     // ============================================================
-    // Table already has 1 entry (score 1000 at index 0) from test 7
+    // Table already has 1 entry (score 1000 at index 0) from test 8
 
     // Set score = 2000 = $0007D0
     lda #$D0
@@ -388,33 +457,33 @@ test_start:
     // New entry should be at index 0 (higher score)
     lda score_new_rank
     cmp #0
-    bne !t8_fail+
+    bne !t9_fail+
     lda hiscore_count
     cmp #2
-    bne !t8_fail+
+    bne !t9_fail+
     // Verify: index 0 has score 2000
     lda hiscore_table + 16
     cmp #$D0
-    bne !t8_fail+
+    bne !t9_fail+
     lda hiscore_table + 17
     cmp #$07
-    bne !t8_fail+
+    bne !t9_fail+
     // Verify: index 1 has score 1000 (shifted down)
     lda hiscore_table + HISCORE_ENTRY_SIZE + 16
     cmp #$E8
-    bne !t8_fail+
+    bne !t9_fail+
     lda hiscore_table + HISCORE_ENTRY_SIZE + 17
     cmp #$03
-    bne !t8_fail+
+    bne !t9_fail+
     lda #$01
-    jmp !t8_store+
-!t8_fail:
+    jmp !t9_store+
+!t9_fail:
     lda #$00
-!t8_store:
-    sta tc_results + 7
+!t9_store:
+    sta tc_results + 8
 
     // ============================================================
-    // Test 9: hiscore_insert — full table overflow
+    // Test 10: hiscore_insert — full table overflow
     // Fill table with 10 entries of score 500, insert score 100
     // Should return $FF (didn't qualify)
     // ============================================================
@@ -424,9 +493,9 @@ test_start:
     // Fill all entries with score 500 = $01F4
     ldx #0
     ldy #0
-!t9_fill:
+!t10_fill:
     cpx #HISCORE_MAX_ENTRIES
-    bcs !t9_fill_done+
+    bcs !t10_fill_done+
     txa
     pha                         // Save X
     ldx #HISCORE_ENTRY_SIZE
@@ -442,8 +511,8 @@ test_start:
     pla
     tax                         // Restore X
     inx
-    jmp !t9_fill-
-!t9_fill_done:
+    jmp !t10_fill-
+!t10_fill_done:
 
     // Try to insert score 100 = $000064
     lda #$64
@@ -457,62 +526,11 @@ test_start:
 
     lda score_new_rank
     cmp #$ff                    // Should not qualify
-    beq !t9_pass+
+    beq !t10_pass+
     lda #$00
-    jmp !t9_store+
-!t9_pass:
-    lda #$01
-!t9_store:
-    sta tc_results + 8
-
-    // ============================================================
-    // Test 10: screen_put_decimal_24 — verify screen RAM output
-    // Value = 12345 ($003039), display at row 0, col 0
-    // Should write "12345" as screen codes $31,$32,$33,$34,$35
-    // ============================================================
-    // Clear screen area
-    lda #$20
-    ldx #39
-!t10_clr:
-    sta $0400,x
-    dex
-    bpl !t10_clr-
-
-    lda #0
-    sta zp_cursor_row
-    sta zp_cursor_col
-    lda #COL_WHITE
-    sta zp_text_color
-
-    lda #$39                    // lo byte of 12345
-    sta score_accum_0
-    lda #$30                    // mid byte of 12345
-    sta score_accum_1
-    lda #$00
-    sta score_accum_2
-
-    jsr screen_put_decimal_24
-
-    // Verify screen RAM at $0400: '1','2','3','4','5'
-    lda $0400
-    cmp #$31                    // '1'
-    bne !t10_fail+
-    lda $0401
-    cmp #$32                    // '2'
-    bne !t10_fail+
-    lda $0402
-    cmp #$33                    // '3'
-    bne !t10_fail+
-    lda $0403
-    cmp #$34                    // '4'
-    bne !t10_fail+
-    lda $0404
-    cmp #$35                    // '5'
-    bne !t10_fail+
-    lda #$01
     jmp !t10_store+
-!t10_fail:
-    lda #$00
+!t10_pass:
+    lda #$01
 !t10_store:
     sta tc_results + 9
 

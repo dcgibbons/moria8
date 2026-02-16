@@ -1096,7 +1096,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 
 ---
 
-## Current State (2026-02-15)
+## Current State (2026-02-16)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 code size optimizations applied (excluding OPT-1.1).
 
@@ -1165,7 +1165,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-R1.2 Throwing, R3.2 Group tactics, R3.3 Breeders, R4.2 Artifacts, R4.3 Rods, R4.4 Pseudo-ID, R6.2 Black Market, R6.3 Player Home
+R1.2 Throwing, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, R6.2 Black Market, R6.3 Player Home
 
 **Phase 10 — C128 Enhancements** (not started):
 
