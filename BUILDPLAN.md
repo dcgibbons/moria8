@@ -4020,7 +4020,7 @@ After OPT-1.2–1.7 optimizations. `program_end` = $BF41. PRG file = 48,060 byte
 | Banked region free | 2,989 bytes (`$F44D`–`$FFFA`) |
 | Total free (expandable) | 3,212 bytes |
 | RAM used (code+map+items+ZP+screen) | ~53 KB |
-| Test suites | 20 (259 tests, all passing) |
+| Test suites | 20 (261 tests, all passing) |
 
 ---
 
