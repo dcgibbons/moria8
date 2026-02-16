@@ -1802,13 +1802,13 @@ piw_wand_miss_str:    .text "THE CLOUD DISSIPATES." ; .byte 0
 piq_cant_read_str:    .text "YOU CAN'T SEE TO READ!" ; .byte 0
 
 // ============================================================
-// item_gain_spell — Study a spell book to learn a spell
-// Prompts "STUDY WHICH BOOK (A-V)?", waits for slot selection.
+// item_gain_spell — Study a spell book to learn qualifying spells
+// Each book covers 4 spells. Learns all spells in that range where
+// player_level >= spell_level and spell not already known.
+// Books are NOT consumed.
 // Output: carry set = turn consumed, carry clear = cancelled
 // Clobbers: everything
 // ============================================================
-.const ITEM_MAGE_BOOK   = 47
-.const ITEM_PRAYER_BOOK = 48
 
 item_gain_spell:
     // Check if player has a spell type at all
@@ -1870,8 +1870,6 @@ item_gain_spell:
     rts
 
 !igs_have_item:
-    sta piw_item_id             // Save item type
-
     // Check if it's a book (ICAT_BOOK)
     tax
     lda it_category,x
@@ -1886,21 +1884,19 @@ item_gain_spell:
     rts
 
 !igs_is_book:
-    // Check if book matches player's spell type
-    // Item 47 = mage book → requires SPELL_MAGE
-    // Item 48 = prayer book → requires SPELL_PRIEST
-    lda piw_item_id
-    cmp #ITEM_MAGE_BOOK
-    bne !igs_check_priest+
+    // Look up book metadata: spell range and class
+    txa                         // A = item type ID
+    jsr book_get_info           // A = spell_start, X = spell_class, C=0
+    bcc !igs_book_ok+
+    jmp !igs_cancel+            // Safety: not in book table
+!igs_book_ok:
+    sta igs_spell_start
+    stx igs_spell_class
+
+    // Check class matches player's spell type
     lda player_data + PL_SPELL_TYPE
-    cmp #SPELL_MAGE
+    cmp igs_spell_class
     beq !igs_type_ok+
-    jmp !igs_wrong_type+
-!igs_check_priest:
-    lda player_data + PL_SPELL_TYPE
-    cmp #SPELL_PRIEST
-    beq !igs_type_ok+
-!igs_wrong_type:
     lda #<igs_wrong_type_str
     sta zp_ptr0
     lda #>igs_wrong_type_str
@@ -1910,94 +1906,84 @@ item_gain_spell:
     rts
 
 !igs_type_ok:
-    // Get spell index from book's p1
-    ldx piw_slot
-    lda inv_p1,x
-    and #$0f                    // Safety: mask to 0-15
+    // Set up spell level table pointer
+    lda igs_spell_class
+    cmp #SPELL_MAGE
+    bne !igs_priest_lvl+
+    lda #<mage_spell_level
+    sta zp_ptr1
+    lda #>mage_spell_level
+    sta zp_ptr1_hi
+    jmp !igs_lvl_set+
+!igs_priest_lvl:
+    lda #<priest_spell_level
+    sta zp_ptr1
+    lda #>priest_spell_level
+    sta zp_ptr1_hi
+!igs_lvl_set:
+
+    // Loop over 4 spells in this book's range
+    lda #0
+    sta igs_learned_count
+    lda igs_spell_start
     sta igs_spell_idx
+
+!igs_spell_loop:
+    // Check player_level >= required spell level
+    ldy igs_spell_idx
+    lda player_data + PL_LEVEL
+    cmp (zp_ptr1),y             // C set if player_level >= req_level
+    bcc !igs_next_spell+        // Player level too low, skip
 
     // Check if spell already known
     lda igs_spell_idx
     cmp #8
-    bcs !igs_check_hi+
+    bcs !igs_hi_check+
 
-    // Check lo byte
+    // Lo byte (spells 0-7)
     tax
     lda spell_bit_mask,x
     and player_data + PL_SPELLS_KNOWN
-    bne !igs_already_known+
-    jmp !igs_learn+
+    bne !igs_next_spell+        // Already known
+    // Learn: set bit in lo byte
+    lda spell_bit_mask,x
+    ora player_data + PL_SPELLS_KNOWN
+    sta player_data + PL_SPELLS_KNOWN
+    inc igs_learned_count
+    jmp !igs_next_spell+
 
-!igs_check_hi:
+!igs_hi_check:
+    // Hi byte (spells 8-15)
     sec
     sbc #8
     tax
     lda spell_bit_mask,x
     and player_data + PL_SPELLS_KNOWN_HI
-    bne !igs_already_known+
-
-!igs_learn:
-    // Set the spell known bit
-    lda igs_spell_idx
-    cmp #8
-    bcs !igs_set_hi+
-
-    // Set bit in lo byte
-    tax
-    lda player_data + PL_SPELLS_KNOWN
-    ora spell_bit_mask,x
-    sta player_data + PL_SPELLS_KNOWN
-    jmp !igs_learned+
-
-!igs_set_hi:
-    sec
-    sbc #8
-    tax
-    lda player_data + PL_SPELLS_KNOWN_HI
-    ora spell_bit_mask,x
+    bne !igs_next_spell+        // Already known
+    // Learn: set bit in hi byte
+    lda spell_bit_mask,x
+    ora player_data + PL_SPELLS_KNOWN_HI
     sta player_data + PL_SPELLS_KNOWN_HI
+    inc igs_learned_count
 
-!igs_learned:
-    // Remove book from inventory
-    ldx piw_slot
-    jsr inv_remove_item
+!igs_next_spell:
+    inc igs_spell_idx
+    lda igs_spell_idx
+    sec
+    sbc igs_spell_start
+    cmp #4                      // Done 4 spells?
+    bcc !igs_spell_loop-
 
-    // Print "YOU LEARNED <spell name>!"
-    lda #<igs_learned_str
+    // Check results
+    lda igs_learned_count
+    beq !igs_none_learned+
+
+    // Learned at least one spell
+    lda #<igs_success_str
     sta zp_ptr0
-    lda #>igs_learned_str
+    lda #>igs_success_str
     sta zp_ptr0_hi
     jsr msg_print
-
-    // Append spell name inline
-    lda zp_text_color
-    pha
-    lda #COL_MSG_TEXT
-    sta zp_text_color
-
-    // Get spell name pointer based on spell type
-    lda player_data + PL_SPELL_TYPE
-    cmp #SPELL_MAGE
-    bne !igs_priest_name+
-    ldx igs_spell_idx
-    lda mage_spell_name_lo,x
-    sta zp_ptr0
-    lda mage_spell_name_hi,x
-    sta zp_ptr0_hi
-    jmp !igs_print_name+
-!igs_priest_name:
-    ldx igs_spell_idx
-    lda priest_spell_name_lo,x
-    sta zp_ptr0
-    lda priest_spell_name_hi,x
-    sta zp_ptr0_hi
-!igs_print_name:
-    jsr screen_put_string
-    // Append "!"
-    lda #$21
-    jsr screen_put_char
-    pla
-    sta zp_text_color
 
     lda #SFX_LEVELUP
     jsr sound_play
@@ -2005,13 +1991,13 @@ item_gain_spell:
     sec                         // Turn consumed
     rts
 
-!igs_already_known:
-    lda #<igs_already_str
+!igs_none_learned:
+    lda #<igs_no_new_str
     sta zp_ptr0
-    lda #>igs_already_str
+    lda #>igs_no_new_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                         // Not consumed — player can try again
+    clc                         // No turn consumed
     rts
 
 !igs_cancel:
@@ -2019,7 +2005,10 @@ item_gain_spell:
     rts
 
 // Gain spell scratch
-igs_spell_idx:  .byte 0
+igs_spell_idx:      .byte 0
+igs_spell_start:    .byte 0
+igs_spell_class:    .byte 0
+igs_learned_count:  .byte 0
 
 // Gain spell strings
 igs_prompt_str:     .text "STUDY WHICH BOOK (A-V)?" ; .byte 0
@@ -2027,5 +2016,5 @@ igs_no_magic_str:   .text "YOU CANNOT USE MAGIC." ; .byte 0
 igs_nothing_str:    .text "YOU HAVE NOTHING THERE." ; .byte 0
 igs_not_book_str:   .text "THAT IS NOT A BOOK." ; .byte 0
 igs_wrong_type_str: .text "YOU CANNOT READ THAT BOOK." ; .byte 0
-igs_already_str:    .text "YOU ALREADY KNOW THAT SPELL." ; .byte 0
-igs_learned_str:    .text "YOU LEARNED " ; .byte 0
+igs_success_str:    .text "YOU LEARN FROM THE BOOK!" ; .byte 0
+igs_no_new_str:     .text "NO NEW SPELLS TO LEARN." ; .byte 0

@@ -1141,7 +1141,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | Open |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7) | ✅ Done (OPT-1.1 deferred) |
-| OPT-2 | MED | Phase overlay code banking — move stores, char create, score to `$E000` overlays; move help/char/inv screens to permanent `$F000`. Est. ~6.8KB freed from main region. | TODO — see Code Banking Architecture section |
+| OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
 
 ### What's Next
 
@@ -1157,8 +1157,8 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
 | ~~7~~ | R4.1 | ~~Ego items~~ — ✅ 7 enchanted weapon types with slay/elemental/AC bonuses | Done |
 | ~~8~~ | OPT-1 | ~~Code size optimization~~ — ✅ 182 bytes reclaimed ($BFF7→$BF41), 20/20 tests pass | Done |
-| **9** | OPT-2 | Code banking — phase overlays at `$E000` + permanent `$F000` expansion. Frees ~6.8KB from main region for new features. | Medium-Large |
-| **10** | R5.1/R5.2 | Spell expansion (more spells + spellbooks) | Medium |
+| ~~9~~ | OPT-2 | ~~Code banking~~ — ✅ Phase overlays at `$E000` + permanent `$F000` expansion. ~6.8KB freed. Display bugs fixed (color RAM, input banking, filesystem naming). | Done |
+| ~~10~~ | R5.1/R5.2 | ~~Spell expansion~~ — ✅ All 32 effects implemented. 8 spellbooks (4/class), book-gated learning, books not consumed. +101 bytes. | Done |
 | **11** | R6.1 | Store haggling | Medium |
 | **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
@@ -3664,8 +3664,8 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R5.1 | Advanced spells | **(TODO)** | Only basic offensive (Bolt) and utility (Heal, Light, Teleport) implemented. Missing ball spells, advanced enchantments, summoning, etc. |
-| R5.2 | Full spellbook set | **(TODO)** | Only "Beginner's Spellbook" and "Holy Prayer Book" implemented. Full game has 4 books per class (8 total). |
+| R5.1 | Advanced spells | **Done** ✅ | All 32 spell/prayer effects implemented (16 mage + 16 priest). Ball spells, enchantments, detection, healing all functional. |
+| R5.2 | Full spellbook set | **Done** ✅ | 8 books total (4 mage + 4 priest). Each covers 4 spells. Book-gated learning on level-up + manual study ('G'). Books not consumed. |
 
 ### 6. Town & Stores
 
@@ -3697,8 +3697,8 @@ design; items marked **(TODO)** need implementation.
 **Medium priority (significant missing content):**
 - ~~R3.4 Monster fleeing~~ — ✅ Done
 - ~~R2.1 Special rooms~~ — ✅ Done (pits, vaults, nests with $F000 banking)
-- R4.1 Ego items — item variety and excitement
-- R5.1/R5.2 Spell expansion — more spells and spellbooks
+- ~~R4.1 Ego items~~ — ✅ Done
+- ~~R5.1/R5.2 Spell expansion~~ — ✅ Done (8 spellbooks, book-gated learning)
 - R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
 
 **Low priority (polish/completeness):**
@@ -4101,40 +4101,67 @@ All overlays fit well within the 4KB window.
 
 ### Trampoline Pattern for `$E000` Overlays
 
-Same pattern as existing `$F000` trampolines. Banked code at `$E000` runs with KERNAL ROM banked out (`$01=$34`). It can freely JSR to main RAM routines (`$0801`–`$BFFF`).
+Same pattern as existing `$F000` trampolines. **Critical:** use the correct banking mode based on whether the banked code writes to screen/color RAM.
+
+#### C64 PLA Banking Modes — `$01` Register Truth Table
+
+| `$01` | Constant | `$A000` | `$D000` | `$E000` | Use case |
+|-------|----------|---------|---------|---------|----------|
+| `$34` | `BANK_NO_ROMS` | RAM | **RAM** (I/O hidden!) | RAM | Compute-only banked code (no screen writes) |
+| `$35` | `BANK_NO_KERNAL` | RAM | **I/O** (color RAM!) | RAM | Screen-writing banked code (the sweet spot) |
+| `$36` | `BANK_NO_BASIC` | RAM | I/O | KERNAL ROM | Normal game mode (KERNAL callable) |
+| `$37` | `BANK_ALL_ROM` | **BASIC ROM** | I/O | KERNAL ROM | Dangerous — maps ROM over program code! |
+
+**Key rule:** Color RAM at `$D800`–`$DBFF` is separate static SRAM on the VIC-II, only accessible when I/O is banked in at `$D000`–`$DFFF`. This requires `(HIRAM=1 OR LORAM=1)` — satisfied by `$35`/`$36`/`$37` but NOT `$34`. With `$34`, writes to `$D800` go to underlying DRAM, not VIC-II color SRAM. Title screen colors (or whatever was last in color RAM) persist.
+
+**Two trampoline variants:**
 
 ```asm
-// In main RAM — trampoline for store entry
-tramp_store_enter:
+// Screen-writing trampoline — uses $35 (I/O visible for color RAM)
+tramp_ui_char_display:
     sei
-    lda #BANK_NO_ROMS           // $34 — bank out KERNAL, exposing $E000 RAM
+    lda #BANK_NO_KERNAL         // $35 — RAM everywhere + I/O at $D000
     sta $01
-    jsr store_enter             // at $E000+
-    lda #BANK_NO_BASIC          // $36 — restore normal banking
+    jsr ui_char_display         // at $F000+, writes to screen + color RAM
+    jmp tramp_sr_epilogue       // restores $36, CLI, RTS
+
+// Compute-only trampoline — uses $34 (slightly faster, no I/O needed)
+tramp_score_calculate:
+    sei
+    lda #BANK_NO_ROMS           // $34 — all RAM (I/O not needed)
     sta $01
-    cli
-    rts
+    jsr score_calculate         // at $E000+, no screen writes
+    jmp tramp_sr_epilogue
 ```
+
+**When to use which:**
+- `$35` — any trampoline where the banked code writes to screen RAM (`$0400+`) or color RAM (`$D800+`), either directly or through screen.s helpers
+- `$34` — compute-only trampolines (score calculation, ego roll/damage math, hiscore insert)
+
+#### `input_get_key` Banking Safety
+
+`input_get_key` is called from many banking contexts. It must use an explicit `lda #BANK_NO_BASIC` ($36), NOT `ora #%00000010` on the current `$01` value:
+- Called from `$35` context: `ora #2` on `$35` = `$37` (BANK_ALL_ROM) — maps BASIC ROM at `$A000` over program code!
+- Called from `$34` context: `ora #2` on `$34` = `$36` — happens to work, but fragile.
+- Explicit `$36` is correct and safe from any context. It saves/restores original `$01` via PHA/PLA.
 
 **KERNAL access from banked code:** Banked code cannot directly call KERNAL routines (ROM is banked out). Two solutions:
 
-1. **Thin wrappers in main RAM** (~15 bytes each) — for KERNAL GETIN, SETNAM, etc.:
-```asm
-// In main RAM — callable from $E000 overlay
-banked_get_key:
-    lda #BANK_NO_BASIC          // Bank in KERNAL
-    sta $01
-    jsr $ffe4                   // GETIN
-    pha
-    lda #BANK_NO_ROMS           // Bank out KERNAL again
-    sta $01
-    pla
-    rts
-```
+1. **`input_get_key` handles its own banking** — already saves/restores `$01`, sets `$36` internally, uses PHP/PLP to save I flag. Safe to call from any banked context.
 
 2. **Existing main-RAM routines** — `screen_put_string`, `screen_put_char`, `rng_range`, `math_dice` etc. are custom code in main RAM, not KERNAL. These work without wrapping.
 
-Only `input_get_key` (KERNAL GETIN) and disk I/O (score.s hiscore save/load) need KERNAL wrappers. Store code does not do disk I/O.
+3. **Disk I/O** (score.s hiscore save/load) needs KERNAL. The death overlay trampoline restores `$36` before disk ops.
+
+#### `$DD00` VIC-II Bank Restore After KERNAL I/O
+
+KERNAL serial I/O uses CIA2 (`$DD00`) bits 3-5 for the serial bus, which can corrupt bits 0-1 that select the VIC-II 16KB bank. After any KERNAL LOAD operation, restore with:
+```asm
+    lda $dd00
+    ora #%00000011              // Bits 0-1 = %11 → bank 0 ($0000-$3FFF)
+    sta $dd00
+```
+This is done in `overlay.s`, `tier_manager.s`, and `title_screen.s` after KERNAL LOAD calls.
 
 ### Why Stores ARE Bankable
 
@@ -4194,4 +4221,4 @@ Store entry is naturally gated by `zp_player_dlvl == 0` (town only), and `store_
 - **Town → dungeon transition:** Store overlay at `$E000` gets overwritten by `tier_load` when player descends. Natural and safe — store code isn't needed in dungeon.
 - **Dungeon → town transition:** `tier_load` is skipped for dlvl=0 (tier 0 embedded). Load town overlay to `$E000` instead.
 - **Word of Recall:** If recalling to town from deep dungeon, load town overlay. If recalling from town to dungeon, load appropriate tier.
-- **`$F000` permanent code:** No interaction — `$F000` contents are independent of `$E000` overlays. Both regions can be banked simultaneously with `$01=$34` (BANK_NO_ROMS).
+- **`$F000` permanent code:** No interaction — `$F000` contents are independent of `$E000` overlays. Both regions can be banked simultaneously with `$01=$34` (compute-only) or `$01=$35` (screen-writing). Use `$35` whenever the banked code writes to screen/color RAM.

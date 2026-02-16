@@ -118,6 +118,48 @@ spell_bit_mask:
     .byte $01, $02, $04, $08, $10, $20, $40, $80
 
 // ============================================================
+// Book → Spell Mapping Tables
+// ============================================================
+// 8 books: 4 mage (types 47,55,56,57), 4 priest (types 48,58,59,60)
+// Each book covers 4 consecutive spells.
+.const BOOK_COUNT = 8
+
+book_type_ids:
+    .byte 47, 55, 56, 57        // Mage books 1-4
+    .byte 48, 58, 59, 60        // Priest books 1-4
+
+book_spell_class:
+    .byte SPELL_MAGE, SPELL_MAGE, SPELL_MAGE, SPELL_MAGE
+    .byte SPELL_PRIEST, SPELL_PRIEST, SPELL_PRIEST, SPELL_PRIEST
+
+book_spell_start:
+    .byte 0, 4, 8, 12           // Mage: spells 0-3, 4-7, 8-11, 12-15
+    .byte 0, 4, 8, 12           // Priest: spells 0-3, 4-7, 8-11, 12-15
+
+// book_get_info — Look up book metadata from item type ID
+// Input:  A = item type ID
+// Output: C=0 found: A = spell_start, X = spell_class
+//         C=1 not a book
+// Clobbers: X
+book_get_info:
+    ldx #BOOK_COUNT - 1
+!bgi_loop:
+    cmp book_type_ids,x
+    beq !bgi_found+
+    dex
+    bpl !bgi_loop-
+    sec                         // Not a book
+    rts
+!bgi_found:
+    lda book_spell_start,x
+    pha
+    lda book_spell_class,x
+    tax
+    pla                         // A = spell_start, X = spell_class
+    clc
+    rts
+
+// ============================================================
 // Compile-time asserts
 // ============================================================
 

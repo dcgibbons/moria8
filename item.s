@@ -49,7 +49,7 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 55
+.const ITEM_TYPE_COUNT = 61
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -104,14 +104,20 @@ it_category:
     .byte ICAT_STAFF    // 44: Staff of Detect Monsters
     .byte ICAT_STAFF    // 45: Staff of Teleportation
     .byte ICAT_STAFF    // 46: Staff of Cure Light Wounds
-    .byte ICAT_BOOK     // 47: Beginner's Spellbook
-    .byte ICAT_BOOK     // 48: Holy Prayer Book
+    .byte ICAT_BOOK     // 47: Beginner's Spellbook (Mage Book 1)
+    .byte ICAT_BOOK     // 48: Holy Prayer Book (Priest Book 1)
     .byte ICAT_WEAPON   // 49: Short Bow
     .byte ICAT_WEAPON   // 50: Light Crossbow
     .byte ICAT_WEAPON   // 51: Sling
     .byte ICAT_WEAPON   // 52: Arrow
     .byte ICAT_WEAPON   // 53: Bolt
     .byte ICAT_WEAPON   // 54: Rock
+    .byte ICAT_BOOK     // 55: Magick I (Mage Book 2)
+    .byte ICAT_BOOK     // 56: Magick II (Mage Book 3)
+    .byte ICAT_BOOK     // 57: The Mages Guide to Power (Mage Book 4)
+    .byte ICAT_BOOK     // 58: Words of Wisdom (Priest Book 2)
+    .byte ICAT_BOOK     // 59: Chants and Blessings (Priest Book 3)
+    .byte ICAT_BOOK     // 60: Exorcism and Dispelling (Priest Book 4)
 
 // Display character (screen codes)
 it_display:
@@ -170,6 +176,12 @@ it_display:
     .byte $1b   // 52: '{' Arrow
     .byte $1b   // 53: '{' Bolt
     .byte $1b   // 54: '{' Rock
+    .byte $3f   // 55: '?' Magick I
+    .byte $3f   // 56: '?' Magick II
+    .byte $3f   // 57: '?' The Mages Guide to Power
+    .byte $3f   // 58: '?' Words of Wisdom
+    .byte $3f   // 59: '?' Chants and Blessings
+    .byte $3f   // 60: '?' Exorcism and Dispelling
 
 // Color
 it_color:
@@ -228,6 +240,12 @@ it_color:
     .byte COL_BROWN     // 52: Arrow
     .byte COL_LGREY     // 53: Bolt
     .byte COL_GREY      // 54: Rock
+    .byte COL_PURPLE    // 55: Magick I
+    .byte COL_BLUE      // 56: Magick II
+    .byte COL_LRED      // 57: The Mages Guide to Power
+    .byte COL_YELLOW    // 58: Words of Wisdom
+    .byte COL_CYAN      // 59: Chants and Blessings
+    .byte COL_WHITE     // 60: Exorcism and Dispelling
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -236,8 +254,9 @@ it_weight:
     .byte 2, 2, 2, 2, 2, 4, 4, 4, 4, 4
     .byte 4, 4, 2, 2, 2, 2, 2, 2, 2
     .byte 10, 10, 10, 10, 50, 50, 50, 50
-    .byte 30, 30                            // Books
+    .byte 30, 30                            // Books (47-48)
     .byte 30, 50, 5, 2, 2, 4               // Bows, ammo
+    .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
 
 // Damage dice count
 it_dmg_dice:
@@ -246,8 +265,9 @@ it_dmg_dice:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books
+    .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 1, 1, 1                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
+    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
 
 // Damage dice sides
 it_dmg_sides:
@@ -256,8 +276,9 @@ it_dmg_sides:
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books
+    .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 4, 5, 2                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
+    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
 
 // Base armor class
 it_base_ac:
@@ -266,8 +287,9 @@ it_base_ac:
     .byte 0, 0, 0, 1, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
     .byte 0, 0, 0, 0, 0, 0, 0, 0
-    .byte 0, 0                              // Books
+    .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 0, 0, 0                  // Bows, ammo: no AC
+    .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
 
 // Base cost (lo)
 it_cost_lo:
@@ -277,8 +299,9 @@ it_cost_lo:
     .byte <100, <150, <80, <5, <5, <60, <40
     .byte <200, <80, <250, <250, <50, <5, <100
     .byte <50, <200, <250, <150, <60, <100, <300, <200
-    .byte <100, <100                        // Books
+    .byte <100, <100                        // Books (47-48)
     .byte <50, <120, <10, <1, <2, <1        // Bows, ammo
+    .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
 
 // Base cost (hi)
 it_cost_hi:
@@ -288,8 +311,9 @@ it_cost_hi:
     .byte >100, >150, >80, >5, >5, >60, >40
     .byte >200, >80, >250, >250, >50, >5, >100
     .byte >50, >200, >250, >150, >60, >100, >300, >200
-    .byte >100, >100                        // Books
+    .byte >100, >100                        // Books (47-48)
     .byte >50, >120, >10, >1, >2, >1        // Bows, ammo
+    .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -298,8 +322,9 @@ it_min_level:
     .byte 1, 2, 3, 4, 5, 3, 5, 4, 1, 1
     .byte 2, 2, 5, 4, 6, 6, 3, 1, 4
     .byte 3, 4, 5, 4, 3, 3, 5, 3
-    .byte 2, 2                              // Books
+    .byte 2, 2                              // Books (47-48)
     .byte 2, 3, 1, 1, 2, 1                  // Bows, ammo
+    .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -342,6 +367,7 @@ it_name_lo:
     .byte <itn_43, <itn_44, <itn_45, <itn_46
     .byte <itn_47, <itn_48
     .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
+    .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -355,6 +381,7 @@ it_name_hi:
     .byte >itn_43, >itn_44, >itn_45, >itn_46
     .byte >itn_47, >itn_48
     .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
+    .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -412,6 +439,12 @@ itn_51: .text "SLING" ; .byte 0
 itn_52: .text "ARROW" ; .byte 0
 itn_53: .text "BOLT" ; .byte 0
 itn_54: .text "ROCK" ; .byte 0
+itn_55: .text "MAGICK I" ; .byte 0
+itn_56: .text "MAGICK II" ; .byte 0
+itn_57: .text "THE MAGES GUIDE" ; .byte 0
+itn_58: .text "WORDS OF WISDOM" ; .byte 0
+itn_59: .text "CHANTS AND BLESSINGS" ; .byte 0
+itn_60: .text "EXORCISM" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1308,9 +1341,9 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(53) + 2 → range [2, 54]
-    // Types 2-54 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo
-    lda #53
+    // Roll type = rng_range(59) + 2 → range [2, 60]
+    // Types 2-60 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo, books
+    lda #59
     jsr rng_range
     clc
     adc #2
@@ -1446,9 +1479,8 @@ roll_enchantment:
     rts
 
 !re_book:
-    // Books get a random spell index (0-15) in p1
-    lda #16
-    jsr rng_range               // [0, 15]
+    // Books: p1=0 (spell range determined by book type)
+    lda #0
     rts
 
 !re_equip:
@@ -1524,6 +1556,7 @@ id_known:
     .byte 0, 0, 0, 0           // 43-46: Staves — unknown at start
     .byte 1, 1                  // 47-48: Books — always known
     .byte 1, 1, 1, 1, 1, 1      // 49-54: Ranged weapons/ammo — always known
+    .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -1541,6 +1574,7 @@ potion_local_idx:
     .byte 3, 4, 5, 6, 7, 8, 9  // 25-31: CSW, RestMana, Hero, Blind, Conf, DetMon, Infra
     .fill 18, $ff       // 32-48: not potions
     .fill 6, $ff        // 49-54: not potions
+    .fill 6, $ff        // 55-60: not potions (books)
 
 scroll_local_idx:
     .fill 20, $ff       // 0-19: not scrolls
@@ -1550,6 +1584,7 @@ scroll_local_idx:
     .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
     .fill 10, $ff       // 39-48: not scrolls
     .fill 6, $ff        // 49-54: not scrolls
+    .fill 6, $ff        // 55-60: not scrolls (books)
 
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .text "A BLUE POTION" ; .byte 0
@@ -1958,7 +1993,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 55
+.assert "Item type count", ITEM_TYPE_COUNT, 61
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

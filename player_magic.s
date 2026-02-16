@@ -653,16 +653,24 @@ calc_spell_failure:
 // magic_check_new_spells — Learn any spells the player qualifies for
 // Checks each spell 0-15: if spell_level <= player_level and not
 // already known, set the known bit and print message.
-// Called on level-up and at character creation.
+// Called on level-up. Scans inventory for books matching
+// the player's class, then learns qualifying spells from
+// each book's 4-spell range.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr2
 // ============================================================
-pm_learn_idx:    .byte 0     // Loop counter for learn check
+pm_learn_idx:    .byte 0     // Current spell index being checked
+mcns_class:      .byte 0     // Player's spell class
+mcns_inv_idx:    .byte 0     // Inventory scan index
+mcns_spell_start:.byte 0     // First spell index for current book
 
 magic_check_new_spells:
     lda player_data + PL_SPELL_TYPE
     bne !mcns_has_type+
     rts                             // SPELL_NONE — nothing to learn
 !mcns_has_type:
+    sta mcns_class
+
+    // Set up table pointers based on class
     cmp #SPELL_MAGE
     bne !mcns_priest+
 
@@ -679,7 +687,7 @@ magic_check_new_spells:
     sta pm_name_hi_lo
     lda #>mage_spell_name_hi
     sta pm_name_hi_hi
-    jmp !mcns_scan+
+    jmp !mcns_scan_inv+
 
 !mcns_priest:
     // Priest: use priest tables
@@ -696,15 +704,61 @@ magic_check_new_spells:
     lda #>priest_spell_name_hi
     sta pm_name_hi_hi
 
-!mcns_scan:
+!mcns_scan_inv:
+    // Scan inventory for books matching player's class
     lda #0
+    sta mcns_inv_idx
+
+!mcns_inv_loop:
+    ldx mcns_inv_idx
+    cpx #MAX_INV_SLOTS
+    bcs !mcns_done+             // Scanned all carried slots
+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !mcns_inv_next+
+
+    // Check if item is a book
+    tax
+    lda it_category,x
+    cmp #ICAT_BOOK
+    bne !mcns_inv_next+
+
+    // Look up book info
+    txa                         // A = item type
+    jsr book_get_info           // A = spell_start, X = spell_class
+    bcs !mcns_inv_next+         // Not in book table
+
+    // Check class matches player
+    cpx mcns_class
+    bne !mcns_inv_next+
+
+    // Learn qualifying spells from this book's range
+    sta mcns_spell_start
+    jsr mcns_learn_from_book
+
+!mcns_inv_next:
+    inc mcns_inv_idx
+    jmp !mcns_inv_loop-
+
+!mcns_done:
+    rts
+
+// mcns_learn_from_book — Learn qualifying spells from one book
+// Input: mcns_spell_start, level/name table pointers set up
+// Clobbers: A, X, Y
+mcns_learn_from_book:
+    lda mcns_spell_start
     sta pm_learn_idx
 
 !mcns_loop:
+    // Check if done with this book's 4 spells
     lda pm_learn_idx
-    cmp #16
+    sec
+    sbc mcns_spell_start
+    cmp #4
     bcc !mcns_cont+
-    rts
+    rts                             // Book done (replaces jmp to mcns_book_done)
 !mcns_cont:
 
     // Check if already known

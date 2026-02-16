@@ -675,8 +675,18 @@ create_init_character:
     // Sync to ZP
     jsr player_sync_to_zp
 
-    // Learn starting spells (level-1 spells for spell-casting classes)
-    jsr magic_check_new_spells
+    // Set starting spells for spell-casting classes
+    // Level 1 + Book 1 (given in main.s): mage learns 4, priest learns 3
+    lda player_data + PL_SPELL_TYPE
+    beq !no_start_spells+       // SPELL_NONE: no spells
+    cmp #SPELL_MAGE
+    bne !priest_start+
+    lda #$0F                    // Mage: spells 0-3 (all level 1)
+    .byte $2c                   // BIT abs — skip next 2 bytes
+!priest_start:
+    lda #$07                    // Priest: spells 0-2 (all level 1)
+    sta player_data + PL_SPELLS_KNOWN
+!no_start_spells:
 
     // Initialize HP regen counter from CON
     lda player_data + PL_CON_CUR

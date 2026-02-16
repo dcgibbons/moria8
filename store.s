@@ -222,12 +222,10 @@ sro_set_p1:
     rts
 
 !sro_book:
-    // Books get random spell index 0-15
-    lda #16
-    jsr rng_range               // [0, 15]
+    // Books: p1=0 (spell range determined by book type)
     ldy sb_abs_slot
-    sta si_p1,y
     lda #0
+    sta si_p1,y
     sta si_flags,y
     rts
 
@@ -240,11 +238,11 @@ store_pick_item:
     sta sr_retry
 
 !spi_loop:
-    // Random item type [2, 54] (skip gold types 0-1)
-    lda #53                     // 53 possible types (2..54)
-    jsr rng_range               // 0-52
+    // Random item type [2, 60] (skip gold types 0-1)
+    lda #59                     // 59 possible types (2..60)
+    jsr rng_range               // 0-58
     clc
-    adc #2                      // 2-54
+    adc #2                      // 2-60
 
     // Check if this item's category matches the store
     pha                         // Save item type on stack
