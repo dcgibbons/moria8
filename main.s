@@ -205,6 +205,7 @@ entry_main:
     jmp load_resume_game
 !title_load_fail:
     jsr disk_prompt_game        // Swap back even on failure
+    jsr input_get_key           // Let user see error message from load_game
     jmp !title_new+
 
 !title_new:
