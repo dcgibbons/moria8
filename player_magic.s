@@ -956,39 +956,13 @@ magic_recalc_mana:
 mage_effect_dispatch:
     cmp #0
     bne !med_1+
-    // 0: Magic Missile — directional, 1d4 + level/2
-    jsr eff_directional_monster
-    bcc !med_rts+
-    stx zp_temp2
-    lda #1                          // 1 die
-    ldx #4                          // d4
-    ldy zp_player_lvl
-    tya
+    // 0: Magic Missile — bolt, 1d4 + level/2
+    lda zp_player_lvl
     lsr                             // level/2
     tay                             // Y = bonus
-    lda #1
-    jsr math_dice
-    ldx zp_temp2
-    jsr monster_get_ptr
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    sec
-    sbc zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    sbc zp_math_b
-    sta (zp_ptr0),y
-    bmi !med_0_dead+
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    ldy #MX_HP_HI
-    ora (zp_ptr0),y
-    bne !med_rts+               // Still alive (HP > 0)
-!med_0_dead:
-    ldx zp_temp2
-    jsr eff_kill_monster
-!med_rts:
+    lda #1                          // 1d4
+    ldx #4
+    jsr eff_bolt
     rts
 
 !med_1:
@@ -1058,6 +1032,7 @@ mage_effect_dispatch:
     // 8: Lightning Bolt — 3d8
     lda #3
     ldx #8
+    ldy #0
     jsr eff_bolt
     rts
 
@@ -1095,6 +1070,7 @@ mage_effect_dispatch:
     // 13: Frost Bolt — 5d8
     lda #5
     ldx #8
+    ldy #0
     jsr eff_bolt
     rts
 

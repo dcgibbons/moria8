@@ -1523,6 +1523,7 @@ item_aim_wand:
 !iaw_lightning:
     lda #3
     ldx #8
+    ldy #0
     jsr eff_bolt
     lda #<piw_wand_bolt_str
     sta zp_ptr0
@@ -1535,6 +1536,7 @@ item_aim_wand:
 !iaw_frost:
     lda #4
     ldx #8
+    ldy #0
     jsr eff_bolt
     lda #<piw_wand_frost_str
     sta zp_ptr0

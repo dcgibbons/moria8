@@ -536,13 +536,12 @@ eff_confuse_adjacent:
 
 // ============================================================
 // eff_bolt — Fire a bolt in a direction, damaging first monster hit
-// Input: A = dice count, X = dice sides
-//        Must call get_direction_target first (df_target_x/y set)
-//        Direction stored in eff_bolt_dir (index 0-7)
+// Input: A = dice count, X = dice sides, Y = bonus
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0-4, zp_math_a/b
 // ============================================================
 eff_bolt_dice:  .byte 0
 eff_bolt_sides: .byte 0
+eff_bolt_bonus: .byte 0
 eff_bolt_dir:   .byte 0
 eff_bolt_cx:    .byte 0     // Current X
 eff_bolt_cy:    .byte 0     // Current Y
@@ -551,6 +550,7 @@ eff_bolt_steps: .byte 0
 eff_bolt:
     sta eff_bolt_dice
     stx eff_bolt_sides
+    sty eff_bolt_bonus
 
     // Get direction from player
     jsr get_direction_target
@@ -653,7 +653,7 @@ eff_bolt:
     stx zp_temp2                // Save monster slot
     lda eff_bolt_dice
     ldx eff_bolt_sides
-    ldy #0                      // No bonus
+    ldy eff_bolt_bonus
     jsr math_dice               // Result in zp_math_a
 
     // Apply damage to monster

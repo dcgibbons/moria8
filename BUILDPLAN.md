@@ -1785,7 +1785,7 @@ Affected locations:
 - `eff_bolt` line 702: `bpl !eb_fizzle+`
 - `eff_damage_adjacent` line 765: `bpl !eda_next+`
 - `eff_dispel_undead` line 1002: `bpl !edu_next+`
-- `mage_effect_dispatch` effect 0 (Magic Missile) line 934: `bpl !med_rts+`
+- ~~`mage_effect_dispatch` effect 0 (Magic Missile)~~ — **Fixed**: now uses `eff_bolt` (shared death check)
 
 **Fix:** After each `bpl !alive+`, add an explicit zero check:
 ```
@@ -2801,7 +2801,7 @@ overwrites the correct value that was loaded from the ZP state block.
 
 | # | Name | Mana | Min Lvl | Fail% | Effect |
 |---|------|------|---------|-------|--------|
-| 0 | Magic Missile | 1 | 1 | 22 | 1d4+level/2 damage to target (directional) |
+| 0 | Magic Missile | 1 | 1 | 22 | 1d4+level/2 bolt (traces path up to 20 tiles) |
 | 1 | Detect Monsters | 1 | 1 | 23 | Reveal all monsters on map for 1 turn |
 | 2 | Phase Door | 2 | 1 | 24 | Teleport to random floor within 10 tiles |
 | 3 | Light Area | 2 | 1 | 26 | Light current room (share with scroll) |
@@ -3169,7 +3169,7 @@ mage_effect_dispatch:
 
 | Spell | Implementation | Shared? |
 |-------|---------------|---------|
-| 0 Magic Missile | `get_direction_target` → find monster at target → `math_dice(1,4,level/2)` → apply damage → kill check | New |
+| 0 Magic Missile | `eff_bolt(1,4,level/2)` — traces path, damages first monster hit | Shared bolt |
 | 1 Detect Monsters | `jsr eff_detect_monsters` | Shared |
 | 2 Phase Door | `jsr eff_phase_door` | Shared |
 | 3 Light Area | `jsr eff_light_room` | Shared |
