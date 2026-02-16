@@ -78,6 +78,7 @@ tier_init:
 
     // REU present: load all 4 tier files from disk into REU
     jsr reu_load_all_tiers
+    jsr reu_stash_overlays
 
 !ti_done:
     rts

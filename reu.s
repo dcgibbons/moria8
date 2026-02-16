@@ -472,3 +472,87 @@ reu_fetch_tier:
     sta $01                     // Restore bank config
     cli
     rts
+
+
+// ============================================================
+// reu_stash_overlays — Stash all phase overlays into REU
+// ============================================================
+// Called at startup after reu_load_all_tiers. Loads each overlay
+// PRG from disk to $E000, then stashes 4KB to REU. REU offset
+// continues from reu_tier_offset_lo/hi (overlays sit after tiers).
+// Clobbers: A, X, Y
+reu_stash_overlays:
+    ldx #1                      // Start with overlay 1 (OVL_STARTUP)
+!rso_loop:
+    stx reu_ovl_idx
+
+    // Record REU start offset for this overlay
+    lda reu_tier_offset_lo
+    sta ovl_reu_start_lo,x
+    lda reu_tier_offset_hi
+    sta ovl_reu_start_hi,x
+
+    // Load overlay PRG from disk to $E000
+    dex                         // 0-based index for overlay_load_disk
+    jsr overlay_load_disk
+    bcs !rso_skip+              // Skip stash if load failed
+
+    // Stash $E000 (4KB) to REU at current offset
+    sei
+    lda $01
+    pha
+    lda #$35                    // Bank out KERNAL for DMA to read RAM at $E000
+    sta $01
+
+    lda #<$e000
+    sta REU_C64LO
+    lda #>$e000
+    sta REU_C64HI
+    ldx reu_ovl_idx
+    lda ovl_reu_start_lo,x
+    sta REU_REULO
+    lda ovl_reu_start_hi,x
+    sta REU_REUHI
+    lda #0
+    sta REU_BANK
+    sta REU_LENLO               // Length lo = $00
+    lda #$10                    // Length hi = $10 → $1000 = 4KB
+    sta REU_LENHI
+    lda #0
+    sta REU_CONTROL
+    lda #REU_CMD_STASH
+    sta REU_COMMAND             // Execute DMA
+
+    pla
+    sta $01
+    cli
+
+!rso_skip:
+    // Advance REU offset by $1000 (4KB) — low byte unchanged
+    lda reu_tier_offset_hi
+    clc
+    adc #$10
+    sta reu_tier_offset_hi
+
+    ldx reu_ovl_idx
+    inx
+    cpx #4                      // Overlays 1-3
+    bne !rso_loop-
+
+    // Set overlay sizes (all 4KB = $1000) and activate REU path
+    ldx #1
+!rso_sizes:
+    lda #$00
+    sta ovl_reu_size_lo,x
+    lda #$10
+    sta ovl_reu_size_hi,x
+    inx
+    cpx #4
+    bne !rso_sizes-
+
+    lda #1
+    sta reu_overlays_stashed
+    rts
+
+// Scratch for overlay stashing
+reu_ovl_idx: .byte 0
