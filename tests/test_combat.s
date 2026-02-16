@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #10
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -83,7 +83,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 11, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -326,10 +326,55 @@ test_start:
     sta tc_results + 7
 
     // ==========================================
-    // Test 9: combat_check_levelup triggers at threshold
-    // XP threshold for level 1→2 is 10. Set XP=10, level=1.
+    // Test 9: combat_award_xp with 16-bit XP
+    // Set cr_xp_lo[4]=$E8, cr_xp_hi[4]=$03 → xp=1000
+    // cr_level[4]=1, player_level=1
+    // Expected: (1000*1)/1 = 1000 = $03E8
     // ==========================================
 !t9:
+    // Clear player XP
+    lda #0
+    sta player_data + PL_XP_0
+    sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
+
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #4                      // Creature slot 4
+    sta cmb_type
+
+    // Set 16-bit XP: $03E8 = 1000
+    lda #$e8
+    sta cr_xp_lo + 4
+    lda #$03
+    sta cr_xp_hi + 4
+    // Set creature level = 1
+    lda #1
+    sta cr_level + 4
+
+    jsr combat_award_xp
+
+    lda player_data + PL_XP_0
+    cmp #$e8
+    bne !t9_fail+
+    lda player_data + PL_XP_1
+    cmp #$03
+    bne !t9_fail+
+    lda player_data + PL_XP_2
+    bne !t9_fail+               // Should be 0
+    lda #$01
+    sta tc_results + 8
+    jmp !t10+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+
+    // ==========================================
+    // Test 10: combat_check_levelup triggers at threshold
+    // XP threshold for level 1→2 is 10. Set XP=10, level=1.
+    // ==========================================
+!t10:
     // Pre-stuff keyboard buffer for -more- prompt from levelup message
     lda #8
     sta $c6
@@ -366,20 +411,20 @@ test_start:
 
     lda zp_player_lvl
     cmp #2
-    bne !t9_fail+
+    bne !t10_fail+
     lda #$01
-    sta tc_results + 8
-    jmp !t10+
-!t9_fail:
+    sta tc_results + 9
+    jmp !t11+
+!t10_fail:
     lda #$00
-    sta tc_results + 8
+    sta tc_results + 9
 
     // ==========================================
-    // Test 10: msg_build_hit produces correct string
+    // Test 11: msg_build_hit produces correct string
     // msg_build_hit with cmb_type=4 (Kobold)
     // Expected: "YOU HIT THE KOBOLD."
     // ==========================================
-!t10:
+!t11:
     lda #4
     sta cmb_type
 
@@ -392,43 +437,43 @@ test_start:
     // K(0b) O(0f) B(02) O(0f) L(0c) D(04) .(2e) null(00)
     lda combat_msg_buf + 0
     cmp #$19                    // 'Y'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 1
     cmp #$0f                    // 'O'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 2
     cmp #$15                    // 'U'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 3
     cmp #$20                    // ' '
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 4
     cmp #$08                    // 'H'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 5
     cmp #$09                    // 'I'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 6
     cmp #$14                    // 'T'
-    bne !t10_fail+
+    bne !t11_fail+
     // Check "KOBOLD." at offset 12
     lda combat_msg_buf + 12
     cmp #$0b                    // 'K'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 18
     cmp #$2e                    // '.'
-    bne !t10_fail+
+    bne !t11_fail+
     lda combat_msg_buf + 19
     cmp #$00                    // null
-    bne !t10_fail+
+    bne !t11_fail+
 
     lda #$01
-    sta tc_results + 9
+    sta tc_results + 10
     jmp !tests_done+
 
-!t10_fail:
+!t11_fail:
     lda #$00
-    sta tc_results + 9
+    sta tc_results + 10
 
 !tests_done:
     jmp test_exit_trampoline

@@ -471,42 +471,66 @@ combat_apply_damage:
 
 // combat_award_xp — Award XP for killing a monster
 // Formula: xp_earned = (cr_xp * cr_level) / player_level
+// cr_xp is 16-bit (cr_xp_hi:cr_xp_lo). Uses 16×8→24-bit multiply.
 // Adds to 24-bit PL_XP_0/1/2.
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_award_xp:
-    // cr_xp is 16-bit but early values are <=35, fits in 8 bits
-    // Compute: xp_lo * cr_level (8x8 → 16-bit)
+    // Load creature XP (16-bit) and level
     ldx cmb_type
-    lda cr_xp_lo,x              // XP value (lo byte, fits in 8 bits)
-    sta zp_temp0                // Save XP
-    lda cr_level,x              // creature level
-    ldx zp_temp0                // X = XP value
-    jsr math_multiply           // zp_math_a/b = xp * level (16-bit)
+    lda cr_xp_lo,x
+    sta zp_temp0
+    lda cr_xp_hi,x
+    sta zp_temp1
+    lda cr_level,x
+    sta zp_temp2
 
-    // Divide by player_level
-    ldx zp_player_lvl
-    cpx #0
+    // 16×8→24: (xp_hi:xp_lo) × level
+    // Step 1: xp_lo × level
+    lda zp_temp0
+    ldx zp_temp2
+    jsr math_multiply           // zp_math_a/b = lo product
+    lda zp_math_a
+    sta ccl_adj_0
+    lda zp_math_b
+    sta ccl_adj_1
+    lda #0
+    sta ccl_adj_2
+
+    // Step 2: xp_hi × level, add shifted left 8
+    lda zp_temp1
+    ldx zp_temp2
+    jsr math_multiply
+    lda ccl_adj_1
+    clc
+    adc zp_math_a
+    sta ccl_adj_1
+    lda ccl_adj_2
+    adc zp_math_b
+    sta ccl_adj_2
+
+    // Divide 24-bit product by player_level
+    lda zp_player_lvl
     bne !cax_div+
-    ldx #1                      // Safety: prevent div by 0
+    lda #1                      // Safety: prevent div by 0
 !cax_div:
-    jsr math_div_16x8           // zp_math_a/b = quotient
+    sta ccl_divisor
+    jsr ccl_div_24x8
 
     // Integer-only XP — no min-1 floor (matches umoria behavior).
     // Weak creatures may award 0 XP when player_level >> creature_level.
-    // Fractional XP accumulation not implemented (known simplification).
 
-    // Add to 24-bit PL_XP
+    // Add 24-bit quotient to PL_XP
     lda player_data + PL_XP_0
     clc
-    adc zp_math_a
+    adc ccl_adj_0
     sta player_data + PL_XP_0
 
     lda player_data + PL_XP_1
-    adc zp_math_b
+    adc ccl_adj_1
     sta player_data + PL_XP_1
 
     lda player_data + PL_XP_2
-    adc #0
+    adc ccl_adj_2
     sta player_data + PL_XP_2
 
     rts
@@ -552,7 +576,9 @@ combat_check_levelup:
     sta ccl_adj_2
 
     // Divide 24-bit product by 100 → adjusted threshold
-    jsr ccl_div_24x100
+    lda #100
+    sta ccl_divisor
+    jsr ccl_div_24x8
 
     // Result in ccl_adj_0/1 (16-bit). Cap at $FFFF if overflow.
     lda ccl_adj_2
@@ -639,12 +665,14 @@ combat_check_levelup:
 ccl_adj_0: .byte 0             // 24-bit product / result (lo)
 ccl_adj_1: .byte 0             // (mid)
 ccl_adj_2: .byte 0             // (hi)
+ccl_divisor: .byte 0           // Divisor for ccl_div_24x8
 
-// ccl_div_24x100 — Divide ccl_adj_0/1/2 by 100
+// ccl_div_24x8 — Divide ccl_adj_0/1/2 by ccl_divisor
 // Uses shift-subtract algorithm (24 iterations)
+// Input: ccl_divisor = divisor
 // Result: quotient overwrites ccl_adj_0/1/2
 // Clobbers: A, X
-ccl_div_24x100:
+ccl_div_24x8:
     lda #0
     sta zp_temp4                // Remainder
     ldx #24                     // 24 bits
@@ -654,9 +682,9 @@ ccl_div_24x100:
     rol ccl_adj_2
     rol zp_temp4                // MSB into remainder
     lda zp_temp4
-    cmp #100                    // Try subtract divisor
+    cmp ccl_divisor             // Try subtract divisor
     bcc !cd24_skip+
-    sbc #100
+    sbc ccl_divisor
     sta zp_temp4
     inc ccl_adj_0               // Set quotient bit
 !cd24_skip:

@@ -1136,7 +1136,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | MC4.1 | LOW | No player critical hit system | TODO — not urgent, combat works without it |
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | **Resolved** — documented in show_inv_and_restore comment; overlay is read-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
-| MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | TODO when needed |
+| MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | **Fixed** — combat_award_xp now uses 16×8→24-bit multiply with cr_xp_hi:cr_xp_lo; generalized ccl_div_24x8 shared with levelup |
 | BUG-19b | **HIGH** | XP awards too generous — player levels up too quickly on low dungeon levels | **Fixed** — experience factor (race_xp% + class_xp%) was never applied to thresholds; now computed at character creation (PL_EXPFACT) and used in combat_check_levelup via 16×8→24-bit multiply + div-by-100 |
 | BUG-23 | **HIGH** | Players still level up too fast despite BUG-19b fix — XP economy not matching umoria | **Fixed** — root cause: missing XP halving on multi-level gain. Umoria halves excess XP above each new threshold on level-up; we preserved full XP, allowing cascading (e.g., 150 XP: 1→7 without halving vs 1→4 with). Audit confirmed cr_xp values and xp_level thresholds match umoria exactly. |
 | BUG-20 | LOW | Dead string `mat_dead_str` wastes 21 bytes (`mat_acid_str` now used by BUG-21 fix) | Open — OPT-1.1 (deferred) |
