@@ -60,13 +60,29 @@ equip_slot_for_cat:
 // Subroutines
 // ============================================================
 
-// show_inv_and_restore — Show inventory overlay, wait for key, restore screen
+// show_inv_and_restore — Show filtered inventory overlay, wait for key, restore screen
+// Input: A = filter value ($FF=all, $FE=wearable, 0-15=exact ICAT match)
 // Used by item selection dialogs when player presses '?'.
 // NOTE (RP15-4): After return, callers re-prompt without re-validating game
 // state. This is safe because the overlay is read-only (no state mutation).
 // Preserves: nothing
 show_inv_and_restore:
+    sta uinv_filter
     jsr tramp_ui_inv_display
+    jsr input_get_key
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+    rts
+
+// show_equip_and_restore — Show equipment overlay, wait for key, restore screen
+// Used by item_takeoff when player presses '?'.
+// Preserves: nothing
+show_equip_and_restore:
+    jsr tramp_ui_equip_display
     jsr input_get_key
     lda #COL_BLACK
     sta zp_text_color
@@ -89,9 +105,10 @@ item_wear:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (wearable items only) and re-prompts
     cmp #$3f
     bne !iw_not_inv+
+    lda #$fe                    // Filter: wearable items
     jsr show_inv_and_restore
     jmp item_wear
 !iw_not_inv:
@@ -265,10 +282,10 @@ item_takeoff:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows equipment and re-prompts
     cmp #$3f
     bne !ito_not_inv+
-    jsr show_inv_and_restore
+    jsr show_equip_and_restore
     jmp item_takeoff
 !ito_not_inv:
 
@@ -645,9 +662,10 @@ item_quaff:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (potions only) and re-prompts
     cmp #$3f
     bne !iq_not_inv+
+    lda #ICAT_POTION
     jsr show_inv_and_restore
     jmp item_quaff
 !iq_not_inv:
@@ -996,9 +1014,10 @@ item_read_scroll:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (scrolls only) and re-prompts
     cmp #$3f
     bne !irs_not_inv+
+    lda #ICAT_SCROLL
     jsr show_inv_and_restore
     jmp !irs_can_see-
 !irs_not_inv:
@@ -1325,9 +1344,10 @@ item_aim_wand:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (wands only) and re-prompts
     cmp #$3f
     bne !iaw_not_inv+
+    lda #ICAT_WAND
     jsr show_inv_and_restore
     jmp item_aim_wand
 !iaw_not_inv:
@@ -1484,9 +1504,10 @@ item_use_staff:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (staves only) and re-prompts
     cmp #$3f
     bne !ius_not_inv+
+    lda #ICAT_STAFF
     jsr show_inv_and_restore
     jmp item_use_staff
 !ius_not_inv:
@@ -1644,9 +1665,10 @@ item_gain_spell:
 
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (books only) and re-prompts
     cmp #$3f
     bne !igs_not_inv+
+    lda #ICAT_BOOK
     jsr show_inv_and_restore
     jmp !igs_can_cast-
 !igs_not_inv:

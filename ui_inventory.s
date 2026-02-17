@@ -60,6 +60,27 @@ ui_inv_display:
     cmp #FI_EMPTY
     beq !uinv_next+
 
+    // Apply category filter
+    ldy uinv_filter
+    cpy #$ff
+    beq !uinv_show+             // $FF = no filter, show all
+    // A still = item type ID from inv_item_id,x
+    tax
+    lda it_category,x           // A = category of this item
+    cpy #$fe
+    beq !uinv_wearable+
+    // Exact category match
+    cmp uinv_filter
+    beq !uinv_show+
+    jmp !uinv_next+
+!uinv_wearable:
+    tax
+    lda equip_slot_for_cat,x
+    cmp #$ff
+    bne !uinv_show+
+    jmp !uinv_next+
+!uinv_show:
+
     // Print letter and item name
     lda uinv_row
     sta zp_cursor_row
@@ -266,6 +287,7 @@ uinv_slot:      .byte 0
 uinv_row:       .byte 0
 uinv_any:       .byte 0
 uinv_equip_idx: .byte 0
+uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 
 // ============================================================
 // String data (screen codes via inherited encoding)

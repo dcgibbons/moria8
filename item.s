@@ -1192,9 +1192,10 @@ item_drop:
     // Wait for keypress
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (all items) and re-prompts
     cmp #$3f
     bne !idr_not_inv+
+    lda #$ff                    // Filter: show all items
     jsr show_inv_and_restore
     jmp item_drop
 !idr_not_inv:

@@ -36,9 +36,10 @@ throw_item:
 
     jsr input_get_key
 
-    // '?' shows inventory and re-prompts
+    // '?' shows inventory (all items) and re-prompts
     cmp #$3f
     bne !tw_not_inv+
+    lda #$ff                    // Filter: show all items
     jsr show_inv_and_restore
     jmp throw_item
 !tw_not_inv:

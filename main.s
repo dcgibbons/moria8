@@ -752,6 +752,8 @@ load_resume_game:
     // Inventory? (display only, no turn consumed)
     cmp #CMD_INVENTORY
     bne !not_inventory+
+    lda #$ff
+    sta uinv_filter             // Show all items
     jsr tramp_ui_inv_display
     jsr input_get_key
     // Redraw map on return
