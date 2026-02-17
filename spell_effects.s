@@ -513,6 +513,11 @@ eff_bolt_dir:   .byte 0
 eff_bolt_cx:    .byte 0     // Current X
 eff_bolt_cy:    .byte 0     // Current Y
 eff_bolt_steps: .byte 0
+eb_save_char:   .byte 0
+eb_save_col:    .byte 0
+
+eb_spell_hits_str: .text "YOUR SPELL HITS" ; .byte 0
+eb_fizzle_str:     .text "YOUR SPELL FIZZLES OUT." ; .byte 0
 
 eff_bolt:
     sta eff_bolt_dice
@@ -609,21 +614,97 @@ eff_bolt:
     jmp !eb_fizzle+                 // Blocked tile
 
 !eb_check_mon:
+    // --- Animate bolt: draw * at current position if on-screen ---
+    lda eff_bolt_cy
+    sec
+    sbc zp_view_y
+    bcc !eb_no_anim+                // Off-screen (top)
+    cmp #VIEWPORT_H
+    bcs !eb_no_anim+                // Off-screen (bottom)
+    clc
+    adc #VIEWPORT_Y                 // Screen row
+    tax
+    lda screen_row_lo,x
+    sta zp_ptr0
+    lda screen_row_hi,x
+    sta zp_ptr0_hi
+
+    lda eff_bolt_cx
+    sec
+    sbc zp_view_x
+    bcc !eb_no_anim+                // Off-screen (left)
+    cmp #VIEWPORT_W
+    bcs !eb_no_anim+                // Off-screen (right)
+    clc
+    adc #VIEWPORT_X                 // Screen column
+    tay
+    sty eb_save_col
+
+    // Save current screen character
+    lda (zp_ptr0),y
+    sta eb_save_char
+
+    // Draw * (screen code $2A)
+    lda #$2a
+    sta (zp_ptr0),y
+
+    // Switch to color RAM, save color, set white
+    lda zp_ptr0_hi
+    pha                             // Save screen hi byte
+    clc
+    adc #$d4                        // $0400 → $D800
+    sta zp_ptr0_hi
+    lda (zp_ptr0),y
+    pha                             // Save original color
+    lda #1                          // White
+    sta (zp_ptr0),y
+
+    // Delay (~10ms at 1MHz)
+    ldx #$08
+!eb_delay_o:
+    ldy #$00
+!eb_delay_i:
+    dey
+    bne !eb_delay_i-
+    dex
+    bne !eb_delay_o-
+    ldy eb_save_col
+
+    // Restore color
+    pla
+    sta (zp_ptr0),y
+
+    // Restore screen pointer and character
+    pla
+    sta zp_ptr0_hi
+    lda eb_save_char
+    sta (zp_ptr0),y
+
+!eb_no_anim:
     // Check for monster at this position
     lda eff_bolt_cx
     ldy eff_bolt_cy
     jsr monster_find_at
-    bcc !eb_trace-              // No monster, keep going
+    bcs !eb_got_monster+        // Monster found
+    jmp !eb_trace-              // No monster, keep going
+!eb_got_monster:
 
     // Hit a monster! X = slot index
-    // Roll damage
     stx zp_temp2                // Save monster slot
+
+    // Get monster type for messages
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta cmb_type
+
+    // Roll damage
     lda eff_bolt_dice
     ldx eff_bolt_sides
     ldy eff_bolt_bonus
     jsr math_dice               // Result in zp_math_a
 
-    // Apply damage to monster
+    // Apply damage to monster (16-bit HP subtraction)
     ldx zp_temp2
     jsr monster_get_ptr         // zp_ptr0 = monster entry
     ldy #MX_HP_LO
@@ -642,13 +723,53 @@ eff_bolt:
     lda (zp_ptr0),y
     ldy #MX_HP_HI
     ora (zp_ptr0),y
-    bne !eb_fizzle+             // Still alive (HP > 0)
+    bne !eb_alive+              // Still alive (HP > 0)
+
 !eb_dead:
-    // Monster killed — award XP and remove
+    // Monster killed — award XP, remove, message
     ldx zp_temp2
     jsr eff_kill_monster
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action            // "YOU HAVE SLAIN THE <name>."
+    jsr cmb_print_buf
+    lda #SFX_HIT
+    jsr sound_play
+    rts
+
+!eb_alive:
+    // Wake the monster
+    ldx zp_temp2
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+
+    // Message: "YOUR SPELL HITS THE <name>."
+    lda #0
+    sta cmb_buf_idx
+    lda #<eb_spell_hits_str
+    ldy #>eb_spell_hits_str
+    jsr combat_append_str           // "YOUR SPELL HITS"
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str           // " THE "
+    jsr combat_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str           // "."
+    jsr cmb_term_and_print
+    lda #SFX_HIT
+    jsr sound_play
+    rts
 
 !eb_fizzle:
+    lda #<eb_fizzle_str
+    sta zp_ptr0
+    lda #>eb_fizzle_str
+    sta zp_ptr0_hi
+    jsr msg_print
     rts
 
 // ============================================================

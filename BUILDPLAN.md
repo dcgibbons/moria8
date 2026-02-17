@@ -1093,6 +1093,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-20 | Dead strings `mat_acid_str` and `mat_dead_str` in monster_attack.s (42 bytes wasted) | **Open** — both strings defined but never referenced. `mat_acid_str` was intended for acid effect message; `mat_dead_str` superseded by death handling in score.s. Delete both to reclaim 42 bytes. |
 | BUG-21 | Acid attack effect (`mon_atk_effect_acid`) is a no-op with no message | **Open** — when a monster hits with ATK_ACID, the player sees generic "THE X HITS YOU." but no acid-specific feedback. Poison/confuse/paralyze all print distinct messages. Either wire up `mat_acid_str` or accept as intentional simplification. |
 | BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | **Open** — monster_attack.s:46 defines `mat_the_str: "THE "` but combat.s:23 already has `cmb_the_str: " THE "` and ranged_fire.s demonstrates using `cmb_the_str + 1` for "THE ". Replace 4 references to save 5 bytes. |
+| BUG-23 | Magic Missile spell does not work — no animation and no damage to monsters | **Fixed** — `eff_bolt` damage math was correct but had zero user feedback: no messages, no animation, no monster wake-up, no sound. Added: bolt `*` animation along trace path with save/restore, hit/kill/fizzle messages using combat_msg_buf, `MF_AWAKE` on non-lethal hit, `SFX_HIT` on hit. |
 
 ---
 
