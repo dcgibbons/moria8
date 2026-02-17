@@ -3725,7 +3725,7 @@ must coordinate with creature tier overlays.
 | R7.3 | Migrate store dialog strings | **DONE** | 15 umoria-sourced shopkeeper insult strings (`data/insult_strings.txt`) compressed via Huffman. Both buy-side and sell-side insult handlers in `ui_store.s` now call `rng_range` + `huff_decode_string` for random insults. Deleted `hg_insult_str`, freed 14 bytes in town overlay. |
 | R7.4 | String bank format | **(TODO — Tier 2)** | Each bank is a loadable PRG file: header (string count, compressed data offset) + string index (16-bit offsets) + compressed bitstream. Banks sized to fit $E000-$EFFF (4 KB max compressed data per bank). Bank IDs assigned by content category: combat/UI, item descriptions, monster recall, etc. |
 | R7.5 | String bank loader | **(TODO — Tier 2)** | `str_bank_load(bank_id)` — loads a string bank into $E000 overlay region. **REU path:** all string banks preloaded to REU at startup (alongside creature tiers), DMA fetch on demand (~instant). **Disk path:** KERNAL LOAD from d64 on demand. `str_current_bank` tracks loaded bank to avoid redundant loads. Must coordinate with creature tier overlay (both share $E000). |
-| R7.6 | Migrate combat/UI strings | **(TODO — future)** | Move combat messages, spell descriptions, and UI text into compressed storage (resident or banked). Largest space savings — combat strings are the biggest consumer in main code area. |
+| R7.6 | Migrate combat/UI strings | **DONE** | Migrated ~155 strings from 11 source files into Huffman-compressed storage. Net savings: 888 bytes in main code area (program_end $B196→$AE1E). Three migration patterns: A (zp_ptr0→msg_print), B (zp_ptr2→mon_atk_build_effect_msg), C (combat_append_str). New helpers: huff_decode_to_ptr2, huff_append_combat. |
 | R7.7 | Monster recall text | **(TODO — future, Tier 2)** | If monster recall is ever implemented, store descriptive text in a string bank. Each creature's recall text 30-80 bytes uncompressed, ~15-40 bytes compressed. 120 creatures × ~25 bytes avg = ~3 KB compressed — fits in one bank. |
 
 **Space budget — Tier 1 (resident compressed strings):**
@@ -3795,7 +3795,7 @@ least 128 KB — no constraint in practice.
 - R4.2 Artifacts — late addition
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
-- R7.6 Combat/UI string migration — largest space savings, after infrastructure exists
+- ~~R7.6 Combat/UI string migration~~ ✅
 - R7.7 Monster recall text — depends on R3.6 (monster recall feature)
 - ~~R6.2 Black Market~~ ✅
 - ~~R6.3 Player Home~~ ✅

@@ -116,10 +116,8 @@ player_try_move:
     // Fear blocks melee attacks
     lda eff_fear_timer
     beq !not_afraid+
-    lda #<ptm_afraid_str
-    sta zp_ptr0
-    lda #>ptm_afraid_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PTM_AFRAID
+    jsr huff_decode_string
     jsr msg_print
     sec                         // Turn consumed (too afraid to act)
     rts
@@ -571,43 +569,36 @@ do_look:
 
     cmp #TILE_DOOR_OPEN
     bne !dl_not_open+
-    lda #<dl_open_door_str
-    ldy #>dl_open_door_str
+    ldx #HSTR_DL_OPEN_DOOR
     jmp dl_print_tile
 !dl_not_open:
     cmp #TILE_DOOR_CLOSED
     bne !dl_not_closed+
-    lda #<dl_closed_door_str
-    ldy #>dl_closed_door_str
+    ldx #HSTR_DL_CLOSED_DOOR
     jmp dl_print_tile
 !dl_not_closed:
     cmp #TILE_STAIRS_DN
     bne !dl_not_sdn+
-    lda #<dl_stairs_dn_str
-    ldy #>dl_stairs_dn_str
+    ldx #HSTR_DL_STAIRS_DN
     jmp dl_print_tile
 !dl_not_sdn:
     cmp #TILE_STAIRS_UP
     bne !dl_not_sup+
-    lda #<dl_stairs_up_str
-    ldy #>dl_stairs_up_str
+    ldx #HSTR_DL_STAIRS_UP
     jmp dl_print_tile
 !dl_not_sup:
     cmp #TILE_TRAP
     bne !dl_not_trap+
-    lda #<dl_trap_str
-    ldy #>dl_trap_str
+    ldx #HSTR_DL_TRAP
     jmp dl_print_tile
 !dl_not_trap:
     cmp #TILE_RUBBLE
     bne !dl_not_rubble+
-    lda #<dl_rubble_str
-    ldy #>dl_rubble_str
+    ldx #HSTR_DL_RUBBLE
     jmp dl_print_tile
 !dl_not_rubble:
     // Wall (any type) — report it
-    lda #<dl_wall_str
-    ldy #>dl_wall_str
+    ldx #HSTR_DL_WALL
     jmp dl_print_tile
 
 !dl_step:
@@ -623,15 +614,13 @@ do_look:
     jmp !dl_scan-
 
 !dl_nothing:
-    lda #<dl_nothing_str
-    ldy #>dl_nothing_str
+    ldx #HSTR_DL_NOTHING
     jmp dl_print_tile
 
 // dl_print_tile — Print a tile description message
-// Input: A = string ptr lo, Y = string ptr hi
+// Input: X = Huffman string ID (HSTR_*)
 dl_print_tile:
-    sta zp_ptr0
-    sty zp_ptr0_hi
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -639,10 +628,8 @@ dl_print_tile:
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
-    lda #<dl_you_see_str
-    sta zp_ptr0
-    lda #>dl_you_see_str
-    sta zp_ptr0_hi
+    ldx #HSTR_DL_YOU_SEE
+    jsr huff_decode_string
     jsr msg_print
     // Append name inline on message row
     lda zp_text_color
@@ -669,27 +656,7 @@ dl_name_hi:  .byte 0
 dl_dx:       .byte 0
 dl_dy:       .byte 0
 
-// Look command strings
-dl_you_see_str:
-    .text "YOU SEE A " ; .byte 0
-dl_open_door_str:
-    .text "YOU SEE AN OPEN DOOR." ; .byte 0
-dl_closed_door_str:
-    .text "YOU SEE A CLOSED DOOR." ; .byte 0
-dl_stairs_dn_str:
-    .text "YOU SEE A STAIRCASE DOWN." ; .byte 0
-dl_stairs_up_str:
-    .text "YOU SEE A STAIRCASE UP." ; .byte 0
-dl_trap_str:
-    .text "YOU SEE A TRAP." ; .byte 0
-dl_rubble_str:
-    .text "YOU SEE RUBBLE." ; .byte 0
-dl_wall_str:
-    .text "YOU SEE A WALL." ; .byte 0
-dl_nothing_str:
-    .text "YOU SEE NOTHING SPECIAL." ; .byte 0
-ptm_afraid_str:
-    .text "YOU ARE TOO AFRAID!" ; .byte 0
+// Strings migrated to Huffman compression (HSTR_DL_*, HSTR_PTM_* in huffman_data.s)
 
 // ============================================================
 // Compile-time validation

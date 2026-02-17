@@ -24,7 +24,7 @@ cmb_the_str:     .text " THE " ; .byte 0
 cmb_hit_str:     .text "HIT" ; .byte 0
 cmb_miss_str:    .text "MISS" ; .byte 0
 cmb_kill_str:    .text "HAVE SLAIN" ; .byte 0
-cmb_lvlup_str:   .text "WELCOME TO LEVEL " ; .byte 0
+// cmb_lvlup_str migrated to Huffman (HSTR_CMB_LVLUP)
 cmb_period:      .byte $2e, 0   // "."
 
 // ============================================================
@@ -750,9 +750,8 @@ msg_build_levelup:
     lda #0
     sta cmb_buf_idx
 
-    lda #<cmb_lvlup_str
-    ldy #>cmb_lvlup_str
-    jsr combat_append_str
+    ldx #HSTR_CMB_LVLUP
+    jsr huff_append_combat
 
     lda zp_player_lvl
     jsr combat_append_decimal

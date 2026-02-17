@@ -287,10 +287,8 @@ mm_print_spell_msg:
 // ============================================================
 monster_cast_bolt:
     // Print "THE <name> CASTS A BOLT!"
-    lda #<mm_bolt_str
-    sta zp_ptr2
-    lda #>mm_bolt_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_BOLT
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Roll 2d8 + level
@@ -321,10 +319,8 @@ monster_cast_bolt:
 // ============================================================
 monster_cast_breath:
     // Print "THE <name> BREATHES FIRE!"
-    lda #<mm_breath_str
-    sta zp_ptr2
-    lda #>mm_breath_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_BREATH
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Get monster HP (16-bit)
@@ -368,10 +364,8 @@ monster_cast_breath:
 // ============================================================
 monster_cast_summon:
     // Print "THE <name> SUMMONS HELP!"
-    lda #<mm_summon_str
-    sta zp_ptr2
-    lda #>mm_summon_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_SUMMON
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Try to find a walkable adjacent tile
@@ -427,10 +421,8 @@ monster_cast_summon:
 // ============================================================
 monster_cast_teleport:
     // Print "THE <name> TELEPORTS YOU!"
-    lda #<mm_teleport_str
-    sta zp_ptr2
-    lda #>mm_teleport_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_TELEPORT
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     jsr eff_teleport_self
@@ -442,10 +434,8 @@ monster_cast_teleport:
 // ============================================================
 monster_cast_blind:
     // Print "THE <name> BLINDS YOU!"
-    lda #<mm_blind_str
-    sta zp_ptr2
-    lda #>mm_blind_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_BLIND
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Roll 1d10+10
@@ -463,10 +453,8 @@ monster_cast_blind:
 // ============================================================
 monster_cast_confuse:
     // Print "THE <name> CONFUSES YOU!"
-    lda #<mm_confuse_str
-    sta zp_ptr2
-    lda #>mm_confuse_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_CONFUSE
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Roll 1d5+5
@@ -484,10 +472,8 @@ monster_cast_confuse:
 // ============================================================
 monster_cast_heal:
     // Print "THE <name> HEALS ITSELF."
-    lda #<mm_heal_str
-    sta zp_ptr2
-    lda #>mm_heal_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MM_HEAL
+    jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
     // Roll 3d8
@@ -546,13 +532,4 @@ monster_cast_heal:
 !mch_ok:
     rts
 
-// ============================================================
-// Spell message strings (screen codes via inherited encoding)
-// ============================================================
-mm_bolt_str:     .text " CASTS A BOLT!" ; .byte 0
-mm_breath_str:   .text " BREATHES FIRE!" ; .byte 0
-mm_summon_str:   .text " SUMMONS HELP!" ; .byte 0
-mm_teleport_str: .text " TELEPORTS YOU!" ; .byte 0
-mm_blind_str:    .text " BLINDS YOU!" ; .byte 0
-mm_confuse_str:  .text " CONFUSES YOU!" ; .byte 0
-mm_heal_str:     .text " HEALS ITSELF." ; .byte 0
+// Strings migrated to Huffman compression (HSTR_MM_* in huffman_data.s)

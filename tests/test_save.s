@@ -53,6 +53,7 @@ test_finish:
 #import "../player_create.s"
 #import "../sound.s"
 #import "../dungeon_gen.s"
+#import "../huffman.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../tier_manager.s"
@@ -82,7 +83,6 @@ test_finish:
 // needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
-#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 .segment Default

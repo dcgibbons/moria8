@@ -37,3 +37,9 @@ Test files that grow past $A000 will **silently hang** in VICE. `BasicUpstart2(t
 **Fix:** Any test whose assembled code crosses $A000 must use the bootstrap trampoline pattern (see `test_item.s`): a small stub at $080E that banks out BASIC ROM first, then `jmp test_start`. `BasicUpstart2` points to the stub, not `test_start` directly. The "Test Code" segment label goes on the stub so `run_tests.sh` extracts the correct breakpoint address.
 
 **How to check:** After assembling, look for `test_start` in the symbol file. If its address is >= $A000, the trampoline is required. Adding new `#import` lines (e.g., `reu.s`, `tier_manager.s`) can push `test_start` past $A000 without any other code changes.
+
+## Test Timeouts
+
+NEVER use more than 30 seconds for a test timeout; tests taking longer than
+that are failing or stuck.
+

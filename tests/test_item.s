@@ -46,6 +46,7 @@ test_exit_trampoline:
 #import "../player_create.s"
 #import "../sound.s"
 #import "../dungeon_gen.s"
+#import "../huffman.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../tier_manager.s"
@@ -74,7 +75,6 @@ test_exit_trampoline:
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
-#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 .segment Default

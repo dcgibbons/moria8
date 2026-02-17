@@ -24,10 +24,8 @@ turn_tick_effects:
     dec zp_eff_poison
     bne !poison_still+
     // Just expired — print message
-    lda #<eff_poison_end
-    sta zp_ptr0
-    lda #>eff_poison_end
-    sta zp_ptr0_hi
+    ldx #HSTR_EFF_POISON_END
+    jsr huff_decode_string
     jsr msg_print
     jmp !no_poison+
 !poison_still:
@@ -53,10 +51,8 @@ turn_tick_effects:
     dec zp_eff_blind
     bne !no_blind+
     // Just expired — print message and trigger viewport redraw
-    lda #<eff_blind_end
-    sta zp_ptr0
-    lda #>eff_blind_end
-    sta zp_ptr0_hi
+    ldx #HSTR_EFF_BLIND_END
+    jsr huff_decode_string
     jsr msg_print
     lda #1
     sta vis_room_revealed       // Trigger full viewport redraw
@@ -68,10 +64,8 @@ turn_tick_effects:
     dec zp_eff_confuse
     bne !no_confuse+
     // Just expired — print message
-    lda #<eff_confuse_end
-    sta zp_ptr0
-    lda #>eff_confuse_end
-    sta zp_ptr0_hi
+    ldx #HSTR_EFF_CONFUSE_END
+    jsr huff_decode_string
     jsr msg_print
 !no_confuse:
 
@@ -81,10 +75,8 @@ turn_tick_effects:
     dec zp_eff_paralyze
     bne !no_para+
     // Just expired — print message
-    lda #<eff_paralyze_end
-    sta zp_ptr0
-    lda #>eff_paralyze_end
-    sta zp_ptr0_hi
+    ldx #HSTR_EFF_PARALYZE_END
+    jsr huff_decode_string
     jsr msg_print
 !no_para:
 
@@ -94,10 +86,8 @@ turn_tick_effects:
     dec eff_fear_timer
     bne !no_fear+
     // Just expired — print message
-    lda #<eff_fear_end
-    sta zp_ptr0
-    lda #>eff_fear_end
-    sta zp_ptr0_hi
+    ldx #HSTR_EFF_FEAR_END
+    jsr huff_decode_string
     jsr msg_print
 !no_fear:
 
@@ -202,10 +192,8 @@ turn_tick_effects:
     jsr render_viewport
     jsr status_draw
 
-    lda #<recall_arrive_str
-    sta zp_ptr0
-    lda #>recall_arrive_str
-    sta zp_ptr0_hi
+    ldx #HSTR_RECALL_ARRIVE
+    jsr huff_decode_string
     jsr msg_print
 !no_recall:
 
@@ -428,10 +416,8 @@ turn_tick_light:
     cmp #10
     bne !ttl_not_dim+
     // Print "YOUR LIGHT IS GROWING DIM."
-    lda #<ttl_dim_str
-    sta zp_ptr0
-    lda #>ttl_dim_str
-    sta zp_ptr0_hi
+    ldx #HSTR_TTL_DIM
+    jsr huff_decode_string
     jsr msg_print
     jmp !ttl_done+
 
@@ -449,27 +435,15 @@ turn_tick_light:
     jsr inv_remove_item
 
     // Print "YOUR LIGHT HAS GONE OUT."
-    lda #<ttl_out_str
-    sta zp_ptr0
-    lda #>ttl_out_str
-    sta zp_ptr0_hi
+    ldx #HSTR_TTL_OUT
+    jsr huff_decode_string
     jsr msg_print
 
 !ttl_done:
     rts
 
-// ============================================================
-// Effect expiration strings
-// ============================================================
-eff_poison_end:   .text "YOU FEEL BETTER." ; .byte 0
-eff_blind_end:    .text "YOU CAN SEE AGAIN." ; .byte 0
-eff_confuse_end:  .text "YOU FEEL LESS CONFUSED." ; .byte 0
-eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0
-eff_fear_end:     .text "YOU FEEL BOLDER NOW." ; .byte 0
+// Strings migrated to Huffman compression (HSTR_EFF_*, HSTR_TTL_*, HSTR_RECALL_* in huffman_data.s)
 eff_fear_timer:   .byte 0
-ttl_dim_str:      .text "YOUR LIGHT IS GROWING DIM." ; .byte 0
-ttl_out_str:      .text "YOUR LIGHT HAS GONE OUT." ; .byte 0
-recall_arrive_str: .text "YOU FEEL YOURSELF YANKED AWAY!" ; .byte 0
 
 // ============================================================
 // Pseudo-identification system

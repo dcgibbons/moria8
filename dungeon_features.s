@@ -35,65 +35,12 @@ df_dir_idx:  .byte 0   // Direction index from get_direction_target
 df_found:    .byte 0   // Search found-something flag
 
 // ============================================================
-// Trap name strings (screen codes, null-terminated)
+// Trap name Huffman indices (indexed by trap type 0-5)
 // ============================================================
-trap_name_ptrs_lo:
-    .byte <trap_name_0, <trap_name_1, <trap_name_2
-    .byte <trap_name_3, <trap_name_4, <trap_name_5
-trap_name_ptrs_hi:
-    .byte >trap_name_0, >trap_name_1, >trap_name_2
-    .byte >trap_name_3, >trap_name_4, >trap_name_5
+trap_name_huff_idx:
+    .byte HSTR_DF_TRAP_0, HSTR_DF_TRAP_1, HSTR_DF_TRAP_2
+    .byte HSTR_DF_TRAP_3, HSTR_DF_TRAP_4, HSTR_DF_TRAP_5
 
-trap_name_0: .text "AN OPEN PIT" ; .byte 0
-trap_name_1: .text "AN ARROW TRAP" ; .byte 0
-trap_name_2: .text "A POISON GAS TRAP" ; .byte 0
-trap_name_3: .text "A TELEPORT TRAP" ; .byte 0
-trap_name_4: .text "A POISON DART" ; .byte 0
-trap_name_5: .text "A ROCKFALL TRAP" ; .byte 0
-
-// ============================================================
-// Message strings
-// ============================================================
-msg_direction:
-    .text "DIRECTION?" ; .byte 0
-msg_door_stuck:
-    .text "THE DOOR IS STUCK." ; .byte 0
-msg_found_trap:
-    .text "YOU FOUND A TRAP!" ; .byte 0
-msg_found_secret:
-    .text "YOU FOUND A SECRET DOOR!" ; .byte 0
-msg_found_nothing:
-    .text "YOU FOUND NOTHING." ; .byte 0
-msg_no_door:
-    .text "NO DOOR THERE." ; .byte 0
-msg_already_open:
-    .text "THE DOOR IS ALREADY OPEN." ; .byte 0
-msg_already_closed:
-    .text "IT IS ALREADY CLOSED." ; .byte 0
-msg_door_opened:
-    .text "YOU OPEN THE DOOR." ; .byte 0
-msg_door_closed:
-    .text "YOU CLOSE THE DOOR." ; .byte 0
-msg_you_fell:
-    .text "YOU FELL INTO A PIT!" ; .byte 0
-msg_arrow_hits:
-    .text "AN ARROW HITS YOU!" ; .byte 0
-msg_poison_gas:
-    .text "A CLOUD OF GAS SURROUNDS YOU!" ; .byte 0
-msg_teleported:
-    .text "YOU ARE TELEPORTED!" ; .byte 0
-msg_dart_hits:
-    .text "A DART HITS YOU!" ; .byte 0
-msg_rockfall:
-    .text "ROCKS FALL ON YOU!" ; .byte 0
-msg_damage_pre:
-    .text "YOU TAKE " ; .byte 0
-msg_damage_post:
-    .text " DAMAGE." ; .byte 0
-msg_con_drain:
-    .text "YOU FEEL WEAKENED." ; .byte 0
-msg_poisoned:
-    .text "YOU FEEL POISONED." ; .byte 0
 
 // ============================================================
 // place_traps — Place hidden traps on the dungeon floor
@@ -427,10 +374,8 @@ trap_trigger:
 
 // Open pit: 1d4 damage
 trap_do_pit:
-    lda #<msg_you_fell
-    sta zp_ptr0
-    lda #>msg_you_fell
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_YOU_FELL
+    jsr huff_decode_string
     jsr msg_print
     lda #1              // 1 die
     ldx #4              // d4
@@ -440,10 +385,8 @@ trap_do_pit:
 
 // Arrow trap: 1d8 damage
 trap_do_arrow:
-    lda #<msg_arrow_hits
-    sta zp_ptr0
-    lda #>msg_arrow_hits
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_ARROW_HITS
+    jsr huff_decode_string
     jsr msg_print
     lda #1
     ldx #8
@@ -453,10 +396,8 @@ trap_do_arrow:
 
 // Poison gas: set poison timer to 10 + 1d10
 trap_do_gas:
-    lda #<msg_poison_gas
-    sta zp_ptr0
-    lda #>msg_poison_gas
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_POISON_GAS
+    jsr huff_decode_string
     jsr msg_print
     // Set poison timer: 10 + rng_range(10) + 1 = 11..20
     lda #10
@@ -465,29 +406,23 @@ trap_do_gas:
     adc #11                 // [11, 20]
     sta zp_eff_poison
     // Print "YOU FEEL POISONED."
-    lda #<msg_poisoned
-    sta zp_ptr0
-    lda #>msg_poisoned
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_POISONED
+    jsr huff_decode_string
     jsr msg_print
     rts
 
 // Teleport: move player to random floor tile
 trap_do_teleport:
-    lda #<msg_teleported
-    sta zp_ptr0
-    lda #>msg_teleported
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_TELEPORTED
+    jsr huff_decode_string
     jsr msg_print
     jsr trap_teleport
     rts
 
 // Poison dart: 1d4 damage + 50% chance CON decrement
 trap_do_dart:
-    lda #<msg_dart_hits
-    sta zp_ptr0
-    lda #>msg_dart_hits
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DART_HITS
+    jsr huff_decode_string
     jsr msg_print
     lda #1
     ldx #4
@@ -504,20 +439,16 @@ trap_do_dart:
     jsr decrement_stat
     sta player_data + PL_CON_CUR
     sta zp_player_con
-    lda #<msg_con_drain
-    sta zp_ptr0
-    lda #>msg_con_drain
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_CON_DRAIN
+    jsr huff_decode_string
     jsr msg_print
 !no_con_drain:
     rts
 
 // Rockfall: 2d8 damage
 trap_do_rockfall:
-    lda #<msg_rockfall
-    sta zp_ptr0
-    lda #>msg_rockfall
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_ROCKFALL
+    jsr huff_decode_string
     jsr msg_print
     lda #2              // 2 dice
     ldx #8              // d8
@@ -553,10 +484,8 @@ trap_apply_damage:
     sta player_data + PL_HP_HI
 
     // Print "YOU TAKE N DAMAGE."
-    lda #<msg_damage_pre
-    sta zp_ptr0
-    lda #>msg_damage_pre
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DAMAGE_PRE
+    jsr huff_decode_string
     jsr msg_print
 
     // Print damage number and " DAMAGE." inline on same row
@@ -570,10 +499,8 @@ trap_apply_damage:
     lda df_target_x
     jsr screen_put_decimal
 
-    lda #<msg_damage_post
-    sta zp_ptr0
-    lda #>msg_damage_post
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DAMAGE_POST
+    jsr huff_decode_string
     jsr screen_put_string
 
     pla
@@ -642,10 +569,8 @@ trap_teleport:
 // ============================================================
 get_direction_target:
     // Print "DIRECTION?" on message line
-    lda #<msg_direction
-    sta zp_ptr0
-    lda #>msg_direction
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DIRECTION
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for a keypress
@@ -710,19 +635,15 @@ door_try_open:
 
     // Not a door
 !dto_no_door:
-    lda #<msg_no_door
-    sta zp_ptr0
-    lda #>msg_no_door
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_NO_DOOR
+    jsr huff_decode_string
     jsr msg_print
     clc                     // No turn consumed
     rts
 
 !dto_already_open:
-    lda #<msg_already_open
-    sta zp_ptr0
-    lda #>msg_already_open
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_ALREADY_OPEN
+    jsr huff_decode_string
     jsr msg_print
     clc                     // No turn consumed
     rts
@@ -740,10 +661,8 @@ door_try_open:
     bcs !dto_open_it+
 
     // Door is stuck
-    lda #<msg_door_stuck
-    sta zp_ptr0
-    lda #>msg_door_stuck
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DOOR_STUCK
+    jsr huff_decode_string
     jsr msg_print
     lda #SFX_BUMP
     jsr sound_play
@@ -766,10 +685,8 @@ door_try_open:
     ora #TILE_DOOR_OPEN
     sta (zp_ptr0),y
 
-    lda #<msg_door_opened
-    sta zp_ptr0
-    lda #>msg_door_opened
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DOOR_OPENED
+    jsr huff_decode_string
     jsr msg_print
     sec                     // Turn consumed
     rts
@@ -797,19 +714,15 @@ door_try_close:
     beq !dtc_already_closed+
 
     // Not a door
-    lda #<msg_no_door
-    sta zp_ptr0
-    lda #>msg_no_door
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_NO_DOOR
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 !dtc_already_closed:
-    lda #<msg_already_closed
-    sta zp_ptr0
-    lda #>msg_already_closed
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_ALREADY_CLOSED
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -830,10 +743,8 @@ door_try_close:
     ora #TILE_DOOR_CLOSED
     sta (zp_ptr0),y
 
-    lda #<msg_door_closed
-    sta zp_ptr0
-    lda #>msg_door_closed
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_DOOR_CLOSED
+    jsr huff_decode_string
     jsr msg_print
     sec                     // Turn consumed
     rts
@@ -908,10 +819,8 @@ do_search:
     sta (zp_ptr0),y
 
     // Print message
-    lda #<msg_found_secret
-    sta zp_ptr0
-    lda #>msg_found_secret
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_FOUND_SECRET
+    jsr huff_decode_string
     jsr msg_print
     lda #1
     sta df_found
@@ -968,10 +877,8 @@ do_search:
     sta trap_type,x
 
     // Print message
-    lda #<msg_found_trap
-    sta zp_ptr0
-    lda #>msg_found_trap
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_FOUND_TRAP
+    jsr huff_decode_string
     jsr msg_print
     lda #1
     sta df_found
@@ -996,10 +903,8 @@ do_search:
     // If nothing was found, print "YOU FOUND NOTHING."
     lda df_found
     bne !ds_exit+
-    lda #<msg_found_nothing
-    sta zp_ptr0
-    lda #>msg_found_nothing
-    sta zp_ptr0_hi
+    ldx #HSTR_DF_FOUND_NOTHING
+    jsr huff_decode_string
     jsr msg_print
 !ds_exit:
     rts

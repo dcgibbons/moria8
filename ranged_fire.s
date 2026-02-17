@@ -15,14 +15,7 @@ rf_cx:         .byte 0     // Current trace X
 rf_cy:         .byte 0     // Current trace Y
 rf_steps:      .byte 0     // Steps remaining
 
-// ============================================================
-// Strings (reuse cmb_the_str, cmb_period, cmb_kill_str from combat.s)
-// ============================================================
-rf_no_weapon_str:  .text "NO RANGED WEAPON." ; .byte 0
-rf_no_ammo_str:    .text "NO AMMO." ; .byte 0
-rf_flies_str:      .text " FLIES AWAY." ; .byte 0
-rf_misses_str:     .text " MISSES" ; .byte 0
-rf_hits_str:       .text " HITS" ; .byte 0
+// Strings migrated to Huffman compression (HSTR_RF_* in huffman_data.s)
 
 // ============================================================
 // ranged_fire — Fire equipped ranged weapon
@@ -241,9 +234,8 @@ ranged_fire:
 
     // Message: "THE <ammo> HITS THE <name>."
     jsr rf_msg_ammo_prefix          // "THE <ammo>"
-    lda #<rf_hits_str
-    ldy #>rf_hits_str
-    jsr combat_append_str           // " HITS"
+    ldx #HSTR_RF_HITS
+    jsr huff_append_combat          // " HITS"
     lda #<cmb_the_str
     ldy #>cmb_the_str
     jsr combat_append_str           // " THE "
@@ -259,9 +251,8 @@ ranged_fire:
 rf_miss_monster:
     // Message: "THE <ammo> MISSES THE <name>."
     jsr rf_msg_ammo_prefix
-    lda #<rf_misses_str
-    ldy #>rf_misses_str
-    jsr combat_append_str
+    ldx #HSTR_RF_MISSES
+    jsr huff_append_combat
     lda #<cmb_the_str
     ldy #>cmb_the_str
     jsr combat_append_str
@@ -277,9 +268,8 @@ rf_miss_monster:
 rf_miss_darkness:
     // Message: "THE <ammo> FLIES AWAY."
     jsr rf_msg_ammo_prefix
-    lda #<rf_flies_str
-    ldy #>rf_flies_str
-    jsr combat_append_str
+    ldx #HSTR_RF_FLIES
+    jsr huff_append_combat
     jsr rf_print_msg
 
 rf_consume_ammo:
@@ -295,19 +285,15 @@ rf_consume_ammo:
     rts
 
 rf_msg_no_weapon:
-    lda #<rf_no_weapon_str
-    sta zp_ptr0
-    lda #>rf_no_weapon_str
-    sta zp_ptr0_hi
+    ldx #HSTR_RF_NO_WEAPON
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 rf_msg_no_ammo:
-    lda #<rf_no_ammo_str
-    sta zp_ptr0
-    lda #>rf_no_ammo_str
-    sta zp_ptr0_hi
+    ldx #HSTR_RF_NO_AMMO
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts

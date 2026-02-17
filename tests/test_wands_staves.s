@@ -45,6 +45,7 @@ test_exit_trampoline:
 #import "../player_create.s"
 #import "../sound.s"
 #import "../dungeon_gen.s"
+#import "../huffman.s"
 #import "../dungeon_features.s"
 #import "../monster.s"
 #import "../tier_manager.s"
@@ -67,7 +68,6 @@ test_exit_trampoline:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
-#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 

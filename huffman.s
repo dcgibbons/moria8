@@ -95,6 +95,32 @@ hd_cur_node_smc:
     rts
 
 // ============================================================
+// huff_decode_to_ptr2 — Decode and set zp_ptr2 (for mon_atk_build_effect_msg)
+// Input: X = string ID
+// Output: zp_ptr2/hi → hd_decode_buf (decoded string)
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr2/hi
+// ============================================================
+huff_decode_to_ptr2:
+    jsr huff_decode_string
+    lda zp_ptr0
+    sta zp_ptr2
+    lda zp_ptr0_hi
+    sta zp_ptr2_hi
+    rts
+
+// ============================================================
+// huff_append_combat — Decode and append to combat_msg_buf
+// Input: X = string ID
+// Output: string appended to combat_msg_buf at cmb_buf_idx
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
+// ============================================================
+huff_append_combat:
+    jsr huff_decode_string
+    lda #<hd_decode_buf
+    ldy #>hd_decode_buf
+    jmp combat_append_str
+
+// ============================================================
 // Compressed string data (generated)
 // ============================================================
 #import "huffman_data.s"

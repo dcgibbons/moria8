@@ -165,10 +165,8 @@ eff_teleport_self:
 // ============================================================
 eff_identify_prompt:
     // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
-    lda #<piq_identify_prompt
-    sta zp_ptr0
-    lda #>piq_identify_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_IDENTIFY_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     jsr input_get_key
@@ -207,9 +205,8 @@ eff_identify_prompt:
     lda #0
     sta cmb_buf_idx
 
-    lda #<piq_thisis_str
-    ldy #>piq_thisis_str
-    jsr combat_append_str
+    ldx #HSTR_PIQ_THISIS
+    jsr huff_append_combat
 
     ldx eff_target_slot
     lda inv_item_id,x
@@ -228,10 +225,8 @@ eff_identify_prompt:
 
 !eip_cancel:
     // Scroll already consumed — just print generic message
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     rts
 
@@ -516,8 +511,7 @@ eff_bolt_steps: .byte 0
 eb_save_char:   .byte 0
 eb_save_col:    .byte 0
 
-eb_spell_hits_str: .text "YOUR SPELL HITS" ; .byte 0
-eb_fizzle_str:     .text "YOUR SPELL FIZZLES OUT." ; .byte 0
+// Strings migrated to Huffman compression (HSTR_EB_* in huffman_data.s)
 
 eff_bolt:
     sta eff_bolt_dice
@@ -749,9 +743,8 @@ eff_bolt:
     // Message: "YOUR SPELL HITS THE <name>."
     lda #0
     sta cmb_buf_idx
-    lda #<eb_spell_hits_str
-    ldy #>eb_spell_hits_str
-    jsr combat_append_str           // "YOUR SPELL HITS"
+    ldx #HSTR_EB_SPELL_HITS
+    jsr huff_append_combat          // "YOUR SPELL HITS"
     lda #<cmb_the_str
     ldy #>cmb_the_str
     jsr combat_append_str           // " THE "
@@ -765,10 +758,8 @@ eff_bolt:
     rts
 
 !eb_fizzle:
-    lda #<eb_fizzle_str
-    sta zp_ptr0
-    lda #>eb_fizzle_str
-    sta zp_ptr0_hi
+    ldx #HSTR_EB_FIZZLE
+    jsr huff_decode_string
     jsr msg_print
     rts
 

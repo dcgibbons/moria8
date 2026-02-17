@@ -82,10 +82,8 @@ show_inv_and_restore:
 // Clobbers: everything
 item_wear:
     // Print prompt
-    lda #<piw_wear_prompt
-    sta zp_ptr0
-    lda #>piw_wear_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_WEAR_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -123,10 +121,8 @@ item_wear:
     bne !iw_has_item+
 
     // Empty slot
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -218,14 +214,12 @@ item_wear:
     lda piw_equip
     cmp #EQUIP_WEAPON
     bne !iw_wearing+
-    lda #<piw_wield_str
-    ldy #>piw_wield_str
+    ldx #HSTR_PIW_WIELD
     jmp !iw_msg+
 !iw_wearing:
-    lda #<piw_wearing_str
-    ldy #>piw_wearing_str
+    ldx #HSTR_PIW_WEARING
 !iw_msg:
-    jsr combat_append_str
+    jsr huff_append_combat
 
     lda piw_ego
     sta fi_add_ego
@@ -245,19 +239,15 @@ item_wear:
     rts
 
 !iw_cant_wear:
-    lda #<piw_cant_wear_str
-    sta zp_ptr0
-    lda #>piw_cant_wear_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_CANT_WEAR
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 !iw_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -268,10 +258,8 @@ item_wear:
 // Clobbers: everything
 item_takeoff:
     // Print prompt
-    lda #<piw_takeoff_prompt
-    sta zp_ptr0
-    lda #>piw_takeoff_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_TAKEOFF_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -310,10 +298,8 @@ item_takeoff:
     cmp #FI_EMPTY
     bne !ito_has_item+
 
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -327,10 +313,8 @@ item_takeoff:
     and #IF_CURSED
     beq !ito_not_cursed+
 
-    lda #<piw_cursed_str
-    sta zp_ptr0
-    lda #>piw_cursed_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_CURSED
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -390,9 +374,8 @@ item_takeoff:
     // Build message: "YOU TAKE OFF THE <name>."
     lda #0
     sta cmb_buf_idx
-    lda #<piw_takeoff_str
-    ldy #>piw_takeoff_str
-    jsr combat_append_str
+    ldx #HSTR_PIW_TAKEOFF
+    jsr huff_append_combat
 
     lda piw_ego
     sta fi_add_ego
@@ -412,10 +395,8 @@ item_takeoff:
     rts
 
 !ito_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -450,10 +431,8 @@ item_eat:
     jmp !ie_scan-
 
 !ie_no_food:
-    lda #<piw_no_food_str
-    sta zp_ptr0
-    lda #>piw_no_food_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NO_FOOD
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -542,9 +521,8 @@ item_eat:
     lda #0
     sta cmb_buf_idx
 
-    lda #<piw_eat_str
-    ldy #>piw_eat_str
-    jsr combat_append_str
+    ldx #HSTR_PIW_EAT
+    jsr huff_append_combat
 
     lda #0
     sta fi_add_ego              // Food has no ego
@@ -556,14 +534,12 @@ item_eat:
     cmp #ITEM_SLIME_MOLD
     beq !ie_yuck+
 
-    lda #<piw_delicious_str
-    ldy #>piw_delicious_str
+    ldx #HSTR_PIW_DELICIOUS
     jmp !ie_end_msg+
 !ie_yuck:
-    lda #<piw_yuck_str
-    ldy #>piw_yuck_str
+    ldx #HSTR_PIW_YUCK
 !ie_end_msg:
-    jsr combat_append_str
+    jsr huff_append_combat
 
     jsr cmb_term_and_print
 
@@ -662,10 +638,8 @@ pre_add_ac:
 // ============================================================
 item_quaff:
     // Print prompt
-    lda #<piq_quaff_prompt
-    sta zp_ptr0
-    lda #>piq_quaff_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_QUAFF_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -701,10 +675,8 @@ item_quaff:
     cmp #FI_EMPTY
     bne !iq_has_item+
 
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -718,10 +690,8 @@ item_quaff:
     cmp #ICAT_POTION
     beq !iq_is_potion+
 
-    lda #<piq_not_potion_str
-    sta zp_ptr0
-    lda #>piq_not_potion_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOT_POTION
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -786,10 +756,8 @@ item_quaff:
     lda piw_qty
     jsr eff_heal
 
-    lda #<piq_feel_better_str
-    sta zp_ptr0
-    lda #>piq_feel_better_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_FEEL_BETTER
+    jsr huff_decode_string
     jsr msg_print
 
     sec
@@ -809,10 +777,8 @@ item_quaff:
 !iq_speed_ok:
     sta zp_eff_speed
 
-    lda #<piq_speed_str
-    sta zp_ptr0
-    lda #>piq_speed_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_SPEED
+    jsr huff_decode_string
     jsr msg_print
 
     sec
@@ -869,10 +835,8 @@ item_quaff:
 !iq_poi_ok:
     sta zp_eff_poison
 
-    lda #<piq_terrible_str
-    sta zp_ptr0
-    lda #>piq_terrible_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_TERRIBLE
+    jsr huff_decode_string
     jsr msg_print
 
     sec
@@ -887,10 +851,8 @@ item_quaff:
     lda zp_math_a
     jsr eff_heal
 
-    lda #<piq_much_better_str
-    sta zp_ptr0
-    lda #>piq_much_better_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_MUCH_BETTER
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -901,10 +863,8 @@ item_quaff:
     sta zp_player_mp
     sta player_data + PL_MANA
 
-    lda #<piq_mind_clear_str
-    sta zp_ptr0
-    lda #>piq_mind_clear_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_MIND_CLEAR
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -924,10 +884,8 @@ item_quaff:
 !iq_hero_ok:
     sta zp_eff_hero
 
-    lda #<piq_heroic_str
-    sta zp_ptr0
-    lda #>piq_heroic_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_HEROIC
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -945,10 +903,8 @@ item_quaff:
 !iq_blind_ok:
     sta zp_eff_blind
 
-    lda #<piq_cant_see_str
-    sta zp_ptr0
-    lda #>piq_cant_see_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_CANT_SEE
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -966,10 +922,8 @@ item_quaff:
 !iq_conf_ok:
     sta zp_eff_confuse
 
-    lda #<piq_dizzy_str
-    sta zp_ptr0
-    lda #>piq_dizzy_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_DIZZY
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -977,10 +931,8 @@ item_quaff:
 !iq_detect_mon:
     jsr eff_detect_monsters
 
-    lda #<piq_sense_str
-    sta zp_ptr0
-    lda #>piq_sense_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_SENSE
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1000,28 +952,22 @@ item_quaff:
 !iq_infra_ok:
     sta zp_eff_infra
 
-    lda #<piq_eyes_tingle_str
-    sta zp_ptr0
-    lda #>piq_eyes_tingle_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_EYES_TINGLE
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !iq_generic_msg:
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !iq_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1036,19 +982,15 @@ item_read_scroll:
     // Blindness check — can't read while blind
     lda zp_eff_blind
     beq !irs_can_see+
-    lda #<piq_cant_read_str
-    sta zp_ptr0
-    lda #>piq_cant_read_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_CANT_READ
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 !irs_can_see:
     // Print prompt
-    lda #<piq_read_prompt
-    sta zp_ptr0
-    lda #>piq_read_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_READ_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -1084,10 +1026,8 @@ item_read_scroll:
     cmp #FI_EMPTY
     bne !irs_has_item+
 
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1101,10 +1041,8 @@ item_read_scroll:
     cmp #ICAT_SCROLL
     beq !irs_is_scroll+
 
-    lda #<piq_not_scroll_str
-    sta zp_ptr0
-    lda #>piq_not_scroll_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOT_SCROLL
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1164,10 +1102,8 @@ item_read_scroll:
 !irs_light:
     // Light the room the player is in (shared subroutine)
     jsr eff_light_room
-    lda #<piq_light_str
-    sta zp_ptr0
-    lda #>piq_light_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_LIGHT
+    jsr huff_decode_string
     jsr msg_print
 
     sec
@@ -1183,10 +1119,8 @@ item_read_scroll:
     // Teleport player to random floor tile (shared subroutine)
     jsr eff_teleport_self
 
-    lda #<piq_teleport_str
-    sta zp_ptr0
-    lda #>piq_teleport_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_TELEPORT
+    jsr huff_decode_string
     jsr msg_print
 
     sec
@@ -1200,10 +1134,8 @@ item_read_scroll:
     adc #15                         // [15, 29]
     sta zp_eff_word_recall
 
-    lda #<piq_air_crackle_str
-    sta zp_ptr0
-    lda #>piq_air_crackle_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_AIR_CRACKLE
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1211,10 +1143,8 @@ item_read_scroll:
 !irs_remove_curse:
     jsr eff_remove_curse
 
-    lda #<piq_cleansed_str
-    sta zp_ptr0
-    lda #>piq_cleansed_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_CLEANSED
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1227,10 +1157,8 @@ item_read_scroll:
     bne !irs_ew_has+
 
     // No weapon equipped
-    lda #<piq_vibration_str
-    sta zp_ptr0
-    lda #>piq_vibration_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_VIBRATION
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1257,10 +1185,8 @@ item_read_scroll:
     bcc !irs_ew_inc+
 
     // Already at cap
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1270,10 +1196,8 @@ item_read_scroll:
     jsr player_recalc_equipment
 
 !irs_ew_msg:
-    lda #<piq_wpn_glow_str
-    sta zp_ptr0
-    lda #>piq_wpn_glow_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_WPN_GLOW
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1286,10 +1210,8 @@ item_read_scroll:
     bne !irs_ea_has+
 
     // No armor equipped
-    lda #<piq_vibration_str
-    sta zp_ptr0
-    lda #>piq_vibration_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_VIBRATION
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1316,10 +1238,8 @@ item_read_scroll:
     bcc !irs_ea_inc+
 
     // Already at cap
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1329,10 +1249,8 @@ item_read_scroll:
     jsr player_recalc_equipment
 
 !irs_ea_msg:
-    lda #<piq_arm_glow_str
-    sta zp_ptr0
-    lda #>piq_arm_glow_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_ARM_GLOW
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1342,10 +1260,8 @@ item_read_scroll:
     lda #1
     sta zp_confuse_melee
 
-    lda #<piq_hands_glow_str
-    sta zp_ptr0
-    lda #>piq_hands_glow_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_HANDS_GLOW
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1353,10 +1269,8 @@ item_read_scroll:
 !irs_aggravate:
     jsr eff_aggravate
 
-    lda #<piq_humming_str
-    sta zp_ptr0
-    lda #>piq_humming_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_HUMMING
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1376,28 +1290,22 @@ item_read_scroll:
 !irs_prot_ok:
     sta zp_eff_protect
 
-    lda #<piq_protected_str
-    sta zp_ptr0
-    lda #>piq_protected_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_PROTECTED
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !irs_generic_msg:
-    lda #<piq_nothing_str
-    sta zp_ptr0
-    lda #>piq_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !irs_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1410,10 +1318,8 @@ item_read_scroll:
 // ============================================================
 item_aim_wand:
     // Print prompt
-    lda #<piw_aim_prompt
-    sta zp_ptr0
-    lda #>piw_aim_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_AIM_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -1449,10 +1355,8 @@ item_aim_wand:
     cmp #FI_EMPTY
     bne !iaw_has_item+
 
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1466,10 +1370,8 @@ item_aim_wand:
     cmp #ICAT_WAND
     beq !iaw_is_wand+
 
-    lda #<piw_not_wand_str
-    sta zp_ptr0
-    lda #>piw_not_wand_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOT_WAND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1480,10 +1382,8 @@ item_aim_wand:
     lda inv_p1,x
     bne !iaw_has_charges+
 
-    lda #<piw_no_charges_str
-    sta zp_ptr0
-    lda #>piw_no_charges_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NO_CHARGES
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1514,10 +1414,8 @@ item_aim_wand:
 
 !iaw_light:
     jsr eff_light_room
-    lda #<piq_light_str
-    sta zp_ptr0
-    lda #>piq_light_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_LIGHT
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1527,10 +1425,8 @@ item_aim_wand:
     ldx #8
     ldy #0
     jsr eff_bolt
-    lda #<piw_wand_bolt_str
-    sta zp_ptr0
-    lda #>piw_wand_bolt_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_WAND_BOLT
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1540,10 +1436,8 @@ item_aim_wand:
     ldx #8
     ldy #0
     jsr eff_bolt
-    lda #<piw_wand_frost_str
-    sta zp_ptr0
-    lda #>piw_wand_frost_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_WAND_FROST
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1556,27 +1450,21 @@ item_aim_wand:
     ldy #MX_CONFUSE
     lda #10
     sta (zp_ptr0),y
-    lda #<piw_wand_cloud_str
-    sta zp_ptr0
-    lda #>piw_wand_cloud_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_WAND_CLOUD
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 !iaw_cloud_miss:
-    lda #<piw_wand_miss_str
-    sta zp_ptr0
-    lda #>piw_wand_miss_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_WAND_MISS
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !iaw_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1589,10 +1477,8 @@ item_aim_wand:
 // ============================================================
 item_use_staff:
     // Print prompt
-    lda #<piw_use_prompt
-    sta zp_ptr0
-    lda #>piw_use_prompt
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_USE_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -1628,10 +1514,8 @@ item_use_staff:
     cmp #FI_EMPTY
     bne !ius_has_item+
 
-    lda #<piw_nothing_str
-    sta zp_ptr0
-    lda #>piw_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1645,10 +1529,8 @@ item_use_staff:
     cmp #ICAT_STAFF
     beq !ius_is_staff+
 
-    lda #<piw_not_staff_str
-    sta zp_ptr0
-    lda #>piw_not_staff_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOT_STAFF
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1659,10 +1541,8 @@ item_use_staff:
     lda inv_p1,x
     bne !ius_has_charges+
 
-    lda #<piw_staff_empty_str
-    sta zp_ptr0
-    lda #>piw_staff_empty_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_STAFF_EMPTY
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1693,30 +1573,24 @@ item_use_staff:
 
 !ius_light:
     jsr eff_light_room
-    lda #<piq_light_str
-    sta zp_ptr0
-    lda #>piq_light_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_LIGHT
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !ius_detect:
     jsr eff_detect_monsters
-    lda #<piq_sense_str
-    sta zp_ptr0
-    lda #>piq_sense_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_SENSE
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !ius_teleport:
     jsr eff_teleport_self
-    lda #<piq_teleport_str
-    sta zp_ptr0
-    lda #>piq_teleport_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_TELEPORT
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
@@ -1729,81 +1603,20 @@ item_use_staff:
     jsr math_dice
     lda zp_math_a                   // Low byte of result (sufficient for 2-9)
     jsr eff_heal
-    lda #<piq_feel_better_str
-    sta zp_ptr0
-    lda #>piq_feel_better_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIQ_FEEL_BETTER
+    jsr huff_decode_string
     jsr msg_print
     sec
     rts
 
 !ius_cancel:
-    lda #<piw_nevermind_str
-    sta zp_ptr0
-    lda #>piw_nevermind_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
-// ============================================================
-// String data (screen codes via inherited encoding)
-// ============================================================
-piw_wear_prompt:    .text "WEAR WHICH ITEM (A-V)?" ; .byte 0
-piw_takeoff_prompt: .text "TAKE OFF WHICH ITEM (A-H)?" ; .byte 0
-piw_nothing_str:    .text "YOU HAVE NOTHING THERE." ; .byte 0
-piw_cant_wear_str:  .text "YOU CANNOT WEAR THAT." ; .byte 0
-piw_nevermind_str:  .text "NEVER MIND." ; .byte 0
-piw_cursed_str:     .text "YOU CANNOT REMOVE IT, IT IS CURSED!" ; .byte 0
-piw_no_food_str:    .text "YOU HAVE NO FOOD." ; .byte 0
-piw_wield_str:      .text "YOU ARE WIELDING A " ; .byte 0
-piw_wearing_str:    .text "YOU ARE WEARING A " ; .byte 0
-piw_takeoff_str:    .text "YOU TAKE OFF THE " ; .byte 0
-piw_eat_str:        .text "YOU EAT THE " ; .byte 0
-piw_delicious_str:  .text ". DELICIOUS!" ; .byte 0
-piw_yuck_str:       .text ". YUCK!" ; .byte 0
-
-// Quaff/Read strings
-piq_quaff_prompt:   .text "QUAFF WHICH POTION (A-V)?" ; .byte 0
-piq_read_prompt:    .text "READ WHICH SCROLL (A-V)?" ; .byte 0
-piq_not_potion_str: .text "THAT IS NOT A POTION." ; .byte 0
-piq_not_scroll_str: .text "THAT IS NOT A SCROLL." ; .byte 0
-piq_feel_better_str:.text "YOU FEEL BETTER." ; .byte 0
-piq_speed_str:      .text "YOU FEEL YOURSELF MOVING FASTER." ; .byte 0
-piq_terrible_str:   .text "THAT TASTED TERRIBLE!" ; .byte 0
-piq_nothing_str:    .text "NOTHING SEEMS TO HAPPEN." ; .byte 0
-piq_light_str:      .text "THE AREA FILLS WITH LIGHT." ; .byte 0
-piq_identify_prompt:.text "IDENTIFY WHICH ITEM (A-V)?" ; .byte 0
-piq_thisis_str:     .text "THIS IS A " ; .byte 0
-piq_teleport_str:   .text "YOU FEEL DISORIENTED." ; .byte 0
-piq_much_better_str:  .text "YOU FEEL MUCH BETTER." ; .byte 0
-piq_mind_clear_str:   .text "YOUR MIND FEELS CLEAR." ; .byte 0
-piq_heroic_str:       .text "YOU FEEL HEROIC!" ; .byte 0
-piq_cant_see_str:     .text "YOU CAN'T SEE!" ; .byte 0
-piq_dizzy_str:        .text "YOU FEEL DIZZY." ; .byte 0
-piq_sense_str:        .text "YOU SENSE NEARBY CREATURES." ; .byte 0
-piq_eyes_tingle_str:  .text "YOUR EYES TINGLE." ; .byte 0
-piq_air_crackle_str:  .text "THE AIR CRACKLES AROUND YOU." ; .byte 0
-piq_cleansed_str:     .text "YOU FEEL CLEANSED." ; .byte 0
-piq_wpn_glow_str:     .text "YOUR WEAPON GLOWS BRIEFLY." ; .byte 0
-piq_arm_glow_str:     .text "YOUR ARMOR GLOWS BRIEFLY." ; .byte 0
-piq_hands_glow_str:   .text "YOUR HANDS BEGIN TO GLOW." ; .byte 0
-piq_humming_str:      .text "YOU HEAR A HIGH-PITCHED HUMMING." ; .byte 0
-piq_protected_str:    .text "YOU FEEL PROTECTED." ; .byte 0
-piq_vibration_str:    .text "YOU FEEL A STRANGE VIBRATION." ; .byte 0
-
-// Wand/Staff strings
-piw_aim_prompt:       .text "AIM WHICH WAND (A-V)?" ; .byte 0
-piw_use_prompt:       .text "USE WHICH STAFF (A-V)?" ; .byte 0
-piw_not_wand_str:     .text "THAT IS NOT A WAND." ; .byte 0
-piw_not_staff_str:    .text "THAT IS NOT A STAFF." ; .byte 0
-piw_no_charges_str:   .text "NO CHARGES LEFT." ; .byte 0
-piw_staff_empty_str:  .text "THE STAFF IS EMPTY." ; .byte 0
-piw_wand_bolt_str:    .text "A BOLT OF LIGHTNING SHOOTS FORTH!" ; .byte 0
-piw_wand_frost_str:   .text "A BOLT OF FROST SHOOTS FORTH!" ; .byte 0
-piw_wand_cloud_str:   .text "THE MONSTER LOOKS CONFUSED." ; .byte 0
-piw_wand_miss_str:    .text "THE CLOUD DISSIPATES." ; .byte 0
-piq_cant_read_str:    .text "YOU CAN'T SEE TO READ!" ; .byte 0
+// Strings migrated to Huffman compression (HSTR_PIW_*, HSTR_PIQ_* in huffman_data.s)
 
 // ============================================================
 // item_gain_spell — Study a spell book to learn qualifying spells
@@ -1818,19 +1631,15 @@ item_gain_spell:
     // Check if player has a spell type at all
     lda player_data + PL_SPELL_TYPE
     bne !igs_can_cast+
-    lda #<igs_no_magic_str
-    sta zp_ptr0
-    lda #>igs_no_magic_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_NO_MAGIC
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 !igs_can_cast:
-    lda #<igs_prompt_str
-    sta zp_ptr0
-    lda #>igs_prompt_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     jsr input_get_key
@@ -1865,10 +1674,8 @@ item_gain_spell:
     lda inv_item_id,x
     cmp #FI_EMPTY
     bne !igs_have_item+
-    lda #<igs_nothing_str
-    sta zp_ptr0
-    lda #>igs_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1879,10 +1686,8 @@ item_gain_spell:
     lda it_category,x
     cmp #ICAT_BOOK
     beq !igs_is_book+
-    lda #<igs_not_book_str
-    sta zp_ptr0
-    lda #>igs_not_book_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_NOT_BOOK
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1901,10 +1706,8 @@ item_gain_spell:
     lda player_data + PL_SPELL_TYPE
     cmp igs_spell_class
     beq !igs_type_ok+
-    lda #<igs_wrong_type_str
-    sta zp_ptr0
-    lda #>igs_wrong_type_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_WRONG_TYPE
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1983,10 +1786,8 @@ item_gain_spell:
     beq !igs_none_learned+
 
     // Learned at least one spell
-    lda #<igs_success_str
-    sta zp_ptr0
-    lda #>igs_success_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_SUCCESS
+    jsr huff_decode_string
     jsr msg_print
 
     lda #SFX_LEVELUP
@@ -1996,10 +1797,8 @@ item_gain_spell:
     rts
 
 !igs_none_learned:
-    lda #<igs_no_new_str
-    sta zp_ptr0
-    lda #>igs_no_new_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IGS_NO_NEW
+    jsr huff_decode_string
     jsr msg_print
     clc                         // No turn consumed
     rts
@@ -2014,11 +1813,4 @@ igs_spell_start:    .byte 0
 igs_spell_class:    .byte 0
 igs_learned_count:  .byte 0
 
-// Gain spell strings
-igs_prompt_str:     .text "STUDY WHICH BOOK (A-V)?" ; .byte 0
-igs_no_magic_str:   .text "YOU CANNOT USE MAGIC." ; .byte 0
-igs_nothing_str:    .text "YOU HAVE NOTHING THERE." ; .byte 0
-igs_not_book_str:   .text "THAT IS NOT A BOOK." ; .byte 0
-igs_wrong_type_str: .text "YOU CANNOT READ THAT BOOK." ; .byte 0
-igs_success_str:    .text "YOU LEARN FROM THE BOOK!" ; .byte 0
-igs_no_new_str:     .text "NO NEW SPELLS TO LEARN." ; .byte 0
+// Gain spell strings migrated to Huffman (HSTR_IGS_* in huffman_data.s)

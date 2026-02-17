@@ -40,10 +40,8 @@ player_cast_spell:
     beq !pm_can_cast+
 
     // Cannot cast
-    lda #<pm_no_cast_str
-    sta zp_ptr0
-    lda #>pm_no_cast_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_NO_CAST
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -66,10 +64,8 @@ player_pray:
     beq !pm_can_pray+
 
     // Cannot pray
-    lda #<pm_no_pray_str
-    sta zp_ptr0
-    lda #>pm_no_pray_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_NO_PRAY
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -170,10 +166,8 @@ pm_do_cast:
     bne !pm_known+
 
 !pm_not_known:
-    lda #<pm_not_known_str
-    sta zp_ptr0
-    lda #>pm_not_known_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_NOT_KNOWN
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -194,10 +188,8 @@ pm_do_cast:
     bcs !pm_mana_ok+
 
     // Not enough mana
-    lda #<pm_no_mana_str
-    sta zp_ptr0
-    lda #>pm_no_mana_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_NO_MANA
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -219,10 +211,8 @@ pm_do_cast:
     bcc !pm_lvl_ok+
 
     // Player level too low
-    lda #<pm_no_exp_str
-    sta zp_ptr0
-    lda #>pm_no_exp_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_NO_EXP
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -240,10 +230,8 @@ pm_do_cast:
     bcc !pm_success+
 
     // Spell failed — turn consumed
-    lda #<pm_fail_str
-    sta zp_ptr0
-    lda #>pm_fail_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_FAIL
+    jsr huff_decode_string
     jsr msg_print
     lda #SFX_SPELL_FAIL
     jsr sound_play
@@ -259,14 +247,12 @@ pm_do_cast:
     lda pm_spell_type
     cmp #SPELL_MAGE
     bne !pm_pray_verb+
-    lda #<pm_you_cast_str
-    ldy #>pm_you_cast_str
+    ldx #HSTR_PM_YOU_CAST
     jmp !pm_verb_done+
 !pm_pray_verb:
-    lda #<pm_you_pray_str
-    ldy #>pm_you_pray_str
+    ldx #HSTR_PM_YOU_PRAY
 !pm_verb_done:
-    jsr combat_append_str
+    jsr huff_append_combat
 
     // Append spell name
     lda pm_name_lo_lo
@@ -332,19 +318,15 @@ spell_list_display:
 
     lda #14                         // Center "MAGE SPELLS" (11 chars)
     sta zp_cursor_col
-    lda #<pm_title_mage_str
-    sta zp_ptr0
-    lda #>pm_title_mage_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_TITLE_MAGE
+    jsr huff_decode_string
     jmp !sld_title_done+
 
 !sld_pray_title:
     lda #16                         // Center "PRAYERS" (7 chars)
     sta zp_cursor_col
-    lda #<pm_title_pray_str
-    sta zp_ptr0
-    lda #>pm_title_pray_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_TITLE_PRAY
+    jsr huff_decode_string
 
 !sld_title_done:
     jsr screen_put_string
@@ -499,16 +481,12 @@ spell_list_display:
     lda pm_spell_type
     cmp #SPELL_MAGE
     bne !sld_pray_footer+
-    lda #<pm_footer_cast_str
-    sta zp_ptr0
-    lda #>pm_footer_cast_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_FOOTER_CAST
+    jsr huff_decode_string
     jmp !sld_footer_done+
 !sld_pray_footer:
-    lda #<pm_footer_pray_str
-    sta zp_ptr0
-    lda #>pm_footer_pray_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PM_FOOTER_PRAY
+    jsr huff_decode_string
 !sld_footer_done:
     jsr screen_put_string
 
@@ -823,9 +801,8 @@ mcns_learn_from_book:
     lda #0
     sta cmb_buf_idx
 
-    lda #<pm_learned_str
-    ldy #>pm_learned_str
-    jsr combat_append_str       // "YOU HAVE LEARNED "
+    ldx #HSTR_PM_LEARNED
+    jsr huff_append_combat      // "YOU HAVE LEARNED "
 
     // Append spell name
     lda pm_name_lo_lo
@@ -1104,34 +1081,8 @@ heal_dice:
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
-pm_no_cast_str:
-    .text "YOU CANNOT CAST SPELLS." ; .byte 0
-pm_no_pray_str:
-    .text "YOU CANNOT PRAY." ; .byte 0
-pm_not_known_str:
-    .text "YOU DON'T KNOW THAT SPELL." ; .byte 0
-pm_no_mana_str:
-    .text "NOT ENOUGH MANA." ; .byte 0
-pm_no_exp_str:
-    .text "YOU'RE NOT EXPERIENCED ENOUGH." ; .byte 0
-pm_fail_str:
-    .text "YOUR SPELL FAILS." ; .byte 0
-pm_you_cast_str:
-    .text "YOU CAST " ; .byte 0
-pm_you_pray_str:
-    .text "YOU PRAY " ; .byte 0
-pm_title_mage_str:
-    .text "MAGE SPELLS" ; .byte 0
-pm_title_pray_str:
-    .text "PRAYERS" ; .byte 0
 pm_header_str:
     .text "   NAME              MANA LVL" ; .byte 0
-pm_footer_cast_str:
-    .text "CAST WHICH? (A-P, ESC)" ; .byte 0
-pm_footer_pray_str:
-    .text "PRAY WHICH? (A-P, ESC)" ; .byte 0
-pm_learned_str:
-    .text "YOU HAVE LEARNED " ; .byte 0
 pm_bang_str:
     .byte $21, 0    // "!"
 

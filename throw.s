@@ -21,11 +21,7 @@ tw_save_p1:    .byte 0     // Saved p1 before consumption
 tw_save_flags: .byte 0     // Saved flags before consumption
 tw_save_ego:   .byte 0     // Saved ego before consumption
 
-// ============================================================
-// Strings
-// ============================================================
-tw_prompt_str:   .text "THROW WHICH ITEM (A-V)?" ; .byte 0
-tw_shatters_str: .text " SHATTERS!" ; .byte 0
+// Strings migrated to Huffman compression (HSTR_TW_* in huffman_data.s)
 
 // ============================================================
 // throw_item — Throw an inventory item
@@ -34,10 +30,8 @@ tw_shatters_str: .text " SHATTERS!" ; .byte 0
 // ============================================================
 throw_item:
     // 1. Prompt for item
-    lda #<tw_prompt_str
-    sta zp_ptr0
-    lda #>tw_prompt_str
-    sta zp_ptr0_hi
+    ldx #HSTR_TW_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     jsr input_get_key
@@ -318,9 +312,8 @@ throw_item:
 
     // Message: "THE <item> HITS THE <name>."
     jsr tw_msg_item_prefix          // "THE <item>"
-    lda #<rf_hits_str
-    ldy #>rf_hits_str
-    jsr combat_append_str           // " HITS"
+    ldx #HSTR_RF_HITS
+    jsr huff_append_combat          // " HITS"
     lda #<cmb_the_str
     ldy #>cmb_the_str
     jsr combat_append_str           // " THE "
@@ -336,9 +329,8 @@ throw_item:
 tw_miss_monster:
     // Message: "THE <item> MISSES THE <name>."
     jsr tw_msg_item_prefix
-    lda #<rf_misses_str
-    ldy #>rf_misses_str
-    jsr combat_append_str
+    ldx #HSTR_RF_MISSES
+    jsr huff_append_combat
     lda #<cmb_the_str
     ldy #>cmb_the_str
     jsr combat_append_str
@@ -360,15 +352,13 @@ tw_miss_darkness:
     lda it_category,x
     cmp #ICAT_POTION
     bne !tw_flies+
-    lda #<tw_shatters_str
-    ldy #>tw_shatters_str
-    jsr combat_append_str
+    ldx #HSTR_TW_SHATTERS
+    jsr huff_append_combat
     jsr cmb_term_and_print
     jmp tw_consume_item
 !tw_flies:
-    lda #<rf_flies_str
-    ldy #>rf_flies_str
-    jsr combat_append_str
+    ldx #HSTR_RF_FLIES
+    jsr huff_append_combat
     jsr cmb_term_and_print
 
 tw_consume_item:

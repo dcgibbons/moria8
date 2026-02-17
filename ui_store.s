@@ -1137,7 +1137,7 @@ haggle_buy:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #HUFF_STR_COUNT
+    lda #HSTR_INSULT_COUNT
     jsr rng_range
     tax
     jsr huff_decode_string
@@ -1347,7 +1347,7 @@ haggle_sell:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #HUFF_STR_COUNT
+    lda #HSTR_INSULT_COUNT
     jsr rng_range
     tax
     jsr huff_decode_string

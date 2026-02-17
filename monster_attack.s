@@ -40,18 +40,7 @@ mat_atk_type:     .byte 0   // Current attack's type ID
 mat_any_hit:      .byte 0   // Any attack connected this round
 mat_total_dmg:    .byte 0   // Total damage accumulated this round
 
-// ============================================================
-// Strings (screen codes via inherited encoding)
-// ============================================================
-mat_hits_str:     .text " HITS YOU." ; .byte 0
-mat_miss_str:     .text " MISSES YOU." ; .byte 0
-mat_poison_str:   .text " POISONS YOU." ; .byte 0
-mat_confuse_str:  .text " CONFUSES YOU." ; .byte 0
-mat_paralyze_str: .text " PARALYZES YOU." ; .byte 0
-mat_acid_str:     .text " SPITS ACID ON YOU." ; .byte 0
-mat_fear_str:     .text " FRIGHTENS YOU." ; .byte 0
-mat_shriek_str:   .text "YOU HEAR A HORRIBLE SHRIEK!" ; .byte 0
-mat_dead_str:     .text "YOU HAVE BEEN SLAIN." ; .byte 0
+// Strings migrated to Huffman compression (HSTR_MAT_* in huffman_data.s)
 
 // ============================================================
 // Subroutines
@@ -162,10 +151,8 @@ monster_attack_player:
     beq !map_miss_msg+
 
     // Hit message: "THE <name> HITS YOU."
-    lda #<mat_hits_str
-    sta zp_ptr2
-    lda #>mat_hits_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_HITS
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_HIT
     jsr sound_play
@@ -173,10 +160,8 @@ monster_attack_player:
 
 !map_miss_msg:
     // Miss message: "THE <name> MISSES YOU."
-    lda #<mat_miss_str
-    sta zp_ptr2
-    lda #>mat_miss_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_MISS
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_MISS
     jsr sound_play
@@ -185,10 +170,8 @@ monster_attack_player:
 !map_do_aggravate:
     jsr mon_atk_effect_aggravate
     // Print shriek message
-    lda #<mat_shriek_str
-    sta zp_ptr0
-    lda #>mat_shriek_str
-    sta zp_ptr0_hi
+    ldx #HSTR_MAT_SHRIEK
+    jsr huff_decode_string
     jsr msg_print
     rts
 
@@ -403,10 +386,8 @@ mon_atk_effect_poison:
     bne !mep_done+
 
     // Print "THE <name> POISONS YOU."
-    lda #<mat_poison_str
-    sta zp_ptr2
-    lda #>mat_poison_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_POISON
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
 !mep_done:
     rts
@@ -433,10 +414,8 @@ mon_atk_effect_confuse:
     sta zp_eff_confuse
 !mec_msg:
     // Print "THE <name> CONFUSES YOU."
-    lda #<mat_confuse_str
-    sta zp_ptr2
-    lda #>mat_confuse_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_CONFUSE
+    jsr huff_decode_to_ptr2
     jmp mon_atk_build_effect_msg
 
 !mec_stack:
@@ -494,10 +473,8 @@ mon_atk_effect_paralyze:
     sta zp_eff_paralyze
 !mepa_msg:
     // Print "THE <name> PARALYZES YOU."
-    lda #<mat_paralyze_str
-    sta zp_ptr2
-    lda #>mat_paralyze_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_PARALYZE
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
 !mepa_done:
     rts
@@ -507,10 +484,8 @@ mon_atk_effect_paralyze:
 // mon_atk_effect_acid — Acid attack (no AC reduction, full damage)
 // Damage already applied; print effect message.
 mon_atk_effect_acid:
-    lda #<mat_acid_str
-    sta zp_ptr2
-    lda #>mat_acid_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_ACID
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     rts
 
@@ -542,10 +517,8 @@ mon_atk_effect_fear:
     bne !mef_no_msg+
 
     // Print "THE <name> FRIGHTENS YOU." (first fear only)
-    lda #<mat_fear_str
-    sta zp_ptr2
-    lda #>mat_fear_str
-    sta zp_ptr2_hi
+    ldx #HSTR_MAT_FEAR
+    jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
 !mef_no_msg:
     pla                         // Restore new timer
