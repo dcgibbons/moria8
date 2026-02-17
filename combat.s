@@ -737,7 +737,7 @@ combat_award_xp:
 // combat_check_levelup — Check if XP exceeds adjusted level threshold
 // Adjusted threshold = base_threshold * PL_EXPFACT / 100
 // Compares 16-bit PL_XP against adjusted threshold.
-// Levels up if exceeded. Recursive check for multi-level jumps.
+// Levels up once if exceeded; caps at 1 level per kill (excess XP halved and retained).
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_check_levelup:
     // Get base threshold for current level
@@ -854,8 +854,8 @@ combat_check_levelup:
     adc zp_temp1
     sta player_data + PL_XP_1
 
-    // Check again for multi-level jumps
-    jmp combat_check_levelup
+    // Cap at 1 level per kill — excess XP retained (halved above)
+    rts
 
 !ccl_no:
     rts
