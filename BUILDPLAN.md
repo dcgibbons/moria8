@@ -1097,9 +1097,9 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-17 | Look command distance | ✅ Fixed — multi-tile scan |
 | BUG-18 | Inventory popup in selection dialogs | ✅ Fixed — '?' key added |
 | BUG-19 | Garbage characters flash on screen when descending to dungeon level 1 | **Fixed** — resolved by VIC-II bank restore (`$DD00 ora #3`) after KERNAL serial I/O in OPT-2 display bug fixes (223bb1e). KERNAL LOAD corrupted $DD00 bits 0-1, causing VIC-II to read wrong memory bank. |
-| BUG-20 | Dead strings `mat_acid_str` and `mat_dead_str` in monster_attack.s (42 bytes wasted) | **Open** — both strings defined but never referenced. `mat_acid_str` was intended for acid effect message; `mat_dead_str` superseded by death handling in score.s. Delete both to reclaim 42 bytes. |
-| BUG-21 | Acid attack effect (`mon_atk_effect_acid`) is a no-op with no message | **Open** — when a monster hits with ATK_ACID, the player sees generic "THE X HITS YOU." but no acid-specific feedback. Poison/confuse/paralyze all print distinct messages. Either wire up `mat_acid_str` or accept as intentional simplification. |
-| BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | **Open** — monster_attack.s:46 defines `mat_the_str: "THE "` but combat.s:23 already has `cmb_the_str: " THE "` and ranged_fire.s demonstrates using `cmb_the_str + 1` for "THE ". Replace 4 references to save 5 bytes. |
+| BUG-20 | Dead strings `mat_acid_str` and `mat_dead_str` in monster_attack.s (42 bytes wasted) | ✅ Fixed — inline strings eliminated by R7.6 Huffman migration; acid message now lives in Huffman dictionary, `mat_dead_str` was never referenced and is gone. |
+| BUG-21 | Acid attack effect (`mon_atk_effect_acid`) is a no-op with no message | ✅ Fixed — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg (pre-R7.6), now Huffman-compressed. |
+| BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | ✅ Fixed — OPT-1.7 eliminated the duplicate; R7.6 Huffman migration removed all remaining inline strings from monster_attack.s. |
 | BUG-23 | Magic Missile spell does not work — no animation and no damage to monsters | **Fixed** — `eff_bolt` damage math was correct but had zero user feedback: no messages, no animation, no monster wake-up, no sound. Added: bolt `*` animation along trace path with save/restore, hit/kill/fizzle messages using combat_msg_buf, `MF_AWAKE` on non-lethal hit, `SFX_HIT` on hit. |
 
 ---
@@ -1126,8 +1126,8 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | R3.4 | Monster Fleeing | ✅ Complete — flee threshold (HP/4) at spawn, reversed greedy movement |
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
-| OPT-1 | Code Size Optimization | ✅ Complete (excluding OPT-1.1) — 182 bytes reclaimed |
-| R7 | String Compression & Banks | Not started — Huffman codec + overlay/REU string bank system |
+| OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
+| R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
@@ -1148,10 +1148,10 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | **Fixed** — combat_award_xp now uses 16×8→24-bit multiply with cr_xp_hi:cr_xp_lo; generalized ccl_div_24x8 shared with levelup |
 | BUG-19b | **HIGH** | XP awards too generous — player levels up too quickly on low dungeon levels | **Fixed** — experience factor (race_xp% + class_xp%) was never applied to thresholds; now computed at character creation (PL_EXPFACT) and used in combat_check_levelup via 16×8→24-bit multiply + div-by-100 |
 | BUG-23 | **HIGH** | Players still level up too fast despite BUG-19b fix — XP economy not matching umoria | **Fixed** — root cause: missing XP halving on multi-level gain. Umoria halves excess XP above each new threshold on level-up; we preserved full XP, allowing cascading (e.g., 150 XP: 1→7 without halving vs 1→4 with). Audit confirmed cr_xp values and xp_level thresholds match umoria exactly. |
-| BUG-20 | LOW | Dead string `mat_dead_str` wastes 21 bytes (`mat_acid_str` now used by BUG-21 fix) | Open — OPT-1.1 (deferred) |
+| BUG-20 | LOW | ~~Dead string `mat_dead_str` wastes 21 bytes~~ | ✅ Fixed — eliminated by R7.6 Huffman migration |
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | **Fixed** — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
-| OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7) | ✅ Done (OPT-1.1 deferred) |
+| OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7), OPT-1.1 resolved by R7.6 | ✅ Done |
 | OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
 
 ### What's Next
@@ -1171,10 +1171,11 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~9~~ | OPT-2 | ~~Code banking~~ — ✅ Phase overlays at `$E000` + permanent `$F000` expansion. ~6.8KB freed. Display bugs fixed (color RAM, input banking, filesystem naming). | Done |
 | ~~10~~ | R5.1/R5.2 | ~~Spell expansion~~ — ✅ All 32 effects implemented. 8 spellbooks (4/class), book-gated learning, books not consumed. +101 bytes. | Done |
 | ~~11~~ | R6.1 | ~~Store haggling~~ — ✅ Multi-round buy/sell haggling with insult/kick system. CHR affects markup. Items ≤10 GP use simple Y/N. Number input, 4-round negotiation, gap/step convergence. +1479 bytes in town overlay ($E000-$EF47). | Done |
-| **12** | R7.1-R7.2 | Huffman codec + resident compressed strings (Tier 1 — no disk/REU needed) | Medium |
-| **13** | R7.3 | Store dialog strings — shopkeeper insults, haggling flavor text | Small (after R7.1-R7.2) |
-| **14** | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
-| **15** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| ~~12~~ | R7.1-R7.2 | ~~Huffman codec + resident compressed strings (Tier 1)~~ — ✅ 155 strings, 888 bytes saved (program_end $B196→$AE1E) | Done |
+| ~~13~~ | R7.3 | ~~Store dialog strings~~ — ✅ 15 shopkeeper insults compressed via Huffman | Done |
+| ~~14~~ | R7.6 | ~~Combat/UI string migration~~ — ✅ 155 strings from 11 source files, 3 migration patterns | Done |
+| **15** | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
+| **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
 ~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
@@ -3784,8 +3785,8 @@ least 128 KB — no constraint in practice.
 - ~~R6.1 Store haggling~~ ✅
 
 **Medium priority (infrastructure for more content):**
-- R7.1-R7.2 Huffman codec + resident compressed strings — no disk I/O, no hardware requirements
-- R7.3 Store dialog strings — first consumer (shopkeeper insults, haggling flavor text)
+- ~~R7.1-R7.2 Huffman codec + resident compressed strings~~ ✅
+- ~~R7.3 Store dialog strings~~ ✅
 - R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
 
 **Low priority (polish/completeness):**
@@ -3946,9 +3947,9 @@ switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
 
 | # | File | Description | Bytes |
 |---|------|-------------|-------|
-| BUG-20 | monster_attack.s:52-54 | Dead strings `mat_acid_str` (" SPITS ACID ON YOU.", 21 bytes) and `mat_dead_str` ("YOU HAVE BEEN SLAIN.", 21 bytes) — defined but never referenced anywhere in codebase. `mat_acid_str` was intended for `mon_atk_effect_acid` (which is a stub RTS). `mat_dead_str` was superseded by `zp_death_source` + score.s death handling. | 42 free |
-| BUG-21 | monster_attack.s:507 | `mon_atk_effect_acid` is just `rts`. Monster acid attacks deal damage but print only the generic "THE X HITS YOU." — no acid-specific message. Poison, confuse, and paralyze all print distinct messages. | N/A |
-| BUG-22 | monster_attack.s:46 | `mat_the_str: .text "THE "` duplicates `cmb_the_str + 1` from combat.s:23. `ranged_fire.s:320` already demonstrates the `cmb_the_str + 1` pattern. 4 references in monster_attack.s + 1 in monster_magic.s need updating. | 5 free |
+| BUG-20 | ~~monster_attack.s~~ | ✅ Fixed — inline strings eliminated by R7.6 Huffman migration. `mat_acid_str` now in Huffman dictionary, `mat_dead_str` removed (never referenced). | ~~42~~ |
+| BUG-21 | ~~monster_attack.s~~ | ✅ Fixed — acid effect prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg, now Huffman-compressed. | N/A |
+| BUG-22 | ~~monster_attack.s~~ | ✅ Fixed — OPT-1.7 eliminated duplicate; R7.6 removed all remaining inline strings. | ~~5~~ |
 
 ### Additional Issues Noted
 
@@ -3964,7 +3965,7 @@ Seven optimizations totaling ~188 bytes. All preserve existing behavior and are 
 
 | # | What | Where | Est. | Status |
 |---|------|-------|------|--------|
-| OPT-1.1 | **Delete dead strings** `mat_acid_str` + `mat_dead_str` | monster_attack.s | **42** | Deferred |
+| OPT-1.1 | ~~**Delete dead strings** `mat_acid_str` + `mat_dead_str`~~ | monster_attack.s | **42** | ✅ Done (eliminated by R7.6 Huffman migration) |
 | OPT-1.2 | **Parameterize cast/pray table setup** — table-driven copy loop | player_magic.s | **~55** | ✅ Done |
 | OPT-1.3 | **Deduplicate "CURE LIGHT WOUNDS"** — `.label` alias to `itn_17` | spell_data.s | **36** | ✅ Done |
 | OPT-1.4 | **Unify `mon_atk_build_hit/miss_msg`** into `mon_atk_build_effect_msg` | monster_attack.s | **~20** | ✅ Done |
