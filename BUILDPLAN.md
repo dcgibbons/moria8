@@ -1185,7 +1185,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, ~~R4.3 Rods~~ N/A (Angband-only, not in umoria), ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
+~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -3739,7 +3739,6 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R4.1 | Ego items | **(TODO)** | No "Holy Avenger", "Defender", "Slay Evil", etc. Need ego flag + modifier table + name generation. |
-| R4.3 | Rods | **(TODO)** | Wands and Staves exist but Rods (rechargeable, non-consumable) missing. Need new item category + recharge-over-time mechanic. |
 | R4.4 | Pseudo-ID | **(TODO)** | No "feeling" about items (excellent, terrible, etc.). Need carry-time counter + quality hint based on hidden enchantment. |
 | R4.5 | Thorough identification | **(TODO)** | `eff_identify_prompt` sets identified flag but doesn't reveal hidden powers (since ego items don't exist yet). Depends on R4.1. |
 | R4.6 | Flasks of Oil | **(TODO)** | Consumable item to refuel Brass Lanterns. In umoria: `TV_FLASK` type, sold at General Store for 7,500 turns of fuel per flask. Player uses flask ('F'uel or 'r'efill command) on equipped lantern, adding charges up to lantern max (7,500). Does NOT work on torches (torches are disposable). Need: new item type entry in `item.s` SoA tables, General Store inventory category update, refuel command in `player_items.s`, charge addition capped at lantern max. Depends on RP17-1 (light duration fix) for correct charge scale. |
@@ -3863,7 +3862,6 @@ least 128 KB — no constraint in practice.
 - ~~R1.2 Throwing~~ ✅
 - R3.2 Group tactics — nice-to-have
 - R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
-- R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
 - R4.6 Flasks of Oil — lantern refueling (depends on RP17-1 light duration fix)
 - ~~R7.6 Combat/UI string migration~~ ✅

@@ -17,7 +17,7 @@
 - **Artifacts**: Original has fixed artifacts (e.g. Phial of Galadriel). `moria8` **does not implement fixed artifacts**.
 - **Ego Items**: Original has ego items (e.g. "Long Sword of Slay Orc"). `moria8` implements basic enchantment (+x to hit/dmg) but **no complex ego powers** or slay flags are visible in the item structure.
 - **Detailed Inscriptions**: `umoria` allows inscribing items with custom text (e.g. "{empty}"). `moria8` does not support custom string inscriptions.
-- **Grouping**: `moria8` implements basic stacking, but advanced grouping options (like in modern Angband variants) are not present.
+- **Grouping**: `moria8` implements basic stacking, but advanced grouping options are not present.
 
 ## 2. Bugs in Implemented Features
 
