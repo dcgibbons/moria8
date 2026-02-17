@@ -75,6 +75,20 @@ sr_store_idx:  .byte 0     // Store index for restock loop
 sb_item_p1:    .byte 0     // Item enchantment/charges for pricing (RP14-3)
 sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
 
+// Haggling state (R6.1)
+hg_ask_lo:     .byte 0     // Shopkeeper's current price (16-bit)
+hg_ask_hi:     .byte 0
+hg_min_lo:     .byte 0     // Floor (buy) or ceiling (sell) price
+hg_min_hi:     .byte 0
+hg_input_lo:   .byte 0     // Player's typed number (16-bit)
+hg_input_hi:   .byte 0
+hg_round:      .byte 0     // Round counter (0-3)
+hg_insults:    .byte 0     // Insult counter per visit
+hg_kicked:     .fill 6, 0  // Per-store kicked flag (resets on town re-entry)
+hg_tmp0:       .byte 0     // Temp for gap/step calculation
+hg_tmp1:       .byte 0
+hg_digit_cnt:  .byte 0     // Digit count for number input
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -102,10 +116,17 @@ store_init_all:
 
     jmp store_restock_all       // Tail call
 
-// store_restock_all — Restock all 6 stores
+// store_restock_all — Restock all 6 stores + reset kicked flags
 // Clobbers: everything
 store_restock_all:
+    // Reset haggling kicked flags for all stores
+    ldx #5
     lda #0
+!sra_clr_kick:
+    sta hg_kicked,x
+    dex
+    bpl !sra_clr_kick-
+
     sta sr_store_idx
 !sra_loop:
     lda sr_store_idx
@@ -386,6 +407,19 @@ calc_sell_price:
     sta sb_price_hi
 
     // Add enchantment/charges bonus (RP14-3)
+    jmp price_add_p1_bonus      // Tail call
+
+// calc_buy_min_price — Minimum acceptable buy price (no CHR markup)
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
+// Output: sb_price_lo/hi = base_cost + p1_bonus
+// Clobbers: everything
+calc_buy_min_price:
+    sta sb_item_type
+    tax
+    lda it_cost_lo,x
+    sta sb_price_lo
+    lda it_cost_hi,x
+    sta sb_price_hi
     jmp price_add_p1_bonus      // Tail call
 
 // price_add_p1_bonus — Add enchantment/charges bonus to price (RP14-3)

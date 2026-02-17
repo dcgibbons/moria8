@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot.
 //
-// Results at $0400-$0410: $01 = pass, $00 = fail per test (17 tests)
+// Results at $0400-$0415: $01 = pass, $00 = fail per test (22 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #18
+    ldx #21
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -76,12 +76,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 20, $ff
+tc_results: .fill 23, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #16
+    ldx #21
     lda #$ff
 !clr:
     sta tc_results,x
@@ -546,5 +546,100 @@ test_start:
     lda #$00
 !t19_store:
     sta tc_results + 18
+
+    // ============================================================
+    // Test 20: calc_buy_min_price — dagger (base=10, p1=0) at CHR 3
+    // Should be 10 (no CHR markup), not 13
+    // ============================================================
+    lda #3
+    sta player_data + PL_CHR_CUR
+    lda #0
+    sta sb_item_p1
+    lda #2                      // Dagger (base 10)
+    jsr calc_buy_min_price
+    lda sb_price_lo
+    cmp #10
+    bne !t20_fail+
+    lda sb_price_hi
+    cmp #0
+    bne !t20_fail+
+    lda #$01
+    jmp !t20_store+
+!t20_fail:
+    lda #$00
+!t20_store:
+    sta tc_results + 19
+
+    // ============================================================
+    // Test 21: calc_buy_min_price — dagger +2 (p1=2) → expect 210
+    // base=10 + 2×100=200 = 210
+    // ============================================================
+    lda #3
+    sta player_data + PL_CHR_CUR
+    lda #2
+    sta sb_item_p1
+    lda #2                      // Dagger
+    jsr calc_buy_min_price
+    lda sb_price_lo
+    cmp #<210
+    bne !t21_fail+
+    lda sb_price_hi
+    cmp #>210
+    bne !t21_fail+
+    lda #$01
+    jmp !t21_store+
+!t21_fail:
+    lda #$00
+!t21_store:
+    sta tc_results + 20
+
+    // ============================================================
+    // Test 22: Gap step math — ask=130, min=100
+    // gap = 30, step = 30/4 = 7, new ask = 130-7 = 123
+    // ============================================================
+    lda #130
+    sta hg_ask_lo
+    lda #0
+    sta hg_ask_hi
+    lda #100
+    sta hg_min_lo
+    lda #0
+    sta hg_min_hi
+
+    // gap = ask - min
+    lda hg_ask_lo
+    sec
+    sbc hg_min_lo
+    sta hg_tmp0
+    lda hg_ask_hi
+    sbc hg_min_hi
+    sta hg_tmp1
+    // step = gap / 4
+    lsr hg_tmp1
+    ror hg_tmp0
+    lsr hg_tmp1
+    ror hg_tmp0
+    // ask -= step
+    lda hg_ask_lo
+    sec
+    sbc hg_tmp0
+    sta hg_ask_lo
+    lda hg_ask_hi
+    sbc hg_tmp1
+    sta hg_ask_hi
+
+    // Expect ask = 123
+    lda hg_ask_lo
+    cmp #123
+    bne !t22_fail+
+    lda hg_ask_hi
+    cmp #0
+    bne !t22_fail+
+    lda #$01
+    jmp !t22_store+
+!t22_fail:
+    lda #$00
+!t22_store:
+    sta tc_results + 21
 
     jmp test_exit_trampoline

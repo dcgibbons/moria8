@@ -1162,7 +1162,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~8~~ | OPT-1 | ~~Code size optimization~~ — ✅ 182 bytes reclaimed ($BFF7→$BF41), 20/20 tests pass | Done |
 | ~~9~~ | OPT-2 | ~~Code banking~~ — ✅ Phase overlays at `$E000` + permanent `$F000` expansion. ~6.8KB freed. Display bugs fixed (color RAM, input banking, filesystem naming). | Done |
 | ~~10~~ | R5.1/R5.2 | ~~Spell expansion~~ — ✅ All 32 effects implemented. 8 spellbooks (4/class), book-gated learning, books not consumed. +101 bytes. | Done |
-| **11** | R6.1 | Store haggling | Medium |
+| ~~11~~ | R6.1 | ~~Store haggling~~ — ✅ Multi-round buy/sell haggling with insult/kick system. CHR affects markup. Items ≤10 GP use simple Y/N. Number input, 4-round negotiation, gap/step convergence. +1479 bytes in town overlay ($E000-$EF47). | Done |
 | **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
@@ -1191,7 +1191,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | Monster count (120 vs 351) | **Done** — R3.5 expanded to 120 across 5 tiers. Further expansion possible with more tier data. |
 | Item count (55 vs 400+) | **Tracked** — R4.1 (ego items) and R4.2 (artifacts) address this. 55 base types is adequate for C64 memory. |
 | Active monsters cap (32) | **Deferred** — RAM constraint. Phase 10.3 raises to 64 on C128. |
-| Haggling simplified | **Tracked** — R6.1 is medium-priority TODO. |
+| Haggling simplified | **Done** — R6.1 implemented multi-round haggling with insult/kick system. |
 | Missing stores (Black Market, Player Home) | **Tracked** — R6.2, R6.3 are low-priority TODOs. |
 | Character history | **Deferred** — nice-to-have, not gameplay-critical. |
 | Save scumming prevention | **Done** — save file deleted on load, enforcing permadeath. |
@@ -3676,7 +3676,7 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R6.1 | Haggling | **(TODO)** | Replace fixed-price with umoria-style multi-round haggling. Shopkeeper has asking price (markup from base), player offers counter-price, back-and-forth until agreement or walk-away. CHR affects initial markup and shopkeeper patience. Bad-offer reputation tracking (shopkeeper refuses if player wastes too much time). Fits on 40-col using message line for offers + row 24 for player input. |
+| R6.1 | Haggling | **Done** | Multi-round buy/sell haggling. 4 rounds max, gap/4 convergence, insult/kick system (3 insults = kicked). Items ≤10 GP use simple Y/N. Number input with 5-digit limit, DELETE support. |
 | R6.2 | Black Market (Store 7) | **(TODO)** | Missing. Sells rare items at inflated prices. Need new store with special stock rules. |
 | R6.3 | Player Home (Store 8) | **(TODO)** | Missing. Storage for items between dungeon runs. Need home inventory (disk-persisted). |
 | R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
@@ -3702,7 +3702,7 @@ design; items marked **(TODO)** need implementation.
 - ~~R2.1 Special rooms~~ — ✅ Done (pits, vaults, nests with $F000 banking)
 - ~~R4.1 Ego items~~ — ✅ Done
 - ~~R5.1/R5.2 Spell expansion~~ — ✅ Done (8 spellbooks, book-gated learning)
-- R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
+- ~~R6.1 Store haggling~~ ✅
 
 **Low priority (polish/completeness):**
 - ~~R1.2 Throwing~~ ✅
