@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #11
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -83,7 +83,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 12, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -449,6 +449,72 @@ test_start:
 !t10_c3:
     lda tc_ok
     sta tc_results + 9
+
+    // ==========================================
+    // Test 11: Fear effect sets timer
+    // Use creature type 0 (White Harpy, level 2)
+    // Timer should be rng_range(2) + 3 = [3,4]
+    // ==========================================
+!t11:
+    lda #0
+    sta eff_fear_timer          // Clear existing fear
+
+    lda #0                      // White Harpy (level 2)
+    sta mat_type2
+
+    jsr mon_atk_effect_fear
+
+    lda eff_fear_timer
+    beq !t11_fail+              // Should be > 0
+    cmp #3
+    bcc !t11_fail+              // Should be >= 3
+    cmp #5
+    bcs !t11_fail+              // Should be <= 4
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // ==========================================
+    // Test 12: Fear timer decrement via turn_tick_effects
+    // Set timer=2, tick once, verify timer=1
+    // ==========================================
+!t12:
+    lda #2
+    sta eff_fear_timer
+    // Clear other effects to avoid side effects
+    lda #0
+    sta zp_eff_poison
+    sta zp_eff_blind
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    sta zp_eff_speed
+    sta zp_eff_protect
+    sta zp_eff_invis
+    sta zp_eff_infra
+    sta zp_eff_bless
+    sta zp_eff_hero
+    sta zp_eff_regen
+    sta zp_eff_word_recall
+    sta eff_detect_timer
+    sta zp_pseudo_id_timer
+
+    // Set player to non-caster to skip mana regen
+    sta player_data + PL_SPELL_TYPE
+
+    jsr turn_tick_effects
+
+    lda eff_fear_timer
+    cmp #1
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !tests_done+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
 
 !tests_done:
     jmp test_exit_trampoline

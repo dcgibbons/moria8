@@ -88,6 +88,19 @@ turn_tick_effects:
     jsr msg_print
 !no_para:
 
+    // Fear
+    lda eff_fear_timer
+    beq !no_fear+
+    dec eff_fear_timer
+    bne !no_fear+
+    // Just expired — print message
+    lda #<eff_fear_end
+    sta zp_ptr0
+    lda #>eff_fear_end
+    sta zp_ptr0_hi
+    jsr msg_print
+!no_fear:
+
     // Haste/slow
     lda zp_eff_speed
     beq !no_speed+
@@ -452,6 +465,8 @@ eff_poison_end:   .text "YOU FEEL BETTER." ; .byte 0
 eff_blind_end:    .text "YOU CAN SEE AGAIN." ; .byte 0
 eff_confuse_end:  .text "YOU FEEL LESS CONFUSED." ; .byte 0
 eff_paralyze_end: .text "YOU CAN MOVE AGAIN." ; .byte 0
+eff_fear_end:     .text "YOU FEEL BOLDER NOW." ; .byte 0
+eff_fear_timer:   .byte 0
 ttl_dim_str:      .text "YOUR LIGHT IS GROWING DIM." ; .byte 0
 ttl_out_str:      .text "YOUR LIGHT HAS GONE OUT." ; .byte 0
 recall_arrive_str: .text "YOU FEEL YOURSELF YANKED AWAY!" ; .byte 0

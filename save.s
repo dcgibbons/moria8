@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $03
+.const SAVE_VERSION    = $04
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -211,6 +211,9 @@ save_game:
     // 3. ZP game state $40-$5f (32 bytes)
     :save_block(ZP_STATE_START, ZP_STATE_SIZE)
 
+    // 3b. Fear timer (static RAM, 1 byte)
+    :save_block(eff_fear_timer, 1)
+
     // 4. RNG state $1a-$1d (4 bytes)
     :save_block(ZP_RNG_START, ZP_RNG_SIZE)
 
@@ -398,6 +401,9 @@ load_game:
 
     // 3. ZP game state
     :load_block(ZP_STATE_START, ZP_STATE_SIZE)
+
+    // 3b. Fear timer (static RAM, 1 byte)
+    :load_block(eff_fear_timer, 1)
 
     // 4. RNG state
     :load_block(ZP_RNG_START, ZP_RNG_SIZE)

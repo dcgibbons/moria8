@@ -49,6 +49,7 @@ mat_poison_str:   .text " POISONS YOU." ; .byte 0
 mat_confuse_str:  .text " CONFUSES YOU." ; .byte 0
 mat_paralyze_str: .text " PARALYZES YOU." ; .byte 0
 mat_acid_str:     .text " SPITS ACID ON YOU." ; .byte 0
+mat_fear_str:     .text " FRIGHTENS YOU." ; .byte 0
 mat_shriek_str:   .text "YOU HEAR A HORRIBLE SHRIEK!" ; .byte 0
 mat_dead_str:     .text "YOU HAVE BEEN SLAIN." ; .byte 0
 
@@ -360,7 +361,7 @@ mon_atk_effect_dispatch:
     rts
 !maed_fear:
     // Fear: full dice damage, no AC reduction (matches umoria)
-    // Fear effect deferred to Phase 6+.
+    jsr mon_atk_effect_fear
     rts
 !maed_corrode:
     // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
@@ -511,6 +512,45 @@ mon_atk_effect_acid:
     lda #>mat_acid_str
     sta zp_ptr2_hi
     jsr mon_atk_build_effect_msg
+    rts
+
+// mon_atk_effect_fear — Set fear timer (blocks melee)
+// Timer = rng_range(cr_level) + 3. Message only on first fear.
+// Replace timer only if new value > current (no stacking, just extend).
+// Clobbers: A, X, zp_temp3, zp_temp4
+mon_atk_effect_fear:
+    // Compute new timer: rng_range(cr_level) + 3
+    ldx mat_type2
+    lda cr_level,x
+    cmp #1
+    bne !mef_roll+
+    lda #4                      // Level 1: 0 + 3 + 1 = 4
+    jmp !mef_check+
+!mef_roll:
+    jsr rng_range               // [0, level-1]
+    clc
+    adc #3
+!mef_check:
+    // Only replace if new > current
+    cmp eff_fear_timer
+    bcc !mef_done+
+    beq !mef_done+
+
+    // Check if this is first fear (for message)
+    pha                         // Save new timer
+    lda eff_fear_timer
+    bne !mef_no_msg+
+
+    // Print "THE <name> FRIGHTENS YOU." (first fear only)
+    lda #<mat_fear_str
+    sta zp_ptr2
+    lda #>mat_fear_str
+    sta zp_ptr2_hi
+    jsr mon_atk_build_effect_msg
+!mef_no_msg:
+    pla                         // Restore new timer
+    sta eff_fear_timer
+!mef_done:
     rts
 
 // mon_atk_effect_aggravate — Wake all sleeping monsters

@@ -113,6 +113,17 @@ player_try_move:
     cmp #$ff
     bne !blocked+               // Running → just block, don't attack
 
+    // Fear blocks melee attacks
+    lda eff_fear_timer
+    beq !not_afraid+
+    lda #<ptm_afraid_str
+    sta zp_ptr0
+    lda #>ptm_afraid_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec                         // Turn consumed (too afraid to act)
+    rts
+!not_afraid:
     lda zp_temp3                // target_x
     ldy zp_temp4                // target_y
     jsr player_attack_monster
@@ -677,6 +688,8 @@ dl_wall_str:
     .text "YOU SEE A WALL." ; .byte 0
 dl_nothing_str:
     .text "YOU SEE NOTHING SPECIAL." ; .byte 0
+ptm_afraid_str:
+    .text "YOU ARE TOO AFRAID!" ; .byte 0
 
 // ============================================================
 // Compile-time validation

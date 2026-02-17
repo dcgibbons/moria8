@@ -237,6 +237,10 @@ entry_main:
     cpx #16                 // $50–$5f = 16 bytes
     bne !clear_effects-
 
+    // Clear static RAM effect timers (not in ZP $50-$5f range)
+    lda #0
+    sta eff_fear_timer
+
     // --- Character creation ---
     jsr tramp_player_create
 

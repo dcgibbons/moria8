@@ -3868,7 +3868,7 @@ switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
 | Issue | File | Description |
 |-------|------|-------------|
 | ~~`rng_range_word` not implemented~~ | rng.s | **RESOLVED:** 16-bit rejection sampling implemented; gold drops now use `fi_qty_hi` + `rng_range_word` + `combat_append_decimal_16`. |
-| `mon_atk_effect_fear` is a no-op | monster_attack.s:356-359 | Fear attacks deal damage but don't apply fear status. Marked "deferred to Phase 6+". |
+| ~~`mon_atk_effect_fear` is a no-op~~ | monster_attack.s | **RESOLVED:** Fear sets `eff_fear_timer` (static RAM byte in turn.s). Timer = `rng_range(cr_level) + 3`. Blocks melee attacks in `player_move.s`. Ticks down in `turn_tick_effects`. Saved/loaded in save.s. |
 | `mon_atk_effect_corrode` is a no-op | monster_attack.s:360-362 | Corrode attacks deal damage but don't damage equipment. Marked "deferred". |
 
 ### Optimization Plan (OPT-1)
