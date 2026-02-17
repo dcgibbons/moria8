@@ -1,4 +1,4 @@
-// main.s — Entry point for Moria C64/C128
+// main.s — Entry point for Moria8 C64/C128
 //
 // BASIC stub at $0801 with SYS entry.
 // Saves BASIC ZP state, disables BASIC ROM, runs game,
@@ -1191,7 +1191,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 welcome_str:
-    .text "WELCOME TO MORIA! SHIFT+Q TO QUIT." ; .byte 0
+    .text "WELCOME TO MORIA8! SHIFT+Q TO QUIT." ; .byte 0
 
 descend_str:
     .text "YOU DESCEND THE STAIRCASE." ; .byte 0
@@ -1374,7 +1374,7 @@ tramp_ego_get_ac_bonus:
 // Init-only strings — kept in main RAM (small, referenced by title_screen.s)
 // ============================================================
 title_str:
-    .text "MORIA C=64" ; .byte 0
+    .text "MORIA8 C=64" ; .byte 0
 
 // title_show_sysinfo — Trampoline to call banked version at $F000
 // Reads KERNAL_REV while KERNAL is still banked in, then banks out.

@@ -1,10 +1,10 @@
-// boot.s — Chain-loading bootloader for Moria C64/C128
+// boot.s — Chain-loading bootloader for Moria8 C64/C128
 //
-// Standalone assembly unit. Displays "LOADING MORIA..." and
+// Standalone assembly unit. Displays "LOADING MORIA8..." and
 // chain-loads the game binary (MORIA64) from disk.
 //
 // Disk layout:
-//   "moria"   = this bootloader (autostart)
+//   "moria8"  = this bootloader (autostart)
 //   "moria64" = game binary (loaded by this bootloader)
 //
 // The game binary is also independently loadable via VICE -autostart
@@ -86,7 +86,7 @@ chain_stub_end:
 // Data
 // ============================================================
 loading_msg:
-    .text "LOADING MORIA..."
+    .text "LOADING MORIA8..."
     .byte 0
 
 game_filename:

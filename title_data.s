@@ -37,15 +37,16 @@
 .byte $5d
 .byte $00
 
-// ── MORIA block letters: rows 3-5 ──
-// Letters: M(5w) O(3w) R(4w) I(3w) A(4w) = 19 + 4 gaps of 2 = 27 wide
-// Centered in 36-char interior: col = (36-27)/2 + 2 = 6.5 → col 7
-// Row 3 (top)
+// ── MORIA8 block letters: rows 3-7 (5 rows tall) ──
+// Letters: M(5w) O(3w) R(4w) I(3w) A(4w) 8(3w) = 22 + 5 gaps of 2 = 32 wide
+// Centered in 36-char interior: col = (36-32)/2 + 2 = 4 → col 4
+
+// Row 3 (letter row 1)
 .byte 3, 1, TC_LGREY
 .byte $5d  // │
 .byte $00
-.byte 3, 7, TC_WHITE
-.byte $a0, $a0, $20, $a0, $a0  // M: ██ ██
+.byte 3, 4, TC_WHITE
+.byte $a0, $20, $20, $20, $a0  // M: █   █
 .byte $20, $20                  // gap
 .byte $a0, $a0, $a0             // O: ███
 .byte $20, $20                  // gap
@@ -54,17 +55,61 @@
 .byte $a0, $a0, $a0             // I: ███
 .byte $20, $20                  // gap
 .byte $20, $a0, $a0, $20        // A:  ██
+.byte $20, $20                  // gap
+.byte $a0, $a0, $a0             // 8: ███
 .byte $00
 .byte 3, 38, TC_LGREY
 .byte $5d
 .byte $00
 
-// Row 4 (middle)
+// Row 4 (letter row 2)
 .byte 4, 1, TC_LGREY
 .byte $5d
 .byte $00
-.byte 4, 7, TC_WHITE
+.byte 4, 4, TC_WHITE
+.byte $a0, $a0, $20, $a0, $a0  // M: ██ ██
+.byte $20, $20                  // gap
+.byte $a0, $20, $a0             // O: █ █
+.byte $20, $20                  // gap
+.byte $a0, $20, $20, $a0        // R: █  █
+.byte $20, $20                  // gap
+.byte $20, $a0, $20             // I:  █
+.byte $20, $20                  // gap
+.byte $a0, $20, $20, $a0        // A: █  █
+.byte $20, $20                  // gap
+.byte $a0, $20, $a0             // 8: █ █
+.byte $00
+.byte 4, 38, TC_LGREY
+.byte $5d
+.byte $00
+
+// Row 5 (letter row 3)
+.byte 5, 1, TC_LGREY
+.byte $5d
+.byte $00
+.byte 5, 4, TC_WHITE
 .byte $a0, $20, $a0, $20, $a0  // M: █ █ █
+.byte $20, $20                  // gap
+.byte $a0, $20, $a0             // O: █ █
+.byte $20, $20                  // gap
+.byte $a0, $a0, $a0, $a0        // R: ████
+.byte $20, $20                  // gap
+.byte $20, $a0, $20             // I:  █
+.byte $20, $20                  // gap
+.byte $a0, $a0, $a0, $a0        // A: ████
+.byte $20, $20                  // gap
+.byte $a0, $a0, $a0             // 8: ███
+.byte $00
+.byte 5, 38, TC_LGREY
+.byte $5d
+.byte $00
+
+// Row 6 (letter row 4)
+.byte 6, 1, TC_LGREY
+.byte $5d
+.byte $00
+.byte 6, 4, TC_WHITE
+.byte $a0, $20, $20, $20, $a0  // M: █   █
 .byte $20, $20                  // gap
 .byte $a0, $20, $a0             // O: █ █
 .byte $20, $20                  // gap
@@ -72,17 +117,19 @@
 .byte $20, $20                  // gap
 .byte $20, $a0, $20             // I:  █
 .byte $20, $20                  // gap
-.byte $a0, $a0, $a0, $a0        // A: ████
+.byte $a0, $20, $20, $a0        // A: █  █
+.byte $20, $20                  // gap
+.byte $a0, $20, $a0             // 8: █ █
 .byte $00
-.byte 4, 38, TC_LGREY
+.byte 6, 38, TC_LGREY
 .byte $5d
 .byte $00
 
-// Row 5 (bottom)
-.byte 5, 1, TC_LGREY
+// Row 7 (letter row 5)
+.byte 7, 1, TC_LGREY
 .byte $5d
 .byte $00
-.byte 5, 7, TC_WHITE
+.byte 7, 4, TC_WHITE
 .byte $a0, $20, $20, $20, $a0  // M: █   █
 .byte $20, $20                  // gap
 .byte $a0, $a0, $a0             // O: ███
@@ -92,25 +139,8 @@
 .byte $a0, $a0, $a0             // I: ███
 .byte $20, $20                  // gap
 .byte $a0, $20, $20, $a0        // A: █  █
-.byte $00
-.byte 5, 38, TC_LGREY
-.byte $5d
-.byte $00
-
-// ── Row 6: empty with borders ──
-.byte 6, 1, TC_LGREY
-.byte $5d
-.byte $00
-.byte 6, 38, TC_LGREY
-.byte $5d
-.byte $00
-
-// ── Row 7: "THE DUNGEONS OF MORIA" ──
-.byte 7, 1, TC_LGREY
-.byte $5d
-.byte $00
-.byte 7, 10, TC_YELLOW
-.text "THE DUNGEONS OF MORIA"
+.byte $20, $20                  // gap
+.byte $a0, $a0, $a0             // 8: ███
 .byte $00
 .byte 7, 38, TC_LGREY
 .byte $5d
@@ -124,54 +154,57 @@
 .byte $5d
 .byte $00
 
-// ── Row 9: divider ──
+// ── Row 9: "THE DUNGEONS OF MORIA" ──
 .byte 9, 1, TC_LGREY
+.byte $5d
+.byte $00
+.byte 9, 10, TC_YELLOW
+.text "THE DUNGEONS OF MORIA"
+.byte $00
+.byte 9, 38, TC_LGREY
+.byte $5d
+.byte $00
+
+// ── Row 10: divider ──
+.byte 10, 1, TC_LGREY
 .byte $6b  // ├
 .fill 36, $40  // ─ × 36
 .byte $73  // ┤
 .byte $00
 
-// ── Row 10: empty with borders ──
-.byte 10, 1, TC_LGREY
-.byte $5d
-.byte $00
-.byte 10, 38, TC_LGREY
-.byte $5d
-.byte $00
-
-// ── Row 11: "COMMODORE 64 EDITION" ──
+// ── Row 11: empty with borders ──
 .byte 11, 1, TC_LGREY
 .byte $5d
-.byte $00
-.byte 11, 10, TC_CYAN
-.text "COMMODORE 64 EDITION"
 .byte $00
 .byte 11, 38, TC_LGREY
 .byte $5d
 .byte $00
 
-// ── Row 12: empty with borders ──
+// ── Row 12: "COMMODORE 64 EDITION" ──
 .byte 12, 1, TC_LGREY
 .byte $5d
+.byte $00
+.byte 12, 10, TC_CYAN
+.text "COMMODORE 64 EDITION"
 .byte $00
 .byte 12, 38, TC_LGREY
 .byte $5d
 .byte $00
 
-// ── Row 13: credits ──
+// ── Row 13: empty with borders ──
 .byte 13, 1, TC_LGREY
 .byte $5d
-.byte $00
-.byte 13, 5, TC_DGREY
-.text "BASED ON MORIA BY R.A. KOENEKE"
 .byte $00
 .byte 13, 38, TC_LGREY
 .byte $5d
 .byte $00
 
-// ── Row 14: empty with borders ──
+// ── Row 14: credits ──
 .byte 14, 1, TC_LGREY
 .byte $5d
+.byte $00
+.byte 14, 5, TC_DGREY
+.text "BASED ON MORIA BY R.A. KOENEKE"
 .byte $00
 .byte 14, 38, TC_LGREY
 .byte $5d

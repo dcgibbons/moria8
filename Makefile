@@ -1,7 +1,7 @@
-# Makefile — Moria C64/C128
+# Makefile — Moria8 C64/C128
 #
 # Targets:
-#   make          Build moria.prg
+#   make          Build moria8.prg
 #   make run      Build and launch in VICE
 #   make rundisk  Build D64 + launch with true drive emulation
 #   make debug    Build + launch with VICE monitor watchpoints
@@ -21,7 +21,7 @@ JAVA        ?= java
 # ── Project layout ────────────────────────────────────────
 OUT         = out
 MAIN_SRC    = main.s
-MAIN_PRG    = $(OUT)/moria.prg
+MAIN_PRG    = $(OUT)/moria8.prg
 BOOT_SRC    = boot.s
 BOOT_PRG    = $(OUT)/boot.prg
 TITLE_SRC   = title_data.s
@@ -30,8 +30,8 @@ TIER_PRGS   = $(OUT)/monster.db.1 $(OUT)/monster.db.2 $(OUT)/monster.db.3 $(OUT)
 OVL_TOWN    = $(OUT)/ovl.town
 OVL_START   = $(OUT)/ovl.start
 OVL_DEATH   = $(OUT)/ovl.death
-DISK_IMAGE  = $(OUT)/moria.d64
-DISK_NAME   = "moria,m8"
+DISK_IMAGE  = $(OUT)/moria8.d64
+DISK_NAME   = "moria8,m8"
 DISKART     = tools/diskart.py
 
 # All source files that main.s imports (dependency list)
@@ -108,7 +108,7 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START)
 	         -write $(OUT)/empty.prg "art3" \
 	         -write $(OUT)/empty.prg "art4" \
 	         -write $(OUT)/empty.prg "art5" \
-	         -write $(BOOT_PRG) "moria" \
+	         -write $(BOOT_PRG) "moria8" \
 	         -write $(MAIN_PRG) "moria64" \
 	         -write $(TITLE_PRG) "title" \
 	         -write $(OUT)/monster.db.1 "monster.db.1" \
@@ -121,10 +121,10 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START)
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(OUT)/empty.prg
 
-SAVE_IMAGE  = $(OUT)/moria_save.d64
+SAVE_IMAGE  = $(OUT)/moria8_save.d64
 
 savedisk: | $(OUT)
-	$(C1541) -format "moria save,sv" d64 $(SAVE_IMAGE)
+	$(C1541) -format "moria8 save,sv" d64 $(SAVE_IMAGE)
 
 $(OUT):
 	mkdir -p $(OUT)

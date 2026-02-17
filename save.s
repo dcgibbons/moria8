@@ -117,7 +117,7 @@ save_corrupt_str:
 save_ioerr_str:
     .text "DISK ERROR!" ; .byte 0
 save_welcome_str:
-    .text "WELCOME BACK TO MORIA!" ; .byte 0
+    .text "WELCOME BACK TO MORIA8!" ; .byte 0
 title_menu_str:
     .text "N)EW  L)OAD  D)UAL DISK" ; .byte 0
 

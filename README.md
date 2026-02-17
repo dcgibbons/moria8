@@ -1,6 +1,6 @@
-# Moria for the Commodore 64 and 128
+# Moria8 for the Commodore 64 and 128
 
-This is a port of the rogue-like game Moria for the Commodore 64 and 128
+This is a port of the rogue-like game Moria8 for the Commodore 64 and 128
 platforms.
 
 This game is written entirely in 6502 assembly language using the Kick
