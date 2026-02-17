@@ -135,6 +135,14 @@ pm_do_cast:
 !pm_valid_key:
     sta pm_spell_idx
 
+    // Restore dungeon screen before executing spell (BUG-27)
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    jsr viewport_update
+    jsr render_viewport
+    jsr status_draw
+
     // Confused? Random spell instead of player's choice
     lda zp_eff_confuse
     beq !pm_not_confused+
