@@ -96,6 +96,7 @@ player_attack_monster:
 !pam_no_confuse:
 
     jsr combat_roll_damage      // → cmb_damage
+    jsr combat_critical_blow    // May multiply cmb_damage (weapon hits only)
 
     // Apply damage to monster
     ldx cmb_slot
@@ -429,6 +430,204 @@ combat_roll_damage:
 
 !crd_ego_done:
     rts
+
+// combat_critical_blow — Chance for weapon hits to deal 2-5x damage
+// Based on umoria playerWeaponCriticalBlow.
+// Trigger: randint(5000) <= (weapon_weight + 5*tohit + class_bth_per_level * level)
+// Damage tiers by (weight + randint(650)):
+//   < 400: 2x + 5, 400-699: 3x + 10, 700-899: 4x + 15, >= 900: 5x + 20
+// Input/Output: cmb_damage modified in place
+// Clobbers: A, X, Y, zp_temp0-3, zp_math_a/b
+combat_critical_blow:
+    // Guard: no weapon = no crit
+    ldy #EQUIP_WEAPON
+    lda inv_item_id,y
+    cmp #FI_EMPTY
+    bne !ccb_armed+
+    rts
+!ccb_armed:
+
+    // Guard: ranged launcher = no crit (melee only)
+    tax
+    jsr item_get_missile
+    beq !ccb_has_weapon+
+    cmp #4
+    bcs !ccb_has_weapon+
+    rts                         // 1-3 = ranged launcher
+!ccb_has_weapon:
+
+    // Save weapon weight (8-bit, will zero-extend to 16 later)
+    lda it_weight,x
+    sta ccb_weight
+
+    // --- Compute 16-bit chance ---
+    // Start with weight (zero-extended to 16)
+    lda ccb_weight
+    sta ccb_chance_lo
+    lda #0
+    sta ccb_chance_hi
+
+    // Add 5 * zp_combat_tohit
+    lda zp_combat_tohit
+    ldx #5
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda ccb_chance_lo
+    clc
+    adc zp_math_a
+    sta ccb_chance_lo
+    lda ccb_chance_hi
+    adc zp_math_b
+    sta ccb_chance_hi
+
+    // Add class_level_adj[class*5+0] * player_level
+    lda player_data + PL_CLASS
+    ldx #CLASS_LVL_SIZE
+    jsr math_multiply           // A = class * 5
+    tax
+    lda class_level_adj,x       // BTH per level
+    ldx zp_player_lvl
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda ccb_chance_lo
+    clc
+    adc zp_math_a
+    sta ccb_chance_lo
+    lda ccb_chance_hi
+    adc zp_math_b
+    sta ccb_chance_hi
+
+    // Roll rng_range_word(5000) — result in zp_temp2/3
+    lda #<5000
+    sta zp_temp0
+    lda #>5000
+    sta zp_temp1
+    jsr rng_range_word          // Result: zp_temp2 (lo), zp_temp3 (hi)
+
+    // Compare: if random >= chance, no crit (return)
+    // 16-bit compare: zp_temp3:zp_temp2 vs ccb_chance_hi:ccb_chance_lo
+    lda zp_temp3
+    cmp ccb_chance_hi
+    bcc !ccb_crit+              // random_hi < chance_hi → crit
+    bne !ccb_no_crit+           // random_hi > chance_hi → no crit
+    lda zp_temp2
+    cmp ccb_chance_lo
+    bcc !ccb_crit+              // random_lo < chance_lo → crit
+!ccb_no_crit:
+    rts
+
+!ccb_crit:
+    // --- Determine damage tier ---
+    // tier_weight = weapon_weight + rng_range_word(650)
+    lda #<650
+    sta zp_temp0
+    lda #>650
+    sta zp_temp1
+    jsr rng_range_word          // Result: zp_temp2 (lo), zp_temp3 (hi)
+
+    // Add weapon weight to random roll (16-bit)
+    lda zp_temp2
+    clc
+    adc ccb_weight
+    sta zp_temp2
+    lda zp_temp3
+    adc #0
+    sta zp_temp3                // zp_temp3:zp_temp2 = tier_weight
+
+    // Save original damage for multiplication
+    lda cmb_damage
+    sta ccb_orig_dmg
+
+    // Compare tier_weight against thresholds (16-bit)
+    // >= 900 → 5x+20
+    lda zp_temp3
+    cmp #>900
+    bcc !ccb_below_900+
+    bne !ccb_tier5+
+    lda zp_temp2
+    cmp #<900
+    bcs !ccb_tier5+
+!ccb_below_900:
+    // >= 700 → 4x+15
+    lda zp_temp3
+    cmp #>700
+    bcc !ccb_below_700+
+    bne !ccb_tier4+
+    lda zp_temp2
+    cmp #<700
+    bcs !ccb_tier4+
+!ccb_below_700:
+    // >= 400 → 3x+10
+    lda zp_temp3
+    cmp #>400
+    bcc !ccb_tier2+
+    bne !ccb_tier3+
+    lda zp_temp2
+    cmp #<400
+    bcs !ccb_tier3+
+
+!ccb_tier2:
+    // 2x + 5
+    lda ccb_orig_dmg
+    asl                         // * 2
+    bcs !ccb_clamp+             // Overflow → 255
+    clc
+    adc #5
+    bcs !ccb_clamp+
+    sta cmb_damage
+    rts
+
+!ccb_tier3:
+    // 3x + 10: orig + orig*2
+    lda ccb_orig_dmg
+    asl                         // * 2
+    bcs !ccb_clamp+
+    clc
+    adc ccb_orig_dmg            // * 3
+    bcs !ccb_clamp+
+    clc
+    adc #10
+    bcs !ccb_clamp+
+    sta cmb_damage
+    rts
+
+!ccb_tier4:
+    // 4x + 15
+    lda ccb_orig_dmg
+    asl                         // * 2
+    bcs !ccb_clamp+
+    asl                         // * 4
+    bcs !ccb_clamp+
+    clc
+    adc #15
+    bcs !ccb_clamp+
+    sta cmb_damage
+    rts
+
+!ccb_tier5:
+    // 5x + 20: orig*4 + orig
+    lda ccb_orig_dmg
+    asl                         // * 2
+    bcs !ccb_clamp+
+    asl                         // * 4
+    bcs !ccb_clamp+
+    clc
+    adc ccb_orig_dmg            // * 5
+    bcs !ccb_clamp+
+    clc
+    adc #20
+    bcs !ccb_clamp+
+    sta cmb_damage
+    rts
+
+!ccb_clamp:
+    lda #255
+    sta cmb_damage
+    rts
+
+// Static vars for combat_critical_blow
+ccb_weight:     .byte 0
+ccb_chance_lo:  .byte 0
+ccb_chance_hi:  .byte 0
+ccb_orig_dmg:   .byte 0
 
 // combat_apply_damage — Subtract damage from monster HP
 // Input:  X = monster slot index, A = damage amount

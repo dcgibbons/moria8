@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #10
+    ldx #12
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -84,7 +84,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 11, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 13, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -470,11 +470,77 @@ test_start:
 
     lda #$01
     sta tc_results + 10
-    jmp !tests_done+
+    jmp !t12+
 
 !t11_fail:
     lda #$00
     sta tc_results + 10
+
+    // ==========================================
+    // Test 12: combat_critical_blow — unarmed = no crit
+    // Set no weapon, known damage, verify unchanged
+    // ==========================================
+!t12:
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_WEAPON
+    lda #7
+    sta cmb_damage
+
+    jsr combat_critical_blow
+
+    lda cmb_damage
+    cmp #7                      // Should be unchanged
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // ==========================================
+    // Test 13: combat_critical_blow — guaranteed crit
+    // Equip heavy weapon (type 8, weight=120), high tohit (255),
+    // high level (50). Chance = 120 + 5*255 + 4*50 = 120+1275+200 = 1595.
+    // rng_range_word(5000) returns [0,4999], so ~32% chance per call.
+    // Run 20 iterations — at least one should produce damage > base.
+    // ==========================================
+!t13:
+    // Equip weapon type 8 (Two-Handed Sword, weight=120)
+    lda #8
+    sta inv_item_id + EQUIP_WEAPON
+    lda #0
+    sta inv_ego + EQUIP_WEAPON
+
+    lda #255
+    sta zp_combat_tohit
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+
+    lda #20
+    sta tc_loop
+    lda #0
+    sta tc_ok                   // Will set to 1 if any crit seen
+!t13_loop:
+    lda #5
+    sta cmb_damage              // Base damage = 5
+
+    jsr combat_critical_blow
+
+    lda cmb_damage
+    cmp #6                      // Any value > 5 means crit happened
+    bcc !t13_next+
+    lda #1
+    sta tc_ok
+!t13_next:
+    dec tc_loop
+    bne !t13_loop-
+
+    lda tc_ok
+    sta tc_results + 12
 
 !tests_done:
     jmp test_exit_trampoline

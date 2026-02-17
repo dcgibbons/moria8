@@ -1142,7 +1142,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| MC4.1 | LOW | No player critical hit system | TODO — not urgent, combat works without it |
+| MC4.1 | LOW | No player critical hit system | **Fixed** — `combat_critical_blow` in combat.s implements umoria `playerWeaponCriticalBlow` (2-5x damage based on weapon weight/tohit/class/level) |
 | RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | **Resolved** — documented in show_inv_and_restore comment; overlay is read-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | **Fixed** — combat_award_xp now uses 16×8→24-bit multiply with cr_xp_hi:cr_xp_lo; generalized ccl_div_24x8 shared with levelup |
