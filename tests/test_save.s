@@ -75,9 +75,17 @@ test_finish:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
+#import "../ui_help.s"
+
+// Store code goes in a dummy overlay segment so it doesn't bloat the test body.
+// test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
+// needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
+.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$dfff]
+.segment TestStoreOverlay
 #import "../store.s"
 #import "../ui_store.s"
-#import "../ui_help.s"
+.segment Default
+
 #import "../ui_trampoline_stubs.s"
 #import "../save.s"
 
