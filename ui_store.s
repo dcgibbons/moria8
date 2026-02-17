@@ -1137,10 +1137,10 @@ haggle_buy:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #<hg_insult_str
-    sta zp_ptr0
-    lda #>hg_insult_str
-    sta zp_ptr0_hi
+    lda #HUFF_STR_COUNT
+    jsr rng_range
+    tax
+    jsr huff_decode_string
     jsr screen_put_string
     jsr input_get_key
     jmp !hb_loop-
@@ -1347,10 +1347,10 @@ haggle_sell:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda #<hg_insult_str
-    sta zp_ptr0
-    lda #>hg_insult_str
-    sta zp_ptr0_hi
+    lda #HUFF_STR_COUNT
+    jsr rng_range
+    tax
+    jsr huff_decode_string
     jsr screen_put_string
     jsr input_get_key
     jmp !hs_loop-
@@ -1634,6 +1634,5 @@ hg_counter_str:  .text "HOW ABOUT "         ; .byte 0
 hg_qmark_str:    .text " GP?"              ; .byte 0
 hg_final_str:    .text "FINAL OFFER: "      ; .byte 0
 hg_take_str:     .text "TAKE IT? (Y/N)"    ; .byte 0
-hg_insult_str:   .text "YOU INSULT ME!"    ; .byte 0
 hg_kicked_str:   .text "GET OUT OF MY STORE!" ; .byte 0
 hg_agreed_str:   .text "AGREED!"           ; .byte 0

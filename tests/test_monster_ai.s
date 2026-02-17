@@ -74,6 +74,7 @@ test_finish:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
+#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 #import "../ui_help.s"

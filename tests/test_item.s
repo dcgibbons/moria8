@@ -68,10 +68,16 @@ test_exit_trampoline:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
-#import "../store.s"
-#import "../ui_store.s"
 #import "../ui_help.s"
 #import "../ui_trampoline_stubs.s"
+
+// Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
+.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
+.segment TestStoreOverlay
+#import "../huffman.s"
+#import "../store.s"
+#import "../ui_store.s"
+.segment Default
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

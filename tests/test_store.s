@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot.
 //
-// Results at $0400-$0419: $01 = pass, $00 = fail per test (26 tests)
+// Results at $0400-$041A: $01 = pass, $00 = fail per test (27 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #25
+    ldx #26
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -66,6 +66,7 @@ test_exit_trampoline:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
+#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 #import "../ui_help.s"
@@ -76,12 +77,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 27, $ff
+tc_results: .fill 28, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #25
+    ldx #26
     lda #$ff
 !clr:
     sta tc_results,x
@@ -717,5 +718,39 @@ test_start:
     lda #$00
 !t26_store:
     sta tc_results + 25
+
+    // ============================================================
+    // Test 27: huff_decode_string — decode string 4 ("RIDICULOUS!")
+    // Verify: R=$12, I=$09, D=$04, !=$21, null at [11], zp_ptr0
+    // ============================================================
+    ldx #4                      // String 4 = "RIDICULOUS!"
+    jsr huff_decode_string
+    lda hd_decode_buf + 0
+    cmp #$12
+    bne !t27_fail+
+    lda hd_decode_buf + 1
+    cmp #$09
+    bne !t27_fail+
+    lda hd_decode_buf + 2
+    cmp #$04
+    bne !t27_fail+
+    lda hd_decode_buf + 10
+    cmp #$21
+    bne !t27_fail+
+    lda hd_decode_buf + 11
+    cmp #$00
+    bne !t27_fail+
+    lda zp_ptr0
+    cmp #<hd_decode_buf
+    bne !t27_fail+
+    lda zp_ptr0_hi
+    cmp #>hd_decode_buf
+    bne !t27_fail+
+    lda #$01
+    jmp !t27_store+
+!t27_fail:
+    lda #$00
+!t27_store:
+    sta tc_results + 26
 
     jmp test_exit_trampoline

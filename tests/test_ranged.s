@@ -67,6 +67,7 @@ test_exit_trampoline:
 #import "../monster_attack.s"
 #import "../turn.s"
 #import "../store_data.s"
+#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 #import "../ui_help.s"

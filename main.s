@@ -101,6 +101,7 @@ exit_trampoline:
 #import "monster_attack.s"
 #import "turn.s"
 #import "store_data.s"
+#import "huffman.s"
 #import "save.s"
 #import "disk_swap.s"
 #import "score_io.s"

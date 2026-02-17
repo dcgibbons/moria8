@@ -80,8 +80,9 @@ test_finish:
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
 // test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
 // needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
-.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$dfff]
+.segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
+#import "../huffman.s"
 #import "../store.s"
 #import "../ui_store.s"
 .segment Default

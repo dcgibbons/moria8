@@ -113,15 +113,22 @@ expansion (ego items, artifacts) may eventually require tiered loading.
 Monster names, item names, class titles, spell names, store dialogue — the
 original has several KB of strings.
 
-**Inline strings (as implemented):** Names are stored as null-terminated strings
+**Inline strings (current):** Names are stored as null-terminated strings
 in program code using `.encoding "screencode_upper"` and `.text` directives.
-No token compression was implemented — the reduced roster (120 creatures, 55
-items) keeps total string data manageable (~3 KB). Creature name strings for
-tier data are stored at $E000+ in the tier PRG files and accessed via
-`creature_get_name` with KERNAL banking (SEI/$35 for reads).
+No compression — the reduced roster (120 creatures, 55 items) keeps total
+string data manageable (~3 KB). Creature name strings for tier data are stored
+at $E000+ in the tier PRG files and accessed via `creature_get_name` with
+KERNAL banking (SEI/$35 for reads).
 
-*Original plan called for PETSCII token compression with a shared dictionary,
-but the simpler inline approach proved sufficient for the reduced data set.*
+**Planned: Huffman compression + string banks (R7).** Two-tier approach:
+**Tier 1** — Huffman-compress strings into the ~3.7 KB free in main code area
+($B196-$C020). At ~55% compression, this yields ~6-7 KB of effective text
+capacity with no disk I/O or hardware requirements. Sufficient for shopkeeper
+insults, haggling dialog, and moderate content additions. **Tier 2** — when
+Tier 1 space is exhausted, store additional Huffman-compressed string banks on
+disk as loadable PRG files in the $E000 overlay region. REU caches all banks at
+startup for instant access when available; disk fallback for unexpanded C64s.
+See R7.1-R7.7 in the R-series enhancement tracker for full plan.
 
 ### Monster Recall
 
@@ -1120,11 +1127,12 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete (excluding OPT-1.1) — 182 bytes reclaimed |
+| R7 | String Compression & Banks | Not started — Huffman codec + overlay/REU string bank system |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
-- **Test suites:** 20 (261 runtime tests)
+- **Test suites:** 21 (263 runtime tests)
 - **Compile-time asserts:** 67
 - **Source files:** ~42 .s files
 - **Program size:** $B4E8 (program_end), CREATURE_BASE at $C020 — **2,872 bytes headroom**
@@ -1163,7 +1171,10 @@ Priority order based on AUDIT review (see Audit Response below):
 | ~~9~~ | OPT-2 | ~~Code banking~~ — ✅ Phase overlays at `$E000` + permanent `$F000` expansion. ~6.8KB freed. Display bugs fixed (color RAM, input banking, filesystem naming). | Done |
 | ~~10~~ | R5.1/R5.2 | ~~Spell expansion~~ — ✅ All 32 effects implemented. 8 spellbooks (4/class), book-gated learning, books not consumed. +101 bytes. | Done |
 | ~~11~~ | R6.1 | ~~Store haggling~~ — ✅ Multi-round buy/sell haggling with insult/kick system. CHR affects markup. Items ≤10 GP use simple Y/N. Number input, 4-round negotiation, gap/step convergence. +1479 bytes in town overlay ($E000-$EF47). | Done |
-| **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| **12** | R7.1-R7.2 | Huffman codec + resident compressed strings (Tier 1 — no disk/REU needed) | Medium |
+| **13** | R7.3 | Store dialog strings — shopkeeper insults, haggling flavor text | Small (after R7.1-R7.2) |
+| **14** | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
+| **15** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
 ~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
@@ -3682,7 +3693,74 @@ design; items marked **(TODO)** need implementation.
 | R6.3 | Player Home (Store 8) | **Done** | Store index 7. Free deposit/retrieve, no pricing. Separate UI at $F000 (D/R/Q menu). No restocking — items persist. Saved with game state (SAVE_VERSION $05). Building at (42,20), door (47,24). |
 | R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
 
-### Priority Triage (updated 2026-02-14)
+### 7. String Compression & String Banks
+
+**Problem:** The game is nearly out of space for new text. The town overlay has 1 byte free,
+main code area has ~3,722 bytes free ($B196-$C020), and the $F000 banked region has only
+~292 bytes free ($FED6-$FFFA). Adding flavor text (shopkeeper insults, item descriptions,
+monster recall, lore) requires a string infrastructure that can hold far more text than
+currently fits in any single RAM region.
+
+**Two-tier approach:**
+
+**Tier 1 — Huffman compression in resident RAM (no disk I/O, no hardware requirements).**
+Huffman-encode all game strings. The ~40-character uppercase alphabet compresses at ~50-60%,
+effectively doubling the capacity of the ~3.7 KB free in main code. This alone provides
+~6-7 KB of effective string capacity — enough for shopkeeper insults, haggling flavor,
+additional combat messages, and moderate item descriptions. No disk loads, no REU, works on
+every C64. This is the first thing to implement.
+
+**Tier 2 — $E000 overlay string banks (when Tier 1 space is exhausted).**
+For large-scale text expansion beyond what fits in resident RAM (monster recall, extensive
+lore, full umoria dialog), store Huffman-compressed string banks on disk as loadable PRG
+files. Two fetch paths: **REU** — all string banks preloaded to REU at startup alongside
+creature tiers, DMA fetch on demand (~instant, no disk I/O). **Disk** — KERNAL LOAD from
+d64 on demand (~1-2 sec per bank on 1541). Banks share the $E000 overlay region, so they
+must coordinate with creature tier overlays.
+
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| R7.1 | Huffman codec | **DONE** | `tools/huff_encoder.py` (offline encoder): reads text file, builds Huffman tree, emits Kick Assembler `.s` with tree tables + compressed bitstreams. `huffman.s` (6502 decoder): `huff_decode_string(X=id)` walks tree, outputs to `hd_decode_buf`. 55.6% compression ratio. Decoder ~80 bytes + 286 bytes data = ~438 bytes in main code area. |
+| R7.2 | Resident compressed strings | **DONE** | `huffman_data.s` (generated) contains tree tables + compressed data in main code area. `huff_str_index` (16-bit offsets) + `huff_str_data` (byte-aligned bitstreams). First consumer: 15 store insult strings (367→204 bytes compressed). Infrastructure ready for additional string corpora. |
+| R7.3 | Migrate store dialog strings | **DONE** | 15 umoria-sourced shopkeeper insult strings (`data/insult_strings.txt`) compressed via Huffman. Both buy-side and sell-side insult handlers in `ui_store.s` now call `rng_range` + `huff_decode_string` for random insults. Deleted `hg_insult_str`, freed 14 bytes in town overlay. |
+| R7.4 | String bank format | **(TODO — Tier 2)** | Each bank is a loadable PRG file: header (string count, compressed data offset) + string index (16-bit offsets) + compressed bitstream. Banks sized to fit $E000-$EFFF (4 KB max compressed data per bank). Bank IDs assigned by content category: combat/UI, item descriptions, monster recall, etc. |
+| R7.5 | String bank loader | **(TODO — Tier 2)** | `str_bank_load(bank_id)` — loads a string bank into $E000 overlay region. **REU path:** all string banks preloaded to REU at startup (alongside creature tiers), DMA fetch on demand (~instant). **Disk path:** KERNAL LOAD from d64 on demand. `str_current_bank` tracks loaded bank to avoid redundant loads. Must coordinate with creature tier overlay (both share $E000). |
+| R7.6 | Migrate combat/UI strings | **(TODO — future)** | Move combat messages, spell descriptions, and UI text into compressed storage (resident or banked). Largest space savings — combat strings are the biggest consumer in main code area. |
+| R7.7 | Monster recall text | **(TODO — future, Tier 2)** | If monster recall is ever implemented, store descriptive text in a string bank. Each creature's recall text 30-80 bytes uncompressed, ~15-40 bytes compressed. 120 creatures × ~25 bytes avg = ~3 KB compressed — fits in one bank. |
+
+**Space budget — Tier 1 (resident compressed strings):**
+
+| Component | Location | Size |
+|-----------|----------|------|
+| Huffman decoder routine | Main code ($0801-$BFFF) | ~150-200 bytes |
+| Huffman tree table | Main code | ~80-120 bytes (40-char alphabet) |
+| `str_decode_buf` | Main code | ~80 bytes (max decoded string length) |
+| **Infrastructure subtotal** | | **~310-400 bytes** |
+| Compressed string data + index | Main code (remaining ~3.3 KB) | ~3,300 bytes |
+| **Effective text capacity** | | **~6-7 KB uncompressed** |
+
+**Space budget — Tier 2 (overlay string banks, when Tier 1 exhausted):**
+
+| Component | Location | Size |
+|-----------|----------|------|
+| Bank loader + fetch API | Main code | ~100-150 bytes additional |
+| Per string bank (disk/REU) | $E000 overlay | Up to 4 KB compressed per bank |
+| Effective capacity per bank | | ~7-8 KB uncompressed text (at 55% ratio) |
+
+**REU string cache layout** (when REU available, Tier 2):
+
+| REU offset | Size | Content |
+|------------|------|---------|
+| $00000-$03FFF | 16 KB | Creature tiers 1-4 (existing) |
+| $04000-$04FFF | 4 KB | String bank 0 (combat/UI) |
+| $05000-$05FFF | 4 KB | String bank 1 (store dialog) |
+| $06000-$06FFF | 4 KB | String bank 2 (item descriptions) |
+| $07000-$07FFF | 4 KB | String bank 3 (monster recall) |
+
+Minimum REU requirement: 32 KB (tiers + string banks). Any 1700/1750/1764 REU has at
+least 128 KB — no constraint in practice.
+
+### Priority Triage (updated 2026-02-17)
 
 **Completed since original triage:**
 - ~~R1.1 Ranged combat~~ — ✅ ranged_fire.s (bows, crossbows, slings, ammo stacking)
@@ -3705,6 +3783,11 @@ design; items marked **(TODO)** need implementation.
 - ~~R5.1/R5.2 Spell expansion~~ — ✅ Done (8 spellbooks, book-gated learning)
 - ~~R6.1 Store haggling~~ ✅
 
+**Medium priority (infrastructure for more content):**
+- R7.1-R7.2 Huffman codec + resident compressed strings — no disk I/O, no hardware requirements
+- R7.3 Store dialog strings — first consumer (shopkeeper insults, haggling flavor text)
+- R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
+
 **Low priority (polish/completeness):**
 - ~~R1.2 Throwing~~ ✅
 - R3.2 Group tactics — nice-to-have
@@ -3712,6 +3795,8 @@ design; items marked **(TODO)** need implementation.
 - R4.2 Artifacts — late addition
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
+- R7.6 Combat/UI string migration — largest space savings, after infrastructure exists
+- R7.7 Monster recall text — depends on R3.6 (monster recall feature)
 - ~~R6.2 Black Market~~ ✅
 - ~~R6.3 Player Home~~ ✅
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
