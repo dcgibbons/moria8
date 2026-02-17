@@ -7,8 +7,8 @@
 // C128 support (Phase 10) without changing any callers.
 //
 // Screen layout (40-col):
-//   Row  0:      Message line
-//   Rows 1–20:   Game viewport (38x20, columns 1–38)
+//   Rows 0–1:    Message area (2 lines)
+//   Rows 2–20:   Game viewport (38x19, columns 1–38)
 //   Rows 21–23:  Status bar (3 lines, umoria-style)
 //   Row  24:     Input prompt line / spare
 //   Cols 0, 39:  Border columns (unused/clear)
@@ -19,9 +19,9 @@
 .const SCREEN_COLS = 40
 .const SCREEN_ROWS = 25
 .const VIEWPORT_X  = 1      // Viewport starts at column 1
-.const VIEWPORT_Y  = 1      // Viewport starts at row 1
+.const VIEWPORT_Y  = 2      // Viewport starts at row 2 (below 2-line message area)
 .const VIEWPORT_W  = 38     // Viewport width
-.const VIEWPORT_H  = 20     // Viewport height
+.const VIEWPORT_H  = 19     // Viewport height
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
 .const INPUT_ROW   = 24     // Input prompt row (row 23 now used by status bar)

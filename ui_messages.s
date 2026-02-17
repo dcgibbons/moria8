@@ -1,15 +1,16 @@
 // ui_messages.s — Message line management
 //
-// Top of screen (row 0) displays game messages.
-// Supports -more- prompt when a new message arrives before
-// the player has had a turn to read the previous one.
+// Top of screen (rows 0-1) displays game messages.
+// Two-line message area reduces -MORE- frequency:
+// messages fill row 0 then row 1, -MORE- only when
+// a 3rd message arrives while both rows are occupied.
 // Message history buffer holds last 8 messages.
 //
 // Messages are screen-code strings, null-terminated.
 
 // Message flags (zp_msg_flags)
-.const MSG_PENDING   = $01  // A message is waiting to be read
-.const MSG_MORE      = $02  // -more- prompt is active
+.const MSG_PENDING   = $01  // Row 0 has an unread message
+.const MSG_FULL      = $02  // Row 1 also has an unread message (both rows occupied)
 
 // History buffer (8 messages x 40 chars max each)
 .const MSG_HIST_COUNT = 8
@@ -18,6 +19,8 @@ msg_history:
     .fill MSG_HIST_COUNT * MSG_HIST_LEN, 0
 msg_hist_idx:
     .byte 0                 // Current write index (0–7, wraps)
+msg_row1_col:
+    .byte 0                 // Cursor column after printing on row 1
 
 // ============================================================
 // Subroutines
@@ -28,6 +31,7 @@ msg_init:
     lda #0
     sta zp_msg_flags
     sta msg_hist_idx
+    sta msg_row1_col
     ldx #0
     lda #$20                // Space (screen code)
 !clr:
@@ -43,76 +47,103 @@ msg_init:
     bne !clr2-
     rts
 
-// msg_print — Display a message on the message line (row 0)
+// msg_print — Display a message on the message area (rows 0-1)
 // Input: zp_ptr0/zp_ptr0_hi = pointer to null-terminated screen code string
-// If a message is already pending, show -more- and wait for keypress first.
+// State machine:
+//   flags = $00: Both rows empty → print on row 0
+//   flags = $01: Row 0 used → print on row 1
+//   flags = $03: Both rows full → show -MORE-, clear, print on row 0
 // Preserves: nothing
 msg_print:
-    // Check if previous message is pending
     lda zp_msg_flags
-    and #MSG_PENDING
-    beq !no_more+
+    cmp #MSG_PENDING | MSG_FULL
+    beq !show_more+
 
+    and #MSG_PENDING
+    bne !use_row1+
+
+    // --- State 0: both rows empty → print on row 0 ---
+    lda #MSG_ROW
+    jsr screen_clear_row
+    lda #MSG_ROW + 1
+    jsr screen_clear_row
+
+    lda #MSG_ROW
+    sta zp_cursor_row
+    lda #0
+    sta zp_cursor_col
+
+    lda zp_text_color
+    pha
+    lda #COL_MSG_TEXT
+    sta zp_text_color
+    jsr screen_put_string
+    pla
+    sta zp_text_color
+
+    lda #MSG_PENDING
+    sta zp_msg_flags
+
+    jmp msg_save_history
+
+!use_row1:
+    // --- State 1: row 0 used → print on row 1 ---
+    lda #MSG_ROW + 1
+    jsr screen_clear_row
+
+    lda #MSG_ROW + 1
+    sta zp_cursor_row
+    lda #0
+    sta zp_cursor_col
+
+    lda zp_text_color
+    pha
+    lda #COL_MSG_TEXT
+    sta zp_text_color
+    jsr screen_put_string
+    pla
+    sta zp_text_color
+
+    lda zp_cursor_col
+    sta msg_row1_col
+
+    lda #MSG_PENDING | MSG_FULL
+    sta zp_msg_flags
+
+    jmp msg_save_history
+
+!show_more:
+    // --- State 2: both rows full, 3rd message arriving ---
     // Save incoming message pointer (msg_show_more clobbers zp_ptr0)
     lda zp_ptr0
     pha
     lda zp_ptr0_hi
     pha
 
-    // Show "-MORE-" prompt and wait
     jsr msg_show_more
-    jsr input_get_key       // Wait for any keypress
+    jsr input_get_key
 
     // Restore message pointer
     pla
     sta zp_ptr0_hi
     pla
     sta zp_ptr0
-    // Fall through to display new message
 
-!no_more:
-    // Clear message row
-    lda #MSG_ROW
-    jsr screen_clear_row
-
-    // Set cursor to row 0, col 0
-    lda #MSG_ROW
-    sta zp_cursor_row
+    // Clear state and restart — will take state 0 path
     lda #0
-    sta zp_cursor_col
-
-    // Save current color, set message color
-    lda zp_text_color
-    pha
-    lda #COL_MSG_TEXT
-    sta zp_text_color
-
-    // Print the string
-    jsr screen_put_string
-
-    // Restore color
-    pla
-    sta zp_text_color
-
-    // Mark message as pending
-    lda zp_msg_flags
-    ora #MSG_PENDING
     sta zp_msg_flags
+    jmp msg_print
 
-    // Save to history
-    jsr msg_save_history
-
-    rts
-
-// msg_clear — Clear the message line and reset pending flag
+// msg_clear — Clear the message area and reset flags
 // Called at the start of each player turn.
 // Preserves: X, Y
 msg_clear:
     lda zp_msg_flags
-    and #MSG_PENDING
-    beq !done+              // Nothing to clear
+    beq !done+
 
     lda #MSG_ROW
+    jsr screen_clear_row
+    lda #MSG_ROW + 1
     jsr screen_clear_row
 
     lda #0
@@ -120,16 +151,16 @@ msg_clear:
 !done:
     rts
 
-// msg_show_more — Display "-MORE-" at end of current message
+// msg_show_more — Display " -MORE-" at end of row 1 message
 // Preserves: nothing
 msg_show_more:
-    lda zp_cursor_col
+    lda msg_row1_col
     cmp #34                 // Room for " -MORE-" (7 chars)?
     bcc !fits+
-    lda #33                 // Truncate position
+    lda #33                 // Clamp so it fits in 40 cols
 !fits:
     sta zp_cursor_col
-    lda #MSG_ROW
+    lda #MSG_ROW + 1
     sta zp_cursor_row
 
     lda zp_text_color

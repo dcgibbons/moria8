@@ -1381,13 +1381,12 @@ test_start:
     sta inv_p1
     sta inv_flags
 
-    // Stuff keyboard: 'A' ($41) to select slot 0, then space for -more-
-    lda #2
+    // Stuff keyboard: 'A' ($41) to select slot 0
+    // (2-line message area means no -MORE- between prompt and effect)
+    lda #1
     sta $c6
     lda #$41
     sta $0277
-    lda #$20
-    sta $0278
 
     jsr item_quaff
 
@@ -1442,19 +1441,17 @@ test_start:
 
     // Stuff keyboard buffer:
     // 1. 'A' ($41) — select scroll in slot 0
-    // 2. Space ($20) — dismiss -more- before identify prompt
-    // 3. 'B' ($42) — select potion in slot 1 to identify
-    // 4. Space ($20) — dismiss -more- after "THIS IS A..." message
-    lda #4
+    // 2. 'B' ($42) — select potion in slot 1 to identify
+    // 3. Space ($20) — dismiss -MORE- after "THIS IS A..." message
+    // (2-line message area: prompt + identify fit in rows 0-1, no -MORE- between them)
+    lda #3
     sta $c6
     lda #$41                        // 'A' — read the scroll in slot 0
     sta $0277
-    lda #$20                        // Space — dismiss -more-
-    sta $0278
     lda #$42                        // 'B' — identify the potion in slot 1
+    sta $0278
+    lda #$20                        // Space — dismiss -MORE- after result
     sta $0279
-    lda #$20                        // Space — dismiss -more- after result
-    sta $027a
 
     jsr item_read_scroll
 

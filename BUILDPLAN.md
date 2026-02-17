@@ -544,12 +544,13 @@ impactful and iconic spells. Cuts code size and spell table data in half.
 
 ```
 +--------------------------------------+
-|Message line                          | Row 0
+|Message line 1                        | Row 0
+|Message line 2                        | Row 1
 +--------------------------------------+
-|                                      | Row 1
+|                                      | Row 2
 |                                      |
-|          Game viewport               | Rows 1-20
-|          (38 x 20 tiles)             | (38 cols visible)
+|          Game viewport               | Rows 2-20
+|          (38 x 19 tiles)             | (38 cols visible)
 |                                      |
 |                                      | Row 20
 +--------------------------------------+
@@ -1153,7 +1154,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
 | BUG-24 | **HIGH** | Huffman decoder 8-bit overflow for string IDs >= 128 | **Fixed** — `huff_decode_string` used `txa; asl; tax` for word index, but `asl` overflows for IDs >= 128 (e.g., 154 → offset $34 instead of $134). 27 strings (128-154) decoded wrong text. Fixed with carry-based page branching. |
 | BUG-25 | MED | Inventory commands (Wear, Cast, etc.) show all items instead of filtering to applicable ones | TODO — Wear should only show wearable items, Cast only books, etc. Refer to umoria `show_inven`/`show_equip` filtering by item category. |
-| BUG-26 | MED | -MORE- prompt placement and frequency feels unnatural on 40-column display | TODO — Re-evaluate where -MORE- appears (top of screen? bottom? inline?) and when it triggers, to feel natural rather than disruptive. Currently shows too frequently and in odd positions. |
+| BUG-26 | MED | -MORE- prompt placement and frequency feels unnatural on 40-column display | **Fixed** — Expanded message area from 1 row to 2 rows (rows 0-1). Messages fill row 0 then row 1; -MORE- only triggers when a 3rd message arrives while both rows are occupied, roughly halving -MORE- frequency. -MORE- positioned at end of row 1 message. Viewport shrunk from 20 to 19 rows (VIEWPORT_Y=2, VIEWPORT_H=19). |
 | BUG-27 | MED | Spell casting animation/combat happens while spell list overlay is still displayed | TODO — After selecting a spell letter, redraw the dungeon screen before executing the spell effect (bolt animation, damage, messages). Currently the spell list remains visible during the action. |
 | BUG-28 | MED | XP still too generous at low levels — single kills can cause 1-2 level jumps | TODO — Despite BUG-19b (expfact) and BUG-23 (XP halving) fixes, early-game XP economy still allows multi-level gains from single monster kills. May need to audit cr_xp values and xp_level thresholds against umoria more carefully, or check if halving logic has an edge case at level 1-3. |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7), OPT-1.1 resolved by R7.6 | ✅ Done |

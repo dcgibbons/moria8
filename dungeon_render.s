@@ -747,4 +747,4 @@ rla_cur_y: .byte 0
 // Compile-time validation
 // ============================================================
 .assert "Viewport width", VIEWPORT_W, 38
-.assert "Viewport height", VIEWPORT_H, 20
+.assert "Viewport height", VIEWPORT_H, 19

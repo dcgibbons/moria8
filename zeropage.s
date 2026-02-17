@@ -157,7 +157,7 @@
 .label zp_view_x       = $60   // Viewport top-left X in map coords
 .label zp_view_y       = $61   // Viewport top-left Y in map coords
 .label zp_view_w       = $62   // Viewport width (38 for 40-col)
-.label zp_view_h       = $63   // Viewport height (20)
+.label zp_view_h       = $63   // Viewport height (19)
 .label zp_map_ptr_lo   = $64   // Map data pointer (lo)
 .label zp_map_ptr_hi   = $65   // Map data pointer (hi)
 .label zp_render_x     = $66   // Current render column
