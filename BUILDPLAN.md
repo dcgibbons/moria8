@@ -1151,6 +1151,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-20 | LOW | ~~Dead string `mat_dead_str` wastes 21 bytes~~ | ✅ Fixed — eliminated by R7.6 Huffman migration |
 | BUG-21 | LOW | Acid attack effect is a no-op (no player message) | **Fixed** — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg |
 | BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
+| BUG-24 | **HIGH** | Huffman decoder 8-bit overflow for string IDs >= 128 | **Fixed** — `huff_decode_string` used `txa; asl; tax` for word index, but `asl` overflows for IDs >= 128 (e.g., 154 → offset $34 instead of $134). 27 strings (128-154) decoded wrong text. Fixed with carry-based page branching. |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7), OPT-1.1 resolved by R7.6 | ✅ Done |
 | OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
 
