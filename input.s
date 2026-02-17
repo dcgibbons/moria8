@@ -62,6 +62,7 @@
 .const CMD_RUN_SE    = $2c  // Run southeast
 .const CMD_GAIN      = $2d  // Gain spell from book (f)
 .const CMD_FIRE      = $2e  // Fire ranged weapon (SHIFT+F)
+.const CMD_THROW     = $2f  // Throw item (SHIFT+T)
 
 // Direction offsets: dx, dy for each movement command
 // Index = CMD_MOVE_x - CMD_MOVE_N
@@ -200,6 +201,7 @@ key_map_petscii:
     .byte $c5   // SHIFT+E — eat
     .byte $d3   // SHIFT+S — save and quit
     .byte $c6   // SHIFT+F — fire ranged weapon
+    .byte $d4   // SHIFT+T — throw item
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -255,6 +257,7 @@ key_map_cmd:
     .byte CMD_EAT
     .byte CMD_SAVE
     .byte CMD_FIRE
+    .byte CMD_THROW
     // Shifted vi-keys (running)
     .byte CMD_RUN_N
     .byte CMD_RUN_S

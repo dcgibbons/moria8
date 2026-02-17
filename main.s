@@ -97,6 +97,7 @@ exit_trampoline:
 #import "player_move.s"
 #import "combat.s"
 #import "ranged_fire.s"
+#import "throw.s"
 #import "monster_attack.s"
 #import "turn.s"
 #import "store_data.s"
@@ -966,6 +967,24 @@ load_resume_game:
 !fire_no_turn:
     jmp !main_loop-
 !not_fire:
+
+    // Throw item?
+    cmp #CMD_THROW
+    bne !not_throw+
+    jsr msg_clear
+    jsr throw_item
+    bcc !throw_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr update_visibility
+    jmp vp_render_status_loop
+!throw_no_turn:
+    jmp !main_loop-
+!not_throw:
 
     // Look?
     cmp #CMD_LOOK

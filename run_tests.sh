@@ -108,6 +108,7 @@ run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
 run_test "tier" "tests/test_tier.s" "0400 0409" 10 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
+run_test "throw" "tests/test_throw.s" "0400 0405" 6 500000000
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

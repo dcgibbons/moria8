@@ -1165,7 +1165,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-R1.2 Throwing, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, R6.2 Black Market, R6.3 Player Home
+~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, R6.2 Black Market, R6.3 Player Home
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -3614,7 +3614,7 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R1.1 | Ranged combat (bows, crossbows, slings) | ✅ **DONE** | `ranged_fire.s` — 3 launchers (bow, crossbow, sling), 3 ammo types (arrow, bolt, rock), SHIFT+F fire command, ammo stacking on pickup, melee unarmed fallback for ranged weapons. 6 new item types (IDs 49-54), `it_missile[]` SoA array. |
-| R1.2 | Throwing items | **(TODO)** | Throw potions, rocks, weapons. Shares LOS projectile path with R1.1. |
+| R1.2 | Throwing items | ✅ **DONE** | `throw.s` — SHIFT+T throws any inventory item. BOW-based to-hit at 75%, STR-based range calc, projectile trace reuses ranged_fire pattern. Potions shatter on impact, other items land on floor. 6 tests in `test_throw.s`. |
 | R1.3 | Monster attacks | ✅ **DONE** | `monster_attack.s` fully implemented (Phase 5.4). 8 attack types, 2 slots per creature, all effects (poison, confuse, paralyze, acid, aggravate). |
 | R1.4 | Monster spells | ✅ **DONE** | `monster_magic.s` fully implemented (Phase 7.8). Breath weapons, bolts, summoning, blindness, confusion. Creature tier data has spell entries. |
 
@@ -3704,7 +3704,7 @@ design; items marked **(TODO)** need implementation.
 - R6.1 Store haggling — replace fixed-price with umoria-style multi-round bidding
 
 **Low priority (polish/completeness):**
-- R1.2 Throwing — niche mechanic
+- ~~R1.2 Throwing~~ ✅
 - R3.2 Group tactics — nice-to-have
 - R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
 - R4.2 Artifacts — late addition
