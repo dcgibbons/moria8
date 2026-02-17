@@ -1075,7 +1075,7 @@ are needed:
 
 ## Known Bugs
 
-Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for verification details.
+Playtesting bugs BUG-1 through BUG-18 have been fixed (see Review Pass 15). BUG-19 through BUG-29 fixed individually.
 
 | # | Description | Status |
 |---|-------------|--------|
@@ -1102,6 +1102,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed. See Review Pass 15 for ve
 | BUG-21 | Acid attack effect (`mon_atk_effect_acid`) is a no-op with no message | ✅ Fixed — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg (pre-R7.6), now Huffman-compressed. |
 | BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | ✅ Fixed — OPT-1.7 eliminated the duplicate; R7.6 Huffman migration removed all remaining inline strings from monster_attack.s. |
 | BUG-23 | Magic Missile spell does not work — no animation and no damage to monsters | **Fixed** — `eff_bolt` damage math was correct but had zero user feedback: no messages, no animation, no monster wake-up, no sound. Added: bolt `*` animation along trace path with save/restore, hit/kill/fizzle messages using combat_msg_buf, `MF_AWAKE` on non-lethal hit, `SFX_HIT` on hit. |
+| BUG-29 | Secret doors on vertical walls render as '─' instead of '│' | ✅ Fixed — old heuristic checked tiles above/below for wall types, failed when neighbors were doors or carved floor. Replaced with left/right floor check: vertical wall doors have floor on both sides (room + corridor), horizontal wall doors have wall tiles beside them. Also saves ~40 bytes. |
 
 ---
 
