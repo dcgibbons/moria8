@@ -1166,7 +1166,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **12** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, R6.2 Black Market, R6.3 Player Home
+~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -1192,7 +1192,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | Item count (55 vs 400+) | **Tracked** — R4.1 (ego items) and R4.2 (artifacts) address this. 55 base types is adequate for C64 memory. |
 | Active monsters cap (32) | **Deferred** — RAM constraint. Phase 10.3 raises to 64 on C128. |
 | Haggling simplified | **Done** — R6.1 implemented multi-round haggling with insult/kick system. |
-| Missing stores (Black Market, Player Home) | **Tracked** — R6.2, R6.3 are low-priority TODOs. |
+| ~~Missing stores (Black Market, Player Home)~~ | **Done** — R6.2 Black Market + R6.3 Player Home implemented. |
 | Character history | **Deferred** — nice-to-have, not gameplay-critical. |
 | Save scumming prevention | **Done** — save file deleted on load, enforcing permadeath. |
 
@@ -1212,7 +1212,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 |---------|------------|
 | Numeric prefix parsing | **Deferred** — not needed for core gameplay. |
 | Phase 10 TODOs | **Tracked** — Phase 10 plan exists. |
-| Missing stores | **Tracked** — R6.2, R6.3. |
+| ~~Missing stores~~ | ~~**Tracked** — R6.2, R6.3.~~ **Done** — R6.2 Black Market + R6.3 Player Home implemented. |
 | Spellbook expansion | **Tracked** — R5.2. |
 | Room placement grid logic | **Deferred** — random placement works; grid would need significant rework. |
 | Large files (dungeon_gen.s, item.s) | **Action item A6** — split opportunistically when touching these files. Low priority. |
@@ -3677,8 +3677,8 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R6.1 | Haggling | **Done** | Multi-round buy/sell haggling. 4 rounds max, gap/4 convergence, insult/kick system (3 insults = kicked). Items ≤10 GP use simple Y/N. Number input with 5-digit limit, DELETE support. |
-| R6.2 | Black Market (Store 7) | **(TODO)** | Missing. Sells rare items at inflated prices. Need new store with special stock rules. |
-| R6.3 | Player Home (Store 8) | **(TODO)** | Missing. Storage for items between dungeon runs. Need home inventory (disk-persisted). |
+| R6.2 | Black Market (Store 7) | **Done** | Store index 6. All item categories ($FFFF mask). Buy=base×3, sell=base/10, no CHR adjustment. No haggling (Y/N only). Building at (37,3), door (42,7). Owner: "THE FENCE". |
+| R6.3 | Player Home (Store 8) | **Done** | Store index 7. Free deposit/retrieve, no pricing. Separate UI at $F000 (D/R/Q menu). No restocking — items persist. Saved with game state (SAVE_VERSION $05). Building at (42,20), door (47,24). |
 | R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
 
 ### Priority Triage (updated 2026-02-14)
@@ -3711,8 +3711,8 @@ design; items marked **(TODO)** need implementation.
 - R4.2 Artifacts — late addition
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
-- R6.2 Black Market — economy depth
-- R6.3 Player Home — QoL feature
+- ~~R6.2 Black Market~~ ✅
+- ~~R6.3 Player Home~~ ✅
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves

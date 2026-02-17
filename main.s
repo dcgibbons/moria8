@@ -1577,6 +1577,7 @@ banked_payload:
     #import "ui_help.s"
     #import "ui_character.s"
     #import "ui_inventory.s"
+    #import "ui_home.s"
 banked_code_end:
 }
 banked_payload_end:

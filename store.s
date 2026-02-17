@@ -18,13 +18,13 @@
 // Store 4 Alchemy:  POTION(10)                = $0400
 // Store 5 Magic:    WAND(14), STAFF(15), RING(12) = $D000
 store_cat_mask_lo:
-    .byte <$0300, <$00F8, <$0004, <$0C00, <$0400, <$F000
+    .byte <$0300, <$00F8, <$0004, <$0C00, <$0400, <$F000, <$FFFF, <$FFFF
 store_cat_mask_hi:
-    .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000
+    .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000, >$FFFF, >$FFFF
 
 // Fallback items per store (used when rejection sampling fails)
 store_fallback:
-    .byte 15, 7, 2, 20, 17, 23  // food, leather, dagger, scroll, CLW potion, ring
+    .byte 15, 7, 2, 20, 17, 23, 2, 15  // food, leather, dagger, scroll, CLW potion, ring, dagger(BM), food(Home)
 
 // Bit mask table for category checking (bit 0-7)
 bit_mask_table:
@@ -39,11 +39,13 @@ sn_weapon:   .text "WEAPONSMITH"    ; .byte 0
 sn_temple:   .text "TEMPLE"         ; .byte 0
 sn_alchemy:  .text "ALCHEMY SHOP"   ; .byte 0
 sn_magic:    .text "MAGIC SHOP"     ; .byte 0
+sn_bmarket:  .text "BLACK MARKET"   ; .byte 0
+sn_home:     .text "HOME"            ; .byte 0
 
 store_name_lo:
-    .byte <sn_general, <sn_armory, <sn_weapon, <sn_temple, <sn_alchemy, <sn_magic
+    .byte <sn_general, <sn_armory, <sn_weapon, <sn_temple, <sn_alchemy, <sn_magic, <sn_bmarket, <sn_home
 store_name_hi:
-    .byte >sn_general, >sn_armory, >sn_weapon, >sn_temple, >sn_alchemy, >sn_magic
+    .byte >sn_general, >sn_armory, >sn_weapon, >sn_temple, >sn_alchemy, >sn_magic, >sn_bmarket, >sn_home
 
 // ============================================================
 // Store owner strings (screen codes, null-terminated)
@@ -54,11 +56,13 @@ so_2: .text "BRYN THE FORGEMASTER"  ; .byte 0
 so_3: .text "GARATH THE HEALER"     ; .byte 0
 so_4: .text "ELARA THE ALCHEMIST"   ; .byte 0
 so_5: .text "ZOLAN THE ENCHANTER"   ; .byte 0
+so_6: .text "THE FENCE"             ; .byte 0
+so_7: .byte 0                        // Home has no owner
 
 store_owner_lo:
-    .byte <so_0, <so_1, <so_2, <so_3, <so_4, <so_5
+    .byte <so_0, <so_1, <so_2, <so_3, <so_4, <so_5, <so_6, <so_7
 store_owner_hi:
-    .byte >so_0, >so_1, >so_2, >so_3, >so_4, >so_5
+    .byte >so_0, >so_1, >so_2, >so_3, >so_4, >so_5, >so_6, >so_7
 
 // ============================================================
 // Scratch variables
@@ -84,7 +88,7 @@ hg_input_lo:   .byte 0     // Player's typed number (16-bit)
 hg_input_hi:   .byte 0
 hg_round:      .byte 0     // Round counter (0-3)
 hg_insults:    .byte 0     // Insult counter per visit
-hg_kicked:     .fill 6, 0  // Per-store kicked flag (resets on town re-entry)
+hg_kicked:     .fill 8, 0  // Per-store kicked flag (resets on town re-entry)
 hg_tmp0:       .byte 0     // Temp for gap/step calculation
 hg_tmp1:       .byte 0
 hg_digit_cnt:  .byte 0     // Digit count for number input
@@ -116,11 +120,12 @@ store_init_all:
 
     jmp store_restock_all       // Tail call
 
-// store_restock_all — Restock all 6 stores + reset kicked flags
+// store_restock_all — Restock all stores + reset kicked flags
+// Skips home (STORE_HOME) — player items persist, no restock.
 // Clobbers: everything
 store_restock_all:
     // Reset haggling kicked flags for all stores
-    ldx #5
+    ldx #7
     lda #0
 !sra_clr_kick:
     sta hg_kicked,x
@@ -132,8 +137,11 @@ store_restock_all:
     lda sr_store_idx
     cmp #STORE_COUNT
     bcs !sra_done+
+    cmp #STORE_HOME
+    beq !sra_skip+              // Skip home — player items persist
     sta zp_store_idx
     jsr store_restock_one
+!sra_skip:
     inc sr_store_idx
     jmp !sra_loop-
 !sra_done:
@@ -324,6 +332,74 @@ check_store_category:
 // ============================================================
 // Price calculation
 // ============================================================
+
+// ============================================================
+// Black Market pricing
+// ============================================================
+
+// calc_store_buy_price — Dispatch: BM uses inflated price, others use CHR-adjusted
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
+// Output: sb_price_lo/hi = price (16-bit)
+// Clobbers: everything
+calc_store_buy_price:
+    ldx zp_store_idx
+    cpx #STORE_BM
+    beq calc_bm_buy_price
+    jmp calc_buy_price          // Normal store — fall through
+
+// calc_bm_buy_price — BM buy: base_cost × 3 + p1_bonus (no CHR adjustment)
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
+// Output: sb_price_lo/hi = price (16-bit)
+// Clobbers: everything
+calc_bm_buy_price:
+    sta sb_item_type
+    tax
+    lda it_cost_lo,x
+    sta zp_temp0
+    lda it_cost_hi,x
+    sta zp_temp1
+    ldx #3
+    jsr math_mul_16x8           // Result in mul_result_0/1/2
+    lda mul_result_0
+    sta sb_price_lo
+    lda mul_result_1
+    sta sb_price_hi
+    // Ensure minimum price of 1
+    ora sb_price_lo
+    bne !cbm_ok+
+    lda #1
+    sta sb_price_lo
+!cbm_ok:
+    jmp price_add_p1_bonus      // Tail call
+
+// calc_store_sell_price — Dispatch: BM uses low sell price, others use CHR-adjusted
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
+// Output: sb_price_lo/hi = price (16-bit)
+// Clobbers: everything
+calc_store_sell_price:
+    ldx zp_store_idx
+    cpx #STORE_BM
+    beq calc_bm_sell_price
+    jmp calc_sell_price         // Normal store — fall through
+
+// calc_bm_sell_price — BM sell: base_cost / 10 + p1_bonus (no CHR adjustment)
+// Input: A = item type ID, sb_item_p1 = enchantment/charges
+// Output: sb_price_lo/hi = price (16-bit)
+// Clobbers: everything
+calc_bm_sell_price:
+    sta sb_item_type
+    tax
+    lda it_cost_lo,x
+    sta zp_math_a
+    lda it_cost_hi,x
+    sta zp_math_b
+    ldx #10
+    jsr math_div_16x8           // Quotient in zp_math_a/b
+    lda zp_math_a
+    sta sb_price_lo
+    lda zp_math_b
+    sta sb_price_hi
+    jmp price_add_p1_bonus      // Tail call
 
 // calc_buy_price — Calculate buy price for item type
 // Input: A = item type ID, sb_item_p1 = enchantment/charges

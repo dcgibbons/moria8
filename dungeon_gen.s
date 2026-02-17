@@ -51,7 +51,7 @@
 .const TOWN_FLAGS    = FLAG_LIT | FLAG_VISITED  // $0C
 
 // Number of stores in the town
-.const STORE_COUNT   = 6
+.const STORE_COUNT   = 8
 
 // Tile type mask (for extracting type from map byte)
 .const TILE_TYPE_MASK = $F0
@@ -69,11 +69,11 @@ map_row_hi:
 // ============================================================
 // Store position data
 // ============================================================
-// Store top-left corners (x, y) — 2 rows of 3 stores
+// Store top-left corners (x, y) — 2 rows of 3 stores + BM + Home
 store_pos_x:
-    .byte 5, 20, 55, 5, 20, 55
+    .byte 5, 20, 55, 5, 20, 55, 37, 42
 store_pos_y:
-    .byte 3,  3,  3, 20, 20, 20
+    .byte 3,  3,  3, 20, 20, 20, 3, 20
 
 // Store sizes (all 10 wide x 5 tall)
 .const STORE_W = 10
@@ -81,9 +81,9 @@ store_pos_y:
 
 // Store door positions (center of south wall)
 store_door_x:
-    .byte 10, 25, 60, 10, 25, 60
+    .byte 10, 25, 60, 10, 25, 60, 42, 47
 store_door_y:
-    .byte  7,  7,  7, 24, 24, 24
+    .byte  7,  7,  7, 24, 24, 24, 7, 24
 
 // ============================================================
 // Subroutines
@@ -339,7 +339,7 @@ draw_store:
 .assert "Map row table size", map_row_hi - map_row_lo, MAP_ROWS
 .assert "Map size = 3840", MAP_SIZE, 3840
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
-.assert "Store count", STORE_COUNT, 6
+.assert "Store count", STORE_COUNT, 8
 
 // ============================================================
 // Dungeon generation constants

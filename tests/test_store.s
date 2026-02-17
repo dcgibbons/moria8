@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot.
 //
-// Results at $0400-$0415: $01 = pass, $00 = fail per test (22 tests)
+// Results at $0400-$0419: $01 = pass, $00 = fail per test (26 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #21
+    ldx #25
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -76,12 +76,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 23, $ff
+tc_results: .fill 27, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #21
+    ldx #25
     lda #$ff
 !clr:
     sta tc_results,x
@@ -641,5 +641,81 @@ test_start:
     lda #$00
 !t22_store:
     sta tc_results + 21
+
+    // ============================================================
+    // Test 23: calc_bm_buy_price — dagger (base=10) × 3 = 30 GP
+    // ============================================================
+    lda #0
+    sta sb_item_p1              // No enchantment
+    lda #2                      // Dagger (base 10)
+    jsr calc_bm_buy_price
+    lda sb_price_lo
+    cmp #30
+    bne !t23_fail+
+    lda sb_price_hi
+    cmp #0
+    bne !t23_fail+
+    lda #$01
+    jmp !t23_store+
+!t23_fail:
+    lda #$00
+!t23_store:
+    sta tc_results + 22
+
+    // ============================================================
+    // Test 24: calc_bm_sell_price — dagger (base=10) / 10 = 1 GP
+    // ============================================================
+    lda #0
+    sta sb_item_p1              // No enchantment
+    lda #2                      // Dagger (base 10)
+    jsr calc_bm_sell_price
+    lda sb_price_lo
+    cmp #1
+    bne !t24_fail+
+    lda sb_price_hi
+    cmp #0
+    bne !t24_fail+
+    lda #$01
+    jmp !t24_store+
+!t24_fail:
+    lda #$00
+!t24_store:
+    sta tc_results + 23
+
+    // ============================================================
+    // Test 25: check_player_on_store_door at BM door (42,7) → store 6
+    // ============================================================
+    lda #42
+    sta zp_player_x
+    lda #7
+    sta zp_player_y
+    jsr check_player_on_store_door
+    bcc !t25_fail+
+    cmp #6                      // Should be store index 6 (BM)
+    bne !t25_fail+
+    lda #$01
+    jmp !t25_store+
+!t25_fail:
+    lda #$00
+!t25_store:
+    sta tc_results + 24
+
+    // ============================================================
+    // Test 26: check_player_on_store_door at Home door (47,24) → store 7
+    // ============================================================
+    lda #47
+    sta zp_player_x
+    lda #24
+    sta zp_player_y
+    jsr check_player_on_store_door
+    bcc !t26_fail+
+    cmp #7                      // Should be store index 7 (Home)
+    bne !t26_fail+
+    lda #$01
+    jmp !t26_store+
+!t26_fail:
+    lda #$00
+!t26_store:
+    sta tc_results + 25
 
     jmp test_exit_trampoline

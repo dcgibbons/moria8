@@ -24,6 +24,12 @@
 // Input: zp_store_idx = store index (0-5)
 // Clobbers: everything
 store_enter:
+    // Home uses separate UI at $F000
+    lda zp_store_idx
+    cmp #STORE_HOME
+    bne !se_not_home+
+    jmp home_enter              // $F000 banked code, same $01=$35
+!se_not_home:
     lda #0
     sta hg_insults              // Reset insult counter for this visit
     jsr store_draw_screen
@@ -168,6 +174,11 @@ store_draw_screen:
     jsr item_get_name_ptr
     jsr screen_put_string
 
+    // Skip price display for Home (no prices)
+    lda zp_store_idx
+    cmp #STORE_HOME
+    beq !sds_next_slot+
+
     // Price at column 31
     lda sd_row
     sta zp_cursor_row
@@ -180,7 +191,7 @@ store_draw_screen:
     lda si_p1,y
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda si_item_id,y
-    jsr calc_buy_price          // sb_price_lo/hi = buy price
+    jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
     lda sb_price_lo
     sta zp_temp0
@@ -351,16 +362,20 @@ store_buy:
     lda si_p1,x
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda si_item_id,x
-    jsr calc_buy_price          // sb_price_lo/hi
+    jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
-    // Cheap items (≤ 10 GP): use simple Y/N flow
+    // Cheap items (≤ 10 GP) or BM: use simple Y/N flow (no haggling)
+    ldx zp_store_idx
+    cpx #STORE_BM
+    beq !sb_yn_confirm+         // BM never haggles
     lda sb_price_hi
     bne !sb_haggle_check+       // > 255, definitely not cheap
     lda sb_price_lo
     cmp #11
     bcs !sb_haggle_check+       // > 10 GP
 
-    // --- Cheap item: Y/N confirm ---
+!sb_yn_confirm:
+    // --- Y/N confirm (cheap item or BM) ---
     jsr sbuy_show_price
     jsr input_get_key
     cmp #PETSCII_Y
@@ -691,7 +706,7 @@ store_sell:
     lda inv_p1,x
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda ss_item_id
-    jsr calc_sell_price
+    jsr calc_store_sell_price   // Dispatches to BM or normal pricing
 
     // Check for worthless items
     lda sb_price_lo
@@ -704,14 +719,18 @@ store_sell:
     rts
 
 !ssell_has_value:
-    // Cheap items (≤ 10 GP): use simple Y/N flow
+    // Cheap items (≤ 10 GP) or BM: use simple Y/N flow (no haggling)
+    ldx zp_store_idx
+    cpx #STORE_BM
+    beq !ssell_yn_confirm+      // BM never haggles
     lda sb_price_hi
     bne !ssell_haggle_check+
     lda sb_price_lo
     cmp #11
     bcs !ssell_haggle_check+
 
-    // --- Cheap item: Y/N confirm ---
+!ssell_yn_confirm:
+    // --- Y/N confirm (cheap item or BM) ---
     jsr ssell_show_offer
     jsr input_get_key
     cmp #PETSCII_Y

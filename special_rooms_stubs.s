@@ -35,6 +35,9 @@ tramp_ego_append_suffix:
 !teas_stub_done:
     rts
 // tramp_ego_put_suffix — Write suffix to screen (no banking needed in test)
+// Home UI stub — home_enter is at $F000 in main build, just RTS in tests
+home_enter:                        rts
+
 tramp_ego_put_suffix:
     cmp #0
     beq !teps_stub_done+
