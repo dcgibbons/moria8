@@ -144,53 +144,21 @@ render_viewport:
 
     // Secret door orientation fix: TILE_SECRET defaults to '─' but
     // should render as '│' when on a vertical wall (left/right of room).
-    // Check tile above AND below for WALL_V/corner (types 2-6).
-    // Excludes type 1 (TILE_WALL_H / uncarved rock) to avoid false
-    // positives on horizontal walls where rock sits above or below.
-    // Checks both directions because a corridor may carve one neighbor.
+    // A vertical wall door has floor on both left and right (room + corridor).
+    // A horizontal wall door has wall tiles continuing left/right.
     cpx #15                     // TILE_SECRET type index
     bne !rv_tile_set+
-    // Peek at tile above (map_ptr - MAP_COLS, same column)
-    lda zp_map_ptr_lo
-    sec
-    sbc #MAP_COLS
-    sta zp_ptr2
-    lda zp_map_ptr_hi
-    sbc #0
-    sta zp_ptr2_hi
-    lda (zp_ptr2),y             // Tile above, same column (Y preserved)
-    lsr
-    lsr
-    lsr
-    lsr                         // Extract type index
-    // Types 2-6 = WALL_V / corner tiles (not WALL_H / rock)
-    cmp #2
-    bcc !rv_check_below+        // Type 0-1 → check below too
-    cmp #7
-    bcs !rv_check_below+        // Type >= 7 → check below too
-    // Tile above is WALL_V or corner → vertical wall → render as '│'
-    lda #$5d                    // '│' screen code
-    sta zp_temp0
-    jmp !rv_tile_set+
-!rv_check_below:
-    // Peek at tile below (map_ptr + MAP_COLS, same column)
-    lda zp_map_ptr_lo
-    clc
-    adc #MAP_COLS
-    sta zp_ptr2
-    lda zp_map_ptr_hi
-    adc #0
-    sta zp_ptr2_hi
-    lda (zp_ptr2),y             // Tile below, same column (Y preserved)
-    lsr
-    lsr
-    lsr
-    lsr                         // Extract type index
-    cmp #2
-    bcc !rv_tile_set+           // Type 0-1 → horizontal, keep '─'
-    cmp #7
-    bcs !rv_tile_set+           // Type >= 7 → horizontal, keep '─'
-    // Tile below is WALL_V or corner → vertical wall → render as '│'
+    dey                         // Y = col - 1 (left neighbor)
+    lda (zp_map_ptr_lo),y
+    iny                         // Restore Y = original col
+    and #TILE_TYPE_MASK
+    bne !rv_tile_set+           // Left not floor → horizontal, keep '─'
+    iny                         // Y = col + 1 (right neighbor)
+    lda (zp_map_ptr_lo),y
+    dey                         // Restore Y = original col
+    and #TILE_TYPE_MASK
+    bne !rv_tile_set+           // Right not floor → horizontal, keep '─'
+    // Both left and right are floor → vertical wall door
     lda #$5d                    // '│' screen code
     sta zp_temp0
 !rv_tile_set:
