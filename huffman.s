@@ -22,9 +22,11 @@ hd_decode_buf: .fill 42, 0
 // ============================================================
 huff_decode_string:
     // Look up 16-bit byte offset from index table
+    // X*2 may exceed 255 for string IDs >= 128, so branch on carry
     txa
-    asl                        // X*2 for word index
+    asl                        // X*2 for word index (carry set if >= 128)
     tax
+    bcs !hds_hi+
     lda huff_str_index,x
     clc
     adc #<huff_str_data
@@ -32,6 +34,16 @@ huff_decode_string:
     lda huff_str_index+1,x
     adc #>huff_str_data
     sta zp_ptr0_hi             // Source pointer hi
+    jmp !hds_init+
+!hds_hi:
+    lda huff_str_index+256,x
+    clc
+    adc #<huff_str_data
+    sta zp_ptr0
+    lda huff_str_index+257,x
+    adc #>huff_str_data
+    sta zp_ptr0_hi
+!hds_init:
 
     // Initialize bit reader
     lda #0
