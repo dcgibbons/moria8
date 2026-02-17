@@ -3867,7 +3867,7 @@ switch instead of REU DMA. Same zero-disk-I/O benefit as REU path.
 
 | Issue | File | Description |
 |-------|------|-------------|
-| `rng_range_word` not implemented | rng.s:115 | Needed for gold amounts >255. Currently gold drops are 8-bit only (max 255), which is a gameplay fidelity gap vs umoria. |
+| ~~`rng_range_word` not implemented~~ | rng.s | **RESOLVED:** 16-bit rejection sampling implemented; gold drops now use `fi_qty_hi` + `rng_range_word` + `combat_append_decimal_16`. |
 | `mon_atk_effect_fear` is a no-op | monster_attack.s:356-359 | Fear attacks deal damage but don't apply fear status. Marked "deferred to Phase 6+". |
 | `mon_atk_effect_corrode` is a no-op | monster_attack.s:360-362 | Corrode attacks deal damage but don't damage equipment. Marked "deferred". |
 

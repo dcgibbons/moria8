@@ -456,7 +456,7 @@ itn_60: .text "EXORCISM" ; .byte 0
 .label fi_p1      = FLOOR_ITEM_BASE + 128     // $CF80: enchantment / charges
 .label fi_flags   = FLOOR_ITEM_BASE + 160     // $CFA0: instance flags
 .label fi_ego     = FLOOR_ITEM_BASE + 192     // $CFC0: ego type (0=none)
-.label fi_spare2  = FLOOR_ITEM_BASE + 224     // $CFE0: reserved
+.label fi_qty_hi  = FLOOR_ITEM_BASE + 224     // $CFE0: gold qty high byte
 
 // ============================================================
 // Inventory Table — 30 slots (22 carried + 8 equipped)
@@ -474,6 +474,7 @@ fi_add_x:   .byte 0       // Position for floor_item_add
 fi_add_y:   .byte 0
 fi_add_id:  .byte 0       // Item type ID
 fi_add_qty: .byte 0       // Quantity / gold amount
+fi_add_qty_hi: .byte 0    // Gold qty high byte (auto-reset after add)
 fi_add_p1:  .byte 0       // Enchantment / charges
 fi_add_ego: .byte 0       // Ego type (0=none)
 isl_target: .byte 0       // item_spawn_level loop target
@@ -541,8 +542,10 @@ floor_item_add:
     sta fi_flags,x
     lda fi_add_ego
     sta fi_ego,x
+    lda fi_add_qty_hi
+    sta fi_qty_hi,x
     lda #0
-    sta fi_spare2,x
+    sta fi_add_qty_hi       // Auto-reset for non-gold callers
 
     // Set FLAG_HAS_ITEM on map tile at (x, y)
     stx zp_temp4                // Save slot index
@@ -792,28 +795,23 @@ item_spawn_level:
     jsr rng_range
     sta fi_add_id
 
-    // Gold qty: rng(dlvl * 10) + 5
-    // dlvl * 10 via shift+add: dlvl*8 + dlvl*2
+    // Gold qty: rng_range_word(dlvl * 10) + 5 (16-bit)
     lda zp_player_dlvl
-    asl                         // *2
-    sta fi_add_qty              // Temp: dlvl*2
-    lda zp_player_dlvl
-    asl
-    asl
-    asl                         // *8
+    ldx #10
+    jsr math_multiply           // zp_math_a=lo, zp_math_b=hi
+    lda zp_math_a
+    sta zp_temp0
+    lda zp_math_b
+    sta zp_temp1                // N = dlvl * 10
+    jsr rng_range_word          // result in zp_temp2/3
+    // Add 5 to 16-bit result
+    lda zp_temp2
     clc
-    adc fi_add_qty              // *8 + *2 = *10
-    // Cap at 255 to avoid overflow for high dlvl
-    bcc !isl_no_cap+
-    lda #255
-!isl_no_cap:
-    jsr rng_range               // [0, dlvl*10-1]
-    clc
-    adc #5                      // [5, dlvl*10+4]
-    bcc !isl_qty_ok+
-    lda #255                    // Cap at 255
-!isl_qty_ok:
+    adc #5
     sta fi_add_qty
+    lda zp_temp3
+    adc #0
+    sta fi_add_qty_hi
 
     lda #0
     sta fi_add_p1               // No enchantment for gold
@@ -1076,14 +1074,14 @@ item_pickup:
     bne !ipu_not_gold+
 
     // --- Gold pickup ---
-    // Add fi_qty to 24-bit player gold
+    // Add 16-bit fi_qty/fi_qty_hi to 24-bit player gold
     ldx ipu_slot
     lda player_data + PL_GOLD_0
     clc
     adc fi_qty,x
     sta player_data + PL_GOLD_0
     lda player_data + PL_GOLD_1
-    adc #0
+    adc fi_qty_hi,x
     sta player_data + PL_GOLD_1
     lda player_data + PL_GOLD_2
     adc #0
@@ -1098,7 +1096,10 @@ item_pickup:
 
     ldx ipu_slot
     lda fi_qty,x
-    jsr combat_append_decimal
+    sta zp_temp0
+    lda fi_qty_hi,x
+    sta zp_temp1
+    jsr combat_append_decimal_16
 
     lda #<ipu_gold_str
     ldy #>ipu_gold_str

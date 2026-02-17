@@ -856,6 +856,54 @@ combat_append_decimal:
     stx cmb_buf_idx
     rts
 
+// combat_append_decimal_16 — Append 16-bit decimal number to buffer
+// Input: zp_temp0 = lo, zp_temp1 = hi
+// Clobbers: A, X, Y, zp_temp0-3
+combat_append_decimal_16:
+    ldx cmb_buf_idx
+    lda #0
+    sta zp_temp2                // Leading zero flag
+    ldy #4                      // 5 digits: index 4..0
+!cad16_digit:
+    lda #0
+    sta zp_temp3                // Digit counter
+!cad16_sub:
+    lda zp_temp0
+    sec
+    sbc decimal_powers_lo,y
+    pha
+    lda zp_temp1
+    sbc decimal_powers_hi,y
+    bcc !cad16_done+            // Underflow — done with this digit
+    sta zp_temp1
+    pla
+    sta zp_temp0
+    inc zp_temp3
+    jmp !cad16_sub-
+!cad16_done:
+    pla                         // Discard underflowed lo
+    lda zp_temp3
+    bne !cad16_print+
+    lda zp_temp2
+    beq !cad16_next+            // Still leading zeros, skip
+!cad16_print:
+    lda #1
+    sta zp_temp2                // No more leading zeros
+    lda zp_temp3
+    ora #$30                    // Digit → screen code
+    sta combat_msg_buf,x
+    inx
+!cad16_next:
+    dey
+    bne !cad16_digit-
+    // Always print ones digit
+    lda zp_temp0
+    ora #$30
+    sta combat_msg_buf,x
+    inx
+    stx cmb_buf_idx
+    rts
+
 // ============================================================
 // Compile-time validation
 // ============================================================

@@ -5,6 +5,11 @@
 // 2. rng_next returns different values on consecutive calls
 // 3. rng_range returns values in [0, N-1] for 100 iterations
 // 4. LFSR doesn't degenerate to all-zeros
+// 5. rng_range(1) always returns 0
+// 6. rng_range(255) returns values in [0, 254]
+// 7. rng_range_word(100) returns [0, 99]
+// 8. rng_range_word(500) returns [0, 499]
+// 9. rng_range_word(1) always returns 0
 //
 // Results at $0400: $01 = pass per test, $02 = overall
 
@@ -189,5 +194,104 @@ test_start:
     sta $0405
     sta $02
 !t6_done:
+
+    // ==========================================
+    // Test 7: rng_range_word(100) returns [0, 99]
+    // Result hi must be 0, result lo < 100.
+    // ==========================================
+    ldx #50
+!t7_loop:
+    txa
+    pha
+    lda #100
+    sta zp_temp0
+    lda #0
+    sta zp_temp1                // N = 100
+    jsr rng_range_word
+    // zp_temp3 (hi) must be 0
+    lda zp_temp3
+    bne !t7_fail+
+    // zp_temp2 (lo) must be < 100
+    lda zp_temp2
+    cmp #100
+    bcs !t7_fail+
+    pla
+    tax
+    dex
+    bne !t7_loop-
+    lda #$01
+    sta $0406
+    jmp !t7_done+
+!t7_fail:
+    pla
+    lda #$00
+    sta $0406
+    sta $02
+!t7_done:
+
+    // ==========================================
+    // Test 8: rng_range_word(500) returns [0, 499]
+    // N=500 ($01F4), 16-bit compare: result < 500
+    // ==========================================
+    ldx #50
+!t8_loop:
+    txa
+    pha
+    lda #<500
+    sta zp_temp0
+    lda #>500
+    sta zp_temp1                // N = 500
+    jsr rng_range_word
+    // 16-bit compare: zp_temp3:zp_temp2 < $01F4?
+    lda zp_temp3
+    cmp #>500
+    bcc !t8_ok+                 // hi < 1 → accept
+    bne !t8_fail+               // hi > 1 → fail
+    lda zp_temp2
+    cmp #<500                   // hi equal, compare lo
+    bcs !t8_fail+               // lo >= $F4 → fail
+!t8_ok:
+    pla
+    tax
+    dex
+    bne !t8_loop-
+    lda #$01
+    sta $0407
+    jmp !t8_done+
+!t8_fail:
+    pla
+    lda #$00
+    sta $0407
+    sta $02
+!t8_done:
+
+    // ==========================================
+    // Test 9: rng_range_word(1) always returns 0
+    // ==========================================
+    ldx #50
+!t9_loop:
+    txa
+    pha
+    lda #1
+    sta zp_temp0
+    lda #0
+    sta zp_temp1                // N = 1
+    jsr rng_range_word
+    lda zp_temp2
+    ora zp_temp3
+    bne !t9_fail+
+    pla
+    tax
+    dex
+    bne !t9_loop-
+    lda #$01
+    sta $0408
+    jmp !t9_done+
+!t9_fail:
+    pla
+    lda #$00
+    sta $0408
+    sta $02
+!t9_done:
 
     brk

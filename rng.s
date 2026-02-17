@@ -112,4 +112,67 @@ rng_range:
 // Input:  zp_temp0 = N lo, zp_temp1 = N hi
 // Output: zp_temp2 = result lo, zp_temp3 = result hi
 // Preserves: nothing
-// NOTE: Not implemented yet — needed for gold amounts etc. in Phase 6+.
+// Method: 16-bit rejection sampling (same principle as rng_range)
+rng_range_word:
+    // Compute mask = spread bits of (N-1) to fill all lower bits
+    lda zp_temp0
+    sec
+    sbc #1
+    sta rrw_mask_lo
+    lda zp_temp1
+    sbc #0
+    sta rrw_mask_hi         // mask = N-1
+
+    // Spread bits right: shifts of 1, 2, 4, 8
+    ldx #1
+    jsr rrw_spread
+    ldx #2
+    jsr rrw_spread
+    ldx #4
+    jsr rrw_spread
+    ldx #8
+    jsr rrw_spread
+
+!rrw_retry:
+    // Generate 16-bit masked random
+    jsr rng_next
+    and rrw_mask_lo
+    sta zp_temp2
+    jsr rng_next
+    and rrw_mask_hi
+    sta zp_temp3
+
+    // 16-bit compare: result >= N? If so, reject
+    lda zp_temp3
+    cmp zp_temp1
+    bcc !rrw_ok+            // hi < N_hi → accept
+    bne !rrw_retry-         // hi > N_hi → reject
+    lda zp_temp2
+    cmp zp_temp0            // hi equal, compare lo
+    bcs !rrw_retry-         // lo >= N_lo → reject
+!rrw_ok:
+    rts
+
+// rrw_spread — OR mask with itself shifted right by X positions
+// Input: X = shift count, rrw_mask_lo/hi
+// Output: rrw_mask_lo/hi updated
+rrw_spread:
+    lda rrw_mask_lo
+    sta rrw_tmp
+    lda rrw_mask_hi
+!rrw_sloop:
+    lsr                     // Shift hi
+    ror rrw_tmp             // Shift lo (carry from hi)
+    dex
+    bne !rrw_sloop-
+    // OR shifted copy into mask
+    ora rrw_mask_hi
+    sta rrw_mask_hi
+    lda rrw_tmp
+    ora rrw_mask_lo
+    sta rrw_mask_lo
+    rts
+
+rrw_mask_lo: .byte 0
+rrw_mask_hi: .byte 0
+rrw_tmp:     .byte 0
