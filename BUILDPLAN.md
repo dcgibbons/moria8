@@ -1184,7 +1184,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.2 Artifacts, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
+~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -1207,7 +1207,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 |---------|------------|
 | Map size (48x80 vs 66x198) | **Deferred** — intentional C64 constraint. Phase 10.3 expands for C128. |
 | Monster count (120 vs 351) | **Done** — R3.5 expanded to 120 across 5 tiers. Further expansion possible with more tier data. |
-| Item count (55 vs 400+) | **Tracked** — R4.1 (ego items) and R4.2 (artifacts) address this. 55 base types is adequate for C64 memory. |
+| Item count (55 vs 400+) | **Tracked** — R4.1 (ego items) addresses this. 55 base types is adequate for C64 memory. |
 | Active monsters cap (32) | **Deferred** — RAM constraint. Phase 10.3 raises to 64 on C128. |
 | Haggling simplified | **Done** — R6.1 implemented multi-round haggling with insult/kick system. |
 | ~~Missing stores (Black Market, Player Home)~~ | **Done** — R6.2 Black Market + R6.3 Player Home implemented. |
@@ -1246,7 +1246,7 @@ Full review of AUDIT.md findings. Each item is categorized as **done**, **action
 | Turn speed at 1 MHz | **Deferred** — monitor in playtesting. AI loop processes max 32 monsters; should be fast enough. |
 | Balance (fewer monsters/items) | **Deferred** — tuning pass after all content features are in place. |
 | Spell variety | **Tracked** — R5.1/R5.2. |
-| Lack of artifacts | **Tracked** — R4.2 (low priority). |
+| Lack of artifacts | **N/A** — not present in umoria. Ego items (R4.1) cover umoria's "special" item system. |
 
 ### AUDIT §5 — Architecture & Physical Build
 
@@ -3738,7 +3738,6 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R4.1 | Ego items | **(TODO)** | No "Holy Avenger", "Defender", "Slay Evil", etc. Need ego flag + modifier table + name generation. |
-| R4.2 | Artifacts | **(TODO)** | No fixed artifacts (Phial of Galadriel, etc.). Need unique item table, generation check (only one per game), special powers. |
 | R4.3 | Rods | **(TODO)** | Wands and Staves exist but Rods (rechargeable, non-consumable) missing. Need new item category + recharge-over-time mechanic. |
 | R4.4 | Pseudo-ID | **(TODO)** | No "feeling" about items (excellent, terrible, etc.). Need carry-time counter + quality hint based on hidden enchantment. |
 | R4.5 | Thorough identification | **(TODO)** | `eff_identify_prompt` sets identified flag but doesn't reveal hidden powers (since ego items don't exist yet). Depends on R4.1. |
@@ -3863,7 +3862,6 @@ least 128 KB — no constraint in practice.
 - ~~R1.2 Throwing~~ ✅
 - R3.2 Group tactics — nice-to-have
 - R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
-- R4.2 Artifacts — late addition
 - R4.3 Rods — minor item category
 - R4.4 Pseudo-ID — QoL feature
 - R4.6 Flasks of Oil — lantern refueling (depends on RP17-1 light duration fix)
