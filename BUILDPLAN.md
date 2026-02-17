@@ -1378,11 +1378,12 @@ but C64 only supports 2 slots (claw 1d1, claw 1d1). Third attack lost. Low impac
    Effect expiration messages also print: "YOU FEEL BETTER." (poison), "YOU CAN SEE AGAIN."
    (blind), "YOU FEEL LESS CONFUSED." (confuse), "YOU CAN MOVE AGAIN." (paralyze).
 
-4. **Monster confusion/stun timers never decremented.** `MX_CONFUSE` and `MX_STUN` fields
-   exist in the monster entry struct. Multiple sources SET `MX_CONFUSE` (combat.s confuse-on-melee,
-   spell 7 Confusion, wand of confusion, Monster Confusion scroll), and `MF_CONFUSED` is checked
-   in monster_ai.s (line 126), but no code decrements `MX_CONFUSE` per turn or clears `MF_CONFUSED`
-   when the timer expires. Once confused, monsters stay confused permanently.
+4. ~~**Monster confusion/stun timers never decremented.**~~ **FIXED** — `monster_process_one`
+   now checks `MX_STUN` and `MX_CONFUSE` timers directly at `!mpo_awake:`. Stun > 0: decrement
+   and skip turn. Confuse > 0: decrement and random-move (no spellcast). Old `MF_CONFUSED` flag
+   check removed — timer IS the confusion state. Timers count down 1 per turn; at 0, normal AI
+   resumes. All timer-setting call sites (combat.s, player_magic.s, player_items.s, spell_effects.s)
+   already write `MX_CONFUSE`/`MX_STUN` correctly. 21 monster_ai tests pass.
 
 #### MC5: Design simplifications — LOW (speed issues mostly resolved)
 

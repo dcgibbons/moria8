@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #18
+    ldx #20
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -88,7 +88,7 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 19, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 21, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
 
@@ -775,11 +775,14 @@ test_start:
     lda #4
     jsr monster_spawn_one
 
-    // Set awake AND confused
+    // Set awake, then set MX_CONFUSE timer
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
-    lda #MF_AWAKE | MF_CONFUSED
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    lda #5
     sta (zp_ptr0),y
 
     // Player far away (won't affect direction)
@@ -1396,11 +1399,14 @@ test_start:
     lda #4
     jsr monster_spawn_one
 
-    // Set awake + confused, low HP, high flee threshold
+    // Set awake, low HP, high flee threshold, MX_CONFUSE timer
     ldx #0
     jsr monster_get_ptr
     ldy #MX_FLAGS
-    lda #MF_AWAKE | MF_CONFUSED
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    lda #5
     sta (zp_ptr0),y
     ldy #MX_HP_LO
     lda #1
@@ -1443,17 +1449,204 @@ test_start:
 
 !t19_nomove:
     dec tai_count
-    bne !t19_retry-
+    beq !t19_done+
+    jmp !t19_retry-
+!t19_done:
 
     // After 5 tries, check if at least one moved (proves confusion path taken)
     lda tai_ok
     beq !t19_fail+
     lda #$01
     sta tc_results + 18
-    jmp !tests_done+
+    jmp !t20+
 !t19_fail:
     lda #$00
     sta tc_results + 18
+
+    // ==========================================
+    // Test 20: Confusion timer expires — monster acts normally after
+    // Set MX_CONFUSE=1, run tick (confused, decrements to 0),
+    // run again (timer=0, monster moves toward player)
+    // ==========================================
+!t20:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Create floor corridor from (20,15) to (30,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t20_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t20_fill-
+
+    // Spawn Kobold at (20,15)
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+
+    // Set awake, MX_CONFUSE=1
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    lda #1
+    sta (zp_ptr0),y
+
+    // Player at (30,15)
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    // Tick 1: confused (timer=1 → decremented to 0, random move)
+    jsr monster_ai_tick
+
+    // Read monster position after first tick (could be anywhere nearby)
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta tai_save_x
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sta tai_save_y
+
+    // Verify confuse timer is now 0
+    ldy #MX_CONFUSE
+    lda (zp_ptr0),y
+    bne !t20_fail+
+
+    // Re-place monster at (20,15) for clean second tick
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    // Clear FLAG_OCCUPIED on old tile, set on (20,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    ora #FLAG_OCCUPIED
+    sta (zp_ptr0),y
+
+    // Tick 2: timer=0, should move toward player (x=20 → x=21)
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #21                     // Should have moved toward player
+    bne !t20_fail+
+
+    lda #$01
+    sta tc_results + 19
+    jmp !t21+
+!t20_fail:
+    lda #$00
+    sta tc_results + 19
+
+    // ==========================================
+    // Test 21: Stun skips monster turn entirely
+    // Set MX_STUN=1, run tick (stunned, decrements to 0, no move),
+    // run again (timer=0, monster moves normally)
+    // ==========================================
+!t21:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Create floor corridor from (20,15) to (30,15)
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t21_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t21_fill-
+
+    // Spawn Kobold at (25,15)
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+
+    // Set awake, MX_STUN=1
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_STUN
+    lda #1
+    sta (zp_ptr0),y
+
+    // Player at (30,15)
+    lda #30
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    // Tick 1: stunned — monster should stay at (25,15)
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #25
+    bne !t21_fail+
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp #15
+    bne !t21_fail+
+
+    // Verify stun timer is now 0
+    ldy #MX_STUN
+    lda (zp_ptr0),y
+    bne !t21_fail+
+
+    // Tick 2: timer=0, should move toward player (x=25 → x=26)
+    jsr monster_ai_tick
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    cmp #26                     // Should have moved toward player
+    bne !t21_fail+
+
+    lda #$01
+    sta tc_results + 20
+    jmp !tests_done+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
 
 !tests_done:
     jmp test_finish

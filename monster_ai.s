@@ -112,20 +112,40 @@ monster_process_one:
     // Check if now awake
     lda zp_mon_flags
     and #MF_AWAKE
-    beq !mpo_done+              // Still asleep, done
+    bne !mpo_awake+
+    jmp !mpo_done+              // Still asleep, done
 
 !mpo_awake:
+    // Tick stun/confuse timers
+    ldx zp_mon_idx
+    jsr monster_get_ptr         // zp_ptr0 → entry
+
+    // Check stun timer
+    ldy #MX_STUN
+    lda (zp_ptr0),y
+    beq !mpo_not_stunned+
+    sec
+    sbc #1
+    sta (zp_ptr0),y
+    jmp !mpo_writeback+         // Stunned — skip entire turn
+!mpo_not_stunned:
+
+    // Check confuse timer
+    ldy #MX_CONFUSE
+    lda (zp_ptr0),y
+    beq !mpo_not_confused+
+    sec
+    sbc #1
+    sta (zp_ptr0),y
+    jmp !mpo_confused+          // Random movement (no spellcast)
+!mpo_not_confused:
+
     // Check if monster wants to cast a spell
     jsr monster_can_cast
     bcc !mpo_no_cast+
     jsr monster_pick_spell
     jmp !mpo_writeback+         // Casting used the monster's turn
 !mpo_no_cast:
-
-    // Check confused
-    lda zp_mon_flags
-    and #MF_CONFUSED
-    bne !mpo_confused+
 
     // Town creatures wander randomly unless provoked
     lda zp_mon_type
