@@ -1185,7 +1185,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Lower priority content** (tracked but not scheduled):
-~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, R4.3 Rods, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
+~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, ~~R4.3 Rods~~ N/A (Angband-only, not in umoria), ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
 
 **Phase 10 — C128 Enhancements** (not started):
 
