@@ -3685,6 +3685,7 @@ design; items marked **(TODO)** need implementation.
 | R1.2 | Throwing items | ✅ **DONE** | `throw.s` — SHIFT+T throws any inventory item. BOW-based to-hit at 75%, STR-based range calc, projectile trace reuses ranged_fire pattern. Potions shatter on impact, other items land on floor. 6 tests in `test_throw.s`. |
 | R1.3 | Monster attacks | ✅ **DONE** | `monster_attack.s` fully implemented (Phase 5.4). 8 attack types, 2 slots per creature, all effects (poison, confuse, paralyze, acid, aggravate). |
 | R1.4 | Monster spells | ✅ **DONE** | `monster_magic.s` fully implemented (Phase 7.8). Breath weapons, bolts, summoning, blindness, confusion. Creature tier data has spell entries. |
+| R1.7 | Bash command | **(TODO)** | `B` + direction. Three targets: **doors** (STR + body weight vs. stuck difficulty, permanently breaks door — only way to open spiked doors), **monsters** (shield bash — shield weight/damage dice, can stun, off-balance risk via DEX check), **chests** (10% destroy contents, 10% break lock, pure RNG). Currently `door_try_open` in `dungeon_features.s` has an inline STR >= 16 force-open, but this is not a separate command. Need: `CMD_BASH` constant in `input.s`, key binding, `player_bash` routine, door/monster/chest dispatch. |
 
 **Issues:**
 
@@ -3841,6 +3842,9 @@ least 128 KB — no constraint in practice.
 - ~~R7.1-R7.2 Huffman codec + resident compressed strings~~ ✅
 - ~~R7.3 Store dialog strings~~ ✅
 - R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
+
+**Medium priority (missing core command):**
+- R1.7 Bash — door/monster/chest bash (`B` + direction). Only way to open spiked doors in umoria.
 
 **Low priority (polish/completeness):**
 - ~~R1.2 Throwing~~ ✅
