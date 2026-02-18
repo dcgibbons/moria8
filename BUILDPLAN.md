@@ -1191,7 +1191,7 @@ Priority order based on AUDIT review (see Audit Response below):
 
 | Priority | ID | Feature | Complexity | Benefit | Notes |
 |----------|-----|---------|-----------|---------|-------|
-| 1 | R4.6 | Flasks of Oil | Low | Medium | New item type + 'F' refuel command + charge transfer to lantern. Quick win, complements RP17-1 light fix. |
+| ~~1~~ | ~~R4.6~~ | ~~Flasks of Oil~~ | ~~Low~~ | ~~Medium~~ | ✅ **DONE** — SHIFT+R refuel command, item type 61, store/equip support. |
 | 2 | R1.7 | Bash command | Medium | High | `B` + direction: bash doors (only way to open spiked doors), monsters (shield bash + stun), chests (break lock). Core umoria command. |
 | 3 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
 
@@ -3734,7 +3734,7 @@ design; items marked **(TODO)** need implementation.
 | R4.1 | Ego items | ✅ **DONE** | `ego_items.s` — 7 enchanted weapon types (HA, DF, SA, SD, SE, SU, FT, FB) with slay/elemental/AC bonuses. `test_ego.s` tests. |
 | R4.4 | Pseudo-ID | ✅ **DONE** | `turn_tick_pseudo_id` in `turn.s`. Class-based timer, scans equipment for unidentified items, sets `IF_TRIED` flag, shows quality tag in inventory. |
 | ~~R4.5~~ | ~~Thorough identification~~ | **Removed** | Not a separate umoria feature. Umoria's Identify spell reveals everything in one shot (`ID_KNOWN2`). Now that R4.1 (ego items) is done, identify already handles ego powers. |
-| R4.6 | Flasks of Oil | **(TODO)** | Consumable item to refuel Brass Lanterns. In umoria: `TV_FLASK` type, sold at General Store for 7,500 turns of fuel per flask. Player uses flask ('F'uel or 'r'efill command) on equipped lantern, adding charges up to lantern max (250 charges × 30 = 7,500 turns). Does NOT work on torches (torches are disposable). Need: new item type entry in `item.s` SoA tables, General Store inventory category update, refuel command in `player_items.s`, charge addition capped at lantern max. RP17-1 light duration fix is done. |
+| R4.6 | Flasks of Oil | ✅ **DONE** | Item type 61 (ITEM_FLASK_OIL) in `item.s`, ICAT_LIGHT category. SHIFT+R (CMD_REFUEL) refuels equipped Brass Lantern from carried flask, capped at 250 charges. Equip guard prevents wearing flask as light source. Store charges set correctly for torch/lantern/flask via shared `sro_store_p1`. |
 
 ### 5. Magic System
 
@@ -3859,7 +3859,7 @@ least 128 KB — no constraint in practice.
 - ~~R3.2 Group tactics~~ ✅
 - ~~R3.3 Breeders~~ ✅
 - ~~R4.4 Pseudo-ID~~ ✅
-- R4.6 Flasks of Oil — lantern refueling (low complexity, RP17-1 done)
+- ~~R4.6 Flasks of Oil~~ ✅
 - ~~R7.6 Combat/UI string migration~~ ✅
 - R7.7 Monster recall — full feature (data structures + tracking + display + string banks)
 - ~~R6.2 Black Market~~ ✅

@@ -170,6 +170,12 @@ item_wear:
     bne !iw_equip_ok+
     jmp !iw_cant_wear+
 !iw_equip_ok:
+    // Reject Flask of Oil — ICAT_LIGHT but not equippable
+    ldx piw_item_id
+    cpx #ITEM_FLASK_OIL
+    bne !iw_not_flask+
+    jmp !iw_cant_wear+
+!iw_not_flask:
     sta piw_equip
 
     // Check if equip slot already occupied -> swap
@@ -1836,3 +1842,82 @@ igs_spell_class:    .byte 0
 igs_learned_count:  .byte 0
 
 // Gain spell strings migrated to Huffman (HSTR_IGS_* in huffman_data.s)
+
+// ============================================================
+// item_refuel — Refuel a brass lantern with a flask of oil
+// Checks EQUIP_LIGHT for lantern, scans inventory for flask.
+// Output: carry set = turn consumed, carry clear = no action
+// Clobbers: everything
+// ============================================================
+item_refuel:
+    // 1. Check EQUIP_LIGHT has a brass lantern (type 14)
+    ldx #EQUIP_LIGHT
+    lda inv_item_id,x
+    cmp #14
+    beq !ir_has_lamp+
+
+    // Not using a lamp
+    ldx #HSTR_PIR_NOT_LAMP
+    jsr huff_decode_string
+    jsr msg_print
+    clc
+    rts
+
+!ir_has_lamp:
+    // 2. Scan carried inventory for Flask of Oil (type 61)
+    ldx #0
+!ir_scan:
+    cpx #MAX_INV_SLOTS
+    bcs !ir_no_oil+
+    lda inv_item_id,x
+    cmp #ITEM_FLASK_OIL
+    beq !ir_found_oil+
+    inx
+    jmp !ir_scan-
+
+!ir_no_oil:
+    ldx #HSTR_PIR_NO_OIL
+    jsr huff_decode_string
+    jsr msg_print
+    clc
+    rts
+
+!ir_found_oil:
+    stx piw_slot
+
+    // 3. Add flask's p1 to lantern's p1, cap at LANTERN_MAX_CHARGES
+    lda inv_p1,x
+    clc
+    adc inv_p1 + EQUIP_LIGHT
+    bcs !ir_overflow+
+    cmp #LANTERN_MAX_CHARGES + 1
+    bcc !ir_no_overflow+
+
+!ir_overflow:
+    lda #LANTERN_MAX_CHARGES
+    sta inv_p1 + EQUIP_LIGHT
+
+    // 4. Overflow messages
+    ldx #HSTR_PIR_OVERFLOW
+    jsr huff_decode_string
+    jsr msg_print
+    ldx #HSTR_PIR_FULL
+    jsr huff_decode_string
+    jsr msg_print
+    jmp !ir_remove_flask+
+
+!ir_no_overflow:
+    sta inv_p1 + EQUIP_LIGHT
+
+    // 5. Refueled message
+    ldx #HSTR_PIR_REFUELED
+    jsr huff_decode_string
+    jsr msg_print
+
+!ir_remove_flask:
+    // 6. Remove flask from inventory
+    ldx piw_slot
+    jsr inv_remove_item
+
+    sec
+    rts

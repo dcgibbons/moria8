@@ -993,6 +993,24 @@ load_resume_game:
     jmp !main_loop-
 !not_throw:
 
+    // Refuel lamp?
+    cmp #CMD_REFUEL
+    bne !not_refuel+
+    jsr msg_clear
+    jsr item_refuel
+    bcc !refuel_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !not_dead+
+    jmp !player_died+
+!not_dead:
+    jsr status_draw
+    jmp !main_loop-
+!refuel_no_turn:
+    jmp !main_loop-
+!not_refuel:
+
     // Look?
     cmp #CMD_LOOK
     bne !not_look+

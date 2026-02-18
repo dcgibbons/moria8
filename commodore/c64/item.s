@@ -49,7 +49,11 @@
 .const TOTAL_INV_SLOTS = 30
 
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 61
+.const ITEM_TYPE_COUNT = 62
+
+// Named item type constants
+.const ITEM_FLASK_OIL = 61
+.const LANTERN_MAX_CHARGES = 250
 
 // ============================================================
 // Master Item Type Table — Struct-of-Arrays (25 types)
@@ -118,6 +122,7 @@ it_category:
     .byte ICAT_BOOK     // 58: Words of Wisdom (Priest Book 2)
     .byte ICAT_BOOK     // 59: Chants and Blessings (Priest Book 3)
     .byte ICAT_BOOK     // 60: Exorcism and Dispelling (Priest Book 4)
+    .byte ICAT_LIGHT    // 61: Flask of Oil
 
 // Display character (screen codes)
 it_display:
@@ -182,6 +187,7 @@ it_display:
     .byte $3f   // 58: '?' Words of Wisdom
     .byte $3f   // 59: '?' Chants and Blessings
     .byte $3f   // 60: '?' Exorcism and Dispelling
+    .byte $21   // 61: '!' Flask of Oil
 
 // Color
 it_color:
@@ -246,6 +252,7 @@ it_color:
     .byte COL_YELLOW    // 58: Words of Wisdom
     .byte COL_CYAN      // 59: Chants and Blessings
     .byte COL_WHITE     // 60: Exorcism and Dispelling
+    .byte COL_ORANGE    // 61: Flask of Oil
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -257,6 +264,7 @@ it_weight:
     .byte 30, 30                            // Books (47-48)
     .byte 30, 50, 5, 2, 2, 4               // Bows, ammo
     .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
+    .byte 10                               // 61: Flask of Oil
 
 // Damage dice count
 it_dmg_dice:
@@ -268,6 +276,7 @@ it_dmg_dice:
     .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 1, 1, 1                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
+    .byte 2                                  // 61: Flask of Oil (2d6)
 
 // Damage dice sides
 it_dmg_sides:
@@ -279,6 +288,7 @@ it_dmg_sides:
     .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 4, 5, 2                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
+    .byte 6                                  // 61: Flask of Oil (2d6)
 
 // Base armor class
 it_base_ac:
@@ -290,6 +300,7 @@ it_base_ac:
     .byte 0, 0                              // Books (47-48)
     .byte 0, 0, 0, 0, 0, 0                  // Bows, ammo: no AC
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
+    .byte 0                                  // 61: Flask of Oil: no AC
 
 // Base cost (lo)
 it_cost_lo:
@@ -302,6 +313,7 @@ it_cost_lo:
     .byte <100, <100                        // Books (47-48)
     .byte <50, <120, <10, <1, <2, <1        // Bows, ammo
     .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
+    .byte <10                                // 61: Flask of Oil
 
 // Base cost (hi)
 it_cost_hi:
@@ -314,6 +326,7 @@ it_cost_hi:
     .byte >100, >100                        // Books (47-48)
     .byte >50, >120, >10, >1, >2, >1        // Bows, ammo
     .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
+    .byte >10                                // 61: Flask of Oil
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -325,6 +338,7 @@ it_min_level:
     .byte 2, 2                              // Books (47-48)
     .byte 2, 3, 1, 1, 2, 1                  // Bows, ammo
     .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
+    .byte 0                                  // 61: Flask of Oil (available immediately)
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -368,6 +382,7 @@ it_name_lo:
     .byte <itn_47, <itn_48
     .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
     .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
+    .byte <itn_61
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -382,6 +397,7 @@ it_name_hi:
     .byte >itn_47, >itn_48
     .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
     .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
+    .byte >itn_61
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "GOLD (SMALL)" ; .byte 0
@@ -445,6 +461,7 @@ itn_57: .text "THE MAGES GUIDE" ; .byte 0
 itn_58: .text "WORDS OF WISDOM" ; .byte 0
 itn_59: .text "CHANTS AND BLESSINGS" ; .byte 0
 itn_60: .text "EXORCISM" ; .byte 0
+itn_61: .text "FLASK OF OIL" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1434,10 +1451,18 @@ roll_enchantment:
 
 !re_lantern:
     // Lantern (type 14): 125 + rng(125)  (each charge = 30 turns)
+    lda zp_temp0
+    cmp #14
+    bne !re_flask_oil+
     lda #125
     jsr rng_range
     clc
     adc #125
+    rts
+
+!re_flask_oil:
+    // Flask of oil (type 61): always 250 (full flask)
+    lda #LANTERN_MAX_CHARGES
     rts
 
 !re_wand:
@@ -1559,6 +1584,7 @@ id_known:
     .byte 1, 1                  // 47-48: Books — always known
     .byte 1, 1, 1, 1, 1, 1      // 49-54: Ranged weapons/ammo — always known
     .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
+    .byte 1                      // 61: Flask of Oil — always known
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -1586,7 +1612,7 @@ scroll_local_idx:
     .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
     .fill 10, $ff       // 39-48: not scrolls
     .fill 6, $ff        // 49-54: not scrolls
-    .fill 6, $ff        // 55-60: not scrolls (books)
+    .fill 7, $ff        // 55-61: not scrolls (books + flask)
 
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .text "A BLUE POTION" ; .byte 0
@@ -1995,7 +2021,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 61
+.assert "Item type count", ITEM_TYPE_COUNT, 62
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT

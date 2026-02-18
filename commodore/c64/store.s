@@ -223,38 +223,48 @@ sro_set_p1:
     cmp #ICAT_STAFF
     beq !sro_charges+
 
+    cmp #ICAT_LIGHT
+    beq !sro_light+
+
     // Default: p1 = 0, flags = 0
     lda #0
-    ldy sb_abs_slot
-    sta si_p1,y
-    sta si_flags,y
-    rts
+    jmp sro_store_p1
 
 !sro_charges:
     lda #6
     jsr rng_range               // 0-5
     clc
     adc #3
-    ldy sb_abs_slot
-    sta si_p1,y
-    lda #0
-    sta si_flags,y
-    rts
+    jmp sro_store_p1
 
 !sro_enchant:
     lda #3
     jsr rng_range               // 0-2
-    ldy sb_abs_slot
-    sta si_p1,y
-    lda #0
-    sta si_flags,y
-    rts
+    jmp sro_store_p1
 
 !sro_book:
     // Books: p1=0 (spell range determined by book type)
-    ldy sb_abs_slot
     lda #0
+    jmp sro_store_p1
+
+!sro_light:
+    // Light items: set charges based on type
+    ldy sb_abs_slot
+    lda si_item_id,y
+    cmp #13
+    beq !sro_light_torch+
+    // Lantern (14) and Flask of oil (61): 250 charges
+    lda #LANTERN_MAX_CHARGES
+    jmp sro_store_p1
+!sro_light_torch:
+    lda #134                    // 134 charges × 30 = 4,020 turns
+
+// Shared tail: store A → si_p1, clear si_flags
+// Input: A = p1 value, sb_abs_slot = target
+sro_store_p1:
+    ldy sb_abs_slot
     sta si_p1,y
+    lda #0
     sta si_flags,y
     rts
 
@@ -267,11 +277,11 @@ store_pick_item:
     sta sr_retry
 
 !spi_loop:
-    // Random item type [2, 60] (skip gold types 0-1)
-    lda #59                     // 59 possible types (2..60)
-    jsr rng_range               // 0-58
+    // Random item type [2, 61] (skip gold types 0-1)
+    lda #60                     // 60 possible types (2..61)
+    jsr rng_range               // 0-59
     clc
-    adc #2                      // 2-60
+    adc #2                      // 2-61
 
     // Check if this item's category matches the store
     pha                         // Save item type on stack
