@@ -39,6 +39,7 @@ test_exit_trampoline:
 #import "../rng.s"
 #import "../math.s"
 #import "../tables.s"
+#import "../item_defs.s"
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"

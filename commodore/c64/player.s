@@ -439,18 +439,46 @@ player_calc_combat:
     lda str_damage_bonus,x
     sta player_data + PL_TODMG
 
-    // DEX AC bonus (signed: negative means worse AC)
-    // AC starts at 0, DEX adds/subtracts. Clamp to min 0.
+    // AC = DEX bonus + equipment AC (base + enchantment)
+    // Start with DEX AC bonus (signed)
     lda player_data + PL_DEX_CUR
     jsr stat_bonus_index
     lda dex_ac_bonus,x
-    bmi !ac_zero+           // Negative bonus → AC stays 0
-    sta player_data + PL_AC
-    jmp !ac_done+
+    sta pcc_ac_accum            // Signed accumulator (may be negative)
+
+    // Loop equipment slots: body, shield, head, hands, feet, ring
+    ldx #EQUIP_BODY
+!ac_equip_loop:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !ac_next_slot+
+    // Add base AC for this item type
+    tay                         // Y = item type ID
+    lda it_base_ac,y
+    clc
+    adc pcc_ac_accum
+    sta pcc_ac_accum
+    // Add enchantment bonus (inv_p1, signed)
+    lda inv_p1,x
+    clc
+    adc pcc_ac_accum
+    sta pcc_ac_accum
+!ac_next_slot:
+    inx
+    cpx #EQUIP_RING + 1        // Past last armor-relevant slot
+    bne !ac_equip_loop-
+
+    // Clamp AC to [0, 60]
+    lda pcc_ac_accum
+    bmi !ac_zero+               // Negative → 0
+    cmp #61
+    bcc !ac_store+
+    lda #60                     // Cap at 60
+    jmp !ac_store+
 !ac_zero:
     lda #0
+!ac_store:
     sta player_data + PL_AC
-!ac_done:
 
     // Blows: simplified lookup
     // Weight class based on STR (higher STR = lighter effective weight)
@@ -459,6 +487,9 @@ player_calc_combat:
     sta player_data + PL_BLOWS
 
     rts
+
+// Scratch for player_calc_combat
+pcc_ac_accum: .byte 0          // AC accumulator (signed during calculation)
 
 // player_calc_hp — Calculate max HP based on level, class HD, CON bonus
 // Preserves: nothing

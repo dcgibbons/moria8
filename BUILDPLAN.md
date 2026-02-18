@@ -1104,6 +1104,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed (see Review Pass 15). BUG-
 | BUG-22 | `mat_the_str` duplicates `cmb_the_str + 1` (5 bytes wasted) | ✅ Fixed — OPT-1.7 eliminated the duplicate; R7.6 Huffman migration removed all remaining inline strings from monster_attack.s. |
 | BUG-23 | Magic Missile spell does not work — no animation and no damage to monsters | **Fixed** — `eff_bolt` damage math was correct but had zero user feedback: no messages, no animation, no monster wake-up, no sound. Added: bolt `*` animation along trace path with save/restore, hit/kill/fizzle messages using combat_msg_buf, `MF_AWAKE` on non-lethal hit, `SFX_HIT` on hit. |
 | BUG-29 | Secret doors on vertical walls render as '─' instead of '│' | ✅ Fixed — old heuristic checked tiles above/below for wall types, failed when neighbors were doors or carved floor. Replaced with left/right floor check: vertical wall doors have floor on both sides (room + corridor), horizontal wall doors have wall tiles beside them. Also saves ~40 bytes. |
+| BUG-30 | Combat messages corrupted (garbled PETSCII) when fighting 'J' monster | **Open** — Message line shows "THE [garbage] HITS" with corrupted characters instead of the monster name. Observed on DL:2 with a Half-Troll Warrior. Appears specific to creatures with symbol 'J'. Likely a Huffman string ID or creature name pointer issue for that creature's entry. |
 
 ---
 
@@ -1159,6 +1160,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed (see Review Pass 15). BUG-
 | BUG-26 | MED | -MORE- prompt placement and frequency feels unnatural on 40-column display | **Fixed** — Expanded message area from 1 row to 2 rows (rows 0-1). Messages fill row 0 then row 1; -MORE- only triggers when a 3rd message arrives while both rows are occupied, roughly halving -MORE- frequency. -MORE- positioned at end of row 1 message. Viewport shrunk from 20 to 19 rows (VIEWPORT_Y=2, VIEWPORT_H=19). |
 | BUG-27 | MED | Spell casting animation/combat happens while spell list overlay is still displayed | **Fixed** — After player selects a spell letter in `pm_do_cast`, the dungeon screen is restored (`ui_help_clear_all` + viewport + render + status) before any mana/level checks or spell effect dispatch. Bolt animations, damage messages, and error messages now appear on the dungeon screen. Cancel (ESC/space) still handled by main.s `screen_clear`. ~16 bytes. |
 | BUG-28 | MED | XP still too generous at low levels — single kills can cause 1-2 level jumps | **Fixed** — Capped `combat_check_levelup` at 1 level-up per kill by replacing the recursive `jmp combat_check_levelup` with `rts`. Excess XP is still halved and retained, so the player levels again on the next kill if still above threshold. Root cause: spawn window [dlvl-2, dlvl+3] allows cr_level 3-4 creatures at DL 1, and XP formula `(cr_xp * cr_level) / player_level` amplifies rewards when cr_level >> player_level. Saves 2 bytes. |
+| BUG-30 | **HIGH** | Combat messages corrupted (garbled PETSCII) when fighting 'J' monster | **Open** — Message area shows "THE [garbage] HITS" with corrupted characters instead of creature name. Observed on DL:2 with Half-Troll Warrior. Specific to creatures with symbol 'J'. Likely Huffman string ID or creature name pointer issue. |
 | OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7), OPT-1.1 resolved by R7.6 | ✅ Done |
 | OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
 
@@ -3703,8 +3705,8 @@ design; items marked **(TODO)** need implementation.
 
 | # | Issue | Status | Notes |
 |---|-------|--------|-------|
-| R1.5 | Blows calculation simplified | **(deferred)** | Currently a 4×5 table (weight class × DEX). Original uses STR, weapon weight, and character level. Consider upgrading if combat feels flat. |
-| R1.6 | AC calculation simplified | **(deferred)** | Review whether current AC formula produces adequate difficulty curve. |
+| R1.5 | Blows calculation simplified | ✅ **Done** | STR-adjusted weight: `adj_weight = (STR×10)/weapon_weight` mapped to 5 brackets. Too-heavy check (`STR×15 < weight → 1 blow`). Same 5×4 table layout with updated values. |
+| R1.6 | AC calculation simplified | ✅ **Done** | Equipment AC now accumulates with DEX bonus. Expanded DEX AC table (max +3 at DEX 18). AC capped at 60. Damage reduction formula `(AC×damage)/200` unchanged (already matched umoria). |
 
 ### 2. Dungeon Generation
 
@@ -3723,7 +3725,7 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R3.1 | Pathfinding | **(deferred)** | Greedy movement (try diagonal, then cardinal). No A*/flow maps. Monsters can get stuck on corners. A* is expensive at 1 MHz; greedy + unstick heuristic may be sufficient. |
+| R3.1 | Pathfinding | ✅ **Done** | Added unstick heuristic: randomized horizontal/vertical try order after diagonal fails + 4th perpendicular fallback direction. Monsters no longer get permanently stuck on corners. |
 | R3.2 | Group/pack tactics | ✅ **DONE** | `CF_GROUP` flag with `spawn_group_extras` (1-3 adjacent same-type on spawn) + neighbor wake. Angband-style escort/pack-leader AI is NOT a umoria feature. |
 | R3.3 | Explosive breeders | ✅ **DONE** | `CF_BREEDER` flag in `monster_ai.s`. Breeding creatures clone themselves each turn (chance-based, room only). Population controlled by MAX_MONSTERS. |
 | R3.4 | Monster fleeing | ✅ **DONE** | Monsters flee when HP < 25% of max. Flee threshold computed at spawn (HP/4). Reversed greedy movement (monster_move_away). Fleeing suppresses attack. CF_ATTACK_ONLY creatures can't flee (can't move). Confusion overrides flee. |
@@ -3758,7 +3760,7 @@ design; items marked **(TODO)** need implementation.
 | R6.1 | Haggling | **Done** | Multi-round buy/sell haggling. 4 rounds max, gap/4 convergence, insult/kick system (3 insults = kicked). Items ≤10 GP use simple Y/N. Number input with 5-digit limit, DELETE support. |
 | R6.2 | Black Market (Store 7) | **Done** | Store index 6. All item categories ($FFFF mask). Buy=base×3, sell=base/10, no CHR adjustment. No haggling (Y/N only). Building at (37,3), door (42,7). Owner: "THE FENCE". |
 | R6.3 | Player Home (Store 8) | **Done** | Store index 7. Free deposit/retrieve, no pricing. Separate UI at $F000 (D/R/Q menu). No restocking — items persist. Saved with game state (SAVE_VERSION $05). Building at (42,20), door (47,24). |
-| R6.4 | Advanced restocking | **(deferred)** | Currently 50% chance per slot on town re-entry. Original restocks based on turn count and dungeon depth. Current approach is acceptable simplification. |
+| R6.4 | Advanced restocking | ✅ **Done** | Turn-based maintenance every 256 turns + town re-entry. Variable restock probability based on stock level (75%/<6 items, 50%/6-9, 25%/10+). Overstock removal when >10 items. |
 
 ### 7. String Compression & String Banks
 

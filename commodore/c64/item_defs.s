@@ -1,0 +1,32 @@
+// item_defs.s — Item system constants
+//
+// Extracted from item.s so player.s (and other early-imported modules)
+// can reference equipment slot indices and inventory constants.
+// Imported before player.s in the build order.
+
+// Item Instance Flags
+.const IF_CURSED     = $01
+.const IF_IDENTIFIED = $02
+.const IF_TRIED      = $04
+
+// Floor Item Constants
+.const MAX_FLOOR_ITEMS = 32
+.const FI_EMPTY        = $ff
+
+// Equipment Slot Constants (indices 22-29 in unified table)
+.const EQUIP_WEAPON = 22
+.const EQUIP_BODY   = 23
+.const EQUIP_SHIELD = 24
+.const EQUIP_HEAD   = 25
+.const EQUIP_HANDS  = 26
+.const EQUIP_FEET   = 27
+.const EQUIP_LIGHT  = 28
+.const EQUIP_RING   = 29
+
+// Inventory Constants
+.const MAX_INV_SLOTS   = 22
+.const MAX_EQUIP_SLOTS = 8
+.const TOTAL_INV_SLOTS = 30
+
+// Master Item Type Count
+.const ITEM_TYPE_COUNT = 62

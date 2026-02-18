@@ -76,6 +76,7 @@ sd_row:        .byte 0     // Current screen row during drawing
 sd_save_x:     .byte 0     // Saved index register
 sr_retry:      .byte 0     // Rejection sampling retry counter
 sr_store_idx:  .byte 0     // Store index for restock loop
+sro_count:     .byte 0     // Item count for variable restock probability
 sb_item_p1:    .byte 0     // Item enchantment/charges for pricing (RP14-3)
 sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
 
@@ -148,84 +149,88 @@ store_restock_all:
     rts
 
 // store_restock_one — Restock empty slots in store zp_store_idx
-// For each of 12 slots: if empty, 50% chance to stock.
+// Variable probability: 75% if <6 items, 50% if 6-10, 25% if >10.
+// Single-pass: counts items inline and adjusts probability dynamically.
+// After restocking, removes 1 random item if store has >10 items.
 // Clobbers: everything
 store_restock_one:
     ldx zp_store_idx
     lda store_base_idx,x
-    sta sb_abs_slot             // Starting absolute slot
+    sta sb_abs_slot
+    lda #0
+    sta sro_count
 
     ldx #0                      // Slot counter 0-11
 !sro_loop:
     cpx #STORE_MAX_ITEMS
-    bcc !sro_cont+
-    jmp !sro_done+
-!sro_cont:
+    bcs !sro_done+
     stx sd_save_x
 
-    // Check if slot is empty
+    // Check if slot is occupied or empty
     ldy sb_abs_slot
     lda si_item_id,y
     cmp #FI_EMPTY
-    bne !sro_next+
+    bne !sro_cnt_inc+           // Occupied → count it
 
-    // 50% chance to stock
+    // Empty slot: stock with variable probability
+    // sro_prob_tbl[count] = skip threshold (rng < threshold → skip)
     jsr rng_byte
-    and #$01
-    beq !sro_next+
+    ldy sro_count
+    cmp sro_prob_tbl,y
+    bcc !sro_next+              // rng < threshold → don't stock
 
-    // Pick an item for this store
+    // Pick and stock an item
     jsr store_pick_item         // Returns A = item type
-
-    // Write to store slot
     ldy sb_abs_slot
     sta si_item_id,y
     lda #1
     sta si_qty,y
-
-    // Determine p1 value based on category
     lda si_item_id,y
     tax
     lda it_category,x
-    jsr sro_set_p1              // Subroutine handles enchant/charges/zero
+    jsr sro_set_p1
+
+!sro_cnt_inc:
+    inc sro_count               // Count occupied + newly stocked
 
 !sro_next:
     ldx sd_save_x
     inc sb_abs_slot
     inx
     jmp !sro_loop-
+
 !sro_done:
     rts
+
+// Skip threshold table: rng < value → don't stock
+// count 0-5: 64 (75% stock), 6-10: 128 (50%), 11-12: 192 (25%)
+sro_prob_tbl:
+    .byte 64, 64, 64, 64, 64, 64
+    .byte 128, 128, 128, 128, 128
+    .byte 192, 192
 
 // sro_set_p1 — Set p1 and flags for newly stocked item
 // Input: A = category, sb_abs_slot = target slot
 // Clobbers: A, X, Y
 sro_set_p1:
-    // Equipment categories get enchantment 0-2
+    // Equipment categories (WEAPON=2 through BOOTS=7) get enchantment 0-2
     cmp #ICAT_WEAPON
-    beq !sro_enchant+
-    cmp #ICAT_ARMOR
-    beq !sro_enchant+
-    cmp #ICAT_SHIELD
-    beq !sro_enchant+
-    cmp #ICAT_HELM
-    beq !sro_enchant+
-    cmp #ICAT_GLOVES
-    beq !sro_enchant+
-    cmp #ICAT_BOOTS
-    beq !sro_enchant+
+    bcc !sro_default+
+    cmp #ICAT_BOOTS + 1
+    bcc !sro_enchant+
+    // ICAT_BOOK=13
     cmp #ICAT_BOOK
     beq !sro_book+
-
-    // Wands/staffs get charges 3-8
+    // Wands(14)/staffs(15) get charges 3-8
     cmp #ICAT_WAND
-    beq !sro_charges+
-    cmp #ICAT_STAFF
-    beq !sro_charges+
+    bcc !sro_default+
+    cmp #ICAT_STAFF + 1
+    bcc !sro_charges+
 
     cmp #ICAT_LIGHT
     beq !sro_light+
 
+!sro_default:
     // Default: p1 = 0, flags = 0
     lda #0
     jmp sro_store_p1
@@ -524,25 +529,17 @@ price_add_p1_bonus:
     ldx sb_item_type
     lda it_category,x
 
-    // Check equipment categories
+    // Equipment range: WEAPON(2) through BOOTS(7)
     cmp #ICAT_WEAPON
-    beq !pap_equip+
-    cmp #ICAT_ARMOR
-    beq !pap_equip+
-    cmp #ICAT_SHIELD
-    beq !pap_equip+
-    cmp #ICAT_HELM
-    beq !pap_equip+
-    cmp #ICAT_GLOVES
-    beq !pap_equip+
-    cmp #ICAT_BOOTS
-    beq !pap_equip+
+    bcc !pap_done+
+    cmp #ICAT_BOOTS + 1
+    bcc !pap_equip+
 
-    // Check wand/staff
+    // Wand(14)/Staff(15)
     cmp #ICAT_WAND
-    beq !pap_charges+
-    cmp #ICAT_STAFF
-    beq !pap_charges+
+    bcc !pap_done+
+    cmp #ICAT_STAFF + 1
+    bcc !pap_charges+
 
     // Other categories: no bonus
 !pap_done:

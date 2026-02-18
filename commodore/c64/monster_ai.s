@@ -334,91 +334,162 @@ wake_group_nearby:
 wgn_dist: .byte 0
 
 // ============================================================
-// monster_move_toward — Greedy 3-try movement toward player
-// Try diagonal, then horizontal, then vertical.
-// Clobbers: A, X, Y, zp_ptr0/hi
+// monster_move_toward — Movement toward player with unstick heuristic
+// Try diagonal first. Then randomly alternate horizontal/vertical
+// to break corner-sticking. 4th fallback: perpendicular move.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_temp3, zp_temp4
 // ============================================================
 monster_move_toward:
     lda #0
     sta mat_fleeing
-    // Compute sign_dx = sgn(player_x - mon_x)
-    lda zp_player_x
-    cmp zp_mon_x
-    beq !mmt_dx_zero+
-    bcs !mmt_dx_pos+
-    // player_x < mon_x → -1
-    lda #$ff
-    sta mat_sign_dx
-    jmp !mmt_dy+
-!mmt_dx_pos:
-    lda #$01
-    sta mat_sign_dx
-    jmp !mmt_dy+
-!mmt_dx_zero:
-    lda #$00
-    sta mat_sign_dx
-
-!mmt_dy:
-    // Compute sign_dy = sgn(player_y - mon_y)
-    lda zp_player_y
-    cmp zp_mon_y
-    beq !mmt_dy_zero+
-    bcs !mmt_dy_pos+
-    lda #$ff
-    sta mat_sign_dy
-    jmp !mmt_try+
-!mmt_dy_pos:
-    lda #$01
-    sta mat_sign_dy
-    jmp !mmt_try+
-!mmt_dy_zero:
-    lda #$00
-    sta mat_sign_dy
-
-!mmt_try:
-    // If both zero, already on player (shouldn't happen) — no move
+    jsr mmt_calc_signs          // Set mat_sign_dx/dy toward player
     lda mat_sign_dx
     ora mat_sign_dy
-    beq !mmt_done+
+    beq !mmt_done+              // Both zero → no move
 
     // Try 1: diagonal (sign_dx, sign_dy)
-    lda zp_mon_x
-    clc
-    adc mat_sign_dx
-    sta mat_target_x
-    lda zp_mon_y
-    clc
-    adc mat_sign_dy
-    sta mat_target_y
-    jsr monster_try_step
-    bcs !mmt_done+              // Success
-
-    // Try 2: horizontal only (sign_dx, 0) — if sign_dx != 0
-    lda mat_sign_dx
-    beq !mmt_try_vert+
-    lda zp_mon_x
-    clc
-    adc mat_sign_dx
-    sta mat_target_x
-    lda zp_mon_y
-    sta mat_target_y
+    jsr mmt_set_diag
     jsr monster_try_step
     bcs !mmt_done+
 
-!mmt_try_vert:
-    // Try 3: vertical only (0, sign_dy) — if sign_dy != 0
+    // Randomly choose horizontal-first or vertical-first (unstick)
+    jsr rng_byte
+    and #$01
+    bne !mmt_vert_first+
+
+    // --- Horizontal first, then vertical ---
+    jsr mmt_try_horiz
+    bcs !mmt_done+
+    jsr mmt_try_vert
+    bcs !mmt_done+
+    jmp !mmt_perp+
+
+!mmt_vert_first:
+    // --- Vertical first, then horizontal ---
+    jsr mmt_try_vert
+    bcs !mmt_done+
+    jsr mmt_try_horiz
+    bcs !mmt_done+
+
+!mmt_perp:
+    // Try 4: perpendicular move (break corner-sticking)
+    // Pick a perpendicular axis and try both directions
+    lda mat_sign_dx
+    beq !mmt_perp_h+           // dx=0 → try horizontal perp
     lda mat_sign_dy
-    beq !mmt_done+
+    beq !mmt_perp_v+           // dy=0 → try vertical perp
+    jsr rng_byte
+    and #$01
+    bne !mmt_perp_h+
+!mmt_perp_v:
+    // Perpendicular vertical: try +1 then -1 (or vice versa)
+    lda zp_mon_x
+    sta mat_target_x
+    lda zp_mon_y
+    clc
+    adc #1
+    sta mat_target_y
+    jsr monster_try_step
+    bcs !mmt_done+
+    lda zp_mon_x
+    sta mat_target_x
+    lda zp_mon_y
+    sec
+    sbc #1
+    sta mat_target_y
+    jsr monster_try_step
+    jmp !mmt_done+
+!mmt_perp_h:
+    // Perpendicular horizontal: try +1 then -1
+    lda zp_mon_y
+    sta mat_target_y
+    lda zp_mon_x
+    clc
+    adc #1
+    sta mat_target_x
+    jsr monster_try_step
+    bcs !mmt_done+
+    lda zp_mon_y
+    sta mat_target_y
+    lda zp_mon_x
+    sec
+    sbc #1
+    sta mat_target_x
+    jsr monster_try_step
+
+!mmt_done:
+    rts
+
+// --- Helper: compute sign_dx/sign_dy toward player ---
+mmt_calc_signs:
+    lda zp_player_x
+    cmp zp_mon_x
+    beq !dx0+
+    bcs !dxp+
+    lda #$ff
+    .byte $2c               // BIT abs — skip next 2 bytes
+!dxp:
+    lda #$01
+    .byte $2c
+!dx0:
+    lda #$00
+    sta mat_sign_dx
+    lda zp_player_y
+    cmp zp_mon_y
+    beq !dy0+
+    bcs !dyp+
+    lda #$ff
+    .byte $2c
+!dyp:
+    lda #$01
+    .byte $2c
+!dy0:
+    lda #$00
+    sta mat_sign_dy
+    rts
+
+// --- Helper: set target to diagonal (mon + sign_dx, mon + sign_dy) ---
+mmt_set_diag:
+    lda zp_mon_x
+    clc
+    adc mat_sign_dx
+    sta mat_target_x
+    lda zp_mon_y
+    clc
+    adc mat_sign_dy
+    sta mat_target_y
+    rts
+
+// --- Helper: try horizontal move (sign_dx, 0) ---
+// Output: carry set = moved
+mmt_try_horiz:
+    lda mat_sign_dx
+    beq !th_fail+
+    lda zp_mon_x
+    clc
+    adc mat_sign_dx
+    sta mat_target_x
+    lda zp_mon_y
+    sta mat_target_y
+    jmp monster_try_step
+!th_fail:
+    clc
+    rts
+
+// --- Helper: try vertical move (0, sign_dy) ---
+// Output: carry set = moved
+mmt_try_vert:
+    lda mat_sign_dy
+    beq !tv_fail+
     lda zp_mon_x
     sta mat_target_x
     lda zp_mon_y
     clc
     adc mat_sign_dy
     sta mat_target_y
-    jsr monster_try_step
-    // Carry set/clear doesn't matter, we're done either way
-
-!mmt_done:
+    jmp monster_try_step
+!tv_fail:
+    clc
     rts
 
 // ============================================================

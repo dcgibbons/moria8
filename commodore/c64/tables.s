@@ -180,7 +180,7 @@ dex_tohit_bonus:
 // DEX AC bonus (positive = better AC)
 dex_ac_bonus:
     .byte <-4, <-3, <-2, <-1, 0, 0, 0, 0  // DEX 3-10
-    .byte   0,   0,   0,   1, 1, 1, 2, 2  // DEX 11-18
+    .byte   0,   0,   1,   2, 2, 2, 3, 3  // DEX 11-18
 
 // CON HP bonus (per level)
 con_hp_bonus:
@@ -209,19 +209,20 @@ chr_sell_adj:
     .byte 41, 43, 44, 45, 46, 47, 48, 50   // CHR 11-18
 
 // ============================================================
-// Attack blows table (simplified from umoria's 7x6)
-// Rows: adjusted weight class (STR*10/weapon_weight), 0-4
-// Cols: DEX bracket (0=<10, 1=10-14, 2=15-17, 3=18)
+// Attack blows table (STR-adjusted, umoria-faithful)
+// Rows: STR-adjusted weight bracket (adj_weight = STR*10/weapon_weight)
+//   0: adj<3 (too weak), 1: 3-4, 2: 5-7, 3: 8-12, 4: >=13 / unarmed
+// Cols: DEX bracket (0=<10, 1=10-14, 2=15-17, 3=18+)
 // Returns number of blows per round (1-4)
 // ============================================================
 .const BLOWS_COLS = 4
 blows_table:
-    //       DEX<10  10-14  15-17   18
-    .byte      1,     1,     1,    1   // wt class 0 (very heavy)
-    .byte      1,     1,     1,    2   // wt class 1
-    .byte      1,     1,     2,    2   // wt class 2
-    .byte      1,     2,     2,    3   // wt class 3
-    .byte      2,     2,     3,    4   // wt class 4 (very light)
+    //       DEX<10  10-14  15-17   18+
+    .byte      1,     1,     1,    1   // row 0: weak for weapon
+    .byte      1,     1,     2,    2   // row 1: fair
+    .byte      1,     2,     2,    3   // row 2: good
+    .byte      2,     2,     3,    3   // row 3: strong
+    .byte      2,     3,     3,    4   // row 4: mighty / unarmed
 
 // ============================================================
 // Race name strings (screen codes, null-terminated)

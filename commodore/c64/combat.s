@@ -257,9 +257,12 @@ combat_calc_tohit:
     rts
 
 // combat_calc_blows — Calculate number of blows per round
-// Checks equipped weapon weight for weight class, unarmed = class 4.
+// Uses STR-adjusted weapon weight: adj_weight = (STR * 10) / weapon_weight
+// Then indexes blows_table[adj_weight_bracket][dex_bracket].
+// Too-heavy check: if STR * 15 < weapon_weight, force 1 blow.
+// Unarmed = weight class 4 (lightest).
 // Output: zp_combat_blows
-// Clobbers: A, X, Y
+// Clobbers: A, X, Y, zp_math_a/b
 combat_calc_blows:
     // DEX bracket: <10→0, 10-14→1, 15-17→2, 18+→3
     lda player_data + PL_DEX_CUR
@@ -284,8 +287,7 @@ combat_calc_blows:
     // X = dex bracket (0-3). Save it.
     stx zp_temp0
 
-    // Determine weight class from weapon
-    // If no weapon: weight class 4 (lightest)
+    // Check for weapon
     ldy #EQUIP_WEAPON
     lda inv_item_id,y
     cmp #FI_EMPTY
@@ -293,28 +295,57 @@ combat_calc_blows:
 
     // Get weapon weight
     tay                         // Y = weapon type
-    lda it_weight,y             // Weight in 1/10 lbs
-    // Weight class: <30→4, <50→3, <80→2, <120→1, else→0
-    cmp #30
-    bcc !ccb_wc4+
-    cmp #50
-    bcc !ccb_wc3+
-    cmp #80
-    bcc !ccb_wc2+
-    cmp #120
-    bcc !ccb_wc1+
+    lda it_weight,y             // A = weapon weight (1/10 lbs)
+    beq !ccb_unarmed+          // Zero weight → treat as unarmed
+    sta ccb_wt_save             // Save weapon weight
+
+    // Too-heavy check: if STR * 15 < weapon_weight, force 1 blow
+    // Compute STR * 15 = STR * 16 - STR (fits in 16-bit for stats up to 118)
+    lda player_data + PL_STR_CUR
+    ldx #15
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    // Compare 16-bit (zp_math_b:zp_math_a) vs weapon_weight (8-bit, zero-extended)
+    lda zp_math_b
+    bne !ccb_not_heavy+         // Hi > 0 → STR*15 >= 256 > any weapon weight
+    lda zp_math_a
+    cmp ccb_wt_save
+    bcs !ccb_not_heavy+         // STR*15 >= weapon_weight → ok
+    // Too heavy: force 1 blow
+    lda #1
+    sta zp_combat_blows
+    rts
+
+!ccb_not_heavy:
+    // Compute adj_weight = (STR * 10) / weapon_weight
+    lda player_data + PL_STR_CUR
+    ldx #10
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi (STR*10)
+    ldx ccb_wt_save             // X = weapon weight (divisor)
+    jsr math_div_16x8           // zp_math_a = quotient lo (adj_weight)
+
+    // Map adj_weight to bracket (0-4)
+    // adj_weight < 3 → 0, 3-4 → 1, 5-7 → 2, 8-12 → 3, >= 13 → 4
+    lda zp_math_a
+    cmp #13
+    bcs !ccb_br4+
+    cmp #8
+    bcs !ccb_br3+
+    cmp #5
+    bcs !ccb_br2+
+    cmp #3
+    bcs !ccb_br1+
     lda #0
     jmp !ccb_lookup+
-!ccb_wc1:
+!ccb_br1:
     lda #1
     jmp !ccb_lookup+
-!ccb_wc2:
+!ccb_br2:
     lda #2
     jmp !ccb_lookup+
-!ccb_wc3:
+!ccb_br3:
     lda #3
     jmp !ccb_lookup+
-!ccb_wc4:
+!ccb_br4:
     lda #4
     jmp !ccb_lookup+
 !ccb_unarmed:
@@ -330,6 +361,9 @@ combat_calc_blows:
     lda blows_table,x
     sta zp_combat_blows
     rts
+
+// Scratch for combat_calc_blows
+ccb_wt_save: .byte 0           // Saved weapon weight
 
 // combat_roll_tohit — Roll d20 to determine if attack hits
 // Input:  zp_combat_tohit = hit chance

@@ -43,6 +43,7 @@ test_finish:
 #import "../rng.s"
 #import "../math.s"
 #import "../tables.s"
+#import "../item_defs.s"
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"
@@ -507,18 +508,32 @@ test_start:
     // Run AI tick — diagonal (21,14) is wall, should try horizontal (21,15)
     jsr monster_ai_tick
 
-    // Monster should be at (21,15) — moved horizontally
+    // Monster should have moved — either (21,15) horizontal or (20,14) vertical
+    // Both are valid due to random horizontal/vertical swap in unstick heuristic
     ldx #0
     jsr monster_get_ptr
     ldy #MX_X
     lda (zp_ptr0),y
-    cmp #21
-    bne !t6_fail+
+    sta tai_save_x
     ldy #MX_Y
     lda (zp_ptr0),y
+    sta tai_save_y
+    // Accept (21,15)
+    lda tai_save_x
+    cmp #21
+    bne !t6_try_vert+
+    lda tai_save_y
     cmp #15
+    beq !t6_pass+
+!t6_try_vert:
+    // Accept (20,14)
+    lda tai_save_x
+    cmp #20
     bne !t6_fail+
-
+    lda tai_save_y
+    cmp #14
+    bne !t6_fail+
+!t6_pass:
     lda #$01
     sta tc_results + 5
     jmp !t7+

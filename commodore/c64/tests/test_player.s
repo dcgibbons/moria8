@@ -18,7 +18,14 @@
 #import "../rng.s"
 #import "../math.s"
 #import "../tables.s"
+#import "../item_defs.s"
 #import "../player.s"
+
+// Stubs for item data arrays referenced by player_calc_combat.
+// Only need enough entries to cover equipment slot indices (22-29).
+inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
+inv_p1:      .fill TOTAL_INV_SLOTS, 0
+it_base_ac:  .fill 62, 0
 
 test_start:
     // Init results

@@ -571,26 +571,12 @@ item_eat:
 
 // player_recalc_equipment — Recalculate AC, to-hit, to-damage from equipment
 // Called after any equip/unequip action.
+// player_calc_combat already handles DEX bonus + equipment AC (R1.6).
+// This adds weapon to-hit/to-damage and ego bonuses.
 // Clobbers: everything
 player_recalc_equipment:
-    // Start with stat-based bonuses
-    jsr player_calc_combat      // Resets PL_AC, PL_TOHIT, PL_TODMG from stats
-
-    // Add armor AC from equipped items
-    ldx #EQUIP_BODY
-    jsr pre_add_ac
-    ldx #EQUIP_SHIELD
-    jsr pre_add_ac
-    ldx #EQUIP_HEAD
-    jsr pre_add_ac
-    ldx #EQUIP_HANDS
-    jsr pre_add_ac
-    ldx #EQUIP_FEET
-    jsr pre_add_ac
-
-    // Add ring protection bonus
-    ldx #EQUIP_RING
-    jsr pre_add_ac
+    // Resets PL_AC (with equipment), PL_TOHIT, PL_TODMG from stats
+    jsr player_calc_combat
 
     // Add weapon to-hit and to-damage enchantment bonus
     ldx #EQUIP_WEAPON
@@ -624,30 +610,6 @@ player_recalc_equipment:
     lda player_data + PL_AC
     sta zp_player_ac
 
-    rts
-
-// pre_add_ac — Add base AC + enchantment from an equipment slot
-// Input: X = equipment slot index (22-29)
-// Clobbers: A, Y
-pre_add_ac:
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !paa_none+
-
-    // Add base AC
-    tay                         // Y = item type
-    lda it_base_ac,y
-    clc
-    adc player_data + PL_AC
-    sta player_data + PL_AC
-
-    // Add enchantment bonus (p1)
-    lda inv_p1,x
-    clc
-    adc player_data + PL_AC
-    sta player_data + PL_AC
-
-!paa_none:
     rts
 
 // ============================================================

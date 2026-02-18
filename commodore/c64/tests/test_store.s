@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot.
 //
-// Results at $0400-$041A: $01 = pass, $00 = fail per test (27 tests)
+// Results at $0400-$041B: $01 = pass, $00 = fail per test (28 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #26
+    ldx #27
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -35,6 +35,7 @@ test_exit_trampoline:
 #import "../rng.s"
 #import "../math.s"
 #import "../tables.s"
+#import "../item_defs.s"
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"
@@ -77,12 +78,12 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 28, $ff
+tc_results: .fill 29, $ff
 tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #26
+    ldx #27
     lda #$ff
 !clr:
     sta tc_results,x
@@ -752,5 +753,48 @@ test_start:
     lda #$00
 !t27_store:
     sta tc_results + 26
+
+    // ============================================================
+    // Test 28: Variable probability restock — empty store fills well
+    // Clear store 0, call store_restock_one. With 0 items, 75% fill
+    // rate should stock at least 4 of 12 slots.
+    // ============================================================
+    ldx #0
+!t28_clr:
+    cpx #STORE_MAX_ITEMS
+    bcs !t28_clr_done+
+    lda #FI_EMPTY
+    sta si_item_id,x
+    inx
+    jmp !t28_clr-
+!t28_clr_done:
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+
+    // Count non-empty slots in store 0
+    lda #0
+    sta tc_count
+    ldx #0
+!t28_loop:
+    cpx #STORE_MAX_ITEMS
+    bcs !t28_done+
+    lda si_item_id,x
+    cmp #FI_EMPTY
+    beq !t28_next+
+    inc tc_count
+!t28_next:
+    inx
+    jmp !t28_loop-
+!t28_done:
+    lda tc_count
+    cmp #4                      // At least 4 stocked (75% rate, very likely)
+    bcc !t28_fail+
+    lda #$01
+    jmp !t28_store+
+!t28_fail:
+    lda #$00
+!t28_store:
+    sta tc_results + 27
 
     jmp test_exit_trampoline

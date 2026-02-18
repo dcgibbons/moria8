@@ -24,32 +24,8 @@
 .const ICAT_WAND     = 14
 .const ICAT_STAFF    = 15
 
-// Item Instance Flags
-.const IF_CURSED     = $01
-.const IF_IDENTIFIED = $02
-.const IF_TRIED      = $04
-
-// Floor Item Constants
-.const MAX_FLOOR_ITEMS = 32
-.const FI_EMPTY        = $ff
-
-// Equipment Slot Constants (indices 22-29 in unified table)
-.const EQUIP_WEAPON = 22
-.const EQUIP_BODY   = 23
-.const EQUIP_SHIELD = 24
-.const EQUIP_HEAD   = 25
-.const EQUIP_HANDS  = 26
-.const EQUIP_FEET   = 27
-.const EQUIP_LIGHT  = 28
-.const EQUIP_RING   = 29
-
-// Inventory Constants
-.const MAX_INV_SLOTS   = 22
-.const MAX_EQUIP_SLOTS = 8
-.const TOTAL_INV_SLOTS = 30
-
-// Master Item Type Count
-.const ITEM_TYPE_COUNT = 62
+// Item system constants (IF_*, FI_*, EQUIP_*, inventory sizes)
+// are defined in item_defs.s (imported early in build order)
 
 // Named item type constants
 .const ITEM_FLASK_OIL = 61

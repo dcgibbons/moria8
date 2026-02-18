@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #12
+    ldx #19
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -40,6 +40,7 @@ test_exit_trampoline:
 #import "../rng.s"
 #import "../math.s"
 #import "../tables.s"
+#import "../item_defs.s"
 #import "../player.s"
 #import "../ui_messages.s"
 #import "../ui_status.s"
@@ -84,7 +85,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 13, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 20, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -154,7 +155,7 @@ test_start:
 
     // ==========================================
     // Test 3: combat_calc_blows with DEX 12 (unarmed)
-    // DEX 12 → bracket 1 → blows_table[16+1] = 2
+    // DEX 12 → bracket 1 → blows_table[16+1] = 3 (row 4=unarmed, col 1)
     // ==========================================
 !t3:
     lda #12
@@ -163,7 +164,7 @@ test_start:
     jsr combat_calc_blows
 
     lda zp_combat_blows
-    cmp #2
+    cmp #3
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
@@ -541,6 +542,218 @@ test_start:
 
     lda tc_ok
     sta tc_results + 12
+
+    // ==========================================
+    // Test 14: combat_calc_blows — STR too weak for weapon
+    // STR 3, Long Sword (type 4, weight=50), DEX 18
+    // STR*15 = 45 < 50 → too heavy → force 1 blow
+    // ==========================================
+!t14:
+    lda #3
+    sta player_data + PL_STR_CUR
+    lda #18
+    sta player_data + PL_DEX_CUR
+    lda #4                      // Long Sword (weight=50)
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #1
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+
+    // ==========================================
+    // Test 15: combat_calc_blows — STR 18 with light weapon
+    // STR 18, Dagger (type 2, weight=12), DEX 18
+    // adj_weight = (18*10)/12 = 15 → bracket 4 (>=13)
+    // Row 4, Col 3 (DEX 18+) = 4 blows
+    // ==========================================
+!t15:
+    lda #18
+    sta player_data + PL_STR_CUR
+    lda #18
+    sta player_data + PL_DEX_CUR
+    lda #2                      // Dagger (weight=12)
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #4
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // ==========================================
+    // Test 16: combat_calc_blows — weak STR with medium weapon
+    // STR 10, Long Sword (type 4, weight=50), DEX 12
+    // STR*15 = 150 >= 50 → ok
+    // adj_weight = (10*10)/50 = 2 → bracket 0 (<3)
+    // Row 0, Col 1 (DEX 10-14) = 1 blow
+    // ==========================================
+!t16:
+    lda #10
+    sta player_data + PL_STR_CUR
+    lda #12
+    sta player_data + PL_DEX_CUR
+    lda #4                      // Long Sword (weight=50)
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #1
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+
+    // ==========================================
+    // Test 17: combat_calc_blows — moderate STR/DEX
+    // STR 14, Short Sword (type 3, weight=30), DEX 15
+    // STR*15 = 210 >= 30 → ok
+    // adj_weight = (14*10)/30 = 4 → bracket 1 (3-4)
+    // Row 1, Col 2 (DEX 15-17) = 2 blows
+    // ==========================================
+!t17:
+    lda #14
+    sta player_data + PL_STR_CUR
+    lda #15
+    sta player_data + PL_DEX_CUR
+    lda #3                      // Short Sword (weight=30)
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #2
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+
+    // ==========================================
+    // Test 18: AC from DEX only (no equipment)
+    // DEX 18 → dex_ac_bonus index 15 = 3
+    // No armor equipped → AC = 3
+    // ==========================================
+!t18:
+    // Clear all equipment slots
+    lda #FI_EMPTY
+    ldx #EQUIP_BODY
+!t18_clr:
+    sta inv_item_id,x
+    inx
+    cpx #EQUIP_RING + 1
+    bne !t18_clr-
+
+    lda #18
+    sta player_data + PL_DEX_CUR
+    lda #12
+    sta player_data + PL_STR_CUR
+
+    jsr player_calc_combat
+
+    lda player_data + PL_AC
+    cmp #3
+    bne !t18_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !t19+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+
+    // ==========================================
+    // Test 19: AC from DEX + one armor piece
+    // DEX 12 → dex_ac_bonus index 9 = 0
+    // Leather armor (type 7, base_ac=4) in EQUIP_BODY, p1=0
+    // AC = 0 + 4 = 4
+    // ==========================================
+!t19:
+    // Clear all equipment slots
+    lda #FI_EMPTY
+    ldx #EQUIP_BODY
+!t19_clr:
+    sta inv_item_id,x
+    inx
+    cpx #EQUIP_RING + 1
+    bne !t19_clr-
+
+    lda #12
+    sta player_data + PL_DEX_CUR
+    lda #7                      // Leather armor
+    sta inv_item_id + EQUIP_BODY
+    lda #0
+    sta inv_p1 + EQUIP_BODY
+
+    jsr player_calc_combat
+
+    lda player_data + PL_AC
+    cmp #4
+    bne !t19_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // ==========================================
+    // Test 20: AC from DEX + multiple armor + enchantment
+    // DEX 18 → bonus 3
+    // Chain mail (type 8, base_ac=6) in EQUIP_BODY, p1=+2
+    // Iron helm (type 10, base_ac=1) in EQUIP_HEAD, p1=0
+    // AC = 3 + 6 + 2 + 1 = 12
+    // ==========================================
+!t20:
+    // Clear all equipment slots
+    lda #FI_EMPTY
+    ldx #EQUIP_BODY
+!t20_clr:
+    sta inv_item_id,x
+    inx
+    cpx #EQUIP_RING + 1
+    bne !t20_clr-
+
+    lda #18
+    sta player_data + PL_DEX_CUR
+    lda #8                      // Chain mail
+    sta inv_item_id + EQUIP_BODY
+    lda #2                      // +2 enchantment
+    sta inv_p1 + EQUIP_BODY
+    lda #10                     // Iron helm
+    sta inv_item_id + EQUIP_HEAD
+    lda #0
+    sta inv_p1 + EQUIP_HEAD
+
+    jsr player_calc_combat
+
+    lda player_data + PL_AC
+    cmp #12
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp !tests_done+
+!t20_fail:
+    lda #$00
+    sta tc_results + 19
 
 !tests_done:
     jmp test_exit_trampoline
