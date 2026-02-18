@@ -1627,8 +1627,10 @@ tracking, effect expiration messages). Found 3 remaining issues.
    ("YOU CAN SEE AGAIN." + viewport redraw), confusion ("YOU FEEL LESS CONFUSED."), paralysis
    ("YOU CAN MOVE AGAIN.") all print correctly when their timers reach 0.
 
-4. **Light source tracking** (`turn_tick_light`, turn.s:309-354) — Decrements charges per turn,
-   warns at 10 ("YOUR LIGHT IS GROWING DIM."), expires at 0 ("YOUR LIGHT HAS GONE OUT." +
+4. **Light source tracking** (`turn_tick_light`, turn.s) — Uses x30 tick multiplier
+   (`LIGHT_TICKS_PER_CHARGE = 30`) so each charge = 30 turns. Torches ~4,020 turns,
+   lanterns ~7,500 turns (matching umoria). Warns at 2 charges (~60 turns remaining:
+   "YOUR LIGHT IS GROWING DIM."), expires at 0 ("YOUR LIGHT HAS GONE OUT." +
    sets `zp_light_radius` to 0 + unequips light).
 
 #### RP8-1: Poltergeist speed wrong — MEDIUM
@@ -2789,36 +2791,18 @@ C64 values are **~100x too low**. Torches should last thousands of turns, not do
 
 With current values, a torch lasts ~35 turns on average — barely enough to explore a single room and corridor. In umoria, a store-bought torch lasts 4,000 turns (~100 dungeon levels of casual exploration). Light management is a background resource concern in umoria, not a constant crisis.
 
-#### RP17-1 (HIGH): Light source duration ~100x too short
+#### RP17-1 ~~(HIGH)~~ DONE: Light source duration ~100x too short
 
-**Recommended fix — turn multiplier approach:**
+**Fixed** using Option B (x30 multiplier). `LIGHT_TICKS_PER_CHARGE = 30` with `light_tick_counter` in `turn_tick_light`. Each charge = 30 turns.
 
-Use a "ticks per charge" counter so each charge unit represents N turns instead of 1. This keeps 8-bit `inv_p1` storage unchanged.
+| Item | Charges (store) | Charges (dungeon) | Effective turns |
+|------|----------------|-------------------|-----------------|
+| Torch | 134 | 67 + rng(67) | ~4,020 (store) |
+| Lantern | 250 | 125 + rng(125) | ~7,500 (store) |
+| Starting torch | 134 | — | 4,020 |
+| Warning threshold | 2 charges | — | ~60 turns remaining |
 
-| Constant | Value | Effect |
-|----------|-------|--------|
-| `LIGHT_TICKS_PER_CHARGE` | 20 | Each charge = 20 turns |
-| Torch charges | `200` (store) / `rng(200)` (dungeon) | 200×20 = 4,000 turns |
-| Lantern charges | `255` (store, 8-bit cap) / `rng(255)` (dungeon) | 255×20 = 5,100 turns |
-| Starting torch | `200` | 4,000 turns |
-| Warning threshold | `2` charges (= 40 turns) | Matches umoria's < 40 turns |
-
-**Implementation:** Add a `light_tick_counter` byte in static RAM. `turn_tick_light` decrements the counter each turn; only decrements `inv_p1` when the counter reaches 0 and resets it to `LIGHT_TICKS_PER_CHARGE`.
-
-**Trade-off:** Brass lantern max is 5,100 turns (255×20) vs umoria's 7,500. To hit 7,500 exactly would need a multiplier of ~30 (250×30=7,500), but then torches would be 133×30=3,990 ≈ 4,000. A multiplier of 30 with torch=134 (4,020) and lantern=250 (7,500) is also viable.
-
-| Alternative | Multiplier | Torch charges | Torch turns | Lantern charges | Lantern turns |
-|-------------|-----------|---------------|-------------|-----------------|---------------|
-| **Option A** | 20 | 200 | 4,000 | 255 | 5,100 |
-| **Option B** | 30 | 134 | 4,020 | 250 | 7,500 |
-
-Option B is more faithful to umoria. Flask of Oil refueling (if implemented later) would add charges in the same unit system.
-
-**Code changes:**
-- `turn.s`: Add tick counter logic to `turn_tick_light` (~10 bytes)
-- `item.s`: Update `roll_enchantment` torch/lantern charge formulas
-- `main.s`: Update starting torch charge value
-- `store.s`: Store-sold lights get full charge values
+Files changed: `turn.s`, `item.s`, `main.s`, `tests/test_item.s`.
 
 **Status:** Open
 
@@ -3741,7 +3725,7 @@ design; items marked **(TODO)** need implementation.
 | R4.1 | Ego items | **(TODO)** | No "Holy Avenger", "Defender", "Slay Evil", etc. Need ego flag + modifier table + name generation. |
 | R4.4 | Pseudo-ID | **(TODO)** | No "feeling" about items (excellent, terrible, etc.). Need carry-time counter + quality hint based on hidden enchantment. |
 | R4.5 | Thorough identification | **(TODO)** | `eff_identify_prompt` sets identified flag but doesn't reveal hidden powers (since ego items don't exist yet). Depends on R4.1. |
-| R4.6 | Flasks of Oil | **(TODO)** | Consumable item to refuel Brass Lanterns. In umoria: `TV_FLASK` type, sold at General Store for 7,500 turns of fuel per flask. Player uses flask ('F'uel or 'r'efill command) on equipped lantern, adding charges up to lantern max (7,500). Does NOT work on torches (torches are disposable). Need: new item type entry in `item.s` SoA tables, General Store inventory category update, refuel command in `player_items.s`, charge addition capped at lantern max. Depends on RP17-1 (light duration fix) for correct charge scale. |
+| R4.6 | Flasks of Oil | **(TODO)** | Consumable item to refuel Brass Lanterns. In umoria: `TV_FLASK` type, sold at General Store for 7,500 turns of fuel per flask. Player uses flask ('F'uel or 'r'efill command) on equipped lantern, adding charges up to lantern max (250 charges × 30 = 7,500 turns). Does NOT work on torches (torches are disposable). Need: new item type entry in `item.s` SoA tables, General Store inventory category update, refuel command in `player_items.s`, charge addition capped at lantern max. RP17-1 light duration fix is done. |
 
 ### 5. Magic System
 
@@ -3863,7 +3847,7 @@ least 128 KB — no constraint in practice.
 - R3.2 Group tactics — nice-to-have
 - R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
 - R4.4 Pseudo-ID — QoL feature
-- R4.6 Flasks of Oil — lantern refueling (depends on RP17-1 light duration fix)
+- R4.6 Flasks of Oil — lantern refueling (RP17-1 light duration fix done)
 - ~~R7.6 Combat/UI string migration~~ ✅
 - R7.7 Monster recall text — depends on R3.6 (monster recall feature)
 - ~~R6.2 Black Market~~ ✅

@@ -246,12 +246,12 @@ entry_main:
     jsr tramp_player_create
 
     // --- Starting equipment ---
-    // Wooden torch (type 13) in EQUIP_LIGHT with 40 charges
+    // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
     lda #13
     sta inv_item_id + EQUIP_LIGHT
     lda #1
     sta inv_qty + EQUIP_LIGHT
-    lda #40
+    lda #134
     sta inv_p1 + EQUIP_LIGHT
     lda #0
     sta inv_flags + EQUIP_LIGHT

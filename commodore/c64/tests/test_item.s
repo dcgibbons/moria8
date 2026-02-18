@@ -1087,10 +1087,10 @@ test_start:
 !t24:
     lda #13                     // Wooden torch
     jsr roll_enchantment
-    // Should be in range [20, 49]
-    cmp #20
+    // Should be in range [67, 133]  (67 + rng(67), each charge = 30 turns)
+    cmp #67
     bcc !t24_fail+
-    cmp #50
+    cmp #134
     bcs !t24_fail+
     lda #$01
     sta tc_results + 23

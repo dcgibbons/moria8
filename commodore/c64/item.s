@@ -1422,22 +1422,22 @@ roll_enchantment:
     rts
 
 !re_light:
-    // Torch (type 13): 20 + rng(30)
+    // Torch (type 13): 67 + rng(67)  (each charge = 30 turns)
     lda zp_temp0
     cmp #13
     bne !re_lantern+
-    lda #30
+    lda #67
     jsr rng_range
     clc
-    adc #20
+    adc #67
     rts
 
 !re_lantern:
-    // Lantern (type 14): 50 + rng(50)
-    lda #50
+    // Lantern (type 14): 125 + rng(125)  (each charge = 30 turns)
+    lda #125
     jsr rng_range
     clc
-    adc #50
+    adc #125
     rts
 
 !re_wand:

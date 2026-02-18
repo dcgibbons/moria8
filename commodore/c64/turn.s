@@ -396,24 +396,39 @@ turn_post_action:
     rts
 
 // turn_tick_light — Decrement light charges if torch/lantern equipped
+// Each charge represents LIGHT_TICKS_PER_CHARGE turns.
 // When charges reach 0, unequip and set light radius to 0.
-// Warning at 10 charges.
+// Warning at 2 charges (~60 turns).
 // Preserves: nothing
+.const LIGHT_TICKS_PER_CHARGE = 30
 turn_tick_light:
     ldx #EQUIP_LIGHT
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !ttl_done+              // No light equipped
 
-    // Decrement charges
     lda inv_p1,x
     beq !ttl_done+              // Already 0 (shouldn't happen)
+
+    // Tick counter — only consume a charge every 30 turns
+    lda light_tick_counter
+    bne !ttl_tick+
+    lda #LIGHT_TICKS_PER_CHARGE // Reset counter (fresh game or after charge decrement)
+!ttl_tick:
+    sec
+    sbc #1
+    sta light_tick_counter
+    bne !ttl_done+              // Counter not yet zero, skip charge decrement
+
+    // Decrement charges
+    ldx #EQUIP_LIGHT
+    lda inv_p1,x
     sec
     sbc #1
     sta inv_p1,x
 
-    // Check for warning at 10
-    cmp #10
+    // Check for warning at 2 charges
+    cmp #2
     bne !ttl_not_dim+
     // Print "YOUR LIGHT IS GROWING DIM."
     ldx #HSTR_TTL_DIM
@@ -443,6 +458,7 @@ turn_tick_light:
     rts
 
 // Strings migrated to Huffman compression (HSTR_EFF_*, HSTR_TTL_*, HSTR_RECALL_* in huffman_data.s)
+light_tick_counter: .byte 0
 eff_fear_timer:   .byte 0
 
 // ============================================================
