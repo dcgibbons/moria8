@@ -1,7 +1,7 @@
 # Makefile — Moria8 C64/C128
 #
 # Targets:
-#   make          Build moria8.prg
+#   make          Build moria8.prg (auto-downloads KickAssembler if needed)
 #   make run      Build and launch in VICE
 #   make rundisk  Build D64 + launch with true drive emulation
 #   make debug    Build + launch with VICE monitor watchpoints
@@ -13,7 +13,9 @@
 #   make KICKASS=/other/path/KickAss.jar VICE=x64sc
 
 # ── Tool paths ────────────────────────────────────────────
-KICKASS     ?= /Applications/C64/KickAssembler/KickAss.jar
+KICKASS_DIR ?= ../../tools/kickass
+KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
+KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
 VICE        ?= x64sc
 C1541       ?= c1541
 JAVA        ?= java
@@ -55,7 +57,7 @@ build: $(MAIN_PRG)
 # Main program — rebuild if ANY .s file changes.
 # KickAssembler resolves all #imports from main.s in one pass,
 # so there are no intermediate .o files to track.
-$(MAIN_PRG): $(SOURCES) | $(OUT)
+$(MAIN_PRG): $(SOURCES) $(KICKASS) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(MAIN_SRC) $(KA_FLAGS) -o $(MAIN_PRG)
 
 # Overlays — produced as side-effect of main assembly (segment outPrg)
@@ -125,6 +127,16 @@ SAVE_IMAGE  = $(OUT)/moria8_save.d64
 
 savedisk: | $(OUT)
 	$(C1541) -format "moria8 save,sv" d64 $(SAVE_IMAGE)
+
+# Auto-download KickAssembler if not present
+$(KICKASS):
+	@echo "Downloading KickAssembler..."
+	@mkdir -p $(KICKASS_DIR)
+	@curl -sL $(KICKASS_URL) -o $(KICKASS_DIR)/KickAssembler.zip
+	@unzip -qo $(KICKASS_DIR)/KickAssembler.zip -d $(KICKASS_DIR)
+	@rm -f $(KICKASS_DIR)/KickAssembler.zip
+	@test -f $(KICKASS) || { echo "ERROR: KickAss.jar not found after download"; exit 1; }
+	@echo "KickAssembler ready at $(KICKASS)"
 
 $(OUT):
 	mkdir -p $(OUT)

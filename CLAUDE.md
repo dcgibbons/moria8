@@ -13,7 +13,7 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 - **Test:** `make test` — assemble + run all tests in VICE headless
 - **Disk image:** `make disk` — create a .d64 disk image
 - **Clean:** `make clean` — remove build artifacts
-- **Assembler:** Kick Assembler suite of tools (path override: `make KICKASS=/path/to/KickAss.jar`)
+- **Assembler:** Kick Assembler — auto-downloaded on first `make` into `tools/kickass/` (override: `make KICKASS=/path/to/KickAss.jar`)
 - **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests
 - **Entry point:** `commodore/c64/main.s`
 

@@ -15,6 +15,9 @@ commodore/*/out/
 # VICE state
 *.vsf
 
+# KickAssembler (auto-downloaded by make)
+tools/kickass/
+
 # Python cache
 __pycache__/
 

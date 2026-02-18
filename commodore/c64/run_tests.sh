@@ -4,7 +4,7 @@
 # Usage: ./run_tests.sh
 # Requires: Kick Assembler, VICE (x64sc)
 
-KICKASS="/Applications/C64/KickAssembler/KickAss.jar"
+KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="x64sc"
 PASS=0
 FAIL=0
