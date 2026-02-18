@@ -8,14 +8,16 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 
 ## Build and Test
 
-- **Build:** `make` (or `make build`) — assembles `main.s` → `out/moria.prg`
+- **Build:** `make` (or `make build`) — assembles `main.s` → `out/moria8.prg`
 - **Run:** `make run` — build and launch in VICE
 - **Test:** `make test` — assemble + run all tests in VICE headless
 - **Disk image:** `make disk` — create a .d64 disk image
 - **Clean:** `make clean` — remove build artifacts
 - **Assembler:** Kick Assembler suite of tools (path override: `make KICKASS=/path/to/KickAss.jar`)
 - **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests
-- **Entry point:** `main.s`
+- **Entry point:** `commodore/c64/main.s`
+
+The root Makefile delegates to `commodore/c64/Makefile`. All make targets work from the project root.
 
 ## Architecture
 
@@ -23,7 +25,7 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 - **Loading:** BASIC stub loader runs the ML program. Cartridge version also supported. Minimize disk access after initial load — organize data so each dungeon level has what it needs in memory (e.g., higher-level monsters only loaded for deeper levels).
 - **KERNAL/BASIC:** Use C64/C128 KERNAL routines freely. Do NOT use BASIC routines after the initial loader. Since BASIC is not active, its zero page space is available for program use.
 - **Memory:** Use C64 memory banking to access RAM behind BASIC ROM for extra program space. Program should be able to exit cleanly back to BASIC.
-- **Source organization:** Small, modular files each targeting a single piece of functionality.
+- **Source organization:** Small, modular files each targeting a single piece of functionality. C64 sources live in `commodore/c64/`, with `commodore/c128/` reserved for the future C128 port.
 
 ## Coding Conventions
 
