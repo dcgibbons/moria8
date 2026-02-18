@@ -1184,8 +1184,16 @@ Priority order based on AUDIT review (see Audit Response below):
 | **15** | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
 | **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
-**Lower priority content** (tracked but not scheduled):
+**Lower priority content** (all now done):
 ~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
+
+**Remaining TODO features** (prioritized by complexity/benefit — all confirmed in umoria source):
+
+| Priority | ID | Feature | Complexity | Benefit | Notes |
+|----------|-----|---------|-----------|---------|-------|
+| 1 | R4.6 | Flasks of Oil | Low | Medium | New item type + 'F' refuel command + charge transfer to lantern. Quick win, complements RP17-1 light fix. |
+| 2 | R1.7 | Bash command | Medium | High | `B` + direction: bash doors (only way to open spiked doors), monsters (shield bash + stun), chests (break lock). Core umoria command. |
+| 3 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -3712,8 +3720,8 @@ design; items marked **(TODO)** need implementation.
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | R3.1 | Pathfinding | **(deferred)** | Greedy movement (try diagonal, then cardinal). No A*/flow maps. Monsters can get stuck on corners. A* is expensive at 1 MHz; greedy + unstick heuristic may be sufficient. |
-| R3.2 | Group/pack tactics | **(TODO)** | No pack instinct, escort behavior, or group spawning beyond random clusters. |
-| R3.3 | Explosive breeders | **(TODO)** | No breeding logic (lice, mice, etc.). Need spawn-on-turn mechanic with population cap. |
+| R3.2 | Group/pack tactics | ✅ **DONE** | `CF_GROUP` flag with `spawn_group_extras` (1-3 adjacent same-type on spawn) + neighbor wake. Angband-style escort/pack-leader AI is NOT a umoria feature. |
+| R3.3 | Explosive breeders | ✅ **DONE** | `CF_BREEDER` flag in `monster_ai.s`. Breeding creatures clone themselves each turn (chance-based, room only). Population controlled by MAX_MONSTERS. |
 | R3.4 | Monster fleeing | ✅ **DONE** | Monsters flee when HP < 25% of max. Flee threshold computed at spawn (HP/4). Reversed greedy movement (monster_move_away). Fleeing suppresses attack. CF_ATTACK_ONLY creatures can't flee (can't move). Confusion overrides flee. |
 | R3.5 | Limited creature roster | ✅ **DONE** | Expanded to 120 creatures across 5 tiers (T0 town + T1-T4 dungeon). REU + disk loading paths implemented. All 12 steps complete (R3.5.1-R3.5.12). See **R3.5 Detailed Plan** below. |
 
@@ -3723,9 +3731,9 @@ design; items marked **(TODO)** need implementation.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| R4.1 | Ego items | **(TODO)** | No "Holy Avenger", "Defender", "Slay Evil", etc. Need ego flag + modifier table + name generation. |
-| R4.4 | Pseudo-ID | **(TODO)** | No "feeling" about items (excellent, terrible, etc.). Need carry-time counter + quality hint based on hidden enchantment. |
-| R4.5 | Thorough identification | **(TODO)** | `eff_identify_prompt` sets identified flag but doesn't reveal hidden powers (since ego items don't exist yet). Depends on R4.1. |
+| R4.1 | Ego items | ✅ **DONE** | `ego_items.s` — 7 enchanted weapon types (HA, DF, SA, SD, SE, SU, FT, FB) with slay/elemental/AC bonuses. `test_ego.s` tests. |
+| R4.4 | Pseudo-ID | ✅ **DONE** | `turn_tick_pseudo_id` in `turn.s`. Class-based timer, scans equipment for unidentified items, sets `IF_TRIED` flag, shows quality tag in inventory. |
+| ~~R4.5~~ | ~~Thorough identification~~ | **Removed** | Not a separate umoria feature. Umoria's Identify spell reveals everything in one shot (`ID_KNOWN2`). Now that R4.1 (ego items) is done, identify already handles ego powers. |
 | R4.6 | Flasks of Oil | **(TODO)** | Consumable item to refuel Brass Lanterns. In umoria: `TV_FLASK` type, sold at General Store for 7,500 turns of fuel per flask. Player uses flask ('F'uel or 'r'efill command) on equipped lantern, adding charges up to lantern max (250 charges × 30 = 7,500 turns). Does NOT work on torches (torches are disposable). Need: new item type entry in `item.s` SoA tables, General Store inventory category update, refuel command in `player_items.s`, charge addition capped at lantern max. RP17-1 light duration fix is done. |
 
 ### 5. Magic System
@@ -3848,12 +3856,12 @@ least 128 KB — no constraint in practice.
 
 **Low priority (polish/completeness):**
 - ~~R1.2 Throwing~~ ✅
-- R3.2 Group tactics — nice-to-have
-- R3.3 Breeders — nice-to-have (lice, mice spawn-on-turn)
-- R4.4 Pseudo-ID — QoL feature
-- R4.6 Flasks of Oil — lantern refueling (RP17-1 light duration fix done)
+- ~~R3.2 Group tactics~~ ✅
+- ~~R3.3 Breeders~~ ✅
+- ~~R4.4 Pseudo-ID~~ ✅
+- R4.6 Flasks of Oil — lantern refueling (low complexity, RP17-1 done)
 - ~~R7.6 Combat/UI string migration~~ ✅
-- R7.7 Monster recall text — depends on R3.6 (monster recall feature)
+- R7.7 Monster recall — full feature (data structures + tracking + display + string banks)
 - ~~R6.2 Black Market~~ ✅
 - ~~R6.3 Player Home~~ ✅
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
