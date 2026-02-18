@@ -159,7 +159,8 @@ main.s                    Entry point, BASIC stub, initialization, command dispa
 ├── ui_inventory.s        Inventory and equipment display screens
 ├── ui_character.s        Character info and spell list screens
 ├── ui_store.s            Store buy/sell UI screens
-├── ui_help.s             Help screen overlay (22 lines of key bindings)
+├── ui_help.s             Help screen rendering code (banked $F000, color-coded with box borders)
+├── ui_help_data.s        Help screen string data (main RAM, inline color toggle markers)
 ├── color.s               Color palette definitions and color RAM management
 │
 ├── rng.s                 Random number generator (32-bit LFSR)
@@ -2333,8 +2334,11 @@ No issues found in this commit.
   Applied after the base [5,95] clamp, so max effective failure with hunger is 95%.
 - **Sound effects:** SFX_SPELL and SFX_SPELL_FAIL correctly added to sfx_table at
   indices 6-7. Triangle wave for spell, noise buzz for fizzle. Both use voice 3.
-- **Help screen:** New line "M CAST SPELL     P PRAY", HELP_LINE_COUNT=22, pointer
-  tables extended correctly in both lo and hi arrays.
+- **Help screen:** New line "M CAST SPELL     P PRAY", HELP_LINE_COUNT=23, pointer
+  tables extended correctly in both lo and hi arrays.  Redesigned with PETSCII box
+  borders, color-coded text (keys WHITE, descriptions LGREY, headers CYAN, borders GREY),
+  and inline color toggle renderer (`help_draw_line`).  String data split to
+  `ui_help_data.s` in main RAM to fit banked code budget.
 - **Character sheet:** Spells Known (N/16) displayed for spell-casters only (row 11).
   count_spells_known correctly iterates all 16 bits via spell_bit_mask. "Press any key"
   moved to row 16 to accommodate.
@@ -4208,7 +4212,7 @@ Expand with **gameplay UI screens** that are called during play but only on user
 
 | Module | Lines | Est. bytes | Entry points |
 |--------|-------|-----------|-------------|
-| `ui_help.s` | 153 | ~400 | `ui_help_display` |
+| `ui_help.s` | 229 | ~280 | `ui_help_display` (string data in `ui_help_data.s`, main RAM) |
 | `ui_character.s` | 395 | ~700 | `ui_char_display` |
 | `ui_inventory.s` | 269 | ~500 | `ui_inv_display`, `ui_equip_display` |
 | **Total** | 817 | ~1,600 | 4 trampolines |

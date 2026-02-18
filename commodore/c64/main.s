@@ -1539,6 +1539,9 @@ tramp_game_over:
     cli
     rts
 
+// Help screen string data — in main RAM (too large for $F000 banked region)
+#import "ui_help_data.s"
+
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
 .assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true
