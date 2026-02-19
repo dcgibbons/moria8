@@ -1090,7 +1090,7 @@ heal_dice:
 // String data (screen codes via inherited encoding)
 // ============================================================
 pm_header_str:
-    .text "   NAME              MANA LVL" ; .byte 0
+    .text "   Name              Mana Lvl" ; .byte 0
 pm_bang_str:
     .byte $21, 0    // "!"
 

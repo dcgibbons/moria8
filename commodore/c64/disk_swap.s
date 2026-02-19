@@ -11,10 +11,10 @@
 // ============================================================
 disk_mode:      .byte 0                 // 0=single, 1=dual
 
-// Screen-code strings (under .encoding "screencode_upper" from main.s)
-ds_save_str:    .text "INSERT SAVE DISK" ; .byte 0
-ds_game_str:    .text "INSERT GAME DISK" ; .byte 0
-ds_dual_str:    .text "[SAVE DISK]" ; .byte 0
+// Screen-code strings (under .encoding "screencode_mixed" from main.s)
+ds_save_str:    .text "Insert save disk" ; .byte 0
+ds_game_str:    .text "Insert game disk" ; .byte 0
+ds_dual_str:    .text "[Save Disk]" ; .byte 0
 
 // PETSCII "I0" for drive init (raw bytes — NOT screen codes)
 disk_init_cmd:  .byte $49, $30

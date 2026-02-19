@@ -222,4 +222,4 @@ msg_save_history:
 // String data
 // ============================================================
 more_str:
-    .text " -MORE-" ; .byte 0
+    .text " -more-" ; .byte 0

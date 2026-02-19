@@ -82,6 +82,7 @@ rng_range:
     sta zp_temp4            // Save N
     // Calculate mask: smallest (2^k - 1) >= N-1
     tax
+    beq !rng_done+          // N=0 → return 0 (A already 0)
     dex                     // N-1
     txa
     // Spread bits right to fill mask
@@ -106,6 +107,7 @@ rng_range:
     and zp_temp3            // Mask to range
     cmp zp_temp4            // >= N?
     bcs !retry-             // Yes, reject and retry
+!rng_done:
     rts
 
 // rng_range_word — Return random 16-bit number in range [0, N-1]

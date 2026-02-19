@@ -257,41 +257,41 @@ cr_name_hi:
 
 // Name strings (screen codes, null-terminated)
 // Dungeon creatures
-crn_0:  .text "WHITE HARPY" ; .byte 0
-crn_1:  .text "GIANT WHITE MOUSE" ; .byte 0
-crn_2:  .text "WHITE WORM MASS" ; .byte 0
-crn_3:  .text "LARGE WHITE SNAKE" ; .byte 0
-crn_4:  .text "KOBOLD" ; .byte 0
-crn_5:  .text "WHITE ICKY THING" ; .byte 0
-crn_6:  .text "SHRIEKER MUSHROOM" ; .byte 0
-crn_7:  .text "GIANT WHITE CENTIPEDE" ; .byte 0
-crn_8:  .text "FLOATING EYE" ; .byte 0
-crn_9:  .text "JACKAL" ; .byte 0
-crn_10: .text "GREEN WORM MASS" ; .byte 0
-crn_11: .text "GIANT FROG" ; .byte 0
-crn_12: .text "GIANT WHITE RAT" ; .byte 0
-crn_13: .text "POLTERGEIST" ; .byte 0
-crn_14: .text "HUGE BROWN BAT" ; .byte 0
-crn_15: .text "CREEPING COPPER COINS" ; .byte 0
-crn_16: .text "GREY MOLD" ; .byte 0
-crn_17: .text "METALLIC GREEN CENTIPEDE" ; .byte 0
-crn_18: .text "YELLOW MOLD" ; .byte 0
-crn_19: .text "GIANT BLACK ANT" ; .byte 0
-crn_20: .text "KOBOLD SHAMAN" ; .byte 0
-crn_21: .text "GIANT WHITE ANT LION" ; .byte 0
-crn_22: .text "NOVICE MAGE" ; .byte 0
-crn_23: .text "NOVICE PRIEST" ; .byte 0
-crn_24: .text "GIANT SALAMANDER" ; .byte 0
-crn_25: .text "ORC SHAMAN" ; .byte 0
+crn_0:  .text "White Harpy" ; .byte 0
+crn_1:  .text "Giant White Mouse" ; .byte 0
+crn_2:  .text "White Worm Mass" ; .byte 0
+crn_3:  .text "Large White Snake" ; .byte 0
+crn_4:  .text "Kobold" ; .byte 0
+crn_5:  .text "White Icky Thing" ; .byte 0
+crn_6:  .text "Shrieker Mushroom" ; .byte 0
+crn_7:  .text "Giant White Centipede" ; .byte 0
+crn_8:  .text "Floating Eye" ; .byte 0
+crn_9:  .text "Jackal" ; .byte 0
+crn_10: .text "Green Worm Mass" ; .byte 0
+crn_11: .text "Giant Frog" ; .byte 0
+crn_12: .text "Giant White Rat" ; .byte 0
+crn_13: .text "Poltergeist" ; .byte 0
+crn_14: .text "Huge Brown Bat" ; .byte 0
+crn_15: .text "Creeping Copper Coins" ; .byte 0
+crn_16: .text "Grey Mold" ; .byte 0
+crn_17: .text "Metallic Green Centipede" ; .byte 0
+crn_18: .text "Yellow Mold" ; .byte 0
+crn_19: .text "Giant Black Ant" ; .byte 0
+crn_20: .text "Kobold Shaman" ; .byte 0
+crn_21: .text "Giant White Ant Lion" ; .byte 0
+crn_22: .text "Novice Mage" ; .byte 0
+crn_23: .text "Novice Priest" ; .byte 0
+crn_24: .text "Giant Salamander" ; .byte 0
+crn_25: .text "Orc Shaman" ; .byte 0
 // Town creatures (referenced from indices 57-64)
-crn_t0: .text "FILTHY STREET URCHIN" ; .byte 0
-crn_t1: .text "BLUBBERING IDIOT" ; .byte 0
-crn_t2: .text "PITIFUL-LOOKING BEGGAR" ; .byte 0
-crn_t3: .text "MANGY-LOOKING LEPER" ; .byte 0
-crn_t4: .text "SQUINT-EYED ROGUE" ; .byte 0
-crn_t5: .text "SINGING, HAPPY DRUNK" ; .byte 0
-crn_t6: .text "MEAN-LOOKING MERCENARY" ; .byte 0
-crn_t7: .text "BATTLE-SCARRED VETERAN" ; .byte 0
+crn_t0: .text "Filthy Street Urchin" ; .byte 0
+crn_t1: .text "Blubbering Idiot" ; .byte 0
+crn_t2: .text "Pitiful-Looking Beggar" ; .byte 0
+crn_t3: .text "Mangy-Looking Leper" ; .byte 0
+crn_t4: .text "Squint-Eyed Rogue" ; .byte 0
+crn_t5: .text "Singing, Happy Drunk" ; .byte 0
+crn_t6: .text "Mean-Looking Mercenary" ; .byte 0
+crn_t7: .text "Battle-Scarred Veteran" ; .byte 0
 
 // ============================================================
 // Active monster table — 32 slots x 12 bytes
@@ -455,6 +455,11 @@ pick_creature_type:
     adc #3
     sta pct_max_lvl
 
+    lda active_dungeon_count
+    beq !pct_fallback+          // No dungeon creatures available
+    lda #50
+    sta pct_retries             // Retry limit (prevent infinite loop)
+
 !pct_retry:
     // Pick random creature index [0, active_dungeon_count-1]
     lda active_dungeon_count
@@ -464,16 +469,24 @@ pick_creature_type:
     // Check cr_level in [min_lvl, max_lvl]
     lda cr_level,x
     cmp pct_min_lvl
-    bcc !pct_retry-             // Too low
+    bcc !pct_next+              // Too low
     cmp pct_max_lvl
     beq !pct_accept+            // Equal to max = ok
-    bcs !pct_retry-             // Too high
+    bcs !pct_next+              // Too high
 !pct_accept:
     txa                         // A = type index
     rts
 
+!pct_next:
+    dec pct_retries
+    bne !pct_retry-
+!pct_fallback:
+    lda #0                      // Fallback: creature type 0
+    rts
+
 pct_min_lvl: .byte 0
 pct_max_lvl: .byte 0
+pct_retries: .byte 0
 
 // monster_spawn_one — Create one monster at ms_spawn_x/y
 // Input:  A = creature type index
@@ -995,10 +1008,26 @@ creature_get_name:
 
 !cgn_table:
     lda cr_name_hi,x
+    beq !cgn_banked+            // Null pointer (cleared slot)
     cmp #$e0
     bcs !cgn_banked+
-    tay
+    // Valid pointer in normal RAM — copy to creature_name_buf
+    sta zp_ptr1_hi
     lda cr_name_lo,x
+    sta zp_ptr1
+    ldy #0
+!cgn_res_copy:
+    lda (zp_ptr1),y
+    sta creature_name_buf,y
+    beq !cgn_res_done+
+    iny
+    cpy #31
+    bne !cgn_res_copy-
+    lda #0
+    sta creature_name_buf,y
+!cgn_res_done:
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
     rts
 
 !cgn_banked:

@@ -538,14 +538,23 @@ create_enter_name:
     jmp !name_loop-
 !not_del:
 
-    // Check if it's a letter (A-Z = $41-$5A in PETSCII)
+    // Check if it's a letter
+    // Unshifted (PETSCII $41-$5A) → lowercase screen codes ($01-$1A)
     cmp #$41
-    bcc !check_other+
+    bcc !check_shifted+
     cmp #$5b
-    bcs !check_other+
-    // It's a letter — convert PETSCII to screen code
+    bcs !check_shifted+
     sec
-    sbc #$40                // A=$01, B=$02, ..., Z=$1A
+    sbc #$40                // $41→$01 (lowercase a)
+    jmp !store_char+
+!check_shifted:
+    // Shifted (PETSCII $C1-$DA) → uppercase screen codes ($41-$5A)
+    cmp #$c1
+    bcc !check_other+
+    cmp #$db
+    bcs !check_other+
+    and #$3f                // $C1→$01
+    ora #$40                // $01→$41 (uppercase A)
     jmp !store_char+
 
 !check_other:
@@ -745,16 +754,16 @@ put_choose_suffix:
 // String data (screen codes)
 // ============================================================
 create_race_title:
-    .text "CHOOSE YOUR RACE" ; .byte $00
+    .text "Choose your race" ; .byte $00
 create_class_title:
-    .text "CHOOSE YOUR CLASS" ; .byte $00
+    .text "Choose your class" ; .byte $00
 create_stats_title:
-    .text "ROLL STATISTICS" ; .byte $00
+    .text "Roll Statistics" ; .byte $00
 create_name_title:
-    .text "ENTER YOUR NAME" ; .byte $00
+    .text "Enter your name" ; .byte $00
 create_choose_str:
-    .text "CHOOSE (A-" ; .byte $00
+    .text "Choose (a-" ; .byte $00
 create_reroll_str:
-    .text "R) REROLL  RETURN) ACCEPT" ; .byte $00
+    .text "r) Reroll  RETURN) Accept" ; .byte $00
 create_name_prompt:
-    .text "NAME (16 CHARS MAX):" ; .byte $00
+    .text "Name (16 chars max):" ; .byte $00

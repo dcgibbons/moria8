@@ -67,10 +67,10 @@
 
 // Display character (screen code)
 tier4_cr_display:
-    .byte $11, $10, $0d, $0b, $0b, $07, $13, $10, $01, $17, $0d, $07, $14, $0b, $14, $17
-    .byte $13, $0b, $16, $0d, $10, $10, $14, $17, $04, $04, $13, $17, $07, $0b, $0f, $14
-    .byte $05, $10, $17, $05, $0c, $16, $05, $04, $10, $04, $18, $17, $0b, $0c, $04, $04
-    .byte $17, $17, $10, $04, $04, $0c, $04, $10, $02
+    .byte $51, $50, $4d, $4b, $4b, $07, $53, $10, $01, $57, $4d, $47, $54, $4b, $14, $57
+    .byte $53, $4b, $56, $0d, $10, $10, $54, $17, $04, $04, $13, $57, $47, $4b, $0f, $54
+    .byte $45, $10, $57, $45, $4c, $56, $45, $04, $10, $04, $58, $57, $4b, $4c, $04, $44
+    .byte $57, $57, $10, $44, $44, $4c, $44, $10, $42
 
 // Color code
 tier4_cr_color:
@@ -88,8 +88,8 @@ tier4_cr_speed:
 
 // Monster flags
 tier4_cr_mflags:
-    .byte $00, $0c, $26, $10, $10, $00, $10, $08, $10, $06, $06, $06, $04, $10, $18, $06
-    .byte $10, $18, $06, $41, $0c, $08, $04, $18, $04, $04, $26, $06, $06, $10, $0c, $04
+    .byte $00, $0c, $06, $10, $10, $00, $10, $08, $10, $06, $06, $06, $04, $10, $18, $06
+    .byte $10, $18, $06, $01, $0c, $08, $04, $18, $04, $04, $06, $06, $06, $10, $0c, $04
     .byte $00, $0c, $06, $08, $06, $06, $00, $0c, $08, $04, $00, $06, $10, $06, $0c, $04
     .byte $06, $06, $08, $04, $0c, $06, $04, $04, $04
 
@@ -225,65 +225,65 @@ tier4_cr_name_hi:
     .byte >tier4_crn_48, >tier4_crn_49, >tier4_crn_50, >tier4_crn_51, >tier4_crn_52, >tier4_crn_53, >tier4_crn_54, >tier4_crn_55
     .byte >tier4_crn_56
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 // Name strings (screen codes, null-terminated)
-tier4_crn_0: .text "QUYLTHULG" ; .byte 0
-tier4_crn_1: .text "CLOUD GIANT" ; .byte 0
-tier4_crn_2: .text "MUMMIFIED ORC" ; .byte 0
-tier4_crn_3: .text "KILLER BORING BEETLE" ; .byte 0
-tier4_crn_4: .text "KILLER STAG BEETLE" ; .byte 0
-tier4_crn_5: .text "IRON GOLEM" ; .byte 0
-tier4_crn_6: .text "GIANT YELLOW SCORPION" ; .byte 0
-tier4_crn_7: .text "WARRIOR" ; .byte 0
-tier4_crn_8: .text "GIANT SILVER ANT" ; .byte 0
-tier4_crn_9: .text "FOREST WIGHT" ; .byte 0
-tier4_crn_10: .text "MUMMIFIED HUMAN" ; .byte 0
-tier4_crn_11: .text "BANSHEE" ; .byte 0
-tier4_crn_12: .text "GIANT TROLL" ; .byte 0
-tier4_crn_13: .text "KILLER RED BEETLE" ; .byte 0
-tier4_crn_14: .text "GIANT FIRE TICK" ; .byte 0
-tier4_crn_15: .text "WHITE WRAITH" ; .byte 0
-tier4_crn_16: .text "GIANT BLACK SCORPION" ; .byte 0
-tier4_crn_17: .text "KILLER FIRE BEETLE" ; .byte 0
-tier4_crn_18: .text "VAMPIRE" ; .byte 0
-tier4_crn_19: .text "SHIMMERING MOLD" ; .byte 0
-tier4_crn_20: .text "BLACK KNIGHT" ; .byte 0
-tier4_crn_21: .text "MAGE" ; .byte 0
-tier4_crn_22: .text "ICE TROLL" ; .byte 0
-tier4_crn_23: .text "GIANT PURPLE WORM" ; .byte 0
-tier4_crn_24: .text "YOUNG BLUE DRAGON" ; .byte 0
-tier4_crn_25: .text "YOUNG GREEN DRAGON" ; .byte 0
-tier4_crn_26: .text "SKELETON TROLL" ; .byte 0
-tier4_crn_27: .text "GRAVE WIGHT" ; .byte 0
-tier4_crn_28: .text "GHOST" ; .byte 0
-tier4_crn_29: .text "DEATH WATCH BEETLE" ; .byte 0
-tier4_crn_30: .text "OGRE MAGE" ; .byte 0
-tier4_crn_31: .text "TWO-HEADED TROLL" ; .byte 0
-tier4_crn_32: .text "INVISIBLE STALKER" ; .byte 0
-tier4_crn_33: .text "NINJA" ; .byte 0
-tier4_crn_34: .text "BARROW WIGHT" ; .byte 0
-tier4_crn_35: .text "FIRE ELEMENTAL" ; .byte 0
-tier4_crn_36: .text "LICH" ; .byte 0
-tier4_crn_37: .text "MASTER VAMPIRE" ; .byte 0
-tier4_crn_38: .text "EARTH ELEMENTAL" ; .byte 0
-tier4_crn_39: .text "YOUNG RED DRAGON" ; .byte 0
-tier4_crn_40: .text "NECROMANCER" ; .byte 0
-tier4_crn_41: .text "MATURE WHITE DRAGON" ; .byte 0
-tier4_crn_42: .text "XORN" ; .byte 0
-tier4_crn_43: .text "GREY WRAITH" ; .byte 0
-tier4_crn_44: .text "IRIDESCENT BEETLE" ; .byte 0
-tier4_crn_45: .text "KING LICH" ; .byte 0
-tier4_crn_46: .text "MATURE RED DRAGON" ; .byte 0
-tier4_crn_47: .text "ANCIENT WHITE DRAGON" ; .byte 0
-tier4_crn_48: .text "BLACK WRAITH" ; .byte 0
-tier4_crn_49: .text "NETHER WRAITH" ; .byte 0
-tier4_crn_50: .text "SORCERER" ; .byte 0
-tier4_crn_51: .text "ANCIENT BLUE DRAGON" ; .byte 0
-tier4_crn_52: .text "ANCIENT RED DRAGON" ; .byte 0
-tier4_crn_53: .text "EMPEROR LICH" ; .byte 0
-tier4_crn_54: .text "ANCIENT MULTI-HUED DRAGON" ; .byte 0
-tier4_crn_55: .text "EVIL IGGY" ; .byte 0
-tier4_crn_56: .text "BALROG" ; .byte 0
+tier4_crn_0: .text "Quylthulg" ; .byte 0
+tier4_crn_1: .text "Cloud Giant" ; .byte 0
+tier4_crn_2: .text "Mummified Orc" ; .byte 0
+tier4_crn_3: .text "Killer Boring Beetle" ; .byte 0
+tier4_crn_4: .text "Killer Stag Beetle" ; .byte 0
+tier4_crn_5: .text "Iron Golem" ; .byte 0
+tier4_crn_6: .text "Giant Yellow Scorpion" ; .byte 0
+tier4_crn_7: .text "Warrior" ; .byte 0
+tier4_crn_8: .text "Giant Silver Ant" ; .byte 0
+tier4_crn_9: .text "Forest Wight" ; .byte 0
+tier4_crn_10: .text "Mummified Human" ; .byte 0
+tier4_crn_11: .text "Banshee" ; .byte 0
+tier4_crn_12: .text "Giant Troll" ; .byte 0
+tier4_crn_13: .text "Killer Red Beetle" ; .byte 0
+tier4_crn_14: .text "Giant Fire Tick" ; .byte 0
+tier4_crn_15: .text "White Wraith" ; .byte 0
+tier4_crn_16: .text "Giant Black Scorpion" ; .byte 0
+tier4_crn_17: .text "Killer Fire Beetle" ; .byte 0
+tier4_crn_18: .text "Vampire" ; .byte 0
+tier4_crn_19: .text "Shimmering Mold" ; .byte 0
+tier4_crn_20: .text "Black Knight" ; .byte 0
+tier4_crn_21: .text "Mage" ; .byte 0
+tier4_crn_22: .text "Ice Troll" ; .byte 0
+tier4_crn_23: .text "Giant Purple Worm" ; .byte 0
+tier4_crn_24: .text "Young Blue Dragon" ; .byte 0
+tier4_crn_25: .text "Young Green Dragon" ; .byte 0
+tier4_crn_26: .text "Skeleton Troll" ; .byte 0
+tier4_crn_27: .text "Grave Wight" ; .byte 0
+tier4_crn_28: .text "Ghost" ; .byte 0
+tier4_crn_29: .text "Death Watch Beetle" ; .byte 0
+tier4_crn_30: .text "Ogre Mage" ; .byte 0
+tier4_crn_31: .text "Two-Headed Troll" ; .byte 0
+tier4_crn_32: .text "Invisible Stalker" ; .byte 0
+tier4_crn_33: .text "Ninja" ; .byte 0
+tier4_crn_34: .text "Barrow Wight" ; .byte 0
+tier4_crn_35: .text "Fire Elemental" ; .byte 0
+tier4_crn_36: .text "Lich" ; .byte 0
+tier4_crn_37: .text "Master Vampire" ; .byte 0
+tier4_crn_38: .text "Earth Elemental" ; .byte 0
+tier4_crn_39: .text "Young Red Dragon" ; .byte 0
+tier4_crn_40: .text "Necromancer" ; .byte 0
+tier4_crn_41: .text "Mature White Dragon" ; .byte 0
+tier4_crn_42: .text "Xorn" ; .byte 0
+tier4_crn_43: .text "Grey Wraith" ; .byte 0
+tier4_crn_44: .text "Iridescent Beetle" ; .byte 0
+tier4_crn_45: .text "King Lich" ; .byte 0
+tier4_crn_46: .text "Mature Red Dragon" ; .byte 0
+tier4_crn_47: .text "Ancient White Dragon" ; .byte 0
+tier4_crn_48: .text "Black Wraith" ; .byte 0
+tier4_crn_49: .text "Nether Wraith" ; .byte 0
+tier4_crn_50: .text "Sorcerer" ; .byte 0
+tier4_crn_51: .text "Ancient Blue Dragon" ; .byte 0
+tier4_crn_52: .text "Ancient Red Dragon" ; .byte 0
+tier4_crn_53: .text "Emperor Lich" ; .byte 0
+tier4_crn_54: .text "Ancient Multi-Hued Dragon" ; .byte 0
+tier4_crn_55: .text "Evil Iggy" ; .byte 0
+tier4_crn_56: .text "Balrog" ; .byte 0
 
 // End marker for size calculation
 tier4_data_end:

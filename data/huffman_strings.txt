@@ -1,227 +1,227 @@
 # ===== Store insults (indices 0-14, anonymous random pool) =====
-YOU WILL HAVE TO DO BETTER THAN THAT!
-THAT IS AN INSULT!
-DO YOU WISH TO DO BUSINESS OR NOT?
-HAH! TRY AGAIN.
-RIDICULOUS!
-YOU HAVE GOT TO BE KIDDING!
-YOU HAD BETTER BE KIDDING!
-YOU TRY MY PATIENCE.
-I DO NOT HEAR YOU.
-HMMM, NICE WEATHER WE ARE HAVING.
-I MUST HAVE HEARD YOU WRONG.
-WHAT WAS THAT?
-I AM SORRY, SAY THAT AGAIN.
-WHAT DID YOU SAY?
-SORRY, WHAT WAS THAT AGAIN?
+You will have to do better than that!
+That is an insult!
+Do you wish to do business or not?
+Hah! Try again.
+Ridiculous!
+You have got to be kidding!
+You had better be kidding!
+You try my patience.
+I do not hear you.
+Hmmm, nice weather we are having.
+I must have heard you wrong.
+What was that?
+I am sorry, say that again.
+What did you say?
+Sorry, what was that again?
 
 # ===== Monster attack effect strings (Pattern B) =====
-@MAT_HITS  HITS YOU.
-@MAT_MISS  MISSES YOU.
-@MAT_POISON  POISONS YOU.
-@MAT_CONFUSE  CONFUSES YOU.
-@MAT_PARALYZE  PARALYZES YOU.
-@MAT_ACID  SPITS ACID ON YOU.
-@MAT_FEAR  FRIGHTENS YOU.
-@MAT_SHRIEK YOU HEAR A HORRIBLE SHRIEK!
-@MAT_DEAD YOU HAVE BEEN SLAIN.
+@MAT_HITS  hits you.
+@MAT_MISS  misses you.
+@MAT_POISON  poisons you.
+@MAT_CONFUSE  confuses you.
+@MAT_PARALYZE  paralyzes you.
+@MAT_ACID  spits acid on you.
+@MAT_FEAR  frightens you.
+@MAT_SHRIEK You hear a horrible shriek!
+@MAT_DEAD You have been slain.
 
 # ===== Monster magic strings (Pattern B) =====
-@MM_BOLT  CASTS A BOLT!
-@MM_BREATH  BREATHES FIRE!
-@MM_SUMMON  SUMMONS HELP!
-@MM_TELEPORT  TELEPORTS YOU!
-@MM_BLIND  BLINDS YOU!
-@MM_CONFUSE  CONFUSES YOU!
-@MM_HEAL  HEALS ITSELF.
+@MM_BOLT  casts a bolt!
+@MM_BREATH  breathes fire!
+@MM_SUMMON  summons help!
+@MM_TELEPORT  teleports you!
+@MM_BLIND  blinds you!
+@MM_CONFUSE  confuses you!
+@MM_HEAL  heals itself.
 
 # ===== Ranged fire strings (Pattern A + C) =====
-@RF_NO_WEAPON NO RANGED WEAPON.
-@RF_NO_AMMO NO AMMO.
-@RF_FLIES  FLIES AWAY.
-@RF_MISSES  MISSES
-@RF_HITS  HITS
+@RF_NO_WEAPON No ranged weapon.
+@RF_NO_AMMO No ammo.
+@RF_FLIES  flies away.
+@RF_MISSES  misses
+@RF_HITS  hits
 
 # ===== Spell effects strings (Pattern A + C) =====
-@EB_SPELL_HITS YOUR SPELL HITS
-@EB_FIZZLE YOUR SPELL FIZZLES OUT.
+@EB_SPELL_HITS Your spell hits
+@EB_FIZZLE Your spell fizzles out.
 
 # ===== Throw strings (Pattern A + C) =====
-@TW_PROMPT THROW WHICH ITEM (A-V)?
-@TW_SHATTERS  SHATTERS!
+@TW_PROMPT Throw which item (a-v)?
+@TW_SHATTERS  shatters!
 
 # ===== Turn effect expiration strings (Pattern A) =====
-@EFF_POISON_END YOU FEEL BETTER.
-@EFF_BLIND_END YOU CAN SEE AGAIN.
-@EFF_CONFUSE_END YOU FEEL LESS CONFUSED.
-@EFF_PARALYZE_END YOU CAN MOVE AGAIN.
-@EFF_FEAR_END YOU FEEL BOLDER NOW.
-@TTL_DIM YOUR LIGHT IS GROWING DIM.
-@TTL_OUT YOUR LIGHT HAS GONE OUT.
-@RECALL_ARRIVE YOU FEEL YOURSELF YANKED AWAY!
+@EFF_POISON_END You feel better.
+@EFF_BLIND_END You can see again.
+@EFF_CONFUSE_END You feel less confused.
+@EFF_PARALYZE_END You can move again.
+@EFF_FEAR_END You feel bolder now.
+@TTL_DIM Your light is growing dim.
+@TTL_OUT Your light has gone out.
+@RECALL_ARRIVE You feel yourself yanked away!
 
 # ===== Player move / look strings (Pattern A) =====
-@DL_YOU_SEE YOU SEE A 
-@DL_OPEN_DOOR YOU SEE AN OPEN DOOR.
-@DL_CLOSED_DOOR YOU SEE A CLOSED DOOR.
-@DL_STAIRS_DN YOU SEE A STAIRCASE DOWN.
-@DL_STAIRS_UP YOU SEE A STAIRCASE UP.
-@DL_TRAP YOU SEE A TRAP.
-@DL_RUBBLE YOU SEE RUBBLE.
-@DL_WALL YOU SEE A WALL.
-@DL_NOTHING YOU SEE NOTHING SPECIAL.
-@PTM_AFRAID YOU ARE TOO AFRAID!
+@DL_YOU_SEE You see a ~
+@DL_OPEN_DOOR You see an open door.
+@DL_CLOSED_DOOR You see a closed door.
+@DL_STAIRS_DN You see a staircase down.
+@DL_STAIRS_UP You see a staircase up.
+@DL_TRAP You see a trap.
+@DL_RUBBLE You see rubble.
+@DL_WALL You see a wall.
+@DL_NOTHING You see nothing special.
+@PTM_AFRAID You are too afraid!
 
 # ===== Dungeon features strings (Pattern A) =====
-@DF_TRAP_0 AN OPEN PIT
-@DF_TRAP_1 AN ARROW TRAP
-@DF_TRAP_2 A POISON GAS TRAP
-@DF_TRAP_3 A TELEPORT TRAP
-@DF_TRAP_4 A POISON DART
-@DF_TRAP_5 A ROCKFALL TRAP
-@DF_DIRECTION DIRECTION?
-@DF_DOOR_STUCK THE DOOR IS STUCK.
-@DF_FOUND_TRAP YOU FOUND A TRAP!
-@DF_FOUND_SECRET YOU FOUND A SECRET DOOR!
-@DF_FOUND_NOTHING YOU FOUND NOTHING.
-@DF_NO_DOOR NO DOOR THERE.
-@DF_ALREADY_OPEN THE DOOR IS ALREADY OPEN.
-@DF_ALREADY_CLOSED IT IS ALREADY CLOSED.
-@DF_DOOR_OPENED YOU OPEN THE DOOR.
-@DF_DOOR_CLOSED YOU CLOSE THE DOOR.
-@DF_YOU_FELL YOU FELL INTO A PIT!
-@DF_ARROW_HITS AN ARROW HITS YOU!
-@DF_POISON_GAS A CLOUD OF GAS SURROUNDS YOU!
-@DF_TELEPORTED YOU ARE TELEPORTED!
-@DF_DART_HITS A DART HITS YOU!
-@DF_ROCKFALL ROCKS FALL ON YOU!
-@DF_DAMAGE_PRE YOU TAKE 
-@DF_DAMAGE_POST  DAMAGE.
-@DF_CON_DRAIN YOU FEEL WEAKENED.
-@DF_POISONED YOU FEEL POISONED.
+@DF_TRAP_0 an open pit
+@DF_TRAP_1 an arrow trap
+@DF_TRAP_2 a poison gas trap
+@DF_TRAP_3 a teleport trap
+@DF_TRAP_4 a poison dart
+@DF_TRAP_5 a rockfall trap
+@DF_DIRECTION Direction?
+@DF_DOOR_STUCK The door is stuck.
+@DF_FOUND_TRAP You found a trap!
+@DF_FOUND_SECRET You found a secret door!
+@DF_FOUND_NOTHING You found nothing.
+@DF_NO_DOOR No door there.
+@DF_ALREADY_OPEN The door is already open.
+@DF_ALREADY_CLOSED It is already closed.
+@DF_DOOR_OPENED You open the door.
+@DF_DOOR_CLOSED You close the door.
+@DF_YOU_FELL You fell into a pit!
+@DF_ARROW_HITS An arrow hits you!
+@DF_POISON_GAS A cloud of gas surrounds you!
+@DF_TELEPORTED You are teleported!
+@DF_DART_HITS A dart hits you!
+@DF_ROCKFALL Rocks fall on you!
+@DF_DAMAGE_PRE You take ~
+@DF_DAMAGE_POST  damage.
+@DF_CON_DRAIN You feel weakened.
+@DF_POISONED You feel poisoned.
 
 # ===== Player magic strings (Pattern A + C) =====
-@PM_NO_CAST YOU CANNOT CAST SPELLS.
-@PM_NO_PRAY YOU CANNOT PRAY.
-@PM_NOT_KNOWN YOU DON'T KNOW THAT SPELL.
-@PM_NO_MANA NOT ENOUGH MANA.
-@PM_NO_EXP YOU'RE NOT EXPERIENCED ENOUGH.
-@PM_FAIL YOUR SPELL FAILS.
-@PM_YOU_CAST YOU CAST 
-@PM_YOU_PRAY YOU PRAY 
-@PM_TITLE_MAGE MAGE SPELLS
-@PM_TITLE_PRAY PRAYERS
-@PM_FOOTER_CAST CAST WHICH? (A-P, ESC)
-@PM_FOOTER_PRAY PRAY WHICH? (A-P, ESC)
-@PM_LEARNED YOU HAVE LEARNED 
+@PM_NO_CAST You cannot cast spells.
+@PM_NO_PRAY You cannot pray.
+@PM_NOT_KNOWN You don't know that spell.
+@PM_NO_MANA Not enough mana.
+@PM_NO_EXP You're not experienced enough.
+@PM_FAIL Your spell fails.
+@PM_YOU_CAST You cast ~
+@PM_YOU_PRAY You pray ~
+@PM_TITLE_MAGE Mage Spells
+@PM_TITLE_PRAY Prayers
+@PM_FOOTER_CAST Cast which? (a-p, ESC)
+@PM_FOOTER_PRAY Pray which? (a-p, ESC)
+@PM_LEARNED You have learned ~
 
 # ===== Player items strings (Pattern A + C) =====
-@PIW_WEAR_PROMPT WEAR WHICH ITEM (A-V)?
-@PIW_TAKEOFF_PROMPT TAKE OFF WHICH ITEM (A-H)?
-@PIW_NOTHING YOU HAVE NOTHING THERE.
-@PIW_CANT_WEAR YOU CANNOT WEAR THAT.
-@PIW_NEVERMIND NEVER MIND.
-@PIW_CURSED YOU CANNOT REMOVE IT, IT IS CURSED!
-@PIW_NO_FOOD YOU HAVE NO FOOD.
-@PIW_WIELD YOU ARE WIELDING A 
-@PIW_WEARING YOU ARE WEARING A 
-@PIW_TAKEOFF YOU TAKE OFF THE 
-@PIW_EAT YOU EAT THE 
-@PIW_DELICIOUS . DELICIOUS!
-@PIW_YUCK . YUCK!
-@PIQ_QUAFF_PROMPT QUAFF WHICH POTION (A-V)?
-@PIQ_READ_PROMPT READ WHICH SCROLL (A-V)?
-@PIQ_NOT_POTION THAT IS NOT A POTION.
-@PIQ_NOT_SCROLL THAT IS NOT A SCROLL.
-@PIQ_FEEL_BETTER YOU FEEL BETTER.
-@PIQ_SPEED YOU FEEL YOURSELF MOVING FASTER.
-@PIQ_TERRIBLE THAT TASTED TERRIBLE!
-@PIQ_NOTHING NOTHING SEEMS TO HAPPEN.
-@PIQ_LIGHT THE AREA FILLS WITH LIGHT.
-@PIQ_IDENTIFY_PROMPT IDENTIFY WHICH ITEM (A-V)?
-@PIQ_THISIS THIS IS A 
-@PIQ_TELEPORT YOU FEEL DISORIENTED.
-@PIQ_MUCH_BETTER YOU FEEL MUCH BETTER.
-@PIQ_MIND_CLEAR YOUR MIND FEELS CLEAR.
-@PIQ_HEROIC YOU FEEL HEROIC!
-@PIQ_CANT_SEE YOU CAN'T SEE!
-@PIQ_DIZZY YOU FEEL DIZZY.
-@PIQ_SENSE YOU SENSE NEARBY CREATURES.
-@PIQ_EYES_TINGLE YOUR EYES TINGLE.
-@PIQ_AIR_CRACKLE THE AIR CRACKLES AROUND YOU.
-@PIQ_CLEANSED YOU FEEL CLEANSED.
-@PIQ_WPN_GLOW YOUR WEAPON GLOWS BRIEFLY.
-@PIQ_ARM_GLOW YOUR ARMOR GLOWS BRIEFLY.
-@PIQ_HANDS_GLOW YOUR HANDS BEGIN TO GLOW.
-@PIQ_HUMMING YOU HEAR A HIGH-PITCHED HUMMING.
-@PIQ_PROTECTED YOU FEEL PROTECTED.
-@PIQ_VIBRATION YOU FEEL A STRANGE VIBRATION.
-@PIW_AIM_PROMPT AIM WHICH WAND (A-V)?
-@PIW_USE_PROMPT USE WHICH STAFF (A-V)?
-@PIW_NOT_WAND THAT IS NOT A WAND.
-@PIW_NOT_STAFF THAT IS NOT A STAFF.
-@PIW_NO_CHARGES NO CHARGES LEFT.
-@PIW_STAFF_EMPTY THE STAFF IS EMPTY.
-@PIW_WAND_BOLT A BOLT OF LIGHTNING SHOOTS FORTH!
-@PIW_WAND_FROST A BOLT OF FROST SHOOTS FORTH!
-@PIW_WAND_CLOUD THE MONSTER LOOKS CONFUSED.
-@PIW_WAND_MISS THE CLOUD DISSIPATES.
-@PIQ_CANT_READ YOU CAN'T SEE TO READ!
-@IGS_PROMPT STUDY WHICH BOOK (A-V)?
-@IGS_NO_MAGIC YOU CANNOT USE MAGIC.
-@IGS_NOT_BOOK THAT IS NOT A BOOK.
-@IGS_WRONG_TYPE YOU CANNOT READ THAT BOOK.
-@IGS_SUCCESS YOU LEARN FROM THE BOOK!
-@IGS_NO_NEW NO NEW SPELLS TO LEARN.
+@PIW_WEAR_PROMPT Wear which item (a-v)?
+@PIW_TAKEOFF_PROMPT Take off which item (a-h)?
+@PIW_NOTHING You have nothing there.
+@PIW_CANT_WEAR You cannot wear that.
+@PIW_NEVERMIND Never mind.
+@PIW_CURSED You cannot remove it, it is cursed!
+@PIW_NO_FOOD You have no food.
+@PIW_WIELD You are wielding a ~
+@PIW_WEARING You are wearing a ~
+@PIW_TAKEOFF You take off the ~
+@PIW_EAT You eat the ~
+@PIW_DELICIOUS . Delicious!
+@PIW_YUCK . Yuck!
+@PIQ_QUAFF_PROMPT Quaff which potion (a-v)?
+@PIQ_READ_PROMPT Read which scroll (a-v)?
+@PIQ_NOT_POTION That is not a potion.
+@PIQ_NOT_SCROLL That is not a scroll.
+@PIQ_FEEL_BETTER You feel better.
+@PIQ_SPEED You feel yourself moving faster.
+@PIQ_TERRIBLE That tasted terrible!
+@PIQ_NOTHING Nothing seems to happen.
+@PIQ_LIGHT The area fills with light.
+@PIQ_IDENTIFY_PROMPT Identify which item (a-v)?
+@PIQ_THISIS This is a ~
+@PIQ_TELEPORT You feel disoriented.
+@PIQ_MUCH_BETTER You feel much better.
+@PIQ_MIND_CLEAR Your mind feels clear.
+@PIQ_HEROIC You feel heroic!
+@PIQ_CANT_SEE You can't see!
+@PIQ_DIZZY You feel dizzy.
+@PIQ_SENSE You sense nearby creatures.
+@PIQ_EYES_TINGLE Your eyes tingle.
+@PIQ_AIR_CRACKLE The air crackles around you.
+@PIQ_CLEANSED You feel cleansed.
+@PIQ_WPN_GLOW Your weapon glows briefly.
+@PIQ_ARM_GLOW Your armor glows briefly.
+@PIQ_HANDS_GLOW Your hands begin to glow.
+@PIQ_HUMMING You hear a high-pitched humming.
+@PIQ_PROTECTED You feel protected.
+@PIQ_VIBRATION You feel a strange vibration.
+@PIW_AIM_PROMPT Aim which wand (a-v)?
+@PIW_USE_PROMPT Use which staff (a-v)?
+@PIW_NOT_WAND That is not a wand.
+@PIW_NOT_STAFF That is not a staff.
+@PIW_NO_CHARGES No charges left.
+@PIW_STAFF_EMPTY The staff is empty.
+@PIW_WAND_BOLT A bolt of lightning shoots forth!
+@PIW_WAND_FROST A bolt of frost shoots forth!
+@PIW_WAND_CLOUD The monster looks confused.
+@PIW_WAND_MISS The cloud dissipates.
+@PIQ_CANT_READ You can't see to read!
+@IGS_PROMPT Study which book (a-v)?
+@IGS_NO_MAGIC You cannot use magic.
+@IGS_NOT_BOOK That is not a book.
+@IGS_WRONG_TYPE You cannot read that book.
+@IGS_SUCCESS You learn from the book!
+@IGS_NO_NEW No new spells to learn.
 
 # ===== Refuel strings (Pattern A) =====
-@PIR_NOT_LAMP NOT USING A LAMP.
-@PIR_NO_OIL YOU HAVE NO OIL.
-@PIR_OVERFLOW YOUR LAMP OVERFLOWS.
-@PIR_FULL YOUR LAMP IS FULL.
-@PIR_REFUELED YOUR LAMP IS REFUELED.
+@PIR_NOT_LAMP Not using a lamp.
+@PIR_NO_OIL You have no oil.
+@PIR_OVERFLOW Your lamp overflows.
+@PIR_FULL Your lamp is full.
+@PIR_REFUELED Your lamp is refueled.
 
 # ===== Combat strings (Pattern C) =====
-@CMB_LVLUP WELCOME TO LEVEL ~
+@CMB_LVLUP Welcome to level ~
 
 # ===== Store UI strings (OPT-3.3 overlay compression) =====
 # NOTE: ~ at end of line = trailing space (stripped by encoder before encoding)
-@UIS_GOLD GOLD: ~
+@UIS_GOLD Gold: ~
 @UIS_BIG_GOLD >65535
-@UIS_MENU B)UY  S)ELL  Q)UIT
-@UIS_BUY_WHICH BUY WHICH ITEM? (A-L)
-@UIS_PRICE PRICE: ~
-@UIS_GP_BUY  GP. BUY? (Y/N)
-@UIS_BOUGHT BOUGHT!
-@UIS_NO_AFFORD YOU CANNOT AFFORD THAT.
-@UIS_PACK_FULL YOUR PACK IS FULL.
-@UIS_SELL_TITLE SELL ITEMS
-@UIS_SELL_WHICH SELL WHICH ITEM? (A-V)
-@UIS_OFFER OFFER: ~
-@UIS_GP_SELL  GP. SELL? (Y/N)
-@UIS_SOLD SOLD!
-@UIS_NO_BUY WE DON'T BUY THAT.
-@UIS_WORTHLESS THAT IS WORTHLESS.
-@UIS_STORE_FULL THE STORE IS FULL.
-@UIS_CURSED THAT ITEM IS CURSED.
-@HG_ASKS ASKS ~
-@HG_OFFERS OFFERS ~
-@HG_GP  GP.
-@HG_YOUR_OFFER YOUR OFFER? (Q=CANCEL)
-@HG_YOUR_PRICE YOUR PRICE? (Q=CANCEL)
-@HG_COUNTER HOW ABOUT ~
-@HG_QMARK  GP?
-@HG_FINAL FINAL OFFER: ~
-@HG_TAKE TAKE IT? (Y/N)
-@HG_KICKED GET OUT OF MY STORE!
-@HG_AGREED AGREED!
+@UIS_MENU B)uy  S)ell  Q)uit
+@UIS_BUY_WHICH Buy which item? (a-l)
+@UIS_PRICE Price: ~
+@UIS_GP_BUY  gp. Buy? (Y/N)
+@UIS_BOUGHT Bought!
+@UIS_NO_AFFORD You cannot afford that.
+@UIS_PACK_FULL Your pack is full.
+@UIS_SELL_TITLE Sell Items
+@UIS_SELL_WHICH Sell which item? (a-v)
+@UIS_OFFER Offer: ~
+@UIS_GP_SELL  gp. Sell? (Y/N)
+@UIS_SOLD Sold!
+@UIS_NO_BUY We don't buy that.
+@UIS_WORTHLESS That is worthless.
+@UIS_STORE_FULL The store is full.
+@UIS_CURSED That item is cursed.
+@HG_ASKS Asks ~
+@HG_OFFERS Offers ~
+@HG_GP  gp.
+@HG_YOUR_OFFER Your offer? (Q=cancel)
+@HG_YOUR_PRICE Your price? (Q=cancel)
+@HG_COUNTER How about ~
+@HG_QMARK  gp?
+@HG_FINAL Final offer: ~
+@HG_TAKE Take it? (Y/N)
+@HG_KICKED Get out of my store!
+@HG_AGREED Agreed!
 
 # ===== Tunnel strings (R2.5) =====
-@TUN_DIG_GRANITE YOU DIG IN THE GRANITE WALL.
-@TUN_DIG_MAGMA YOU DIG IN THE MAGMA.
-@TUN_DIG_QUARTZ YOU DIG IN THE QUARTZ VEIN.
-@TUN_FINISHED YOU HAVE FINISHED THE TUNNEL.
-@TUN_FOUND YOU HAVE FOUND SOMETHING!
-@TUN_PERMANENT THIS SEEMS TO BE PERMANENT ROCK.
-@TUN_NOTHING THERE IS NOTHING TO TUNNEL HERE.
-@TUN_RUBBLE THE RUBBLE CRUMBLES.
+@TUN_DIG_GRANITE You dig in the granite wall.
+@TUN_DIG_MAGMA You dig in the magma.
+@TUN_DIG_QUARTZ You dig in the quartz vein.
+@TUN_FINISHED You have finished the tunnel.
+@TUN_FOUND You have found something!
+@TUN_PERMANENT This seems to be permanent rock.
+@TUN_NOTHING There is nothing to tunnel here.
+@TUN_RUBBLE The rubble crumbles.

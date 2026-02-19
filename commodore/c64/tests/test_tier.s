@@ -12,7 +12,7 @@
 
 .pc = $0810 "Test Code"
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 
 // Bootstrap — must be before imports so it's in RAM below $A000.
 bootstrap:

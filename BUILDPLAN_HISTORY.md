@@ -3714,3 +3714,56 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 **Files modified:**
 - `monster.s` — Replaced `!cgn_banked` code block with safe "?" fallback
 
+---
+
+## BUG-35 Fix: Help Screen Fills with 'p' Characters and Locks Up ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** `help_lines` data in `ui_help_data.s` started at `$BD26` and extended past `$C000` (MAP_BASE), placing program_end at `$C016`. At runtime, the dungeon map at `$C000` overwrites the tail end of help_lines data. The help_draw_line renderer finds no null terminator in the corrupted data and reads map tiles as characters (floor tiles = `p` in lowercase mode), filling the screen and hanging.
+
+**Fix:** Added a tab-to-column control code (`$fc`) to the help renderer. Replaced padding spaces in help_lines data with 2-byte tab codes (`$fc, column`), shrinking help data by ~96 bytes. Also changed the build assertion from CREATURE_BASE to MAP_BASE.
+
+**Size impact:** program_end moved from `$C016` to `$BFD0` (~48 bytes headroom below MAP_BASE).
+
+**Files modified:**
+- `ui_help.s` — Added `CT = $fc` constant and `!hdl_tab` handler in `help_draw_line`
+- `ui_help_data.s` — Replaced padding spaces with tab control codes across 18 rows
+- `main.s` — Changed build assertion from `CREATURE_BASE` to `MAP_BASE`
+
+---
+
+## BUG-36 Fix: Monster Recall Missing Creature Name for Town Creatures ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** `creature_get_name` had an inconsistency: the tier path populated `creature_name_buf`, but the table path (for town/embedded creatures) returned a direct pointer without populating the buffer. `ui_recall.s` reads from `creature_name_buf`, so town creature names appeared blank.
+
+**Fix:** Made the table path in `creature_get_name` copy the name into `creature_name_buf` before returning, matching the tier path behavior.
+
+**Files modified:**
+- `monster.s` — Added copy loop in `!cgn_table` path to populate `creature_name_buf`
+
+---
+
+## BUG-37 Fix: Recall/Help Screens Flash and Dismiss Immediately ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** C64 keyboard buffer at `$C6` retains repeat characters from the preceding keypress. When the user types a letter for "Recall which?" or presses `?` for help, key repeat characters land in the buffer. The dismiss `input_get_key` call reads a buffered character immediately, causing the screen to flash and dismiss before the user can read it.
+
+**Fix:** Added `lda #0; sta $c6` (clear keyboard buffer) before the dismiss `input_get_key` calls for both recall and help screens.
+
+**Files modified:**
+- `main.s` — Added keyboard buffer clears before dismiss calls (~lines 469 and 531)
+
+---
+
+## BUG-38 Fix: rng_range(0) Causes Infinite Loop (Game Hang) ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** `rng_range` uses rejection sampling: generate masked random byte, reject if >= N. When called with N=0, the mask wraps to `$FF` and `CMP 0` always sets carry, creating an infinite loop. Multiple callers can pass 0: `active_dungeon_count` (when all creature slots filled), `door_scan_count` (on doorless levels), and potentially others with computed values.
+
+**Fix (3-part):**
+1. **Defensive guard in `rng_range`** — Added `beq` after `tax` to return 0 immediately when N=0 (2 bytes)
+2. **Guard in `pick_creature_type`** — Added `active_dungeon_count` zero-check + 50-retry limit to prevent infinite retry loop
+3. **Guard in `monster_cast_summon`** — Added `active_dungeon_count` zero-check before `jsr rng_range`
+
+**Files modified:**
+- `rng.s` — Added zero guard in `rng_range`
+- `monster.s` — Added `active_dungeon_count` guard + retry limit in `pick_creature_type`
+- `monster_magic.s` — Added `active_dungeon_count` guard in `monster_cast_summon`
+

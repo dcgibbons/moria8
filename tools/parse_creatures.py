@@ -266,11 +266,11 @@ def map_spells(spell_word):
 # Display character mapping (ASCII → C64 screen code)
 # ============================================================
 def char_to_screencode(ch):
-    """Convert ASCII character to C64 screen code (uppercase mode)."""
+    """Convert ASCII character to C64 screen code (lowercase/uppercase mode)."""
     if 'A' <= ch <= 'Z':
-        return ord(ch) - ord('A') + 1
+        return ord(ch) - ord('A') + 0x41  # Uppercase: $41-$5A
     if 'a' <= ch <= 'z':
-        return ord(ch) - ord('a') + 1  # Same as uppercase in screen codes
+        return ord(ch) - ord('a') + 0x01  # Lowercase: $01-$1A
     if ch == '$':
         return 0x24
     if ch == ',':
@@ -925,12 +925,11 @@ def generate_asm_tier(tier_idx, tier, creatures, selected_indices, outdir):
     lines.append("")
 
     # Name strings (screen codes, null-terminated)
-    lines.append('.encoding "screencode_upper"')
+    lines.append('.encoding "screencode_mixed"')
     lines.append("// Name strings (screen codes, null-terminated)")
     for i, (idx, cr) in enumerate(members):
-        name_upper = cr['name'].upper()
-        # Escape any characters that Kick Assembler can't handle
-        lines.append(f'{tier_name}_crn_{i}: .text "{name_upper}" ; .byte 0')
+        # Use original mixed-case name (e.g., "Kobold" not "KOBOLD")
+        lines.append(f'{tier_name}_crn_{i}: .text "{cr["name"]}" ; .byte 0')
     lines.append("")
 
     # Size assertion

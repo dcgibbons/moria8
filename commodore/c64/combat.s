@@ -19,11 +19,11 @@ combat_msg_buf:  .fill 42, 0
 // ============================================================
 // Combat strings (screen codes via inherited encoding)
 // ============================================================
-cmb_you_str:     .text "YOU " ; .byte 0
-cmb_the_str:     .text " THE " ; .byte 0
-cmb_hit_str:     .text "HIT" ; .byte 0
-cmb_miss_str:    .text "MISS" ; .byte 0
-cmb_kill_str:    .text "HAVE SLAIN" ; .byte 0
+cmb_you_str:     .text "You " ; .byte 0
+cmb_the_str:     .text " the " ; .byte 0
+cmb_hit_str:     .text "hit" ; .byte 0
+cmb_miss_str:    .text "miss" ; .byte 0
+cmb_kill_str:    .text "have slain" ; .byte 0
 // cmb_lvlup_str migrated to Huffman (HSTR_CMB_LVLUP)
 cmb_period:      .byte $2e, 0   // "."
 
@@ -124,7 +124,7 @@ player_attack_monster:
     lda cmb_dead
     beq !pam_not_dead+
 
-    // Killed: "YOU HAVE SLAIN THE <name>."
+    // Killed: "You have slain the <name>."
     lda #<cmb_kill_str
     ldy #>cmb_kill_str
     jsr msg_build_action
@@ -141,7 +141,7 @@ player_attack_monster:
     lda cmb_any_hit
     beq !pam_all_miss+
 
-    // Hit but alive: "YOU HIT THE <name>."
+    // Hit but alive: "You hit the <name>."
     lda #<cmb_hit_str
     ldy #>cmb_hit_str
     jsr msg_build_action
@@ -152,7 +152,7 @@ player_attack_monster:
     jmp !pam_done+
 
 !pam_all_miss:
-    // All blows missed: "YOU MISS THE <name>."
+    // All blows missed: "You miss the <name>."
     lda #<cmb_miss_str
     ldy #>cmb_miss_str
     jsr msg_build_action
@@ -868,7 +868,7 @@ combat_check_levelup:
     lda #SFX_LEVELUP
     jsr sound_play
 
-    // Print level-up message: "WELCOME TO LEVEL N."
+    // Print level-up message: "Welcome to level N."
     jsr msg_build_levelup
     jsr cmb_print_buf
 
@@ -933,7 +933,7 @@ ccl_div_24x8:
 // Message builders — compose strings in combat_msg_buf
 // ============================================================
 
-// msg_build_action — "YOU <action> THE <name>."
+// msg_build_action — "You <action> the <name>."
 // Input: A = action string ptr lo, Y = action string ptr hi
 // Clobbers: A, X, Y, zp_ptr1
 msg_build_action:
@@ -944,7 +944,7 @@ msg_build_action:
 
     lda #<cmb_you_str
     ldy #>cmb_you_str
-    jsr combat_append_str       // "YOU "
+    jsr combat_append_str       // "You "
 
     lda mba_action_lo
     ldy mba_action_hi
@@ -952,7 +952,7 @@ msg_build_action:
 
     lda #<cmb_the_str
     ldy #>cmb_the_str
-    jsr combat_append_str       // " THE "
+    jsr combat_append_str       // " the "
 
     jsr combat_append_monster_name
 
@@ -982,7 +982,7 @@ cmb_print_buf:
     sta zp_ptr0_hi
     jmp msg_print
 
-// msg_build_levelup — "WELCOME TO LEVEL N."
+// msg_build_levelup — "Welcome to level N."
 msg_build_levelup:
     lda #0
     sta cmb_buf_idx

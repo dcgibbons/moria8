@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-18)
+## Current State (2026-02-19)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 code size optimizations applied (excluding OPT-1.1).
 
@@ -31,6 +31,7 @@
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader ($E000 overlay), monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
+| R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
@@ -38,19 +39,20 @@
 - **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 68
 - **Source files:** ~46 .s files
-- **Program size:** $BFFF (program_end) — **1 byte headroom** to MAP_BASE ($C000)
-- **Banked code:** $F000-$FFBC (62 bytes headroom to CPU vectors)
-- **Banked payload:** $C01D-$CFE8 (24 bytes headroom to I/O at $D000)
+- **Program size:** $BFEF (program_end) — **17 bytes headroom** to MAP_BASE ($C000)
+- **Banked code:** $F000-$FFC6 (52 bytes headroom to CPU vectors)
+- **Banked payload:** $C01C-$CFE2 (30 bytes headroom to I/O at $D000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
 
 ### Known Remaining Issues
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| BUG-32 | MED | Monster names/descriptions garbled for tier-loaded creatures from REU (death screen "KILLED BY A [garbage]", combat "HIT THE [garbage]") — repeat of BUG-30 pattern, not fully resolved | **Fixed** — Root cause: `load_tier_to_buffer` writes `$E0xx` pointers into `cr_name_lo/hi`, but `overlay_load` later sets `current_tier=0` and overwrites `$E000` with overlay code. The `!cgn_table` fallback in `creature_get_name` saw `cr_name_hi >= $E0`, went to `!cgn_banked`, and read executable code as string data. Fix: replaced `!cgn_banked` with safe fallback returning "?" to `creature_name_buf`. The `!cgn_banked` path was dead code for legitimate use — embedded names are always < `$C000`, and tier names use the dedicated tier path. Byte-neutral (15B → 15B). |
-| BUG-33 | LOW | Secret door wall sometimes wrong orientation (renders as `+` on horizontal wall instead of `—`) — recurring | Open |
-| BUG-34 | MED | Monster recall only shows first match when multiple creatures share a display symbol. umoria cycles through all known creatures with that letter (backward iteration, ESCAPE to advance); moria8 finds the first match and stops. On C64 this is worse than umoria because case-folding (no lowercase) merges symbols that are distinct in umoria (e.g. `j`=Jackal vs `J`=Jellies both become screen code $0A). Fix: add a recall cycling loop similar to umoria's `recallMonsterAttributes()`. | Open |
-| R11 | MED | **Switch to lowercase/uppercase character mode.** Currently using uppercase/graphics mode solely for 6 box-drawing wall characters (─ │ ┌ ┐ └ ┘). Switching to lowercase mode gives 52 letter symbols (a-z + A-Z) instead of 26, fixing the root cause of BUG-34's symbol collisions and enabling mixed-case text throughout the game. Walls change from box-drawing to ASCII (`#` or `-`/`|`/`+`), which is genre-authentic (original VMS Moria used `#`-walls on standard terminals). Zero RAM cost. Changes: flip bit 1 of `$D018` init, remap 6 entries in `tile_char_table` (color.s), change `.text` encoding from `screencode_upper` to `screencode_mixed`, update creature `cr_display` values to use both cases, update recall key input to accept both cases. | Open |
+| BUG-34 | MED | Monster recall only shows first match when multiple creatures share a display symbol. umoria cycles through all known creatures with that letter; moria8 finds the first match and stops. Fix: add a recall cycling loop similar to umoria's `recallMonsterAttributes()`. | Open |
+| BUG-35 | HIGH | Help screen fills with 'p' characters and locks up — help_lines data crossed MAP_BASE ($C000), dungeon map overwrote tail of data | **Fixed** — Tab control code ($fc) replaced padding spaces, saving ~96 bytes |
+| BUG-36 | MED | Monster recall shows blank name for town creatures — creature_get_name table path didn't populate creature_name_buf | **Fixed** — Table path now copies name to buffer |
+| BUG-37 | MED | Recall/help screens flash and dismiss immediately — keyboard buffer contained repeat characters | **Fixed** — Clear $C6 before dismiss input_get_key |
+| BUG-38 | HIGH | rng_range(0) causes infinite loop (game hang) — rejection sampling loops forever when N=0 | **Fixed** — Defensive guard in rng_range + guards in pick_creature_type and monster_cast_summon |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
@@ -70,7 +72,7 @@
 
 ---
 
-### Priority Triage (updated 2026-02-18)
+### Priority Triage (updated 2026-02-19)
 
 **Remaining items:**
 
@@ -87,7 +89,7 @@
 
 ### Current State
 
-Main segment: **$080E–$B4CF** (44,225 bytes, ~2,833 bytes before $C000 MAP_BASE).
+Main segment: **$080E–$BFEF** (~46,049 bytes, ~17 bytes before $C000 MAP_BASE).
 $F000 banked region: 3,369 of ~4,089 bytes used (~720 bytes free).
 Town overlay: 4,074 of 4,096 bytes (22 free — covered by OPT-3).
 

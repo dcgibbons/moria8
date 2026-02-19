@@ -2,7 +2,7 @@
 """
 Huffman encoder for C64 Moria string compression.
 
-Reads a text file with one string per line (ASCII uppercase), builds a
+Reads a text file with one string per line (ASCII mixed case), builds a
 Huffman tree, and emits a Kick Assembler .s file with compressed data
 and tree tables for the 6502 decoder.
 
@@ -22,12 +22,14 @@ from collections import Counter
 
 
 def ascii_to_screencode(ch):
-    """Convert ASCII character to C64 screen code."""
+    """Convert ASCII character to C64 screen code (screencode_mixed)."""
     c = ord(ch)
     if ch == ' ':
         return 0x20
     if 'A' <= ch <= 'Z':
-        return c - 0x40  # A=0x01, B=0x02, ...
+        return c - 0x40 + 0x40  # A=$41, B=$42, ... Z=$5A (uppercase)
+    if 'a' <= ch <= 'z':
+        return c - 0x60  # a=$01, b=$02, ... z=$1A (lowercase)
     if '0' <= ch <= '9':
         return c - 0x30 + 0x30  # 0-9 map to $30-$39
     if ch == '.':
@@ -303,7 +305,9 @@ def main():
         elif sc == 0x20:
             name = 'SPACE'
         elif 0x01 <= sc <= 0x1a:
-            name = chr(sc + 0x40)
+            name = chr(sc + 0x60)  # lowercase a-z
+        elif 0x41 <= sc <= 0x5a:
+            name = chr(sc)  # uppercase A-Z
         else:
             name = f'${sc:02x}'
         out_lines.append(f'//   {name:6s} = {codes[sc]:>12s} ({len(codes[sc])} bits, freq={freq[sc]})')

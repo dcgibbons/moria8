@@ -351,21 +351,21 @@ ui_char_draw_stats:
 // String data (screen codes)
 // ============================================================
 char_title_str:
-    .text "CHARACTER INFO" ; .byte $00
+    .text "Character Info" ; .byte $00
 char_name_label:
-    .text "NAME: " ; .byte $00
+    .text "Name: " ; .byte $00
 char_race_label:
-    .text "RACE: " ; .byte $00
+    .text "Race: " ; .byte $00
 char_class_label:
-    .text "CLASS: " ; .byte $00
+    .text "Class: " ; .byte $00
 char_level_label:
-    .text "LEVEL: " ; .byte $00
+    .text "Level: " ; .byte $00
 char_mana_label:
-    .text "MANA: " ; .byte $00
+    .text "Mana: " ; .byte $00
 char_gold_label:
-    .text "GOLD: " ; .byte $00
+    .text "Gold: " ; .byte $00
 char_spells_label:
-    .text "SPELLS: " ; .byte $00
+    .text "Spells: " ; .byte $00
 
 // count_spells_known — Count set bits in PL_SPELLS_KNOWN (16 bits)
 // Returns: A = count (0-16)

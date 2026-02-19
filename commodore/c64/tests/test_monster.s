@@ -25,7 +25,7 @@ test_exit_trampoline:
 
 .pc = $0828 "Main"
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 
 #import "../zeropage.s"
 #import "../memory.s"

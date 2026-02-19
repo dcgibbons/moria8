@@ -34,14 +34,14 @@ store_base_idx:
 // Store name strings (screen codes, null-terminated)
 // ============================================================
 // In main RAM so they don't consume overlay space at $E000.
-sn_general:  .text "GENERAL STORE"  ; .byte 0
-sn_armory:   .text "ARMORY"         ; .byte 0
-sn_weapon:   .text "WEAPONSMITH"    ; .byte 0
-sn_temple:   .text "TEMPLE"         ; .byte 0
-sn_alchemy:  .text "ALCHEMY SHOP"   ; .byte 0
-sn_magic:    .text "MAGIC SHOP"     ; .byte 0
-sn_bmarket:  .text "BLACK MARKET"   ; .byte 0
-sn_home:     .text "HOME"            ; .byte 0
+sn_general:  .text "General Store"  ; .byte 0
+sn_armory:   .text "Armory"         ; .byte 0
+sn_weapon:   .text "Weaponsmith"    ; .byte 0
+sn_temple:   .text "Temple"         ; .byte 0
+sn_alchemy:  .text "Alchemy Shop"   ; .byte 0
+sn_magic:    .text "Magic Shop"     ; .byte 0
+sn_bmarket:  .text "Black Market"   ; .byte 0
+sn_home:     .text "Home"            ; .byte 0
 
 store_name_lo:
     .byte <sn_general, <sn_armory, <sn_weapon, <sn_temple, <sn_alchemy, <sn_magic, <sn_bmarket, <sn_home

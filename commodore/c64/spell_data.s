@@ -73,42 +73,42 @@ priest_spell_name_hi:
 // ============================================================
 // Mage Spell Name Strings (screen codes, null-terminated)
 // ============================================================
-msn_0:  .text "MAGIC MISSILE" ; .byte 0
-.label msn_1 = itn_30   // "DETECT MONSTERS" — shared with item.s
-msn_2:  .text "PHASE DOOR" ; .byte 0
-msn_3:  .text "LIGHT AREA" ; .byte 0
-.label msn_4 = itn_17   // "CURE LIGHT WOUNDS" — shared with item.s
-msn_5:  .text "FIND TRAPS/DOORS" ; .byte 0
-msn_6:  .text "STINKING CLOUD" ; .byte 0
-msn_7:  .text "CONFUSION" ; .byte 0
-msn_8:  .text "LIGHTNING BOLT" ; .byte 0
-msn_9:  .text "TRAP/DOOR DESTROY" ; .byte 0
-msn_10: .text "SLEEP I" ; .byte 0
-msn_11: .text "CURE POISON" ; .byte 0
-msn_12: .text "TELEPORT SELF" ; .byte 0
-msn_13: .text "FROST BOLT" ; .byte 0
-msn_14: .text "WALL TO MUD" ; .byte 0
-msn_15: .text "FIRE BALL" ; .byte 0
+msn_0:  .text "Magic Missile" ; .byte 0
+.label msn_1 = itn_30   // "Detect Monsters" — shared with item.s
+msn_2:  .text "Phase Door" ; .byte 0
+msn_3:  .text "Light Area" ; .byte 0
+.label msn_4 = itn_17   // "Cure Light Wounds" — shared with item.s
+msn_5:  .text "Find Traps/Doors" ; .byte 0
+msn_6:  .text "Stinking Cloud" ; .byte 0
+msn_7:  .text "Confusion" ; .byte 0
+msn_8:  .text "Lightning Bolt" ; .byte 0
+msn_9:  .text "Trap/Door Destroy" ; .byte 0
+msn_10: .text "Sleep I" ; .byte 0
+msn_11: .text "Cure Poison" ; .byte 0
+msn_12: .text "Teleport Self" ; .byte 0
+msn_13: .text "Frost Bolt" ; .byte 0
+msn_14: .text "Wall to Mud" ; .byte 0
+msn_15: .text "Fire Ball" ; .byte 0
 
 // ============================================================
 // Priest Prayer Name Strings (screen codes, null-terminated)
 // ============================================================
-psn_0:  .text "DETECT EVIL" ; .byte 0
-.label psn_1 = itn_17   // "CURE LIGHT WOUNDS" — shared with item.s
-psn_2:  .text "BLESS" ; .byte 0
-psn_3:  .text "REMOVE FEAR" ; .byte 0
-psn_4:  .text "CALL LIGHT" ; .byte 0
-psn_5:  .text "FIND TRAPS" ; .byte 0
-psn_6:  .text "DETECT DOORS" ; .byte 0
-psn_7:  .text "SLOW POISON" ; .byte 0
-psn_8:  .text "BLIND CREATURE" ; .byte 0
-psn_9:  .text "PORTAL" ; .byte 0
-psn_10: .text "CURE MEDIUM WOUNDS" ; .byte 0
-psn_11: .text "CHANT" ; .byte 0
-psn_12: .text "SANCTUARY" ; .byte 0
-psn_13: .text "REMOVE CURSE" ; .byte 0
-psn_14: .text "CURE SERIOUS WOUNDS" ; .byte 0
-psn_15: .text "DISPEL UNDEAD" ; .byte 0
+psn_0:  .text "Detect Evil" ; .byte 0
+.label psn_1 = itn_17   // "Cure Light Wounds" — shared with item.s
+psn_2:  .text "Bless" ; .byte 0
+psn_3:  .text "Remove Fear" ; .byte 0
+psn_4:  .text "Call Light" ; .byte 0
+psn_5:  .text "Find Traps" ; .byte 0
+psn_6:  .text "Detect Doors" ; .byte 0
+psn_7:  .text "Slow Poison" ; .byte 0
+psn_8:  .text "Blind Creature" ; .byte 0
+psn_9:  .text "Portal" ; .byte 0
+psn_10: .text "Cure Medium Wounds" ; .byte 0
+psn_11: .text "Chant" ; .byte 0
+psn_12: .text "Sanctuary" ; .byte 0
+psn_13: .text "Remove Curse" ; .byte 0
+psn_14: .text "Cure Serious Wounds" ; .byte 0
+psn_15: .text "Dispel Undead" ; .byte 0
 
 // ============================================================
 // Bit mask helper for spell known checks

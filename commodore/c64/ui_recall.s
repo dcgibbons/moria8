@@ -257,16 +257,16 @@ rcl_print_atk:
 // ============================================================
 // String data (screen codes, null-terminated)
 // ============================================================
-rcl_s_title: .text "MONSTER RECALL" ; .byte 0
+rcl_s_title: .text "Monster Recall" ; .byte 0
 rcl_s_lv:    .text "LV " ; .byte 0
 rcl_s_ac:    .text "AC " ; .byte 0
 rcl_s_hp:    .text "HP " ; .byte 0
-rcl_s_atk:   .text "ATK: " ; .byte 0
-rcl_s_spl:   .text "SPELLS: " ; .byte 0
-rcl_s_kill:  .text "KILLED " ; .byte 0
-rcl_s_died:  .text "DIED " ; .byte 0
-rcl_s_none:  .text "NONE" ; .byte 0
-rcl_s_yes:   .text "YES" ; .byte 0
+rcl_s_atk:   .text "Atk: " ; .byte 0
+rcl_s_spl:   .text "Spells: " ; .byte 0
+rcl_s_kill:  .text "Killed " ; .byte 0
+rcl_s_died:  .text "Died " ; .byte 0
+rcl_s_none:  .text "None" ; .byte 0
+rcl_s_yes:   .text "Yes" ; .byte 0
 
 // Attack type 3-char abbreviations (9 × 3 = 27 bytes)
 rcl_atk_3:

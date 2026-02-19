@@ -247,6 +247,20 @@ tier_load:
     sta $01                     // Restore bank config
     cli
 
+    // Clear stale name pointers for indices beyond this tier's range.
+    // A previous larger tier may have left $E0xx pointers in
+    // cr_name_hi[count..prev_count-1]. Zero them to prevent the
+    // "?" fallback from triggering on out-of-range lookups.
+    ldx active_dungeon_count
+!tl_clear_names:
+    cpx #MAX_DUNGEON_CREATURES
+    bcs !tl_names_done+
+    lda #0
+    sta cr_name_hi,x
+    inx
+    bne !tl_clear_names-
+!tl_names_done:
+
     lda #1
     sta tier_loaded
     rts
@@ -319,4 +333,4 @@ tier_fn_addr_hi:
     .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
 
 tier_loading_str:
-    .text "LOADING..." ; .byte 0
+    .text "Loading..." ; .byte 0

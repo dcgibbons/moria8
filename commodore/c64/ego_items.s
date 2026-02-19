@@ -1,7 +1,7 @@
 // ego_items.s — Ego item generation and suffix strings
 //
 // Lives at $F000 (RAM under KERNAL ROM), accessed via trampolines.
-// Ego types are enchanted weapon variants (e.g., "Long Sword (FLAME)").
+// Ego types are enchanted weapon variants (e.g., "Long Sword (Flame)").
 //
 // Ego Type IDs:
 //   0 = None
@@ -100,13 +100,13 @@ ego_suffix_hi:
 // Ego suffix strings (screen codes, null-terminated)
 // These are in banked RAM at $F000+ so must be read while KERNAL is banked out.
 ego_str_none:         .byte 0
-ego_str_slay_animal:  .text " (SLAY ANIMAL)" ; .byte 0
-ego_str_slay_evil:    .text " (SLAY EVIL)" ; .byte 0
-ego_str_slay_undead:  .text " (SLAY UNDEAD)" ; .byte 0
-ego_str_flame:        .text " (FLAME)" ; .byte 0
-ego_str_frost:        .text " (FROST)" ; .byte 0
-ego_str_defender:     .text " (DEFENDER)" ; .byte 0
-ego_str_holy_avenger: .text " (HOLY AVENGER)" ; .byte 0
+ego_str_slay_animal:  .text " (Slay Animal)" ; .byte 0
+ego_str_slay_evil:    .text " (Slay Evil)" ; .byte 0
+ego_str_slay_undead:  .text " (Slay Undead)" ; .byte 0
+ego_str_flame:        .text " (Flame)" ; .byte 0
+ego_str_frost:        .text " (Frost)" ; .byte 0
+ego_str_defender:     .text " (Defender)" ; .byte 0
+ego_str_holy_avenger: .text " (Holy Avenger)" ; .byte 0
 
 // ============================================================
 // Ego data tables (indexed by ego type 0-7)

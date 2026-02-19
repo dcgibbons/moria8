@@ -234,14 +234,14 @@ race_name_ptrs_hi:
     .byte >race_name_0, >race_name_1, >race_name_2, >race_name_3
     .byte >race_name_4, >race_name_5, >race_name_6, >race_name_7
 
-race_name_0: .text "HUMAN" ; .byte 0
-race_name_1: .text "HALF-ELF" ; .byte 0
-race_name_2: .text "ELF" ; .byte 0
-race_name_3: .text "HALFLING" ; .byte 0
-race_name_4: .text "GNOME" ; .byte 0
-race_name_5: .text "DWARF" ; .byte 0
-race_name_6: .text "HALF-ORC" ; .byte 0
-race_name_7: .text "HALF-TROLL" ; .byte 0
+race_name_0: .text "Human" ; .byte 0
+race_name_1: .text "Half-Elf" ; .byte 0
+race_name_2: .text "Elf" ; .byte 0
+race_name_3: .text "Halfling" ; .byte 0
+race_name_4: .text "Gnome" ; .byte 0
+race_name_5: .text "Dwarf" ; .byte 0
+race_name_6: .text "Half-Orc" ; .byte 0
+race_name_7: .text "Half-Troll" ; .byte 0
 
 // ============================================================
 // Class name strings (screen codes, null-terminated)
@@ -253,12 +253,12 @@ class_name_ptrs_hi:
     .byte >class_name_0, >class_name_1, >class_name_2
     .byte >class_name_3, >class_name_4, >class_name_5
 
-class_name_0: .text "WARRIOR" ; .byte 0
-class_name_1: .text "MAGE" ; .byte 0
-class_name_2: .text "PRIEST" ; .byte 0
-class_name_3: .text "ROGUE" ; .byte 0
-class_name_4: .text "RANGER" ; .byte 0
-class_name_5: .text "PALADIN" ; .byte 0
+class_name_0: .text "Warrior" ; .byte 0
+class_name_1: .text "Mage" ; .byte 0
+class_name_2: .text "Priest" ; .byte 0
+class_name_3: .text "Rogue" ; .byte 0
+class_name_4: .text "Ranger" ; .byte 0
+class_name_5: .text "Paladin" ; .byte 0
 
 // ============================================================
 // Stat name strings (screen codes, null-terminated)
@@ -287,10 +287,10 @@ hunger_name_ptrs_lo:
 hunger_name_ptrs_hi:
     .byte >hunger_0, >hunger_1, >hunger_2, >hunger_3
 
-hunger_0: .text "FULL  " ; .byte 0
-hunger_1: .text "HUNGRY" ; .byte 0
-hunger_2: .text "WEAK  " ; .byte 0
-hunger_3: .text "FAINT " ; .byte 0
+hunger_0: .text "Full  " ; .byte 0
+hunger_1: .text "Hungry" ; .byte 0
+hunger_2: .text "Weak  " ; .byte 0
+hunger_3: .text "Faint " ; .byte 0
 
 // ============================================================
 // HP regeneration rate: turns per 1 HP healed, indexed by CON-3

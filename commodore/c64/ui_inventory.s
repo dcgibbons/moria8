@@ -292,22 +292,22 @@ uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 // ============================================================
 // String data (screen codes via inherited encoding)
 // ============================================================
-uinv_title_str:   .text "INVENTORY" ; .byte 0
+uinv_title_str:   .text "Inventory" ; .byte 0
 uinv_sep_str:     .text "---------" ; .byte 0
-uinv_nothing_str: .text "YOU HAVE NOTHING." ; .byte 0
+uinv_nothing_str: .text "You have nothing." ; .byte 0
 
-ueq_title_str:    .text "EQUIPMENT" ; .byte 0
-ueq_none_str:     .text "(NONE)" ; .byte 0
+ueq_title_str:    .text "Equipment" ; .byte 0
+ueq_none_str:     .text "(none)" ; .byte 0
 
 // Equipment slot label strings
-ueq_lbl_weapon: .text "WEAPON: " ; .byte 0
-ueq_lbl_body:   .text "BODY:   " ; .byte 0
-ueq_lbl_shield: .text "SHIELD: " ; .byte 0
-ueq_lbl_head:   .text "HEAD:   " ; .byte 0
-ueq_lbl_hands:  .text "HANDS:  " ; .byte 0
-ueq_lbl_feet:   .text "FEET:   " ; .byte 0
-ueq_lbl_light:  .text "LIGHT:  " ; .byte 0
-ueq_lbl_ring:   .text "RING:   " ; .byte 0
+ueq_lbl_weapon: .text "Weapon: " ; .byte 0
+ueq_lbl_body:   .text "Body:   " ; .byte 0
+ueq_lbl_shield: .text "Shield: " ; .byte 0
+ueq_lbl_head:   .text "Head:   " ; .byte 0
+ueq_lbl_hands:  .text "Hands:  " ; .byte 0
+ueq_lbl_feet:   .text "Feet:   " ; .byte 0
+ueq_lbl_light:  .text "Light:  " ; .byte 0
+ueq_lbl_ring:   .text "Ring:   " ; .byte 0
 
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head

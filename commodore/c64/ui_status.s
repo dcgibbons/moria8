@@ -1,7 +1,7 @@
 // ui_status.s — Bottom status bar rendering (umoria-style, 3 lines)
 //
 // Three-line status bar at rows 21–23:
-//   Row 21: Race, Class, Level, Dungeon Level
+//   Row 21: Name, Race, Level, Dungeon Level
 //   Row 22: ST:nn IN:nn WI:nn DX:nn CO:nn CH:nn
 //   Row 23: HP:nn/nn MP:nn/nn AC:nn AU:nnnnn HUNGRY
 //
@@ -26,21 +26,20 @@ status_draw:
     lda #INPUT_ROW
     jsr screen_clear_row
 
-    // ========== Row 21: Race / Class / Level / Dungeon Level ==========
+    // ========== Row 21: Name / Race / Level / Dungeon Level ==========
     lda #STATUS_ROW
     jsr screen_clear_row
     lda #STATUS_ROW
     sta zp_cursor_row
 
-    // Race name
-    lda #COL_STATUS
+    // Player name
+    lda #COL_WHITE
     sta zp_text_color
     lda #0
     sta zp_cursor_col
-    ldx zp_player_race
-    lda race_name_ptrs_lo,x
+    lda #<(player_data + PL_NAME)
     sta zp_ptr0
-    lda race_name_ptrs_hi,x
+    lda #>(player_data + PL_NAME)
     sta zp_ptr0_hi
     jsr screen_put_string
 
@@ -48,11 +47,13 @@ status_draw:
     lda #$20
     jsr screen_put_char
 
-    // Class name
-    ldx zp_player_class
-    lda class_name_ptrs_lo,x
+    // Race name
+    lda #COL_STATUS
+    sta zp_text_color
+    ldx zp_player_race
+    lda race_name_ptrs_lo,x
     sta zp_ptr0
-    lda class_name_ptrs_hi,x
+    lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
     jsr screen_put_string
 

@@ -63,7 +63,7 @@ exit_trampoline:
 
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 
 #import "zeropage.s"
 #import "memory.s"
@@ -133,10 +133,10 @@ entry_main:
     lda #>tramp_reu_show_status
     sta reu_show_status + 2
 
-    // Select unshifted character set (uppercase + graphics)
-    // Bit 1 of $D018 selects character set: 0=uppercase, 1=lowercase
+    // Select lowercase/uppercase character set (52 letter symbols)
+    // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase
     lda $d018
-    and #%11111101          // Clear bit 1 → uppercase + graphics
+    ora #%00000010          // Set bit 1 → lowercase + uppercase
     sta $d018
     // Also set via $D016 to ensure proper state
     // (Actually $D018 bit 1 is sufficient on C64)
@@ -467,6 +467,8 @@ load_resume_game:
     cmp #CMD_HELP
     bne !not_help+
     jsr tramp_ui_help_display
+    lda #0
+    sta $c6                     // Clear keyboard buffer (prevent key repeat from dismissing)
     jsr input_get_key
     // Redraw map on return — clear all rows then redraw
     lda #COL_BLACK
@@ -489,15 +491,27 @@ load_resume_game:
     sta zp_ptr0_hi
     jsr screen_put_string
     jsr input_get_key
-    // Convert PETSCII letter to screen code
-    cmp #$41                    // 'A'
-    bcc !recall_done+
+    // Convert PETSCII letter to screen code (lowercase/uppercase mode)
+    // Unshifted letters ($41-$5A) → lowercase screen codes ($01-$1A)
+    cmp #$41                    // 'A' unshifted
+    bcc !recall_try_shifted+
     cmp #$5b                    // 'Z'+1
-    bcs !recall_done+
+    bcs !recall_try_shifted+
     sec
-    sbc #$40                    // PETSCII→screen code: $41→$01
+    sbc #$40                    // PETSCII→screen code: $41→$01 (lowercase)
     sta recall_query_sc
-    // Search for matching creature with recall data
+    ldx #0
+    jmp !recall_search+
+!recall_try_shifted:
+    // Shifted letters ($C1-$DA) → uppercase screen codes ($41-$5A)
+    cmp #$c1                    // shifted 'A'
+    bcc !recall_done+
+    cmp #$db                    // shifted 'Z'+1
+    bcs !recall_done+
+    and #$3f                    // $C1→$01
+    clc
+    adc #$40                    // $01→$41 (uppercase screen code)
+    sta recall_query_sc
     ldx #0
 !recall_search:
     lda cr_display,x
@@ -517,6 +531,8 @@ load_resume_game:
     stx recall_found_type
     jsr creature_get_name       // Populates creature_name_buf
     jsr tramp_ui_recall
+    lda #0
+    sta $c6                     // Clear keyboard buffer (prevent key repeat from dismissing)
     jsr input_get_key           // Wait for dismiss
 !recall_done:
     jsr screen_clear
@@ -1303,25 +1319,25 @@ irq_no_blink:
 // ============================================================
 
 press_key_str:
-    .text "PRESS ANY KEY" ; .byte 0
+    .text "Press any key" ; .byte 0
 
 welcome_str:
-    .text "WELCOME TO MORIA8! SHIFT+Q TO QUIT." ; .byte 0
+    .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
 
 descend_str:
-    .text "YOU DESCEND THE STAIRCASE." ; .byte 0
+    .text "You descend the staircase." ; .byte 0
 
 ascend_str:
-    .text "YOU ASCEND THE STAIRCASE." ; .byte 0
+    .text "You ascend the staircase." ; .byte 0
 
 at_surface_str:
-    .text "YOU ARE ALREADY AT THE SURFACE." ; .byte 0
+    .text "You are already at the surface." ; .byte 0
 
 no_stairs_str:
-    .text "YOU SEE NO STAIRS HERE." ; .byte 0
+    .text "You see no stairs here." ; .byte 0
 
 slain_str:
-    .text "YOU HAVE BEEN SLAIN." ; .byte 0
+    .text "You have been slain." ; .byte 0
 
 // ============================================================
 // Special rooms trampolines — SEI + bank out KERNAL, call $F000+
@@ -1561,7 +1577,7 @@ tramp_ui_recall:
     jmp tramp_sr_epilogue
 
 // Recall command variables
-recall_prompt_str: .text "RECALL WHICH? " ; .byte 0
+recall_prompt_str: .text "Recall which? " ; .byte 0
 recall_query_sc:   .byte 0             // Screen code of typed letter
 recall_found_type: .byte 0             // Creature type index found
 
@@ -1667,7 +1683,7 @@ tramp_game_over:
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
-.assert "Program fits below CREATURE_BASE", program_end <= CREATURE_BASE, true
+.assert "Program fits below MAP_BASE", program_end <= MAP_BASE, true
 
 // ============================================================
 // Init-only code below — lives past CREATURE_BASE, safe because

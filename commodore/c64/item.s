@@ -376,68 +376,68 @@ it_name_hi:
     .byte >itn_61
 
 // Name strings (screen codes, null-terminated)
-itn_0:  .text "GOLD (SMALL)" ; .byte 0
-itn_1:  .text "GOLD (LARGE)" ; .byte 0
-itn_2:  .text "DAGGER" ; .byte 0
-itn_3:  .text "SHORT SWORD" ; .byte 0
-itn_4:  .text "LONG SWORD" ; .byte 0
-itn_5:  .text "MACE" ; .byte 0
-itn_6:  .text "ROBE" ; .byte 0
-itn_7:  .text "LEATHER ARMOR" ; .byte 0
-itn_8:  .text "CHAIN MAIL" ; .byte 0
-itn_9:  .text "SMALL SHIELD" ; .byte 0
-itn_10: .text "IRON HELM" ; .byte 0
-itn_11: .text "LEATHER GLOVES" ; .byte 0
-itn_12: .text "LEATHER BOOTS" ; .byte 0
-itn_13: .text "WOODEN TORCH" ; .byte 0
-itn_14: .text "BRASS LANTERN" ; .byte 0
-itn_15: .text "RATION OF FOOD" ; .byte 0
-itn_16: .text "SLIME MOLD" ; .byte 0
-itn_17: .text "CURE LIGHT WOUNDS" ; .byte 0
-itn_18: .text "SPEED" ; .byte 0
-itn_19: .text "POISON" ; .byte 0
-itn_20: .text "LIGHT" ; .byte 0
-itn_21: .text "IDENTIFY" ; .byte 0
-itn_22: .text "TELEPORTATION" ; .byte 0
-itn_23: .text "PROTECTION" ; .byte 0
-itn_24: .text "STRENGTH" ; .byte 0
-itn_25: .text "CURE SERIOUS WOUNDS" ; .byte 0
-itn_26: .text "RESTORE MANA" ; .byte 0
-itn_27: .text "HEROISM" ; .byte 0
-itn_28: .text "BLINDNESS" ; .byte 0
-itn_29: .text "CONFUSION" ; .byte 0
-itn_30: .text "DETECT MONSTERS" ; .byte 0
-itn_31: .text "INFRAVISION" ; .byte 0
-itn_32: .text "WORD OF RECALL" ; .byte 0
-itn_33: .text "REMOVE CURSE" ; .byte 0
-itn_34: .text "ENCHANT WEAPON" ; .byte 0
-itn_35: .text "ENCHANT ARMOR" ; .byte 0
-itn_36: .text "MONSTER CONFUSION" ; .byte 0
-itn_37: .text "AGGRAVATE" ; .byte 0
-itn_38: .text "PROTECT FROM EVIL" ; .byte 0
-itn_39: .text "WAND OF LIGHT" ; .byte 0
-itn_40: .text "WAND OF LIGHTNING" ; .byte 0
-itn_41: .text "WAND OF FROST" ; .byte 0
-itn_42: .text "WAND OF STINKING CLOUD" ; .byte 0
-itn_43: .text "STAFF OF LIGHT" ; .byte 0
-itn_44: .text "STAFF OF DETECT MONSTERS" ; .byte 0
-itn_45: .text "STAFF OF TELEPORTATION" ; .byte 0
-itn_46: .text "STAFF OF CURE LIGHT WOUNDS" ; .byte 0
-itn_47: .text "BEGINNER'S SPELLBOOK" ; .byte 0
-itn_48: .text "HOLY PRAYER BOOK" ; .byte 0
-itn_49: .text "SHORT BOW" ; .byte 0
-itn_50: .text "LIGHT CROSSBOW" ; .byte 0
-itn_51: .text "SLING" ; .byte 0
-itn_52: .text "ARROW" ; .byte 0
-itn_53: .text "BOLT" ; .byte 0
-itn_54: .text "ROCK" ; .byte 0
-itn_55: .text "MAGICK I" ; .byte 0
-itn_56: .text "MAGICK II" ; .byte 0
-itn_57: .text "THE MAGES GUIDE" ; .byte 0
-itn_58: .text "WORDS OF WISDOM" ; .byte 0
-itn_59: .text "CHANTS AND BLESSINGS" ; .byte 0
-itn_60: .text "EXORCISM" ; .byte 0
-itn_61: .text "FLASK OF OIL" ; .byte 0
+itn_0:  .text "Gold (small)" ; .byte 0
+itn_1:  .text "Gold (large)" ; .byte 0
+itn_2:  .text "Dagger" ; .byte 0
+itn_3:  .text "Short Sword" ; .byte 0
+itn_4:  .text "Long Sword" ; .byte 0
+itn_5:  .text "Mace" ; .byte 0
+itn_6:  .text "Robe" ; .byte 0
+itn_7:  .text "Leather Armor" ; .byte 0
+itn_8:  .text "Chain Mail" ; .byte 0
+itn_9:  .text "Small Shield" ; .byte 0
+itn_10: .text "Iron Helm" ; .byte 0
+itn_11: .text "Leather Gloves" ; .byte 0
+itn_12: .text "Leather Boots" ; .byte 0
+itn_13: .text "Wooden Torch" ; .byte 0
+itn_14: .text "Brass Lantern" ; .byte 0
+itn_15: .text "Ration of Food" ; .byte 0
+itn_16: .text "Slime Mold" ; .byte 0
+itn_17: .text "Cure Light Wounds" ; .byte 0
+itn_18: .text "Speed" ; .byte 0
+itn_19: .text "Poison" ; .byte 0
+itn_20: .text "Light" ; .byte 0
+itn_21: .text "Identify" ; .byte 0
+itn_22: .text "Teleportation" ; .byte 0
+itn_23: .text "Protection" ; .byte 0
+itn_24: .text "Strength" ; .byte 0
+itn_25: .text "Cure Serious Wounds" ; .byte 0
+itn_26: .text "Restore Mana" ; .byte 0
+itn_27: .text "Heroism" ; .byte 0
+itn_28: .text "Blindness" ; .byte 0
+itn_29: .text "Confusion" ; .byte 0
+itn_30: .text "Detect Monsters" ; .byte 0
+itn_31: .text "Infravision" ; .byte 0
+itn_32: .text "Word of Recall" ; .byte 0
+itn_33: .text "Remove Curse" ; .byte 0
+itn_34: .text "Enchant Weapon" ; .byte 0
+itn_35: .text "Enchant Armor" ; .byte 0
+itn_36: .text "Monster Confusion" ; .byte 0
+itn_37: .text "Aggravate" ; .byte 0
+itn_38: .text "Protect from Evil" ; .byte 0
+itn_39: .text "Wand of Light" ; .byte 0
+itn_40: .text "Wand of Lightning" ; .byte 0
+itn_41: .text "Wand of Frost" ; .byte 0
+itn_42: .text "Wand of Stinking Cloud" ; .byte 0
+itn_43: .text "Staff of Light" ; .byte 0
+itn_44: .text "Staff of Detect Monsters" ; .byte 0
+itn_45: .text "Staff of Teleportation" ; .byte 0
+itn_46: .text "Staff of Cure Light Wounds" ; .byte 0
+itn_47: .text "Beginner's Spellbook" ; .byte 0
+itn_48: .text "Holy Prayer Book" ; .byte 0
+itn_49: .text "Short Bow" ; .byte 0
+itn_50: .text "Light Crossbow" ; .byte 0
+itn_51: .text "Sling" ; .byte 0
+itn_52: .text "Arrow" ; .byte 0
+itn_53: .text "Bolt" ; .byte 0
+itn_54: .text "Rock" ; .byte 0
+itn_55: .text "Magick I" ; .byte 0
+itn_56: .text "Magick II" ; .byte 0
+itn_57: .text "The Mages Guide" ; .byte 0
+itn_58: .text "Words of Wisdom" ; .byte 0
+itn_59: .text "Chants and Blessings" ; .byte 0
+itn_60: .text "Exorcism" ; .byte 0
+itn_61: .text "Flask of Oil" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1080,7 +1080,7 @@ item_pickup:
     adc #0
     sta player_data + PL_GOLD_2
 
-    // Build message: "YOU FOUND N GOLD PIECES."
+    // Build message: "You found N gold pieces."
     lda #0
     sta cmb_buf_idx
     lda #<ipu_found_str
@@ -1143,7 +1143,7 @@ item_pickup:
     jsr inv_add_item
     // carry set = success (should always succeed since we checked)
 
-    // Build message: "YOU PICKED UP A <name>."
+    // Build message: "You picked up a <name>."
     lda #0
     sta cmb_buf_idx
     lda #<ipu_picked_str
@@ -1171,7 +1171,7 @@ item_pickup:
     rts
 
 // item_drop — Drop a carried item to the floor (prompted)
-// Prompts "DROP WHICH ITEM (A-V)?", waits for keypress.
+// Prompts "Drop which item (a-v)?", waits for keypress.
 // Output: carry set = turn consumed, carry clear = no action
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
 item_drop:
@@ -1267,7 +1267,7 @@ item_drop:
     ldx ipu_slot
     jsr inv_remove_item
 
-    // Build message: "YOU DROP A <name>."
+    // Build message: "You drop a <name>."
     lda #0
     sta cmb_buf_idx
     lda #<idr_drop_str
@@ -1310,16 +1310,16 @@ ipu_slot: .byte 0              // Floor/inventory slot being processed
 // ============================================================
 // Pickup/Drop strings (screen codes via inherited encoding)
 // ============================================================
-ipu_nothing_str:   .text "YOU SEE NOTHING HERE." ; .byte 0
-ipu_found_str:     .text "YOU FOUND " ; .byte 0
-ipu_gold_str:      .text " GOLD PIECES." ; .byte 0
-ipu_picked_str:    .text "YOU PICKED UP A " ; .byte 0
-ipu_pack_full_str: .text "YOUR PACK IS FULL." ; .byte 0
-idr_prompt_str:    .text "DROP WHICH ITEM (A-V)?" ; .byte 0
-idr_drop_str:      .text "YOU DROP A " ; .byte 0
-idr_no_items_str:  .text "YOU HAVE NOTHING THERE." ; .byte 0
-idr_cancel_str:    .text "NEVER MIND." ; .byte 0
-idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
+ipu_nothing_str:   .text "You see nothing here." ; .byte 0
+ipu_found_str:     .text "You found " ; .byte 0
+ipu_gold_str:      .text " gold pieces." ; .byte 0
+ipu_picked_str:    .text "You picked up a " ; .byte 0
+ipu_pack_full_str: .text "Your pack is full." ; .byte 0
+idr_prompt_str:    .text "Drop which item (a-v)?" ; .byte 0
+idr_drop_str:      .text "You drop a " ; .byte 0
+idr_no_items_str:  .text "You have nothing there." ; .byte 0
+idr_cancel_str:    .text "Never mind." ; .byte 0
+idr_floor_full_str: .text "No room on the floor." ; .byte 0
 
 // ============================================================
 // tunnel_spawn_gold — Spawn gold at a tunneled vein location
@@ -1632,36 +1632,36 @@ scroll_local_idx:
     .fill 7, $ff        // 55-61: not scrolls (books + flask)
 
 // Unidentified name strings (screen codes, null-terminated)
-pn_0:  .text "A BLUE POTION" ; .byte 0
-pn_1:  .text "A RED POTION" ; .byte 0
-pn_2:  .text "A GREEN POTION" ; .byte 0
-pn_3:  .text "A YELLOW POTION" ; .byte 0
-pn_4:  .text "A CLEAR POTION" ; .byte 0
-pn_5:  .text "AN AZURE POTION" ; .byte 0
-pn_6:  .text "A SMOKY POTION" ; .byte 0
-pn_7:  .text "A BROWN POTION" ; .byte 0
-pn_8:  .text "A SILVER POTION" ; .byte 0
-pn_9:  .text "A PINK POTION" ; .byte 0
-pn_10: .text "A CLOUDY POTION" ; .byte 0
-pn_11: .text "A GOLDEN POTION" ; .byte 0
+pn_0:  .text "a Blue Potion" ; .byte 0
+pn_1:  .text "a Red Potion" ; .byte 0
+pn_2:  .text "a Green Potion" ; .byte 0
+pn_3:  .text "a Yellow Potion" ; .byte 0
+pn_4:  .text "a Clear Potion" ; .byte 0
+pn_5:  .text "an Azure Potion" ; .byte 0
+pn_6:  .text "a Smoky Potion" ; .byte 0
+pn_7:  .text "a Brown Potion" ; .byte 0
+pn_8:  .text "a Silver Potion" ; .byte 0
+pn_9:  .text "a Pink Potion" ; .byte 0
+pn_10: .text "a Cloudy Potion" ; .byte 0
+pn_11: .text "a Golden Potion" ; .byte 0
 
-sn_0:  .text "A WHITE SCROLL" ; .byte 0
-sn_1:  .text "A BROWN SCROLL" ; .byte 0
-sn_2:  .text "A GREY SCROLL" ; .byte 0
-sn_3:  .text "A FADED SCROLL" ; .byte 0
-sn_4:  .text "A GLOWING SCROLL" ; .byte 0
-sn_5:  .text "A SCROLL OF LUMEN" ; .byte 0
-sn_6:  .text "A SCROLL OF VERITAS" ; .byte 0
-sn_7:  .text "A SCROLL OF DURA" ; .byte 0
-sn_8:  .text "A SCROLL OF LIBERA" ; .byte 0
-sn_9:  .text "A SCROLL OF ACUTA" ; .byte 0
-sn_10: .text "A SCROLL OF FEROX" ; .byte 0
-sn_11: .text "A SCROLL OF TUTELA" ; .byte 0
+sn_0:  .text "a White Scroll" ; .byte 0
+sn_1:  .text "a Brown Scroll" ; .byte 0
+sn_2:  .text "a Grey Scroll" ; .byte 0
+sn_3:  .text "a Faded Scroll" ; .byte 0
+sn_4:  .text "a Glowing Scroll" ; .byte 0
+sn_5:  .text "a Scroll of Lumen" ; .byte 0
+sn_6:  .text "a Scroll of Veritas" ; .byte 0
+sn_7:  .text "a Scroll of Dura" ; .byte 0
+sn_8:  .text "a Scroll of Libera" ; .byte 0
+sn_9:  .text "a Scroll of Acuta" ; .byte 0
+sn_10: .text "a Scroll of Ferox" ; .byte 0
+sn_11: .text "a Scroll of Tutela" ; .byte 0
 
-rn_0: .text "A GOLD RING" ; .byte 0
-rn_1: .text "A SILVER RING" ; .byte 0
-rn_2: .text "A BRONZE RING" ; .byte 0
-rn_3: .text "A COPPER RING" ; .byte 0
+rn_0: .text "a Gold Ring" ; .byte 0
+rn_1: .text "a Silver Ring" ; .byte 0
+rn_2: .text "a Bronze Ring" ; .byte 0
+rn_3: .text "a Copper Ring" ; .byte 0
 
 // Pointer tables for unidentified names
 potion_name_lo:
@@ -1691,22 +1691,22 @@ scroll_colors:
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
-wn_0: .text "AN IRON WAND" ; .byte 0
-wn_1: .text "A COPPER WAND" ; .byte 0
-wn_2: .text "A SILVER WAND" ; .byte 0
-wn_3: .text "A BONE WAND" ; .byte 0
-wn_4: .text "AN OAK WAND" ; .byte 0
+wn_0: .text "an Iron Wand" ; .byte 0
+wn_1: .text "a Copper Wand" ; .byte 0
+wn_2: .text "a Silver Wand" ; .byte 0
+wn_3: .text "a Bone Wand" ; .byte 0
+wn_4: .text "an Oak Wand" ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
-sfn_0: .text "A BIRCH STAFF" ; .byte 0
-sfn_1: .text "A PINE STAFF" ; .byte 0
-sfn_2: .text "A MAPLE STAFF" ; .byte 0
-sfn_3: .text "A WILLOW STAFF" ; .byte 0
-sfn_4: .text "AN ASH STAFF" ; .byte 0
+sfn_0: .text "a Birch Staff" ; .byte 0
+sfn_1: .text "a Pine Staff" ; .byte 0
+sfn_2: .text "a Maple Staff" ; .byte 0
+sfn_3: .text "a Willow Staff" ; .byte 0
+sfn_4: .text "an Ash Staff" ; .byte 0
 
 staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
 staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4

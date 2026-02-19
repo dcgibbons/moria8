@@ -75,6 +75,18 @@ render_viewport:
     lda color_row_hi,x
     sta zp_color_hi
 
+    // Clear viewport border columns (0 and 39) to prevent overlay leftovers
+    ldy #0
+    lda #SC_SPACE
+    sta (zp_screen_lo),y
+    lda #COL_BLACK
+    sta (zp_color_lo),y
+    ldy #39
+    lda #SC_SPACE
+    sta (zp_screen_lo),y
+    lda #COL_BLACK
+    sta (zp_color_lo),y
+
     // Inner loop: 38 columns
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
@@ -142,25 +154,8 @@ render_viewport:
     lda tile_colors,x
     sta zp_temp1            // color
 
-    // Secret door orientation fix: TILE_SECRET defaults to '─' but
-    // should render as '│' when on a vertical wall (left/right of room).
-    // A vertical wall door has floor on both left and right (room + corridor).
-    // A horizontal wall door has wall tiles continuing left/right.
-    cpx #15                     // TILE_SECRET type index
-    bne !rv_tile_set+
-    dey                         // Y = col - 1 (left neighbor)
-    lda (zp_map_ptr_lo),y
-    iny                         // Restore Y = original col
-    and #TILE_TYPE_MASK
-    bne !rv_tile_set+           // Left not floor → horizontal, keep '─'
-    iny                         // Y = col + 1 (right neighbor)
-    lda (zp_map_ptr_lo),y
-    dey                         // Restore Y = original col
-    and #TILE_TYPE_MASK
-    bne !rv_tile_set+           // Right not floor → horizontal, keep '─'
-    // Both left and right are floor → vertical wall door
-    lda #$5d                    // '│' screen code
-    sta zp_temp0
+    // R11: All walls/secret doors render as '#' ($23) — no orientation
+    // distinction needed. BUG-33 (secret door orientation) is obsolete.
 !rv_tile_set:
 
     // Store door number override (town only, open door tiles only)

@@ -102,16 +102,16 @@ tier0_cr_name_lo:
 tier0_cr_name_hi:
     .byte >tier0_crn_0, >tier0_crn_1, >tier0_crn_2, >tier0_crn_3, >tier0_crn_4, >tier0_crn_5, >tier0_crn_6, >tier0_crn_7
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 // Name strings (screen codes, null-terminated)
-tier0_crn_0: .text "FILTHY STREET URCHIN" ; .byte 0
-tier0_crn_1: .text "BLUBBERING IDIOT" ; .byte 0
-tier0_crn_2: .text "PITIFUL-LOOKING BEGGAR" ; .byte 0
-tier0_crn_3: .text "MANGY-LOOKING LEPER" ; .byte 0
-tier0_crn_4: .text "SQUINT-EYED ROGUE" ; .byte 0
-tier0_crn_5: .text "SINGING, HAPPY DRUNK" ; .byte 0
-tier0_crn_6: .text "MEAN-LOOKING MERCENARY" ; .byte 0
-tier0_crn_7: .text "BATTLE-SCARRED VETERAN" ; .byte 0
+tier0_crn_0: .text "Filthy Street Urchin" ; .byte 0
+tier0_crn_1: .text "Blubbering Idiot" ; .byte 0
+tier0_crn_2: .text "Pitiful-Looking Beggar" ; .byte 0
+tier0_crn_3: .text "Mangy-Looking Leper" ; .byte 0
+tier0_crn_4: .text "Squint-Eyed Rogue" ; .byte 0
+tier0_crn_5: .text "Singing, Happy Drunk" ; .byte 0
+tier0_crn_6: .text "Mean-Looking Mercenary" ; .byte 0
+tier0_crn_7: .text "Battle-Scarred Veteran" ; .byte 0
 
 // End marker for size calculation
 tier0_data_end:

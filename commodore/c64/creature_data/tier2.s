@@ -42,8 +42,8 @@
 
 // Display character (screen code)
 tier2_cr_display:
-    .byte $0e, $2c, $13, $0d, $0f, $12, $05, $1a, $07, $0d, $13, $10, $0f, $01, $12, $14
-    .byte $0d, $24, $1a, $10, $08, $12, $10, $13, $0f, $10, $0f, $06, $10, $07, $10, $0d
+    .byte $0e, $2c, $13, $0d, $0f, $52, $05, $1a, $47, $0d, $13, $10, $0f, $01, $52, $14
+    .byte $0d, $24, $1a, $10, $48, $52, $10, $13, $0f, $10, $0f, $46, $50, $07, $50, $0d
 
 // Color code
 tier2_cr_color:
@@ -57,8 +57,8 @@ tier2_cr_speed:
 
 // Monster flags
 tier2_cr_mflags:
-    .byte $04, $41, $26, $41, $2c, $18, $01, $26, $06, $41, $26, $2c, $2c, $10, $18, $10
-    .byte $41, $00, $26, $0c, $2c, $18, $08, $26, $0c, $08, $2c, $10, $0c, $08, $04, $41
+    .byte $04, $01, $06, $01, $0c, $18, $01, $06, $06, $01, $06, $0c, $0c, $10, $18, $10
+    .byte $01, $00, $06, $0c, $0c, $18, $08, $06, $0c, $08, $0c, $10, $0c, $08, $04, $01
 
 // Dungeon level
 tier2_cr_level:
@@ -152,40 +152,40 @@ tier2_cr_name_hi:
     .byte >tier2_crn_16, >tier2_crn_17, >tier2_crn_18, >tier2_crn_19, >tier2_crn_20, >tier2_crn_21, >tier2_crn_22, >tier2_crn_23
     .byte >tier2_crn_24, >tier2_crn_25, >tier2_crn_26, >tier2_crn_27, >tier2_crn_28, >tier2_crn_29, >tier2_crn_30, >tier2_crn_31
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 // Name strings (screen codes, null-terminated)
-tier2_crn_0: .text "GREEN NAGA" ; .byte 0
-tier2_crn_1: .text "WHITE MUSHROOM PATCH" ; .byte 0
-tier2_crn_2: .text "SKELETON KOBOLD" ; .byte 0
-tier2_crn_3: .text "BROWN MOLD" ; .byte 0
-tier2_crn_4: .text "ORC" ; .byte 0
-tier2_crn_5: .text "RATTLESNAKE" ; .byte 0
-tier2_crn_6: .text "BLOODSHOT EYE" ; .byte 0
-tier2_crn_7: .text "ZOMBIE KOBOLD" ; .byte 0
-tier2_crn_8: .text "LOST SOUL" ; .byte 0
-tier2_crn_9: .text "GREEN MOLD" ; .byte 0
-tier2_crn_10: .text "SKELETON ORC" ; .byte 0
-tier2_crn_11: .text "BANDIT" ; .byte 0
-tier2_crn_12: .text "ORC SHAMAN" ; .byte 0
-tier2_crn_13: .text "GIANT RED ANT" ; .byte 0
-tier2_crn_14: .text "KING COBRA" ; .byte 0
-tier2_crn_15: .text "GIANT WHITE TICK" ; .byte 0
-tier2_crn_16: .text "DISENCHANTER MOLD" ; .byte 0
-tier2_crn_17: .text "CREEPING GOLD COINS" ; .byte 0
-tier2_crn_18: .text "ORC ZOMBIE" ; .byte 0
-tier2_crn_19: .text "NASTY LITTLE GNOME" ; .byte 0
-tier2_crn_20: .text "HOBGOBLIN" ; .byte 0
-tier2_crn_21: .text "BLACK MAMBA" ; .byte 0
-tier2_crn_22: .text "PRIEST" ; .byte 0
-tier2_crn_23: .text "SKELETON HUMAN" ; .byte 0
-tier2_crn_24: .text "OGRE" ; .byte 0
-tier2_crn_25: .text "MAGIC USER" ; .byte 0
-tier2_crn_26: .text "BLACK ORC" ; .byte 0
-tier2_crn_27: .text "GIANT WHITE DRAGON FLY" ; .byte 0
-tier2_crn_28: .text "HILL GIANT" ; .byte 0
-tier2_crn_29: .text "FLESH GOLEM" ; .byte 0
-tier2_crn_30: .text "FROST GIANT" ; .byte 0
-tier2_crn_31: .text "VIOLET MOLD" ; .byte 0
+tier2_crn_0: .text "Green Naga" ; .byte 0
+tier2_crn_1: .text "White Mushroom patch" ; .byte 0
+tier2_crn_2: .text "Skeleton Kobold" ; .byte 0
+tier2_crn_3: .text "Brown Mold" ; .byte 0
+tier2_crn_4: .text "Orc" ; .byte 0
+tier2_crn_5: .text "Rattlesnake" ; .byte 0
+tier2_crn_6: .text "Bloodshot Eye" ; .byte 0
+tier2_crn_7: .text "Zombie Kobold" ; .byte 0
+tier2_crn_8: .text "Lost Soul" ; .byte 0
+tier2_crn_9: .text "Green Mold" ; .byte 0
+tier2_crn_10: .text "Skeleton Orc" ; .byte 0
+tier2_crn_11: .text "Bandit" ; .byte 0
+tier2_crn_12: .text "Orc Shaman" ; .byte 0
+tier2_crn_13: .text "Giant Red Ant" ; .byte 0
+tier2_crn_14: .text "King Cobra" ; .byte 0
+tier2_crn_15: .text "Giant White Tick" ; .byte 0
+tier2_crn_16: .text "Disenchanter Mold" ; .byte 0
+tier2_crn_17: .text "Creeping Gold Coins" ; .byte 0
+tier2_crn_18: .text "Orc Zombie" ; .byte 0
+tier2_crn_19: .text "Nasty Little Gnome" ; .byte 0
+tier2_crn_20: .text "Hobgoblin" ; .byte 0
+tier2_crn_21: .text "Black Mamba" ; .byte 0
+tier2_crn_22: .text "Priest" ; .byte 0
+tier2_crn_23: .text "Skeleton Human" ; .byte 0
+tier2_crn_24: .text "Ogre" ; .byte 0
+tier2_crn_25: .text "Magic User" ; .byte 0
+tier2_crn_26: .text "Black Orc" ; .byte 0
+tier2_crn_27: .text "Giant White Dragon Fly" ; .byte 0
+tier2_crn_28: .text "Hill Giant" ; .byte 0
+tier2_crn_29: .text "Flesh Golem" ; .byte 0
+tier2_crn_30: .text "Frost Giant" ; .byte 0
+tier2_crn_31: .text "Violet Mold" ; .byte 0
 
 // End marker for size calculation
 tier2_data_end:

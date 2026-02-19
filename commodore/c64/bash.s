@@ -14,14 +14,14 @@ bash_dir_idx:   .byte 0     // Direction index 0-7
 // ============================================================
 // Inline strings (screen codes via inherited encoding)
 // ============================================================
-bash_smash_str:   .text "YOU SMASH INTO THE DOOR!" ; .byte 0
-bash_crash_str:   .text "THE DOOR CRASHES OPEN!" ; .byte 0
-bash_holds_str:   .text "THE DOOR HOLDS FIRM." ; .byte 0
-bash_offbal_str:  .text "YOU ARE OFF BALANCE." ; .byte 0
-bash_nothing_str: .text "NOTHING INTERESTING HAPPENS." ; .byte 0
-bash_empty_str:   .text "YOU BASH AT EMPTY SPACE." ; .byte 0
-bash_stunned_str: .text " APPEARS STUNNED!" ; .byte 0
-bash_ignores_str: .text " IGNORES YOUR BASH!" ; .byte 0
+bash_smash_str:   .text "You smash into the door!" ; .byte 0
+bash_crash_str:   .text "The door crashes open!" ; .byte 0
+bash_holds_str:   .text "The door holds firm." ; .byte 0
+bash_offbal_str:  .text "You are off balance." ; .byte 0
+bash_nothing_str: .text "Nothing interesting happens." ; .byte 0
+bash_empty_str:   .text "You bash at empty space." ; .byte 0
+bash_stunned_str: .text " appears stunned!" ; .byte 0
+bash_ignores_str: .text " ignores your bash!" ; .byte 0
 
 // ============================================================
 // bash_command — Entry point for bash command
@@ -448,7 +448,7 @@ bash_stun_check:
 !bash_stun_ok:
     sta (zp_ptr0),y
 
-    // Print "<NAME> APPEARS STUNNED!"
+    // Print "<name> appears stunned!"
     lda #0
     sta cmb_buf_idx
     jsr combat_append_monster_name
@@ -459,7 +459,7 @@ bash_stun_check:
     rts
 
 !bash_ignores:
-    // Print "<NAME> IGNORES YOUR BASH!"
+    // Print "<name> ignores your bash!"
     lda #0
     sta cmb_buf_idx
     jsr combat_append_monster_name

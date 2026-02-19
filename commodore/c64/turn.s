@@ -564,15 +564,15 @@ pid_get_quality:
     rts
 
 // Quality word strings (screen codes via inherited encoding)
-pid_w_terrible: .text "TERRIBLE" ; .byte 0
-pid_w_bad:      .text "BAD" ; .byte 0
-pid_w_average:  .text "AVERAGE" ; .byte 0
-pid_w_good:     .text "GOOD" ; .byte 0
-pid_w_excellent:.text "EXCELLENT" ; .byte 0
+pid_w_terrible: .text "Terrible" ; .byte 0
+pid_w_bad:      .text "Bad" ; .byte 0
+pid_w_average:  .text "Average" ; .byte 0
+pid_w_good:     .text "Good" ; .byte 0
+pid_w_excellent:.text "Excellent" ; .byte 0
 
 pid_w_ptrs_lo:
     .byte <pid_w_terrible, <pid_w_bad, <pid_w_average, <pid_w_good, <pid_w_excellent
 pid_w_ptrs_hi:
     .byte >pid_w_terrible, >pid_w_bad, >pid_w_average, >pid_w_good, >pid_w_excellent
 
-pid_sense_str: .text "SENSE: " ; .byte 0
+pid_sense_str: .text "Sense: " ; .byte 0

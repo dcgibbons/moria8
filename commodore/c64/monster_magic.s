@@ -416,6 +416,7 @@ monster_cast_summon:
 
     // Spawn random dungeon creature (not town)
     lda active_dungeon_count
+    beq !mcs_fail+              // No dungeon creatures → skip
     jsr rng_range
     jsr monster_spawn_one
     // Ignore failure (table could be full)

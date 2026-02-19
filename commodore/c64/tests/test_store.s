@@ -23,7 +23,7 @@ test_exit_trampoline:
 
 .pc = $0828 "Main"
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 
 #import "../zeropage.s"
 #import "../memory.s"
@@ -722,19 +722,20 @@ test_start:
     sta tc_results + 25
 
     // ============================================================
-    // Test 27: huff_decode_string — decode string 4 ("RIDICULOUS!")
-    // Verify: R=$12, I=$09, D=$04, !=$21, null at [11], zp_ptr0
+    // Test 27: huff_decode_string — decode string 4 ("Ridiculous!")
+    // Verify: R=$52, i=$09, d=$04, !=$21, null at [11], zp_ptr0
+    // (screencode_mixed: uppercase A-Z=$41-$5A, lowercase a-z=$01-$1A)
     // ============================================================
-    ldx #4                      // String 4 = "RIDICULOUS!"
+    ldx #4                      // String 4 = "Ridiculous!"
     jsr huff_decode_string
     lda hd_decode_buf + 0
-    cmp #$12
+    cmp #$52                    // 'R' (uppercase)
     bne !t27_fail+
     lda hd_decode_buf + 1
-    cmp #$09
+    cmp #$09                    // 'i' (lowercase)
     bne !t27_fail+
     lda hd_decode_buf + 2
-    cmp #$04
+    cmp #$04                    // 'd' (lowercase)
     bne !t27_fail+
     lda hd_decode_buf + 10
     cmp #$21

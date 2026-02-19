@@ -626,4 +626,4 @@ reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3
 reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3
 
 // Header string (displayed by tier_init)
-reu_loading_hdr: .text "LOADING INTO REU:" ; .byte 0
+reu_loading_hdr: .text "Loading into REU:" ; .byte 0

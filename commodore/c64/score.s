@@ -748,19 +748,19 @@ hiscore_display:
 // ============================================================
 // Screen-code strings for death screen
 // ============================================================
-sds_died_str:      .text "* YOU HAVE DIED *" ; .byte 0
-sds_level_str:     .text "  LEVEL " ; .byte 0
-sds_dungeon_str:   .text "KILLED ON DUNGEON LEVEL " ; .byte 0
-sds_killed_by_str: .text "KILLED BY " ; .byte 0
-sds_a_str:         .text "A " ; .byte 0
-sds_src_poison:    .text "POISON" ; .byte 0
-sds_src_starve:    .text "STARVATION" ; .byte 0
-sds_src_cursed:    .text "A CURSED ITEM" ; .byte 0
-sds_src_unknown:   .text "UNKNOWN CAUSES" ; .byte 0
-sds_xp_str:        .text "EXPERIENCE:" ; .byte 0
-sds_gold_str:      .text "GOLD:" ; .byte 0
-sds_depth_str:     .text "DEPTH BONUS:" ; .byte 0
-sds_total_str:     .text "TOTAL SCORE:" ; .byte 0
-sds_hiscore_hdr:   .text "-------- HIGH SCORES --------" ; .byte 0
+sds_died_str:      .text "* You have died *" ; .byte 0
+sds_level_str:     .text "  Level " ; .byte 0
+sds_dungeon_str:   .text "Killed on dungeon level " ; .byte 0
+sds_killed_by_str: .text "Killed by " ; .byte 0
+sds_a_str:         .text "a " ; .byte 0
+sds_src_poison:    .text "Poison" ; .byte 0
+sds_src_starve:    .text "Starvation" ; .byte 0
+sds_src_cursed:    .text "a Cursed Item" ; .byte 0
+sds_src_unknown:   .text "Unknown Causes" ; .byte 0
+sds_xp_str:        .text "Experience:" ; .byte 0
+sds_gold_str:      .text "Gold:" ; .byte 0
+sds_depth_str:     .text "Depth Bonus:" ; .byte 0
+sds_total_str:     .text "Total Score:" ; .byte 0
+sds_hiscore_hdr:   .text "-------- High Scores --------" ; .byte 0
 sds_lv_str:        .text "LV" ; .byte 0
-sds_anykey_str:    .text "PRESS ANY KEY" ; .byte 0
+sds_anykey_str:    .text "Press any key" ; .byte 0

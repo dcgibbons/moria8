@@ -363,18 +363,18 @@ home_deposit:
 // String data (screen codes)
 // ============================================================
 hm_menu_str:
-    .text "D)EPOSIT R)ETRIEVE Q)UIT" ; .byte 0
+    .text "D)eposit R)etrieve Q)uit" ; .byte 0
 hm_retrieve_str:
-    .text "RETRIEVE WHICH? (A-L)" ; .byte 0
+    .text "Retrieve which? (a-l)" ; .byte 0
 hm_deposit_title:
-    .text "DEPOSIT ITEM" ; .byte 0
+    .text "Deposit Item" ; .byte 0
 hm_which_str:
-    .text "WHICH ITEM? (Q=CANCEL)" ; .byte 0
+    .text "Which item? (Q=cancel)" ; .byte 0
 hm_deposited_str:
-    .text "DEPOSITED!" ; .byte 0
+    .text "Deposited!" ; .byte 0
 hm_retrieved_str:
-    .text "RETRIEVED!" ; .byte 0
+    .text "Retrieved!" ; .byte 0
 hm_home_full_str:
-    .text "HOME IS FULL!" ; .byte 0
+    .text "Home is full!" ; .byte 0
 hm_inv_full_str:
-    .text "INVENTORY FULL!" ; .byte 0
+    .text "Inventory full!" ; .byte 0

@@ -49,9 +49,9 @@
 
 // Display character (screen code)
 tier3_cr_display:
-    .byte $1a, $10, $08, $12, $10, $13, $0f, $10, $0f, $06, $10, $07, $10, $0d, $15, $10
-    .byte $11, $14, $13, $05, $05, $0f, $10, $07, $0b, $11, $10, $0d, $0b, $0b, $07, $13
-    .byte $10, $01, $17, $0d, $07, $14, $0b
+    .byte $1a, $10, $48, $52, $10, $13, $0f, $10, $0f, $46, $50, $07, $50, $0d, $55, $50
+    .byte $11, $54, $53, $45, $45, $0f, $50, $07, $4b, $51, $50, $4d, $4b, $4b, $07, $53
+    .byte $10, $01, $57, $4d, $47, $54, $4b
 
 // Color code
 tier3_cr_color:
@@ -67,8 +67,8 @@ tier3_cr_speed:
 
 // Monster flags
 tier3_cr_mflags:
-    .byte $26, $0c, $2c, $18, $08, $26, $0c, $08, $2c, $10, $0c, $08, $04, $41, $04, $0c
-    .byte $04, $04, $10, $00, $08, $2c, $04, $00, $10, $00, $0c, $26, $10, $10, $00, $10
+    .byte $06, $0c, $0c, $18, $08, $06, $0c, $08, $0c, $10, $0c, $08, $04, $01, $04, $0c
+    .byte $04, $04, $10, $00, $08, $0c, $04, $00, $10, $00, $0c, $06, $10, $10, $00, $10
     .byte $08, $10, $06, $06, $06, $04, $10
 
 // Dungeon level
@@ -181,47 +181,47 @@ tier3_cr_name_hi:
     .byte >tier3_crn_24, >tier3_crn_25, >tier3_crn_26, >tier3_crn_27, >tier3_crn_28, >tier3_crn_29, >tier3_crn_30, >tier3_crn_31
     .byte >tier3_crn_32, >tier3_crn_33, >tier3_crn_34, >tier3_crn_35, >tier3_crn_36, >tier3_crn_37, >tier3_crn_38
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 // Name strings (screen codes, null-terminated)
-tier3_crn_0: .text "ORC ZOMBIE" ; .byte 0
-tier3_crn_1: .text "NASTY LITTLE GNOME" ; .byte 0
-tier3_crn_2: .text "HOBGOBLIN" ; .byte 0
-tier3_crn_3: .text "BLACK MAMBA" ; .byte 0
-tier3_crn_4: .text "PRIEST" ; .byte 0
-tier3_crn_5: .text "SKELETON HUMAN" ; .byte 0
-tier3_crn_6: .text "OGRE" ; .byte 0
-tier3_crn_7: .text "MAGIC USER" ; .byte 0
-tier3_crn_8: .text "BLACK ORC" ; .byte 0
-tier3_crn_9: .text "GIANT WHITE DRAGON FLY" ; .byte 0
-tier3_crn_10: .text "HILL GIANT" ; .byte 0
-tier3_crn_11: .text "FLESH GOLEM" ; .byte 0
-tier3_crn_12: .text "FROST GIANT" ; .byte 0
-tier3_crn_13: .text "VIOLET MOLD" ; .byte 0
-tier3_crn_14: .text "UMBER HULK" ; .byte 0
-tier3_crn_15: .text "FIRE GIANT" ; .byte 0
-tier3_crn_16: .text "QUASIT" ; .byte 0
-tier3_crn_17: .text "TROLL" ; .byte 0
-tier3_crn_18: .text "GIANT BROWN SCORPION" ; .byte 0
-tier3_crn_19: .text "EARTH SPIRIT" ; .byte 0
-tier3_crn_20: .text "FIRE SPIRIT" ; .byte 0
-tier3_crn_21: .text "URUK-HAI ORC" ; .byte 0
-tier3_crn_22: .text "STONE GIANT" ; .byte 0
-tier3_crn_23: .text "STONE GOLEM" ; .byte 0
-tier3_crn_24: .text "KILLER BLACK BEETLE" ; .byte 0
-tier3_crn_25: .text "QUYLTHULG" ; .byte 0
-tier3_crn_26: .text "CLOUD GIANT" ; .byte 0
-tier3_crn_27: .text "MUMMIFIED ORC" ; .byte 0
-tier3_crn_28: .text "KILLER BORING BEETLE" ; .byte 0
-tier3_crn_29: .text "KILLER STAG BEETLE" ; .byte 0
-tier3_crn_30: .text "IRON GOLEM" ; .byte 0
-tier3_crn_31: .text "GIANT YELLOW SCORPION" ; .byte 0
-tier3_crn_32: .text "WARRIOR" ; .byte 0
-tier3_crn_33: .text "GIANT SILVER ANT" ; .byte 0
-tier3_crn_34: .text "FOREST WIGHT" ; .byte 0
-tier3_crn_35: .text "MUMMIFIED HUMAN" ; .byte 0
-tier3_crn_36: .text "BANSHEE" ; .byte 0
-tier3_crn_37: .text "GIANT TROLL" ; .byte 0
-tier3_crn_38: .text "KILLER RED BEETLE" ; .byte 0
+tier3_crn_0: .text "Orc Zombie" ; .byte 0
+tier3_crn_1: .text "Nasty Little Gnome" ; .byte 0
+tier3_crn_2: .text "Hobgoblin" ; .byte 0
+tier3_crn_3: .text "Black Mamba" ; .byte 0
+tier3_crn_4: .text "Priest" ; .byte 0
+tier3_crn_5: .text "Skeleton Human" ; .byte 0
+tier3_crn_6: .text "Ogre" ; .byte 0
+tier3_crn_7: .text "Magic User" ; .byte 0
+tier3_crn_8: .text "Black Orc" ; .byte 0
+tier3_crn_9: .text "Giant White Dragon Fly" ; .byte 0
+tier3_crn_10: .text "Hill Giant" ; .byte 0
+tier3_crn_11: .text "Flesh Golem" ; .byte 0
+tier3_crn_12: .text "Frost Giant" ; .byte 0
+tier3_crn_13: .text "Violet Mold" ; .byte 0
+tier3_crn_14: .text "Umber Hulk" ; .byte 0
+tier3_crn_15: .text "Fire Giant" ; .byte 0
+tier3_crn_16: .text "Quasit" ; .byte 0
+tier3_crn_17: .text "Troll" ; .byte 0
+tier3_crn_18: .text "Giant Brown Scorpion" ; .byte 0
+tier3_crn_19: .text "Earth Spirit" ; .byte 0
+tier3_crn_20: .text "Fire Spirit" ; .byte 0
+tier3_crn_21: .text "Uruk-Hai Orc" ; .byte 0
+tier3_crn_22: .text "Stone Giant" ; .byte 0
+tier3_crn_23: .text "Stone Golem" ; .byte 0
+tier3_crn_24: .text "Killer Black Beetle" ; .byte 0
+tier3_crn_25: .text "Quylthulg" ; .byte 0
+tier3_crn_26: .text "Cloud Giant" ; .byte 0
+tier3_crn_27: .text "Mummified Orc" ; .byte 0
+tier3_crn_28: .text "Killer Boring Beetle" ; .byte 0
+tier3_crn_29: .text "Killer Stag Beetle" ; .byte 0
+tier3_crn_30: .text "Iron Golem" ; .byte 0
+tier3_crn_31: .text "Giant Yellow Scorpion" ; .byte 0
+tier3_crn_32: .text "Warrior" ; .byte 0
+tier3_crn_33: .text "Giant Silver Ant" ; .byte 0
+tier3_crn_34: .text "Forest Wight" ; .byte 0
+tier3_crn_35: .text "Mummified Human" ; .byte 0
+tier3_crn_36: .text "Banshee" ; .byte 0
+tier3_crn_37: .text "Giant Troll" ; .byte 0
+tier3_crn_38: .text "Killer Red Beetle" ; .byte 0
 
 // End marker for size calculation
 tier3_data_end:

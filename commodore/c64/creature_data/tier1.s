@@ -34,8 +34,8 @@
 
 // Display character (screen code)
 tier1_cr_display:
-    .byte $0b, $17, $05, $10, $10, $01, $07, $0e, $0a, $24, $17, $0a, $0e, $2c, $13, $0d
-    .byte $0f, $12, $05, $1a, $07, $0d, $13, $10
+    .byte $0b, $17, $05, $10, $10, $01, $47, $0e, $4a, $24, $17, $0a, $0e, $2c, $13, $0d
+    .byte $0f, $52, $05, $1a, $47, $0d, $13, $10
 
 // Color code
 tier1_cr_color:
@@ -49,8 +49,8 @@ tier1_cr_speed:
 
 // Monster flags
 tier1_cr_mflags:
-    .byte $28, $58, $01, $08, $08, $10, $06, $04, $41, $00, $50, $38, $04, $41, $26, $41
-    .byte $2c, $18, $01, $26, $06, $41, $26, $2c
+    .byte $08, $18, $01, $08, $08, $10, $06, $04, $01, $00, $10, $18, $04, $01, $06, $01
+    .byte $0c, $18, $01, $06, $06, $01, $06, $0c
 
 // Dungeon level
 tier1_cr_level:
@@ -142,32 +142,32 @@ tier1_cr_name_hi:
     .byte >tier1_crn_8, >tier1_crn_9, >tier1_crn_10, >tier1_crn_11, >tier1_crn_12, >tier1_crn_13, >tier1_crn_14, >tier1_crn_15
     .byte >tier1_crn_16, >tier1_crn_17, >tier1_crn_18, >tier1_crn_19, >tier1_crn_20, >tier1_crn_21, >tier1_crn_22, >tier1_crn_23
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 // Name strings (screen codes, null-terminated)
-tier1_crn_0: .text "KOBOLD" ; .byte 0
-tier1_crn_1: .text "WHITE WORM MASS" ; .byte 0
-tier1_crn_2: .text "FLOATING EYE" ; .byte 0
-tier1_crn_3: .text "NOVICE PRIEST" ; .byte 0
-tier1_crn_4: .text "NOVICE MAGE" ; .byte 0
-tier1_crn_5: .text "GIANT BLACK ANT" ; .byte 0
-tier1_crn_6: .text "POLTERGEIST" ; .byte 0
-tier1_crn_7: .text "BLACK NAGA" ; .byte 0
-tier1_crn_8: .text "YELLOW JELLY" ; .byte 0
-tier1_crn_9: .text "CREEPING COPPER COINS" ; .byte 0
-tier1_crn_10: .text "BLUE WORM MASS" ; .byte 0
-tier1_crn_11: .text "JACKAL" ; .byte 0
-tier1_crn_12: .text "GREEN NAGA" ; .byte 0
-tier1_crn_13: .text "WHITE MUSHROOM PATCH" ; .byte 0
-tier1_crn_14: .text "SKELETON KOBOLD" ; .byte 0
-tier1_crn_15: .text "BROWN MOLD" ; .byte 0
-tier1_crn_16: .text "ORC" ; .byte 0
-tier1_crn_17: .text "RATTLESNAKE" ; .byte 0
-tier1_crn_18: .text "BLOODSHOT EYE" ; .byte 0
-tier1_crn_19: .text "ZOMBIE KOBOLD" ; .byte 0
-tier1_crn_20: .text "LOST SOUL" ; .byte 0
-tier1_crn_21: .text "GREEN MOLD" ; .byte 0
-tier1_crn_22: .text "SKELETON ORC" ; .byte 0
-tier1_crn_23: .text "BANDIT" ; .byte 0
+tier1_crn_0: .text "Kobold" ; .byte 0
+tier1_crn_1: .text "White Worm mass" ; .byte 0
+tier1_crn_2: .text "Floating Eye" ; .byte 0
+tier1_crn_3: .text "Novice Priest" ; .byte 0
+tier1_crn_4: .text "Novice Mage" ; .byte 0
+tier1_crn_5: .text "Giant Black Ant" ; .byte 0
+tier1_crn_6: .text "Poltergeist" ; .byte 0
+tier1_crn_7: .text "Black Naga" ; .byte 0
+tier1_crn_8: .text "Yellow Jelly" ; .byte 0
+tier1_crn_9: .text "Creeping Copper Coins" ; .byte 0
+tier1_crn_10: .text "Blue Worm mass" ; .byte 0
+tier1_crn_11: .text "Jackal" ; .byte 0
+tier1_crn_12: .text "Green Naga" ; .byte 0
+tier1_crn_13: .text "White Mushroom patch" ; .byte 0
+tier1_crn_14: .text "Skeleton Kobold" ; .byte 0
+tier1_crn_15: .text "Brown Mold" ; .byte 0
+tier1_crn_16: .text "Orc" ; .byte 0
+tier1_crn_17: .text "Rattlesnake" ; .byte 0
+tier1_crn_18: .text "Bloodshot Eye" ; .byte 0
+tier1_crn_19: .text "Zombie Kobold" ; .byte 0
+tier1_crn_20: .text "Lost Soul" ; .byte 0
+tier1_crn_21: .text "Green Mold" ; .byte 0
+tier1_crn_22: .text "Skeleton Orc" ; .byte 0
+tier1_crn_23: .text "Bandit" ; .byte 0
 
 // End marker for size calculation
 tier1_data_end:

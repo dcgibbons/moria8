@@ -28,7 +28,7 @@ test_exit_trampoline:
 
 .pc = $0828 "Main"
 
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 
 #import "../zeropage.s"
 #import "../memory.s"
@@ -435,33 +435,34 @@ test_start:
     ldy #>cmb_hit_str
     jsr msg_build_action
 
-    // Check: "YOU HIT THE KOBOLD."
-    // Y(19) O(0f) U(15) ' '(20) H(08) I(09) T(14) ' '(20) T(14) H(08) E(05) ' '(20)
-    // K(0b) O(0f) B(02) O(0f) L(0c) D(04) .(2e) null(00)
+    // Check: "You hit the Kobold."
+    // Y(59) o(0f) u(15) ' '(20) h(08) i(09) t(14) ' '(20) t(14) h(08) e(05) ' '(20)
+    // K(4b) o(0f) b(02) o(0f) l(0c) d(04) .(2e) null(00)
+    // (screencode_mixed: uppercase A-Z=$41-$5A, lowercase a-z=$01-$1A)
     lda combat_msg_buf + 0
-    cmp #$19                    // 'Y'
+    cmp #$59                    // 'Y'
     bne !t11_fail+
     lda combat_msg_buf + 1
-    cmp #$0f                    // 'O'
+    cmp #$0f                    // 'o' (lowercase)
     bne !t11_fail+
     lda combat_msg_buf + 2
-    cmp #$15                    // 'U'
+    cmp #$15                    // 'u' (lowercase)
     bne !t11_fail+
     lda combat_msg_buf + 3
     cmp #$20                    // ' '
     bne !t11_fail+
     lda combat_msg_buf + 4
-    cmp #$08                    // 'H'
+    cmp #$08                    // 'h' (lowercase)
     bne !t11_fail+
     lda combat_msg_buf + 5
-    cmp #$09                    // 'I'
+    cmp #$09                    // 'i' (lowercase)
     bne !t11_fail+
     lda combat_msg_buf + 6
-    cmp #$14                    // 'T'
+    cmp #$14                    // 't' (lowercase)
     bne !t11_fail+
-    // Check "KOBOLD." at offset 12
+    // Check "Kobold." at offset 12
     lda combat_msg_buf + 12
-    cmp #$0b                    // 'K'
+    cmp #$4b                    // 'K'
     bne !t11_fail+
     lda combat_msg_buf + 18
     cmp #$2e                    // '.'

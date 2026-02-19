@@ -30,12 +30,12 @@ tile_colors:
 // ============================================================
 tile_screen_codes:
     .byte $2e           // 0: Floor '.'
-    .byte $40           // 1: Wall horizontal '─'
-    .byte $5d           // 2: Wall vertical '│'
-    .byte $70           // 3: Corner TL '┌'
-    .byte $6e           // 4: Corner TR '┐'
-    .byte $6d           // 5: Corner BL '└'
-    .byte $7d           // 6: Corner BR '┘'
+    .byte $23           // 1: Wall horizontal '#'
+    .byte $23           // 2: Wall vertical '#'
+    .byte $23           // 3: Corner TL '#'
+    .byte $23           // 4: Corner TR '#'
+    .byte $23           // 5: Corner BL '#'
+    .byte $23           // 6: Corner BR '#'
     .byte $27           // 7: Door open "'"
     .byte $2b           // 8: Door closed '+'
     .byte $3e           // 9: Stairs down '>'
@@ -44,7 +44,7 @@ tile_screen_codes:
     .byte $23           // 12: Magma '#'
     .byte $25           // 13: Quartz '%'
     .byte $1e           // 14: Trap '^' (up arrow)
-    .byte $40           // 15: Secret door (same as horiz wall)
+    .byte $23           // 15: Secret door (same as wall '#')
 
 // ============================================================
 // Special entity screen codes and colors

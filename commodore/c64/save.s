@@ -105,21 +105,21 @@ save_magic:
 .assert "Magic is 8 bytes", * - save_magic, SAVE_MAGIC_SIZE
 
 // Screen-code strings for status messages
-.encoding "screencode_upper"
+.encoding "screencode_mixed"
 save_saving_str:
-    .text "SAVING GAME..." ; .byte 0
+    .text "Saving game..." ; .byte 0
 save_done_str:
-    .text "GAME SAVED." ; .byte 0
+    .text "Game saved." ; .byte 0
 save_load_str:
-    .text "LOADING GAME..." ; .byte 0
+    .text "Loading game..." ; .byte 0
 save_corrupt_str:
-    .text "SAVE FILE CORRUPT!" ; .byte 0
+    .text "Save file corrupt!" ; .byte 0
 save_ioerr_str:
-    .text "DISK ERROR!" ; .byte 0
+    .text "Disk error!" ; .byte 0
 save_welcome_str:
-    .text "WELCOME BACK TO MORIA8!" ; .byte 0
+    .text "Welcome back to Moria8!" ; .byte 0
 title_menu_str:
-    .text "N)EW  L)OAD  D)UAL DISK" ; .byte 0
+    .text "N)ew  L)oad  D)ual Disk" ; .byte 0
 
 // ============================================================
 // Macros for concise block I/O
