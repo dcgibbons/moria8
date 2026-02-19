@@ -28,6 +28,7 @@
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
+| OPT-3 | Town Overlay Optimization | ✅ Complete — 475 bytes saved (4,074→3,599), 497 bytes free. OPT-3.1/3.2/3.4/3.6/3.7/3.8 done. |
 | R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
 | 10 | C128 Enhancements | Not started |
 
@@ -411,18 +412,18 @@ Called 16 times so keeping it small helps. **Net savings: ~7-8 bytes.**
 
 ### Priority and Implementation Order
 
-| Priority | Item | Effort | Savings | Cumulative Free |
-|----------|------|--------|---------|----------------|
-| 1 | OPT-3.4 Separator draw loop | Trivial | ~26 | 48 |
-| 2 | OPT-3.6 Cancel-key helper | Trivial | ~15 | 63 |
-| 3 | OPT-3.8 Clear-msg loop | Trivial | ~8 | 71 |
-| 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 371-471 |
-| 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 521-641 |
-| 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 551-691 |
-| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | 631-931 |
-| 8 | OPT-3.3 Huffman compress strings | High | ~200-600 | 831-1531 |
+| Priority | Item | Effort | Est. | Actual | Status |
+|----------|------|--------|------|--------|--------|
+| 1 | OPT-3.4 Separator draw loop | Trivial | ~26 | 62 | ✅ Done |
+| 2 | OPT-3.6 Cancel-key helper | Trivial | ~15 | 17 | ✅ Done |
+| 3 | OPT-3.8 Clear-msg loop | Trivial | ~8 | 6 | ✅ Done |
+| 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 295 | ✅ Done |
+| 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 60 | ✅ Done |
+| 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 35 | ✅ Done |
+| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | — | Deferred |
+| 8 | OPT-3.3 Huffman compress strings | High | ~200-600 | — | Deferred |
 
-Start with the trivial wins (OPT-3.4, 3.6, 3.8) for immediate breathing room (~49 bytes). Then OPT-3.1 for the largest single improvement. OPT-3.2 and OPT-3.7 are good follow-ups. OPT-3.3 and OPT-3.5 are the nuclear options if more room is still needed — they shift bytes from overlay to main RAM.
+**Result: 475 bytes saved (4,074→3,599), 497 bytes free.** OPT-3.5 and OPT-3.3 deferred — 497 bytes free is sufficient headroom for near-term feature additions.
 
 **Realistic target:** OPT-3.1 through OPT-3.7 should yield **~500-700 bytes free** in the overlay, enough for significant new store features.
 

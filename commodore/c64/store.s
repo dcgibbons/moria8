@@ -345,6 +345,34 @@ check_store_category:
     rts
 
 // ============================================================
+// Price calculation helpers
+// ============================================================
+
+// load_item_base_cost — Load item base cost to zp_temp0/1
+// Input: A = item type ID
+// Output: zp_temp0/1 = base cost, sb_item_type = item ID
+// Clobbers: A, X
+load_item_base_cost:
+    sta sb_item_type
+    tax
+    lda it_cost_lo,x
+    sta zp_temp0
+    lda it_cost_hi,x
+    sta zp_temp1
+    rts
+
+// store_price_and_p1 — Store zp_math_a/b as price, add p1 bonus
+// Input: zp_math_a/b = price value, sb_item_type/sb_item_p1 set
+// Output: sb_price_lo/hi updated
+// Clobbers: A, X
+store_price_and_p1:
+    lda zp_math_a
+    sta sb_price_lo
+    lda zp_math_b
+    sta sb_price_hi
+    jmp price_add_p1_bonus
+
+// ============================================================
 // Price calculation
 // ============================================================
 
@@ -367,12 +395,7 @@ calc_store_buy_price:
 // Output: sb_price_lo/hi = price (16-bit)
 // Clobbers: everything
 calc_bm_buy_price:
-    sta sb_item_type
-    tax
-    lda it_cost_lo,x
-    sta zp_temp0
-    lda it_cost_hi,x
-    sta zp_temp1
+    jsr load_item_base_cost
     ldx #3
     jsr math_mul_16x8           // Result in mul_result_0/1/2
     lda mul_result_0
@@ -410,11 +433,7 @@ calc_bm_sell_price:
     sta zp_math_b
     ldx #10
     jsr math_div_16x8           // Quotient in zp_math_a/b
-    lda zp_math_a
-    sta sb_price_lo
-    lda zp_math_b
-    sta sb_price_hi
-    jmp price_add_p1_bonus      // Tail call
+    jmp store_price_and_p1      // Store price + add p1 bonus
 
 // calc_buy_price — Calculate buy price for item type
 // Input: A = item type ID, sb_item_p1 = enchantment/charges
@@ -422,12 +441,7 @@ calc_bm_sell_price:
 // Formula: (base_price × chr_price_adj[CHR-3] / 100) + p1_bonus
 // Clobbers: everything
 calc_buy_price:
-    sta sb_item_type            // Save for p1 bonus lookup
-    tax
-    lda it_cost_lo,x
-    sta zp_temp0
-    lda it_cost_hi,x
-    sta zp_temp1
+    jsr load_item_base_cost
 
     // Get CHR price adjustment
     lda player_data + PL_CHR_CUR
@@ -453,13 +467,7 @@ calc_buy_price:
     lda #1
     sta zp_math_a
 !cbp_ok:
-    lda zp_math_a
-    sta sb_price_lo
-    lda zp_math_b
-    sta sb_price_hi
-
-    // Add enchantment/charges bonus (RP14-3)
-    jmp price_add_p1_bonus      // Tail call
+    jmp store_price_and_p1      // Store price + add p1 bonus
 
 // calc_sell_price — Calculate sell price for item type
 // Input: A = item type ID, sb_item_p1 = enchantment/charges
@@ -467,12 +475,7 @@ calc_buy_price:
 // Formula: (base_price × chr_sell_adj[CHR-3] / 100) + p1_bonus
 // Clobbers: everything
 calc_sell_price:
-    sta sb_item_type            // Save for p1 bonus lookup
-    tax
-    lda it_cost_lo,x
-    sta zp_temp0
-    lda it_cost_hi,x
-    sta zp_temp1
+    jsr load_item_base_cost
 
     // Get CHR sell adjustment
     lda player_data + PL_CHR_CUR
@@ -492,13 +495,7 @@ calc_sell_price:
     jsr math_div_16x8           // Quotient in zp_math_a/b
 
     // Sell price can be 0 for cheap items — that's valid
-    lda zp_math_a
-    sta sb_price_lo
-    lda zp_math_b
-    sta sb_price_hi
-
-    // Add enchantment/charges bonus (RP14-3)
-    jmp price_add_p1_bonus      // Tail call
+    jmp store_price_and_p1      // Store price + add p1 bonus
 
 // calc_buy_min_price — Minimum acceptable buy price (no CHR markup)
 // Input: A = item type ID, sb_item_p1 = enchantment/charges

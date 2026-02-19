@@ -15,6 +15,28 @@
 .const PETSCII_SPACE  = $20
 .const PETSCII_A      = $41
 
+// Message table indices for show_msg
+.const MSG_GOLD       = 0
+.const MSG_MENU       = 1
+.const MSG_BUY_WHICH  = 2
+.const MSG_KICKED     = 3
+.const MSG_BOUGHT     = 4
+.const MSG_PRICE      = 5
+.const MSG_NO_AFFORD  = 6
+.const MSG_PACK_FULL  = 7
+.const MSG_SELL_TITLE = 8
+.const MSG_SELL_WHICH = 9
+.const MSG_OFFER      = 10
+.const MSG_SOLD       = 11
+.const MSG_ASKS       = 12
+.const MSG_YOUR_OFFER = 13
+.const MSG_OFFERS     = 14
+.const MSG_YOUR_PRICE = 15
+.const MSG_COUNTER    = 16
+.const MSG_FINAL      = 17
+.const MSG_TAKE       = 18
+.const MSG_AGREED     = 19
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -115,13 +137,7 @@ store_draw_screen:
     sta zp_text_color
     lda #2
     sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
-    lda #<uis_sep_str
-    sta zp_ptr0
-    lda #>uis_sep_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr draw_separator
 
     // Rows 3-14: Item list
     lda #COL_LGREY
@@ -234,26 +250,11 @@ store_draw_screen:
     sta zp_text_color
     lda #15
     sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
-    lda #<uis_sep_str
-    sta zp_ptr0
-    lda #>uis_sep_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr draw_separator
 
     // Row 16: Gold display
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #16
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_gold_str
-    sta zp_ptr0
-    lda #>uis_gold_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_GOLD
+    jsr show_msg
 
     // Check for >65535 gold
     lda player_data + PL_GOLD_2
@@ -276,17 +277,8 @@ store_draw_screen:
 
 !sds_gold_done:
     // Row 18: Menu
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_menu_str
-    sta zp_ptr0
-    lda #>uis_menu_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_MENU
+    jsr show_msg
 
     rts
 
@@ -300,34 +292,17 @@ store_draw_screen:
 store_buy:
     // Prompt: "BUY WHICH ITEM? (A-L)"
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_buy_which_str
-    sta zp_ptr0
-    lda #>uis_buy_which_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_BUY_WHICH
+    jsr show_msg
 
     // Get key
     jsr input_get_key
 
     // Q/ESC/space = cancel
-    cmp #PETSCII_Q
-    bne !sb_not_q+
+    jsr check_cancel
+    bne !sb_not_cancel+
     rts
-!sb_not_q:
-    cmp #PETSCII_ESC
-    bne !sb_not_esc+
-    rts
-!sb_not_esc:
-    cmp #PETSCII_SPACE
-    bne !sb_not_spc+
-    rts
-!sb_not_spc:
+!sb_not_cancel:
 
     // Convert PETSCII letter to slot index (A=0, L=11)
     sec
@@ -388,17 +363,8 @@ store_buy:
     lda hg_kicked,x
     beq !sb_do_haggle+
     jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_kicked_str
-    sta zp_ptr0
-    lda #>hg_kicked_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_KICKED
+    jsr show_msg
     jmp input_get_key           // Wait for key, tail call returns
 
 !sb_do_haggle:
@@ -446,17 +412,8 @@ sbuy_execute:
 
     // Success message
     jsr store_clear_msg_area
-    lda #COL_LGREEN
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_bought_str
-    sta zp_ptr0
-    lda #>uis_bought_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_BOUGHT
+    jsr show_msg
 
     lda #SFX_PICKUP
     jsr sound_play
@@ -465,17 +422,8 @@ sbuy_execute:
 // sbuy_show_price — Display price confirmation for buy
 sbuy_show_price:
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #21
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_price_str
-    sta zp_ptr0
-    lda #>uis_price_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_PRICE
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -495,31 +443,13 @@ sbuy_show_price:
 
 sbuy_no_gold:
     jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_no_afford_str
-    sta zp_ptr0
-    lda #>uis_no_afford_str
-    sta zp_ptr0_hi
-    jmp screen_put_string       // Tail call
+    ldx #MSG_NO_AFFORD
+    jmp show_msg                // Tail call
 
 sbuy_full:
     jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_pack_full_str
-    sta zp_ptr0
-    lda #>uis_pack_full_str
-    sta zp_ptr0_hi
-    jmp screen_put_string       // Tail call
+    ldx #MSG_PACK_FULL
+    jmp show_msg                // Tail call
 
 // ============================================================
 // Sell flow
@@ -534,30 +464,15 @@ store_sell:
     sta zp_text_color
     jsr ui_help_clear_all
 
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #0
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_sell_title_str
-    sta zp_ptr0
-    lda #>uis_sell_title_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_SELL_TITLE
+    jsr show_msg
 
     // Separator
     lda #COL_DGREY
     sta zp_text_color
     lda #1
     sta zp_cursor_row
-    lda #0
-    sta zp_cursor_col
-    lda #<uis_sep_str
-    sta zp_ptr0
-    lda #>uis_sep_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr draw_separator
 
     // List inventory items (A-V = slots 0-21)
     lda #2
@@ -625,34 +540,17 @@ store_sell:
 
 !ssl_inv_done:
     // Prompt
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #23
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_sell_which_str
-    sta zp_ptr0
-    lda #>uis_sell_which_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_SELL_WHICH
+    jsr show_msg
 
     // Get key
     jsr input_get_key
 
     // Q/ESC/space = cancel
-    cmp #PETSCII_Q
-    bne !ss_not_q+
+    jsr check_cancel
+    bne !ss_not_cancel+
     rts
-!ss_not_q:
-    cmp #PETSCII_ESC
-    bne !ss_not_esc+
-    rts
-!ss_not_esc:
-    cmp #PETSCII_SPACE
-    bne !ss_not_spc+
-    rts
-!ss_not_spc:
+!ss_not_cancel:
 
     // Convert PETSCII to slot (A=0, V=21)
     sec
@@ -785,17 +683,8 @@ ssell_execute:
     jsr gold_add_price
 
     // Success
-    lda #COL_LGREEN
-    sta zp_text_color
-    lda #23
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_sold_str
-    sta zp_ptr0
-    lda #>uis_sold_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_SOLD
+    jsr show_msg
 
     lda #SFX_PICKUP
     jsr sound_play
@@ -818,17 +707,8 @@ ssell_show_error:
 
 // ssell_show_offer — Display sell offer with price
 ssell_show_offer:
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<uis_offer_str
-    sta zp_ptr0
-    lda #>uis_offer_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_OFFER
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -850,17 +730,62 @@ ssell_show_offer:
 // Helpers
 // ============================================================
 
+// show_msg — Display a table-driven message
+// Input: X = message index (MSG_* constant)
+// All messages use column 1.
+// Clobbers: A, X, Y
+show_msg:
+    lda msg_tbl_color,x
+    sta zp_text_color
+    lda msg_tbl_row,x
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda msg_tbl_str_lo,x
+    sta zp_ptr0
+    lda msg_tbl_str_hi,x
+    sta zp_ptr0_hi
+    jmp screen_put_string
+
+// check_cancel — Check if A is a cancel key (Q, ESC, SPACE)
+// Input: A = key code
+// Output: Z set if cancel, Z clear if not; A preserved
+// Clobbers: flags only
+check_cancel:
+    cmp #PETSCII_Q
+    beq !cc_yes+
+    cmp #PETSCII_ESC
+    beq !cc_yes+
+    cmp #PETSCII_SPACE
+!cc_yes:
+    rts
+
+// draw_separator — Draw 40 dashes across current row
+// Input: zp_cursor_row set
+// Clobbers: A, X, Y
+draw_separator:
+    lda #0
+    sta zp_cursor_col
+    ldx #40
+!ds_loop:
+    lda #$2d                    // Screen code '-'
+    jsr screen_put_char
+    dex
+    bne !ds_loop-
+    rts
+
 // store_clear_msg_area — Clear rows 20-23 for messages
 // Clobbers: A, X, Y
 store_clear_msg_area:
     lda #20
+!scma_loop:
+    pha
     jsr screen_clear_row
-    lda #21
-    jsr screen_clear_row
-    lda #22
-    jsr screen_clear_row
-    lda #23
-    jsr screen_clear_row
+    pla
+    clc
+    adc #1
+    cmp #24
+    bcc !scma_loop-
     rts
 
 // ============================================================
@@ -889,15 +814,9 @@ input_read_number:
     rts
 !irn_not_ret:
 
-    // Q ($51) or ESC ($1B) or SPACE ($20) = cancel
-    cmp #PETSCII_Q
-    beq !irn_cancel_relay+
-    cmp #$1b
-    beq !irn_cancel_relay+
-    cmp #$20
-    beq !irn_cancel_relay+
-    jmp !irn_check_del+
-!irn_cancel_relay:
+    // Q/ESC/space = cancel
+    jsr check_cancel
+    bne !irn_check_del+
     jmp !irn_cancel+
 !irn_check_del:
 
@@ -1129,63 +1048,14 @@ haggle_buy:
     lda hg_insults
     cmp #3
     bcs !hb_kick+
-    // Show insult message
-    jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #23
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #HSTR_INSULT_COUNT
-    jsr rng_range
-    tax
-    jsr huff_decode_string
-    jsr screen_put_string
-    jsr input_get_key
+    jsr hg_show_insult_msg
     jmp !hb_loop-
 
 !hb_kick:
-    ldx zp_store_idx
-    lda #1
-    sta hg_kicked,x
-    jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_kicked_str
-    sta zp_ptr0
-    lda #>hg_kicked_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    jsr input_get_key
-    clc
-    rts
+    jmp hg_do_kick
 
 !hb_accept:
-    // Set agreed price
-    lda hg_ask_lo
-    sta sb_price_lo
-    lda hg_ask_hi
-    sta sb_price_hi
-    // Show "AGREED!"
-    jsr store_clear_msg_area
-    lda #COL_LGREEN
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_agreed_str
-    sta zp_ptr0
-    lda #>hg_agreed_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    sec
-    rts
+    jmp hg_do_accept
 
 // ============================================================
 // Haggle sell (R6.1)
@@ -1323,12 +1193,12 @@ haggle_sell:
     cmp #4
     bcs !hs_final+
 
-    jsr hg_show_sell_counter
+    jsr hg_show_counter
     jsr input_get_key
     jmp !hs_loop-
 
 !hs_final:
-    jsr hg_show_sell_final
+    jsr hg_show_final
     jsr input_get_key
     cmp #PETSCII_Y
     beq !hs_accept+
@@ -1340,6 +1210,48 @@ haggle_sell:
     lda hg_insults
     cmp #3
     bcs !hs_kick+
+    jsr hg_show_insult_msg
+    jmp !hs_loop-
+
+!hs_kick:
+    jmp hg_do_kick
+
+!hs_accept:
+    jmp hg_do_accept
+
+// ============================================================
+// Shared haggle handlers
+// ============================================================
+
+// hg_do_kick — Shared kick handler (terminal)
+// Sets kicked flag, shows message, returns with carry clear
+hg_do_kick:
+    ldx zp_store_idx
+    lda #1
+    sta hg_kicked,x
+    jsr store_clear_msg_area
+    ldx #MSG_KICKED
+    jsr show_msg
+    jsr input_get_key
+    clc
+    rts
+
+// hg_do_accept — Shared accept handler (terminal)
+// Copies ask to price, shows "AGREED!", returns with carry set
+hg_do_accept:
+    lda hg_ask_lo
+    sta sb_price_lo
+    lda hg_ask_hi
+    sta sb_price_hi
+    jsr store_clear_msg_area
+    ldx #MSG_AGREED
+    jsr show_msg
+    sec
+    rts
+
+// hg_show_insult_msg — Display random insult, wait for key
+// Clobbers: everything
+hg_show_insult_msg:
     jsr store_clear_msg_area
     lda #COL_RED
     sta zp_text_color
@@ -1352,48 +1264,7 @@ haggle_sell:
     tax
     jsr huff_decode_string
     jsr screen_put_string
-    jsr input_get_key
-    jmp !hs_loop-
-
-!hs_kick:
-    ldx zp_store_idx
-    lda #1
-    sta hg_kicked,x
-    jsr store_clear_msg_area
-    lda #COL_RED
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_kicked_str
-    sta zp_ptr0
-    lda #>hg_kicked_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    jsr input_get_key
-    clc
-    rts
-
-!hs_accept:
-    lda hg_ask_lo
-    sta sb_price_lo
-    lda hg_ask_hi
-    sta sb_price_hi
-    jsr store_clear_msg_area
-    lda #COL_LGREEN
-    sta zp_text_color
-    lda #22
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_agreed_str
-    sta zp_ptr0
-    lda #>hg_agreed_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    sec
-    rts
+    jmp input_get_key           // Tail call
 
 // ============================================================
 // Haggle display helpers (R6.1)
@@ -1402,17 +1273,8 @@ haggle_sell:
 // hg_show_ask — Display "ASKS [price] GP." + "YOUR OFFER? (Q=CANCEL)"
 hg_show_ask:
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_asks_str
-    sta zp_ptr0
-    lda #>hg_asks_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_ASKS
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1431,15 +1293,8 @@ hg_show_ask:
     jsr screen_put_string
 
     // Row 21: prompt
-    lda #21
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_offer_str
-    sta zp_ptr0
-    lda #>hg_offer_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_YOUR_OFFER
+    jsr show_msg
 
     // Position cursor for number input on row 22
     lda #COL_YELLOW
@@ -1453,17 +1308,8 @@ hg_show_ask:
 // hg_show_offer — Display "OFFERS [price] GP." + "YOUR PRICE? (Q=CANCEL)"
 hg_show_offer:
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_offers_str
-    sta zp_ptr0
-    lda #>hg_offers_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_OFFERS
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1482,15 +1328,8 @@ hg_show_offer:
     jsr screen_put_string
 
     // Row 21: prompt
-    lda #21
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_price_str
-    sta zp_ptr0
-    lda #>hg_price_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_YOUR_PRICE
+    jsr show_msg
 
     // Position cursor for number input on row 22
     lda #COL_YELLOW
@@ -1504,17 +1343,8 @@ hg_show_offer:
 // hg_show_counter — Display "HOW ABOUT [ask] GP?"
 hg_show_counter:
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_counter_str
-    sta zp_ptr0
-    lda #>hg_counter_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_COUNTER
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1532,24 +1362,11 @@ hg_show_counter:
     sta zp_ptr0_hi
     jmp screen_put_string
 
-// hg_show_sell_counter — Same as counter for sell
-hg_show_sell_counter:
-    jmp hg_show_counter         // Same display
-
 // hg_show_final — Display "FINAL OFFER: [ask] GP." + "TAKE IT? (Y/N)"
 hg_show_final:
     jsr store_clear_msg_area
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #20
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_final_str
-    sta zp_ptr0
-    lda #>hg_final_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    ldx #MSG_FINAL
+    jsr show_msg
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -1568,25 +1385,12 @@ hg_show_final:
     jsr screen_put_string
 
     // Row 21: "TAKE IT? (Y/N)"
-    lda #21
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-    lda #<hg_take_str
-    sta zp_ptr0
-    lda #>hg_take_str
-    sta zp_ptr0_hi
-    jmp screen_put_string
-
-// hg_show_sell_final — Same layout for sell
-hg_show_sell_final:
-    jmp hg_show_final           // Same display
+    ldx #MSG_TAKE
+    jmp show_msg
 
 // ============================================================
 // String data (screen codes)
 // ============================================================
-uis_sep_str:
-    .text "----------------------------------------" ; .byte 0
 uis_gold_str:
     .text "GOLD: " ; .byte 0
 uis_big_gold_str:
@@ -1636,3 +1440,25 @@ hg_final_str:    .text "FINAL OFFER: "      ; .byte 0
 hg_take_str:     .text "TAKE IT? (Y/N)"    ; .byte 0
 hg_kicked_str:   .text "GET OUT OF MY STORE!" ; .byte 0
 hg_agreed_str:   .text "AGREED!"           ; .byte 0
+
+// Message display tables (indexed by MSG_* constants)
+msg_tbl_color:
+    .byte COL_YELLOW, COL_WHITE, COL_WHITE, COL_RED, COL_LGREEN
+    .byte COL_WHITE, COL_RED, COL_RED, COL_WHITE, COL_WHITE
+    .byte COL_WHITE, COL_LGREEN, COL_WHITE, COL_WHITE, COL_WHITE
+    .byte COL_WHITE, COL_WHITE, COL_WHITE, COL_WHITE, COL_LGREEN
+msg_tbl_row:
+    .byte 16, 18, 20, 22, 22
+    .byte 21, 22, 22, 0, 23
+    .byte 22, 23, 20, 21, 20
+    .byte 21, 20, 20, 21, 22
+msg_tbl_str_lo:
+    .byte <uis_gold_str, <uis_menu_str, <uis_buy_which_str, <hg_kicked_str, <uis_bought_str
+    .byte <uis_price_str, <uis_no_afford_str, <uis_pack_full_str, <uis_sell_title_str, <uis_sell_which_str
+    .byte <uis_offer_str, <uis_sold_str, <hg_asks_str, <hg_offer_str, <hg_offers_str
+    .byte <hg_price_str, <hg_counter_str, <hg_final_str, <hg_take_str, <hg_agreed_str
+msg_tbl_str_hi:
+    .byte >uis_gold_str, >uis_menu_str, >uis_buy_which_str, >hg_kicked_str, >uis_bought_str
+    .byte >uis_price_str, >uis_no_afford_str, >uis_pack_full_str, >uis_sell_title_str, >uis_sell_which_str
+    .byte >uis_offer_str, >uis_sold_str, >hg_asks_str, >hg_offer_str, >hg_offers_str
+    .byte >hg_price_str, >hg_counter_str, >hg_final_str, >hg_take_str, >hg_agreed_str
