@@ -3617,3 +3617,42 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 - `3e93849` — OPT-3.5 (240 bytes saved, names/owners to main RAM)
 - OPT-3.3 (468 bytes saved, Huffman compress overlay strings)
 
+---
+
+## Tunneling & Treasure Veins — R2.5 ✅ COMPLETE (2026-02-18)
+
+### What Was Implemented
+
+| Step | What | Details |
+|------|------|---------|
+| R2.5.1 | Treasure flag encoding | Reused `FLAG_HAS_ITEM` ($02) on magma/quartz wall tiles — no conflict since items can't exist on impassable tiles |
+| R2.5.2 | Treasure placement in `carve_streamer` | Roll per vein tile: 1-in-90 for magma, 1-in-40 for quartz. Used BIT abs skip trick for compact branching |
+| R2.5.3 | Tunnel command (`+` key) | New `tunnel.s` module. Direction prompt, confusion (75% random), monster redirect, boundary check. STR + max(0, PL_TODMG) digging ability vs scaled resistance |
+| R2.5.4 | Gold spawn from treasure veins | `tunnel_spawn_gold` in `item.s`. Gold amount: rng(5+dlvl*3)*2+1. Shared by tunnel and wall-to-mud |
+| R2.5.5 | Wall-to-mud vein support | Extended `eff_wall_to_mud` in `spell_effects.s` to handle all wall types + magma + quartz + secret doors. Boundary check added. Treasure gold spawns on vein destruction |
+| R2.5.6 | Huffman strings | 8 new strings: dig granite/magma/quartz, finished, found, permanent, nothing, rubble. 197 total strings |
+
+### Design Decisions
+
+- **Key binding:** `+` key ($2B PETSCII) instead of `T` (taken by Take Off). `+` is available on C64 keyboard and intuitive for digging.
+- **Digging ability:** `STR + max(0, PL_TODMG)` — simplified from umoria's weapon-type-specific formula. No shovel/pick item types exist.
+- **Wall resistance (8-bit scaled):** Granite rng(20)+8 (8-27), Magma rng(12)+3 (3-14), Quartz rng(10)+2 (2-11). Rubble always succeeds.
+- **Treasure veins invisible** to player (matches umoria). `FLAG_HAS_ITEM` bit is not rendered differently on wall tiles.
+- **Confusion:** 75% random direction (25% keep intended), matching umoria.
+
+### Size Impact
+
+742 bytes added to main segment ($BADB → $BDC1), 575 bytes headroom remaining to MAP_BASE ($C000).
+
+### Files Modified
+
+- `tunnel.s` — New module: tunnel command handler (~290 bytes)
+- `item.s` — Added `tunnel_spawn_gold` (~50 bytes)
+- `dungeon_gen.s` — Treasure placement in `carve_streamer` (~25 bytes)
+- `spell_effects.s` — Extended `eff_wall_to_mud` for all wall types + veins (~40 bytes)
+- `input.s` — Added `CMD_TUNNEL` ($32), mapped `+` key ($2B)
+- `main.s` — Added tunnel command dispatch
+- `ui_help_data.s` — Added `+ TUNNEL` to help screen row 23
+- `data/huffman_strings.txt` — 8 new tunnel strings
+- `huffman_data.s` — Regenerated (197 strings, 2,756 bytes)
+

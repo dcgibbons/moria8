@@ -30,14 +30,15 @@
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
 | R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
+| R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
 - **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 67
-- **Source files:** ~42 .s files
-- **Program size:** $BADB (program_end) — **1,317 bytes headroom** to MAP_BASE ($C000)
+- **Source files:** ~43 .s files
+- **Program size:** $BDC1 (program_end) — **575 bytes headroom** to MAP_BASE ($C000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
 
 ### Known Remaining Issues
@@ -50,17 +51,15 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R2.5 | Tunneling + treasure veins (T command, dig walls/veins, gold in quartz/magma) | Medium |
-| 2 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
-| 3 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
-| 4 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
+| 2 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
+| 3 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Remaining TODO features:**
 
 | Priority | ID | Feature | Complexity | Benefit | Notes |
 |----------|-----|---------|-----------|---------|-------|
-| 1 | R2.5 | Tunneling + treasure veins | Medium | High | T command (dig through walls/veins), treasure in quartz/magma veins, wall-to-mud spell fix. Core umoria mechanic currently missing. |
-| 2 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
+| 1 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -76,9 +75,6 @@
 ### Priority Triage (updated 2026-02-18)
 
 **Remaining items:**
-
-**Medium priority (missing core mechanic):**
-- R2.5 Tunneling + treasure veins — T command, STR-based digging, gold in quartz/magma, wall-to-mud fix
 
 **Medium priority (infrastructure for more content):**
 - R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
@@ -622,250 +618,3 @@ Each call site becomes 5 bytes (`ldx #ID; jsr huff_print_msg`) instead of 8 byte
 
 Combined with OPT-3 (town overlay, ~500-700 bytes saved there), the project can reclaim substantial headroom in both the main segment and the overlay without losing any features. The code deduplication items (OPT-4.1–4.6, 4.9–4.11) are recommended first since they also improve maintainability. OPT-4.7 (Huffman item names) is the single largest main-segment win but requires tooling changes.
 
----
-
-## Tunneling & Treasure Veins — R2.5 (2026-02-18)
-
-### Problem
-
-Magma and quartz streamers are generated during dungeon creation (3 magma + 2 quartz per level) but serve only as impassable obstacles. In umoria, these veins are a core gameplay mechanic: players can tunnel through them with the `T` command, and quartz/magma veins can contain embedded gold treasure. The wall-to-mud spell should also destroy veins. Currently none of this is implemented.
-
-### Umoria Reference
-
-**Tunnel command (`T` + direction):**
-- If confused: 75% chance of random direction
-- If monster present at target: attack instead of tunneling
-- Digging ability = STR + weapon bonus
-  - Shovel/Pick: STR + 25 + (50 × enchantment level)
-  - Normal weapon: STR + (max_damage + tohit + todam) / 2
-  - Bare hands: STR only
-- Heavy weapon penalty reduces digging ability
-- Success: `digging_ability > wall_resistance` (random per attempt)
-
-**Wall resistance by type:**
-
-| Wall Type | Resistance Range | Relative Difficulty |
-|-----------|-----------------|-------------------|
-| Granite wall | 80–1,280 | Hardest |
-| Magma intrusion | 10–610 | Medium |
-| Quartz vein | 10–410 | Easiest |
-| Boundary wall | Impossible | Cannot tunnel |
-
-**Treasure in veins (placed during dungeon generation):**
-
-| Vein Type | Treasure Chance Per Tile | Streamers/Level |
-|-----------|------------------------|-----------------|
-| Magma | 1 in 90 | 3 |
-| Quartz | 1 in 40 | 2 |
-
-Quartz has ~2.25× higher treasure density than magma. When a treasure vein tile is tunneled or destroyed by wall-to-mud, gold drops on the floor.
-
-**Wall-to-Mud spell:** Instantly destroys any non-boundary wall type (granite, magma, quartz) along a bolt path. No STR check required. Treasure vein gold still drops.
-
-### Implementation Plan
-
-#### R2.5.1 — Treasure Vein Tile Types
-
-Add two new tile types for treasure-bearing veins. The current tile encoding uses 4-bit type in bits 7-4:
-
-| Tile | Current Value | Notes |
-|------|--------------|-------|
-| TILE_MAGMA | $C0 | Already exists |
-| TILE_QUARTZ | $D0 | Already exists |
-| TILE_TRAP | $E0 | Already exists |
-| TILE_SECRET | $F0 | Already exists |
-
-**Problem:** All 16 tile type slots (0-15) are taken. Options:
-
-**Option A — Use a flag bit.** The lower nibble (bits 3-0) holds flags (`FLAG_VISITED`, `FLAG_LIT`, `FLAG_HAS_ITEM`, `FLAG_OCCUPIED`). If a flag bit is available, use it as `FLAG_TREASURE` on magma/quartz tiles. Check: `FLAG_HAS_ITEM` (bit 0) is only used on floor tiles for floor items — it could be repurposed on wall tiles to mean "has treasure". This costs zero new tile types.
-
-**Option B — Encode in the map differently.** Use a separate 1-bit-per-tile bitfield for treasure markers. At 64×60 = 3,840 tiles, this needs 480 bytes — too expensive.
-
-**Recommended: Option A** — reuse `FLAG_HAS_ITEM` (bit 0) on magma/quartz tiles to mean "contains treasure." Since items can't exist on impassable tiles, there's no conflict. When the tile is tunneled to floor, clear the flag and spawn gold.
-
-#### R2.5.2 — Treasure Placement in Dungeon Generation
-
-Modify `carve_streamer()` in `dungeon_gen.s` to roll for treasure at each vein tile:
-
-```asm
-// After placing TILE_MAGMA or TILE_QUARTZ:
-    lda streamer_type
-    cmp #TILE_MAGMA
-    bne !check_quartz+
-    lda #90                     // 1-in-90 chance for magma
-    jmp !roll_treasure+
-!check_quartz:
-    lda #40                     // 1-in-40 chance for quartz
-!roll_treasure:
-    jsr rng_range               // A = rng(chance)
-    cmp #1
-    bne !no_treasure+
-    ldy map_offset
-    lda (zp_ptr0),y
-    ora #FLAG_HAS_ITEM          // Set treasure flag on the vein tile
-    sta (zp_ptr0),y
-!no_treasure:
-```
-
-Estimated cost: ~25 bytes in `dungeon_gen.s`.
-
-#### R2.5.3 — Tunnel Command (`T` + direction)
-
-New command `CMD_TUNNEL` mapped to `T` key in `input.s`. Handler in a new `tunnel.s` module (or extend `player_move.s`):
-
-```asm
-// player_tunnel: called with direction in zp_input_dir
-player_tunnel:
-    // 1. Get target tile coordinates
-    ldx zp_input_dir
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
-
-    // 2. Check for monster → attack instead
-    jsr monster_find_at
-    bcc !no_monster+
-    jmp player_attack_monster   // Redirect to melee
-!no_monster:
-
-    // 3. Get tile type
-    jsr map_get_tile            // A = tile byte at target
-    and #$F0                    // Isolate type nibble
-    // Check tunnelable types
-    cmp #TILE_WALL_H
-    beq !tunnel_granite+
-    cmp #TILE_WALL_V
-    beq !tunnel_granite+
-    cmp #TILE_MAGMA
-    beq !tunnel_magma+
-    cmp #TILE_QUARTZ
-    beq !tunnel_quartz+
-    // Rubble — always succeeds
-    cmp #TILE_RUBBLE
-    beq !clear_rubble+
-    // Boundary walls — permanent
-    // ... "THIS SEEMS TO BE PERMANENT ROCK."
-    rts
-
-!tunnel_granite:
-    // resistance = rng(200) + 40 (scaled down from umoria's 1280 range)
-    ...
-!tunnel_magma:
-    // resistance = rng(80) + 5
-    ...
-!tunnel_quartz:
-    // resistance = rng(60) + 5
-    ...
-```
-
-**Digging ability (simplified for C64):**
-
-Umoria uses STR + weapon bonuses with shovel/pick special items. Since we don't have shovel/pick item types, simplify to:
-
-```
-digging_ability = STR_CUR + weapon_damage_avg + weapon_tohit
-```
-
-This gives reasonable progression: a STR 3 character with a basic weapon digs ~6-8, while STR 18 with a good weapon digs ~25-30. Wall resistances are scaled down accordingly from umoria's ranges to fit 8-bit math.
-
-**Success check:** `digging_ability > rng(wall_resistance)`
-
-On success:
-1. Replace tile with `TILE_FLOOR | FLAG_VISITED | FLAG_LIT`
-2. If tile had `FLAG_HAS_ITEM` set (treasure vein): spawn gold at location
-3. Print "YOU TUNNEL INTO THE [GRANITE WALL/MAGMA/QUARTZ VEIN]."
-4. Print "YOU HAVE FOUND SOMETHING!" on treasure hit
-5. Play `SFX_PICKUP` on treasure hit
-6. Consumes a turn (call `turn_post_action`)
-
-On failure:
-1. Print "YOU DIG IN THE [wall type]." (no "into" — indicates partial progress)
-2. Consumes a turn
-
-#### R2.5.4 — Gold Spawn from Treasure Veins
-
-When a treasure vein is opened (by tunneling or wall-to-mud), spawn a gold pile:
-
-```asm
-tunnel_spawn_gold:
-    // Gold amount scales with dungeon level (simplified from umoria)
-    // base = 5 + dlvl * 3, variance = rng(base) * 2
-    lda zp_dungeon_level
-    asl                         // × 2
-    clc
-    adc zp_dungeon_level        // × 3
-    clc
-    adc #5                      // base = 5 + dlvl*3
-    jsr rng_range               // rng(base)
-    asl                         // × 2
-    clc
-    adc #1                      // At least 1 GP
-    // ... place gold item on floor at df_target_x/y
-```
-
-Uses existing `floor_item_add` infrastructure. Gold amount: ~6-60 GP on DL1, ~15-170 GP on DL10, scaling with depth.
-
-#### R2.5.5 — Fix Wall-to-Mud Spell
-
-Extend `eff_wall_to_mud` in `spell_effects.s` to handle magma and quartz:
-
-```asm
-eff_wall_to_mud:
-    // Currently only checks TILE_WALL_H and TILE_WALL_V
-    // Add:
-    cmp #TILE_MAGMA
-    beq !destroy_wall+
-    cmp #TILE_QUARTZ
-    beq !destroy_wall+
-    // ... existing wall checks ...
-!destroy_wall:
-    // Check for treasure flag before clearing
-    lda original_tile
-    and #FLAG_HAS_ITEM
-    beq !no_treasure+
-    jsr tunnel_spawn_gold
-!no_treasure:
-    // Replace with floor
-    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
-    // ... existing floor placement code ...
-```
-
-Estimated cost: ~20 bytes added to `spell_effects.s`.
-
-#### R2.5.6 — Rendering
-
-Treasure veins should be visually distinguishable from plain veins. Options:
-- **Color differentiation:** Treasure magma/quartz rendered in yellow instead of the normal vein color (brown/grey). Only when tile is visible/lit.
-- **No visual difference:** Player must tunnel speculatively (matches umoria — treasure veins look the same until opened).
-
-**Recommended:** No visual difference (matches umoria behavior). The `FLAG_HAS_ITEM` bit is invisible to the player. Discovery is the reward for tunneling.
-
-The existing `dungeon_render.s` tile rendering for magma ($C0) and quartz ($D0) needs no changes — the flag bits in the low nibble don't affect the screen code lookup (tile type is bits 7-4 only).
-
-### Size Estimate
-
-| Component | Location | Est. Bytes |
-|-----------|----------|-----------|
-| Treasure placement in `carve_streamer` | dungeon_gen.s | ~25 |
-| Tunnel command handler | tunnel.s (new) or player_move.s | ~200 |
-| Gold spawn from treasure | tunnel.s | ~40 |
-| Wall-to-mud vein fix | spell_effects.s | ~20 |
-| Command dispatch + key mapping | main.s, input.s | ~10 |
-| Huffman strings (4-5 messages) | huffman_data.s | ~40 compressed |
-| **Total** | | **~335 bytes** |
-
-### Implementation Order
-
-| Step | What | Effort | Dependencies |
-|------|------|--------|-------------|
-| R2.5.1 | FLAG_HAS_ITEM treasure encoding | Trivial | None |
-| R2.5.2 | Treasure placement in `carve_streamer` | Low | R2.5.1 |
-| R2.5.3 | Tunnel command (T + direction) | Medium | R2.5.1 |
-| R2.5.4 | Gold spawn from treasure veins | Low | R2.5.1 |
-| R2.5.5 | Wall-to-Mud spell fix | Trivial | R2.5.4 |
-| R2.5.6 | Testing | Low | R2.5.2-R2.5.5 |

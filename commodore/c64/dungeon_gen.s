@@ -1873,14 +1873,17 @@ carve_streamer:
     // Bounds check
     lda dg_cx1
     cmp #1
-    bcc !cs_end+
+    bcc !cs_oob+
     cmp #MAP_COLS - 1
-    bcs !cs_end+
+    bcs !cs_oob+
     lda dg_cy1
     cmp #1
-    bcc !cs_end+
+    bcc !cs_oob+
     cmp #MAP_ROWS - 1
-    bcs !cs_end+
+    bcc !cs_in_bounds+
+!cs_oob:
+    jmp !cs_end+
+!cs_in_bounds:
 
     // Write mineral tile — only overwrite wall tiles (types 1-6)
     // Matches umoria: streamers replace granite but never floors,
@@ -1903,6 +1906,20 @@ carve_streamer:
     bne !cs_no_write+           // Room wall → preserve
     // Regular rock → overwrite with mineral
     lda dg_room_w               // Mineral tile value
+    sta (zp_ptr0),y
+    // Treasure roll: 1-in-90 for magma, 1-in-40 for quartz
+    lda dg_room_w
+    and #TILE_TYPE_MASK
+    cmp #TILE_QUARTZ
+    beq !cs_quartz_roll+
+    lda #90                     // Magma: 1-in-90
+    .byte $2c                   // BIT abs — skip next 2 bytes
+!cs_quartz_roll:
+    lda #40                     // Quartz: 1-in-40
+    jsr rng_range               // A = rng(chance), Y preserved
+    bne !cs_no_write+           // Treasure only if A == 0
+    lda (zp_ptr0),y
+    ora #FLAG_HAS_ITEM          // Set treasure flag on vein tile
     sta (zp_ptr0),y
 !cs_no_write:
 
@@ -1934,7 +1951,8 @@ carve_streamer:
 !cs_no_jitter:
 
     dec dg_retries
-    bne !cs_step-
+    beq !cs_end+
+    jmp !cs_step-
 
 !cs_end:
     rts

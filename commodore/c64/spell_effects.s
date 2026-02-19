@@ -988,6 +988,16 @@ eff_wall_to_mud:
     jsr get_direction_target
     bcc !ewtm_fail+
 
+    // Boundary check — edge tiles are permanent
+    lda df_target_x
+    beq !ewtm_fail+
+    cmp #MAP_COLS - 1
+    beq !ewtm_fail+
+    lda df_target_y
+    beq !ewtm_fail+
+    cmp #MAP_ROWS - 1
+    beq !ewtm_fail+
+
     ldx df_target_y
     lda map_row_lo,x
     sta zp_ptr0
@@ -995,28 +1005,54 @@ eff_wall_to_mud:
     sta zp_ptr0_hi
     ldy df_target_x
     lda (zp_ptr0),y
+    sta ewtm_save_tile          // Save full tile for treasure check
     and #TILE_TYPE_MASK
 
-    // Check if it's a wall type
+    // Check all tunnelable types
     cmp #TILE_WALL_H
     beq !ewtm_dig+
     cmp #TILE_WALL_V
+    beq !ewtm_dig+
+    cmp #TILE_CORNER_TL
+    beq !ewtm_dig+
+    cmp #TILE_CORNER_TR
+    beq !ewtm_dig+
+    cmp #TILE_CORNER_BL
+    beq !ewtm_dig+
+    cmp #TILE_CORNER_BR
+    beq !ewtm_dig+
+    cmp #TILE_MAGMA
+    beq !ewtm_dig+
+    cmp #TILE_QUARTZ
+    beq !ewtm_dig+
+    cmp #TILE_SECRET
     beq !ewtm_dig+
     // Not a wall
 !ewtm_fail:
     rts
 
 !ewtm_dig:
-    // Replace with floor + flags
-    lda (zp_ptr0),y
-    and #TILE_FLAG_MASK
-    ora #TILE_FLOOR
-    ora #FLAG_VISITED | FLAG_LIT
+    // Replace with floor + flags (preserve visited/lit from original)
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
     sta (zp_ptr0),y
+
+    // Check for treasure in vein
+    lda ewtm_save_tile
+    and #FLAG_HAS_ITEM
+    beq !ewtm_no_treasure+
+    jsr tunnel_spawn_gold
+    ldx #HSTR_TUN_FOUND
+    jsr huff_decode_string
+    jsr msg_print
+    lda #SFX_PICKUP
+    jsr sound_play
+!ewtm_no_treasure:
 
     lda #1
     sta vis_room_revealed
     rts
+
+ewtm_save_tile: .byte 0
 
 // ============================================================
 // eff_kill_monster — Remove a dead monster and award XP

@@ -101,6 +101,7 @@ exit_trampoline:
 #import "ranged_fire.s"
 #import "throw.s"
 #import "bash.s"
+#import "tunnel.s"
 #import "monster_attack.s"
 #import "turn.s"
 #import "store_data.s"
@@ -1038,6 +1039,24 @@ load_resume_game:
 !bash_no_turn:
     jmp !main_loop-
 !not_bash:
+
+    // Tunnel?
+    cmp #CMD_TUNNEL
+    bne !not_tunnel+
+    jsr msg_clear
+    jsr player_tunnel
+    bcc !tunnel_no_turn+
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    beq !tun_not_dead+
+    jmp !player_died+
+!tun_not_dead:
+    jsr update_visibility
+    jmp vp_render_status_loop
+!tunnel_no_turn:
+    jmp !main_loop-
+!not_tunnel:
 
     // Look?
     cmp #CMD_LOOK

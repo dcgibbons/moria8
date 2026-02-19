@@ -1322,6 +1322,47 @@ idr_cancel_str:    .text "NEVER MIND." ; .byte 0
 idr_floor_full_str: .text "NO ROOM ON THE FLOOR." ; .byte 0
 
 // ============================================================
+// tunnel_spawn_gold — Spawn gold at a tunneled vein location
+// Input: df_target_x/y = position to place gold
+// Gold amount scales with dungeon level
+// Clobbers: A, X, Y, zp_ptr0, zp_math_a/b, zp_temp0/1/2/3
+// ============================================================
+tunnel_spawn_gold:
+    lda df_target_x
+    sta fi_add_x
+    lda df_target_y
+    sta fi_add_y
+
+    // Gold type: rng(2) → ID 0 or 1 (small or large)
+    lda #2
+    jsr rng_range
+    sta fi_add_id
+
+    // Gold amount: (5 + dlvl*3) base, rng(base)*2 + 1
+    // Gives ~6-60 GP on DL1, ~15-170 GP on DL10
+    lda zp_player_dlvl
+    ldx #3
+    jsr math_multiply           // zp_math_a = lo
+    lda zp_math_a
+    clc
+    adc #5                      // base = 5 + dlvl*3
+    sta zp_temp0
+    jsr rng_range               // rng(base)
+    asl                         // × 2
+    clc
+    adc #1                      // At least 1 GP
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+
+    jsr floor_item_add
+    // Ignore failure (table full)
+    rts
+
+// ============================================================
 // pick_item_type — Select a random non-gold item type for floor spawning
 // Rejection sampling: roll random type 2-46, accept if min_level <= dlvl+2.
 // 1-in-12 "great item" chance bypasses min_level check.
