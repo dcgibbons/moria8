@@ -31,6 +31,41 @@ store_base_idx:
     .byte 0, 12, 24, 36, 48, 60, 72, 84
 
 // ============================================================
+// Store name strings (screen codes, null-terminated)
+// ============================================================
+// In main RAM so they don't consume overlay space at $E000.
+sn_general:  .text "GENERAL STORE"  ; .byte 0
+sn_armory:   .text "ARMORY"         ; .byte 0
+sn_weapon:   .text "WEAPONSMITH"    ; .byte 0
+sn_temple:   .text "TEMPLE"         ; .byte 0
+sn_alchemy:  .text "ALCHEMY SHOP"   ; .byte 0
+sn_magic:    .text "MAGIC SHOP"     ; .byte 0
+sn_bmarket:  .text "BLACK MARKET"   ; .byte 0
+sn_home:     .text "HOME"            ; .byte 0
+
+store_name_lo:
+    .byte <sn_general, <sn_armory, <sn_weapon, <sn_temple, <sn_alchemy, <sn_magic, <sn_bmarket, <sn_home
+store_name_hi:
+    .byte >sn_general, >sn_armory, >sn_weapon, >sn_temple, >sn_alchemy, >sn_magic, >sn_bmarket, >sn_home
+
+// ============================================================
+// Store owner strings (screen codes, null-terminated)
+// ============================================================
+so_0: .text "BILBO THE FRIENDLY"    ; .byte 0
+so_1: .text "GORN THE ARMORER"      ; .byte 0
+so_2: .text "BRYN THE FORGEMASTER"  ; .byte 0
+so_3: .text "GARATH THE HEALER"     ; .byte 0
+so_4: .text "ELARA THE ALCHEMIST"   ; .byte 0
+so_5: .text "ZOLAN THE ENCHANTER"   ; .byte 0
+so_6: .text "THE FENCE"             ; .byte 0
+so_7: .byte 0                        // Home has no owner
+
+store_owner_lo:
+    .byte <so_0, <so_1, <so_2, <so_3, <so_4, <so_5, <so_6, <so_7
+store_owner_hi:
+    .byte >so_0, >so_1, >so_2, >so_3, >so_4, >so_5, >so_6, >so_7
+
+// ============================================================
 // check_player_on_store_door — Check if player is on a store door
 // ============================================================
 // Input: zp_player_x/y

@@ -28,7 +28,7 @@
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
-| OPT-3 | Town Overlay Optimization | ✅ Complete — 475 bytes saved (4,074→3,599), 497 bytes free. OPT-3.1/3.2/3.4/3.6/3.7/3.8 done. |
+| OPT-3 | Town Overlay Optimization | ✅ Complete — 715 bytes saved (4,074→3,359), 737 bytes free. OPT-3.1/3.2/3.4/3.5/3.6/3.7/3.8 done. |
 | R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
 | 10 | C128 Enhancements | Not started |
 
@@ -420,10 +420,10 @@ Called 16 times so keeping it small helps. **Net savings: ~7-8 bytes.**
 | 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 295 | ✅ Done |
 | 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 60 | ✅ Done |
 | 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 35 | ✅ Done |
-| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | — | Deferred |
+| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | 240 | ✅ Done |
 | 8 | OPT-3.3 Huffman compress strings | High | ~200-600 | — | Deferred |
 
-**Result: 475 bytes saved (4,074→3,599), 497 bytes free.** OPT-3.5 and OPT-3.3 deferred — 497 bytes free is sufficient headroom for near-term feature additions.
+**Result: 715 bytes saved (4,074→3,359), 737 bytes free.** OPT-3.3 deferred — 737 bytes free is ample headroom.
 
 **Realistic target:** OPT-3.1 through OPT-3.7 should yield **~500-700 bytes free** in the overlay, enough for significant new store features.
 
