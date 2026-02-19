@@ -22,6 +22,10 @@ status_draw:
     lda zp_text_color
     pha
 
+    // Clear input row (row 24) — many code paths bypass vp_render_status_loop
+    lda #INPUT_ROW
+    jsr screen_clear_row
+
     // ========== Row 21: Race / Class / Level / Dungeon Level ==========
     lda #STATUS_ROW
     jsr screen_clear_row

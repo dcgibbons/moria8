@@ -251,7 +251,11 @@ tier_load:
     rts
 
 !tl_failed:
-    // Disk load failed — keep embedded data as fallback
+    // Disk load failed — reset tier state so creature_get_name
+    // uses embedded name pointers (main RAM) instead of the
+    // tier path which reads from $E000 (now invalid).
+    lda #0
+    sta current_tier
     rts
 
 
@@ -289,6 +293,9 @@ tier_load_disk:
     jsr $FFD5                   // KERNAL LOAD
     // Carry clear = success, carry set = error
     php                         // Save carry (load result)
+    lda #2
+    jsr $ffc3                   // KERNAL CLOSE — release file #2
+    jsr $ffcc                   // KERNAL CLRCHN — restore default I/O
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00

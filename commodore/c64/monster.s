@@ -1030,7 +1030,6 @@ creature_get_name:
     ldy #>creature_name_buf
     rts
 
-cgn_save_x: .byte 0
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0
