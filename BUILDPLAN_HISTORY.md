@@ -3607,10 +3607,13 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 - **OPT-3.6:** Factored Q/ESC/SPACE cancel pattern into `check_cancel` helper. 17 bytes saved.
 - **OPT-3.7:** Unified BM + normal price calculation with parameterized multiplier. 35 bytes saved.
 - **OPT-3.8:** Replaced 4 sequential `jsr screen_clear_row` calls with loop. 6 bytes saved.
-- **OPT-3.3:** Deferred — Huffman compress overlay strings. 737 bytes free is ample headroom; moved to active TODO.
+- **OPT-3.3:** Huffman-compressed all 29 overlay strings (419 bytes raw). Strings moved to `huffman_data.s` in main RAM. `show_msg` table changed from pointer pairs to single-byte Huffman IDs. `ssell_show_error` changed to accept Huffman IDs. 468 bytes overlay savings (+340 bytes main RAM). Added `/`, `=`, `>` character support to Huffman encoder. Added `~` trailing-space marker convention for string data file.
+
+**Final result: 1,183 bytes saved total (4,074→2,891), 1,204 bytes free in overlay.**
 
 ### Commits
 
 - `0664743` — OPT-3.1/3.2/3.4/3.6/3.7/3.8 (475 bytes saved)
 - `3e93849` — OPT-3.5 (240 bytes saved, names/owners to main RAM)
+- OPT-3.3 (468 bytes saved, Huffman compress overlay strings)
 

@@ -50,6 +50,12 @@ def ascii_to_screencode(ch):
         return 0x28
     if ch == ')':
         return 0x29
+    if ch == '/':
+        return 0x2F
+    if ch == '=':
+        return 0x3D
+    if ch == '>':
+        return 0x3E
     raise ValueError(f"Unsupported character: '{ch}' (0x{c:02x})")
 
 
@@ -184,6 +190,10 @@ def main():
         else:
             label = None
             text = trimmed  # Anonymous strings: strip leading whitespace only
+
+        # Handle trailing space marker: " ~" at end → trailing space
+        if text.endswith(' ~'):
+            text = text[:-1]  # Remove ~, keep the space
 
         idx = len(strings)
         screencodes = [ascii_to_screencode(ch) for ch in text]

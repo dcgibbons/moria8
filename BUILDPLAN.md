@@ -28,17 +28,17 @@
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
-| OPT-3 | Town Overlay Optimization | ✅ Code opts done (715 bytes saved, 737 free). OPT-3.3 Huffman strings remaining. |
+| OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
 | R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
-- **Test suites:** 21 (263 runtime tests)
+- **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 67
 - **Source files:** ~42 .s files
-- **Program size:** $B4E8 (program_end), CREATURE_BASE at $C020 — **2,872 bytes headroom**
-- **PRG file:** 44,266 bytes (43 KB on disk)
+- **Program size:** $BADB (program_end) — **1,317 bytes headroom** to MAP_BASE ($C000)
+- **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
 
 ### Known Remaining Issues
 
@@ -50,11 +50,10 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | OPT-3.3 | Huffman-compress overlay strings | Medium |
-| 2 | R2.5 | Tunneling + treasure veins (T command, dig walls/veins, gold in quartz/magma) | Medium |
-| 3 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
-| 4 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
-| 5 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | R2.5 | Tunneling + treasure veins (T command, dig walls/veins, gold in quartz/magma) | Medium |
+| 2 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
+| 3 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
+| 4 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Remaining TODO features:**
 
@@ -91,29 +90,6 @@
 - A7 Item generation distribution review vs umoria curves
 
 ---
-
-## Town Overlay String Compression — OPT-3.3 (2026-02-18)
-
-### Background
-
-OPT-3 (town overlay optimization) saved 715 bytes (4,074→3,359, 737 bytes free). Seven of eight planned optimizations are complete (see BUILDPLAN_HISTORY.md). OPT-3.3 remains as the final overlay string compression step.
-
-### OPT-3.3 — Huffman-Compress Overlay Strings
-
-The overlay still contains raw null-terminated strings. The Huffman decoder (`huff_decode_string` in `huffman.s`) already lives in main RAM and is callable from the overlay — it's already used for haggling insult strings.
-
-Move store UI strings into the Huffman compressed string table (`huffman_data.s`). At typical ~50-55% compression ratio for short uppercase English strings:
-
-- Raw strings removed from overlay entirely
-- Compressed data lives in main RAM (inside `huffman_data.s`)
-- String IDs added to `huff_str_index` (2 bytes each per string, in main RAM)
-- Call overhead per string: `ldx #STR_ID; jsr huff_decode_string` = 5 bytes, replaces inline pointer load
-
-The `show_msg` helper (OPT-3.1) table entries would store Huffman string IDs instead of raw pointers, calling `huff_decode_string` before `screen_put_string`.
-
-**Net overlay savings: ~600 bytes** (but costs ~420-450 bytes in main RAM)
-
-If main RAM is tight, compress only the longest strings and keep short strings (like "GP.", "AGREED!") inline.
 
 ---
 
