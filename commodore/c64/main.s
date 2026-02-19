@@ -88,6 +88,7 @@ exit_trampoline:
 #import "tier_manager.s"
 #import "overlay.s"
 #import "monster_ai.s"
+#import "recall.s"
 #import "monster_magic.s"
 #import "item.s"
 #import "player_items.s"
@@ -105,6 +106,7 @@ exit_trampoline:
 #import "monster_attack.s"
 #import "turn.s"
 #import "store_data.s"
+#import "string_bank.s"
 #import "save.s"
 #import "disk_swap.s"
 #import "score_io.s"
@@ -472,6 +474,54 @@ load_resume_game:
     jsr ui_help_clear_all
     jmp vp_render_status_loop
 !not_help:
+
+    // Monster recall?
+    cmp #CMD_RECALL
+    bne !not_recall+
+    jsr msg_clear
+    // Show prompt on message row
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    lda #<recall_prompt_str
+    sta zp_ptr0
+    lda #>recall_prompt_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    jsr input_get_key
+    // Convert PETSCII letter to screen code
+    cmp #$41                    // 'A'
+    bcc !recall_done+
+    cmp #$5b                    // 'Z'+1
+    bcs !recall_done+
+    sec
+    sbc #$40                    // PETSCII→screen code: $41→$01
+    sta recall_query_sc
+    // Search for matching creature with recall data
+    ldx #0
+!recall_search:
+    lda cr_display,x
+    cmp recall_query_sc
+    bne !recall_next+
+    lda recall_kills,x
+    ora recall_deaths,x
+    ora recall_attacks,x
+    ora recall_spells,x
+    bne !recall_found+
+!recall_next:
+    inx
+    cpx #MAX_CREATURES
+    bcc !recall_search-
+    bcs !recall_done+           // Not found — skip display
+!recall_found:
+    stx recall_found_type
+    jsr creature_get_name       // Populates creature_name_buf
+    jsr tramp_ui_recall
+    jsr input_get_key           // Wait for dismiss
+!recall_done:
+    jsr screen_clear
+    jmp vp_render_status_loop
+!not_recall:
 
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
     cmp #CMD_MOVE_N
@@ -1503,6 +1553,18 @@ tramp_ui_equip_display:
     jsr ui_equip_display
     jmp tramp_sr_epilogue
 
+tramp_ui_recall:
+    sei
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
+    sta $01
+    jsr ui_recall_display
+    jmp tramp_sr_epilogue
+
+// Recall command variables
+recall_prompt_str: .text "RECALL WHICH? " ; .byte 0
+recall_query_sc:   .byte 0             // Screen code of typed letter
+recall_found_type: .byte 0             // Creature type index found
+
 // ============================================================
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+
 // ============================================================
@@ -1664,6 +1726,8 @@ banked_payload:
     #import "ui_character.s"
     #import "ui_inventory.s"
     #import "ui_home.s"
+    #import "string_bank_banked.s"
+    #import "ui_recall.s"
 banked_code_end:
 }
 banked_payload_end:

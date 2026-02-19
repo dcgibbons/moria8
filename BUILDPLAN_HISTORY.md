@@ -3272,10 +3272,10 @@ must coordinate with creature tier overlays.
 | R7.1 | Huffman codec | **DONE** | `tools/huff_encoder.py` (offline encoder): reads text file, builds Huffman tree, emits Kick Assembler `.s` with tree tables + compressed bitstreams. `huffman.s` (6502 decoder): `huff_decode_string(X=id)` walks tree, outputs to `hd_decode_buf`. 55.6% compression ratio. Decoder ~80 bytes + 286 bytes data = ~438 bytes in main code area. |
 | R7.2 | Resident compressed strings | **DONE** | `huffman_data.s` (generated) contains tree tables + compressed data in main code area. `huff_str_index` (16-bit offsets) + `huff_str_data` (byte-aligned bitstreams). First consumer: 15 store insult strings (367→204 bytes compressed). Infrastructure ready for additional string corpora. |
 | R7.3 | Migrate store dialog strings | **DONE** | 15 umoria-sourced shopkeeper insult strings (`data/insult_strings.txt`) compressed via Huffman. Both buy-side and sell-side insult handlers in `ui_store.s` now call `rng_range` + `huff_decode_string` for random insults. Deleted `hg_insult_str`, freed 14 bytes in town overlay. |
-| R7.4 | String bank format | **(TODO — Tier 2)** | Each bank is a loadable PRG file: header (string count, compressed data offset) + string index (16-bit offsets) + compressed bitstream. Banks sized to fit $E000-$EFFF (4 KB max compressed data per bank). Bank IDs assigned by content category: combat/UI, item descriptions, monster recall, etc. |
-| R7.5 | String bank loader | **(TODO — Tier 2)** | `str_bank_load(bank_id)` — loads a string bank into $E000 overlay region. **REU path:** all string banks preloaded to REU at startup (alongside creature tiers), DMA fetch on demand (~instant). **Disk path:** KERNAL LOAD from d64 on demand. `str_current_bank` tracks loaded bank to avoid redundant loads. Must coordinate with creature tier overlay (both share $E000). |
+| R7.4 | String bank encoder | ✅ **DONE** | `tools/string_bank_encoder.py` — Python tool creates Huffman-compressed PRG bank files for $E000 overlay. Reuses Huffman tree from main game. Output: 2-byte load address + string count + index table (16-bit offsets) + compressed bitstream. |
+| R7.5 | String bank loader | ✅ **DONE** | `string_bank.s` (main RAM) + `string_bank_banked.s` ($F000 banked). KERNAL LOAD to $E000, shared Huffman decoder entry point `sb_decode_string(X=id)`. REU path: DMA fetch from preloaded banks. Disk path: KERNAL LOAD on demand. `sb_current_bank` tracks loaded bank. |
 | R7.6 | Migrate combat/UI strings | **DONE** | Migrated ~155 strings from 11 source files into Huffman-compressed storage. Net savings: 888 bytes in main code area (program_end $B196→$AE1E). Three migration patterns: A (zp_ptr0→msg_print), B (zp_ptr2→mon_atk_build_effect_msg), C (combat_append_str). New helpers: huff_decode_to_ptr2, huff_append_combat. |
-| R7.7 | Monster recall text | **(TODO — future, Tier 2)** | If monster recall is ever implemented, store descriptive text in a string bank. Each creature's recall text 30-80 bytes uncompressed, ~15-40 bytes compressed. 120 creatures × ~25 bytes avg = ~3 KB compressed — fits in one bank. |
+| R7.7 | Monster recall | ✅ **DONE** | `ui_recall.s` ($F000 banked) — `/` command prompts for creature letter, searches for matching creature with recall data. Displays: LV/AC/HP, attacks with 3-char type abbreviations + dice, spell status (YES/NONE), kills/deaths. 4 SoA tracking arrays (recall_kills/deaths/attacks/spells), combat hooks in combat.s/monster_attack.s/monster_magic.s, save/load persistence. |
 
 **Space budget — Tier 1 (resident compressed strings):**
 
@@ -3655,4 +3655,44 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 - `ui_help_data.s` — Added `+ TUNNEL` to help screen row 23
 - `data/huffman_strings.txt` — 8 new tunnel strings
 - `huffman_data.s` — Regenerated (197 strings, 2,756 bytes)
+
+---
+
+## String Banks & Monster Recall — R7.4, R7.5, R7.7 ✅ COMPLETE (2026-02-19)
+
+### What Was Implemented
+
+| Step | What | Details |
+|------|------|---------|
+| R7.4 | String bank encoder | `tools/string_bank_encoder.py` — Python tool reads a text file of strings, Huffman-compresses them using the game's existing tree, and outputs a loadable PRG file for the $E000 overlay region. Format: 2-byte load address ($00 $E0) + 1-byte string count + 16-bit index table (bit offsets) + compressed bitstream. |
+| R7.5 | String bank loader | `string_bank.s` (main RAM API) + `string_bank_banked.s` ($F000 banked decoder). `sb_load_bank(A=bank_id)` loads a string bank PRG to $E000 via KERNAL LOAD (disk) or REU DMA fetch. `sb_decode_string(X=id)` decodes a string from the loaded bank into `hd_decode_buf` using the shared Huffman tree. `sb_current_bank` tracks loaded bank to avoid redundant loads. REU path preloads all string banks at startup alongside creature tiers. |
+| R7.7 | Monster recall system | **Tracking:** 4 SoA byte arrays (`recall_kills`, `recall_deaths`, `recall_attacks`, `recall_spells`) indexed by creature type. Updated by hooks in `combat.s` (kill tracking), `monster_attack.s` (attack type tracking), `monster_magic.s` (spell tracking), and death handler (death tracking). Saved/loaded with game state. **UI:** `ui_recall.s` at $F000 (banked). `/` key prompts for creature letter, searches `cr_display[]` for matching creature with any recall data (kills OR deaths OR attacks OR spells > 0). Display shows: creature char + name (colored), LV/AC/HP with dice, up to 2 attacks with 3-char type abbreviations (HIT/CNF/FER/ACD/COR/PAR/PSN/AGG) + NdM dice, spell status (YES/NONE), kills/deaths counters. Compact design (~610 bytes) fits within tight $F000 banked region budget. |
+
+### Design Decisions
+
+- **Recall display trimmed for space:** Removed spell name display (YES/NONE only), XP display, "attacks seen" counter, and speed display to fit within ~634 bytes available in the $F000 banked region. Attack type 3-char abbreviations kept as critical gameplay information.
+- **creature_get_name called before trampoline:** The name lookup function calls CLI internally (for tier-loaded creatures), which would crash if called from banked code where KERNAL ROM is banked out. So the recall dispatch in main.s calls `creature_get_name` in main RAM, populating `creature_name_buf` before entering the $F000 trampoline.
+- **Search by display character:** The `/` command converts the typed PETSCII letter to a screen code and searches `cr_display[]` for a match. Only creatures with nonzero recall data (kills/deaths/attacks/spells) are shown.
+- **Attack type lookup via packed table:** 9 attack type names stored as 3-char packed abbreviations (27 bytes) + 21-byte sparse→compact index table. Much smaller than null-terminated strings + pointer tables (~48 bytes vs ~130 bytes).
+
+### Size Impact
+
+- Main segment: $BFF0 (program_end) — 16 bytes headroom to MAP_BASE ($C000)
+- Banked code ($F000): ends at $FFBC — 62 bytes headroom to CPU vectors ($FFFA)
+- Banked payload: ends at $CFD9 — 39 bytes headroom to I/O ($D000)
+- String bank encoder tool: ~200 lines Python (not in PRG)
+
+### Files Created/Modified
+
+- `tools/string_bank_encoder.py` — New: Python string bank encoder tool
+- `ui_recall.s` — New: monster recall display UI ($F000 banked, ~610 bytes)
+- `string_bank.s` — New: string bank loader API (main RAM)
+- `string_bank_banked.s` — New: string bank decoder ($F000 banked)
+- `main.s` — Added CMD_RECALL dispatch, `tramp_ui_recall` trampoline, recall variables
+- `combat.s` — Added recall_kills/recall_attacks tracking hooks
+- `monster_attack.s` — Added recall_attacks tracking hook
+- `monster_magic.s` — Added recall_spells tracking hook
+- `save_load.s` — Added recall array save/load (4 × MAX_CREATURES bytes)
+- `data/recall_data.s` — New: recall SoA array definitions
+- `input.s` — CMD_RECALL ($1e) already mapped to `/` key
 

@@ -108,6 +108,10 @@ player_attack_monster:
     lda #1
     sta cmb_dead
 
+    // Track kill in recall
+    ldx cmb_type
+    inc recall_kills,x
+
     ldx cmb_slot
     jsr monster_remove
 

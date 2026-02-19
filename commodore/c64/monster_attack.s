@@ -146,6 +146,10 @@ monster_attack_player:
     bcs !map_player_dead+
 
 !map_done:
+    // Track attack in recall
+    ldx mat_type2
+    inc recall_attacks,x
+
     // Build and print summary message
     lda mat_any_hit
     beq !map_miss_msg+
@@ -176,8 +180,9 @@ monster_attack_player:
     rts
 
 !map_player_dead:
-    lda mat_type2
-    sta zp_death_source
+    ldx mat_type2
+    inc recall_deaths,x
+    stx zp_death_source
     jsr player_death_check
     rts
 

@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $05
+.const SAVE_VERSION    = $06
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -278,6 +278,9 @@ save_game:
     :save_block(fi_flags, MAX_FLOOR_ITEMS)
     :save_block(fi_ego, MAX_FLOOR_ITEMS)
 
+    // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
+    :save_block(recall_data_start, RECALL_DATA_SIZE)
+
     // 17. RLE map size (2 bytes, little-endian)
     lda rle_size_lo
     jsr save_write_byte
@@ -468,6 +471,9 @@ load_game:
     :load_block(fi_p1, MAX_FLOOR_ITEMS)
     :load_block(fi_flags, MAX_FLOOR_ITEMS)
     :load_block(fi_ego, MAX_FLOOR_ITEMS)
+
+    // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
+    :load_block(recall_data_start, RECALL_DATA_SIZE)
 
     // 17. RLE map size (2 bytes)
     jsr load_read_byte

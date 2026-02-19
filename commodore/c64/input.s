@@ -208,6 +208,7 @@ key_map_petscii:
     .byte $d2   // SHIFT+R — refuel lamp
     .byte $c4   // SHIFT+D — bash
     .byte $2b   // + — tunnel
+    .byte $2f   // / — monster recall
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -267,6 +268,7 @@ key_map_cmd:
     .byte CMD_REFUEL
     .byte CMD_BASH
     .byte CMD_TUNNEL
+    .byte CMD_RECALL
     // Shifted vi-keys (running)
     .byte CMD_RUN_N
     .byte CMD_RUN_S

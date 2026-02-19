@@ -216,6 +216,12 @@ monster_pick_spell:
 
 !mps_dispatch:
     // X = bit position (spell index 0-6)
+    // Track spell in recall
+    lda recall_spell_bit,x
+    ldy zp_mon_type
+    ora recall_spells,y
+    sta recall_spells,y
+    // Dispatch
     cpx #0
     beq !mps_bolt+
     cpx #1
@@ -308,8 +314,9 @@ monster_cast_bolt:
     jsr sound_play
     rts
 !mcb_dead:
-    lda zp_mon_type
-    sta zp_death_source
+    ldx zp_mon_type
+    inc recall_deaths,x
+    stx zp_death_source
     jsr player_death_check
     rts
 
@@ -353,8 +360,9 @@ monster_cast_breath:
     jsr sound_play
     rts
 !mcbr_dead:
-    lda zp_mon_type
-    sta zp_death_source
+    ldx zp_mon_type
+    inc recall_deaths,x
+    stx zp_death_source
     jsr player_death_check
     rts
 

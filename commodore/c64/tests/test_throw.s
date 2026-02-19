@@ -51,6 +51,7 @@ test_exit_trampoline:
 #import "../tier_manager.s"
 #import "../overlay.s"
 #import "../monster_ai.s"
+#import "../recall.s"
 #import "../monster_magic.s"
 #import "../item.s"
 #import "../special_rooms.s"

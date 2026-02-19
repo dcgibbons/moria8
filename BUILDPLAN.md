@@ -29,16 +29,18 @@
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
-| R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
+| R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader ($E000 overlay), monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
 - **Test suites:** 22 (300 runtime tests)
-- **Compile-time asserts:** 67
-- **Source files:** ~43 .s files
-- **Program size:** $BDC1 (program_end) — **575 bytes headroom** to MAP_BASE ($C000)
+- **Compile-time asserts:** 68
+- **Source files:** ~46 .s files
+- **Program size:** $BFFF (program_end) — **1 byte headroom** to MAP_BASE ($C000)
+- **Banked code:** $F000-$FFBC (62 bytes headroom to CPU vectors)
+- **Banked payload:** $C01D-$CFE8 (24 bytes headroom to I/O at $D000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
 
 ### Known Remaining Issues
@@ -53,15 +55,7 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
-| 2 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
-| 3 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
-
-**Remaining TODO features:**
-
-| Priority | ID | Feature | Complexity | Benefit | Notes |
-|----------|-----|---------|-----------|---------|-------|
-| 1 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
+| 1 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -78,11 +72,7 @@
 
 **Remaining items:**
 
-**Medium priority (infrastructure for more content):**
-- R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
-
 **Low priority (polish/completeness):**
-- R7.7 Monster recall — full feature (data structures + tracking + display + string banks)
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves

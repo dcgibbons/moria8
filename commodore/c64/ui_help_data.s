@@ -133,10 +133,16 @@ help_l7:
     .text " GO UP STAIRS"
     .byte 0
 
-// Row 8: Running instruction
+// Row 8: Running instruction + Recall
 help_l8:
     .byte $fe
     .text "SHIFT+DIRECTION"
+    .byte $ff
+    .text "  "
+    .byte $fe
+    .text "/"
+    .byte $ff
+    .text " RECALL"
     .byte 0
 
 // Row 9: blank (HTYPE_BLANK)

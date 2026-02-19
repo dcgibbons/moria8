@@ -34,7 +34,7 @@ huff_decode_string:
     lda huff_str_index+1,x
     adc #>huff_str_data
     sta zp_ptr0_hi             // Source pointer hi
-    jmp !hds_init+
+    jmp huff_decode_from_ptr
 !hds_hi:
     lda huff_str_index+256,x
     clc
@@ -43,8 +43,17 @@ huff_decode_string:
     lda huff_str_index+257,x
     adc #>huff_str_data
     sta zp_ptr0_hi
-!hds_init:
+    // Fall through
 
+// ============================================================
+// huff_decode_from_ptr — Decode Huffman stream from pointer
+//
+// Input:  zp_ptr0/zp_ptr0_hi = pointer to compressed data
+// Output: hd_decode_buf filled with null-terminated screen codes
+//         zp_ptr0/zp_ptr0_hi → hd_decode_buf
+// Clobbers: A, X, Y
+// ============================================================
+huff_decode_from_ptr:
     // Initialize bit reader
     lda #0
     sta hd_bit_mask            // Force load of first byte

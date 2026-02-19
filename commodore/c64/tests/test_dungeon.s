@@ -55,6 +55,18 @@ test_exit_trampoline:
 #import "../tier_manager.s"
 #import "../overlay.s"
 #import "../monster_ai.s"
+// Recall stubs — minimal footprint to keep test below MAP_BASE ($C000).
+// Full recall.s adds 267 bytes; stubs save ~260 bytes.
+// Safe: dungeon tests never exercise recall code paths.
+.const RECALL_DATA_SIZE = MAX_CREATURES * 4
+recall_data_start:
+recall_kills:   .byte 0
+recall_deaths:  .byte 0
+recall_attacks: .byte 0
+recall_spells:  .byte 0
+recall_data_end:
+recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
+recall_clear: rts
 #import "../monster_magic.s"
 #import "../item.s"
 #import "../special_rooms.s"
