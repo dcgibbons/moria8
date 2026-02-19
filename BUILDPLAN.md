@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-16)
+## Current State (2026-02-18)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 code size optimizations applied (excluding OPT-1.1).
 
@@ -28,7 +28,7 @@
 | R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
 | R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
-| OPT-3 | Town Overlay Optimization | ✅ Complete — 715 bytes saved (4,074→3,359), 737 bytes free. OPT-3.1/3.2/3.4/3.5/3.6/3.7/3.8 done. |
+| OPT-3 | Town Overlay Optimization | ✅ Code opts done (715 bytes saved, 737 free). OPT-3.3 Huffman strings remaining. |
 | R7 | String Compression (Tier 1) | ✅ Complete — R7.1-R7.3, R7.6 done. 155 strings Huffman-compressed, 888 bytes saved. Tier 2 (R7.4-R7.5) deferred. |
 | 10 | C128 Enhancements | Not started |
 
@@ -44,59 +44,24 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| MC4.1 | LOW | No player critical hit system | **Fixed** — `combat_critical_blow` in combat.s implements umoria `playerWeaponCriticalBlow` (2-5x damage based on weapon weight/tohit/class/level) |
-| RP15-4 | LOW | BUG-18 re-entry after inventory popup skips state re-validation | **Resolved** — documented in show_inv_and_restore comment; overlay is read-only |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
-| MC2.3 | LOW | Only uses cr_xp_lo (8-bit XP); will need 16-bit for high-tier creatures | **Fixed** — combat_award_xp now uses 16×8→24-bit multiply with cr_xp_hi:cr_xp_lo; generalized ccl_div_24x8 shared with levelup |
-| BUG-19b | **HIGH** | XP awards too generous — player levels up too quickly on low dungeon levels | **Fixed** — experience factor (race_xp% + class_xp%) was never applied to thresholds; now computed at character creation (PL_EXPFACT) and used in combat_check_levelup via 16×8→24-bit multiply + div-by-100 |
-| BUG-23 | **HIGH** | Players still level up too fast despite BUG-19b fix — XP economy not matching umoria | **Fixed** — root cause: missing XP halving on multi-level gain. Umoria halves excess XP above each new threshold on level-up; we preserved full XP, allowing cascading (e.g., 150 XP: 1→7 without halving vs 1→4 with). Audit confirmed cr_xp values and xp_level thresholds match umoria exactly. |
-| BUG-20 | LOW | ~~Dead string `mat_dead_str` wastes 21 bytes~~ | ✅ Fixed — eliminated by R7.6 Huffman migration |
-| BUG-21 | LOW | Acid attack effect is a no-op (no player message) | **Fixed** — prints "SPITS ACID ON YOU" via mon_atk_build_effect_msg |
-| BUG-22 | LOW | ~~`mat_the_str` duplicates `cmb_the_str + 1`~~ | ✅ Fixed — OPT-1.7 |
-| BUG-24 | **HIGH** | Huffman decoder 8-bit overflow for string IDs >= 128 | **Fixed** — `huff_decode_string` used `txa; asl; tax` for word index, but `asl` overflows for IDs >= 128 (e.g., 154 → offset $34 instead of $134). 27 strings (128-154) decoded wrong text. Fixed with carry-based page branching. |
-| BUG-25 | MED | Inventory commands (Wear, Cast, etc.) show all items instead of filtering to applicable ones | **Fixed** — Added `uinv_filter` variable to `ui_inventory.s`. `show_inv_and_restore` accepts filter in A: `$FF`=all (drop, throw, 'I'), `$FE`=wearable (wear), or exact `ICAT_*` match (quaff=potion, read=scroll, aim=wand, use=staff, study=book). Takeoff uses new `show_equip_and_restore` to show equipment instead. ~66 bytes. |
-| BUG-26 | MED | -MORE- prompt placement and frequency feels unnatural on 40-column display | **Fixed** — Expanded message area from 1 row to 2 rows (rows 0-1). Messages fill row 0 then row 1; -MORE- only triggers when a 3rd message arrives while both rows are occupied, roughly halving -MORE- frequency. -MORE- positioned at end of row 1 message. Viewport shrunk from 20 to 19 rows (VIEWPORT_Y=2, VIEWPORT_H=19). |
-| BUG-27 | MED | Spell casting animation/combat happens while spell list overlay is still displayed | **Fixed** — After player selects a spell letter in `pm_do_cast`, the dungeon screen is restored (`ui_help_clear_all` + viewport + render + status) before any mana/level checks or spell effect dispatch. Bolt animations, damage messages, and error messages now appear on the dungeon screen. Cancel (ESC/space) still handled by main.s `screen_clear`. ~16 bytes. |
-| BUG-28 | MED | XP still too generous at low levels — single kills can cause 1-2 level jumps | **Fixed** — Capped `combat_check_levelup` at 1 level-up per kill by replacing the recursive `jmp combat_check_levelup` with `rts`. Excess XP is still halved and retained, so the player levels again on the next kill if still above threshold. Root cause: spawn window [dlvl-2, dlvl+3] allows cr_level 3-4 creatures at DL 1, and XP formula `(cr_xp * cr_level) / player_level` amplifies rewards when cr_level >> player_level. Saves 2 bytes. |
-| BUG-30 | **HIGH** | Combat messages corrupted (garbled PETSCII) for tier-loaded creature names | ✅ Fixed — Root cause: stale KERNAL file table (file #2 not closed after LOAD). Added CLOSE+CLRCHN after every KERNAL LOAD; reset `current_tier` on failure. |
-| BUG-31 | LOW | Garbage text on screen row 24 during dungeon exploration | ✅ Fixed — Added INPUT_ROW clear to `status_draw` so all code paths clean row 24. |
-| OPT-1 | MED | ~~Code size optimization~~ — 182 bytes reclaimed (OPT-1.2–1.7), OPT-1.1 resolved by R7.6 | ✅ Done |
-| OPT-2 | MED | ~~Phase overlay code banking~~ — `$E000` overlays + `$F000` UI screens, ~6.8KB freed. Display bugs from incorrect banking ($34→$35) fixed. | ✅ Done |
 
 ### What's Next
 
-Priority order based on AUDIT review (see Audit Response below):
-
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| ~~1~~ | A1 | ~~File naming cleanup~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4 | Done |
-| ~~2~~ | A2 | ~~Directory art~~ — ✅ PETSCII title card in d64 directory listing | Done |
-| ~~3~~ | A5 | ~~Stack depth audit (trace deep call chains)~~ — ✅ Max 27 bytes (11%), safe | Done |
-| ~~4~~ | A3 | ~~Character disk strategy (separate game/save disks)~~ — ✅ Dual-disk mode with swap prompts | Done |
-| ~~5~~ | R3.4 | ~~Monster fleeing at low HP~~ — ✅ Flee threshold (HP/4) at spawn, reversed greedy movement | Done |
-| ~~6~~ | R2.1 | ~~Special rooms (vaults, pits, nests)~~ — ✅ Pits, vaults, nests with $F000 banking | Done |
-| ~~7~~ | R4.1 | ~~Ego items~~ — ✅ 7 enchanted weapon types with slay/elemental/AC bonuses | Done |
-| ~~8~~ | OPT-1 | ~~Code size optimization~~ — ✅ 182 bytes reclaimed ($BFF7→$BF41), 20/20 tests pass | Done |
-| ~~9~~ | OPT-2 | ~~Code banking~~ — ✅ Phase overlays at `$E000` + permanent `$F000` expansion. ~6.8KB freed. Display bugs fixed (color RAM, input banking, filesystem naming). | Done |
-| ~~10~~ | R5.1/R5.2 | ~~Spell expansion~~ — ✅ All 32 effects implemented. 8 spellbooks (4/class), book-gated learning, books not consumed. +101 bytes. | Done |
-| ~~11~~ | R6.1 | ~~Store haggling~~ — ✅ Multi-round buy/sell haggling with insult/kick system. CHR affects markup. Items ≤10 GP use simple Y/N. Number input, 4-round negotiation, gap/step convergence. +1479 bytes in town overlay ($E000-$EF47). | Done |
-| ~~12~~ | R7.1-R7.2 | ~~Huffman codec + resident compressed strings (Tier 1)~~ — ✅ 155 strings, 888 bytes saved (program_end $B196→$AE1E) | Done |
-| ~~13~~ | R7.3 | ~~Store dialog strings~~ — ✅ 15 shopkeeper insults compressed via Huffman | Done |
-| ~~14~~ | R7.6 | ~~Combat/UI string migration~~ — ✅ 155 strings from 11 source files, 3 migration patterns | Done |
-| **15** | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
-| **16** | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | OPT-3.3 | Huffman-compress overlay strings | Medium |
+| 2 | R2.5 | Tunneling + treasure veins (T command, dig walls/veins, gold in quartz/magma) | Medium |
+| 3 | R7.4-R7.5 + R7.7 | Monster recall (data structures, combat tracking, display, string banks) | High |
+| 4 | R7.4-R7.5 | Overlay string banks + REU cache (Tier 2 — when Tier 1 space exhausted) | Medium |
+| 5 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
-**Lower priority content** (all now done):
-~~R1.2 Throwing~~ ✅, ~~R3.2 Group tactics~~ ✅, ~~R3.3 Breeders~~ ✅, ~~R4.4 Pseudo-ID~~ ✅, ~~R6.2 Black Market~~ ✅, ~~R6.3 Player Home~~ ✅
-
-**Remaining TODO features** (prioritized by complexity/benefit — all confirmed in umoria source):
+**Remaining TODO features:**
 
 | Priority | ID | Feature | Complexity | Benefit | Notes |
 |----------|-----|---------|-----------|---------|-------|
-| ~~1~~ | ~~R4.6~~ | ~~Flasks of Oil~~ | ~~Low~~ | ~~Medium~~ | ✅ **DONE** — SHIFT+R refuel command, item type 61, store/equip support. |
-| ~~2~~ | ~~R1.7~~ | ~~Bash command~~ | ~~Medium~~ | ~~High~~ | ✅ **DONE** — SHIFT+D bash command. Door bash (STR-based chance), monster bash (shield weight to-hit, 1d4+STR+3 damage, stun check), off-balance paralysis. 6 tests in test_bash.s. |
-| 3 | R2.5 | Tunneling + treasure veins | Medium | High | T command (dig through walls/veins), treasure in quartz/magma veins, wall-to-mud spell fix. Core umoria mechanic currently missing. |
-| 4 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
+| 1 | R2.5 | Tunneling + treasure veins | Medium | High | T command (dig through walls/veins), treasure in quartz/magma veins, wall-to-mud spell fix. Core umoria mechanic currently missing. |
+| 2 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -109,323 +74,46 @@ Priority order based on AUDIT review (see Audit Response below):
 
 ---
 
-### Priority Triage (updated 2026-02-17)
+### Priority Triage (updated 2026-02-18)
 
-**Completed since original triage:**
-- ~~R1.1 Ranged combat~~ — ✅ ranged_fire.s (bows, crossbows, slings, ammo stacking)
-- ~~R1.3 Monster attacks~~ — ✅ Phase 5.4
-- ~~R1.4 Monster spells~~ — ✅ Phase 7.8 (monster_magic.s)
-- ~~R2.2 Mineral streamers~~ — ✅ 5 streamers per level (3 magma + 2 quartz)
-- ~~R2.4 Secret doors~~ — ✅ Phase 4.6 (place_secrets + do_search)
-- ~~R3.5 Creature roster~~ — ✅ R3.5.1-R3.5.12 (120 creatures, 5 tiers, REU + disk)
-- ~~A1 File naming~~ — ✅ THE.GAME, HALL.OF.FAME, MONSTER.DB.1-4
-- ~~A2 Directory art~~ — ✅ PETSCII title card via tools/diskart.py
-
-**High priority (from AUDIT — polish & release readiness):**
-- ~~A5 Stack depth audit~~ — ✅ max 27 bytes (11%), safe, no canary needed
-- ~~A3 Character disk strategy~~ — ✅ dual-disk mode with swap prompts
-
-**Medium priority (significant missing content):**
-- ~~R3.4 Monster fleeing~~ — ✅ Done
-- ~~R2.1 Special rooms~~ — ✅ Done (pits, vaults, nests with $F000 banking)
-- ~~R4.1 Ego items~~ — ✅ Done
-- ~~R5.1/R5.2 Spell expansion~~ — ✅ Done (8 spellbooks, book-gated learning)
-- ~~R6.1 Store haggling~~ ✅
+**Remaining items:**
 
 **Medium priority (missing core mechanic):**
 - R2.5 Tunneling + treasure veins — T command, STR-based digging, gold in quartz/magma, wall-to-mud fix
 
 **Medium priority (infrastructure for more content):**
-- ~~R7.1-R7.2 Huffman codec + resident compressed strings~~ ✅
-- ~~R7.3 Store dialog strings~~ ✅
 - R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
 
-**Medium priority (missing core command):**
-- ~~R1.7 Bash~~ ✅ — SHIFT+D bash command (door/monster bash with stun)
-
 **Low priority (polish/completeness):**
-- ~~R1.2 Throwing~~ ✅
-- ~~R3.2 Group tactics~~ ✅
-- ~~R3.3 Breeders~~ ✅
-- ~~R4.4 Pseudo-ID~~ ✅
-- ~~R4.6 Flasks of Oil~~ ✅
-- ~~R7.6 Combat/UI string migration~~ ✅
 - R7.7 Monster recall — full feature (data structures + tracking + display + string banks)
-- ~~R6.2 Black Market~~ ✅
-- ~~R6.3 Player Home~~ ✅
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves
 
 ---
 
-## Town Overlay Size Optimization — OPT-3 (2026-02-18)
+## Town Overlay String Compression — OPT-3.3 (2026-02-18)
 
-### Problem
+### Background
 
-The town overlay (`$E000-$EFFF`, 4096 bytes max) is at **4,074 bytes** — only **22 bytes free**. Any new feature or bug fix that adds code to `store.s` or `ui_store.s` risks overflowing. This plan identifies strategies to reclaim space without losing functionality.
+OPT-3 (town overlay optimization) saved 715 bytes (4,074→3,359, 737 bytes free). Seven of eight planned optimizations are complete (see BUILDPLAN_HISTORY.md). OPT-3.3 remains as the final overlay string compression step.
 
-### Current Breakdown
+### OPT-3.3 — Huffman-Compress Overlay Strings
 
-| Category | Bytes | % of overlay |
-|----------|-------|-------------|
-| Raw string data (46 strings) | 661 | 16.2% |
-| Pointer tables + misc data | ~108 | 2.7% |
-| Code (logic + UI boilerplate) | ~3,305 | 81.1% |
-| **Total** | **4,074** | **99.5%** |
-
-The code portion is dominated by repetitive UI boilerplate: `jsr screen_put_string` is called **34 times**, `jsr store_clear_msg_area` **16 times**, and the "set color, set row, set col, load string pointer" pattern repeats ~25 times at 20-28 bytes each.
-
-### OPT-3.1 — Parameterized Message Display Helper (~300-400 bytes saved)
-
-**Highest impact.** The repeated pattern in `ui_store.s`:
-
-```asm
-    lda #COL_xxx
-    sta zp_text_color
-    lda #row
-    sta zp_cursor_row
-    lda #col
-    sta zp_cursor_col
-    lda #<string
-    sta zp_ptr0
-    lda #>string
-    sta zp_ptr0_hi
-    jsr screen_put_string
-```
-
-costs 20-28 bytes per occurrence (~25 occurrences = 500-700 bytes total). Replace with a table-driven helper:
-
-```asm
-// Message descriptor table: 5 bytes per entry (color, row, col, str_lo, str_hi)
-msg_table:
-    .byte COL_WHITE, 20, 1, <uis_buy_which_str, >uis_buy_which_str  // MSG_BUY_WHICH
-    .byte COL_RED,   22, 1, <uis_no_afford_str, >uis_no_afford_str  // MSG_NO_AFFORD
-    // ... etc
-
-// Helper: X = message ID (0-based)
-show_msg:
-    txa
-    asl
-    asl
-    clc
-    adc msg_table_idx,x   // or compute ×5
-    tax
-    lda msg_table+0,x
-    sta zp_text_color
-    lda msg_table+1,x
-    sta zp_cursor_row
-    lda msg_table+2,x
-    sta zp_cursor_col
-    lda msg_table+3,x
-    sta zp_ptr0
-    lda msg_table+4,x
-    sta zp_ptr0_hi
-    jmp screen_put_string
-```
-
-Each call site shrinks from ~20-28 bytes to **5 bytes** (`ldx #MSG_ID; jsr show_msg`). Helper cost: ~35 bytes + 5 bytes per table entry.
-
-- ~25 applicable call sites × ~23 bytes saved per site = ~575 bytes saved
-- Overhead: 35 byte helper + 25 × 5 byte table entries = 160 bytes
-- **Net savings: ~300-400 bytes**
-
-Note: Some call sites interleave price display between string prints (e.g., `sbuy_show_price` prints "PRICE: ", then a number, then " GP. BUY? (Y/N)"). These compound patterns need a `show_msg` call for the first part, then inline code for the number, then another `show_msg` or inline for the suffix. Not every occurrence can be fully parameterized, but most can.
-
-### OPT-3.2 — Merge haggle_buy / haggle_sell (~150-170 bytes saved)
-
-`haggle_buy` (lines 994-1188 of `ui_store.s`) and `haggle_sell` (lines 1198-1396) are structurally nearly identical. Differences:
-
-| Aspect | haggle_buy | haggle_sell |
-|--------|-----------|------------|
-| Accept condition | `input >= ask` | `input <= ask` |
-| Counter step | `ask -= step` (toward min) | `ask += step` (toward max) |
-| Insult threshold | `input < min/2` | `input > 2×max` |
-| Display strings | "ASKS" / "YOUR OFFER?" | "OFFERS" / "YOUR PRICE?" |
-
-Merge into a single `haggle_common` with a `hg_mode` flag (0=buy, 1=sell):
-
-```asm
-hg_mode: .byte 0   // 0=buy, 1=sell
-
-haggle_common:
-    lda #0
-    sta hg_round
-!hc_loop:
-    lda hg_mode
-    beq !hc_buy_display+
-    jsr hg_show_offer       // sell display
-    jmp !hc_get_input+
-!hc_buy_display:
-    jsr hg_show_ask         // buy display
-!hc_get_input:
-    jsr input_read_number
-    // ... shared insult/accept/counter logic with mode-based branches
-```
-
-The insult, kick, accept, and counter-offer-with-clamp logic is identical except for comparison direction and add/subtract. A few `lda hg_mode; beq` branches (5 bytes each × ~4 branch points = 20 bytes) replace ~180 bytes of duplicated code.
-
-`hg_show_sell_counter` and `hg_show_sell_final` already just `jmp` to their buy counterparts, confirming the display code is already shared.
-
-- Duplicate code eliminated: ~180 bytes
-- Mode-branch overhead: ~20-30 bytes
-- **Net savings: ~150-170 bytes**
-
-### OPT-3.3 — Huffman-Compress Overlay Strings (~200-250 bytes saved)
-
-661 bytes of raw null-terminated strings in the overlay. The Huffman decoder (`huff_decode_string` in `huffman.s`) already lives in main RAM and is callable from the overlay — it's already used for haggling insult strings.
+The overlay still contains raw null-terminated strings. The Huffman decoder (`huff_decode_string` in `huffman.s`) already lives in main RAM and is callable from the overlay — it's already used for haggling insult strings.
 
 Move store UI strings into the Huffman compressed string table (`huffman_data.s`). At typical ~50-55% compression ratio for short uppercase English strings:
 
-- 661 bytes raw → ~330-360 bytes compressed
-- String IDs added to `huff_str_index` (2 bytes each × 46 strings = 92 bytes, but in main RAM not overlay)
-- Call overhead per string: `ldx #STR_ID; jsr huff_decode_string; jsr screen_put_string` = 8 bytes, roughly same as current inline pointer load (8 bytes for `lda #<str; sta zp_ptr0; lda #>str; sta zp_ptr0_hi`)
+- Raw strings removed from overlay entirely
+- Compressed data lives in main RAM (inside `huffman_data.s`)
+- String IDs added to `huff_str_index` (2 bytes each per string, in main RAM)
+- Call overhead per string: `ldx #STR_ID; jsr huff_decode_string` = 5 bytes, replaces inline pointer load
 
-The raw string data is removed from the overlay entirely. The compressed data lives in main RAM (inside `huffman_data.s`). Cost is only the string IDs being added to the Huffman encoder pipeline (`tools/huff_encoder.py`).
+The `show_msg` helper (OPT-3.1) table entries would store Huffman string IDs instead of raw pointers, calling `huff_decode_string` before `screen_put_string`.
 
-- 661 bytes removed from overlay
-- ~92 bytes of index overhead added to main RAM (not overlay)
-- ~330-360 bytes of compressed data added to main RAM (not overlay)
-- **Net overlay savings: ~600 bytes** (but costs ~420-450 bytes in main RAM)
+**Net overlay savings: ~600 bytes** (but costs ~420-450 bytes in main RAM)
 
-If main RAM is also tight, a middle ground is to Huffman-compress only the longest strings (owner names: 126 bytes, UI messages: 314 bytes) and keep short strings (like "GP.", "AGREED!") inline.
-
-**Interaction with OPT-3.1:** If strings are Huffman-encoded, the message display helper table stores string IDs instead of raw pointers, and calls `huff_decode_string` before `screen_put_string`. These two optimizations compose well.
-
-### OPT-3.4 — Replace Separator String with Draw Loop (~26 bytes saved)
-
-The 40-dash separator string (`uis_sep_str`) is 41 bytes and used twice. Replace with:
-
-```asm
-draw_separator:
-    ldx #40
-!:  lda #$2d           // '-' screen code
-    jsr screen_put_char
-    dex
-    bne !-
-    rts                 // 12 bytes
-```
-
-Remove the 41-byte string, add 12 bytes of code. Two call sites change from `lda #<uis_sep_str; sta zp_ptr0; lda #>uis_sep_str; sta zp_ptr0_hi; jsr screen_put_string` (11 bytes) to `jsr draw_separator` (3 bytes), saving an additional 16 bytes.
-
-- **Net savings: ~26 bytes** (trivial effort, zero risk)
-
-### OPT-3.5 — Move Store Names/Owners Out of Overlay (~80-126 bytes saved)
-
-Store names (82 bytes with nulls) and owner names (126 bytes with nulls) plus their pointer tables (32 bytes) are only used during `store_draw_screen`. Options:
-
-**Option A: Huffman-encode into main RAM string table.** Part of OPT-3.3. Removes 208 bytes of string data + 32 bytes of pointer tables from overlay.
-
-**Option B: Shorten owner strings.** Trim titles: "BILBO THE FRIENDLY" → "BILBO", "GORN THE ARMORER" → "GORN", etc. Saves ~80 bytes but reduces flavor. Not recommended as a standalone change.
-
-**Option C: Move raw strings to main RAM.** Store name/owner strings live in `store_data.s` (main RAM) instead of the overlay. The pointer tables also move. The overlay code references them via the same labels. Cost: 240 bytes of main RAM. Savings: 240 bytes of overlay.
-
-- **Net overlay savings: 80-240 bytes** depending on approach
-
-### OPT-3.6 — Factor Cancel-Key Check (~15 bytes saved)
-
-The Q/ESC/SPACE cancel pattern appears 3 times (`store_buy`, `store_sell`, `input_read_number`):
-
-```asm
-    cmp #PETSCII_Q
-    bne !not_q+
-    rts
-!not_q:
-    cmp #PETSCII_ESC
-    bne !not_esc+
-    rts
-!not_esc:
-    cmp #PETSCII_SPACE
-    bne !not_spc+
-    rts
-!not_spc:
-```
-
-15 bytes each × 3 = 45 bytes. Replace with:
-
-```asm
-// check_cancel — carry set = cancel key pressed
-check_cancel:
-    cmp #PETSCII_Q
-    beq !yes+
-    cmp #PETSCII_ESC
-    beq !yes+
-    cmp #PETSCII_SPACE
-    bne !no+
-!yes:
-    sec
-    rts
-!no:
-    clc
-    rts              // 16 bytes
-```
-
-Each call site becomes `jsr check_cancel; bcs cancel_target` (5 bytes vs 15 bytes).
-
-- 3 × 15 = 45 bytes → 16 + 3 × 5 = 31 bytes
-- **Net savings: ~15 bytes** (trivial effort)
-
-### OPT-3.7 — Unify BM + Normal Price Calculation (~30-50 bytes saved)
-
-`calc_bm_buy_price` and `calc_buy_price` share structure: load base cost, multiply by factor, divide, add p1 bonus. Same for the sell paths. The BM paths use fixed multipliers (×3 for buy, ÷10 for sell) while normal paths use CHR-indexed multipliers.
-
-Could parameterize with a multiplier value passed in X:
-
-```asm
-// Unified: calc_buy_price_with_factor
-// Input: A = item type, X = multiplier (or 0 to use CHR lookup)
-calc_buy_price_common:
-    sta sb_item_type
-    // ... shared setup ...
-    cpx #0
-    beq !chr_lookup+
-    // BM path: use X directly
-    jmp !multiply+
-!chr_lookup:
-    lda player_data + PL_CHR_CUR
-    jsr stat_bonus_index
-    lda chr_price_adj,x
-    tax
-!multiply:
-    jsr math_mul_16x8
-    // ... shared remainder ...
-```
-
-- **Net savings: ~30-50 bytes**
-
-### OPT-3.8 — Loop-Based store_clear_msg_area (~8 bytes saved)
-
-Currently 4 sequential `jsr screen_clear_row` calls (12 bytes). Replace with:
-
-```asm
-store_clear_msg_area:
-    lda #20
-!:  jsr screen_clear_row
-    clc
-    adc #1
-    cmp #24
-    bcc !-
-    rts             // ~10 bytes vs 17 bytes (4×jsr + rts)
-```
-
-Called 16 times so keeping it small helps. **Net savings: ~7-8 bytes.**
-
-### Priority and Implementation Order
-
-| Priority | Item | Effort | Est. | Actual | Status |
-|----------|------|--------|------|--------|--------|
-| 1 | OPT-3.4 Separator draw loop | Trivial | ~26 | 62 | ✅ Done |
-| 2 | OPT-3.6 Cancel-key helper | Trivial | ~15 | 17 | ✅ Done |
-| 3 | OPT-3.8 Clear-msg loop | Trivial | ~8 | 6 | ✅ Done |
-| 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 295 | ✅ Done |
-| 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 60 | ✅ Done |
-| 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 35 | ✅ Done |
-| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | 240 | ✅ Done |
-| 8 | OPT-3.3 Huffman compress strings | High | ~200-600 | — | Deferred |
-
-**Result: 715 bytes saved (4,074→3,359), 737 bytes free.** OPT-3.3 deferred — 737 bytes free is ample headroom.
-
-**Realistic target:** OPT-3.1 through OPT-3.7 should yield **~500-700 bytes free** in the overlay, enough for significant new store features.
+If main RAM is tight, compress only the longest strings and keep short strings (like "GP.", "AGREED!") inline.
 
 ---
 

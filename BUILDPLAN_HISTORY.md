@@ -3576,3 +3576,41 @@ These were identified but deferred due to complexity or diminishing returns:
 | String pool / dictionary | Central string deduplication system | 50-100 | Major refactor, error-prone |
 | Creature name prefix extraction | Share "GIANT ", "SKELETON " prefixes | 40-60 | Only applies to tier data files (loaded from disk, not in main PRG) |
 
+---
+
+## Town Overlay Size Optimization — OPT-3 (2026-02-18) ✅
+
+### Problem
+
+The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only **22 bytes free**.
+
+### Results
+
+| Priority | Item | Effort | Est. | Actual | Status |
+|----------|------|--------|------|--------|--------|
+| 1 | OPT-3.4 Separator draw loop | Trivial | ~26 | 62 | ✅ Done |
+| 2 | OPT-3.6 Cancel-key helper | Trivial | ~15 | 17 | ✅ Done |
+| 3 | OPT-3.8 Clear-msg loop | Trivial | ~8 | 6 | ✅ Done |
+| 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 295 | ✅ Done |
+| 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 60 | ✅ Done |
+| 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 35 | ✅ Done |
+| 7 | OPT-3.5 Move names/owners to main RAM | Low-Med | ~80-240 | 240 | ✅ Done |
+
+**Total: 715 bytes saved (4,074→3,359), 737 bytes free.**
+
+### Summary of Changes
+
+- **OPT-3.1:** Table-driven `show_msg` helper in `ui_store.s` — 25 call sites collapsed to `ldx #MSG_ID; jsr show_msg` (5 bytes each). 295 bytes saved.
+- **OPT-3.2:** Merged `haggle_buy`/`haggle_sell` into shared subroutines with mode flag. 60 bytes saved.
+- **OPT-3.4:** Replaced 41-byte separator string with `draw_separator` loop (12 bytes). 62 bytes saved.
+- **OPT-3.5:** Moved store name strings (82 bytes), owner strings (126 bytes), and pointer tables (32 bytes) from `store.s` overlay to `store_data.s` main RAM. 240 bytes saved in overlay.
+- **OPT-3.6:** Factored Q/ESC/SPACE cancel pattern into `check_cancel` helper. 17 bytes saved.
+- **OPT-3.7:** Unified BM + normal price calculation with parameterized multiplier. 35 bytes saved.
+- **OPT-3.8:** Replaced 4 sequential `jsr screen_clear_row` calls with loop. 6 bytes saved.
+- **OPT-3.3:** Deferred — Huffman compress overlay strings. 737 bytes free is ample headroom; moved to active TODO.
+
+### Commits
+
+- `0664743` — OPT-3.1/3.2/3.4/3.6/3.7/3.8 (475 bytes saved)
+- `3e93849` — OPT-3.5 (240 bytes saved, names/owners to main RAM)
+
