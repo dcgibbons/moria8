@@ -1002,14 +1002,17 @@ creature_get_name:
     rts
 
 !cgn_banked:
-    sta zp_ptr1_hi
-    lda cr_name_lo,x
-    sta zp_ptr1
-    sei
-    lda $01
-    pha
-    lda #$35
-    sta $01
+    // Stale $E0xx pointer — tier data no longer at $E000.
+    // Embedded names are always < $C000, so cr_name_hi >= $E0
+    // on the table path is always a leftover from load_tier_to_buffer
+    // after an overlay has overwritten $E000. Return safe fallback.
+    lda #$3f                    // '?' ($3F in both PETSCII and screen codes)
+    sta creature_name_buf
+    lda #0
+    sta creature_name_buf+1     // Null-terminate: "?"
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
+    rts
 
 !cgn_copy:
     ldy #0

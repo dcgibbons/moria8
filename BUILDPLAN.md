@@ -47,7 +47,7 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| BUG-32 | MED | Monster names/descriptions garbled for tier-loaded creatures from REU (death screen "KILLED BY A [garbage]", combat "HIT THE [garbage]") — repeat of BUG-30 pattern, not fully resolved | Open |
+| BUG-32 | MED | Monster names/descriptions garbled for tier-loaded creatures from REU (death screen "KILLED BY A [garbage]", combat "HIT THE [garbage]") — repeat of BUG-30 pattern, not fully resolved | **Fixed** — Root cause: `load_tier_to_buffer` writes `$E0xx` pointers into `cr_name_lo/hi`, but `overlay_load` later sets `current_tier=0` and overwrites `$E000` with overlay code. The `!cgn_table` fallback in `creature_get_name` saw `cr_name_hi >= $E0`, went to `!cgn_banked`, and read executable code as string data. Fix: replaced `!cgn_banked` with safe fallback returning "?" to `creature_name_buf`. The `!cgn_banked` path was dead code for legitimate use — embedded names are always < `$C000`, and tier names use the dedicated tier path. Byte-neutral (15B → 15B). |
 | BUG-33 | LOW | Secret door wall sometimes wrong orientation (renders as `+` on horizontal wall instead of `—`) — recurring | Open |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 

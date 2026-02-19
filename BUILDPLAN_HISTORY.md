@@ -672,6 +672,7 @@ Playtesting bugs BUG-1 through BUG-18 have been fixed (see Review Pass 15). BUG-
 | BUG-29 | Secret doors on vertical walls render as '─' instead of '│' | ✅ Fixed — old heuristic checked tiles above/below for wall types, failed when neighbors were doors or carved floor. Replaced with left/right floor check: vertical wall doors have floor on both sides (room + corridor), horizontal wall doors have wall tiles beside them. Also saves ~40 bytes. |
 | BUG-30 | Combat messages corrupted (garbled PETSCII) for tier-loaded creature names | ✅ Fixed — Root cause: KERNAL LOAD does not reliably CLOSE file entries. Both `overlay_load_disk` and `tier_load_disk` used logical file #2 without calling CLOSE afterward. After the first LOAD, file #2 stayed in the KERNAL file table; subsequent LOADs failed silently ("FILE ALREADY OPEN"), leaving `$E000` with stale overlay data and `tier_name_lo/hi_addr` uninitialized (pointing to ZP). Fix: (1) added explicit CLOSE+CLRCHN after every KERNAL LOAD in both `tier_load_disk` and `overlay_load_disk`, (2) `!tl_failed` now resets `current_tier=0` so creature names fall back to embedded data, (3) `creature_get_name` tier path reads name pointers from `$E000` via `tier_name_lo/hi_addr`. |
 | BUG-31 | Garbage text on screen row 24 during dungeon exploration | ✅ Fixed — Row 24 (INPUT_ROW) showed garbage characters during normal gameplay. Many command handlers (movement, eat, quaff, rest, run, refuel) return to the main loop via `status_draw` → `!main_loop` without clearing row 24; only `vp_render_status_loop` cleared it. Fix: added `screen_clear_row` for INPUT_ROW at the start of `status_draw`, ensuring row 24 is cleaned on every status redraw. |
+| BUG-32 | Monster names garbled for tier-loaded creatures (stale `$E0xx` name pointers) | ✅ Fixed — `load_tier_to_buffer` writes `$E0xx` pointers into `cr_name_lo/hi`. When `overlay_load` later sets `current_tier=0` and overwrites `$E000` with overlay code, the `!cgn_table` fallback in `creature_get_name` read executable code as string data. Also triggered when switching to a smaller tier (stale indices beyond new count). Fix: replaced `!cgn_banked` with safe "?" fallback to `creature_name_buf`. Dead code for legitimate use — embedded names always `< $C000`, tier names use dedicated tier path. Byte-neutral (15B → 15B). |
 
 ---
 
@@ -3695,4 +3696,21 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 - `save_load.s` — Added recall array save/load (4 × MAX_CREATURES bytes)
 - `data/recall_data.s` — New: recall SoA array definitions
 - `input.s` — CMD_RECALL ($1e) already mapped to `/` key
+
+---
+
+## BUG-32 Fix: Garbled Tier-Loaded Monster Names ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** `load_tier_to_buffer` writes `$E0xx` pointers into `cr_name_lo/hi` arrays (pointing into tier data at `$E000`). When `overlay_load` later sets `current_tier=0` and overwrites `$E000` with overlay code (town stores, death screen, etc.), the `!cgn_table` fallback path in `creature_get_name` saw `cr_name_hi[X] >= $E0`, entered `!cgn_banked`, and read overlay executable code as string data — producing garbled PETSCII.
+
+**Trigger scenarios:**
+1. Monster recall (`/`) in town after dungeon exploration — store overlay at `$E000`, stale `$E0xx` name pointers
+2. Tier switch to smaller tier (e.g., tier 2→1) — indices beyond new count retain old `$E0xx` pointers
+
+**Fix:** Replaced `!cgn_banked` (which banked out KERNAL and read from `$E000`) with a safe fallback that writes "?" to `creature_name_buf` and returns a pointer to it. The `!cgn_banked` path was dead code for all legitimate use cases: embedded creature names are always below `$C000` (so `cr_name_hi < $C0 < $E0`), and tier creature names use the dedicated tier path (lines 967-994) which reads via `tier_name_lo/hi_addr`.
+
+**Size impact:** Byte-neutral (15B old → 15B new). `program_end` remains `$BFFF`.
+
+**Files modified:**
+- `monster.s` — Replaced `!cgn_banked` code block with safe "?" fallback
 
