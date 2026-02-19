@@ -283,9 +283,12 @@ help_l22:
     .text " SAVE"
     .byte 0
 
-// Row 23: Quit
+// Row 23: Bash + Quit
 help_l23:
-    .text "                  "
+    .byte $fe
+    .text "SHIFT+D"
+    .byte $ff
+    .text " BASH       "
     .byte $fe
     .text "SHIFT+Q"
     .byte $ff

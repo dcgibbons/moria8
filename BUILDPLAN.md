@@ -1197,7 +1197,7 @@ Priority order based on AUDIT review (see Audit Response below):
 | Priority | ID | Feature | Complexity | Benefit | Notes |
 |----------|-----|---------|-----------|---------|-------|
 | ~~1~~ | ~~R4.6~~ | ~~Flasks of Oil~~ | ~~Low~~ | ~~Medium~~ | ✅ **DONE** — SHIFT+R refuel command, item type 61, store/equip support. |
-| 2 | R1.7 | Bash command | Medium | High | `B` + direction: bash doors (only way to open spiked doors), monsters (shield bash + stun), chests (break lock). Core umoria command. |
+| ~~2~~ | ~~R1.7~~ | ~~Bash command~~ | ~~Medium~~ | ~~High~~ | ✅ **DONE** — SHIFT+D bash command. Door bash (STR-based chance), monster bash (shield weight to-hit, 1d4+STR+3 damage, stun check), off-balance paralysis. 6 tests in test_bash.s. |
 | 3 | R7.4-R7.5 + R7.7 | Monster recall | High | High | Full system: recall data structures, combat tracking (kills/spells/attacks), save/load persistence, `/` display command, string bank infrastructure for recall text. Signature Moria feature but large scope. |
 
 **Phase 10 — C128 Enhancements** (not started):
@@ -3701,7 +3701,7 @@ design; items marked **(TODO)** need implementation.
 | R1.2 | Throwing items | ✅ **DONE** | `throw.s` — SHIFT+T throws any inventory item. BOW-based to-hit at 75%, STR-based range calc, projectile trace reuses ranged_fire pattern. Potions shatter on impact, other items land on floor. 6 tests in `test_throw.s`. |
 | R1.3 | Monster attacks | ✅ **DONE** | `monster_attack.s` fully implemented (Phase 5.4). 8 attack types, 2 slots per creature, all effects (poison, confuse, paralyze, acid, aggravate). |
 | R1.4 | Monster spells | ✅ **DONE** | `monster_magic.s` fully implemented (Phase 7.8). Breath weapons, bolts, summoning, blindness, confusion. Creature tier data has spell entries. |
-| R1.7 | Bash command | **(TODO)** | `B` + direction. Three targets: **doors** (STR + body weight vs. stuck difficulty, permanently breaks door — only way to open spiked doors), **monsters** (shield bash — shield weight/damage dice, can stun, off-balance risk via DEX check), **chests** (10% destroy contents, 10% break lock, pure RNG). Currently `door_try_open` in `dungeon_features.s` has an inline STR >= 16 force-open, but this is not a separate command. Need: `CMD_BASH` constant in `input.s`, key binding, `player_bash` routine, door/monster/chest dispatch. |
+| R1.7 | Bash command | ✅ **DONE** | `bash.s` — SHIFT+D + direction. Door bash: STR-based chance (rng_range(STR+10) >= 5, ~50% at STR 3, ~82% at STR 18), converts to TILE_DOOR_OPEN on success. Monster bash: to-hit = STR + shield_weight/2 + 5, damage = 1d4 + str_bonus + 3, stun check (25+rng(100)+rng(100) vs HP/4+avg_max/4), MX_STUN 2-4 turns capped at 24 (AI already handles stun skip). Off-balance: rng(150) > DEX → 1-2 turn paralysis. Reuses combat_roll_tohit, combat_apply_damage, msg_build_action. No chest bash (ICAT_CHEST not implemented). 6 tests in test_bash.s. |
 
 **Issues:**
 
@@ -3860,7 +3860,7 @@ least 128 KB — no constraint in practice.
 - R7.4-R7.5 Overlay string banks + REU cache — Tier 2, when resident space is exhausted
 
 **Medium priority (missing core command):**
-- R1.7 Bash — door/monster/chest bash (`B` + direction). Only way to open spiked doors in umoria.
+- ~~R1.7 Bash~~ ✅ — SHIFT+D bash command (door/monster bash with stun)
 
 **Low priority (polish/completeness):**
 - ~~R1.2 Throwing~~ ✅
@@ -4384,3 +4384,800 @@ Store entry is naturally gated by `zp_player_dlvl == 0` (town only), and `store_
 - **Dungeon → town transition:** `tier_load` is skipped for dlvl=0 (tier 0 embedded). Load town overlay to `$E000` instead.
 - **Word of Recall:** If recalling to town from deep dungeon, load town overlay. If recalling from town to dungeon, load appropriate tier.
 - **`$F000` permanent code:** No interaction — `$F000` contents are independent of `$E000` overlays. Both regions can be banked simultaneously with `$01=$34` (compute-only) or `$01=$35` (screen-writing). Use `$35` whenever the banked code writes to screen/color RAM.
+
+## Town Overlay Size Optimization — OPT-3 (2026-02-18)
+
+### Problem
+
+The town overlay (`$E000-$EFFF`, 4096 bytes max) is at **4,074 bytes** — only **22 bytes free**. Any new feature or bug fix that adds code to `store.s` or `ui_store.s` risks overflowing. This plan identifies strategies to reclaim space without losing functionality.
+
+### Current Breakdown
+
+| Category | Bytes | % of overlay |
+|----------|-------|-------------|
+| Raw string data (46 strings) | 661 | 16.2% |
+| Pointer tables + misc data | ~108 | 2.7% |
+| Code (logic + UI boilerplate) | ~3,305 | 81.1% |
+| **Total** | **4,074** | **99.5%** |
+
+The code portion is dominated by repetitive UI boilerplate: `jsr screen_put_string` is called **34 times**, `jsr store_clear_msg_area` **16 times**, and the "set color, set row, set col, load string pointer" pattern repeats ~25 times at 20-28 bytes each.
+
+### OPT-3.1 — Parameterized Message Display Helper (~300-400 bytes saved)
+
+**Highest impact.** The repeated pattern in `ui_store.s`:
+
+```asm
+    lda #COL_xxx
+    sta zp_text_color
+    lda #row
+    sta zp_cursor_row
+    lda #col
+    sta zp_cursor_col
+    lda #<string
+    sta zp_ptr0
+    lda #>string
+    sta zp_ptr0_hi
+    jsr screen_put_string
+```
+
+costs 20-28 bytes per occurrence (~25 occurrences = 500-700 bytes total). Replace with a table-driven helper:
+
+```asm
+// Message descriptor table: 5 bytes per entry (color, row, col, str_lo, str_hi)
+msg_table:
+    .byte COL_WHITE, 20, 1, <uis_buy_which_str, >uis_buy_which_str  // MSG_BUY_WHICH
+    .byte COL_RED,   22, 1, <uis_no_afford_str, >uis_no_afford_str  // MSG_NO_AFFORD
+    // ... etc
+
+// Helper: X = message ID (0-based)
+show_msg:
+    txa
+    asl
+    asl
+    clc
+    adc msg_table_idx,x   // or compute ×5
+    tax
+    lda msg_table+0,x
+    sta zp_text_color
+    lda msg_table+1,x
+    sta zp_cursor_row
+    lda msg_table+2,x
+    sta zp_cursor_col
+    lda msg_table+3,x
+    sta zp_ptr0
+    lda msg_table+4,x
+    sta zp_ptr0_hi
+    jmp screen_put_string
+```
+
+Each call site shrinks from ~20-28 bytes to **5 bytes** (`ldx #MSG_ID; jsr show_msg`). Helper cost: ~35 bytes + 5 bytes per table entry.
+
+- ~25 applicable call sites × ~23 bytes saved per site = ~575 bytes saved
+- Overhead: 35 byte helper + 25 × 5 byte table entries = 160 bytes
+- **Net savings: ~300-400 bytes**
+
+Note: Some call sites interleave price display between string prints (e.g., `sbuy_show_price` prints "PRICE: ", then a number, then " GP. BUY? (Y/N)"). These compound patterns need a `show_msg` call for the first part, then inline code for the number, then another `show_msg` or inline for the suffix. Not every occurrence can be fully parameterized, but most can.
+
+### OPT-3.2 — Merge haggle_buy / haggle_sell (~150-170 bytes saved)
+
+`haggle_buy` (lines 994-1188 of `ui_store.s`) and `haggle_sell` (lines 1198-1396) are structurally nearly identical. Differences:
+
+| Aspect | haggle_buy | haggle_sell |
+|--------|-----------|------------|
+| Accept condition | `input >= ask` | `input <= ask` |
+| Counter step | `ask -= step` (toward min) | `ask += step` (toward max) |
+| Insult threshold | `input < min/2` | `input > 2×max` |
+| Display strings | "ASKS" / "YOUR OFFER?" | "OFFERS" / "YOUR PRICE?" |
+
+Merge into a single `haggle_common` with a `hg_mode` flag (0=buy, 1=sell):
+
+```asm
+hg_mode: .byte 0   // 0=buy, 1=sell
+
+haggle_common:
+    lda #0
+    sta hg_round
+!hc_loop:
+    lda hg_mode
+    beq !hc_buy_display+
+    jsr hg_show_offer       // sell display
+    jmp !hc_get_input+
+!hc_buy_display:
+    jsr hg_show_ask         // buy display
+!hc_get_input:
+    jsr input_read_number
+    // ... shared insult/accept/counter logic with mode-based branches
+```
+
+The insult, kick, accept, and counter-offer-with-clamp logic is identical except for comparison direction and add/subtract. A few `lda hg_mode; beq` branches (5 bytes each × ~4 branch points = 20 bytes) replace ~180 bytes of duplicated code.
+
+`hg_show_sell_counter` and `hg_show_sell_final` already just `jmp` to their buy counterparts, confirming the display code is already shared.
+
+- Duplicate code eliminated: ~180 bytes
+- Mode-branch overhead: ~20-30 bytes
+- **Net savings: ~150-170 bytes**
+
+### OPT-3.3 — Huffman-Compress Overlay Strings (~200-250 bytes saved)
+
+661 bytes of raw null-terminated strings in the overlay. The Huffman decoder (`huff_decode_string` in `huffman.s`) already lives in main RAM and is callable from the overlay — it's already used for haggling insult strings.
+
+Move store UI strings into the Huffman compressed string table (`huffman_data.s`). At typical ~50-55% compression ratio for short uppercase English strings:
+
+- 661 bytes raw → ~330-360 bytes compressed
+- String IDs added to `huff_str_index` (2 bytes each × 46 strings = 92 bytes, but in main RAM not overlay)
+- Call overhead per string: `ldx #STR_ID; jsr huff_decode_string; jsr screen_put_string` = 8 bytes, roughly same as current inline pointer load (8 bytes for `lda #<str; sta zp_ptr0; lda #>str; sta zp_ptr0_hi`)
+
+The raw string data is removed from the overlay entirely. The compressed data lives in main RAM (inside `huffman_data.s`). Cost is only the string IDs being added to the Huffman encoder pipeline (`tools/huff_encoder.py`).
+
+- 661 bytes removed from overlay
+- ~92 bytes of index overhead added to main RAM (not overlay)
+- ~330-360 bytes of compressed data added to main RAM (not overlay)
+- **Net overlay savings: ~600 bytes** (but costs ~420-450 bytes in main RAM)
+
+If main RAM is also tight, a middle ground is to Huffman-compress only the longest strings (owner names: 126 bytes, UI messages: 314 bytes) and keep short strings (like "GP.", "AGREED!") inline.
+
+**Interaction with OPT-3.1:** If strings are Huffman-encoded, the message display helper table stores string IDs instead of raw pointers, and calls `huff_decode_string` before `screen_put_string`. These two optimizations compose well.
+
+### OPT-3.4 — Replace Separator String with Draw Loop (~26 bytes saved)
+
+The 40-dash separator string (`uis_sep_str`) is 41 bytes and used twice. Replace with:
+
+```asm
+draw_separator:
+    ldx #40
+!:  lda #$2d           // '-' screen code
+    jsr screen_put_char
+    dex
+    bne !-
+    rts                 // 12 bytes
+```
+
+Remove the 41-byte string, add 12 bytes of code. Two call sites change from `lda #<uis_sep_str; sta zp_ptr0; lda #>uis_sep_str; sta zp_ptr0_hi; jsr screen_put_string` (11 bytes) to `jsr draw_separator` (3 bytes), saving an additional 16 bytes.
+
+- **Net savings: ~26 bytes** (trivial effort, zero risk)
+
+### OPT-3.5 — Move Store Names/Owners Out of Overlay (~80-126 bytes saved)
+
+Store names (82 bytes with nulls) and owner names (126 bytes with nulls) plus their pointer tables (32 bytes) are only used during `store_draw_screen`. Options:
+
+**Option A: Huffman-encode into main RAM string table.** Part of OPT-3.3. Removes 208 bytes of string data + 32 bytes of pointer tables from overlay.
+
+**Option B: Shorten owner strings.** Trim titles: "BILBO THE FRIENDLY" → "BILBO", "GORN THE ARMORER" → "GORN", etc. Saves ~80 bytes but reduces flavor. Not recommended as a standalone change.
+
+**Option C: Move raw strings to main RAM.** Store name/owner strings live in `store_data.s` (main RAM) instead of the overlay. The pointer tables also move. The overlay code references them via the same labels. Cost: 240 bytes of main RAM. Savings: 240 bytes of overlay.
+
+- **Net overlay savings: 80-240 bytes** depending on approach
+
+### OPT-3.6 — Factor Cancel-Key Check (~15 bytes saved)
+
+The Q/ESC/SPACE cancel pattern appears 3 times (`store_buy`, `store_sell`, `input_read_number`):
+
+```asm
+    cmp #PETSCII_Q
+    bne !not_q+
+    rts
+!not_q:
+    cmp #PETSCII_ESC
+    bne !not_esc+
+    rts
+!not_esc:
+    cmp #PETSCII_SPACE
+    bne !not_spc+
+    rts
+!not_spc:
+```
+
+15 bytes each × 3 = 45 bytes. Replace with:
+
+```asm
+// check_cancel — carry set = cancel key pressed
+check_cancel:
+    cmp #PETSCII_Q
+    beq !yes+
+    cmp #PETSCII_ESC
+    beq !yes+
+    cmp #PETSCII_SPACE
+    bne !no+
+!yes:
+    sec
+    rts
+!no:
+    clc
+    rts              // 16 bytes
+```
+
+Each call site becomes `jsr check_cancel; bcs cancel_target` (5 bytes vs 15 bytes).
+
+- 3 × 15 = 45 bytes → 16 + 3 × 5 = 31 bytes
+- **Net savings: ~15 bytes** (trivial effort)
+
+### OPT-3.7 — Unify BM + Normal Price Calculation (~30-50 bytes saved)
+
+`calc_bm_buy_price` and `calc_buy_price` share structure: load base cost, multiply by factor, divide, add p1 bonus. Same for the sell paths. The BM paths use fixed multipliers (×3 for buy, ÷10 for sell) while normal paths use CHR-indexed multipliers.
+
+Could parameterize with a multiplier value passed in X:
+
+```asm
+// Unified: calc_buy_price_with_factor
+// Input: A = item type, X = multiplier (or 0 to use CHR lookup)
+calc_buy_price_common:
+    sta sb_item_type
+    // ... shared setup ...
+    cpx #0
+    beq !chr_lookup+
+    // BM path: use X directly
+    jmp !multiply+
+!chr_lookup:
+    lda player_data + PL_CHR_CUR
+    jsr stat_bonus_index
+    lda chr_price_adj,x
+    tax
+!multiply:
+    jsr math_mul_16x8
+    // ... shared remainder ...
+```
+
+- **Net savings: ~30-50 bytes**
+
+### OPT-3.8 — Loop-Based store_clear_msg_area (~8 bytes saved)
+
+Currently 4 sequential `jsr screen_clear_row` calls (12 bytes). Replace with:
+
+```asm
+store_clear_msg_area:
+    lda #20
+!:  jsr screen_clear_row
+    clc
+    adc #1
+    cmp #24
+    bcc !-
+    rts             // ~10 bytes vs 17 bytes (4×jsr + rts)
+```
+
+Called 16 times so keeping it small helps. **Net savings: ~7-8 bytes.**
+
+### Priority and Implementation Order
+
+| Priority | Item | Effort | Savings | Cumulative Free |
+|----------|------|--------|---------|----------------|
+| 1 | OPT-3.4 Separator draw loop | Trivial | ~26 | 48 |
+| 2 | OPT-3.6 Cancel-key helper | Trivial | ~15 | 63 |
+| 3 | OPT-3.8 Clear-msg loop | Trivial | ~8 | 71 |
+| 4 | OPT-3.1 Message display helper | Medium | ~300-400 | 371-471 |
+| 5 | OPT-3.2 Merge haggle routines | Medium | ~150-170 | 521-641 |
+| 6 | OPT-3.7 Unify price calcs | Low | ~30-50 | 551-691 |
+| 7 | OPT-3.5 Move names/owners out | Low-Med | ~80-240 | 631-931 |
+| 8 | OPT-3.3 Huffman compress strings | High | ~200-600 | 831-1531 |
+
+Start with the trivial wins (OPT-3.4, 3.6, 3.8) for immediate breathing room (~49 bytes). Then OPT-3.1 for the largest single improvement. OPT-3.2 and OPT-3.7 are good follow-ups. OPT-3.3 and OPT-3.5 are the nuclear options if more room is still needed — they shift bytes from overlay to main RAM.
+
+**Realistic target:** OPT-3.1 through OPT-3.7 should yield **~500-700 bytes free** in the overlay, enough for significant new store features.
+
+## Codebase-Wide Size Optimization — OPT-4 (2026-02-18)
+
+### Current State
+
+Main segment: **$080E–$B4CF** (44,225 bytes, ~2,833 bytes before $C000 MAP_BASE).
+$F000 banked region: 3,369 of ~4,089 bytes used (~720 bytes free).
+Town overlay: 4,074 of 4,096 bytes (22 free — covered by OPT-3).
+
+The main segment has reasonable headroom but adding major features will require optimization. This section identifies cross-module duplication and data compression opportunities that collectively could save **~1,500–2,200 bytes** in the main segment.
+
+### OPT-4.1 — Shared Projectile Trace Loop (~150-180 bytes saved)
+
+Three files contain nearly identical projectile trace loops:
+
+| File | Function | Lines | Pattern |
+|------|----------|-------|---------|
+| `ranged_fire.s` | `!rf_trace` | 112-161 | Step in direction → bounds check → walkability check → monster_find_at |
+| `throw.s` | `!tw_trace` | 160-215 | Identical + saves last walkable position |
+| `spell_effects.s` | `!eb_trace` | 562-683 | Identical + bolt animation overlay |
+
+The core trace loop is ~50 bytes each: direction step (8 bytes), bounds check (12 bytes), map tile walkability via `walkable_table` (18 bytes), `monster_find_at` call (6 bytes). All three use the same variable pattern: `*_cx`, `*_cy`, `*_dir`, `*_steps`.
+
+**Fix:** Create a shared `trace_projectile` routine:
+
+```asm
+// Input: proj_cx/cy = start, proj_dir = direction, proj_steps = max range
+// Output: carry SET = hit monster (X = slot), carry CLEAR = blocked/OOB
+//         proj_cx/cy = final position
+proj_cx:    .byte 0
+proj_cy:    .byte 0
+proj_dir:   .byte 0
+proj_steps: .byte 0
+proj_last_x: .byte 0    // Last walkable position (for throw drop)
+proj_last_y: .byte 0
+
+trace_projectile:
+    dec proj_steps
+    beq !tp_oob+
+    ldx proj_dir
+    lda proj_cx
+    clc
+    adc dir_dx,x
+    sta proj_cx
+    lda proj_cy
+    clc
+    adc dir_dy,x
+    sta proj_cy
+    // Bounds + walkability + monster check...
+    // ~50 bytes total
+```
+
+Each caller shrinks from ~50 bytes inline to ~15 bytes of setup + `jsr trace_projectile`. `throw.s` copies `proj_cx/cy → proj_last_x/y` after each step (4 bytes extra). `spell_effects.s` adds animation code after the walkability check via a callback flag or inline hook.
+
+- 3 × ~50 = 150 bytes inline → 50 byte helper + 3 × 15 = 95 bytes
+- **Net savings: ~55 bytes** (conservative, more with the direction-finding code below)
+
+### OPT-4.2 — Shared Direction-Finding from Target (~80-100 bytes saved)
+
+Three files contain identical direction-finding code that converts `df_target_x/y` delta into a `dir_dx/dir_dy` table index:
+
+```asm
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    sta zp_temp0            // dx
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    sta zp_temp1            // dy
+    ldx #0
+!find_dir:
+    lda dir_dx,x
+    cmp zp_temp0
+    bne !dir_next+
+    lda dir_dy,x
+    cmp zp_temp1
+    beq !dir_found+
+!dir_next:
+    inx
+    cpx #8
+    bcc !find_dir-
+```
+
+This ~30-byte pattern appears in `ranged_fire.s` (lines 78-101), `throw.s` (lines 97-121), and `spell_effects.s` (lines 526-549).
+
+**Fix:** Extract a shared `calc_direction_index` utility:
+
+```asm
+// Input: df_target_x/y (adjacent to player)
+// Output: X = direction index 0-7, carry SET = found
+calc_direction_index:
+    lda df_target_x
+    sec
+    sbc zp_player_x
+    sta zp_temp0
+    lda df_target_y
+    sec
+    sbc zp_player_y
+    sta zp_temp1
+    ldx #0
+!:  lda dir_dx,x
+    cmp zp_temp0
+    bne !next+
+    lda dir_dy,x
+    cmp zp_temp1
+    beq !found+
+!next:
+    inx
+    cpx #8
+    bcc !-
+    clc
+    rts
+!found:
+    sec
+    rts
+```
+
+~35 byte helper, each call site becomes `jsr calc_direction_index; bcc cancel; stx *_dir` (~8 bytes).
+
+- 3 × ~30 = 90 bytes → 35 + 3 × 8 = 59 bytes
+- **Net savings: ~30 bytes**
+
+Combined with OPT-4.1 (shared trace loop, shared direction finding, shared scratch vars), total savings ~**150-180 bytes**.
+
+### OPT-4.3 — Unify Adjacent-Tile Iteration (~120-150 bytes saved)
+
+`spell_effects.s` has **four** separate 8-direction adjacent-tile loops with identical structure:
+
+| Function | Lines | Action per direction |
+|----------|-------|---------------------|
+| `eff_sleep_adjacent` | 420-455 | find_at → set MX_SLEEP_CUR |
+| `eff_confuse_adjacent` | 463-497 | find_at → set MX_CONFUSE |
+| `eff_damage_adjacent` | 775-836 | find_at → roll dice → subtract HP → death check |
+| `eff_destroy_traps_doors` | 864-980 | read tile → modify tile (TWO separate 8-dir loops!) |
+
+Each loop follows the identical skeleton (~35 bytes):
+
+```asm
+    lda #0
+    sta *_dir
+!loop:
+    lda *_dir
+    cmp #8
+    bcs !done+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    ...action...
+    inc *_dir
+    jmp !loop-
+!done:
+    rts
+```
+
+**Fix:** Create `for_each_adjacent(callback)` using a function pointer or inline dispatch:
+
+```asm
+// Iterates 8 directions, for each: sets df_target_x/y, calls callback via JMP indirect
+adj_callback: .word 0   // Function pointer
+
+for_each_adjacent:
+    lda #0
+    sta adj_dir_idx
+!fea_loop:
+    lda adj_dir_idx
+    cmp #8
+    bcs !fea_done+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta df_target_y
+    jsr !fea_dispatch+
+    inc adj_dir_idx
+    jmp !fea_loop-
+!fea_done:
+    rts
+!fea_dispatch:
+    jmp (adj_callback)
+```
+
+Helper: ~40 bytes. Each call site becomes: set callback pointer (6 bytes) + `jsr for_each_adjacent` (3 bytes) + callback body (varies, ~10-15 bytes). The 5 loops of ~35 bytes each become 5 × 9 + 40 = 85 bytes.
+
+- 5 × ~35 = 175 bytes → ~85 bytes
+- **Net savings: ~90 bytes**
+
+Alternative (simpler, no function pointers): factor out only the "find monster at adjacent direction" pattern shared by sleep/confuse/damage into a single `for_each_adjacent_monster` that provides X=slot for each found monster. Saves ~70 bytes from just those three.
+
+### OPT-4.4 — Inline Monster HP Damage + Death Check → Shared Subroutine (~80-100 bytes saved)
+
+The pattern "subtract damage from monster HP via `(zp_ptr0),y` + check dead" appears **three times** inline in `spell_effects.s` (eff_bolt line 704-720, eff_damage_adjacent line 810-825, eff_dispel_undead line 1084-1100) and once as the existing `combat_apply_damage` in `combat.s` (line 671-703).
+
+The inline versions duplicate ~25 bytes each and differ only in the damage source register (zp_math_a/b vs A):
+
+```asm
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    sec
+    sbc zp_math_a
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda (zp_ptr0),y
+    sbc zp_math_b
+    sta (zp_ptr0),y
+    bmi !dead+
+    ldy #MX_HP_LO
+    lda (zp_ptr0),y
+    ldy #MX_HP_HI
+    ora (zp_ptr0),y
+    bne !alive+
+```
+
+**Fix:** Extend `combat_apply_damage` to accept 16-bit damage (currently only 8-bit via A register). Or create a `combat_apply_damage_16` variant that reads from zp_math_a/b. The inline code in spell_effects.s then becomes `jsr combat_apply_damage_16` (3 bytes each).
+
+- 3 × ~25 = 75 bytes inline → 25 byte helper + 3 × 3 = 34 bytes
+- **Net savings: ~40 bytes** (plus cleaner code)
+
+### OPT-4.5 — Unify combat_calc_tohit / throw_calc_tohit (~100-120 bytes saved)
+
+`combat.s:combat_calc_tohit` (lines 168-257, ~90 bytes) and `throw.s:throw_calc_tohit` (lines 417-516, ~100 bytes) are structurally identical. The only differences:
+
+| Aspect | combat_calc_tohit | throw_calc_tohit |
+|--------|------------------|-----------------|
+| Class property offset | BTH (offset 3) | BTH_BOW (offset 4) |
+| Level adj offset | class_level_adj+0 | class_level_adj+1 |
+| Post-processing | None | × 75% (×3 >> 2) |
+
+**Fix:** Parameterize with a "BTH offset" passed in A or a ZP var:
+
+```asm
+// Input: A = class property offset (3=melee, 4=bow)
+//        X = level adj offset (0=melee, 1=bow)
+combat_calc_tohit_common:
+    sta cct_prop_offset
+    stx cct_lvl_offset
+    // ... shared code (~90 bytes) ...
+    rts
+
+// throw_calc_tohit wrapper: calls common then applies 75%
+throw_calc_tohit:
+    lda #4
+    ldx #1
+    jsr combat_calc_tohit_common
+    // 75% = *3/4
+    lda zp_combat_tohit
+    sta zp_temp0
+    asl
+    bcs !cap+
+    clc
+    adc zp_temp0
+    bcc !div+
+!cap: lda #255
+!div: lsr
+    lsr
+    sta zp_combat_tohit
+    rts
+```
+
+The 75% wrapper is ~20 bytes. The shared routine is ~90 bytes. Eliminates ~100 bytes of throw.s duplication.
+
+- 90 + 100 bytes → 90 + 20 = 110 bytes
+- **Net savings: ~80 bytes**
+
+### OPT-4.6 — Table-Driven Effect Timer Ticks (~60-80 bytes saved)
+
+`turn.s:turn_tick_effects` (lines 20-208) has 13 individual effect timers. Most follow one of two patterns:
+
+**Pattern A — Simple decrement (7 timers: speed, protect, invis, infra, bless, hero, regen):**
+```asm
+    lda zp_eff_xxx
+    beq !no_xxx+
+    dec zp_eff_xxx
+!no_xxx:
+```
+6 bytes each × 7 = 42 bytes. (Speed is slightly different — signed decrement — but the rest are identical.)
+
+**Pattern B — Decrement with expiry message (5 timers: poison, blind, confuse, paralyze, fear):**
+```asm
+    lda zp_eff_xxx
+    beq !no_xxx+
+    dec zp_eff_xxx
+    bne !no_xxx+   // or bne !still_xxx+
+    ldx #HSTR_EFF_XXX_END
+    jsr huff_decode_string
+    jsr msg_print
+!no_xxx:
+```
+~15 bytes each × 4 = 60 bytes (poison has extra HP damage logic, excluded).
+
+**Fix for Pattern A:** Loop through a table of ZP addresses:
+
+```asm
+simple_effect_addrs:
+    .byte zp_eff_protect, zp_eff_invis, zp_eff_infra
+    .byte zp_eff_bless, zp_eff_hero, zp_eff_regen
+.const SIMPLE_EFFECT_COUNT = 6
+
+tick_simple_effects:
+    ldx #SIMPLE_EFFECT_COUNT - 1
+!loop:
+    ldy simple_effect_addrs,x
+    lda $00,y               // ZP indirect read
+    beq !skip+
+    dec $00,y               // ZP indirect decrement
+!skip:
+    dex
+    bpl !loop-
+    rts
+```
+
+~20 bytes replaces 36 bytes (6 × 6). Savings: ~16 bytes.
+
+**Fix for Pattern B:** Loop through paired table (address, huff ID):
+
+```asm
+msg_effect_addrs:
+    .byte zp_eff_blind, zp_eff_confuse, zp_eff_paralyze
+msg_effect_hstr:
+    .byte HSTR_EFF_BLIND_END, HSTR_EFF_CONFUSE_END, HSTR_EFF_PARALYZE_END
+.const MSG_EFFECT_COUNT = 3
+
+tick_msg_effects:
+    ldx #MSG_EFFECT_COUNT - 1
+!loop:
+    stx tte_save_x
+    ldy msg_effect_addrs,x
+    lda $00,y
+    beq !skip+
+    dec $00,y
+    bne !skip+
+    ldx tte_save_x
+    lda msg_effect_hstr,x
+    tax
+    jsr huff_decode_string
+    jsr msg_print
+    ldx tte_save_x
+!skip:
+    dex
+    bpl !loop-
+    rts
+```
+
+~35 bytes replaces 45 bytes (3 × 15). Savings: ~10 bytes.
+
+Fear and speed have special behavior (fear uses non-ZP `eff_fear_timer`; speed has signed increment logic) — keep those inline.
+
+- **Total savings: ~26 bytes** (modest, but reduces maintenance burden for adding new effects)
+
+### OPT-4.7 — Huffman-Encode Item Name Strings (~300-400 bytes saved)
+
+`item.s` contains **110 raw `.text` strings** for item names totaling ~806 bytes (names only) + 124 bytes of pointer tables = **~930 bytes**. These are looked up via `it_name_lo/hi` tables.
+
+The Huffman infrastructure already exists in main RAM. Item names are short uppercase English strings — the same character distribution as existing Huffman data. At ~55% compression:
+
+- 806 bytes raw → ~445 bytes compressed
+- Pointer tables (110 × 2 = 220 bytes) become index entries in the Huffman string table
+- Decode call overhead: name lookup changes from pointer dereference to `huff_decode_string` call
+
+The `item_get_name_ptr` function currently returns a raw pointer. After Huffman encoding, it would decode to `hd_decode_buf` and return a pointer to that. Callers already use the returned pointer with `screen_put_string` — no change needed.
+
+- 930 bytes → ~445 compressed + ~220 index entries (already absorbed by Huffman table)
+- **Net savings in main segment: ~300-400 bytes**
+
+Note: Since `hd_decode_buf` is reused, callers that need to retain the name across another decode call would need to copy it first. Audit all `item_get_name_ptr` call sites.
+
+### OPT-4.8 — Remaining Raw Strings to Huffman (~100-120 bytes saved)
+
+Several modules still contain small raw strings that could be Huffman-encoded:
+
+| File | Strings | Bytes |
+|------|---------|-------|
+| `turn.s` | pid_w_terrible/bad/average/good/excellent + pid_sense_str | 50 |
+| `combat.s` | cmb_you_str, cmb_the_str, cmb_hit_str, cmb_miss_str, cmb_kill_str, cmb_period | 33 |
+
+The `combat.s` strings are heavily used by `combat_append_str` which needs raw pointers for inline assembly into `combat_msg_buf`. These are poor Huffman candidates — the decode overhead would exceed the savings for 3-4 byte strings.
+
+The `turn.s` pseudo-ID quality words (50 bytes + 10 bytes pointer tables = 60 bytes) are a better candidate — they're only used in one place. Encoding them saves ~30 bytes.
+
+- **Net savings: ~30 bytes** (only pseudo-ID strings worth converting)
+
+### OPT-4.9 — Deduplicate "Hit Alive / Dead" Message Patterns (~60-80 bytes saved)
+
+After a monster takes damage, four modules repeat the same "dead or alive" message dispatch:
+
+```asm
+// Dead path:
+    ldx slot
+    jsr eff_kill_monster
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action    // "YOU HAVE SLAIN THE <name>."
+    jsr cmb_print_buf
+    lda #SFX_HIT
+    jsr sound_play
+    rts
+
+// Alive path:
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+    // Build "VERB THE <name>." message
+    ...
+```
+
+This ~40-byte dead path appears in `combat.s` (line 111-134), `ranged_fire.s` (line 217-225), `throw.s` (line 296-304), and `spell_effects.s` (line 722-732).
+
+**Fix:** Create `combat_kill_message`:
+```asm
+// Input: cmb_slot, cmb_type already set
+// Prints "YOU HAVE SLAIN THE <name>.", plays SFX, awards XP
+combat_kill_message:
+    ldx cmb_slot
+    jsr eff_kill_monster
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action
+    jsr cmb_print_buf
+    lda #SFX_HIT
+    jmp sound_play         // Tail call
+```
+
+~20 bytes. Each of 4 call sites becomes `jsr combat_kill_message` (3 bytes) instead of ~20 bytes inline.
+
+- 4 × 20 = 80 bytes → 20 + 4 × 3 = 32 bytes
+- **Net savings: ~48 bytes**
+
+Similarly, the "wake monster" pattern (get_ptr, load flags, ora MF_AWAKE, store) is ~12 bytes and appears 3 times. A `monster_wake` helper saves ~20 bytes.
+
+- **Combined savings: ~68 bytes**
+
+### OPT-4.10 — Projectile Hit/Miss Message Deduplication (~50-60 bytes saved)
+
+`ranged_fire.s` and `throw.s` both build identical hit/miss messages:
+
+```asm
+// "THE <item> HITS THE <name>."
+    jsr *_msg_item_prefix       // "THE <item>"
+    ldx #HSTR_RF_HITS
+    jsr huff_append_combat      // " HITS"
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str       // " THE "
+    jsr combat_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str       // "."
+    jsr *_print_msg
+```
+
+This ~30-byte "append VERB THE name." suffix appears 4 times across the two files (hit + miss for both ranged and throw). The `*_msg_item_prefix` functions are also nearly identical (both build "THE <item>" — differ only in the item ID source).
+
+**Fix:** Create `projectile_msg_suffix(verb_hstr_id)`:
+```asm
+// Appends " VERB THE <name>." to combat_msg_buf and prints
+projectile_msg_suffix:
+    jsr huff_append_combat      // VERB
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str
+    jsr combat_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
+```
+
+~25 bytes. Replaces 4 × ~25 = 100 bytes with 25 + 4 × 5 = 45 bytes.
+
+- **Net savings: ~55 bytes**
+
+### OPT-4.11 — Huff-Decode-and-Print Helper (~30-40 bytes saved)
+
+The two-line pattern:
+```asm
+    ldx #HSTR_xxx
+    jsr huff_decode_string
+    jsr msg_print
+```
+appears **10 times** across 10 files (turn.s, spell_effects.s, throw.s, bash.s, player_items.s, player_move.s, ranged_fire.s, monster_attack.s, dungeon_features.s, player_magic.s). Each instance is 8 bytes (2 + 3 + 3).
+
+**Fix:** Create `huff_print_msg`:
+```asm
+// Input: X = Huffman string ID
+huff_print_msg:
+    jsr huff_decode_string
+    jmp msg_print          // 6 bytes
+```
+
+Each call site becomes 5 bytes (`ldx #ID; jsr huff_print_msg`) instead of 8 bytes.
+
+- 10 × 8 = 80 bytes → 6 + 10 × 5 = 56 bytes
+- **Net savings: ~24 bytes** (trivial to implement)
+
+### Priority and Implementation Order
+
+| Priority | Item | Effort | Est. Savings | Files Affected |
+|----------|------|--------|-------------|----------------|
+| 1 | OPT-4.11 Huff-print helper | Trivial | ~24 | 10 files |
+| 2 | OPT-4.9 Kill/wake message helpers | Low | ~68 | combat.s, ranged_fire.s, throw.s, spell_effects.s |
+| 3 | OPT-4.10 Projectile msg dedup | Low | ~55 | ranged_fire.s, throw.s |
+| 4 | OPT-4.5 Unify tohit calc | Medium | ~80 | combat.s, throw.s |
+| 5 | OPT-4.1+4.2 Shared trace + direction | Medium | ~150-180 | ranged_fire.s, throw.s, spell_effects.s |
+| 6 | OPT-4.3 Adjacent-tile iterator | Medium | ~90-120 | spell_effects.s |
+| 7 | OPT-4.4 Shared 16-bit HP damage | Low | ~40 | spell_effects.s, combat.s |
+| 8 | OPT-4.6 Table-driven effect ticks | Medium | ~26 | turn.s |
+| 9 | OPT-4.7 Huffman item names | High | ~300-400 | item.s, huffman_data.s, tools/ |
+| 10 | OPT-4.8 Remaining raw strings | Low | ~30 | turn.s |
+
+### Summary
+
+| Category | Items | Total Savings |
+|----------|-------|--------------|
+| Code deduplication (OPT-4.1–4.6, 4.9–4.11) | 8 items | ~550-650 bytes |
+| String compression (OPT-4.7–4.8) | 2 items | ~330-430 bytes |
+| **Total** | **10 items** | **~880-1,080 bytes** |
+
+Combined with OPT-3 (town overlay, ~500-700 bytes saved there), the project can reclaim substantial headroom in both the main segment and the overlay without losing any features. The code deduplication items (OPT-4.1–4.6, 4.9–4.11) are recommended first since they also improve maintainability. OPT-4.7 (Huffman item names) is the single largest main-segment win but requires tooling changes.
