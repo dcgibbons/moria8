@@ -958,49 +958,79 @@ ltb_dst_hi:
 // ============================================================
 // Input: X = creature type index
 // Output: A = name string ptr lo, Y = name string ptr hi
-// If the name pointer is in $E000+ (under KERNAL ROM), copies the
-// string to creature_name_buf and returns the buffer address.
-// If the name is in normal RAM (embedded/town), returns directly.
+// For tier-loaded creatures: reads name pointers from the tier
+// overlay at $E000 and copies name to creature_name_buf.
+// For resident/town creatures: returns pointer directly if in
+// normal RAM, or copies via banking if under KERNAL ROM.
 // Clobbers: A, Y, zp_ptr1
 creature_get_name:
+    lda current_tier
+    beq !cgn_table+             // No tier → use cr_name tables
+    cpx active_dungeon_count
+    bcs !cgn_table+             // Not a tier creature
+
+    // --- Tier creature: bank, read ptr from $E000, copy name ---
+    txa
+    tay                         // Y = creature index (preserved across banking)
+    sei
+    lda $01
+    pha
+    lda #$35
+    sta $01
+    lda tier_name_lo_addr
+    sta zp_ptr1
+    lda tier_name_lo_addr+1
+    sta zp_ptr1_hi
+    lda (zp_ptr1),y
+    pha
+    lda tier_name_hi_addr
+    sta zp_ptr1
+    lda tier_name_hi_addr+1
+    sta zp_ptr1_hi
+    lda (zp_ptr1),y
+    sta zp_ptr1_hi
+    pla
+    sta zp_ptr1
+    jmp !cgn_copy+
+
+!cgn_table:
     lda cr_name_hi,x
     cmp #$e0
     bcs !cgn_banked+
-
-    // Name is in normal program RAM — return pointer directly
-    tay                         // Y = hi byte
-    lda cr_name_lo,x            // A = lo byte
+    tay
+    lda cr_name_lo,x
     rts
 
 !cgn_banked:
-    // Name is under KERNAL ROM — copy to buffer via banking
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-
     sei
     lda $01
-    pha                         // Save current bank config
-    lda #$35                    // Bank out KERNAL + BASIC (RAM everywhere)
+    pha
+    lda #$35
     sta $01
 
-    ldy #0
 !cgn_copy:
+    ldy #0
+!cgn_copy_lp:
     lda (zp_ptr1),y
     sta creature_name_buf,y
     beq !cgn_done+
     iny
-    cpy #31                     // Safety limit (names never exceed 30 chars)
-    bne !cgn_copy-
+    cpy #31
+    bne !cgn_copy_lp-
     lda #0
-    sta creature_name_buf,y     // Null-terminate at limit
+    sta creature_name_buf,y
 !cgn_done:
     pla
-    sta $01                     // Restore bank config
+    sta $01
     cli
-
     lda #<creature_name_buf
     ldy #>creature_name_buf
     rts
 
+cgn_save_x: .byte 0
+tier_name_lo_addr: .word 0
+tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0

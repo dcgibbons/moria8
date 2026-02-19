@@ -223,6 +223,25 @@ tier_load:
     lda tier_count_table,x      // A = creature count for this tier
     jsr load_tier_to_buffer
 
+    // Compute tier name table addresses in $E000 region.
+    // After load_tier_to_buffer, zp_ptr0 is past all 22 arrays.
+    // name_hi starts at zp_ptr0 - count, name_lo at zp_ptr0 - 2*count.
+    sec
+    lda zp_ptr0
+    sbc active_dungeon_count
+    sta tier_name_hi_addr
+    lda zp_ptr0_hi
+    sbc #0
+    sta tier_name_hi_addr+1
+
+    sec
+    lda tier_name_hi_addr
+    sbc active_dungeon_count
+    sta tier_name_lo_addr
+    lda tier_name_hi_addr+1
+    sbc #0
+    sta tier_name_lo_addr+1
+
     pla
     sta $01                     // Restore bank config
     cli

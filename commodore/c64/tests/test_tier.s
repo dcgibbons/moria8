@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #9
+    ldx #10
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -90,7 +90,7 @@ tc_results: .fill 12, $ff
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #9
+    ldx #10
     lda #$ff
 !clr:
     sta tc_results,x
@@ -387,6 +387,101 @@ test_start:
     lda #$00
 !t10_store:
     sta tc_results + 9
+
+    // ============================================================
+    // Test 11: creature_get_name for tier creature
+    // Write name pointer tables and name strings at $E000,
+    // configure tier state, call creature_get_name(X=1),
+    // verify creature_name_buf contains expected bytes.
+    // ============================================================
+
+    // Bank out KERNAL to write test data at $E000
+    sei
+    lda $01
+    pha
+    lda #$35                    // All RAM
+    sta $01
+
+    // Name_lo table at $E000: lo bytes of name string addresses
+    lda #$10                    // lo($E010)
+    sta $e000
+    lda #$13                    // lo($E013)
+    sta $e001
+    lda #$16                    // lo($E016)
+    sta $e002
+
+    // Name_hi table at $E003: hi bytes of name string addresses
+    lda #$e0                    // hi($E0xx)
+    sta $e003
+    sta $e004
+    sta $e005
+
+    // Name string 0 at $E010: screen codes $01,$02 + null
+    lda #$01
+    sta $e010
+    lda #$02
+    sta $e011
+    lda #$00
+    sta $e012
+
+    // Name string 1 at $E013: screen codes $03,$04 + null
+    lda #$03
+    sta $e013
+    lda #$04
+    sta $e014
+    lda #$00
+    sta $e015
+
+    // Name string 2 at $E016: screen codes $05,$06 + null
+    lda #$05
+    sta $e016
+    lda #$06
+    sta $e017
+    lda #$00
+    sta $e018
+
+    // Restore KERNAL
+    pla
+    sta $01
+    cli
+
+    // Configure tier state
+    lda #1
+    sta current_tier            // Tier active
+    lda #3
+    sta active_dungeon_count    // 3 creatures
+
+    // Set tier name table pointers
+    lda #<$e000
+    sta tier_name_lo_addr
+    lda #>$e000
+    sta tier_name_lo_addr+1
+
+    lda #$03                    // lo($E003)
+    sta tier_name_hi_addr
+    lda #$e0                    // hi($E003)
+    sta tier_name_hi_addr+1
+
+    // Call creature_get_name(X=1) — should resolve to "CD" ($03,$04,$00)
+    ldx #1
+    jsr creature_get_name
+
+    // Verify creature_name_buf contains $03, $04, $00
+    lda creature_name_buf
+    cmp #$03
+    bne !t11_fail+
+    lda creature_name_buf + 1
+    cmp #$04
+    bne !t11_fail+
+    lda creature_name_buf + 2
+    cmp #$00
+    bne !t11_fail+
+    lda #$01
+    jmp !t11_store+
+!t11_fail:
+    lda #$00
+!t11_store:
+    sta tc_results + 10
 
     // ============================================================
     // Done — copy results and halt

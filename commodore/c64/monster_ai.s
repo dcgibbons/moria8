@@ -336,8 +336,8 @@ wgn_dist: .byte 0
 // ============================================================
 // monster_move_toward — Movement toward player with unstick heuristic
 // Try diagonal first. Then randomly alternate horizontal/vertical
-// to break corner-sticking. 4th fallback: perpendicular move.
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_temp3, zp_temp4
+// to break corner-sticking.
+// Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 monster_move_toward:
     lda #0
@@ -361,61 +361,13 @@ monster_move_toward:
     jsr mmt_try_horiz
     bcs !mmt_done+
     jsr mmt_try_vert
-    bcs !mmt_done+
-    jmp !mmt_perp+
+    jmp !mmt_done+
 
 !mmt_vert_first:
     // --- Vertical first, then horizontal ---
     jsr mmt_try_vert
     bcs !mmt_done+
     jsr mmt_try_horiz
-    bcs !mmt_done+
-
-!mmt_perp:
-    // Try 4: perpendicular move (break corner-sticking)
-    // Pick a perpendicular axis and try both directions
-    lda mat_sign_dx
-    beq !mmt_perp_h+           // dx=0 → try horizontal perp
-    lda mat_sign_dy
-    beq !mmt_perp_v+           // dy=0 → try vertical perp
-    jsr rng_byte
-    and #$01
-    bne !mmt_perp_h+
-!mmt_perp_v:
-    // Perpendicular vertical: try +1 then -1 (or vice versa)
-    lda zp_mon_x
-    sta mat_target_x
-    lda zp_mon_y
-    clc
-    adc #1
-    sta mat_target_y
-    jsr monster_try_step
-    bcs !mmt_done+
-    lda zp_mon_x
-    sta mat_target_x
-    lda zp_mon_y
-    sec
-    sbc #1
-    sta mat_target_y
-    jsr monster_try_step
-    jmp !mmt_done+
-!mmt_perp_h:
-    // Perpendicular horizontal: try +1 then -1
-    lda zp_mon_y
-    sta mat_target_y
-    lda zp_mon_x
-    clc
-    adc #1
-    sta mat_target_x
-    jsr monster_try_step
-    bcs !mmt_done+
-    lda zp_mon_y
-    sta mat_target_y
-    lda zp_mon_x
-    sec
-    sbc #1
-    sta mat_target_x
-    jsr monster_try_step
 
 !mmt_done:
     rts
