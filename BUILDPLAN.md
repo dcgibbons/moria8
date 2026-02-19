@@ -45,6 +45,8 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
+| BUG-32 | MED | Monster names/descriptions garbled for tier-loaded creatures from REU (death screen "KILLED BY A [garbage]", combat "HIT THE [garbage]") — repeat of BUG-30 pattern, not fully resolved | Open |
+| BUG-33 | LOW | Secret door wall sometimes wrong orientation (renders as `+` on horizontal wall instead of `—`) — recurring | Open |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
