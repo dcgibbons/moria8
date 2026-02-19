@@ -97,7 +97,10 @@ for name string. Tier PRGs load to $E000 (RAM under KERNAL ROM), then
 `load_tier_to_buffer` copies SoA data to active creature buffers in program RAM.
 Name strings remain at $E000+ (read via `creature_get_name` with KERNAL banking).
 
-REU path: all 4 tiers preloaded at startup → DMA fetch on transition (instant).
+REU path: all 4 tiers + 3 overlays preloaded at startup → DMA fetch on transition
+(instant). Loading screen shows "LOADING INTO REU:" header with per-file progress
+(`X/YYYKB` used/total). Display routine lives in banked $F000 region
+(`reu_loading_banked.s`), called via self-modifying dispatch patched at startup.
 Disk path: KERNAL LOAD tier PRG on each transition.
 Tier overlap ranges prevent thrashing: T1=[1,8], T2=[5,15], T3=[11,25], T4=[20,100].
 
@@ -200,6 +203,7 @@ main.s                    Entry point, BASIC stub, initialization, command dispa
 ├── save.s                Save/load game state to disk (RLE map compression, checksum)
 ├── score.s               Death screen, high score table, 24-bit score calculation
 ├── reu.s                 REU detection, DMA stash/fetch for tier data
+├── reu_loading_banked.s  REU loading progress display (banked at $F000)
 ├── tier_manager.s        Creature tier loading (disk KERNAL LOAD or REU DMA)
 │
 └── data/

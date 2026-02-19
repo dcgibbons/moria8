@@ -122,6 +122,14 @@ entry_main:
     // trampoline calls — payload stored inline after program code)
     jsr init_copy_banked
 
+    // Patch reu_show_status: RTS → JMP tramp_reu_show_status
+    lda #$4c                    // JMP absolute opcode
+    sta reu_show_status
+    lda #<tramp_reu_show_status
+    sta reu_show_status + 1
+    lda #>tramp_reu_show_status
+    sta reu_show_status + 2
+
     // Select unshifted character set (uppercase + graphics)
     // Bit 1 of $D018 selects character set: 0=uppercase, 1=lowercase
     lda $d018
@@ -1429,6 +1437,20 @@ title_show_sysinfo:
     rts
 tsi_krev_cached: .byte 0
 
+// tramp_reu_show_status — Bank out KERNAL to call banked status display
+// Patched into reu_show_status at startup by init code.
+tramp_reu_show_status:
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL         // $35 — I/O visible for screen writes
+    sta $01
+    jsr reu_show_status_banked
+    pla
+    sta $01
+    cli
+    rts
+
 #import "ui_help_clear.s"
 
 // ============================================================
@@ -1618,6 +1640,7 @@ banked_payload:
     #import "special_rooms.s"
     #import "ego_items.s"
     #import "title_sysinfo_banked.s"
+    #import "reu_loading_banked.s"
     #import "ui_help.s"
     #import "ui_character.s"
     #import "ui_inventory.s"

@@ -407,6 +407,9 @@ reu_load_all_tiers:
     adc tier_size_hi,x
     sta reu_tier_offset_hi
 
+    // Update status display with new usage
+    jsr reu_show_status
+
     ldx reu_tier_idx
     inx
     cpx #5                      // Tiers 1-4
@@ -553,6 +556,9 @@ reu_stash_overlays:
     adc #$10
     sta reu_tier_offset_hi
 
+    // Update status display with new usage
+    jsr reu_show_status
+
     ldx reu_ovl_idx
     inx
     cpx #4                      // Overlays 1-3
@@ -596,6 +602,14 @@ reu_show_file:
 
 reu_loading_row: .byte 0
 
+// reu_show_status — Display REU loading progress
+// Default: RTS (safe for test builds). At startup, main.s patches
+// this to JMP to the banked trampoline after init_copy_banked.
+// Clobbers: A, X, Y (when patched)
+reu_show_status:
+    rts                         // Patched to $4C (JMP abs) at startup
+    .byte 0, 0                  // Operand bytes filled by init patch
+
 // Screen-code filename strings for display
 reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
 reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
@@ -612,4 +626,4 @@ reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3
 reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3
 
 // Header string (displayed by tier_init)
-reu_loading_hdr: .text "LOADING:" ; .byte 0
+reu_loading_hdr: .text "LOADING INTO REU:" ; .byte 0

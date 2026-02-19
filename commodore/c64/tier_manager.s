@@ -91,7 +91,8 @@ tier_init:
     lda #>reu_loading_hdr
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda #3
+    jsr reu_show_status         // Show initial "0/XXXKB"
+    lda #4
     sta reu_loading_row
 
     // REU present: load all 4 tier files from disk into REU
