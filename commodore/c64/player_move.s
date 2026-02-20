@@ -117,8 +117,7 @@ player_try_move:
     lda eff_fear_timer
     beq !not_afraid+
     ldx #HSTR_PTM_AFRAID
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec                         // Turn consumed (too afraid to act)
     rts
 !not_afraid:
@@ -620,8 +619,7 @@ do_look:
 // dl_print_tile — Print a tile description message
 // Input: X = Huffman string ID (HSTR_*)
 dl_print_tile:
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -629,8 +627,7 @@ dl_print_tile:
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
     ldx #HSTR_DL_YOU_SEE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     // Append name inline on message row
     lda zp_text_color
     pha

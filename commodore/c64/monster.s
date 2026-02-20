@@ -333,6 +333,17 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
+// monster_wake — Set MF_AWAKE flag on a monster
+// Input: X = monster slot index
+// Clobbers: A, Y, zp_ptr0/hi
+monster_wake:
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    ora #MF_AWAKE
+    sta (zp_ptr0),y
+    rts
+
 // monster_init_table — Mark all 32 slots empty, reset count
 // Clears 384 bytes (32 slots × 12 bytes). Two-pass loop because
 // cpx #384 truncates to cpx #128 on 6502 (8-bit immediate).

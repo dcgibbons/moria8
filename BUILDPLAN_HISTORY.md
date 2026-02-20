@@ -3782,3 +3782,36 @@ All paths share a single copy loop (`!cgn_copy`), eliminating a duplicate copy r
 **Files modified:**
 - `monster.s` — Rewrote `creature_get_name` with four-path resolution
 
+
+---
+
+## OPT-4 — Codebase-Wide Size Optimization ✅ COMPLETE (2026-02-20)
+
+**Total savings: 1,098 bytes** in the main segment (program_end $BFD5 → $BB8B, headroom 43 → 1,141 bytes). Nine items implemented by an architect/implementor/tester team. All 22 test suites pass, 70 compile-time asserts.
+
+### Items Completed
+
+| Item | Description | Saved |
+|------|-------------|-------|
+| OPT-4.11 | `huff_print_msg` helper — collapsed 3-instruction pattern (ldx/jsr decode/jsr print) to 2 across ~136 sites | **402 bytes** |
+| OPT-4.9 | `combat_kill_message` + `monster_wake` helpers — deduplicated kill dispatch and flag-set patterns | **39 bytes** |
+| OPT-4.10 | `projectile_msg_suffix` — shared hit/miss message suffix in ranged_fire.s + throw.s | **77 bytes** |
+| OPT-4.5 | `combat_calc_tohit_common` — unified melee/ranged tohit calc, throw wrapper does 75% scaling | **114 bytes** |
+| OPT-4.1+4.2 | `trace_projectile` + `calc_direction_index` in new `projectile.s` — shared across ranged_fire.s, throw.s, spell_effects.s | **194 bytes** |
+| OPT-4.3 | `for_each_adjacent` — shared 8-direction iterator used by sleep/confuse/damage/traps loops in spell_effects.s | **62 bytes** |
+| OPT-4.4 | `combat_apply_damage_16` — fall-through design extends existing combat_apply_damage to 16-bit; spell_effects.s inline loops replaced | **84 bytes** |
+| OPT-4.6 | Table-driven effect ticks — `tick_simple_effects` + `tick_msg_effects` loops replace 7+3 inline patterns in turn.s | **14 bytes** |
+| OPT-4.8 | Huffman-encode remaining raw strings — turn.s pseudo-ID quality words + bash.s strings (13 new HSTR entries, now 217 total) | **112 bytes** |
+
+### Notes
+
+- **OPT-4.11** was the biggest win by far — the 3-instruction inline pattern was far more prevalent than the BUILDPLAN estimated (~24 bytes projected vs 402 actual).
+- **OPT-4.6** savings were smaller than projected (15 vs 26) because `dec $00,y` doesn't exist on 6502 — zero-page indirect decrement requires load/dec/store (3 instructions, not 1).
+- **OPT-4.8** was larger than projected (~85-100 vs 112) because bash.s contained ~190 bytes of raw strings the BUILDPLAN had missed.
+- **OPT-4.7** (Huffman item names, ~300-400 bytes) was deferred — requires tooling changes; sufficient headroom exists without it.
+- A new `projectile.s` source file was added. All 17 test files that transitively import spell_effects.s, ranged_fire.s, or throw.s required a new `#import "../projectile.s"` line.
+- Banked code region ($F000-$FFF7) unchanged — OPT-4 only affected the main segment.
+
+### Files Modified
+
+`turn.s`, `spell_effects.s`, `combat.s`, `ranged_fire.s`, `throw.s`, `bash.s`, `monster.s`, `ui_inventory.s`, `huffman_data.s` + new `projectile.s` + 17 test files (import added).

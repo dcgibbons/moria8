@@ -11,10 +11,6 @@
 // ============================================================
 tw_slot:       .byte 0     // Inventory slot of thrown item
 tw_item_id:    .byte 0     // Item type ID
-tw_dir:        .byte 0     // Direction index 0-7
-tw_cx:         .byte 0     // Current trace X
-tw_cy:         .byte 0     // Current trace Y
-tw_steps:      .byte 0     // Steps remaining (range)
 tw_last_x:     .byte 0     // Last walkable position X (for floor drop)
 tw_last_y:     .byte 0     // Last walkable position Y
 tw_save_p1:    .byte 0     // Saved p1 before consumption
@@ -31,8 +27,7 @@ tw_save_ego:   .byte 0     // Saved ego before consumption
 throw_item:
     // 1. Prompt for item
     ldx #HSTR_TW_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     jsr input_get_key
 
@@ -65,15 +60,13 @@ throw_item:
 
     // Empty slot
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 !tw_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -89,32 +82,11 @@ throw_item:
     rts                         // Cancelled
 !tw_has_dir:
 
-    // Compute direction index from df_target_x/y
-    lda df_target_x
-    sec
-    sbc zp_player_x
-    sta zp_temp0                // dx
-    lda df_target_y
-    sec
-    sbc zp_player_y
-    sta zp_temp1                // dy
-
-    ldx #0
-!tw_find_dir:
-    lda dir_dx,x
-    cmp zp_temp0
-    bne !tw_dir_next+
-    lda dir_dy,x
-    cmp zp_temp1
-    beq !tw_dir_found+
-!tw_dir_next:
-    inx
-    cpx #8
-    bcc !tw_find_dir-
+    jsr calc_direction_index
+    bcs !tw_dir_ok+
     clc
     rts                         // Shouldn't happen
-!tw_dir_found:
-    stx tw_dir
+!tw_dir_ok:
 
     // 3. Calculate range: min(10, (STR + 20) * 10 / weight)
     lda zp_player_str
@@ -143,70 +115,34 @@ throw_item:
 !tw_max_range:
     lda #10
 !tw_range_ok:
-    sta tw_steps
+    sta proj_steps
 
     // 4. Trace projectile
     lda zp_player_x
-    sta tw_cx
+    sta proj_cx
     sta tw_last_x
     lda zp_player_y
-    sta tw_cy
+    sta proj_cy
     sta tw_last_y
 
 !tw_trace:
-    dec tw_steps
+    dec proj_steps
     bmi !tw_miss_dark_tramp+
-
-    // Step in direction
-    ldx tw_dir
-    lda tw_cx
-    clc
-    adc dir_dx,x
-    sta tw_cx
-    lda tw_cy
-    clc
-    adc dir_dy,x
-    sta tw_cy
-
-    // Bounds check
-    lda tw_cx
-    beq !tw_miss_dark_tramp+
-    cmp #MAP_COLS - 1
-    bcs !tw_miss_dark_tramp+
-    lda tw_cy
-    beq !tw_miss_dark_tramp+
-    cmp #MAP_ROWS - 1
-    bcc !tw_bounds_ok+
+    jsr trace_step
+    bcs !tw_step_ok+
 !tw_miss_dark_tramp:
     jmp tw_miss_darkness
-!tw_bounds_ok:
-
-    // Check walkability
-    ldx tw_cy
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy tw_cx
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    lda walkable_table,x
-    beq !tw_miss_dark_tramp-    // Blocked
+!tw_step_ok:
 
     // Update last walkable position
-    lda tw_cx
+    lda proj_cx
     sta tw_last_x
-    lda tw_cy
+    lda proj_cy
     sta tw_last_y
 
     // Check for monster
-    lda tw_cx
-    ldy tw_cy
+    lda proj_cx
+    ldy proj_cy
     jsr monster_find_at
     bcc !tw_trace-              // No monster, keep tracing
 
@@ -290,35 +226,17 @@ throw_item:
 
     // Monster killed — "YOU HAVE SLAIN THE <name>."
     ldx cmb_slot
-    jsr eff_kill_monster
-    lda #<cmb_kill_str
-    ldy #>cmb_kill_str
-    jsr msg_build_action
-    jsr cmb_print_buf
-    lda #SFX_HIT
-    jsr sound_play
+    jsr combat_kill_message
     jmp tw_consume_item
 
 !tw_hit_alive:
     // Wake the monster
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
+    jsr monster_wake
 
     // Message: "THE <item> HITS THE <name>."
     jsr tw_msg_item_prefix          // "THE <item>"
     ldx #HSTR_RF_HITS
-    jsr huff_append_combat          // " HITS"
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str           // " THE "
-    jsr combat_append_monster_name
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-    jsr cmb_term_and_print
+    jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr sound_play
     jmp tw_consume_item
@@ -327,15 +245,7 @@ tw_miss_monster:
     // Message: "THE <item> MISSES THE <name>."
     jsr tw_msg_item_prefix
     ldx #HSTR_RF_MISSES
-    jsr huff_append_combat
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str
-    jsr combat_append_monster_name
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-    jsr cmb_term_and_print
+    jsr projectile_msg_suffix
     lda #SFX_MISS
     jsr sound_play
     jmp tw_consume_item
@@ -411,90 +321,9 @@ tw_consume_item:
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 // ============================================================
 throw_calc_tohit:
-    // Get class BTH_BOW (class_properties offset 4)
-    lda player_data + PL_CLASS
-    ldx #CLASS_PROP_SIZE
-    jsr math_multiply           // A = class * 10
-    clc
-    adc #4                      // Offset to BTH_BOW field
-    tax
-    lda class_properties,x
-    sta zp_combat_tohit
-
-    // Add race BTH (race_properties offset 7, signed byte)
-    lda player_data + PL_RACE
-    ldx #RACE_PROP_SIZE
-    jsr math_multiply           // A = race * RACE_PROP_SIZE
-    clc
-    adc #7                      // Offset to BTH field
-    tax
-    lda race_properties,x
-    bmi !tct_race_neg+
-    clc
-    adc zp_combat_tohit
-    bcc !tct_race_done+
-    lda #255
-    jmp !tct_race_done+
-!tct_race_neg:
-    eor #$ff
-    clc
-    adc #1
-    sta zp_temp0
-    lda zp_combat_tohit
-    sec
-    sbc zp_temp0
-    bcs !tct_race_done+
-    lda #0
-!tct_race_done:
-    sta zp_combat_tohit
-
-    // Add PL_TOHIT * 3
-    lda player_data + PL_TOHIT
-    bmi !tct_neg_tohit+
-    sta zp_temp0
-    asl                         // *2
-    clc
-    adc zp_temp0                // *3
-    clc
-    adc zp_combat_tohit
-    bcc !tct_tohit_ok+
-    lda #255
-    jmp !tct_tohit_ok+
-!tct_neg_tohit:
-    eor #$ff
-    clc
-    adc #1
-    sta zp_temp0
-    asl
-    clc
-    adc zp_temp0                // *3 (positive value)
-    sta zp_temp0
-    lda zp_combat_tohit
-    sec
-    sbc zp_temp0
-    bcs !tct_tohit_ok+
-    lda #0
-!tct_tohit_ok:
-    sta zp_combat_tohit
-
-    // Add player_level * class_bth_bow_per_level (class_level_adj offset 1)
-    lda player_data + PL_CLASS
-    ldx #CLASS_LVL_SIZE
-    jsr math_multiply           // A = class * 5
-    clc
-    adc #1                      // Offset to BOW per-level
-    tax
-    lda class_level_adj,x       // BOW per level
-    ldx zp_player_lvl
-    jsr math_multiply           // zp_math_a = level * bow_per_level
-    lda zp_math_a
-    clc
-    adc zp_combat_tohit
-    bcc !tct_lvl_done+
-    lda #255
-!tct_lvl_done:
-    sta zp_combat_tohit
-
+    lda #4                          // BTH_BOW offset in class_properties
+    ldx #1                          // BOW level adj offset
+    jsr combat_calc_tohit_common
     // Apply 75%: tohit = tohit * 3 / 4
     lda zp_combat_tohit
     sta zp_temp0

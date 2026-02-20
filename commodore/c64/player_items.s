@@ -99,8 +99,7 @@ show_equip_and_restore:
 item_wear:
     // Print prompt
     ldx #HSTR_PIW_WEAR_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -139,8 +138,7 @@ item_wear:
 
     // Empty slot
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -263,15 +261,13 @@ item_wear:
 
 !iw_cant_wear:
     ldx #HSTR_PIW_CANT_WEAR
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 !iw_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -282,8 +278,7 @@ item_wear:
 item_takeoff:
     // Print prompt
     ldx #HSTR_PIW_TAKEOFF_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -322,8 +317,7 @@ item_takeoff:
     bne !ito_has_item+
 
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -337,8 +331,7 @@ item_takeoff:
     beq !ito_not_cursed+
 
     ldx #HSTR_PIW_CURSED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -366,8 +359,7 @@ item_takeoff:
 
     // Pack full
     ldx #HSTR_UIS_PACK_FULL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -417,8 +409,7 @@ item_takeoff:
 
 !ito_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -453,8 +444,7 @@ item_eat:
 
 !ie_no_food:
     ldx #HSTR_PIW_NO_FOOD
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -622,8 +612,7 @@ player_recalc_equipment:
 item_quaff:
     // Print prompt
     ldx #HSTR_PIQ_QUAFF_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -660,8 +649,7 @@ item_quaff:
     bne !iq_has_item+
 
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -675,8 +663,7 @@ item_quaff:
     beq !iq_is_potion+
 
     ldx #HSTR_PIQ_NOT_POTION
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -741,8 +728,7 @@ item_quaff:
     jsr eff_heal
 
     ldx #HSTR_PIQ_FEEL_BETTER
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     sec
     rts
@@ -762,8 +748,7 @@ item_quaff:
     sta zp_eff_speed
 
     ldx #HSTR_PIQ_SPEED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     sec
     rts
@@ -820,8 +805,7 @@ item_quaff:
     sta zp_eff_poison
 
     ldx #HSTR_PIQ_TERRIBLE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     sec
     rts
@@ -836,8 +820,7 @@ item_quaff:
     jsr eff_heal
 
     ldx #HSTR_PIQ_MUCH_BETTER
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -848,8 +831,7 @@ item_quaff:
     sta player_data + PL_MANA
 
     ldx #HSTR_PIQ_MIND_CLEAR
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -869,8 +851,7 @@ item_quaff:
     sta zp_eff_hero
 
     ldx #HSTR_PIQ_HEROIC
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -888,8 +869,7 @@ item_quaff:
     sta zp_eff_blind
 
     ldx #HSTR_PIQ_CANT_SEE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -907,8 +887,7 @@ item_quaff:
     sta zp_eff_confuse
 
     ldx #HSTR_PIQ_DIZZY
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -916,8 +895,7 @@ item_quaff:
     jsr eff_detect_monsters
 
     ldx #HSTR_PIQ_SENSE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -937,22 +915,19 @@ item_quaff:
     sta zp_eff_infra
 
     ldx #HSTR_PIQ_EYES_TINGLE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !iq_generic_msg:
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !iq_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -967,15 +942,13 @@ item_read_scroll:
     lda zp_eff_blind
     beq !irs_can_see+
     ldx #HSTR_PIQ_CANT_READ
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 !irs_can_see:
     // Print prompt
     ldx #HSTR_PIQ_READ_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -1012,8 +985,7 @@ item_read_scroll:
     bne !irs_has_item+
 
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1027,8 +999,7 @@ item_read_scroll:
     beq !irs_is_scroll+
 
     ldx #HSTR_PIQ_NOT_SCROLL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1088,8 +1059,7 @@ item_read_scroll:
     // Light the room the player is in (shared subroutine)
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     sec
     rts
@@ -1105,8 +1075,7 @@ item_read_scroll:
     jsr eff_teleport_self
 
     ldx #HSTR_PIQ_TELEPORT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     sec
     rts
@@ -1120,8 +1089,7 @@ item_read_scroll:
     sta zp_eff_word_recall
 
     ldx #HSTR_PIQ_AIR_CRACKLE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1129,8 +1097,7 @@ item_read_scroll:
     jsr eff_remove_curse
 
     ldx #HSTR_PIQ_CLEANSED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1143,8 +1110,7 @@ item_read_scroll:
 
     // No weapon equipped
     ldx #HSTR_PIQ_VIBRATION
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1171,8 +1137,7 @@ item_read_scroll:
 
     // Already at cap
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1182,8 +1147,7 @@ item_read_scroll:
 
 !irs_ew_msg:
     ldx #HSTR_PIQ_WPN_GLOW
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1196,8 +1160,7 @@ item_read_scroll:
 
     // No armor equipped
     ldx #HSTR_PIQ_VIBRATION
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1224,8 +1187,7 @@ item_read_scroll:
 
     // Already at cap
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1235,8 +1197,7 @@ item_read_scroll:
 
 !irs_ea_msg:
     ldx #HSTR_PIQ_ARM_GLOW
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1246,8 +1207,7 @@ item_read_scroll:
     sta zp_confuse_melee
 
     ldx #HSTR_PIQ_HANDS_GLOW
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1255,8 +1215,7 @@ item_read_scroll:
     jsr eff_aggravate
 
     ldx #HSTR_PIQ_HUMMING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1276,22 +1235,19 @@ item_read_scroll:
     sta zp_eff_protect
 
     ldx #HSTR_PIQ_PROTECTED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !irs_generic_msg:
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !irs_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1304,8 +1260,7 @@ item_read_scroll:
 item_aim_wand:
     // Print prompt
     ldx #HSTR_PIW_AIM_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -1342,8 +1297,7 @@ item_aim_wand:
     bne !iaw_has_item+
 
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1357,8 +1311,7 @@ item_aim_wand:
     beq !iaw_is_wand+
 
     ldx #HSTR_PIW_NOT_WAND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1369,8 +1322,7 @@ item_aim_wand:
     bne !iaw_has_charges+
 
     ldx #HSTR_PIW_NO_CHARGES
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1401,8 +1353,7 @@ item_aim_wand:
 !iaw_light:
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1412,8 +1363,7 @@ item_aim_wand:
     ldy #0
     jsr eff_bolt
     ldx #HSTR_PIW_WAND_BOLT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1423,8 +1373,7 @@ item_aim_wand:
     ldy #0
     jsr eff_bolt
     ldx #HSTR_PIW_WAND_FROST
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1437,21 +1386,18 @@ item_aim_wand:
     lda #10
     sta (zp_ptr0),y
     ldx #HSTR_PIW_WAND_CLOUD
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 !iaw_cloud_miss:
     ldx #HSTR_PIW_WAND_MISS
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !iaw_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1464,8 +1410,7 @@ item_aim_wand:
 item_use_staff:
     // Print prompt
     ldx #HSTR_PIW_USE_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -1502,8 +1447,7 @@ item_use_staff:
     bne !ius_has_item+
 
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1517,8 +1461,7 @@ item_use_staff:
     beq !ius_is_staff+
 
     ldx #HSTR_PIW_NOT_STAFF
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1529,8 +1472,7 @@ item_use_staff:
     bne !ius_has_charges+
 
     ldx #HSTR_PIW_STAFF_EMPTY
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1561,24 +1503,21 @@ item_use_staff:
 !ius_light:
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !ius_detect:
     jsr eff_detect_monsters
     ldx #HSTR_PIQ_SENSE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !ius_teleport:
     jsr eff_teleport_self
     ldx #HSTR_PIQ_TELEPORT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
@@ -1591,15 +1530,13 @@ item_use_staff:
     lda zp_math_a                   // Low byte of result (sufficient for 2-9)
     jsr eff_heal
     ldx #HSTR_PIQ_FEEL_BETTER
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec
     rts
 
 !ius_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1619,15 +1556,13 @@ item_gain_spell:
     lda player_data + PL_SPELL_TYPE
     bne !igs_can_cast+
     ldx #HSTR_IGS_NO_MAGIC
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 !igs_can_cast:
     ldx #HSTR_IGS_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     jsr input_get_key
 
@@ -1663,8 +1598,7 @@ item_gain_spell:
     cmp #FI_EMPTY
     bne !igs_have_item+
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1675,8 +1609,7 @@ item_gain_spell:
     cmp #ICAT_BOOK
     beq !igs_is_book+
     ldx #HSTR_IGS_NOT_BOOK
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1695,8 +1628,7 @@ item_gain_spell:
     cmp igs_spell_class
     beq !igs_type_ok+
     ldx #HSTR_IGS_WRONG_TYPE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1775,8 +1707,7 @@ item_gain_spell:
 
     // Learned at least one spell
     ldx #HSTR_IGS_SUCCESS
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     lda #SFX_LEVELUP
     jsr sound_play
@@ -1786,8 +1717,7 @@ item_gain_spell:
 
 !igs_none_learned:
     ldx #HSTR_IGS_NO_NEW
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc                         // No turn consumed
     rts
 
@@ -1818,8 +1748,7 @@ item_refuel:
 
     // Not using a lamp
     ldx #HSTR_PIR_NOT_LAMP
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1837,8 +1766,7 @@ item_refuel:
 
 !ir_no_oil:
     ldx #HSTR_PIR_NO_OIL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1859,11 +1787,9 @@ item_refuel:
 
     // 4. Overflow messages
     ldx #HSTR_PIR_OVERFLOW
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     ldx #HSTR_PIR_FULL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     jmp !ir_remove_flask+
 
 !ir_no_overflow:
@@ -1871,8 +1797,7 @@ item_refuel:
 
     // 5. Refueled message
     ldx #HSTR_PIR_REFUELED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
 !ir_remove_flask:
     // 6. Remove flask from inventory

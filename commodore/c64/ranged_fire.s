@@ -10,11 +10,6 @@
 rf_ammo_type:  .byte 0     // Matching ammo type (1=arrow, 2=bolt, 3=rock)
 rf_ammo_slot:  .byte 0     // Inventory slot of ammo
 rf_ammo_id:    .byte 0     // Item type ID of ammo
-rf_dir:        .byte 0     // Direction index 0-7
-rf_cx:         .byte 0     // Current trace X
-rf_cy:         .byte 0     // Current trace Y
-rf_steps:      .byte 0     // Steps remaining
-
 // Strings migrated to Huffman compression (HSTR_RF_* in huffman_data.s)
 
 // ============================================================
@@ -74,89 +69,32 @@ ranged_fire:
     rts                         // Cancelled
 !rf_has_dir:
 
-    // Compute direction index from df_target_x/y
-    lda df_target_x
-    sec
-    sbc zp_player_x
-    sta zp_temp0                // dx
-    lda df_target_y
-    sec
-    sbc zp_player_y
-    sta zp_temp1                // dy
-
-    ldx #0
-!rf_find_dir:
-    lda dir_dx,x
-    cmp zp_temp0
-    bne !rf_dir_next+
-    lda dir_dy,x
-    cmp zp_temp1
-    beq !rf_dir_found+
-!rf_dir_next:
-    inx
-    cpx #8
-    bcc !rf_find_dir-
+    jsr calc_direction_index
+    bcs !rf_dir_ok+
     clc
     rts                         // Shouldn't happen
-!rf_dir_found:
-    stx rf_dir
+!rf_dir_ok:
 
     // 4. Trace projectile
     lda zp_player_x
-    sta rf_cx
+    sta proj_cx
     lda zp_player_y
-    sta rf_cy
+    sta proj_cy
     lda #20
-    sta rf_steps
+    sta proj_steps
 
 !rf_trace:
-    dec rf_steps
+    dec proj_steps
     beq !rf_miss_dark_tramp+
-
-    // Step in direction
-    ldx rf_dir
-    lda rf_cx
-    clc
-    adc dir_dx,x
-    sta rf_cx
-    lda rf_cy
-    clc
-    adc dir_dy,x
-    sta rf_cy
-
-    // Bounds check
-    lda rf_cx
-    beq !rf_miss_dark_tramp+
-    cmp #MAP_COLS - 1
-    bcs !rf_miss_dark_tramp+
-    lda rf_cy
-    beq !rf_miss_dark_tramp+
-    cmp #MAP_ROWS - 1
-    bcc !rf_bounds_ok+
+    jsr trace_step
+    bcs !rf_step_ok+
 !rf_miss_dark_tramp:
     jmp rf_miss_darkness
-!rf_bounds_ok:
-
-    // Check walkability
-    ldx rf_cy
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy rf_cx
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    lda walkable_table,x
-    beq !rf_miss_dark_tramp-    // Blocked
+!rf_step_ok:
 
     // Check for monster
-    lda rf_cx
-    ldy rf_cy
+    lda proj_cx
+    ldy proj_cy
     jsr monster_find_at
     bcc !rf_trace-              // No monster, keep tracing
 
@@ -215,35 +153,17 @@ ranged_fire:
 
     // Monster killed — "YOU HAVE SLAIN THE <name>."
     ldx cmb_slot
-    jsr eff_kill_monster
-    lda #<cmb_kill_str
-    ldy #>cmb_kill_str
-    jsr msg_build_action            // Reuse melee kill message builder
-    jsr rf_print_msg
-    lda #SFX_HIT
-    jsr sound_play
+    jsr combat_kill_message
     jmp rf_consume_ammo
 
 !rf_hit_alive:
     // Wake the monster
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
+    jsr monster_wake
 
     // Message: "THE <ammo> HITS THE <name>."
     jsr rf_msg_ammo_prefix          // "THE <ammo>"
     ldx #HSTR_RF_HITS
-    jsr huff_append_combat          // " HITS"
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str           // " THE "
-    jsr combat_append_monster_name
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-    jsr rf_print_msg
+    jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr sound_play
     jmp rf_consume_ammo
@@ -252,15 +172,7 @@ rf_miss_monster:
     // Message: "THE <ammo> MISSES THE <name>."
     jsr rf_msg_ammo_prefix
     ldx #HSTR_RF_MISSES
-    jsr huff_append_combat
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str
-    jsr combat_append_monster_name
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-    jsr rf_print_msg
+    jsr projectile_msg_suffix
     lda #SFX_MISS
     jsr sound_play
     jmp rf_consume_ammo
@@ -286,15 +198,13 @@ rf_consume_ammo:
 
 rf_msg_no_weapon:
     ldx #HSTR_RF_NO_WEAPON
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 rf_msg_no_ammo:
     ldx #HSTR_RF_NO_AMMO
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 

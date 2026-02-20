@@ -41,8 +41,7 @@ player_cast_spell:
 
     // Cannot cast
     ldx #HSTR_PM_NO_CAST
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -65,8 +64,7 @@ player_pray:
 
     // Cannot pray
     ldx #HSTR_PM_NO_PRAY
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -175,8 +173,7 @@ pm_do_cast:
 
 !pm_not_known:
     ldx #HSTR_PM_NOT_KNOWN
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -197,8 +194,7 @@ pm_do_cast:
 
     // Not enough mana
     ldx #HSTR_PM_NO_MANA
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -220,8 +216,7 @@ pm_do_cast:
 
     // Player level too low
     ldx #HSTR_PM_NO_EXP
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -239,8 +234,7 @@ pm_do_cast:
 
     // Spell failed — turn consumed
     ldx #HSTR_PM_FAIL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #SFX_SPELL_FAIL
     jsr sound_play
     sec

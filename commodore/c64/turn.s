@@ -25,8 +25,7 @@ turn_tick_effects:
     bne !poison_still+
     // Just expired — print message
     ldx #HSTR_EFF_POISON_END
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     jmp !no_poison+
 !poison_still:
     // Poison tick: 1 HP damage per turn (only while timer > 0)
@@ -52,8 +51,7 @@ turn_tick_effects:
     bne !no_blind+
     // Just expired — print message and trigger viewport redraw
     ldx #HSTR_EFF_BLIND_END
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1
     sta vis_room_revealed       // Trigger full viewport redraw
 !no_blind:
@@ -65,8 +63,7 @@ turn_tick_effects:
     bne !no_confuse+
     // Just expired — print message
     ldx #HSTR_EFF_CONFUSE_END
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !no_confuse:
 
     // Paralysis
@@ -76,8 +73,7 @@ turn_tick_effects:
     bne !no_para+
     // Just expired — print message
     ldx #HSTR_EFF_PARALYZE_END
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !no_para:
 
     // Fear
@@ -87,8 +83,7 @@ turn_tick_effects:
     bne !no_fear+
     // Just expired — print message
     ldx #HSTR_EFF_FEAR_END
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !no_fear:
 
     // Haste/slow
@@ -102,41 +97,22 @@ turn_tick_effects:
     dec zp_eff_speed        // Positive, decrement toward 0
 !no_speed:
 
-    // Protection
-    lda zp_eff_protect
-    beq !no_prot+
-    dec zp_eff_protect
-!no_prot:
-
-    // Invisibility
-    lda zp_eff_invis
-    beq !no_invis+
-    dec zp_eff_invis
-!no_invis:
-
-    // Infravision
-    lda zp_eff_infra
-    beq !no_infra+
-    dec zp_eff_infra
-!no_infra:
-
-    // Bless
-    lda zp_eff_bless
-    beq !no_bless+
-    dec zp_eff_bless
-!no_bless:
-
-    // Heroism
-    lda zp_eff_hero
-    beq !no_hero+
-    dec zp_eff_hero
-!no_hero:
-
-    // Extra regeneration
-    lda zp_eff_regen
-    beq !no_regen+
-    dec zp_eff_regen
-!no_regen:
+    // Simple-dec effects: protect($55), invis($56), infra($57),
+    // [skip resist($58)], bless($59), hero($5a), regen($5b)
+    .assert "Simple-dec range", zp_eff_regen - zp_eff_protect, 6
+    ldy #zp_eff_protect
+!tse_loop:
+    cpy #zp_eff_resist
+    beq !tse_next+
+    lda $00,y
+    beq !tse_next+
+    sec
+    sbc #1
+    sta $00,y
+!tse_next:
+    iny
+    cpy #zp_eff_regen + 1
+    bne !tse_loop-
 
     // Word of recall
     lda zp_eff_word_recall
@@ -193,8 +169,7 @@ turn_tick_effects:
     jsr status_draw
 
     ldx #HSTR_RECALL_ARRIVE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !no_recall:
 
     // Detect monsters timer
@@ -438,8 +413,7 @@ turn_tick_light:
     bne !ttl_not_dim+
     // Print "YOUR LIGHT IS GROWING DIM."
     ldx #HSTR_TTL_DIM
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     jmp !ttl_done+
 
 !ttl_not_dim:
@@ -457,8 +431,7 @@ turn_tick_light:
 
     // Print "YOUR LIGHT HAS GONE OUT."
     ldx #HSTR_TTL_OUT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
 !ttl_done:
     rts
@@ -505,17 +478,12 @@ turn_tick_pseudo_id:
     jsr pid_get_quality         // A = quality index 0-4
     sta pid_save_q
 
-    // Build message: "SENSE: <QUALITY>"
-    lda #0
-    sta cmb_buf_idx
-    lda #<pid_sense_str
-    ldy #>pid_sense_str
-    jsr combat_append_str
-    ldx pid_save_q
-    lda pid_w_ptrs_lo,x
-    ldy pid_w_ptrs_hi,x
-    jsr combat_append_str
-    jsr cmb_term_and_print
+    // Print "Sense: <quality>" via Huffman (sequential HSTR_PID_TERRIBLE+q)
+    lda pid_save_q
+    clc
+    adc #HSTR_PID_TERRIBLE
+    tax
+    jsr huff_print_msg
     jmp !pid_reset+
 
 !pid_next:
@@ -563,16 +531,4 @@ pid_get_quality:
     lda #2                      // AVERAGE (p1 = 0)
     rts
 
-// Quality word strings (screen codes via inherited encoding)
-pid_w_terrible: .text "Terrible" ; .byte 0
-pid_w_bad:      .text "Bad" ; .byte 0
-pid_w_average:  .text "Average" ; .byte 0
-pid_w_good:     .text "Good" ; .byte 0
-pid_w_excellent:.text "Excellent" ; .byte 0
-
-pid_w_ptrs_lo:
-    .byte <pid_w_terrible, <pid_w_bad, <pid_w_average, <pid_w_good, <pid_w_excellent
-pid_w_ptrs_hi:
-    .byte >pid_w_terrible, >pid_w_bad, >pid_w_average, >pid_w_good, >pid_w_excellent
-
-pid_sense_str: .text "Sense: " ; .byte 0
+// Pseudo-ID strings migrated to Huffman (HSTR_PID_* in huffman_data.s)

@@ -1063,8 +1063,7 @@ item_pickup:
 
     // Nothing here
     ldx #HSTR_IPU_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1131,8 +1130,7 @@ item_pickup:
 
     // Pack full
     ldx #HSTR_UIS_PACK_FULL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1185,8 +1183,7 @@ item_pickup:
 item_drop:
     // Print prompt
     ldx #HSTR_IDR_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for keypress
     jsr input_get_key
@@ -1220,15 +1217,13 @@ item_drop:
 
     // Empty slot
     ldx #HSTR_PIW_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 !idr_cancel:
     ldx #HSTR_PIW_NEVERMIND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -1257,8 +1252,7 @@ item_drop:
 
     // Floor full
     ldx #HSTR_IDR_FLOOR_FULL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 

@@ -375,8 +375,7 @@ trap_trigger:
 // Open pit: 1d4 damage
 trap_do_pit:
     ldx #HSTR_DF_YOU_FELL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1              // 1 die
     ldx #4              // d4
     ldy #0              // +0
@@ -386,8 +385,7 @@ trap_do_pit:
 // Arrow trap: 1d8 damage
 trap_do_arrow:
     ldx #HSTR_DF_ARROW_HITS
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1
     ldx #8
     ldy #0
@@ -397,8 +395,7 @@ trap_do_arrow:
 // Poison gas: set poison timer to 10 + 1d10
 trap_do_gas:
     ldx #HSTR_DF_POISON_GAS
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     // Set poison timer: 10 + rng_range(10) + 1 = 11..20
     lda #10
     jsr rng_range           // [0, 9]
@@ -407,23 +404,20 @@ trap_do_gas:
     sta zp_eff_poison
     // Print "YOU FEEL POISONED."
     ldx #HSTR_DF_POISONED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     rts
 
 // Teleport: move player to random floor tile
 trap_do_teleport:
     ldx #HSTR_DF_TELEPORTED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     jsr trap_teleport
     rts
 
 // Poison dart: 1d4 damage + 50% chance CON decrement
 trap_do_dart:
     ldx #HSTR_DF_DART_HITS
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1
     ldx #4
     ldy #0
@@ -440,16 +434,14 @@ trap_do_dart:
     sta player_data + PL_CON_CUR
     sta zp_player_con
     ldx #HSTR_DF_CON_DRAIN
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !no_con_drain:
     rts
 
 // Rockfall: 2d8 damage
 trap_do_rockfall:
     ldx #HSTR_DF_ROCKFALL
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #2              // 2 dice
     ldx #8              // d8
     ldy #0              // +0
@@ -485,8 +477,7 @@ trap_apply_damage:
 
     // Print "YOU TAKE N DAMAGE."
     ldx #HSTR_DF_DAMAGE_PRE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Print damage number and " DAMAGE." inline on same row
     // msg_print left cursor at end of "YOU TAKE "
@@ -570,8 +561,7 @@ trap_teleport:
 get_direction_target:
     // Print "DIRECTION?" on message line
     ldx #HSTR_DF_DIRECTION
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     // Wait for a keypress
     jsr input_get_key
@@ -636,15 +626,13 @@ door_try_open:
     // Not a door
 !dto_no_door:
     ldx #HSTR_DF_NO_DOOR
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc                     // No turn consumed
     rts
 
 !dto_already_open:
     ldx #HSTR_DF_ALREADY_OPEN
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc                     // No turn consumed
     rts
 
@@ -662,8 +650,7 @@ door_try_open:
 
     // Door is stuck
     ldx #HSTR_DF_DOOR_STUCK
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #SFX_BUMP
     jsr sound_play
     sec                     // Turn consumed (attempted)
@@ -686,8 +673,7 @@ door_try_open:
     sta (zp_ptr0),y
 
     ldx #HSTR_DF_DOOR_OPENED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec                     // Turn consumed
     rts
 
@@ -715,15 +701,13 @@ door_try_close:
 
     // Not a door
     ldx #HSTR_DF_NO_DOOR
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
 !dtc_already_closed:
     ldx #HSTR_DF_ALREADY_CLOSED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 
@@ -744,8 +728,7 @@ door_try_close:
     sta (zp_ptr0),y
 
     ldx #HSTR_DF_DOOR_CLOSED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec                     // Turn consumed
     rts
 
@@ -820,8 +803,7 @@ do_search:
 
     // Print message
     ldx #HSTR_DF_FOUND_SECRET
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1
     sta df_found
     jmp !ds_next+
@@ -878,8 +860,7 @@ do_search:
 
     // Print message
     ldx #HSTR_DF_FOUND_TRAP
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #1
     sta df_found
     jmp !ds_next+           // Move to next direction
@@ -904,8 +885,7 @@ do_search:
     lda df_found
     bne !ds_exit+
     ldx #HSTR_DF_FOUND_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 !ds_exit:
     rts
 

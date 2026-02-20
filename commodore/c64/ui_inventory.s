@@ -241,11 +241,12 @@ ui_equip_display:
     jsr screen_put_char
     // X still = uinv_equip_idx (screen_put_char only clobbers Y)
     jsr pid_get_quality         // A = quality index 0-4, X preserved
+    clc
+    adc #HSTR_PID_TERRIBLE      // Sequential: TERRIBLE=0, BAD=1, ...
     tax
-    lda pid_w_ptrs_lo,x
+    jsr huff_decode_string      // zp_ptr0/hi → hd_decode_buf
+    lda #<(hd_decode_buf + 7)   // Skip "Sense: " prefix (hi byte unchanged)
     sta zp_ptr0
-    lda pid_w_ptrs_hi,x
-    sta zp_ptr0_hi
     jsr screen_put_string
     lda #$29                    // ')'
     jsr screen_put_char

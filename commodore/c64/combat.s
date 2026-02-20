@@ -165,17 +165,31 @@ player_attack_monster:
     sec                         // Turn consumed
     rts
 
-// combat_calc_tohit — Compute hit chance
-// hit_chance = class_bth + PL_TOHIT*3 + player_level * class_bth_per_level
+cct_bth_offset: .byte 0
+cct_lvl_offset: .byte 0
+
+// combat_calc_tohit — Compute melee hit chance (entry point)
 // Output: zp_combat_tohit = hit chance (capped at 255)
-// Clobbers: A, X, Y, zp_math_a/b
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0
 combat_calc_tohit:
-    // Get class BTH (class_properties offset 3)
+    lda #3                          // Melee BTH offset in class_properties
+    ldx #0                          // Melee level adj offset
+
+// combat_calc_tohit_common — Shared hit chance calculation
+// Input: A = class property offset (3=melee BTH, 4=bow BTH_BOW)
+//        X = level adj offset (0=melee BTH/lvl, 1=bow BTH_BOW/lvl)
+// Output: zp_combat_tohit = hit chance (capped at 255)
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0
+combat_calc_tohit_common:
+    sta cct_bth_offset
+    stx cct_lvl_offset
+
+    // Get class BTH/BTH_BOW
     lda player_data + PL_CLASS
     ldx #CLASS_PROP_SIZE
     jsr math_multiply           // A = class * 10
     clc
-    adc #3                      // Offset to BTH field
+    adc cct_bth_offset          // 3=melee, 4=bow
     tax
     lda class_properties,x
     sta zp_combat_tohit         // Start with base BTH
@@ -243,10 +257,12 @@ combat_calc_tohit:
 !cct_tohit_ok:
     sta zp_combat_tohit
 
-    // Add player_level * class_bth_per_level (class_level_adj offset 0)
+    // Add player_level * class level adj
     lda player_data + PL_CLASS
     ldx #CLASS_LVL_SIZE
     jsr math_multiply           // A = class * 5
+    clc
+    adc cct_lvl_offset          // 0=melee BTH/lvl, 1=bow BTH_BOW/lvl
     tax
     lda class_level_adj,x       // BTH per level
     ldx zp_player_lvl
@@ -667,37 +683,46 @@ ccb_chance_lo:  .byte 0
 ccb_chance_hi:  .byte 0
 ccb_orig_dmg:   .byte 0
 
-// combat_apply_damage — Subtract damage from monster HP
-// Input:  X = monster slot index, A = damage amount
+// combat_apply_damage — Subtract 8-bit damage from monster HP
+// Input:  X = monster slot index, A = damage amount (8-bit)
 // Output: carry set = monster dead (HP <= 0)
 //         carry clear = monster still alive
-// Clobbers: A, Y, zp_ptr0
+// Preserves: X
+// Clobbers: A, Y, zp_ptr0, zp_math_a, zp_math_b
 combat_apply_damage:
-    sta zp_temp0                // Save damage
+    sta zp_math_a               // Damage lo = A
+    lda #0
+    sta zp_math_b               // Damage hi = 0
+    // Fall through to 16-bit version
 
+// combat_apply_damage_16 — Subtract 16-bit damage from monster HP
+// Input:  X = monster slot index, zp_math_a = damage lo, zp_math_b = damage hi
+// Output: carry set = monster dead (HP <= 0)
+//         carry clear = monster still alive
+// Preserves: X
+// Clobbers: A, Y, zp_ptr0
+combat_apply_damage_16:
     jsr monster_get_ptr         // zp_ptr0 = entry
 
-    // 16-bit subtraction: HP -= damage
     ldy #MX_HP_LO
     lda (zp_ptr0),y
     sec
-    sbc zp_temp0
+    sbc zp_math_a
     sta (zp_ptr0),y
 
     ldy #MX_HP_HI
     lda (zp_ptr0),y
-    sbc #0                      // Borrow from hi byte
+    sbc zp_math_b
     sta (zp_ptr0),y
 
     // Check if dead: hi byte negative (bit 7 set) OR both bytes zero
-    bmi !cad_dead+              // Hi byte went negative → dead
+    bmi !cad_dead+
 
-    // Check if both bytes are zero
     ldy #MX_HP_LO
     lda (zp_ptr0),y
     ldy #MX_HP_HI
     ora (zp_ptr0),y
-    beq !cad_dead+              // HP = 0 → dead
+    beq !cad_dead+
 
     clc                         // Alive
     rts
@@ -967,6 +992,20 @@ msg_build_action:
 mba_action_lo: .byte 0
 mba_action_hi: .byte 0
 
+// combat_kill_message — Kill monster, print "You have slain the <name>.", play SFX
+// Input: X = monster slot index
+// Calls eff_kill_monster (awards XP, removes monster), builds and prints
+// the kill message, plays SFX_HIT.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi, zp_math_a/b, zp_temp0-4
+combat_kill_message:
+    jsr eff_kill_monster
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action
+    jsr cmb_print_buf
+    lda #SFX_HIT
+    jmp sound_play
+
 // cmb_term_and_print — Null-terminate combat_msg_buf and print it
 // Clobbers: A, X
 cmb_term_and_print:
@@ -981,6 +1020,23 @@ cmb_print_buf:
     lda #>combat_msg_buf
     sta zp_ptr0_hi
     jmp msg_print
+
+// projectile_msg_suffix — Append " VERB THE <name>." and print
+// Input: X = HSTR ID for verb string (e.g., HSTR_RF_HITS, HSTR_RF_MISSES)
+//        combat_msg_buf already contains prefix text (e.g., "THE ARROW")
+//        cmb_slot = target monster slot
+// Appends decoded HSTR + " THE <name>." to combat_msg_buf, then prints.
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
+projectile_msg_suffix:
+    jsr huff_append_combat
+    lda #<cmb_the_str
+    ldy #>cmb_the_str
+    jsr combat_append_str
+    jsr combat_append_monster_name
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jmp cmb_term_and_print
 
 // msg_build_levelup — "Welcome to level N."
 msg_build_levelup:

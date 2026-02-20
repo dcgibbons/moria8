@@ -11,17 +11,7 @@
 bash_save_tile: .byte 0     // Saved tile byte at target
 bash_dir_idx:   .byte 0     // Direction index 0-7
 
-// ============================================================
-// Inline strings (screen codes via inherited encoding)
-// ============================================================
-bash_smash_str:   .text "You smash into the door!" ; .byte 0
-bash_crash_str:   .text "The door crashes open!" ; .byte 0
-bash_holds_str:   .text "The door holds firm." ; .byte 0
-bash_offbal_str:  .text "You are off balance." ; .byte 0
-bash_nothing_str: .text "Nothing interesting happens." ; .byte 0
-bash_empty_str:   .text "You bash at empty space." ; .byte 0
-bash_stunned_str: .text " appears stunned!" ; .byte 0
-bash_ignores_str: .text " ignores your bash!" ; .byte 0
+// Strings migrated to Huffman compression (HSTR_BASH_* in huffman_data.s)
 
 // ============================================================
 // bash_command — Entry point for bash command
@@ -33,8 +23,7 @@ bash_command:
     lda eff_fear_timer
     beq !bash_not_afraid+
     ldx #HSTR_PTM_AFRAID
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 !bash_not_afraid:
@@ -143,20 +132,14 @@ bash_command:
     beq !bash_wall+
 
     // Empty space (floor, open door, stairs, etc.)
-    lda #<bash_empty_str
-    sta zp_ptr0
-    lda #>bash_empty_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_EMPTY
+    jsr huff_print_msg
     sec                         // Turn consumed
     rts
 
 !bash_wall:
-    lda #<bash_nothing_str
-    sta zp_ptr0
-    lda #>bash_nothing_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_NOTHING
+    jsr huff_print_msg
     sec                         // Turn consumed
     rts
 
@@ -165,11 +148,8 @@ bash_command:
 // ============================================================
 bash_door:
     // Print smash message
-    lda #<bash_smash_str
-    sta zp_ptr0
-    lda #>bash_smash_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_SMASH
+    jsr huff_print_msg
 
     // Roll: rng_range(STR + 10), success if result >= 5
     lda zp_player_str
@@ -180,11 +160,8 @@ bash_door:
     bcs !bash_door_success+
 
     // Fail — door holds
-    lda #<bash_holds_str
-    sta zp_ptr0
-    lda #>bash_holds_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_HOLDS
+    jsr huff_print_msg
     jsr bash_off_balance
     lda #SFX_BUMP
     jsr sound_play
@@ -205,11 +182,8 @@ bash_door:
     sta (zp_ptr0),y
 
     // Print success message
-    lda #<bash_crash_str
-    sta zp_ptr0
-    lda #>bash_crash_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_CRASH
+    jsr huff_print_msg
 
     lda #SFX_HIT
     jsr sound_play
@@ -452,9 +426,8 @@ bash_stun_check:
     lda #0
     sta cmb_buf_idx
     jsr combat_append_monster_name
-    lda #<bash_stunned_str
-    ldy #>bash_stunned_str
-    jsr combat_append_str
+    ldx #HSTR_BASH_STUNNED
+    jsr huff_append_combat
     jsr cmb_term_and_print
     rts
 
@@ -463,9 +436,8 @@ bash_stun_check:
     lda #0
     sta cmb_buf_idx
     jsr combat_append_monster_name
-    lda #<bash_ignores_str
-    ldy #>bash_ignores_str
-    jsr combat_append_str
+    ldx #HSTR_BASH_IGNORES
+    jsr huff_append_combat
     jsr cmb_term_and_print
     rts
 
@@ -486,11 +458,8 @@ bash_off_balance:
     adc #1                      // [1,2]
     sta zp_eff_paralyze
 
-    lda #<bash_offbal_str
-    sta zp_ptr0
-    lda #>bash_offbal_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_BASH_OFFBAL
+    jsr huff_print_msg
 
 !bash_balanced:
     rts

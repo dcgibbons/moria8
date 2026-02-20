@@ -22,8 +22,7 @@ player_tunnel:
     lda eff_fear_timer
     beq !tun_not_afraid+
     ldx #HSTR_PTM_AFRAID
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 !tun_not_afraid:
@@ -165,15 +164,13 @@ player_tunnel:
 
     // Everything else (floor, open door, stairs, trap) — nothing to tunnel
     ldx #HSTR_TUN_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc                         // No turn consumed
     rts
 
 !tun_permanent:
     ldx #HSTR_TUN_PERMANENT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     clc                         // No turn consumed
     rts
 
@@ -222,8 +219,7 @@ player_tunnel:
     sta (zp_ptr0),y
 
     ldx #HSTR_TUN_RUBBLE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     lda #1
     sta vis_room_revealed       // Trigger viewport redraw
@@ -267,16 +263,14 @@ player_tunnel:
     jsr tunnel_spawn_gold
 
     ldx #HSTR_TUN_FOUND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #SFX_PICKUP
     jsr sound_play
     jmp !tun_success_done+
 
 !tun_no_treasure:
     ldx #HSTR_TUN_FINISHED
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
 !tun_success_done:
     lda #1
@@ -287,8 +281,7 @@ player_tunnel:
 !tun_fail:
     // Print wall-type-specific "You dig in the..." message
     ldx zp_temp1                // Fail message HSTR ID
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     sec                         // Turn consumed (digging takes effort)
     rts
 

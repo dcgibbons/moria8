@@ -234,3 +234,20 @@ Sorry, what was that again?
 @IDR_PROMPT Drop which item (a-v)?
 @IDR_DROP You drop a ~
 @IDR_FLOOR_FULL No room on the floor.
+
+# ===== Pseudo-ID quality strings (OPT-4.8) =====
+@PID_TERRIBLE Sense: Terrible
+@PID_BAD Sense: Bad
+@PID_AVERAGE Sense: Average
+@PID_GOOD Sense: Good
+@PID_EXCELLENT Sense: Excellent
+
+# ===== Bash command strings (OPT-4.8) =====
+@BASH_SMASH You smash into the door!
+@BASH_CRASH The door crashes open!
+@BASH_HOLDS The door holds firm.
+@BASH_OFFBAL You are off balance.
+@BASH_NOTHING Nothing interesting happens.
+@BASH_EMPTY You bash at empty space.
+@BASH_STUNNED  appears stunned!
+@BASH_IGNORES  ignores your bash!

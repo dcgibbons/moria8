@@ -99,6 +99,7 @@ exit_trampoline:
 #import "dungeon_los.s"
 #import "player_move.s"
 #import "combat.s"
+#import "projectile.s"
 #import "ranged_fire.s"
 #import "throw.s"
 #import "bash.s"

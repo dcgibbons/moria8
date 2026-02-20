@@ -11,6 +11,7 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 
 // Decode output buffer (42 bytes, matches combat_msg_buf size)
 hd_decode_buf: .fill 42, 0
+.assert "hd_decode_buf same page", (hd_decode_buf >> 8) == ((hd_decode_buf + 7) >> 8), true
 
 // ============================================================
 // huff_decode_string — Decode a Huffman-compressed string
@@ -140,6 +141,15 @@ huff_append_combat:
     lda #<hd_decode_buf
     ldy #>hd_decode_buf
     jmp combat_append_str
+
+// ============================================================
+// huff_print_msg — Decode Huffman string and print to message area
+// Input: X = string ID (HSTR_*)
+// Clobbers: A, X, Y, zp_ptr0/hi
+// ============================================================
+huff_print_msg:
+    jsr huff_decode_string
+    jmp msg_print              // Tail call — 6 bytes total
 
 // ============================================================
 // Compressed string data (generated)

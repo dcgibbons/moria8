@@ -61,6 +61,7 @@ test_exit_trampoline:
 #import "../special_rooms_stubs.s"
 #import "../player_items.s"
 #import "../spell_data.s"
+#import "../projectile.s"
 #import "../spell_effects.s"
 #import "../player_magic.s"
 #import "../ui_inventory.s"

@@ -166,8 +166,7 @@ eff_teleport_self:
 eff_identify_prompt:
     // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
     ldx #HSTR_PIQ_IDENTIFY_PROMPT
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
 
     jsr input_get_key
 
@@ -226,8 +225,7 @@ eff_identify_prompt:
 !eip_cancel:
     // Scroll already consumed — just print generic message
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     rts
 
 // ============================================================
@@ -412,20 +410,22 @@ eff_find_doors:
     rts
 
 // ============================================================
-// eff_sleep_adjacent — Put all adjacent monsters to sleep
-// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
+// for_each_adjacent — Iterate 8 adjacent tiles, call callback
+// Sets df_target_x/df_target_y for each direction, then calls
+// the function at adj_callback via indirect jump.
+// Callbacks may clobber A, X, Y, zp_ptr0, zp_temp0-4 freely.
+// Clobbers: A, X, Y
 // ============================================================
-eff_sa_dir: .byte 0
+adj_callback: .word 0       // Function pointer for callback
+adj_dir_idx:  .byte 0       // Direction counter 0-7
 
-eff_sleep_adjacent:
+for_each_adjacent:
     lda #0
-    sta eff_sa_dir
-
-!esa_loop:
-    lda eff_sa_dir
+    sta adj_dir_idx
+!fea_loop:
+    lda adj_dir_idx
     cmp #8
-    bcs !esa_done+
-
+    bcs !fea_done+
     tax
     lda zp_player_x
     clc
@@ -434,66 +434,57 @@ eff_sleep_adjacent:
     lda zp_player_y
     clc
     adc dir_dy,x
-    tay
+    sta df_target_y
+    jsr !fea_dispatch+
+    inc adj_dir_idx
+    jmp !fea_loop-
+!fea_done:
+    rts
+!fea_dispatch:
+    jmp (adj_callback)
+
+// ============================================================
+// eff_sleep_adjacent — Put all adjacent monsters to sleep
+// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
+// ============================================================
+eff_sleep_adjacent:
+    lda #<!esa_cb+
+    sta adj_callback
+    lda #>!esa_cb+
+    sta adj_callback+1
+    jmp for_each_adjacent
+!esa_cb:
     lda df_target_x
-
-    // A = x, Y = y
+    ldy df_target_y
     jsr monster_find_at
-    bcc !esa_next+
-
-    // Monster found in X — set sleep timer
+    bcc !esa_skip+
     jsr monster_get_ptr             // zp_ptr0 = entry
     ldy #MX_SLEEP_CUR
     lda #20                         // Sleep for 20 turns
     sta (zp_ptr0),y
-
-!esa_next:
-    inc eff_sa_dir
-    jmp !esa_loop-
-
-!esa_done:
+!esa_skip:
     rts
 
 // ============================================================
 // eff_confuse_adjacent — Confuse all adjacent monsters
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
 // ============================================================
-eff_ca_dir: .byte 0
-
 eff_confuse_adjacent:
-    lda #0
-    sta eff_ca_dir
-
-!eca_loop:
-    lda eff_ca_dir
-    cmp #8
-    bcs !eca_done+
-
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    tay
+    lda #<!eca_cb+
+    sta adj_callback
+    lda #>!eca_cb+
+    sta adj_callback+1
+    jmp for_each_adjacent
+!eca_cb:
     lda df_target_x
-
+    ldy df_target_y
     jsr monster_find_at
-    bcc !eca_next+
-
-    // Monster found in X — set confuse timer
+    bcc !eca_skip+
     jsr monster_get_ptr
     ldy #MX_CONFUSE
     lda #10                         // Confuse for 10 turns
     sta (zp_ptr0),y
-
-!eca_next:
-    inc eff_ca_dir
-    jmp !eca_loop-
-
-!eca_done:
+!eca_skip:
     rts
 
 // ============================================================
@@ -504,10 +495,6 @@ eff_confuse_adjacent:
 eff_bolt_dice:  .byte 0
 eff_bolt_sides: .byte 0
 eff_bolt_bonus: .byte 0
-eff_bolt_dir:   .byte 0
-eff_bolt_cx:    .byte 0     // Current X
-eff_bolt_cy:    .byte 0     // Current Y
-eff_bolt_steps: .byte 0
 eb_save_char:   .byte 0
 eb_save_col:    .byte 0
 
@@ -520,96 +507,34 @@ eff_bolt:
 
     // Get direction from player
     jsr get_direction_target
-    bcc !eb_no_dir+
-
-    // Calculate direction index
-    lda df_target_x
-    sec
-    sbc zp_player_x
-    sta zp_temp0                    // dx (signed)
-    lda df_target_y
-    sec
-    sbc zp_player_y
-    sta zp_temp1                    // dy (signed)
-
-    // Find matching direction in dir_dx/dir_dy
-    ldx #0
-!eb_find_dir:
-    lda dir_dx,x
-    cmp zp_temp0
-    bne !eb_dir_next+
-    lda dir_dy,x
-    cmp zp_temp1
-    beq !eb_dir_found+
-!eb_dir_next:
-    inx
-    cpx #8
-    bcc !eb_find_dir-
-!eb_no_dir:
+    bcs !eb_has_dir+
+    rts                             // Cancelled
+!eb_has_dir:
+    jsr calc_direction_index
+    bcs !eb_dir_ok+
     rts                             // No valid direction
-
-!eb_dir_found:
-    stx eff_bolt_dir
+!eb_dir_ok:
 
     // Start from player position
     lda zp_player_x
-    sta eff_bolt_cx
+    sta proj_cx
     lda zp_player_y
-    sta eff_bolt_cy
+    sta proj_cy
     lda #20
-    sta eff_bolt_steps
+    sta proj_steps
 
 !eb_trace:
-    dec eff_bolt_steps
+    dec proj_steps
     bne !eb_has_steps+
     jmp !eb_fizzle+
 !eb_has_steps:
-
-    // Step in direction
-    ldx eff_bolt_dir
-    lda eff_bolt_cx
-    clc
-    adc dir_dx,x
-    sta eff_bolt_cx
-    lda eff_bolt_cy
-    clc
-    adc dir_dy,x
-    sta eff_bolt_cy
-
-    // Bounds check
-    lda eff_bolt_cx
-    beq !eb_oob+
-    cmp #MAP_COLS - 1
-    bcs !eb_oob+
-    lda eff_bolt_cy
-    beq !eb_oob+
-    cmp #MAP_ROWS - 1
-    bcc !eb_bounds_ok+
-!eb_oob:
-    jmp !eb_fizzle+
-!eb_bounds_ok:
-
-    // Read map tile — use walkable_table to determine passability
-    ldx eff_bolt_cy
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy eff_bolt_cx
-    lda (zp_ptr0),y
-    and #TILE_TYPE_MASK
-    lsr
-    lsr
-    lsr
-    lsr                             // Tile type index 0-15
-    tax
-    lda walkable_table,x
-    bne !eb_check_mon+
-    jmp !eb_fizzle+                 // Blocked tile
+    jsr trace_step
+    bcs !eb_check_mon+
+    jmp !eb_fizzle+                 // Blocked or out of bounds
 
 !eb_check_mon:
     // --- Animate bolt: draw * at current position if on-screen ---
-    lda eff_bolt_cy
+    lda proj_cy
     sec
     sbc zp_view_y
     bcc !eb_no_anim+                // Off-screen (top)
@@ -623,7 +548,7 @@ eff_bolt:
     lda screen_row_hi,x
     sta zp_ptr0_hi
 
-    lda eff_bolt_cx
+    lda proj_cx
     sec
     sbc zp_view_x
     bcc !eb_no_anim+                // Off-screen (left)
@@ -676,8 +601,8 @@ eff_bolt:
 
 !eb_no_anim:
     // Check for monster at this position
-    lda eff_bolt_cx
-    ldy eff_bolt_cy
+    lda proj_cx
+    ldy proj_cy
     jsr monster_find_at
     bcs !eb_got_monster+        // Monster found
     jmp !eb_trace-              // No monster, keep going
@@ -698,69 +623,32 @@ eff_bolt:
     ldy eff_bolt_bonus
     jsr math_dice               // Result in zp_math_a
 
-    // Apply damage to monster (16-bit HP subtraction)
+    // Apply damage to monster
     ldx zp_temp2
-    jsr monster_get_ptr         // zp_ptr0 = monster entry
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    sec
-    sbc zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    sbc zp_math_b
-    sta (zp_ptr0),y
+    jsr combat_apply_damage_16
+    bcc !eb_alive+              // Still alive
 
-    // Check if dead (HP <= 0)
-    bmi !eb_dead+
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    ldy #MX_HP_HI
-    ora (zp_ptr0),y
-    bne !eb_alive+              // Still alive (HP > 0)
-
-!eb_dead:
     // Monster killed — award XP, remove, message
-    ldx zp_temp2
-    jsr eff_kill_monster
-    lda #<cmb_kill_str
-    ldy #>cmb_kill_str
-    jsr msg_build_action            // "YOU HAVE SLAIN THE <name>."
-    jsr cmb_print_buf
-    lda #SFX_HIT
-    jsr sound_play
+    jsr combat_kill_message     // X preserved by helper
     rts
 
 !eb_alive:
     // Wake the monster
     ldx zp_temp2
-    jsr monster_get_ptr
-    ldy #MX_FLAGS
-    lda (zp_ptr0),y
-    ora #MF_AWAKE
-    sta (zp_ptr0),y
+    jsr monster_wake
 
     // Message: "YOUR SPELL HITS THE <name>."
     lda #0
     sta cmb_buf_idx
     ldx #HSTR_EB_SPELL_HITS
-    jsr huff_append_combat          // "YOUR SPELL HITS"
-    lda #<cmb_the_str
-    ldy #>cmb_the_str
-    jsr combat_append_str           // " THE "
-    jsr combat_append_monster_name
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str           // "."
-    jsr cmb_term_and_print
+    jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr sound_play
     rts
 
 !eb_fizzle:
     ldx #HSTR_EB_FIZZLE
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     rts
 
 // ============================================================
@@ -770,32 +658,20 @@ eff_bolt:
 // ============================================================
 eff_da_dice:  .byte 0
 eff_da_sides: .byte 0
-eff_da_dir:   .byte 0
 
 eff_damage_adjacent:
     sta eff_da_dice
     stx eff_da_sides
-    lda #0
-    sta eff_da_dir
-
-!eda_loop:
-    lda eff_da_dir
-    cmp #8
-    bcs !eda_done+
-
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    tay
+    lda #<!eda_cb+
+    sta adj_callback
+    lda #>!eda_cb+
+    sta adj_callback+1
+    jmp for_each_adjacent
+!eda_cb:
     lda df_target_x
-
+    ldy df_target_y
     jsr monster_find_at
-    bcc !eda_next+
+    bcc !eda_skip+
 
     // Monster found — roll damage
     stx zp_temp2                    // Save monster slot
@@ -806,33 +682,11 @@ eff_damage_adjacent:
 
     // Apply damage
     ldx zp_temp2
-    jsr monster_get_ptr
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    sec
-    sbc zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    sbc zp_math_b
-    sta (zp_ptr0),y
-
-    bmi !eda_dead+
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    ldy #MX_HP_HI
-    ora (zp_ptr0),y
-    bne !eda_next+              // Still alive (HP > 0)
-!eda_dead:
+    jsr combat_apply_damage_16
+    bcc !eda_skip+              // Still alive
     // Monster killed
-    ldx zp_temp2
-    jsr eff_kill_monster
-
-!eda_next:
-    inc eff_da_dir
-    jmp !eda_loop-
-
-!eda_done:
+    jsr eff_kill_monster        // X preserved by helper
+!eda_skip:
     rts
 
 // ============================================================
@@ -859,27 +713,24 @@ eff_directional_monster:
 // Scans 8 adjacent tiles. Traps removed, closed doors opened.
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
-eff_dtd_dir: .byte 0
-
 eff_destroy_traps_doors:
-    lda #0
-    sta eff_dtd_dir
+    // First pass: modify map tiles
+    lda #<!edtd_tile_cb+
+    sta adj_callback
+    lda #>!edtd_tile_cb+
+    sta adj_callback+1
+    jsr for_each_adjacent
+    // Second pass: remove from trap table
+    lda #<!edtd_trap_cb+
+    sta adj_callback
+    lda #>!edtd_trap_cb+
+    sta adj_callback+1
+    jsr for_each_adjacent
+    lda #1
+    sta vis_room_revealed
+    rts
 
-!edtd_loop:
-    lda eff_dtd_dir
-    cmp #8
-    bcs !edtd_done+
-
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
-
+!edtd_tile_cb:
     // Read map tile
     ldx df_target_y
     lda map_row_lo,x
@@ -899,7 +750,7 @@ eff_destroy_traps_doors:
     and #TILE_FLAG_MASK
     ora #TILE_FLOOR
     sta (zp_ptr0),y
-    jmp !edtd_next+
+    rts
 
 !edtd_check_door:
     // Check for closed door or secret door
@@ -907,7 +758,7 @@ eff_destroy_traps_doors:
     cmp #TILE_DOOR_CLOSED
     beq !edtd_open_door+
     cmp #TILE_SECRET
-    bne !edtd_next+
+    bne !edtd_tile_done+
 
 !edtd_open_door:
     // Open the door
@@ -916,33 +767,11 @@ eff_destroy_traps_doors:
     ora #TILE_DOOR_OPEN
     ora #FLAG_VISITED
     sta (zp_ptr0),y
+!edtd_tile_done:
+    rts
 
-!edtd_next:
-    inc eff_dtd_dir
-    jmp !edtd_loop-
-
-!edtd_done:
-    // Remove matching traps from trap table for all 8 adjacent positions
-    lda #0
-    sta eff_dtd_dir              // Reuse as direction counter
-
-!edtd_trap_dir:
-    lda eff_dtd_dir
-    cmp #8
-    bcs !edtd_trap_done+
-
-    // Compute adjacent position for this direction
-    tax
-    lda zp_player_x
-    clc
-    adc dir_dx,x
-    sta df_target_x
-    lda zp_player_y
-    clc
-    adc dir_dy,x
-    sta df_target_y
-
-    // Scan trap table for match
+!edtd_trap_cb:
+    // Scan trap table for match at df_target_x/df_target_y
     ldx #0
 !edtd_scan:
     cpx trap_count
@@ -971,12 +800,6 @@ eff_destroy_traps_doors:
     jmp !edtd_scan-
 
 !edtd_scan_done:
-    inc eff_dtd_dir
-    jmp !edtd_trap_dir-
-
-!edtd_trap_done:
-    lda #1
-    sta vis_room_revealed
     rts
 
 // ============================================================
@@ -1042,8 +865,7 @@ eff_wall_to_mud:
     beq !ewtm_no_treasure+
     jsr tunnel_spawn_gold
     ldx #HSTR_TUN_FOUND
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     lda #SFX_PICKUP
     jsr sound_play
 !ewtm_no_treasure:
@@ -1116,28 +938,10 @@ eff_dispel_undead:
 
     // Apply damage
     ldx eff_du_idx
-    jsr monster_get_ptr
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    sec
-    sbc zp_math_a
-    sta (zp_ptr0),y
-    ldy #MX_HP_HI
-    lda (zp_ptr0),y
-    sbc zp_math_b
-    sta (zp_ptr0),y
-
-    // Check if dead (HP <= 0)
-    bmi !edu_dead+
-    ldy #MX_HP_LO
-    lda (zp_ptr0),y
-    ldy #MX_HP_HI
-    ora (zp_ptr0),y
-    bne !edu_next+              // Still alive (HP > 0)
-!edu_dead:
+    jsr combat_apply_damage_16
+    bcc !edu_next+              // Still alive
     // Monster killed
-    ldx eff_du_idx
-    jsr eff_kill_monster
+    jsr eff_kill_monster        // X preserved by helper
 
 !edu_next:
     inc eff_du_idx

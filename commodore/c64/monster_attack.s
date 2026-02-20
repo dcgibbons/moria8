@@ -175,8 +175,7 @@ monster_attack_player:
     jsr mon_atk_effect_aggravate
     // Print shriek message
     ldx #HSTR_MAT_SHRIEK
-    jsr huff_decode_string
-    jsr msg_print
+    jsr huff_print_msg
     rts
 
 !map_player_dead:
