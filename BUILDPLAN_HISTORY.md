@@ -6,6 +6,73 @@
 
 ---
 
+## R14 — Fix Tunneling Difficulty + Enchanted Digging Tools ✅ COMPLETE
+
+Completed 2026-02-20. Fixes BUG-41 (tunneling far too easy) and adds enchanted digging tool variants.
+
+### What Was Implemented
+
+**Part A — Hardness Rescaling (BUG-41 fix):**
+- Granite: `rng(20)+8` (8–27) → `rng(240)+16` (16–255) — matches ~umoria proportions
+- Magma: `rng(12)+3` (3–14) → `rng(120)+5` (5–124)
+- Quartz: `rng(10)+2` (2–11) → `rng(80)+3` (3–82)
+- Rubble: always-succeed → `rng(40)` resistance check (now requires a tool)
+
+**Part A — New Dig Ability Formula:**
+- `bare hands → ability = 0` (prints "You dig with your hands, making no progress.")
+- `digging tool → (STR >> 2) + base_bonus + (ego × 12)` — Shovel base=6, Pick base=20
+- `regular weapon → (STR >> 2) + max(0, TODMG >> 1)`
+
+| Tool | ego | Ability (STR 18) | Granite hit rate |
+|------|-----|-----------------|-----------------|
+| Shovel | 0 | 10 | 0% |
+| Pick | 0 | 24 | 3.3% |
+| Gnomish Shovel | 1 | 22 | 2.5% |
+| Orcish Pick | 1 | 36 | 8.3% |
+| Dwarven Shovel | 2 | 34 | 7.5% |
+| Dwarven Pick | 2 | 48 | 13.3% |
+
+**Part B — Enchanted Digging Tools:**
+- Reuse item types 62/63 (Shovel/Pick) with ego byte (0=basic, 1=Gnomish/Orcish, 2=Dwarven)
+- `roll_tool_ego_check` (main RAM): DL<10 always ego=0; DL 10–19: 25% ego=1; DL 20+: 25% ego=1, 10% ego=2
+- Name display uses prefix not suffix: "Dwarven Pick" (not "Pick (Dwarven)")
+- Pricing: ego=1 base×5, ego=2 base×15 (Shovel: 15/75/225gp, Pick: 50/250/750gp)
+- Home storage: `si_ego` array added to store_data.s; deposit/retrieve/save/load all handle ego correctly
+- `SAVE_VERSION` bumped $07→$08 (si_ego added to save format)
+
+### Files Changed (11)
+
+| File | Change |
+|------|--------|
+| `data/huffman_strings.txt` | Added `@TUN_NO_TOOL` string |
+| `commodore/c64/huffman_data.s` | Regenerated (218 strings, HSTR_TUN_NO_TOOL=197) |
+| `commodore/c64/tunnel.s` | New hardness values, rubble resistance, bare-hands check |
+| `commodore/c64/main.s` | `calc_dig_ability` (new formula, moved to main RAM), `roll_tool_ego_check`, `put_tool_ego_prefix`, `put_inv_name_with_ego`, `banked_ego_put_suffix` relocated from $F000 |
+| `commodore/c64/ego_items.s` | 3-byte dispatch stub → `roll_tool_ego_check` |
+| `commodore/c64/ui_inventory.s` | Replaced ego display with `put_inv_name_with_ego` helper |
+| `commodore/c64/store_data.s` | Added `si_ego` array (96 bytes) |
+| `commodore/c64/ui_home.s` | Deposit/retrieve copy ego; home display shows prefix |
+| `commodore/c64/save.s` | `si_ego` added to save/load; SAVE_VERSION $07→$08 |
+| `commodore/c64/store.s` | `apply_tool_ego_multiplier` function; `sb_item_ego` variable; 5 pricing functions updated |
+| `commodore/c64/ui_store.s` | Store display shows tool ego prefix; buy/sell set sb_item_ego |
+
+### Bugs Found During Testing
+
+- **Stale flags in `roll_tool_ego_check`**: `jmp` from ego_items.s didn't update the zero flag, so the `bne` check used stale flags from `roll_ego_type`'s earlier `cmp #ICAT_WEAPON`. Result: digging tools would never get ego types. Fixed by adding `cmp #ICAT_DIGGING` before the branch.
+- **Missing test stubs**: `ui_trampoline_stubs.s` needed entries for `roll_tool_ego_check`, `put_inv_name_with_ego`, `put_tool_ego_prefix`, `banked_ego_put_suffix` (all new R14 functions). Added.
+
+### Segment Boundaries After R14
+
+- Main segment: $BDB5 (587 bytes headroom to MAP_BASE $C000)
+- Banked code: $F000–$FF97 (98 bytes headroom, up from 3 bytes — net freed by moving calc_dig_ability + banked_ego_put_suffix to main RAM)
+- Town overlay: 3,014 bytes (1,082 bytes free)
+
+### Key Architectural Note
+
+The BUILDPLAN estimated $F000 had 720 bytes free. Actual: 3 bytes. Solution: move `calc_dig_ability` (new name) and `banked_ego_put_suffix` to main RAM entirely — they only read main RAM data. Also added shared helper `put_inv_name_with_ego` to DRY up prefix/suffix display across inventory, equipment, and home store screens, saving ~45 bytes in $F000.
+
+---
+
 ## Phase Plan
 
 ### Phase 1 — Skeleton and Infrastructure ✅ COMPLETE

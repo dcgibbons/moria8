@@ -43,11 +43,13 @@ ss_inv_slot:   .byte 0     // Player inventory slot for sell
 ss_item_id:    .byte 0     // Item type being sold
 sd_row:        .byte 0     // Current screen row during drawing
 sd_save_x:     .byte 0     // Saved index register
+sd_save_item_id: .byte 0   // Saved item type for prefix check (R14)
 sr_retry:      .byte 0     // Rejection sampling retry counter
 sr_store_idx:  .byte 0     // Store index for restock loop
 sro_count:     .byte 0     // Item count for variable restock probability
 sb_item_p1:    .byte 0     // Item enchantment/charges for pricing (RP14-3)
 sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
+sb_item_ego:   .byte 0     // Ego byte for pricing (R14)
 
 // Haggling state (R6.1)
 hg_ask_lo:     .byte 0     // Shopkeeper's current price (16-bit)
@@ -85,6 +87,7 @@ store_init_all:
     sta si_qty,x
     sta si_p1,x
     sta si_flags,x
+    sta si_ego,x
     dex
     bpl !sia_clr2-
 
@@ -233,13 +236,14 @@ sro_set_p1:
 !sro_light_torch:
     lda #134                    // 134 charges × 30 = 4,020 turns
 
-// Shared tail: store A → si_p1, clear si_flags
+// Shared tail: store A → si_p1, clear si_flags and si_ego
 // Input: A = p1 value, sb_abs_slot = target
 sro_store_p1:
     ldy sb_abs_slot
     sta si_p1,y
     lda #0
     sta si_flags,y
+    sta si_ego,y
     rts
 
 // store_pick_item — Pick a random item suitable for store zp_store_idx
@@ -330,6 +334,36 @@ load_item_base_cost:
     sta zp_temp1
     rts
 
+// apply_tool_ego_multiplier — Multiply base cost by ego factor for digging tools (R14)
+// Input: zp_temp0/1 = base cost, sb_item_type and sb_item_ego set
+// Output: zp_temp0/1 updated
+// ego=0: ×1, ego=1: ×5, ego=2: ×15
+// Clobbers: A, X
+apply_tool_ego_multiplier:
+    lda sb_item_ego
+    beq !atem_done+             // ego=0, no change
+    ldx sb_item_type
+    lda it_category,x
+    cmp #ICAT_DIGGING
+    bne !atem_done+             // Not a digging tool
+    // Multiply base cost by factor
+    lda sb_item_ego
+    cmp #2
+    beq !atem_x15+
+    // ego=1: multiply by 5
+    ldx #5
+    jmp !atem_mul+
+!atem_x15:
+    ldx #15
+!atem_mul:
+    jsr math_mul_16x8           // Result in mul_result_0/1
+    lda mul_result_0
+    sta zp_temp0
+    lda mul_result_1
+    sta zp_temp1
+!atem_done:
+    rts
+
 // store_price_and_p1 — Store zp_math_a/b as price, add p1 bonus
 // Input: zp_math_a/b = price value, sb_item_type/sb_item_p1 set
 // Output: sb_price_lo/hi updated
@@ -365,6 +399,7 @@ calc_store_buy_price:
 // Clobbers: everything
 calc_bm_buy_price:
     jsr load_item_base_cost
+    jsr apply_tool_ego_multiplier
     ldx #3
     jsr math_mul_16x8           // Result in mul_result_0/1/2
     lda mul_result_0
@@ -394,11 +429,11 @@ calc_store_sell_price:
 // Output: sb_price_lo/hi = price (16-bit)
 // Clobbers: everything
 calc_bm_sell_price:
-    sta sb_item_type
-    tax
-    lda it_cost_lo,x
+    jsr load_item_base_cost
+    jsr apply_tool_ego_multiplier
+    lda zp_temp0
     sta zp_math_a
-    lda it_cost_hi,x
+    lda zp_temp1
     sta zp_math_b
     ldx #10
     jsr math_div_16x8           // Quotient in zp_math_a/b
@@ -411,6 +446,7 @@ calc_bm_sell_price:
 // Clobbers: everything
 calc_buy_price:
     jsr load_item_base_cost
+    jsr apply_tool_ego_multiplier
 
     // Get CHR price adjustment
     lda player_data + PL_CHR_CUR
@@ -445,6 +481,7 @@ calc_buy_price:
 // Clobbers: everything
 calc_sell_price:
     jsr load_item_base_cost
+    jsr apply_tool_ego_multiplier
 
     // Get CHR sell adjustment
     lda player_data + PL_CHR_CUR
@@ -471,11 +508,11 @@ calc_sell_price:
 // Output: sb_price_lo/hi = base_cost + p1_bonus
 // Clobbers: everything
 calc_buy_min_price:
-    sta sb_item_type
-    tax
-    lda it_cost_lo,x
+    jsr load_item_base_cost
+    jsr apply_tool_ego_multiplier
+    lda zp_temp0
     sta sb_price_lo
-    lda it_cost_hi,x
+    lda zp_temp1
     sta sb_price_hi
     jmp price_add_p1_bonus      // Tail call
 

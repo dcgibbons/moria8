@@ -25,6 +25,7 @@ si_item_id:     .fill STORE_TOTAL_SLOTS, $FF   // $FF = empty
 si_qty:         .fill STORE_TOTAL_SLOTS, 0
 si_p1:          .fill STORE_TOTAL_SLOTS, 0
 si_flags:       .fill STORE_TOTAL_SLOTS, 0
+si_ego:         .fill STORE_TOTAL_SLOTS, 0
 
 // Base index into SoA arrays for each store (store * 12)
 store_base_idx:

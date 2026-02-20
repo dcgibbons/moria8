@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-20 — updated)
+## Current State (2026-02-20 — R14 complete)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 and OPT-4 code size optimizations complete.
 
@@ -33,24 +33,25 @@
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader ($E000 overlay), monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
+| R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants, bare-hands no-progress, rubble resistance, si_ego save/load |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
-- **Test suites:** 22 (300 runtime tests)
+- **Test suites:** 23 (308 runtime tests)
 - **Compile-time asserts:** 70
-- **Source files:** ~47 .s files (projectile.s added by OPT-4)
-- **Program size:** $BBBF (program_end) — **1,089 bytes headroom** to MAP_BASE ($C000)
-- **Banked code:** $F000-$FFF7 (3 bytes headroom to CPU vectors — very tight)
-- **Banked payload:** $C002-$CFF9 (7 bytes headroom to I/O at $D000)
-- **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
+- **Source files:** ~48 .s files (test_tunnel.s added by R14)
+- **Program size:** $BDB5 (program_end) — **587 bytes headroom** to MAP_BASE ($C000)
+- **Banked code:** $F000-$FF97 (98 bytes headroom to CPU vectors)
+- **Banked payload:** $BDE2-$CD79 (646 bytes headroom to I/O at $D000)
+- **Town overlay:** 3,014 of 4,096 bytes (1,082 free)
 
 ### Known Remaining Issues
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | BUG-34 | MED | Monster recall only shows first match when multiple creatures share a display symbol. umoria cycles through all known creatures with that letter; moria8 finds the first match and stops. Fix: add a recall cycling loop similar to umoria's `recallMonsterAttributes()`. | **Fixed** — pressing the same letter again cycles to the next known creature with that symbol (wraps around); state tracked in recall_last_sc/idx |
-| BUG-41 | HIGH | Tunneling far too easy — hardness values scaled ~50× too low vs umoria but tool bonuses copied verbatim. Pick+STR18 = 100% success on granite (should be ~1%). Bare hands dig granite ~50% of the time. See R14 for fix plan. | Open |
+| BUG-41 | HIGH | Tunneling far too easy — hardness values scaled ~50× too low vs umoria but tool bonuses copied verbatim. Pick+STR18 = 100% success on granite (should be ~1%). Bare hands dig granite ~50% of the time. See R14 for fix plan. | **Fixed** — R14: hardness rescaled (granite 16–255, magma 5–124, quartz 3–82, rubble 0–39), new formula (STR>>2)+base+(ego×12), bare hands always fail |
 | BUG-35 | HIGH | Help screen fills with 'p' characters and locks up — help_lines data crossed MAP_BASE ($C000), dungeon map overwrote tail of data | **Fixed** — Tab control code ($fc) replaced padding spaces, saving ~96 bytes |
 | BUG-36 | MED | Monster recall shows blank name for town creatures — creature_get_name table path didn't populate creature_name_buf | **Fixed** — Table path now copies name to buffer |
 | BUG-37 | MED | Recall/help screens flash and dismiss immediately — keyboard buffer contained repeat characters | **Fixed** — Clear $C6 before dismiss input_get_key |
@@ -63,8 +64,8 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R14 | Fix tunneling difficulty (BUG-41) + enchanted digging tools | Medium |
-| 2 | R12 | Game-over loop (restart/reboot prompt instead of exit to BASIC) | Low |
+| 1 | R12 | Game-over loop (restart/reboot prompt instead of exit to BASIC) | Low |
+| 2 | R15 | Multi-disk support (dual-drive device 9, improved disk swap) | Low |
 | 3 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
@@ -83,10 +84,10 @@
 **Remaining items:**
 
 **Medium priority (gameplay polish):**
-- R14 Fix tunneling difficulty (BUG-41) + enchanted digging tools (Gnomish/Orcish/Dwarven variants)
 - R12 Game-over loop — after save/death/quit, prompt "Restart" or "Reboot" instead of exiting to BASIC
 
 **Low priority (polish/completeness):**
+- R15 Multi-disk support — dual-drive (device 9) eliminates swap prompts; also fixes missing disk_prompt_game calls after save/death
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves
@@ -127,250 +128,138 @@ All game-ending paths currently converge on an `rts` or `jmp` back to BASIC (via
 
 ---
 
-## R14 — Fix Tunneling Difficulty + Enchanted Digging Tools (BUG-41)
+## R15 — Multi-Disk Support (Dual-Drive + Improved Disk Swap)
 
-Two changes: (A) fix the broken hardness/bonus scaling so digging difficulty matches umoria, and (B) add enchanted tool variants (Gnomish Shovel, Orcish Pick, Dwarven Shovel, Dwarven Pick) so deeper dungeon levels reward better tools — matching umoria's progression.
+Support three disk configurations transparently:
+1. **Single disk** (mode 0) — save + program on same disk (today's default, device 8)
+2. **Swap disks** (mode 1) — physical disk swap on device 8 (today's 'D' mode, improved)
+3. **Dual drive** (mode 2) — game on device 8, save on device 9 (no swaps needed)
 
-### Part A: Fix Hardness/Bonus Scaling
+### Why
 
-#### Root Cause
+Users with two 1541 drives (or a dual-drive unit like the 4040/MSD) can eliminate all disk-swap prompts by putting the save disk in drive 9. This is a common C64 setup and many games from the era supported it. The existing mode 1 (swap) code works but has two bugs: missing `disk_prompt_game` calls after save-and-quit and after death, which will break R12's restart loop.
 
-umoria uses 16-bit hardness (granite: 80–1280) compared against ability values typically 25–193. moria8 scaled hardness to fit 8 bits (granite: 8–27) but didn't scale the bonuses (Pick still +75), so ability always exceeds hardness. With a Pick + STR 18, every wall type is a guaranteed one-hit dig (should be ~1% for granite). Bare hands dig granite ~50% of the time (should be impossible).
+### Current State
 
-#### New Digging Ability Formula
+`disk_swap.s` already provides mode 0/1 infrastructure:
+- `disk_mode` byte (0=single, 1=dual)
+- `disk_prompt_save` / `disk_prompt_game` — show swap prompt + `I0` reinit (no-op when mode=0)
+- Title menu 'D' key sets `disk_mode=1`
 
-```
-bare hands      → ability = 0, print "no progress" message, skip check
-digging tool    → ability = (STR >> 2) + base_bonus + (enchant_level * 12)
-regular weapon  → ability = (STR >> 2) + max(0, toDam >> 1)
-```
+All save/load/hiscore I/O hardcodes `ldx #SAVE_DEVICE` (device 8).
 
-STR >> 2 maps STR 3–18 to 0–4 (coarse, but tool bonus dominates — same as umoria where STR is a small fraction of total ability).
+### Design
 
-#### New Hardness Values
-
-| Wall Type | Current | New | umoria reference |
-|-----------|---------|-----|------------------|
-| Granite | rng(20)+8 → 8–27 | **rng(240)+16** → 16–255 | rand(1200)+80 → 80–1280 |
-| Magma | rng(12)+3 → 3–14 | **rng(120)+5** → 5–124 | rand(600)+10 → 10–610 |
-| Quartz | rng(10)+2 → 2–11 | **rng(80)+3** → 3–82 | rand(400)+10 → 10–410 |
-| Rubble | 0 (auto-succeed) | **rng(40)** → 0–39 | rand(180) → 1–180 |
-
-#### Bare Hands
-
-umoria prints "You dig with your hands, making no progress" and doesn't roll. moria8 should do the same — if no weapon equipped, set ability=0 and short-circuit before the resistance check. Needs a new Huffman string (HSTR_TUN_NO_TOOL).
-
-#### Rubble
-
-Changes from always-succeed to a resistance check (rng(40)), matching umoria. With a Pick it's ~60% per turn — still fast. Bare hands can't clear rubble, matching umoria.
-
-### Part B: Enchanted Digging Tools
-
-#### umoria Tool Progression
-
-umoria has 6 digging tools across 4 effectiveness tiers, using the `misc_use` field:
-
-| Tool | misc_use | umoria ability (STR 18) | Min DL | Cost |
-|------|----------|------------------------|--------|------|
-| Shovel | 0 | STR + 25 = 43 | 0 | 0 |
-| Pick | 1 | STR + 75 = 93 | 1 | 0 |
-| Gnomish Shovel | 1 | STR + 75 = 93 | 20 | 100 |
-| Orcish Pick | 2 | STR + 125 = 143 | 20 | 500 |
-| Dwarven Shovel | 2 | STR + 125 = 143 | 40 | 250 |
-| Dwarven Pick | 3 | STR + 175 = 193 | 50 | 1200 |
-
-Formula: `ability = STR + 25 + (misc_use × 50)`
-
-#### moria8 Enchanted Tool Design
-
-Reuse existing item types 62 (Shovel) and 63 (Pick) — no new item type slots needed (table is full at 64/64). Differentiate via the `inv_ego`/`fi_ego` byte, which already exists on every item instance and is already saved/loaded.
-
-**Ego byte interpretation for ICAT_DIGGING:**
-
-| ego | Shovel name | Pick name | Enchant bonus |
-|-----|-------------|-----------|---------------|
-| 0 | Shovel | Pick | +0 |
-| 1 | Gnomish Shovel | Orcish Pick | +12 |
-| 2 | Dwarven Shovel | Dwarven Pick | +12 more |
-
-**Dig ability with enchantment:** `(STR >> 2) + base_bonus + (ego × 12)`
-
-| Tool | ego | Base | Total bonus | Ability (STR 18) |
-|------|-----|------|-------------|------------------|
-| Shovel | 0 | 6 | 6 | 10 |
-| Gnomish Shovel | 1 | 6 | 18 | 22 |
-| Dwarven Shovel | 2 | 6 | 30 | 34 |
-| Pick | 0 | 20 | 20 | 24 |
-| Orcish Pick | 1 | 20 | 32 | 36 |
-| Dwarven Pick | 2 | 20 | 44 | 48 |
-
-#### Resulting Success Rates
-
-**vs Granite (rng(240)+16 → 16–255):**
-
-| Tool | Ability (STR18) | moria8 P(success) | umoria P(success) |
-|------|-----------------|-------------------|-------------------|
-| Shovel | 10 | 0% | 0% |
-| Pick | 24 | 3.3% | 1.0% |
-| Gnomish Shovel | 22 | 2.5% | 1.0% |
-| Orcish Pick | 36 | 8.3% | 5.3% |
-| Dwarven Shovel | 34 | 7.5% | 5.3% |
-| Dwarven Pick | 48 | 13.3% | 9.4% |
-| Bare hands | 0 | 0% | 0% |
-
-**vs Magma (rng(120)+5 → 5–124):**
-
-| Tool | moria8 P | umoria P |
-|------|----------|----------|
-| Shovel | 4.2% | 5.5% |
-| Pick | 15.8% | 13.8% |
-| Gnomish Shovel | 14.2% | 13.8% |
-| Orcish Pick | 25.8% | 22.2% |
-| Dwarven Shovel | 24.2% | 22.2% |
-| Dwarven Pick | 35.8% | 30.5% |
-
-**vs Quartz (rng(80)+3 → 3–82):**
-
-| Tool | moria8 P | umoria P |
-|------|----------|----------|
-| Shovel | 8.8% | 8.3% |
-| Pick | 26.3% | 20.8% |
-| Orcish Pick | 41.3% | 33.3% |
-| Dwarven Pick | 56.3% | 45.8% |
-
-All rates are close to umoria. Moria8 is consistently slightly easier, which compensates for C64's slower gameplay pace.
-
-#### Tool Enchantment Roll
-
-Extend `roll_ego_type` (in `ego_items.s`, lives at $F000) to also handle `ICAT_DIGGING`:
+#### New variable: `save_device`
 
 ```
-roll_ego_type:
-    tax
-    lda it_category,x
-    cmp #ICAT_WEAPON
-    beq !ret_weapon_ego+
-    cmp #ICAT_DIGGING
-    beq !ret_tool_ego+
-    lda #0
-    rts
-
-!ret_tool_ego:
-    // Chance based on dungeon level:
-    //   DL < 10: always ego=0 (basic tools only)
-    //   DL 10-19: 25% chance ego=1
-    //   DL 20+: 25% chance ego=1, 10% chance ego=2
-    lda zp_player_dlvl
-    cmp #10
-    bcc !ret_zero+          // DL < 10 → basic only
-    lda #100
-    jsr rng_range
-    cmp #10
-    bcc !ret_ego2+          // 10% → Dwarven (ego=2)
-    cmp #35
-    bcc !ret_ego1+          // 25% → Gnomish/Orcish (ego=1)
-    lda #0                  // 65% → basic
-    rts
-!ret_ego2:
-    lda zp_player_dlvl
-    cmp #20
-    bcc !ret_ego1+          // DL 10-19 can't get ego=2
-    lda #2
-    rts
-!ret_ego1:
-    lda #1
-    rts
+disk_mode:    .byte 0    // 0=single, 1=swap (1 drive), 2=dual-drive (dev 8+9)
+save_device:  .byte 8    // device# for save/score I/O (8 or 9)
 ```
 
-This is ~35 bytes in the $F000 banked region (720 bytes free there).
+- Mode 0: `save_device=8`, prompts are no-ops
+- Mode 1: `save_device=8`, prompts trigger swap + `I0`
+- Mode 2: `save_device=9`, prompts are no-ops (no swap needed)
 
-#### Name Display: Prefix Instead of Suffix
+#### Parameterize device number
 
-Weapons use ego as a suffix: "Long Sword (Flame)". Tools use ego as a **prefix**: "Dwarven Pick".
+Replace all `ldx #SAVE_DEVICE` with `ldx save_device` in save/score/scratch I/O. Tier loading and overlay loading continue using device 8 (game disk).
 
-**Display path change:** In `ui_inventory.s`, the current flow is:
-1. `item_get_name_ptr` → get base name
-2. `screen_put_string` → print name
-3. `banked_ego_put_suffix` → append suffix
+Affected SETLFS call sites (7 total):
 
-For tools with ego > 0, insert a prefix **before** the base name:
-1. Check if `ICAT_DIGGING` AND `ego > 0`
-2. If yes: print prefix string ("Gnomish ", "Orcish ", "Dwarven ") **first**
-3. Then print base name ("Shovel" / "Pick")
-4. Skip suffix (tool egos don't use suffixes)
+| File | Line | Operation |
+|------|------|-----------|
+| `save.s` | 188 | save_game open |
+| `save.s` | 372 | load_game open |
+| `save.s` | 733 | delete_savefile scratch |
+| `score_io.s` | 45 | hiscore_load open |
+| `score_io.s` | 134 | hiscore_save scratch |
+| `score_io.s` | 148 | hiscore_save write |
+| `disk_swap.s` | 92 | disk_init_drive `I0` |
 
-**Prefix strings** (3 unique, in $F000 banked region):
-```
-ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0   // 9 bytes
-ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0    // 8 bytes
-ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0   // 9 bytes
-```
+Each change is +1 byte (absolute addressing vs immediate).
 
-**Lookup:** Indexed by (tool_type - 62) × 2 + ego - 1:
-
-| Index | Tool + ego | Prefix |
-|-------|-----------|--------|
-| 0 | Shovel ego=1 | Gnomish |
-| 1 | Shovel ego=2 | Dwarven |
-| 2 | Pick ego=1 | Orcish |
-| 3 | Pick ego=2 | Dwarven |
+#### Mode-aware prompts
 
 ```
-tool_ego_prefix_lo: .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
-                    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
-tool_ego_prefix_hi: (matching high bytes)
+disk_prompt_save:
+    lda disk_mode
+    beq !done+         // mode 0: no-op
+    cmp #2
+    beq !done+         // mode 2: no-op (separate drive)
+    // mode 1: show swap prompt + I0
+    ...
+!done: rts
 ```
 
-~30 bytes for strings + ~8 bytes for tables = ~38 bytes in $F000.
+`disk_prompt_game` gets the same treatment.
 
-#### Store Availability
+#### Title menu — Disk setup sub-menu
 
-- **General Store:** sells basic Shovel and Pick only (no change).
-- **Dungeon floor:** enchanted variants spawn via ego roll at DL 10+.
-- **Home storage:** enchanted tools can be stashed (ego byte already saved/loaded).
+Expand 'D' handler. Pressing 'D' at the title enters a sub-menu:
 
-#### Pricing
+```
+Save disk:  S)ame  W)swap  9) Drive 9
+```
 
-Enchanted tools should be worth more when sold. The existing `item_get_value` function can check the ego byte for ICAT_DIGGING and multiply:
-- ego=0: base price (Shovel 15g, Pick 50g)
-- ego=1: base × 5 (Gnomish 75g, Orcish 250g)
-- ego=2: base × 15 (Dwarven Shovel 225g, Dwarven Pick 750g)
+- **S** → mode 0, `save_device=8` (reset to default)
+- **W** → mode 1, `save_device=8` (existing swap behavior)
+- **9** → probe device 9; if present → mode 2, `save_device=9`; if absent → error message, stay on menu
 
-### Implementation Summary
+Device 9 probe: open command channel 15 on device 9, send `I0`, check KERNAL status. ~30 bytes.
 
-#### Files Changed
+#### Fix missing `disk_prompt_game` calls
 
-1. **`tunnel.s`** — Change 4 hardness calculations, add rubble resistance check
-2. **`main.s:banked_dig_ability`** — New formula: `(STR >> 2) + base + (ego × 12)`, bare-hands short-circuit, read `inv_ego` for equipped tool
-3. **`ego_items.s`** ($F000) — Add `ICAT_DIGGING` branch to `roll_ego_type`, add tool prefix strings + lookup table
-4. **`ui_inventory.s`** — Add tool ego prefix display path (check ICAT_DIGGING before name, print prefix, skip suffix)
-5. **`item.s`** — Adjust `item_get_value` for tool ego pricing multiplier
-6. **Huffman string table** — Add HSTR_TUN_NO_TOOL ("You dig with your hands, making no progress.")
+Two bugs in current code:
 
-#### Size Impact
+1. **Save-and-quit** (`main.s:446-448`): calls `disk_prompt_save` → `save_game` → `jmp !quit+` — never swaps back to game disk. Add `jsr disk_prompt_game` before quit.
 
-| Region | Change | Bytes |
-|--------|--------|-------|
-| Main segment | tunnel.s hardness changes | ~net zero |
-| Main segment | dig_ability formula + bare-hands | ~+10 |
-| Main segment | ui_inventory prefix path | ~+25 |
-| Main segment | item_get_value ego pricing | ~+15 |
-| Main segment | Huffman string | ~+25 |
-| $F000 banked | roll_ego_type tool branch | ~+35 |
-| $F000 banked | prefix strings + tables | ~+38 |
-| **Total main** | | **~+75 bytes** |
-| **Total $F000** | | **~+73 bytes** (of 720 free) |
+2. **Death** (`main.s:1309-1314`): calls `disk_prompt_save` → `delete_savefile` → `tramp_game_over` (hiscore I/O) → `jmp !quit+` — never swaps back. Add `jsr disk_prompt_game` before quit. (Critical for R12 restart loop which needs game disk in drive.)
 
-#### Testing
+These are no-ops in mode 0, so adding them is safe regardless of disk configuration.
 
-- Bare hands → always fails (ability = 0)
-- Basic Pick + STR 18 → ability = 24 (4 + 20)
-- Basic Shovel + STR 18 → ability = 10 (4 + 6)
-- Orcish Pick (ego=1) + STR 18 → ability = 36 (4 + 20 + 12)
-- Dwarven Pick (ego=2) + STR 18 → ability = 48 (4 + 20 + 24)
-- Granite minimum resistance = 16 (shovel can never dig granite)
-- Rubble max resistance = 39 (basic pick almost always clears it)
-- Tool ego roll: returns 0 at DL < 10, returns 0-1 at DL 10-19, returns 0-2 at DL 20+
-- Name display: "Dwarven Pick" not "Pick (Dwarven)"
-- Enchanted tools save/load correctly (ego byte already in save format)
+### Implementation Steps
+
+| Step | What | Bytes |
+|------|------|-------|
+| R15.1 | Add `save_device` variable; replace 7 `ldx #SAVE_DEVICE` → `ldx save_device` | +8 |
+| R15.2 | Add mode 2 check to `disk_prompt_save` and `disk_prompt_game` | +6 |
+| R15.3 | Add missing `jsr disk_prompt_game` after save-and-quit and after death | +6 |
+| R15.4 | Device 9 probe routine (`probe_device_9`) | +35 |
+| R15.5 | Disk setup sub-menu (strings + handler in title screen) | +60 |
+| R15.6 | Makefile: add `rundual` target (VICE with two drives, `-9 $(SAVE_IMAGE)`) | 0 (build only) |
+| R15.7 | Test all three modes: single, swap, dual-drive | 0 |
+| **Total** | | **~115 bytes** |
+
+### Makefile Changes
+
+**New `rundual` target:**
+```makefile
+rundual: disk savedisk
+	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 \
+	        -drive9truedrive -drive9type 1541 +iecdevice9 \
+	        -8 $(DISK_IMAGE) -9 $(SAVE_IMAGE) \
+	        -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
+```
+
+### Size Impact
+
+~115 bytes total in main segment. Current headroom: 1,089 bytes. Fits easily.
+
+### Interaction with Other Systems
+
+- **Tier loading / overlays:** Unchanged — always use device 8 (game disk). `tier_manager.s` and `overlay.s` don't touch `save_device`.
+- **R12 game-over loop:** R15.3 adds the missing `disk_prompt_game` calls that R12 will need. Implementing R15.3 before R12 is ideal.
+- **REU:** No interaction — REU tier caching is orthogonal to save disk location.
+- **Boot loader:** No change — boot always loads from device 8.
+- **C128 (Phase 10):** Dual-drive is even more common on C128 setups. This infrastructure carries forward directly.
+
+### Testing
+
+- Mode 0 (default): save/load/hiscore all work on device 8, no prompts
+- Mode 1 (swap): prompts appear before save, load, death; `I0` sent after swap
+- Mode 2 (dual-drive): save/load/hiscore use device 9, no prompts, tiers still load from device 8
+- Device 9 not present: probe fails gracefully, error message, stays on menu
+- Save-and-quit: game disk back in drive (or device 8 active) after save completes
+- Death: game disk back in drive after hiscore save completes
 

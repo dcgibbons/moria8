@@ -180,39 +180,66 @@ player_tunnel:
 // ============================================================
 
 !tun_granite:
-    // Resistance: rng(20) + 8 → 8-27
-    lda #20
+    // Resistance: rng(240) + 16 → 16-255
+    lda #240
     jsr rng_range
     clc
-    adc #8
+    adc #16
     sta zp_temp0                // resistance
     ldx #HSTR_TUN_DIG_GRANITE   // fail message
     jmp !tun_dig_check+
 
 !tun_magma:
-    // Resistance: rng(12) + 3 → 3-14
-    lda #12
+    // Resistance: rng(120) + 5 → 5-124
+    lda #120
     jsr rng_range
     clc
-    adc #3
+    adc #5
     sta zp_temp0                // resistance
     ldx #HSTR_TUN_DIG_MAGMA     // fail message
     jmp !tun_dig_check+
 
 !tun_quartz:
-    // Resistance: rng(10) + 2 → 2-11
-    lda #10
+    // Resistance: rng(80) + 3 → 3-82
+    lda #80
     jsr rng_range
     clc
-    adc #2
+    adc #3
     sta zp_temp0                // resistance
     ldx #HSTR_TUN_DIG_QUARTZ    // fail message
     jmp !tun_dig_check+
 
 // ============================================================
-// Rubble — always succeeds, no resistance check
+// Rubble — resistance check with rng(40) (R14)
 // ============================================================
 !tun_rubble:
+    // Calculate digging ability
+    jsr tramp_dig_ability
+
+    // Bare-hands check: ability=0 means no tool
+    lda tun_dig_ability
+    bne !tun_rubble_check+
+    ldx #HSTR_TUN_NO_TOOL
+    jsr huff_print_msg
+    sec                         // Turn consumed
+    rts
+
+!tun_rubble_check:
+    // Resistance: rng(40) → [0,39]
+    lda #40
+    jsr rng_range
+    sta zp_temp0                // resistance
+
+    // Success check: ability > resistance
+    lda tun_dig_ability
+    cmp zp_temp0
+    bcc !tun_rubble_fail+
+    bne !tun_rubble_success+
+    jsr rng_byte
+    and #1
+    beq !tun_rubble_fail+
+
+!tun_rubble_success:
     // Replace with floor
     ldy df_target_x
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
@@ -223,6 +250,12 @@ player_tunnel:
 
     lda #1
     sta vis_room_revealed       // Trigger viewport redraw
+    sec
+    rts
+
+!tun_rubble_fail:
+    ldx #HSTR_TUN_DIG_GRANITE   // Reuse "You dig in the granite wall."
+    jsr huff_print_msg
     sec                         // Turn consumed
     rts
 
@@ -234,9 +267,17 @@ player_tunnel:
 !tun_dig_check:
     stx zp_temp1                // Save fail message ID
 
-    // Calculate digging ability (banked at $F000)
-    // Accounts for digging tools or weapon TODMG bonus
+    // Calculate digging ability
     jsr tramp_dig_ability
+
+    // Bare-hands check: ability=0 means no tool (R14)
+    lda tun_dig_ability
+    bne !tun_has_tool+
+    ldx #HSTR_TUN_NO_TOOL
+    jsr huff_print_msg
+    sec                         // Turn consumed
+    rts
+!tun_has_tool:
 
     // Success check: digging_ability > resistance
     lda tun_dig_ability

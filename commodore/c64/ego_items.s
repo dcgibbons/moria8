@@ -32,11 +32,13 @@
 // Clobbers: A, X, Y
 // ============================================================
 roll_ego_type:
-    // Check category — only melee weapons get ego
+    // Check category — weapons get weapon ego, digging tools get tool ego
     tax
     lda it_category,x
     cmp #ICAT_WEAPON
-    bne !ret_zero+
+    beq !ret_weapon_ego+
+    jmp roll_tool_ego_check     // Main RAM: handles ICAT_DIGGING check, returns 0 for others
+!ret_weapon_ego:
 
     // Exclude ranged weapons (bows, crossbows, slings) and ammo
     jsr item_get_missile

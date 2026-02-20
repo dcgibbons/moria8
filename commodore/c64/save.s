@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $07
+.const SAVE_VERSION    = $08
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -234,11 +234,12 @@ save_game:
     :save_block(wand_shuffle, 5)
     :save_block(staff_shuffle, 5)
 
-    // 8. Store inventory (4 × 72 = 288 bytes)
+    // 8. Store inventory (5 × 96 = 480 bytes)
     :save_block(si_item_id, STORE_TOTAL_SLOTS)
     :save_block(si_qty, STORE_TOTAL_SLOTS)
     :save_block(si_p1, STORE_TOTAL_SLOTS)
     :save_block(si_flags, STORE_TOTAL_SLOTS)
+    :save_block(si_ego, STORE_TOTAL_SLOTS)
 
     // 9. Stairs (6 bytes)
     :save_block(stairs_up_x, 6)
@@ -433,6 +434,7 @@ load_game:
     :load_block(si_qty, STORE_TOTAL_SLOTS)
     :load_block(si_p1, STORE_TOTAL_SLOTS)
     :load_block(si_flags, STORE_TOTAL_SLOTS)
+    :load_block(si_ego, STORE_TOTAL_SLOTS)
 
     // 9. Stairs
     :load_block(stairs_up_x, 6)

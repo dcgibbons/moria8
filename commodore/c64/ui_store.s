@@ -168,7 +168,9 @@ store_draw_screen:
     ldy sb_abs_slot
     lda si_item_id,y
     cmp #FI_EMPTY
-    beq !sds_empty_slot+
+    bne !sds_has_item+
+    jmp !sds_empty_slot+
+!sds_has_item:
 
     // Letter: A + slot_counter (screen code A = $01)
     lda #COL_WHITE
@@ -182,11 +184,23 @@ store_draw_screen:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name
+    // Item name — check for tool ego prefix (R14)
     lda #COL_LGREY
     sta zp_text_color
     ldy sb_abs_slot
     lda si_item_id,y
+    sta sd_save_item_id
+    tax
+    lda it_category,x
+    bne !sds_normal_name+
+    ldy sb_abs_slot
+    lda si_ego,y
+    beq !sds_normal_name+
+    // Tool ego prefix
+    ldx sd_save_item_id
+    jsr put_tool_ego_prefix
+!sds_normal_name:
+    lda sd_save_item_id
     jsr item_get_name_ptr
     jsr screen_put_string
 
@@ -204,6 +218,8 @@ store_draw_screen:
     sta zp_text_color
 
     ldy sb_abs_slot
+    lda si_ego,y
+    sta sb_item_ego             // Pass ego for pricing (R14)
     lda si_p1,y
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda si_item_id,y
@@ -332,6 +348,8 @@ store_buy:
 
     // Calculate buy price
     ldx sb_abs_slot
+    lda si_ego,x
+    sta sb_item_ego             // Pass ego for pricing (R14)
     lda si_p1,x
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda si_item_id,x
@@ -397,6 +415,8 @@ sbuy_execute:
     sta fi_add_p1
     lda si_flags,x
     sta fi_add_flags
+    lda si_ego,x
+    sta fi_add_ego
     jsr inv_add_item
 
     // Remove from store
@@ -407,6 +427,7 @@ sbuy_execute:
     sta si_qty,x
     sta si_p1,x
     sta si_flags,x
+    sta si_ego,x
 
     // Success message
     jsr store_clear_msg_area
@@ -595,6 +616,8 @@ store_sell:
 !ssell_not_cursed:
     // Calculate sell price
     ldx ss_inv_slot
+    lda inv_ego,x
+    sta sb_item_ego             // Pass ego for pricing (R14)
     lda inv_p1,x
     sta sb_item_p1              // Pass enchantment/charges for pricing
     lda ss_item_id
@@ -665,6 +688,8 @@ ssell_execute:
     sta si_p1,y
     lda inv_flags,x
     sta si_flags,y
+    lda inv_ego,x
+    sta si_ego,y
 
     // Remove from inventory
     ldx ss_inv_slot

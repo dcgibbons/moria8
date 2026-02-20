@@ -225,6 +225,7 @@ Sorry, what was that again?
 @TUN_PERMANENT This seems to be permanent rock.
 @TUN_NOTHING There is nothing to tunnel here.
 @TUN_RUBBLE The rubble crumbles.
+@TUN_NO_TOOL You dig with your hands, making no progress.
 
 # ===== Item pickup/drop strings (R13) =====
 @IPU_NOTHING You see nothing here.

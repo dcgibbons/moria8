@@ -162,6 +162,8 @@ home_retrieve:
     sta fi_add_p1
     lda si_flags,x
     sta fi_add_flags
+    lda si_ego,x
+    sta fi_add_ego
     jsr inv_add_item
 
     // Clear store slot
@@ -172,6 +174,7 @@ home_retrieve:
     sta si_qty,x
     sta si_p1,x
     sta si_flags,x
+    sta si_ego,x
 
     // Success message
     lda #COL_LGREEN
@@ -247,11 +250,9 @@ home_deposit:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name
+    // Item name with ego prefix/suffix (R14)
     ldx hm_save_x
-    lda inv_item_id,x
-    jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr put_inv_name_with_ego
 
     inc hm_row
 
@@ -335,6 +336,8 @@ home_deposit:
     sta si_p1,y
     lda inv_flags,x
     sta si_flags,y
+    lda inv_ego,x
+    sta si_ego,y
 
     // Remove from inventory
     ldx hm_inv_slot

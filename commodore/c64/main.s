@@ -1529,19 +1529,231 @@ tramp_ego_get_ac_bonus:
     pla
     rts
 
-// tramp_dig_ability — Calculate digging ability (banked at $F000)
-// Accounts for equipped digging tools (Shovel/Pick) or weapon TODMG.
+// tramp_dig_ability — Calculate digging ability
+// Now in main RAM — no banking needed.
 // Output: tun_dig_ability set
 // Clobbers: A, X
 tramp_dig_ability:
-    sei
-    lda #BANK_NO_ROMS
-    sta $01
-    jsr banked_dig_ability
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
+    jmp calc_dig_ability
+
+// ============================================================
+// calc_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
+// New formula for R14: (STR>>2) + base_bonus + (ego*12) for digging tools
+// Output: tun_dig_ability set
+// Clobbers: A, X
+// ============================================================
+calc_dig_ability:
+    // Check equipped weapon
+    ldx inv_item_id + EQUIP_WEAPON
+    cpx #$FF
+    bne !cda_has_weapon+
+
+    // Bare hands: ability = 0
+    lda #0
+    sta tun_dig_ability
     rts
+
+!cda_has_weapon:
+    lda it_category,x
+    cmp #ICAT_DIGGING
+    beq !cda_dig_tool+
+
+    // Regular weapon: ability = (STR >> 2) + max(0, PL_TODMG >> 1)
+    lda zp_player_str
+    lsr
+    lsr                         // STR >> 2
+    sta tun_dig_ability
+    lda player_data + PL_TODMG
+    bmi !cda_done+              // Negative TODMG → skip (leave ability = STR>>2)
+    lsr                         // TODMG >> 1
+    clc
+    adc tun_dig_ability
+    bcc !cda_ok+
+    lda #$FF                    // Cap at 255
+!cda_ok:
+    sta tun_dig_ability
+!cda_done:
+    rts
+
+!cda_dig_tool:
+    // Digging tool: ability = (STR >> 2) + dig_base_table[type-62] + (ego * 12)
+    lda zp_player_str
+    lsr
+    lsr                         // STR >> 2
+    sta tun_dig_ability
+
+    // Add base bonus from table
+    txa
+    sec
+    sbc #62                     // Index into dig_base_table (0=Shovel, 1=Pick)
+    tax
+    lda dig_base_table,x
+    clc
+    adc tun_dig_ability
+    sta tun_dig_ability
+
+    // Add ego bonus: ego * 12
+    lda inv_ego + EQUIP_WEAPON
+    beq !cda_done-              // ego=0, no bonus
+    // Multiply ego (1 or 2) by 12
+    // ego * 12 = ego * 8 + ego * 4
+    sta zp_temp2                // save ego
+    asl                         // *2
+    asl                         // *4
+    sta zp_temp3                // ego*4
+    asl                         // *8
+    clc
+    adc zp_temp3                // *8 + *4 = *12
+    clc
+    adc tun_dig_ability
+    bcc !cda_ego_ok+
+    lda #$FF                    // Cap at 255
+!cda_ego_ok:
+    sta tun_dig_ability
+    rts
+
+dig_base_table:
+    .byte 6, 20                 // Shovel base=6, Pick base=20
+
+// ============================================================
+// roll_tool_ego_check — Handle ego roll for digging tools
+// Called from roll_ego_type ($F000) via JMP when category != ICAT_WEAPON.
+// A = category value from it_category lookup
+// Returns: A = ego type (0, 1, or 2)
+// Clobbers: A, X
+// ============================================================
+roll_tool_ego_check:
+    // A has the category value. ICAT_DIGGING = 0.
+    cmp #ICAT_DIGGING           // Re-test A (flags stale from prior CMP in roll_ego_type)
+    bne !rtc_zero+              // category != 0 → not a digging tool
+    // It IS a digging tool — roll ego based on dungeon level
+    lda zp_player_dlvl
+    cmp #10
+    bcc !rtc_zero+              // DL < 10 → basic only (ego=0)
+    lda #100
+    jsr rng_range               // [0, 99]
+    cmp #10
+    bcc !rtc_ego2+              // 10% → check for Dwarven (ego=2)
+    cmp #35
+    bcc !rtc_ego1+              // 25% → Gnomish/Orcish (ego=1)
+!rtc_zero:
+    lda #0                      // 65% → basic
+    rts
+!rtc_ego2:
+    lda zp_player_dlvl
+    cmp #20
+    bcc !rtc_ego1+              // DL 10-19 can't get ego=2, downgrade to ego=1
+    lda #2
+    rts
+!rtc_ego1:
+    lda #1
+    rts
+
+// ============================================================
+// banked_ego_put_suffix — Write ego suffix to screen
+// Relocated from $F000 to main RAM (R14). Calls ego_get_suffix_ptr
+// ($F000) — requires KERNAL banked out (always true when called).
+// Input: A = ego type (0 = no ego)
+// Clobbers: A, Y, zp_ptr0
+// ============================================================
+banked_ego_put_suffix:
+    cmp #0
+    beq !beps_done+
+    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000 RAM)
+    ldy #0
+!beps_loop:
+    lda (zp_ptr0),y
+    beq !beps_done+
+    sty beps_save_y
+    jsr screen_put_char
+    ldy beps_save_y
+    iny
+    jmp !beps_loop-
+!beps_done:
+    rts
+beps_save_y: .byte 0
+
+// ============================================================
+// put_tool_ego_prefix — Print ego prefix for digging tools
+// Input: A = ego (1 or 2), X = item type ID (62 or 63)
+// Output: prefix string printed to screen (e.g., "Gnomish ")
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+put_tool_ego_prefix:
+    // Compute index = (type - 62) * 2 + (ego - 1)
+    sec
+    sbc #1                      // ego - 1 (0 or 1)
+    sta ptep_temp
+    txa
+    sec
+    sbc #62                     // type - 62 (0=Shovel, 1=Pick)
+    asl                         // * 2
+    clc
+    adc ptep_temp               // + (ego - 1) → index 0-3
+    tax
+    lda tool_ego_prefix_lo,x
+    sta zp_ptr0
+    lda tool_ego_prefix_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string       // Print prefix (e.g., "Dwarven ")
+    rts
+
+ptep_temp: .byte 0
+
+// Prefix strings (screen codes, null-terminated)
+ego_tool_prefix_gnomish: .text "Gnomish " ; .byte 0
+ego_tool_prefix_orcish:  .text "Orcish " ; .byte 0
+ego_tool_prefix_dwarven: .text "Dwarven " ; .byte 0
+
+// Prefix lookup table — indexed 0-3
+// Index: (type-62)*2 + (ego-1)
+//   0 = Shovel ego=1 → Gnomish
+//   1 = Shovel ego=2 → Dwarven
+//   2 = Pick ego=1   → Orcish
+//   3 = Pick ego=2   → Dwarven
+tool_ego_prefix_lo:
+    .byte <ego_tool_prefix_gnomish, <ego_tool_prefix_dwarven
+    .byte <ego_tool_prefix_orcish,  <ego_tool_prefix_dwarven
+tool_ego_prefix_hi:
+    .byte >ego_tool_prefix_gnomish, >ego_tool_prefix_dwarven
+    .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
+
+// ============================================================
+// put_inv_name_with_ego — Print item name with ego prefix/suffix
+// Shared helper to avoid duplicating prefix check logic in $F000.
+// Input: X = inventory slot index
+// For ICAT_DIGGING + ego>0: prints "Gnomish Shovel" (prefix + name)
+// For other + ego>0: prints "Long Sword (Flame)" (name + suffix)
+// For ego=0: prints base name only
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+put_inv_name_with_ego:
+    lda inv_item_id,x
+    sta pinwe_item_id
+    stx pinwe_slot
+    tax
+    lda it_category,x
+    bne !pinwe_not_tool+
+    ldx pinwe_slot
+    lda inv_ego,x
+    beq !pinwe_not_tool+
+    // Tool ego prefix + base name (no suffix)
+    ldx pinwe_item_id
+    jsr put_tool_ego_prefix
+    lda pinwe_item_id
+    jsr item_get_name_ptr
+    jsr screen_put_string
+    rts
+!pinwe_not_tool:
+    lda pinwe_item_id
+    jsr item_get_name_ptr
+    jsr screen_put_string
+    ldx pinwe_slot
+    lda inv_ego,x
+    jsr banked_ego_put_suffix
+    rts
+pinwe_item_id: .byte 0
+pinwe_slot:    .byte 0
 
 // Init-only strings — kept in main RAM (small, referenced by title_screen.s)
 // ============================================================
@@ -1787,45 +1999,6 @@ banked_payload:
     #import "ui_home.s"
     #import "string_bank_banked.s"
     #import "ui_recall.s"
-
-// ============================================================
-// banked_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
-// Called from tramp_dig_ability while KERNAL banked out.
-// Checks equipped weapon: if ICAT_DIGGING, uses dig_bonus table;
-// otherwise uses max(0, PL_TODMG) as before.
-// Output: tun_dig_ability set
-// Clobbers: A, X
-// ============================================================
-banked_dig_ability:
-    lda zp_player_str
-    sta tun_dig_ability
-    ldx inv_item_id + EQUIP_WEAPON
-    cpx #$FF
-    beq !bda_done+              // No weapon equipped
-    lda it_category,x
-    cmp #ICAT_DIGGING
-    beq !bda_dig_tool+
-    // Regular weapon: add max(0, PL_TODMG)
-    lda player_data + PL_TODMG
-    bmi !bda_done+              // Negative → skip
-!bda_add_bonus:
-    clc
-    adc tun_dig_ability
-    bcc !bda_ok+
-    lda #$ff                    // Cap at 255
-!bda_ok:
-    sta tun_dig_ability
-!bda_done:
-    rts
-!bda_dig_tool:
-    txa
-    sec
-    sbc #62                     // Index into dig_bonus (0=Shovel, 1=Pick)
-    tax
-    lda dig_bonus_table,x
-    jmp !bda_add_bonus-
-dig_bonus_table:
-    .byte 25, 75               // Shovel +25, Pick +75
 
 banked_code_end:
 }
