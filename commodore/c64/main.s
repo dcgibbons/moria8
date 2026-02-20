@@ -480,8 +480,9 @@ load_resume_game:
 
     // Monster recall?
     cmp #CMD_RECALL
-    bne !not_recall+
-    jsr msg_clear
+    beq !+
+    jmp !not_recall+
+!:  jsr msg_clear
     // Show prompt on message row
     lda #0
     sta zp_cursor_row
@@ -501,8 +502,7 @@ load_resume_game:
     sec
     sbc #$40                    // PETSCII→screen code: $41→$01 (lowercase)
     sta recall_query_sc
-    ldx #0
-    jmp !recall_search+
+    jmp !recall_start+
 !recall_try_shifted:
     // Shifted letters ($C1-$DA) → uppercase screen codes ($41-$5A)
     cmp #$c1                    // shifted 'A'
@@ -513,7 +513,24 @@ load_resume_game:
     clc
     adc #$40                    // $01→$41 (uppercase screen code)
     sta recall_query_sc
-    ldx #0
+!recall_start:
+    // Cycling: same char as last recall → start after last match, else start from 0
+    lda recall_query_sc
+    cmp recall_last_sc
+    bne !recall_new_char+
+    lda recall_last_idx
+    clc
+    adc #1
+    cmp #MAX_CREATURES
+    bcc !recall_set_start+
+    lda #0
+    jmp !recall_set_start+
+!recall_new_char:
+    lda #0
+!recall_set_start:
+    tax                         // X = search start index
+    lda #MAX_CREATURES
+    sta zp_temp1                // Loop counter (search all MAX_CREATURES slots)
 !recall_search:
     lda cr_display,x
     cmp recall_query_sc
@@ -526,10 +543,19 @@ load_resume_game:
 !recall_next:
     inx
     cpx #MAX_CREATURES
-    bcc !recall_search-
-    bcs !recall_done+           // Not found — skip display
+    bcc !recall_no_wrap+
+    ldx #0
+!recall_no_wrap:
+    dec zp_temp1
+    bne !recall_search-
+    lda #0                      // No match — clear cycling state
+    sta recall_last_sc
+    jmp !recall_done+
 !recall_found:
     stx recall_found_type
+    lda recall_query_sc         // Update cycling state for next recall
+    sta recall_last_sc
+    stx recall_last_idx
     jsr creature_get_name       // Populates creature_name_buf
     jsr tramp_ui_recall
     lda #0
@@ -1595,6 +1621,8 @@ tramp_ui_recall:
 recall_prompt_str: .text "Recall which? " ; .byte 0
 recall_query_sc:   .byte 0             // Screen code of typed letter
 recall_found_type: .byte 0             // Creature type index found
+recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)
+recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
 
 // ============================================================
 // Store overlay trampolines — load overlay, bank out KERNAL, call $E000+

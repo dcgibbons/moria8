@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-20)
+## Current State (2026-02-20 — updated)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 and OPT-4 code size optimizations complete.
 
@@ -40,7 +40,7 @@
 - **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 70
 - **Source files:** ~47 .s files (projectile.s added by OPT-4)
-- **Program size:** $BB8B (program_end) — **1,141 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BBBF (program_end) — **1,089 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FFF7 (3 bytes headroom to CPU vectors — very tight)
 - **Banked payload:** $C002-$CFF9 (7 bytes headroom to I/O at $D000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
@@ -49,7 +49,7 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| BUG-34 | MED | Monster recall only shows first match when multiple creatures share a display symbol. umoria cycles through all known creatures with that letter; moria8 finds the first match and stops. Fix: add a recall cycling loop similar to umoria's `recallMonsterAttributes()`. | Open |
+| BUG-34 | MED | Monster recall only shows first match when multiple creatures share a display symbol. umoria cycles through all known creatures with that letter; moria8 finds the first match and stops. Fix: add a recall cycling loop similar to umoria's `recallMonsterAttributes()`. | **Fixed** — pressing the same letter again cycles to the next known creature with that symbol (wraps around); state tracked in recall_last_sc/idx |
 | BUG-41 | HIGH | Tunneling far too easy — hardness values scaled ~50× too low vs umoria but tool bonuses copied verbatim. Pick+STR18 = 100% success on granite (should be ~1%). Bare hands dig granite ~50% of the time. See R14 for fix plan. | Open |
 | BUG-35 | HIGH | Help screen fills with 'p' characters and locks up — help_lines data crossed MAP_BASE ($C000), dungeon map overwrote tail of data | **Fixed** — Tab control code ($fc) replaced padding spaces, saving ~96 bytes |
 | BUG-36 | MED | Monster recall shows blank name for town creatures — creature_get_name table path didn't populate creature_name_buf | **Fixed** — Table path now copies name to buffer |

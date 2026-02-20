@@ -3815,3 +3815,23 @@ All paths share a single copy loop (`!cgn_copy`), eliminating a duplicate copy r
 ### Files Modified
 
 `turn.s`, `spell_effects.s`, `combat.s`, `ranged_fire.s`, `throw.s`, `bash.s`, `monster.s`, `ui_inventory.s`, `huffman_data.s` + new `projectile.s` + 17 test files (import added).
+
+---
+
+## BUG-34 — Monster Recall Cycling ✅ FIXED (2026-02-20)
+
+**Problem:** Monster recall showed only the first creature matching a typed display symbol. When multiple creatures share a letter (e.g. several 'j' creatures), the player had no way to see the others.
+
+**Fix:** Added cycling state to the recall command handler in `main.s`. Pressing the same letter again now advances to the next known creature with that symbol, wrapping around to the first after the last. Matches umoria's `recallMonsterAttributes()` behaviour.
+
+**Implementation:**
+- `recall_last_sc` (.byte 0) — screen code of the last recall shown; 0 = no previous recall
+- `recall_last_idx` (.byte 0) — creature index last displayed (determines where to resume the search)
+- Search start: `(recall_last_idx + 1) % MAX_CREATURES` if same char, else 0
+- Loop runs MAX_CREATURES iterations with wrap-around (using `zp_temp1` as counter), ensuring all slots are checked exactly once
+- On no match: clears `recall_last_sc` so next use restarts from the beginning
+- `bne !not_recall+` trampoline added (handler grew past ±127 byte branch range)
+
+**Files modified:** `main.s` (recall handler + two new state variables)
+
+**Size impact:** +52 bytes (program_end $BB8B → $BBBF). All 22 test suites pass.
