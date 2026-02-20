@@ -225,3 +225,12 @@ Sorry, what was that again?
 @TUN_PERMANENT This seems to be permanent rock.
 @TUN_NOTHING There is nothing to tunnel here.
 @TUN_RUBBLE The rubble crumbles.
+
+# ===== Item pickup/drop strings (R13) =====
+@IPU_NOTHING You see nothing here.
+@IPU_FOUND You found ~
+@IPU_GOLD  gold pieces.
+@IPU_PICKED You picked up a ~
+@IDR_PROMPT Drop which item (a-v)?
+@IDR_DROP You drop a ~
+@IDR_FLOOR_FULL No room on the floor.

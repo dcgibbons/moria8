@@ -20,7 +20,7 @@
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $06
+.const SAVE_VERSION    = $07
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.

@@ -1502,6 +1502,20 @@ tramp_ego_get_ac_bonus:
     pla
     rts
 
+// tramp_dig_ability — Calculate digging ability (banked at $F000)
+// Accounts for equipped digging tools (Shovel/Pick) or weapon TODMG.
+// Output: tun_dig_ability set
+// Clobbers: A, X
+tramp_dig_ability:
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr banked_dig_ability
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    rts
+
 // Init-only strings — kept in main RAM (small, referenced by title_screen.s)
 // ============================================================
 title_str:
@@ -1744,6 +1758,46 @@ banked_payload:
     #import "ui_home.s"
     #import "string_bank_banked.s"
     #import "ui_recall.s"
+
+// ============================================================
+// banked_dig_ability — Calculate digging ability (STR + tool/weapon bonus)
+// Called from tramp_dig_ability while KERNAL banked out.
+// Checks equipped weapon: if ICAT_DIGGING, uses dig_bonus table;
+// otherwise uses max(0, PL_TODMG) as before.
+// Output: tun_dig_ability set
+// Clobbers: A, X
+// ============================================================
+banked_dig_ability:
+    lda zp_player_str
+    sta tun_dig_ability
+    ldx inv_item_id + EQUIP_WEAPON
+    cpx #$FF
+    beq !bda_done+              // No weapon equipped
+    lda it_category,x
+    cmp #ICAT_DIGGING
+    beq !bda_dig_tool+
+    // Regular weapon: add max(0, PL_TODMG)
+    lda player_data + PL_TODMG
+    bmi !bda_done+              // Negative → skip
+!bda_add_bonus:
+    clc
+    adc tun_dig_ability
+    bcc !bda_ok+
+    lda #$ff                    // Cap at 255
+!bda_ok:
+    sta tun_dig_ability
+!bda_done:
+    rts
+!bda_dig_tool:
+    txa
+    sec
+    sbc #62                     // Index into dig_bonus (0=Shovel, 1=Pick)
+    tax
+    lda dig_bonus_table,x
+    jmp !bda_add_bonus-
+dig_bonus_table:
+    .byte 25, 75               // Shovel +25, Pick +75
+
 banked_code_end:
 }
 banked_payload_end:

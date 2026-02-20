@@ -28,5 +28,8 @@
 .const MAX_EQUIP_SLOTS = 8
 .const TOTAL_INV_SLOTS = 30
 
+// Item Category for Digging Tools
+.const ICAT_DIGGING = 0
+
 // Master Item Type Count
-.const ITEM_TYPE_COUNT = 62
+.const ITEM_TYPE_COUNT = 64

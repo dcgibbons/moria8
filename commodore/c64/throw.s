@@ -64,19 +64,15 @@ throw_item:
     bne !tw_slot_ok+
 
     // Empty slot
-    lda #<idr_no_items_str
-    sta zp_ptr0
-    lda #>idr_no_items_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 !tw_cancel:
-    lda #<idr_cancel_str
-    sta zp_ptr0
-    lda #>idr_cancel_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts

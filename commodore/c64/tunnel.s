@@ -238,18 +238,9 @@ player_tunnel:
 !tun_dig_check:
     stx zp_temp1                // Save fail message ID
 
-    // Calculate digging ability: STR + max(0, PL_TODMG)
-    lda zp_player_str
-    sta tun_dig_ability
-    lda player_data + PL_TODMG
-    bmi !tun_no_weapon_bonus+   // Negative → skip
-    clc
-    adc tun_dig_ability
-    bcc !tun_ability_ok+
-    lda #$ff                    // Cap at 255
-!tun_ability_ok:
-    sta tun_dig_ability
-!tun_no_weapon_bonus:
+    // Calculate digging ability (banked at $F000)
+    // Accounts for digging tools or weapon TODMG bonus
+    jsr tramp_dig_ability
 
     // Success check: digging_ability > resistance
     lda tun_dig_ability

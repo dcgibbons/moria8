@@ -39,7 +39,7 @@ piw_ego:      .byte 0          // Item ego type being processed
 // Category -> equipment slot mapping table
 // ============================================================
 equip_slot_for_cat:
-    .byte $ff              // ICAT_NONE (0) -> invalid
+    .byte EQUIP_WEAPON     // ICAT_DIGGING (0) -> weapon slot 22
     .byte $ff              // ICAT_GOLD (1) -> invalid
     .byte EQUIP_WEAPON     // ICAT_WEAPON (2) -> slot 22
     .byte EQUIP_BODY       // ICAT_ARMOR (3) -> slot 23
@@ -365,10 +365,8 @@ item_takeoff:
     bcs !ito_added+
 
     // Pack full
-    lda #<ipu_pack_full_str
-    sta zp_ptr0
-    lda #>ipu_pack_full_str
-    sta zp_ptr0_hi
+    ldx #HSTR_UIS_PACK_FULL
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts

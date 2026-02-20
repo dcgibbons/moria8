@@ -18,7 +18,7 @@
 // Store 4 Alchemy:  POTION(10)                = $0400
 // Store 5 Magic:    WAND(14), STAFF(15), RING(12) = $D000
 store_cat_mask_lo:
-    .byte <$0300, <$00F8, <$0004, <$0C00, <$0400, <$F000, <$FFFF, <$FFFF
+    .byte <$0301, <$00F8, <$0004, <$0C00, <$0400, <$F000, <$FFFF, <$FFFF
 store_cat_mask_hi:
     .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000, >$FFFF, >$FFFF
 
@@ -251,11 +251,11 @@ store_pick_item:
     sta sr_retry
 
 !spi_loop:
-    // Random item type [2, 61] (skip gold types 0-1)
-    lda #60                     // 60 possible types (2..61)
-    jsr rng_range               // 0-59
+    // Random item type [2, 63] (skip gold types 0-1)
+    lda #62                     // 62 possible types (2..63)
+    jsr rng_range               // 0-61
     clc
-    adc #2                      // 2-61
+    adc #2                      // 2-63
 
     // Check if this item's category matches the store
     pha                         // Save item type on stack

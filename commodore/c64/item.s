@@ -99,6 +99,8 @@ it_category:
     .byte ICAT_BOOK     // 59: Chants and Blessings (Priest Book 3)
     .byte ICAT_BOOK     // 60: Exorcism and Dispelling (Priest Book 4)
     .byte ICAT_LIGHT    // 61: Flask of Oil
+    .byte ICAT_DIGGING  // 62: Shovel
+    .byte ICAT_DIGGING  // 63: Pick
 
 // Display character (screen codes)
 it_display:
@@ -164,6 +166,8 @@ it_display:
     .byte $3f   // 59: '?' Chants and Blessings
     .byte $3f   // 60: '?' Exorcism and Dispelling
     .byte $21   // 61: '!' Flask of Oil
+    .byte $5c   // 62: '\' Shovel
+    .byte $5c   // 63: '\' Pick
 
 // Color
 it_color:
@@ -229,6 +233,8 @@ it_color:
     .byte COL_CYAN      // 59: Chants and Blessings
     .byte COL_WHITE     // 60: Exorcism and Dispelling
     .byte COL_ORANGE    // 61: Flask of Oil
+    .byte COL_BROWN     // 62: Shovel
+    .byte COL_LGREY     // 63: Pick
 
 // Weight (in 1/10 lbs)
 it_weight:
@@ -241,6 +247,7 @@ it_weight:
     .byte 30, 50, 5, 2, 2, 4               // Bows, ammo
     .byte 30, 30, 30, 30, 30, 30           // Books (55-60)
     .byte 10                               // 61: Flask of Oil
+    .byte 60, 50                            // 62: Shovel, 63: Pick
 
 // Damage dice count
 it_dmg_dice:
@@ -253,6 +260,7 @@ it_dmg_dice:
     .byte 0, 0, 0, 1, 1, 1                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 2                                  // 61: Flask of Oil (2d6)
+    .byte 1, 1                              // 62: Shovel (1d2), 63: Pick (1d3)
 
 // Damage dice sides
 it_dmg_sides:
@@ -265,6 +273,7 @@ it_dmg_sides:
     .byte 0, 0, 0, 4, 5, 2                  // Bows=0d0, Arrow=1d4, Bolt=1d5, Rock=1d2
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60)
     .byte 6                                  // 61: Flask of Oil (2d6)
+    .byte 2, 3                              // 62: Shovel (1d2), 63: Pick (1d3)
 
 // Base armor class
 it_base_ac:
@@ -277,6 +286,7 @@ it_base_ac:
     .byte 0, 0, 0, 0, 0, 0                  // Bows, ammo: no AC
     .byte 0, 0, 0, 0, 0, 0                  // Books (55-60): no AC
     .byte 0                                  // 61: Flask of Oil: no AC
+    .byte 0, 0                              // 62: Shovel, 63: Pick (no AC)
 
 // Base cost (lo)
 it_cost_lo:
@@ -290,6 +300,7 @@ it_cost_lo:
     .byte <50, <120, <10, <1, <2, <1        // Bows, ammo
     .byte <300, <500, <800, <300, <500, <800 // Books (55-60)
     .byte <10                                // 61: Flask of Oil
+    .byte <15, <50                          // 62: Shovel (15gp), 63: Pick (50gp)
 
 // Base cost (hi)
 it_cost_hi:
@@ -303,6 +314,7 @@ it_cost_hi:
     .byte >50, >120, >10, >1, >2, >1        // Bows, ammo
     .byte >300, >500, >800, >300, >500, >800 // Books (55-60)
     .byte >10                                // 61: Flask of Oil
+    .byte >15, >50                          // 62: Shovel (15gp), 63: Pick (50gp)
 
 // Minimum dungeon level to appear
 it_min_level:
@@ -315,6 +327,7 @@ it_min_level:
     .byte 2, 3, 1, 1, 2, 1                  // Bows, ammo
     .byte 4, 8, 12, 4, 8, 12                // Books (55-60)
     .byte 0                                  // 61: Flask of Oil (available immediately)
+    .byte 0, 0                              // 62: Shovel, 63: Pick (available immediately)
 
 // Missile type table — encodes ranged weapon/ammo relationships
 // Only stored for types 49-54 (ranged items). Types < 49 are not ranged (return 0).
@@ -358,7 +371,7 @@ it_name_lo:
     .byte <itn_47, <itn_48
     .byte <itn_49, <itn_50, <itn_51, <itn_52, <itn_53, <itn_54
     .byte <itn_55, <itn_56, <itn_57, <itn_58, <itn_59, <itn_60
-    .byte <itn_61
+    .byte <itn_61, <itn_62, <itn_63
 it_name_hi:
     .byte >itn_0,  >itn_1,  >itn_2,  >itn_3,  >itn_4
     .byte >itn_5,  >itn_6,  >itn_7,  >itn_8,  >itn_9
@@ -373,7 +386,7 @@ it_name_hi:
     .byte >itn_47, >itn_48
     .byte >itn_49, >itn_50, >itn_51, >itn_52, >itn_53, >itn_54
     .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
-    .byte >itn_61
+    .byte >itn_61, >itn_62, >itn_63
 
 // Name strings (screen codes, null-terminated)
 itn_0:  .text "Gold (small)" ; .byte 0
@@ -438,6 +451,8 @@ itn_58: .text "Words of Wisdom" ; .byte 0
 itn_59: .text "Chants and Blessings" ; .byte 0
 itn_60: .text "Exorcism" ; .byte 0
 itn_61: .text "Flask of Oil" ; .byte 0
+itn_62: .text "Shovel" ; .byte 0
+itn_63: .text "Pick" ; .byte 0
 
 // ============================================================
 // Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
@@ -1047,10 +1062,8 @@ item_pickup:
     bcs !ipu_found+
 
     // Nothing here
-    lda #<ipu_nothing_str
-    sta zp_ptr0
-    lda #>ipu_nothing_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IPU_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1083,9 +1096,8 @@ item_pickup:
     // Build message: "You found N gold pieces."
     lda #0
     sta cmb_buf_idx
-    lda #<ipu_found_str
-    ldy #>ipu_found_str
-    jsr combat_append_str
+    ldx #HSTR_IPU_FOUND
+    jsr huff_append_combat
 
     ldx ipu_slot
     lda fi_qty,x
@@ -1094,9 +1106,8 @@ item_pickup:
     sta zp_temp1
     jsr combat_append_decimal_16
 
-    lda #<ipu_gold_str
-    ldy #>ipu_gold_str
-    jsr combat_append_str
+    ldx #HSTR_IPU_GOLD
+    jsr huff_append_combat
 
     // Null-terminate
     jsr cmb_term_and_print
@@ -1119,10 +1130,8 @@ item_pickup:
     bcc !ipu_has_room+
 
     // Pack full
-    lda #<ipu_pack_full_str
-    sta zp_ptr0
-    lda #>ipu_pack_full_str
-    sta zp_ptr0_hi
+    ldx #HSTR_UIS_PACK_FULL
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1146,9 +1155,8 @@ item_pickup:
     // Build message: "You picked up a <name>."
     lda #0
     sta cmb_buf_idx
-    lda #<ipu_picked_str
-    ldy #>ipu_picked_str
-    jsr combat_append_str
+    ldx #HSTR_IPU_PICKED
+    jsr huff_append_combat
 
     lda fi_add_id
     jsr item_append_name
@@ -1176,10 +1184,8 @@ item_pickup:
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
 item_drop:
     // Print prompt
-    lda #<idr_prompt_str
-    sta zp_ptr0
-    lda #>idr_prompt_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IDR_PROMPT
+    jsr huff_decode_string
     jsr msg_print
 
     // Wait for keypress
@@ -1213,19 +1219,15 @@ item_drop:
     bne !idr_found+
 
     // Empty slot
-    lda #<idr_no_items_str
-    sta zp_ptr0
-    lda #>idr_no_items_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
 
 !idr_cancel:
-    lda #<idr_cancel_str
-    sta zp_ptr0
-    lda #>idr_cancel_str
-    sta zp_ptr0_hi
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1254,10 +1256,8 @@ item_drop:
     bcs !idr_placed+
 
     // Floor full
-    lda #<idr_floor_full_str
-    sta zp_ptr0
-    lda #>idr_floor_full_str
-    sta zp_ptr0_hi
+    ldx #HSTR_IDR_FLOOR_FULL
+    jsr huff_decode_string
     jsr msg_print
     clc
     rts
@@ -1270,9 +1270,8 @@ item_drop:
     // Build message: "You drop a <name>."
     lda #0
     sta cmb_buf_idx
-    lda #<idr_drop_str
-    ldy #>idr_drop_str
-    jsr combat_append_str
+    ldx #HSTR_IDR_DROP
+    jsr huff_append_combat
 
     lda fi_add_id
     jsr item_append_name
@@ -1306,20 +1305,6 @@ item_append_name:
 
 // Scratch variables for pickup/drop
 ipu_slot: .byte 0              // Floor/inventory slot being processed
-
-// ============================================================
-// Pickup/Drop strings (screen codes via inherited encoding)
-// ============================================================
-ipu_nothing_str:   .text "You see nothing here." ; .byte 0
-ipu_found_str:     .text "You found " ; .byte 0
-ipu_gold_str:      .text " gold pieces." ; .byte 0
-ipu_picked_str:    .text "You picked up a " ; .byte 0
-ipu_pack_full_str: .text "Your pack is full." ; .byte 0
-idr_prompt_str:    .text "Drop which item (a-v)?" ; .byte 0
-idr_drop_str:      .text "You drop a " ; .byte 0
-idr_no_items_str:  .text "You have nothing there." ; .byte 0
-idr_cancel_str:    .text "Never mind." ; .byte 0
-idr_floor_full_str: .text "No room on the floor." ; .byte 0
 
 // ============================================================
 // tunnel_spawn_gold — Spawn gold at a tunneled vein location
@@ -1377,9 +1362,9 @@ pick_item_type:
     sta pit_attempts
 
 !pit_loop:
-    // Roll type = rng_range(59) + 2 → range [2, 60]
-    // Types 2-60 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo, books
-    lda #59
+    // Roll type = rng_range(62) + 2 → range [2, 63]
+    // Types 2-63 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo, books, digging
+    lda #62
     jsr rng_range
     clc
     adc #2
@@ -1602,6 +1587,7 @@ id_known:
     .byte 1, 1, 1, 1, 1, 1      // 49-54: Ranged weapons/ammo — always known
     .byte 1, 1, 1, 1, 1, 1      // 55-60: Books — always known
     .byte 1                      // 61: Flask of Oil — always known
+    .byte 1, 1                  // 62-63: Digging tools — always known
 
 // Shuffle tables: map category-local index → description index
 // 12 potions, 12 scrolls, 4 rings — full pool shuffled, first N used
@@ -2038,7 +2024,7 @@ item_get_floor_color:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Item type count", ITEM_TYPE_COUNT, 62
+.assert "Item type count", ITEM_TYPE_COUNT, 64
 .assert "it_category size", it_display - it_category, ITEM_TYPE_COUNT
 .assert "it_display size", it_color - it_display, ITEM_TYPE_COUNT
 .assert "it_color size", it_weight - it_color, ITEM_TYPE_COUNT
