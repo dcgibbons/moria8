@@ -985,8 +985,9 @@ creature_get_name:
     // Tier loaded but X >= active_dungeon_count.
     // Creature may have a valid $E0xx name pointer from current tier.
     lda cr_name_hi,x
-    beq !cgn_stale+             // Null pointer → "?"
-    cmp #$e0
+    bne !+
+    jmp !cgn_stale+             // Null pointer → "?"
+!:  cmp #$e0
     bcc !cgn_setup_normal+      // Normal RAM pointer
     // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
     sta zp_ptr1_hi
@@ -1033,7 +1034,32 @@ creature_get_name:
     lda cr_name_hi,x
     beq !cgn_stale+             // Null pointer → "?"
     cmp #$e0
-    bcs !cgn_stale+             // Stale $E0xx, no tier to read → "?"
+    bcc !cgn_setup_normal+      // Normal RAM pointer — use directly
+    // Stale $E0xx pointer: tier was previously loaded but current_tier was reset.
+    // Reload the smallest tier that covers creature index X (e.g. recall in town).
+    stx cgn_saved_x
+    lda #1
+    sta current_tier
+!cgn_find_tier:
+    ldx current_tier
+    cpx #5
+    bcs !cgn_reload_fail+       // Beyond tier 4 → give up
+    lda tier_count_table,x      // Creature count for this tier
+    cmp cgn_saved_x             // compare count vs creature index
+    bcc !cgn_next_tier+         // count < index → not in this tier
+    beq !cgn_next_tier+         // count == index → index out of [0..count-1]
+    // count > index → this tier covers creature X
+    jsr tier_load               // Load tier (current_tier already set)
+    ldx current_tier
+    beq !cgn_reload_fail+       // Load failed (disk error) → "?"
+    ldx cgn_saved_x
+    jmp !cgn_tier_indexed-      // Use tier-indexed path to read name
+!cgn_next_tier:
+    inc current_tier
+    jmp !cgn_find_tier-
+!cgn_reload_fail:
+    ldx cgn_saved_x
+    jmp !cgn_stale+
 
 !cgn_setup_normal:
     // Valid pointer in normal RAM — set up and share copy loop
@@ -1077,3 +1103,4 @@ creature_get_name:
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0
+cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload

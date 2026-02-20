@@ -39,9 +39,9 @@
 - **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 68
 - **Source files:** ~46 .s files
-- **Program size:** $BFF9 (program_end) — **7 bytes headroom** to MAP_BASE ($C000)
-- **Banked code:** $F000-$FFC6 (52 bytes headroom to CPU vectors)
-- **Banked payload:** $C01C-$CFE2 (30 bytes headroom to I/O at $D000)
+- **Program size:** $BFD5 (program_end) — **43 bytes headroom** to MAP_BASE ($C000)
+- **Banked code:** $F000-$FFF7 (3 bytes headroom to CPU vectors — very tight)
+- **Banked payload:** $C002-$CFF9 (7 bytes headroom to I/O at $D000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
 
 ### Known Remaining Issues
@@ -54,6 +54,7 @@
 | BUG-37 | MED | Recall/help screens flash and dismiss immediately — keyboard buffer contained repeat characters | **Fixed** — Clear $C6 before dismiss input_get_key |
 | BUG-38 | HIGH | rng_range(0) causes infinite loop (game hang) — rejection sampling loops forever when N=0 | **Fixed** — Defensive guard in rng_range + guards in pick_creature_type and monster_cast_summon |
 | BUG-39 | MED | Creature name shows "?" during combat — creature_get_name rejected valid $E0xx pointers when X >= active_dungeon_count but tier still loaded | **Fixed** — Four-path name resolution with shared copy loop |
+| BUG-40 | MED | Creature name shows "?" in monster recall from town — after ascending from dungeon, current_tier=0 but cr_name_hi[] holds stale $E0xx pointers; recall command finds stale cr_display[] match and creature_get_name returns "?" | **Fixed** — cgn_no_tier path reloads the appropriate tier when stale $E0xx pointer found |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
