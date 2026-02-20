@@ -3767,3 +3767,18 @@ The town overlay (`$E000-$EFFF`, 4096 bytes max) was at **4,074 bytes** — only
 - `monster.s` — Added `active_dungeon_count` guard + retry limit in `pick_creature_type`
 - `monster_magic.s` — Added `active_dungeon_count` guard in `monster_cast_summon`
 
+## BUG-39 Fix: Creature Name Shows "?" During Combat (creature_get_name $E0xx Pointer) ✅ COMPLETE (2026-02-19)
+
+**Root Cause:** `creature_get_name` had an overly restrictive check: when `current_tier != 0` but `X >= active_dungeon_count`, it fell through to the table path which treated any `cr_name_hi >= $E0` as a stale pointer and returned "?". However, when a tier is loaded, `$E0xx` pointers are still valid because the tier data remains at `$E000` — the creature was simply beyond `active_dungeon_count` (e.g., a creature from a previous tier load whose name pointer still works).
+
+**Fix:** Rewrote `creature_get_name` with four distinct paths:
+1. **Tier indexed** (`current_tier != 0`, `X < active_dungeon_count`): Banks out KERNAL, reads name pointer from tier name arrays at `$E000`
+2. **$E0xx with tier** (`current_tier != 0`, `X >= active_dungeon_count`, `cr_name_hi >= $E0`): Banks out KERNAL, reads name directly from the `$E0xx` pointer
+3. **Normal RAM** (`cr_name_hi < $E0`): Reads from normal RAM without banking
+4. **Stale fallback** (`current_tier == 0` with `$E0xx` pointer, or null pointer): Returns "?"
+
+All paths share a single copy loop (`!cgn_copy`), eliminating a duplicate copy routine. Net result: **+10 bytes** ($BFEF → $BFF9, 7 bytes headroom to MAP_BASE).
+
+**Files modified:**
+- `monster.s` — Rewrote `creature_get_name` with four-path resolution
+

@@ -978,18 +978,31 @@ ltb_dst_hi:
 // Clobbers: A, Y, zp_ptr1
 creature_get_name:
     lda current_tier
-    beq !cgn_table+             // No tier → use cr_name tables
+    beq !cgn_no_tier+           // No tier → use cr_name tables (no banking)
     cpx active_dungeon_count
-    bcs !cgn_table+             // Not a tier creature
+    bcc !cgn_tier_indexed+      // X < count → read via tier name arrays
 
-    // --- Tier creature: bank, read ptr from $E000, copy name ---
+    // Tier loaded but X >= active_dungeon_count.
+    // Creature may have a valid $E0xx name pointer from current tier.
+    lda cr_name_hi,x
+    beq !cgn_stale+             // Null pointer → "?"
+    cmp #$e0
+    bcc !cgn_setup_normal+      // Normal RAM pointer
+    // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
+    sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+    jmp !cgn_do_bank+
+
+!cgn_tier_indexed:
+    // --- Tier creature: bank, read ptr from tier name arrays at $E000 ---
     txa
     tay                         // Y = creature index (preserved across banking)
     sei
     lda $01
     pha
     lda #$35
-    sta $01
+    sta $01                     // Bank out KERNAL — $E000 accessible
     lda tier_name_lo_addr
     sta zp_ptr1
     lda tier_name_lo_addr+1
@@ -1006,42 +1019,31 @@ creature_get_name:
     sta zp_ptr1
     jmp !cgn_copy+
 
-!cgn_table:
+!cgn_do_bank:
+    // Bank out KERNAL for $E0xx pointer reads
+    sei
+    lda $01
+    pha
+    lda #$35
+    sta $01
+    jmp !cgn_copy+
+
+!cgn_no_tier:
+    // No tier loaded — cr_name tables only (can't resolve $E0xx)
     lda cr_name_hi,x
-    beq !cgn_banked+            // Null pointer (cleared slot)
+    beq !cgn_stale+             // Null pointer → "?"
     cmp #$e0
-    bcs !cgn_banked+
-    // Valid pointer in normal RAM — copy to creature_name_buf
+    bcs !cgn_stale+             // Stale $E0xx, no tier to read → "?"
+
+!cgn_setup_normal:
+    // Valid pointer in normal RAM — set up and share copy loop
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-    ldy #0
-!cgn_res_copy:
-    lda (zp_ptr1),y
-    sta creature_name_buf,y
-    beq !cgn_res_done+
-    iny
-    cpy #31
-    bne !cgn_res_copy-
-    lda #0
-    sta creature_name_buf,y
-!cgn_res_done:
-    lda #<creature_name_buf
-    ldy #>creature_name_buf
-    rts
-
-!cgn_banked:
-    // Stale $E0xx pointer — tier data no longer at $E000.
-    // Embedded names are always < $C000, so cr_name_hi >= $E0
-    // on the table path is always a leftover from load_tier_to_buffer
-    // after an overlay has overwritten $E000. Return safe fallback.
-    lda #$3f                    // '?' ($3F in both PETSCII and screen codes)
-    sta creature_name_buf
-    lda #0
-    sta creature_name_buf+1     // Null-terminate: "?"
-    lda #<creature_name_buf
-    ldy #>creature_name_buf
-    rts
+    sei
+    lda $01
+    pha                         // Push bank config (don't change — RAM accessible)
+    // Fall through to shared copy loop
 
 !cgn_copy:
     ldy #0
@@ -1058,6 +1060,16 @@ creature_get_name:
     pla
     sta $01
     cli
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
+    rts
+
+!cgn_stale:
+    // No valid name pointer — return "?" as safety fallback
+    lda #$3f                    // '?'
+    sta creature_name_buf
+    lda #0
+    sta creature_name_buf+1
     lda #<creature_name_buf
     ldy #>creature_name_buf
     rts

@@ -39,7 +39,7 @@
 - **Test suites:** 22 (300 runtime tests)
 - **Compile-time asserts:** 68
 - **Source files:** ~46 .s files
-- **Program size:** $BFEF (program_end) — **17 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BFF9 (program_end) — **7 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FFC6 (52 bytes headroom to CPU vectors)
 - **Banked payload:** $C01C-$CFE2 (30 bytes headroom to I/O at $D000)
 - **Town overlay:** 2,891 of 4,096 bytes (1,204 free)
@@ -53,13 +53,15 @@
 | BUG-36 | MED | Monster recall shows blank name for town creatures — creature_get_name table path didn't populate creature_name_buf | **Fixed** — Table path now copies name to buffer |
 | BUG-37 | MED | Recall/help screens flash and dismiss immediately — keyboard buffer contained repeat characters | **Fixed** — Clear $C6 before dismiss input_get_key |
 | BUG-38 | HIGH | rng_range(0) causes infinite loop (game hang) — rejection sampling loops forever when N=0 | **Fixed** — Defensive guard in rng_range + guards in pick_creature_type and monster_cast_summon |
+| BUG-39 | MED | Creature name shows "?" during combat — creature_get_name rejected valid $E0xx pointers when X >= active_dungeon_count but tier still loaded | **Fixed** — Four-path name resolution with shared copy loop |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | R12 | Game-over loop (restart/reboot prompt instead of exit to BASIC) | Low |
+| 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -76,12 +78,47 @@
 
 **Remaining items:**
 
+**Medium priority (gameplay polish):**
+- R12 Game-over loop — after save/death/quit, prompt "Restart" or "Reboot" instead of exiting to BASIC
+
 **Low priority (polish/completeness):**
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves
 
 ---
+
+---
+
+## R12 — Game-Over Loop (Restart / Reboot Prompt)
+
+After save, death, or voluntary quit, instead of returning to BASIC, present a prompt:
+
+```
+(R)estart new game  (Q)uit to BASIC
+```
+
+**Restart** reinitializes game state and jumps back to the title screen (character creation → dungeon). **Quit** exits cleanly to BASIC as today.
+
+### Why
+
+Exiting to BASIC after every death or save forces the player to re-type `LOAD` and `RUN`. On real hardware with disk loading this is especially painful. Every other Moria port loops back to "play again?" — this matches that expectation.
+
+### Implementation
+
+All game-ending paths currently converge on an `rts` or `jmp` back to BASIC (via the KERNAL warm-start vector or the original return address). The fix:
+
+1. **Identify exit points:** save-and-quit, death/score screen, and voluntary quit (`Q` command) — each currently ends the program.
+2. **Add `game_over_prompt`:** a small routine (~40-60 bytes) that clears the screen, prints the restart/quit prompt, and waits for a keypress.
+   - `R` → call a `game_restart` entry point that reinitializes ZP state, clears the monster/item tables, resets the map, and `jmp`s to the title screen.
+   - `Q` → existing clean exit to BASIC.
+3. **State reinit:** the restart path must reset all mutable global state (ZP variables, map buffer at $C000, monster slots, item slots, effect timers, RNG seed). Static tables and code don't need reinit. Audit all `.byte 0` / `.fill` variables for anything that assumes fresh-load state.
+4. **Tier system:** reset `current_tier` to 0 and reload tier 0 creature data (town creatures) as part of restart.
+
+### Risks
+
+- **Stale state bugs:** if any module assumes one-time init from fresh load, restart will expose it. Thorough testing required.
+- **Size:** ~40-60 bytes for the prompt + ~20-30 bytes for reinit calls. Well within current headroom if an OPT-4 item is done first, or fits in the $F000 banked region.
 
 ---
 
