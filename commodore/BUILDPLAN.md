@@ -5,9 +5,9 @@
 
 ---
 
-## Current State (2026-02-21 — R16 complete)
+## Current State (2026-02-21 — R17 complete)
 
-**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1, OPT-4, OPT-5 code size optimizations complete.
+**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1, OPT-4, OPT-5 code size optimizations complete. R17 character background history, gender, social class, and variable starting gold implemented.
 
 ### Phase Completion Summary
 
@@ -37,20 +37,22 @@
 | R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants, bare-hands no-progress, rubble resistance, si_ego save/load |
 | R15 | Multi-Disk Support | ✅ Complete — save_device variable, 7 SETLFS sites parameterized, mode 2 no-ops, probe_device_9, disk setup sub-menu (S/W/9), missing disk_prompt_game calls fixed, rundual Makefile target |
 | R16 | Save Drive Selection | ✅ Complete — `#)Drive #` menu option; disk_enter_device reads 1–2 digit device# (8–30), validates, probes via generic probe_device; shows "[Drive N]" indicator |
+| R17 | Background History + Gender + Gold | ✅ Complete — 72-entry background table, chain walker, gender prompt, social class 1–100, umoria gold formula, word-wrap char sheet display, save/load v$0b |
 | BUG-42 | Fix Save/Load Corruption | ✅ Complete — streaming RLE decompressor overflow fixed by replacing with raw map I/O (3840 bytes); LOAD_SEC_ADDR fixed; title screen KERNAL LOAD cleanup (CLOSE file, clear $90) |
 | R12 | Game-Over Loop | ✅ Complete — R)EBOOT / S)TART / Q)UIT prompt; reboot stuffs BASIC keyboard buffer with RUN; restart resets ZP+inventory+tier and jumps to restart_entry |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
 
-- **Test suites:** 23 (312 runtime tests)
+- **Test suites:** 24 (320 runtime tests)
 - **Compile-time asserts:** 71
-- **Source files:** ~49 .s files
-- **Program size:** $B30A (program_end) — **3,318 bytes headroom** to MAP_BASE ($C000)
+- **Source files:** ~51 .s files
+- **Program size:** $B47C (program_end) — **2,948 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
-- **Banked payload:** $B22E-$C1C6
+- **Banked payload:** $B4A9-$C444
 - **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
-- **DungeonGen overlay:** 3,529 of 4,096 bytes (567 free)
+- **Startup overlay:** 4,017 of 4,096 bytes (79 free)
+- **DungeonGen overlay:** 3,530 of 4,096 bytes (566 free)
 
 ### Known Remaining Issues
 
@@ -94,48 +96,9 @@
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
-- R17 Character background history + social class + variable starting gold
 - OPT-5 (Options 2+3) — further overlays for magic/spells and UI screens if main segment tightens again
 
 ---
 
-## R17 — Character Background History + Social Class + Variable Starting Gold
-
-### Why
-
-The C64 version hardcodes `START_GOLD = 200` for every character (`player_create.s`). umoria derives starting gold from a formula combining stats, Charisma, gender, and Social Class — the one gameplay-relevant output of the background history system. A character born a Titled Noble's only child starts with meaningfully more gold than a Serf's illegitimate child. This only affects the first shopping trip before entering the dungeon, but it is a real mechanical difference.
-
-### What umoria does
-
-1. **Background history table** — a chain of text fragments, each entry tagged with race and a probability, forming readable sentences like *"You are the illegitimate and unacknowledged child of a Serf. You have brown eyes, straight brown hair, and an average complexion."* The chain is walked until a "terminal" entry is reached, accumulating Social Class adjustments along the way.
-2. **Social Class (1–100)** — a numeric value derived from the background roll. High-class histories produce high values.
-3. **Starting gold formula:**
-   ```
-   gold = social_class × 6 + rnd(25) + 325
-   gold += stat_adj(STR) + stat_adj(INT) + stat_adj(WIS) + stat_adj(CON) + stat_adj(DEX)
-   gold -= CHA_adj × 6
-   if female: gold += 50   // "She charmed the banker into it!"
-   if gold < 80: gold = 80
-   ```
-4. **Gender** — umoria tracks Male/Female (affects the gold bonus above and pronoun display). C64 currently omits gender.
-5. **Background text** — displayed on the character sheet but has no other mechanical effect beyond the Social Class it generated.
-
-### Scope options
-
-| Option | What | Notes |
-|--------|------|-------|
-| **A** | Social Class + variable gold only | ~40 bytes — no background text, no gender. Closest mechanical parity for minimal size. |
-| **B** | Gender + Social Class + variable gold | Adds M/F prompt during character creation, pronoun tracking. |
-| **C** | Full background history text + gender + gold | Background table is large (~1–2 KB); needs banked storage. Adds flavour display on character sheet. |
-
-### Size notes
-
-- Option A (gold formula only): trivial, fits in main segment.
-- Option B: small gender prompt + one extra ZP/save byte.
-- Option C: background text table is the main cost; likely needs the `$E000` string bank or a dedicated overlay. The character sheet display would need a new screen region.
-
-### Recommendation
-
-Start with **Option B** (gender + social class + variable gold) as the minimum faithful implementation. Add full background text (Option C) only if space allows.
 
 

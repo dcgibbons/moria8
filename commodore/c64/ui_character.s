@@ -262,10 +262,13 @@ ui_char_display:
     jsr screen_put_decimal
 !ucd_no_spells:
 
+    // --- Sex, Social Class, Background (rows 12-16) ---
+    jsr ui_char_draw_background
+
     // --- Press any key ---
     lda #COL_LGREY
     sta zp_text_color
-    lda #16
+    lda #18
     sta zp_cursor_row
     lda #10
     sta zp_cursor_col

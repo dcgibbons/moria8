@@ -52,7 +52,11 @@ test_finish:
 #import "../ui_help_clear.s"
 #import "../ui_character.s"
 #import "../stat_display.s"
+.segmentdef TestCreateOverlay [start=$D000]
+.segment TestCreateOverlay
+#import "../background_data.s"
 #import "../player_create.s"
+.segment Default
 #import "../sound.s"
 #import "../dungeon_data.s"
 #import "../dungeon_gen.s"

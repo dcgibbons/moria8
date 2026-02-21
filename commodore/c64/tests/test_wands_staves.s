@@ -43,7 +43,11 @@ test_exit_trampoline:
 #import "../ui_help.s"
 #import "../ui_trampoline_stubs.s"
 #import "../stat_display.s"
+.segmentdef TestCreateOverlay [start=$D000]
+.segment TestCreateOverlay
+#import "../background_data.s"
 #import "../player_create.s"
+.segment Default
 #import "../sound.s"
 #import "../dungeon_data.s"
 #import "../dungeon_gen.s"

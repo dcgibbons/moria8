@@ -2215,6 +2215,7 @@ ovl_town_end:
 // This segment produces out/ovl_start (loaded from disk as OVL.START).
 // Used once during new game, then replaced by town/death overlays.
 .segment StartupOverlay
+    #import "background_data.s"
     #import "player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)

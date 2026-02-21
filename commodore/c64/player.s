@@ -69,6 +69,7 @@
 .const PL_EXPFACT   = 63
 // Reserved
 .const PL_RESERVED  = 64   // Start of reserved area
+.const PL_SOCIAL_CLASS = 65 // 1 byte: social class (1-100)
 .const PL_STRUCT_SIZE = 80  // Total struct size (with padding)
 
 // Player flags
@@ -85,6 +86,21 @@
 player_data:
     .fill PL_STRUCT_SIZE, 0
 
+// Player background text (4 lines x 40 bytes = 160 bytes)
+// Populated during character creation, saved/loaded with game.
+player_background:
+    .fill 160, 0
+
+// Character sheet strings (main RAM — referenced by $F000 banked code)
+char_sex_label:
+    .text "Sex: " ; .byte 0
+char_sex_male:
+    .text "Male" ; .byte 0
+char_sex_female:
+    .text "Female" ; .byte 0
+char_sc_label:
+    .text "  SC: " ; .byte 0
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -98,6 +114,13 @@ player_init:
     sta player_data,x
     dex
     bpl !loop-
+    // Clear player_background (160 bytes = 2 x 80)
+    ldx #79
+!bg_loop:
+    sta player_background,x
+    sta player_background + 80,x
+    dex
+    bpl !bg_loop-
     rts
 
 // player_sync_to_zp — Copy hot fields from struct to ZP
@@ -574,6 +597,91 @@ player_get_stat_bonus:
     tax
     lda (zp_ptr0),y         // Read from bonus table
     rts
+
+// ============================================================
+// ui_char_draw_background — Draw sex, social class, background on char sheet
+// Called from ui_char_display ($F000). Main RAM so no banking issues.
+// Renders rows 12-16 of the character sheet.
+// Preserves: nothing
+// ============================================================
+ui_char_draw_background:
+    // --- Sex / Social Class (row 12) ---
+    lda #12
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<char_sex_label
+    sta zp_ptr0
+    lda #>char_sex_label
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #COL_WHITE
+    sta zp_text_color
+    lda player_data + PL_FLAGS
+    and #PLF_MALE
+    beq !udb_female+
+    lda #<char_sex_male
+    sta zp_ptr0
+    lda #>char_sex_male
+    sta zp_ptr0_hi
+    jmp !udb_print_sex+
+!udb_female:
+    lda #<char_sex_female
+    sta zp_ptr0
+    lda #>char_sex_female
+    sta zp_ptr0_hi
+!udb_print_sex:
+    jsr screen_put_string
+
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #<char_sc_label
+    sta zp_ptr0
+    lda #>char_sc_label
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    lda player_data + PL_SOCIAL_CLASS
+    jsr screen_put_decimal
+
+    // --- Background text (rows 13-16) ---
+    lda #COL_LGREY
+    sta zp_text_color
+    ldx #0
+!udb_line_loop:
+    txa
+    pha
+    clc
+    adc #13
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    pla
+    tax
+    pha
+    lda udb_line_lo,x
+    sta zp_ptr0
+    lda udb_line_hi,x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    pla
+    tax
+    inx
+    cpx #4
+    bcc !udb_line_loop-
+    rts
+
+// Background line pointer lookup table
+udb_line_lo:
+    .byte <player_background, <(player_background + 40)
+    .byte <(player_background + 80), <(player_background + 120)
+udb_line_hi:
+    .byte >player_background, >(player_background + 40)
+    .byte >(player_background + 80), >(player_background + 120)
 
 // ============================================================
 // Compile-time validation

@@ -4,12 +4,13 @@
 // 2. Class selection (filtered by race)
 // 3. Stat rolling (umoria: d3+d4+d5 per stat, constrained total, increment/decrement modifiers)
 // 4. Name entry (max 16 chars, uppercase only)
-// 5. Initialize starting HP, mana, gold, food, position
+// 5. Gender selection
+// 6. Background generation (social class + flavor text)
+// 7. Initialize starting HP, mana, gold, food, position
 
 // Starting values
 .const START_FOOD_LO  = <2000  // 2000 turns of food (lo = $D0)
 .const START_FOOD_HI  = >2000  // (hi = $07)
-.const START_GOLD     = 200  // Starting gold pieces
 .const START_LIGHT    = 1    // Starting light radius (torch)
 
 // ============================================================
@@ -26,6 +27,8 @@ player_create:
     jsr create_roll_stats
     jsr create_select_class
     jsr create_enter_name
+    jsr create_select_gender
+    jsr create_gen_background
     jsr create_init_character
 
     // Show final character sheet (direct call — both at $F000/$E000 with $01=$34)
@@ -649,13 +652,8 @@ create_init_character:
     sta player_data + PL_MANA
 !mana_done:
 
-    // Starting gold
-    lda #<START_GOLD
-    sta player_data + PL_GOLD_0
-    lda #>START_GOLD
-    sta player_data + PL_GOLD_1
-    lda #0
-    sta player_data + PL_GOLD_2
+    // Starting gold — umoria formula based on social class, stats, gender
+    jsr create_calc_gold
 
     // Experience factor = race_xp% + class_xp% (range 100-165)
     ldx player_data + PL_RACE
@@ -693,9 +691,7 @@ create_init_character:
 
     // Starting position is set by town_generate (called after player_create)
 
-    // Flags: male by default
-    lda #PLF_MALE
-    sta player_data + PL_FLAGS
+    // Flags: gender already set by create_select_gender
 
     // Sync to ZP
     jsr player_sync_to_zp
@@ -767,3 +763,509 @@ create_reroll_str:
     .text "r) Reroll  RETURN) Accept" ; .byte $00
 create_name_prompt:
     .text "Name (16 chars max):" ; .byte $00
+create_gender_title:
+    .text "Choose your gender" ; .byte $00
+create_gender_m:
+    .text "a) Male" ; .byte $00
+create_gender_f:
+    .text "b) Female" ; .byte $00
+
+// ============================================================
+// Gender selection
+// ============================================================
+create_select_gender:
+    jsr screen_clear
+
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #0
+    sta zp_cursor_row
+    lda #10
+    sta zp_cursor_col
+    lda #<create_gender_title
+    sta zp_ptr0
+    lda #>create_gender_title
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    // Option A) Male
+    lda #COL_LGREY
+    sta zp_text_color
+    lda #2
+    sta zp_cursor_row
+    lda #3
+    sta zp_cursor_col
+    lda #<create_gender_m
+    sta zp_ptr0
+    lda #>create_gender_m
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    // Option B) Female
+    lda #3
+    sta zp_cursor_row
+    lda #3
+    sta zp_cursor_col
+    lda #<create_gender_f
+    sta zp_ptr0
+    lda #>create_gender_f
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+!gender_key:
+    jsr input_get_key
+    cmp #$41                // 'A' — male
+    beq !gender_male+
+    cmp #$42                // 'B' — female
+    beq !gender_female+
+    jmp !gender_key-
+!gender_male:
+    lda #PLF_MALE
+    sta player_data + PL_FLAGS
+    rts
+!gender_female:
+    lda #0
+    sta player_data + PL_FLAGS
+    rts
+
+// ============================================================
+// Background generation — chain walker
+// Walks umoria background charts, accumulates text + social class.
+// Output: player_background filled, PL_SOCIAL_CLASS set.
+// ============================================================
+
+// Scratch variables (overlay-local)
+bg_history_id: .byte 0     // Current chart ID
+bg_text_len:   .byte 0     // Current length in bg_text_buf
+bg_sc_lo:      .byte 0     // Social class accumulator (16-bit signed)
+bg_sc_hi:      .byte 0
+bg_scan_idx:   .byte 0     // Current scan index
+bg_roll_val:   .byte 0     // Current d100 roll result
+
+create_gen_background:
+    // Initialize social class = rng_range(4) + 1 → [1, 4]
+    lda #4
+    jsr rng_range           // A = [0, 3]
+    clc
+    adc #1                  // A = [1, 4]
+    sta bg_sc_lo
+    lda #0
+    sta bg_sc_hi
+    sta bg_text_len
+
+    // Starting chart = bg_race_start[race]
+    ldx player_data + PL_RACE
+    lda bg_race_start,x
+    sta bg_history_id
+
+!bg_chain_loop:
+    // Find first entry where bg_chart[idx] == history_id
+    ldx #0
+!bg_find_chart:
+    lda bg_chart,x
+    cmp bg_history_id
+    beq !bg_found_chart+
+    inx
+    cpx #BG_ENTRY_COUNT
+    bcc !bg_find_chart-
+    jmp !bg_chain_done+     // Should never happen — safety exit
+
+!bg_found_chart:
+    stx bg_scan_idx
+
+    // Roll d100: rng_range(100) + 1 → [1, 100]
+    lda #100
+    jsr rng_range           // A = [0, 99]
+    clc
+    adc #1                  // A = [1, 100]
+    sta bg_roll_val
+
+    // Scan forward until bg_roll[idx] >= roll
+    ldx bg_scan_idx
+!bg_roll_scan:
+    lda bg_roll,x
+    cmp bg_roll_val
+    bcs !bg_roll_match+     // bg_roll >= roll → match
+    inx
+    jmp !bg_roll_scan-      // Always terminates — last entry in chart has roll=100
+
+!bg_roll_match:
+    // Append string at bg_str[x] to bg_text_buf
+    stx bg_scan_idx         // Save matched index
+    lda bg_str_lo,x
+    sta zp_ptr0
+    lda bg_str_hi,x
+    sta zp_ptr0_hi
+    ldx bg_text_len
+    ldy #0
+!bg_copy_str:
+    lda (zp_ptr0),y
+    beq !bg_copy_done+
+    sta bg_text_buf,x
+    inx
+    iny
+    cpx #199                // Buffer overflow protection
+    bcc !bg_copy_str-
+!bg_copy_done:
+    stx bg_text_len
+
+    // Accumulate social class: sc += bonus[idx] - 50
+    ldx bg_scan_idx
+    lda bg_bonus,x
+    sec
+    sbc #50                 // A = signed adjustment (-40 to +100)
+    bmi !bg_sc_neg+
+    // Positive or zero adjustment
+    clc
+    adc bg_sc_lo
+    sta bg_sc_lo
+    bcc !bg_sc_ok+
+    inc bg_sc_hi
+    jmp !bg_sc_ok+
+!bg_sc_neg:
+    // Negative adjustment: sign-extend, add
+    clc
+    adc bg_sc_lo
+    sta bg_sc_lo
+    lda bg_sc_hi
+    adc #$ff                // Sign-extend negative
+    sta bg_sc_hi
+!bg_sc_ok:
+
+    // Follow chain: next = bg_next[idx]
+    ldx bg_scan_idx
+    lda bg_next,x
+    beq !bg_chain_done+     // next == 0 → end of chain
+    sta bg_history_id
+    jmp !bg_chain_loop-
+
+!bg_chain_done:
+    // Null-terminate text buffer
+    ldx bg_text_len
+    lda #0
+    sta bg_text_buf,x
+
+    // Clamp social class to [1, 100]
+    // Check if negative (hi byte has bit 7 set or hi != 0 with negative)
+    lda bg_sc_hi
+    bmi !bg_sc_clamp_lo+    // Negative → clamp to 1
+    bne !bg_sc_clamp_hi+    // Hi > 0 → clamp to 100
+    // Hi == 0, check lo
+    lda bg_sc_lo
+    cmp #1
+    bcc !bg_sc_clamp_lo+    // < 1 → clamp to 1
+    cmp #101
+    bcc !bg_sc_store+        // 1-100 → valid
+!bg_sc_clamp_hi:
+    lda #100
+    jmp !bg_sc_store+
+!bg_sc_clamp_lo:
+    lda #1
+!bg_sc_store:
+    sta player_data + PL_SOCIAL_CLASS
+
+    // Word-wrap text into player_background
+    jsr bg_word_wrap
+    rts
+
+// ============================================================
+// bg_word_wrap — Wrap bg_text_buf into player_background
+// Input: bg_text_buf (null-terminated), bg_text_len
+// Output: player_background filled (4 lines x 40 bytes)
+// ============================================================
+.const BG_LINE_WIDTH = 38   // Max visible chars per line
+.const BG_LINE_STRIDE = 40  // Bytes per line in player_background
+
+bg_wrap_src:  .byte 0       // Current source offset in bg_text_buf
+bg_wrap_line: .byte 0       // Current output line (0-3)
+
+bg_word_wrap:
+    lda #0
+    sta bg_wrap_src
+    sta bg_wrap_line
+
+!bgw_next_line:
+    lda bg_wrap_line
+    cmp #4
+    bcc !bgw_not_full+
+    jmp !bgw_done+          // All 4 lines filled
+!bgw_not_full:
+
+    // Skip leading spaces
+!bgw_skip_space:
+    ldx bg_wrap_src
+    lda bg_text_buf,x
+    bne !bgw_not_end+
+    jmp !bgw_done+          // End of text
+!bgw_not_end:
+    cmp #$20                // Space
+    bne !bgw_no_skip+
+    inc bg_wrap_src
+    jmp !bgw_skip_space-
+!bgw_no_skip:
+
+    // Calculate remaining text length
+    ldx bg_wrap_src
+    lda #0
+    sta zp_temp0            // Remaining count
+!bgw_count:
+    lda bg_text_buf,x
+    beq !bgw_counted+
+    inc zp_temp0
+    inx
+    jmp !bgw_count-
+!bgw_counted:
+
+    // Calculate dest pointer: player_background + line * 40
+    lda bg_wrap_line
+    asl                     // *2
+    asl                     // *4
+    asl                     // *8
+    sta zp_temp1
+    asl                     // *16
+    asl                     // *32
+    clc
+    adc zp_temp1            // *32 + *8 = *40
+    clc
+    adc #<player_background
+    sta zp_ptr1
+    lda #>player_background
+    adc #0
+    sta zp_ptr1 + 1
+
+    // If remaining <= BG_LINE_WIDTH, copy all and done
+    lda zp_temp0
+    cmp #BG_LINE_WIDTH + 1
+    bcs !bgw_need_break+
+
+    // Copy remaining text to this line
+    ldx bg_wrap_src
+    ldy #0
+!bgw_copy_rest:
+    lda bg_text_buf,x
+    beq !bgw_null_rest+
+    sta (zp_ptr1),y
+    inx
+    iny
+    jmp !bgw_copy_rest-
+!bgw_null_rest:
+    // Null-terminate and trim trailing spaces
+    jsr bgw_trim_line
+    jmp !bgw_done+          // All text consumed
+
+!bgw_need_break:
+    // Find word break: scan backward from position BG_LINE_WIDTH for space
+    lda bg_wrap_src
+    clc
+    adc #BG_LINE_WIDTH
+    tax                     // X = src + BG_LINE_WIDTH (position past line end)
+!bgw_scan_back:
+    cpx bg_wrap_src
+    beq !bgw_force_break+   // No space found — force break at BG_LINE_WIDTH
+    dex
+    lda bg_text_buf,x
+    cmp #$20                // Space
+    beq !bgw_found_break+
+    jmp !bgw_scan_back-
+
+!bgw_force_break:
+    // No word break found — break at exactly BG_LINE_WIDTH
+    lda bg_wrap_src
+    clc
+    adc #BG_LINE_WIDTH
+    tax
+    jmp !bgw_do_copy+
+
+!bgw_found_break:
+    // X = position of space (break point)
+    inx                     // Break AFTER the space (next line starts after it)
+
+!bgw_do_copy:
+    // Copy from bg_wrap_src to X-1 into dest line
+    stx zp_temp1            // Save break position
+    ldx bg_wrap_src
+    ldy #0
+!bgw_copy_line:
+    cpx zp_temp1
+    bcs !bgw_line_done+
+    lda bg_text_buf,x
+    sta (zp_ptr1),y
+    inx
+    iny
+    jmp !bgw_copy_line-
+!bgw_line_done:
+    // Null-terminate and trim trailing spaces
+    jsr bgw_trim_line
+    // Advance source
+    lda zp_temp1
+    sta bg_wrap_src
+    inc bg_wrap_line
+    jmp !bgw_next_line-
+
+!bgw_done:
+    rts
+
+// bgw_trim_line — Null-terminate line, trim trailing spaces
+// Input: zp_ptr1 = line start, Y = length written
+// Clobbers: A, Y
+bgw_trim_line:
+    // Scan backward to trim trailing spaces
+!bgw_trim:
+    cpy #0
+    beq !bgw_null+
+    dey
+    lda (zp_ptr1),y
+    cmp #$20
+    beq !bgw_trim-
+    iny                     // Keep the non-space char
+!bgw_null:
+    lda #0
+    sta (zp_ptr1),y
+    rts
+
+// ============================================================
+// Gold formula — umoria starting gold based on social class, stats, gender
+// gold = SC*6 + rng(25)+326 - 5*(STR+INT+WIS+DEX+CON-CHR-50) + (female?50:0)
+// min 80
+// Must be called AFTER player_calc_stats (current stats needed).
+// ============================================================
+
+// Scratch variables for gold calculation
+gold_lo:       .byte 0
+gold_hi:       .byte 0
+gold_stat_adj: .byte 0     // Net stat adjustment (signed 8-bit)
+
+// Stat offsets for the 5 "subtract" stats (STR, INT, WIS, DEX, CON)
+gold_stat_offsets:
+    .byte PL_STR_CUR, PL_INT_CUR, PL_WIS_CUR, PL_DEX_CUR, PL_CON_CUR
+
+create_calc_gold:
+    // Step 1: gold = social_class * 6
+    lda player_data + PL_SOCIAL_CLASS
+    ldx #6
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda zp_math_a
+    sta gold_lo
+    lda zp_math_b
+    sta gold_hi
+
+    // Step 2: gold += rng_range(25) + 326
+    lda #25
+    jsr rng_range               // A = [0, 24]
+    clc
+    adc gold_lo
+    sta gold_lo
+    bcc !ccg_no_c1+
+    inc gold_hi
+!ccg_no_c1:
+    // Add 326 ($0146)
+    lda gold_lo
+    clc
+    adc #$46                    // lo byte of 326
+    sta gold_lo
+    lda gold_hi
+    adc #$01                    // hi byte of 326
+    sta gold_hi
+
+    // Step 3: Compute net stat adjustment
+    // net_adj = sum of (min(stat,18)-10) for STR,INT,WIS,DEX,CON
+    //         - (min(CHR,18)-10)
+    lda #0
+    sta gold_stat_adj
+
+    ldx #0
+!ccg_stat_loop:
+    stx zp_temp2                // Save loop index (safe across rng calls — rng not called here)
+    ldy gold_stat_offsets,x
+    lda player_data,y
+    cmp #19
+    bcc !ccg_no_cap+
+    lda #18
+!ccg_no_cap:
+    sec
+    sbc #10                     // Signed: -7 to +8
+    clc
+    adc gold_stat_adj
+    sta gold_stat_adj
+    ldx zp_temp2
+    inx
+    cpx #5
+    bcc !ccg_stat_loop-
+
+    // Subtract CHR adjustment (CHR goes the other way)
+    lda player_data + PL_CHR_CUR
+    cmp #19
+    bcc !ccg_chr_ok+
+    lda #18
+!ccg_chr_ok:
+    sec
+    sbc #10
+    sta zp_temp0
+    lda gold_stat_adj
+    sec
+    sbc zp_temp0
+    sta gold_stat_adj           // net_adj = sum_5_stats - CHR
+
+    // Step 4: gold -= 5 * net_adj (16-bit)
+    lda gold_stat_adj
+    bpl !ccg_adj_pos+
+
+    // Negative net_adj → gold += 5 * |net_adj| (subtracting a negative)
+    eor #$ff
+    clc
+    adc #1                      // A = |net_adj|
+    ldx #5
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda gold_lo
+    clc
+    adc zp_math_a
+    sta gold_lo
+    lda gold_hi
+    adc zp_math_b
+    sta gold_hi
+    jmp !ccg_adj_done+
+
+!ccg_adj_pos:
+    beq !ccg_adj_done+          // net_adj == 0, skip
+    // Positive net_adj → gold -= 5 * net_adj
+    ldx #5
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda gold_lo
+    sec
+    sbc zp_math_a
+    sta gold_lo
+    lda gold_hi
+    sbc zp_math_b
+    sta gold_hi
+
+!ccg_adj_done:
+    // Step 5: If female, add 50
+    lda player_data + PL_FLAGS
+    and #PLF_MALE
+    bne !ccg_not_female+
+    lda gold_lo
+    clc
+    adc #50
+    sta gold_lo
+    bcc !ccg_not_female+
+    inc gold_hi
+!ccg_not_female:
+
+    // Step 6: Clamp minimum 80
+    lda gold_hi
+    bne !ccg_gold_ok+           // Hi > 0 → at least 256, no clamp needed
+    lda gold_lo
+    cmp #80
+    bcs !ccg_gold_ok+
+    lda #80
+    sta gold_lo
+!ccg_gold_ok:
+
+    // Store in player struct (24-bit, hi byte = 0)
+    lda gold_lo
+    sta player_data + PL_GOLD_0
+    lda gold_hi
+    sta player_data + PL_GOLD_1
+    lda #0
+    sta player_data + PL_GOLD_2
+    rts

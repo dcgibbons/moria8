@@ -6,6 +6,27 @@
 
 ---
 
+## R17 — Character Background History + Gender + Social Class + Variable Gold ✅ COMPLETE
+
+Completed 2026-02-21. Implemented Option C-lite: full family/occupation background history text, gender selection, social class derivation, and umoria-faithful variable starting gold formula. Appearance descriptions (eyes, hair, complexion) dropped to save space.
+
+**New files:**
+- `background_data.s` — 72-entry background table from umoria charts 1–23 (family/occupation). Parallel metadata arrays (bg_roll, bg_chart, bg_next, bg_bonus) + packed null-terminated string table in screen codes. Lives in StartupOverlay ($E000). ~2,073 bytes.
+
+**Modified files:**
+- `player.s` — added `PL_SOCIAL_CLASS = 65` constant, `player_background` buffer (160 bytes = 4 lines × 40 chars), `ui_char_draw_background` function, gender/SC display strings. `player_init` clears the background buffer.
+- `player_create.s` — added `create_select_gender` (M/F prompt), `create_gen_background` (chain walker: race→chart lookup, d100 roll per chart, social class accumulation, text concatenation), `bg_word_wrap` (38-char line limit with word-boundary breaks), `create_calc_gold` (umoria formula: SC×6 + rng(25) + 326 - stat adjustments + female bonus, min 80). Removed hardcoded `PLF_MALE` and `START_GOLD = 200`.
+- `ui_character.s` — added rows 12–16: gender + social class display, 4-line background text. "Press any key" moved to row 18.
+- `save.s` — bumped `SAVE_VERSION` $0a → $0b; added `save_block`/`load_block` for `player_background` (160 bytes) after player_data.
+- `main.s` — updated creation flow to call `create_select_gender` and `create_gen_background` before `create_init_character`.
+- 18 test files — added `#import "../background_data.s"` wrapped in `.segmentdef TestCreateOverlay [start=$D000]` dummy segment (keeps Default segment below MAP_BASE $C000).
+- `test_background.s` — NEW: 8 runtime tests covering Human/Elf/Half-Troll background generation, gold formula range, gold varies with SC, female +50 bonus, word-wrap line limits, player_init clears buffer.
+- `run_tests.sh` — added background test entry (8 tests, default cycle limit).
+
+**Size:** +370 bytes main segment ($B30A → $B47C); 2,948 bytes headroom remaining. Startup overlay: 4,017 of 4,096 bytes (79 free).
+
+---
+
 ## R16 — Save Drive Selection (Any IEC Device Number) ✅ COMPLETE
 
 Completed 2026-02-21. Replaced the hardcoded `9)Drive 9` disk sub-menu option with `#)Drive #`, allowing any IEC device number 8–30.
