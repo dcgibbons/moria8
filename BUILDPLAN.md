@@ -63,6 +63,7 @@
 | BUG-40 | MED | Creature name shows "?" in monster recall from town — after ascending from dungeon, current_tier=0 but cr_name_hi[] holds stale $E0xx pointers; recall command finds stale cr_display[] match and creature_get_name returns "?" | **Fixed** — cgn_no_tier path reloads the appropriate tier when stale $E0xx pointer found |
 | BUG-43 | MED | Store-stocked items not identified — `store_restock_one` (store.s:154-163) sets `si_item_id`, `si_qty`, `si_p1` but never sets `IF_IDENTIFIED` in `si_flags`. umoria's `store_create()` calls `magicTreasure()` then `storeItemInsertIntoStock()` which sets `STR_IDENTIFIED`. Fix: `ora #IF_IDENTIFIED` on `si_flags,y` after stocking. | **Fixed** — `sro_store_p1` stores `#IF_IDENTIFIED` in `si_flags`; test 29 added to test_store.s |
 | BUG-44 | MED | Save file not found shows wrong error and wrong recovery — when LOAD returns file-not-found, the game prints "Save game corrupt" and falls through to character creation instead of returning to the New/Load/Dual menu. Fix: check the KERNAL status after LOAD; on file-not-found ($42 or carry set with no data), print "Save file not found" and jump back to the title/game-start menu. | Open |
+| BUG-45 | MED | Item generation uses flat uniform distribution — `pick_item_type` (item.s) rolls uniformly from items 2–63 and accepts any whose `min_level <= dlvl+2`. This means low-level items (torches, food, basic potions) perpetually dominate every drop because they are always valid. umoria's `itemGetRandomObjectId` uses a depth-weighted allocation table (`treasure_levels`): 50% flat pick from valid pool, 50% "best of 3" curve that picks the highest-depth of 3 random items then re-rolls within that exact depth tier — creating a pronounced curve that shifts drops toward the current dungeon level. Additionally, C64's great-item (1-in-12) check bypasses `min_level` entirely, giving equal odds to a torch vs. the best item in the game; umoria multiplies the generation level but still feeds it through the curved allocator. Fix: rewrite `pick_item_type` to use a `treasure_levels`-style depth-bucketed allocator with the 50/50 flat/best-of-3 algorithm. | Open |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
@@ -70,8 +71,9 @@
 | Priority | # | What | Effort |
 |----------|---|------|--------|
 | 1 | BUG-44 | Save file not found → wrong error + wrong recovery path | Small |
-| 2 | R16 | Save drive selection — any IEC device number (8–30) | Small |
-| 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 2 | BUG-45 | Item generation flat distribution — rewrite pick_item_type with depth-bucketed 50/50 flat/best-of-3 curve | Medium |
+| 3 | R16 | Save drive selection — any IEC device number (8–30) | Small |
+| 4 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -94,7 +96,7 @@
 **Low priority (polish/completeness):**
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
-- A7 Item generation distribution review vs umoria curves
+- BUG-45 Item generation flat distribution — rewrite pick_item_type (medium effort)
 
 ---
 
