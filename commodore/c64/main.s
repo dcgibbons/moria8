@@ -192,16 +192,106 @@ entry_main:
 !title_menu_loop:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
-    beq !title_new+
+    bne !not_n+
+    jmp !title_new+
+!not_n:
     cmp #$4c                // 'L' — load game
-    beq !title_load+
-    cmp #$44                // 'D' — dual disk mode
+    bne !not_l+
+    jmp !title_load+
+!not_l:
+    cmp #$44                // 'D' — disk setup sub-menu
     bne !title_menu_loop-
 
-    // Set dual disk mode
+    // Show disk sub-menu on row 18
+    lda #18
+    jsr screen_clear_row
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #18
+    sta zp_cursor_row
+    lda #9                  // Center: (40-22)/2 = 9
+    sta zp_cursor_col
+    lda #<ds_menu_str
+    sta zp_ptr0
+    lda #>ds_menu_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+!disk_menu_loop:
+    jsr input_get_key
+    cmp #$53                // 'S' — same disk (mode 0)
+    beq !disk_same+
+    cmp #$57                // 'W' — swap disks (mode 1)
+    beq !disk_swap+
+    cmp #$39                // '9' — drive 9 (mode 2)
+    beq !disk_drv9+
+    jmp !disk_menu_loop-
+
+!disk_same:
+    lda #0
+    sta disk_mode
+    lda #8
+    sta save_device
+    lda #18
+    jsr screen_clear_row
+    jmp !title_menu_loop-
+
+!disk_swap:
     lda #1
     sta disk_mode
-    // Show "[SAVE DISK]" indicator on row 18
+    lda #8
+    sta save_device
+    jmp !disk_show_indicator+
+
+!disk_drv9:
+    jsr probe_device_9
+    bcs !disk_no_dev9+
+    // Device 9 present
+    lda #2
+    sta disk_mode
+    lda #9
+    sta save_device
+    // Show "[Drive 9]" indicator
+    lda #18
+    jsr screen_clear_row
+    lda #COL_CYAN
+    sta zp_text_color
+    lda #18
+    sta zp_cursor_row
+    lda #15                 // Center: (40-9)/2 ≈ 15
+    sta zp_cursor_col
+    lda #<ds_drv9_str
+    sta zp_ptr0
+    lda #>ds_drv9_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    jmp !title_menu_loop-
+
+!disk_no_dev9:
+    // Show error, stay on sub-menu
+    lda #19
+    jsr screen_clear_row
+    lda #COL_LRED
+    sta zp_text_color
+    lda #19
+    sta zp_cursor_row
+    lda #11                 // Center: (40-18)/2 = 11
+    sta zp_cursor_col
+    lda #<ds_nod9_str
+    sta zp_ptr0
+    lda #>ds_nod9_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #COL_WHITE
+    sta zp_text_color
+    jmp !disk_menu_loop-
+
+!disk_show_indicator:
+    // Show "[Save Disk]" indicator on row 18
+    lda #18
+    jsr screen_clear_row
     lda #COL_CYAN
     sta zp_text_color
     lda #18
@@ -445,6 +535,7 @@ load_resume_game:
     bne !not_save+
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr save_game
+    jsr disk_prompt_game        // Swap back to game disk if dual
     jmp !quit+
 !not_save:
 
@@ -1310,6 +1401,7 @@ run_step:
     jsr delete_savefile
     jsr player_sync_from_zp
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
+    jsr disk_prompt_game        // Swap back to game disk if dual
     jsr input_get_key
     jmp !quit+
 

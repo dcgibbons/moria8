@@ -20,7 +20,7 @@ title_load_and_draw:
 
     // SETLFS: logical file 2, device 8, secondary 1 (use header address)
     lda #2
-    ldx #8
+    ldx #SAVE_DEVICE
     ldy #1
     jsr KERNAL_SETLFS
 
@@ -29,12 +29,21 @@ title_load_and_draw:
     ldx #<MAP_BASE
     ldy #>MAP_BASE
     jsr $FFD5               // KERNAL LOAD
+    php                     // Save carry (LOAD success/failure)
+    lda #2
+    jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
+    plp                     // Restore carry from LOAD
     bcs !title_fallback+    // Carry set = error
 
     // Restore VIC-II bank 0 after serial I/O
     lda $dd00
     ora #%00000011
     sta $dd00
+
+    // Clear KERNAL status byte — LOAD leaves EOI (bit 6) set from the last file byte.
+    // Without this, READST in any subsequent file read returns stale status → false errors.
+    lda #0
+    sta $90
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
     jsr screen_clear

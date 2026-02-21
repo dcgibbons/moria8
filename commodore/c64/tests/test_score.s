@@ -85,6 +85,7 @@ test_finish:
 #import "../ui_help.s"
 #import "../ui_trampoline_stubs.s"
 #import "../save.s"
+#import "../disk_swap.s"
 
 // --- Test-local hiscore definitions (replaces score_io.s) ---
 // score_io.s aliases hiscore_table to CREATURE_BASE ($C020) which

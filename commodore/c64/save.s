@@ -1,8 +1,9 @@
-// save.s — Save/Load game system with RLE map compression
+// save.s — Save/Load game system
 //
 // Writes all game state to a sequential file on 1541 disk via KERNAL I/O.
 // Load restores state and deletes the savefile to enforce permadeath.
 // Uses 16-bit additive complement checksum for integrity.
+// Map data is written raw (3840 bytes). RLE compressor is kept for tests only.
 //
 // KERNAL calls: SETNAM($FFBD), SETLFS($FFBA), OPEN($FFC0), CLOSE($FFC3),
 //   CHKOUT($FFC9), CHKIN($FFC6), CLRCHN($FFCC), CHROUT($FFD2),
@@ -15,12 +16,12 @@
 .const CHECK_FILE_NUM = 3       // Separate file number for check_savefile_exists
 .const SAVE_DEVICE    = 8       // Device 8 = first disk drive
 .const SAVE_SEC_ADDR  = 2       // Secondary address for write (1541 channel 2)
-.const LOAD_SEC_ADDR  = 5       // Secondary address for read (1541 channel 5)
+.const LOAD_SEC_ADDR  = 2       // Secondary address for read (1541 channel 2) — same as write
 .const CHECK_SEC_ADDR = 6       // Secondary address for existence check (1541 channel 6)
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const SAVE_MAGIC_SIZE = 8
-.const SAVE_VERSION    = $08
+.const SAVE_VERSION    = $0a
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -54,6 +55,7 @@
 .const KERNAL_CHROUT = $ffd2
 .const KERNAL_CHRIN  = $ffcf
 .const KERNAL_READST = $ffb7
+.const KERNAL_LOAD   = $ffd5
 
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
@@ -150,7 +152,7 @@ title_menu_str:
 
 // ============================================================
 // save_game — Top-level save routine
-// Syncs ZP→struct, writes all blocks + RLE map + checksum, closes
+// Syncs ZP→struct, writes all blocks + raw map + checksum, closes
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 save_game:
@@ -170,10 +172,6 @@ save_game:
     sta save_cksum_hi
     sta save_io_error
 
-    // Compress map while we can still use CREATURE_BASE as workspace
-    // (monster_table will be written before we need it)
-    jsr rle_compress_map
-
     // Delete old save file (ignore errors)
     jsr delete_savefile
 
@@ -183,9 +181,9 @@ save_game:
     ldx #<save_filename
     ldy #>save_filename
     jsr KERNAL_SETNAM
-    // SETLFS: file#2, device 8, secondary 2
+    // SETLFS: file#2, device 8/9, secondary 2
     lda #SAVE_FILE_NUM
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #SAVE_SEC_ADDR
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
@@ -282,22 +280,9 @@ save_game:
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :save_block(recall_data_start, RECALL_DATA_SIZE)
 
-    // 17. RLE map size (2 bytes, little-endian)
-    lda rle_size_lo
-    jsr save_write_byte
-    lda rle_size_hi
-    jsr save_write_byte
+    // 17. Map data (3840 bytes raw)
+    :save_block(MAP_BASE, MAP_SIZE)
 
-    // 18. RLE compressed map data (dynamic size — inline, not macro)
-    lda rle_work_lo
-    sta save_block_lo
-    lda rle_work_hi
-    sta save_block_hi
-    lda rle_size_lo
-    sta save_count_lo
-    lda rle_size_hi
-    sta save_count_hi
-    jsr save_write_block
     // Check for I/O errors
     lda save_io_error
     beq !save_io_ok+
@@ -343,8 +328,8 @@ save_game:
 
 // ============================================================
 // load_game — Top-level load routine
-// Opens file, verifies magic, reads all blocks, verifies checksum,
-// decompresses map, syncs struct→ZP, deletes savefile.
+// Opens file, verifies magic, reads all blocks + raw map,
+// verifies checksum, syncs struct→ZP, deletes savefile.
 // Output: carry set = success, carry clear = failure
 // Clobbers: A, X, Y, all scratch
 // ============================================================
@@ -363,25 +348,33 @@ load_game:
     sta save_cksum_hi
     sta save_io_error
 
-    // Open file for reading
+    // Open save file for sequential read via CHKIN/CHRIN
     lda #load_filename_len
     ldx #<load_filename
     ldy #>load_filename
     jsr KERNAL_SETNAM
     lda #SAVE_FILE_NUM
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #LOAD_SEC_ADDR
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcc !load_open_ok+
+    // OPEN failed
+    lda $dd00
+    ora #%00000011
+    sta $dd00
     jmp !load_fail+
 !load_open_ok:
-
-    // Direct input from file
     ldx #SAVE_FILE_NUM
     jsr KERNAL_CHKIN
     bcc !load_chkin_ok+
-    jmp !load_fail_close+
+    // CHKIN failed — close and bail
+    lda #SAVE_FILE_NUM
+    jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    jmp !load_fail+
 !load_chkin_ok:
 
     // --- Read and verify magic header ---
@@ -477,34 +470,22 @@ load_game:
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :load_block(recall_data_start, RECALL_DATA_SIZE)
 
-    // 17. RLE map size (2 bytes)
-    jsr load_read_byte
-    sta rle_size_lo
-    jsr load_read_byte
-    sta rle_size_hi
+    // 17. Map data (3840 bytes raw)
+    :load_block(MAP_BASE, MAP_SIZE)
 
-    // 18. Decompress RLE map directly from file → MAP_BASE
-    // (Streaming decompressor avoids workspace/MAP_BASE overlap)
-    jsr rle_decompress_from_file
+    // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
+    jsr KERNAL_CHRIN        // Stored checksum lo (not accumulated)
+    sta zp_temp0
+    jsr KERNAL_CHRIN        // Stored checksum hi (not accumulated)
+    sta zp_temp1
 
-    // 19. Read stored checksum (2 bytes, NOT accumulated)
-    jsr KERNAL_CHRIN
-    sta zp_temp0            // Stored checksum lo
-    jsr KERNAL_CHRIN
-    sta zp_temp1            // Stored checksum hi
-
-    // Check I/O error
+    // Check for I/O errors during read
     lda save_io_error
     beq !load_io_ok+
-    jmp !load_fail_close+
+    jmp !load_corrupt_nocl+
 !load_io_ok:
 
-    // Close file (map already decompressed from file stream)
-    jsr KERNAL_CLRCHN
-    lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
-
-    // Verify checksum: computed sum must match stored sum
+    // Verify checksum
     lda save_cksum_lo
     cmp zp_temp0
     bne !load_cksum_bad+
@@ -514,6 +495,13 @@ load_game:
 !load_cksum_bad:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
+    // Close file after successful read
+    jsr KERNAL_CLRCHN
+    lda #SAVE_FILE_NUM
+    jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011
+    sta $dd00
 
     // Sync struct → ZP
     jsr player_sync_to_zp
@@ -529,13 +517,14 @@ load_game:
     rts
 
 !load_corrupt:
+!load_corrupt_nocl:
+    // Close file (may still be open if corruption detected mid-read)
     jsr KERNAL_CLRCHN
     lda #SAVE_FILE_NUM
     jsr KERNAL_CLOSE
     lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
+    ora #%00000011
     sta $dd00
-!load_corrupt_nocl:
     lda #<save_corrupt_str
     sta zp_ptr0
     lda #>save_corrupt_str
@@ -544,13 +533,6 @@ load_game:
     clc                     // Failure
     rts
 
-!load_fail_close:
-    jsr KERNAL_CLRCHN
-    lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
-    lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
 !load_fail:
     lda #<save_ioerr_str
     sta zp_ptr0
@@ -651,39 +633,27 @@ save_write_byte_raw:
     rts
 
 // ============================================================
-// load_read_block — Read N bytes from file to addr with checksum
+// load_read_block — Read N bytes from open sequential file to dest (zp_ptr0)
+// Accumulates checksum. Advances zp_ptr0.
 // Input: zp_ptr0/hi = dest addr, save_count_lo/hi = byte count
 // Clobbers: A, X, Y
 // ============================================================
 load_read_block:
-    ldy #0
 !lrb_loop:
     // Check if count == 0
     lda save_count_lo
     ora save_count_hi
     beq !lrb_done+
-    // Read byte from file
-    jsr KERNAL_CHRIN
+    // Read byte from file (accumulates checksum)
+    jsr load_read_byte
     // Store at destination
+    ldy #0
     sta (zp_ptr0),y
-    // Accumulate checksum
-    clc
-    adc save_cksum_lo
-    sta save_cksum_lo
-    bcc !lrb_no_carry+
-    inc save_cksum_hi
-!lrb_no_carry:
-    // Check status (bit 6 = EOF, bits 1-0 = timeout/error)
-    jsr KERNAL_READST
-    and #$43
-    beq !lrb_ok+
-    inc save_io_error
-!lrb_ok:
-    // Advance pointer
-    iny
-    bne !lrb_no_page+
+    // Advance dest pointer
+    inc zp_ptr0
+    bne !lrb_no_hi+
     inc zp_ptr0_hi
-!lrb_no_page:
+!lrb_no_hi:
     // Decrement count
     lda save_count_lo
     sec
@@ -696,12 +666,12 @@ load_read_block:
     rts
 
 // ============================================================
-// load_read_byte — Read single byte from file with checksum
-// Output: A = byte read
-// Clobbers: flags
+// load_read_byte — Read single byte from open sequential file with checksum
+// Output: A = byte read.
+// Clobbers: A, flags
 // ============================================================
 load_read_byte:
-    jsr KERNAL_CHRIN
+    jsr KERNAL_CHRIN        // Read next byte from open sequential file
     pha
     // Accumulate checksum
     clc
@@ -710,13 +680,7 @@ load_read_byte:
     bcc !lrby_no_carry+
     inc save_cksum_hi
 !lrby_no_carry:
-    // Check status (bit 6 = EOF, bits 1-0 = timeout/error)
-    jsr KERNAL_READST
-    and #$43
-    beq !lrby_ok+
-    inc save_io_error
-!lrby_ok:
-    pla
+    pla                     // A = original byte
     rts
 
 // ============================================================
@@ -730,7 +694,7 @@ delete_savefile:
     ldy #>scratch_cmd
     jsr KERNAL_SETNAM
     lda #CMD_CHANNEL
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #CMD_CHANNEL
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
@@ -997,95 +961,17 @@ rle_flush_literals:
 !rfl_done:
     rts
 
-// ============================================================
-// rle_decompress_from_file — Stream-decompress RLE from open file → MAP_BASE
-// Reads compressed bytes via load_read_byte (accumulates checksum).
-// Avoids workspace/MAP_BASE overlap by reading directly from disk.
-// Input: rle_size_lo/hi = compressed data size (file must be open with CHKIN)
-// Clobbers: A, Y, zp_ptr1/hi, save_count_lo/hi, rle_run_len, rle_run_byte
-// ============================================================
-rle_decompress_from_file:
-    // Dest: MAP_BASE
-    lda #<MAP_BASE
-    sta zp_ptr1
-    lda #>MAP_BASE
-    sta zp_ptr1_hi
-
-    // Remaining compressed bytes
-    lda rle_size_lo
-    sta save_count_lo
-    lda rle_size_hi
-    sta save_count_hi
-
-!rdff_loop:
-    // Done?
-    lda save_count_lo
-    ora save_count_hi
-    beq !rdff_done+
-    lda save_io_error
-    bne !rdff_done+
-
-    // Read header byte from file
-    jsr rdff_read_byte
-    cmp #$80
-    bcs !rdff_repeat+
-
-    // --- Literal run: length = header + 1 ---
-    clc
-    adc #1
-    sta rle_run_len
-!rdff_lit:
-    lda rle_run_len
-    beq !rdff_loop-
-    jsr rdff_read_byte
-    ldy #0
-    sta (zp_ptr1),y
-    jsr rle_d_advance_dst
-    dec rle_run_len
-    jmp !rdff_lit-
-
-!rdff_repeat:
-    // --- Repeat run: length = header - $7D ---
-    sec
-    sbc #$7d
-    sta rle_run_len
-    jsr rdff_read_byte
-    sta rle_run_byte
-!rdff_rep:
-    lda rle_run_len
-    beq !rdff_loop-
-    lda rle_run_byte
-    ldy #0
-    sta (zp_ptr1),y
-    jsr rle_d_advance_dst
-    dec rle_run_len
-    jmp !rdff_rep-
-
-!rdff_done:
-    rts
-
-// Helper: read one RLE byte from file with checksum + count decrement
-rdff_read_byte:
-    jsr load_read_byte
-    pha
-    lda save_count_lo
-    sec
-    sbc #1
-    sta save_count_lo
-    bcs !+
-    dec save_count_hi
-!:  pla
-    rts
-
-// Helper: advance dest pointer by 1, check bounds
+// Helper: advance dest pointer by 1, check bounds (used by test decompressor)
 rle_d_advance_dst:
     inc zp_ptr1
     bne !rdad_no+
     inc zp_ptr1_hi
 !rdad_no:
-    // Bounds check: dest must not exceed MAP_END ($CEFF)
+    // Bounds check: dest must not exceed MAP_END ($CEFF).
+    // After writing the final byte at $CEFF, ptr1 advances to $CF00 ($CF hi).
+    // That is still valid — only $D000+ (I/O area) is a true overflow.
     lda zp_ptr1_hi
-    cmp #>(MAP_END + 1)     // $CF = past end of map
+    cmp #>(MAP_END + 1) + 1 // $D0 = into I/O area, truly past map
     bcc !rdad_ok+
     inc save_io_error       // Flag overflow — corrupt compressed data
 !rdad_ok:

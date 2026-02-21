@@ -6,10 +6,11 @@ def parse_umoria(filepath):
     with open(filepath, 'r') as f:
         content = f.read()
 
-    cr_match = re.search(r'creatures_list\[.*?\]\s*=\s*\{(.*?)\n\};', content, re.DOTALL)
-    if not cr_match:
-        return creatures
-    cr_text = cr_match.group(1)
+    start = content.find('creatures_list')
+    if start == -1: return creatures
+    start = content.find('{', start)
+    end = content.find('};', start)
+    cr_text = content[start:end]
     
     pattern = (
         r'\{"([^"]+)"'
@@ -93,16 +94,10 @@ def main():
     with open("/Users/chadwick/.gemini/antigravity/brain/fa57cf0f-3ea4-4d79-ab22-515cb3f090ce/moria_comparison.md", "a") as f:
         f.write("\n\n## 2. Monsters\n\n")
         f.write("Below is a table comparing the monsters across the three ports. `umoria` and `vms-moria` share most generic stats, but `moria8` selected exactly 120 monsters from the `umoria` database to fit within the limited C64 RAM. Their combat stats match `umoria` exactly.\n\n")
-        f.write("| Monster Name | Present in VMS | Present in Umoria | Present in Moria8 | DLVL (U) | HP Die (U) | AC (U) | EXP (U) |\n")
+        f.write("| Monster Name | VMS | Umoria | Moria8 | DLVL (U) | HP Die (U) | AC (U) | EXP (U) |\n")
         f.write("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
         
-        written = 0
         for name in sorted(all_names):
-            if written >= 100:
-                f.write(f"| *... {len(all_names)-100} more monsters elided for brevity ...* | | | | | | | |\n")
-                break
-            written += 1
-                
             in_v = "Yes" if name in v_cr else "No"
             in_u = "Yes" if name in u_cr else "No"
             in_m8 = "Yes" if name in m8_names else "No"

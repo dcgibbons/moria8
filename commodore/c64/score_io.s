@@ -42,7 +42,7 @@ hiscore_load:
     ldy #>hi_read_fname
     jsr KERNAL_SETNAM
     lda #HISCORE_FILE_NUM
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #HISCORE_SEC_RD
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
@@ -129,7 +129,7 @@ hiscore_save:
     ldy #>hi_scratch_cmd
     jsr KERNAL_SETNAM
     lda #CMD_CHANNEL
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #CMD_CHANNEL
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
@@ -145,7 +145,7 @@ hiscore_save:
     ldy #>hi_write_fname
     jsr KERNAL_SETNAM
     lda #HISCORE_FILE_NUM
-    ldx #SAVE_DEVICE
+    ldx save_device
     ldy #HISCORE_SEC_WR
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN

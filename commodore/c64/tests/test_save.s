@@ -92,6 +92,7 @@ test_finish:
 
 #import "../ui_trampoline_stubs.s"
 #import "../save.s"
+#import "../disk_swap.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:

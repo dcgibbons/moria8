@@ -48,7 +48,7 @@ KA_FLAGS    = -showmem -vicesymbols
 RUN_FLAGS   = -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: all build run rundisk debug test disk savedisk clean
+.PHONY: all build run rundisk rundual debug test disk savedisk clean
 
 all: build
 
@@ -92,9 +92,16 @@ run: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS)
 rundisk: disk
 	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
+# Launch with two drives (game on 8, save on 9) for dual-drive testing
+rundual: disk savedisk
+	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 \
+	        -drive9truedrive -drive9type 1541 +iecdevice9 \
+	        -8 $(DISK_IMAGE) -9 $(SAVE_IMAGE) \
+	        -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
+
 # Launch with VICE monitor commands for save/load debugging
 debug: $(MAIN_PRG) disk
-	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
+	$(VICE) -drive8truedrive -drive8type 1541 -iecdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
 
 # Delegate to existing test runner (assembles tests + runs in VICE headless)
 test: $(MAIN_PRG)

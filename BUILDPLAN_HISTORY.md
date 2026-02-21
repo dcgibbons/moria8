@@ -6,6 +6,31 @@
 
 ---
 
+## R15 — Multi-Disk Support (Dual-Drive + Improved Disk Swap) ✅ COMPLETE
+
+Completed 2026-02-20. Adds dual-drive device 9 support, fixes missing disk_prompt_game calls, expands disk setup sub-menu.
+
+### What Was Implemented
+
+- **R15.1** — Added `save_device: .byte 8` to disk_swap.s; replaced all 7 `ldx #SAVE_DEVICE` sites in save.s, score_io.s, disk_swap.s with `ldx save_device`
+- **R15.2** — Added mode 2 no-op check (`cmp #2 / beq !done+`) to both `disk_prompt_save` and `disk_prompt_game`
+- **R15.3** — Added missing `jsr disk_prompt_game` after save-and-quit and after death in main.s (fixes mode 1 swap-back bug; also required for R12 restart loop)
+- **R15.4** — Added `probe_device_9` routine to disk_swap.s (~35 bytes): opens channel 15 on device 9, sends I0, checks KERNAL status, returns C=0 if present / C=1 if absent
+- **R15.5** — Expanded title screen 'D' handler into disk setup sub-menu: "S)ame W)swap 9)Drive 9" — S→mode 0, W→mode 1, 9→probe+mode 2 or "Drive 9 not found!" error
+- **R15.6** — Added `rundual` target to both commodore/c64/Makefile and root Makefile (VICE with two true-drive 1541s on devices 8+9)
+- **Fix** — Added `#import "../disk_swap.s"` to test_save.s and test_score.s (save_device was an implicit dependency; test files assemble independently)
+
+### Size
+
+~120 bytes in main segment. `program_end` moved from $BDB5 → $BED5 (811 bytes headroom to $C000).
+
+### Notes
+
+- Tier loading and overlays unchanged — always use device 8 (game disk)
+- save_device has an implicit dependency from save.s/score_io.s; test files importing those must also import disk_swap.s
+
+---
+
 ## R14 — Fix Tunneling Difficulty + Enchanted Digging Tools ✅ COMPLETE
 
 Completed 2026-02-20. Fixes BUG-41 (tunneling far too easy) and adds enchanted digging tool variants.
