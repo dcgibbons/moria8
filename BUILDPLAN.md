@@ -62,13 +62,15 @@
 | BUG-39 | MED | Creature name shows "?" during combat — creature_get_name rejected valid $E0xx pointers when X >= active_dungeon_count but tier still loaded | **Fixed** — Four-path name resolution with shared copy loop |
 | BUG-40 | MED | Creature name shows "?" in monster recall from town — after ascending from dungeon, current_tier=0 but cr_name_hi[] holds stale $E0xx pointers; recall command finds stale cr_display[] match and creature_get_name returns "?" | **Fixed** — cgn_no_tier path reloads the appropriate tier when stale $E0xx pointer found |
 | BUG-43 | MED | Store-stocked items not identified — `store_restock_one` (store.s:154-163) sets `si_item_id`, `si_qty`, `si_p1` but never sets `IF_IDENTIFIED` in `si_flags`. umoria's `store_create()` calls `magicTreasure()` then `storeItemInsertIntoStock()` which sets `STR_IDENTIFIED`. Fix: `ora #IF_IDENTIFIED` on `si_flags,y` after stocking. | **Fixed** — `sro_store_p1` stores `#IF_IDENTIFIED` in `si_flags`; test 29 added to test_store.s |
+| BUG-44 | MED | Save file not found shows wrong error and wrong recovery — when LOAD returns file-not-found, the game prints "Save game corrupt" and falls through to character creation instead of returning to the New/Load/Dual menu. Fix: check the KERNAL status after LOAD; on file-not-found ($42 or carry set with no data), print "Save file not found" and jump back to the title/game-start menu. | Open |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R16 | Save drive selection — any IEC device number (8–30) | Small |
+| 1 | BUG-44 | Save file not found → wrong error + wrong recovery path | Small |
+| 2 | R16 | Save drive selection — any IEC device number (8–30) | Small |
 | 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
