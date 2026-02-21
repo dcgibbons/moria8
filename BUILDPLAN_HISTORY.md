@@ -22,6 +22,22 @@ All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code
 
 ---
 
+## BUG-46 — Stale Monster Positions on Death Screen ✅ COMPLETE
+
+Completed 2026-02-20. Observed a Jackal killing the player while appearing 2+ tiles away on screen.
+
+### Root Cause
+
+The adjacency check in `monster_try_step` is correct — attack only fires when `mat_target == player_pos` (exactly one step). The bug was a **rendering artifact**: every `turn_post_action` death path in the main loop does `jmp !player_died+` *before* the `viewport_update` / `render_viewport` call. The death screen showed the last pre-AI frame (stale positions from the previous turn). The Jackal was 2 tiles away, moved 1 tile to be adjacent, attacked and killed the player, but the screen still showed it 2 tiles away.
+
+This is a follow-on to BUG-17 (which moved the AI *before* the render for normal turns) but the death exit path was never updated.
+
+### Fix
+
+Added `jsr viewport_update` + `jsr render_viewport` at the top of `!player_died:` in `main.s`. Since all death paths converge on this single label, one fix covers move, paralysis, rest, pickup, drop, wear, open, close, search, and any future turn-consuming actions.
+
+---
+
 ## BUG-44 — Save File Not Found: Wrong Error + Wrong Recovery ✅ COMPLETE
 
 Completed 2026-02-20. When "L)oad" was chosen at the title menu and no save file existed, the game showed "Save file corrupt!" and fell through into character creation.

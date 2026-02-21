@@ -44,7 +44,7 @@
 - **Test suites:** 23 (308 runtime tests)
 - **Compile-time asserts:** 70
 - **Source files:** ~48 .s files
-- **Program size:** $BF0F (program_end) — **241 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BF15 (program_end) — **235 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
 - **Banked payload:** $BF1A-$CEB2
 - **Town overlay:** 3,014 of 4,096 bytes (1,082 free)
@@ -64,17 +64,16 @@
 | BUG-43 | MED | Store-stocked items not identified — `store_restock_one` (store.s:154-163) sets `si_item_id`, `si_qty`, `si_p1` but never sets `IF_IDENTIFIED` in `si_flags`. umoria's `store_create()` calls `magicTreasure()` then `storeItemInsertIntoStock()` which sets `STR_IDENTIFIED`. Fix: `ora #IF_IDENTIFIED` on `si_flags,y` after stocking. | **Fixed** — `sro_store_p1` stores `#IF_IDENTIFIED` in `si_flags`; test 29 added to test_store.s |
 | BUG-44 | MED | Save file not found shows wrong error and wrong recovery — when LOAD returns file-not-found, the game prints "Save game corrupt" and falls through to character creation instead of returning to the New/Load/Dual menu. Fix: check the KERNAL status after LOAD; on file-not-found ($42 or carry set with no data), print "Save file not found" and jump back to the title/game-start menu. | **Fixed** — OPEN-fail path now shows "Save file not found."; `!title_load_fail` in main.s jumps back to `!title_menu_loop-` instead of `!title_new+` |
 | BUG-45 | MED | Item generation uses flat uniform distribution — `pick_item_type` (item.s) rolls uniformly from items 2–63 and accepts any whose `min_level <= dlvl+2`. This means low-level items (torches, food, basic potions) perpetually dominate every drop because they are always valid. umoria's `itemGetRandomObjectId` uses a depth-weighted allocation table (`treasure_levels`): 50% flat pick from valid pool, 50% "best of 3" curve that picks the highest-depth of 3 random items then re-rolls within that exact depth tier — creating a pronounced curve that shifts drops toward the current dungeon level. Additionally, C64's great-item (1-in-12) check bypasses `min_level` entirely, giving equal odds to a torch vs. the best item in the game; umoria multiplies the generation level but still feeds it through the curved allocator. Fix: rewrite `pick_item_type` to use a `treasure_levels`-style depth-bucketed allocator with the 50/50 flat/best-of-3 algorithm. | Open |
-| BUG-46 | MED | Monster melee attack from non-adjacent position — observed a Jackal killing the player while appearing 2+ tiles away on screen. Either the adjacency check in `monster_attack.s` is too permissive (allows attacks from distance > 1), or the viewport rendering shows stale/wrong creature positions after the fatal hit. umoria requires `abs(py-my) <= 1 && abs(px-mx) <= 1` for melee. Fix: audit `monster_adjacent` (or equivalent check) in monster_attack.s and confirm the displayed position matches the actual map coordinate used for the attack decision. | Open |
+| BUG-46 | MED | Monster melee attack from non-adjacent position — observed a Jackal killing the player while appearing 2+ tiles away on screen. Root cause: all `turn_post_action` death paths skip the post-AI render (`jmp !player_died+` before `render_viewport`), so the death screen shows the last pre-AI frame with stale monster positions. Fix: call `viewport_update` + `render_viewport` at the top of `!player_died:` so the accurate final state is visible when "YOU HAVE BEEN SLAIN." appears. | **Fixed** — `!player_died:` now renders viewport before showing death message (main.s:1389) |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | BUG-46 | Monster melee from non-adjacent position — audit adjacency check | Small |
-| 2 | BUG-45 | Item generation flat distribution — rewrite pick_item_type with depth-bucketed 50/50 flat/best-of-3 curve | Medium |
-| 3 | R16 | Save drive selection — any IEC device number (8–30) | Small |
-| 4 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | BUG-45 | Item generation flat distribution — rewrite pick_item_type with depth-bucketed 50/50 flat/best-of-3 curve | Medium |
+| 2 | R16 | Save drive selection — any IEC device number (8–30) | Small |
+| 3 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 

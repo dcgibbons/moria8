@@ -1387,6 +1387,12 @@ run_step:
     jmp !main_loop-
 
 !player_died:
+    // Render current positions before showing death message (BUG-46 fix).
+    // All death paths skip the normal post-AI render, leaving stale monster
+    // positions on screen. Render now so the killing blow is visible.
+    jsr viewport_update
+    jsr render_viewport
+
     // Show "YOU HAVE BEEN SLAIN." with -more- BEFORE disk I/O
     // so the player isn't staring at a frozen screen during file ops
     lda #<slain_str
