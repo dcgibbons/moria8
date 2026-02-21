@@ -6,6 +6,34 @@
 
 ---
 
+## BUG-42 — Fix Save/Load "Save file corrupt!" ✅ COMPLETE
+
+Completed 2026-02-20. Save files always failed to load with "Save file corrupt!" due to streaming RLE decompressor overflow.
+
+### Root Cause
+
+The streaming RLE compress/decompress functions (`rle_compress_to_file`, `rle_decompress_from_file`) had a subtle bug that caused the decompressor to produce excess output bytes, overflowing past MAP_END ($CEFF) into the I/O area. Multiple fixes were attempted (rle_flush_to_file clobbering rle_run_len, bounds check off-by-one $CF→$D0) but the underlying streaming bug persisted.
+
+Diagnosis confirmed by bypassing RLE entirely with raw map I/O — save/load worked immediately, proving block I/O and checksum logic were correct.
+
+### Additional Fixes
+
+- **LOAD_SEC_ADDR**: Changed from 5 to 2 (must match write secondary address)
+- **SAVE_VERSION**: Bumped $08→$0A (format changed: no RLE size prefix, raw map data)
+- **Title screen KERNAL LOAD**: Added CLOSE file 2 after LOAD (LOAD doesn't remove from file table); cleared status byte $90 (stale EOI from title art LOAD caused false errors in subsequent READST during save I/O)
+
+### Fix
+
+Replaced streaming RLE map compression with raw 3840-byte map I/O via `save_block`/`load_block`. Cost: ~10 extra disk blocks (~9 blocks more than compressed). Benefit: simple, proven reliable, 383 bytes of dead streaming code removed.
+
+Kept in-memory `rle_compress_map` and `rle_flush_literals` for unit tests (tests use safe workspace at $BE00 with no MAP_BASE overlap).
+
+### Size
+
+Program end: $BE48 (was $BFC7 with streaming code). 1,464 bytes headroom to $C000.
+
+---
+
 ## R15 — Multi-Disk Support (Dual-Drive + Improved Disk Swap) ✅ COMPLETE
 
 Completed 2026-02-20. Adds dual-drive device 9 support, fixes missing disk_prompt_game calls, expands disk setup sub-menu.

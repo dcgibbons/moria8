@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-20 — R15 complete)
+## Current State (2026-02-20 — R15 + BUG-42 complete)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 and OPT-4 code size optimizations complete.
 
@@ -35,6 +35,7 @@
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
 | R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants, bare-hands no-progress, rubble resistance, si_ego save/load |
 | R15 | Multi-Disk Support | ✅ Complete — save_device variable, 7 SETLFS sites parameterized, mode 2 no-ops, probe_device_9, disk setup sub-menu (S/W/9), missing disk_prompt_game calls fixed, rundual Makefile target |
+| BUG-42 | Fix Save/Load Corruption | ✅ Complete — streaming RLE decompressor overflow fixed by replacing with raw map I/O (3840 bytes); LOAD_SEC_ADDR fixed; title screen KERNAL LOAD cleanup (CLOSE file, clear $90) |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
@@ -42,7 +43,7 @@
 - **Test suites:** 23 (308 runtime tests)
 - **Compile-time asserts:** 70
 - **Source files:** ~48 .s files
-- **Program size:** $BED5 (program_end) — **811 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BE48 (program_end) — **1,464 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
 - **Banked payload:** $BDE2-$CD79 (646 bytes headroom to I/O at $D000)
 - **Town overlay:** 3,014 of 4,096 bytes (1,082 free)
