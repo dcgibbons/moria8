@@ -73,14 +73,11 @@
 
 ### What's Next
 
-| Priority | # | What | Effort |
-|----------|---|------|--------|
-| 1 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
-
 **Phase 10 — C128 Enhancements** (not started):
 
 | # | What | Summary |
 |---|------|---------|
+| 10.0 | Separate binaries | BOOT.PRG + MORIA64 + MORIA128 — prerequisite for all C128 work |
 | 10.1 | 80-column VDC mode | Second rendering backend for VDC 80x25 display |
 | 10.2 | Extended memory | C128 128KB MMU bank-switch path (no disk tier loading) |
 | 10.3 | Larger dungeon | Expand map to 120x80+, more rooms, up to 64 active monsters |
@@ -96,7 +93,6 @@
 - _(none pending)_
 
 **Low priority (polish/completeness):**
-- A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (item.s)
 - R17 Character background history + social class + variable starting gold
 - OPT-5 (Options 2+3) — further overlays for magic/spells and UI screens if main segment tightens again
