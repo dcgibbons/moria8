@@ -99,6 +99,7 @@
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - BUG-45 Item generation flat distribution — rewrite pick_item_type (medium effort)
 - R17 Character background history + social class + variable starting gold
+- OPT-5 Overlay expansion — move large modules out of main segment to reclaim RAM (dungeon_gen, magic/spells, UI screens)
 
 ---
 
@@ -201,6 +202,50 @@ The C64 version hardcodes `START_GOLD = 200` for every character (`player_create
 ### Recommendation
 
 Start with **Option B** (gender + social class + variable gold) as the minimum faithful implementation. Add full background text (Option C) only if space allows.
+
+---
+
+## OPT-5 — Overlay Expansion (Reclaim Main Segment RAM)
+
+### Context
+
+Main segment ends at ~$BF0F with ~241 bytes headroom to MAP_BASE ($C000). Banked code at $F000–$FF98 is at capacity. As new features are added, the main segment will overflow. This plan documents the available escape valves in priority order.
+
+### Current memory layout
+
+| Region | Use | Status |
+|--------|-----|--------|
+| Main PRG ends ~$BF0F | Core game code | ~241 bytes headroom |
+| $C000–$CFFF | MAP_BASE (dungeon map) | Fixed — do not touch |
+| $D000–$DFFF | I/O (SID, VIC, CIA) | Normally off-limits; can bank out during generation |
+| $E000–$EFFF | 4 KB overlay swap | TownOverlay / StartupOverlay / DeathOverlay |
+| $F000–$FF98 | Banked UI screens | At capacity |
+
+### Option 1 — Dungeon generation overlay (highest yield)
+
+`dungeon_gen.s` is the largest single module (~2,400 lines, est. 5–6 KB). It runs only when the player takes a staircase — a disk-load delay is acceptable there.
+
+- Move `dungeon_gen.s` out of the main segment into an `$E000` overlay loaded on staircase.
+- If the assembled size exceeds 4 KB, bank out I/O ($D000–$DFFF) during generation to create an 8 KB window ($D000–$EFFF). Dungeon generation never reads keyboard or draws to screen, so the I/O blackout is safe. Re-enable I/O before returning to the game loop.
+- **Estimated savings:** 5–6 KB in main segment.
+
+### Option 2 — Magic/spell overlays (medium yield)
+
+`player_magic.s` + `spell_effects.s` combined are ~2,000 lines (est. 4–5 KB). Spell casting already freezes time to prompt the user, so a brief load (or REU fetch if REU present) is acceptable.
+
+- Move both into a `MagicOverlay` at $E000, loaded on first cast per level (or on every cast if REU is unavailable).
+- **Estimated savings:** 4–5 KB in main segment.
+
+### Option 3 — Move infrequent UI screens from $F000 to $E000 overlay
+
+Help (`ui_help.s`) and Setup screens are accessed rarely. Moving them from the banked $F000 region to the $E000 overlay swap frees banked RAM for higher-frequency code.
+
+- Help and Setup become overlay slots; load on demand, evict on dismiss.
+- **Estimated savings:** frees $F000 slots for more frequently needed banked code.
+
+### Recommendation
+
+If the main segment fills: implement **Option 1** first (dungeon generation overlay). It yields the most RAM for the least gameplay disruption. Options 2 and 3 are follow-ons if further space is needed.
 
 ---
 
