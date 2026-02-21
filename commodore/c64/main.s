@@ -2060,19 +2060,10 @@ game_over_prompt:
     bne !gop_loop-
     rts                         // Q: fall through to exit_trampoline
 !gop_reboot:
-    // Stuff BASIC keyboard buffer with "RUN" + RETURN so BASIC
-    // auto-executes RUN on warm-start, re-running our BASIC stub.
-    lda #$52                    // 'R'
-    sta $0277
-    lda #$55                    // 'U'
-    sta $0278
-    lda #$4e                    // 'N'
-    sta $0279
-    lda #$0d                    // RETURN
-    sta $027a
-    lda #4
-    sta $c6                     // Keyboard buffer count = 4
-    jmp exit_trampoline
+    // Hard reset — jump through the C64 cold-start vector.
+    // KERNAL ROM is readable ($01=$36, HIRAM set), so $FFFC/$FFFD
+    // contain the reset vector ($FCE2). Equivalent to pressing reset.
+    jmp ($fffc)
 !gop_restart:
     jmp game_restart
 
