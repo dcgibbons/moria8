@@ -44,7 +44,7 @@
 - **Test suites:** 23 (308 runtime tests)
 - **Compile-time asserts:** 70
 - **Source files:** ~48 .s files
-- **Program size:** $BEED (program_end) — **275 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BED5 (program_end) — **299 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
 - **Banked payload:** $BF1A-$CEB2
 - **Town overlay:** 3,014 of 4,096 bytes (1,082 free)

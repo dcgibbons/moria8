@@ -14,11 +14,11 @@ Completed 2026-02-20. After save+quit, death, or voluntary quit, the game now sh
 R)EBOOT  S)TART  Q)UIT
 ```
 
-- **R (Reboot):** stuffs BASIC keyboard buffer with `RUN` + RETURN and exits to BASIC warm-start. BASIC auto-executes `RUN` which re-runs the BASIC stub (`SYS 2062`), reloading the game from scratch.
+- **R (Reboot):** `JMP ($FFFC)` — jumps through the C64 cold-start vector. With `$01=$36` (HIRAM set), `$FFFC/$FFFD` in KERNAL ROM hold `$FCE2`. Equivalent to pressing the reset button: reinitializes I/O chips, SID, VIC, CIA, and BASIC from scratch.
 - **S (Start over):** clears ZP game state ($2B–$8F), inventory arrays, `eff_fear_timer`, recall variables, and tier state, then jumps to `restart_entry` (before `detect_machine`) to reinitialize subsystems and return to the title screen.
 - **Q (Quit):** falls through to the existing `exit_trampoline` → BASIC warm-start (unchanged behavior).
 
-All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code size: ~165 bytes. `program_end` = $BEED (275 bytes headroom to MAP_BASE).
+All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code size: ~150 bytes. `program_end` = $BED5 (299 bytes headroom to MAP_BASE).
 
 ---
 
