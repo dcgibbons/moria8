@@ -21,11 +21,11 @@ The root Makefile delegates to `commodore/c64/Makefile`. All make targets work f
 
 ## Planning Docs
 
-- **`BUILDPLAN.md`** — active plans only (current state, priority triage, optimization plans)
-- **`DESIGN.md`** — architecture reference (memory map, design decisions, banking architecture)
-- **`BUILDPLAN_HISTORY.md`** — completed work archive (finished phases, reviews, audits)
+- **`commodore/BUILDPLAN.md`** — active plans only (current state, priority triage, optimization plans)
+- **`commodore/DESIGN.md`** — architecture reference (memory map, design decisions, banking architecture)
+- **`commodore/BUILDPLAN_HISTORY.md`** — completed work archive (finished phases, reviews, audits)
 
-When completing a feature or optimization from BUILDPLAN.md, move the finished section to BUILDPLAN_HISTORY.md.
+When completing a feature or optimization from commodore/BUILDPLAN.md, move the finished section to commodore/BUILDPLAN_HISTORY.md.
 
 ## Architecture
 
