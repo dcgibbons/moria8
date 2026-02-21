@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot.
 //
-// Results at $0400-$041B: $01 = pass, $00 = fail per test (28 tests)
+// Results at $0400-$041C: $01 = pass, $00 = fail per test (29 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #27
+    ldx #28
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -799,5 +799,46 @@ test_start:
     lda #$00
 !t28_store:
     sta tc_results + 27
+
+    // ============================================================
+    // Test 29: store_restock_one sets IF_IDENTIFIED on stocked items
+    // ============================================================
+    ldx #0
+!t29_clr:
+    cpx #STORE_MAX_ITEMS
+    bcs !t29_clr_done+
+    lda #FI_EMPTY
+    sta si_item_id,x
+    lda #0
+    sta si_flags,x
+    inx
+    jmp !t29_clr-
+!t29_clr_done:
+    lda #0
+    sta zp_store_idx
+    jsr store_restock_one
+
+    // Find first occupied slot and verify IF_IDENTIFIED is set
+    ldx #0
+!t29_scan:
+    cpx #STORE_MAX_ITEMS
+    bcs !t29_fail+              // No items stocked → fail
+    lda si_item_id,x
+    cmp #FI_EMPTY
+    beq !t29_next+
+    lda si_flags,x
+    and #IF_IDENTIFIED
+    bne !t29_pass+
+    jmp !t29_fail+              // Occupied but flag not set
+!t29_next:
+    inx
+    jmp !t29_scan-
+!t29_pass:
+    lda #$01
+    jmp !t29_store+
+!t29_fail:
+    lda #$00
+!t29_store:
+    sta tc_results + 28
 
     jmp test_exit_trampoline

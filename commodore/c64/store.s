@@ -236,13 +236,14 @@ sro_set_p1:
 !sro_light_torch:
     lda #134                    // 134 charges × 30 = 4,020 turns
 
-// Shared tail: store A → si_p1, clear si_flags and si_ego
+// Shared tail: store A → si_p1, set IF_IDENTIFIED in si_flags, clear si_ego
 // Input: A = p1 value, sb_abs_slot = target
 sro_store_p1:
     ldy sb_abs_slot
     sta si_p1,y
-    lda #0
+    lda #IF_IDENTIFIED          // Store items are always identified
     sta si_flags,y
+    lda #0
     sta si_ego,y
     rts
 
