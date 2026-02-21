@@ -97,6 +97,7 @@
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - BUG-45 Item generation flat distribution — rewrite pick_item_type (medium effort)
+- R17 Character background history + social class + variable starting gold
 
 ---
 
@@ -158,6 +159,47 @@ If tight, the number-entry routine can move to the `$F000` banked region via a t
 
 - **Probe false-negative:** slow/busy devices may time out. Consider showing "Probing…" before the KERNAL OPEN call.
 - **Mode 1 (swap) + arbitrary drive:** if the player later sets swap mode independently, `save_device` should already hold the right number. The swap/same options always set `save_device=8`, which is correct for those modes. The `#` option sets mode 2 (no swap prompts) so there is no conflict.
+
+---
+
+## R17 — Character Background History + Social Class + Variable Starting Gold
+
+### Why
+
+The C64 version hardcodes `START_GOLD = 200` for every character (`player_create.s`). umoria derives starting gold from a formula combining stats, Charisma, gender, and Social Class — the one gameplay-relevant output of the background history system. A character born a Titled Noble's only child starts with meaningfully more gold than a Serf's illegitimate child. This only affects the first shopping trip before entering the dungeon, but it is a real mechanical difference.
+
+### What umoria does
+
+1. **Background history table** — a chain of text fragments, each entry tagged with race and a probability, forming readable sentences like *"You are the illegitimate and unacknowledged child of a Serf. You have brown eyes, straight brown hair, and an average complexion."* The chain is walked until a "terminal" entry is reached, accumulating Social Class adjustments along the way.
+2. **Social Class (1–100)** — a numeric value derived from the background roll. High-class histories produce high values.
+3. **Starting gold formula:**
+   ```
+   gold = social_class × 6 + rnd(25) + 325
+   gold += stat_adj(STR) + stat_adj(INT) + stat_adj(WIS) + stat_adj(CON) + stat_adj(DEX)
+   gold -= CHA_adj × 6
+   if female: gold += 50   // "She charmed the banker into it!"
+   if gold < 80: gold = 80
+   ```
+4. **Gender** — umoria tracks Male/Female (affects the gold bonus above and pronoun display). C64 currently omits gender.
+5. **Background text** — displayed on the character sheet but has no other mechanical effect beyond the Social Class it generated.
+
+### Scope options
+
+| Option | What | Notes |
+|--------|------|-------|
+| **A** | Social Class + variable gold only | ~40 bytes — no background text, no gender. Closest mechanical parity for minimal size. |
+| **B** | Gender + Social Class + variable gold | Adds M/F prompt during character creation, pronoun tracking. |
+| **C** | Full background history text + gender + gold | Background table is large (~1–2 KB); needs banked storage. Adds flavour display on character sheet. |
+
+### Size notes
+
+- Option A (gold formula only): trivial, fits in main segment.
+- Option B: small gender prompt + one extra ZP/save byte.
+- Option C: background text table is the main cost; likely needs the `$E000` string bank or a dedicated overlay. The character sheet display would need a new screen region.
+
+### Recommendation
+
+Start with **Option B** (gender + social class + variable gold) as the minimum faithful implementation. Add full background text (Option C) only if space allows.
 
 ---
 
