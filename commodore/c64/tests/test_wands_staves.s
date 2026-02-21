@@ -45,6 +45,7 @@ test_exit_trampoline:
 #import "../stat_display.s"
 #import "../player_create.s"
 #import "../sound.s"
+#import "../dungeon_data.s"
 #import "../dungeon_gen.s"
 #import "../huffman.s"
 #import "../dungeon_features.s"

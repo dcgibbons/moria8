@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #31
+    ldx #34
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -48,6 +48,7 @@ test_exit_trampoline:
 #import "../stat_display.s"
 #import "../player_create.s"
 #import "../sound.s"
+#import "../dungeon_data.s"
 #import "../dungeon_gen.s"
 #import "../huffman.s"
 #import "../dungeon_features.s"
@@ -87,8 +88,15 @@ recall_clear: rts
 #import "../store_data.s"
 #import "../store.s"
 #import "../ui_store.s"
-#import "../ui_help.s"
+// ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
+// Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    rts
 #import "../ui_trampoline_stubs.s"
+
+.assert "Test code must not cross MAP_BASE", * < MAP_BASE, true
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -107,7 +115,7 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 32, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 35, $ff              // Test results buffer (copied to $0400 before brk)
 
 test_start:
     // Initialize result area to $ff (untested)
@@ -1783,6 +1791,185 @@ test_start:
     lda #$00
     sta tc_results+31
 !t32_done:
+
+    // ============================================================
+    // Test 33: verify_connectivity preserves I flag (sei context, connected)
+    // If verify_connectivity called cli unconditionally, the I flag would be
+    // cleared on return even though the caller held sei.  With php/plp this
+    // can't happen.  Layout: 2 rooms + corridor, connected.
+    // ============================================================
+    jsr fill_map_rock
+    lda #2
+    sta room_count
+    // Room 0 at (10,10,5,3)
+    lda #10
+    sta dg_room_x
+    sta dg_room_y
+    sta room_x
+    sta room_y
+    lda #5
+    sta dg_room_w
+    sta room_w
+    lda #3
+    sta dg_room_h
+    sta room_h
+    jsr draw_dungeon_room
+    // Room 1 at (30,10,5,3)
+    lda #30
+    sta dg_room_x
+    sta room_x + 1
+    lda #10
+    sta dg_room_y
+    sta room_y + 1
+    lda #5
+    sta dg_room_w
+    sta room_w + 1
+    lda #3
+    sta dg_room_h
+    sta room_h + 1
+    jsr draw_dungeon_room
+    // Connect rooms
+    lda #12
+    sta dg_cx1
+    lda #32
+    sta dg_cx2
+    lda #11
+    sta dg_cy1
+    jsr carve_h_corridor
+    lda #12
+    sta stairs_up_x
+    lda #11
+    sta stairs_up_y
+    // Call with sei active; I flag must still be set on return
+    sei
+    jsr verify_connectivity     // Connected → carry clear; I flag must stay set
+    php                         // Capture processor status
+    pla                         // Into A
+    and #$04                    // Bit 2 = I flag
+    beq !t33_fail+              // I=0 means cli was called — FAIL
+    lda #$01
+    sta tc_results + 32
+    jmp !t33_done+
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+!t33_done:
+    cli                         // Restore normal interrupt state
+
+    // ============================================================
+    // Test 34: verify_connectivity preserves I flag (sei context, disconnected)
+    // Same check on the failure/carry-set path (unreachable room).
+    // ============================================================
+    jsr fill_map_rock
+    lda #2
+    sta room_count
+    // Room 0 at (10,10,5,3)
+    lda #10
+    sta dg_room_x
+    sta dg_room_y
+    sta room_x
+    sta room_y
+    lda #5
+    sta dg_room_w
+    sta room_w
+    lda #3
+    sta dg_room_h
+    sta room_h
+    jsr draw_dungeon_room
+    // Room 1 at (50,30,5,3) — isolated (no corridor)
+    lda #50
+    sta dg_room_x
+    sta room_x + 1
+    lda #30
+    sta dg_room_y
+    sta room_y + 1
+    lda #5
+    sta dg_room_w
+    sta room_w + 1
+    lda #3
+    sta dg_room_h
+    sta room_h + 1
+    jsr draw_dungeon_room
+    lda #12
+    sta stairs_up_x
+    lda #11
+    sta stairs_up_y
+    // Call with sei; carry set expected (unreachable); I flag must stay set
+    sei
+    jsr verify_connectivity     // Disconnected → carry set; I flag must stay set
+    php
+    pla
+    and #$04
+    beq !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !t34_done+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+!t34_done:
+    cli
+
+    // ============================================================
+    // Test 35: verify_connectivity preserves I=0 in normal (cli) context
+    // Ensures php/plp doesn't accidentally leave IRQs disabled after a
+    // call made without sei.  Layout: connected (success path).
+    // ============================================================
+    jsr fill_map_rock
+    lda #2
+    sta room_count
+    // Room 0 at (10,10,5,3)
+    lda #10
+    sta dg_room_x
+    sta dg_room_y
+    sta room_x
+    sta room_y
+    lda #5
+    sta dg_room_w
+    sta room_w
+    lda #3
+    sta dg_room_h
+    sta room_h
+    jsr draw_dungeon_room
+    // Room 1 at (30,10,5,3)
+    lda #30
+    sta dg_room_x
+    sta room_x + 1
+    lda #10
+    sta dg_room_y
+    sta room_y + 1
+    lda #5
+    sta dg_room_w
+    sta room_w + 1
+    lda #3
+    sta dg_room_h
+    sta room_h + 1
+    jsr draw_dungeon_room
+    lda #12
+    sta dg_cx1
+    lda #32
+    sta dg_cx2
+    lda #11
+    sta dg_cy1
+    jsr carve_h_corridor
+    lda #12
+    sta stairs_up_x
+    lda #11
+    sta stairs_up_y
+    // Call without sei (I=0); I flag must still be clear on return
+    cli
+    jsr verify_connectivity     // Connected → carry clear; I must stay clear
+    php
+    pla
+    and #$04                    // I flag
+    bne !t35_fail+              // I=1 means sei leaked — FAIL
+    lda #$01
+    sta tc_results + 34
+    jmp !t35_done+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+!t35_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

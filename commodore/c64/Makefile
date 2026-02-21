@@ -32,6 +32,7 @@ TIER_PRGS   = $(OUT)/monster.db.1 $(OUT)/monster.db.2 $(OUT)/monster.db.3 $(OUT)
 OVL_TOWN    = $(OUT)/ovl.town
 OVL_START   = $(OUT)/ovl.start
 OVL_DEATH   = $(OUT)/ovl.death
+OVL_GEN     = $(OUT)/ovl.gen
 DISK_IMAGE  = $(OUT)/moria8.d64
 DISK_NAME   = "moria8,m8"
 DISKART     = ../../tools/diskart.py
@@ -64,6 +65,7 @@ $(MAIN_PRG): $(SOURCES) $(KICKASS) | $(OUT)
 $(OVL_TOWN): $(MAIN_PRG)
 $(OVL_START): $(MAIN_PRG)
 $(OVL_DEATH): $(MAIN_PRG)
+$(OVL_GEN): $(MAIN_PRG)
 
 # Title screen art — standalone PRG loaded from disk at runtime
 $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
@@ -108,7 +110,7 @@ test: $(MAIN_PRG)
 	./run_tests.sh
 
 # Create a 1541 .d64 disk image with PETSCII directory art
-disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) | $(OUT)
+disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) | $(OUT)
 	printf '\x01\x08' > $(OUT)/empty.prg
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
@@ -126,7 +128,8 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START)
 	         -write $(OUT)/monster.db.4 "monster.db.4" \
 	         -write $(OVL_TOWN) "ovl.town" \
 	         -write $(OVL_START) "ovl.start" \
-	         -write $(OVL_DEATH) "ovl.death"
+	         -write $(OVL_DEATH) "ovl.death" \
+	         -write $(OVL_GEN) "ovl.gen"
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(OUT)/empty.prg
 

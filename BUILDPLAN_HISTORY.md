@@ -6,6 +6,30 @@
 
 ---
 
+## OPT-5 — Overlay Expansion (dungeon_gen.s → $E000 overlay) ✅ COMPLETE
+
+Completed 2026-02-21. Moved `dungeon_gen.s` out of the main segment into a new `$E000` overlay (`OVL_DUNGEON_GEN = 4`, disk file `OVL.GEN`).
+
+**Approach:** Split the file into:
+- `dungeon_data.s` (new, main segment, ~200 bytes) — shared constants (TILE_*, FLAG_*, MAP_*, room constants), `map_row_lo/hi` row address table, store position/door tables, room data arrays, stairs coordinates, `level_entry_dir`.
+- `dungeon_gen.s` (overlay, 3,529 bytes) — all generation code (town_generate, dungeon_generate, BFS connectivity check, etc.) plus private constants (STORE_W/H, ROOM_MIN/MAX) and scratch variables (dg_*, bfs_*).
+
+**Changes:**
+- `dungeon_data.s` — new file; extracted from dungeon_gen.s
+- `dungeon_gen.s` — stripped to generation code + private data only
+- `main.s` — added `DungeonGenOverlay` segmentdef, swapped import, added `lda #OVL_DUNGEON_GEN; jsr overlay_load` before each of 3 `jsr level_generate` calls
+- `overlay.s` — added `OVL_DUNGEON_GEN = 4`, `OVL_COUNT = 4`, `OVL.GEN` filename data, expanded REU arrays to 5 entries
+- `reu.s` — added `reu_fn_o4` ("OVL.GEN"), extended stash loop from `cpx #4` to `cpx #5`
+- `Makefile` — added `OVL_GEN`, disk dependency and write
+- 18 test files — added `#import "../dungeon_data.s"` before `#import "../dungeon_gen.s"`
+
+**Results:**
+- Program end: $BFA3 → $B201 (**3,490 bytes reclaimed**)
+- Headroom to MAP_BASE: 93 → **3,583 bytes**
+- DungeonGen overlay: 3,529 bytes (under 4 KB)
+
+---
+
 ## R12 — Game-Over Loop ✅ COMPLETE
 
 Completed 2026-02-20. After save+quit, death, or voluntary quit, the game now shows:
@@ -19,6 +43,62 @@ R)EBOOT  S)TART  Q)UIT
 - **Q (Quit):** falls through to the existing `exit_trampoline` → BASIC warm-start (unchanged behavior).
 
 All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code size: ~150 bytes. `program_end` = $BED5 (299 bytes headroom to MAP_BASE).
+
+---
+
+## BUG-47 — OPT-5 Overlay IRQ Lockup (Dungeon Descent Hang) ✅ COMPLETE
+
+Completed 2026-02-21. After OPT-5 moved `dungeon_gen.s` to a `$E000` overlay, descending to dungeon level 1 hung every time; the town level worked fine.
+
+### Root Cause
+
+The `tramp_level_generate` trampoline does `sei` + `$01=$34` (KERNAL ROM off, all RAM at $E000-$FFFF) before calling the overlay, and `$01=$36` + `cli` after. With KERNAL ROM off the hardware IRQ vector at `$FFFE/$FFFF` reads from uninitialized RAM — any `cli` while `$01=$34` is in effect is fatal.
+
+Three functions called `cli` unconditionally at return:
+
+1. **`verify_connectivity`** (dungeon_gen.s) — had `sei` at entry and `cli` at exit.
+2. **`tramp_assign_special_room`** (main.s) — saved `$01`, set `$34`, called the overlay function, restored `$01`, then `cli`. This fires at **step 4 of 15** in `dungeon_generate`, leaving ~50,000 cycles of exposed IRQ window before the outer trampoline's `cli`.
+3. **`tramp_vault_seal_entrance`** (main.s) — same pattern.
+
+Town worked because `town_generate` never calls `verify_connectivity` or either trampoline.
+
+### Fix
+
+All three functions now use `php` at entry / `plp` at exit:
+
+```asm
+verify_connectivity:
+    php                    // Save interrupt state — caller may already be in sei context
+    sei
+    ...
+    plp                    // Restore interrupt state (overwrites carry, so set after)
+    clc / sec
+    rts
+
+tramp_assign_special_room:
+    php                    // Save interrupt state
+    sei
+    lda $01
+    pha                    // Save caller's $01 (may be $34 if called from overlay)
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr assign_special_room
+    pla
+    sta $01                // Restore banking state
+    plp                    // Restore interrupt state — no cli
+    rts
+```
+
+Stack discipline: `php` before `pha`; on exit `pla` (restores `$01`), then `plp` (restores flags). `clc`/`sec` must come *after* `plp` since `plp` overwrites all flags.
+
+### Unit Tests Added
+
+Three interrupt-preservation tests added to `test_dungeon.s` (tests 33–35):
+- Test 33: `verify_connectivity` in `sei` context (connected) — I flag stays set on return.
+- Test 34: `verify_connectivity` in `sei` context (disconnected/carry-set path) — I flag stays set.
+- Test 35: `verify_connectivity` in `cli` context (connected) — I flag stays clear (no sei leak).
+
+Also added a compile-time `MAP_BASE` size guard (`.assert "Test code must not cross MAP_BASE"`) to test_dungeon.s after the test body grew past $C000 (due to OPT-5 item.s changes) and silently corrupted the test code. Fixed by stubbing `ui_help.s` inline (~900 bytes saved).
 
 ---
 
@@ -4004,3 +4084,52 @@ All paths share a single copy loop (`!cgn_copy`), eliminating a duplicate copy r
 **Files modified:** `main.s` (recall handler + two new state variables)
 
 **Size impact:** +52 bytes (program_end $BB8B → $BBBF). All 22 test suites pass.
+
+---
+
+## BUG-45 — Item Generation Flat Distribution Fix (2026-02-20)
+
+### Problem
+
+`pick_item_type` (item.s) used flat uniform rejection sampling: roll random [2,63], accept if `min_level <= dlvl+2`. Low-level items (torches, food, basic potions) perpetually dominated every drop because they were always valid candidates. The 1-in-12 "great item" check bypassed `min_level` entirely, giving equal odds to a torch vs. the best item in the game.
+
+### Solution
+
+Rewrote `pick_item_type` with a umoria-faithful depth-bucketed 50/50 flat/best-of-3 algorithm:
+
+1. **Compile-time sorted item table** (`pit_sorted`, 62 bytes) — all 62 non-gold items (IDs 2–63) sorted ascending by `it_min_level`. Items at the same level are grouped together.
+
+2. **Cumulative level bounds table** (`pit_level_bounds`, 13 bytes) — `pit_level_bounds[L]` = count of items with `min_level <= L`. Levels 0–12 covered. Enables O(1) pool size lookup.
+
+3. **Algorithm:**
+   - Effective level = `min(dlvl + 2, 12)` (preserves the existing +2 bonus)
+   - Great item check (1/12 chance): sets effective level to 12 (full pool access)
+   - Pool size = `pit_level_bounds[effective_level]`
+   - 50% chance: **flat pick** — uniform random from entire level-appropriate pool
+   - 50% chance: **best-of-3** — pick 3 random indices, keep the highest (biases toward deeper items), then re-roll uniformly within the winner's exact depth tier
+
+4. **Re-roll within tier** — after best-of-3 selects a winning index, look up the item's `min_level`, find the tier boundaries from `pit_level_bounds`, and pick a new random index within that tier. This ensures uniform distribution within each depth tier while the best-of-3 determines which tier gets selected.
+
+### Level distribution
+
+| Level | Items | Cumulative | Examples |
+|-------|-------|------------|---------|
+| 0 | 5 | 5 | Torch, Food, Flask of Oil, Shovel, Pick |
+| 1 | 15 | 20 | Dagger, Short Sword, Robe, Leather Armor, Potions |
+| 2 | 11 | 31 | Mace, Shield, Lantern, Books 1 |
+| 3 | 11 | 42 | Long Sword, Chain Mail, Wands, Staves |
+| 4 | 9 | 51 | Helm, Rings, Books 2 |
+| 5 | 5 | 56 | Strength Ring, Word of Recall, Enchant scrolls |
+| 6 | 2 | 58 | Enchant Weapon/Armor scrolls |
+| 8 | 2 | 60 | Books 3 |
+| 12 | 2 | 62 | Books 4 (endgame) |
+
+### Files modified
+
+1. **`item.s`** — replaced `pick_item_type` (lines 1344–1389): removed flat rejection sampling + `pit_attempts` variable, added `pit_sorted` (62 bytes), `pit_level_bounds` (13 bytes), and new depth-bucketed algorithm (~113 bytes code). Uses `zp_temp0`–`zp_temp2` for scratch (safe: `rng_range` only uses `zp_temp4`). Y register holds effective level across `rng_range` calls (Y preserved by `rng_range`).
+
+2. **`tests/test_item.s`** — added Test 43 (depth-curve distribution verification: 60 iterations at dlvl=8, verifies ≥15 items have `min_level ≥ 3`). Updated copy loop `ldx #42` and `tc_results` buffer to 43 entries. Added `sei` + `:BankOutBasic()` to exit trampoline (tc_results at $AA16 is in BASIC ROM range; ensures RAM is readable during copy).
+
+3. **`run_tests.sh`** — updated item test count from 42 to 43.
+
+**Size impact:** +142 bytes (program_end $BF15 → $BFA3, 93 bytes headroom). All 23 test suites pass (309 runtime tests).

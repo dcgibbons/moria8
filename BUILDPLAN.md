@@ -5,9 +5,9 @@
 
 ---
 
-## Current State (2026-02-20 — R12 complete)
+## Current State (2026-02-21 — OPT-5 complete)
 
-**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 and OPT-4 code size optimizations complete.
+**All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1, OPT-4, OPT-5 code size optimizations complete.
 
 ### Phase Completion Summary
 
@@ -30,6 +30,7 @@
 | OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
 | OPT-4 | Codebase-Wide Size Optimization | ✅ Complete — 1,098 bytes reclaimed across 9 items (huff_print_msg, kill/wake helpers, projectile msg dedup, tohit unification, shared trace+direction, adjacent-tile iterator, 16-bit HP damage, effect tick tables, Huffman strings) |
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
+| OPT-5 | Overlay Expansion (dungeon gen) | ✅ Complete — dungeon_gen.s → $E000 overlay; 3,490 bytes reclaimed ($B201 program_end, 3,583 bytes headroom) |
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader ($E000 overlay), monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
@@ -41,13 +42,14 @@
 
 ### Build Stats
 
-- **Test suites:** 23 (308 runtime tests)
-- **Compile-time asserts:** 70
-- **Source files:** ~48 .s files
-- **Program size:** $BF15 (program_end) — **235 bytes headroom** to MAP_BASE ($C000)
+- **Test suites:** 23 (312 runtime tests)
+- **Compile-time asserts:** 71
+- **Source files:** ~49 .s files
+- **Program size:** $B201 (program_end) — **3,583 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
-- **Banked payload:** $BF1A-$CEB2
-- **Town overlay:** 3,014 of 4,096 bytes (1,082 free)
+- **Banked payload:** $B22E-$C1C6
+- **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
+- **DungeonGen overlay:** 3,529 of 4,096 bytes (567 free)
 
 ### Known Remaining Issues
 
@@ -63,17 +65,17 @@
 | BUG-40 | MED | Creature name shows "?" in monster recall from town — after ascending from dungeon, current_tier=0 but cr_name_hi[] holds stale $E0xx pointers; recall command finds stale cr_display[] match and creature_get_name returns "?" | **Fixed** — cgn_no_tier path reloads the appropriate tier when stale $E0xx pointer found |
 | BUG-43 | MED | Store-stocked items not identified — `store_restock_one` (store.s:154-163) sets `si_item_id`, `si_qty`, `si_p1` but never sets `IF_IDENTIFIED` in `si_flags`. umoria's `store_create()` calls `magicTreasure()` then `storeItemInsertIntoStock()` which sets `STR_IDENTIFIED`. Fix: `ora #IF_IDENTIFIED` on `si_flags,y` after stocking. | **Fixed** — `sro_store_p1` stores `#IF_IDENTIFIED` in `si_flags`; test 29 added to test_store.s |
 | BUG-44 | MED | Save file not found shows wrong error and wrong recovery — when LOAD returns file-not-found, the game prints "Save game corrupt" and falls through to character creation instead of returning to the New/Load/Dual menu. Fix: check the KERNAL status after LOAD; on file-not-found ($42 or carry set with no data), print "Save file not found" and jump back to the title/game-start menu. | **Fixed** — OPEN-fail path now shows "Save file not found."; `!title_load_fail` in main.s jumps back to `!title_menu_loop-` instead of `!title_new+` |
-| BUG-45 | MED | Item generation uses flat uniform distribution — `pick_item_type` (item.s) rolls uniformly from items 2–63 and accepts any whose `min_level <= dlvl+2`. This means low-level items (torches, food, basic potions) perpetually dominate every drop because they are always valid. umoria's `itemGetRandomObjectId` uses a depth-weighted allocation table (`treasure_levels`): 50% flat pick from valid pool, 50% "best of 3" curve that picks the highest-depth of 3 random items then re-rolls within that exact depth tier — creating a pronounced curve that shifts drops toward the current dungeon level. Additionally, C64's great-item (1-in-12) check bypasses `min_level` entirely, giving equal odds to a torch vs. the best item in the game; umoria multiplies the generation level but still feeds it through the curved allocator. Fix: rewrite `pick_item_type` to use a `treasure_levels`-style depth-bucketed allocator with the 50/50 flat/best-of-3 algorithm. | Open |
+| BUG-45 | MED | Item generation uses flat uniform distribution — `pick_item_type` (item.s) rolls uniformly from items 2–63 and accepts any whose `min_level <= dlvl+2`. This means low-level items (torches, food, basic potions) perpetually dominate every drop because they are always valid. umoria's `itemGetRandomObjectId` uses a depth-weighted allocation table (`treasure_levels`): 50% flat pick from valid pool, 50% "best of 3" curve that picks the highest-depth of 3 random items then re-rolls within that exact depth tier — creating a pronounced curve that shifts drops toward the current dungeon level. Additionally, C64's great-item (1-in-12) check bypasses `min_level` entirely, giving equal odds to a torch vs. the best item in the game; umoria multiplies the generation level but still feeds it through the curved allocator. Fix: rewrite `pick_item_type` to use a `treasure_levels`-style depth-bucketed allocator with the 50/50 flat/best-of-3 algorithm. | **Fixed** — depth-bucketed 50/50 flat/best-of-3 allocator with 62-item sorted table and 13-level cumulative bounds; great items (1/12) access full pool |
 | BUG-46 | MED | Monster melee attack from non-adjacent position — observed a Jackal killing the player while appearing 2+ tiles away on screen. Root cause: all `turn_post_action` death paths skip the post-AI render (`jmp !player_died+` before `render_viewport`), so the death screen shows the last pre-AI frame with stale monster positions. Fix: call `viewport_update` + `render_viewport` at the top of `!player_died:` so the accurate final state is visible when "YOU HAVE BEEN SLAIN." appears. | **Fixed** — `!player_died:` now renders viewport before showing death message (main.s:1389) |
+| BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung every time. `verify_connectivity`, `tramp_assign_special_room`, and `tramp_vault_seal_entrance` each called `cli` unconditionally at return. When invoked while `$01=$34` (KERNAL ROM off, KERNAL IRQ vector missing), CIA1 timer IRQ fires into garbage RAM → wild jump → hang. Fix: `php` at entry / `plp` at exit in all three functions preserves caller's interrupt state. Also added 3 interrupt-preservation unit tests to `test_dungeon.s` (tests 33–35). | **Fixed** — `php`/`plp` in verify_connectivity (dungeon_gen.s) and both trampolines (main.s); 35/35 dungeon tests pass |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### What's Next
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | BUG-45 | Item generation flat distribution — rewrite pick_item_type with depth-bucketed 50/50 flat/best-of-3 curve | Medium |
-| 2 | R16 | Save drive selection — any IEC device number (8–30) | Small |
-| 3 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | R16 | Save drive selection — any IEC device number (8–30) | Small |
+| 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -95,10 +97,9 @@
 
 **Low priority (polish/completeness):**
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
-- A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
-- BUG-45 Item generation flat distribution — rewrite pick_item_type (medium effort)
+- A6 Large file split — opportunistic refactoring (item.s)
 - R17 Character background history + social class + variable starting gold
-- OPT-5 Overlay expansion — move large modules out of main segment to reclaim RAM (dungeon_gen, magic/spells, UI screens)
+- OPT-5 (Options 2+3) — further overlays for magic/spells and UI screens if main segment tightens again
 
 ---
 
@@ -201,51 +202,5 @@ The C64 version hardcodes `START_GOLD = 200` for every character (`player_create
 ### Recommendation
 
 Start with **Option B** (gender + social class + variable gold) as the minimum faithful implementation. Add full background text (Option C) only if space allows.
-
----
-
-## OPT-5 — Overlay Expansion (Reclaim Main Segment RAM)
-
-### Context
-
-Main segment ends at ~$BF0F with ~241 bytes headroom to MAP_BASE ($C000). Banked code at $F000–$FF98 is at capacity. As new features are added, the main segment will overflow. This plan documents the available escape valves in priority order.
-
-### Current memory layout
-
-| Region | Use | Status |
-|--------|-----|--------|
-| Main PRG ends ~$BF0F | Core game code | ~241 bytes headroom |
-| $C000–$CFFF | MAP_BASE (dungeon map) | Fixed — do not touch |
-| $D000–$DFFF | I/O (SID, VIC, CIA) | Normally off-limits; can bank out during generation |
-| $E000–$EFFF | 4 KB overlay swap | TownOverlay / StartupOverlay / DeathOverlay |
-| $F000–$FF98 | Banked UI screens | At capacity |
-
-### Option 1 — Dungeon generation overlay (highest yield)
-
-`dungeon_gen.s` is the largest single module (~2,400 lines, est. 5–6 KB). It runs only when the player takes a staircase — a disk-load delay is acceptable there.
-
-- Move `dungeon_gen.s` out of the main segment into an `$E000` overlay loaded on staircase.
-- If the assembled size exceeds 4 KB, bank out I/O ($D000–$DFFF) during generation to create an 8 KB window ($D000–$EFFF). Dungeon generation never reads keyboard or draws to screen, so the I/O blackout is safe. Re-enable I/O before returning to the game loop.
-- **Estimated savings:** 5–6 KB in main segment.
-
-### Option 2 — Magic/spell overlays (medium yield)
-
-`player_magic.s` + `spell_effects.s` combined are ~2,000 lines (est. 4–5 KB). Spell casting already freezes time to prompt the user, so a brief load (or REU fetch if REU present) is acceptable.
-
-- Move both into a `MagicOverlay` at $E000, loaded on first cast per level (or on every cast if REU is unavailable).
-- **Estimated savings:** 4–5 KB in main segment.
-
-### Option 3 — Move infrequent UI screens from $F000 to $E000 overlay
-
-Help (`ui_help.s`) and Setup screens are accessed rarely. Moving them from the banked $F000 region to the $E000 overlay swap frees banked RAM for higher-frequency code.
-
-- Help and Setup become overlay slots; load on demand, evict on dismiss.
-- **Estimated savings:** frees $F000 slots for more frequently needed banked code.
-
-### Recommendation
-
-If the main segment fills: implement **Option 1** first (dungeon generation overlay). It yields the most RAM for the least gameplay disruption. Options 2 and 3 are follow-ons if further space is needed.
-
----
 
 

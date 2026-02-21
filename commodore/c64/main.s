@@ -10,9 +10,10 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
-.segmentdef StartupOverlay [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
-.segmentdef TownOverlay [outPrg="out/ovl.town", start=$e000, min=$e000, max=$efff]
-.segmentdef DeathOverlay [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
+.segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
+.segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]
+.segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
+.segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
@@ -82,7 +83,7 @@ exit_trampoline:
 #import "stat_display.s"
 #import "sound.s"
 #import "huffman.s"
-#import "dungeon_gen.s"
+#import "dungeon_data.s"
 #import "dungeon_features.s"
 #import "monster.s"
 #import "tier_manager.s"
@@ -431,7 +432,9 @@ restart_entry:
     sta level_entry_dir
     lda #$ff
     sta zp_run_dir              // Not running
-    jsr level_generate
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    jsr tramp_level_generate
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility       // Reveal starting area
@@ -758,7 +761,9 @@ load_resume_game:
     sta level_entry_dir         // 0 = descended
     lda #$ff
     sta zp_run_dir              // Stop running on level change
-    jsr level_generate
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    jsr tramp_level_generate
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility
@@ -809,7 +814,9 @@ load_resume_game:
     sta level_entry_dir         // 1 = ascended
     lda #$ff
     sta zp_run_dir              // Stop running on level change
-    jsr level_generate
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    jsr tramp_level_generate
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility
@@ -1467,21 +1474,52 @@ slain_str:
     .text "You have been slain." ; .byte 0
 
 // ============================================================
+// Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
+// ============================================================
+// KERNAL must be off ($34) while executing overlay code at $E000.
+// IRQs must stay DISABLED for the entire overlay execution:
+//   - tramp_level_generate holds sei from entry to exit
+//   - inner trampolines (tramp_assign_special_room, tramp_vault_seal_entrance,
+//     verify_connectivity) use php/plp to preserve the caller's interrupt state
+//     instead of cli, so IRQs remain disabled throughout dungeon generation
+tramp_level_generate:
+    sei
+    lda #BANK_NO_ROMS           // $34 — KERNAL off, I/O on; $E000 = overlay RAM
+    sta $01
+    jsr level_generate          // executes from DungeonGenOverlay at $E000
+    lda #BANK_NO_BASIC          // $36 — KERNAL back on; restore normal game banking
+    sta $01
+    cli
+    rts
+
+// ============================================================
 // Special rooms trampolines — SEI + bank out KERNAL, call $F000+
 // ============================================================
 tramp_assign_special_room:
+    php                         // Save interrupt state (caller may be in sei context)
     sei
+    lda $01
+    pha                         // Save caller's $01 (may be $34 if called from overlay)
     lda #BANK_NO_ROMS
     sta $01
     jsr assign_special_room
-    jmp tramp_sr_epilogue
+    pla
+    sta $01                     // Restore caller's banking state
+    plp                         // Restore interrupt state (no cli — would re-enable IRQs with $01=$34)
+    rts
 
 tramp_vault_seal_entrance:
+    php                         // Save interrupt state (caller may be in sei context)
     sei
+    lda $01
+    pha                         // Save caller's $01 (may be $34 if called from overlay)
     lda #BANK_NO_ROMS
     sta $01
     jsr vault_seal_entrance
-    jmp tramp_sr_epilogue
+    pla
+    sta $01                     // Restore caller's banking state
+    plp                         // Restore interrupt state
+    rts
 
 tramp_spawn_special_room_monsters:
     sei
@@ -2230,3 +2268,15 @@ ovl_start_end:
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
+
+// ============================================================
+// Dungeon generation overlay — town + dungeon generation at $E000
+// ============================================================
+// This segment produces out/ovl.gen (loaded from disk as OVL.GEN).
+// Loaded on demand whenever stairs are used or a new game starts.
+// Shared constants and data tables stay in dungeon_data.s (main segment).
+.segment DungeonGenOverlay
+    #import "dungeon_gen.s"
+ovl_gen_end:
+.print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
+.assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true

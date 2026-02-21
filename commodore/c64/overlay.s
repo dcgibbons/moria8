@@ -5,22 +5,24 @@
 // When an overlay loads, tier data is invalidated (and vice versa).
 //
 // Overlay IDs:
-//   OVL_NONE    = 0  No overlay (tier data or empty)
-//   OVL_STARTUP = 1  Title screen + character creation
-//   OVL_TOWN    = 2  Stores
-//   OVL_DEATH   = 3  Score + high scores
+//   OVL_NONE        = 0  No overlay (tier data or empty)
+//   OVL_STARTUP     = 1  Title screen + character creation
+//   OVL_TOWN        = 2  Stores
+//   OVL_DEATH       = 3  Score + high scores
+//   OVL_DUNGEON_GEN = 4  Town + dungeon generation
 //
-// Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH
+// Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN
 // REU: stashed alongside creature tiers at startup
 
 // ============================================================
 // Constants
 // ============================================================
-.const OVL_NONE    = 0
-.const OVL_STARTUP = 1
-.const OVL_TOWN    = 2
-.const OVL_DEATH   = 3
-.const OVL_COUNT   = 3
+.const OVL_NONE        = 0
+.const OVL_STARTUP     = 1
+.const OVL_TOWN        = 2
+.const OVL_DEATH       = 3
+.const OVL_DUNGEON_GEN = 4
+.const OVL_COUNT       = 4
 
 // ============================================================
 // State
@@ -162,21 +164,22 @@ overlay_fetch_reu:
 // ============================================================
 ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
 ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
-ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48   // "OVL.DEATH"
+ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
+ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
 
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen
 ovl_fn_len:
-    .byte 9, 8, 9           // "OVL.START"=9, "OVL.TOWN"=8, "OVL.DEATH"=9
+    .byte 9, 8, 9, 7        // "OVL.START"=9, "OVL.TOWN"=8, "OVL.DEATH"=9, "OVL.GEN"=7
 
 
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
 // ============================================================
-// Index 0 unused (OVL_NONE), indices 1-3 = overlay IDs
-ovl_reu_start_lo: .byte 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0
+// Index 0 unused (OVL_NONE), indices 1-4 = overlay IDs
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0

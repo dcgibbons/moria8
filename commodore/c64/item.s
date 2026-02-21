@@ -1343,50 +1343,132 @@ tunnel_spawn_gold:
 
 // ============================================================
 // pick_item_type — Select a random non-gold item type for floor spawning
-// Rejection sampling: roll random type 2-46, accept if min_level <= dlvl+2.
-// 1-in-12 "great item" chance bypasses min_level check.
-// Fallback after 50 tries: return type 15 (ration of food).
-// Output: A = item type ID (2-46)
+// Uses umoria-faithful depth-bucketed 50/50 flat/best-of-3 algorithm.
+// 50% flat pick from level-appropriate pool.
+// 50% best-of-3 random picks (highest index wins), then re-roll
+//      within the winner's depth tier for uniform intra-tier distribution.
+// 1-in-12 "great item" chance sets effective level to max (full pool).
+// Output: A = item type ID (2-63)
 // Clobbers: A, X, Y
+// Uses: zp_temp0 (pool_size), zp_temp1 (best_idx), zp_temp2 (tier_lo)
+//       zp_temp4 used internally by rng_range
 // ============================================================
-pit_attempts: .byte 0
+.const PIT_MAX_LEVEL = 12
+
+// Items 2-63 sorted ascending by it_min_level
+pit_sorted:
+    // Level 0 (5 items)
+    .byte 13, 15, 61, 62, 63
+    // Level 1 (15 items)
+    .byte 2, 3, 6, 11, 12, 16, 17, 19, 20, 28, 29, 37, 51, 52, 54
+    // Level 2 (11 items)
+    .byte 5, 7, 9, 14, 21, 30, 31, 47, 48, 49, 53
+    // Level 3 (11 items)
+    .byte 4, 10, 18, 22, 25, 36, 39, 43, 44, 46, 50
+    // Level 4 (9 items)
+    .byte 8, 23, 27, 33, 38, 40, 42, 55, 58
+    // Level 5 (5 items)
+    .byte 24, 26, 32, 41, 45
+    // Level 6 (2 items)
+    .byte 34, 35
+    // Level 8 (2 items)
+    .byte 56, 59
+    // Level 12 (2 items)
+    .byte 57, 60
+
+// Cumulative item count per level (0-12)
+pit_level_bounds:
+    .byte 5      // level 0: 5 items
+    .byte 20     // level 1: +15 = 20
+    .byte 31     // level 2: +11 = 31
+    .byte 42     // level 3: +11 = 42
+    .byte 51     // level 4: +9 = 51
+    .byte 56     // level 5: +5 = 56
+    .byte 58     // level 6: +2 = 58
+    .byte 58     // level 7: (no items)
+    .byte 60     // level 8: +2 = 60
+    .byte 60     // level 9: (no items)
+    .byte 60     // level 10: (no items)
+    .byte 60     // level 11: (no items)
+    .byte 62     // level 12: +2 = 62
 
 pick_item_type:
-    lda #50
-    sta pit_attempts
-
-!pit_loop:
-    // Roll type = rng_range(62) + 2 → range [2, 63]
-    // Types 2-63 cover weapons, armor, food, potions, scrolls, rings, wands, staves, bows, ammo, books, digging
-    lda #62
-    jsr rng_range
-    clc
-    adc #2
-    sta zp_temp0                // Save candidate type
-
-    // 1-in-12 "great item" chance: bypass min_level check
-    lda #12
-    jsr rng_range
-    beq !pit_accept+            // rng(12) == 0 → great item
-
-    // Check min_level: accept if it_min_level[type] <= dlvl + 2
-    ldx zp_temp0
+    // Calculate effective level = min(dlvl + 2, PIT_MAX_LEVEL)
     lda zp_player_dlvl
     clc
-    adc #2                      // A = dlvl + 2
-    cmp it_min_level,x          // dlvl+2 >= min_level?
-    bcs !pit_accept+            // Yes → accept
+    adc #2
+    cmp #PIT_MAX_LEVEL + 1
+    bcc !pit_level_ok+
+    lda #PIT_MAX_LEVEL
+!pit_level_ok:
+    tay                          // Y = eff_level (preserved by rng_range)
 
-    dec pit_attempts
-    bne !pit_loop-
+    // Great item check: 1/12 chance → full pool access
+    lda #12
+    jsr rng_range                // [0, 11]
+    bne !pit_no_great+
+    ldy #PIT_MAX_LEVEL
+!pit_no_great:
 
-    // Fallback: ration of food (always valid)
-    lda #15
-    rts
+    // pool_size = pit_level_bounds[eff_level]
+    lda pit_level_bounds,y
+    sta zp_temp0                 // zp_temp0 = pool_size
 
-!pit_accept:
+    // 50/50 coin flip: flat pick vs best-of-3
+    lda #2
+    jsr rng_range                // [0, 1]
+    bne !pit_best_of_3+
+
+    // --- Flat pick: uniform random from pool ---
     lda zp_temp0
+    jsr rng_range                // [0, pool_size-1]
+!pit_return_idx:
+    tax
+    lda pit_sorted,x
     rts
+
+!pit_best_of_3:
+    // Pick 3 random indices, keep the highest (biases toward deeper items)
+    lda zp_temp0
+    jsr rng_range
+    sta zp_temp1                 // zp_temp1 = best_idx
+
+    lda zp_temp0
+    jsr rng_range
+    cmp zp_temp1
+    bcc !pit_skip1+
+    sta zp_temp1
+!pit_skip1:
+    lda zp_temp0
+    jsr rng_range
+    cmp zp_temp1
+    bcc !pit_skip2+
+    sta zp_temp1
+!pit_skip2:
+
+    // Look up the winning item's depth tier
+    ldx zp_temp1
+    lda pit_sorted,x             // A = item_id
+    tax
+    lda it_min_level,x           // A = found_level
+    beq !pit_reroll_l0+          // Level 0: special case (no lower bound)
+
+    // Re-roll uniformly within found_level's tier
+    tax                          // X = found_level
+    lda pit_level_bounds-1,x     // lo = level_bounds[found_level - 1]
+    sta zp_temp2                 // zp_temp2 = tier_lo
+    lda pit_level_bounds,x       // hi = level_bounds[found_level]
+    sec
+    sbc zp_temp2                 // A = range = hi - lo
+    jsr rng_range                // [0, range-1]
+    clc
+    adc zp_temp2                 // [lo, hi-1]
+    jmp !pit_return_idx-
+
+!pit_reroll_l0:
+    lda pit_level_bounds         // level_bounds[0] = count at level 0
+    jsr rng_range                // [0, count-1]
+    jmp !pit_return_idx-
 
 // ============================================================
 // roll_enchantment — Roll enchantment value for a spawned item

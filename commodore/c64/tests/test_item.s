@@ -15,7 +15,9 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #41
+    sei                         // Disable IRQs during copy
+    :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
+    ldx #42
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -23,7 +25,7 @@ test_exit_trampoline:
     bpl !tc_copy-
     brk
 
-.pc = $0828 "Main"
+.pc = $0830 "Main"
 
 .encoding "screencode_mixed"
 
@@ -46,6 +48,7 @@ test_exit_trampoline:
 #import "../stat_display.s"
 #import "../player_create.s"
 #import "../sound.s"
+#import "../dungeon_data.s"
 #import "../dungeon_gen.s"
 #import "../huffman.s"
 #import "../dungeon_features.s"
@@ -87,7 +90,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 40, $ff
+tc_results: .fill 43, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 
@@ -1953,10 +1956,44 @@ test_start:
 
     lda #$01
     sta tc_results + 41
-    jmp !tests_done+
+    jmp !t43+
 !t42_fail:
     lda #$00
     sta tc_results + 41
+
+    // ==========================================
+    // Test 43: pick_item_type depth curve produces high-level items
+    // ==========================================
+!t43:
+    lda #8
+    sta zp_player_dlvl
+
+    lda #0
+    sta tc_valid_ctr            // Count items with min_level >= 3
+    lda #60
+    sta tc_loop_ctr
+!t43_loop:
+    jsr pick_item_type
+    tax
+    lda it_min_level,x
+    cmp #3
+    bcc !t43_under+
+    inc tc_valid_ctr
+!t43_under:
+    dec tc_loop_ctr
+    bne !t43_loop-
+
+    // At least 15 of 60 should have min_level >= 3
+    // (depth curve biases toward higher-level items)
+    lda tc_valid_ctr
+    cmp #15
+    bcs !t43_pass+
+    lda #$00
+    sta tc_results + 42
+    jmp !tests_done+
+!t43_pass:
+    lda #$01
+    sta tc_results + 42
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
