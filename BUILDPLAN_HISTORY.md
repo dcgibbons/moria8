@@ -22,6 +22,23 @@ All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code
 
 ---
 
+## BUG-44 — Save File Not Found: Wrong Error + Wrong Recovery ✅ COMPLETE
+
+Completed 2026-02-20. When "L)oad" was chosen at the title menu and no save file existed, the game showed "Save file corrupt!" and fell through into character creation.
+
+### Root Cause
+
+On VICE/1541, `KERNAL OPEN` for a non-existent sequential file **succeeds** (carry clear). The error only manifests on the first `CHRIN`: the drive returns immediate EOF/timeout, setting `STATUS = $42`. The magic bytes read as zeros/garbage, the 8-byte magic header comparison fails, and `!load_corrupt` fired with the misleading message.
+
+The `!title_load_fail` handler also jumped to `!title_new+` (character creation) instead of back to the N/L/D title menu.
+
+### Fix
+
+- **save.s:** After reading the 8-byte magic header, call `READST`. Any non-zero STATUS at this point means the file doesn't exist (a real save is thousands of bytes — EOI can't appear in the first 8 reads). Non-zero → `!load_close_notfound` (closes file, falls through to message). Zero → proceed with existing magic comparison. Added `save_notfound_str` ("Save file not found.") and `!load_close_notfound` label; the OPEN-fail path jumps directly to `!load_notfound` (no close needed).
+- **main.s:** `!title_load_fail` now does `jmp !title_menu_loop-` (back to N/L/D menu) instead of `jmp !title_new+`.
+
+---
+
 ## BUG-42 — Fix Save/Load "Save file corrupt!" ✅ COMPLETE
 
 Completed 2026-02-20. Save files always failed to load with "Save file corrupt!" due to streaming RLE decompressor overflow.

@@ -114,6 +114,8 @@ save_done_str:
     .text "Game saved." ; .byte 0
 save_load_str:
     .text "Loading game..." ; .byte 0
+save_notfound_str:
+    .text "Save file not found." ; .byte 0
 save_corrupt_str:
     .text "Save file corrupt!" ; .byte 0
 save_ioerr_str:
@@ -359,11 +361,11 @@ load_game:
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcc !load_open_ok+
-    // OPEN failed
+    // OPEN failed — file not found is the most common cause
     lda $dd00
     ora #%00000011
     sta $dd00
-    jmp !load_fail+
+    jmp !load_notfound+
 !load_open_ok:
     ldx #SAVE_FILE_NUM
     jsr KERNAL_CHKIN
@@ -380,6 +382,13 @@ load_game:
     // --- Read and verify magic header ---
     // Read 8 bytes to temp area and compare
     :load_block(rle_lit_buf, SAVE_MAGIC_SIZE)
+    // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
+    // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
+    // Any non-zero STATUS this early means the file doesn't exist.
+    jsr KERNAL_READST
+    beq !load_magic_check+
+    jmp !load_close_notfound+   // STATUS non-zero → file not found
+!load_magic_check:
     ldx #0
 !check_magic:
     lda rle_lit_buf,x
@@ -528,6 +537,24 @@ load_game:
     lda #<save_corrupt_str
     sta zp_ptr0
     lda #>save_corrupt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    clc                     // Failure
+    rts
+
+!load_close_notfound:
+    // File was opened but returned no data — close before showing message
+    jsr KERNAL_CLRCHN
+    lda #SAVE_FILE_NUM
+    jsr KERNAL_CLOSE
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+!load_notfound:
+    // OPEN-fail path also jumps here (file was never opened, no close needed)
+    lda #<save_notfound_str
+    sta zp_ptr0
+    lda #>save_notfound_str
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure

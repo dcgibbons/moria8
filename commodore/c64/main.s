@@ -321,7 +321,7 @@ restart_entry:
 !title_load_fail:
     jsr disk_prompt_game        // Swap back even on failure
     jsr input_get_key           // Let user see error message from load_game
-    jmp !title_new+
+    jmp !title_menu_loop-       // Back to N/L/D menu (not character creation)
 
 !title_new:
     // Re-seed RNG after user input for better entropy
