@@ -6,6 +6,78 @@
 
 ---
 
+## Phase Completion Summary (as of 2026-02-21)
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Skeleton and Infrastructure | ✅ Complete |
+| 2 | Player and Character Creation | ✅ Complete |
+| 3 | The Town Level | ✅ Complete |
+| 4 | Dungeon Generation and Navigation | ✅ Complete |
+| 5 | Monsters | ✅ Complete |
+| 6 | Items and Inventory | ✅ Complete |
+| 7 | Magic System | ✅ Complete (steps 7.0-7.10) |
+| 8 | Stores | ✅ Complete |
+| 9 | Save/Load and Game Polish | ✅ Complete (9.1-9.4, BUG-1 through BUG-18 fixed) |
+| R3.5 | Creature Tier System + REU | ✅ Complete (R3.5.1-R3.5.12, 120 creatures across 5 tiers) |
+| R1.1 | Ranged Combat | ✅ Complete — bows, crossbows, slings, 3 ammo types, fire command, ammo stacking |
+| R3.4 | Monster Fleeing | ✅ Complete — flee threshold (HP/4) at spawn, reversed greedy movement |
+| R2.1 | Special Rooms | ✅ Complete — pits, vaults, nests with $F000 banking |
+| R4.1 | Ego Items | ✅ Complete — 7 enchanted weapon types with slay/elemental/AC bonuses |
+| OPT-1 | Code Size Optimization | ✅ Complete — 182 bytes reclaimed (OPT-1.1 resolved by R7.6) |
+| OPT-4 | Codebase-Wide Size Optimization | ✅ Complete — 1,098 bytes reclaimed across 9 items |
+| OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
+| OPT-5 | Overlay Expansion (dungeon gen) | ✅ Complete — dungeon_gen.s → $E000 overlay; 3,490 bytes reclaimed |
+| R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader, monster recall system. |
+| R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
+| R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
+| R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants |
+| R15 | Multi-Disk Support | ✅ Complete — save_device variable, 7 SETLFS sites parameterized, disk setup sub-menu |
+| R16 | Save Drive Selection | ✅ Complete — `#)Drive #` menu option; disk_enter_device reads 1–2 digit device# (8–30) |
+| R17 | Background History + Gender + Gold | ✅ Complete — 72-entry background table, chain walker, gender prompt, social class, umoria gold formula |
+| BUG-42 | Fix Save/Load Corruption | ✅ Complete — raw map I/O replacing streaming RLE decompressor |
+| R12 | Game-Over Loop | ✅ Complete — R)EBOOT / S)TART / Q)UIT prompt; restart resets ZP+inventory+tier |
+
+---
+
+## Resolved Bug Summary (BUG-34 through BUG-47)
+
+All bugs below are **fixed**. Detailed write-ups for each appear in the sections that follow.
+
+| # | Severity | Description | Resolution |
+|---|----------|-------------|------------|
+| BUG-34 | MED | Monster recall only shows first match for shared display symbols | Pressing same letter cycles through all known creatures; state tracked in recall_last_sc/idx |
+| BUG-35 | HIGH | Help screen fills with 'p' characters and locks up (data crossed MAP_BASE) | Tab control code ($fc) replaced padding spaces, saving ~96 bytes |
+| BUG-36 | MED | Monster recall shows blank name for town creatures | Table path now copies name to creature_name_buf |
+| BUG-37 | MED | Recall/help screens flash and dismiss immediately | Clear $C6 before dismiss input_get_key |
+| BUG-38 | HIGH | rng_range(0) causes infinite loop (game hang) | Defensive guard in rng_range + guards in pick_creature_type and monster_cast_summon |
+| BUG-39 | MED | Creature name shows "?" during combat ($E0xx pointer rejection) | Four-path name resolution with shared copy loop |
+| BUG-40 | MED | Creature name shows "?" in monster recall from town (stale tier pointers) | cgn_no_tier path reloads the appropriate tier when stale $E0xx pointer found |
+| BUG-41 | HIGH | Tunneling far too easy — hardness ~50× too low | Fixed by R14: hardness rescaled, new formula (STR>>2)+base+(ego×12), bare hands always fail |
+| BUG-43 | MED | Store-stocked items not identified | `sro_store_p1` stores `#IF_IDENTIFIED` in `si_flags`; test 29 added to test_store.s |
+| BUG-44 | MED | Save file not found shows wrong error and wrong recovery | OPEN-fail path shows "Save file not found."; jumps back to title_menu_loop |
+| BUG-45 | MED | Item generation uses flat uniform distribution | Depth-bucketed 50/50 flat/best-of-3 allocator with 62-item sorted table and 13-level cumulative bounds |
+| BUG-46 | MED | Monster melee attack from non-adjacent position (stale render) | `!player_died:` now renders viewport before showing death message |
+| BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
+
+---
+
+## BUG-40 — Creature Name "?" in Monster Recall from Town ✅ COMPLETE (2026-02-19)
+
+**Problem:** After ascending from dungeon to town, `current_tier=0` but `cr_name_hi[]` still held stale `$E0xx` pointers from the previously loaded tier. The recall command found a stale `cr_display[]` match, and `creature_get_name` returned "?" because the tier data was no longer loaded.
+
+**Fix:** Added `cgn_no_tier` path in `creature_get_name` that detects stale `$E0xx` pointers when `current_tier=0` and reloads the appropriate tier before resolving the name.
+
+---
+
+## BUG-43 — Store-Stocked Items Not Identified ✅ COMPLETE (2026-02-20)
+
+**Problem:** `store_restock_one` (store.s) set `si_item_id`, `si_qty`, `si_p1` for new stock but never set `IF_IDENTIFIED` in `si_flags`. In umoria, `store_create()` calls `magicTreasure()` then `storeItemInsertIntoStock()` which sets `STR_IDENTIFIED`. Players saw store items as unidentified.
+
+**Fix:** Added `ora #IF_IDENTIFIED` on `si_flags,y` in the `sro_store_p1` path. Added test 29 to `test_store.s` to verify store-stocked items always have the identified flag set.
+
+---
+
 ## R17 — Character Background History + Gender + Social Class + Variable Gold ✅ COMPLETE
 
 Completed 2026-02-21. Implemented Option C-lite: full family/occupation background history text, gender selection, social class derivation, and umoria-faithful variable starting gold formula. Appearance descriptions (eyes, hair, complexion) dropped to save space.
