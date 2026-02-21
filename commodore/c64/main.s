@@ -204,6 +204,7 @@ restart_entry:
     cmp #$44                // 'D' — disk setup sub-menu
     bne !title_menu_loop-
 
+disk_menu_show:
     // Show disk sub-menu on row 18
     lda #18
     jsr screen_clear_row
@@ -225,7 +226,7 @@ restart_entry:
     beq !disk_same+
     cmp #$57                // 'W' — swap disks (mode 1)
     beq !disk_swap+
-    cmp #$39                // '9' — drive 9 (mode 2)
+    cmp #$23                // '#' — custom drive number (mode 2)
     beq !disk_drv9+
     jmp !disk_menu_loop-
 
@@ -246,49 +247,11 @@ restart_entry:
     jmp !disk_show_indicator+
 
 !disk_drv9:
-    jsr probe_device_9
-    bcs !disk_no_dev9+
-    // Device 9 present
-    lda #2
-    sta disk_mode
-    lda #9
-    sta save_device
-    // Show "[Drive 9]" indicator
-    lda #18
-    jsr screen_clear_row
-    lda #COL_CYAN
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #15                 // Center: (40-9)/2 ≈ 15
-    sta zp_cursor_col
-    lda #<ds_drv9_str
-    sta zp_ptr0
-    lda #>ds_drv9_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #COL_WHITE
-    sta zp_text_color
-    jmp !title_menu_loop-
-
-!disk_no_dev9:
-    // Show error, stay on sub-menu
-    lda #19
-    jsr screen_clear_row
-    lda #COL_LRED
-    sta zp_text_color
-    lda #19
-    sta zp_cursor_row
-    lda #11                 // Center: (40-18)/2 = 11
-    sta zp_cursor_col
-    lda #<ds_nod9_str
-    sta zp_ptr0
-    lda #>ds_nod9_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #COL_WHITE
-    sta zp_text_color
-    jmp !disk_menu_loop-
+    jsr disk_enter_device
+    bcs !disk_drv9_fail+        // fail — re-show disk sub-menu
+    jmp !title_menu_loop-       // success — device configured
+!disk_drv9_fail:
+    jmp disk_menu_show
 
 !disk_show_indicator:
     // Show "[Save Disk]" indicator on row 18

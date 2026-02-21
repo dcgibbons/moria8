@@ -6,6 +6,20 @@
 
 ---
 
+## R16 — Save Drive Selection (Any IEC Device Number) ✅ COMPLETE
+
+Completed 2026-02-21. Replaced the hardcoded `9)Drive 9` disk sub-menu option with `#)Drive #`, allowing any IEC device number 8–30.
+
+**Changes:**
+- `disk_swap.s` — replaced `ds_drv9_str`/`ds_nod9_str` strings and `probe_device_9` with: `probe_device` (generic, X = device#), `disk_enter_device` (new ~170-byte routine), plus data: `de_prompt_str`, `de_ind_pfx`, `de_nodev_str`, `de_digits[2]`, `de_count`, `de_temp`.
+- `main.s` — added `disk_menu_show:` label before sub-menu display; changed `$39` (`'9'`) branch to `$23` (`'#'`); replaced 99-byte `!disk_drv9`/`!disk_no_dev9` blocks with `jsr disk_enter_device` + branch (11 bytes).
+
+**UX flow:** pressing `#` shows `Save drive (8-30): ` on row 19; player types 1–2 digits, DEL corrects, RETURN commits. On valid range + device present: sets `disk_mode=2`, `save_device=N`, shows `[Drive  N]` indicator. On device absent: shows `Drive not found!`, waits for key, returns to disk menu. Out-of-range input silently re-prompts.
+
+**Size:** +265 bytes (`program_end` $B201 → $B30A); 3,318 bytes headroom remaining.
+
+---
+
 ## OPT-5 — Overlay Expansion (dungeon_gen.s → $E000 overlay) ✅ COMPLETE
 
 Completed 2026-02-21. Moved `dungeon_gen.s` out of the main segment into a new `$E000` overlay (`OVL_DUNGEON_GEN = 4`, disk file `OVL.GEN`).

@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-21 — OPT-5 complete)
+## Current State (2026-02-21 — R16 complete)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1, OPT-4, OPT-5 code size optimizations complete.
 
@@ -36,6 +36,7 @@
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
 | R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants, bare-hands no-progress, rubble resistance, si_ego save/load |
 | R15 | Multi-Disk Support | ✅ Complete — save_device variable, 7 SETLFS sites parameterized, mode 2 no-ops, probe_device_9, disk setup sub-menu (S/W/9), missing disk_prompt_game calls fixed, rundual Makefile target |
+| R16 | Save Drive Selection | ✅ Complete — `#)Drive #` menu option; disk_enter_device reads 1–2 digit device# (8–30), validates, probes via generic probe_device; shows "[Drive N]" indicator |
 | BUG-42 | Fix Save/Load Corruption | ✅ Complete — streaming RLE decompressor overflow fixed by replacing with raw map I/O (3840 bytes); LOAD_SEC_ADDR fixed; title screen KERNAL LOAD cleanup (CLOSE file, clear $90) |
 | R12 | Game-Over Loop | ✅ Complete — R)EBOOT / S)TART / Q)UIT prompt; reboot stuffs BASIC keyboard buffer with RUN; restart resets ZP+inventory+tier and jumps to restart_entry |
 | 10 | C128 Enhancements | Not started |
@@ -45,7 +46,7 @@
 - **Test suites:** 23 (312 runtime tests)
 - **Compile-time asserts:** 71
 - **Source files:** ~49 .s files
-- **Program size:** $B201 (program_end) — **3,583 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $B30A (program_end) — **3,318 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
 - **Banked payload:** $B22E-$C1C6
 - **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
@@ -74,8 +75,7 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R16 | Save drive selection — any IEC device number (8–30) | Small |
-| 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -88,79 +88,18 @@
 
 ---
 
-### Priority Triage (updated 2026-02-20)
+### Priority Triage (updated 2026-02-21)
 
 **Remaining items:**
 
 **Small (gameplay polish):**
-- R16 Save drive selection — replace hardcoded drive-9 option with free entry of any valid IEC device number
+- _(none pending)_
 
 **Low priority (polish/completeness):**
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (item.s)
 - R17 Character background history + social class + variable starting gold
 - OPT-5 (Options 2+3) — further overlays for magic/spells and UI screens if main segment tightens again
-
----
-
-## R16 — Save Drive Selection (Any IEC Device Number)
-
-### Why
-
-R15 added multi-disk support but hardcoded two choices: device 8 (same or swap disk) or device 9 (dual drive). Real setups vary — SD2IEC users often put the save image on drive 10 or 11; CMD HD partitions commonly use 8–12. The fixed "9" option is also brittle: `probe_device_9` reports absent and the option is greyed out even when device 9 is present but slow to respond.
-
-### What
-
-Replace the `9)Drive 9` option in the title-screen disk sub-menu with `#)Drive #`, which prompts the player to type a 1–2-digit device number. Any value 8–30 is accepted. After entry, probe the device (reuse/extend `probe_device_9` into a generic `probe_device`). If the probe succeeds, set `save_device` and `disk_mode=2` (dual-drive, no swap prompts). If the probe fails, show an error and return to the disk menu.
-
-### UI Change
-
-Current menu row (disk_swap.s `ds_menu_str`):
-```
-S)ame W)swap 9)Drive 9
-```
-New:
-```
-S)ame W)swap #)Drive #
-```
-
-Pressing `#` (PETSCII `$23`) triggers the number-entry sub-flow on the next row:
-```
-Save drive (8-30):
-```
-The player types 1–2 digits and presses RETURN. Backspace/DEL corrects a digit. After RETURN, validate range (8–30) and probe.
-
-### Implementation
-
-1. **`ds_menu_str`** (disk_swap.s) — change `9)Drive 9` → `#)Drive #` (same byte count, no size change).
-
-2. **Title-menu disk handler** (main.s ~line 220–308) — replace the `$39` ('9') branch with a `$23` ('#') branch that calls `disk_enter_device`.
-
-3. **`disk_enter_device`** (disk_swap.s) — new routine (~60 bytes):
-   - Print prompt `Save drive (8-30): ` on row 18.
-   - Read 1–2 digit keypresses ($30–$39 = '0'–'9'). RETURN commits; DEL erases last digit. Non-digit ignored.
-   - Convert ASCII digits to binary (tens × 10 + units).
-   - Validate 8 ≤ value ≤ 30; if out of range, blink/redisplay.
-   - Call `probe_device` with the entered number.
-   - On success: `sta save_device`, `lda #2; sta disk_mode`, clear row, return to title menu.
-   - On fail: print `Drive ## not found!`, wait for key, redisplay disk menu.
-
-4. **`probe_device`** (disk_swap.s) — generalise `probe_device_9` to accept device# in X (~5 bytes delta, or just inline the change). `probe_device_9` becomes a wrapper `ldx #9; jmp probe_device`.
-
-### Size Budget
-
-With only 275 bytes of headroom in the main segment, placement matters:
-- `disk_enter_device`: ~60 bytes — fits in `disk_swap.s` (loaded in main segment).
-- Prompt string `Save drive (8-30): ` = 20 bytes — in `disk_swap.s`.
-- `probe_device` refactor: net ~+5 bytes.
-- Total delta: ~85 bytes — fits within the 275 byte main segment headroom.
-
-If tight, the number-entry routine can move to the `$F000` banked region via a trampoline (pattern already used for `reu_show_status`, `store_enter`, etc.).
-
-### Risks
-
-- **Probe false-negative:** slow/busy devices may time out. Consider showing "Probing…" before the KERNAL OPEN call.
-- **Mode 1 (swap) + arbitrary drive:** if the player later sets swap mode independently, `save_device` should already hold the right number. The swap/same options always set `save_device=8`, which is correct for those modes. The `#` option sets mode 2 (no swap prompts) so there is no conflict.
 
 ---
 
