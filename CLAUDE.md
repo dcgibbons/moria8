@@ -19,13 +19,15 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 
 The root Makefile delegates to `commodore/c64/Makefile`. All make targets work from the project root.
 
-## Planning Docs
+## Planning Docs (Commodore port)
+
+When working on the Commodore port:
 
 - **`commodore/BUILDPLAN.md`** — active plans only (current state, priority triage, optimization plans)
 - **`commodore/DESIGN.md`** — architecture reference (memory map, design decisions, banking architecture)
 - **`commodore/BUILDPLAN_HISTORY.md`** — completed work archive (finished phases, reviews, audits)
 
-When completing a feature or optimization from commodore/BUILDPLAN.md, move the finished section to commodore/BUILDPLAN_HISTORY.md.
+When completing a feature or optimization from `commodore/BUILDPLAN.md`, move the finished section to `commodore/BUILDPLAN_HISTORY.md`.
 
 ## Architecture
 
