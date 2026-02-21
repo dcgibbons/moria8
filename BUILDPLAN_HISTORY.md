@@ -6,6 +6,22 @@
 
 ---
 
+## R12 — Game-Over Loop ✅ COMPLETE
+
+Completed 2026-02-20. After save+quit, death, or voluntary quit, the game now shows:
+
+```
+R)EBOOT  S)TART  Q)UIT
+```
+
+- **R (Reboot):** stuffs BASIC keyboard buffer with `RUN` + RETURN and exits to BASIC warm-start. BASIC auto-executes `RUN` which re-runs the BASIC stub (`SYS 2062`), reloading the game from scratch.
+- **S (Start over):** clears ZP game state ($2B–$8F), inventory arrays, `eff_fear_timer`, recall variables, and tier state, then jumps to `restart_entry` (before `detect_machine`) to reinitialize subsystems and return to the title screen.
+- **Q (Quit):** falls through to the existing `exit_trampoline` → BASIC warm-start (unchanged behavior).
+
+All three exit paths converge on `!quit:` in main.s → `game_over_prompt`. Code size: ~165 bytes. `program_end` = $BEED (275 bytes headroom to MAP_BASE).
+
+---
+
 ## BUG-42 — Fix Save/Load "Save file corrupt!" ✅ COMPLETE
 
 Completed 2026-02-20. Save files always failed to load with "Save file corrupt!" due to streaming RLE decompressor overflow.

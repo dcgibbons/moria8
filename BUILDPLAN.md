@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-20 — R15 + BUG-42 complete)
+## Current State (2026-02-20 — R12 complete)
 
 **All core phases complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. Ranged combat (R1.1) added. OPT-1 and OPT-4 code size optimizations complete.
 
@@ -36,6 +36,7 @@
 | R14 | Fix Tunneling Difficulty + Enchanted Tools | ✅ Complete — hardness rescaled, new (STR>>2)+base+(ego×12) formula, Gnomish/Orcish/Dwarven variants, bare-hands no-progress, rubble resistance, si_ego save/load |
 | R15 | Multi-Disk Support | ✅ Complete — save_device variable, 7 SETLFS sites parameterized, mode 2 no-ops, probe_device_9, disk setup sub-menu (S/W/9), missing disk_prompt_game calls fixed, rundual Makefile target |
 | BUG-42 | Fix Save/Load Corruption | ✅ Complete — streaming RLE decompressor overflow fixed by replacing with raw map I/O (3840 bytes); LOAD_SEC_ADDR fixed; title screen KERNAL LOAD cleanup (CLOSE file, clear $90) |
+| R12 | Game-Over Loop | ✅ Complete — R)EBOOT / S)TART / Q)UIT prompt; reboot stuffs BASIC keyboard buffer with RUN; restart resets ZP+inventory+tier and jumps to restart_entry |
 | 10 | C128 Enhancements | Not started |
 
 ### Build Stats
@@ -43,9 +44,9 @@
 - **Test suites:** 23 (308 runtime tests)
 - **Compile-time asserts:** 70
 - **Source files:** ~48 .s files
-- **Program size:** $BE48 (program_end) — **1,464 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $BEED (program_end) — **275 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
-- **Banked payload:** $BDE2-$CD79 (646 bytes headroom to I/O at $D000)
+- **Banked payload:** $BF1A-$CEB2
 - **Town overlay:** 3,014 of 4,096 bytes (1,082 free)
 
 ### Known Remaining Issues
@@ -67,8 +68,7 @@
 
 | Priority | # | What | Effort |
 |----------|---|------|--------|
-| 1 | R12 | Game-over loop (reboot/restart/quit prompt instead of exit to BASIC) | Low-Med |
-| 2 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
+| 1 | A4 | Separate binaries (BOOT.PRG + MORIA64 + MORIA128) | Major (Phase 10) |
 
 **Phase 10 — C128 Enhancements** (not started):
 
@@ -85,51 +85,11 @@
 
 **Remaining items:**
 
-**Medium priority (gameplay polish):**
-- R12 Game-over loop — after save/death/quit, prompt "Reboot" / "Restart" / "Quit" instead of exiting to BASIC
-
 **Low priority (polish/completeness):**
 - A4 Separate binaries — Phase 10 scope (BOOT.PRG + MORIA64 + MORIA128)
 - A6 Large file split — opportunistic refactoring (dungeon_gen.s, item.s)
 - A7 Item generation distribution review vs umoria curves
 
 ---
-
----
-
-## R12 — Game-Over Loop (Reboot / Restart / Quit Prompt)
-
-After save, death, or voluntary quit, instead of returning to BASIC, present a prompt:
-
-```
-R)eboot  Res)tart  Q)uit to BASIC
-```
-
-- **Reboot** (`R`) — cold restart: reload the program from disk and run it from scratch, as if the player typed `LOAD` + `RUN`. Equivalent to a fresh boot with no stale state concerns.
-- **Restart** (`S`) — warm restart: reinitialize game state in memory and jump back to the title screen (character creation → dungeon). Faster than reboot since it skips disk loading, but requires careful state reinit.
-- **Quit** (`Q`) — exit cleanly to BASIC as today.
-
-### Why
-
-Exiting to BASIC after every death or save forces the player to re-type `LOAD` and `RUN`. On real hardware with disk loading this is especially painful. Every other Moria port loops back to "play again?" — this matches that expectation. Offering both reboot and restart gives the player a safe option (reboot) and a fast option (restart).
-
-### Implementation
-
-All game-ending paths currently converge on an `rts` or `jmp` back to BASIC (via the KERNAL warm-start vector or the original return address). The fix:
-
-1. **Identify exit points:** save-and-quit, death/score screen, and voluntary quit (`Q` command) — each currently ends the program.
-2. **Add `game_over_prompt`:** a small routine (~60-80 bytes) that clears the screen, prints the reboot/restart/quit prompt, and waits for a keypress.
-   - `R` → **Reboot:** issue KERNAL LOAD + RUN sequence to reload the program from disk (e.g., set up the BASIC input buffer with `LOAD"*",8,1` + `RUN` and jump to the BASIC warm-start vector, or use an equivalent KERNAL LOAD/JMP approach).
-   - `S` → **Restart:** call a `game_restart` entry point that reinitializes ZP state, clears the monster/item tables, resets the map, and `jmp`s to the title screen.
-   - `Q` → existing clean exit to BASIC.
-3. **State reinit (restart path):** the restart path must reset all mutable global state (ZP variables, map buffer at $C000, monster slots, item slots, effect timers, RNG seed). Static tables and code don't need reinit. Audit all `.byte 0` / `.fill` variables for anything that assumes fresh-load state.
-4. **Tier system (restart path):** reset `current_tier` to 0 and reload tier 0 creature data (town creatures) as part of restart.
-5. **Reboot path:** stuff the BASIC input buffer with the LOAD+RUN command string and jump to the BASIC warm-start routine. This avoids any stale-state concerns since the entire program is reloaded from disk.
-
-### Risks
-
-- **Stale state bugs (restart only):** if any module assumes one-time init from fresh load, restart will expose it. Thorough testing required. The reboot option sidesteps this entirely.
-- **Reboot disk dependency:** reboot requires the program disk to be in the drive. If the player has swapped to the save disk, the reboot will fail or load the wrong file. May need a "insert game disk" prompt.
-- **Size:** ~60-80 bytes for the prompt + ~20-30 bytes for reinit calls + ~20-30 bytes for reboot logic. Fits comfortably in main segment headroom (811 bytes free) or the $F000 banked region.
 
 

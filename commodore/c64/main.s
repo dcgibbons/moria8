@@ -147,6 +147,7 @@ entry_main:
     sta $d020               // Border
     sta $d021               // Background
 
+restart_entry:
     // --- Initialize subsystems ---
     jsr detect_machine
     jsr reu_detect
@@ -1406,6 +1407,7 @@ run_step:
     jmp !quit+
 
 !quit:
+    jsr game_over_prompt    // R)EBOOT / S)TART OVER / Q)UIT — Q falls through
 
     // --- Clean exit to BASIC ---
 exit:
@@ -2027,6 +2029,102 @@ tramp_game_over:
 
 // Help screen string data — in main RAM (too large for $F000 banked region)
 #import "ui_help_data.s"
+
+// ============================================================
+// game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
+// Shown at all exit points (save+quit, voluntary quit, death).
+// Q falls through; R and S branch internally.
+// ============================================================
+game_over_prompt:
+    jsr screen_clear
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #12                     // Row 12 (center)
+    sta zp_cursor_row
+    lda #9                      // Col 9: (40-22)/2 = 9
+    sta zp_cursor_col
+    lda #<game_over_str
+    sta zp_ptr0
+    lda #>game_over_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #0
+    sta $c6                     // Flush keyboard buffer
+!gop_loop:
+    jsr input_get_key
+    cmp #$52                    // 'R' — reboot (reload from disk)
+    beq !gop_reboot+
+    cmp #$53                    // 'S' — start over (restart to title)
+    beq !gop_restart+
+    cmp #$51                    // 'Q' — quit to BASIC
+    bne !gop_loop-
+    rts                         // Q: fall through to exit_trampoline
+!gop_reboot:
+    // Stuff BASIC keyboard buffer with "RUN" + RETURN so BASIC
+    // auto-executes RUN on warm-start, re-running our BASIC stub.
+    lda #$52                    // 'R'
+    sta $0277
+    lda #$55                    // 'U'
+    sta $0278
+    lda #$4e                    // 'N'
+    sta $0279
+    lda #$0d                    // RETURN
+    sta $027a
+    lda #4
+    sta $c6                     // Keyboard buffer count = 4
+    jmp exit_trampoline
+!gop_restart:
+    jmp game_restart
+
+game_over_str:
+    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
+
+// ============================================================
+// game_restart — reset game state, return to title screen
+// Clears mutable state (ZP vars, inventory, tier), then jumps
+// to restart_entry (skipping one-time init_copy_banked etc.).
+// ============================================================
+game_restart:
+    // Clear ZP game variables $2B–$8F (player stats, turn counter,
+    // effect timers, monster counts, etc.)
+    lda #0
+    ldx #0
+!clr_zp:
+    sta $2b,x
+    inx
+    cpx #($8f - $2b + 1)        // 101 bytes
+    bne !clr_zp-
+
+    // Clear static game-state variables in data segments
+    lda #0
+    sta eff_fear_timer
+    sta recall_query_sc
+    sta recall_found_type
+    sta recall_last_sc
+    sta recall_last_idx
+
+    // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
+    lda #$ff
+    ldx #TOTAL_INV_SLOTS - 1
+!clr_inv_id:
+    sta inv_item_id,x
+    dex
+    bpl !clr_inv_id-
+
+    lda #0
+    ldx #TOTAL_INV_SLOTS - 1
+!clr_inv_rest:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_flags,x
+    dex
+    bpl !clr_inv_rest-
+
+    // Reset tier state (zp_current_tier already zeroed above)
+    sta current_tier
+    sta tier_loaded
+
+    jmp restart_entry
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
