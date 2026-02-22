@@ -26,7 +26,7 @@ MAIN_SRC    = main.s
 MAIN_PRG    = $(OUT)/moria8.prg
 BOOT_SRC    = boot.s
 BOOT_PRG    = $(OUT)/boot.prg
-TITLE_SRC   = title_data.s
+TITLE_SRC   = ../common/title_data.s
 TITLE_PRG   = $(OUT)/title
 TIER_PRGS   = $(OUT)/monster.db.1 $(OUT)/monster.db.2 $(OUT)/monster.db.3 $(OUT)/monster.db.4
 OVL_TOWN    = $(OUT)/ovl.town
@@ -38,7 +38,8 @@ DISK_NAME   = "moria8,m8"
 DISKART     = ../../tools/diskart.py
 
 # All source files that main.s imports (dependency list)
-SOURCES     = $(wildcard *.s)
+COMMON_SOURCES = $(wildcard ../common/*.s)
+SOURCES     = $(wildcard *.s) $(COMMON_SOURCES)
 TEST_SOURCES = $(wildcard tests/*.s)
 
 # ── KickAssembler flags ──────────────────────────────────

@@ -6,7 +6,7 @@
 
 ---
 
-## Phase Completion Summary (as of 2026-02-21)
+## Phase Completion Summary (as of 2026-02-21, Phase 10.0 complete)
 
 | Phase | Description | Status |
 |-------|-------------|--------|
@@ -28,6 +28,7 @@
 | OPT-4 | Codebase-Wide Size Optimization | ✅ Complete — 1,098 bytes reclaimed across 9 items |
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
 | OPT-5 | Overlay Expansion (dungeon gen) | ✅ Complete — dungeon_gen.s → $E000 overlay; 3,490 bytes reclaimed |
+| 10.0 | C64/C128 Code Split | ✅ Complete — 64 files to common/, game loop extracted, c128 skeleton |
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader, monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
@@ -4255,3 +4256,62 @@ Rewrote `pick_item_type` with a umoria-faithful depth-bucketed 50/50 flat/best-o
 3. **`run_tests.sh`** — updated item test count from 42 to 43.
 
 **Size impact:** +142 bytes (program_end $BF15 → $BFA3, 93 bytes headroom). All 23 test suites pass (309 runtime tests).
+
+---
+
+## Phase 10.0 — C64/C128 Code Split (2026-02-21)
+
+### Summary
+
+Split the codebase into `commodore/common/`, `commodore/c64/`, and `commodore/c128/` to prepare for the C128 port. Moved 64 shared game logic files to `common/`, extracted the game loop (~1,382 lines) from `main.s` into `common/game_loop.s`, and created a skeletal `c128/main.s`. Pure file moves + import path updates — no game logic changes.
+
+### Directory structure after split
+
+```
+commodore/
+├── common/        64 shared .s files (game logic, UI, data)
+│   └── game_loop.s   (extracted from c64/main.s)
+├── c64/           7 platform files + tests/ + creature_data/
+│   ├── main.s         (892 lines — bootstrap, hw init, trampolines)
+│   ├── screen.s       (VIC-II 40-col rendering)
+│   ├── dungeon_render.s (VIC-II viewport)
+│   ├── memory.s       (PLA $01 banking)
+│   ├── config.s       (C64/C128 detection)
+│   ├── input.s        (keyboard via $01 + $C6)
+│   ├── boot.s         (bootloader)
+│   ├── tests/         23 test suites
+│   └── creature_data/ tier data
+└── c128/
+    ├── main.s         (skeleton — commented import list + trampoline stubs)
+    ├── ARCHITECTURE.md
+    ├── README.md
+    └── vdc_demo.s     (standalone VDC demo from earlier)
+```
+
+### What was done
+
+1. **Created `commodore/common/`** and moved 64 files via `git mv` (preserves blame history)
+2. **Extracted `common/game_loop.s`** (~1,382 lines) from `c64/main.s`:
+   - `game_new_start` — new game initialization (character creation, starting equipment, first dungeon)
+   - `load_resume_game` — load/resume entry point
+   - `main_loop` — full command dispatch (movement, stairs, doors, items, combat, magic, etc.)
+   - `run_step` — corridor running state machine
+   - Death handling, dig ability, ego helpers, gameplay strings
+3. **Updated `c64/main.s`** (2,262 → 892 lines):
+   - Import paths changed to `../common/` for moved files
+   - Added `#import "../common/game_loop.s"`
+   - `!title_new` reference → `game_new_start` (global label in game_loop.s)
+   - Platform-specific code remains: bootstrap, exit trampoline, IRQ wedge, 20+ banking trampolines, overlay segments
+4. **Updated all 23 test files**: `"../X.s"` → `"../../common/X.s"` for moved files
+5. **Updated Makefile**: `COMMON_SOURCES = $(wildcard ../common/*.s)` added to dependencies
+6. **Created skeletal `c128/main.s`**: commented import list, trampoline label inventory, MMU banking notes
+
+### Interface between common/ and platform code
+
+`game_loop.s` calls trampoline labels defined in the platform's `main.s`. Kick Assembler resolves all labels globally within the compilation unit (everything is `#import`ed into one pass), so forward references work naturally. The C128's `main.s` will define the same trampoline labels with MMU `$FF00` banking.
+
+### Verification
+
+- `make clean && make build` — assembles without errors, all 71 compile-time asserts pass
+- `make test` — all 24 suites (321 runtime tests) pass
+- `git diff --stat` — confirms only file moves + import path changes

@@ -10,16 +10,16 @@
 
 .pc = $0810 "Test Code"
 
-#import "../zeropage.s"
+#import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"
-#import "../color.s"
+#import "../../common/color.s"
 #import "../input.s"
-#import "../rng.s"
-#import "../math.s"
-#import "../tables.s"
-#import "../item_defs.s"
-#import "../player.s"
+#import "../../common/rng.s"
+#import "../../common/math.s"
+#import "../../common/tables.s"
+#import "../../common/item_defs.s"
+#import "../../common/player.s"
 
 // Stubs for item data arrays referenced by player_calc_combat.
 // Only need enough entries to cover equipment slot indices (22-29).

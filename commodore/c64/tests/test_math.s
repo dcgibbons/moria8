@@ -9,10 +9,10 @@
 
 .pc = $0810 "Test Code"
 
-#import "../zeropage.s"
+#import "../../common/zeropage.s"
 #import "../memory.s"
-#import "../rng.s"
-#import "../math.s"
+#import "../../common/rng.s"
+#import "../../common/math.s"
 
 // Test result pointer
 .var test_idx = 0
