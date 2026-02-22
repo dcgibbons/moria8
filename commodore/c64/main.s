@@ -180,6 +180,16 @@ restart_entry:
     // Load and display title (clears screen internally after KERNAL LOAD)
     jsr title_load_and_draw
 
+    // Explicitly clear status rows 21–23 before sysinfo draws on row 23.
+    // title_load_and_draw + KERNAL LOAD together may leave stale status bar
+    // data in those rows (e.g. from title_render_data parsing MAP_BASE).
+    lda #STATUS_ROW             // row 21
+    jsr screen_clear_row
+    lda #STATUS_ROW + 1         // row 22
+    jsr screen_clear_row
+    lda #STATUS_ROW + 2         // row 23
+    jsr screen_clear_row
+
     // Show system info on row 23 (machine type, KERNAL rev, REU)
     jsr title_show_sysinfo
 
