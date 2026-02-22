@@ -172,6 +172,11 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
+    // Clear screen now so stale status bar (rows 21–23) from any prior session
+    // is gone before KERNAL LOAD starts printing "SEARCHING...".
+    // title_load_and_draw also clears after KERNAL LOAD to remove those messages.
+    jsr screen_clear
+
     // Load and display title (clears screen internally after KERNAL LOAD)
     jsr title_load_and_draw
 

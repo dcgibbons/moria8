@@ -5,16 +5,16 @@
 
 ---
 
-## Current State (2026-02-21 — R17 complete)
+## Current State (2026-02-21 — R17 + BUG-48 complete)
 
-**All core phases (1–9) complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. All feature work (R1.1–R17), optimizations (OPT-1–OPT-5), and 47 bug fixes complete. See BUILDPLAN_HISTORY.md for the full phase completion summary and resolved bug list.
+**All core phases (1–9) complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. All feature work (R1.1–R17), optimizations (OPT-1–OPT-5), and 48 bug fixes complete. See BUILDPLAN_HISTORY.md for the full phase completion summary and resolved bug list.
 
 ### Build Stats
 
 - **Test suites:** 24 (320 runtime tests)
 - **Compile-time asserts:** 71
 - **Source files:** ~51 .s files
-- **Program size:** $B47C (program_end) — **2,948 bytes headroom** to MAP_BASE ($C000)
+- **Program size:** $B47F (program_end) — **2,945 bytes headroom** to MAP_BASE ($C000)
 - **Banked code:** $F000-$FF98 (at limit)
 - **Banked payload:** $B4A9-$C444
 - **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
@@ -27,7 +27,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop — when selecting Start after saving/quitting, the title screen redraws but the bottom 3 lines still show the previous session's character name, race, stats, and HP. The restart path doesn't clear the status bar area before redrawing the title screen. Fix: clear the full screen (including status lines 22–24) before drawing the title screen on restart. | Open |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ---

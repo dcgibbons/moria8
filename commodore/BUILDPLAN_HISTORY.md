@@ -59,6 +59,7 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 | BUG-45 | MED | Item generation uses flat uniform distribution | Depth-bucketed 50/50 flat/best-of-3 allocator with 62-item sorted table and 13-level cumulative bounds |
 | BUG-46 | MED | Monster melee attack from non-adjacent position (stale render) | `!player_died:` now renders viewport before showing death message |
 | BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
+| BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `jsr screen_clear` added in `restart_entry` before `title_load_and_draw` so status rows 21–23 are cleared before KERNAL LOAD begins |
 
 ---
 
