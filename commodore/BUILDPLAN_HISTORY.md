@@ -59,7 +59,21 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 | BUG-45 | MED | Item generation uses flat uniform distribution | Depth-bucketed 50/50 flat/best-of-3 allocator with 62-item sorted table and 13-level cumulative bounds |
 | BUG-46 | MED | Monster melee attack from non-adjacent position (stale render) | `!player_died:` now renders viewport before showing death message |
 | BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
-| BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `jsr screen_clear` added in `restart_entry` before `title_load_and_draw` so status rows 21–23 are cleared before KERNAL LOAD begins |
+| BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `screen_clear_row` for rows 21–23 added before `title_show_sysinfo`; root cause: `title_render_data` parses dungeon MAP_BASE as title art and writes to status rows |
+
+---
+
+## BUG-48 — Stale Character Stats on Title Screen After S)tart ✅ COMPLETE (2026-02-21)
+
+**Problem:** After pressing S)tart from the game-over prompt (R)EBOOT / S)TART / Q)UIT), the title screen rendered correctly but rows 21–23 still showed the previous session's character name, race, stats, and HP. Row 23 showed a hybrid: old "HP:21/21" at column 0 alongside the new system info from `title_show_sysinfo` starting at column 12.
+
+**Root cause:** `title_render_data` parses MAP_BASE ($C000) as a title art segment stream (format: `[row, col, color, chars…, $00] … $FF`). After a dungeon level is played, MAP_BASE contains dungeon tile data. When parsed as title art segments, some dungeon data bytes land as row values 21, 22, or 23, so `title_render_data` writes dungeon tile screen codes — with the old status bar color RAM still in place — directly onto those rows. This happens *after* `screen_clear`, which clears screen RAM to spaces but the dungeon art render then overwrites them. KERNAL LOAD on restart does reload the TITLE file into MAP_BASE ($C000), but if MAP_BASE data is misinterpreted at any point, or if (on some code paths) MAP_BASE retains dungeon data, the status rows get repainted.
+
+**Fix:** Added `screen_clear_row` calls for rows 21, 22, and 23 in `restart_entry` immediately before `jsr title_show_sysinfo`. This fires *after* `title_render_data` has finished, clearing any status row contamination at the last possible moment before the title screen is visible. Also added a belt-and-suspenders `screen_clear` earlier in `restart_entry` (before `title_load_and_draw`) so stale data is gone before KERNAL LOAD starts printing "SEARCHING...".
+
+**Changes:** `main.s` — `restart_entry`: added `jsr screen_clear` before `title_load_and_draw`; added `screen_clear_row` for rows 21–23 before `title_show_sysinfo`. No new files. No test changes needed (title screen path is not unit-testable headlessly).
+
+**Size:** +18 bytes (`program_end` $B47C → $B48E); 2,930 bytes headroom remaining.
 
 ---
 
