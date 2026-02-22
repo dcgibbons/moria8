@@ -44,12 +44,18 @@ TEST_SOURCES = $(wildcard tests/*.s)
 # ── KickAssembler flags ──────────────────────────────────
 KA_FLAGS    = -showmem -vicesymbols
 
+# ── C128 VDC demo ────────────────────────────────────────
+C128_DIR     = ../c128
+VDC_DEMO_SRC = $(C128_DIR)/vdc_demo.s
+VDC_DEMO_PRG = $(OUT)/vdc_demo.prg
+VICE128      ?= x128
+
 # ── VICE flags ────────────────────────────────────────────
 # For interactive play
 RUN_FLAGS   = -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: all build run rundisk rundual debug test disk savedisk clean
+.PHONY: all build run rundisk rundual debug test disk savedisk clean run128demo
 
 all: build
 
@@ -137,6 +143,13 @@ SAVE_IMAGE  = $(OUT)/moria8_save.d64
 
 savedisk: | $(OUT)
 	$(C1541) -format "moria8 save,sv" d64 $(SAVE_IMAGE)
+
+# C128 VDC demo — standalone VDC rendering test
+$(VDC_DEMO_PRG): $(VDC_DEMO_SRC) $(KICKASS) | $(OUT)
+	$(JAVA) -jar $(KICKASS) $(VDC_DEMO_SRC) $(KA_FLAGS) -o $(VDC_DEMO_PRG)
+
+run128demo: $(VDC_DEMO_PRG)
+	$(VICE128) -80col -autostartprgmode 1 -autostart $(VDC_DEMO_PRG)
 
 # Auto-download KickAssembler if not present
 $(KICKASS):
