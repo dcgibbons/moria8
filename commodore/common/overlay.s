@@ -78,12 +78,13 @@ overlay_invalidate:
 
 
 // ============================================================
-// overlay_load_disk — KERNAL LOAD overlay PRG file to $E000
+// overlay_load_disk — KERNAL LOAD overlay PRG file
 // ============================================================
 // Input: X = 0-based overlay index (0=startup, 1=town, 2=death)
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 overlay_load_disk:
+    :EnterKernal()
     lda ovl_fn_len,x
     pha                     // Save filename length
     lda ovl_fn_addr_lo,x
@@ -97,25 +98,35 @@ overlay_load_disk:
 
     lda #2                  // Logical file number
     ldx #8                  // Device 8
-    ldy #1                  // Secondary 1 = load to PRG header address ($E000)
+    ldy #1                  // Secondary 1 = use PRG header address ($E000)
     jsr $ffba               // KERNAL SETLFS
 
     lda #0                  // 0 = LOAD
-    ldx #$00
-    ldy #$e0
-    jsr $ffd5               // KERNAL LOAD
+    ldx #$00                // Load address low ($E000 low byte = $00)
+    ldy #$e0                // Load address high ($E000)
+
+!ol_do_load:
+    :AssetLoad()            // Platform asset LOAD (handles C128 Bank 1)
     // Carry clear = success, carry set = error
     php                     // Save carry (load result)
     lda #2
     jsr $ffc3               // KERNAL CLOSE — release file #2
     jsr $ffcc               // KERNAL CLRCHN — restore default I/O
+    
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    beq !ol_done+
+    
     // Restore VIC-II bank 0 — KERNAL serial I/O uses CIA2 ($DD00)
     // bits 3-5 for the serial bus; bits 0-1 select VIC bank.
     // Ensure bank 0 ($0000-$3FFF) so VIC sees screen RAM at $0400.
     lda $dd00
     ora #%00000011
     sta $dd00
+
+!ol_done:
     plp                     // Restore carry
+    :ExitKernal()
     rts
 
 
