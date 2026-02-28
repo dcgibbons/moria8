@@ -1,48 +1,42 @@
-# VDC Performance Optimization Plan (Phase 10.5)
+# VDC Performance Optimization Plan (Phase 10.5 — REVISED)
 
-The C128 VDC (8563) bottleneck is I/O protocol overhead, not CPU speed. This plan outlines five "Force Multiplier" optimizations to achieve high-frame-rate rendering on the 80-column display.
+This plan replaces the previous version with technically verified optimizations based on the Phase 10.1 and C3 implementation baseline.
 
-## Current State Analysis
+## Revised Root Cause Analysis
 
--   **I/O Throttling**: The VDC register port ($D600/$D601) is hardware-throttled to 1MHz, regardless of the 8502's 2MHz mode.
--   **Register Overhead**: Every `vdc_write_data` call currently performs a status poll + register select + status poll + data write. This is a massive tax during character streaming.
+-   **I/O Throttling**: The VDC (8563) is the bottleneck. While the CPU runs at 2MHz, the VDC data port ($D601) requires a status-bit poll ($D600) between every write.
+-   **Subroutine Overhead**: `jsr vdc_wait` adds 9 cycles (JSR+RTS) per byte. Over a full viewport refresh (1,444 bytes), this is ~13,000 wasted cycles.
+-   **Per-Tile Arithmetic**: Calculating map coordinates for every tile (`clc/adc`) is more expensive than the per-row pointer lookups.
 
-## The "Force Multiplier" Optimizations
+## The Corrected Optimizations
 
-### 1. Select-Once-Blast-Row (Streaming)
-Stop re-selecting VDC Register 31 (Data Port) for every character.
-- **Implementation**: In `render_viewport`, select Register 31 **once** before the column loop. Within the loop, perform only a `vdc_wait` and a raw `sta VDC_DATA_REG`.
-- **Target**: ~70% reduction in per-character VDC I/O overhead.
+### 1. Inlined VDC Wait and Unrolled Streaming
+Replace `jsr vdc_wait` and `jsr vdc_write_data` in the row-blasting loop with inlined code.
+- **Implementation**: Inline `bit $D600; bpl *-3; sta $D601` inside the loop.
+- **Unrolling**: Unroll the 38-iteration character and attribute blasts. This eliminates `iny/cpy/bne` overhead (another 7 cycles per byte).
+- **Benefit**: ~23,000 cycles saved per refresh.
 
-### 2. Double-Buffered Row Blasting
-Separate game logic (map lookups, monster detection, light radius) from VDC I/O.
-- **Implementation**: Use 2MHz mode to fill two 38-byte ZP buffers (`row_char_buf` and `row_attr_buf`) with translated screen codes and RGBI colors for an entire row.
-- **Execution**: Once buffered, switch back to 1MHz (as needed for I/O) and blast the buffer to the VDC data port using an unrolled loop.
+### 2. Pre-Translated Tile Tables (Narrow Scope)
+Create `tile_vdc_colors` containing RGBI values for standard tiles.
+- **Implementation**: Look up these values during the base tile render path.
+- **Constraint**: Override paths (monsters, items, player, dimming) will still use the `vic_to_vdc_color` translation table to maintain code modularity.
 
-### 3. Pre-Translated VDC Tile Tables
-Remove runtime color translation.
-- **Implementation**: Create a `tile_vdc_colors` table during data initialization (or at compile-time) that stores the pre-translated VDC RGBI values.
-- **Target**: Saves 2 instructions (`ldx/lda`) per tile.
+### 3. Per-Tile Pointer "Sliding" (X-Offset Removal)
+Eliminate the `adc` for every tile in the `col_loop`.
+- **Implementation**: At the start of each row, set `zp_map_ptr` directly to `view_y_ptr + view_x`. 
+- **Effect**: The inner loop becomes a simple `lda (zp_map_ptr),y` where `y` increments from 0 to 37.
+- **Benefit**: ~7,000 cycles saved per refresh.
 
-### 4. Zero-Page Pointer "Sliding"
-Avoid repeated 16-bit row address lookups in the inner loop.
-- **Implementation**: Initialize `zp_map_ptr` to the start of the viewport's top row. Advance it by `MAP_WIDTH` (198) at the end of each row.
-- **Target**: Replace table lookups with simple 16-bit addition, saving cycles during the logic pass.
+### 4. Per-Row `dy` Early-Exit (Dimming Optimization)
+Replace the per-tile Chebyshev distance check with a per-row pre-check.
+- **Implementation**: At the start of the row loop, compute `dy = abs(map_y - player_y)`.
+- **Early Exit**: If `dy > light_radius`, flag the entire row as "Dimmed Only." This allows skipping monster/item checks and the `dx` distance check for the entire 38-column row.
 
-### 5. Static Distance Map (Chebyshev Optimization)
-Optimize the "dimming" calculation for unlit tiles.
-- **Implementation**: Since the player is always at the center of the 38x19 viewport, the distance from each viewport coordinate (X:0-37, Y:0-18) to the player is static. Pre-calculate a 38x19 distance map.
-- **Target**: Replace 2 `abs()` and 1 `max()` with a single `lda (ptr),y`.
-
-## Implementation Roadmap
-
-1.  **Phase 10.5.1**: Implement Optimization #1 (Streaming) in `render_viewport` and `render_single_tile`.
-2.  **Phase 10.5.2**: Update `tile_data` to include pre-translated VDC colors.
-3.  **Phase 10.5.3**: Refactor `render_viewport` to use double-buffering and unrolled blasting.
-4.  **Phase 10.5.4**: Integrate the pre-calculated distance map for dimming.
+### 5. Unified Hardware Fill
+Utilize VDC Registers 24-30 for `screen_clear`. This is a verified speedup for UI-level operations.
 
 ## Success Criteria
 
-- Viewport rendering speed increases by 300% or more.
-- Smooth scrolling even with multiple active monsters visible.
-- Full screen refresh is visually instantaneous to the user.
+- Viewport rendering performance exceeds 15 FPS during movement.
+- Zero redundant register selections or subroutine calls in the "Critical Path" (streaming loop).
+- Correct lighting/dimming logic maintained near map boundaries.

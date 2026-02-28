@@ -30,6 +30,7 @@
 | OPT-5 | Overlay Expansion (dungeon gen) | ✅ Complete — dungeon_gen.s → $E000 overlay; 3,490 bytes reclaimed |
 | 10.0 | C64/C128 Code Split | ✅ Complete — 64 files to common/, game loop extracted, c128 skeleton |
 | C3 | VDC Viewport Artifacts | ✅ Complete — centering, IRQ protection, streaming optimization, flash alignment |
+| 10.5 | VDC Performance Optimizations | ✅ Complete — inline vdc_wait, pre-translated tile colors, pointer sliding, per-row dy early-exit, hardware fill |
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader, monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
@@ -83,7 +84,29 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 4. **`screen_flash_at` column misalignment** — `sty sfa_col` stored the raw game-space column with no centering offset, causing combat flash effects to appear 20 columns left of the tile they referenced.
    **Fix:** `tya; clc; adc #SCREEN_COL_OFFSET; sta sfa_col` applies the offset on entry.
 
-**Fix 5 (VDC reg-30 hardware fill) deferred** — `screen_clear` already uses the streaming pattern (reg 31 selected once, `vdc_wait+sta` loop). The hardware fill via reg 30 provides marginal benefit and was not implemented.
+**Fix 5 (VDC reg-30 hardware fill) deferred at C3** — Later completed as part of Phase 10.5.
+
+---
+
+## Phase 10.5 — VDC Performance Optimizations ✅ COMPLETE (2026-02-27)
+
+**Files:** `commodore/c128/dungeon_render_vdc.s`, `commodore/c128/screen_vdc.s`
+
+**Root cause:** I/O protocol overhead dominates VDC rendering. The original implementation called `jsr vdc_wait` (9-cycle jsr+rts overhead) per byte, computed per-tile map column addresses with redundant arithmetic, and performed full dy recalculation per tile for dimming.
+
+**Optimizations implemented:**
+
+1. **Inline `vdc_wait` in streaming loops (Opt 1, ~13K cycles/refresh)** — Replaced `jsr vdc_wait` in `render_viewport`'s `!char_stream:`/`!attr_stream:` loops with inline `bit VDC_ADDR_REG; bpl *-3`. Uses a shared-label trick: both the poll branch (`bpl`) and the next-byte branch (`bne`) point to the same `bit VDC_ADDR_REG` target — the poll loop and the outer iteration loop share a single instruction. Saves 9 cycles × 76 stream iterations × 19 rows ≈ 13,000 cycles per full viewport refresh. Code cost: only 2 extra bytes per pass.
+
+2. **Pre-translated `tile_vdc_colors` table (Opt 2)** — Added `tile_vdc_colors` table (16 bytes) and 14 VDC RGBI constants (`VDC_BLACK`, `VDC_WHITE`, `VDC_DGREY`, etc.) to `screen_vdc.s`. Normal tile path now loads VDC-native color directly from `tile_vdc_colors` instead of `tile_colors` + runtime `vic_to_vdc_color` lookup. Override paths (monsters, items, player, dimming) apply the translation inline at their own color-assignment site. `!write_tile:`/`!rst_write:` no longer translate — `zp_temp1`/`zp_temp4` are always VDC-native. Saves 2 instructions per tile for the common case.
+
+3. **Per-tile pointer sliding (Opt 3, ~7K cycles/refresh)** — At the start of each `row_loop` iteration, the map pointer is pre-slid by `view_x`: `zp_map_ptr = map_row_base + view_x`. The `col_loop` then uses `ldy zp_render_x; lda (zp_map_ptr),y` instead of `lda zp_view_x; clc; adc zp_render_x; tay; lda (zp_map_ptr),y` — removing 3 instructions (lda/clc/adc) per tile × 722 tiles ≈ 7,000 cycles saved per refresh.
+
+4. **Per-row `dy` early-exit for dimming (Opt 4)** — At the start of each row loop iteration, `rv_row_dy = abs(view_y + render_y - player_y)` is computed once. In the per-tile dimming check: if `rv_row_dy > light_radius`, the tile is immediately dimmed (skips the `dx` computation entirely). If within range, `rv_row_dy` is reused for the `max(|dx|,|dy|)` Chebyshev comparison — no redundant `dy` recalculation. Saves the full `lda/clc/adc/sec/sbc/bcs/eor/clc/adc` dy block per dimmed tile, and half of it (the `cmp rv_row_dy; lda rv_row_dy` max) for lit tiles.
+
+5. **VDC hardware fill in `screen_clear` and `screen_clear_row` (Opt 5)** — Replaced CPU streaming loops with VDC block fill hardware: write fill byte to reg 31 (1 byte, sets fill value + auto-increments address), write count-1 to reg 30 (hardware fills remaining bytes). `screen_clear` uses 7 × 256-byte fills + 1 × 208-byte tail per pass (chars + attrs). `screen_clear_row` uses 1 × 80-byte fill per pass. Replaces ~2000-iteration CPU loops with ~8 register writes per full clear.
+
+**Note on unrolling:** Full 38-iteration loop unrolling was initially implemented but reverted — it exceeded the `$E000` program boundary (`program_end <= BANKED_DATA_BASE`). The inline-wait-with-shared-label approach achieves the primary jsr-overhead savings without the code size cost.
 
 ---
 

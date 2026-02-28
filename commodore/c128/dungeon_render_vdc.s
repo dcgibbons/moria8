@@ -60,10 +60,24 @@ render_viewport:
     adc zp_render_y
     tax                     // X = map row
 
-    // Get map row address
+    // Pre-compute |dy| = abs(map_y - player_y) for this row (Opt 4: per-row dimming early-exit)
+    txa                     // A = map_y
+    sec
+    sbc zp_player_y
+    bcs !rv_row_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!rv_row_dy_pos:
+    sta rv_row_dy           // rv_row_dy = abs(map_y - player_y) for this row
+
+    // Get map row address, pre-slid by view_x (Opt 3: col_loop uses ldy zp_render_x directly)
     lda map_row_lo,x
+    clc
+    adc zp_view_x           // Pre-add view_x: ptr = row_base + view_x
     sta zp_map_ptr_lo
     lda map_row_hi,x
+    adc #0
     sta zp_map_ptr_hi
 
     // Get VDC screen/attribute row addresses
@@ -85,13 +99,8 @@ render_viewport:
     sta zp_render_x         // Screen column counter (0-37)
 
 !col_loop:
-    // Compute map column = view_x + render_x
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    tay                     // Y = map column offset
-
-    // Read map byte
+    // Read map byte — ptr already offset by view_x (Opt 3), Y = render_x column counter
+    ldy zp_render_x
     lda (zp_map_ptr_lo),y
     sta zp_tile_tmp
 
@@ -112,7 +121,7 @@ render_viewport:
     // Detected monster on unvisited tile — blank background, then monster
     lda #$20                    // Space (blank tile)
     sta zp_temp0
-    lda #0                      // Black background
+    lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp1
     jmp !rv_no_item+            // Skip to monster check
 !rv_visited:
@@ -137,15 +146,15 @@ render_viewport:
     // Corridor rock
     lda #$23                // '#' screen code
     sta zp_temp0
-    lda #COL_LGREY
+    lda #VDC_LGREY          // Pre-translated VDC color (Opt 2)
     sta zp_temp1
     jmp !rv_tile_set+
 !rv_normal:
-    // Look up screen code and color
+    // Look up screen code and pre-translated VDC color (Opt 2)
     lda tile_screen_codes,x
-    sta zp_temp0            // screen code
-    lda tile_colors,x
-    sta zp_temp1            // color
+    sta zp_temp0
+    lda tile_vdc_colors,x   // Pre-translated VDC RGBI — no vic_to_vdc_color needed
+    sta zp_temp1
 !rv_tile_set:
 
     // Store door number override (town only, open door tiles only)
@@ -174,7 +183,7 @@ render_viewport:
     clc
     adc #$31                    // '1'-'6' screen code
     sta zp_temp0
-    lda #COL_STORE
+    lda #VDC_YELLOW             // Pre-translated VDC color (Opt 2)
     sta zp_temp1
     jmp !rv_no_store+
 !rv_store_nxt:
@@ -189,8 +198,18 @@ render_viewport:
     and #FLAG_LIT
     bne !rv_vis_ok+             // FLAG_LIT → permanently visible → full color
 
-    // Not lit — check if within torch radius (Chebyshev distance)
-    // dx = abs(map_x - player_x)
+    // Not lit — use pre-computed rv_row_dy for row-level early exit (Opt 4)
+    lda rv_row_dy
+    cmp zp_light_radius
+    beq !rv_check_dx+           // |dy| == radius: still need |dx| check
+    bcc !rv_check_dx+           // |dy| < radius: still need |dx| check
+    // |dy| > light_radius: entire tile guaranteed outside torch range
+    lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
+    sta zp_temp1
+    jmp !rv_no_monster+         // Dimmed tiles never show monsters
+
+!rv_check_dx:
+    // |dy| <= light_radius: check |dx| = abs(map_x - player_x)
     lda zp_view_x
     clc
     adc zp_render_x
@@ -201,32 +220,18 @@ render_viewport:
     clc
     adc #1
 !rv_dx_pos:
-    sta zp_temp2                // |dx| (safe — not used by tile lookup)
-
-    // dy = abs(map_y - player_y)
-    lda zp_view_y
-    clc
-    adc zp_render_y
-    sec
-    sbc zp_player_y
-    bcs !rv_dy_pos+
-    eor #$ff
-    clc
-    adc #1
-!rv_dy_pos:
-    // A = |dy|, find max(|dx|, |dy|)
-    cmp zp_temp2
-    bcs !rv_use_dy+
-    lda zp_temp2
-!rv_use_dy:
-    // A = Chebyshev distance
+    // A = |dx|; find max(|dx|, rv_row_dy) = Chebyshev distance
+    cmp rv_row_dy
+    bcs !rv_use_dx+             // |dx| >= |dy|: A already holds max
+    lda rv_row_dy               // |dy| > |dx|: use pre-computed |dy|
+!rv_use_dx:
     cmp zp_light_radius
     beq !rv_vis_ok+             // Exactly at radius → visible
     bcc !rv_vis_ok+             // Within radius → visible
 
     // Outside light radius → dimmed (remembered tile)
-    lda #COL_DGREY
-    sta zp_temp1                // Override color to dark grey
+    lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
+    sta zp_temp1
     jmp !rv_no_monster+         // Dimmed tiles never show monsters
 
 !rv_vis_ok:
@@ -252,7 +257,9 @@ render_viewport:
     lda it_display,x
     sta zp_temp0
     txa                             // A = item type ID
-    jsr item_get_floor_color        // A = identification-aware color
+    jsr item_get_floor_color        // A = VIC color (identification-aware)
+    tax
+    lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
 !rv_no_item:
 
@@ -279,7 +286,9 @@ render_viewport:
     tax                         // X = creature type
     lda cr_display,x
     sta zp_temp0
-    lda cr_color,x
+    lda cr_color,x              // VIC color
+    tax
+    lda vic_to_vdc_color,x      // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
 
 !rv_no_monster:
@@ -298,7 +307,7 @@ render_viewport:
     // Override with player character
     lda #SC_PLAYER          // '@'
     sta zp_temp0
-    lda #COL_PLAYER
+    lda #VDC_WHITE          // Pre-translated VDC white (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp1
     jmp !write_tile+
 
@@ -308,19 +317,15 @@ render_viewport:
 !draw_blank:
     lda #SC_SPACE
     sta zp_temp0
-    lda #COL_BLACK
+    lda #VDC_BLACK          // Pre-translated VDC black (Opt 2)
     sta zp_temp1
 
 !write_tile:
-    // Buffer screen code for streaming pass (VDC write deferred to after col_loop)
+    // Buffer screen code and pre-translated VDC color (all paths set zp_temp1 to VDC-native)
+    ldx zp_render_x
     lda zp_temp0
-    ldx zp_render_x
     sta row_char_buf,x
-
-    // Buffer translated color for attribute pass
-    ldx zp_temp1
-    lda vic_to_vdc_color,x
-    ldx zp_render_x
+    lda zp_temp1            // Already VDC RGBI (Opt 2: translation moved to each color path)
     sta row_attr_buf,x
 
     // Next column
@@ -332,9 +337,13 @@ render_viewport:
 !col_done:
 
     // Stream char + attr rows to VDC atomically (sei per row = minimal IRQ window)
+    // Opt 1: reg 31 selected once per pass; vdc_wait inlined as bit/bpl sharing the loop target.
+    // Trick: both bpl (VDC busy → repoll) and bne (next byte) branch to the same !stream: label
+    // (the bit instruction). This eliminates jsr vdc_wait overhead (~9 cycles) per byte,
+    // saving ~13K cycles/refresh, while keeping code size compact (18 bytes per pass).
     sei
 
-    // Stream char row: set address once, select reg 31 once, hammer the port
+    // Char row: set VDC address, select reg 31 once, then blast 38 bytes
     lda zp_screen_lo
     clc
     adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
@@ -343,17 +352,18 @@ render_viewport:
     adc #0
     jsr vdc_set_update_addr
     ldx #31
-    jsr vdc_select_reg
+    jsr vdc_select_reg      // Wait + select reg 31 + wait (once per row)
     ldy #0
 !char_stream:
-    jsr vdc_wait
+    bit VDC_ADDR_REG        // Poll VDC ready (bit 7 → N flag)
+    bpl !char_stream-       // N=0 (busy) → repoll; N=1 (ready) → fall through
     lda row_char_buf,y
     sta VDC_DATA_REG
     iny
     cpy #VIEWPORT_W
-    bne !char_stream-
+    bne !char_stream-       // Loop back to bit — also acts as wait for next byte
 
-    // Stream attr row: set address once, select reg 31 once, hammer the port
+    // Attr row: same pattern
     lda zp_color_lo
     clc
     adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
@@ -365,7 +375,8 @@ render_viewport:
     jsr vdc_select_reg
     ldy #0
 !attr_stream:
-    jsr vdc_wait
+    bit VDC_ADDR_REG
+    bpl !attr_stream-
     lda row_attr_buf,y
     sta VDC_DATA_REG
     iny
@@ -390,6 +401,27 @@ rsd_save_x: .byte 0
 // Row char/attribute buffers — filled during col_loop, streamed to VDC after
 row_char_buf: .fill VIEWPORT_W, 0
 row_attr_buf: .fill VIEWPORT_W, 0
+
+// Pre-translated VDC attribute bytes for standard tile types (indexed by tile type 0-15).
+// Values are VDC RGBI + Set1 flag ($80), matching vic_to_vdc_color[tile_colors[i]].
+// Eliminates the runtime vic_to_vdc_color lookup for the common (non-overridden) tile path.
+tile_vdc_colors:
+    .byte VDC_DGREY     // 0: Floor
+    .byte VDC_LGREY     // 1: Wall (horizontal)
+    .byte VDC_LGREY     // 2: Wall (vertical)
+    .byte VDC_LGREY     // 3: Wall (corner TL)
+    .byte VDC_LGREY     // 4: Wall (corner TR)
+    .byte VDC_LGREY     // 5: Wall (corner BL)
+    .byte VDC_LGREY     // 6: Wall (corner BR)
+    .byte VDC_BROWN     // 7: Door (open)
+    .byte VDC_BROWN     // 8: Door (closed)
+    .byte VDC_WHITE     // 9: Stairs down
+    .byte VDC_WHITE     // 10: Stairs up
+    .byte VDC_GREY      // 11: Rubble
+    .byte VDC_RED       // 12: Magma stream
+    .byte VDC_WHITE     // 13: Quartz vein
+    .byte VDC_RED       // 14: Trap (visible)
+    .byte VDC_LGREY     // 15: Secret door
 
 // render_single_tile — Render one tile at map coordinates via VDC
 // Used by dirty rendering to update only changed tiles.
@@ -455,13 +487,13 @@ render_single_tile:
     bne !rst_normal+
     lda #$23                // '#'
     sta zp_temp3
-    lda #COL_LGREY
+    lda #VDC_LGREY          // Pre-translated VDC color (Opt 2)
     sta zp_temp4
     jmp !rst_tile_set+
 !rst_normal:
     lda tile_screen_codes,x
     sta zp_temp3
-    lda tile_colors,x
+    lda tile_vdc_colors,x   // Pre-translated VDC color (Opt 2)
     sta zp_temp4
 !rst_tile_set:
 
@@ -482,7 +514,7 @@ render_single_tile:
     clc
     adc #$31                    // '1'-'6' screen code
     sta zp_temp3
-    lda #COL_STORE
+    lda #VDC_YELLOW             // Pre-translated VDC color (Opt 2)
     sta zp_temp4
     jmp !rst_no_store+
 !rst_store_nxt:
@@ -524,7 +556,7 @@ render_single_tile:
     bcc !rst_vis_ok+
 
     // Dimmed
-    lda #COL_DGREY
+    lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp4
     jmp !rst_no_monster+        // Dimmed tiles never show monsters
 
@@ -543,7 +575,9 @@ render_single_tile:
     lda it_display,x
     sta zp_temp3
     txa                             // A = item type ID
-    jsr item_get_floor_color        // A = identification-aware color
+    jsr item_get_floor_color        // A = VIC color (identification-aware)
+    tax
+    lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4
 !rst_no_item:
 
@@ -563,7 +597,9 @@ render_single_tile:
     tax
     lda cr_display,x
     sta zp_temp3
-    lda cr_color,x
+    lda cr_color,x              // VIC color
+    tax
+    lda vic_to_vdc_color,x      // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4
 
 !rst_no_monster:
@@ -576,14 +612,14 @@ render_single_tile:
     bne !rst_write+
     lda #SC_PLAYER
     sta zp_temp3
-    lda #COL_PLAYER
+    lda #VDC_WHITE              // Pre-translated (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp4
     jmp !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
     sta zp_temp3
-    lda #COL_BLACK
+    lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp4
 
 !rst_write:
@@ -600,7 +636,7 @@ render_single_tile:
     lda zp_temp3
     jsr vdc_write_data
 
-    // Set VDC address to attribute position and write translated color
+    // Set VDC address to attribute position and write pre-translated VDC color
     lda zp_color_lo
     clc
     adc rst_col_tmp
@@ -608,8 +644,7 @@ render_single_tile:
     lda zp_color_hi
     adc #0
     jsr vdc_set_update_addr
-    ldx zp_temp4
-    lda vic_to_vdc_color,x
+    lda zp_temp4                // Already VDC RGBI (Opt 2: translation moved to each color path)
     jsr vdc_write_data
     cli                         // IRQ on: char + attr written consistently
     rts
@@ -618,6 +653,7 @@ rst_col_tmp: .byte 0
 rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
 rv_mon_x:    .byte 0          // Monster check scratch
+rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0

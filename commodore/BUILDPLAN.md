@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-27)
+## Current State (2026-02-27, updated)
 
 **All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete — codebase reorganized into `common/`, `c64/`, and `c128/`. The project is currently focusing on Phase 10.1 (VDC 80-column rendering) and resolving critical C128 input issues.
 
@@ -41,7 +41,7 @@
 | 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | |
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) at $4000 in Bank 0. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
-| 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | |
+| 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 
 ---
 

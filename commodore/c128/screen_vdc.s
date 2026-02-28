@@ -141,70 +141,91 @@ vic_to_vdc_color:
     .byte  7|$80    // $0f lt grey   → RGBI 7  | Set 1
 
 // ============================================================
+// Pre-translated VDC RGBI color constants
+// ============================================================
+// These match vic_to_vdc_color entries; use directly in VDC attribute
+// writes to avoid a runtime table lookup in hot rendering paths.
+// Bit 7 ($80) = Alternate Character Set (VDC Set 1 = mixed case font).
+.const VDC_BLACK  =  0|$80   // COL_BLACK  ($00) → RGBI 0
+.const VDC_WHITE  = 15|$80   // COL_WHITE  ($01) → RGBI 15
+.const VDC_RED    =  4|$80   // COL_RED    ($02) → RGBI 4
+.const VDC_CYAN   = 11|$80   // COL_CYAN   ($03) → RGBI 11
+.const VDC_GREEN  =  2|$80   // COL_GREEN  ($05) → RGBI 2
+.const VDC_BLUE   =  1|$80   // COL_BLUE   ($06) → RGBI 1
+.const VDC_YELLOW = 14|$80   // COL_YELLOW ($07) → RGBI 14
+.const VDC_ORANGE = 12|$80   // COL_ORANGE ($08) → RGBI 12
+.const VDC_BROWN  =  6|$80   // COL_BROWN  ($09) → RGBI 6
+.const VDC_DGREY  =  8|$80   // COL_DGREY  ($0b) → RGBI 8
+.const VDC_GREY   =  7|$80   // COL_GREY   ($0c) → RGBI 7
+.const VDC_LGREY  =  7|$80   // COL_LGREY  ($0f) → RGBI 7 (L3: same as GREY)
+.const VDC_LGREEN = 10|$80   // COL_LGREEN ($0d) → RGBI 10
+.const VDC_LBLUE  =  9|$80   // COL_LBLUE  ($0e) → RGBI 9
+
+// ============================================================
 // Screen Subroutines
 // ============================================================
 
 // screen_clear — Clear entire VDC screen (spaces) and attributes (current color)
+// Uses VDC hardware block fill (reg 30) for maximum speed.
+// 2000 bytes = 7 × 256-byte fills + 1 × 208-byte fill (one pass each for chars + attrs).
+// Each fill: write first byte to reg 31 (sets fill value + addr++),
+// write count-1 to reg 30 (VDC fills count-1 more bytes in hardware).
 screen_clear:
     sei                     // IRQ off: protect screen fill + attr fill as one atomic block
 
-    // Fill screen RAM with spaces
+    // Fill screen RAM: 2000 bytes of SC_SPACE via hardware block fill
     lda #>VDC_SCREEN_BASE
     ldy #<VDC_SCREEN_BASE
     jsr vdc_set_update_addr
-    ldx #31                 // Select reg 31 once: stream all 2000 space bytes
-    jsr vdc_select_reg
 
-    // 2000 bytes = 7 full pages (1792) + 208 remaining
     lda #7
     sta sc_page_cnt
-    ldy #0
-!fill_screen:
-    jsr vdc_wait            // Wait for auto-increment from previous write
+!fill_char_chunk:           // 7 × 256-byte chunks
     lda #SC_SPACE
-    sta VDC_DATA_REG        // Write directly — reg 31 stays selected
-    iny
-    bne !fill_screen-
+    ldx #31
+    jsr vdc_write_reg       // Write 1 byte (sets fill value, advances address)
+    lda #255
+    ldx #30
+    jsr vdc_write_reg       // Trigger hardware fill: 255 more bytes = 256 total
+    jsr vdc_wait            // Wait for hardware fill to complete
     dec sc_page_cnt
-    bne !fill_screen-
-    ldy #0
-!fill_screen_tail:
+    bne !fill_char_chunk-
+    lda #SC_SPACE           // Tail: 2000 - 7*256 = 208 bytes
+    ldx #31
+    jsr vdc_write_reg
+    lda #207
+    ldx #30
+    jsr vdc_write_reg
     jsr vdc_wait
-    lda #SC_SPACE
-    sta VDC_DATA_REG
-    iny
-    cpy #208
-    bne !fill_screen_tail-
 
-    // Fill attribute RAM with translated color
+    // Fill attribute RAM: 2000 bytes via hardware block fill
     lda #>VDC_ATTRIB_BASE
     ldy #<VDC_ATTRIB_BASE
     jsr vdc_set_update_addr
     ldx zp_text_color
     lda vic_to_vdc_color,x
     sta sc_attr_val
-    ldx #31                 // Select reg 31 once: stream all 2000 attr bytes
-    jsr vdc_select_reg
 
     lda #7
     sta sc_page_cnt
-    ldy #0
-!fill_attr:
-    jsr vdc_wait
+!fill_attr_chunk:
     lda sc_attr_val
-    sta VDC_DATA_REG
-    iny
-    bne !fill_attr-
+    ldx #31
+    jsr vdc_write_reg
+    lda #255
+    ldx #30
+    jsr vdc_write_reg
+    jsr vdc_wait
     dec sc_page_cnt
-    bne !fill_attr-
-    ldy #0
-!fill_attr_tail:
+    bne !fill_attr_chunk-
+    lda sc_attr_val         // Tail: 208 bytes
+    ldx #31
+    jsr vdc_write_reg
+    lda #207
+    ldx #30
+    jsr vdc_write_reg
     jsr vdc_wait
-    lda sc_attr_val
-    sta VDC_DATA_REG
-    iny
-    cpy #208
-    bne !fill_attr_tail-
+
     cli                     // IRQ on: screen + attr RAM fully cleared
     rts
 
@@ -395,31 +416,28 @@ screen_set_color:
 
 // screen_clear_row — Clear a single VDC row to spaces
 // Input: A = row number (0–24)
+// Uses VDC hardware block fill: 1 byte via reg 31 + 79 more via reg 30 = 80 total.
 // Preserves: nothing
 screen_clear_row:
     tax
     sei                     // IRQ off: protect char fill + attr fill for this row
-    stx scr_save_row        // Save row NOW — vdc_set_update_addr and vdc_select_reg clobber X
+    stx scr_save_row
 
-    // Set VDC address to screen row start; select reg 31 once for char streaming
+    // Clear char row: hardware fill 80 spaces
     lda screen_row_lo,x
     tay
     lda screen_row_hi,x
     jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg      // Reg 31 selected for char stream
-
-    ldy #0
-!scr_loop:
-    jsr vdc_wait
     lda #SC_SPACE
-    sta VDC_DATA_REG        // Write directly — reg 31 stays selected
-    iny
-    cpy #SCREEN_COLS
-    bne !scr_loop-
+    ldx #31
+    jsr vdc_write_reg       // Write first byte (sets fill value, advances address)
+    lda #79
+    ldx #30
+    jsr vdc_write_reg       // Fill 79 more bytes = 80 total
+    jsr vdc_wait            // Wait for hardware fill to complete
 
-    // Set VDC address to attribute row start; select reg 31 once for attr streaming
-    ldx scr_save_row        // Restore row — X was clobbered by VDC calls above
+    // Clear attr row: hardware fill 80 bytes of current color
+    ldx scr_save_row
     lda color_row_lo,x
     tay
     lda color_row_hi,x
@@ -427,17 +445,13 @@ screen_clear_row:
     ldx zp_text_color
     lda vic_to_vdc_color,x
     sta scr_attr
-    ldx #31
-    jsr vdc_select_reg      // Reg 31 selected for attr stream
-
-    ldy #0
-!attr_loop:
-    jsr vdc_wait
     lda scr_attr
-    sta VDC_DATA_REG        // Write directly — reg 31 stays selected
-    iny
-    cpy #SCREEN_COLS
-    bne !attr_loop-
+    ldx #31
+    jsr vdc_write_reg
+    lda #79
+    ldx #30
+    jsr vdc_write_reg
+    jsr vdc_wait
 
     ldx scr_save_row
     cli                     // IRQ on: row char+attr fill complete
