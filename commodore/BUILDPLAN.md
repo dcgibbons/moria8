@@ -41,6 +41,7 @@
 | 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | |
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) at $4000 in Bank 0. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
+| 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | |
 
 ---
 
