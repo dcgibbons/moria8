@@ -90,6 +90,13 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 // GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
 // non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
+// input_run_key_check — Non-blocking: returns nonzero if any key is pending
+// Used by run-cancel check in game_loop.s. C64 reads KERNAL keyboard buffer count.
+// Output: A = nonzero if key pending, 0 if no key
+input_run_key_check:
+    lda KBDBUF_COUNT
+    rts
+
 input_get_key:
     lda $01
     pha

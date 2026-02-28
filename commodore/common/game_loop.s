@@ -192,13 +192,13 @@ main_loop:
 !not_conf_run:
 
     // Any keypress cancels running
-    lda KBDBUF_COUNT            // Keyboard buffer count
+    jsr input_run_key_check     // Returns nonzero if any key is pressed
     bne !run_cancel+
     jmp run_step
 
 !run_cancel:
     lda #0
-    sta KBDBUF_COUNT            // Flush keyboard buffer
+    sta KBDBUF_COUNT            // Flush keyboard buffer (C64 only; harmless on C128)
     lda #$ff
     sta zp_run_dir
 !not_running:

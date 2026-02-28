@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-02-26)
+## Current State (2026-02-27)
 
 **All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete — codebase reorganized into `common/`, `c64/`, and `c128/`. The project is currently focusing on Phase 10.1 (VDC 80-column rendering) and resolving critical C128 input issues.
 
@@ -22,8 +22,8 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **C1** | **BLOCKER** | C128: Missing essential keys (RETURN, SPACE, DEL, STOP, digits) in CIA scan table. | **High Priority** |
-| **M1** | **HIGH** | C128: `KBDBUF_COUNT` uses C64 address ($C6) instead of C128 ($D0). | **High Priority** |
+| **C2** | **BLOCKER** | C128: Keyboard matrix scan lacks Line 8 (keypad/extended keys) support. | **High Priority** |
+| **C3** | **HIGH** | C128: VDC Viewport clipping/scrolling produces visual artifacts. | Tracked |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -63,12 +63,11 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 ---
 
-### Priority Triage (updated 2026-02-26)
+### Priority Triage (updated 2026-02-27)
 
 **High priority (C128 Port Stability):**
-1. Fix `cia_scancode_table` in `input128.s` (C1, C2).
-2. Fix `KBDBUF_COUNT` constant (M1).
-3. Complete VDC Rendering Backend (10.1).
+1. Add Line 8 (keypad/extra keys) scanning support (C2).
+2. Resolve VDC viewport clipping/artifacts (C3, 10.1).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

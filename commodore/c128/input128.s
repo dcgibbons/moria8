@@ -88,6 +88,14 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4
 // Subroutines
 // ============================================================
 
+// input_run_key_check — Non-blocking: returns nonzero if any key is currently pressed
+// Used by run-cancel check in game_loop.s. C128 polls CIA directly (no KERNAL buffer).
+// Output: A = nonzero (PETSCII) if key pressed, 0 if no key
+// Destroys: A, X, Y
+input_run_key_check:
+    jsr cia_scan_petscii
+    rts
+
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
 // Waits for any previously-held key to be released before detecting

@@ -4315,3 +4315,33 @@ commodore/
 - `make clean && make build` — assembles without errors, all 71 compile-time asserts pass
 - `make test` — all 24 suites (321 runtime tests) pass
 - `git diff --stat` — confirms only file moves + import path changes
+
+---
+
+## C128 Input Bug Fixes — C1, M1, Run-Cancel (2026-02-27)
+
+### Issues Resolved
+
+| # | Severity | Description | Resolution |
+|---|----------|-------------|------------|
+| C1 | BLOCKER | C128: Missing essential keys (RETURN, SPACE, DEL, STOP, digits) in CIA scan table | Already present in `cia_scancode_table` in `input128.s` — entry was stale |
+| M1 | HIGH | C128: `KBDBUF_COUNT` uses C64 address ($C6) instead of C128 ($D0) | Already $D0 in `input128.s` — entry was stale |
+| — | HIGH | C128: Running could never be cancelled by keypress | `game_loop.s` read `KBDBUF_COUNT` which the CIA direct scan never writes; fixed via `input_run_key_check` |
+
+### Root Cause — Run-Cancel Broken
+
+`game_loop.s:195` checked `lda KBDBUF_COUNT; bne !run_cancel+` to detect a keypress during
+running. On C64, the KERNAL IRQ handler (SCNKEY) writes $C6 each frame. On C128, `input128.s`
+bypasses KERNAL entirely with `cia_scan_petscii` — nothing ever writes $D0 during the run loop,
+so the branch never fired and running could not be cancelled.
+
+### Fix
+
+Introduced `input_run_key_check` as a platform-specific non-blocking key poll:
+
+- **`c64/input.s`**: `lda KBDBUF_COUNT; rts` — reads KERNAL buffer count (unchanged behavior)
+- **`c128/input128.s`**: `jsr cia_scan_petscii; rts` — polls CIA1 matrix directly; returns nonzero PETSCII if any key is pressed
+
+`game_loop.s` now calls `jsr input_run_key_check` instead of `lda KBDBUF_COUNT` at the
+run-cancel check site. Both builds: 69/70 asserts, 0 failed. Tested in VICE — run correctly
+cancels on keypress.
