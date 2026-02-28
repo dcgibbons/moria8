@@ -159,27 +159,34 @@ stub_start:
     bne !clr-
 
     // Atomic Bank Copy (1 -> 0)
+    // Page-buffered copy via common RAM to avoid MMU thrashing.
     // MUST use _NOIO variants ($7F/$3F) to hide I/O at $D000-$DFFF.
-    // Without this, the copy reads VDC/SID/CIA registers and writes garbage
-    // back to them, corrupting hardware state (VDC hangs, CIA misconfigured).
     lda #$00
     sta $60
     lda #$1c
     sta $61
-    ldx #$e2                // Copy until $FE00
+    ldx #$e3                // Copy $E3 pages ($1C00 to $FEFF) -> stops exactly at $FF00
 copy_loop:
-    ldy #0
-!pg:
+    // Read 256 bytes from Bank 1 into common RAM buffer ($0C00)
     lda #MMU_RAM_BANK1_NOIO
     sta $ff00
+    ldy #0
+!read_pg:
     lda ($60),y
-    sta $62
+    sta $0c00,y
+    iny
+    bne !read_pg-
+
+    // Write 256 bytes from common RAM buffer to Bank 0
     lda #MMU_ALL_RAM_NOIO
     sta $ff00
-    lda $62
+    ldy #0
+!write_pg:
+    lda $0c00,y
     sta ($60),y
     iny
-    bne !pg-
+    bne !write_pg-
+
     inc $61
     dex
     bne copy_loop

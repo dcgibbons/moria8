@@ -61,6 +61,7 @@ entry_real:
     cld
     ldx #$ff
     txs
+
     lda #$7f
     sta $dc0d               // Mask all CIA1 interrupt sources
     sta $dd0d               // Mask all CIA2 interrupt sources
@@ -211,7 +212,7 @@ entry_real:
 
 // ============================================================
 // Safe KERNAL Wrappers
-// Each wrapper switches to MMU_NORMAL, calls real target, 
+// Each wrapper switches to MMU_NORMAL, calls real target,
 // then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
 // ============================================================
 
@@ -494,12 +495,7 @@ init_copy_banked:
 !copy:
     lda zp_ptr1_hi
     cmp #$ff
-    bne !do_copy+
-    cpy #5
-    bcc !skip_copy+
-    cpy #$b7
-    bcs !skip_copy+             // Protect $FFB7-$FFFF (patched KERNAL JMP table + vectors)
-!do_copy:
+    beq !skip_copy+             // Protect Page $FF ($FF00-$FFFF) entirely
     lda (zp_ptr0),y
     sta (zp_ptr1),y
 !skip_copy:
@@ -511,9 +507,6 @@ init_copy_banked:
     bne !copy-
     lda #MMU_ALL_RAM
     sta $ff00
-    // DIAG-6c: RED = copy loop done, I/O restored
-    lda #COL_RED
-    sta $d020
     cli
     rts
 
