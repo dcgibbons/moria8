@@ -80,15 +80,6 @@ render_viewport:
     lda color_row_hi,x
     sta zp_color_hi
 
-    // Set VDC address to screen row + VIEWPORT_X for auto-increment streaming
-    lda zp_screen_lo
-    clc
-    adc #VIEWPORT_X
-    tay
-    lda zp_screen_hi
-    adc #0
-    jsr vdc_set_update_addr
-
     // Inner loop: 38 columns
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
@@ -321,9 +312,10 @@ render_viewport:
     sta zp_temp1
 
 !write_tile:
-    // Write screen code to VDC via auto-increment
+    // Buffer screen code for streaming pass (VDC write deferred to after col_loop)
     lda zp_temp0
-    jsr vdc_write_data
+    ldx zp_render_x
+    sta row_char_buf,x
 
     // Buffer translated color for attribute pass
     ldx zp_temp1
@@ -339,22 +331,48 @@ render_viewport:
     jmp !col_loop-
 !col_done:
 
-    // Stream buffered attributes for this row
+    // Stream char + attr rows to VDC atomically (sei per row = minimal IRQ window)
+    sei
+
+    // Stream char row: set address once, select reg 31 once, hammer the port
+    lda zp_screen_lo
+    clc
+    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
+    tay
+    lda zp_screen_hi
+    adc #0
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!char_stream:
+    jsr vdc_wait
+    lda row_char_buf,y
+    sta VDC_DATA_REG
+    iny
+    cpy #VIEWPORT_W
+    bne !char_stream-
+
+    // Stream attr row: set address once, select reg 31 once, hammer the port
     lda zp_color_lo
     clc
-    adc #VIEWPORT_X
+    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
     tay
     lda zp_color_hi
     adc #0
     jsr vdc_set_update_addr
-
+    ldx #31
+    jsr vdc_select_reg
     ldy #0
 !attr_stream:
+    jsr vdc_wait
     lda row_attr_buf,y
-    jsr vdc_write_data
+    sta VDC_DATA_REG
     iny
     cpy #VIEWPORT_W
     bne !attr_stream-
+
+    cli
 
     // Next row
     inc zp_render_y
@@ -369,7 +387,8 @@ render_viewport:
 rsd_col:    .byte 0
 rsd_save_x: .byte 0
 
-// Row attribute buffer for batched VDC writes
+// Row char/attribute buffers — filled during col_loop, streamed to VDC after
+row_char_buf: .fill VIEWPORT_W, 0
 row_attr_buf: .fill VIEWPORT_W, 0
 
 // render_single_tile — Render one tile at map coordinates via VDC
@@ -394,12 +413,12 @@ render_single_tile:
     lda color_row_hi,x
     sta zp_color_hi
 
-    // Compute and save screen column offset
+    // Compute and save screen column offset (viewport-relative + centering offset)
     lda zp_temp0
     sec
     sbc zp_view_x
     clc
-    adc #VIEWPORT_X
+    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
     sta rst_col_tmp
 
     // Read map byte at (map_x, map_y)
@@ -568,6 +587,8 @@ render_single_tile:
     sta zp_temp4
 
 !rst_write:
+    sei                         // IRQ off: protect char + attr VDC writes as atomic pair
+
     // Set VDC address to screen position and write char
     lda zp_screen_lo
     clc
@@ -590,6 +611,7 @@ render_single_tile:
     ldx zp_temp4
     lda vic_to_vdc_color,x
     jsr vdc_write_data
+    cli                         // IRQ on: char + attr written consistently
     rts
 
 rst_col_tmp: .byte 0

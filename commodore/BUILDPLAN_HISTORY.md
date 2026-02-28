@@ -29,6 +29,7 @@
 | OPT-3 | Town Overlay Optimization | ✅ Complete — 1,183 bytes saved (4,074→2,891), 1,204 bytes free |
 | OPT-5 | Overlay Expansion (dungeon gen) | ✅ Complete — dungeon_gen.s → $E000 overlay; 3,490 bytes reclaimed |
 | 10.0 | C64/C128 Code Split | ✅ Complete — 64 files to common/, game loop extracted, c128 skeleton |
+| C3 | VDC Viewport Artifacts | ✅ Complete — centering, IRQ protection, streaming optimization, flash alignment |
 | R7 | String Compression | ✅ Complete — R7.1-R7.7 all done. Tier 1: 155 strings Huffman-compressed, 888 bytes saved. Tier 2: string bank encoder/loader, monster recall system. |
 | R2.5 | Tunneling + Treasure Veins | ✅ Complete — + command, STR-based digging, treasure in quartz/magma veins, wall-to-mud fix, 742 bytes |
 | R11 | Lowercase/Uppercase Mode | ✅ Complete — 52 monster symbols (a-z + A-Z), '#' walls, screencode_mixed encoding, case-aware recall |
@@ -61,6 +62,28 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 | BUG-46 | MED | Monster melee attack from non-adjacent position (stale render) | `!player_died:` now renders viewport before showing death message |
 | BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
 | BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `screen_clear_row` for rows 21–23 added before `title_show_sysinfo`; root cause: `title_render_data` parses dungeon MAP_BASE as title art and writes to status rows |
+
+---
+
+## C3 — VDC Viewport Artifacts ✅ COMPLETE (2026-02-27)
+
+**Files:** `commodore/c128/dungeon_render_vdc.s`, `commodore/c128/screen_vdc.s`
+
+**Root causes identified and fixed:**
+
+1. **Horizontal alignment mismatch** — `screen_vdc.s` applied `SCREEN_COL_OFFSET=20` to center UI text in the 80-column display, but `dungeon_render_vdc.s` (`render_viewport`, `render_single_tile`) ignored the offset, placing dungeon art at VDC columns 1–38 while text landed at columns 20+. The two areas overlapped at columns 20–38, causing visual corruption.
+   **Fix:** Both functions now use `adc #(VIEWPORT_X + SCREEN_COL_OFFSET)` (+21) so dungeon art occupies VDC columns 21–58, aligned with the centered UI.
+
+2. **IRQ hazard during VDC writes** — `render_viewport` and `render_single_tile` had no `sei/cli` protection. The KERNAL's 60Hz cursor IRQ could clobber `$D600` (VDC address register) between the register-select and data-write phases, causing data to land in arbitrary VRAM.
+   **Fix:** `render_viewport` wraps its per-row char+attr streaming in `sei/cli` (interrupts off only during the VDC stream, not tile computation). `render_single_tile` wraps `!rst_write:` in `sei/cli`.
+
+3. **Redundant VDC reg-31 reselection** — `render_viewport` called `vdc_write_data` per character, which in turn called `vdc_write_reg` → `vdc_select_reg` (wait+stx+wait) for every one of the 38 tiles per row — 2×38×19 = 1444 register-selections per full viewport redraw.
+   **Fix:** The col_loop now buffers chars into `row_char_buf[x]` (CPU memory only). After the loop, `ldx #31; jsr vdc_select_reg` is called **once** for chars and once for attrs, then the full row is streamed with `jsr vdc_wait; sta VDC_DATA_REG`. Reduces to 2 register-selections per row (38 per full redraw).
+
+4. **`screen_flash_at` column misalignment** — `sty sfa_col` stored the raw game-space column with no centering offset, causing combat flash effects to appear 20 columns left of the tile they referenced.
+   **Fix:** `tya; clc; adc #SCREEN_COL_OFFSET; sta sfa_col` applies the offset on entry.
+
+**Fix 5 (VDC reg-30 hardware fill) deferred** — `screen_clear` already uses the streaming pattern (reg 31 selected once, `vdc_wait+sta` loop). The hardware fill via reg 30 provides marginal benefit and was not implemented.
 
 ---
 

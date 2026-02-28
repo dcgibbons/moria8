@@ -474,7 +474,10 @@ spca_char: .byte 0
 // Clobbers: A, X, Y
 screen_flash_at:
     stx sfa_row
-    sty sfa_col
+    tya                     // Apply centering offset so flash lands in the game area
+    clc
+    adc #SCREEN_COL_OFFSET
+    sta sfa_col
     sei                     // IRQ off: protect all VDC read/write/restore operations
 
     // Read current character at position

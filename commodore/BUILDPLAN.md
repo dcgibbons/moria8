@@ -23,7 +23,7 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix scan lacks Line 8 (keypad/extended keys) support. | **High Priority** |
-| **C3** | **HIGH** | C128: VDC Viewport clipping/scrolling produces visual artifacts. | Tracked |
+| **C4** | **BLOCKER** | C128: Memory Collision — Dungeon Map ($0B00) overwrites Program ($1C0E). | **Critical** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -66,8 +66,8 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-02-27)
 
 **High priority (C128 Port Stability):**
-1. Add Line 8 (keypad/extra keys) scanning support (C2).
-2. Resolve VDC viewport clipping/artifacts (C3, 10.1).
+1. Resolve Memory Collision between Dungeon Map and Program (C4).
+2. Add Line 8 (keypad/extra keys) scanning support (C2).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
