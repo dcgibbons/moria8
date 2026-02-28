@@ -5,20 +5,16 @@
 
 ---
 
-## Current State (2026-02-21 — Phase 10.0 code split complete)
+## Current State (2026-02-26)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) done — codebase reorganized into `common/` (64 shared files), `c64/` (7 platform files), and skeletal `c128/main.s`. Game loop extracted from main.s into `common/game_loop.s` (~1,382 lines). All tests pass.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete — codebase reorganized into `common/`, `c64/`, and `c128/`. The project is currently focusing on Phase 10.1 (VDC 80-column rendering) and resolving critical C128 input issues.
 
 ### Build Stats
 
 - **Test suites:** 24 (321 runtime tests)
 - **Compile-time asserts:** 71
-- **Source files:** 64 common + 7 c64-specific + 23 test files
-- **Program size:** $B4BB (program_end) — headroom to MAP_BASE ($C000)
-- **Banked code:** $F000-$FF98 (at limit)
-- **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
-- **Startup overlay:** 4,017 of 4,096 bytes (79 free)
-- **DungeonGen overlay:** 3,530 of 4,096 bytes (566 free)
+- **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
+- **Bank 0 Physical Map**: Contiguous code from $1C0E to $BFFF. Map at $0B00.
 
 ---
 
@@ -26,6 +22,10 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
+| **C1** | **BLOCKER** | C128: Missing essential keys (RETURN, SPACE, DEL, STOP, digits) in CIA scan table. | **High Priority** |
+| **M1** | **HIGH** | C128: `KBDBUF_COUNT` uses C64 address ($C6) instead of C128 ($D0). | **High Priority** |
+| **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
+| **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ---
@@ -36,15 +36,17 @@
 
 | # | What | Summary | Status |
 |---|------|---------|--------|
-| 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure, game loop extraction | **Done** |
-| 10.1 | 80-column VDC mode | Second rendering backend for VDC 80x25 display | Next |
-| 10.2 | Extended memory | C128 128KB MMU bank-switch path (no disk tier loading) | |
-| 10.3 | Larger dungeon | Expand map to 120x80+, more rooms, up to 64 active monsters | |
-| 10.4 | Enhanced display | VDC color attributes for threat-coded monsters | |
+| 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure complete. | **Done** |
+| 10.1 | 80-column VDC mode | Implement VDC rendering backend, optimized with row batching and dirty-rect. | **In Progress** |
+| 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | |
+| 10.3 | Larger dungeon | Expand map to 198x66 (original size) at $4000 in Bank 0. | |
+| 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 
-### Phase 10.0 — Known Platform Dependencies in common/
+---
 
-These files in `common/` contain minor C64-specific code that will need parameterization for C128:
+### Phase 10 — Known Platform Dependencies in common/
+
+These files in `common/` contain minor C64-specific code that will need parameterization or hooks for C128:
 
 | File | Issue | Future Fix |
 |------|-------|-----------|
@@ -57,11 +59,16 @@ These files in `common/` contain minor C64-specific code that will need paramete
 | `ui_help.s:6` | 40-col layout | Parameterize or create 80-col version |
 | `ui_status.s` | Hardcoded column positions | Replace with named constants |
 | `disk_swap.s` | Centering hardcoded for 40 cols | Use SCREEN_COLS/2 arithmetic |
-| `game_loop.s` | `$d011` VIC-II DEN bit, `$c6` keyboard buffer | Platform hooks or constants |
+| `game_loop.s` | `$d011` VIC-II DEN bit | Platform hooks for VDC blanking |
 
 ---
 
-### Priority Triage (updated 2026-02-21)
+### Priority Triage (updated 2026-02-26)
+
+**High priority (C128 Port Stability):**
+1. Fix `cia_scancode_table` in `input128.s` (C1, C2).
+2. Fix `KBDBUF_COUNT` constant (M1).
+3. Complete VDC Rendering Backend (10.1).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
