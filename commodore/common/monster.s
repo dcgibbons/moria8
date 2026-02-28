@@ -999,8 +999,9 @@ creature_get_name:
     bne !+
     jmp !cgn_stale+             // Null pointer → "?"
 !:  cmp #$e0
-    bcc !cgn_setup_normal+      // Normal RAM pointer
-    // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
+    bcs !+
+    jmp !cgn_setup_normal+      // Normal RAM pointer
+!:  // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
@@ -1013,8 +1014,7 @@ creature_get_name:
     sei
     lda $01
     pha
-    lda #$35
-    sta $01                     // Bank out KERNAL — $E000 accessible
+    :BankOutKernal()            // Bank out KERNAL — $E000 accessible
     lda tier_name_lo_addr
     sta zp_ptr1
     lda tier_name_lo_addr+1
@@ -1036,8 +1036,7 @@ creature_get_name:
     sei
     lda $01
     pha
-    lda #$35
-    sta $01
+    :BankOutKernal()
     jmp !cgn_copy+
 
 !cgn_no_tier:
@@ -1045,8 +1044,9 @@ creature_get_name:
     lda cr_name_hi,x
     beq !cgn_stale+             // Null pointer → "?"
     cmp #$e0
-    bcc !cgn_setup_normal+      // Normal RAM pointer — use directly
-    // Stale $E0xx pointer: tier was previously loaded but current_tier was reset.
+    bcs !+
+    jmp !cgn_setup_normal+      // Normal RAM pointer — use directly
+!:  // Stale $E0xx pointer: tier was previously loaded but current_tier was reset.
     // Reload the smallest tier that covers creature index X (e.g. recall in town).
     stx cgn_saved_x
     lda #1

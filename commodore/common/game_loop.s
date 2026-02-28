@@ -192,13 +192,13 @@ main_loop:
 !not_conf_run:
 
     // Any keypress cancels running
-    lda $c6                     // Keyboard buffer count
+    lda KBDBUF_COUNT            // Keyboard buffer count
     bne !run_cancel+
     jmp run_step
 
 !run_cancel:
     lda #0
-    sta $c6                     // Flush keyboard buffer
+    sta KBDBUF_COUNT            // Flush keyboard buffer
     lda #$ff
     sta zp_run_dir
 !not_running:
@@ -249,7 +249,7 @@ main_loop:
     bne !not_help+
     jsr tramp_ui_help_display
     lda #0
-    sta $c6                     // Clear keyboard buffer (prevent key repeat from dismissing)
+    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
     jsr input_get_key
     // Redraw map on return — clear all rows then redraw
     lda #COL_BLACK
@@ -339,7 +339,7 @@ main_loop:
     jsr creature_get_name       // Populates creature_name_buf
     jsr tramp_ui_recall
     lda #0
-    sta $c6                     // Clear keyboard buffer (prevent key repeat from dismissing)
+    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
     jsr input_get_key           // Wait for dismiss
 !recall_done:
     jsr screen_clear

@@ -91,6 +91,12 @@
     sta $01
 }
 
+// Platform compatibility macros (no-ops for C64)
+.macro MachineRestoreDefault() {}
+.macro MachineRestoreAllRam() {}
+.macro EnterKernal() { php }
+.macro ExitKernal() { plp }
+
 // ============================================================
 // Subroutines
 // ============================================================

@@ -158,6 +158,7 @@ title_menu_str:
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 save_game:
+    :EnterKernal()
     // Show "SAVING GAME..." message
     lda #<save_saving_str
     sta zp_ptr0
@@ -314,6 +315,7 @@ save_game:
     lda #>save_done_str
     sta zp_ptr0_hi
     jsr msg_print
+    :ExitKernal()
     rts
 
 !save_error_close:
@@ -329,6 +331,7 @@ save_game:
     lda #>save_ioerr_str
     sta zp_ptr0_hi
     jsr msg_print
+    :ExitKernal()
     rts
 
 // ============================================================
@@ -340,6 +343,7 @@ save_game:
 // ============================================================
 
 load_game:
+    :EnterKernal()
     // Show "LOADING GAME..." message
     lda #<save_load_str
     sta zp_ptr0
@@ -529,6 +533,7 @@ load_game:
     jsr delete_savefile
 
     sec                     // Success
+    :ExitKernal()
     rts
 
 !load_corrupt:
@@ -546,6 +551,7 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+    :ExitKernal()
     rts
 
 !load_close_notfound:
@@ -564,6 +570,7 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+    :ExitKernal()
     rts
 
 !load_fail:
@@ -573,6 +580,7 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+    :ExitKernal()
     rts
 
 // ============================================================
@@ -721,6 +729,7 @@ load_read_byte:
 // Clobbers: A, X, Y
 // ============================================================
 delete_savefile:
+    :EnterKernal()
     // Open command channel — scratch command executes on OPEN
     lda #scratch_cmd_len
     ldx #<scratch_cmd
@@ -739,6 +748,7 @@ delete_savefile:
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
+    :ExitKernal()
     rts
 
 // ============================================================

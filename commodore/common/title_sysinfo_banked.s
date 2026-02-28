@@ -40,7 +40,7 @@ title_show_sysinfo_banked:
 
     // Revision digit lookup (using cached value)
     lda tsi_krev_cached
-    ldx #3
+    ldx #4
 !kl: cmp tsi_krev_table,x
     beq !kf+
     dex
@@ -80,5 +80,5 @@ tsi_sx64_str:   .text "SX-64" ; .byte 0
 tsi_kernal_str: .text "  KERNAL R" ; .byte 0
 tsi_reu_str:    .text "  REU " ; .byte 0
 tsi_kb_str:     .text "KB" ; .byte 0
-tsi_krev_table: .byte $aa, $00, $03, $43    // KERNAL rev bytes
-tsi_krev_chars: .byte $31, $32, $33, $31    // '1', '2', '3', '1' in screen codes
+tsi_krev_table: .byte $aa, $00, $03, $43, $01  // KERNAL rev bytes (C64 R1/R2/R3, SX-64, C128)
+tsi_krev_chars: .byte $31, $32, $33, $31, $31  // '1', '2', '3', '1', '1' in screen codes

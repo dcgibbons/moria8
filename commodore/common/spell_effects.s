@@ -495,8 +495,7 @@ eff_confuse_adjacent:
 eff_bolt_dice:  .byte 0
 eff_bolt_sides: .byte 0
 eff_bolt_bonus: .byte 0
-eb_save_char:   .byte 0
-eb_save_col:    .byte 0
+// eb_save_char/eb_save_col removed — now handled by screen_flash_at
 
 // Strings migrated to Huffman compression (HSTR_EB_* in huffman_data.s)
 
@@ -542,11 +541,7 @@ eff_bolt:
     bcs !eb_no_anim+                // Off-screen (bottom)
     clc
     adc #VIEWPORT_Y                 // Screen row
-    tax
-    lda screen_row_lo,x
-    sta zp_ptr0
-    lda screen_row_hi,x
-    sta zp_ptr0_hi
+    tax                             // X = absolute screen row
 
     lda proj_cx
     sec
@@ -556,48 +551,9 @@ eff_bolt:
     bcs !eb_no_anim+                // Off-screen (right)
     clc
     adc #VIEWPORT_X                 // Screen column
-    tay
-    sty eb_save_col
+    tay                             // Y = absolute screen column
 
-    // Save current screen character
-    lda (zp_ptr0),y
-    sta eb_save_char
-
-    // Draw * (screen code $2A)
-    lda #$2a
-    sta (zp_ptr0),y
-
-    // Switch to color RAM, save color, set white
-    lda zp_ptr0_hi
-    pha                             // Save screen hi byte
-    clc
-    adc #$d4                        // $0400 → $D800
-    sta zp_ptr0_hi
-    lda (zp_ptr0),y
-    pha                             // Save original color
-    lda #1                          // White
-    sta (zp_ptr0),y
-
-    // Delay (~10ms at 1MHz)
-    ldx #$08
-!eb_delay_o:
-    ldy #$00
-!eb_delay_i:
-    dey
-    bne !eb_delay_i-
-    dex
-    bne !eb_delay_o-
-    ldy eb_save_col
-
-    // Restore color
-    pla
-    sta (zp_ptr0),y
-
-    // Restore screen pointer and character
-    pla
-    sta zp_ptr0_hi
-    lda eb_save_char
-    sta (zp_ptr0),y
+    jsr screen_flash_at             // Flash '*' white, restore after delay
 
 !eb_no_anim:
     // Check for monster at this position

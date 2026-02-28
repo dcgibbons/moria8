@@ -30,6 +30,7 @@ bank_fn_recall:
 // Clobbers: A, X, Y
 // ============================================================
 bank_load_recall:
+    :EnterKernal()
     // Invalidate overlay and tier state
     lda #OVL_NONE
     sta current_overlay
@@ -49,7 +50,7 @@ bank_load_recall:
     lda #0                  // 0 = LOAD
     ldx #$00
     ldy #$e0
-    jsr $ffd5               // KERNAL LOAD
+    jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
     // Carry clear = success, carry set = error
     php                     // Save carry (load result)
     lda #2
@@ -60,4 +61,5 @@ bank_load_recall:
     ora #%00000011
     sta $dd00
     plp                     // Restore carry
+    :ExitKernal()
     rts

@@ -1,8 +1,8 @@
 // title_screen.s — Title screen loader and renderer
 //
-// Loads title art from disk ("TITLE" file) into MAP_BASE ($C000),
-// renders to screen RAM, then returns. $C000 is naturally recycled
-// when dungeon_generate is called.
+// Loads title art from disk ("TITLE" file) into MAP_BASE,
+// renders to screen RAM, then returns. MAP_BASE region is naturally
+// recycled when dungeon_generate is called.
 //
 // Fallback: if KERNAL LOAD fails (no disk, file not found),
 // displays a simple text title (original behavior).
@@ -12,23 +12,24 @@
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
 // ============================================================
 title_load_and_draw:
+    :EnterKernal()
     // SETNAM: filename "TITLE" (5 chars)
     lda #5
     ldx #<title_filename
     ldy #>title_filename
     jsr KERNAL_SETNAM
 
-    // SETLFS: logical file 2, device 8, secondary 1 (use header address)
+    // SETLFS: logical file 2, device 8, secondary 0 (use X/Y load address)
     lda #2
     ldx #SAVE_DEVICE
-    ldy #1
+    ldy #0
     jsr KERNAL_SETLFS
 
-    // LOAD: 0 = load to address from file header
+    // LOAD: 0 = load, X/Y = destination (MAP_BASE)
     lda #0
     ldx #<MAP_BASE
     ldy #>MAP_BASE
-    jsr $FFD5               // KERNAL LOAD
+    jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
     php                     // Save carry (LOAD success/failure)
     lda #2
     jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
@@ -50,6 +51,7 @@ title_load_and_draw:
 
     // Render the loaded art data
     jsr title_render_data
+    :ExitKernal()
     rts
 
 !title_fallback:
@@ -68,6 +70,7 @@ title_load_and_draw:
     lda #15                 // Center: (40-10)/2
     sta zp_cursor_col
     jsr screen_put_string
+    :ExitKernal()
     rts
 
 // ============================================================

@@ -64,6 +64,14 @@ detect_machine:
 // ============================================================
 // Death source constants (used by turn.s, player_items.s, score.s)
 // ============================================================
+// kernal_load — Platform LOAD wrapper (C64: direct KERNAL call)
+kernal_load:
+    jmp $ffd5
+
+.macro AssetLoad() {
+    jsr kernal_load
+}
+
 .const DEATH_ALIVE   = $00    // Player is alive
 .const DEATH_CURSED  = $FD    // Killed by cursed item
 .const DEATH_POISON  = $FE    // Killed by poison

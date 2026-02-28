@@ -213,8 +213,7 @@ tier_load:
     sei
     lda $01
     pha                         // Save bank config
-    lda #$35                    // Bank out KERNAL + BASIC (all RAM)
-    sta $01
+    :BankOutKernal()
 
     lda #<$e000
     sta zp_ptr0
@@ -281,6 +280,7 @@ tier_load:
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 tier_load_disk:
+    :EnterKernal()
     // Select filename from table
     ldx current_tier
     dex                         // 0-based index (tier 1 → index 0)
@@ -305,7 +305,7 @@ tier_load_disk:
     lda #0                      // 0 = LOAD (not VERIFY)
     ldx #$00                    // Ignored with secondary 1
     ldy #$e0
-    jsr $FFD5                   // KERNAL LOAD
+    :AssetLoad()                // Platform asset LOAD (handles C128 Bank 1)
     // Carry clear = success, carry set = error
     php                         // Save carry (load result)
     lda #2
@@ -315,6 +315,7 @@ tier_load_disk:
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
     plp                         // Restore carry
+    :ExitKernal()
     rts
 
 

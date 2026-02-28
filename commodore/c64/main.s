@@ -314,6 +314,19 @@ irq_no_blink:
     jmp $ea31               // Continue to standard KERNAL IRQ handler
 
 // ============================================================
+// kernal_load_safe — KERNAL LOAD wrapper for C64
+// ============================================================
+kernal_load_safe:
+    jsr $ffd5               // KERNAL LOAD — carry set on error
+    php                     // Preserve carry for caller
+    lda #<irq_no_blink      // Reinstall: KERNAL/JiffyDOS overwrites $0314
+    sta $0314
+    lda #>irq_no_blink
+    sta $0315
+    plp
+    rts
+
+// ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
 // ============================================================
 // KERNAL must be off ($34) while executing overlay code at $E000.

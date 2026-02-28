@@ -53,24 +53,13 @@ ui_char_display:
 
     lda #COL_WHITE
     sta zp_text_color
-    // Print name inline — same approach as screen_put_string
-    // (set cursor once, write chars via indirect indexed Y)
-    jsr screen_set_cursor
-    ldy #0
-!ucd_name_loop:
-    lda player_data + PL_NAME,y
-    beq !ucd_name_done+
-    sta (zp_screen_lo),y
-    lda zp_text_color
-    sta (zp_color_lo),y
-    iny
-    cpy #16
-    bcc !ucd_name_loop-
-!ucd_name_done:
-    tya
-    clc
-    adc zp_cursor_col
+    lda #7                  // Name follows "Name: " (6 chars from col 1)
     sta zp_cursor_col
+    lda #<(player_data + PL_NAME)
+    sta zp_ptr0
+    lda #>(player_data + PL_NAME)
+    sta zp_ptr0_hi
+    jsr screen_put_string
 
     // --- Race / Class ---
     lda #COL_LGREY

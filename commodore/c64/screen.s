@@ -409,6 +409,64 @@ decimal_powers_lo:
 decimal_powers_hi:
     .byte >1, >10, >100, >1000, >10000
 
+// screen_flash_at — Briefly flash a '*' in white at a screen position, then restore
+// Used by bolt animation in spell_effects.s.
+// Input:  X = screen row (absolute, 0–24)
+//         Y = screen column (absolute, 0–79)
+// Clobbers: A, X, Y, zp_ptr0
+screen_flash_at:
+    stx sfa_save_row
+    lda screen_row_lo,x
+    sta zp_ptr0
+    lda screen_row_hi,x
+    sta zp_ptr0_hi
+    sty sfa_save_col
+
+    // Save current character
+    lda (zp_ptr0),y
+    sta sfa_save_char
+
+    // Draw '*' (screen code $2A)
+    lda #$2a
+    sta (zp_ptr0),y
+
+    // Switch to color RAM (screen hi + $D4), save color, write white
+    lda zp_ptr0_hi
+    pha                             // Save screen hi byte
+    clc
+    adc #$d4                        // $0400 → $D800
+    sta zp_ptr0_hi
+    lda (zp_ptr0),y
+    pha                             // Save original color
+    lda #COL_WHITE
+    sta (zp_ptr0),y
+
+    // Delay (~10ms at 1MHz)
+    ldx #$08
+!sfa_delay_o:
+    ldy #$00
+!sfa_delay_i:
+    dey
+    bne !sfa_delay_i-
+    dex
+    bne !sfa_delay_o-
+    ldy sfa_save_col
+
+    // Restore color
+    pla
+    sta (zp_ptr0),y
+
+    // Restore screen pointer and character
+    pla
+    sta zp_ptr0_hi
+    lda sfa_save_char
+    sta (zp_ptr0),y
+    rts
+
+sfa_save_row:   .byte 0
+sfa_save_col:   .byte 0
+sfa_save_char:  .byte 0
+
 // ============================================================
 // Compile-time validation
 // ============================================================

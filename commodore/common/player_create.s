@@ -816,7 +816,11 @@ create_select_gender:
     jsr input_get_key
     cmp #$41                // 'A' — male
     beq !gender_male+
+    cmp #$61                // 'a' — male (lowercase PETSCII, e.g. C64 lowercase mode)
+    beq !gender_male+
     cmp #$42                // 'B' — female
+    beq !gender_female+
+    cmp #$62                // 'b' — female (lowercase PETSCII)
     beq !gender_female+
     jmp !gender_key-
 !gender_male:

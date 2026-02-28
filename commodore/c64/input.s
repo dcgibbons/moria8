@@ -12,6 +12,9 @@
 // KERNAL vectors
 .const KERNAL_GETIN = $ffe4
 
+// Keyboard buffer count location (C64: $C6, C128: $D0)
+.const KBDBUF_COUNT = $c6
+
 // ============================================================
 // Command IDs — internal constants, not key codes
 // ============================================================

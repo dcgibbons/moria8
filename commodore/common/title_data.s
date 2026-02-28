@@ -179,12 +179,16 @@
 .byte $21
 .byte $00
 
-// ── Row 12: "COMMODORE 64 EDITION" ──
+// ── Row 12: "COMMODORE 64/128 EDITION" ──
 .byte 12, 1, TC_LGREY
 .byte $21
 .byte $00
 .byte 12, 10, TC_CYAN
+#if C128
+.text "Commodore 128 Edition"
+#else
 .text "Commodore 64 Edition"
+#endif
 .byte $00
 .byte 12, 38, TC_LGREY
 .byte $21
