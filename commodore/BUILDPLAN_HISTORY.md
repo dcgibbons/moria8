@@ -4391,3 +4391,32 @@ Introduced `input_run_key_check` as a platform-specific non-blocking key poll:
 `game_loop.s` now calls `jsr input_run_key_check` instead of `lda KBDBUF_COUNT` at the
 run-cancel check site. Both builds: 69/70 asserts, 0 failed. Tested in VICE — run correctly
 cancels on keypress.
+
+---
+
+## C128 Stability Fixes — VDC Hardware Fill & Overlay Overlap (2026-02-28)
+
+### Issues Resolved
+
+| Date | Bug | Description | Resolution |
+|------|-----|-------------|------------|
+| 2026-02-28 | **VDC Hardware Fill JAM** | CPU JAM at $A94E during character creation after pressing 'N'. | Reverted VDC hardware fill (Opt 5) to streaming loops in `screen_clear` and `screen_clear_row`. |
+| 2026-02-28 | **Overlay Overlap JAM** | CPU JAM at $76CB when entering dungeon from town. | Moved `special_rooms.s` and `ego_items.s` to the end of the `banked_payload` block to avoid overlap with overlays. |
+
+### Bug 1: VDC Hardware Fill Instability
+
+**Root Cause:** The use of VDC Register 30 (Hardware Fill) in `screen_clear` and `screen_clear_row` caused a fatal CPU crash. The VDC hardware fill is an autonomous operation that takes several milliseconds. If the CPU selects a different VDC register or attempts data I/O while the fill is in progress, the VDC state machine can become corrupted, leading to invalid data being presented to the CPU or bus contention, resulting in a JAM.
+
+**Fix:** Reverted `screen_clear` and `screen_clear_row` in `screen_vdc.s` to use deterministic streaming loops. Each byte is written to Register 31 with a preceding `jsr vdc_wait`. This ensures the VDC is always ready for the next command and eliminates race conditions.
+
+### Bug 2: Overlay Overlap with Banked Payload
+
+**Root Cause:** On the C128, overlays load at $E000-$EFFF. The `banked_payload` (containing resident gameplay routines) was relocated to $EB00 at runtime. The `DungeonGenOverlay` (3530 bytes) ended at $EDCA, overwriting the first ~700 bytes of the banked payload. This area contained `ego_items.s`. When `item_spawn_level` called `tramp_roll_ego_type`, the CPU jumped into the middle of the dungeon generation code instead of `roll_ego_type`, causing a crash.
+
+**Fix:** Reordered the `banked_payload` block in `main.s`. The shared routines `special_rooms.s` and `ego_items.s` were moved to the end of the payload. Since the total payload size is ~4.6KB and it starts at $EB00, these routines now reside at $F900+, safely beyond the reach of any 4KB overlay.
+
+### Verification
+
+- **Character Creation:** Pressing 'N' on the title screen now reliably proceeds to race/class selection.
+- **Dungeon Entry:** Moving from town to level 1 via stairs now correctly loads the creature tier and generates the level without crashing.
+- **Build:** `make build128` completes with 69 asserts passing.

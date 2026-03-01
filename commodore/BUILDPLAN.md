@@ -5,23 +5,16 @@
 
 ---
 
-## Recent Fixes
-
-| Date | Bug | Description |
-|------|-----|-------------|
-| 2026-02-28 | **Overlay Overlap** | Fixed CPU JAM at $76CB when entering dungeon. `DungeonGenOverlay` was overwriting `ego_items.s` in banked payload. |
-| 2026-02-28 | **VDC JAM** | Fixed CPU JAM at $A94E during character creation. Reverted VDC hardware fill to streaming loops. |
-
 ## Current State (2026-02-28, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete — codebase reorganized into `common/`, `c64/`, and `c128/`. The project is currently focusing on Phase 10.1 (VDC 80-column rendering) and resolving critical C128 input issues.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete. Phase 10.1 (VDC 80-column rendering) is operational with performance optimizations (Phase 10.5). Critical stability issues regarding VDC hardware operations and overlay memory management have been resolved.
 
 ### Build Stats
 
 - **Test suites:** 24 (321 runtime tests)
-- **Compile-time asserts:** 71
+- **Compile-time asserts:** 69 (C128) / 71 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
-- **Bank 0 Physical Map**: Contiguous code from $1C0E to $BFFF. Map at $0B00.
+- **Bank 0 Physical Map**: Code from $1C0E to $DEAB. Map at $0B00. Banked payload at $EB00-$FD32.
 
 ---
 
