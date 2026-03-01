@@ -29,7 +29,8 @@ This file provides foundational mandates and technical guidance for AI agents (G
 - Skip this for simple, obvious fixes - don't over-engineer
 - Challenge your own work before presenting it
 ### 6. Autonomous Bug Fizing
-- When given a bug report: just fix it. Don't ask for hand-holding
+- When given a bug report: just fix it. Don't ask for hand-holding. Caveat: if
+  asked to just add it to the list, then just add it to the list.
 - Point at logs, errors, failing tests - then resolve them
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
