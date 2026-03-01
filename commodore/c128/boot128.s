@@ -64,11 +64,11 @@ loader_start:
     lda #COL_BLACK
     sta $d020
     
-    // 4. Machine State — 4KB bottom common ($0000-$0FFF)
-    // The copy stub lives at $0B00. It must be in common area so the CPU
+    // 4. Machine State — 1KB bottom common ($0000-$03FF)
+    // The copy stub lives at $0200. It must be in common area so the CPU
     // still fetches stub instructions from Bank 0 when $FF00 switches to Bank 1.
-    // $05 = bit 0 (bottom common on) + bits 3-2=01 (4KB size)
-    lda #$05
+    // $04 = bit 0 (bottom common on) + bits 3-2=00 (1KB size)
+    lda #$04
     sta $d506
     lda #$ff
     sta $d8                 // 80-column mode defense
@@ -104,7 +104,7 @@ loader_start:
     jsr $ffd5
     bcs load_err
     
-    // 7. SUCCESS: Relocate stub to $0B00 and Hand-off
+    // 7. SUCCESS: Relocate stub to $0200 and Hand-off
     // Data load (BANK1.DAT) will be handled by the engine in Stage 2.
     lda #COL_BLACK
     sta $d020
@@ -113,11 +113,11 @@ loader_start:
     ldx #stub_end - stub_start
 !reloc:
     lda stub_reloc_src_relocated - 1,x
-    sta $0b00 - 1,x
+    sta $0200 - 1,x
     dex
     bne !reloc-
     
-    jmp $0b00
+    jmp $0200
 
 load_err:
     inc $d020               // Flashing Red Scream
@@ -135,12 +135,12 @@ game_filename_end:
 .label stub_reloc_src_relocated = *
 }
 
-// Stub source - virtual address $0B00
+// Stub source - virtual address $0200
 stub_reloc_src:
-.pseudopc $0b00 {
+.pseudopc $0200 {
 stub_start:
-    lda #$05
-    sta $d506               // 4KB bottom common ($0000-$0FFF) — stub at $0B00 must be common
+    lda #$04
+    sta $d506               // 1KB bottom common ($0000-$03FF) — stub at $0200 must be common
 
     // Clear Overlay $B000-$BFFF
     lda #0
@@ -163,9 +163,9 @@ stub_start:
     // MUST use _NOIO variants ($7F/$3F) to hide I/O at $D000-$DFFF.
     lda #$00
     sta $60
-    lda #$1c
+    lda #$0b
     sta $61
-    ldx #$e3                // Copy $E3 pages ($1C00 to $FEFF) -> stops exactly at $FF00
+    ldx #$f4                // Copy $F4 pages ($0B00 to $FEFF) -> stops exactly at $FF00
 copy_loop:
     // Read 256 bytes from Bank 1 into common RAM buffer ($0C00)
     lda #MMU_RAM_BANK1_NOIO
@@ -198,6 +198,6 @@ copy_loop:
     sta $01
     
     // Jump to real entry point, skipping redundant relocation
-    jmp $1c0e               // Skip to robust init
+    jmp $0b0d               // Skip to robust init
 stub_end:
 }

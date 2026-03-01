@@ -67,6 +67,11 @@ exit_trampoline:
 .encoding "screencode_mixed"
 
 #import "../common/zeropage.s"
+// ============================================================
+// Platform Constants
+// ============================================================
+.const C128 = false
+
 #import "memory.s"
 #import "../common/reu.s"
 #import "screen.s"

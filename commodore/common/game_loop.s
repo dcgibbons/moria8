@@ -979,7 +979,9 @@ run_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
+.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
+.if (C128) { :Bank0Restore() }
     and #FLAG_LIT
     sta run_was_lit
 

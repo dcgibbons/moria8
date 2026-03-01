@@ -64,11 +64,20 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 ---
 
-### Priority Triage (updated 2026-02-27)
+### Priority Triage (updated 2026-02-28)
 
 **High priority (C128 Port Stability):**
-1. Resolve Memory Collision between Dungeon Map and Program (C4).
+1. [DONE] Resolve Memory Collision (C4).
 2. Add Line 8 (keypad/extra keys) scanning support (C2).
+
+---
+
+## Phase C4: Memory Map Relocation (C128) [COMPLETE]
+- [x] Relocate Dungeon Map, Floor Items, and Creature Scratch to Bank 1 at $4000.
+- [x] Relocate Program Start to $0B00 (recovers 4KB Bank 0 RAM).
+- [x] Implement bank-switching wrappers for map access in `common/` code.
+- [x] Update `boot128.s` to handle new load address and copy range.
+- [x] Verify both C64 and C128 builds.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

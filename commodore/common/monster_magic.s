@@ -138,7 +138,9 @@ monster_can_cast:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mm_los_cx
+.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
+.if (C128) { :Bank0Restore() }
     and #TILE_TYPE_MASK
     lsr
     lsr
@@ -396,7 +398,9 @@ monster_cast_summon:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
+.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
+.if (C128) { :Bank0Restore() }
     sta zp_mon_scratch2       // Save tile byte
 
     // Check walkable

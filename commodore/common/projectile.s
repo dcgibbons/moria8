@@ -83,7 +83,9 @@ trace_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy proj_cx
+.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
+.if (C128) { :Bank0Restore() }
     and #TILE_TYPE_MASK
     lsr
     lsr

@@ -26,6 +26,11 @@ title_load_and_draw:
     jsr KERNAL_SETLFS
 
     // LOAD: 0 = load, X/Y = destination (MAP_BASE)
+.if (C128) {
+    lda #1
+    ldx #0
+    jsr safe_setbnk         // Bank 1 for data, Bank 0 for filenames
+}
     lda #0
     ldx #<MAP_BASE
     ldy #>MAP_BASE
@@ -34,6 +39,13 @@ title_load_and_draw:
     lda #2
     jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
     plp                     // Restore carry from LOAD
+.if (C128) {
+    pha
+    lda #0
+    ldx #0
+    jsr safe_setbnk         // Restore Bank 0
+    pla
+}
     bcs !title_fallback+    // Carry set = error
 
     // Restore VIC-II bank 0 after serial I/O
@@ -73,6 +85,30 @@ title_load_and_draw:
     :ExitKernal()
     rts
 
+// title_put_string_banked — Special VDC renderer for Bank 1 strings
+// Input: zp_ptr0/hi = string in Bank 1
+//        zp_cursor_row, zp_cursor_col, zp_text_color = state
+title_put_string_banked:
+.if (C128) {
+    ldy #0
+!loop:
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+    lda (zp_ptr0),y
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+    beq !done+
+    jsr screen_put_char
+    iny
+    bne !loop-
+!done:
+}
+    rts
+
 // ============================================================
 // title_render_data — Render segment stream from MAP_BASE
 // Format: [row, col, color, screen_codes..., $00] ... $FF
@@ -87,19 +123,55 @@ title_render_data:
 !trd_loop:
     // Read first byte: row or $FF (end marker)
     ldy #0
+.if (C128) {
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+}
     lda (zp_ptr1),y
+.if (C128) {
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+}
     cmp #$ff
     beq !trd_done+
     sta zp_cursor_row
 
     // Read col
     iny
+.if (C128) {
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+}
     lda (zp_ptr1),y
+.if (C128) {
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+}
     sta zp_cursor_col
 
     // Read color
     iny
+.if (C128) {
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+}
     lda (zp_ptr1),y
+.if (C128) {
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+}
     sta zp_text_color
 
     // Advance ptr1 by 3 to point at string data
@@ -111,19 +183,35 @@ title_render_data:
     adc #0
     sta zp_ptr1_hi
 
-    // Copy string pointer to ptr0 for screen_put_string
+    // Copy string pointer to ptr0 for string rendering
     lda zp_ptr1
     sta zp_ptr0
     lda zp_ptr1_hi
     sta zp_ptr0_hi
 
     // Render this segment
+.if (C128) {
+    jsr title_put_string_banked
+} else {
     jsr screen_put_string
+}
 
     // Scan forward in ptr1 to find null terminator
     ldy #0
 !trd_scan:
+.if (C128) {
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+}
     lda (zp_ptr1),y
+.if (C128) {
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+}
     beq !trd_found+
     iny
     bne !trd_scan-         // Safety: max 255 chars per segment

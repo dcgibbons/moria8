@@ -29,14 +29,14 @@
 .segmentdef Bank1Data         [outPrg="out/bank1.dat", start=$e000, min=$e000, max=$feff]
 
 // ============================================================
-// BASIC stub at $1C01 — SYS 7182 ($1C0E)
+// BASIC stub at $0B01 — SYS 2829 ($0B0D)
 // ============================================================
-.pc = $1c01 "BASIC Stub"
-    .byte $0b, $1c, $0a, $00, $9e, $37, $31, $38, $32, $00, $00, $00
+.pc = $0b01 "BASIC Stub"
+    .byte $0b, $0b, $0a, $00, $9e, $32, $38, $32, $39, $00, $00, $00
 
-.pc = $1c0e "Program"
+.pc = $0b0d "Program"
 entry:
-    // DIAG-0: RED = game code reached at $1C0E
+    // DIAG-0: RED = game code reached at $0B0D
     lda #$02
     sta $d020
     jmp entry_real
@@ -45,6 +45,11 @@ entry:
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
 // ============================================================
 #import "../common/zeropage.s"
+// ============================================================
+// Platform Constants
+// ============================================================
+.const C128 = true
+
 #import "memory128.s"
 #import "../common/color.s"
 #import "../common/sound.s"
@@ -792,19 +797,19 @@ disk_menu_show:
 #import "../common/monster.s"
 #import "../common/tier_manager.s"
 #import "../common/overlay.s"
-#import "../common/monster_ai.s"
 #import "../common/recall.s"
-#import "../common/monster_magic.s"
 #import "../common/item.s"
 #import "../common/player_items.s"
-#import "../common/spell_data.s"
-#import "../common/spell_effects.s"
 #import "../common/player_magic.s"
 #import "dungeon_render_vdc.s"
 #import "../common/dungeon_los.s"
 #import "../common/turn.s"
 #import "../common/store_data.s"
 #import "../common/monster_attack.s"
+#import "../common/monster_ai.s"
+#import "../common/monster_magic.s"
+#import "../common/spell_data.s"
+#import "../common/spell_effects.s"
 #import "../common/string_bank.s"
 #import "../common/save.s"
 #import "../common/disk_swap.s"
@@ -1222,6 +1227,8 @@ banked_payload:
     #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
+    
+    // Critical shared routines (at end, $F900+ target)
     #import "../common/special_rooms.s"
     #import "../common/ego_items.s"
 

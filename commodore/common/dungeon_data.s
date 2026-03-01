@@ -61,13 +61,72 @@
 .const RT_NEST   = 3
 
 // ============================================================
-// Pre-computed row address table (48 bytes each, base $C000)
-// map_row_lo[n] / map_row_hi[n] = $C000 + n*80
+// Pre-computed row address table
+// map_row_lo[n] / map_row_hi[n] = MAP_BASE + n * MAP_COLS
 // ============================================================
 map_row_lo:
     .fill MAP_ROWS, <(MAP_BASE + i * MAP_COLS)
 map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
+
+// ============================================================
+// Map accessors (Platform specific)
+// ============================================================
+
+// map_get_tile — Get tile at (X, Y)
+// Input:  X = col, Y = row
+// Output: A = tile
+// Clobbers: zp_ptr0
+map_get_tile:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+.if (C128) {
+    sei
+    lda #MMU_RAM_BANK1
+    sta $ff00
+    lda (zp_ptr0),y
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+} else {
+    lda (zp_ptr0),y
+}
+    rts
+
+// map_set_tile — Set tile at (X, Y) to A
+// Input:  X = col, Y = row, A = tile
+// Clobbers: zp_ptr0
+map_set_tile:
+    pha                     // Save tile
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    pla                     // Restore tile
+.if (C128) {
+    sei
+    pha
+    lda #MMU_RAM_BANK1
+    sta $ff00
+    pla
+    sta (zp_ptr0),y
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+} else {
+    sta (zp_ptr0),y
+}
+    rts
 
 // ============================================================
 // Store position data

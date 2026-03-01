@@ -28,6 +28,7 @@ town_generate:
     lda #0
     sta trap_count
     // --- Step 1: Fill entire map with floor + TOWN_FLAGS ---
+.if (C128) { :Bank1Write() }
     lda #TILE_FLOOR | TOWN_FLAGS    // $0C
     ldx #0
 !fill_page0:
@@ -48,6 +49,7 @@ town_generate:
     sta MAP_BASE + $e00,x
     inx
     bne !fill_page0-
+.if (C128) { :Bank0Restore() }
 
     // --- Step 2: Draw outer boundary walls ---
     // Top wall (row 0): horizontal walls with corners
@@ -303,6 +305,7 @@ level_generate:
 // corridors always overwrite mineral veins they cross.
 // ============================================================
 dungeon_generate:
+.if (C128) { :Bank1Write() }
     lda #10
     sta dg_gen_retries          // Max regeneration attempts
 !dg_gen_retry:
@@ -337,6 +340,7 @@ dungeon_generate:
     bne !dg_gen_retry-
     // Give up after max retries (shouldn't happen with circular chain)
 !dg_gen_done:
+.if (C128) { :Bank0Restore() }
     rts
 
 dg_gen_retries: .byte 0
@@ -421,6 +425,7 @@ dr_end_col:   .byte 0
 // uncarved rock does not.  The renderer uses this to show '#' for rock.
 // ============================================================
 fill_map_rock:
+.if (C128) { :Bank1Write() }
     lda #TILE_WALL_H            // $10 — solid rock, no flags
     ldx #0
 !fill:
@@ -441,6 +446,7 @@ fill_map_rock:
     sta MAP_BASE + $e00,x
     inx
     bne !fill-
+.if (C128) { :Bank0Restore() }
     rts
 
 // ============================================================
@@ -1904,6 +1910,7 @@ verify_stairs:
 verify_connectivity:
     php                          // Save interrupt state — caller may already be in sei context
     sei                          // Disable IRQ — cursor blink writes to $0400 (BFS queue)
+.if (C128) { :Bank1Write() }
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---
     // We reuse bit 0 as "visited" marker for BFS
     ldx #0
@@ -1955,6 +1962,7 @@ verify_connectivity:
     sta MAP_BASE + $e00,x
     inx
     bne !vc_clear-
+.if (C128) { :Bank0Restore() }
 
     // --- Step 2: BFS from stairs_up position ---
     // Queue head/tail as 16-bit indices into BFS_QUEUE
@@ -2083,6 +2091,7 @@ verify_connectivity:
 
 // vc_cleanup — Clear FLAG_OCCUPIED from entire map
 vc_cleanup:
+.if (C128) { :Bank1Write() }
     ldx #0
 !vcc:
     lda MAP_BASE,x
@@ -2132,6 +2141,7 @@ vc_cleanup:
     sta MAP_BASE + $e00,x
     inx
     bne !vcc-
+.if (C128) { :Bank0Restore() }
     rts
 
 // bfs_try_neighbor — Check neighbor tile, enqueue if passable and unvisited
