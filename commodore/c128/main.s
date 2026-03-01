@@ -1213,8 +1213,6 @@ game_restart:
 // ============================================================
 banked_payload:
 .pseudopc $EB00 {
-    #import "../common/special_rooms.s"
-    #import "../common/ego_items.s"
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
     #import "../common/string_bank_banked.s"
@@ -1224,6 +1222,8 @@ banked_payload:
     #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
+    #import "../common/special_rooms.s"
+    #import "../common/ego_items.s"
 
 banked_code_end:
 }
