@@ -166,65 +166,50 @@ vic_to_vdc_color:
 // ============================================================
 
 // screen_clear — Clear entire VDC screen (spaces) and attributes (current color)
-// Uses VDC hardware block fill (reg 30) for maximum speed.
-// 2000 bytes = 7 × 256-byte fills + 1 × 208-byte fill (one pass each for chars + attrs).
-// Each fill: write first byte to reg 31 (sets fill value + addr++),
-// write count-1 to reg 30 (VDC fills count-1 more bytes in hardware).
+// Reverted to streaming loop (Opt 5 revert) to resolve character creation crash.
 screen_clear:
     sei                     // IRQ off: protect screen fill + attr fill as one atomic block
 
-    // Fill screen RAM: 2000 bytes of SC_SPACE via hardware block fill
+    // Fill screen RAM: 2000 bytes of SC_SPACE
     lda #>VDC_SCREEN_BASE
     ldy #<VDC_SCREEN_BASE
     jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg      // Select Data Register once
 
-    lda #7
+    lda #8                  // Clear 8 pages (2048 bytes) to cover 2000-byte screen
     sta sc_page_cnt
-!fill_char_chunk:           // 7 × 256-byte chunks
+    ldy #0
     lda #SC_SPACE
-    ldx #31
-    jsr vdc_write_reg       // Write 1 byte (sets fill value, advances address)
-    lda #255
-    ldx #30
-    jsr vdc_write_reg       // Trigger hardware fill: 255 more bytes = 256 total
-    jsr vdc_wait            // Wait for hardware fill to complete
-    dec sc_page_cnt
-    bne !fill_char_chunk-
-    lda #SC_SPACE           // Tail: 2000 - 7*256 = 208 bytes
-    ldx #31
-    jsr vdc_write_reg
-    lda #207
-    ldx #30
-    jsr vdc_write_reg
+!char_loop:
     jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !char_loop-
+    dec sc_page_cnt
+    bne !char_loop-
 
-    // Fill attribute RAM: 2000 bytes via hardware block fill
+    // Fill attribute RAM: 2000 bytes via streaming loop
     lda #>VDC_ATTRIB_BASE
     ldy #<VDC_ATTRIB_BASE
     jsr vdc_set_update_addr
     ldx zp_text_color
     lda vic_to_vdc_color,x
     sta sc_attr_val
+    ldx #31
+    jsr vdc_select_reg
 
-    lda #7
+    lda #8                  // Clear 8 pages (2048 bytes)
     sta sc_page_cnt
-!fill_attr_chunk:
+    ldy #0
     lda sc_attr_val
-    ldx #31
-    jsr vdc_write_reg
-    lda #255
-    ldx #30
-    jsr vdc_write_reg
+!attr_loop:
     jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !attr_loop-
     dec sc_page_cnt
-    bne !fill_attr_chunk-
-    lda sc_attr_val         // Tail: 208 bytes
-    ldx #31
-    jsr vdc_write_reg
-    lda #207
-    ldx #30
-    jsr vdc_write_reg
-    jsr vdc_wait
+    bne !attr_loop-
 
     cli                     // IRQ on: screen + attr RAM fully cleared
     rts
@@ -415,28 +400,30 @@ screen_set_color:
     rts
 
 // screen_clear_row — Clear a single VDC row to spaces
+// Reverted to streaming loop (Opt 5 revert) to resolve character creation crash.
 // Input: A = row number (0–24)
-// Uses VDC hardware block fill: 1 byte via reg 31 + 79 more via reg 30 = 80 total.
 // Preserves: nothing
 screen_clear_row:
     tax
     sei                     // IRQ off: protect char fill + attr fill for this row
     stx scr_save_row
 
-    // Clear char row: hardware fill 80 spaces
+    // Clear char row: 80 spaces
     lda screen_row_lo,x
     tay
     lda screen_row_hi,x
     jsr vdc_set_update_addr
-    lda #SC_SPACE
     ldx #31
-    jsr vdc_write_reg       // Write first byte (sets fill value, advances address)
-    lda #79
-    ldx #30
-    jsr vdc_write_reg       // Fill 79 more bytes = 80 total
-    jsr vdc_wait            // Wait for hardware fill to complete
+    jsr vdc_select_reg
+    lda #SC_SPACE
+    ldy #80
+!loop:
+    jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !loop-
 
-    // Clear attr row: hardware fill 80 bytes of current color
+    // Clear attr row: 80 bytes of current color
     ldx scr_save_row
     lda color_row_lo,x
     tay
@@ -444,14 +431,14 @@ screen_clear_row:
     jsr vdc_set_update_addr
     ldx zp_text_color
     lda vic_to_vdc_color,x
-    sta scr_attr
-    lda scr_attr
     ldx #31
-    jsr vdc_write_reg
-    lda #79
-    ldx #30
-    jsr vdc_write_reg
+    jsr vdc_select_reg
+    ldy #80
+!col:
     jsr vdc_wait
+    sta VDC_DATA_REG
+    dey
+    bne !col-
 
     ldx scr_save_row
     cli                     // IRQ on: row char+attr fill complete
