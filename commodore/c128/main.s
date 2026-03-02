@@ -125,60 +125,9 @@ entry_real:
     sta $ffc1
     lda #>w_open
     sta $ffc2
-    // FFC3 CLOSE
-    lda $ffc4
-    sta t_close
-    lda $ffc5
-    sta t_close+1
-    lda #<w_close
-    sta $ffc4
-    lda #>w_close
-    sta $ffc5
-    // FFC6 CHKIN
-    lda $ffc7
-    sta t_chkin
-    lda $ffc8
-    sta t_chkin+1
-    lda #<w_chkin
-    sta $ffc7
-    lda #>w_chkin
-    sta $ffc8
-    // FFC9 CHKOUT
-    lda $ffca
-    sta t_chkout
-    lda $ffcb
-    sta t_chkout+1
-    lda #<w_chkout
-    sta $ffca
-    lda #>w_chkout
-    sta $ffcb
-    // FFCC CLRCHN
-    lda $ffcd
-    sta t_clrchn
-    lda $ffce
-    sta t_clrchn+1
-    lda #<w_clrchn
-    sta $ffcd
-    lda #>w_clrchn
-    sta $ffce
-    // FFCF CHRIN
-    lda $ffd0
-    sta t_chrin
-    lda $ffd1
-    sta t_chrin+1
-    lda #<w_chrin
-    sta $ffd0
-    lda #>w_chrin
-    sta $ffd1
-    // FFD2 CHROUT
-    lda $ffd3
-    sta t_chrout
-    lda $ffd4
-    sta t_chrout+1
-    lda #<w_chrout
-    sta $ffd3
-    lda #>w_chrout
-    sta $ffd4
+    // NOTE: FFC3..FFD2 are indirect JMP vectors in C128 ROM
+    // (JMP ($031C)..JMP ($0326)). Do NOT rewrite their operands in the
+    // RAM mirror as if they were direct JMP targets.
     // FFD5 LOAD
     lda $ffd6
     sta t_load
@@ -1280,4 +1229,3 @@ ovl_death_end:
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
-

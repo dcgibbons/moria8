@@ -30,19 +30,18 @@ detect_machine:
 // ============================================================
 // Death source constants (used by turn.s, player_items.s, score.s)
 // ============================================================
-// kernal_load — Platform LOAD wrapper (C128: swaps in original IRQ handler)
-// Defined in main.s as kernal_load_safe
-.label kernal_load = kernal_load_safe
+// kernal_load — Platform LOAD entry (expects EnterKernal() context)
+.label kernal_load = $ffd5
 
 .macro AssetLoad() {
     lda #0
     ldx #0
-    jsr safe_setbnk             // SETBNK: data=Bank 0 (via safe wrapper)
-    jsr kernal_load_safe        // Load asset
+    jsr $ff68                   // SETBNK: data=Bank 0
+    jsr $ffd5                   // LOAD
     php
     lda #0
     ldx #0
-    jsr safe_setbnk             // Restore SETBNK: data=Bank 0
+    jsr $ff68                   // Restore SETBNK: data=Bank 0
     plp
 }
 
