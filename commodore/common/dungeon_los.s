@@ -102,9 +102,9 @@ update_visibility:
 
     ldy vis_min_x
 !uv_col:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     cpy vis_max_x
     beq !uv_col_done+
     iny
@@ -217,9 +217,9 @@ reveal_room:
 
     ldy vis_min_x
 !rr_col:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     cpy vis_max_x
     beq !rr_col_done+
     iny

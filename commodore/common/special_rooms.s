@@ -214,7 +214,7 @@ vault_seal_entrance:
 // Returns carry set if found and sealed
 vse_scan_hwall:
 !vsh_loop:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_OPEN
     beq !vsh_seal+
@@ -226,10 +226,10 @@ vse_scan_hwall:
     clc
     rts
 !vsh_seal:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_SECRET
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     sec
     rts
 
@@ -243,7 +243,7 @@ vse_scan_vwall:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy vse_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_OPEN
     beq !vsv_seal+
@@ -255,10 +255,10 @@ vse_scan_vwall:
     clc
     rts
 !vsv_seal:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_SECRET
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     sec
     rts
 
@@ -319,7 +319,7 @@ spawn_special_room_monsters:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK | FLAG_OCCUPIED
     bne !ssm_skip+              // Not clean floor
 

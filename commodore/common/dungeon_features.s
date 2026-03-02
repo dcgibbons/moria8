@@ -135,7 +135,7 @@ find_random_floor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta zp_temp0
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
@@ -185,7 +185,7 @@ place_secrets:
 
     ldy #1                  // Start at col 1
 !ps_col:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_CLOSED
     bne !ps_next+
@@ -254,10 +254,10 @@ place_secrets:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK     // Keep flags
     ora #TILE_SECRET        // Change type to secret
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Remove from scan list: swap picked entry with last, decrement count
     dec door_scan_count
@@ -307,11 +307,11 @@ trap_check_at_player:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK     // Keep existing flags
     ora #TILE_TRAP          // Set tile type to trap
     ora #FLAG_VISITED       // Ensure visible
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Trigger the trap effect
     ldx df_dir_idx
@@ -532,7 +532,7 @@ trap_teleport:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
     beq !tt_found+
@@ -611,7 +611,7 @@ door_try_open:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta df_dir_idx          // Save full tile byte
 
     // Check tile type
@@ -670,7 +670,7 @@ door_try_open:
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_OPEN
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     ldx #HSTR_DF_DOOR_OPENED
     jsr huff_print_msg
@@ -689,7 +689,7 @@ door_try_close:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta df_dir_idx          // Save full tile byte
 
     // Check tile type
@@ -725,7 +725,7 @@ door_try_close:
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     ldx #HSTR_DF_DOOR_CLOSED
     jsr huff_print_msg
@@ -781,7 +781,7 @@ do_search:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
 
     // Check for secret door
@@ -796,10 +796,10 @@ do_search:
 
     // Reveal: change to TILE_DOOR_CLOSED
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Print message
     ldx #HSTR_DF_FOUND_SECRET
@@ -842,11 +842,11 @@ do_search:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy trap_x,x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_TRAP
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Remove from trap table
     dec trap_count

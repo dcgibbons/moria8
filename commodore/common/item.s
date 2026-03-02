@@ -563,9 +563,9 @@ floor_item_add:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_HAS_ITEM
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     ldx zp_temp4                // Restore slot index
 
     // Increment floor item count
@@ -632,9 +632,9 @@ floor_item_remove:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #~FLAG_HAS_ITEM & $ff
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     ldx zp_temp4                // Restore X
     rts
 
@@ -1008,7 +1008,7 @@ item_spawn_level:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #$f0                    // TILE_TYPE_MASK
     cmp #TILE_FLOOR
     bne !isl_treasure_skip+

@@ -979,7 +979,7 @@ run_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #FLAG_LIT
     sta run_was_lit
 
@@ -1288,7 +1288,7 @@ banked_ego_put_suffix:
     jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000 RAM)
     ldy #0
 !beps_loop:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     beq !beps_done+
     sty beps_save_y
     jsr screen_put_char

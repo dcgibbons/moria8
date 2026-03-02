@@ -58,16 +58,16 @@ town_generate:
     // Top-left corner
     lda #TILE_CORNER_TL | TOWN_FLAGS
     ldy #0
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Top-right corner
     lda #TILE_CORNER_TR | TOWN_FLAGS
     ldy #MAP_COLS - 1
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Horizontal wall between corners
     lda #TILE_WALL_H | TOWN_FLAGS
     ldy #1
 !top_wall:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS - 1
     bne !top_wall-
@@ -80,16 +80,16 @@ town_generate:
     // Bottom-left corner
     lda #TILE_CORNER_BL | TOWN_FLAGS
     ldy #0
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Bottom-right corner
     lda #TILE_CORNER_BR | TOWN_FLAGS
     ldy #MAP_COLS - 1
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Horizontal wall between corners
     lda #TILE_WALL_H | TOWN_FLAGS
     ldy #1
 !bot_wall:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy #MAP_COLS - 1
     bne !bot_wall-
@@ -104,10 +104,10 @@ town_generate:
     // Left wall (col 0)
     lda #TILE_WALL_V | TOWN_FLAGS
     ldy #0
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Right wall (col 79)
     ldy #MAP_COLS - 1
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     inx
     cpx #MAP_ROWS - 1
     bne !side_walls-
@@ -129,7 +129,7 @@ town_generate:
     sta zp_ptr0_hi
     lda #TILE_STAIRS_DN | TOWN_FLAGS
     ldy #40
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // --- Step 5: Set player start at (39, 24) ---
     lda #39
@@ -173,19 +173,19 @@ draw_store:
     // Top-left corner
     ldy zp_temp1
     lda #TILE_CORNER_TL | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Top-right corner
     ldy zp_temp3
     lda #TILE_CORNER_TR | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Top horizontal wall
     ldy zp_temp1
     iny                 // Start at left+1
     lda #TILE_WALL_H | TOWN_FLAGS
 !top_h:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !top_h-
@@ -200,19 +200,19 @@ draw_store:
     // Bottom-left corner
     ldy zp_temp1
     lda #TILE_CORNER_BL | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Bottom-right corner
     ldy zp_temp3
     lda #TILE_CORNER_BR | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Bottom horizontal wall (with door gap)
     ldy zp_temp1
     iny
     lda #TILE_WALL_H | TOWN_FLAGS
 !bot_h:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !bot_h-
@@ -230,16 +230,16 @@ draw_store:
     // Left wall
     ldy zp_temp1
     lda #TILE_WALL_V | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Right wall
     ldy zp_temp3
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Fill interior with opaque wall (no flags → invisible, non-walkable)
     ldy zp_temp1
     iny
     lda #TILE_WALL_H
 !interior:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !interior-
@@ -259,7 +259,7 @@ draw_store:
     ldx zp_temp0        // Re-get store index
     ldy store_door_x,x
     lda #TILE_DOOR_OPEN | TOWN_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     rts
 
@@ -387,9 +387,9 @@ darken_rooms:
 
     ldy dr_start_col
 !dr_col_loop:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #~FLAG_LIT              // Clear FLAG_LIT
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     cpy dr_end_col
     beq !dr_row_done+
     iny
@@ -693,19 +693,19 @@ draw_dungeon_room:
     // Top-left corner
     ldy zp_temp1
     lda #TILE_CORNER_TL | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Top-right corner
     ldy zp_temp3
     lda #TILE_CORNER_TR | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Horizontal wall between corners
     ldy zp_temp1
     iny
     lda #TILE_WALL_H | DUNGEON_FLAGS
 !dr_top_h:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !dr_top_h-
@@ -720,19 +720,19 @@ draw_dungeon_room:
     // Bottom-left corner
     ldy zp_temp1
     lda #TILE_CORNER_BL | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Bottom-right corner
     ldy zp_temp3
     lda #TILE_CORNER_BR | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Horizontal wall between corners
     ldy zp_temp1
     iny
     lda #TILE_WALL_H | DUNGEON_FLAGS
 !dr_bot_h:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !dr_bot_h-
@@ -751,18 +751,18 @@ draw_dungeon_room:
     // Left wall
     ldy zp_temp1
     lda #TILE_WALL_V | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Right wall
     ldy zp_temp3
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Fill interior with floor
     ldy zp_temp1
     iny
     lda #TILE_FLOOR | DUNGEON_FLAGS
 !dr_interior:
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     iny
     cpy zp_temp3
     bne !dr_interior-
@@ -944,7 +944,7 @@ carve_h_corridor:
     lda dg_cx2
     sta dg_room_x               // End at larger (temp)
 !hc_loop:
-    lda (zp_ptr0),y             // Read existing tile
+    :MapRead_ptr0_y()             // Read existing tile
     tax                         // Stash full byte in X
     and #TILE_TYPE_MASK
     beq !hc_advance+            // $00 floor → skip
@@ -966,13 +966,13 @@ carve_h_corridor:
     // Parallel wall (horiz) or corner → carve to floor
 !hc_carve_floor:
     lda #TILE_FLOOR               // No flags — corridor starts invisible
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     jmp !hc_advance+
 !hc_place_door:
     sty dg_retries               // Save Y (column pos; dg_retries not live here)
     jsr random_door_type         // A = door tile value with flags
     ldy dg_retries
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !hc_advance:
     cpy dg_room_x
     beq !hc_done+
@@ -980,7 +980,7 @@ carve_h_corridor:
     jmp !hc_loop-
 !hc_single:
     ldy dg_cx1
-    lda (zp_ptr0),y             // Read existing tile
+    :MapRead_ptr0_y()             // Read existing tile
     tax
     and #TILE_TYPE_MASK
     beq !hc_done+               // Floor → skip
@@ -999,13 +999,13 @@ carve_h_corridor:
     beq !hc_single_door+        // Perpendicular vertical wall → door
 !hc_single_floor:
     lda #TILE_FLOOR               // No flags — corridor starts invisible
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     jmp !hc_done+
 !hc_single_door:
     sty dg_retries
     jsr random_door_type
     ldy dg_retries
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !hc_done:
     rts
 
@@ -1034,7 +1034,7 @@ carve_v_corridor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
-    lda (zp_ptr0),y             // Read existing tile
+    :MapRead_ptr0_y()             // Read existing tile
     sta dg_retries              // Stash full byte (scratch — not live here)
     and #TILE_TYPE_MASK
     beq !vc_advance+            // $00 floor → skip
@@ -1056,7 +1056,7 @@ carve_v_corridor:
     // Parallel wall (vert) or corner → carve to floor
 !vc_carve_floor:
     lda #TILE_FLOOR               // No flags — corridor starts invisible
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     jmp !vc_advance+
 !vc_place_door:
     stx dg_retries               // Save row counter (dg_retries free here)
@@ -1064,7 +1064,7 @@ carve_v_corridor:
     jsr random_door_type         // A = random door tile with flags
     ldx dg_retries
     ldy shuf_j_tmp
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !vc_advance:
     cpx dg_room_y
     beq !vc_done+
@@ -1077,7 +1077,7 @@ carve_v_corridor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
-    lda (zp_ptr0),y             // Read existing tile
+    :MapRead_ptr0_y()             // Read existing tile
     sta dg_retries
     and #TILE_TYPE_MASK
     beq !vc_done+               // Floor → skip
@@ -1096,13 +1096,13 @@ carve_v_corridor:
     beq !vc_single_door+        // Perpendicular horizontal wall → door
 !vc_single_floor:
     lda #TILE_FLOOR               // No flags — corridor starts invisible
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     jmp !vc_done+
 !vc_single_door:
     sty shuf_j_tmp
     jsr random_door_type
     ldy shuf_j_tmp
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !vc_done:
     rts
 
@@ -1145,7 +1145,7 @@ mark_corridor_walls:
 
     ldy #1                      // Start at col 1
 !mcw_col:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     // Is this a visited floor tile?
     tax
     and #TILE_TYPE_MASK
@@ -1212,7 +1212,7 @@ mark_corridor_walls:
 
 // Mark tile at ptr0[Y] as visited if it's a non-floor, unvisited tile
 mcw_mark_p0:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     tax
     and #FLAG_VISITED
     bne !mcw_skip+              // Already visited
@@ -1221,7 +1221,7 @@ mcw_mark_p0:
     beq !mcw_skip+              // Floor → skip
     txa
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !mcw_skip:
     rts
 
@@ -1343,7 +1343,7 @@ acd_scan_v_wall:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy acd_wall_col
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     // Already a door on this wall? → done (wall is connected)
     cmp #TILE_DOOR_OPEN
@@ -1355,13 +1355,13 @@ acd_scan_v_wall:
     bne !asvw_next+
     // Check outer column for corridor floor
     ldy acd_outer_col
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     bne !asvw_next+             // Not floor → no corridor here
     // Place door
     jsr random_door_type        // A = door tile (clobbers X, preserves Y)
     ldy acd_wall_col
-    sta (zp_ptr0),y             // zp_ptr0 still valid
+    :MapWrite_ptr0_y()             // zp_ptr0 still valid
     rts                         // One door placed, done with this wall
 !asvw_next:
     inx
@@ -1390,7 +1390,7 @@ acd_scan_h_wall:
 !ashw_loop:
     cpy acd_end
     bcs !ashw_ret+
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     // Already a door? → done
     cmp #TILE_DOOR_OPEN
@@ -1408,7 +1408,7 @@ acd_scan_h_wall:
     sty acd_save_col
     jsr random_door_type        // A = door tile (clobbers X, preserves Y)
     ldy acd_save_col
-    sta (zp_ptr0),y             // zp_ptr0 still valid
+    :MapWrite_ptr0_y()             // zp_ptr0 still valid
     rts                         // One door placed, done with this wall
 !ashw_next:
     iny
@@ -1484,7 +1484,7 @@ count_adj_walls:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy rwaf_result_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     jsr caw_check_wall
 
     // South (y+1)
@@ -1495,7 +1495,7 @@ count_adj_walls:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy rwaf_result_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     jsr caw_check_wall
 
     // West (x-1)
@@ -1506,13 +1506,13 @@ count_adj_walls:
     sta zp_ptr0_hi
     ldy rwaf_result_x
     dey
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     jsr caw_check_wall
 
     // East (x+1)
     ldy rwaf_result_x
     iny
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     jsr caw_check_wall
 
     lda rwaf_wall_count
@@ -1548,7 +1548,7 @@ place_stairs_dungeon:
     // Write to map
     jsr write_tile_at_xy
     lda #TILE_STAIRS_UP | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Stairs down 1 — pick a different room
     lda room_count
@@ -1563,7 +1563,7 @@ place_stairs_dungeon:
     sty stairs_dn1_y
     jsr write_tile_at_xy
     lda #TILE_STAIRS_DN | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Stairs down 2 — pick another different room if possible
     lda room_count
@@ -1585,7 +1585,7 @@ place_stairs_dungeon:
     sty stairs_dn2_y
     jsr write_tile_at_xy
     lda #TILE_STAIRS_DN | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 // ============================================================
@@ -1787,7 +1787,7 @@ carve_streamer:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy dg_cx1
-    lda (zp_ptr0),y             // Read existing tile
+    :MapRead_ptr0_y()             // Read existing tile
     tax                         // Save full byte
     and #TILE_TYPE_MASK         // Extract type nibble
     beq !cs_no_write+           // $00 = floor — skip
@@ -1799,7 +1799,7 @@ carve_streamer:
     bne !cs_no_write+           // Room wall → preserve
     // Regular rock → overwrite with mineral
     lda dg_room_w               // Mineral tile value
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     // Treasure roll: 1-in-90 for magma, 1-in-40 for quartz
     lda dg_room_w
     and #TILE_TYPE_MASK
@@ -1811,9 +1811,9 @@ carve_streamer:
     lda #40                     // Quartz: 1-in-40
     jsr rng_range               // A = rng(chance), Y preserved
     bne !cs_no_write+           // Treasure only if A == 0
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_HAS_ITEM          // Set treasure flag on vein tile
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !cs_no_write:
 
     // Advance position with jitter
@@ -1859,34 +1859,34 @@ verify_stairs:
     lda stairs_up_x
     ldy stairs_up_y
     jsr write_tile_at_xy
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_UP
     beq !vs_dn1+
     lda #TILE_STAIRS_UP | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
 !vs_dn1:
     lda stairs_dn1_x
     ldy stairs_dn1_y
     jsr write_tile_at_xy
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
     beq !vs_dn2+
     lda #TILE_STAIRS_DN | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
 !vs_dn2:
     lda stairs_dn2_x
     ldy stairs_dn2_y
     jsr write_tile_at_xy
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
     beq !vs_done+
     lda #TILE_STAIRS_DN | DUNGEON_FLAGS
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
 !vs_done:
     rts
@@ -1977,9 +1977,9 @@ verify_connectivity:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy bfs_cur_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     jsr bfs_enqueue
 
@@ -2060,7 +2060,7 @@ verify_connectivity:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy room_x,x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #FLAG_OCCUPIED
     beq !vc_unreachable+         // Not reached by BFS → fail
 
@@ -2143,7 +2143,7 @@ bfs_try_neighbor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy bfs_nb_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
 
     // Already visited?
     tax
@@ -2178,7 +2178,7 @@ bfs_try_neighbor:
     // Mark as visited
     txa                          // Full tile byte (without OCCUPIED)
     ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Enqueue this neighbor (uses bfs_nb_x/bfs_nb_y directly)
     jsr bfs_enqueue_nb

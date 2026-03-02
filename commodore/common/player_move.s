@@ -90,7 +90,7 @@ player_try_move:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp3            // map column
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
 
     // Extract tile type (bits 7-4 → 0-15)
     lsr
@@ -104,7 +104,7 @@ player_try_move:
 
     // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)
-    lda (zp_ptr0),y             // Re-read map byte (zp_ptr0 still valid)
+    :MapRead_ptr0_y()             // Re-read map byte (zp_ptr0 still valid)
     and #FLAG_OCCUPIED
     beq !not_occupied+          // No monster → continue to move
 
@@ -160,7 +160,7 @@ check_stairs_at_player:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
 
     // Extract tile type
     lsr
@@ -200,7 +200,7 @@ run_check_stop:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta zp_temp0            // Save full tile byte
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
@@ -300,7 +300,7 @@ run_check_adjacent_doors:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp1
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
 
     // Check for any door type
@@ -373,7 +373,7 @@ run_check_adjacent_monsters:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp1
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #FLAG_OCCUPIED
     bne !rcam_found+
 
@@ -442,7 +442,7 @@ run_check_intersection:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp1
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     lsr
     lsr
@@ -512,7 +512,7 @@ do_look:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta dl_tile
 
     // Must be visible (lit or visited)

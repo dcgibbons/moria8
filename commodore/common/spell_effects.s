@@ -130,9 +130,9 @@ eff_teleport_self:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Move player
     lda df_target_x
@@ -147,9 +147,9 @@ eff_teleport_self:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Trigger full visibility update and redraw
     lda #1
@@ -345,11 +345,11 @@ eff_find_traps:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy trap_x,x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_TRAP
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     inx
     jmp !eft_loop-
@@ -384,17 +384,17 @@ eff_find_doors:
 
     ldy #1
 !efd_col_loop:
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
     bne !efd_col_next+
 
     // Convert to closed door
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
 !efd_col_next:
     iny
@@ -694,7 +694,7 @@ eff_destroy_traps_doors:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     sta zp_temp0
 
@@ -702,10 +702,10 @@ eff_destroy_traps_doors:
     cmp #TILE_TRAP
     bne !edtd_check_door+
     // Remove trap — set to floor
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_FLOOR
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
     rts
 
 !edtd_check_door:
@@ -718,11 +718,11 @@ eff_destroy_traps_doors:
 
 !edtd_open_door:
     // Open the door
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_OPEN
     ora #FLAG_VISITED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 !edtd_tile_done:
     rts
 
@@ -783,7 +783,7 @@ eff_wall_to_mud:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta ewtm_save_tile          // Save full tile for treasure check
     and #TILE_TYPE_MASK
 
@@ -813,7 +813,7 @@ eff_wall_to_mud:
 !ewtm_dig:
     // Replace with floor + flags (preserve visited/lit from original)
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Check for treasure in vein
     lda ewtm_save_tile
@@ -922,7 +922,7 @@ eff_aggravate:
     beq !eag_next+
     ldy #MX_SLEEP_CUR
     lda #0
-    sta (zp_ptr0),y             // Clear sleep
+    sta (zp_ptr0),y                // Clear sleep
 !eag_next:
     inx
     jmp !eag_loop-

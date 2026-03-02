@@ -418,7 +418,7 @@ find_monster_floor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
 
     // Must be floor tile (upper nibble = $00) with no FLAG_OCCUPIED
     and #TILE_TYPE_MASK | FLAG_OCCUPIED
@@ -597,9 +597,9 @@ monster_spawn_one:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Increment monster count
     inc zp_mon_count
@@ -640,7 +640,7 @@ find_adjacent_empty:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK | FLAG_OCCUPIED
     bne !fae_next+
     // Not player pos
@@ -885,7 +885,7 @@ monster_remove:
     ldy mfa_x
     lda (zp_ptr0),y
     and #~FLAG_OCCUPIED & $ff   // Clear bit 0
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Decrement count
     dec zp_mon_count

@@ -76,3 +76,22 @@ kernal_load:
 .const DEATH_CURSED  = $FD    // Killed by cursed item
 .const DEATH_POISON  = $FE    // Killed by poison
 .const DEATH_STARVE  = $FF    // Killed by starvation
+
+// ============================================================
+// C64 map-safe pointer wrappers (no MMU; direct access)
+// ============================================================
+mmu_safe_map_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_map_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_map_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_map_write_ptr1:
+    sta (zp_ptr1),y
+    rts

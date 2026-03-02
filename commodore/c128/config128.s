@@ -50,3 +50,44 @@ detect_machine:
 .const DEATH_CURSED  = $FD    // Killed by cursed item
 .const DEATH_POISON  = $FE    // Killed by poison
 .const DEATH_STARVE  = $FF    // Killed by starvation
+
+// ============================================================
+// C128 map-safe pointer access wrappers
+// ============================================================
+// These are the only MMU primitives used by common map macros.
+// Contract: mmu_select_bank1/mmu_select_bank0 preserve caller IRQ state.
+mmu_safe_map_read_ptr0:
+    jsr mmu_select_bank1
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_write_ptr0:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_read_ptr1:
+    jsr mmu_select_bank1
+    lda (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_write_ptr1:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts

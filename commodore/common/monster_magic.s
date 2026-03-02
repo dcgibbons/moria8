@@ -138,7 +138,7 @@ monster_can_cast:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mm_los_cx
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     lsr
     lsr
@@ -396,7 +396,7 @@ monster_cast_summon:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy ms_spawn_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta zp_mon_scratch2       // Save tile byte
 
     // Check walkable

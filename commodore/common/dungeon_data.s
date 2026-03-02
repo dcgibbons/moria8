@@ -70,6 +70,36 @@ map_row_hi:
     .fill MAP_ROWS, >(MAP_BASE + i * MAP_COLS)
 
 // ============================================================
+// Map accessors (single-tile API boundary)
+// ============================================================
+// Input: X = column, Y = row
+// Output (get): A = tile byte
+// Clobbers: A, Y, zp_ptr0/zp_ptr0_hi
+map_get_tile:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    :MapRead_ptr0_y()
+    rts
+
+// Input: X = column, Y = row, A = tile byte
+// Clobbers: Y, zp_ptr0/zp_ptr0_hi
+map_set_tile:
+    pha
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    pla
+    :MapWrite_ptr0_y()
+    rts
+
+// ============================================================
 // Store position data
 // ============================================================
 // Store top-left corners (x, y) — 2 rows of 3 stores + BM + Home
@@ -113,3 +143,5 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 .assert "Map size = 3840", MAP_SIZE, 3840
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 8
+
+#import "mmu_macros.s"

@@ -91,7 +91,7 @@ bash_command:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta bash_save_tile
 
     // Check for monster at target
@@ -179,7 +179,7 @@ bash_door:
     lda bash_save_tile
     and #TILE_FLAG_MASK         // Keep flags
     ora #TILE_DOOR_OPEN         // Set to open door
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Print success message
     ldx #HSTR_BASH_CRASH

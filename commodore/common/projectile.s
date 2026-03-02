@@ -83,7 +83,7 @@ trace_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy proj_cx
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     lsr
     lsr

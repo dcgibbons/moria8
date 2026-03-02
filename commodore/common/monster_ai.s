@@ -614,13 +614,21 @@ monster_try_step:
 
     // Bounds check
     lda mat_target_x
-    beq !mts_blocked+
+    bne !mts_x_nonzero+
+    jmp !mts_blocked+
+!mts_x_nonzero:
     cmp #MAP_COLS - 1
-    bcs !mts_blocked+
+    bcc !mts_x_inbounds+
+    jmp !mts_blocked+
+!mts_x_inbounds:
     lda mat_target_y
-    beq !mts_blocked+
+    bne !mts_y_nonzero+
+    jmp !mts_blocked+
+!mts_y_nonzero:
     cmp #MAP_ROWS - 1
-    bcs !mts_blocked+
+    bcc !mts_y_inbounds+
+    jmp !mts_blocked+
+!mts_y_inbounds:
 
     // Read map tile at target
     ldx mat_target_y
@@ -629,7 +637,7 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta zp_mon_scratch1         // Save full tile byte
 
     // Check walkable
@@ -638,18 +646,24 @@ monster_try_step:
     lsr
     lsr                         // Tile type index 0-15
     jsr tile_is_walkable
-    bcc !mts_blocked+
+    bcs !mts_walk_ok+
+    jmp !mts_blocked+
+!mts_walk_ok:
 
     // Check FLAG_OCCUPIED
     lda zp_mon_scratch1
     and #FLAG_OCCUPIED
-    bne !mts_blocked+           // Another monster there
+    beq !mts_unoccupied+
+    jmp !mts_blocked+           // Another monster there
+!mts_unoccupied:
 
     // Check CF_ATTACK_ONLY — prevent actual movement
     ldx zp_mon_type
     lda cr_mflags,x
     and #CF_ATTACK_ONLY
-    bne !mts_blocked+           // Can't move (but player attack above still fires)
+    beq !mts_can_move+
+    jmp !mts_blocked+           // Can't move (but player attack above still fires)
+!mts_can_move:
 
     // --- Move is valid --- execute it
 
@@ -672,9 +686,9 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_old_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Set FLAG_OCCUPIED on new tile
     ldx mat_target_y
@@ -683,9 +697,9 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     sec                         // Success
     rts

@@ -93,7 +93,7 @@ player_tunnel:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     sta tun_save_tile
 
     // Check for monster at target → attack instead
@@ -243,7 +243,7 @@ player_tunnel:
     // Replace with floor
     ldy df_target_x
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     ldx #HSTR_TUN_RUBBLE
     jsr huff_print_msg
@@ -293,7 +293,7 @@ player_tunnel:
     // Replace tile with floor
     ldy df_target_x
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
-    sta (zp_ptr0),y
+    :MapWrite_ptr0_y()
 
     // Check for treasure in vein
     lda tun_save_tile
