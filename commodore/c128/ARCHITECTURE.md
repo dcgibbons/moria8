@@ -1,6 +1,6 @@
-# Moria8 C128 Port — Architecture (C4 Baseline)
+# Moria8 C128 Port — Architecture (C4 Baseline + Stability Fixes)
 
-> Updated for C4 completion state (2026-03-02).
+> Updated for C4 completion state (2026-03-02), including post-lock stability fixes.
 > This document tracks the shipping C128 memory/banking model after map relocation.
 
 ---
@@ -53,8 +53,13 @@ Rules used by shipping code:
 1. Runtime stays in Bank 0 (`MMU_ALL_RAM`) except for scoped map accesses.
 2. Single-tile map access flows through `map_get_tile` / `map_set_tile`.
 3. Those accessors consume C128 MMU-safe pointer wrappers (`mmu_safe_map_*`).
-4. Bulk map work uses centralized `map_bulk_*` helpers, not ad-hoc per-call-site MMU switching.
+4. Bulk map work uses centralized `map_bulk_*` helpers and does not hold an ambient Bank 1 execution context while running overlay code at `$E000`.
 5. MMU select/restore helpers preserve caller IRQ state.
+6. C128 VDC rendering paths (`render_viewport` / `render_single_tile`) read map tiles through MMU-safe map macros, not raw Bank 0 pointer dereferences.
+
+KERNAL call safety:
+- `$FFC3..$FFD2` ROM entry points are indirect stubs on C128; RAM mirror patching must not rewrite them as direct JMP operands.
+- Asset loading runs in explicit `EnterKernal` context with direct `$FF68` (SETBNK) and `$FFD5` (LOAD) calls.
 
 ---
 

@@ -1,6 +1,6 @@
 # Action Plan C4: Resolve C128 Map/Program Memory Collision
 
-**Status:** Completed through C4.8 (2026-03-02)  
+**Status:** Completed through C4.8, with post-lock stabilization fixes applied (2026-03-02)  
 **Priority:** BLOCKER  
 **Owner:** C128 Port Team
 
@@ -49,6 +49,7 @@ C4 is complete only when all are true:
 3. C128 regression harness passes (`minimal128`, `memory128`, `dungeon128`, `soak128`, `boot_d64_smoke`, `boot_diag_copy`).
 4. 200 repeated dungeon generations complete without hang/jam/corruption.
 5. BUILDPLAN and architecture notes match actual addresses and current scope.
+6. New-game path is stable end-to-end (title -> character creation -> town -> first dungeon entry) without monitor BREAK/jam or render corruption.
 
 ## 5. Commit-Sized Execution Plan
 
@@ -136,6 +137,20 @@ Each step should be one small PR/commit with a single intent.
 - Ensure no doc claims `198x66` is complete.
 
 **Gate:** docs match shipping code exactly.
+
+### C4.9 Post-Lock Stabilization: KERNAL Vector/LOAD Path (applied)
+- Fix C128 KERNAL vector handling in RAM mirror:
+  - Do not rewrite `$FFC3..$FFD2` operands as direct JMP targets (they are indirect ROM stubs).
+- Fix C128 asset-load path:
+  - Use direct `$FF68`/`$FFD5` calls inside `EnterKernal` context to avoid MMU-mode leakage and recursive CLOSE/CLRCHN failures.
+
+**Gate:** New game no longer loops in KERNAL CLOSE/CLRCHN path after disk activity.
+
+### C4.10 Post-Lock Stabilization: Generation/Render Bank Safety (applied)
+- Fix generation bulk helpers so overlay code at `$E000` does not execute under a Bank 1 MMU context.
+- Fix C128 VDC renderer to read map tiles via MMU-safe map access macros, not raw Bank 0 pointer reads.
+
+**Gate:** Town and first dungeon entry render correctly on C128 after character creation.
 
 ## 6. Common Failure Modes to Guard Against
 

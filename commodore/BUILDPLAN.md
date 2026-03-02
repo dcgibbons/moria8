@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-02, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split) and the C4 map-collision stabilization track are complete through C4.8 (documentation lock). C128 now runs with the map in Bank 1 and validated MMU-safe map access paths.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split) and the C4 map-collision stabilization track are complete through C4.8, with post-lock stability fixes applied to KERNAL vector/load handling and C128 banked map render paths. C128 now runs with the map in Bank 1 and validated MMU-safe map access paths.
 
 ### Build Stats
 
@@ -15,6 +15,7 @@
 - **Compile-time asserts:** 69 (C128) / 71 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
+- **C128 integration stability:** New game -> character creation -> town -> first dungeon entry is validated after C4 stabilization fixes.
 
 ---
 
