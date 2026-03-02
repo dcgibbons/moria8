@@ -95,3 +95,10 @@ mmu_safe_map_read_ptr1:
 mmu_safe_map_write_ptr1:
     sta (zp_ptr1),y
     rts
+
+// Bulk map helpers enter/exit (no-op on C64)
+map_bulk_enter:
+    rts
+
+map_bulk_exit:
+    rts

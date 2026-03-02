@@ -91,3 +91,12 @@ mmu_safe_map_write_ptr1:
     jsr mmu_select_bank0
     pla
     rts
+
+// Bulk map helpers enter/exit (single bank transition around hot loops)
+map_bulk_enter:
+    jsr mmu_select_bank1
+    rts
+
+map_bulk_exit:
+    jsr mmu_select_bank0
+    rts

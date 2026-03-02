@@ -1,6 +1,6 @@
 // dungeon_gen.s — Town and dungeon map generation (loaded as $E000 overlay)
 //
-// Populates the 3,840-byte map at $C000-$CEFF (80x48 tiles, 1 byte/tile).
+// Populates the 3,840-byte map at MAP_BASE..MAP_END (80x48 tiles, 1 byte/tile).
 // Each map byte: bits 7-4 = tile type (0-15), bits 3-0 = flags.
 //
 // Shared constants and data tables (map_row_lo/hi, room_count, stairs, etc.)
@@ -16,21 +16,19 @@
 .const STORE_H = 5
 
 // ============================================================
-// Subroutines
+// Bulk map helpers (overlay-local, centralized high-volume operations)
 // ============================================================
+// These are the approved bulk bypass paths for single-tile wrappers.
+// They perform one bank enter/exit around the full map walk.
 
-// town_generate — Build the town level map
-// Fills map at $C000 with floor, outer walls, 6 stores, stairs.
-// Sets player start position.
-// Preserves: nothing
-town_generate:
-    // Clear trap table for safety (town has no traps)
-    lda #0
-    sta trap_count
-    // --- Step 1: Fill entire map with floor + TOWN_FLAGS ---
-    lda #TILE_FLOOR | TOWN_FLAGS    // $0C
+// Input: A = fill byte
+// Clobbers: A, X
+map_bulk_fill_all:
+    sta map_bulk_fill_val
+    jsr map_bulk_enter
     ldx #0
-!fill_page0:
+!mbf_loop:
+    lda map_bulk_fill_val
     sta MAP_BASE,x
     sta MAP_BASE + $100,x
     sta MAP_BASE + $200,x
@@ -47,7 +45,89 @@ town_generate:
     sta MAP_BASE + $d00,x
     sta MAP_BASE + $e00,x
     inx
-    bne !fill_page0-
+    beq !mbf_done+
+    jmp !mbf_loop-
+!mbf_done:
+    jsr map_bulk_exit
+    rts
+
+// Input: A = AND mask applied to every map byte
+// Clobbers: A, X
+map_bulk_and_all:
+    sta map_bulk_and_mask
+    jsr map_bulk_enter
+    ldx #0
+!mba_loop:
+    lda MAP_BASE,x
+    and map_bulk_and_mask
+    sta MAP_BASE,x
+    lda MAP_BASE + $100,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $100,x
+    lda MAP_BASE + $200,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $200,x
+    lda MAP_BASE + $300,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $300,x
+    lda MAP_BASE + $400,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $400,x
+    lda MAP_BASE + $500,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $500,x
+    lda MAP_BASE + $600,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $600,x
+    lda MAP_BASE + $700,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $700,x
+    lda MAP_BASE + $800,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $800,x
+    lda MAP_BASE + $900,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $900,x
+    lda MAP_BASE + $a00,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $a00,x
+    lda MAP_BASE + $b00,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $b00,x
+    lda MAP_BASE + $c00,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $c00,x
+    lda MAP_BASE + $d00,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $d00,x
+    lda MAP_BASE + $e00,x
+    and map_bulk_and_mask
+    sta MAP_BASE + $e00,x
+    inx
+    beq !mba_done+
+    jmp !mba_loop-
+!mba_done:
+    jsr map_bulk_exit
+    rts
+
+map_bulk_fill_val: .byte 0
+map_bulk_and_mask: .byte 0
+
+// ============================================================
+// Subroutines
+// ============================================================
+
+// town_generate — Build the town level map
+// Fills map at MAP_BASE with floor, outer walls, 6 stores, stairs.
+// Sets player start position.
+// Preserves: nothing
+town_generate:
+    // Clear trap table for safety (town has no traps)
+    lda #0
+    sta trap_count
+    // --- Step 1: Fill entire map with floor + TOWN_FLAGS ---
+    lda #TILE_FLOOR | TOWN_FLAGS    // $0C
+    jsr map_bulk_fill_all
 
     // --- Step 2: Draw outer boundary walls ---
     // Top wall (row 0): horizontal walls with corners
@@ -422,26 +502,7 @@ dr_end_col:   .byte 0
 // ============================================================
 fill_map_rock:
     lda #TILE_WALL_H            // $10 — solid rock, no flags
-    ldx #0
-!fill:
-    sta MAP_BASE,x
-    sta MAP_BASE + $100,x
-    sta MAP_BASE + $200,x
-    sta MAP_BASE + $300,x
-    sta MAP_BASE + $400,x
-    sta MAP_BASE + $500,x
-    sta MAP_BASE + $600,x
-    sta MAP_BASE + $700,x
-    sta MAP_BASE + $800,x
-    sta MAP_BASE + $900,x
-    sta MAP_BASE + $a00,x
-    sta MAP_BASE + $b00,x
-    sta MAP_BASE + $c00,x
-    sta MAP_BASE + $d00,x
-    sta MAP_BASE + $e00,x
-    inx
-    bne !fill-
-    rts
+    jmp map_bulk_fill_all
 
 // ============================================================
 // place_rooms — Place 4-8 rooms with overlap rejection
@@ -1906,55 +1967,8 @@ verify_connectivity:
     sei                          // Disable IRQ — cursor blink writes to $0400 (BFS queue)
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---
     // We reuse bit 0 as "visited" marker for BFS
-    ldx #0
-!vc_clear:
-    lda MAP_BASE,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE,x
-    lda MAP_BASE + $100,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $100,x
-    lda MAP_BASE + $200,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $200,x
-    lda MAP_BASE + $300,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $300,x
-    lda MAP_BASE + $400,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $400,x
-    lda MAP_BASE + $500,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $500,x
-    lda MAP_BASE + $600,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $600,x
-    lda MAP_BASE + $700,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $700,x
-    lda MAP_BASE + $800,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $800,x
-    lda MAP_BASE + $900,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $900,x
-    lda MAP_BASE + $a00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $a00,x
-    lda MAP_BASE + $b00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $b00,x
-    lda MAP_BASE + $c00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $c00,x
-    lda MAP_BASE + $d00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $d00,x
-    lda MAP_BASE + $e00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $e00,x
-    inx
-    bne !vc_clear-
+    lda #~FLAG_OCCUPIED & $ff
+    jsr map_bulk_and_all
 
     // --- Step 2: BFS from stairs_up position ---
     // Queue head/tail as 16-bit indices into BFS_QUEUE
@@ -2083,56 +2097,8 @@ verify_connectivity:
 
 // vc_cleanup — Clear FLAG_OCCUPIED from entire map
 vc_cleanup:
-    ldx #0
-!vcc:
-    lda MAP_BASE,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE,x
-    lda MAP_BASE + $100,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $100,x
-    lda MAP_BASE + $200,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $200,x
-    lda MAP_BASE + $300,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $300,x
-    lda MAP_BASE + $400,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $400,x
-    lda MAP_BASE + $500,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $500,x
-    lda MAP_BASE + $600,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $600,x
-    lda MAP_BASE + $700,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $700,x
-    lda MAP_BASE + $800,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $800,x
-    lda MAP_BASE + $900,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $900,x
-    lda MAP_BASE + $a00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $a00,x
-    lda MAP_BASE + $b00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $b00,x
-    lda MAP_BASE + $c00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $c00,x
-    lda MAP_BASE + $d00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $d00,x
-    lda MAP_BASE + $e00,x
-    and #~FLAG_OCCUPIED
-    sta MAP_BASE + $e00,x
-    inx
-    bne !vcc-
-    rts
+    lda #~FLAG_OCCUPIED & $ff
+    jmp map_bulk_and_all
 
 // bfs_try_neighbor — Check neighbor tile, enqueue if passable and unvisited
 // Input: bfs_nb_x, bfs_nb_y = neighbor coordinates
