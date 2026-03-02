@@ -200,6 +200,7 @@ echo "=== Moria C128 Tests ==="
 run_test "minimal128" "tests/test_minimal128.s"
 run_test "memory128" "tests/test_memory128.s"
 run_test "dungeon128" "tests/test_dungeon128.s" 50000000
+run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke
 run_boot_diag_copy
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
