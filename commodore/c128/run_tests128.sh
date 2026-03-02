@@ -8,6 +8,35 @@ VICE="${VICE128:-/Applications/VICE/bin/x128}"
 PASS=0
 FAIL=0
 TOTAL=0
+BOOT_ASSETS_BUILT=0
+
+build_boot_assets() {
+    if [ "$BOOT_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    local build_log="/tmp/test128_boot_build.log"
+    if ! make -s build128 disk128 >"$build_log" 2>&1; then
+        echo "FAIL (build128/disk128 failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    local diag_asm
+    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 -o out/boot128.diag.prg 2>&1)
+    if [ $? -ne 0 ]; then
+        echo "FAIL (boot128 diag assembly error)"
+        echo "$diag_asm" | grep -i error | head -3 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=1
+    return 0
+}
 
 run_test() {
     local name="$1"
@@ -76,10 +105,103 @@ run_test() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_boot_d64_smoke() {
+    local name="boot_d64_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local entry_main
+    entry_main=$(awk '/\.entry_main$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${entry_main:-}" ]; then
+        echo "FAIL (missing entry_main in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "break \$${entry_main}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 120000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+
+    if grep -q "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        tail -6 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
+run_boot_diag_copy() {
+    local name="boot_diag_copy"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local entry_main
+    entry_main=$(awk '/\.entry_main$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${entry_main:-}" ]; then
+        echo "FAIL (missing entry_main in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64 abs_diag_boot
+    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_diag_boot="$(cd out && pwd)/boot128.diag.prg"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "attach \"${abs_d64}\" 8"
+        echo "load \"${abs_diag_boot}\" 0"
+        echo "r pc=1C0E"
+        echo "break \$${entry_main}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 120000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+
+    if ! grep -q "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+        echo "FAIL (did not reach entry_main)"
+        tail -6 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria C128 Tests ==="
 run_test "minimal128" "tests/test_minimal128.s"
 run_test "memory128" "tests/test_memory128.s"
 run_test "dungeon128" "tests/test_dungeon128.s" 50000000
+run_boot_d64_smoke
+run_boot_diag_copy
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 
 if [ "$FAIL" -gt 0 ]; then

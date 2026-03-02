@@ -22,6 +22,8 @@
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
 // ============================================================
+.const BOOT_DIAG_SIG_BASE = $0bf0
+
 .pc = $1C01 "BASIC Stub"
     .byte $0b, $1c, $0a, $00, $9e, $37, $31, $38, $32, $00, $00, $00
 
@@ -58,6 +60,13 @@ bootstrap_entry:
 loader_data_src:
 .pseudopc $2000 {
 loader_start:
+#if BOOT_DIAG
+    lda #$c1
+    sta BOOT_DIAG_SIG_BASE + 0
+    lda $d506
+    sta BOOT_DIAG_SIG_BASE + 1
+#endif
+
     // 3. RESTORE KERNAL: Bank in ROMs for I/O
     lda #MMU_NORMAL
     sta $ff00
@@ -103,6 +112,13 @@ loader_start:
     lda #0
     jsr $ffd5
     bcs load_err
+
+#if BOOT_DIAG
+    lda #$c2
+    sta BOOT_DIAG_SIG_BASE + 0
+    lda $d506
+    sta BOOT_DIAG_SIG_BASE + 2
+#endif
     
     // 7. SUCCESS: Relocate stub to $0B00 and Hand-off
     // Data load (BANK1.DAT) will be handled by the engine in Stage 2.
@@ -142,6 +158,13 @@ stub_start:
     lda #$05
     sta $d506               // 4KB bottom common ($0000-$0FFF) — stub at $0B00 must be common
 
+#if BOOT_DIAG
+    lda #$d1
+    sta BOOT_DIAG_SIG_BASE + 0
+    lda $d506
+    sta BOOT_DIAG_SIG_BASE + 3
+#endif
+
     // Clear Overlay $B000-$BFFF
     lda #0
     ldx #$b0
@@ -166,6 +189,17 @@ stub_start:
     lda #$1c
     sta $61
     ldx #$e3                // Copy $E3 pages ($1C00 to $FEFF) -> stops exactly at $FF00
+
+#if BOOT_DIAG
+    // Capture source signature byte from Bank 1 before copy
+    lda #MMU_RAM_BANK1_NOIO
+    sta $ff00
+    lda $1c0e
+    sta BOOT_DIAG_SIG_BASE + 4
+    lda #MMU_ALL_RAM_NOIO
+    sta $ff00
+#endif
+
 copy_loop:
     // Read 256 bytes from Bank 1 into common RAM buffer ($0C00)
     lda #MMU_RAM_BANK1_NOIO
@@ -190,6 +224,21 @@ copy_loop:
     inc $61
     dex
     bne copy_loop
+
+#if BOOT_DIAG
+    // Verify destination signature byte in Bank 0 after copy
+    lda $1c0e
+    sta BOOT_DIAG_SIG_BASE + 5
+    cmp BOOT_DIAG_SIG_BASE + 4
+    beq !diag_ok+
+    lda #$ee
+    sta BOOT_DIAG_SIG_BASE + 6
+!diag_fail:
+    jmp !diag_fail-
+!diag_ok:
+    lda #$aa
+    sta BOOT_DIAG_SIG_BASE + 6
+#endif
 
     // Restore operational bank (ROMs visible)
     lda #MMU_NORMAL
