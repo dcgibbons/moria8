@@ -614,19 +614,14 @@ monster_try_step:
 
     // Bounds check
     lda mat_target_x
-    beq !jmp_blocked+
+    beq !mts_blocked+
     cmp #MAP_COLS - 1
-    bcs !jmp_blocked+
+    bcs !mts_blocked+
     lda mat_target_y
-    beq !jmp_blocked+
+    beq !mts_blocked+
     cmp #MAP_ROWS - 1
-    bcs !jmp_blocked+
-    jmp !mts_bounds_ok+
+    bcs !mts_blocked+
 
-!jmp_blocked:
-    jmp !mts_blocked+
-
-!mts_bounds_ok:
     // Read map tile at target
     ldx mat_target_y
     lda map_row_lo,x
@@ -634,9 +629,7 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta zp_mon_scratch1         // Save full tile byte
 
     // Check walkable
@@ -645,16 +638,12 @@ monster_try_step:
     lsr
     lsr                         // Tile type index 0-15
     jsr tile_is_walkable
-    bcs !mts_walkable+
-    jmp !mts_blocked+
-!mts_walkable:
+    bcc !mts_blocked+
 
     // Check FLAG_OCCUPIED
     lda zp_mon_scratch1
     and #FLAG_OCCUPIED
-    beq !mts_not_occupied+
-    jmp !mts_blocked+           // Another monster there
-!mts_not_occupied:
+    bne !mts_blocked+           // Another monster there
 
     // Check CF_ATTACK_ONLY — prevent actual movement
     ldx zp_mon_type
@@ -683,12 +672,9 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_old_x
-    .if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
-    and #~FLAG_OCCUPIED
+    and #~FLAG_OCCUPIED & $ff
     sta (zp_ptr0),y
-    .if (C128) { :Bank0Restore() }
-
 
     // Set FLAG_OCCUPIED on new tile
     ldx mat_target_y
@@ -697,11 +683,9 @@ monster_try_step:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mat_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     ora #FLAG_OCCUPIED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     sec                         // Success
     rts

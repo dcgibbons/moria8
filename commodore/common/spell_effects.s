@@ -130,11 +130,9 @@ eff_teleport_self:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #~FLAG_OCCUPIED & $ff
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Move player
     lda df_target_x
@@ -149,11 +147,9 @@ eff_teleport_self:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_player_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     ora #FLAG_OCCUPIED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Trigger full visibility update and redraw
     lda #1
@@ -349,13 +345,11 @@ eff_find_traps:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy trap_x,x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_FLAG_MASK
     ora #TILE_TRAP
     ora #FLAG_VISITED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     inx
     jmp !eft_loop-
@@ -389,7 +383,6 @@ eff_find_doors:
     sta zp_ptr0_hi
 
     ldy #1
-.if (C128) { :Bank1Write() }
 !efd_col_loop:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
@@ -407,7 +400,6 @@ eff_find_doors:
     iny
     cpy #MAP_COLS - 1
     bcc !efd_col_loop-
-.if (C128) { :Bank0Restore() }
 
     inc eff_fd_row
     jmp !efd_row_loop-
@@ -702,7 +694,6 @@ eff_destroy_traps_doors:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     sta zp_temp0
@@ -715,7 +706,6 @@ eff_destroy_traps_doors:
     and #TILE_FLAG_MASK
     ora #TILE_FLOOR
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     rts
 
 !edtd_check_door:
@@ -734,7 +724,6 @@ eff_destroy_traps_doors:
     ora #FLAG_VISITED
     sta (zp_ptr0),y
 !edtd_tile_done:
-.if (C128) { :Bank0Restore() }
     rts
 
 !edtd_trap_cb:
@@ -794,7 +783,6 @@ eff_wall_to_mud:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     sta ewtm_save_tile          // Save full tile for treasure check
     and #TILE_TYPE_MASK
@@ -819,14 +807,13 @@ eff_wall_to_mud:
     cmp #TILE_SECRET
     beq !ewtm_dig+
     // Not a wall
-    .if (C128) { :Bank0Restore() }
-    jmp !ewtm_fail+
+!ewtm_fail:
+    rts
 
-    !ewtm_dig:
+!ewtm_dig:
     // Replace with floor + flags (preserve visited/lit from original)
     lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Check for treasure in vein
     lda ewtm_save_tile
@@ -838,9 +825,9 @@ eff_wall_to_mud:
     lda #SFX_PICKUP
     jsr sound_play
 !ewtm_no_treasure:
+
     lda #1
     sta vis_room_revealed
-!ewtm_fail:
     rts
 
 ewtm_save_tile: .byte 0

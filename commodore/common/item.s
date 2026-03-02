@@ -563,11 +563,9 @@ floor_item_add:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     ora #FLAG_HAS_ITEM
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     ldx zp_temp4                // Restore slot index
 
     // Increment floor item count
@@ -634,11 +632,9 @@ floor_item_remove:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #~FLAG_HAS_ITEM & $ff
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     ldx zp_temp4                // Restore X
     rts
 
@@ -1012,9 +1008,7 @@ item_spawn_level:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy fi_add_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     and #$f0                    // TILE_TYPE_MASK
     cmp #TILE_FLOOR
     bne !isl_treasure_skip+

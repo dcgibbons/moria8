@@ -91,9 +91,7 @@ bash_command:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta bash_save_tile
 
     // Check for monster at target

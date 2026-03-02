@@ -54,7 +54,6 @@ render_viewport:
     sta zp_render_y         // Screen row counter (0-18)
 
 !row_loop:
-    :Bank1Read()
     // Compute map row = view_y + render_y
     lda zp_view_y
     clc
@@ -336,7 +335,6 @@ render_viewport:
     beq !col_done+
     jmp !col_loop-
 !col_done:
-    :Bank0Restore()
 
     // Stream char + attr rows to VDC atomically (sei per row = minimal IRQ window)
     // Opt 1: reg 31 selected once per pass; vdc_wait inlined as bit/bpl sharing the loop target.
@@ -462,10 +460,8 @@ render_single_tile:
     lda map_row_hi,x
     sta zp_map_ptr_hi
     ldy zp_temp0
-    :Bank1Read()
     lda (zp_map_ptr_lo),y
     sta zp_tile_tmp
-    :Bank0Restore()
 
     // Check visited flag
     and #FLAG_VISITED

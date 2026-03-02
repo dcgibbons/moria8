@@ -135,9 +135,7 @@ find_random_floor:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta zp_temp0
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
@@ -185,7 +183,6 @@ place_secrets:
     sta zp_ptr0_hi
     stx df_target_y         // Save row
 
-.if (C128) { :Bank1Read() }
     ldy #1                  // Start at col 1
 !ps_col:
     lda (zp_ptr0),y
@@ -209,7 +206,6 @@ place_secrets:
     iny
     cpy #MAP_COLS - 1
     bne !ps_col-
-.if (C128) { :Bank0Restore() }
 
     ldx df_target_y         // Restore row
     inx
@@ -258,12 +254,10 @@ place_secrets:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_FLAG_MASK     // Keep flags
     ora #TILE_SECRET        // Change type to secret
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Remove from scan list: swap picked entry with last, decrement count
     dec door_scan_count
@@ -313,13 +307,11 @@ trap_check_at_player:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy zp_player_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_FLAG_MASK     // Keep existing flags
     ora #TILE_TRAP          // Set tile type to trap
     ora #FLAG_VISITED       // Ensure visible
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Trigger the trap effect
     ldx df_dir_idx
@@ -540,9 +532,7 @@ trap_teleport:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     and #TILE_TYPE_MASK
     cmp #TILE_FLOOR
     beq !tt_found+
@@ -621,9 +611,7 @@ door_try_open:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta df_dir_idx          // Save full tile byte
 
     // Check tile type
@@ -679,13 +667,10 @@ door_try_open:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-    .if (C128) { :Bank1Write() }
-    lda (zp_ptr0),y
+    lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_OPEN
     sta (zp_ptr0),y
-    .if (C128) { :Bank0Restore() }
-
 
     ldx #HSTR_DF_DOOR_OPENED
     jsr huff_print_msg
@@ -704,9 +689,7 @@ door_try_close:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta df_dir_idx          // Save full tile byte
 
     // Check tile type
@@ -739,12 +722,10 @@ door_try_close:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda df_dir_idx
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     ldx #HSTR_DF_DOOR_CLOSED
     jsr huff_print_msg
@@ -800,9 +781,7 @@ do_search:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy df_target_x
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     and #TILE_TYPE_MASK
 
     // Check for secret door
@@ -817,13 +796,10 @@ do_search:
 
     // Reveal: change to TILE_DOOR_CLOSED
     ldy df_target_x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
-
 
     // Print message
     ldx #HSTR_DF_FOUND_SECRET
@@ -866,13 +842,11 @@ do_search:
     lda map_row_hi,y
     sta zp_ptr0_hi
     ldy trap_x,x
-.if (C128) { :Bank1Write() }
     lda (zp_ptr0),y
     and #TILE_FLAG_MASK
     ora #TILE_TRAP
     ora #FLAG_VISITED
     sta (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
 
     // Remove from trap table
     dec trap_count

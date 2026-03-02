@@ -599,32 +599,8 @@ save_write_block:
     lda save_count_lo
     ora save_count_hi
     beq !swb_done+
-    
     // Read byte from source
-.if (C128) {
-    // Check if source is in Bank 1 ($4000-$7FFF)
-    lda zp_ptr0_hi
-    cmp #$40
-    bcc !swb_bank0+
-    cmp #$80
-    bcs !swb_bank0+
-    // Bank 1 source
-    sei
-    lda #MMU_RAM_BANK1
-    sta $ff00
     lda (zp_ptr0),y
-    pha
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    jmp !swb_got_byte+
-!swb_bank0:
-    lda (zp_ptr0),y
-!swb_got_byte:
-} else {
-    lda (zp_ptr0),y
-}
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -632,7 +608,8 @@ save_write_block:
     bcc !swb_no_carry+
     inc save_cksum_hi
 !swb_no_carry:
-    // Write byte (A already has the byte)
+    // Write byte
+    lda (zp_ptr0),y
     jsr KERNAL_CHROUT
     // Check status
     jsr KERNAL_READST
@@ -712,32 +689,7 @@ load_read_block:
     jsr load_read_byte
     // Store at destination
     ldy #0
-.if (C128) {
-    // Check if dest is in Bank 1 ($4000-$7FFF)
-    ldx zp_ptr0_hi
-    cpx #$40
-    bcc !lrb_bank0+
-    cpx #$80
-    bcs !lrb_bank0+
-    // Bank 1 destination
-    sei
-    pha
-    lda #MMU_RAM_BANK1
-    sta $ff00
-    pla
     sta (zp_ptr0),y
-    pha
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    jmp !lrb_next+
-!lrb_bank0:
-    sta (zp_ptr0),y
-!lrb_next:
-} else {
-    sta (zp_ptr0),y
-}
     // Advance dest pointer
     inc zp_ptr0
     bne !lrb_no_hi+
@@ -884,9 +836,7 @@ rle_compress_map:
 
     // Read current byte
     ldy #0
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     sta rle_run_byte
     lda #1
     sta rle_run_len
@@ -911,9 +861,7 @@ rle_compress_map:
 
     // Check next byte
     ldy rle_run_len
-.if (C128) { :Bank1Read() }
     lda (zp_ptr0),y
-.if (C128) { :Bank0Restore() }
     cmp rle_run_byte
     bne !rle_c_emit+
     inc rle_run_len

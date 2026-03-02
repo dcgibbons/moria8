@@ -87,16 +87,16 @@
 // C128 "Lower Safe Zone" strategy:
 //   $0400-$09FF: VIC-II/Scratch
 //   $0A00-$0AFF: Screen Editor Workspace (RESERVED)
-//   $0B00-$1BFF: RECOVERED RAM (available for program segment expansion)
+//   $0B00-$19FF: Dungeon Map (3,840 bytes)
+//   $1A00-$1AFF: Floor Items (256 bytes)
+//   $1B00-$1BFF: Creature Scratch/Misc
 //   $1C01:        BASIC Start / Program entry
-//
-// Bank 1 Map Data (Relocated to free up low memory and allow 198x66 expansion)
-.const MAP_BASE         = $4000 // Dungeon map (Bank 1)
-.const MAP_END          = $72ef // 13,068 bytes (198x66)
-.const FLOOR_ITEM_BASE  = $7300 // Floor item table (256 bytes)
-.const FLOOR_ITEM_END   = $73ff
-.const CREATURE_BASE    = $7400 // Runtime scratch area (RLE, hiscore)
-.const CREATURE_END     = $74ff
+.const MAP_BASE         = $0b00 // Dungeon map (3,840 bytes)
+.const MAP_END          = $19ff
+.const FLOOR_ITEM_BASE  = $1a00 // Floor item table (256 bytes)
+.const FLOOR_ITEM_END   = $1aff
+.const CREATURE_BASE    = $1b00 // Runtime scratch area (RLE, hiscore)
+.const CREATURE_END     = $1bff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
 .const SCREEN_RAM       = $0400 // VIC-II screen RAM (used as scratch buffer on C128)
@@ -194,21 +194,18 @@
 
 // MMU Bank 1 Access Macros
 .macro Bank1Read() {
-    sei
     lda #MMU_RAM_BANK1
     sta MMU_CR
 }
 
 .macro Bank1Write() {
-    sei
     lda #MMU_RAM_BANK1
     sta MMU_CR
 }
 
 .macro Bank0Restore() {
-    lda #MMU_ALL_RAM
+    lda #MMU_NORMAL
     sta MMU_CR
-    cli
 }
 
 // ============================================================
@@ -301,7 +298,7 @@ copy_to_e000:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Map fits in Bank 1 RAM", MAP_END - MAP_BASE + 1, 13040
+.assert "Map fits in $1000 region", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "ZP save buffer doesn't overlap CREATURE_BASE", ZP_SAVE_BUF_ADDR + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

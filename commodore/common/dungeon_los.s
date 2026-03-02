@@ -101,7 +101,6 @@ update_visibility:
     sta zp_ptr0_hi
 
     ldy vis_min_x
-.if (C128) { :Bank1Write() }
 !uv_col:
     lda (zp_ptr0),y
     ora #FLAG_VISITED
@@ -111,7 +110,6 @@ update_visibility:
     iny
     jmp !uv_col-
 !uv_col_done:
-.if (C128) { :Bank0Restore() }
 
     // Also mark adjacent walls (1 tile beyond torch in each direction)
     // This ensures corridor walls are visible when standing next to them.
@@ -218,7 +216,6 @@ reveal_room:
     sta zp_ptr0_hi
 
     ldy vis_min_x
-.if (C128) { :Bank1Write() }
 !rr_col:
     lda (zp_ptr0),y
     ora #FLAG_VISITED
@@ -228,7 +225,6 @@ reveal_room:
     iny
     jmp !rr_col-
 !rr_col_done:
-.if (C128) { :Bank0Restore() }
 
     cpx vis_max_y
     beq !rr_done+
@@ -258,9 +254,7 @@ los_is_visible:
     // Read tile at (X, Y)
     txa
     tay
-.if (C128) { :Bank1Read() }
     lda (zp_ptr1),y
-.if (C128) { :Bank0Restore() }
 
     // Check FLAG_LIT
     and #FLAG_LIT

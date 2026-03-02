@@ -97,15 +97,6 @@
 .macro EnterKernal() { php }
 .macro ExitKernal() { plp }
 
-// C128 Banking Dummies
-.const MMU_RAM_BANK1 = 0
-.const MMU_ALL_RAM   = 0
-.macro Bank1Read() {}
-.macro Bank1Write() {}
-.macro Bank0Restore() {}
-
-safe_setbnk: rts
-
 // ============================================================
 // Subroutines
 // ============================================================
