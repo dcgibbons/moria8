@@ -23,7 +23,7 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **C2** | **BLOCKER** | C128: Keyboard matrix scan lacks Line 8 (keypad/extended keys) support. | **High Priority** |
+| **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
 | **Q1** | **HIGH** | C128: `Quit` path fails to return cleanly to BASIC; exits to corrupted screen/monitor BREAK state instead of stable BASIC prompt. | **New** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
