@@ -137,7 +137,7 @@ run_boot_d64_smoke() {
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
-    if grep -q "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+    if grep -qi "^BREAK: .*C:\$${entry_main}" "$log_file"; then
         echo "PASS"
         PASS=$((PASS + 1))
     else
@@ -184,7 +184,7 @@ run_boot_diag_copy() {
         -limitcycles 120000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
-    if ! grep -q "^BREAK: .*C:\$${entry_main}" "$log_file"; then
+    if ! grep -qi "^BREAK: .*C:\$${entry_main}" "$log_file"; then
         echo "FAIL (did not reach entry_main)"
         tail -6 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))

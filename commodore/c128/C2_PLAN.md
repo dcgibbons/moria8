@@ -63,12 +63,13 @@ C2 is complete only when all are true:
 
 **Gate:** baseline artifact captured in this plan file.
 
-### C2.1 Extend Matrix Scan to Rows 8/9
+### C2.1 Extend Matrix Scan to Rows 8/9 ✅ Completed (2026-03-02)
 - Update `cia_scan_petscii`:
   - Rows 0-7: drive via `$DC00`, read `$DC01`.
   - Row 8: deselect CIA rows (`$DC00=$FF`), drive `$D02F` bit 6 low, read `$DC01`.
   - Row 9: deselect CIA rows (`$DC00=$FF`), drive `$D02F` bit 7 low, read `$DC01`.
 - Preserve/restore `$D02F` state around scan.
+- Scope note: this step adds row 8/9 scan-path plumbing and safe register restoration only; extended-key command mapping remains in C2.2/C2.4.
 
 **Gate:** raw row/column decode works for lines 8/9 without breaking lines 0-7.
 

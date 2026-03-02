@@ -23,6 +23,7 @@
 // CIA1 keyboard hardware registers
 .const CIA1_PORTA = $DC00   // Row drive (write): 0 in a bit selects that row
 .const CIA1_PORTB = $DC01   // Column read: 0 = key pressed (active low)
+.const C128_KBD_EXT = $D02F // Extended keyboard line drive (bit6=line8, bit7=line9)
 
 // ============================================================
 // Command IDs — internal constants, not key codes
@@ -145,6 +146,13 @@ cia_scan_petscii:
     lda #$00
     sta $dc03
 
+    // Save extended keyboard drive register and force lines 8/9 idle-high.
+    // We must always restore this register before returning.
+    lda C128_KBD_EXT
+    sta csp_ext_save
+    ora #%11000000
+    sta C128_KBD_EXT
+
     // --- Detect shift state ---
     // LSHIFT is row 1, column bit 7 (drive $FD, read bit 7 of $DC01)
     lda #$FD
@@ -192,20 +200,57 @@ cia_scan_petscii:
     cpx #8
     bcc !csp_row-
 
-    // No key found in any row — restore CIA1 and return 0
+    // No key in CIA rows 0-7; scan extended C128 row 8 (line 8).
+    lda #$ff
+    sta CIA1_PORTA
+    lda csp_ext_save
+    ora #%11000000
+    and #%10111111      // Drive line 8 low, keep line 9 high
+    sta C128_KBD_EXT
+    lda CIA1_PORTB
+    eor #$FF            // Active low -> 1=pressed
+    cmp #0
+    bne !csp_key_row8+
+
+    // No key in row 8; scan extended row 9 (line 9).
+    lda csp_ext_save
+    ora #%11000000
+    and #%01111111      // Drive line 9 low, keep line 8 high
+    sta C128_KBD_EXT
+    lda CIA1_PORTB
+    eor #$FF            // Active low -> 1=pressed
+    cmp #0
+    bne !csp_key_row9+
+
+    // No key found in any row — restore state and return 0.
     lda #$FF
     sta CIA1_PORTA      // Deselect all rows (neutral state)
+    lda csp_ext_save
+    sta C128_KBD_EXT
     lda #0
     rts
+
+!csp_key_row8:
+    sta csp_col_bits
+    ldx #8
+    jmp !csp_key_post_scan+
+
+!csp_key_row9:
+    sta csp_col_bits
+    ldx #9
+    jmp !csp_key_post_scan+
 
 !csp_key_found:
     // A = column bits (1=pressed), X = row index
     sta csp_col_bits
     pla                 // Discard saved drive mask (done with row loop)
 
+!csp_key_post_scan:
     // Restore CIA1 to neutral
     lda #$FF
     sta CIA1_PORTA
+    lda csp_ext_save
+    sta C128_KBD_EXT
 
     // Find lowest set bit → column index in Y
     ldy #0
@@ -224,7 +269,15 @@ cia_scan_petscii:
     clc
     adc csp_col_bits    // A = scan code
 
+    // Extended rows (64-79) are scanned in C2.1 but not command-mapped
+    // until C2.2 table expansion.
+    cmp #64
+    bcc !csp_lookup+
+    lda #0
+    rts
+
     // Look up unshifted PETSCII in table
+!csp_lookup:
     tax
     lda cia_scancode_table,x
     beq !csp_return+    // 0 = key not used by game → return 0
@@ -255,6 +308,7 @@ cia_scan_petscii:
 
 csp_shift:    .byte $80   // 0=shifted, $80=unshifted (initialized to unshifted)
 csp_col_bits: .byte 0
+csp_ext_save: .byte 0
 
 // ============================================================
 // CIA1 scan code (0–63) → unshifted PETSCII lookup table
