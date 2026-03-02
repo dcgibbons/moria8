@@ -47,9 +47,12 @@ SOURCES        = $(C128_SOURCES) $(COMMON_SOURCES)
 KA_FLAGS    = -showmem -vicesymbols -libdir ../c64
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: build128 run128 disk128 clean128
+.PHONY: build128 run128 disk128 clean128 test128
 
 build128: $(MAIN_PRG) $(BOOT_PRG)
+
+test128:
+	./run_tests128.sh
 
 # Main program
 $(MAIN_PRG): $(SOURCES) $(KICKASS) | $(OUT)

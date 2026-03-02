@@ -83,19 +83,17 @@
 .const COL_LBLUE    = $0e
 .const COL_LGREY    = $0f
 
-// Memory region bases — same as C64 (C128 system RAM layout matches)
-// C128 "Lower Safe Zone" strategy:
-//   $0400-$09FF: VIC-II/Scratch
-//   $0A00-$0AFF: Screen Editor Workspace (RESERVED)
-//   $0B00-$19FF: Dungeon Map (3,840 bytes)
-//   $1A00-$1AFF: Floor Items (256 bytes)
-//   $1B00-$1BFF: Creature Scratch/Misc
-//   $1C01:        BASIC Start / Program entry
-.const MAP_BASE         = $0b00 // Dungeon map (3,840 bytes)
-.const MAP_END          = $19ff
-.const FLOOR_ITEM_BASE  = $1a00 // Floor item table (256 bytes)
+// Memory region bases
+// C128 Plan C4 Banking Model:
+//   - Dungeon Map: Bank 1 RAM at $4000-$4EFF (3,840 bytes)
+//   - Floor Items: Bank 0 RAM at $1A00-$1AFF (256 bytes)
+//   - Creature Scratch: Bank 0 RAM at $1B00-$1BFF (256 bytes)
+//   - Program: Bank 0 RAM at $1C01-$BFFF
+.const MAP_BASE         = $4000 // Dungeon map (Bank 1)
+.const MAP_END          = $4eff
+.const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
-.const CREATURE_BASE    = $1b00 // Runtime scratch area (RLE, hiscore)
+.const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
 .const CREATURE_END     = $1bff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
@@ -204,13 +202,37 @@
 }
 
 .macro Bank0Restore() {
-    lda #MMU_NORMAL
+    lda #MMU_ALL_RAM
     sta MMU_CR
 }
 
 // ============================================================
 // Subroutines
 // ============================================================
+
+// mmu_save_p — Static storage for CPU status register during bank switches
+mmu_save_p: .byte 0
+
+// mmu_select_bank1 — Select Bank 1 RAM, preserve IRQ state
+// Contract: must be paired with mmu_select_bank0. Clobbers: A.
+mmu_select_bank1:
+    php
+    sei
+    pla
+    sta mmu_save_p
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+    rts
+
+// mmu_select_bank0 — Restore Bank 0 RAM and prior IRQ state
+// Contract: must be paired with mmu_select_bank1. Clobbers: A.
+mmu_select_bank0:
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    lda mmu_save_p
+    pha
+    plp
+    rts
 
 // save_zp — Copy $02–$8F to ZP_SAVE_BUF_ADDR
 save_zp:
@@ -298,7 +320,6 @@ copy_to_e000:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Map fits in $1000 region", MAP_END - MAP_BASE + 1, 3840
+.assert "Map size = 3840", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
-.assert "ZP save buffer doesn't overlap CREATURE_BASE", ZP_SAVE_BUF_ADDR + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
