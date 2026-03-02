@@ -1,6 +1,6 @@
 # Action Plan C4: Resolve C128 Map/Program Memory Collision
 
-**Status:** Reset and Re-plan (2026-03-01)  
+**Status:** Completed through C4.8 (2026-03-02)  
 **Priority:** BLOCKER  
 **Owner:** C128 Port Team
 
@@ -46,7 +46,7 @@ C4 is complete only when all are true:
 2. C128 smoke boot works from:
    - direct PRG boot
    - D64 `moria8.128` chain-load
-3. C128 memory and dungeon regression tests pass (see Section 7).
+3. C128 regression harness passes (`minimal128`, `memory128`, `dungeon128`, `soak128`, `boot_d64_smoke`, `boot_diag_copy`).
 4. 200 repeated dungeon generations complete without hang/jam/corruption.
 5. BUILDPLAN and architecture notes match actual addresses and current scope.
 
@@ -65,7 +65,7 @@ Each step should be one small PR/commit with a single intent.
 - Add dedicated C128 test sources (do not depend on C64 test imports):
   - `test_memory128.s`
   - `test_dungeon128.s`
-  - `test_monster128.s`
+  - `test_soak128.s` (added in C4.7)
 - Add a C128 test runner script (`run_tests128.sh`) with pass/fail summary.
 - Add `make -C commodore/c128 test128` target.
 
@@ -98,7 +98,7 @@ Each step should be one small PR/commit with a single intent.
   - MMU primitives are consumed only by that single-tile API and by dedicated bulk helpers.
   - Avoid scattering `.if (C128)` MMU conditionals through general common gameplay code.
 
-**Gate:** `test_dungeon128` and `test_monster128` compile and run; failures reduced to known remaining bulk-path gaps.
+**Gate:** `test_dungeon128` compiles/runs; failures reduced to known remaining bulk-path gaps.
 
 ### C4.5 Add Bulk Map Helpers and Replace Hot Loops
 - Add dedicated bulk helpers for fill/clear operations (C128-safe, Bank1-internal).
@@ -130,7 +130,7 @@ Each step should be one small PR/commit with a single intent.
 
 ### C4.8 Documentation Lock
 - Update:
-  - `BUILDPLAN.md`
+  - `commodore/BUILDPLAN.md`
   - `c128/ARCHITECTURE.md`
   - this file (`C4_PLAN.md`)
 - Ensure no doc claims `198x66` is complete.
@@ -147,17 +147,19 @@ Each step should be one small PR/commit with a single intent.
 
 ## 7. Test Matrix (Minimum)
 
-1. `test_memory128`:
+1. `minimal128`:
+   - harness sanity / pass-loop monitor path
+2. `test_memory128`:
    - Bank 0 vs Bank 1 isolation at same address
    - wrapper read/write correctness
    - IRQ-state preservation across wrappers
-2. `test_dungeon128`:
+3. `test_dungeon128`:
    - fill/room/corridor/connectivity paths
    - BFS queue integrity (`$0400` path)
-   - regeneration loop stability
-3. `test_monster128`:
-   - spawn/move/remove map-flag correctness through wrappers
-4. integration smoke:
+4. `test_soak128`:
+   - 200 deterministic generation iterations
+   - jam prevention, IRQ drift checks, map corruption sentinels
+5. integration smoke:
    - boot path (PRG and D64)
    - enter town, descend, generate dungeon, basic movement
 

@@ -5,16 +5,16 @@
 
 ---
 
-## Current State (2026-02-28, updated)
+## Current State (2026-03-02, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 code split) is complete. Phase 10.1 (VDC 80-column rendering) is operational with performance optimizations (Phase 10.5). Critical stability issues regarding VDC hardware operations and overlay memory management have been resolved.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split) and the C4 map-collision stabilization track are complete through C4.8 (documentation lock). C128 now runs with the map in Bank 1 and validated MMU-safe map access paths.
 
 ### Build Stats
 
-- **Test suites:** 24 (321 runtime tests)
+- **Test suites:** C64: 21 runtime suites, C128: 6 harness suites
 - **Compile-time asserts:** 69 (C128) / 71 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
-- **Bank 0 Physical Map**: Code from $1C0E to $DEAB. Map at $0B00. Banked payload at $EB00-$FD32.
+- **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
 
 ---
 
@@ -23,7 +23,6 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix scan lacks Line 8 (keypad/extended keys) support. | **High Priority** |
-| **C4** | **BLOCKER** | C128: Memory Collision — Dungeon Map ($0B00) overwrites Program ($1C0E). | **Critical** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -37,9 +36,9 @@
 | # | What | Summary | Status |
 |---|------|---------|--------|
 | 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure complete. | **Done** |
-| 10.1 | 80-column VDC mode | Implement VDC rendering backend, optimized with row batching and dirty-rect. | **In Progress** |
+| 10.1 | 80-column VDC mode | VDC rendering backend with row batching and dirty-rect optimization. | **Done (baseline)** |
 | 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | |
-| 10.3 | Larger dungeon | Expand map to 198x66 (original size) at $4000 in Bank 0. | |
+| 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 
@@ -67,8 +66,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-02-27)
 
 **High priority (C128 Port Stability):**
-1. Resolve Memory Collision between Dungeon Map and Program (C4).
-2. Add Line 8 (keypad/extra keys) scanning support (C2).
+1. Add Line 8 (keypad/extra keys) scanning support (C2).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
