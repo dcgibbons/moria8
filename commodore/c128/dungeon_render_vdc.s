@@ -79,6 +79,10 @@ render_viewport:
     lda map_row_hi,x
     adc #0
     sta zp_map_ptr_hi
+    lda zp_map_ptr_lo
+    sta zp_ptr0
+    lda zp_map_ptr_hi
+    sta zp_ptr0_hi
 
     // Get VDC screen/attribute row addresses
     lda zp_render_y
@@ -101,7 +105,7 @@ render_viewport:
 !col_loop:
     // Read map byte — ptr already offset by view_x (Opt 3), Y = render_x column counter
     ldy zp_render_x
-    lda (zp_map_ptr_lo),y
+    :MapRead_ptr0_y()
     sta zp_tile_tmp
 
     // Check if visited (bit 2)
@@ -456,11 +460,11 @@ render_single_tile:
     // Read map byte at (map_x, map_y)
     ldx zp_temp1
     lda map_row_lo,x
-    sta zp_map_ptr_lo
+    sta zp_ptr0
     lda map_row_hi,x
-    sta zp_map_ptr_hi
+    sta zp_ptr0_hi
     ldy zp_temp0
-    lda (zp_map_ptr_lo),y
+    :MapRead_ptr0_y()
     sta zp_tile_tmp
 
     // Check visited flag

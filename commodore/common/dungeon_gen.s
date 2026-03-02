@@ -22,92 +22,48 @@
 // They perform one bank enter/exit around the full map walk.
 
 // Input: A = fill byte
-// Clobbers: A, X
+// Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 map_bulk_fill_all:
     sta map_bulk_fill_val
-    jsr map_bulk_enter
     ldx #0
-!mbf_loop:
+!mbf_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+!mbf_col:
     lda map_bulk_fill_val
-    sta MAP_BASE,x
-    sta MAP_BASE + $100,x
-    sta MAP_BASE + $200,x
-    sta MAP_BASE + $300,x
-    sta MAP_BASE + $400,x
-    sta MAP_BASE + $500,x
-    sta MAP_BASE + $600,x
-    sta MAP_BASE + $700,x
-    sta MAP_BASE + $800,x
-    sta MAP_BASE + $900,x
-    sta MAP_BASE + $a00,x
-    sta MAP_BASE + $b00,x
-    sta MAP_BASE + $c00,x
-    sta MAP_BASE + $d00,x
-    sta MAP_BASE + $e00,x
+    :MapWrite_ptr0_y()
+    iny
+    cpy #MAP_COLS
+    bne !mbf_col-
     inx
-    beq !mbf_done+
-    jmp !mbf_loop-
-!mbf_done:
-    jsr map_bulk_exit
+    cpx #MAP_ROWS
+    bne !mbf_row-
     rts
 
 // Input: A = AND mask applied to every map byte
-// Clobbers: A, X
+// Clobbers: A, X, Y, zp_ptr0/zp_ptr0_hi
 map_bulk_and_all:
     sta map_bulk_and_mask
-    jsr map_bulk_enter
     ldx #0
-!mba_loop:
-    lda MAP_BASE,x
+!mba_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+!mba_col:
+    :MapRead_ptr0_y()
     and map_bulk_and_mask
-    sta MAP_BASE,x
-    lda MAP_BASE + $100,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $100,x
-    lda MAP_BASE + $200,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $200,x
-    lda MAP_BASE + $300,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $300,x
-    lda MAP_BASE + $400,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $400,x
-    lda MAP_BASE + $500,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $500,x
-    lda MAP_BASE + $600,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $600,x
-    lda MAP_BASE + $700,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $700,x
-    lda MAP_BASE + $800,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $800,x
-    lda MAP_BASE + $900,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $900,x
-    lda MAP_BASE + $a00,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $a00,x
-    lda MAP_BASE + $b00,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $b00,x
-    lda MAP_BASE + $c00,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $c00,x
-    lda MAP_BASE + $d00,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $d00,x
-    lda MAP_BASE + $e00,x
-    and map_bulk_and_mask
-    sta MAP_BASE + $e00,x
+    :MapWrite_ptr0_y()
+    iny
+    cpy #MAP_COLS
+    bne !mba_col-
     inx
-    beq !mba_done+
-    jmp !mba_loop-
-!mba_done:
-    jsr map_bulk_exit
+    cpx #MAP_ROWS
+    bne !mba_row-
     rts
 
 map_bulk_fill_val: .byte 0
