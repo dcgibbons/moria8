@@ -168,25 +168,9 @@ cia_scan_petscii:
     ora #%11000000
     sta C128_KBD_EXT
 
-    // --- Detect shift state ---
-    // LSHIFT is row 1, column bit 7 (drive $FD, read bit 7 of $DC01)
-    lda #$FD
-    sta CIA1_PORTA
-    lda CIA1_PORTB
-    and #$80            // Active low: 0 = LSHIFT pressed
-    beq !csp_shifted+
-    // RSHIFT is row 6, column bit 4 (drive $BF, read bit 4 of $DC01)
-    lda #$BF
-    sta CIA1_PORTA
-    lda CIA1_PORTB
-    and #$10            // Active low: 0 = RSHIFT pressed
-    beq !csp_shifted+
-    lda #$80            // Neither shift: mark as unshifted ($80 = flag)
-    bne !csp_save_shift+ // (always taken)
-!csp_shifted:
-    lda #$00            // One or both shifts pressed
-!csp_save_shift:
-    sta csp_shift       // 0=shifted, $80=unshifted
+    // Default shift state: unshifted ($80). Updated inline during row scan.
+    lda #$80
+    sta csp_shift
 
     // --- Scan all 8 rows for a non-shift key ---
     lda #$FE            // Row 0: bit 0 driven low
@@ -195,16 +179,35 @@ cia_scan_petscii:
     sta CIA1_PORTA
     pha                 // Save drive mask (for SEC/ROL rotation below)
     lda CIA1_PORTB
-    eor #$FF            // Active low → 1=pressed
-    // Mask out the shift keys so they don't appear as regular keys
+    sta csp_row_raw
+    // Detect/mask LSHIFT inline (row 1, bit 7)
     cpx #1
     bne !csp_mask1_done+
-    and #$7F            // Row 1 bit 7 = LSHIFT
+    lda csp_row_raw
+    and #$80            // Active low: 0 = LSHIFT pressed
+    bne !csp_no_lshift+
+    lda #$00
+    sta csp_shift
+!csp_no_lshift:
+    lda csp_row_raw
+    and #$7F            // Mask LSHIFT bit out of key bitmap
+    sta csp_row_raw
 !csp_mask1_done:
+    // Detect/mask RSHIFT inline (row 6, bit 4)
     cpx #6
     bne !csp_mask6_done+
-    and #$EF            // Row 6 bit 4 = RSHIFT
+    lda csp_row_raw
+    and #$10            // Active low: 0 = RSHIFT pressed
+    bne !csp_no_rshift+
+    lda #$00
+    sta csp_shift
+!csp_no_rshift:
+    lda csp_row_raw
+    and #$EF            // Mask RSHIFT bit out of key bitmap
+    sta csp_row_raw
 !csp_mask6_done:
+    lda csp_row_raw
+    eor #$FF            // Active low -> 1=pressed
     // CPX #6 above corrupted Z; re-test A to get actual key state.
     cmp #0
     bne !csp_key_found+ // Nonzero: at least one non-shift key in this row
@@ -316,6 +319,7 @@ cia_scan_petscii:
 csp_shift:    .byte $80   // 0=shifted, $80=unshifted (initialized to unshifted)
 csp_col_bits: .byte 0
 csp_ext_save: .byte 0
+csp_row_raw:  .byte 0
 
 // ============================================================
 // CIA1/C128 scan code (0–79) → unshifted PETSCII/virtual-key lookup table

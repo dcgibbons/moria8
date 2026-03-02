@@ -89,6 +89,7 @@ C2 is complete only when all are true:
 - Optional: add bounded repeat delay/rate if needed for held keys.
 - Current status:
   - edge-transition state machine implemented in `input_get_key`,
+  - SHIFT detection moved inline into the main scan loop (removed extra pre-scan passes),
   - automated C128 harness remains green,
   - manual feel validation for `E`/rapid taps still required before marking complete.
 
