@@ -73,7 +73,7 @@ C2 is complete only when all are true:
 
 **Gate:** raw row/column decode works for lines 8/9 without breaking lines 0-7.
 
-### C2.2 Expand Scan Decode Tables
+### C2.2 Expand Scan Decode Tables ✅ Completed (2026-03-02)
 - Expand scan decode table from 64 to 80 entries (or explicit row-dispatch tables).
 - Add row 8/9 mappings for:
   - keypad digits and symbols,
@@ -82,30 +82,42 @@ C2 is complete only when all are true:
 
 **Gate:** decoded PETSCII/virtual key codes match expected row/column map.
 
-### C2.3 Improve Key Transition Logic (Responsiveness)
+### C2.3 Improve Key Transition Logic (Responsiveness) 🚧 In Progress
 - Replace strict blocking “release-then-press” loop with edge-based state tracking:
   - detect new press transitions,
   - allow fast repeated taps without requiring long release windows.
 - Optional: add bounded repeat delay/rate if needed for held keys.
+- Current status:
+  - edge-transition state machine implemented in `input_get_key`,
+  - automated C128 harness remains green,
+  - manual feel validation for `E`/rapid taps still required before marking complete.
 
 **Gate:** `E` and movement commands feel immediate and reliably repeat on rapid taps.
 
-### C2.4 Map Extended Keys to Commands
+### C2.4 Map Extended Keys to Commands 🚧 In Progress
 - Extend `petscii_to_command` mapping:
   - keypad `8/2/4/6` -> N/S/W/E
   - keypad `7/9/1/3` -> NW/NE/SW/SE
   - keypad `5` -> `CMD_REST`
   - ESC -> configured cancel/quit behavior (document exact choice)
 - Preserve existing vi/cursor/shift mappings.
+- Current status:
+  - keypad movement and keypad `5` rest mappings implemented,
+  - keypad `+` mapped to tunnel for parity with `+`,
+  - ESC currently mapped to `CMD_QUIT` (pending UX confirmation).
 
 **Gate:** keypad movement and rest verified in town + dungeon.
 
-### C2.5 Add C128 Input Regression Tests
+### C2.5 Add C128 Input Regression Tests 🚧 In Progress
 - Add `tests/test_input128.s`:
   - row decode correctness (including rows 8/9 path),
   - mapping checks for keypad and ESC,
   - key transition behavior checks (press/release edges).
 - Integrate into `run_tests128.sh` and C128 test target.
+- Current status:
+  - `test_input128.s` added and integrated in `run_tests128.sh`,
+  - mapping coverage for keypad movement/rest, keypad `+`, ESC, and unmapped-key fallback is automated,
+  - row-drive hardware path and edge-transition behavior tests still pending follow-up harness work.
 
 **Gate:** input suite passes consistently with no flakes.
 

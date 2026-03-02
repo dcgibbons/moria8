@@ -25,6 +25,23 @@
 .const CIA1_PORTB = $DC01   // Column read: 0 = key pressed (active low)
 .const C128_KBD_EXT = $D02F // Extended keyboard line drive (bit6=line8, bit7=line9)
 
+// Virtual key codes for C128 extended keypad keys (rows 8/9).
+// Chosen from currently-unused PETSCII range in this project path.
+.const KEY_ALT      = $a0
+.const KEY_KP0      = $a1
+.const KEY_KP1      = $a2
+.const KEY_KP2      = $a3
+.const KEY_KP3      = $a4
+.const KEY_KP4      = $a5
+.const KEY_KP5      = $a6
+.const KEY_KP6      = $a7
+.const KEY_KP7      = $a8
+.const KEY_KP8      = $a9
+.const KEY_KP9      = $aa
+.const KEY_KP_PLUS  = $ab
+.const KEY_KP_MINUS = $ac
+.const KEY_KP_DOT   = $ad
+
 // ============================================================
 // Command IDs — internal constants, not key codes
 // ============================================================
@@ -99,8 +116,9 @@ input_run_key_check:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Waits for any previously-held key to be released before detecting
-// a new keypress, ensuring each physical press fires exactly once.
+// Uses edge-transition detection: returns on key-up->key-down transitions.
+// This avoids the strict release-gate lag of the old two-phase loop while
+// still preventing held-key flood.
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
@@ -109,17 +127,13 @@ input_get_key:
     tya
     pha                     // Save Y
 
-    // Phase 1: wait for release — don't re-report a still-held key
-!igk_release:
+    // Wait for key state transition; report only nonzero transitions.
+!igk_wait_edge:
     jsr cia_scan_petscii
-    cmp #0
-    bne !igk_release-       // Key still held, keep waiting
-
-    // Phase 2: wait for a new keypress
-!igk_press:
-    jsr cia_scan_petscii
-    cmp #0
-    beq !igk_press-         // No key yet
+    cmp igk_prev
+    beq !igk_wait_edge-     // No state change yet
+    sta igk_prev            // Record latest state
+    beq !igk_wait_edge-     // Key release edge only; wait for key-down edge
 
     sta igk_key
     pla
@@ -128,6 +142,7 @@ input_get_key:
     tax                     // Restore X
     lda igk_key
     rts
+igk_prev: .byte 0
 igk_key: .byte 0
 
 // cia_scan_petscii — Single CIA1 keyboard matrix scan
@@ -269,15 +284,7 @@ cia_scan_petscii:
     clc
     adc csp_col_bits    // A = scan code
 
-    // Extended rows (64-79) are scanned in C2.1 but not command-mapped
-    // until C2.2 table expansion.
-    cmp #64
-    bcc !csp_lookup+
-    lda #0
-    rts
-
     // Look up unshifted PETSCII in table
-!csp_lookup:
     tax
     lda cia_scancode_table,x
     beq !csp_return+    // 0 = key not used by game → return 0
@@ -311,7 +318,7 @@ csp_col_bits: .byte 0
 csp_ext_save: .byte 0
 
 // ============================================================
-// CIA1 scan code (0–63) → unshifted PETSCII lookup table
+// CIA1/C128 scan code (0–79) → unshifted PETSCII/virtual-key lookup table
 // Scan code = row_index * 8 + column_bit_index
 // 0 = key not used by game (will be ignored)
 // C64/C128 keyboard matrix layout (row, col):
@@ -323,6 +330,8 @@ csp_ext_save: .byte 0
 //   Row 5 (drive $DF): +   P    L      -  .  :  @  ,
 //   Row 6 (drive $BF): £   *    ;   HOME  RSHIFT = ↑  /
 //   Row 7 (drive $7F): 1   ←  CTRL     2  SPC C= Q  STOP
+//   Row 8 (line8):     ALT KP8  KP5   KP2  KP4 KP7 KP1 KP0
+//   Row 9 (line9):     ESC KP+  KP-   LF   KP9 KP6 KP3 KP.
 // ============================================================
 cia_scancode_table:
     // Row 0 (scan  0– 7): DEL RET CRSR-R F7 F1 F3 F5 CRSR-D
@@ -341,6 +350,10 @@ cia_scancode_table:
     .byte 0,    0,    0,    0,   0,   0,   0,   $2F
     // Row 7 (scan 56–63): 1  ←  CTRL   2  SPC  C=   Q  STOP
     .byte $31,  0,    0,    $32, $20, 0,   $51, $03
+    // Row 8 (scan 64–71): ALT KP8  KP5  KP2  KP4  KP7  KP1  KP0
+    .byte KEY_ALT, KEY_KP8, KEY_KP5, KEY_KP2, KEY_KP4, KEY_KP7, KEY_KP1, KEY_KP0
+    // Row 9 (scan 72–79): ESC KP+  KP-  LF   KP9  KP6  KP3  KP.
+    .byte $1b, KEY_KP_PLUS, KEY_KP_MINUS, $0a, KEY_KP9, KEY_KP6, KEY_KP3, KEY_KP_DOT
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID, zp_input_cmd = same, zp_input_count = 1
@@ -441,6 +454,18 @@ key_map_petscii:
     .byte $d5   // SHIFT+U — run northeast
     .byte $c2   // SHIFT+B — run southwest
     .byte $ce   // SHIFT+N — run southeast
+    // C128 keypad/extended keys (virtual codes from cia_scancode_table rows 8/9)
+    .byte KEY_KP8      // keypad 8 — north
+    .byte KEY_KP2      // keypad 2 — south
+    .byte KEY_KP4      // keypad 4 — west
+    .byte KEY_KP6      // keypad 6 — east
+    .byte KEY_KP7      // keypad 7 — northwest
+    .byte KEY_KP9      // keypad 9 — northeast
+    .byte KEY_KP1      // keypad 1 — southwest
+    .byte KEY_KP3      // keypad 3 — southeast
+    .byte KEY_KP5      // keypad 5 — rest
+    .byte KEY_KP_PLUS  // keypad + — tunnel
+    .byte $1b          // ESC — quit shortcut
 
 key_map_cmd:
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
@@ -457,6 +482,10 @@ key_map_cmd:
     .byte CMD_TUNNEL, CMD_RECALL
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
+    // C128 keypad/extended key command mappings
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST, CMD_TUNNEL, CMD_QUIT
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii
