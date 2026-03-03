@@ -209,12 +209,12 @@
 .label zp_store_idx    = $8c   // Current store index (0–5)
 .label zp_store_slot   = $8d   // Current store inventory slot
 .label zp_pseudo_id_timer = $8e // Pseudo-ID turn countdown
-.label zp_spare_8f     = $8f   // Spare
+.label zp_entropy      = $8f   // Accumulated user input entropy
 
 // ============================================================
 // Compile-time validation
 // ============================================================
 .assert "ZP safe zone start", zp_temp0, $02
-.assert "ZP last label", zp_spare_8f, $8f
+.assert "ZP last label", zp_entropy, $8f
 .assert "ZP RNG is 4 contiguous bytes", zp_rng_3 - zp_rng_0, 3
 .assert "ZP player pos contiguous", zp_player_y - zp_player_x, 1

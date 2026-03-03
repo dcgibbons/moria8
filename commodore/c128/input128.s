@@ -132,6 +132,7 @@ input_get_key:
     pha                     // Save Y
 
 !igk_wait:
+    inc zp_entropy
     jsr input_poll_key_event
     beq !igk_wait-          // Wait for key-up -> key-down edge
 
@@ -153,6 +154,7 @@ igk_stable: .byte 0
 // Preserves: nothing
 input_wait_release:
 !iwr_wait:
+    inc zp_entropy
     jsr cia_scan_petscii
     bne !iwr_wait-
     jsr cia_scan_petscii

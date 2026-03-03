@@ -105,6 +105,7 @@ input_get_key:
     sta $01
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
+    inc zp_entropy
     lda $c6                 // Keyboard buffer count (filled by IRQ handler)
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
@@ -130,6 +131,7 @@ input_wait_release:
 
     // Drain any already-buffered keypresses.
 !iwr_drain:
+    inc zp_entropy
     lda KBDBUF_COUNT
     beq !iwr_wait+
     jsr KERNAL_GETIN
@@ -137,6 +139,7 @@ input_wait_release:
 
     // Require two consecutive empty-buffer polls for stability.
 !iwr_wait:
+    inc zp_entropy
     lda KBDBUF_COUNT
     bne !iwr_drain-
     lda KBDBUF_COUNT

@@ -26,14 +26,22 @@
 // (for additional entropy from timing).
 // Preserves: nothing
 rng_seed:
-    // Read CIA timers for 4 bytes of entropy
+    // Read CIA timers and mix with input jitter and prior state
     lda CIA1_TIMER_A_LO
+    eor zp_entropy
+    eor zp_rng_0
     sta zp_rng_0
     lda CIA1_TIMER_A_HI
+    eor zp_entropy
+    eor zp_rng_1
     sta zp_rng_1
     lda CIA2_TIMER_A_LO
+    eor zp_entropy
+    eor zp_rng_2
     sta zp_rng_2
     lda CIA2_TIMER_A_HI
+    eor zp_entropy
+    eor zp_rng_3
     sta zp_rng_3
 
     // Ensure state is not all-zeros (LFSR has absorbing zero state)

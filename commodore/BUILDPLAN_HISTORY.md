@@ -63,8 +63,23 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 | BUG-46 | MED | Monster melee attack from non-adjacent position (stale render) | `!player_died:` now renders viewport before showing death message |
 | BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
 | BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `screen_clear_row` for rows 21–23 added before `title_show_sysinfo`; root cause: `title_render_data` parses dungeon MAP_BASE as title art and writes to status rows |
+| **R3** | **HIGH** | Deterministic RNG startup seeding path on C128 | Fixed by maintaining `zp_entropy` counter in input loops and EORing state in `rng_seed` |
 
 ---
+
+## R3 — Deterministic RNG Startup Seeding ✅ COMPLETE (2026-03-03)
+
+**Problem:** The C128 generates the same sequence of values because its port removes KERNAL background paths. The RNG seed was completely overwritten by `STA` using CIA timers, and early menus lacked human-timing variance in their loops, making random generations fully deterministic across emulator runs.
+
+**Fix:**
+1. Added `zp_entropy` to Zero Page.
+2. Hardened wait loops in `input.s` and `input128.s` to increment `zp_entropy` while polling for keys. The varying human reaction times provide true runtime jitter.
+3. Modernized `rng_seed` (in `rng.s`) to mix existing seed state with CIA Timers and `zp_entropy` via `EOR`.
+
+**Validation:**
+- `make test128`: **PASS** (`9 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+- Confirmed C128 builds behave non-deterministically across reloads.
 
 ## Q1 — C128 Quit/Reboot Exit Stability ✅ COMPLETE (2026-03-03)
 

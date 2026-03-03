@@ -24,18 +24,15 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **R3** | **HIGH** | C128: RNG startup entropy appears deterministic across runs. Likely cause: `rng_seed` uses only CIA timer reads and is called at highly repeatable startup/menu timing (`main.s` + `game_new_start`), producing repeatable initial seeds in emulator/runtime. | **New** |
 | **R4** | **HIGH** | C128: After killing a dungeon monster, the vacated tile can render as the wrong glyph/color (including near/far-dependent color shifts). Likely cause: post-kill map byte/render state mismatch (tile byte after `FLAG_OCCUPIED` clear vs VDC visible/dim path), requiring trace of tile value before/after `monster_remove` and immediate render path inputs. | **New** |
 | **R2** | **MED** | C128: In town, pressing `T` can corrupt top-of-screen text (garbled cyan text block appears instead of clean message output). Repro observed while normal gameplay rendering otherwise remains stable. | **New** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
-### Investigation Tasks (R3, R4)
+### Investigation Tasks (R4)
 
-1. **R3 seed instrumentation:** Log first 8 RNG outputs at fresh boot and at `game_new_start` across 5 cold runs to confirm repeatability and distinguish boot-seed vs post-menu reseed behavior.
-2. **R3 entropy hardening:** Mix CIA timers with user timing jitter (keypress interval counter) and mutable state (frame/turn counters) before first gameplay RNG consumption; keep all-zero guard.
-3. **R4 kill-path trace:** At a known kill coordinate, capture map byte before hit, immediately after `monster_remove`, and before render decode (`zp_tile_tmp`) to verify type/flags are preserved except `FLAG_OCCUPIED`.
+1. **R4 kill-path trace:** At a known kill coordinate, capture map byte before hit, immediately after `monster_remove`, and before render decode (`zp_tile_tmp`) to verify type/flags are preserved except `FLAG_OCCUPIED`.
 4. **R4 render branch validation:** Confirm the same tile routes through expected visible/dim branch and that final glyph/color source (tile/item/monster/player override) matches map state.
 5. **R4 regression test:** Add C128 harness/assertion covering monster death tile normalization (glyph/type and color path stable after kill at close/far distances).
 
@@ -79,8 +76,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
-2. Fix deterministic RNG startup seeding path on C128 (R3).
-3. Fix post-monster-kill tile corruption/render mismatch on C128 (R4).
+2. Fix post-monster-kill tile corruption/render mismatch on C128 (R4).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
