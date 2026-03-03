@@ -144,6 +144,7 @@ input_get_key:
     sta igk_stable
     beq !igk_wait-          // Release edge; wait for next press edge
 
+!igk_return:
     sta igk_key
     pla
     tay                     // Restore Y
