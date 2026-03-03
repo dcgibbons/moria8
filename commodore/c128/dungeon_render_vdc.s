@@ -155,11 +155,15 @@ render_viewport:
     sta zp_temp1
     jmp !rv_tile_set+
 !rv_normal:
-    // Look up screen code and pre-translated VDC color (Opt 2)
+    // Look up screen code and translate VIC color via canonical table path.
     lda tile_screen_codes,x
     sta zp_temp0
-    lda tile_vdc_colors,x   // Pre-translated VDC RGBI — no vic_to_vdc_color needed
+    stx rv_tile_type
+    lda tile_colors,x
+    tax
+    lda vic_to_vdc_color,x
     sta zp_temp1
+    ldx rv_tile_type
 !rv_tile_set:
 
     // Store door number override (town only, open door tiles only)
@@ -498,8 +502,12 @@ render_single_tile:
 !rst_normal:
     lda tile_screen_codes,x
     sta zp_temp3
-    lda tile_vdc_colors,x   // Pre-translated VDC color (Opt 2)
+    stx rv_tile_type
+    lda tile_colors,x
+    tax
+    lda vic_to_vdc_color,x
     sta zp_temp4
+    ldx rv_tile_type
 !rst_tile_set:
 
     // Store door number override (town only, open door tiles only)
@@ -661,6 +669,7 @@ rv_mon_x:    .byte 0          // Monster check scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
 rv_row_ptr_lo: .byte 0        // Stable map-row pointer (view_x applied)
 rv_row_ptr_hi: .byte 0
+rv_tile_type: .byte 0         // Preserve tile type index across color translation
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0

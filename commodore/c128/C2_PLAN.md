@@ -82,7 +82,7 @@ C2 is complete only when all are true:
 
 **Gate:** decoded PETSCII/virtual key codes match expected row/column map.
 
-### C2.3 Improve Key Transition Logic (Responsiveness) 🚧 In Progress
+### C2.3 Improve Key Transition Logic (Responsiveness) ✅ Completed (2026-03-02)
 - Replace strict blocking “release-then-press” loop with edge-based state tracking:
   - detect new press transitions,
   - allow fast repeated taps without requiring long release windows.
@@ -93,11 +93,11 @@ C2 is complete only when all are true:
   - held-key repeat was tested and explicitly removed (too sensitive for current UX target),
   - SHIFT detection moved inline into the main scan loop (removed extra pre-scan passes),
   - automated C128 harness remains green,
-  - manual feel validation for `E`/rapid taps still required before marking complete.
+  - manual feel validation for `E`/rapid taps completed in gameplay pass.
 
 **Gate:** `E` and movement commands feel immediate and reliably repeat on rapid taps.
 
-### C2.4 Map Extended Keys to Commands 🚧 In Progress
+### C2.4 Map Extended Keys to Commands 🚧 In Progress (manual validation blocked)
 - Extend `petscii_to_command` mapping:
   - keypad `8/2/4/6` -> N/S/W/E
   - keypad `7/9/1/3` -> NW/NE/SW/SE
@@ -110,7 +110,7 @@ C2 is complete only when all are true:
   - ESC policy is locked to `CMD_QUIT` (matches existing `SHIFT+Q` quit affordance),
   - non-gameplay extended keys (`KP0`, `KP-`, `KP.`, `ALT`, `LF`) are explicitly unmapped (`CMD_NONE`) and test-covered.
 
-**Gate:** keypad movement/rest and ESC quit path verified in town + dungeon.
+**Gate:** keypad movement/rest and ESC quit path verified in town + dungeon (currently blocked by active C128 visual-color regression validation pass).
 
 ### C2.5 Add C128 Input Regression Tests ✅ Completed (2026-03-02)
 - Add `tests/test_input128.s`:
