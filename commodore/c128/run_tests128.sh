@@ -200,6 +200,7 @@ echo "=== Moria C128 Tests ==="
 run_test "minimal128" "tests/test_minimal128.s"
 run_test "memory128" "tests/test_memory128.s"
 run_test "db128" "tests/test_db128.s"
+run_test "tier128" "tests/test_tier128.s"
 run_test "input128" "tests/test_input128.s"
 run_test "dungeon128" "tests/test_dungeon128.s" 50000000
 run_test "soak128" "tests/test_soak128.s" 300000000
