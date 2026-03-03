@@ -66,6 +66,24 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## S1 — C128 Save JAM at `$A953` / `$0323` ✅ COMPLETE (2026-03-03)
+
+**Problem:** C128 save flow intermittently crashed with CPU `JAM`, initially observed at `$A953` and later at `$0323` during channel cleanup. The failures were triggered in the save path while mixing KERNAL-context transitions and save-specific wrapper calls.
+
+**Root cause:** Save/load code entered KERNAL context (`EnterKernal`) and then called `delete_savefile`, which performed a nested `EnterKernal`/`ExitKernal` pair. That nested transition leaked MMU/KERNAL assumptions across the active save path, causing unstable vector/call behavior and eventual `JAM`.
+
+**Fix:**
+1. Refactored `save.s` to avoid nested KERNAL context transitions:
+   - Added `delete_savefile_core` (internal helper that assumes KERNAL context is already active).
+   - Updated `save_game` and `load_game` to call `delete_savefile_core` directly.
+   - Kept `delete_savefile` as the external wrapper for non-KERNAL callers (`EnterKernal` -> core -> `ExitKernal`).
+2. Kept save channel restore logic non-invasive on C128 while this path stabilized.
+3. Hardened C128 build dependencies (`Makefile`) so `clean128`/`run128` consistently rebuild the disk image from current sources.
+
+**Validation:** C128 runtime suites pass and manual in-game save path no longer reproduces the prior `JAM` crash.
+
+---
+
 ## C3 — VDC Viewport Artifacts ✅ COMPLETE (2026-02-27)
 
 **Files:** `commodore/c128/dungeon_render_vdc.s`, `commodore/c128/screen_vdc.s`
