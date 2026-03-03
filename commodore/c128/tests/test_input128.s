@@ -102,6 +102,88 @@ test_continue:
     cmp #CMD_NONE
     bne test_fail
 
+    jmp test_edge_checks
+
+test_fail2:
+    jmp test_fail_loop
+
+test_edge_checks:
+    // Edge-transition behavior:
+    // - key-down requires 2 stable samples
+    // - key release also requires 2 stable samples
+    lda #0
+    sta igk_last_sample
+    sta igk_stable
+
+    lda #0
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+
+    lda #$45               // First sample of 'E' => no event yet
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+
+    lda #$45               // Second sample of 'E' => key-down edge event
+    jsr input_process_sample
+    cmp #$45
+    bne test_fail2
+
+    lda #$45               // Held key => no repeated event
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+
+    lda #0                 // First release sample: no event, still armed
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+    lda igk_stable
+    cmp #$45
+    bne test_fail2
+
+    lda #0                 // Second release sample: rearmed
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+    lda igk_stable
+    cmp #0
+    bne test_fail2
+
+    lda #$45               // Retap sample 1 => no event
+    jsr input_process_sample
+    cmp #0
+    bne test_fail2
+
+    lda #$45               // Retap sample 2 => event again
+    jsr input_process_sample
+    cmp #$45
+    bne test_fail2
+
+    jmp test_scan_restore_checks
+
+test_fail3:
+    jmp test_fail_loop
+
+test_scan_restore_checks:
+    // Scan routine must always restore keyboard drive registers.
+    lda C128_KBD_EXT
+    sta test_ext_orig
+    lda #%00001111
+    sta C128_KBD_EXT
+    lda #$00
+    sta CIA1_PORTA
+    jsr cia_scan_petscii
+    lda CIA1_PORTA
+    cmp #$FF
+    bne test_fail3
+    lda C128_KBD_EXT
+    cmp #%00001111
+    bne test_fail3
+    lda test_ext_orig
+    sta C128_KBD_EXT
+
     jmp test_pass
 
 test_fail_loop:
@@ -109,3 +191,6 @@ test_fail_loop:
 
 test_pass:
     jmp test_pass
+
+test_ext_orig:
+    .byte 0

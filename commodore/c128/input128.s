@@ -118,9 +118,8 @@ input_run_key_check:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Uses edge-transition detection:
-// - key-down sample must appear twice consecutively before being considered stable.
-// - key release rearms immediately on first zero sample to improve rapid retaps.
+// Uses edge-transition detection with a 2-sample stability filter:
+// - sample must appear twice consecutively before being considered stable.
 // - returns on stable key-up -> key-down transitions only.
 // This improves responsiveness versus strict release-then-press loops while
 // avoiding single-scan phantom transitions.
@@ -133,23 +132,8 @@ input_get_key:
     pha                     // Save Y
 
 !igk_wait:
-    jsr cia_scan_petscii
-    cmp igk_last_sample
-    beq !igk_stable_sample+
-    sta igk_last_sample
-    cmp #0
-    bne !igk_wait-
-    lda igk_stable
-    beq !igk_wait-
-    lda #0
-    sta igk_stable
-    jmp !igk_wait-
-
-!igk_stable_sample:
-    cmp igk_stable
-    beq !igk_wait-          // No stable transition
-    sta igk_stable
-    beq !igk_wait-          // Release edge; wait for next press edge
+    jsr input_poll_key_event
+    beq !igk_wait-          // Wait for key-up -> key-down edge
 
 !igk_return:
     sta igk_key
@@ -162,6 +146,46 @@ input_get_key:
 igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
+
+// input_wait_release — Block until keyboard is released (C128 direct scan)
+// Used before one-shot "press any key" prompts to avoid consuming
+// a still-held selection key from the previous screen.
+// Preserves: nothing
+input_wait_release:
+!iwr_wait:
+    jsr cia_scan_petscii
+    bne !iwr_wait-
+    jsr cia_scan_petscii
+    bne !iwr_wait-
+    lda #0
+    sta igk_last_sample
+    sta igk_stable
+    rts
+
+// input_poll_key_event — One CIA scan + edge processing
+// Output: A = PETSCII on key-down edge, 0 otherwise
+// Destroys: A, X, Y
+input_poll_key_event:
+    jsr cia_scan_petscii
+    // Fall through into shared state machine for testability.
+
+// input_process_sample — Edge/state machine step for one sampled key value
+// Input:  A = sampled PETSCII (0 = no key)
+// Output: A = PETSCII on key-down edge, 0 otherwise
+input_process_sample:
+    cmp igk_last_sample
+    beq !ips_stable+
+    sta igk_last_sample
+!ips_none:
+    lda #0
+    rts
+
+!ips_stable:
+    cmp igk_stable
+    beq !ips_none-          // No stable transition
+    sta igk_stable
+    beq !ips_none-          // Release edge (rearm only)
+    rts                     // New stable key-down edge
 
 // cia_scan_petscii — Single CIA1 keyboard matrix scan
 // Drives each of 8 rows via $DC00, reads columns from $DC01.

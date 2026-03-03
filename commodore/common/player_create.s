@@ -33,6 +33,7 @@ player_create:
 
     // Show final character sheet (direct call — both at $F000/$E000 with $01=$34)
     jsr ui_char_display
+    jsr input_wait_release
     jsr input_get_key
 
     rts

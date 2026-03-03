@@ -89,7 +89,7 @@ C2 is complete only when all are true:
 - Optional: add bounded repeat delay/rate if needed for held keys.
 - Current status:
   - edge-transition state machine implemented in `input_get_key` with 2-sample press stabilization,
-  - key-release rearm is now single-sample (`0`) so same-key retaps are captured faster,
+  - key-release remains 2-sample stabilized to avoid bounce-triggered duplicate events,
   - held-key repeat was tested and explicitly removed (too sensitive for current UX target),
   - SHIFT detection moved inline into the main scan loop (removed extra pre-scan passes),
   - automated C128 harness remains green,
@@ -112,7 +112,7 @@ C2 is complete only when all are true:
 
 **Gate:** keypad movement/rest and ESC quit path verified in town + dungeon.
 
-### C2.5 Add C128 Input Regression Tests 🚧 In Progress
+### C2.5 Add C128 Input Regression Tests ✅ Completed (2026-03-02)
 - Add `tests/test_input128.s`:
   - row decode correctness (including rows 8/9 path),
   - mapping checks for keypad and ESC,
@@ -121,7 +121,9 @@ C2 is complete only when all are true:
 - Current status:
   - `test_input128.s` added and integrated in `run_tests128.sh`,
   - mapping coverage for keypad movement/rest, keypad `+`, ESC, and unmapped-key fallback is automated,
-  - row-drive hardware path and edge-transition behavior tests still pending follow-up harness work.
+  - edge-transition behavior (2-sample press, 2-sample release rearm) is now directly test-covered via `input_process_sample`,
+  - scanner safety invariant (restores `CIA1_PORTA=$FF` and preserves/restores `$D02F`) is test-covered,
+  - `run_tests128.sh` UNTIL matching was hardened to case-insensitive address matching in VICE logs.
 
 **Gate:** input suite passes consistently with no flakes.
 

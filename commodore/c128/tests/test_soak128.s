@@ -242,6 +242,67 @@ test_start:
     beq !ok_dn2tile+
     jmp test_fail
 !ok_dn2tile:
+    // Town generation sanity pass (dlvl=0) to catch bank/map regressions.
+    lda #0
+    sta zp_player_dlvl
+
+    // Bank0 sentinels must survive town generation as well.
+    jsr mmu_select_bank0
+    lda #$3c
+    sta $4000
+    lda #$c3
+    sta $4eff
+
+    jsr town_generate
+
+    lda $4000
+    cmp #$3c
+    beq !ok_towns0+
+    jmp test_fail
+!ok_towns0:
+    lda $4eff
+    cmp #$c3
+    beq !ok_towns1+
+    jmp test_fail
+!ok_towns1:
+
+    // Top-left corner must be a lit+visited TL corner.
+    ldx #0
+    ldy #0
+    jsr map_get_tile
+    cmp #(TILE_CORNER_TL | TOWN_FLAGS)
+    beq !ok_tcorner+
+    jmp test_fail
+!ok_tcorner:
+
+    // Town down-stairs at (40,24).
+    ldx #40
+    ldy #24
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_STAIRS_DN
+    beq !ok_tstairs+
+    jmp test_fail
+!ok_tstairs:
+
+    // Sample two known store doors: (10,7) and (60,24) must be open doors.
+    ldx #10
+    ldy #7
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !ok_tdoor1+
+    jmp test_fail
+!ok_tdoor1:
+    ldx #60
+    ldy #24
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_OPEN
+    beq !ok_tdoor2+
+    jmp test_fail
+!ok_tdoor2:
+
     jmp !iter_continue+
 
 test_fail:

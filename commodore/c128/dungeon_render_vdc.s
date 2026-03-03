@@ -75,14 +75,10 @@ render_viewport:
     lda map_row_lo,x
     clc
     adc zp_view_x           // Pre-add view_x: ptr = row_base + view_x
-    sta zp_map_ptr_lo
+    sta rv_row_ptr_lo
     lda map_row_hi,x
     adc #0
-    sta zp_map_ptr_hi
-    lda zp_map_ptr_lo
-    sta zp_ptr0
-    lda zp_map_ptr_hi
-    sta zp_ptr0_hi
+    sta rv_row_ptr_hi
 
     // Get VDC screen/attribute row addresses
     lda zp_render_y
@@ -103,7 +99,12 @@ render_viewport:
     sta zp_render_x         // Screen column counter (0-37)
 
 !col_loop:
-    // Read map byte — ptr already offset by view_x (Opt 3), Y = render_x column counter
+    // Read map byte. Restore row pointer each column because monster/item
+    // helpers may clobber zp_ptr0 as a generic scratch pointer.
+    lda rv_row_ptr_lo
+    sta zp_ptr0
+    lda rv_row_ptr_hi
+    sta zp_ptr0_hi
     ldy zp_render_x
     :MapRead_ptr0_y()
     sta zp_tile_tmp
@@ -658,6 +659,8 @@ rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
 rv_mon_x:    .byte 0          // Monster check scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
+rv_row_ptr_lo: .byte 0        // Stable map-row pointer (view_x applied)
+rv_row_ptr_hi: .byte 0
 
 // Saved positions for dirty render detection
 old_view_x:    .byte 0

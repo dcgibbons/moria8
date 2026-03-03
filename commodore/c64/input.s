@@ -116,6 +116,37 @@ input_get_key:
     rts
 igk_key: .byte 0
 
+// input_wait_release — Drain pending buffered keys and wait until no key is pending
+// Used before one-shot "press any key" prompts so a prior selection key does
+// not auto-dismiss the next screen.
+// Preserves: X, Y
+input_wait_release:
+    lda $01
+    pha
+    php                     // Save processor flags (preserves I flag)
+    lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
+    sta $01
+    cli                     // Keep KERNAL keyboard IRQ scanning active
+
+    // Drain any already-buffered keypresses.
+!iwr_drain:
+    lda KBDBUF_COUNT
+    beq !iwr_wait+
+    jsr KERNAL_GETIN
+    jmp !iwr_drain-
+
+    // Require two consecutive empty-buffer polls for stability.
+!iwr_wait:
+    lda KBDBUF_COUNT
+    bne !iwr_drain-
+    lda KBDBUF_COUNT
+    bne !iwr_drain-
+
+    plp                     // Restore original I flag
+    pla
+    sta $01                 // Restore original banking state
+    rts
+
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)
 //         zp_input_cmd = same
