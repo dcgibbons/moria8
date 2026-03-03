@@ -25,10 +25,20 @@
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
 | **Q1** | **HIGH** | C128: `Quit` path fails to return cleanly to BASIC; exits to corrupted screen/monitor BREAK state instead of stable BASIC prompt. | **New** |
+| **R3** | **HIGH** | C128: RNG startup entropy appears deterministic across runs. Likely cause: `rng_seed` uses only CIA timer reads and is called at highly repeatable startup/menu timing (`main.s` + `game_new_start`), producing repeatable initial seeds in emulator/runtime. | **New** |
+| **R4** | **HIGH** | C128: After killing a dungeon monster, the vacated tile can render as the wrong glyph/color (including near/far-dependent color shifts). Likely cause: post-kill map byte/render state mismatch (tile byte after `FLAG_OCCUPIED` clear vs VDC visible/dim path), requiring trace of tile value before/after `monster_remove` and immediate render path inputs. | **New** |
 | **R2** | **MED** | C128: In town, pressing `T` can corrupt top-of-screen text (garbled cyan text block appears instead of clean message output). Repro observed while normal gameplay rendering otherwise remains stable. | **New** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
+
+### Investigation Tasks (R3, R4)
+
+1. **R3 seed instrumentation:** Log first 8 RNG outputs at fresh boot and at `game_new_start` across 5 cold runs to confirm repeatability and distinguish boot-seed vs post-menu reseed behavior.
+2. **R3 entropy hardening:** Mix CIA timers with user timing jitter (keypress interval counter) and mutable state (frame/turn counters) before first gameplay RNG consumption; keep all-zero guard.
+3. **R4 kill-path trace:** At a known kill coordinate, capture map byte before hit, immediately after `monster_remove`, and before render decode (`zp_tile_tmp`) to verify type/flags are preserved except `FLAG_OCCUPIED`.
+4. **R4 render branch validation:** Confirm the same tile routes through expected visible/dim branch and that final glyph/color source (tile/item/monster/player override) matches map state.
+5. **R4 regression test:** Add C128 harness/assertion covering monster death tile normalization (glyph/type and color path stable after kill at close/far distances).
 
 ---
 
@@ -44,6 +54,29 @@
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
+
+### Phase 10.2 Execution Plan (2026-03-03)
+
+| Step | Goal | Deliverable | Test Gate | Status |
+|---|---|---|---|---|
+| **10.2.0** | Baseline + invariants | Freeze current behavior, define no-regression checklist, capture baseline test results | `make test128`, `make test`, manual smoke checklist | **Complete (Automated), Manual Smoke Pending** |
+| **10.2.1** | Access abstraction | C128-only banked database access helpers (byte/pointer/block) with clear IRQ/MMU contracts | Existing C128 memory tests + new helper smoke checks | Planned |
+| **10.2.2** | Banked tier staging | Copy active tier payload from `$E000` load area into Bank 1 DB region; persist metadata | Tier load/transition tests + boot smoke | Planned |
+| **10.2.3** | Consumer migration | Switch C128 tier/name runtime reads (`creature_get_name` path + tier pointer reads) to Bank 1 DB helpers | New tier/name correctness suite + existing gameplay smoke | Planned |
+| **10.2.4** | State hardening | Harden overlay/tier/string-bank invalidation and load-fail fallback state on C128 | Failure-path test cases + no BREAK/JAM smoke | Planned |
+| **10.2.5** | Regression coverage | Add C128 tests for tier transition/name lookup across banks and stale-pointer fallback | `make test128` all green with new suite(s) | Planned |
+| **10.2.6** | Completion + doc sync | Confirm full regressions and update status/history artifacts | C64+C128 full suites + manual end-to-end smoke | Planned |
+
+**10.2 No-Regression Checklist**
+- C64 behavior remains unchanged (`make test` green).
+- C128 boots to title, accepts input, starts new game, enters town/dungeon without JAM/BREAK.
+- C128 save/load path remains functional.
+- Existing C4 map banking behavior remains stable.
+
+**10.2.0 Baseline Capture (2026-03-03)**
+- `make test128`: **PASS** (`7 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+- Manual smoke: **Pending during implementation** (to be re-run after each behavior-changing step)
 
 ---
 
@@ -70,6 +103,8 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
+2. Fix deterministic RNG startup seeding path on C128 (R3).
+3. Fix post-monster-kill tile corruption/render mismatch on C128 (R4).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
