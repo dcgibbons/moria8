@@ -26,6 +26,11 @@
 // ============================================================
 current_tier:   .byte 0     // 0 = no tier (town/embedded), 1-4 = active tier
 tier_loaded:    .byte 0     // 1 = a tier has been loaded from disk/REU
+// C128 10.2 staging metadata: active tier payload mirrored to Bank 1 DB region.
+c128_tier_db_base_lo: .byte <BANK1_DB_BASE
+c128_tier_db_base_hi: .byte >BANK1_DB_BASE
+c128_tier_db_size_lo: .byte 0
+c128_tier_db_size_hi: .byte 0
 
 // ============================================================
 // Tier boundary tables (indexed by tier 1-4; index 0 unused)
@@ -199,7 +204,9 @@ tier_load:
 
     // --- Disk path: KERNAL LOAD tier file to $E000 ---
     jsr tier_load_disk
-    bcs !tl_failed+
+    bcc !tl_disk_ok+
+    jmp !tl_failed+
+!tl_disk_ok:
     jmp !tl_activate+
 
 !tl_reu:
@@ -242,6 +249,23 @@ tier_load:
     sbc #0
     sta tier_name_lo_addr+1
 
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !tl_no_c128_stage+
+    // C128 10.2.2: mirror loaded tier payload from $E000 into Bank 1 DB region.
+    // Runtime consumers still use the $E000 path until 10.2.3 migration.
+    lda #<BANK1_DB_BASE
+    sta c128_tier_db_base_lo
+    lda #>BANK1_DB_BASE
+    sta c128_tier_db_base_hi
+    ldx current_tier
+    lda tier_size_lo,x
+    sta c128_tier_db_size_lo
+    lda tier_size_hi,x
+    sta c128_tier_db_size_hi
+    jsr c128_stage_tier_to_bank1
+!tl_no_c128_stage:
+
     pla
     sta $01                     // Restore bank config
     cli
@@ -270,6 +294,8 @@ tier_load:
     // tier path which reads from $E000 (now invalid).
     lda #0
     sta current_tier
+    sta c128_tier_db_size_lo
+    sta c128_tier_db_size_hi
     rts
 
 
@@ -335,3 +361,73 @@ tier_fn_addr_hi:
 
 tier_loading_str:
     .text "Loading..." ; .byte 0
+
+// ============================================================
+// c128_stage_tier_to_bank1 — Mirror tier payload to Bank 1 DB region
+// ============================================================
+// Precondition: caller has BankOutKernal active so Bank 0 $E000 RAM is readable.
+// Input: current_tier set; tier_size tables valid.
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
+c128_stage_tier_to_bank1:
+    // Source = Bank 0 $E000 (loaded tier payload)
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+
+    // Destination = Bank 1 staging base (fixed for now)
+    lda c128_tier_db_base_lo
+    sta zp_ptr1
+    lda c128_tier_db_base_hi
+    sta zp_ptr1_hi
+
+    // Copy size from tier table for current tier
+    ldx current_tier
+    lda tier_size_lo,x
+    sta zp_temp0
+    lda tier_size_hi,x
+    sta zp_temp1
+
+    // Quick exit on zero length
+    lda zp_temp0
+    ora zp_temp1
+    bne !cs_copy+
+    rts
+
+!cs_copy:
+    ldy #0
+
+    // Copy whole pages first (zp_temp1 pages)
+!cs_page_loop:
+    lda zp_temp1
+    beq !cs_tail+
+!cs_page:
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr1),y
+    jsr mmu_select_bank0
+    iny
+    bne !cs_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !cs_page_loop-
+
+    // Copy trailing bytes (zp_temp0)
+!cs_tail:
+    ldx zp_temp0
+    beq !cs_done+
+!cs_tail_loop:
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr1),y
+    jsr mmu_select_bank0
+    iny
+    dex
+    bne !cs_tail_loop-
+!cs_done:
+    rts

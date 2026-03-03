@@ -33,6 +33,9 @@
 .const CREATURE_END     = $c0ff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
+// C128-only constant used by shared tier_manager staging metadata.
+// C64 never executes this path (runtime machine check), but symbol must exist.
+.const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0400
 .const COLOR_RAM        = $d800
 
@@ -191,6 +194,13 @@ copy_to_e000:
     dex
     bne !tail-
 !done:
+    rts
+
+// C128 MMU compatibility stubs for shared code paths that are runtime-gated.
+mmu_select_bank1:
+    rts
+
+mmu_select_bank0:
     rts
 
 // ============================================================

@@ -86,11 +86,14 @@
 // Memory region bases
 // C128 Plan C4 Banking Model:
 //   - Dungeon Map: Bank 1 RAM at $4000-$4EFF (3,840 bytes)
+//   - Tier staging DB: Bank 1 RAM at $5000-$7FFF (runtime tier payload mirror)
 //   - Floor Items: Bank 0 RAM at $1A00-$1AFF (256 bytes)
 //   - Creature Scratch: Bank 0 RAM at $1B00-$1BFF (256 bytes)
 //   - Program: Bank 0 RAM at $1C01-$BFFF
 .const MAP_BASE         = $4000 // Dungeon map (Bank 1)
 .const MAP_END          = $4eff
+.const BANK1_DB_BASE    = $5000 // Tier payload staging (Bank 1)
+.const BANK1_DB_END     = $7fff
 .const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
 .const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
