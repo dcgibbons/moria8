@@ -103,11 +103,12 @@
 .const SCREEN_RAM       = $0400 // VIC-II screen RAM (used as scratch buffer on C128)
 .const COLOR_RAM        = $d800 // VIC-II color RAM (VDC has separate attributes)
 
-// ZP save buffer — stores $02–$8F during game, restored on exit
-// Using hardcoded address $0700 (VIC-II scratch RAM) to ensure it 
-// doesn't overlap with code or the dungeon map.
-.const ZP_SAVE_BUF_ADDR = $0700
+// ZP save buffer — stores $02–$8F during game, restored on exit.
+// Keep this as owned program data (not a fixed low-RAM page), because
+// native C128 KERNAL/BASIC workspace usage differs from C64.
 .const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
+zp_save_buf:
+    .fill ZP_SAVE_SIZE, 0
 
 // ============================================================
 // Macros — use $01 for runtime banking (C64-compatible)
@@ -242,7 +243,7 @@ save_zp:
     ldx #0
 !loop:
     lda $02,x
-    sta ZP_SAVE_BUF_ADDR,x
+    sta zp_save_buf,x
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
@@ -252,7 +253,7 @@ save_zp:
 restore_zp:
     ldx #0
 !loop:
-    lda ZP_SAVE_BUF_ADDR,x
+    lda zp_save_buf,x
     sta $02,x
     inx
     cpx #ZP_SAVE_SIZE

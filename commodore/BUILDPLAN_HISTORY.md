@@ -66,6 +66,31 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## Q1 — C128 Quit/Reboot Exit Stability ✅ COMPLETE (2026-03-03)
+
+**Problem:** Exiting from the C128 game-over prompt via `Q` (Quit) frequently crashed into monitor `BREAK`/`JAM` states instead of returning cleanly to BASIC. Failures were observed in multiple ROM paths (`$C946`, `$706F`) after partial warm-start handoff.
+
+**Root cause:** The previous quit path attempted C128 BASIC warm-start sequencing from a game-mutated runtime context. That path was fragile under MMU/ROM/vector state changes and did not reliably re-enter BASIC.
+
+**Fix:**
+1. Corrected invalid warm-start indirection and removed unstable mixed path logic.
+2. Standardized C128 exit handoff to a deterministic reset-vector path:
+   - `exit_trampoline` now restores ROM mapping and performs `JMP ($FFFC)`.
+3. Unified game-over prompt behavior:
+   - `R` now jumps to `exit_trampoline` (same behavior as `Q`).
+4. Hardened exit-state handling while stabilizing this bug:
+   - Removed C128 zero-page restore on exit (avoid re-injecting stale BASIC workspace).
+   - Moved C128 ZP snapshot storage off fixed low RAM page to owned static buffer data.
+
+**Result:** `Q` and `R` now both perform a consistent soft-reset return to BASIC (reboot-equivalent), eliminating the prior monitor crash modes.
+
+**Validation:**
+- `make test128`: **PASS** (`9 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+- Manual operator validation: C128 quit now reaches BASIC via soft reset without the previous `BREAK`/`JAM` loop.
+
+---
+
 ## S1 — C128 Save JAM at `$A953` / `$0323` ✅ COMPLETE (2026-03-03)
 
 **Problem:** C128 save flow intermittently crashed with CPU `JAM`, initially observed at `$A953` and later at `$0323` during channel cleanup. The failures were triggered in the save path while mixing KERNAL-context transitions and save-specific wrapper calls.

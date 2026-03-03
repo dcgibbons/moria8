@@ -463,16 +463,17 @@ init_copy_banked:
 exit_trampoline:
     lda #0
     sta $d418
-    jsr restore_zp
     sei
+    // Restore full ROM map before handing control back to ROM.
     lda #$00
     sta $ff00
     lda #BANK_ALL_ROM
     sta $01
-    cli
-    lda #$93
-    jsr $ffd2
-    jmp ($4002)
+
+    // Native C128 warm-start paths proved unstable after game runtime state
+    // mutation. Use the hardware reset vector for deterministic return.
+    // This is equivalent to a soft reboot to BASIC.
+    jmp ($fffc)
 
 // ============================================================
 // Entry point
@@ -1086,7 +1087,7 @@ game_over_prompt:
     sta KBDBUF_COUNT            // Flush keyboard buffer (C128: $D0)
 !gop_loop:
     jsr input_get_key
-    cmp #$52                    // 'R' — reboot (reset)
+    cmp #$52                    // 'R' — reboot (same path as quit)
     beq !gop_reboot+
     cmp #$53                    // 'S' — start over (restart to title)
     beq !gop_restart+
@@ -1094,9 +1095,7 @@ game_over_prompt:
     bne !gop_loop-
     rts                         // Q: fall through to exit_trampoline
 !gop_reboot:
-    lda #MMU_NORMAL             // $0E — expose KERNAL ROM reset vector
-    sta $ff00
-    jmp ($fffc)                 // Hard reset via KERNAL ROM vector
+    jmp exit_trampoline         // Unified C128 behavior: R == Q
 !gop_restart:
     jmp game_restart
 

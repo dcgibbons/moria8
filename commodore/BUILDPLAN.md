@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-03, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved.
 
 ### Build Stats
 
@@ -24,7 +24,6 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **Q1** | **HIGH** | C128: `Quit` path fails to return cleanly to BASIC; exits to corrupted screen/monitor BREAK state instead of stable BASIC prompt. | **New** |
 | **R3** | **HIGH** | C128: RNG startup entropy appears deterministic across runs. Likely cause: `rng_seed` uses only CIA timer reads and is called at highly repeatable startup/menu timing (`main.s` + `game_new_start`), producing repeatable initial seeds in emulator/runtime. | **New** |
 | **R4** | **HIGH** | C128: After killing a dungeon monster, the vacated tile can render as the wrong glyph/color (including near/far-dependent color shifts). Likely cause: post-kill map byte/render state mismatch (tile byte after `FLAG_OCCUPIED` clear vs VDC visible/dim path), requiring trace of tile value before/after `monster_remove` and immediate render path inputs. | **New** |
 | **R2** | **MED** | C128: In town, pressing `T` can corrupt top-of-screen text (garbled cyan text block appears instead of clean message output). Repro observed while normal gameplay rendering otherwise remains stable. | **New** |
