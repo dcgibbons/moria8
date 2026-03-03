@@ -50,7 +50,7 @@
 |---|------|---------|--------|
 | 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure complete. | **Done** |
 | 10.1 | 80-column VDC mode | VDC rendering backend with row batching and dirty-rect optimization. | **Done (baseline)** |
-| 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | |
+| 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | **Done (Automated), Manual Smoke Pending** |
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
@@ -65,7 +65,7 @@
 | **10.2.3** | Consumer migration | Switch C128 tier/name runtime reads (`creature_get_name` path + tier pointer reads) to Bank 1 DB helpers | New tier/name correctness suite + existing gameplay smoke | **Complete (Automated)** |
 | **10.2.4** | State hardening | Harden overlay/tier/string-bank invalidation and load-fail fallback state on C128 | Failure-path test cases + no BREAK/JAM smoke | **Complete (Automated)** |
 | **10.2.5** | Regression coverage | Add C128 tests for tier transition/name lookup across banks and stale-pointer fallback | `make test128` all green with new suite(s) | **Complete (Automated)** |
-| **10.2.6** | Completion + doc sync | Confirm full regressions and update status/history artifacts | C64+C128 full suites + manual end-to-end smoke | Planned |
+| **10.2.6** | Completion + doc sync | Confirm full regressions and update status/history artifacts | C64+C128 full suites + manual end-to-end smoke | **Complete (Automated), Manual Smoke Pending** |
 
 **10.2 No-Regression Checklist**
 - C64 behavior remains unchanged (`make test` green).
@@ -97,6 +97,11 @@
 **10.2.5 Gate Capture (2026-03-03)**
 - `make test128`: **PASS** (`9 passed, 0 failed`) — includes new `tier128` suite
 - `make test`: **PASS** (`24 passed, 0 failed`)
+
+**10.2.6 Gate Capture (2026-03-03)**
+- `make test128`: **PASS** (`9 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+- Manual end-to-end smoke (title/new/save/load/town/dungeon): **Pending operator validation**
 
 ---
 
