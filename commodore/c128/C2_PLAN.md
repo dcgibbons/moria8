@@ -107,9 +107,10 @@ C2 is complete only when all are true:
 - Current status:
   - keypad movement and keypad `5` rest mappings implemented,
   - keypad `+` mapped to tunnel for parity with `+`,
-  - ESC currently mapped to `CMD_QUIT` (pending UX confirmation).
+  - ESC policy is locked to `CMD_QUIT` (matches existing `SHIFT+Q` quit affordance),
+  - non-gameplay extended keys (`KP0`, `KP-`, `KP.`, `ALT`, `LF`) are explicitly unmapped (`CMD_NONE`) and test-covered.
 
-**Gate:** keypad movement and rest verified in town + dungeon.
+**Gate:** keypad movement/rest and ESC quit path verified in town + dungeon.
 
 ### C2.5 Add C128 Input Regression Tests 🚧 In Progress
 - Add `tests/test_input128.s`:

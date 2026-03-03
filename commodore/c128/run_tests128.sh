@@ -93,7 +93,7 @@ run_test() {
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
-    if grep -q "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+    if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
         echo "PASS"
         PASS=$((PASS + 1))
     else

@@ -64,23 +64,48 @@ test_start:
     jsr petscii_to_command
     cmp #CMD_TUNNEL
     bne test_fail
+    jmp test_continue
 
+test_fail:
+    jmp test_fail_loop
+
+test_continue:
     // ESC mapping (current C2.4 policy: quit shortcut)
     lda #KEY_ESC
     jsr petscii_to_command
     cmp #CMD_QUIT
     bne test_fail
 
-    // Unmapped keypad key should return CMD_NONE
+    // Unmapped keypad/extended keys should return CMD_NONE
     lda #KEY_KP_MINUS
+    jsr petscii_to_command
+    cmp #CMD_NONE
+    bne test_fail
+
+    lda #KEY_KP_DOT
+    jsr petscii_to_command
+    cmp #CMD_NONE
+    bne test_fail
+
+    lda #KEY_KP0
+    jsr petscii_to_command
+    cmp #CMD_NONE
+    bne test_fail
+
+    lda #KEY_ALT
+    jsr petscii_to_command
+    cmp #CMD_NONE
+    bne test_fail
+
+    lda #KEY_LF
     jsr petscii_to_command
     cmp #CMD_NONE
     bne test_fail
 
     jmp test_pass
 
-test_fail:
-    jmp test_fail
+test_fail_loop:
+    jmp test_fail_loop
 
 test_pass:
     jmp test_pass
