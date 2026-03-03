@@ -99,3 +99,58 @@ map_bulk_enter:
 map_bulk_exit:
     jsr mmu_select_bank0
     rts
+
+// ============================================================
+// C128 banked-database access helpers (Phase 10.2.1)
+// ============================================================
+// Contract:
+// - These helpers are C128-only and centralize Bank 1 data reads/writes
+//   for future creature/item database relocation.
+// - All helpers preserve caller IRQ state via mmu_select_bank1/bank0.
+// - Pointer access uses zp_ptr0/zp_ptr1 + Y offset for parity with map APIs.
+
+mmu_safe_db_read_ptr0:
+    jsr mmu_select_bank1
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_db_write_ptr0:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_db_read_ptr1:
+    jsr mmu_select_bank1
+    lda (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_db_write_ptr1:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+// db_bulk_enter/db_bulk_exit:
+// Optional fast-path wrappers for future bulk DB scans/copies.
+db_bulk_enter:
+    jsr mmu_select_bank1
+    rts
+
+db_bulk_exit:
+    jsr mmu_select_bank0
+    rts
