@@ -66,7 +66,7 @@ test_start:
     bne test_fail
 
     // ESC mapping (current C2.4 policy: quit shortcut)
-    lda #$1b
+    lda #KEY_ESC
     jsr petscii_to_command
     cmp #CMD_QUIT
     bne test_fail

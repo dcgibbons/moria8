@@ -41,6 +41,8 @@
 .const KEY_KP_PLUS  = $ab
 .const KEY_KP_MINUS = $ac
 .const KEY_KP_DOT   = $ad
+.const KEY_ESC      = $ae
+.const KEY_LF       = $af
 
 // ============================================================
 // Command IDs — internal constants, not key codes
@@ -116,9 +118,8 @@ input_run_key_check:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Uses edge-transition detection: returns on key-up->key-down transitions.
-// This avoids the strict release-gate lag of the old two-phase loop while
-// still preventing held-key flood.
+// Waits for any previously-held key to be released before detecting
+// a new keypress, ensuring each physical press fires exactly once.
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
@@ -127,13 +128,19 @@ input_get_key:
     tya
     pha                     // Save Y
 
-    // Wait for key state transition; report only nonzero transitions.
-!igk_wait_edge:
+    // Phase 1: wait for release — don't re-report a still-held key
+!igk_release:
     jsr cia_scan_petscii
-    cmp igk_prev
-    beq !igk_wait_edge-     // No state change yet
-    sta igk_prev            // Record latest state
-    beq !igk_wait_edge-     // Key release edge only; wait for key-down edge
+    cmp #$a0
+    bcs !igk_press+         // Ignore extended-line virtual keys in release gate
+    cmp #0
+    bne !igk_release-       // Key still held, keep waiting
+
+    // Phase 2: wait for a new keypress
+!igk_press:
+    jsr cia_scan_petscii
+    cmp #0
+    beq !igk_press-         // No key yet
 
     sta igk_key
     pla
@@ -142,7 +149,6 @@ input_get_key:
     tax                     // Restore X
     lda igk_key
     rts
-igk_prev: .byte 0
 igk_key: .byte 0
 
 // cia_scan_petscii — Single CIA1 keyboard matrix scan
@@ -190,7 +196,7 @@ cia_scan_petscii:
     sta csp_shift
 !csp_no_lshift:
     lda csp_row_raw
-    and #$7F            // Mask LSHIFT bit out of key bitmap
+    ora #$80            // Force LSHIFT bit to unpressed (raw active-low domain)
     sta csp_row_raw
 !csp_mask1_done:
     // Detect/mask RSHIFT inline (row 6, bit 4)
@@ -203,7 +209,7 @@ cia_scan_petscii:
     sta csp_shift
 !csp_no_rshift:
     lda csp_row_raw
-    and #$EF            // Mask RSHIFT bit out of key bitmap
+    ora #$10            // Force RSHIFT bit to unpressed (raw active-low domain)
     sta csp_row_raw
 !csp_mask6_done:
     lda csp_row_raw
@@ -357,7 +363,7 @@ cia_scancode_table:
     // Row 8 (scan 64–71): ALT KP8  KP5  KP2  KP4  KP7  KP1  KP0
     .byte KEY_ALT, KEY_KP8, KEY_KP5, KEY_KP2, KEY_KP4, KEY_KP7, KEY_KP1, KEY_KP0
     // Row 9 (scan 72–79): ESC KP+  KP-  LF   KP9  KP6  KP3  KP.
-    .byte $1b, KEY_KP_PLUS, KEY_KP_MINUS, $0a, KEY_KP9, KEY_KP6, KEY_KP3, KEY_KP_DOT
+    .byte KEY_ESC, KEY_KP_PLUS, KEY_KP_MINUS, KEY_LF, KEY_KP9, KEY_KP6, KEY_KP3, KEY_KP_DOT
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID, zp_input_cmd = same, zp_input_count = 1
@@ -374,6 +380,7 @@ input_get_command:
     cmp #CMD_NONE
     beq !get_key-           // Unknown key, try again
 
+!got_cmd:
     sta zp_input_cmd
     rts
 
@@ -469,7 +476,7 @@ key_map_petscii:
     .byte KEY_KP3      // keypad 3 — southeast
     .byte KEY_KP5      // keypad 5 — rest
     .byte KEY_KP_PLUS  // keypad + — tunnel
-    .byte $1b          // ESC — quit shortcut
+    .byte KEY_ESC      // ESC — quit shortcut
 
 key_map_cmd:
     .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
