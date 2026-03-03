@@ -55,6 +55,17 @@
 .const KERNAL_CHROUT = $ffd2
 .const KERNAL_CHRIN  = $ffcf
 .const KERNAL_READST = $ffb7
+
+.const SAVE_SETNAM = KERNAL_SETNAM
+.const SAVE_SETLFS = KERNAL_SETLFS
+.const SAVE_OPEN   = KERNAL_OPEN
+.const SAVE_CLOSE  = KERNAL_CLOSE
+.const SAVE_CHKOUT = KERNAL_CHKOUT
+.const SAVE_CHKIN  = KERNAL_CHKIN
+.const SAVE_CLRCHN = KERNAL_CLRCHN
+.const SAVE_CHROUT = KERNAL_CHROUT
+.const SAVE_CHRIN  = KERNAL_CHRIN
+.const SAVE_READST = KERNAL_READST
 .const KERNAL_LOAD   = $ffd5
 
 // ============================================================
@@ -176,27 +187,28 @@ save_game:
     sta save_io_error
 
     // Delete old save file (ignore errors)
-    jsr delete_savefile
+    // save_game already runs inside EnterKernal; avoid nested transitions.
+    jsr delete_savefile_core
 
     // Open file for writing
     // SETNAM
     lda #save_filename_len
     ldx #<save_filename
     ldy #>save_filename
-    jsr KERNAL_SETNAM
+    jsr SAVE_SETNAM
     // SETLFS: file#2, device 8/9, secondary 2
     lda #SAVE_FILE_NUM
     ldx save_device
     ldy #SAVE_SEC_ADDR
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
     bcc !save_open_ok+
     jmp !save_error+
 !save_open_ok:
 
     // Direct output to file
     ldx #SAVE_FILE_NUM
-    jsr KERNAL_CHKOUT
+    jsr SAVE_CHKOUT
     bcc !save_chkout_ok+
     jmp !save_error_close+
 !save_chkout_ok:
@@ -302,9 +314,9 @@ save_game:
     jsr save_write_byte_raw
 
     // Close and clean up
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
@@ -319,9 +331,9 @@ save_game:
     rts
 
 !save_error_close:
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
@@ -361,12 +373,12 @@ load_game:
     lda #load_filename_len
     ldx #<load_filename
     ldy #>load_filename
-    jsr KERNAL_SETNAM
+    jsr SAVE_SETNAM
     lda #SAVE_FILE_NUM
     ldx save_device
     ldy #LOAD_SEC_ADDR
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
     bcc !load_open_ok+
     // OPEN failed — file not found is the most common cause
     lda $dd00
@@ -375,11 +387,11 @@ load_game:
     jmp !load_notfound+
 !load_open_ok:
     ldx #SAVE_FILE_NUM
-    jsr KERNAL_CHKIN
+    jsr SAVE_CHKIN
     bcc !load_chkin_ok+
     // CHKIN failed — close and bail
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011
     sta $dd00
@@ -392,7 +404,7 @@ load_game:
     // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
     // Any non-zero STATUS this early means the file doesn't exist.
-    jsr KERNAL_READST
+    jsr SAVE_READST
     beq !load_magic_check+
     jmp !load_close_notfound+   // STATUS non-zero → file not found
 !load_magic_check:
@@ -493,9 +505,9 @@ load_game:
     :load_block(MAP_BASE, MAP_SIZE)
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
-    jsr KERNAL_CHRIN        // Stored checksum lo (not accumulated)
+    jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
     sta zp_temp0
-    jsr KERNAL_CHRIN        // Stored checksum hi (not accumulated)
+    jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
     sta zp_temp1
 
     // Check for I/O errors during read
@@ -515,9 +527,9 @@ load_game:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
     // Close file after successful read
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011
     sta $dd00
@@ -530,7 +542,8 @@ load_game:
     jsr recount_floor_items
 
     // Delete savefile (permadeath)
-    jsr delete_savefile
+    // load_game already runs inside EnterKernal; avoid nested transitions.
+    jsr delete_savefile_core
 
     sec                     // Success
     :ExitKernal()
@@ -539,9 +552,9 @@ load_game:
 !load_corrupt:
 !load_corrupt_nocl:
     // Close file (may still be open if corruption detected mid-read)
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011
     sta $dd00
@@ -556,9 +569,9 @@ load_game:
 
 !load_close_notfound:
     // File was opened but returned no data — close before showing message
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda #SAVE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
     lda $dd00
     ora #%00000011
     sta $dd00
@@ -610,9 +623,9 @@ save_write_block:
 !swb_no_carry:
     // Write byte
     lda (zp_ptr0),y
-    jsr KERNAL_CHROUT
+    jsr SAVE_CHROUT
     // Check status
-    jsr KERNAL_READST
+    jsr SAVE_READST
     and #$03                // Timeout or error bits
     beq !swb_ok+
     inc save_io_error
@@ -648,9 +661,9 @@ save_write_byte:
     inc save_cksum_hi
 !swby_no_carry:
     pla
-    jsr KERNAL_CHROUT
+    jsr SAVE_CHROUT
     pha
-    jsr KERNAL_READST
+    jsr SAVE_READST
     and #$03
     beq !swby_ok+
     inc save_io_error
@@ -663,9 +676,9 @@ save_write_byte:
 // Input: A = byte to write
 // ============================================================
 save_write_byte_raw:
-    jsr KERNAL_CHROUT
+    jsr SAVE_CHROUT
     pha
-    jsr KERNAL_READST
+    jsr SAVE_READST
     and #$03
     beq !swbr_ok+
     inc save_io_error
@@ -712,7 +725,7 @@ load_read_block:
 // Clobbers: A, flags
 // ============================================================
 load_read_byte:
-    jsr KERNAL_CHRIN        // Read next byte from open sequential file
+    jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
     // Accumulate checksum
     clc
@@ -729,27 +742,48 @@ load_read_byte:
 // Clobbers: A, X, Y
 // ============================================================
 delete_savefile:
-    :EnterKernal()
+    :EnterKernal()              // External entrypoint for non-KERNAL callers
+    jsr delete_savefile_core
+    :ExitKernal()
+    rts
+
+// delete_savefile_core — Internal helper (assumes EnterKernal context)
+// Clobbers: A, X, Y
+delete_savefile_core:
     // Open command channel — scratch command executes on OPEN
     lda #scratch_cmd_len
     ldx #<scratch_cmd
     ldy #>scratch_cmd
-    jsr KERNAL_SETNAM
+    jsr SAVE_SETNAM
     lda #CMD_CHANNEL
     ldx save_device
     ldy #CMD_CHANNEL
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SAVE_SETLFS
+    jsr SAVE_OPEN
     bcs !dsf_done+          // OPEN failed — nothing to close
     lda #CMD_CHANNEL
-    jsr KERNAL_CLOSE
+    jsr SAVE_CLOSE
 !dsf_done:
-    jsr KERNAL_CLRCHN
+    jsr save_restore_channels
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
-    :ExitKernal()
     rts
+
+// ============================================================
+// save_restore_channels — restore default KERNAL channels
+// C128 workaround: avoid CLRCHN vector path; use explicit CHKIN/CHKOUT.
+// C64 path keeps CLRCHN behavior.
+// ============================================================
+save_restore_channels:
+#if C128
+    // C128: avoid CHKIN/CHKOUT/CLRCHN vector paths entirely.
+    // Save/load code uses explicit channels and closes files directly.
+    rts
+#else
+    jsr SAVE_CLRCHN
+    rts
+#endif
 
 // ============================================================
 // recount_monsters — Scan monster_table, set zp_mon_count
@@ -1019,4 +1053,3 @@ rle_d_advance_dst:
     inc save_io_error       // Flag overflow — corrupt compressed data
 !rdad_ok:
     rts
-

@@ -125,9 +125,7 @@ entry_real:
     sta $ffc1
     lda #>w_open
     sta $ffc2
-    // NOTE: FFC3..FFD2 are indirect JMP vectors in C128 ROM
-    // (JMP ($031C)..JMP ($0326)). Do NOT rewrite their operands in the
-    // RAM mirror as if they were direct JMP targets.
+    // Leave C128 low-RAM vectors untouched.
     // FFD5 LOAD
     lda $ffd6
     sta t_load
@@ -164,13 +162,21 @@ entry_real:
 // Each wrapper switches to MMU_NORMAL, calls real target,
 // then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
 // ============================================================
+// C128 KERNAL R1 direct routine entries used to bypass low-RAM indirect
+// vectors ($031C-$0327), which are unstable during current save-path bug.
+.const K128_CLOSE  = $f188
+.const K128_CHKIN  = $f106
+.const K128_CHKOUT = $f14c
+.const K128_CLRCHN = $f226
+.const K128_CHRIN  = $ef06
+.const K128_CHROUT = $ef79
 
 // READST
 w_readst:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     .byte $20
@@ -185,9 +191,9 @@ t_readst: .word 0
 // SETLFS
 w_setlfs:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     .byte $20
@@ -202,9 +208,9 @@ t_setlfs: .word 0
 // SETNAM
 w_setnam:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     .byte $20
@@ -219,9 +225,9 @@ t_setnam: .word 0
 // OPEN
 w_open:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     .byte $20
@@ -236,13 +242,12 @@ t_open: .word 0
 // CLOSE
 w_close:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_close: .word 0
+    jsr K128_CLOSE
     php
     pha
     lda #MMU_ALL_RAM
@@ -253,13 +258,12 @@ t_close: .word 0
 // CHKIN
 w_chkin:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_chkin: .word 0
+    jsr K128_CHKIN
     php
     pha
     lda #MMU_ALL_RAM
@@ -270,13 +274,12 @@ t_chkin: .word 0
 // CHKOUT
 w_chkout:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_chkout: .word 0
+    jsr K128_CHKOUT
     php
     pha
     lda #MMU_ALL_RAM
@@ -287,13 +290,12 @@ t_chkout: .word 0
 // CLRCHN
 w_clrchn:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_clrchn: .word 0
+    jsr K128_CLRCHN
     php
     pha
     lda #MMU_ALL_RAM
@@ -304,13 +306,12 @@ t_clrchn: .word 0
 // CHRIN
 w_chrin:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_chrin: .word 0
+    jsr K128_CHRIN
     php
     pha
     lda #MMU_ALL_RAM
@@ -321,13 +322,12 @@ t_chrin: .word 0
 // CHROUT
 w_chrout:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
-    .byte $20
-t_chrout: .word 0
+    jsr K128_CHROUT
     php
     pha
     lda #MMU_ALL_RAM
@@ -338,9 +338,9 @@ t_chrout: .word 0
 // LOAD
 w_load:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     .byte $20
@@ -398,9 +398,9 @@ chrin_keyboard_stub:
 // patched via the JMP table — call this routine directly instead.
 safe_setbnk:
     pha
-    lda #MMU_NORMAL
+    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
-    lda #BANK_NO_BASIC
+    lda #BANK_ALL_ROM
     sta $01
     pla
     jsr $ff68

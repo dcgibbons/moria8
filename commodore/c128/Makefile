@@ -39,12 +39,14 @@ DISK_IMAGE  = $(OUT)/moria128.d64
 DISK_NAME   = "moria128,m8"
 
 # Source dependencies
-COMMON_SOURCES = $(wildcard ../common/*.s)
-C128_SOURCES   = $(wildcard *.s)
-SOURCES        = $(C128_SOURCES) $(COMMON_SOURCES)
+# Use recursive discovery so imported .s changes in shared trees always
+# invalidate C128 outputs (even when not doing a clean build).
+COMMON_SOURCES := $(shell find ../common ../c64 -type f -name '*.s')
+C128_SOURCES   := $(shell find . -maxdepth 1 -type f -name '*.s')
+SOURCES        := $(C128_SOURCES) $(COMMON_SOURCES)
 
 # ── KickAssembler flags ──────────────────────────────────
-KA_FLAGS    = -showmem -vicesymbols -libdir ../c64
+KA_FLAGS    = -showmem -vicesymbols -libdir ../c64 -define C128
 
 # ── Targets ───────────────────────────────────────────────
 .PHONY: build128 run128 disk128 clean128 test128
@@ -85,9 +87,11 @@ $(OUT)/monster.db.4: $(TIER_DIR)/tier4_prg.s $(TIER_DIR)/tier4.s | $(OUT)
 
 # Create 1571 D64 disk image with all game files
 # boot128 is the autostart entry — chain-loads moria128
-disk128: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) $(BANK1_DAT) | $(OUT)
-	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
-	         -attach $(DISK_IMAGE) \
+disk128: $(DISK_IMAGE)
+
+$(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) $(BANK1_DAT) Makefile | $(OUT)
+	$(C1541) -format $(DISK_NAME) d64 $@ \
+	         -attach $@ \
 	         -write $(BOOT_PRG) "moria8.128" \
 	         -write $(MAIN_PRG) "moria128" \
 	         -write $(TITLE_PRG) "title" \
@@ -102,7 +106,7 @@ disk128: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_STA
 	         -write $(BANK1_DAT) "bank1.dat"
 
 # Launch in VICE x128 (80-column mode) with D64 disk image
-run128: disk128
+run128: $(DISK_IMAGE)
 	$(VICE128) -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
 		-sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
