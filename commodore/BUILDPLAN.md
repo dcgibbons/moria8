@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-03, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed.
 
 ### Build Stats
 
@@ -24,20 +24,13 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **R4** | **HIGH** | C128: After killing a dungeon monster, the vacated tile can render as the wrong glyph/color (including near/far-dependent color shifts). Likely cause: post-kill map byte/render state mismatch (tile byte after `FLAG_OCCUPIED` clear vs VDC visible/dim path), requiring trace of tile value before/after `monster_remove` and immediate render path inputs. | **New** |
 | **R2** | **MED** | C128: In town, pressing `T` can corrupt top-of-screen text (garbled cyan text block appears instead of clean message output). Repro observed while normal gameplay rendering otherwise remains stable. | **New** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 
 ### Investigation Tasks (R4)
-
-1. **R4 kill-path trace:** At a known kill coordinate, capture map byte before hit, immediately after `monster_remove`, and before render decode (`zp_tile_tmp`) to verify type/flags are preserved except `FLAG_OCCUPIED`.
-4. **R4 render branch validation:** Confirm the same tile routes through expected visible/dim branch and that final glyph/color source (tile/item/monster/player override) matches map state.
-5. **R4 regression test:** Add C128 harness/assertion covering monster death tile normalization (glyph/type and color path stable after kill at close/far distances).
-
----
-
+*(Moved to BUILDPLAN_HISTORY pending next cleanup)*
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -76,7 +69,6 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
-2. Fix post-monster-kill tile corruption/render mismatch on C128 (R4).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

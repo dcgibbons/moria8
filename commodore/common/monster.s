@@ -883,7 +883,7 @@ monster_remove:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy mfa_x
-    lda (zp_ptr0),y
+    :MapRead_ptr0_y()
     and #~FLAG_OCCUPIED & $ff   // Clear bit 0
     :MapWrite_ptr0_y()
 

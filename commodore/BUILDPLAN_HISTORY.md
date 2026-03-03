@@ -64,8 +64,22 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 | BUG-47 | HIGH | OPT-5 overlay IRQ lockup — dungeon descent hung | `php`/`plp` in verify_connectivity and both trampolines; 3 interrupt-preservation unit tests added |
 | BUG-48 | MED | Title screen shows stale character stats after S)tart from game-over loop | `screen_clear_row` for rows 21–23 added before `title_show_sysinfo`; root cause: `title_render_data` parses dungeon MAP_BASE as title art and writes to status rows |
 | **R3** | **HIGH** | Deterministic RNG startup seeding path on C128 | Fixed by maintaining `zp_entropy` counter in input loops and EORing state in `rng_seed` |
+| **R4** | **HIGH** | Post-kill map byte render mismatch | Fixed `monster_remove` to use MMU-safe map read macro to prevent Bank 0 read corruption |
 
 ---
+
+## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
+
+**Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).
+
+**Fix:**
+1. Traced root cause to `monster_remove` where it cleared `FLAG_OCCUPIED` bypassing MMU macros (`lda (zp_ptr0),y`).
+2. This caused a garbage byte to be read from Bank 0, bits cleared, and that corrupt byte written appropriately to the map in Bank 1.
+3. Updated the code to use `:MapRead_ptr0_y()` correctly fetching map byte from Bank 1.
+4. Created an isolated regression test `test_monster128.s` that mocks the map memory safely and verifies `FLAG_OCCUPIED` drops without clobbering the base tile data, ensuring no future overlap with other fixes.
+
+**Validation:**
+- `make test128`: **PASS** (`10 passed, 0 failed`)
 
 ## R3 — Deterministic RNG Startup Seeding ✅ COMPLETE (2026-03-03)
 

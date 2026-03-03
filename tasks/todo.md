@@ -9,7 +9,7 @@
 - [x] **C4.1 Add C128 Banking Test Harness**
     - [x] Create `test_memory128.s`.
     - [x] Create `test_dungeon128.s`.
-    - [ ] Create `test_monster128.s`.
+    - [x] Create `test_monster128.s`.
     - [x] Create `run_tests128.sh`.
     - [x] Add `make test128` target.
 - [x] **C4.2 Introduce MMU Primitives With IRQ-State Preservation**
