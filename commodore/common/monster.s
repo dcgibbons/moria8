@@ -988,8 +988,13 @@ ltb_dst_hi:
 // normal RAM, or copies via banking if under KERNAL ROM.
 // Clobbers: A, Y, zp_ptr1
 creature_get_name:
+    lda #0
+    sta cgn_src_banked
+
     lda current_tier
-    beq !cgn_no_tier+           // No tier → use cr_name tables (no banking)
+    bne !cgn_has_tier+
+    jmp !cgn_no_tier+           // No tier → use cr_name tables (no banking)
+!cgn_has_tier:
     cpx active_dungeon_count
     bcc !cgn_tier_indexed+      // X < count → read via tier name arrays
 
@@ -1008,7 +1013,34 @@ creature_get_name:
     jmp !cgn_do_bank+
 
 !cgn_tier_indexed:
-    // --- Tier creature: bank, read ptr from tier name arrays at $E000 ---
+    // --- Tier creature: read ptr from active tier name tables ---
+    // C128: read from Bank 1 staged DB via helper wrappers.
+    // C64: existing $E000 banked read path.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !cgn_tier_c64+
+    txa
+    tay
+    lda tier_name_lo_addr
+    sta zp_ptr1
+    lda tier_name_lo_addr+1
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+    pha
+    lda tier_name_hi_addr
+    sta zp_ptr1
+    lda tier_name_hi_addr+1
+    sta zp_ptr1_hi
+    jsr mmu_safe_db_read_ptr1
+    sta zp_ptr1_hi
+    pla
+    sta zp_ptr1
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_copy+
+
+!cgn_tier_c64:
+    // C64: bank/read ptr from tier name arrays at $E000.
     txa
     tay                         // Y = creature index (preserved across banking)
     sei
@@ -1032,7 +1064,23 @@ creature_get_name:
     jmp !cgn_copy+
 
 !cgn_do_bank:
-    // Bank out KERNAL for $E0xx pointer reads
+    // C128: convert historical $E0xx pointer into Bank 1 DB space.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !cgn_do_bank_c64+
+    clc
+    lda zp_ptr1
+    adc #<(BANK1_DB_BASE - $e000)
+    sta zp_ptr1
+    lda zp_ptr1_hi
+    adc #>(BANK1_DB_BASE - $e000)
+    sta zp_ptr1_hi
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_copy+
+
+!cgn_do_bank_c64:
+    // C64: bank out KERNAL for $E0xx pointer reads
     sei
     lda $01
     pha
@@ -1042,7 +1090,9 @@ creature_get_name:
 !cgn_no_tier:
     // No tier loaded — cr_name tables only (can't resolve $E0xx)
     lda cr_name_hi,x
-    beq !cgn_stale+             // Null pointer → "?"
+    bne !cgn_hi_ok+
+    jmp !cgn_stale+             // Null pointer → "?"
+!cgn_hi_ok:
     cmp #$e0
     bcs !+
     jmp !cgn_setup_normal+      // Normal RAM pointer — use directly
@@ -1054,7 +1104,9 @@ creature_get_name:
 !cgn_find_tier:
     ldx current_tier
     cpx #5
-    bcs !cgn_reload_fail+       // Beyond tier 4 → give up
+    bcc !cgn_tier_idx_ok+
+    jmp !cgn_reload_fail+       // Beyond tier 4 → give up
+!cgn_tier_idx_ok:
     lda tier_count_table,x      // Creature count for this tier
     cmp cgn_saved_x             // compare count vs creature index
     bcc !cgn_next_tier+         // count < index → not in this tier
@@ -1062,7 +1114,9 @@ creature_get_name:
     // count > index → this tier covers creature X
     jsr tier_load               // Load tier (current_tier already set)
     ldx current_tier
-    beq !cgn_reload_fail+       // Load failed (disk error) → "?"
+    bne !cgn_reload_ok+
+    jmp !cgn_reload_fail+       // Load failed (disk error) → "?"
+!cgn_reload_ok:
     ldx cgn_saved_x
     jmp !cgn_tier_indexed-      // Use tier-indexed path to read name
 !cgn_next_tier:
@@ -1083,6 +1137,30 @@ creature_get_name:
     // Fall through to shared copy loop
 
 !cgn_copy:
+    // C128 staged DB copy path (no $01 banking required).
+    lda cgn_src_banked
+    beq !cgn_copy_linear+
+    ldx #0
+!cgn_copy_bank_lp:
+    ldy #0
+    jsr mmu_safe_db_read_ptr1
+    sta creature_name_buf,x
+    beq !cgn_copy_bank_done+
+    inc zp_ptr1
+    bne !cgn_copy_bank_ptr_ok+
+    inc zp_ptr1_hi
+!cgn_copy_bank_ptr_ok:
+    inx
+    cpx #31
+    bne !cgn_copy_bank_lp-
+    lda #0
+    sta creature_name_buf,x
+!cgn_copy_bank_done:
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
+    rts
+
+!cgn_copy_linear:
     ldy #0
 !cgn_copy_lp:
     lda (zp_ptr1),y
@@ -1115,3 +1193,4 @@ tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
+cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper

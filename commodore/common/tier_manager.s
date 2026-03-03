@@ -266,6 +266,36 @@ tier_load:
     jsr c128_stage_tier_to_bank1
 !tl_no_c128_stage:
 
+    // C128 10.2.3: runtime name tables should point at Bank 1 staged payload,
+    // not at temporary $E000 load staging.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !tl_no_c128_name_override+
+    clc
+    lda c128_tier_db_base_lo
+    adc c128_tier_db_size_lo
+    sta zp_ptr1
+    lda c128_tier_db_base_hi
+    adc c128_tier_db_size_hi
+    sta zp_ptr1_hi               // zp_ptr1 = db_base + db_size (end ptr)
+
+    sec
+    lda zp_ptr1
+    sbc active_dungeon_count
+    sta tier_name_hi_addr
+    lda zp_ptr1_hi
+    sbc #0
+    sta tier_name_hi_addr+1
+
+    sec
+    lda tier_name_hi_addr
+    sbc active_dungeon_count
+    sta tier_name_lo_addr
+    lda tier_name_hi_addr+1
+    sbc #0
+    sta tier_name_lo_addr+1
+!tl_no_c128_name_override:
+
     pla
     sta $01                     // Restore bank config
     cli

@@ -102,3 +102,28 @@ map_bulk_enter:
 
 map_bulk_exit:
     rts
+
+// ============================================================
+// C64 DB-safe pointer wrappers (no MMU; direct access)
+// ============================================================
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
+db_bulk_enter:
+    rts
+
+db_bulk_exit:
+    rts
