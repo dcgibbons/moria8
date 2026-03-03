@@ -31,11 +31,10 @@ bank_fn_recall:
 // ============================================================
 bank_load_recall:
     :EnterKernal()
-    // Invalidate overlay and tier state
+    // Invalidate overlay and tier state/metadata before loading into $E000.
     lda #OVL_NONE
     sta current_overlay
-    lda #0
-    sta current_tier
+    jsr tier_invalidate_state
 
     lda #BANK_FN_RECALL_LEN
     ldx #<bank_fn_recall
@@ -56,10 +55,16 @@ bank_load_recall:
     lda #2
     jsr $ffc3               // KERNAL CLOSE
     jsr $ffcc               // KERNAL CLRCHN
-    // Restore VIC-II bank 0 after serial I/O
+
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    beq !bl_done+
+
+    // C64: restore VIC-II bank 0 after serial I/O.
     lda $dd00
     ora #%00000011
     sta $dd00
+!bl_done:
     plp                     // Restore carry
     :ExitKernal()
     rts

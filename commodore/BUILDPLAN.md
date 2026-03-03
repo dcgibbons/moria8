@@ -63,7 +63,7 @@
 | **10.2.1** | Access abstraction | C128-only banked database access helpers (byte/pointer/block) with clear IRQ/MMU contracts | Existing C128 memory tests + new helper smoke checks | **Complete (Automated)** |
 | **10.2.2** | Banked tier staging | Copy active tier payload from `$E000` load area into Bank 1 DB region; persist metadata | Tier load/transition tests + boot smoke | **Complete (Automated)** |
 | **10.2.3** | Consumer migration | Switch C128 tier/name runtime reads (`creature_get_name` path + tier pointer reads) to Bank 1 DB helpers | New tier/name correctness suite + existing gameplay smoke | **Complete (Automated)** |
-| **10.2.4** | State hardening | Harden overlay/tier/string-bank invalidation and load-fail fallback state on C128 | Failure-path test cases + no BREAK/JAM smoke | Planned |
+| **10.2.4** | State hardening | Harden overlay/tier/string-bank invalidation and load-fail fallback state on C128 | Failure-path test cases + no BREAK/JAM smoke | **Complete (Automated)** |
 | **10.2.5** | Regression coverage | Add C128 tests for tier transition/name lookup across banks and stale-pointer fallback | `make test128` all green with new suite(s) | Planned |
 | **10.2.6** | Completion + doc sync | Confirm full regressions and update status/history artifacts | C64+C128 full suites + manual end-to-end smoke | Planned |
 
@@ -87,6 +87,10 @@
 - `make test`: **PASS** (`24 passed, 0 failed`)
 
 **10.2.3 Gate Capture (2026-03-03)**
+- `make test128`: **PASS** (`8 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+
+**10.2.4 Gate Capture (2026-03-03)**
 - `make test128`: **PASS** (`8 passed, 0 failed`)
 - `make test`: **PASS** (`24 passed, 0 failed`)
 

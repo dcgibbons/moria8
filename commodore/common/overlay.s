@@ -40,25 +40,33 @@ reu_overlays_stashed: .byte 0   // Set to 1 after overlays are stashed in REU
 overlay_load:
     cmp current_overlay
     beq !ol_skip+           // Already loaded — skip
-    sta current_overlay
+    sta ol_target
 
-    // Invalidate tier — $E000 will be overwritten with overlay code
-    lda #0
-    sta current_tier
+    // Invalidate tier state/metadata — $E000 will be overwritten by overlay code.
+    jsr tier_invalidate_state
 
     lda reu_overlays_stashed
     bne !ol_reu+
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
-    ldx current_overlay
+    ldx ol_target
     dex                     // 0-based index (OVL_STARTUP=1 → index 0)
     jsr overlay_load_disk
+    bcs !ol_disk_fail+
+    lda ol_target
+    sta current_overlay
+    rts
+!ol_disk_fail:
+    lda #OVL_NONE
+    sta current_overlay
     rts
 
 !ol_reu:
     // --- REU path: DMA overlay from REU to $E000 ---
-    ldx current_overlay
+    ldx ol_target
     jsr overlay_fetch_reu
+    lda ol_target
+    sta current_overlay
     clc                     // REU always succeeds
     rts
 
@@ -194,3 +202,4 @@ ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
+ol_target:        .byte 0

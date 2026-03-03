@@ -32,6 +32,21 @@ c128_tier_db_base_hi: .byte >BANK1_DB_BASE
 c128_tier_db_size_lo: .byte 0
 c128_tier_db_size_hi: .byte 0
 
+// tier_invalidate_state — Clear active tier state + derived metadata
+// Safe to call from any module before loading an overlay/string bank.
+// Clobbers: A
+tier_invalidate_state:
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    sta c128_tier_db_size_lo
+    sta c128_tier_db_size_hi
+    sta tier_name_lo_addr
+    sta tier_name_lo_addr+1
+    sta tier_name_hi_addr
+    sta tier_name_hi_addr+1
+    rts
+
 // ============================================================
 // Tier boundary tables (indexed by tier 1-4; index 0 unused)
 // ============================================================
@@ -74,9 +89,7 @@ tier_size_hi:
 // If no REU: nothing to do now; tiers load on demand.
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0, zp_temp1
 tier_init:
-    lda #0
-    sta current_tier
-    sta tier_loaded
+    jsr tier_invalidate_state
 
     lda reu_present
     beq !ti_done+
@@ -322,10 +335,7 @@ tier_load:
     // Disk load failed — reset tier state so creature_get_name
     // uses embedded name pointers (main RAM) instead of the
     // tier path which reads from $E000 (now invalid).
-    lda #0
-    sta current_tier
-    sta c128_tier_db_size_lo
-    sta c128_tier_db_size_hi
+    jsr tier_invalidate_state
     rts
 
 
