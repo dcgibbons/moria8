@@ -5,13 +5,13 @@
 
 ---
 
-## Current State (2026-03-02, updated)
+## Current State (2026-03-03, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split) and the C4 map-collision stabilization track are complete through C4.8, with post-lock stability fixes applied to KERNAL vector/load handling and C128 banked map render paths. C128 now runs with the map in Bank 1 and validated MMU-safe map access paths.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths.
 
 ### Build Stats
 
-- **Test suites:** C64: 21 runtime suites, C128: 6 harness suites
+- **Test suites:** C64: 24 runtime suites, C128: 9 harness suites
 - **Compile-time asserts:** 69 (C128) / 71 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
@@ -50,58 +50,10 @@
 |---|------|---------|--------|
 | 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure complete. | **Done** |
 | 10.1 | 80-column VDC mode | VDC rendering backend with row batching and dirty-rect optimization. | **Done (baseline)** |
-| 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | **Done (Automated), Manual Smoke Pending** |
+| 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | **Done** |
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
-
-### Phase 10.2 Execution Plan (2026-03-03)
-
-| Step | Goal | Deliverable | Test Gate | Status |
-|---|---|---|---|---|
-| **10.2.0** | Baseline + invariants | Freeze current behavior, define no-regression checklist, capture baseline test results | `make test128`, `make test`, manual smoke checklist | **Complete (Automated), Manual Smoke Pending** |
-| **10.2.1** | Access abstraction | C128-only banked database access helpers (byte/pointer/block) with clear IRQ/MMU contracts | Existing C128 memory tests + new helper smoke checks | **Complete (Automated)** |
-| **10.2.2** | Banked tier staging | Copy active tier payload from `$E000` load area into Bank 1 DB region; persist metadata | Tier load/transition tests + boot smoke | **Complete (Automated)** |
-| **10.2.3** | Consumer migration | Switch C128 tier/name runtime reads (`creature_get_name` path + tier pointer reads) to Bank 1 DB helpers | New tier/name correctness suite + existing gameplay smoke | **Complete (Automated)** |
-| **10.2.4** | State hardening | Harden overlay/tier/string-bank invalidation and load-fail fallback state on C128 | Failure-path test cases + no BREAK/JAM smoke | **Complete (Automated)** |
-| **10.2.5** | Regression coverage | Add C128 tests for tier transition/name lookup across banks and stale-pointer fallback | `make test128` all green with new suite(s) | **Complete (Automated)** |
-| **10.2.6** | Completion + doc sync | Confirm full regressions and update status/history artifacts | C64+C128 full suites + manual end-to-end smoke | **Complete (Automated), Manual Smoke Pending** |
-
-**10.2 No-Regression Checklist**
-- C64 behavior remains unchanged (`make test` green).
-- C128 boots to title, accepts input, starts new game, enters town/dungeon without JAM/BREAK.
-- C128 save/load path remains functional.
-- Existing C4 map banking behavior remains stable.
-
-**10.2.0 Baseline Capture (2026-03-03)**
-- `make test128`: **PASS** (`7 passed, 0 failed`)
-- `make test`: **PASS** (`24 passed, 0 failed`)
-- Manual smoke: **Pending during implementation** (to be re-run after each behavior-changing step)
-
-**10.2.1 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`8 passed, 0 failed`) — includes new `db128` helper suite
-- `make test`: **PASS** (`24 passed, 0 failed`)
-
-**10.2.2 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`8 passed, 0 failed`) — includes boot smoke suites
-- `make test`: **PASS** (`24 passed, 0 failed`)
-
-**10.2.3 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`8 passed, 0 failed`)
-- `make test`: **PASS** (`24 passed, 0 failed`)
-
-**10.2.4 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`8 passed, 0 failed`)
-- `make test`: **PASS** (`24 passed, 0 failed`)
-
-**10.2.5 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`9 passed, 0 failed`) — includes new `tier128` suite
-- `make test`: **PASS** (`24 passed, 0 failed`)
-
-**10.2.6 Gate Capture (2026-03-03)**
-- `make test128`: **PASS** (`9 passed, 0 failed`)
-- `make test`: **PASS** (`24 passed, 0 failed`)
-- Manual end-to-end smoke (title/new/save/load/town/dungeon): **Pending operator validation**
 
 ---
 

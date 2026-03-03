@@ -84,6 +84,39 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## Phase 10.2 — C128 Extended Memory Path ✅ COMPLETE (2026-03-03)
+
+**Objective:** Move C128 creature-tier runtime access off the fragile `$E000` live-read dependency and onto a Bank 1 staged data path, while preserving C64 behavior.
+
+**Completed steps:**
+1. **10.2.0 Baseline + invariants**
+   - Captured baseline suite status and defined no-regression checklist.
+2. **10.2.1 Access abstraction**
+   - Added C128 banked DB helper primitives (`mmu_safe_db_read/write_ptr0/ptr1`, bulk enter/exit).
+   - Added `test_db128` harness and integrated into `run_tests128.sh`.
+3. **10.2.2 Banked tier staging**
+   - Added Bank 1 DB region constants and tier staging metadata.
+   - Mirrored loaded tier payload from Bank 0 `$E000` to Bank 1 staging region.
+4. **10.2.3 Consumer migration**
+   - Migrated C128 tier name-table reads and `creature_get_name` tier paths to DB helper access.
+   - Kept C64 path behavior unchanged via compatibility wrappers.
+5. **10.2.4 State hardening**
+   - Added centralized `tier_invalidate_state`.
+   - Hardened overlay/string-bank invalidation and overlay load failure state handling.
+6. **10.2.5 Regression coverage**
+   - Added `test_tier128` suite (transition routing + tier metadata invalidation checks).
+   - Integrated into C128 automated harness.
+7. **10.2.6 Completion gates + docs**
+   - Re-ran full C64/C128 automated suites and synchronized plan documentation.
+
+**Automated gate results (final):**
+- `make test128`: **PASS** (`9 passed, 0 failed`)
+- `make test`: **PASS** (`24 passed, 0 failed`)
+
+**Manual validation:** Operator-reported runtime smoke is working at this stage (`"seems to WORK"`), and 10.2 is marked complete.
+
+---
+
 ## C3 — VDC Viewport Artifacts ✅ COMPLETE (2026-02-27)
 
 **Files:** `commodore/c128/dungeon_render_vdc.s`, `commodore/c128/screen_vdc.s`
