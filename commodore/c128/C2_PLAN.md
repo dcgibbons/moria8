@@ -88,7 +88,9 @@ C2 is complete only when all are true:
   - allow fast repeated taps without requiring long release windows.
 - Optional: add bounded repeat delay/rate if needed for held keys.
 - Current status:
-  - edge-transition state machine implemented in `input_get_key` with 2-sample stabilization,
+  - edge-transition state machine implemented in `input_get_key` with 2-sample press stabilization,
+  - key-release rearm is now single-sample (`0`) so same-key retaps are captured faster,
+  - held-key repeat was tested and explicitly removed (too sensitive for current UX target),
   - SHIFT detection moved inline into the main scan loop (removed extra pre-scan passes),
   - automated C128 harness remains green,
   - manual feel validation for `E`/rapid taps still required before marking complete.
