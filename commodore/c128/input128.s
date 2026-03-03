@@ -118,8 +118,11 @@ input_run_key_check:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Waits for any previously-held key to be released before detecting
-// a new keypress, ensuring each physical press fires exactly once.
+// Uses edge-transition detection with a 2-sample stability filter:
+// - sample must appear twice consecutively before being considered stable.
+// - returns on stable key-up -> key-down transitions only.
+// This improves responsiveness versus strict release-then-press loops while
+// avoiding single-scan phantom transitions.
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
@@ -128,19 +131,18 @@ input_get_key:
     tya
     pha                     // Save Y
 
-    // Phase 1: wait for release — don't re-report a still-held key
-!igk_release:
+!igk_wait:
     jsr cia_scan_petscii
-    cmp #$a0
-    bcs !igk_press+         // Ignore extended-line virtual keys in release gate
-    cmp #0
-    bne !igk_release-       // Key still held, keep waiting
+    cmp igk_last_sample
+    beq !igk_stable_sample+
+    sta igk_last_sample
+    jmp !igk_wait-
 
-    // Phase 2: wait for a new keypress
-!igk_press:
-    jsr cia_scan_petscii
-    cmp #0
-    beq !igk_press-         // No key yet
+!igk_stable_sample:
+    cmp igk_stable
+    beq !igk_wait-          // No stable transition
+    sta igk_stable
+    beq !igk_wait-          // Release edge; wait for next press edge
 
     sta igk_key
     pla
@@ -150,6 +152,8 @@ input_get_key:
     lda igk_key
     rts
 igk_key: .byte 0
+igk_last_sample: .byte 0
+igk_stable: .byte 0
 
 // cia_scan_petscii — Single CIA1 keyboard matrix scan
 // Drives each of 8 rows via $DC00, reads columns from $DC01.
