@@ -30,6 +30,9 @@
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
+| **OPT-1** | **MED** | Performance: O(1) Command Dispatch. Convert massive `cmp`/`bne` chain in `game_loop.s` to a jump table (array of function pointers). | Pending |
+| **OPT-2** | LOW | Performance: Bounding Box Math. Optimize `dungeon_los.s` room bounds checks to save instructions. | Pending |
+| **OPT-3** | **MED** | Performance: Visibility Updates. Cache room ID and only re-evaluate `update_visibility` room checks upon entering a new room to save per-turn overhead. | Pending |
 
 ### Investigation Tasks (R4)
 *(Moved to BUILDPLAN_HISTORY pending next cleanup)*
