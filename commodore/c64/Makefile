@@ -2,7 +2,6 @@
 #
 # Targets:
 #   make          Build moria8.prg (auto-downloads KickAssembler if needed)
-#   make run      Build and launch in VICE
 #   make rundisk  Build D64 + launch with true drive emulation
 #   make debug    Build + launch with VICE monitor watchpoints
 #   make test     Assemble + run all tests in VICE headless
@@ -56,7 +55,7 @@ VICE128      ?= x128
 RUN_FLAGS   = -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: all build run rundisk rundual debug test disk savedisk clean run128demo
+.PHONY: all build rundisk rundual debug test disk savedisk clean run128demo
 
 all: build
 
@@ -92,10 +91,6 @@ $(OUT)/monster.db.4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
 # Bootloader — chain-loads MORIA64 from disk
 $(BOOT_PRG): $(BOOT_SRC) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(BOOT_SRC) -o $(BOOT_PRG)
-
-# Launch in VICE emulator
-run: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS)
-	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
 
 # Launch with D64 disk image + true drive emulation (bypasses FileSystemDevice)
 rundisk: disk

@@ -1035,9 +1035,7 @@ creature_get_name:
     sta zp_ptr1_hi
     pla
     sta zp_ptr1
-    lda #1
-    sta cgn_src_banked
-    jmp !cgn_copy+
+    jmp !cgn_do_bank+
 
 !cgn_tier_c64:
     // C64: bank/read ptr from tier name arrays at $E000.

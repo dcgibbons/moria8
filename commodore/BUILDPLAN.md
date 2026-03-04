@@ -24,10 +24,12 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **R2** | **MED** | C128: In town, pressing `T` can corrupt top-of-screen text (garbled cyan text block appears instead of clean message output). Repro observed while normal gameplay rendering otherwise remains stable. | **New** |
+| **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
+| **R2** | **MED** | C128: Intermittent garbled text still appears when UI prompts/messages print (top-of-screen corruption during normal play; not fully deterministic). | **Open / Regression** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
+| FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
 
 ### Investigation Tasks (R4)
 *(Moved to BUILDPLAN_HISTORY pending next cleanup)*

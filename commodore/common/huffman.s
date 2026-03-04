@@ -55,6 +55,14 @@ huff_decode_string:
 // Clobbers: A, X, Y
 // ============================================================
 huff_decode_from_ptr:
+    // C128: KERNAL/IRQ can clobber low ZP pointer bytes during decode.
+    // Lock IRQs for the short decode window to keep pointer traversal stable.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !hdfp_no_lock+
+    php
+    sei
+!hdfp_no_lock:
     // Initialize bit reader
     lda #0
     sta hd_bit_mask            // Force load of first byte
@@ -80,7 +88,10 @@ huff_decode_from_ptr:
     lda #7
     sta hd_bit_mask
 !have_bit:
-    asl hd_cur_byte            // Shift left; bit 7 → carry. Modifies memory in-place.
+    lda hd_cur_byte            // C128 silicon bug workaround:
+    asl                        // DO NOT use RMW "asl hd_cur_byte" on C128.
+    sta hd_cur_byte            // The 8502 can corrupt RAM if VIC-II cycle
+                               // steals between 2MHz/1MHz on a RMW instruction.
 
     // Follow tree: carry clear = left, carry set = right
 hd_cur_node_smc:
@@ -114,6 +125,13 @@ hd_cur_node_smc:
     sta zp_ptr0
     lda #>hd_decode_buf
     sta zp_ptr0_hi
+
+    // Restore prior IRQ state if we locked on C128.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !hdfp_no_unlock+
+    plp
+!hdfp_no_unlock:
     rts
 
 // ============================================================
@@ -148,8 +166,34 @@ huff_append_combat:
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 huff_print_msg:
+    // C128 hotfix: two prompt IDs are intermittently corrupted in the
+    // Huffman path. Bypass decode for these IDs with static strings.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !hpm_normal+
+    cpx #64                   // HSTR_DF_DIRECTION
+    bne !hpm_not_dir+
+    lda #<hpm_df_direction_str
+    sta zp_ptr0
+    lda #>hpm_df_direction_str
+    sta zp_ptr0_hi
+    jmp msg_print
+!hpm_not_dir:
+    cpx #98                   // HSTR_PIW_TAKEOFF_PROMPT
+    bne !hpm_normal+
+    lda #<hpm_takeoff_prompt_str
+    sta zp_ptr0
+    lda #>hpm_takeoff_prompt_str
+    sta zp_ptr0_hi
+    jmp msg_print
+!hpm_normal:
     jsr huff_decode_string
     jmp msg_print              // Tail call — 6 bytes total
+
+hpm_df_direction_str:
+    .text "Direction?" ; .byte 0
+hpm_takeoff_prompt_str:
+    .text "Take off which item (a-h)?" ; .byte 0
 
 // ============================================================
 // Compressed string data (generated)

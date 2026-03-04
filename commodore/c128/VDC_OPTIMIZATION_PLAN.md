@@ -1,42 +1,44 @@
-# VDC Performance Optimization Plan (Phase 10.5 — REVISED)
+# VDC Performance Optimization Plan (C128)
 
-This plan replaces the previous version with technically verified optimizations based on the Phase 10.1 and C3 implementation baseline.
+I have analyzed the current C128 source tree, specifically `dungeon_render_vdc.s`, `screen_vdc.s`, and the `mmu_safe_map_read_ptr0` macro overhead. While some optimizations from the previous plan have been implemented (like early-exit dimming and pre-translated VDC colors), the core rendering loops still have significant bottlenecks.
 
-## Revised Root Cause Analysis
+## Proposed Changes
 
--   **I/O Throttling**: The VDC (8563) is the bottleneck. While the CPU runs at 2MHz, the VDC data port ($D601) requires a status-bit poll ($D600) between every write.
--   **Subroutine Overhead**: `jsr vdc_wait` adds 9 cycles (JSR+RTS) per byte. Over a full viewport refresh (1,444 bytes), this is ~13,000 wasted cycles.
--   **Per-Tile Arithmetic**: Calculating map coordinates for every tile (`clc/adc`) is more expensive than the per-row pointer lookups.
+### 1. Inline MMU Bank Switching in the Inner Loop
+Currently, `render_viewport` calls `MapRead_ptr0_y()` (which calls `mmu_safe_map_read_ptr0`) for every single tile in the `!col_loop`. 
+- `mmu_safe_map_read_ptr0` is a subroutine that calls `mmu_select_bank1` and `mmu_select_bank0`, resulting in **70 cycles** of overhead per tile (saving/restoring flags, multiple JSRs, etc.).
+- Over an 38x19 viewport (722 tiles), this is ~50,540 cycles spent just switching banks.
+- **Solution**: Replace the `MapRead_ptr0_y()` call in the inner `!col_loop` with a tight, inline MMU switch:
+  ```assembly
+  sei
+  lda #MMU_RAM_BANK1
+  sta MMU_CR
+  lda (zp_map_ptr),y
+  pha
+  lda #MMU_ALL_RAM
+  sta MMU_CR
+  cli
+  pla
+  sta zp_tile_tmp
+  ```
+- **Estimated Savings**: ~30,000 cycles per frame limit.
 
-## The Corrected Optimizations
+### 2. Fully Unroll the VDC Stream Loops
+The previous plan called for fully unrolling the 38-iteration character and attribute blasts. The current code uses a shared loop target (`bit / bpl / lda / sta / iny / cpy / bne`), which successfully eliminates the `jsr vdc_wait` overhead, but still spends 21 cycles per byte.
+- **Solution**: Use KickAssembler `.for` macros to fully unroll the 38 `lda / bit / bpl *-3 / sta` blocks for both the character stream and attribute stream.
+- **Estimated Savings**: Eliminates `iny/cpy/bne` (7 cycles * 38 bytes * 2 passes * 19 rows) ≈ 10,108 cycles per frame.
 
-### 1. Inlined VDC Wait and Unrolled Streaming
-Replace `jsr vdc_wait` and `jsr vdc_write_data` in the row-blasting loop with inlined code.
-- **Implementation**: Inline `bit $D600; bpl *-3; sta $D601` inside the loop.
-- **Unrolling**: Unroll the 38-iteration character and attribute blasts. This eliminates `iny/cpy/bne` overhead (another 7 cycles per byte).
-- **Benefit**: ~23,000 cycles saved per refresh.
+### 3. Avoid ZP Pointer Reloading per Column
+`render_viewport` reloads `zp_ptr0` with `rv_row_ptr_lo/hi` for *every* column because `monster_find_at` and `floor_item_find_at` clobber it.
+- **Solution**: Dedicate a new zero-page pointer (e.g., `zp_view_ptr` or configure `zp_ptr2` to be safe from clobbering) specifically for the map read in this loop. Load it once at the start of the `!row_loop`.
+- **Estimated Savings**: 15 cycles * 722 tiles ≈ 10,830 cycles per frame.
 
-### 2. Pre-Translated Tile Tables (Narrow Scope)
-Create `tile_vdc_colors` containing RGBI values for standard tiles.
-- **Implementation**: Look up these values during the base tile render path.
-- **Constraint**: Override paths (monsters, items, player, dimming) will still use the `vic_to_vdc_color` translation table to maintain code modularity.
+## Verification Plan
 
-### 3. Per-Tile Pointer "Sliding" (X-Offset Removal)
-Eliminate the `adc` for every tile in the `col_loop`.
-- **Implementation**: At the start of each row, set `zp_map_ptr` directly to `view_y_ptr + view_x`. 
-- **Effect**: The inner loop becomes a simple `lda (zp_map_ptr),y` where `y` increments from 0 to 37.
-- **Benefit**: ~7,000 cycles saved per refresh.
+### Automated Tests
+Run `make test` to ensure that no regression occurs in pathfinding, FOV, bounding box clipping, or other systems.
 
-### 4. Per-Row `dy` Early-Exit (Dimming Optimization)
-Replace the per-tile Chebyshev distance check with a per-row pre-check.
-- **Implementation**: At the start of the row loop, compute `dy = abs(map_y - player_y)`.
-- **Early Exit**: If `dy > light_radius`, flag the entire row as "Dimmed Only." This allows skipping monster/item checks and the `dx` distance check for the entire 38-column row.
-
-### 5. Unified Hardware Fill
-Utilize VDC Registers 24-30 for `screen_clear`. This is a verified speedup for UI-level operations.
-
-## Success Criteria
-
-- Viewport rendering performance exceeds 15 FPS during movement.
-- Zero redundant register selections or subroutine calls in the "Critical Path" (streaming loop).
-- Correct lighting/dimming logic maintained near map boundaries.
+### Manual Verification
+1. Run `make run` to launch the game in the VICE emulator.
+2. Observe the rendering speed while moving around the dungeon.
+3. Validate that tiles, monsters, and items continue to render properly with correct PETSCII characters and colors.

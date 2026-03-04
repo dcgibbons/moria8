@@ -21,6 +21,10 @@ msg_hist_idx:
     .byte 0                 // Current write index (0–7, wraps)
 msg_row1_col:
     .byte 0                 // Cursor column after printing on row 1
+msg_src_lo:
+    .byte 0                 // Stable copy of source string pointer (lo)
+msg_src_hi:
+    .byte 0                 // Stable copy of source string pointer (hi)
 
 // ============================================================
 // Subroutines
@@ -55,6 +59,13 @@ msg_init:
 //   flags = $03: Both rows full → show -MORE-, clear, print on row 0
 // Preserves: nothing
 msg_print:
+    // Cache source pointer in static RAM so C128 IRQ activity cannot
+    // clobber low-ZP pointer bytes before/during message handling.
+    lda zp_ptr0
+    sta msg_src_lo
+    lda zp_ptr0_hi
+    sta msg_src_hi
+
     lda zp_msg_flags
     cmp #MSG_PENDING | MSG_FULL
     beq !show_more+
@@ -77,6 +88,10 @@ msg_print:
     pha
     lda #COL_MSG_TEXT
     sta zp_text_color
+    lda msg_src_lo
+    sta zp_ptr0
+    lda msg_src_hi
+    sta zp_ptr0_hi
     jsr screen_put_string
     pla
     sta zp_text_color
@@ -84,6 +99,10 @@ msg_print:
     lda #MSG_PENDING
     sta zp_msg_flags
 
+    lda msg_src_lo
+    sta zp_ptr0
+    lda msg_src_hi
+    sta zp_ptr0_hi
     jmp msg_save_history
 
 !use_row1:
@@ -100,6 +119,10 @@ msg_print:
     pha
     lda #COL_MSG_TEXT
     sta zp_text_color
+    lda msg_src_lo
+    sta zp_ptr0
+    lda msg_src_hi
+    sta zp_ptr0_hi
     jsr screen_put_string
     pla
     sta zp_text_color
@@ -110,14 +133,18 @@ msg_print:
     lda #MSG_PENDING | MSG_FULL
     sta zp_msg_flags
 
+    lda msg_src_lo
+    sta zp_ptr0
+    lda msg_src_hi
+    sta zp_ptr0_hi
     jmp msg_save_history
 
 !show_more:
     // --- State 2: both rows full, 3rd message arriving ---
     // Save incoming message pointer (msg_show_more clobbers zp_ptr0)
-    lda zp_ptr0
+    lda msg_src_lo
     pha
-    lda zp_ptr0_hi
+    lda msg_src_hi
     pha
 
     jsr msg_show_more
@@ -182,33 +209,60 @@ msg_show_more:
 // Input: zp_ptr0 = original message pointer (still set from msg_print)
 // Preserves: nothing
 msg_save_history:
-    // Calculate destination: msg_history + (msg_hist_idx * 40)
+    // C128: keep history copy atomic so low-ZP pointer bytes used by
+    // (zp_ptr0)/(zp_ptr1) cannot be clobbered mid-copy by IRQ paths.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !msh_no_lock+
+    php
+    sei
+!msh_no_lock:
+    // Calculate destination: $msg_history + (msg_hist_idx * 40)
+    // using 16-bit math because msg_history is 320 bytes long
     lda msg_hist_idx
-    // Multiply by 40: x32 + x8
-    asl             // x2
-    asl             // x4
-    asl             // x8
-    sta zp_temp0
-    asl             // x16
-    asl             // x32
+    asl
+    asl
+    asl
+    sta zp_temp0     // x8 (lo)
     clc
-    adc zp_temp0    // x32 + x8 = x40
-    tax             // X = offset into history buffer
+    lda #0
+    adc #0
+    sta zp_temp1     // x8 (hi)
+
+    lda zp_temp0
+    asl
+    rol zp_temp1     // x16
+    asl
+    rol zp_temp1     // x32
+
+    clc
+    adc zp_temp0
+    sta zp_ptr1      // lo: x32 + x8 = x40
+    lda zp_temp1
+    adc #0
+    sta zp_ptr1_hi
+
+    clc
+    lda zp_ptr1
+    adc #<msg_history
+    sta zp_ptr1
+    lda zp_ptr1_hi
+    adc #>msg_history
+    sta zp_ptr1_hi
 
     // Copy up to 39 chars from source to history
     ldy #0
 !copy:
     lda (zp_ptr0),y
     beq !pad+               // Null terminator
-    sta msg_history,x
-    inx
+    sta (zp_ptr1),y
     iny
     cpy #MSG_HIST_LEN - 1
     bcc !copy-
 !pad:
-    // Null-terminate and pad with spaces
+    // Null-terminate
     lda #0
-    sta msg_history,x
+    sta (zp_ptr1),y
 
     // Advance history index (wrap at 8)
     lda msg_hist_idx
@@ -216,6 +270,12 @@ msg_save_history:
     adc #1
     and #MSG_HIST_COUNT - 1 // Wrap (8 = power of 2)
     sta msg_hist_idx
+
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !msh_no_unlock+
+    plp
+!msh_no_unlock:
     rts
 
 // ============================================================
