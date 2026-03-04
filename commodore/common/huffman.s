@@ -166,34 +166,8 @@ huff_append_combat:
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 huff_print_msg:
-    // C128 hotfix: two prompt IDs are intermittently corrupted in the
-    // Huffman path. Bypass decode for these IDs with static strings.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !hpm_normal+
-    cpx #64                   // HSTR_DF_DIRECTION
-    bne !hpm_not_dir+
-    lda #<hpm_df_direction_str
-    sta zp_ptr0
-    lda #>hpm_df_direction_str
-    sta zp_ptr0_hi
-    jmp msg_print
-!hpm_not_dir:
-    cpx #98                   // HSTR_PIW_TAKEOFF_PROMPT
-    bne !hpm_normal+
-    lda #<hpm_takeoff_prompt_str
-    sta zp_ptr0
-    lda #>hpm_takeoff_prompt_str
-    sta zp_ptr0_hi
-    jmp msg_print
-!hpm_normal:
     jsr huff_decode_string
     jmp msg_print              // Tail call — 6 bytes total
-
-hpm_df_direction_str:
-    .text "Direction?" ; .byte 0
-hpm_takeoff_prompt_str:
-    .text "Take off which item (a-h)?" ; .byte 0
 
 // ============================================================
 // Compressed string data (generated)
