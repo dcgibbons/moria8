@@ -53,6 +53,7 @@ run_symbol_placement_check() {
 from pathlib import Path
 import re
 sym = Path("main.sym").read_text().splitlines()
+main_source = Path("main.s").read_text().splitlines()
 labels = {}
 for line in sym:
     m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
@@ -60,9 +61,17 @@ for line in sym:
         continue
     labels[m.group(1)] = int(m.group(2), 16)
 
+assert_guards = set()
+for line in main_source:
+    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\b", line)
+    if m:
+        assert_guards.add(m.group(1))
+
 required = [
     "game_over_prompt",
+    "game_over_prompt_end",
     "game_over_str",
+    "game_over_str_end",
     "title_show_sysinfo",
     "tramp_reu_show_status",
     "tramp_ui_equip_display",
@@ -75,6 +84,7 @@ required = [
 ]
 bad = []
 missing = []
+missing_asserts = []
 for name in required:
     if name not in labels:
         missing.append(name)
@@ -84,12 +94,18 @@ for name in required:
 
 # Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
 for name, addr in labels.items():
-    if name.startswith("tramp_") and addr >= 0xD000:
+    if not name.startswith("tramp_"):
+        continue
+    if name not in assert_guards:
+        missing_asserts.append(name)
+    if addr >= 0xD000:
         bad.append((name, addr))
 
-if missing or bad:
+if missing or bad or missing_asserts:
     if missing:
         print("missing:" + ",".join(missing))
+    if missing_asserts:
+        print("missing_asserts:" + ",".join(sorted(missing_asserts)))
     for name, addr in bad:
         print(f"high:{name}=${addr:04X}")
     raise SystemExit(1)

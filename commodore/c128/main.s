@@ -612,6 +612,7 @@ exit_trampoline:
 // ============================================================
 game_over_str:
     .text "R)EBOOT S)TART Q)UIT" ; .byte 0
+game_over_str_end:
 
 game_over_prompt:
     jsr screen_clear
@@ -638,6 +639,7 @@ game_over_prompt:
     jmp exit_trampoline         // Unified C128 behavior: R == Q
 !gop_restart:
     jmp restart_entry
+game_over_prompt_end:
 
 // ============================================================
 // Entry point
@@ -1100,6 +1102,12 @@ banked_payload_end:
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
 .assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
+.assert "UI enter trampoline stays below I/O hole", tramp_ui_enter < $D000, true
+.assert "UI exit trampoline stays below I/O hole", tramp_ui_exit < $D000, true
+.assert "UI help display trampoline stays below I/O hole", tramp_ui_help_display < $D000, true
+.assert "UI char display trampoline stays below I/O hole", tramp_ui_char_display < $D000, true
+.assert "UI inventory display trampoline stays below I/O hole", tramp_ui_inv_display < $D000, true
+.assert "UI equip display trampoline stays below I/O hole", tramp_ui_equip_display < $D000, true
 .assert "Store trampoline init stays below I/O hole", tramp_store_init_all < $D000, true
 .assert "Store trampoline restock stays below I/O hole", tramp_store_restock_all < $D000, true
 .assert "Store trampoline enter stays below I/O hole", tramp_store_enter < $D000, true
@@ -1107,10 +1115,23 @@ program_end:
 .assert "Game-over trampoline stays below I/O hole", tramp_game_over < $D000, true
 .assert "Ego damage trampoline stays below I/O hole", tramp_ego_apply_damage < $D000, true
 .assert "Ego AC trampoline stays below I/O hole", tramp_ego_get_ac_bonus < $D000, true
+.assert "Level-generate trampoline stays below I/O hole", tramp_level_generate < $D000, true
+.assert "Assign-special-room trampoline stays below I/O hole", tramp_assign_special_room < $D000, true
+.assert "Vault-seal-entrance trampoline stays below I/O hole", tramp_vault_seal_entrance < $D000, true
+.assert "Spawn-special-room-monsters trampoline stays below I/O hole", tramp_spawn_special_room_monsters < $D000, true
+.assert "Spawn-nest-gold trampoline stays below I/O hole", tramp_spawn_nest_gold < $D000, true
+.assert "Find-special-room trampoline stays below I/O hole", tramp_find_special_room < $D000, true
+.assert "Special-room epilogue trampoline stays below I/O hole", tramp_sr_epilogue < $D000, true
+.assert "Dig-ability trampoline stays below I/O hole", tramp_dig_ability < $D000, true
+.assert "Roll-ego-type trampoline stays below I/O hole", tramp_roll_ego_type < $D000, true
+.assert "Ego-append-suffix trampoline stays below I/O hole", tramp_ego_append_suffix < $D000, true
+.assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
+.assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
+.assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true
 
 
 // ============================================================

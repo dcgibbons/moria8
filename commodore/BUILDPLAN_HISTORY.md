@@ -155,6 +155,40 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## A8 — C128 I/O-Hole Placement Hardening ✅ COMPLETE (2026-03-05)
+
+### Objective
+- Eliminate C128 layout brittleness where critical code/data can drift into `$D000-$DFFF` (I/O hole), causing CPU JAM/reboot failures.
+- Enforce both compile-time placement gating and harness-level policy checks.
+
+### Implemented Scope
+1. `c128/main.s` compile-time hardening:
+   - Added missing `< $D000` asserts for previously unguarded trampolines:
+     - `tramp_ui_enter`, `tramp_ui_exit`, `tramp_ui_help_display`, `tramp_ui_char_display`, `tramp_ui_inv_display`, `tramp_ui_equip_display`
+     - `tramp_level_generate`, `tramp_assign_special_room`, `tramp_vault_seal_entrance`, `tramp_spawn_special_room_monsters`, `tramp_spawn_nest_gold`, `tramp_find_special_room`, `tramp_sr_epilogue`
+     - `tramp_roll_ego_type`, `tramp_ego_append_suffix`, `tramp_ego_put_suffix`
+   - Added `tramp_dig_ability` assert after harness coverage gate identified it as unguarded.
+2. End-boundary guards for non-trampoline high-risk region:
+   - Added `game_over_str_end` and `game_over_prompt_end` labels.
+   - Added asserts requiring both end labels `< $D000` to prevent “start below hole but extend into hole” regressions.
+3. `c128/run_tests128.sh` (`main128_layout`) hardening:
+   - Added parsing of `main.s` to collect symbols guarded by `.assert ... < $D000`.
+   - Added policy gate: fail if any `tramp_*` symbol in `main.sym` lacks compile-time assert coverage.
+   - Extended required critical symbols to include `game_over_prompt_end` and `game_over_str_end`.
+   - Kept existing runtime address checks requiring required symbols and all `tramp_*` symbols to remain `< $D000`.
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+  - `main128_asm`: PASS (`Made 98 asserts, 0 failed`)
+  - `main128_layout`: PASS
+
+### Result
+- A8 policy is now enforced at two levels:
+  1. Assembler asserts (fast fail at build time).
+  2. Harness coverage + symbol placement checks (regression gate for future additions).
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).

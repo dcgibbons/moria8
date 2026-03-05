@@ -12,7 +12,7 @@
 ### Build Stats
 
 - **Test suites:** C64: 24 runtime suites, C128: 14 harness suites
-- **Compile-time asserts:** 79 (C128) / 70 (C64)
+- **Compile-time asserts:** 98 (C128) / 70 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
 - **C128 integration stability:** New game -> character creation -> town -> first dungeon entry is validated after C4 stabilization fixes.
@@ -27,7 +27,6 @@
 | **C3** | **HIGH** | C128: `wear` command prompt has follow-up key handling regression (selection key cancels/consumes incorrectly instead of waiting for fresh input release). | **Open / Regression** |
 | **C4** | **HIGH** | C128: Audit all input commands with follow-up key prompts (`wear/take-off/look/drop/read/quaff/aim/use/doors/tunnel/targeting/menu` paths) for stale-key consumption and missing release-wait gates; add regression tests per command family. | **Planned Audit** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
-| **A8** | **HIGH** | C128 layout brittleness: critical entrypoints can drift into `$D000-$DFFF` (I/O hole) when code grows, causing CPU JAM/reboot paths that unit tests may miss unless symbol placement is gated. | **In Progress (hardening)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -49,6 +48,7 @@
 |---|----------|-------------|-----------------|
 | **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
 | **A7** | **HIGH** | Compile-time split hardening: removed runtime `zp_machine_type` gating from common hot paths and replaced with `#if C128`/`#if !C128`. | **2026-03-05** |
+| **A8** | **HIGH** | C128 layout hardening: enforced `<$D000` placement asserts for all `tramp_*`, added game-over end-boundary guards, and added harness assert-coverage enforcement. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -90,7 +90,6 @@ These files in `common/` contain minor C64-specific code that will need paramete
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
 2. Fix `wear` command follow-up key handling regression (C3).
 3. Complete C128 input prompt audit and regression coverage (C4).
-4. Complete A8 hardening sweep: require all `tramp_*` and title/reu entrypoints to remain below `$D000` in both assembler asserts and test harness symbol checks.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
