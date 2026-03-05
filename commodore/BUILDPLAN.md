@@ -7,12 +7,12 @@
 
 ## Current State (2026-03-05, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption is now resolved** with title-path bank fixes and low-memory pinning of critical trampolines.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, and C2 keyboard responsiveness/matrix stabilization are resolved.**
 
 ### Build Stats
 
 - **Test suites:** C64: 24 runtime suites, C128: 14 harness suites
-- **Compile-time asserts:** 98 (C128) / 70 (C64)
+- **Compile-time asserts:** 101 (C128) / 70 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
 - **C128 integration stability:** New game -> character creation -> town -> first dungeon entry is validated after C4 stabilization fixes.
@@ -23,7 +23,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **C2** | **BLOCKER** | C128: Keyboard responsiveness parity remains below C64 in rapid command entry (`E` and fast taps). Line 8/9 scan path exists; finalize responsiveness tuning + manual UX validation before closure. | **High Priority** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
@@ -50,6 +49,7 @@
 | **C3** | **HIGH** | C128 `wear` prompt stale-key regression fixed by adding release-wait gate before selection read; harness guard added to prevent regression. | **2026-03-05** |
 | **C4** | **HIGH** | C128 follow-up prompt audit complete: added release-wait gates for drop/quaff/read/aim/use/gain/throw + menu/recall dismiss paths, with expanded harness chain checks. | **2026-03-05** |
 | **C5** | **BLOCKER** | C128 help (`?`) corruption/JAM fixed by C128-safe help renderer path and help code/data relocation out of overlay window, with assert+harness placement gates. | **2026-03-05** |
+| **C2** | **BLOCKER** | C128 keyboard matrix + responsiveness stabilization complete: rows 8/9 scan path, keypad/ESC mappings, asymmetric debounce tuning, and regression coverage validated. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -85,10 +85,10 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 ---
 
-### Priority Triage (updated 2026-02-27)
+### Priority Triage (updated 2026-03-05)
 
 **High priority (C128 Port Stability):**
-1. Add Line 8 (keypad/extra keys) scanning support (C2).
+1. No open C128 blocker after C2/C5 closure; next work item is C128 performance (P1).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

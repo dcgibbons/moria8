@@ -286,6 +286,37 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## C2 — C128 Keyboard Matrix + Responsiveness Stabilization ✅ COMPLETE (2026-03-05)
+
+### Objective
+- Complete C128 keyboard matrix coverage and close the remaining responsiveness gap versus C64 for rapid command entry.
+
+### Implemented Scope
+1. Extended matrix scanning and decode coverage
+   - `input128.s` scans rows 0–7 via CIA and rows 8/9 via `$D02F` line drive.
+   - Scan decode table expanded to 80 entries.
+   - Keypad movement/rest and ESC mapping integrated in `petscii_to_command`.
+2. Responsiveness tuning
+   - `input_process_sample` updated to asymmetric debounce:
+     - idle→press accepted on first sample for lower latency.
+     - release remains 2-sample stabilized to avoid bounce-triggered repeats.
+3. Regression coverage
+   - `tests/test_input128.s` updated to assert the new edge policy.
+   - Existing mapping and scanner restore invariants retained and passing.
+4. Documentation sync
+   - `BUILDPLAN.md` and `c128/C2_PLAN.md` updated to reflect resolved status and current behavior.
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+  - includes `input128` suite and full harness gates.
+- Manual operator validation accepted as sufficient for closure.
+
+### Result
+- C2 closed with scan completeness + tuned responsiveness + test guardrails.
+- Future keyboard findings are tracked as new discrete bugs.
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).
