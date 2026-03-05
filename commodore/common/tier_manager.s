@@ -262,9 +262,7 @@ tier_load:
     sbc #0
     sta tier_name_lo_addr+1
 
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !tl_no_c128_stage+
+#if C128
     // C128 10.2.2: mirror loaded tier payload from $E000 into Bank 1 DB region.
     // Runtime consumers still use the $E000 path until 10.2.3 migration.
     lda #<BANK1_DB_BASE
@@ -277,13 +275,11 @@ tier_load:
     lda tier_size_hi,x
     sta c128_tier_db_size_hi
     jsr c128_stage_tier_to_bank1
-!tl_no_c128_stage:
+#endif
 
     // C128 10.2.3: runtime name tables should point at Bank 1 staged payload,
     // not at temporary $E000 load staging.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !tl_no_c128_name_override+
+#if C128
     clc
     lda c128_tier_db_base_lo
     adc c128_tier_db_size_lo
@@ -307,7 +303,7 @@ tier_load:
     lda tier_name_hi_addr+1
     sbc #0
     sta tier_name_lo_addr+1
-!tl_no_c128_name_override:
+#endif
 
     pla
     sta $01                     // Restore bank config

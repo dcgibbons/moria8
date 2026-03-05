@@ -25,7 +25,6 @@
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
-| **A7** | **HIGH** | Architecture: Common-path runtime machine checks (`zp_machine_type`) still gate C64/C128 behavior in several hot paths. Port policy is compile-time split only (`#if C128` / `#if !C128`) to avoid runtime branch cost and mixed-path regressions. | **Planned** |
 | **A8** | **HIGH** | C128 layout brittleness: critical entrypoints can drift into `$D000-$DFFF` (I/O hole) when code grows, causing CPU JAM/reboot paths that unit tests may miss unless symbol placement is gated. | **In Progress (hardening)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
@@ -47,6 +46,7 @@
 | # | Severity | Description | Resolution Date |
 |---|----------|-------------|-----------------|
 | **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
+| **A7** | **HIGH** | Compile-time split hardening: removed runtime `zp_machine_type` gating from common hot paths and replaced with `#if C128`/`#if !C128`. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -59,7 +59,7 @@
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
-| 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Planned** |
+| 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
 
 ---
 

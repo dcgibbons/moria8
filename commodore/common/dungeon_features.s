@@ -565,11 +565,9 @@ get_direction_target:
 
     // C128: ensure the command key that triggered the action is released so
     // the direction prompt consumes a fresh follow-up keypress.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !gdt_skip_release+
+#if C128
     jsr input_wait_release
-!gdt_skip_release:
+#endif
 
     // Wait for a keypress
     jsr input_get_key

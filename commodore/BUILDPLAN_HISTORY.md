@@ -114,6 +114,47 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## A7 — Compile-Time Split Hardening ✅ COMPLETE (2026-03-05)
+
+### Objective
+- Remove runtime machine-type gating in `common/` hot paths (`zp_machine_type` checks) and enforce compile-time platform dispatch (`#if C128` / `#if !C128`).
+
+### Implemented Scope
+1. `common/player_items.s`
+   - Converted C128 key-release waits (`show_inv_and_restore`, `show_equip_and_restore`, `item_takeoff`) to compile-time `#if C128`.
+2. `common/ui_messages.s`
+   - Converted `msg_save_history` lock/unlock (`php;sei` / `plp`) from runtime C128 checks to compile-time `#if C128`.
+3. `common/string_bank.s`
+   - Converted VIC-II bank restore after KERNAL load to C64-only `#if !C128`.
+4. `common/title_sysinfo_banked.s`
+   - Converted machine label selection from runtime flag test to compile-time branch.
+5. `common/overlay.s`
+   - Converted disk-load VIC-II bank restore path to C64-only compile-time branch.
+6. `common/tier_manager.s`
+   - Converted C128 tier staging and Bank 1 name-table override logic in `tier_load` to compile-time C128 blocks.
+7. `common/monster.s`
+   - Converted `creature_get_name` C64/C128 dispatch from runtime machine checks to compile-time paths.
+8. `common/dungeon_features.s`
+   - Converted direction-prompt key-release wait to compile-time C128 branch.
+
+### Sweep Result
+- `rg` scan confirms **no remaining runtime `zp_machine_type` / `MACHINE_C128` checks in `commodore/common/`**.
+- Remaining references exist only in platform config, zeropage symbol declaration, tests, and documentation.
+
+### Code Size Impact (baseline `af6b1c1` -> post-A7)
+1. **C64 build**
+   - Default segment end: `$C75D` -> `$C681` (**-220 bytes**)
+   - Banked payload: `3992` -> `3985` (**-7 bytes**)
+2. **C128 build**
+   - Default segment end: `$E25E` -> `$E1B8` (**-166 bytes**)
+   - Banked payload: `4666` -> `4650` (**-16 bytes**)
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+- `make -C commodore/c64 test`: **24 passed, 0 failed**
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).

@@ -17,17 +17,16 @@ title_show_sysinfo_banked:
 !:  stx zp_cursor_col
 
     // Machine type: X = 0(C64), 1(C128), 2(SX-64)
-    ldx #0                      // Default: C64
-    lda zp_machine_type
-    bmi !c128+
+#if C128
+    ldx #1                      // C128 build
+#else
+    ldx #0                      // C64 default; check for SX-64
     // C64 — check for SX-64 (KERNAL_REV = $43)
     lda tsi_krev_cached         // Cached by trampoline before banking
     cmp #$43
     bne !pm+
     ldx #2                      // SX-64
-    .byte $2c                   // BIT abs — skip ldx #1
-!c128:
-    ldx #1
+#endif
 !pm:
     lda tsi_mach_lo,x
     ldy tsi_mach_hi,x

@@ -121,17 +121,14 @@ overlay_load_disk:
     jsr $ffc3               // KERNAL CLOSE — release file #2
     jsr $ffcc               // KERNAL CLRCHN — restore default I/O
     
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    beq !ol_done+
-    
+#if !C128
     // Restore VIC-II bank 0 — KERNAL serial I/O uses CIA2 ($DD00)
     // bits 3-5 for the serial bus; bits 0-1 select VIC bank.
     // Ensure bank 0 ($0000-$3FFF) so VIC sees screen RAM at $0400.
     lda $dd00
     ora #%00000011
     sta $dd00
-
+#endif
 !ol_done:
     plp                     // Restore carry
     :ExitKernal()

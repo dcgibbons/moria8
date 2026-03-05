@@ -1006,30 +1006,29 @@ creature_get_name:
 !:  cmp #$e0
     bcs !+
     jmp !cgn_setup_normal+      // Normal RAM pointer
-!:  // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
+ !:  // $E0xx pointer, tier still at $E000 — bank out KERNAL and read
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    beq !cgn_do_bank_c128+
+#if C128
+    jmp !cgn_do_bank_c128+
+#else
     jmp !cgn_do_bank_c64+
+#endif
+#if C128
 !cgn_do_bank_c128:
     lda #1
     sta cgn_src_banked
     jmp !cgn_translate_b1_ptr+
+#endif
 
 !cgn_tier_indexed:
     // --- Tier creature: read ptr from active tier name tables ---
     // C128: read from Bank 1 staged DB via helper wrappers.
     // C64: existing $E000 banked read path.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !cgn_tier_c64+
 #if C128
     php
     sei
-#endif
     txa
     tay
     lda tier_name_lo_addr
@@ -1046,12 +1045,13 @@ creature_get_name:
     sta zp_ptr1_hi
     pla
     sta zp_ptr1
-#if C128
     plp
-#endif
     lda #1
     sta cgn_src_banked
     jmp !cgn_translate_b1_ptr+
+#else
+    jmp !cgn_tier_c64+
+#endif
 
 !cgn_translate_b1_ptr:
 #if C128
@@ -1065,6 +1065,7 @@ creature_get_name:
 #endif
     jmp !cgn_copy+
 
+#if !C128
 !cgn_tier_c64:
     // C64: bank/read ptr from tier name arrays at $E000.
     txa
@@ -1088,14 +1089,17 @@ creature_get_name:
     pla
     sta zp_ptr1
     jmp !cgn_copy+
+#endif
 
 !cgn_do_bank_c64:
+#if !C128
     // C64: bank out KERNAL for $E0xx pointer reads
     sei
     lda $01
     pha
     :BankOutKernal()
     jmp !cgn_copy+
+#endif
 
 !cgn_no_tier:
     // No tier loaded — cr_name tables only (can't resolve $E0xx)

@@ -215,12 +215,10 @@ msg_show_more:
 msg_save_history:
     // C128: keep history copy atomic so low-ZP pointer bytes used by
     // (zp_ptr0)/(zp_ptr1) cannot be clobbered mid-copy by IRQ paths.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !msh_no_lock+
+#if C128
     php
     sei
-!msh_no_lock:
+#endif
     // Calculate destination: $msg_history + (msg_hist_idx * 40)
     // using 16-bit math because msg_history is 320 bytes long
     lda msg_hist_idx
@@ -275,11 +273,9 @@ msg_save_history:
     and #MSG_HIST_COUNT - 1 // Wrap (8 = power of 2)
     sta msg_hist_idx
 
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !msh_no_unlock+
+#if C128
     plp
-!msh_no_unlock:
+#endif
     rts
 
 // ============================================================

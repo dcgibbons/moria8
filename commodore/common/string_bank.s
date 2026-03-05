@@ -56,14 +56,12 @@ bank_load_recall:
     jsr $ffc3               // KERNAL CLOSE
     jsr $ffcc               // KERNAL CLRCHN
 
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    beq !bl_done+
-
+#if !C128
     // C64: restore VIC-II bank 0 after serial I/O.
     lda $dd00
     ora #%00000011
     sta $dd00
+#endif
 !bl_done:
     plp                     // Restore carry
     :ExitKernal()
