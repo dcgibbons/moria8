@@ -15,10 +15,6 @@
 // Colors: borders GREY, title/footer WHITE, headers CYAN,
 //         keys WHITE, descriptions LGREY
 
-// Import string data (lives in main RAM; #import has include guards
-// so this is a no-op when main.s has already imported it)
-#import "ui_help_data.s"
-
 // ============================================================
 // Constants
 // ============================================================
@@ -182,7 +178,14 @@ help_draw_line:
     beq !hdl_hdr+
     cmp #CT
     beq !hdl_tab+
-    // Regular character — write to screen and color RAM
+    // Regular character
+#if C128
+    // C128/VDC: must write through screen API (no CPU-mapped screen RAM).
+    jsr screen_put_char
+    inc zp_temp0
+    jmp !hdl_loop-
+#else
+    // C64/VIC-II: direct screen/color RAM stores.
     ldy #0
     sta (zp_screen_lo),y
     lda zp_text_color
@@ -195,6 +198,7 @@ help_draw_line:
     inc zp_color_hi
 !:  inc zp_temp0
     jmp !hdl_loop-
+#endif
 !hdl_desc:
     lda #COL_LGREY
     sta zp_text_color

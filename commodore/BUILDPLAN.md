@@ -24,7 +24,6 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **C5** | **BLOCKER** | C128: `?` Help command renders garbled title text and then CPU JAMs at `$1C09` after/during help screen flow. | **Open / Regression** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
@@ -50,6 +49,7 @@
 | **A8** | **HIGH** | C128 layout hardening: enforced `<$D000` placement asserts for all `tramp_*`, added game-over end-boundary guards, and added harness assert-coverage enforcement. | **2026-03-05** |
 | **C3** | **HIGH** | C128 `wear` prompt stale-key regression fixed by adding release-wait gate before selection read; harness guard added to prevent regression. | **2026-03-05** |
 | **C4** | **HIGH** | C128 follow-up prompt audit complete: added release-wait gates for drop/quaff/read/aim/use/gain/throw + menu/recall dismiss paths, with expanded harness chain checks. | **2026-03-05** |
+| **C5** | **BLOCKER** | C128 help (`?`) corruption/JAM fixed by C128-safe help renderer path and help code/data relocation out of overlay window, with assert+harness placement gates. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -88,8 +88,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-02-27)
 
 **High priority (C128 Port Stability):**
-1. Fix Help (`?`) garble + CPU JAM at `$1C09` (C5).
-2. Add Line 8 (keypad/extra keys) scanning support (C2).
+1. Add Line 8 (keypad/extra keys) scanning support (C2).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

@@ -247,6 +247,45 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## C5 — C128 Help (`?`) Garble + CPU JAM ✅ COMPLETE (2026-03-05)
+
+### Symptom
+- Pressing `?` in gameplay showed a garbled help title/body and could JAM (reported at `$1C09`).
+
+### Root Causes
+1. `ui_help.s` used C64-style direct RAM writes (`sta (zp_screen_lo),y` / `sta (zp_color_lo),y`) in `help_draw_line`.
+   - On C128 VDC, `screen_set_cursor` pointers are VDC addresses, not CPU-mapped screen/color RAM.
+   - Result: memory corruption and unstable help rendering path.
+2. Help routine/data placement was vulnerable to overlay overlap.
+   - The `$E000-$EFFF` window is runtime overlay territory; help symbols in that range can be overwritten.
+
+### Fixes
+1. `common/ui_help.s`
+   - Added compile-time split in `help_draw_line`:
+     - `#if C128`: render chars via `jsr screen_put_char` (VDC-safe path).
+     - `#else`: keep direct VIC-II RAM writes for C64.
+2. `c128/main.s`
+   - Reordered banked imports so `ui_help.s` and `ui_help_data.s` link in safe high banked space.
+   - Added asserts:
+     - `ui_help_display >= $F000`
+     - `help_title_str >= $F000`
+     - `help_lines >= $F000`
+3. `c128/run_tests128.sh`
+   - `main128_layout` now enforces help code/data are outside the `$E000-$EFFF` overlay window.
+   - `prompt_irq_guard` now enforces the C128/C64 split in `ui_help.s` (C128 uses `screen_put_char`, C64 keeps direct RAM path).
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+  - `main128_asm`: PASS (`Made 101 asserts, 0 failed`)
+  - `main128_layout`: PASS
+  - `prompt_irq_guard`: PASS
+- Verified symbol placement:
+  - `ui_help_display = $F5A2`
+  - `help_title_str = $F6C6`
+  - `help_lines = $F6D8`
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).

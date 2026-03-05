@@ -1083,11 +1083,11 @@ banked_payload:
     #import "../common/reu_loading_banked.s"
     #import "../common/string_bank_banked.s"
     #import "../common/ui_recall.s"
-    #import "../common/ui_help_data.s"
-    #import "../common/ui_help.s"
     #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
+    #import "../common/ui_help.s"
+    #import "../common/ui_help_data.s"
     #import "../common/special_rooms.s"
     #import "../common/ego_items.s"
 
@@ -1128,6 +1128,9 @@ program_end:
 .assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
+.assert "Help renderer stays out of overlay window", ui_help_display >= $F000, true
+.assert "Help title text stays out of overlay window", help_title_str >= $F000, true
+.assert "Help content table stays out of overlay window", help_lines >= $F000, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true

@@ -92,6 +92,22 @@ for name in required:
     if labels[name] >= 0xD000:
         bad.append((name, labels[name]))
 
+for name in ("help_title_str", "help_lines"):
+    if name not in labels:
+        missing.append(name)
+        continue
+    # Help data must live outside the $E000-$EFFF overlay window.
+    if labels[name] < 0xF000:
+        bad.append((name, labels[name]))
+
+for name in ("ui_help_display",):
+    if name not in labels:
+        missing.append(name)
+        continue
+    # Help renderer code must not execute from $E000-$EFFF overlay window.
+    if labels[name] < 0xF000:
+        bad.append((name, labels[name]))
+
 # Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
 for name, addr in labels.items():
     if not name.startswith("tramp_"):
@@ -141,6 +157,7 @@ item_mod = (root / "common" / "item.s").read_text().splitlines()
 throw_mod = (root / "common" / "throw.s").read_text().splitlines()
 loop_mod = (root / "common" / "game_loop.s").read_text().splitlines()
 dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
+help_mod = (root / "common" / "ui_help.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -300,6 +317,15 @@ for name, lines, chain in required_chains:
     if not has_ordered_chain(lines, chain):
         print(f"{name} must gate with input_wait_release before input_get_key")
         raise SystemExit(1)
+
+if not has_ordered_chain(help_mod, [
+    "#if C128",
+    "jsr screen_put_char",
+    "#else",
+    "sta (zp_screen_lo),y",
+]):
+    print("ui_help_draw_line must use screen_put_char on C128 and keep direct RAM path only for C64")
+    raise SystemExit(1)
 
 print("ok")
 PY
