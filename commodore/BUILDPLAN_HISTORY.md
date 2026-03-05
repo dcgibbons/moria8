@@ -218,6 +218,35 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## C4 — C128 Follow-Up Prompt/Input Audit ✅ COMPLETE (2026-03-05)
+
+### Objective
+- Eliminate stale-key consumption across C128 follow-up prompt flows and lock in regression guards for command families that prompt for a second key.
+
+### Implemented Scope
+1. Added C128 release-wait gating (`#if C128 -> jsr input_wait_release`) before follow-up `input_get_key` in:
+   - `common/item.s`: `item_drop`
+   - `common/player_items.s`: `item_quaff`, `item_read_scroll`, `item_aim_wand`, `item_use_staff`, `item_gain_spell`
+   - `common/throw.s`: `throw_item`
+2. Added C128 release-wait gating in command UI dismiss paths:
+   - `common/game_loop.s`: `CMD_CHAR_INFO`, `CMD_HELP`, `CMD_INVENTORY`, `CMD_EQUIPMENT`, recall prompt input, recall-screen dismiss input
+3. Expanded C128 harness structural checks (`run_tests128.sh`, `prompt_irq_guard`):
+   - Added ordered-chain checks enforcing `huff_print_msg -> input_wait_release -> input_get_key` for audited prompt commands.
+   - Added ordered-chain checks for menu/recall dismiss paths requiring `input_wait_release` before `input_get_key`.
+   - Kept existing direction prompt gate coverage (`get_direction_target`) in the same chain-style enforcement.
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+  - `main128_asm`: PASS (`Made 98 asserts, 0 failed`)
+  - `main128_layout`: PASS
+  - `prompt_irq_guard`: PASS
+
+### Result
+- C128 follow-up key behavior is now consistently release-gated across the audited command/menu families.
+- Harness now fails if any audited path drops the release gate ordering.
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).

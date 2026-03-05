@@ -137,6 +137,9 @@ import re
 root = Path("..").resolve()
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
 items = (root / "common" / "player_items.s").read_text().splitlines()
+item_mod = (root / "common" / "item.s").read_text().splitlines()
+throw_mod = (root / "common" / "throw.s").read_text().splitlines()
+loop_mod = (root / "common" / "game_loop.s").read_text().splitlines()
 dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
@@ -195,18 +198,108 @@ if not has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg"):
     print("item_takeoff prompt is not using Huffman print path")
     raise SystemExit(1)
 
-if not has_ordered_chain(items, [
-    "ldx #HSTR_PIW_WEAR_PROMPT",
-    "jsr huff_print_msg",
-    "jsr input_wait_release",
-    "jsr input_get_key",
-]):
-    print("item_wear prompt must gate with input_wait_release before input_get_key")
-    raise SystemExit(1)
+required_chains = [
+    ("item_wear", items, [
+        "ldx #HSTR_PIW_WEAR_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_takeoff", items, [
+        "ldx #HSTR_PIW_TAKEOFF_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_quaff", items, [
+        "ldx #HSTR_PIQ_QUAFF_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_read_scroll", items, [
+        "ldx #HSTR_PIQ_READ_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_aim_wand", items, [
+        "ldx #HSTR_PIW_AIM_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_use_staff", items, [
+        "ldx #HSTR_PIW_USE_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_gain_spell", items, [
+        "ldx #HSTR_IGS_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("item_drop", item_mod, [
+        "ldx #HSTR_IDR_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("throw_item", throw_mod, [
+        "ldx #HSTR_TW_PROMPT",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("get_direction_target", dfeat, [
+        "ldx #HSTR_DF_DIRECTION",
+        "jsr huff_print_msg",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_inventory_dismiss", loop_mod, [
+        "cmp #CMD_INVENTORY",
+        "jsr tramp_ui_inv_display",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_equipment_dismiss", loop_mod, [
+        "cmp #CMD_EQUIPMENT",
+        "jsr tramp_ui_equip_display",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_help_dismiss", loop_mod, [
+        "cmp #CMD_HELP",
+        "jsr tramp_ui_help_display",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_char_info_dismiss", loop_mod, [
+        "cmp #CMD_CHAR_INFO",
+        "jsr tramp_ui_char_display",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_recall_prompt", loop_mod, [
+        "cmp #CMD_RECALL",
+        "jsr screen_put_string",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+    ("cmd_recall_dismiss", loop_mod, [
+        "jsr tramp_ui_recall",
+        "jsr input_wait_release",
+        "jsr input_get_key",
+    ]),
+]
 
-if not has_pair(dfeat, "ldx #HSTR_DF_DIRECTION", "jsr huff_print_msg"):
-    print("get_direction_target prompt is not using Huffman print path")
-    raise SystemExit(1)
+for name, lines, chain in required_chains:
+    if not has_ordered_chain(lines, chain):
+        print(f"{name} must gate with input_wait_release before input_get_key")
+        raise SystemExit(1)
 
 print("ok")
 PY

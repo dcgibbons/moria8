@@ -1185,6 +1185,11 @@ item_drop:
     ldx #HSTR_IDR_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     // Wait for keypress
     jsr input_get_key
 

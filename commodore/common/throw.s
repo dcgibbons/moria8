@@ -29,6 +29,11 @@ throw_item:
     ldx #HSTR_TW_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     jsr input_get_key
 
     // '?' shows inventory (all items) and re-prompts

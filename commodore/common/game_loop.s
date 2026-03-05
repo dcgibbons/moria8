@@ -238,6 +238,9 @@ main_loop:
     cmp #CMD_CHAR_INFO
     bne !not_char+
     jsr tramp_ui_char_display
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     // Redraw map on return
     jsr screen_clear
@@ -250,6 +253,9 @@ main_loop:
     jsr tramp_ui_help_display
     lda #0
     sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     // Redraw map on return — clear all rows then redraw
     lda #COL_BLACK
@@ -272,6 +278,9 @@ main_loop:
     lda #>recall_prompt_str
     sta zp_ptr0_hi
     jsr screen_put_string
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     // Convert PETSCII letter to screen code (lowercase/uppercase mode)
     // Unshifted letters ($41-$5A) → lowercase screen codes ($01-$1A)
@@ -340,6 +349,9 @@ main_loop:
     jsr tramp_ui_recall
     lda #0
     sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key           // Wait for dismiss
 !recall_done:
     jsr screen_clear
@@ -643,6 +655,9 @@ main_loop:
     lda #$ff
     sta uinv_filter             // Show all items
     jsr tramp_ui_inv_display
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     // Redraw map on return
     lda #COL_BLACK
@@ -655,6 +670,9 @@ main_loop:
     cmp #CMD_EQUIPMENT
     bne !not_equipment+
     jsr tramp_ui_equip_display
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     // Redraw map on return
     lda #COL_BLACK

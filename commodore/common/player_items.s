@@ -633,6 +633,11 @@ item_quaff:
     ldx #HSTR_PIQ_QUAFF_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     // Wait for keypress
     jsr input_get_key
 
@@ -969,6 +974,11 @@ item_read_scroll:
     ldx #HSTR_PIQ_READ_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     // Wait for keypress
     jsr input_get_key
 
@@ -1281,6 +1291,11 @@ item_aim_wand:
     ldx #HSTR_PIW_AIM_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     // Wait for keypress
     jsr input_get_key
 
@@ -1430,6 +1445,11 @@ item_use_staff:
     // Print prompt
     ldx #HSTR_PIW_USE_PROMPT
     jsr huff_print_msg
+
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
 
     // Wait for keypress
     jsr input_get_key
@@ -1582,6 +1602,11 @@ item_gain_spell:
 !igs_can_cast:
     ldx #HSTR_IGS_PROMPT
     jsr huff_print_msg
+
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
 
     jsr input_get_key
 
