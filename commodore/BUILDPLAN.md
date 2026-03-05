@@ -5,14 +5,14 @@
 
 ---
 
-## Current State (2026-03-03, updated)
+## Current State (2026-03-05, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed.
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption is now resolved** with title-path bank fixes and low-memory pinning of critical trampolines.
 
 ### Build Stats
 
-- **Test suites:** C64: 24 runtime suites, C128: 9 harness suites
-- **Compile-time asserts:** 69 (C128) / 71 (C64)
+- **Test suites:** C64: 24 runtime suites, C128: 14 harness suites
+- **Compile-time asserts:** 79 (C128) / 70 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
 - **C128 integration stability:** New game -> character creation -> town -> first dungeon entry is validated after C4 stabilization fixes.
@@ -25,7 +25,8 @@
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
-| **R2** | **MED** | C128: Intermittent garbled text still appears when UI prompts/messages print (top-of-screen corruption during normal play; not fully deterministic). | **Open / Regression** |
+| **A7** | **HIGH** | Architecture: Common-path runtime machine checks (`zp_machine_type`) still gate C64/C128 behavior in several hot paths. Port policy is compile-time split only (`#if C128` / `#if !C128`) to avoid runtime branch cost and mixed-path regressions. | **Planned** |
+| **A8** | **HIGH** | C128 layout brittleness: critical entrypoints can drift into `$D000-$DFFF` (I/O hole) when code grows, causing CPU JAM/reboot paths that unit tests may miss unless symbol placement is gated. | **In Progress (hardening)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -40,6 +41,12 @@
 
 ### Investigation Tasks (R4)
 *(Moved to BUILDPLAN_HISTORY pending next cleanup)*
+
+### Recently Resolved
+
+| # | Severity | Description | Resolution Date |
+|---|----------|-------------|-----------------|
+| **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -52,6 +59,7 @@
 | 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
+| 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Planned** |
 
 ---
 
@@ -78,6 +86,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
+2. Complete A8 hardening sweep: require all `tramp_*` and title/reu entrypoints to remain below `$D000` in both assembler asserts and test harness symbol checks.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

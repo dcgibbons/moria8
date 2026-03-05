@@ -44,6 +44,9 @@
 .const KEY_ESC      = $ae
 .const KEY_LF       = $af
 
+// C128 runtime MMU mode used by game loop (all RAM, I/O visible)
+.const INPUT_MMU_ALL_RAM  = $3e
+
 // ============================================================
 // Command IDs — internal constants, not key codes
 // ============================================================
@@ -126,6 +129,14 @@ input_run_key_check:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
+    // Re-assert game MMU mode and keep Screen Editor blink disabled.
+    // If any prior KERNAL path leaked MMU/ROM state, waiting for a key here
+    // must not run the Screen Editor IRQ path that can touch VDC RAM.
+    lda #INPUT_MMU_ALL_RAM
+    sta $ff00
+    lda #$ff
+    sta $cc
+
     txa
     pha                     // Save X
     tya
@@ -153,6 +164,12 @@ igk_stable: .byte 0
 // a still-held selection key from the previous screen.
 // Preserves: nothing
 input_wait_release:
+    // Same guard as input_get_key: release waits are long-lived and must
+    // stay in game MMU mode with Screen Editor blink suppressed.
+    lda #INPUT_MMU_ALL_RAM
+    sta $ff00
+    lda #$ff
+    sta $cc
 !iwr_wait:
     inc zp_entropy
     jsr cia_scan_petscii

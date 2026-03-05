@@ -626,6 +626,10 @@ dl_print_tile:
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
+#if C128
+    php
+    sei
+#endif
     ldx #HSTR_DL_YOU_SEE
     jsr huff_print_msg
     // Append name inline on message row
@@ -643,6 +647,9 @@ dl_print_you_see:
     jsr screen_put_char
     pla
     sta zp_text_color
+#if C128
+    plp
+#endif
     rts
 
 // Look command scratch

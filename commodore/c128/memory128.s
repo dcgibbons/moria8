@@ -185,6 +185,8 @@ zp_save_buf:
 .macro EnterKernal() {
     php
     sei
+    lda #$ff
+    sta $cc
     :MachineRestoreDefault()
 }
 

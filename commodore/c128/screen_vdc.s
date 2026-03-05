@@ -168,6 +168,7 @@ vic_to_vdc_color:
 // screen_clear — Clear entire VDC screen (spaces) and attributes (current color)
 // Reverted to streaming loop (Opt 5 revert) to resolve character creation crash.
 screen_clear:
+    php
     sei                     // IRQ off: protect screen fill + attr fill as one atomic block
 
     // Fill screen RAM: 2000 bytes of SC_SPACE
@@ -211,7 +212,7 @@ screen_clear:
     dec sc_page_cnt
     bne !attr_loop-
 
-    cli                     // IRQ on: screen + attr RAM fully cleared
+    plp                     // Restore caller IRQ state
     rts
 
 sc_page_cnt: .byte 0
@@ -284,6 +285,7 @@ screen_translate_petscii:
 // Output: cursor advances right by 1
 // Preserves: X
 screen_put_char:
+    php
     pha                     // Save screen code
     stx spc_save_x          // Save original X
     jsr screen_set_cursor   // Compute VDC addresses (no VDC access)
@@ -308,20 +310,24 @@ screen_put_char:
     ldx zp_text_color
     lda vic_to_vdc_color,x
     jsr vdc_write_data
-    cli                     // IRQ on: VDC state is now consistent
+    plp                     // Restore caller IRQ state
 
     ldx spc_save_x          // Restore original X
     inc zp_cursor_col
     rts
 spc_save_x: .byte 0
 
-// screen_put_string — Write a null-terminated string of PETSCII chars via VDC
-// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (PETSCII, $00 terminated)
+// screen_put_string — Write a null-terminated string of screen codes via VDC
+// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (screen codes, $00 terminated)
 //         zp_cursor_row = row
 //         zp_cursor_col = starting column
 //         zp_text_color = color
 // Preserves: nothing
 screen_put_string:
+    // Lock IRQs before any cursor/address setup so zp_ptr0 can't be
+    // clobbered between caller handoff and first character fetch.
+    php
+    sei
     jsr screen_set_cursor   // Compute VDC addresses (no VDC access)
 
     // Clamp max chars to viewport width (computed before sei to minimize IRQ-off window)
@@ -332,8 +338,6 @@ screen_put_string:
     lda #0
 !sps_clamp_ok:
     sta sps_max_chars
-
-    sei                     // IRQ OFF: Prevent KERNAL from moving VDC pointer
 
     // --- Character Pass ---
     lda zp_screen_hi
@@ -346,10 +350,7 @@ screen_put_string:
 !char_loop:
     lda (zp_ptr0),y
     beq !chars_done+
-    jsr screen_translate_petscii    // PETSCII → VDC Set 1 screen code
-    pha
     jsr vdc_wait            // WAIT before every data write
-    pla
     sta VDC_DATA_REG        // Stream directly to port
     iny
     cpy sps_max_chars
@@ -380,7 +381,7 @@ screen_put_string:
     bcc !attr_loop-
 
 !sps_done:
-    cli                     // IRQ ON: Operation complete
+    plp                     // Restore caller IRQ state
 
     lda sps_str_len
     clc
@@ -404,6 +405,7 @@ screen_set_color:
 // Input: A = row number (0–24)
 // Preserves: nothing
 screen_clear_row:
+    php
     tax
     sei                     // IRQ off: protect char fill + attr fill for this row
     stx scr_save_row
@@ -441,7 +443,7 @@ screen_clear_row:
     bne !col-
 
     ldx scr_save_row
-    cli                     // IRQ on: row char+attr fill complete
+    plp                     // Restore caller IRQ state
     rts
 
 scr_save_row: .byte 0
@@ -479,6 +481,7 @@ screen_flash_at:
     clc
     adc #SCREEN_COL_OFFSET
     sta sfa_col
+    php
     sei                     // IRQ off: protect all VDC read/write/restore operations
 
     // Read current character at position
@@ -563,7 +566,7 @@ screen_flash_at:
     jsr vdc_set_update_addr
     lda sfa_save_attr
     jsr vdc_write_data
-    cli                     // IRQ on: flash complete, char+attr restored
+    plp                     // Restore caller IRQ state
     rts
 
 sfa_row:       .byte 0

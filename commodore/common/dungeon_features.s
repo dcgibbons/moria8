@@ -563,6 +563,14 @@ get_direction_target:
     ldx #HSTR_DF_DIRECTION
     jsr huff_print_msg
 
+    // C128: ensure the command key that triggered the action is released so
+    // the direction prompt consumes a fresh follow-up keypress.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !gdt_skip_release+
+    jsr input_wait_release
+!gdt_skip_release:
+
     // Wait for a keypress
     jsr input_get_key
 

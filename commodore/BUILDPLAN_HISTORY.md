@@ -68,6 +68,52 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## R2 — C128 Garbled Prompt/Message Corruption ✅ COMPLETE (2026-03-05)
+
+### Symptom
+- C128 showed intermittent and then persistent garbled prompt text (`LOOK`/`TAKE-OFF`) and multiple CPU JAM points (`$D023`, `$D063`) during title/new-game flow.
+
+### Root Cause Chain
+1. **Title data bank mismatch:** C128 title load/render path mixed Bank 1 `MAP_BASE` data with Bank 0 string rendering assumptions.
+2. **Code placement drift into I/O hole:** growth in `main.s` moved critical entrypoints (`tramp_*`, `title_show_sysinfo`, REU status trampoline) into `$D000-$DFFF`.
+3. **Insufficient placement gates:** existing checks covered only a subset of critical routines; symbol-layout tests did not enforce a broad “no critical code in I/O hole” policy.
+4. **Debugging noise from temporary instrumentation:** runtime tripwire hooks helped isolate corruption origin but increased moving parts during stabilization.
+
+### Implemented Fixes
+1. **Title path bank correctness (C128):**
+   - `title_load_and_draw` now loads TITLE art to Bank 1 and restores SETBNK after LOAD.
+   - C128 title rendering reads title stream bytes via MMU-safe map reads instead of passing Bank 1 pointers to Bank 0 string routines.
+2. **I/O hole hardening:**
+   - Pinned critical trampolines/entrypoints to low memory (< `$D000`) in `c128/main.s`, including player-create, game-over, store/UI trampolines, title sysinfo, REU status, and ego trampolines.
+   - Added compile-time asserts to fail builds if critical entrypoints drift into `$D000-$DFFF`.
+3. **Test-harness hardening:**
+   - `run_tests128.sh` symbol placement check now enforces:
+     - required critical labels `< $D000`
+     - blanket policy: all `tramp_*` labels must remain `< $D000`.
+4. **Cleanup:**
+   - Removed temporary C128 Huffman runtime tripwire instrumentation after root-cause fixes were in place.
+
+### Build/Test System Improvement Summary
+1. Symbol-policy gate added to C128 harness for critical labels and all `tramp_*`.
+2. Assembler placement asserts expanded in `c128/main.s`.
+3. Debug tripwires explicitly treated as temporary and removed after deterministic gates were installed.
+4. Address-budget pressure near `$D000` now treated as a tracked C128 risk.
+
+### AI Agent Process Improvement Summary
+1. Use single-hypothesis changes tied to monitor/symbol evidence.
+2. Do not mark fixed without:
+   - reproduced failure condition
+   - root-cause proof from addresses/symbols
+   - passing regression gates.
+3. Add/extend placement/banking guards before behavior edits on fragile C128 paths.
+4. Maintain a canonical list of “must stay `<$D000`” entrypoints for C128 work.
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+- `make -C commodore/c64 test`: **24 passed, 0 failed**
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).

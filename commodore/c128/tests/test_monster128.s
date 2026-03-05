@@ -17,6 +17,10 @@ test_map_row:
     .fill 80, 0
 
 .pc = $3000 "Test Code"
+.const TEST_NAME_LO_TABLE = $5100
+.const TEST_NAME_HI_TABLE = $5120
+.const TEST_NAME_STR      = $5200
+.const TEST_NAME_PTR      = $e200
 #import "../../common/monster.s"
 test_start:
     sei
@@ -71,11 +75,11 @@ test_start:
     jsr monster_remove
 
     // ==========================================
-    // Verify results
+    // Verify monster_remove results
     // ==========================================
     // The monster count should decrease
     lda zp_mon_count
-    bne test_fail
+    bne !fail+
 
     lda map_row_lo+5
     sta zp_ptr0
@@ -85,7 +89,66 @@ test_start:
     :MapRead_ptr0_y()
     
     cmp #$08
-    bne test_fail
+    bne !fail+
+
+    // ==========================================
+    // C128 creature_get_name Bank1 tier path
+    // ==========================================
+    // Stage tier name pointer tables and target string in Bank 1.
+    jsr mmu_select_bank1
+    // Tier DB encodes historical $E0xx payload pointers; C128 runtime
+    // must translate these to Bank 1 staging addresses before copy.
+    lda #<TEST_NAME_PTR
+    sta TEST_NAME_LO_TABLE
+    lda #>TEST_NAME_PTR
+    sta TEST_NAME_HI_TABLE
+    lda #18   // 'R' screen code
+    sta TEST_NAME_STR + 0
+    lda #15   // 'o' screen code
+    sta TEST_NAME_STR + 1
+    lda #7    // 'g' screen code
+    sta TEST_NAME_STR + 2
+    lda #21   // 'u' screen code
+    sta TEST_NAME_STR + 3
+    lda #5    // 'e' screen code
+    sta TEST_NAME_STR + 4
+    lda #0
+    sta TEST_NAME_STR + 5
+    jsr mmu_select_bank0
+
+    lda #1
+    sta current_tier
+    lda #1
+    sta active_dungeon_count
+    lda #<TEST_NAME_LO_TABLE
+    sta tier_name_lo_addr
+    lda #>TEST_NAME_LO_TABLE
+    sta tier_name_lo_addr+1
+    lda #<TEST_NAME_HI_TABLE
+    sta tier_name_hi_addr
+    lda #>TEST_NAME_HI_TABLE
+    sta tier_name_hi_addr+1
+
+    ldx #0
+    jsr creature_get_name
+    cmp #<creature_name_buf
+    bne !fail+
+    cpy #>creature_name_buf
+    bne !fail+
+
+    ldx #0
+!name_cmp:
+    lda creature_name_buf,x
+    cmp test_expected_name,x
+    bne !fail+
+    cmp #0
+    beq !name_ok+
+    inx
+    cpx #16
+    bne !name_cmp-
+!fail:
+    jmp test_fail
+!name_ok:
 
     jmp test_pass
 
@@ -98,6 +161,9 @@ test_pass:
     lda #$01
     sta $0400
     jmp test_pass
+
+test_expected_name:
+    .byte 18, 15, 7, 21, 5, 0
 
 // Dummy stubs needed by monster.s that aren't imported
 .pc = $4000 "Stubs"

@@ -69,6 +69,12 @@ equip_slot_for_cat:
 show_inv_and_restore:
     sta uinv_filter
     jsr tramp_ui_inv_display
+    // C128: require a fresh dismiss key after opening the overlay.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !sir_no_release+
+    jsr input_wait_release
+!sir_no_release:
     jsr input_get_key
     lda #COL_BLACK
     sta zp_text_color
@@ -83,6 +89,12 @@ show_inv_and_restore:
 // Preserves: nothing
 show_equip_and_restore:
     jsr tramp_ui_equip_display
+    // C128: require a fresh dismiss key after opening the overlay.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !ser_no_release+
+    jsr input_wait_release
+!ser_no_release:
     jsr input_get_key
     lda #COL_BLACK
     sta zp_text_color
@@ -280,8 +292,16 @@ item_takeoff:
     ldx #HSTR_PIW_TAKEOFF_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    bne !ito_skip_release+
+    jsr input_wait_release
+!ito_skip_release:
+
     // Wait for keypress
     jsr input_get_key
+    and #$7f                    // Accept shifted/unshifted letter selections
 
     // '?' shows equipment and re-prompts
     cmp #$3f

@@ -70,6 +70,22 @@ test_fail:
     jmp test_fail_loop
 
 test_continue:
+    // Core command mappings involved in recent regressions
+    lda #$54               // T
+    jsr petscii_to_command
+    cmp #CMD_TAKEOFF
+    bne test_fail
+
+    lda #$58               // X
+    jsr petscii_to_command
+    cmp #CMD_LOOK
+    bne test_fail
+
+    lda #$d1               // SHIFT+Q
+    jsr petscii_to_command
+    cmp #CMD_QUIT
+    bne test_fail
+
     // ESC mapping (current C2.4 policy: quit shortcut)
     lda #KEY_ESC
     jsr petscii_to_command

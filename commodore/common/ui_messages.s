@@ -66,6 +66,10 @@ msg_print:
     lda zp_ptr0_hi
     sta msg_src_hi
 
+// msg_print_cached — Display message using msg_src_lo/msg_src_hi as source.
+// Used by C128 Huffman path to avoid a decode->print ZP pointer race.
+msg_print_cached:
+
     lda zp_msg_flags
     cmp #MSG_PENDING | MSG_FULL
     beq !show_more+

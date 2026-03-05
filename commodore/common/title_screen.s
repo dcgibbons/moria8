@@ -13,6 +13,13 @@
 // ============================================================
 title_load_and_draw:
     :EnterKernal()
+#if C128
+    // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
+    // SETBNK controls LOAD destination bank; keep filename in Bank 0.
+    lda #1
+    ldx #0
+    jsr safe_setbnk
+#endif
     // SETNAM: filename "TITLE" (5 chars)
     lda #5
     ldx #<title_filename
@@ -32,7 +39,17 @@ title_load_and_draw:
     jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
     php                     // Save carry (LOAD success/failure)
     lda #2
+#if C128
+    jsr w_close             // C128: force ROM mapping around CLOSE
+#else
     jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
+#endif
+#if C128
+    // Restore default LOAD destination to Bank 0 for subsequent file I/O.
+    lda #0
+    ldx #0
+    jsr safe_setbnk
+#endif
     plp                     // Restore carry from LOAD
     bcs !title_fallback+    // Carry set = error
 
@@ -87,19 +104,31 @@ title_render_data:
 !trd_loop:
     // Read first byte: row or $FF (end marker)
     ldy #0
+#if C128
+    jsr mmu_safe_map_read_ptr1
+#else
     lda (zp_ptr1),y
+#endif
     cmp #$ff
     beq !trd_done+
     sta zp_cursor_row
 
     // Read col
     iny
+#if C128
+    jsr mmu_safe_map_read_ptr1
+#else
     lda (zp_ptr1),y
+#endif
     sta zp_cursor_col
 
     // Read color
     iny
+#if C128
+    jsr mmu_safe_map_read_ptr1
+#else
     lda (zp_ptr1),y
+#endif
     sta zp_text_color
 
     // Advance ptr1 by 3 to point at string data
@@ -111,16 +140,34 @@ title_render_data:
     adc #0
     sta zp_ptr1_hi
 
-    // Copy string pointer to ptr0 for screen_put_string
+#if C128
+    // C128: segment text lives in Bank 1 MAP_BASE; render directly using
+    // mmu-safe reads so we never pass Bank 1 pointers into Bank 0 string code.
+!trd_draw_bank1:
+    ldy #0
+    jsr mmu_safe_map_read_ptr1
+    beq !trd_found+
+    jsr screen_put_char
+    inc zp_ptr1
+    bne !trd_draw_bank1-
+    inc zp_ptr1_hi
+    jmp !trd_draw_bank1-
+
+!trd_found:
+    // Skip null terminator.
+    inc zp_ptr1
+    bne !trd_next+
+    inc zp_ptr1_hi
+!trd_next:
+#else
+    // C64: title stream and render source are in the active RAM bank.
     lda zp_ptr1
     sta zp_ptr0
     lda zp_ptr1_hi
     sta zp_ptr0_hi
-
-    // Render this segment
     jsr screen_put_string
 
-    // Scan forward in ptr1 to find null terminator
+    // Scan forward in ptr1 to find null terminator.
     ldy #0
 !trd_scan:
     lda (zp_ptr1),y
@@ -130,7 +177,7 @@ title_render_data:
 
 !trd_found:
     // Advance ptr1 past the null byte
-    iny                     // Y = length + 1
+    iny                    // Y = length + 1
     tya
     clc
     adc zp_ptr1
@@ -138,6 +185,7 @@ title_render_data:
     lda zp_ptr1_hi
     adc #0
     sta zp_ptr1_hi
+#endif
 
     jmp !trd_loop-
 

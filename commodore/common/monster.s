@@ -1010,7 +1010,14 @@ creature_get_name:
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-    jmp !cgn_do_bank+
+    lda zp_machine_type
+    cmp #MACHINE_C128
+    beq !cgn_do_bank_c128+
+    jmp !cgn_do_bank_c64+
+!cgn_do_bank_c128:
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_translate_b1_ptr+
 
 !cgn_tier_indexed:
     // --- Tier creature: read ptr from active tier name tables ---
@@ -1019,6 +1026,10 @@ creature_get_name:
     lda zp_machine_type
     cmp #MACHINE_C128
     bne !cgn_tier_c64+
+#if C128
+    php
+    sei
+#endif
     txa
     tay
     lda tier_name_lo_addr
@@ -1035,7 +1046,24 @@ creature_get_name:
     sta zp_ptr1_hi
     pla
     sta zp_ptr1
-    jmp !cgn_do_bank+
+#if C128
+    plp
+#endif
+    lda #1
+    sta cgn_src_banked
+    jmp !cgn_translate_b1_ptr+
+
+!cgn_translate_b1_ptr:
+#if C128
+    // C128 tier string pointers are encoded as historical $E0xx payload
+    // addresses. Convert to Bank 1 staging address before banked copy.
+    // $E0xx-$EFFF maps linearly to $50xx-$5FFF, so only the high byte shifts.
+    lda zp_ptr1_hi
+    sec
+    sbc #$90
+    sta zp_ptr1_hi
+#endif
+    jmp !cgn_copy+
 
 !cgn_tier_c64:
     // C64: bank/read ptr from tier name arrays at $E000.
@@ -1059,22 +1087,6 @@ creature_get_name:
     sta zp_ptr1_hi
     pla
     sta zp_ptr1
-    jmp !cgn_copy+
-
-!cgn_do_bank:
-    // C128: convert historical $E0xx pointer into Bank 1 DB space.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !cgn_do_bank_c64+
-    clc
-    lda zp_ptr1
-    adc #<(BANK1_DB_BASE - $e000)
-    sta zp_ptr1
-    lda zp_ptr1_hi
-    adc #>(BANK1_DB_BASE - $e000)
-    sta zp_ptr1_hi
-    lda #1
-    sta cgn_src_banked
     jmp !cgn_copy+
 
 !cgn_do_bank_c64:
@@ -1138,6 +1150,10 @@ creature_get_name:
     // C128 staged DB copy path (no $01 banking required).
     lda cgn_src_banked
     beq !cgn_copy_linear+
+#if C128
+    php
+    sei
+#endif
     ldx #0
 !cgn_copy_bank_lp:
     ldy #0
@@ -1154,6 +1170,9 @@ creature_get_name:
     lda #0
     sta creature_name_buf,x
 !cgn_copy_bank_done:
+#if C128
+    plp
+#endif
     lda #<creature_name_buf
     ldy #>creature_name_buf
     rts

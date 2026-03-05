@@ -36,10 +36,152 @@
 
 .pc = $1c0e "Program"
 entry:
-    // DIAG-0: RED = game code reached at $1C0E
-    lda #$02
-    sta $d020
     jmp entry_real
+
+// ============================================================
+// Critical trampolines — pin these near program start so they
+// can never drift into the $D000 I/O hole.
+// ============================================================
+tramp_player_create:
+    lda #1                      // OVL_STARTUP
+    jsr overlay_load
+    jmp player_create
+
+tramp_game_over:
+    // 1. Resolve creature name while tier data still at $E000
+    lda zp_death_source
+    cmp #$fd                    // DEATH_CURSED
+    bcs !tgo_load_overlay+
+    tax
+    jsr creature_get_name
+
+!tgo_load_overlay:
+    // 2. Load death overlay at $0400
+    lda #3                      // OVL_DEATH
+    jsr overlay_load
+
+    // 3. Calculate score
+    jsr score_calculate
+
+    // 4. Load high scores from disk (needs KERNAL)
+    jsr hiscore_load
+
+    // 5. Insert into high score table
+    jsr hiscore_insert
+
+    // 6. Save high scores to disk (needs KERNAL)
+    jsr hiscore_save
+
+    // 7. Display death screen
+    jmp score_death_screen
+
+tramp_store_init_all:
+    lda #2                      // OVL_TOWN
+    jsr overlay_load
+    jmp store_init_all
+
+tramp_store_restock_all:
+    lda #2                      // OVL_TOWN
+    jsr overlay_load
+    jmp store_restock_all
+
+tramp_store_enter:
+    lda #2                      // OVL_TOWN
+    jsr overlay_load
+    jmp store_enter
+
+tramp_ui_enter:
+    sei
+    :BankOutKernal()
+    rts
+
+tramp_ui_exit:
+    lda #$36                    // BANK_NO_BASIC
+    sta $01
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
+
+tramp_ui_help_display:
+    jsr tramp_ui_enter
+    jsr ui_help_display
+    jmp tramp_ui_exit
+
+tramp_ui_char_display:
+    jsr tramp_ui_enter
+    jsr ui_char_display
+    jmp tramp_ui_exit
+
+tramp_ui_inv_display:
+    jsr tramp_ui_enter
+    jsr ui_inv_display
+    jmp tramp_ui_exit
+
+tramp_ui_equip_display:
+    jsr tramp_ui_enter
+    jsr ui_equip_display
+    jmp tramp_ui_exit
+
+tramp_ui_recall:
+    jsr tramp_ui_enter
+    jsr ui_recall_display
+    jmp tramp_ui_exit
+
+// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
+// Pinned low to avoid $D000 drift.
+tramp_ego_apply_damage:
+    pha
+    sei
+    :BankOutKernal()
+    pla
+    jsr ego_apply_damage
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
+
+tramp_ego_get_ac_bonus:
+    pha
+    sei
+    :BankOutKernal()
+    pla
+    jsr ego_get_ac_bonus
+    pha
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+    rts
+
+// title_show_sysinfo — trampoline to banked routine at $EB00.
+// Pinned low to avoid drifting into $D000 I/O space.
+title_show_sysinfo:
+    sei
+    lda #$35                    // BANK_NO_KERNAL (I/O visible)
+    sta $01
+    jsr title_show_sysinfo_banked
+    lda #$36                    // BANK_NO_BASIC
+    sta $01
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
+tsi_krev_cached: .byte 0
+
+// tramp_reu_show_status — banked status display hook.
+// Pinned low to avoid drifting into $D000 I/O space.
+tramp_reu_show_status:
+    sei
+    lda #$35                    // BANK_NO_KERNAL (I/O visible)
+    sta $01
+    jsr reu_show_status_banked
+    lda #$36                    // BANK_NO_BASIC
+    sta $01
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
 
 // ============================================================
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
@@ -54,9 +196,6 @@ entry:
 
 // Bootstrap — sets up MMU and processor port, jumps to main code
 entry_real:
-    // DIAG-1: GREEN = entry_real reached
-    lda #$05
-    sta $d020
     sei
     cld
     ldx #$ff
@@ -80,10 +219,6 @@ entry_real:
     sta $ff00,x
     inx
     bne !mirror-
-
-    // DIAG-2: BLUE = mirror done
-    lda #$06
-    sta $d020
 
     // --- Patch KERNAL JMP table in RAM ---
     // Read original targets from ROM stubs and patch stubs to point to our safe wrappers.
@@ -149,10 +284,6 @@ entry_real:
     sta $fffa
     lda #>safe_nmi
     sta $fffb
-
-    // DIAG-3: YELLOW = patching done
-    lda #$07
-    sta $d020
 
     :MachineRestoreDefault()
     jmp entry_main
@@ -361,9 +492,18 @@ t_load: .word 0
 // it reasserts immediately after RTI causing an infinite IRQ loop.
 safe_irq:
     pha
+    txa
+    pha
+    tya
+    pha
     lda $dc0d               // Acknowledge CIA1 interrupt (read clears flags)
     lda #$ff
     sta $d019               // Acknowledge VIC-II interrupts (write 1s clears flags)
+safe_irq_restore:
+    pla
+    tay
+    pla
+    tax
     pla
     rti
 
@@ -420,9 +560,6 @@ safe_setbnk:
 // at runtime by BANKED_DATA_BASE (tier monster/item databases).
 init_copy_banked:
     sei
-    // DIAG-6a: WHITE = entered init_copy_banked
-    lda #COL_WHITE
-    sta $d020
     lda #<banked_payload
     sta zp_ptr0
     lda #>banked_payload
@@ -433,11 +570,6 @@ init_copy_banked:
     sta zp_ptr1_hi
     ldx #((banked_payload_end - banked_payload + 255) / 256)
     ldy #0
-    // DIAG-6b: YELLOW = about to start copy loop
-    pha
-    lda #COL_YELLOW
-    sta $d020
-    pla
     // Switch to NOIO for the copy (source crosses $D000)
     lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
     sta $ff00
@@ -476,12 +608,41 @@ exit_trampoline:
     jmp ($fffc)
 
 // ============================================================
+// game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
+// ============================================================
+game_over_str:
+    .text "R)EBOOT S)TART Q)UIT" ; .byte 0
+
+game_over_prompt:
+    jsr screen_clear
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #12
+    sta zp_cursor_row
+    lda #9                      // Keep C64-style centering for MVP
+    sta zp_cursor_col
+    lda #<game_over_str
+    sta zp_ptr0
+    lda #>game_over_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!gop_loop:
+    jsr input_get_key
+    cmp #$52                    // 'R' — reboot (same path as quit)
+    beq !gop_quit+
+    cmp #$53                    // 'S' — start over (restart to title)
+    beq !gop_restart+
+    cmp #$51                    // 'Q' — quit to BASIC
+    bne !gop_loop-
+!gop_quit:
+    jmp exit_trampoline         // Unified C128 behavior: R == Q
+!gop_restart:
+    jmp restart_entry
+
+// ============================================================
 // Entry point
 // ============================================================
 entry_main:
-    // DIAG-4: ORANGE = entry_main reached
-    lda #$08
-    sta $d020
     sei
     cld
     ldx #$ff
@@ -498,23 +659,12 @@ entry_main:
     lda #0
     ldx #0
     jsr $ff68                   // SETBNK: reset to Bank 0
-    // DIAG-5e: LIGHT GREEN = SETBNK reset done
-    lda #$0d
-    sta $d020
-
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
-    // DIAG-5f: LIGHT BLUE = save_zp done
-    lda #$0e
-    sta $d020
 
     // Relocate banked code payload to $E000.
     // MUST be done before any UI or overlay call.
     jsr init_copy_banked
-
-    // --- DIAG: Purple border = init_copy_banked done ---
-    lda #COL_PURPLE
-    sta $d020
 
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
@@ -530,6 +680,33 @@ entry_main:
     ldx #10
     jsr vdc_write_reg
 
+    // Initialize VDC display/attribute base explicitly (don't rely on KERNAL defaults).
+    // Reg 12/13 = display start address ($0000), Reg 20/21 = attribute start ($0800).
+    lda #0
+    ldx #12
+    jsr vdc_write_reg
+    inx                         // 13
+    jsr vdc_write_reg
+    ldx #21
+    jsr vdc_write_reg
+    lda #8
+    dex                         // 20
+    jsr vdc_write_reg
+
+    // Disable Screen Editor software cursor blink.
+    // VDC reg 10 only disables hardware cursor display; the Screen Editor
+    // blink path still runs unless $CC is non-zero, and can write VDC RAM
+    // during KERNAL I/O IRQ windows.
+    lda #$ff
+    sta $cc
+    // Keep KERNAL IRQ tail dispatch off the Screen Editor path.
+    // KERNAL IRQ prologue has already serviced interrupt sources before
+    // it jumps through ($0314/$0315), so restore+RTI is sufficient.
+    lda #<safe_irq_restore
+    sta $0314
+    lda #>safe_irq_restore
+    sta $0315
+
     // Set VDC background to black (register 26 = background color)
     lda #0                      // RGBI 0 = black
     ldx #26
@@ -541,10 +718,6 @@ entry_main:
     sta $d021               // Background
 
 restart_entry:
-    // --- DIAG: White border = restart_entry reached ---
-    lda #COL_WHITE
-    sta $d020
-
     // --- Initialize subsystems ---
     jsr detect_machine
 
@@ -567,10 +740,6 @@ restart_entry:
     jsr sound_init
     jsr rng_seed
 
-    // --- DIAG: Red border = subsystems done ---
-    lda #COL_RED
-    sta $d020
-
     lda #$ff
     sta $d8                     // Screen Editor: 80-col mode
 
@@ -584,21 +753,9 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
-    // --- DIAG: Cyan border = about to screen_clear ---
-    lda #COL_CYAN
-    sta $d020
-
     jsr screen_clear
 
-    // --- DIAG: Green border = screen_clear done, about to title_load ---
-    lda #COL_GREEN
-    sta $d020
-
     jsr title_load_and_draw
-
-    // --- DIAG: Blue border = title_load done ---
-    lda #COL_BLUE
-    sta $d020
 
     lda #STATUS_ROW
     jsr screen_clear_row
@@ -608,10 +765,6 @@ restart_entry:
     jsr screen_clear_row
 
     jsr title_show_sysinfo
-
-    // --- DIAG: Yellow border = title_show_sysinfo done ---
-    lda #COL_YELLOW
-    sta $d020
 
     // --- Show title menu ---
     lda #COL_WHITE
@@ -899,252 +1052,15 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-// ============================================================
-// tramp_ego_apply_damage — Apply ego slay/bonus damage (banked at $F000)
-// ============================================================
-tramp_ego_apply_damage:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr ego_apply_damage
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    rts
-
-// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000)
-tramp_ego_get_ac_bonus:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr ego_get_ac_bonus
-    pha
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    rts
-
-
 // Init-only strings — kept in main RAM
 // ============================================================
 title_str:
     .text "MORIA8 C=128" ; .byte 0
 
-// title_show_sysinfo — Trampoline to call banked version at $F000
-// KERNAL_REV is cached at startup in restart_entry (low RAM, below $C000)
-// because MMU_NORMAL banks Screen Editor ROM over $C000-$CFFF, making it
-// impossible to execute code here while KERNAL ROM is visible.
-title_show_sysinfo:
-    sei
-    lda $01
-    pha
-    :BankOutKernal()           // $35 — I/O visible for VDC register access
-    jsr title_show_sysinfo_banked
-    pla
-    sta $01                    // Restore processor port
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    rts
-tsi_krev_cached: .byte 0
-
-// tramp_reu_show_status — Bank out KERNAL to call banked status display
-tramp_reu_show_status:
-    sei
-    lda $01
-    pha
-    :BankOutKernal()           // $35 — I/O visible for VDC
-    jsr reu_show_status_banked
-    pla
-    sta $01
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    rts
-
-// ============================================================
-// UI screen trampolines — SEI + bank out KERNAL, call $F000+
-// ============================================================
-tramp_ui_help_display:
-    sei
-    :BankOutKernal()       // $35 — I/O visible for VDC
-    jsr ui_help_display
-    jmp tramp_sr_epilogue
-
-tramp_ui_char_display:
-    sei
-    :BankOutKernal()
-    jsr ui_char_display
-    jmp tramp_sr_epilogue
-
-tramp_ui_inv_display:
-    sei
-    :BankOutKernal()
-    jsr ui_inv_display
-    jmp tramp_sr_epilogue
-
-tramp_ui_equip_display:
-    sei
-    :BankOutKernal()
-    jsr ui_equip_display
-    jmp tramp_sr_epilogue
-
-tramp_ui_recall:
-    sei
-    :BankOutKernal()
-    jsr ui_recall_display
-    jmp tramp_sr_epilogue
-
-
-// ============================================================
-// Store overlay trampolines — load overlay at $0400, call directly
-// ============================================================
-tramp_store_init_all:
-    lda #OVL_TOWN
-    jsr overlay_load
-    jsr store_init_all
-    rts
-
-tramp_store_restock_all:
-    lda #OVL_TOWN
-    jsr overlay_load
-    jsr store_restock_all
-    rts
-
-tramp_store_enter:
-    lda #OVL_TOWN
-    jsr overlay_load
-    jsr store_enter
-    rts
-
-// ============================================================
-// Startup overlay trampoline — character creation at $0400
-// ============================================================
-tramp_player_create:
-    lda #OVL_STARTUP
-    jsr overlay_load
-    jsr player_create
-    rts
-
-// ============================================================
-// Death overlay trampoline — death screen at $0400
-// ============================================================
-tramp_game_over:
-    // 1. Resolve creature name while tier data still at $E000
-    lda zp_death_source
-    cmp #DEATH_CURSED
-    bcs !tgo_load_overlay+
-    tax
-    jsr creature_get_name
-
-!tgo_load_overlay:
-    // 2. Load death overlay at $0400
-    lda #OVL_DEATH
-    jsr overlay_load
-
-    // 3. Calculate score
-    jsr score_calculate
-
-    // 4. Load high scores from disk (needs KERNAL)
-    jsr hiscore_load
-
-    // 5. Insert into high score table
-    jsr hiscore_insert
-
-    // 6. Save high scores to disk (needs KERNAL)
-    jsr hiscore_save
-
-    // 7. Display death screen
-    jsr score_death_screen
-    rts
-
 // Bank1Data segment — content moved to banked_payload ($EB00, Bank 0).
 // Segment kept empty; bank1.dat is no longer loaded at runtime.
 .segment Bank1Data
 .segment Default
-
-
-// ============================================================
-// game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
-// ============================================================
-game_over_prompt:
-    jsr screen_clear
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #12
-    sta zp_cursor_row
-    lda #9                      // Keep C64-style centering for MVP
-    sta zp_cursor_col
-    lda #<game_over_str
-    sta zp_ptr0
-    lda #>game_over_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #0
-    sta KBDBUF_COUNT            // Flush keyboard buffer (C128: $D0)
-!gop_loop:
-    jsr input_get_key
-    cmp #$52                    // 'R' — reboot (same path as quit)
-    beq !gop_reboot+
-    cmp #$53                    // 'S' — start over (restart to title)
-    beq !gop_restart+
-    cmp #$51                    // 'Q' — quit to BASIC
-    bne !gop_loop-
-    rts                         // Q: fall through to exit_trampoline
-!gop_reboot:
-    jmp exit_trampoline         // Unified C128 behavior: R == Q
-!gop_restart:
-    jmp game_restart
-
-game_over_str:
-    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
-
-// ============================================================
-// game_restart — reset game state, return to title screen
-// ============================================================
-game_restart:
-    // Clear ZP game variables $2B–$8F
-    lda #0
-    ldx #0
-!clr_zp:
-    sta $2b,x
-    inx
-    cpx #($8f - $2b + 1)        // 101 bytes
-    bne !clr_zp-
-
-    // Clear static game-state variables in data segments
-    lda #0
-    sta eff_fear_timer
-    sta recall_query_sc
-    sta recall_found_type
-    sta recall_last_sc
-    sta recall_last_idx
-
-    // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
-    lda #$ff
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_id:
-    sta inv_item_id,x
-    dex
-    bpl !clr_inv_id-
-
-    lda #0
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_rest:
-    sta inv_qty,x
-    sta inv_p1,x
-    sta inv_flags,x
-    dex
-    bpl !clr_inv_rest-
-
-    // Reset tier state
-    sta current_tier
-    sta tier_loaded
-
-    jmp restart_entry
 
 
 // ============================================================
@@ -1183,7 +1099,18 @@ banked_payload_end:
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
-.assert "Program fits below System ROM", program_end <= BANKED_DATA_BASE, true
+.assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
+.assert "Store trampoline init stays below I/O hole", tramp_store_init_all < $D000, true
+.assert "Store trampoline restock stays below I/O hole", tramp_store_restock_all < $D000, true
+.assert "Store trampoline enter stays below I/O hole", tramp_store_enter < $D000, true
+.assert "Player-create trampoline stays below I/O hole", tramp_player_create < $D000, true
+.assert "Game-over trampoline stays below I/O hole", tramp_game_over < $D000, true
+.assert "Ego damage trampoline stays below I/O hole", tramp_ego_apply_damage < $D000, true
+.assert "Ego AC trampoline stays below I/O hole", tramp_ego_get_ac_bonus < $D000, true
+.assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
+.assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
+.assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
+.assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 
 
 // ============================================================

@@ -55,14 +55,12 @@ huff_decode_string:
 // Clobbers: A, X, Y
 // ============================================================
 huff_decode_from_ptr:
+#if C128
     // C128: KERNAL/IRQ can clobber low ZP pointer bytes during decode.
     // Lock IRQs for the short decode window to keep pointer traversal stable.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !hdfp_no_lock+
     php
     sei
-!hdfp_no_lock:
+#endif
     // Initialize bit reader
     lda #0
     sta hd_bit_mask            // Force load of first byte
@@ -126,12 +124,10 @@ hd_cur_node_smc:
     lda #>hd_decode_buf
     sta zp_ptr0_hi
 
-    // Restore prior IRQ state if we locked on C128.
-    lda zp_machine_type
-    cmp #MACHINE_C128
-    bne !hdfp_no_unlock+
+#if C128
+    // Restore prior IRQ state on C128.
     plp
-!hdfp_no_unlock:
+#endif
     rts
 
 // ============================================================
@@ -166,8 +162,22 @@ huff_append_combat:
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 huff_print_msg:
+#if C128
+    // C128: keep decode + pointer handoff atomic. We cache the decoded
+    // pointer in msg_src_* under SEI, then print from that cached source.
+    php
+    sei
+    jsr huff_decode_string
+    lda zp_ptr0
+    sta msg_src_lo
+    lda zp_ptr0_hi
+    sta msg_src_hi
+    plp
+    jmp msg_print_cached
+#else
     jsr huff_decode_string
     jmp msg_print              // Tail call — 6 bytes total
+#endif
 
 // ============================================================
 // Compressed string data (generated)
