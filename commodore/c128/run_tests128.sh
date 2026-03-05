@@ -166,6 +166,26 @@ def has_pair(lines: list[str], token_a: str, token_b: str) -> bool:
             return False
     return False
 
+def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 28) -> bool:
+    for i, ln in enumerate(lines):
+        if tokens[0] not in ln:
+            continue
+        pos = i
+        ok = True
+        for tok in tokens[1:]:
+            found = False
+            for j in range(pos + 1, min(pos + 1 + window, len(lines))):
+                if tok in lines[j]:
+                    pos = j
+                    found = True
+                    break
+            if not found:
+                ok = False
+                break
+        if ok:
+            return True
+    return False
+
 first2 = first_instructions_after("screen_put_string:", screen, 2)
 if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1].lower().startswith("sei")):
     print(f"screen_put_string must start with php; sei, found: {first2!r}")
@@ -173,6 +193,15 @@ if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1
 
 if not has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg"):
     print("item_takeoff prompt is not using Huffman print path")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "ldx #HSTR_PIW_WEAR_PROMPT",
+    "jsr huff_print_msg",
+    "jsr input_wait_release",
+    "jsr input_get_key",
+]):
+    print("item_wear prompt must gate with input_wait_release before input_get_key")
     raise SystemExit(1)
 
 if not has_pair(dfeat, "ldx #HSTR_DF_DIRECTION", "jsr huff_print_msg"):

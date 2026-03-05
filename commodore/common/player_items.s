@@ -109,6 +109,11 @@ item_wear:
     ldx #HSTR_PIW_WEAR_PROMPT
     jsr huff_print_msg
 
+    // C128: require a fresh selection key after the command key.
+#if C128
+    jsr input_wait_release
+#endif
+
     // Wait for keypress
     jsr input_get_key
 

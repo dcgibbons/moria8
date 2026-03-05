@@ -24,7 +24,6 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
-| **C3** | **HIGH** | C128: `wear` command prompt has follow-up key handling regression (selection key cancels/consumes incorrectly instead of waiting for fresh input release). | **Open / Regression** |
 | **C4** | **HIGH** | C128: Audit all input commands with follow-up key prompts (`wear/take-off/look/drop/read/quaff/aim/use/doors/tunnel/targeting/menu` paths) for stale-key consumption and missing release-wait gates; add regression tests per command family. | **Planned Audit** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
@@ -49,6 +48,7 @@
 | **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
 | **A7** | **HIGH** | Compile-time split hardening: removed runtime `zp_machine_type` gating from common hot paths and replaced with `#if C128`/`#if !C128`. | **2026-03-05** |
 | **A8** | **HIGH** | C128 layout hardening: enforced `<$D000` placement asserts for all `tramp_*`, added game-over end-boundary guards, and added harness assert-coverage enforcement. | **2026-03-05** |
+| **C3** | **HIGH** | C128 `wear` prompt stale-key regression fixed by adding release-wait gate before selection read; harness guard added to prevent regression. | **2026-03-05** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -88,8 +88,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. Add Line 8 (keypad/extra keys) scanning support (C2).
-2. Fix `wear` command follow-up key handling regression (C3).
-3. Complete C128 input prompt audit and regression coverage (C4).
+2. Complete C128 input prompt audit and regression coverage (C4).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

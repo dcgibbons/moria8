@@ -189,6 +189,35 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## C3 (Port Stability) — Wear Prompt Follow-Up Key Regression ✅ COMPLETE (2026-03-05)
+
+### Symptom
+- On C128, `W` (wear) prompt selection could immediately cancel/consume input due to stale command-key state, instead of waiting for a fresh follow-up keypress.
+
+### Root Cause
+- `item_wear` read selection with `input_get_key` immediately after printing the prompt.
+- Unlike `item_takeoff` and direction-prompt paths, it lacked a C128 release gate (`input_wait_release`) before the follow-up read.
+
+### Fix
+1. `common/player_items.s`
+   - In `item_wear`, added:
+     - `#if C128`
+     - `jsr input_wait_release`
+     - `#endif`
+   - Placement is immediately after `huff_print_msg` and before `input_get_key`.
+2. `c128/run_tests128.sh`
+   - Extended `prompt_irq_guard` with an ordered-chain check enforcing:
+     - `HSTR_PIW_WEAR_PROMPT` -> `jsr huff_print_msg` -> `jsr input_wait_release` -> `jsr input_get_key`
+   - This prevents silent regression of the C128 follow-up key gate.
+
+### Validation
+- `run_tests128.sh`: **14 passed, 0 failed**
+  - `main128_asm`: PASS
+  - `main128_layout`: PASS
+  - `prompt_irq_guard`: PASS
+
+---
+
 ## R4 — C128 Post-Kill Render Glitch ✅ COMPLETE (2026-03-03)
 
 **Problem:** After killing a dungeon monster on C128, the vacated tile rendered as the wrong glyph/color (including near/far-dependent color shifts).
