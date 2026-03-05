@@ -8,10 +8,9 @@
 
 Current C128 keyboard behavior has two defects:
 
-1. Matrix coverage is incomplete:
-   - Scanner currently handles CIA rows 0-7 only.
-   - Extended keyboard lines (8/9 via `$D02F`) are not scanned.
-   - Numeric keypad and ESC path are therefore missing/incomplete.
+1. Matrix coverage correctness must be continuously validated:
+   - Scanner now includes CIA rows 0-7 plus extended keyboard lines 8/9 via `$D02F`.
+   - Numeric keypad and ESC path are mapped, but this remains a regression-sensitive area.
 
 2. Input responsiveness is degraded versus C64:
    - Key handling feels sluggish (notably `E`, plus other keys).
@@ -19,9 +18,9 @@ Current C128 keyboard behavior has two defects:
 
 ## 2. Root Causes
 
-1. **Scan coverage gap**
-   - `cia_scan_petscii` is limited to scan codes 0-63 (8 rows x 8 columns).
-   - C128 extended lines require explicit drive through processor port `$D02F` bits 6/7.
+1. **Coverage regression risk**
+   - C128 extended line scan and decode are now present (scan codes 0-79),
+     but must remain explicitly gated by tests and source checks.
 
 2. **Latency behavior mismatch**
    - C64 path uses KERNAL buffered key input.
@@ -127,7 +126,7 @@ C2 is complete only when all are true:
 
 **Gate:** input suite passes consistently with no flakes.
 
-### C2.6 Integration and Docs Lock
+### C2.6 Integration and Docs Lock 🚧 In Progress
 - Manual integration checks:
   - title/menu navigation,
   - in-game repeated command entry speed,
@@ -138,6 +137,13 @@ C2 is complete only when all are true:
   - this file.
 
 **Gate:** docs reflect shipping input behavior exactly.
+
+### C2.7 Responsiveness Tuning (Asymmetric Debounce) ✅ Completed (2026-03-05)
+- Updated `input_process_sample` to accept idle->press on first sample while
+  preserving 2-sample release stabilization for bounce resistance.
+- Updated `tests/test_input128.s` edge-transition assertions to match the
+  new latency policy and keep it regression-gated.
+- `run_tests128.sh` remains green after tuning.
 
 ## 6. Key Mapping Target (Extended Rows)
 

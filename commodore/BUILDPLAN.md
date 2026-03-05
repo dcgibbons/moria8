@@ -23,7 +23,7 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
+| **C2** | **BLOCKER** | C128: Keyboard responsiveness parity remains below C64 in rapid command entry (`E` and fast taps). Line 8/9 scan path exists; finalize responsiveness tuning + manual UX validation before closure. | **High Priority** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |

@@ -121,11 +121,11 @@ input_run_key_check:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Uses edge-transition detection with a 2-sample stability filter:
-// - sample must appear twice consecutively before being considered stable.
-// - returns on stable key-up -> key-down transitions only.
-// This improves responsiveness versus strict release-then-press loops while
-// avoiding single-scan phantom transitions.
+// Uses asymmetric edge filtering:
+// - key-down from idle (stable=0) is accepted on first sample for snappy feel
+// - key-up (release) requires 2 stable zero samples before rearm
+// This preserves bounce resistance on release while reducing perceived latency
+// for rapid taps in command entry.
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
@@ -195,6 +195,13 @@ input_process_sample:
     cmp igk_last_sample
     beq !ips_stable+
     sta igk_last_sample
+    beq !ips_none+          // first release sample (stabilize on next 0)
+    lda igk_stable
+    bne !ips_none+          // key change while another key stable: wait
+    lda igk_last_sample
+    sta igk_stable          // idle->press: accept immediately
+    lda igk_last_sample
+    rts
 !ips_none:
     lda #0
     rts

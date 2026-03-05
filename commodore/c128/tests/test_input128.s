@@ -125,7 +125,7 @@ test_fail2:
 
 test_edge_checks:
     // Edge-transition behavior:
-    // - key-down requires 2 stable samples
+    // - key-down from idle is accepted on first sample
     // - key release also requires 2 stable samples
     lda #0
     sta igk_last_sample
@@ -136,14 +136,14 @@ test_edge_checks:
     cmp #0
     bne test_fail2
 
-    lda #$45               // First sample of 'E' => no event yet
-    jsr input_process_sample
-    cmp #0
-    bne test_fail2
-
-    lda #$45               // Second sample of 'E' => key-down edge event
+    lda #$45               // First sample of 'E' => immediate key-down event
     jsr input_process_sample
     cmp #$45
+    bne test_fail2
+
+    lda #$45               // Stable held key => no repeat event
+    jsr input_process_sample
+    cmp #0
     bne test_fail2
 
     lda #$45               // Held key => no repeated event
