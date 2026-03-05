@@ -24,6 +24,7 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **C2** | **BLOCKER** | C128: Keyboard matrix path is incomplete (missing Line 8/9 extended key scan) and input responsiveness is sluggish versus C64 (notably `E` and rapid repeats). | **High Priority** |
+| **C5** | **BLOCKER** | C128: `?` Help command renders garbled title text and then CPU JAMs at `$1C09` after/during help screen flow. | **Open / Regression** |
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
@@ -87,7 +88,8 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-02-27)
 
 **High priority (C128 Port Stability):**
-1. Add Line 8 (keypad/extra keys) scanning support (C2).
+1. Fix Help (`?`) garble + CPU JAM at `$1C09` (C5).
+2. Add Line 8 (keypad/extra keys) scanning support (C2).
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
