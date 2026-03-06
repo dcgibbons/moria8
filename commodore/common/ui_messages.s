@@ -12,9 +12,13 @@
 .const MSG_PENDING   = $01  // Row 0 has an unread message
 .const MSG_FULL      = $02  // Row 1 also has an unread message (both rows occupied)
 
-// History buffer (8 messages x 40 chars max each)
+// History buffer (8 messages x screen width chars max each)
 .const MSG_HIST_COUNT = 8
-.const MSG_HIST_LEN   = 40
+.const MSG_HIST_LEN   = SCREEN_COLS
+.const MSG_HIST_BYTES = MSG_HIST_COUNT * MSG_HIST_LEN
+.const MSG_MORE_LEN = 7
+.const MSG_MORE_MAX_COL = SCREEN_COLS - MSG_MORE_LEN
+.const MSG_MORE_OVERFLOW_CMP = MSG_MORE_MAX_COL + 1
 msg_history:
     .fill MSG_HIST_COUNT * MSG_HIST_LEN, 0
 msg_hist_idx:
@@ -36,19 +40,36 @@ msg_init:
     sta zp_msg_flags
     sta msg_hist_idx
     sta msg_row1_col
-    ldx #0
     lda #$20                // Space (screen code)
+    sta zp_temp2
+    lda #<msg_history
+    sta zp_ptr1
+    lda #>msg_history
+    sta zp_ptr1_hi
+    lda #<MSG_HIST_BYTES
+    sta zp_temp0
+    lda #>MSG_HIST_BYTES
+    sta zp_temp1
 !clr:
-    sta msg_history,x
-    inx
-    bne !clr-
-    // Clear remaining (320 - 256 = 64 bytes)
-    ldx #0
-!clr2:
-    sta msg_history + 256,x
-    inx
-    cpx #64
-    bne !clr2-
+    lda zp_temp0
+    ora zp_temp1
+    beq !done+
+    ldy #0
+    lda zp_temp2
+    sta (zp_ptr1),y
+    inc zp_ptr1
+    bne !dec+
+    inc zp_ptr1_hi
+!dec:
+    sec
+    lda zp_temp0
+    sbc #1
+    sta zp_temp0
+    lda zp_temp1
+    sbc #0
+    sta zp_temp1
+    jmp !clr-
+!done:
     rts
 
 // msg_print — Display a message on the message area (rows 0-1)
@@ -186,9 +207,9 @@ msg_clear:
 // Preserves: nothing
 msg_show_more:
     lda msg_row1_col
-    cmp #34                 // Room for " -MORE-" (7 chars)?
+    cmp #MSG_MORE_OVERFLOW_CMP
     bcc !fits+
-    lda #33                 // Clamp so it fits in 40 cols
+    lda #MSG_MORE_MAX_COL
 !fits:
     sta zp_cursor_col
     lda #MSG_ROW + 1
@@ -219,9 +240,32 @@ msg_save_history:
     php
     sei
 #endif
-    // Calculate destination: $msg_history + (msg_hist_idx * 40)
-    // using 16-bit math because msg_history is 320 bytes long
+    // Calculate destination: msg_history + (msg_hist_idx * MSG_HIST_LEN)
     lda msg_hist_idx
+#if C128
+    // x80 = x64 + x16
+    asl
+    asl
+    asl
+    asl
+    sta zp_temp0     // x16 (lo)
+    lda #0
+    sta zp_temp1     // x16 (hi)
+
+    lda zp_temp0
+    asl
+    rol zp_temp1     // x32
+    asl
+    rol zp_temp1     // x64
+
+    clc
+    adc zp_temp0     // x64 + x16 = x80 (lo)
+    sta zp_ptr1
+    lda zp_temp1
+    adc #0
+    sta zp_ptr1_hi
+#else
+    // x40 = x32 + x8
     asl
     asl
     asl
@@ -243,6 +287,7 @@ msg_save_history:
     lda zp_temp1
     adc #0
     sta zp_ptr1_hi
+#endif
 
     clc
     lda zp_ptr1

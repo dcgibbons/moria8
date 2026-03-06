@@ -173,6 +173,11 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
+    lda #<help_lines
+    sta help_lines_src_lo
+    lda #>help_lines
+    sta help_lines_src_hi
+
     // Clear screen now so stale status bar (rows 21–23) from any prior session
     // is gone before KERNAL LOAD starts printing "SEARCHING...".
     // title_load_and_draw also clears after KERNAL LOAD to remove those messages.

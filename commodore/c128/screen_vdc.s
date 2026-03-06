@@ -5,12 +5,12 @@
 // with the same ordering as VIC-II). Colors are translated from VIC-II
 // palette to RGBI via vic_to_vdc_color table.
 //
-// Screen layout (80-col, MVP — uses 40-col layout within 80-col screen):
+// Screen layout (80-col):
 //   Rows 0–1:    Message area (2 lines)
-//   Rows 2–20:   Game viewport (38x19, columns 1–38)
+//   Rows 2–20:   Game viewport (38x19)
 //   Rows 21–23:  Status bar (3 lines)
 //   Row  24:     Input prompt line
-//   Cols 0, 39+: Border/unused
+// Placement is explicit by caller constants (no implicit global centering).
 
 // ============================================================
 // VDC Constants
@@ -26,8 +26,7 @@
 // ============================================================
 .const SCREEN_COLS = 80
 .const SCREEN_ROWS = 25
-.const SCREEN_COL_OFFSET = 20   // Centers 40-col game area in 80-col VDC display
-.const VIEWPORT_X  = 1      // Viewport starts at column 1
+.const VIEWPORT_X  = 21     // Center 38-col viewport within 80-column screen
 .const VIEWPORT_Y  = 2      // Viewport starts at row 2
 .const VIEWPORT_W  = 38     // Viewport width (same as C64 for MVP)
 .const VIEWPORT_H  = 19     // Viewport height
@@ -122,44 +121,44 @@ color_row_hi:
 // Bit 6 ($40) = Reverse Video — do NOT set that.
 // Bit 7 ($80) = Alternate Character Set: selects VDC Set 1 (Mixed Case font),
 // which has uppercase A-Z at $41-$5A and lowercase a-z at $01-$1A.
+.const VDC_ATTR_MODE = $80
 vic_to_vdc_color:
-    .byte  0|$80    // $00 black     → RGBI 0  | Set 1
-    .byte 15|$80    // $01 white     → RGBI 15 | Set 1
-    .byte  4|$80    // $02 red       → RGBI 4  | Set 1
-    .byte 11|$80    // $03 cyan      → RGBI 11 | Set 1
-    .byte  5|$80    // $04 purple    → RGBI 5  | Set 1
-    .byte  2|$80    // $05 green     → RGBI 2  | Set 1
-    .byte  1|$80    // $06 blue      → RGBI 1  | Set 1
-    .byte 14|$80    // $07 yellow    → RGBI 14 | Set 1
-    .byte 12|$80    // $08 orange    → RGBI 12 | Set 1
-    .byte  6|$80    // $09 brown     → RGBI 6  | Set 1
-    .byte 12|$80    // $0a lt red    → RGBI 12 | Set 1
-    .byte  8|$80    // $0b dk grey   → RGBI 8  | Set 1
-    .byte  7|$80    // $0c grey      → RGBI 7  | Set 1
-    .byte 10|$80    // $0d lt green  → RGBI 10 | Set 1
-    .byte  9|$80    // $0e lt blue   → RGBI 9  | Set 1
-    .byte  7|$80    // $0f lt grey   → RGBI 7  | Set 1
+    .byte  0|VDC_ATTR_MODE    // $00 black
+    .byte 15|VDC_ATTR_MODE    // $01 white
+    .byte  4|VDC_ATTR_MODE    // $02 red
+    .byte 11|VDC_ATTR_MODE    // $03 cyan
+    .byte  5|VDC_ATTR_MODE    // $04 purple
+    .byte  2|VDC_ATTR_MODE    // $05 green
+    .byte  1|VDC_ATTR_MODE    // $06 blue
+    .byte 14|VDC_ATTR_MODE    // $07 yellow
+    .byte 12|VDC_ATTR_MODE    // $08 orange
+    .byte  6|VDC_ATTR_MODE    // $09 brown
+    .byte 12|VDC_ATTR_MODE    // $0a lt red
+    .byte  8|VDC_ATTR_MODE    // $0b dk grey
+    .byte  7|VDC_ATTR_MODE    // $0c grey
+    .byte 10|VDC_ATTR_MODE    // $0d lt green
+    .byte  9|VDC_ATTR_MODE    // $0e lt blue
+    .byte  7|VDC_ATTR_MODE    // $0f lt grey
 
 // ============================================================
 // Pre-translated VDC RGBI color constants
 // ============================================================
-// These match vic_to_vdc_color entries; use directly in VDC attribute
-// writes to avoid a runtime table lookup in hot rendering paths.
-// Bit 7 ($80) = Alternate Character Set (VDC Set 1 = mixed case font).
-.const VDC_BLACK  =  0|$80   // COL_BLACK  ($00) → RGBI 0
-.const VDC_WHITE  = 15|$80   // COL_WHITE  ($01) → RGBI 15
-.const VDC_RED    =  4|$80   // COL_RED    ($02) → RGBI 4
-.const VDC_CYAN   = 11|$80   // COL_CYAN   ($03) → RGBI 11
-.const VDC_GREEN  =  2|$80   // COL_GREEN  ($05) → RGBI 2
-.const VDC_BLUE   =  1|$80   // COL_BLUE   ($06) → RGBI 1
-.const VDC_YELLOW = 14|$80   // COL_YELLOW ($07) → RGBI 14
-.const VDC_ORANGE = 12|$80   // COL_ORANGE ($08) → RGBI 12
-.const VDC_BROWN  =  6|$80   // COL_BROWN  ($09) → RGBI 6
-.const VDC_DGREY  =  8|$80   // COL_DGREY  ($0b) → RGBI 8
-.const VDC_GREY   =  7|$80   // COL_GREY   ($0c) → RGBI 7
-.const VDC_LGREY  =  7|$80   // COL_LGREY  ($0f) → RGBI 7 (L3: same as GREY)
-.const VDC_LGREEN = 10|$80   // COL_LGREEN ($0d) → RGBI 10
-.const VDC_LBLUE  =  9|$80   // COL_LBLUE  ($0e) → RGBI 9
+// These match vic_to_vdc_color entries; use directly in VDC attribute writes
+// to avoid a runtime table lookup in hot rendering paths.
+.const VDC_BLACK  =  0|VDC_ATTR_MODE   // COL_BLACK  ($00) → RGBI 0
+.const VDC_WHITE  = 15|VDC_ATTR_MODE   // COL_WHITE  ($01) → RGBI 15
+.const VDC_RED    =  4|VDC_ATTR_MODE   // COL_RED    ($02) → RGBI 4
+.const VDC_CYAN   = 11|VDC_ATTR_MODE   // COL_CYAN   ($03) → RGBI 11
+.const VDC_GREEN  =  2|VDC_ATTR_MODE   // COL_GREEN  ($05) → RGBI 2
+.const VDC_BLUE   =  1|VDC_ATTR_MODE   // COL_BLUE   ($06) → RGBI 1
+.const VDC_YELLOW = 14|VDC_ATTR_MODE   // COL_YELLOW ($07) → RGBI 14
+.const VDC_ORANGE = 12|VDC_ATTR_MODE   // COL_ORANGE ($08) → RGBI 12
+.const VDC_BROWN  =  6|VDC_ATTR_MODE   // COL_BROWN  ($09) → RGBI 6
+.const VDC_DGREY  =  8|VDC_ATTR_MODE   // COL_DGREY  ($0b) → RGBI 8
+.const VDC_GREY   =  7|VDC_ATTR_MODE   // COL_GREY   ($0c) → RGBI 7
+.const VDC_LGREY  =  7|VDC_ATTR_MODE   // COL_LGREY  ($0f) → RGBI 7 (L3: same as GREY)
+.const VDC_LGREEN = 10|VDC_ATTR_MODE   // COL_LGREEN ($0d) → RGBI 10
+.const VDC_LBLUE  =  9|VDC_ATTR_MODE   // COL_LBLUE  ($0e) → RGBI 9
 
 // ============================================================
 // Screen Subroutines
@@ -232,14 +231,6 @@ screen_set_cursor:
     lda screen_row_hi,x
     adc #0
     sta zp_screen_hi
-    // Apply centering offset: shift game content +20 cols into 80-col display
-    lda zp_screen_lo
-    clc
-    adc #SCREEN_COL_OFFSET
-    sta zp_screen_lo
-    bcc !ssc_s_done+
-    inc zp_screen_hi
-!ssc_s_done:
 
     lda color_row_lo,x
     clc
@@ -248,14 +239,6 @@ screen_set_cursor:
     lda color_row_hi,x
     adc #0
     sta zp_color_hi
-    // Apply centering offset to attribute address as well
-    lda zp_color_lo
-    clc
-    adc #SCREEN_COL_OFFSET
-    sta zp_color_lo
-    bcc !ssc_c_done+
-    inc zp_color_hi
-!ssc_c_done:
     rts
 
 // screen_translate_petscii — Convert PETSCII char to VDC Mixed Case (Set 1) screen code
@@ -330,8 +313,8 @@ screen_put_string:
     sei
     jsr screen_set_cursor   // Compute VDC addresses (no VDC access)
 
-    // Clamp max chars to viewport width (computed before sei to minimize IRQ-off window)
-    lda #(SCREEN_COLS - SCREEN_COL_OFFSET)
+    // Clamp max chars to screen width.
+    lda #SCREEN_COLS
     sec
     sbc zp_cursor_col
     bcs !sps_clamp_ok+
@@ -477,10 +460,7 @@ spca_char: .byte 0
 // Clobbers: A, X, Y
 screen_flash_at:
     stx sfa_row
-    tya                     // Apply centering offset so flash lands in the game area
-    clc
-    adc #SCREEN_COL_OFFSET
-    sta sfa_col
+    sty sfa_col
     php
     sei                     // IRQ off: protect all VDC read/write/restore operations
 

@@ -28,6 +28,14 @@ de_temp:        .byte 0       // scratch / device number
 // PETSCII "I0" for drive init (raw bytes — NOT screen codes)
 disk_init_cmd:  .byte $49, $30
 
+// Centering helpers
+.const DS_PROMPT_COL = (SCREEN_COLS - 16) / 2
+.const DS_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
+.const DS_ENTER_PROMPT_COL = (SCREEN_COLS - 19) / 2
+.const DS_ENTER_DIGIT_COL = DS_ENTER_PROMPT_COL + 19
+.const DS_NODEV_COL = (SCREEN_COLS - 16) / 2
+.const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
+
 // ============================================================
 // disk_prompt_save — Prompt to insert save disk
 // Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
@@ -63,14 +71,14 @@ disk_prompt:
     sta zp_text_color
     lda #10
     sta zp_cursor_row
-    lda #12                     // (40-16)/2 = 12
+    lda #DS_PROMPT_COL
     sta zp_cursor_col
     jsr screen_put_string
 
     // "PRESS ANY KEY" on row 11
     lda #11
     sta zp_cursor_row
-    lda #13                     // (40-13)/2 = 13
+    lda #DS_PRESS_ANY_KEY_COL
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0
@@ -164,13 +172,13 @@ disk_enter_device:
     sta zp_text_color
     lda #19
     sta zp_cursor_row
-    lda #10                     // (40-19)/2 ≈ 10
+    lda #DS_ENTER_PROMPT_COL
     sta zp_cursor_col
     lda #<de_prompt_str
     sta zp_ptr0
     lda #>de_prompt_str
     sta zp_ptr0_hi
-    jsr screen_put_string       // cursor lands at col 29 after 19-char prompt
+    jsr screen_put_string
     // Reset digit count
     lda #0
     sta de_count
@@ -184,7 +192,7 @@ disk_enter_device:
     dec de_count
     lda de_count                // new count = digit column offset
     clc
-    adc #29                     // erase col 29+new_count
+    adc #DS_ENTER_DIGIT_COL
     sta zp_cursor_col
     lda #19
     sta zp_cursor_row
@@ -211,7 +219,7 @@ disk_enter_device:
     pha                         // save digit for screen_put_char
     txa
     clc
-    adc #29                     // col = 29 + digit index
+    adc #DS_ENTER_DIGIT_COL
     sta zp_cursor_col
     lda #19
     sta zp_cursor_row
@@ -262,7 +270,7 @@ disk_enter_device:
     sta zp_text_color
     lda #20
     sta zp_cursor_row
-    lda #12                     // (40-16)/2 = 12
+    lda #DS_NODEV_COL
     sta zp_cursor_col
     lda #<de_nodev_str
     sta zp_ptr0
@@ -296,7 +304,7 @@ disk_enter_device:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #15                     // center: (40-10)/2 = 15 for "[Drive NN]"
+    lda #DS_DRIVE_IND_COL
     sta zp_cursor_col
     lda #<de_ind_pfx
     sta zp_ptr0

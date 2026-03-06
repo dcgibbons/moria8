@@ -604,11 +604,17 @@ player_get_stat_bonus:
 // Renders rows 12-16 of the character sheet.
 // Preserves: nothing
 // ============================================================
+#if C128
+.const UDBG_COL = VIEWPORT_X + 1
+#else
+.const UDBG_COL = 1
+#endif
+
 ui_char_draw_background:
     // --- Sex / Social Class (row 12) ---
     lda #12
     sta zp_cursor_row
-    lda #1
+    lda #UDBG_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -658,7 +664,7 @@ ui_char_draw_background:
     clc
     adc #13
     sta zp_cursor_row
-    lda #1
+    lda #UDBG_COL
     sta zp_cursor_col
     pla
     tax

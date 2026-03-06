@@ -15,6 +15,14 @@
 
 #importonce
 
+#if C128
+.const URCL_TITLE_COL = (SCREEN_COLS - 14) / 2
+.const URCL_FOOTER_COL = (SCREEN_COLS - 13) / 2
+#else
+.const URCL_TITLE_COL = 13
+.const URCL_FOOTER_COL = 13
+#endif
+
 // ============================================================
 // ui_recall_display — Show recall screen for one creature
 // ============================================================
@@ -26,7 +34,7 @@ ui_recall_display:
     // --- Title (row 0) ---
     lda #0
     sta zp_cursor_row
-    lda #13
+    lda #URCL_TITLE_COL
     sta zp_cursor_col
     lda #<rcl_s_title
     sta zp_ptr0
@@ -194,7 +202,7 @@ ui_recall_display:
     sta zp_text_color
     lda #16
     sta zp_cursor_row
-    lda #13
+    lda #URCL_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0

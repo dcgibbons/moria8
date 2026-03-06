@@ -4,6 +4,14 @@
 // CMD_INVENTORY shows carried items (slots 0-21).
 // CMD_EQUIPMENT shows equipped items (slots 22-29).
 
+#if C128
+.const UINV_TITLE_COL = (SCREEN_COLS - 9) / 2
+.const UINV_FOOTER_COL = (SCREEN_COLS - 13) / 2
+#else
+.const UINV_TITLE_COL = 15
+.const UINV_FOOTER_COL = 12
+#endif
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -19,7 +27,7 @@ ui_inv_display:
     // Title
     lda #0
     sta zp_cursor_row
-    lda #15
+    lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<uinv_title_str
     sta zp_ptr0
@@ -30,7 +38,7 @@ ui_inv_display:
     // Separator
     lda #1
     sta zp_cursor_row
-    lda #15
+    lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<uinv_sep_str
     sta zp_ptr0
@@ -131,7 +139,7 @@ ui_inv_display:
     sta zp_text_color
     lda #24
     sta zp_cursor_row
-    lda #12
+    lda #UINV_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0
@@ -152,7 +160,7 @@ ui_equip_display:
     // Title
     lda #0
     sta zp_cursor_row
-    lda #15
+    lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<ueq_title_str
     sta zp_ptr0
@@ -163,7 +171,7 @@ ui_equip_display:
     // Separator
     lda #1
     sta zp_cursor_row
-    lda #15
+    lda #UINV_TITLE_COL
     sta zp_cursor_col
     lda #<uinv_sep_str
     sta zp_ptr0
@@ -259,7 +267,7 @@ ui_equip_display:
     sta zp_text_color
     lda #24
     sta zp_cursor_row
-    lda #12
+    lda #UINV_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0

@@ -19,6 +19,11 @@
 // Constants
 // ============================================================
 .const HELP_LINE_COUNT = 23
+.const HELP_FRAME_LEFT_COL = 0
+.const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
+.const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
+.const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
+.const HELP_FOOTER_COL = (SCREEN_COLS - 13) / 2
 
 // Inline control codes for help_draw_line
 .const CT = $fc     // Tab-to-column (next byte = target column)
@@ -62,7 +67,7 @@ ui_help_display:
     ldy zp_temp0                // row
     jsr screen_put_char_at
     lda #BOX_V
-    ldx #39                     // col 39
+    ldx #HELP_FRAME_RIGHT_COL
     ldy zp_temp0
     jsr screen_put_char_at
     inc zp_temp0
@@ -74,16 +79,16 @@ ui_help_display:
     lda #0
     jsr help_draw_hborder
 
-    // Title text "Command Reference" at (0,10) in WHITE
+    // Title text "Command Reference" centered on row 0.
     lda #COL_WHITE
     sta zp_text_color
     lda #0
     sta zp_cursor_row
-    lda #10
+    lda #HELP_TITLE_COL
     sta zp_cursor_col
-    lda #<help_title_str
+    lda #<uh_title_str
     sta zp_ptr0
-    lda #>help_title_str
+    lda #>uh_title_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
@@ -91,23 +96,23 @@ ui_help_display:
     lda #24
     jsr help_draw_hborder
 
-    // Footer text "Press any key" at (24,10) in WHITE
+    // Footer text "Press any key" centered on row 24.
     lda #COL_WHITE
     sta zp_text_color
     lda #24
     sta zp_cursor_row
-    lda #10
+    lda #HELP_FOOTER_COL
     sta zp_cursor_col
-    lda #<press_key_str
+    lda #<uh_press_key_str
     sta zp_ptr0
-    lda #>press_key_str
+    lda #>uh_press_key_str
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // 5. Draw content lines — sequential walk through packed help_lines
-    lda #<help_lines
+    // 5. Draw content lines — sequential walk through packed help data.
+    lda help_lines_src_lo
     sta zp_ptr0
-    lda #>help_lines
+    lda help_lines_src_hi
     sta zp_ptr0_hi
     lda #1
     sta help_line_idx           // row counter (rows 1-23)
@@ -236,7 +241,7 @@ help_draw_line:
 
 // help_draw_hborder — Draw a horizontal border: +---...---+
 // Input: A = row number
-// Draws 40-char border: + then 38 dashes then +
+// Draws screen-width border: + then (SCREEN_COLS-2) dashes then +
 help_draw_hborder:
     sta zp_cursor_row
     lda #COL_GREY
@@ -245,7 +250,7 @@ help_draw_hborder:
     sta zp_cursor_col
     lda #BOX_TL                     // + (corner)
     jsr screen_put_char
-    ldx #38
+    ldx #HELP_FRAME_HSEG_COUNT
 !hb_dash:
     lda #BOX_H                      // - (horizontal)
     jsr screen_put_char
@@ -253,3 +258,17 @@ help_draw_hborder:
     bne !hb_dash-
     lda #BOX_TR                     // + (corner)
     jmp screen_put_char             // tail call
+
+// Local title/footer strings keep ui_help.s linkable in isolated unit tests.
+uh_title_str: .text "Command Reference" ; .byte 0
+uh_press_key_str: .text "Press any key" ; .byte 0
+
+// Bindable help-line source pointer. Main programs set this to help_lines.
+// Fallback keeps isolated unit assemblies linkable even without ui_help_data.s.
+help_lines_src_lo: .byte <uh_help_lines_fallback
+help_lines_src_hi: .byte >uh_help_lines_fallback
+
+uh_help_lines_fallback:
+    .for (var i = 0; i < HELP_LINE_COUNT; i++) {
+        .byte HTYPE_BLANK, $00
+    }

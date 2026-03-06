@@ -15,6 +15,28 @@
 //   Row 12: Depth: Town   Hunger: Full
 //   Row 14: [PRESS ANY KEY]
 
+#if C128
+.const UCHAR_TITLE_COL = (SCREEN_COLS - 14) / 2
+.const UCHAR_FOOTER_COL = (SCREEN_COLS - 13) / 2
+.const UCHAR_COL_L = VIEWPORT_X + 1
+.const UCHAR_COL_NAME = VIEWPORT_X + 7
+.const UCHAR_COL_MID = VIEWPORT_X + 18
+.const UCHAR_COL_R = VIEWPORT_X + 22
+.const UCHAR_STAT_COL0 = VIEWPORT_X + 1
+.const UCHAR_STAT_COL1 = VIEWPORT_X + 14
+.const UCHAR_STAT_COL2 = VIEWPORT_X + 27
+#else
+.const UCHAR_TITLE_COL = 12
+.const UCHAR_FOOTER_COL = 10
+.const UCHAR_COL_L = 1
+.const UCHAR_COL_NAME = 7
+.const UCHAR_COL_MID = 18
+.const UCHAR_COL_R = 22
+.const UCHAR_STAT_COL0 = 1
+.const UCHAR_STAT_COL1 = 14
+.const UCHAR_STAT_COL2 = 27
+#endif
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -29,7 +51,7 @@ ui_char_display:
     // Title
     lda #0
     sta zp_cursor_row
-    lda #12
+    lda #UCHAR_TITLE_COL
     sta zp_cursor_col
     lda #<char_title_str
     sta zp_ptr0
@@ -43,7 +65,7 @@ ui_char_display:
     // --- Name ---
     lda #2
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_name_label
     sta zp_ptr0
@@ -53,7 +75,7 @@ ui_char_display:
 
     lda #COL_WHITE
     sta zp_text_color
-    lda #7                  // Name follows "Name: " (6 chars from col 1)
+    lda #UCHAR_COL_NAME
     sta zp_cursor_col
     lda #<(player_data + PL_NAME)
     sta zp_ptr0
@@ -66,7 +88,7 @@ ui_char_display:
     sta zp_text_color
     lda #3
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_race_label
     sta zp_ptr0
@@ -85,7 +107,7 @@ ui_char_display:
 
     lda #COL_LGREY
     sta zp_text_color
-    lda #22
+    lda #UCHAR_COL_R
     sta zp_cursor_col
     lda #<char_class_label
     sta zp_ptr0
@@ -107,7 +129,7 @@ ui_char_display:
     sta zp_text_color
     lda #4
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_level_label
     sta zp_ptr0
@@ -122,7 +144,7 @@ ui_char_display:
 
     lda #COL_LGREY
     sta zp_text_color
-    lda #22
+    lda #UCHAR_COL_R
     sta zp_cursor_col
     lda #<status_ac_str
     sta zp_ptr0
@@ -143,7 +165,7 @@ ui_char_display:
     sta zp_text_color
     lda #9
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<status_hp_str
     sta zp_ptr0
@@ -169,7 +191,7 @@ ui_char_display:
 
     lda #COL_LGREY
     sta zp_text_color
-    lda #18
+    lda #UCHAR_COL_MID
     sta zp_cursor_col
     lda #<char_mana_label
     sta zp_ptr0
@@ -191,7 +213,7 @@ ui_char_display:
     sta zp_text_color
     lda #10
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_gold_label
     sta zp_ptr0
@@ -209,7 +231,7 @@ ui_char_display:
 
     lda #COL_LGREY
     sta zp_text_color
-    lda #18
+    lda #UCHAR_COL_MID
     sta zp_cursor_col
     lda #<status_exp_str
     sta zp_ptr0
@@ -233,7 +255,7 @@ ui_char_display:
     sta zp_text_color
     lda #11
     sta zp_cursor_row
-    lda #1
+    lda #UCHAR_COL_L
     sta zp_cursor_col
     lda #<char_spells_label
     sta zp_ptr0
@@ -259,7 +281,7 @@ ui_char_display:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #10
+    lda #UCHAR_FOOTER_COL
     sta zp_cursor_col
     lda #<press_key_str
     sta zp_ptr0
@@ -295,15 +317,15 @@ ui_char_draw_stats:
     // Column: 0=col 1, 1=col 14, 2=col 27
     cmp #0
     bne !not_0+
-    lda #1
+    lda #UCHAR_STAT_COL0
     jmp !set_col+
 !not_0:
     cmp #1
     bne !not_1+
-    lda #14
+    lda #UCHAR_STAT_COL1
     jmp !set_col+
 !not_1:
-    lda #27
+    lda #UCHAR_STAT_COL2
 !set_col:
     sta zp_cursor_col
 

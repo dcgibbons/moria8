@@ -7,6 +7,37 @@
 //
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
+#if C128
+.const STS_BASE_COL = VIEWPORT_X
+.const STS_ROW21_LV_COL = STS_BASE_COL + 28
+.const STS_ROW21_DL_COL = STS_BASE_COL + 34
+.const STS_ROW22_ST_COL = STS_BASE_COL + 0
+.const STS_ROW22_IN_COL = STS_BASE_COL + 7
+.const STS_ROW22_WI_COL = STS_BASE_COL + 14
+.const STS_ROW22_DX_COL = STS_BASE_COL + 21
+.const STS_ROW22_CO_COL = STS_BASE_COL + 28
+.const STS_ROW22_CH_COL = STS_BASE_COL + 35
+.const STS_ROW23_HP_COL = STS_BASE_COL + 0
+.const STS_ROW23_MP_COL = STS_BASE_COL + 10
+.const STS_ROW23_AC_COL = STS_BASE_COL + 19
+.const STS_ROW23_AU_COL = STS_BASE_COL + 25
+.const STS_ROW23_HUNGER_COL = STS_BASE_COL + 34
+#else
+.const STS_ROW21_LV_COL = 28
+.const STS_ROW21_DL_COL = 34
+.const STS_ROW22_ST_COL = 0
+.const STS_ROW22_IN_COL = 7
+.const STS_ROW22_WI_COL = 14
+.const STS_ROW22_DX_COL = 21
+.const STS_ROW22_CO_COL = 28
+.const STS_ROW22_CH_COL = 35
+.const STS_ROW23_HP_COL = 0
+.const STS_ROW23_MP_COL = 10
+.const STS_ROW23_AC_COL = 19
+.const STS_ROW23_AU_COL = 25
+.const STS_ROW23_HUNGER_COL = 34
+#endif
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -35,7 +66,7 @@ status_draw:
     // Player name
     lda #COL_WHITE
     sta zp_text_color
-    lda #0
+    lda #STS_ROW22_ST_COL
     sta zp_cursor_col
     lda #<(player_data + PL_NAME)
     sta zp_ptr0
@@ -57,8 +88,7 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
-    // "LV:" at col 28
-    lda #28
+    lda #STS_ROW21_LV_COL
     sta zp_cursor_col
     lda #<status_lv_str
     sta zp_ptr0
@@ -71,10 +101,10 @@ status_draw:
     lda zp_player_lvl
     jsr screen_put_decimal
 
-    // "DL:" at col 34
+    // "DL:"
     lda #COL_STATUS
     sta zp_text_color
-    lda #34
+    lda #STS_ROW21_DL_COL
     sta zp_cursor_col
     lda #<status_dl_str
     sta zp_ptr0
@@ -95,8 +125,7 @@ status_draw:
     lda #COL_STATUS
     sta zp_text_color
 
-    // ST: at col 0
-    lda #0
+    lda #STS_ROW22_ST_COL
     sta zp_cursor_col
     lda #<stat_st_str
     sta zp_ptr0
@@ -108,10 +137,10 @@ status_draw:
     lda zp_player_str
     jsr status_put_stat_val
 
-    // IN: at col 7
+    // IN:
     lda #COL_STATUS
     sta zp_text_color
-    lda #7
+    lda #STS_ROW22_IN_COL
     sta zp_cursor_col
     lda #<stat_in_str
     sta zp_ptr0
@@ -123,10 +152,10 @@ status_draw:
     lda zp_player_int
     jsr status_put_stat_val
 
-    // WI: at col 14
+    // WI:
     lda #COL_STATUS
     sta zp_text_color
-    lda #14
+    lda #STS_ROW22_WI_COL
     sta zp_cursor_col
     lda #<stat_wi_str
     sta zp_ptr0
@@ -138,10 +167,10 @@ status_draw:
     lda zp_player_wis
     jsr status_put_stat_val
 
-    // DX: at col 21
+    // DX:
     lda #COL_STATUS
     sta zp_text_color
-    lda #21
+    lda #STS_ROW22_DX_COL
     sta zp_cursor_col
     lda #<stat_dx_str
     sta zp_ptr0
@@ -153,10 +182,10 @@ status_draw:
     lda zp_player_dex
     jsr status_put_stat_val
 
-    // CO: at col 28
+    // CO:
     lda #COL_STATUS
     sta zp_text_color
-    lda #28
+    lda #STS_ROW22_CO_COL
     sta zp_cursor_col
     lda #<stat_co_str
     sta zp_ptr0
@@ -168,10 +197,10 @@ status_draw:
     lda zp_player_con
     jsr status_put_stat_val
 
-    // CH: at col 35
+    // CH:
     lda #COL_STATUS
     sta zp_text_color
-    lda #35
+    lda #STS_ROW22_CH_COL
     sta zp_cursor_col
     lda #<stat_ch_str
     sta zp_ptr0
@@ -191,8 +220,7 @@ status_draw:
     lda #COL_STATUS
     sta zp_text_color
 
-    // "HP:" at col 0
-    lda #0
+    lda #STS_ROW23_HP_COL
     sta zp_cursor_col
     lda #<status_hp_str
     sta zp_ptr0
@@ -223,10 +251,10 @@ status_draw:
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // "MP:" at col 10
+    // "MP:"
     lda #COL_STATUS
     sta zp_text_color
-    lda #10
+    lda #STS_ROW23_MP_COL
     sta zp_cursor_col
     lda #<status_mp_str
     sta zp_ptr0
@@ -247,10 +275,10 @@ status_draw:
     lda zp_player_mmp
     jsr screen_put_decimal
 
-    // "AC:" at col 19
+    // "AC:"
     lda #COL_STATUS
     sta zp_text_color
-    lda #19
+    lda #STS_ROW23_AC_COL
     sta zp_cursor_col
     lda #<status_ac_str
     sta zp_ptr0
@@ -263,10 +291,10 @@ status_draw:
     lda zp_player_ac
     jsr screen_put_decimal
 
-    // "AU:" at col 25
+    // "AU:"
     lda #COL_YELLOW
     sta zp_text_color
-    lda #25
+    lda #STS_ROW23_AU_COL
     sta zp_cursor_col
     lda #<status_au_str
     sta zp_ptr0
@@ -280,8 +308,7 @@ status_draw:
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // Hunger state at col 34
-    lda #34
+    lda #STS_ROW23_HUNGER_COL
     sta zp_cursor_col
     // Color-code hunger
     lda zp_hunger_state

@@ -614,13 +614,18 @@ game_over_str:
     .text "R)EBOOT S)TART Q)UIT" ; .byte 0
 game_over_str_end:
 
+.const GAME_OVER_COL = (SCREEN_COLS - 20) / 2
+.const TITLE_MENU_COL = (SCREEN_COLS - 23) / 2
+.const DISK_MENU_COL = (SCREEN_COLS - 22) / 2
+.const SAVE_DISK_IND_COL = (SCREEN_COLS - 11) / 2
+
 game_over_prompt:
     jsr screen_clear
     lda #COL_WHITE
     sta zp_text_color
     lda #12
     sta zp_cursor_row
-    lda #9                      // Keep C64-style centering for MVP
+    lda #GAME_OVER_COL
     sta zp_cursor_col
     lda #<game_over_str
     sta zp_ptr0
@@ -755,6 +760,11 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
+    lda #<help_lines
+    sta help_lines_src_lo
+    lda #>help_lines
+    sta help_lines_src_hi
+
     jsr screen_clear
 
     jsr title_load_and_draw
@@ -773,7 +783,7 @@ restart_entry:
     sta zp_text_color
     lda #17
     sta zp_cursor_row
-    lda #8
+    lda #TITLE_MENU_COL
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
@@ -802,7 +812,7 @@ disk_menu_show:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #9                  // Keep C64-style centering for MVP
+    lda #DISK_MENU_COL
     sta zp_cursor_col
     lda #<ds_menu_str
     sta zp_ptr0
@@ -851,7 +861,7 @@ disk_menu_show:
     sta zp_text_color
     lda #18
     sta zp_cursor_row
-    lda #14                 // Keep C64-style centering for MVP
+    lda #SAVE_DISK_IND_COL
     sta zp_cursor_col
     lda #<ds_dual_str
     sta zp_ptr0
@@ -877,53 +887,6 @@ disk_menu_show:
     jsr input_get_key
     jmp !title_menu_loop-
 
-
-// ============================================================
-// Imports — Game Engine (Safe to spill past $C000)
-// ============================================================
-#import "../common/tables.s"
-#import "../common/item_defs.s"
-#import "../common/reu.s"
-#import "../common/rng.s"
-#import "../common/math.s"
-#import "../common/player.s"
-#import "../common/ui_messages.s"
-#import "../common/ui_status.s"
-#import "../common/stat_display.s"
-#import "../common/huffman.s"
-
-#import "../common/dungeon_data.s"
-#import "../common/dungeon_features.s"
-#import "../common/monster.s"
-#import "../common/tier_manager.s"
-#import "../common/overlay.s"
-#import "../common/monster_ai.s"
-#import "../common/recall.s"
-#import "../common/monster_magic.s"
-#import "../common/item.s"
-#import "../common/player_items.s"
-#import "../common/spell_data.s"
-#import "../common/spell_effects.s"
-#import "../common/player_magic.s"
-#import "dungeon_render_vdc.s"
-#import "../common/dungeon_los.s"
-#import "../common/turn.s"
-#import "../common/store_data.s"
-#import "../common/monster_attack.s"
-#import "../common/string_bank.s"
-#import "../common/save.s"
-#import "../common/disk_swap.s"
-#import "../common/score_io.s"
-#import "../common/title_screen.s"
-#import "../common/game_loop.s"
-#import "../common/ui_help_clear.s"
-#import "../common/player_move.s"
-#import "../common/combat.s"
-#import "../common/projectile.s"
-#import "../common/ranged_fire.s"
-#import "../common/throw.s"
-#import "../common/bash.s"
-#import "../common/tunnel.s"
 
 // ============================================================
 // Dungeon gen overlay trampoline — overlays now at $0400 (Safe Zone)
@@ -1054,6 +1017,53 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
+// ============================================================
+// Imports — Game Engine (Safe to spill past $C000)
+// ============================================================
+#import "../common/tables.s"
+#import "../common/item_defs.s"
+#import "../common/reu.s"
+#import "../common/rng.s"
+#import "../common/math.s"
+#import "../common/player.s"
+#import "../common/ui_messages.s"
+#import "../common/ui_status.s"
+#import "../common/stat_display.s"
+#import "../common/huffman.s"
+
+#import "../common/dungeon_data.s"
+#import "../common/dungeon_features.s"
+#import "../common/monster.s"
+#import "../common/tier_manager.s"
+#import "../common/overlay.s"
+#import "../common/monster_ai.s"
+#import "../common/recall.s"
+#import "../common/monster_magic.s"
+#import "../common/item.s"
+#import "../common/player_items.s"
+#import "../common/spell_data.s"
+#import "../common/spell_effects.s"
+#import "../common/player_magic.s"
+#import "dungeon_render_vdc.s"
+#import "../common/dungeon_los.s"
+#import "../common/turn.s"
+#import "../common/store_data.s"
+#import "../common/monster_attack.s"
+#import "../common/string_bank.s"
+#import "../common/save.s"
+#import "../common/disk_swap.s"
+#import "../common/score_io.s"
+#import "../common/title_screen.s"
+#import "../common/game_loop.s"
+#import "../common/ui_help_clear.s"
+#import "../common/player_move.s"
+#import "../common/combat.s"
+#import "../common/projectile.s"
+#import "../common/ranged_fire.s"
+#import "../common/throw.s"
+#import "../common/bash.s"
+#import "../common/tunnel.s"
+
 // Init-only strings — kept in main RAM
 // ============================================================
 title_str:
@@ -1082,14 +1092,14 @@ banked_payload:
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
     #import "../common/string_bank_banked.s"
+    #import "../common/special_rooms.s"
+    #import "../common/ego_items.s"
+    #import "../common/ui_home.s"
+    #import "../common/ui_help_data.s"
+    #import "../common/ui_help.s"
     #import "../common/ui_recall.s"
     #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
-    #import "../common/ui_home.s"
-    #import "../common/ui_help.s"
-    #import "../common/ui_help_data.s"
-    #import "../common/special_rooms.s"
-    #import "../common/ego_items.s"
 
 banked_code_end:
 }
@@ -1131,10 +1141,16 @@ program_end:
 .assert "Help renderer stays out of overlay window", ui_help_display >= $F000, true
 .assert "Help title text stays out of overlay window", help_title_str >= $F000, true
 .assert "Help content table stays out of overlay window", help_lines >= $F000, true
+.assert "Character sheet renderer stays out of overlay window", ui_char_display >= $F000, true
+.assert "Recall renderer stays out of overlay window", ui_recall_display >= $F000, true
+.assert "Inventory renderer stays out of overlay window", ui_inv_display >= $F000, true
+.assert "Equipment renderer stays out of overlay window", ui_equip_display >= $F000, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true
+.assert "Message history buffer matches configured width", (msg_hist_idx - msg_history) == MSG_HIST_BYTES, true
+.assert "VDC attribute mode keeps alternate charset enabled", VDC_ATTR_MODE == $80, true
 
 
 // ============================================================

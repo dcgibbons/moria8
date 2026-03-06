@@ -53,7 +53,8 @@ run_symbol_placement_check() {
 from pathlib import Path
 import re
 sym = Path("main.sym").read_text().splitlines()
-main_source = Path("main.s").read_text().splitlines()
+main_text = Path("main.s").read_text()
+main_source = main_text.splitlines()
 labels = {}
 for line in sym:
     m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
@@ -92,6 +93,12 @@ for name in required:
     if labels[name] >= 0xD000:
         bad.append((name, labels[name]))
 
+if "msg_history" not in labels or "msg_hist_idx" not in labels:
+    missing.append("msg_history/msg_hist_idx")
+else:
+    if labels["msg_hist_idx"] - labels["msg_history"] != (8 * 80):
+        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"]))
+
 for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
@@ -107,6 +114,10 @@ for name in ("ui_help_display",):
     # Help renderer code must not execute from $E000-$EFFF overlay window.
     if labels[name] < 0xF000:
         bad.append((name, labels[name]))
+
+if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         // 20\n    jsr vdc_write_reg" not in main_text:
+    print("vdc_attr_base_init: expected reg21/reg20 init sequence with lda #8 for reg20")
+    raise SystemExit(1)
 
 # Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
 for name, addr in labels.items():
@@ -125,6 +136,76 @@ if missing or bad or missing_asserts:
     for name, addr in bad:
         print(f"high:{name}=${addr:04X}")
     raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_80col_layout_guard_check() {
+    echo -n "  layout80_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+root = Path("..").resolve()
+screen = (root / "c128" / "screen_vdc.s").read_text()
+render = (root / "c128" / "dungeon_render_vdc.s").read_text()
+main128 = (root / "c128" / "main.s").read_text()
+msgs = (root / "common" / "ui_messages.s").read_text()
+status = (root / "common" / "ui_status.s").read_text()
+help_s = (root / "common" / "ui_help.s").read_text()
+swap = (root / "common" / "disk_swap.s").read_text()
+char_s = (root / "common" / "ui_character.s").read_text()
+sysinfo = (root / "common" / "title_sysinfo_banked.s").read_text()
+
+def must_contain(text: str, snippet: str, err: str):
+    if snippet not in text:
+        print(err)
+        raise SystemExit(1)
+
+def must_not_contain(text: str, snippet: str, err: str):
+    if snippet in text:
+        print(err)
+        raise SystemExit(1)
+
+must_contain(screen, ".const SCREEN_COLS = 80", "screen_vdc must keep SCREEN_COLS=80")
+must_contain(screen, ".const VIEWPORT_X  = 21", "screen_vdc must use explicit VIEWPORT_X=21")
+must_contain(screen, ".const VDC_ATTR_MODE = $80", "screen_vdc must keep VDC_ATTR_MODE=$80 (Set 1 charset)")
+must_not_contain(screen, "SCREEN_COL_OFFSET", "screen_vdc must not use implicit SCREEN_COL_OFFSET")
+must_not_contain(render, "VIEWPORT_X + SCREEN_COL_OFFSET", "dungeon_render_vdc must use explicit VIEWPORT_X only")
+
+must_contain(msgs, ".const MSG_HIST_LEN   = SCREEN_COLS", "ui_messages must size history by SCREEN_COLS")
+must_contain(status, "#if C128", "ui_status must use compile-time C128 layout constants")
+must_contain(help_s, ".const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1", "ui_help border must use SCREEN_COLS")
+must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 16) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
+must_contain(main128, "lda #TITLE_MENU_COL", "title menu must use TITLE_MENU_COL")
+must_contain(char_s, "lda #10\n    sta zp_cursor_row", "ui_character gold/xp row must stay at row 10")
+must_contain(char_s, ".const UCHAR_COL_L = VIEWPORT_X + 1", "ui_character C128 columns must be viewport-aligned")
+must_contain(sysinfo, "ldx #((SCREEN_COLS - 15) / 2)", "title sysinfo baseline must be centered on C128")
+must_contain(status, "lda #STS_ROW22_ST_COL\n    sta zp_cursor_col", "status row 21 name must share status base alignment")
+
+for src_name, src_text in (
+    ("ui_messages.s", msgs),
+    ("ui_status.s", status),
+    ("ui_help.s", help_s),
+    ("disk_swap.s", swap),
+):
+    if "zp_machine_type" in src_text:
+        print(f"{src_name} reintroduced runtime machine checks")
+        raise SystemExit(1)
 
 print("ok")
 PY
@@ -533,12 +614,14 @@ echo "=== Moria C128 Tests ==="
 run_main_assembly_check
 run_symbol_placement_check
 run_prompt_irq_guard_check
+run_80col_layout_guard_check
 run_test "minimal128" "tests/test_minimal128.s"
 run_test "memory128" "tests/test_memory128.s"
 run_test "db128" "tests/test_db128.s"
 run_test "tier128" "tests/test_tier128.s"
 run_test "input128" "tests/test_input128.s"
 run_test "msg_prompt128" "tests/test_msg_prompt128.s" 120000000
+run_test "vdc_attr128" "tests/test_vdc_attr128.s"
 run_test "dungeon128" "tests/test_dungeon128.s" 50000000
 run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke

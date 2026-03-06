@@ -7,6 +7,8 @@
 // Fallback: if KERNAL LOAD fails (no disk, file not found),
 // displays a simple text title (original behavior).
 
+.const TITLE_FALLBACK_COL = (SCREEN_COLS - 10) / 2
+
 // ============================================================
 // title_load_and_draw — Load and render the title screen
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
@@ -84,7 +86,7 @@ title_load_and_draw:
     sta zp_ptr0
     lda #>title_str
     sta zp_ptr0_hi
-    lda #15                 // Center: (40-10)/2
+    lda #TITLE_FALLBACK_COL
     sta zp_cursor_col
     jsr screen_put_string
     :ExitKernal()
@@ -119,6 +121,10 @@ title_render_data:
     jsr mmu_safe_map_read_ptr1
 #else
     lda (zp_ptr1),y
+#endif
+#if C128
+    clc
+    adc #20
 #endif
     sta zp_cursor_col
 

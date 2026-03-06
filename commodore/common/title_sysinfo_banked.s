@@ -9,11 +9,19 @@ title_show_sysinfo_banked:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
-    // Start column: 7 if REU, 12 if not
+    // Start column: centered baseline; shift left when REU info is shown.
+#if C128
+    ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
+#else
     ldx #12
+#endif
     lda reu_present
     beq !+
-    ldx #7
+    dex
+    dex
+    dex
+    dex
+    dex
 !:  stx zp_cursor_col
 
     // Machine type: X = 0(C64), 1(C128), 2(SX-64)

@@ -355,7 +355,7 @@ render_viewport:
     // Char row: set VDC address, select reg 31 once, then blast 38 bytes
     lda zp_screen_lo
     clc
-    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
+    adc #VIEWPORT_X
     tay
     lda zp_screen_hi
     adc #0
@@ -375,7 +375,7 @@ render_viewport:
     // Attr row: same pattern
     lda zp_color_lo
     clc
-    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
+    adc #VIEWPORT_X
     tay
     lda zp_color_hi
     adc #0
@@ -454,12 +454,12 @@ render_single_tile:
     lda color_row_hi,x
     sta zp_color_hi
 
-    // Compute and save screen column offset (viewport-relative + centering offset)
+    // Compute and save absolute screen column (viewport-relative + VIEWPORT_X)
     lda zp_temp0
     sec
     sbc zp_view_x
     clc
-    adc #(VIEWPORT_X + SCREEN_COL_OFFSET)
+    adc #VIEWPORT_X
     sta rst_col_tmp
 
     // Read map byte at (map_x, map_y)
