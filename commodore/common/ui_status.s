@@ -8,21 +8,22 @@
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
 #if C128
-.const STS_BASE_COL = VIEWPORT_X
-.const STS_ROW21_LV_COL = STS_BASE_COL + 28
-.const STS_ROW21_DL_COL = STS_BASE_COL + 34
-.const STS_ROW22_ST_COL = STS_BASE_COL + 0
-.const STS_ROW22_IN_COL = STS_BASE_COL + 7
-.const STS_ROW22_WI_COL = STS_BASE_COL + 14
-.const STS_ROW22_DX_COL = STS_BASE_COL + 21
-.const STS_ROW22_CO_COL = STS_BASE_COL + 28
-.const STS_ROW22_CH_COL = STS_BASE_COL + 35
-.const STS_ROW23_HP_COL = STS_BASE_COL + 0
-.const STS_ROW23_MP_COL = STS_BASE_COL + 10
-.const STS_ROW23_AC_COL = STS_BASE_COL + 19
-.const STS_ROW23_AU_COL = STS_BASE_COL + 25
-.const STS_ROW23_HUNGER_COL = STS_BASE_COL + 34
+.const STS_ROW21_NAME_COL = 1
+.const STS_ROW21_LV_COL = 58
+.const STS_ROW21_DL_COL = 66
+.const STS_ROW22_ST_COL = 1
+.const STS_ROW22_IN_COL = 14
+.const STS_ROW22_WI_COL = 27
+.const STS_ROW22_DX_COL = 40
+.const STS_ROW22_CO_COL = 53
+.const STS_ROW22_CH_COL = 66
+.const STS_ROW23_HP_COL = 1
+.const STS_ROW23_MP_COL = 16
+.const STS_ROW23_AC_COL = 31
+.const STS_ROW23_AU_COL = 44
+.const STS_ROW23_HUNGER_COL = 63
 #else
+.const STS_ROW21_NAME_COL = 0
 .const STS_ROW21_LV_COL = 28
 .const STS_ROW21_DL_COL = 34
 .const STS_ROW22_ST_COL = 0
@@ -66,7 +67,7 @@ status_draw:
     // Player name
     lda #COL_WHITE
     sta zp_text_color
-    lda #STS_ROW22_ST_COL
+    lda #STS_ROW21_NAME_COL
     sta zp_cursor_col
     lda #<(player_data + PL_NAME)
     sta zp_ptr0

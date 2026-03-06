@@ -605,7 +605,7 @@ player_get_stat_bonus:
 // Preserves: nothing
 // ============================================================
 #if C128
-.const UDBG_COL = VIEWPORT_X + 1
+.const UDBG_COL = (SCREEN_COLS - 36) / 2
 #else
 .const UDBG_COL = 1
 #endif

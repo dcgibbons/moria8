@@ -1,8 +1,8 @@
 // dungeon_render_vdc.s — VDC viewport rendering (C128 80-column)
 //
-// Reads the map at $C000 and draws a 38x19 viewport via VDC register writes.
+// Reads the map at $C000 and draws a 78x19 viewport via VDC register writes.
 // The viewport is centered on the player position, clamped to map edges.
-// Screen layout: viewport at rows 2-20, columns 1-38 (same as C64 for MVP).
+// Screen layout: viewport at rows 2-20, columns 1-78.
 //
 // Row-batch VDC writes: for each viewport row, screen codes are streamed
 // via VDC auto-increment, then attribute bytes are buffered and streamed
@@ -45,7 +45,7 @@ viewport_update:
     sta zp_view_y
     rts
 
-// render_viewport — Draw the 38x19 viewport to VDC screen
+// render_viewport — Draw the 78x19 viewport to VDC screen
 // For each row: stream screen codes via VDC auto-increment,
 // buffer translated colors, then stream attributes.
 // Preserves: nothing
@@ -94,7 +94,7 @@ render_viewport:
     lda color_row_hi,x
     sta zp_color_hi
 
-    // Inner loop: 38 columns
+    // Inner loop: VIEWPORT_W columns
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
 
@@ -352,7 +352,7 @@ render_viewport:
     // saving ~13K cycles/refresh, while keeping code size compact (18 bytes per pass).
     sei
 
-    // Char row: set VDC address, select reg 31 once, then blast 38 bytes
+    // Char row: set VDC address, select reg 31 once, then blast VIEWPORT_W bytes
     lda zp_screen_lo
     clc
     adc #VIEWPORT_X
@@ -820,5 +820,5 @@ rla_cur_y: .byte 0
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Viewport width", VIEWPORT_W, 38
+.assert "Viewport width", VIEWPORT_W, 78
 .assert "Viewport height", VIEWPORT_H, 19

@@ -182,7 +182,8 @@ def must_not_contain(text: str, snippet: str, err: str):
         raise SystemExit(1)
 
 must_contain(screen, ".const SCREEN_COLS = 80", "screen_vdc must keep SCREEN_COLS=80")
-must_contain(screen, ".const VIEWPORT_X  = 21", "screen_vdc must use explicit VIEWPORT_X=21")
+must_contain(screen, ".const VIEWPORT_X  = 1", "screen_vdc must use explicit VIEWPORT_X=1")
+must_contain(screen, ".const VIEWPORT_W  = 78", "screen_vdc must use explicit VIEWPORT_W=78")
 must_contain(screen, ".const VDC_ATTR_MODE = $80", "screen_vdc must keep VDC_ATTR_MODE=$80 (Set 1 charset)")
 must_not_contain(screen, "SCREEN_COL_OFFSET", "screen_vdc must not use implicit SCREEN_COL_OFFSET")
 must_not_contain(render, "VIEWPORT_X + SCREEN_COL_OFFSET", "dungeon_render_vdc must use explicit VIEWPORT_X only")
@@ -193,9 +194,9 @@ must_contain(help_s, ".const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1", "ui_help b
 must_contain(swap, ".const DS_PROMPT_COL = (SCREEN_COLS - 16) / 2", "disk_swap prompt centering must use SCREEN_COLS math")
 must_contain(main128, "lda #TITLE_MENU_COL", "title menu must use TITLE_MENU_COL")
 must_contain(char_s, "lda #10\n    sta zp_cursor_row", "ui_character gold/xp row must stay at row 10")
-must_contain(char_s, ".const UCHAR_COL_L = VIEWPORT_X + 1", "ui_character C128 columns must be viewport-aligned")
+must_contain(char_s, ".const UCHAR_COL_L = (SCREEN_COLS - 36) / 2", "ui_character C128 columns must stay centered for 80-col")
 must_contain(sysinfo, "ldx #((SCREEN_COLS - 15) / 2)", "title sysinfo baseline must be centered on C128")
-must_contain(status, "lda #STS_ROW22_ST_COL\n    sta zp_cursor_col", "status row 21 name must share status base alignment")
+must_contain(status, "lda #STS_ROW21_NAME_COL\n    sta zp_cursor_col", "status row 21 name must use dedicated C128 anchor")
 
 for src_name, src_text in (
     ("ui_messages.s", msgs),

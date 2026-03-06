@@ -7,7 +7,7 @@
 //
 // Screen layout (80-col):
 //   Rows 0–1:    Message area (2 lines)
-//   Rows 2–20:   Game viewport (38x19)
+//   Rows 2–20:   Game viewport (78x19)
 //   Rows 21–23:  Status bar (3 lines)
 //   Row  24:     Input prompt line
 // Placement is explicit by caller constants (no implicit global centering).
@@ -26,9 +26,9 @@
 // ============================================================
 .const SCREEN_COLS = 80
 .const SCREEN_ROWS = 25
-.const VIEWPORT_X  = 21     // Center 38-col viewport within 80-column screen
+.const VIEWPORT_X  = 1      // Wide viewport starts near left edge
 .const VIEWPORT_Y  = 2      // Viewport starts at row 2
-.const VIEWPORT_W  = 38     // Viewport width (same as C64 for MVP)
+.const VIEWPORT_W  = 78     // Wide 80-col-era viewport
 .const VIEWPORT_H  = 19     // Viewport height
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
