@@ -456,9 +456,357 @@ render_viewport:
 !done:
     rts
 
+// render_viewport_scroll_delta — Fast path for 1-tile viewport scroll
+// Uses VDC row/segment copy + exposed-strip redraw.
+// Preconditions:
+//   old_view_x/old_view_y = previous viewport
+//   zp_view_x/zp_view_y   = current viewport
+// Output:
+//   C=1 if handled by delta path
+//   C=0 if not a simple +/-1 single-axis scroll (caller should full redraw)
+// Preserves: nothing
+render_viewport_scroll_delta:
+    jsr c128_vdc_reassert_mode
+
+    // Horizontal scroll candidate: dy == 0, dx == +/-1
+    lda zp_view_y
+    cmp old_view_y
+    beq !rvsd_horiz_ok+
+    jmp !rvsd_check_vertical+
+!rvsd_horiz_ok:
+
+    lda zp_view_x
+    sec
+    sbc old_view_x
+    cmp #$01
+    bne !rvsd_check_h_right+
+    jmp !rvsd_h_scroll_left+
+!rvsd_check_h_right:
+    cmp #$ff
+    bne !rvsd_no_fast_h+
+    jmp !rvsd_h_scroll_right+
+!rvsd_no_fast_h:
+    clc
+    rts
+
+!rvsd_h_scroll_left:
+    // New viewport moved right by 1 map tile; screen shifts left by 1.
+    // Copy cols [VIEWPORT_X+1 .. VIEWPORT_X+77] -> [VIEWPORT_X .. VIEWPORT_X+76]
+    lda #0
+    sta rvsd_row
+!rvsd_hl_row_loop:
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y
+    sta rvsd_src_row
+    sta rvsd_dst_row
+    lda #VIEWPORT_X + 1
+    sta rvsd_src_col
+    lda #VIEWPORT_X
+    sta rvsd_dst_col
+    lda #VIEWPORT_W - 1
+    sta rvsd_copy_len
+    jsr rvsd_copy_segment
+
+    inc rvsd_row
+    lda rvsd_row
+    cmp #VIEWPORT_H
+    bne !rvsd_hl_row_loop-
+
+    // Redraw newly exposed rightmost map column.
+    lda zp_view_x
+    clc
+    adc #VIEWPORT_W - 1
+    sta rvsd_map_x
+    lda #0
+    sta rvsd_row
+!rvsd_hl_strip_loop:
+    lda rvsd_map_x
+    sta zp_temp0
+    lda zp_view_y
+    clc
+    adc rvsd_row
+    sta zp_temp1
+    jsr render_single_tile
+    inc rvsd_row
+    lda rvsd_row
+    cmp #VIEWPORT_H
+    bne !rvsd_hl_strip_loop-
+    sec
+    rts
+
+!rvsd_h_scroll_right:
+    // New viewport moved left by 1 map tile; screen shifts right by 1.
+    // Copy cols [VIEWPORT_X .. VIEWPORT_X+76] -> [VIEWPORT_X+1 .. VIEWPORT_X+77]
+    lda #0
+    sta rvsd_row
+!rvsd_hr_row_loop:
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y
+    sta rvsd_src_row
+    sta rvsd_dst_row
+    lda #VIEWPORT_X
+    sta rvsd_src_col
+    lda #VIEWPORT_X + 1
+    sta rvsd_dst_col
+    lda #VIEWPORT_W - 1
+    sta rvsd_copy_len
+    jsr rvsd_copy_segment
+
+    inc rvsd_row
+    lda rvsd_row
+    cmp #VIEWPORT_H
+    bne !rvsd_hr_row_loop-
+
+    // Redraw newly exposed leftmost map column.
+    lda zp_view_x
+    sta rvsd_map_x
+    lda #0
+    sta rvsd_row
+!rvsd_hr_strip_loop:
+    lda rvsd_map_x
+    sta zp_temp0
+    lda zp_view_y
+    clc
+    adc rvsd_row
+    sta zp_temp1
+    jsr render_single_tile
+    inc rvsd_row
+    lda rvsd_row
+    cmp #VIEWPORT_H
+    bne !rvsd_hr_strip_loop-
+    sec
+    rts
+
+!rvsd_check_vertical:
+    // Vertical scroll candidate: dx == 0, dy == +/-1
+    lda zp_view_x
+    cmp old_view_x
+    beq !rvsd_vert_ok+
+    jmp !rvsd_no_fast+
+!rvsd_vert_ok:
+
+    lda zp_view_y
+    sec
+    sbc old_view_y
+    cmp #$01
+    bne !rvsd_check_v_down+
+    jmp !rvsd_v_scroll_up+
+!rvsd_check_v_down:
+    cmp #$ff
+    beq !rvsd_v_down_ok+
+    jmp !rvsd_no_fast+
+!rvsd_v_down_ok:
+    jmp !rvsd_v_scroll_down+
+
+!rvsd_v_scroll_up:
+    // New viewport moved down by 1 map tile; screen shifts up by 1 row.
+    // Copy rows [VIEWPORT_Y+1 .. VIEWPORT_Y+18] -> [VIEWPORT_Y .. VIEWPORT_Y+17]
+    lda #0
+    sta rvsd_row
+!rvsd_vu_row_loop:
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y + 1
+    sta rvsd_src_row
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y
+    sta rvsd_dst_row
+    lda #VIEWPORT_X
+    sta rvsd_src_col
+    sta rvsd_dst_col
+    lda #VIEWPORT_W
+    sta rvsd_copy_len
+    jsr rvsd_copy_segment
+
+    inc rvsd_row
+    lda rvsd_row
+    cmp #VIEWPORT_H - 1
+    bne !rvsd_vu_row_loop-
+
+    // Redraw newly exposed bottom map row.
+    lda zp_view_y
+    clc
+    adc #VIEWPORT_H - 1
+    sta rvsd_map_y
+    lda #0
+    sta rvsd_col
+!rvsd_vu_strip_loop:
+    lda zp_view_x
+    clc
+    adc rvsd_col
+    sta zp_temp0
+    lda rvsd_map_y
+    sta zp_temp1
+    jsr render_single_tile
+    inc rvsd_col
+    lda rvsd_col
+    cmp #VIEWPORT_W
+    bne !rvsd_vu_strip_loop-
+    sec
+    rts
+
+!rvsd_v_scroll_down:
+    // New viewport moved up by 1 map tile; screen shifts down by 1 row.
+    // Copy rows [VIEWPORT_Y .. VIEWPORT_Y+17] -> [VIEWPORT_Y+1 .. VIEWPORT_Y+18]
+    lda #VIEWPORT_H - 2
+    sta rvsd_row
+!rvsd_vd_row_loop:
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y
+    sta rvsd_src_row
+    lda rvsd_row
+    clc
+    adc #VIEWPORT_Y + 1
+    sta rvsd_dst_row
+    lda #VIEWPORT_X
+    sta rvsd_src_col
+    sta rvsd_dst_col
+    lda #VIEWPORT_W
+    sta rvsd_copy_len
+    jsr rvsd_copy_segment
+
+    lda rvsd_row
+    beq !rvsd_vd_rows_done+
+    dec rvsd_row
+    jmp !rvsd_vd_row_loop-
+!rvsd_vd_rows_done:
+    // Redraw newly exposed top map row.
+    lda zp_view_y
+    sta rvsd_map_y
+    lda #0
+    sta rvsd_col
+!rvsd_vd_strip_loop:
+    lda zp_view_x
+    clc
+    adc rvsd_col
+    sta zp_temp0
+    lda rvsd_map_y
+    sta zp_temp1
+    jsr render_single_tile
+    inc rvsd_col
+    lda rvsd_col
+    cmp #VIEWPORT_W
+    bne !rvsd_vd_strip_loop-
+    sec
+    rts
+
+!rvsd_no_fast:
+    clc
+    rts
+
+// rvsd_copy_segment — Copy one viewport segment (char+attr) via row buffers
+// Inputs:
+//   rvsd_src_row, rvsd_dst_row = absolute screen rows
+//   rvsd_src_col, rvsd_dst_col = absolute screen cols
+//   rvsd_copy_len              = byte count (1..78)
+rvsd_copy_segment:
+    sei
+
+    // -------- Char read --------
+    ldx rvsd_src_row
+    lda screen_row_lo,x
+    clc
+    adc rvsd_src_col
+    tay
+    lda screen_row_hi,x
+    adc #0
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!rvsd_char_read:
+    bit VDC_ADDR_REG
+    bpl !rvsd_char_read-
+    lda VDC_DATA_REG
+    sta row_char_buf,y
+    iny
+    cpy rvsd_copy_len
+    bne !rvsd_char_read-
+
+    // -------- Char write --------
+    ldx rvsd_dst_row
+    lda screen_row_lo,x
+    clc
+    adc rvsd_dst_col
+    tay
+    lda screen_row_hi,x
+    adc #0
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!rvsd_char_write:
+    bit VDC_ADDR_REG
+    bpl !rvsd_char_write-
+    lda row_char_buf,y
+    sta VDC_DATA_REG
+    iny
+    cpy rvsd_copy_len
+    bne !rvsd_char_write-
+
+    // -------- Attr read --------
+    ldx rvsd_src_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_src_col
+    tay
+    lda color_row_hi,x
+    adc #0
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!rvsd_attr_read:
+    bit VDC_ADDR_REG
+    bpl !rvsd_attr_read-
+    lda VDC_DATA_REG
+    sta row_attr_buf,y
+    iny
+    cpy rvsd_copy_len
+    bne !rvsd_attr_read-
+
+    // -------- Attr write --------
+    ldx rvsd_dst_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_dst_col
+    tay
+    lda color_row_hi,x
+    adc #0
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_select_reg
+    ldy #0
+!rvsd_attr_write:
+    bit VDC_ADDR_REG
+    bpl !rvsd_attr_write-
+    lda row_attr_buf,y
+    sta VDC_DATA_REG
+    iny
+    cpy rvsd_copy_len
+    bne !rvsd_attr_write-
+
+    cli
+    rts
+
 // Scratch bytes for store door check in render_viewport
 rsd_col:    .byte 0
 rsd_save_x: .byte 0
+
+// Scratch bytes for scroll-delta renderer
+rvsd_row:      .byte 0
+rvsd_col:      .byte 0
+rvsd_src_row:  .byte 0
+rvsd_dst_row:  .byte 0
+rvsd_src_col:  .byte 0
+rvsd_dst_col:  .byte 0
+rvsd_copy_len: .byte 0
+rvsd_map_x:    .byte 0
+rvsd_map_y:    .byte 0
 
 // Row char/attribute buffers — filled during col_loop, streamed to VDC after
 row_char_buf: .fill VIEWPORT_W, 0
