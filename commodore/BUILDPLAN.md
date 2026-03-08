@@ -24,6 +24,8 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
+| **DTH-1** | **BLOCKER** | C128: death flow regression. On player death, game incorrectly reports "game saved" instead of entering death screen, then CPU JAMs at `$01FF`. | **Open (backlog)** |
+| **SAV-2** | **BLOCKER** | C128: restore/load regression. After loading a saved game, town/dungeon map state renders as severe corruption/garbage (both world + actor state appear invalid). | **Open (backlog)** |
 | **UX80** | **HIGH** | C128: Full 80-column VDC layout adoption. Current UI centers a legacy 40-column playfield/messages; migrate gameplay/status/help/title/menu layouts to intentionally use full 80 columns. | **Planned (new 10.x)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
@@ -65,6 +67,7 @@
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
 | 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Planned** |
+| 10.8 | Bank 1 Pseudo-REU (Preloading) | C128: Preload all creature tiers and overlays into unused Bank 1 RAM at startup, eliminating disk access during phase/stair transitions (acting like the C64 REU). | **Planned** |
 
 ---
 
