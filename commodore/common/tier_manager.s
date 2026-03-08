@@ -31,6 +31,8 @@ c128_tier_db_base_lo: .byte <BANK1_DB_BASE
 c128_tier_db_base_hi: .byte >BANK1_DB_BASE
 c128_tier_db_size_lo: .byte 0
 c128_tier_db_size_hi: .byte 0
+c128_tier_soa_end_lo: .byte 0
+c128_tier_soa_end_hi: .byte 0
 
 // tier_invalidate_state — Clear active tier state + derived metadata
 // Safe to call from any module before loading an overlay/string bank.
@@ -263,6 +265,12 @@ tier_load:
     sta tier_name_lo_addr+1
 
 #if C128
+    // Preserve end-of-SoA pointer before staging helper clobbers zp_ptr0.
+    lda zp_ptr0
+    sta c128_tier_soa_end_lo
+    lda zp_ptr0_hi
+    sta c128_tier_soa_end_hi
+
     // C128 10.2.2: mirror loaded tier payload from $E000 into Bank 1 DB region.
     // Runtime consumers still use the $E000 path until 10.2.3 migration.
     lda #<BANK1_DB_BASE
@@ -280,13 +288,23 @@ tier_load:
     // C128 10.2.3: runtime name tables should point at Bank 1 staged payload,
     // not at temporary $E000 load staging.
 #if C128
+    // Map the post-SoA pointer from $E000 staging into Bank 1 DB space.
+    // Use preserved value from before c128_stage_tier_to_bank1.
+    sec
+    lda c128_tier_soa_end_lo
+    sbc #<$e000
+    sta zp_ptr1
+    lda c128_tier_soa_end_hi
+    sbc #>$e000
+    sta zp_ptr1_hi               // zp_ptr1 = SoA offset from $E000
+
     clc
     lda c128_tier_db_base_lo
-    adc c128_tier_db_size_lo
+    adc zp_ptr1
     sta zp_ptr1
     lda c128_tier_db_base_hi
-    adc c128_tier_db_size_hi
-    sta zp_ptr1_hi               // zp_ptr1 = db_base + db_size (end ptr)
+    adc zp_ptr1_hi
+    sta zp_ptr1_hi               // zp_ptr1 = Bank1 base + SoA offset
 
     sec
     lda zp_ptr1

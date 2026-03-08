@@ -8,6 +8,9 @@
 // displays a simple text title (original behavior).
 
 .const TITLE_FALLBACK_COL = (SCREEN_COLS - 10) / 2
+#if C128
+.const TITLE_ART_COL_OFFSET = (SCREEN_COLS - 40) / 2
+#endif
 
 // ============================================================
 // title_load_and_draw — Load and render the title screen
@@ -124,7 +127,7 @@ title_render_data:
 #endif
 #if C128
     clc
-    adc #20
+    adc #TITLE_ART_COL_OFFSET
 #endif
     sta zp_cursor_col
 

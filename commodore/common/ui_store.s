@@ -15,6 +15,12 @@
 .const PETSCII_SPACE  = $20
 .const PETSCII_A      = $41
 
+#if C128
+.const USTORE_PRICE_COL = SCREEN_COLS - 12
+#else
+.const USTORE_PRICE_COL = 31
+#endif
+
 // Message table indices for show_msg
 .const MSG_GOLD       = 0
 .const MSG_MENU       = 1
@@ -209,10 +215,10 @@ store_draw_screen:
     cmp #STORE_HOME
     beq !sds_next_slot+
 
-    // Price at column 31
+    // Price column is platform-tuned (C128 uses wider right anchor).
     lda sd_row
     sta zp_cursor_row
-    lda #31
+    lda #USTORE_PRICE_COL
     sta zp_cursor_col
     lda #COL_YELLOW
     sta zp_text_color
@@ -772,13 +778,13 @@ check_cancel:
 !cc_yes:
     rts
 
-// draw_separator — Draw 40 dashes across current row
+// draw_separator — Draw SCREEN_COLS dashes across current row
 // Input: zp_cursor_row set
 // Clobbers: A, X, Y
 draw_separator:
     lda #0
     sta zp_cursor_col
-    ldx #40
+    ldx #SCREEN_COLS
 !ds_loop:
     lda #$2d                    // Screen code '-'
     jsr screen_put_char

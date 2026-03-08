@@ -26,9 +26,9 @@
 // ============================================================
 .const SCREEN_COLS = 80
 .const SCREEN_ROWS = 25
-.const VIEWPORT_X  = 21     // Center 38-col viewport within 80-column screen
+.const VIEWPORT_X  = 1      // Full-width viewport with 1-column side margins
 .const VIEWPORT_Y  = 2      // Viewport starts at row 2
-.const VIEWPORT_W  = 38     // Viewport width (same as C64 for MVP)
+.const VIEWPORT_W  = 78     // Full 80-col layout minus side frame margins
 .const VIEWPORT_H  = 19     // Viewport height
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
@@ -117,28 +117,34 @@ color_row_hi:
 // VIC-II → VDC RGBI color translation
 // Index = VIC-II color (0–15), value = RGBI attribute
 // ============================================================
-// VDC attribute byte: bits 3-0 = RGBI color, bit 7 = Alternate Character Set
+// VDC attribute byte: bits 3-0 are encoded as R,G,B,I on this runtime.
+// Keep game colors in canonical RGBI form and convert here once.
 // Bit 6 ($40) = Reverse Video — do NOT set that.
 // Bit 7 ($80) = Alternate Character Set: selects VDC Set 1 (Mixed Case font),
 // which has uppercase A-Z at $41-$5A and lowercase a-z at $01-$1A.
 .const VDC_ATTR_MODE = $80
+.function vdc_encode_rgbi(rgbi) {
+    // Convert canonical RGBI nibble (I,R,G,B in bits 3..0) to runtime nibble
+    // layout (R,G,B,I in bits 3..0).
+    .return (((rgbi & $07) << 1) | ((rgbi & $08) >> 3))
+}
 vic_to_vdc_color:
     .byte  0|VDC_ATTR_MODE    // $00 black
     .byte 15|VDC_ATTR_MODE    // $01 white
-    .byte  4|VDC_ATTR_MODE    // $02 red
-    .byte 11|VDC_ATTR_MODE    // $03 cyan
-    .byte  5|VDC_ATTR_MODE    // $04 purple
-    .byte  2|VDC_ATTR_MODE    // $05 green
-    .byte  1|VDC_ATTR_MODE    // $06 blue
-    .byte 14|VDC_ATTR_MODE    // $07 yellow
-    .byte 12|VDC_ATTR_MODE    // $08 orange
-    .byte  6|VDC_ATTR_MODE    // $09 brown
-    .byte 12|VDC_ATTR_MODE    // $0a lt red
-    .byte  8|VDC_ATTR_MODE    // $0b dk grey
-    .byte  7|VDC_ATTR_MODE    // $0c grey
-    .byte 10|VDC_ATTR_MODE    // $0d lt green
-    .byte  9|VDC_ATTR_MODE    // $0e lt blue
-    .byte  7|VDC_ATTR_MODE    // $0f lt grey
+    .byte vdc_encode_rgbi(4)|VDC_ATTR_MODE    // $02 red
+    .byte vdc_encode_rgbi(11)|VDC_ATTR_MODE   // $03 cyan
+    .byte vdc_encode_rgbi(5)|VDC_ATTR_MODE    // $04 purple
+    .byte vdc_encode_rgbi(2)|VDC_ATTR_MODE    // $05 green
+    .byte vdc_encode_rgbi(1)|VDC_ATTR_MODE    // $06 blue
+    .byte vdc_encode_rgbi(14)|VDC_ATTR_MODE   // $07 yellow
+    .byte vdc_encode_rgbi(12)|VDC_ATTR_MODE   // $08 orange
+    .byte vdc_encode_rgbi(6)|VDC_ATTR_MODE    // $09 brown
+    .byte vdc_encode_rgbi(12)|VDC_ATTR_MODE   // $0a lt red
+    .byte vdc_encode_rgbi(8)|VDC_ATTR_MODE    // $0b dk grey
+    .byte vdc_encode_rgbi(7)|VDC_ATTR_MODE    // $0c grey
+    .byte vdc_encode_rgbi(10)|VDC_ATTR_MODE   // $0d lt green
+    .byte vdc_encode_rgbi(9)|VDC_ATTR_MODE    // $0e lt blue
+    .byte vdc_encode_rgbi(7)|VDC_ATTR_MODE    // $0f lt grey
 
 // ============================================================
 // Pre-translated VDC RGBI color constants
@@ -147,18 +153,18 @@ vic_to_vdc_color:
 // to avoid a runtime table lookup in hot rendering paths.
 .const VDC_BLACK  =  0|VDC_ATTR_MODE   // COL_BLACK  ($00) → RGBI 0
 .const VDC_WHITE  = 15|VDC_ATTR_MODE   // COL_WHITE  ($01) → RGBI 15
-.const VDC_RED    =  4|VDC_ATTR_MODE   // COL_RED    ($02) → RGBI 4
-.const VDC_CYAN   = 11|VDC_ATTR_MODE   // COL_CYAN   ($03) → RGBI 11
-.const VDC_GREEN  =  2|VDC_ATTR_MODE   // COL_GREEN  ($05) → RGBI 2
-.const VDC_BLUE   =  1|VDC_ATTR_MODE   // COL_BLUE   ($06) → RGBI 1
-.const VDC_YELLOW = 14|VDC_ATTR_MODE   // COL_YELLOW ($07) → RGBI 14
-.const VDC_ORANGE = 12|VDC_ATTR_MODE   // COL_ORANGE ($08) → RGBI 12
-.const VDC_BROWN  =  6|VDC_ATTR_MODE   // COL_BROWN  ($09) → RGBI 6
-.const VDC_DGREY  =  8|VDC_ATTR_MODE   // COL_DGREY  ($0b) → RGBI 8
-.const VDC_GREY   =  7|VDC_ATTR_MODE   // COL_GREY   ($0c) → RGBI 7
-.const VDC_LGREY  =  7|VDC_ATTR_MODE   // COL_LGREY  ($0f) → RGBI 7 (L3: same as GREY)
-.const VDC_LGREEN = 10|VDC_ATTR_MODE   // COL_LGREEN ($0d) → RGBI 10
-.const VDC_LBLUE  =  9|VDC_ATTR_MODE   // COL_LBLUE  ($0e) → RGBI 9
+.const VDC_RED    =  vdc_encode_rgbi(4)|VDC_ATTR_MODE   // COL_RED
+.const VDC_CYAN   =  vdc_encode_rgbi(11)|VDC_ATTR_MODE  // COL_CYAN
+.const VDC_GREEN  =  vdc_encode_rgbi(2)|VDC_ATTR_MODE   // COL_GREEN
+.const VDC_BLUE   =  vdc_encode_rgbi(1)|VDC_ATTR_MODE   // COL_BLUE
+.const VDC_YELLOW =  vdc_encode_rgbi(14)|VDC_ATTR_MODE  // COL_YELLOW
+.const VDC_ORANGE =  vdc_encode_rgbi(12)|VDC_ATTR_MODE  // COL_ORANGE
+.const VDC_BROWN  =  vdc_encode_rgbi(6)|VDC_ATTR_MODE   // COL_BROWN
+.const VDC_DGREY  =  vdc_encode_rgbi(8)|VDC_ATTR_MODE   // COL_DGREY
+.const VDC_GREY   =  vdc_encode_rgbi(7)|VDC_ATTR_MODE   // COL_GREY
+.const VDC_LGREY  =  vdc_encode_rgbi(7)|VDC_ATTR_MODE   // COL_LGREY
+.const VDC_LGREEN =  vdc_encode_rgbi(10)|VDC_ATTR_MODE  // COL_LGREEN
+.const VDC_LBLUE  =  vdc_encode_rgbi(9)|VDC_ATTR_MODE   // COL_LBLUE
 
 // ============================================================
 // Screen Subroutines

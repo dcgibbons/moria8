@@ -50,6 +50,10 @@ viewport_update:
 // buffer translated colors, then stream attributes.
 // Preserves: nothing
 render_viewport:
+    // Defensive: keep VDC attribute mode/default colors stable even if
+    // external ROM paths touched VDC mode registers.
+    jsr c128_vdc_reassert_mode
+
     lda #0
     sta zp_render_y         // Screen row counter (0-18)
 
@@ -820,5 +824,5 @@ rla_cur_y: .byte 0
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Viewport width", VIEWPORT_W, 38
+.assert "Viewport width", VIEWPORT_W, 78
 .assert "Viewport height", VIEWPORT_H, 19

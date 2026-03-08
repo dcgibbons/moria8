@@ -68,6 +68,36 @@ All bugs below are **fixed**. Detailed write-ups for each appear in the sections
 
 ---
 
+## 10.7 — Full 80-Column Layout + Stabilization ✅ COMPLETE (2026-03-08)
+
+### Scope Closed
+- Completed the C128 full-width UI migration for Phase 10.7:
+  - viewport width/layout constants and guards (`VIEWPORT_W=78`, left-anchored 80-col composition)
+  - 80-col status/message/help/title/menu/store/recall/layout constants and centering math cleanup
+  - dungeon generation bounds updated to use map constants instead of legacy width assumptions
+
+### Stability Work Included in 10.7 Closure
+1. **Overlay/payload overlap fix (BLOCKER)**
+   - Removed `special_rooms.s` from banked payload and moved generation-time room logic into the dungeon-gen overlay region.
+   - Added placement asserts ensuring banked payload starts above overlay ceiling.
+2. **C128 save/load map-path correction**
+   - Added Bank1-aware map block save/load path for C128 to avoid Bank0 pointer corruption during persistence.
+3. **Tier/name staging fix**
+   - Fixed C128 tier name table remap using saved post-SoA-end pointer across Bank1 staging, preventing corrupt `creature_get_name` lookups.
+4. **VDC color regression cleanup**
+   - Replaced piecemeal color overrides with a single coherent VDC nibble-encoding path.
+   - Added dungeon color-path assertions in `test_dungeon128` for:
+     - floor in-LOS
+     - floor out-of-LOS dimming
+     - corridor wall in-LOS
+     - magma in-LOS
+
+### Verification
+- `run_tests128.sh`: **16 passed, 0 failed**
+- C128 build asserts: **108 asserts, 0 failed**
+
+---
+
 ## R2 — C128 Garbled Prompt/Message Corruption ✅ COMPLETE (2026-03-05)
 
 ### Symptom

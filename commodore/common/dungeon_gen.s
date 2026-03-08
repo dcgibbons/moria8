@@ -308,6 +308,7 @@ draw_store:
 .const ROOM_MAX_H       = 7     // 3 + rng(5)
 .const ROOM_GAP         = 2     // Min gap between rooms
 .const MAX_ROOM_RETRIES = 20    // Retries per room attempt
+.const ROOM_EDGE_PAD    = 4     // Keep overlap math away from map edges
 
 // ============================================================
 // Local scratch for dungeon generation (safe from rng_range clobbering zp_temp3/4)
@@ -493,24 +494,24 @@ place_rooms:
     adc #ROOM_MIN_H
     sta dg_room_h
 
-    // Roll x position: rng_range(75 - w) + 4
-    // Ensures wall at x-1 >= 3 and overlap check (x - 3) >= 1 (no underflow)
-    lda #75
+    // Roll x position: rng_range((MAP_COLS - ROOM_EDGE_PAD - 1) - w) + ROOM_EDGE_PAD
+    // Keeps wall + overlap math in-bounds while scaling with MAP_COLS.
+    lda #MAP_COLS - ROOM_EDGE_PAD - 1
     sec
     sbc dg_room_w
     jsr rng_range
     clc
-    adc #4
+    adc #ROOM_EDGE_PAD
     sta dg_room_x
 
-    // Roll y position: rng_range(43 - h) + 4
-    // Ensures wall at y-1 >= 3 and overlap check (y - 3) >= 1 (no underflow)
-    lda #43
+    // Roll y position: rng_range((MAP_ROWS - ROOM_EDGE_PAD - 1) - h) + ROOM_EDGE_PAD
+    // Keeps wall + overlap math in-bounds while scaling with MAP_ROWS.
+    lda #MAP_ROWS - ROOM_EDGE_PAD - 1
     sec
     sbc dg_room_h
     jsr rng_range
     clc
-    adc #4
+    adc #ROOM_EDGE_PAD
     sta dg_room_y
 
     // Check overlap with all existing rooms

@@ -19,8 +19,8 @@
 //         go to Bank 0 RAM under KERNAL ROM (same as C64). Execution:
 //         $FF00=$3E hides KERNAL ROM → $E000+ = Bank 0 RAM.
 //
-// banked_payload is at $F000+ so overlays ($E000-$EFFF max 4096
-// bytes) never overlap it.
+// banked_payload runtime code is forced to start above the dungeon overlay
+// footprint so overlays ($E000-$EFFF) never overlap live banked routines.
 // ============================================================
 .segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]
@@ -700,6 +700,14 @@ entry_main:
     dex                         // 20
     jsr vdc_write_reg
 
+    // Ensure VDC uses per-character attributes (reg 25 bit 6 = 1).
+    // Some environments leave this mode undefined after reset/ROM paths.
+    ldx #25
+    jsr vdc_read_reg
+    ora #%01000000
+    sta c128_vdc_reg25_cached
+    jsr vdc_write_reg
+
     // Disable Screen Editor software cursor blink.
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero, and can write VDC RAM
@@ -714,8 +722,11 @@ entry_main:
     lda #>safe_irq_restore
     sta $0315
 
-    // Set VDC background to black (register 26 = background color)
-    lda #0                      // RGBI 0 = black
+    // Set VDC default colors: foreground white, background black.
+    // In attribute mode these are defaults/fallbacks, but setting them
+    // explicitly avoids emulator-dependent tinting.
+    lda #$f0                    // fg=white (F), bg=black (0)
+    sta c128_vdc_reg26_cached
     ldx #26
     jsr vdc_write_reg
 
@@ -1081,18 +1092,16 @@ title_str:
 // All Bank1Data functions (UI screens, home) are included here so
 // they live in Bank 0 and are accessible with $FF00=$3E (MMU_ALL_RAM).
 //
-// Note: overlays load at $E000-$EFFF and overlap the early portion
-// of this range ($EB00-$EFFF). This is intentional — functions in
-// that range (special_rooms, ego_items) are only needed while an
-// overlay is active. Gameplay UI functions live at $F000+ and are
-// never overwritten by an overlay.
+// Keep $EB00-$EF78 reserved so runtime banked code starts above the
+// current DungeonGen overlay ceiling.
 // ============================================================
 banked_payload:
 .pseudopc $EB00 {
+    .fill ($EF79 - $EB00), 0
+first_banked_function:
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
     #import "../common/string_bank_banked.s"
-    #import "../common/special_rooms.s"
     #import "../common/ego_items.s"
     #import "../common/ui_home.s"
     #import "../common/ui_help_data.s"
@@ -1191,7 +1200,9 @@ ovl_death_end:
 // Dungeon generation overlay
 // ============================================================
 .segment DungeonGenOverlay
+    #import "../common/special_rooms.s"
     #import "../common/dungeon_gen.s"
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $f000, true
+.assert "banked_payload_start above overlay ceiling", first_banked_function > ovl_gen_end, true

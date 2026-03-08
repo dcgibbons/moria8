@@ -299,7 +299,11 @@ save_game:
     :save_block(recall_data_start, RECALL_DATA_SIZE)
 
     // 17. Map data (3840 bytes raw)
+#if C128
+    jsr save_write_map_c128
+#else
     :save_block(MAP_BASE, MAP_SIZE)
+#endif
 
     // Check for I/O errors
     lda save_io_error
@@ -502,7 +506,11 @@ load_game:
     :load_block(recall_data_start, RECALL_DATA_SIZE)
 
     // 17. Map data (3840 bytes raw)
+#if C128
+    jsr load_read_map_c128
+#else
     :load_block(MAP_BASE, MAP_SIZE)
+#endif
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
     jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
@@ -736,6 +744,79 @@ load_read_byte:
 !lrby_no_carry:
     pla                     // A = original byte
     rts
+
+#if C128
+// ============================================================
+// C128 map I/O helpers — MAP_BASE is in Bank 1 RAM on C128.
+// Save/load all non-map blocks through normal bank0 pointers; map bytes
+// must be read/written through explicit MMU bank switching.
+// ============================================================
+save_write_map_c128:
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    lda #<MAP_SIZE
+    sta save_count_lo
+    lda #>MAP_SIZE
+    sta save_count_hi
+!swm_loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !swm_done+
+    ldy #0
+    jsr mmu_select_bank1
+    lda (zp_ptr0),y
+    jsr mmu_select_bank0
+    jsr save_write_byte
+    inc zp_ptr0
+    bne !swm_no_hi+
+    inc zp_ptr0_hi
+!swm_no_hi:
+    lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !swm_loop-
+    dec save_count_hi
+    jmp !swm_loop-
+!swm_done:
+    rts
+
+load_read_map_c128:
+    lda #<MAP_BASE
+    sta zp_ptr0
+    lda #>MAP_BASE
+    sta zp_ptr0_hi
+    lda #<MAP_SIZE
+    sta save_count_lo
+    lda #>MAP_SIZE
+    sta save_count_hi
+!lrm_loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !lrm_done+
+    jsr load_read_byte
+    pha
+    jsr mmu_select_bank1
+    pla
+    ldy #0
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+    inc zp_ptr0
+    bne !lrm_no_hi+
+    inc zp_ptr0_hi
+!lrm_no_hi:
+    lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !lrm_loop-
+    dec save_count_hi
+    jmp !lrm_loop-
+!lrm_done:
+    rts
+#endif
 
 // ============================================================
 // delete_savefile — Send scratch command via command channel

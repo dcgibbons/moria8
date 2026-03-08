@@ -1055,13 +1055,25 @@ creature_get_name:
 
 !cgn_translate_b1_ptr:
 #if C128
-    // C128 tier string pointers are encoded as historical $E0xx payload
-    // addresses. Convert to Bank 1 staging address before banked copy.
-    // $E0xx-$EFFF maps linearly to $50xx-$5FFF, so only the high byte shifts.
+    // C128 tier name pointers are typically encoded as historical $E0xx
+    // payload addresses; convert those to Bank 1 staged DB space.
+    // If pointers are already in Bank 1 DB range ($50xx-$7Fxx), keep them.
+    // Any other range is invalid for banked name fetch.
     lda zp_ptr1_hi
+    cmp #$e0
+    bcc !cgn_ptr_maybe_b1+
     sec
     sbc #$90
     sta zp_ptr1_hi
+    jmp !cgn_copy+
+!cgn_ptr_maybe_b1:
+    cmp #>BANK1_DB_BASE
+    bcs !cgn_ptr_check_hi+
+    jmp !cgn_stale+
+!cgn_ptr_check_hi:
+    cmp #$80
+    bcc !cgn_copy+
+    jmp !cgn_stale+
 #endif
     jmp !cgn_copy+
 
@@ -1072,7 +1084,7 @@ creature_get_name:
     tay                         // Y = creature index (preserved across banking)
     sei
     lda $01
-    pha
+    sta cgn_saved_p01
     :BankOutKernal()            // Bank out KERNAL — $E000 accessible
     lda tier_name_lo_addr
     sta zp_ptr1
@@ -1096,7 +1108,7 @@ creature_get_name:
     // C64: bank out KERNAL for $E0xx pointer reads
     sei
     lda $01
-    pha
+    sta cgn_saved_p01
     :BankOutKernal()
     jmp !cgn_copy+
 #endif
@@ -1147,7 +1159,7 @@ creature_get_name:
     sta zp_ptr1
     sei
     lda $01
-    pha                         // Push bank config (don't change — RAM accessible)
+    sta cgn_saved_p01           // Save bank config without using stack
     // Fall through to shared copy loop
 
 !cgn_copy:
@@ -1193,7 +1205,7 @@ creature_get_name:
     lda #0
     sta creature_name_buf,y
 !cgn_done:
-    pla
+    lda cgn_saved_p01
     sta $01
     cli
     lda #<creature_name_buf
@@ -1215,3 +1227,4 @@ tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper
+cgn_saved_p01: .byte 0         // saved $01 for linear copy restore (stack-free)

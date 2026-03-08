@@ -31,10 +31,13 @@ bank_fn_recall:
 // ============================================================
 bank_load_recall:
     :EnterKernal()
-    // Invalidate overlay and tier state/metadata before loading into $E000.
+    // Invalidate overlay before loading into $E000.
+    // Tier invalidation is C64-only: C128 tier metadata points to Bank 1 DB.
     lda #OVL_NONE
     sta current_overlay
+#if !C128
     jsr tier_invalidate_state
+#endif
 
     lda #BANK_FN_RECALL_LEN
     ldx #<bank_fn_recall

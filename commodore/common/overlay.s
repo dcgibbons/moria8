@@ -42,8 +42,12 @@ overlay_load:
     beq !ol_skip+           // Already loaded — skip
     sta ol_target
 
-    // Invalidate tier state/metadata — $E000 will be overwritten by overlay code.
+    // C64: tier name payload is read from $E000, so overlays must invalidate it.
+    // C128: tier payload/name tables are staged in Bank 1 DB space; keep tier
+    // state alive so creature_get_name never reloads MONSTER.DB into $E000.
+#if !C128
     jsr tier_invalidate_state
+#endif
 
     lda reu_overlays_stashed
     bne !ol_reu+

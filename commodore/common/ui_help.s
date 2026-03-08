@@ -7,7 +7,7 @@
 //   [type_byte] [string_data...] [$00] repeated for 23 lines.
 // The banked code walks this data sequentially.
 //
-// Layout (40 columns, 25 rows):
+// Layout (SCREEN_COLS columns, 25 rows):
 //   Row 0:     Top border with "COMMAND REFERENCE" title
 //   Rows 1-23: Content area with left/right borders
 //   Row 24:    Bottom border with "PRESS ANY KEY" footer

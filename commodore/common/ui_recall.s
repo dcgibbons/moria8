@@ -4,7 +4,7 @@
 // Called from trampoline with KERNAL banked out ($01=$35).
 // creature_name_buf has been pre-populated by creature_get_name.
 //
-// Layout (40 columns):
+// Layout (overlay rows with centered title/footer; width adapts via SCREEN_COLS):
 //   Row 0:  MONSTER RECALL
 //   Row 2:  [K] KOBOLD
 //   Row 4:  LV 1   AC 12   HP 1D8

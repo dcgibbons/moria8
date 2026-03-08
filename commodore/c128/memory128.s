@@ -193,6 +193,7 @@ zp_save_buf:
 // ExitKernal — Restore game state after KERNAL calls (C128)
 .macro ExitKernal() {
     :MachineRestoreAllRam()
+    jsr c128_vdc_reassert_mode
     plp
 }
 
@@ -261,6 +262,43 @@ restore_zp:
     cpx #ZP_SAVE_SIZE
     bne !loop-
     rts
+
+// c128_vdc_reassert_mode — Defensive VDC mode restore
+// Reasserts cached known-good register values:
+//   - Reg 25 (attribute/mode register as configured in init)
+//   - Reg 26 (default fg/bg color)
+// Safe to call from both KERNAL exit paths and render paths.
+c128_vdc_reassert_mode:
+    php
+    sei
+
+    // Reg 25: restore known-good mode byte.
+    jsr c128_vdc_wait
+    lda #25
+    sta $d600
+    jsr c128_vdc_wait
+    lda c128_vdc_reg25_cached
+    sta $d601
+
+    // Reg 26: restore known-good default fg/bg (white on black).
+    jsr c128_vdc_wait
+    lda #26
+    sta $d600
+    jsr c128_vdc_wait
+    lda c128_vdc_reg26_cached
+    sta $d601
+    plp
+    rts
+
+c128_vdc_wait:
+    bit $d600
+    bpl c128_vdc_wait
+    rts
+
+// Cached VDC defaults captured during init in main.s.
+// Keep explicit initial values so early calls still restore sane mode.
+c128_vdc_reg25_cached: .byte $40
+c128_vdc_reg26_cached: .byte $f0
 
 // read_banked_byte_a000 — Read a byte from RAM under BASIC ROM
 // Input:  zp_ptr0/zp_ptr0_hi = address in $A000–$BFFF

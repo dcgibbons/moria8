@@ -435,10 +435,14 @@ main_loop:
 
     // Stairs down?
     cmp #CMD_STAIRS_DN
-    bne !not_stairs_dn+
+    beq !stairs_dn+
+    jmp !not_stairs_dn+
+!stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
-    bne !no_stairs_dn+
+    beq !stairs_dn_ok+
+    jmp !no_stairs_dn+
+!stairs_dn_ok:
     // Descend: increment dungeon level
     inc zp_player_dlvl
     lda zp_player_dlvl
@@ -488,13 +492,19 @@ main_loop:
 
     // Stairs up?
     cmp #CMD_STAIRS_UP
-    bne !not_stairs_up+
+    beq !stairs_up+
+    jmp !not_stairs_up+
+!stairs_up:
     jsr check_stairs_at_player
     cmp #10                 // Stairs up type
-    bne !no_stairs_up+
+    beq !stairs_up_ok+
+    jmp !no_stairs_up+
+!stairs_up_ok:
     // Ascend
     lda zp_player_dlvl
-    beq !at_surface+
+    bne !stairs_up_not_surface+
+    jmp !at_surface+
+!stairs_up_not_surface:
     dec zp_player_dlvl
     lda zp_player_dlvl
     sta player_data + PL_DLEVEL

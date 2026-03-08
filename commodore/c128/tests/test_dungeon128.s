@@ -1,7 +1,9 @@
-// test_dungeon128.s — Lightweight map/scratch safety smoke test for C4.1
+// test_dungeon128.s — Dungeon render color-path regression checks (C128)
 
 #import "../../common/zeropage.s"
 #import "../memory128.s"
+#import "../../common/color.s"
+#import "../screen_vdc.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -49,6 +51,40 @@ test_start:
     bne test_fail
     lda MAP_END
     cmp $02f1
+    bne test_fail
+
+    // Test 3: Color translation consistency used by dungeon renderer
+    // Floor in LOS: tile type 0 -> COL_DGREY -> VDC_DGREY
+    ldx tile_colors + 0
+    lda vic_to_vdc_color,x
+    cmp #VDC_DGREY
+    bne test_fail
+
+    // Floor out of LOS: dimming path writes VDC_DGREY directly.
+    lda #VDC_DGREY
+    cmp vic_to_vdc_color + COL_DGREY
+    bne test_fail
+
+    // Corridor rock in LOS: hardcoded VDC_LGREY path must match palette.
+    lda #VDC_LGREY
+    cmp vic_to_vdc_color + COL_LGREY
+    bne test_fail
+
+    // Magma in LOS: tile type 12 -> COL_RED -> VDC_RED
+    ldx tile_colors + 12
+    lda vic_to_vdc_color,x
+    cmp #VDC_RED
+    bne test_fail
+
+    // Guard runtime nibble encoding so dim floor/wall/magma don't drift.
+    lda #VDC_DGREY
+    cmp #(vdc_encode_rgbi(8) | VDC_ATTR_MODE)
+    bne test_fail
+    lda #VDC_LGREY
+    cmp #(vdc_encode_rgbi(7) | VDC_ATTR_MODE)
+    bne test_fail
+    lda #VDC_RED
+    cmp #(vdc_encode_rgbi(4) | VDC_ATTR_MODE)
     bne test_fail
 
     jmp test_pass

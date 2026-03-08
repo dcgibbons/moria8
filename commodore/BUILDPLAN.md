@@ -5,9 +5,9 @@
 
 ---
 
-## Current State (2026-03-05, updated)
+## Current State (2026-03-08, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, and Phase 10.2 (C128 extended-memory creature DB path) are complete. C128 now runs with the map in Bank 1 and validated MMU-safe map/tier access paths. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, and C2 keyboard responsiveness/matrix stabilization are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, and C2 keyboard responsiveness/matrix stabilization are resolved.**
 
 ### Build Stats
 
@@ -26,7 +26,6 @@
 | **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **DTH-1** | **BLOCKER** | C128: death flow regression. On player death, game incorrectly reports "game saved" instead of entering death screen, then CPU JAMs at `$01FF`. | **Open (backlog)** |
 | **SAV-2** | **BLOCKER** | C128: restore/load regression. After loading a saved game, town/dungeon map state renders as severe corruption/garbage (both world + actor state appear invalid). | **Open (backlog)** |
-| **UX80** | **HIGH** | C128: Full 80-column VDC layout adoption. Current UI centers a legacy 40-column playfield/messages; migrate gameplay/status/help/title/menu layouts to intentionally use full 80 columns. | **Planned (new 10.x)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -47,6 +46,7 @@
 | # | Severity | Description | Resolution Date |
 |---|----------|-------------|-----------------|
 | **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
+| **UX80 / 10.7** | **HIGH** | C128 full 80-column layout + post-rollout VDC color regression cleanup (coherent color mapping restored; dungeon color-path guard tests added). | **2026-03-08** |
 | **A7** | **HIGH** | Compile-time split hardening: removed runtime `zp_machine_type` gating from common hot paths and replaced with `#if C128`/`#if !C128`. | **2026-03-05** |
 | **A8** | **HIGH** | C128 layout hardening: enforced `<$D000` placement asserts for all `tramp_*`, added game-over end-boundary guards, and added harness assert-coverage enforcement. | **2026-03-05** |
 | **C3** | **HIGH** | C128 `wear` prompt stale-key regression fixed by adding release-wait gate before selection read; harness guard added to prevent regression. | **2026-03-05** |
@@ -66,7 +66,7 @@
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
-| 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Planned** |
+| 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Done** |
 | 10.8 | Bank 1 Pseudo-REU (Preloading) | C128: Preload all creature tiers and overlays into unused Bank 1 RAM at startup, eliminating disk access during phase/stair transitions (acting like the C64 REU). | **Planned** |
 
 ---
@@ -94,7 +94,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. No open C128 blocker after C2/C5 closure; next work item is C128 performance (P1).
-2. Execute 10.7 full 80-column UI layout adoption (UX80).
+2. Execute 10.8 Bank 1 pseudo-REU preload plan after DTH-1/SAV-2 stabilization.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
