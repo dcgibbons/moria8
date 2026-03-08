@@ -86,6 +86,24 @@ test_continue:
     cmp #CMD_QUIT
     bne test_fail
 
+    // Shifted vi-keys map to running commands.
+    lda #$cb               // SHIFT+K
+    jsr petscii_to_command
+    cmp #CMD_RUN_N
+    bne test_fail
+    lda #$ca               // SHIFT+J
+    jsr petscii_to_command
+    cmp #CMD_RUN_S
+    bne test_fail
+    lda #$c8               // SHIFT+H
+    jsr petscii_to_command
+    cmp #CMD_RUN_W
+    bne test_fail
+    lda #$cc               // SHIFT+L
+    jsr petscii_to_command
+    cmp #CMD_RUN_E
+    bne test_fail
+
     // ESC mapping (current C2.4 policy: quit shortcut)
     lda #KEY_ESC
     jsr petscii_to_command

@@ -1,8 +1,8 @@
 // dungeon_render_vdc.s — VDC viewport rendering (C128 80-column)
 //
-// Reads the map at $C000 and draws a 38x19 viewport via VDC register writes.
+// Reads the map and draws a 78x19 viewport via VDC register writes.
 // The viewport is centered on the player position, clamped to map edges.
-// Screen layout: viewport at rows 2-20, columns 1-38 (same as C64 for MVP).
+// Screen layout: viewport at rows 2-20, columns 1-78.
 //
 // Row-batch VDC writes: for each viewport row, screen codes are streamed
 // via VDC auto-increment, then attribute bytes are buffered and streamed
@@ -12,40 +12,89 @@
 // Subroutines
 // ============================================================
 
+// Scroll deadband: viewport only recenters when player nears edges.
+// This avoids full-redraw-on-every-step behavior on the VDC path.
+.const VIEW_SCROLL_MARGIN_X = 12
+.const VIEW_SCROLL_MARGIN_Y = 4
+
 // viewport_update — Center viewport on player, clamp to map edges
 // Updates zp_view_x, zp_view_y
 // Preserves: nothing
 viewport_update:
-    // view_x = player_x - VIEWPORT_W/2, clamped to [0, MAP_COLS - VIEWPORT_W]
+    // Horizontal deadband:
+    // keep player in [view_x+M, view_x+VIEWPORT_W-1-M]
+    lda zp_view_x
+    clc
+    adc #VIEW_SCROLL_MARGIN_X
+    cmp zp_player_x
+    bcc !vx_check_right+
+    beq !vx_check_right+
+    // Player crossed left deadband edge.
     lda zp_player_x
     sec
-    sbc #VIEWPORT_W / 2     // 19
-    bcs !vx_not_neg+
-    lda #0                  // Underflow, clamp to 0
-    jmp !vx_store+
-!vx_not_neg:
-    cmp #MAP_COLS - VIEWPORT_W  // 42
-    bcc !vx_store+
+    sbc #VIEW_SCROLL_MARGIN_X
+    bcs !vx_store_left+
+    lda #0
+!vx_store_left:
+    sta zp_view_x
+    jmp !vy_update+
+
+!vx_check_right:
+    lda zp_view_x
+    clc
+    adc #VIEWPORT_W - 1 - VIEW_SCROLL_MARGIN_X
+    cmp zp_player_x
+    bcs !vy_update+             // Inside deadband.
+
+    // Player crossed right deadband edge.
+    lda zp_player_x
+    sec
+    sbc #VIEWPORT_W - 1 - VIEW_SCROLL_MARGIN_X
+    cmp #MAP_COLS - VIEWPORT_W
+    bcc !vx_store_right+
     lda #MAP_COLS - VIEWPORT_W
-!vx_store:
+!vx_store_right:
     sta zp_view_x
 
-    // view_y = player_y - VIEWPORT_H/2, clamped to [0, MAP_ROWS - VIEWPORT_H]
+!vy_update:
+    // Vertical deadband:
+    // keep player in [view_y+M, view_y+VIEWPORT_H-1-M]
+    lda zp_view_y
+    clc
+    adc #VIEW_SCROLL_MARGIN_Y
+    cmp zp_player_y
+    bcc !vy_check_bottom+
+    beq !vy_check_bottom+
+    // Player crossed top deadband edge.
     lda zp_player_y
     sec
-    sbc #VIEWPORT_H / 2     // 10
-    bcs !vy_not_neg+
+    sbc #VIEW_SCROLL_MARGIN_Y
+    bcs !vy_store_top+
     lda #0
-    jmp !vy_store+
-!vy_not_neg:
-    cmp #MAP_ROWS - VIEWPORT_H  // 28
-    bcc !vy_store+
-    lda #MAP_ROWS - VIEWPORT_H
-!vy_store:
+!vy_store_top:
     sta zp_view_y
     rts
 
-// render_viewport — Draw the 38x19 viewport to VDC screen
+!vy_check_bottom:
+    lda zp_view_y
+    clc
+    adc #VIEWPORT_H - 1 - VIEW_SCROLL_MARGIN_Y
+    cmp zp_player_y
+    bcs !vy_done+               // Inside deadband.
+
+    // Player crossed bottom deadband edge.
+    lda zp_player_y
+    sec
+    sbc #VIEWPORT_H - 1 - VIEW_SCROLL_MARGIN_Y
+    cmp #MAP_ROWS - VIEWPORT_H
+    bcc !vy_store_bottom+
+    lda #MAP_ROWS - VIEWPORT_H
+!vy_store_bottom:
+    sta zp_view_y
+!vy_done:
+    rts
+
+// render_viewport — Draw the 78x19 viewport to VDC screen
 // For each row: stream screen codes via VDC auto-increment,
 // buffer translated colors, then stream attributes.
 // Preserves: nothing

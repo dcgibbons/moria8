@@ -240,6 +240,27 @@ cia_scan_petscii:
     lda #$80
     sta csp_shift
 
+    // Pre-detect shift state so both LSHIFT (row 1) and RSHIFT (row 6)
+    // are known before scanning rows that contain movement letters (HJKL on row 4).
+    // Without this pre-pass, right-shifted vi movement can decode as unshifted.
+    lda #$FD            // Row 1 drive mask
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    and #$80            // Active low: 0 = LSHIFT pressed
+    bne !csp_shift_l_done+
+    lda #$00
+    sta csp_shift
+!csp_shift_l_done:
+
+    lda #$BF            // Row 6 drive mask
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    and #$10            // Active low: 0 = RSHIFT pressed
+    bne !csp_shift_r_done+
+    lda #$00
+    sta csp_shift
+!csp_shift_r_done:
+
     // --- Scan all 8 rows for a non-shift key ---
     lda #$FE            // Row 0: bit 0 driven low
     ldx #0              // Row index (0–7)

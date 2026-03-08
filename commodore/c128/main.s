@@ -1066,6 +1066,7 @@ teps_save_y: .byte 0
 #import "../common/score_io.s"
 #import "../common/title_screen.s"
 #import "../common/game_loop.s"
+#import "../common/perf_p1.s"
 #import "../common/ui_help_clear.s"
 #import "../common/player_move.s"
 #import "../common/combat.s"

@@ -5,16 +5,22 @@ set -u
 
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="${VICE128:-/Applications/VICE/bin/x128}"
+PERF_P1_MODE="${PERF_P1:-0}"
 PASS=0
 FAIL=0
 TOTAL=0
 BOOT_ASSETS_BUILT=0
 
+KA_DEFINES=(-define C128)
+if [ "$PERF_P1_MODE" = "1" ]; then
+    KA_DEFINES+=(-define PERF_P1)
+fi
+
 run_main_assembly_check() {
     echo -n "  main128_asm: "
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -o out/moria128.prg 2>&1)
+    asm_output=$(java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 "${KA_DEFINES[@]}" -o out/moria128.prg 2>&1)
 
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
@@ -466,7 +472,7 @@ run_test() {
     local vs_file="${src%.s}.vs"
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols 2>&1)
+    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 "${KA_DEFINES[@]}" -vicesymbols 2>&1)
     if [ $? -ne 0 ]; then
         echo "FAIL (assembly error)"
         echo "$asm_output" | grep -i error | head -3
@@ -612,6 +618,11 @@ run_boot_diag_copy() {
 }
 
 echo "=== Moria C128 Tests ==="
+if [ "$PERF_P1_MODE" = "1" ]; then
+    echo "  mode: PERF_P1 instrumentation ON"
+else
+    echo "  mode: PERF_P1 instrumentation OFF"
+fi
 run_main_assembly_check
 run_symbol_placement_check
 run_prompt_irq_guard_check
@@ -628,6 +639,9 @@ run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke
 run_boot_diag_copy
 run_test "monster128" "tests/test_monster128.s"
+if [ "$PERF_P1_MODE" = "1" ]; then
+    run_test "perf_p1" "tests/test_perf_p1.s"
+fi
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 
 if [ "$FAIL" -gt 0 ]; then

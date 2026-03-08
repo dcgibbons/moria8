@@ -172,8 +172,6 @@ update_visibility:
 
     // Player is inside this lit room — reveal it
     jsr reveal_room
-    lda #1
-    sta vis_room_revealed
     jmp !uv_done+               // Only one room at a time
 
 !uv_next_room:
@@ -218,6 +216,13 @@ reveal_room:
     ldy vis_min_x
 !rr_col:
     :MapRead_ptr0_y()
+    sta zp_temp0
+    and #FLAG_VISITED
+    bne !rr_already_visited+
+    lda #1
+    sta vis_room_revealed       // Trigger full redraw only on first-time reveal
+!rr_already_visited:
+    lda zp_temp0
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
     cpy vis_max_x

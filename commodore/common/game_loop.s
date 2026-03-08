@@ -20,6 +20,13 @@ game_new_start:
     // Initialize message system
     jsr msg_init
 
+#if C128
+#if PERF_P1
+    // Reset movement responsiveness counters for new sessions.
+    jsr perf_p1_reset
+#endif
+#endif
+
     // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
     ldx #0
     lda #0
@@ -163,6 +170,13 @@ load_resume_game:
     // Re-init SID
     jsr sound_init
 
+#if C128
+#if PERF_P1
+    // Reset movement responsiveness counters after restore.
+    jsr perf_p1_reset
+#endif
+#endif
+
     // Clear screen and render the loaded level
     jsr screen_clear
     jsr update_visibility
@@ -190,8 +204,18 @@ main_loop:
     sta zp_run_dir
     jmp !not_running+
 !not_conf_run:
-
-    // Any keypress cancels running
+    // Running cancel is edge-like: ignore the initiating held key(s) until
+    // the keyboard returns to neutral once, then any new keypress cancels.
+    lda run_input_armed
+    bne !run_cancel_check+
+    jsr input_run_key_check
+    beq !run_arm_cancel+
+    jmp run_step                // Still holding initiating key: keep running
+!run_arm_cancel:
+    lda #1
+    sta run_input_armed
+    jmp run_step
+!run_cancel_check:
     jsr input_run_key_check     // Returns nonzero if any key is pressed
     bne !run_cancel+
     jmp run_step
@@ -201,6 +225,8 @@ main_loop:
     sta KBDBUF_COUNT            // Flush keyboard buffer (C64 only; harmless on C128)
     lda #$ff
     sta zp_run_dir
+    lda #0
+    sta run_input_armed
 !not_running:
     // Paralysis check — skip input, just tick the turn
     lda zp_eff_paralyze
@@ -360,9 +386,19 @@ main_loop:
 
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
     cmp #CMD_MOVE_N
-    bcc !not_move+
+    bcs !mv_hi_check+
+    jmp !not_move+
+!mv_hi_check:
     cmp #CMD_MOVE_SE + 1
-    bcs !not_move+
+    bcc !mv_cmd_ok+
+    jmp !not_move+
+!mv_cmd_ok:
+
+#if C128
+#if PERF_P1
+    jsr perf_p1_move_start
+#endif
+#endif
 
     // Save positions before move for dirty render
     ldx zp_player_x
@@ -398,10 +434,32 @@ main_loop:
     // Did viewport scroll?
     lda zp_view_x
     cmp old_view_x
+#if C128
+#if PERF_P1
+    beq !mv_chk_y+
+    jsr perf_p1_mark_scroll
+    jmp !full_redraw+
+!mv_chk_y:
+#else
     bne !full_redraw+
+#endif
+#else
+    bne !full_redraw+
+#endif
     lda zp_view_y
     cmp old_view_y
+#if C128
+#if PERF_P1
+    beq !mv_chk_reveal+
+    jsr perf_p1_mark_scroll
+    jmp !full_redraw+
+!mv_chk_reveal:
+#else
     bne !full_redraw+
+#endif
+#else
+    bne !full_redraw+
+#endif
 
     // Did a room get revealed?
     lda vis_room_revealed
@@ -409,10 +467,22 @@ main_loop:
 
     // No scroll, no room reveal — render local area around old+new position
     jsr render_local_area
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_local
+    jsr perf_p1_move_end
+#endif
+#endif
     jmp !post_move+
 
 !full_redraw:
     jsr render_viewport
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full
+    jsr perf_p1_move_end
+#endif
+#endif
 
 !post_move:
     // Check if player stepped on a store door (town only)
@@ -980,6 +1050,8 @@ main_loop:
     sec
     sbc #CMD_RUN_N              // Direction index 0-7
     sta zp_run_dir
+    lda #0
+    sta run_input_armed
     jmp run_step                // Take first step
 !not_run:
 
@@ -1182,6 +1254,7 @@ recall_query_sc:   .byte 0             // Screen code of typed letter
 recall_found_type: .byte 0             // Creature type index found
 recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)
 recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
+run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
 
 // tramp_dig_ability — Calculate digging ability
 // Now in main RAM — no banking needed.

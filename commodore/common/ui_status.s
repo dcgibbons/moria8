@@ -46,6 +46,122 @@
 // status_draw — Redraw the full status bar (3 rows)
 // Preserves: nothing
 status_draw:
+    // Dirty row bitmask in status_dirty_rows:
+    // bit0=row21, bit1=row22, bit2=row23
+    lda #$07
+    sta status_dirty_rows
+
+    // Cold-start: no cache means draw all three rows.
+    lda status_cache_valid
+    bne !sd_check+
+    jmp !sd_draw+
+!sd_check:
+
+    // Cache valid: build per-row dirty mask.
+    lda #$00
+    sta status_dirty_rows
+
+    // Row 21: LV / DL
+    lda zp_player_lvl
+    cmp status_prev_lvl
+    bne !sd_row21_dirty+
+    lda zp_player_dlvl
+    cmp status_prev_dlvl
+    bne !sd_row21_dirty+
+    jmp !sd_check_row22+
+!sd_row21_dirty:
+    lda status_dirty_rows
+    ora #$01
+    sta status_dirty_rows
+
+!sd_check_row22:
+    // Row 22: stats
+    lda zp_player_str
+    cmp status_prev_str
+    bne !sd_row22_dirty+
+    lda zp_player_int
+    cmp status_prev_int
+    bne !sd_row22_dirty+
+    lda zp_player_wis
+    cmp status_prev_wis
+    bne !sd_row22_dirty+
+    lda zp_player_dex
+    cmp status_prev_dex
+    bne !sd_row22_dirty+
+    lda zp_player_con
+    cmp status_prev_con
+    bne !sd_row22_dirty+
+    lda zp_player_chr
+    cmp status_prev_chr
+    bne !sd_row22_dirty+
+    jmp !sd_check_row23+
+!sd_row22_dirty:
+    lda status_dirty_rows
+    ora #$02
+    sta status_dirty_rows
+
+!sd_check_row23:
+    // Row 23: HP / MP / AC / AU / hunger
+    lda zp_player_hp_lo
+    cmp status_prev_hp_lo
+    bne !sd_row23_dirty+
+    lda zp_player_hp_hi
+    cmp status_prev_hp_hi
+    bne !sd_row23_dirty+
+    lda zp_player_mhp_lo
+    cmp status_prev_mhp_lo
+    bne !sd_row23_dirty+
+    lda zp_player_mhp_hi
+    cmp status_prev_mhp_hi
+    bne !sd_row23_dirty+
+
+    lda zp_player_mp
+    cmp status_prev_mp
+    bne !sd_row23_dirty+
+    lda zp_player_mmp
+    cmp status_prev_mmp
+    bne !sd_row23_dirty+
+    lda zp_player_ac
+    cmp status_prev_ac
+    bne !sd_row23_dirty+
+
+    lda player_data + PL_GOLD_0
+    cmp status_prev_gold_lo
+    bne !sd_row23_dirty+
+    lda player_data + PL_GOLD_1
+    cmp status_prev_gold_hi
+    bne !sd_row23_dirty+
+
+    lda zp_hunger_state
+    cmp status_prev_hunger
+    bne !sd_row23_dirty+
+    jmp !sd_dirty_ready+
+!sd_row23_dirty:
+    lda status_dirty_rows
+    ora #$04
+    sta status_dirty_rows
+
+!sd_dirty_ready:
+    // Any visible change redraws the full 3-line status block.
+    // Row-level partial redraw proved invalid because other flows may clear
+    // status lines independently; keep bar updates atomic.
+    lda status_dirty_rows
+    beq !sd_no_change+
+    lda #$07
+    sta status_dirty_rows
+    jmp !sd_draw+
+!sd_no_change:
+    // No visible status changes: either force redraw (bit7) or clear dirty and return.
+    lda zp_ui_dirty
+    and #%10000000
+    beq !sd_no_force+
+    lda #$07
+    sta status_dirty_rows
+    jmp !sd_draw+
+!sd_no_force:
+    jmp !sd_clear_dirty_only+
+
+!sd_draw:
     // Save cursor state
     lda zp_cursor_row
     pha
@@ -59,8 +175,11 @@ status_draw:
     jsr screen_clear_row
 
     // ========== Row 21: Name / Race / Level / Dungeon Level ==========
-    lda #STATUS_ROW
-    jsr screen_clear_row
+    lda status_dirty_rows
+    and #$01
+    bne !sd_row21_draw+
+    jmp !sd_row22+
+!sd_row21_draw:
     lda #STATUS_ROW
     sta zp_cursor_row
 
@@ -118,9 +237,13 @@ status_draw:
     lda zp_player_dlvl
     jsr screen_put_decimal
 
+!sd_row22:
     // ========== Row 22: All 6 stats ==========
-    lda #STATUS_ROW + 1
-    jsr screen_clear_row
+    lda status_dirty_rows
+    and #$02
+    bne !sd_row22_draw+
+    jmp !sd_row23+
+!sd_row22_draw:
     lda #STATUS_ROW + 1
     sta zp_cursor_row
     lda #COL_STATUS
@@ -213,9 +336,13 @@ status_draw:
     lda zp_player_chr
     jsr status_put_stat_val
 
+!sd_row23:
     // ========== Row 23: HP / MP / AC / Gold / Hunger ==========
-    lda #STATUS_ROW + 2
-    jsr screen_clear_row
+    lda status_dirty_rows
+    and #$04
+    bne !sd_row23_draw+
+    jmp !sd_update_cache+
+!sd_row23_draw:
     lda #STATUS_ROW + 2
     sta zp_cursor_row
     lda #COL_STATUS
@@ -337,18 +464,73 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
+!sd_update_cache:
+    // Update status cache after successful redraw.
+    lda zp_player_lvl
+    sta status_prev_lvl
+    lda zp_player_dlvl
+    sta status_prev_dlvl
+
+    lda zp_player_str
+    sta status_prev_str
+    lda zp_player_int
+    sta status_prev_int
+    lda zp_player_wis
+    sta status_prev_wis
+    lda zp_player_dex
+    sta status_prev_dex
+    lda zp_player_con
+    sta status_prev_con
+    lda zp_player_chr
+    sta status_prev_chr
+
+    lda zp_player_hp_lo
+    sta status_prev_hp_lo
+    lda zp_player_hp_hi
+    sta status_prev_hp_hi
+    lda zp_player_mhp_lo
+    sta status_prev_mhp_lo
+    lda zp_player_mhp_hi
+    sta status_prev_mhp_hi
+
+    lda zp_player_mp
+    sta status_prev_mp
+    lda zp_player_mmp
+    sta status_prev_mmp
+    lda zp_player_ac
+    sta status_prev_ac
+
+    lda player_data + PL_GOLD_0
+    sta status_prev_gold_lo
+    lda player_data + PL_GOLD_1
+    sta status_prev_gold_hi
+
+    lda zp_hunger_state
+    sta status_prev_hunger
+    lda #1
+    sta status_cache_valid
+
+!sd_clear_dirty:
     // Clear dirty flag
     lda zp_ui_dirty
-    and #%11111110
+    and #%01111110          // clear bit0 (status dirty) and bit7 (force redraw)
     sta zp_ui_dirty
 
-    // Restore cursor state
+    // Restore cursor state.
     pla
     sta zp_text_color
     pla
     sta zp_cursor_col
     pla
     sta zp_cursor_row
+!sd_done:
+    rts
+
+!sd_clear_dirty_only:
+    // No drawing happened; only clear dirty flag.
+    lda zp_ui_dirty
+    and #%01111110          // clear bit0 (status dirty) and bit7 (force redraw)
+    sta zp_ui_dirty
     rts
 
 // status_put_stat_val — Display stat value for status bar (cap 18/xx to 18)
@@ -440,3 +622,27 @@ status_au_str:
     .text "AU:" ; .byte $00
 status_exp_str:
     .text "EXP:" ; .byte $00
+
+// ============================================================
+// Status cache (skip redraw when visible values are unchanged)
+// ============================================================
+status_cache_valid: .byte 0
+status_prev_lvl:    .byte 0
+status_prev_dlvl:   .byte 0
+status_prev_str:    .byte 0
+status_prev_int:    .byte 0
+status_prev_wis:    .byte 0
+status_prev_dex:    .byte 0
+status_prev_con:    .byte 0
+status_prev_chr:    .byte 0
+status_prev_hp_lo:  .byte 0
+status_prev_hp_hi:  .byte 0
+status_prev_mhp_lo: .byte 0
+status_prev_mhp_hi: .byte 0
+status_prev_mp:     .byte 0
+status_prev_mmp:    .byte 0
+status_prev_ac:     .byte 0
+status_prev_gold_lo:.byte 0
+status_prev_gold_hi:.byte 0
+status_prev_hunger: .byte 0
+status_dirty_rows:  .byte 0

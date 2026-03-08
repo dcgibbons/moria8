@@ -7,7 +7,7 @@
 //
 // Screen layout (80-col):
 //   Rows 0–1:    Message area (2 lines)
-//   Rows 2–20:   Game viewport (38x19)
+//   Rows 2–20:   Game viewport (78x19)
 //   Rows 21–23:  Status bar (3 lines)
 //   Row  24:     Input prompt line
 // Placement is explicit by caller constants (no implicit global centering).
@@ -218,6 +218,10 @@ screen_clear:
     bne !attr_loop-
 
     plp                     // Restore caller IRQ state
+    // Full clear wipes status rows; force next status_draw to repaint.
+    lda zp_ui_dirty
+    ora #%10000001          // bit7=force status redraw, bit0=status dirty
+    sta zp_ui_dirty
     rts
 
 sc_page_cnt: .byte 0
@@ -433,6 +437,18 @@ screen_clear_row:
 
     ldx scr_save_row
     plp                     // Restore caller IRQ state
+    // If one of the status rows was cleared, force status repaint.
+    cpx #STATUS_ROW
+    beq !invalidate_status+
+    cpx #STATUS_ROW + 1
+    beq !invalidate_status+
+    cpx #STATUS_ROW + 2
+    bne !done+
+!invalidate_status:
+    lda zp_ui_dirty
+    ora #%10000001          // bit7=force status redraw, bit0=status dirty
+    sta zp_ui_dirty
+!done:
     rts
 
 scr_save_row: .byte 0
