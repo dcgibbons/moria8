@@ -111,6 +111,22 @@ screen_clear:
     bpl !col_last-
     rts
 
+// screen_blank — Hide display during long operations (C64 VIC-II DEN bit)
+// Preserves: nothing
+screen_blank:
+    lda $d011
+    and #%11101111              // Clear bit 4 — DEN off
+    sta $d011
+    rts
+
+// screen_unblank — Show display after long operations (C64 VIC-II DEN bit)
+// Preserves: nothing
+screen_unblank:
+    lda $d011
+    ora #%00010000              // Set bit 4 — DEN on
+    sta $d011
+    rts
+
 // screen_set_cursor — Set screen and color pointers for (row, col)
 // Input:  zp_cursor_row, zp_cursor_col
 // Output: zp_screen_lo/hi, zp_color_lo/hi point to that cell

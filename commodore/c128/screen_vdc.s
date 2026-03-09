@@ -224,6 +224,15 @@ screen_clear:
     sta zp_ui_dirty
     rts
 
+// screen_blank / screen_unblank — C128 VDC policy hooks
+// VDC has no VIC-II DEN equivalent on $D011. These hooks keep the shared
+// interface platform-correct and intentionally no-op on C128 for now.
+screen_blank:
+    rts
+
+screen_unblank:
+    rts
+
 sc_page_cnt: .byte 0
 sc_attr_val: .byte 0
 

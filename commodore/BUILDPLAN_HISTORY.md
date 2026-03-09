@@ -6,6 +6,32 @@
 
 ---
 
+## M2 — Platformized Screen Blanking Hooks ✅ COMPLETE (2026-03-09)
+
+### Goal
+- Remove VIC-II-specific `$D011` blank/unblank toggles from shared game logic so C128 VDC paths no longer rely on non-applicable hardware semantics.
+
+### Implemented
+1. Replaced direct `$D011` writes in `common/game_loop.s` with platform hooks:
+   - `screen_blank`
+   - `screen_unblank`
+2. Added C64 platform implementation in `c64/screen.s`:
+   - `screen_blank` clears VIC-II DEN bit
+   - `screen_unblank` sets VIC-II DEN bit
+3. Added C128 platform implementation in `c128/screen_vdc.s`:
+   - explicit no-op policy hooks (VDC has no `$D011` DEN equivalent)
+4. Updated `BUILDPLAN.md`:
+   - removed M2 from Open Issues
+   - added M2 to Recently Resolved
+   - removed stale `game_loop.s` `$D011` dependency row
+
+### Validation
+- `make -B -C commodore/c128 build128`: pass
+- `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)
+- C64 build remains blocked by pre-existing unrelated symbol error (`render_viewport_scroll_delta`), outside M2 scope.
+
+---
+
 ## P1 — C128 VDC Responsiveness Plan ✅ COMPLETE (2026-03-09)
 
 ### Goal

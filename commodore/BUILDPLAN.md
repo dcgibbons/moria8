@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-09, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, and C2 keyboard responsiveness/matrix stabilization are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, and M2 platformized screen blanking hooks are resolved.**
 
 ### Build Stats
 
@@ -25,7 +25,6 @@
 |---|----------|-------------|--------|
 | **DTH-1** | **BLOCKER** | C128: death flow regression. On player death, game incorrectly reports "game saved" instead of entering death screen, then CPU JAMs at `$01FF`. | **Open (backlog)** |
 | **SAV-2** | **BLOCKER** | C128: restore/load regression. After loading a saved game, town/dungeon map state renders as severe corruption/garbage (both world + actor state appear invalid). | **Open (backlog)** |
-| **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
@@ -53,6 +52,7 @@
 | **C5** | **BLOCKER** | C128 help (`?`) corruption/JAM fixed by C128-safe help renderer path and help code/data relocation out of overlay window, with assert+harness placement gates. | **2026-03-05** |
 | **C2** | **BLOCKER** | C128 keyboard matrix + responsiveness stabilization complete: rows 8/9 scan path, keypad/ESC mappings, asymmetric debounce tuning, and regression coverage validated. | **2026-03-05** |
 | **P1** | **MED** | C128 VDC responsiveness: instrumentation-first tuning complete (status redraw coherence, scroll-delta rendering for 1-tile shifts, movement latency counters/harness guards). | **2026-03-09** |
+| **M2** | MED | Platformized screen blank/unblank hooks: removed direct `$D011` toggles from shared `game_loop.s`; C64 keeps VIC-II DEN behavior, C128 uses explicit no-op VDC policy hook. | **2026-03-09** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -86,7 +86,6 @@ These files in `common/` contain minor C64-specific code that will need paramete
 | `ui_help.s:6` | 40-col layout | Parameterize or create 80-col version |
 | `ui_status.s` | Hardcoded column positions | Replace with named constants |
 | `disk_swap.s` | Centering hardcoded for 40 cols | Use SCREEN_COLS/2 arithmetic |
-| `game_loop.s` | `$d011` VIC-II DEN bit | Platform hooks for VDC blanking |
 
 ---
 

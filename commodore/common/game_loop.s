@@ -106,9 +106,7 @@ game_new_start:
     jsr player_recalc_equipment
 
     // Blank screen during lengthy init (hides BFS queue garbage + KERNAL messages)
-    lda $d011
-    and #%11101111              // Clear bit 4 — DEN off
-    sta $d011
+    jsr screen_blank
     jsr screen_clear
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
@@ -138,9 +136,7 @@ game_new_start:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
-    lda $d011
-    ora #%00010000              // Set bit 4 — DEN on, show rendered screen
-    sta $d011
+    jsr screen_unblank
     jsr status_draw
 
     // Welcome message
@@ -547,9 +543,7 @@ main_loop:
     beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
-    lda $d011
-    and #%11101111              // Blank screen (clear bit 4 — DEN)
-    sta $d011
+    jsr screen_blank
     jsr screen_clear            // Clear old level before lengthy load/generate
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #0
@@ -565,9 +559,7 @@ main_loop:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
-    lda $d011
-    ora #%00010000              // Restore screen (set bit 4 — DEN)
-    sta $d011
+    jsr screen_unblank
     jsr status_draw
     lda #<descend_str
     sta zp_ptr0
@@ -606,9 +598,7 @@ main_loop:
     bne !not_entering_town+
     jsr tramp_store_restock_all
 !not_entering_town:
-    lda $d011
-    and #%11101111              // Blank screen (clear bit 4 — DEN)
-    sta $d011
+    jsr screen_blank
     jsr screen_clear            // Clear old level before lengthy load/generate
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
@@ -624,9 +614,7 @@ main_loop:
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
-    lda $d011
-    ora #%00010000              // Restore screen (set bit 4 — DEN)
-    sta $d011
+    jsr screen_unblank
     jsr status_draw
     lda #<ascend_str
     sta zp_ptr0
