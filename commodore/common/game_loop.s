@@ -152,7 +152,9 @@ game_new_start:
 // load_resume_game — Entry point after successful load
 // ============================================================
 load_resume_game:
-    // Load creature tier for the resumed dungeon level
+    // Reset transient tier metadata from any prior runtime state, then
+    // load the correct tier for the resumed dungeon level.
+    jsr tier_invalidate_state
     jsr tier_check_transition
 
     // Recalculate derived stats from loaded base values

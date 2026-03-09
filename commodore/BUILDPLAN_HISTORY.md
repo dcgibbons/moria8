@@ -6,6 +6,27 @@
 
 ---
 
+## SAV-2 — C128 Restore/Load Regression ✅ COMPLETE (2026-03-09)
+
+### Symptom
+- C128 restored sessions could render invalid world/actor state after load, consistent with stale runtime metadata leaking across load-resume.
+
+### Root Cause
+- `load_resume_game` called `tier_check_transition` without first clearing transient tier state (`current_tier`, `tier_loaded`, tier name-table metadata).
+- These fields are runtime-derived and not part of persistent save payload; after a load they could still reflect a previous runtime session, causing mismatched tier assumptions during resumed play.
+
+### Fix
+1. Updated `commodore/common/game_loop.s`:
+   - `load_resume_game` now calls `tier_invalidate_state` before `tier_check_transition`.
+2. Effect:
+   - Resumed games always recompute/load tier state from saved dungeon depth rather than reusing stale in-memory tier metadata.
+
+### Validation
+- `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)
+- `make -C commodore/c64 test`: pass (**24 passed, 0 failed**)
+
+---
+
 ## DTH-1 — C128 Death Flow Regression ✅ COMPLETE (2026-03-09)
 
 ### Symptom
