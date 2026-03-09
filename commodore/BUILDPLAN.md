@@ -23,7 +23,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **DTH-1** | **BLOCKER** | C128: death flow regression. On player death, game incorrectly reports "game saved" instead of entering death screen, then CPU JAMs at `$01FF`. | **Open (backlog)** |
 | **SAV-2** | **BLOCKER** | C128: restore/load regression. After loading a saved game, town/dungeon map state renders as severe corruption/garbage (both world + actor state appear invalid). | **Open (backlog)** |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
@@ -53,6 +52,7 @@
 | **C2** | **BLOCKER** | C128 keyboard matrix + responsiveness stabilization complete: rows 8/9 scan path, keypad/ESC mappings, asymmetric debounce tuning, and regression coverage validated. | **2026-03-05** |
 | **P1** | **MED** | C128 VDC responsiveness: instrumentation-first tuning complete (status redraw coherence, scroll-delta rendering for 1-tile shifts, movement latency counters/harness guards). | **2026-03-09** |
 | **M2** | MED | Platformized screen blank/unblank hooks: removed direct `$D011` toggles from shared `game_loop.s`; C64 keeps VIC-II DEN behavior, C128 uses explicit no-op VDC policy hook. | **2026-03-09** |
+| **DTH-1** | **BLOCKER** | C128 death flow regression fixed by bracketing high-score KERNAL I/O in `tramp_game_over` with explicit MMU/ROM transitions while keeping death overlay routines in all-RAM mode. | **2026-03-09** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -92,8 +92,8 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-03-05)
 
 **High priority (C128 Port Stability):**
-1. No open C128 blocker after C2/C5/P1 closure; next work item is DTH-1/SAV-2 stabilization.
-2. Execute 10.8 Bank 1 pseudo-REU preload plan after DTH-1/SAV-2 stabilization.
+1. Next blocker work item is SAV-2 stabilization.
+2. Execute 10.8 Bank 1 pseudo-REU preload plan after SAV-2 stabilization.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

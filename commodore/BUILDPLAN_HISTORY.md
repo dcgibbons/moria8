@@ -6,6 +6,29 @@
 
 ---
 
+## DTH-1 — C128 Death Flow Regression ✅ COMPLETE (2026-03-09)
+
+### Symptom
+- On player death, C128 sometimes skipped normal death-screen flow, surfaced incorrect save-path behavior, and could end in a CPU `JAM` (`$01FF`) during post-death handling.
+
+### Root Cause
+- `tramp_game_over` called high-score disk I/O (`hiscore_load` / `hiscore_save`) while game MMU state was in all-RAM mode (`$FF00=$3E`), but those routines depend on KERNAL-visible ROM paths.
+- The death overlay routines (`score_calculate`, `hiscore_insert`, `score_death_screen`) require all-RAM execution at `$E000`, so KERNAL transitions must be scoped tightly around only the I/O calls.
+
+### Fix
+1. Updated `commodore/c128/main.s` `tramp_game_over`:
+   - Added explicit KERNAL-entry/exit transitions around `hiscore_load`.
+   - Added explicit KERNAL-entry/exit transitions around `hiscore_save`.
+   - Kept overlay routines (`score_calculate`, `hiscore_insert`, `score_death_screen`) outside KERNAL-visible windows.
+2. Preserved prior death-flow ordering and user-facing flow in `common/game_loop.s` (slain message -> disk prompt -> savefile delete -> game-over pipeline).
+
+### Validation
+- `make -B -C commodore/c128 build128`: pass
+- `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)
+- `make -C commodore/c64 test`: pass (**24 passed, 0 failed**)
+
+---
+
 ## M2 — Platformized Screen Blanking Hooks ✅ COMPLETE (2026-03-09)
 
 ### Goal

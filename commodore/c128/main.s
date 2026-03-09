@@ -63,16 +63,40 @@ tramp_game_over:
     // 3. Calculate score
     jsr score_calculate
 
-    // 4. Load high scores from disk (needs KERNAL)
+    // 4. Load high scores from disk (needs KERNAL-visible ROM)
+    php
+    sei
+    lda #$ff
+    sta $cc
+    lda #$0e                    // MMU_NORMAL
+    sta $ff00
+    lda #$37                    // BANK_ALL_ROM
+    sta $01
     jsr hiscore_load
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    jsr c128_vdc_reassert_mode
+    plp
 
-    // 5. Insert into high score table
+    // 5. Insert into high score table (death overlay code at $E000)
     jsr hiscore_insert
 
-    // 6. Save high scores to disk (needs KERNAL)
+    // 6. Save high scores to disk (needs KERNAL-visible ROM)
+    php
+    sei
+    lda #$ff
+    sta $cc
+    lda #$0e                    // MMU_NORMAL
+    sta $ff00
+    lda #$37                    // BANK_ALL_ROM
+    sta $01
     jsr hiscore_save
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    jsr c128_vdc_reassert_mode
+    plp
 
-    // 7. Display death screen
+    // 7. Display death screen (death overlay code at $E000)
     jmp score_death_screen
 
 tramp_store_init_all:
