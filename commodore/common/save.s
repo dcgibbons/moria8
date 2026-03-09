@@ -767,7 +767,8 @@ save_write_map_c128:
     ldy #0
     jsr mmu_select_bank1
     lda (zp_ptr0),y
-    jsr mmu_select_bank0
+    lda #MMU_NORMAL
+    sta $ff00
     jsr save_write_byte
     inc zp_ptr0
     bne !swm_no_hi+
@@ -802,7 +803,8 @@ load_read_map_c128:
     pla
     ldy #0
     sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    lda #MMU_NORMAL
+    sta $ff00
     inc zp_ptr0
     bne !lrm_no_hi+
     inc zp_ptr0_hi

@@ -18,8 +18,12 @@
 ### Fix
 1. Updated `commodore/common/game_loop.s`:
    - `load_resume_game` now calls `tier_invalidate_state` before `tier_check_transition`.
-2. Effect:
+2. Updated `commodore/common/save.s` C128 map-stream helpers:
+   - `save_write_map_c128` now restores MMU to `MMU_NORMAL` (not `MMU_ALL_RAM`) before each KERNAL byte write.
+   - `load_read_map_c128` now restores MMU to `MMU_NORMAL` (not `MMU_ALL_RAM`) before each KERNAL byte read.
+3. Effect:
    - Resumed games always recompute/load tier state from saved dungeon depth rather than reusing stale in-memory tier metadata.
+   - C128 save/load map streaming no longer drifts into an incorrect MMU context during byte I/O.
 
 ### Validation
 - `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)
