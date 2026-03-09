@@ -47,6 +47,9 @@ SOURCES        := $(C128_SOURCES) $(COMMON_SOURCES)
 
 # ── KickAssembler flags ──────────────────────────────────
 KA_FLAGS    = -showmem -vicesymbols -libdir ../c64 -define C128
+ifeq ($(PERF_P1),1)
+KA_FLAGS    += -define PERF_P1
+endif
 
 # ── Targets ───────────────────────────────────────────────
 .PHONY: build128 run128 disk128 clean128 test128

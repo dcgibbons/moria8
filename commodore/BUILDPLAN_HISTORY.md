@@ -6,6 +6,54 @@
 
 ---
 
+## P1 — C128 VDC Responsiveness Plan ✅ COMPLETE (2026-03-09)
+
+### Goal
+- Eliminate perceived movement lag in the C128 VDC path for turn-based play, with measurable movement latency bounds and stable rendering behavior.
+
+### Implemented
+1. Instrumentation-first movement latency probe (`PERF_P1`)
+   - Added compile-time guarded probe module (`common/perf_p1.s`) with:
+     - frame-delta histogram buckets: `0`, `1`, `2`, `>=3`
+     - path counters: local redraw, full redraw, scroll-driven redraw
+     - scroll quality counters: delta-scroll hits and scroll fallbacks
+   - Hooked movement lifecycle in `common/game_loop.s` (`move_start`, path markers, `move_end`).
+   - Added `PERF_P1` test mode support in `c128/run_tests128.sh`.
+2. Rendering-path stabilization and responsiveness fixes
+   - Preserved local-area fast path for no-scroll movement.
+   - Added scroll-delta renderer for 1-tile viewport shifts:
+     - copy existing viewport content in VDC
+     - redraw only newly exposed strip
+     - fallback to full redraw when delta path is inapplicable
+   - Hardened status rendering against flashing/partial redraw artifacts:
+     - change-detection cache with no-op dirty clear
+     - force-redraw signaling on full/status row clears
+     - atomic full status block redraw on visible status changes
+3. Behavior and regression hardening
+   - Fixed run/shift movement edge regressions (input/run-latch handling).
+   - Fixed LOS room-reveal flag behavior to prevent unnecessary full redraws.
+   - Added status coherence regression test:
+     - `c128/tests/test_status_coherence128.s`
+   - Extended `test_perf_p1.s` for new counters and reset/assert coverage.
+4. PERF-mode debugging safety fixes
+   - Fixed movement command clobber in `perf_p1_move_start` (preserve `A`).
+   - Added PERF key dump hook (`V`) and fixed scan-table mapping for `V`.
+   - Resized PERF dump routine to avoid code placement drift into `$D000-$DFFF` (I/O hole), preventing combat JAMs.
+
+### Validation
+- `make -C commodore/c128 test128`: passing.
+- `PERF_P1=1 make -C commodore/c128 test128`: passing (includes perf suite).
+- Manual confirmation during P1 closure:
+  - status bar flash/regression paths resolved
+  - scroll-heavy viewport movement materially improved and acceptable
+  - `PERF_P1` counters visible in-game for manual profiling.
+
+### Notes
+- P1 is closed as a responsiveness-first objective, not as a real-time/fps optimization program.
+- Remaining known blockers are outside P1 scope (`DTH-1`, `SAV-2`).
+
+---
+
 ## Phase Completion Summary (as of 2026-02-21, Phase 10.0 complete)
 
 | Phase | Description | Status |

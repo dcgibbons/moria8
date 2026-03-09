@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-03-08, updated)
+## Current State (2026-03-09, updated)
 
 **All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, and C2 keyboard responsiveness/matrix stabilization are resolved.**
 
@@ -23,7 +23,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **P1** | **MED**     | C128: VDC viewport rendering is slow. See `c128/VDC_OPTIMIZATION_PLAN.md` for the performance improvement plan. | **Open** |
 | **DTH-1** | **BLOCKER** | C128: death flow regression. On player death, game incorrectly reports "game saved" instead of entering death screen, then CPU JAMs at `$01FF`. | **Open (backlog)** |
 | **SAV-2** | **BLOCKER** | C128: restore/load regression. After loading a saved game, town/dungeon map state renders as severe corruption/garbage (both world + actor state appear invalid). | **Open (backlog)** |
 | **M2** | MED | C128: VIC-II screen blanking ($D011) has no effect on VDC display. | Tracked |
@@ -53,6 +52,7 @@
 | **C4** | **HIGH** | C128 follow-up prompt audit complete: added release-wait gates for drop/quaff/read/aim/use/gain/throw + menu/recall dismiss paths, with expanded harness chain checks. | **2026-03-05** |
 | **C5** | **BLOCKER** | C128 help (`?`) corruption/JAM fixed by C128-safe help renderer path and help code/data relocation out of overlay window, with assert+harness placement gates. | **2026-03-05** |
 | **C2** | **BLOCKER** | C128 keyboard matrix + responsiveness stabilization complete: rows 8/9 scan path, keypad/ESC mappings, asymmetric debounce tuning, and regression coverage validated. | **2026-03-05** |
+| **P1** | **MED** | C128 VDC responsiveness: instrumentation-first tuning complete (status redraw coherence, scroll-delta rendering for 1-tile shifts, movement latency counters/harness guards). | **2026-03-09** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -93,7 +93,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 ### Priority Triage (updated 2026-03-05)
 
 **High priority (C128 Port Stability):**
-1. No open C128 blocker after C2/C5 closure; next work item is C128 performance (P1).
+1. No open C128 blocker after C2/C5/P1 closure; next work item is DTH-1/SAV-2 stabilization.
 2. Execute 10.8 Bank 1 pseudo-REU preload plan after DTH-1/SAV-2 stabilization.
 
 **Low priority (polish/completeness):**

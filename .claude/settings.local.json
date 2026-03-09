@@ -76,7 +76,11 @@
       "Bash(elif grep -q '#import \"\"../item.s\"\"' \"$f\")",
       "Bash(then sed -i '' '/#import \"\"..\\\\/item.s\"\"/a#import \"\"../special_rooms.s\"\"#import \"\"../special_rooms_stubs.s\"\"\n' \"$f\")",
       "Bash(else echo \"$f: no item.s import found — needs manual check\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "WebFetch(domain:vice-emu.sourceforge.io)",
+      "WebFetch(domain:stable-retro.farama.org)",
+      "WebFetch(domain:docs.libretro.com)",
+      "WebFetch(domain:www.videogames.ai)"
     ]
   }
 }

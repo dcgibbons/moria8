@@ -70,6 +70,24 @@ test_fail:
     jmp test_fail_loop
 
 test_continue:
+    // Unshifted vi movement mappings.
+    lda #$4b               // K
+    jsr petscii_to_command
+    cmp #CMD_MOVE_N
+    bne test_fail
+    lda #$4a               // J
+    jsr petscii_to_command
+    cmp #CMD_MOVE_S
+    bne test_fail
+    lda #$48               // H
+    jsr petscii_to_command
+    cmp #CMD_MOVE_W
+    bne test_fail
+    lda #$4c               // L
+    jsr petscii_to_command
+    cmp #CMD_MOVE_E
+    bne test_fail
+
     // Core command mappings involved in recent regressions
     lda #$54               // T
     jsr petscii_to_command
@@ -108,33 +126,33 @@ test_continue:
     lda #KEY_ESC
     jsr petscii_to_command
     cmp #CMD_QUIT
-    bne test_fail
+    bne test_fail2
 
     // Unmapped keypad/extended keys should return CMD_NONE
     lda #KEY_KP_MINUS
     jsr petscii_to_command
     cmp #CMD_NONE
-    bne test_fail
+    bne test_fail2
 
     lda #KEY_KP_DOT
     jsr petscii_to_command
     cmp #CMD_NONE
-    bne test_fail
+    bne test_fail2
 
     lda #KEY_KP0
     jsr petscii_to_command
     cmp #CMD_NONE
-    bne test_fail
+    bne test_fail2
 
     lda #KEY_ALT
     jsr petscii_to_command
     cmp #CMD_NONE
-    bne test_fail
+    bne test_fail2
 
     lda #KEY_LF
     jsr petscii_to_command
     cmp #CMD_NONE
-    bne test_fail
+    bne test_fail2
 
     jmp test_edge_checks
 

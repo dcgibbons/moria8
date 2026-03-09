@@ -21,6 +21,10 @@ perf_p1_full_lo:   .byte 0
 perf_p1_full_hi:   .byte 0
 perf_p1_scroll_lo: .byte 0
 perf_p1_scroll_hi: .byte 0
+perf_p1_scroll_delta_lo:    .byte 0
+perf_p1_scroll_delta_hi:    .byte 0
+perf_p1_scroll_fallback_lo: .byte 0
+perf_p1_scroll_fallback_hi: .byte 0
 
 // Move transaction tracking.
 perf_p1_moves:       .byte 0
@@ -42,6 +46,10 @@ perf_p1_reset:
     sta perf_p1_full_hi
     sta perf_p1_scroll_lo
     sta perf_p1_scroll_hi
+    sta perf_p1_scroll_delta_lo
+    sta perf_p1_scroll_delta_hi
+    sta perf_p1_scroll_fallback_lo
+    sta perf_p1_scroll_fallback_hi
     sta perf_p1_moves
     sta perf_p1_start_frame
     sta perf_p1_max_delta
@@ -49,13 +57,15 @@ perf_p1_reset:
     rts
 
 // perf_p1_move_start — Mark movement command start frame.
-// Clobbers: A
+// Preserves: A
 perf_p1_move_start:
+    pha
     lda PERF_P1_JIFFY_LO
     sta perf_p1_start_frame
     inc perf_p1_moves
     lda #0
     sta perf_p1_scroll_flag
+    pla
     rts
 
 // perf_p1_mark_scroll — Mark current movement redraw as scroll-driven.
@@ -63,6 +73,28 @@ perf_p1_move_start:
 perf_p1_mark_scroll:
     lda #1
     sta perf_p1_scroll_flag
+    rts
+
+// perf_p1_mark_scroll_delta — Count one scroll handled via delta renderer.
+// Clobbers: A
+perf_p1_mark_scroll_delta:
+    lda perf_p1_scroll_flag
+    beq !done+
+    inc perf_p1_scroll_delta_lo
+    bne !done+
+    inc perf_p1_scroll_delta_hi
+!done:
+    rts
+
+// perf_p1_mark_scroll_fallback — Count one scroll that fell back to full redraw.
+// Clobbers: A
+perf_p1_mark_scroll_fallback:
+    lda perf_p1_scroll_flag
+    beq !done+
+    inc perf_p1_scroll_fallback_lo
+    bne !done+
+    inc perf_p1_scroll_fallback_hi
+!done:
     rts
 
 // perf_p1_mark_local — Count one local-area render.
@@ -120,5 +152,45 @@ perf_p1_move_end:
 !b2:
     inc perf_p1_hist_2
     rts
+
+// perf_p1_dump_overlay — Show PERF_P1 counters on message rows 0-1.
+// Debug helper for manual gameplay profiling.
+// Clobbers: A, X, Y
+perf_p1_dump_overlay:
+    // Compact dump to avoid pushing hot gameplay code into the $D000 I/O hole.
+    jsr msg_clear
+    lda zp_text_color
+    pha
+    lda #COL_WHITE
+    sta zp_text_color
+
+    // Row 0: M:<moves> X:<max>
+    lda #MSG_ROW
+    sta zp_cursor_row
+    lda #0
+    sta zp_cursor_col
+    lda #<perf_p1_line0_m
+    sta zp_ptr0
+    lda #>perf_p1_line0_m
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda perf_p1_moves
+    jsr screen_put_hex
+
+    lda #<perf_p1_line0_x
+    sta zp_ptr0
+    lda #>perf_p1_line0_x
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda perf_p1_max_delta
+    jsr screen_put_hex
+
+    pla
+    sta zp_text_color
+    rts
+
+perf_p1_line0_m: .text "P1 M:" ; .byte 0
+perf_p1_line0_x: .text " X:" ; .byte 0
 
 #endif

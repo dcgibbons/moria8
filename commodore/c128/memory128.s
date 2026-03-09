@@ -241,6 +241,27 @@ mmu_select_bank0:
     plp
     rts
 
+// mmu_copy_map_row — Fast copy from Bank 1 MAP to MMU_LINE_BUF ($0400)
+// Input: zp_ptr0/hi = source address in Bank 1
+// Output: 38 bytes copied to $0400 in Bank 0
+// Preserves: X
+mmu_copy_map_row:
+    php
+    sei                             // Shield against KERNAL interrupts
+    lda #MMU_RAM_BANK1              // Bank 1, RAM
+    sta MMU_CR
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta SCREEN_RAM,y                // $0400 (visible as common RAM in Bank 1)
+    iny
+    cpy #38                         // VIEWPORT_W
+    bne !copy-
+    lda #MMU_ALL_RAM                // Restore Bank 0 All RAM
+    sta MMU_CR
+    plp
+    rts
+
 // save_zp — Copy $02–$8F to ZP_SAVE_BUF_ADDR
 save_zp:
     ldx #0

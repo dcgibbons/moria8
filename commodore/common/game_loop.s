@@ -290,6 +290,17 @@ main_loop:
     jmp vp_render_status_loop
 !not_help:
 
+#if C128
+#if PERF_P1
+    // PERF_P1 counter dump (debug key: 'V')
+    cmp #CMD_VERSION
+    bne !not_perf_dump+
+    jsr perf_p1_dump_overlay
+    jmp main_loop
+!not_perf_dump:
+#endif
+#endif
+
     // Monster recall?
     cmp #CMD_RECALL
     beq !+
@@ -482,6 +493,7 @@ main_loop:
     jsr render_local_area
 #if C128
 #if PERF_P1
+    jsr perf_p1_mark_scroll_delta
     jsr perf_p1_move_end
 #endif
 #endif
@@ -490,6 +502,7 @@ main_loop:
     jsr render_viewport
 #if C128
 #if PERF_P1
+    jsr perf_p1_mark_scroll_fallback
     jsr perf_p1_mark_full
     jsr perf_p1_move_end
 #endif

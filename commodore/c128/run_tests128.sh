@@ -634,6 +634,7 @@ run_test "tier128" "tests/test_tier128.s"
 run_test "input128" "tests/test_input128.s"
 run_test "msg_prompt128" "tests/test_msg_prompt128.s" 120000000
 run_test "vdc_attr128" "tests/test_vdc_attr128.s"
+run_test "status_coherence128" "tests/test_status_coherence128.s"
 run_test "dungeon128" "tests/test_dungeon128.s" 50000000
 run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke

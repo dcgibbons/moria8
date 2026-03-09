@@ -434,7 +434,7 @@ cia_scancode_table:
     // Row 2 (scan 16–23): 5  R     D    6    C    F    T    X
     .byte $35,  $52,  $44,  $36, $43, $46, $54, $58
     // Row 3 (scan 24–31): 7  Y     G    8    B    H    U    V
-    .byte $37,  $59,  $47,  $38, $42, $48, $55, 0
+    .byte $37,  $59,  $47,  $38, $42, $48, $55, $56
     // Row 4 (scan 32–39): 9  I     J    0    M    K    O    N
     .byte $39,  $49,  $4A,  $30, $4D, $4B, $4F, $4E
     // Row 5 (scan 40–47): +  P     L    -    .    :    @    ,
@@ -459,6 +459,17 @@ input_get_command:
 
 !get_key:
     jsr input_get_key
+#if PERF_P1
+    // Debug-only shortcut: 'V' dumps PERF_P1 counters in-game.
+    cmp #$56                    // PETSCII 'V'
+    beq !perf_dump+
+    cmp #$76                    // PETSCII 'v'
+    bne !perf_dump_done+
+!perf_dump:
+    lda #CMD_VERSION
+    jmp !got_cmd+
+!perf_dump_done:
+#endif
     jsr petscii_to_command
     cmp #CMD_NONE
     beq !get_key-           // Unknown key, try again

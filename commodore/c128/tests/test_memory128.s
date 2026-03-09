@@ -64,6 +64,58 @@ test_start:
     and #$04
     beq test_fail   // Still should be disabled
 
+    // Test 3: mmu_copy_map_row isolation and boundary checks
+    
+    // Setup dummy data in Bank 1 at $4000
+    jsr mmu_select_bank1
+    ldx #0
+!setup_src:
+    txa
+    sta $4000,x
+    inx
+    cpx #38
+    bne !setup_src-
+    jsr mmu_select_bank0
+
+    // Setup sentinels at $03FF and $0400+38 ($0426)
+    lda #$ff
+    sta $03ff
+    sta $0426
+    
+    // Clear destination $0400-$0425
+    lda #0
+    ldx #0
+!clr_dest:
+    sta $0400,x
+    inx
+    cpx #38
+    bne !clr_dest-
+
+    // Call the copy routine
+    lda #<$4000
+    sta zp_ptr0
+    lda #>$4000
+    sta zp_ptr0_hi
+    jsr mmu_copy_map_row
+
+    // Verify boundaries to prove no clobbering
+    lda $03ff
+    cmp #$ff
+    bne test_fail
+    lda $0426
+    cmp #$ff
+    bne test_fail
+
+    // Verify copied content
+    ldx #0
+!chk_dest:
+    txa
+    cmp $0400,x
+    bne test_fail
+    inx
+    cpx #38
+    bne !chk_dest-
+
     jmp test_pass
 
 test_fail:
