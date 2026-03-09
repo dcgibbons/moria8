@@ -14,16 +14,19 @@
 ### Root Cause
 - `load_resume_game` called `tier_check_transition` without first clearing transient tier state (`current_tier`, `tier_loaded`, tier name-table metadata).
 - These fields are runtime-derived and not part of persistent save payload; after a load they could still reflect a previous runtime session, causing mismatched tier assumptions during resumed play.
+- C128 map save streaming also had a register-lifetime bug: the loaded map byte in `A` was overwritten by `lda #MMU_NORMAL` before `save_write_byte`, causing the saved map block to be filled with `0x0E` bytes.
 
 ### Fix
 1. Updated `commodore/common/game_loop.s`:
    - `load_resume_game` now calls `tier_invalidate_state` before `tier_check_transition`.
 2. Updated `commodore/common/save.s` C128 map-stream helpers:
-   - `save_write_map_c128` now restores MMU to `MMU_NORMAL` (not `MMU_ALL_RAM`) before each KERNAL byte write.
+   - `save_write_map_c128` now preserves the map byte across MMU restore (`pha`/`pla`) before `save_write_byte`.
+   - `save_write_map_c128` and `load_read_map_c128` now restore via `mmu_select_bank0` and then force `MMU_NORMAL` before each KERNAL byte I/O.
    - `load_read_map_c128` now restores MMU to `MMU_NORMAL` (not `MMU_ALL_RAM`) before each KERNAL byte read.
 3. Effect:
    - Resumed games always recompute/load tier state from saved dungeon depth rather than reusing stale in-memory tier metadata.
    - C128 save/load map streaming no longer drifts into an incorrect MMU context during byte I/O.
+   - Saved map payload now contains real tile bytes instead of a repeated MMU constant.
 
 ### Validation
 - `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)

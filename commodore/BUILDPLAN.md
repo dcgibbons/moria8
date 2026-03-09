@@ -52,7 +52,7 @@
 | **P1** | **MED** | C128 VDC responsiveness: instrumentation-first tuning complete (status redraw coherence, scroll-delta rendering for 1-tile shifts, movement latency counters/harness guards). | **2026-03-09** |
 | **M2** | MED | Platformized screen blank/unblank hooks: removed direct `$D011` toggles from shared `game_loop.s`; C64 keeps VIC-II DEN behavior, C128 uses explicit no-op VDC policy hook. | **2026-03-09** |
 | **DTH-1** | **BLOCKER** | C128 death flow regression fixed by bracketing high-score KERNAL I/O in `tramp_game_over` with explicit MMU/ROM transitions while keeping death overlay routines in all-RAM mode. | **2026-03-09** |
-| **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map streaming MMU restore (`MMU_NORMAL` during byte I/O) so restored world/actor state is read/written against the correct bank context. | **2026-03-09** |
+| **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map stream handling so map bytes are preserved across MMU restore (instead of being clobbered to `MMU_NORMAL`), with KERNAL byte I/O running in `MMU_NORMAL` context. | **2026-03-09** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
