@@ -483,6 +483,7 @@ main_loop:
     jmp !post_move+
 
 !full_redraw:
+#if C128
     jsr render_viewport_scroll_delta
     bcc !full_draw_fallback+
     // Scroll-delta path handled viewport shift; refresh local dynamic area.
@@ -495,6 +496,7 @@ main_loop:
 #endif
     jmp !post_move+
 !full_draw_fallback:
+#endif
     jsr render_viewport
 #if C128
 #if PERF_P1
@@ -1137,11 +1139,13 @@ run_step:
     jmp !run_post+
 
 !run_full_redraw:
+#if C128
     jsr render_viewport_scroll_delta
     bcc !run_full_fallback+
     jsr render_local_area
     jmp !run_post+
 !run_full_fallback:
+#endif
     jsr render_viewport
 
 !run_post:
@@ -1190,11 +1194,13 @@ run_step:
     jsr render_local_area
     jmp !rsm_post+
 !rsm_full:
+#if C128
     jsr render_viewport_scroll_delta
     bcc !rsm_full_fallback+
     jsr render_local_area
     jmp !rsm_post+
 !rsm_full_fallback:
+#endif
     jsr render_viewport
 !rsm_post:
     jsr status_draw

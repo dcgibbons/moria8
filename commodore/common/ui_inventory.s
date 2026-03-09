@@ -241,8 +241,14 @@ ui_equip_display:
     adc #HSTR_PID_TERRIBLE      // Sequential: TERRIBLE=0, BAD=1, ...
     tax
     jsr huff_decode_string      // zp_ptr0/hi → hd_decode_buf
-    lda #<(hd_decode_buf + 7)   // Skip "Sense: " prefix (hi byte unchanged)
+    // Skip "Sense: " prefix with carry-safe pointer math.
+    lda zp_ptr0
+    clc
+    adc #7
     sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #0
+    sta zp_ptr0_hi
     jsr screen_put_string
     lda #$29                    // ')'
     jsr screen_put_char

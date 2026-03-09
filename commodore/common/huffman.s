@@ -11,7 +11,6 @@ hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 
 // Decode output buffer (42 bytes, matches combat_msg_buf size)
 hd_decode_buf: .fill 42, 0
-.assert "hd_decode_buf same page", (hd_decode_buf >> 8) == ((hd_decode_buf + 7) >> 8), true
 
 // ============================================================
 // huff_decode_string — Decode a Huffman-compressed string
