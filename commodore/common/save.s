@@ -767,9 +767,11 @@ save_write_map_c128:
     ldy #0
     jsr mmu_select_bank1
     lda (zp_ptr0),y
+    pha
     jsr mmu_select_bank0
     lda #MMU_NORMAL
     sta $ff00
+    pla
     jsr save_write_byte
     inc zp_ptr0
     bne !swm_no_hi+
