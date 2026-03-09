@@ -28,7 +28,9 @@
 ### Validation
 - `make -B -C commodore/c128 build128`: pass
 - `make -C commodore/c128 test128`: pass (**17 passed, 0 failed**)
-- C64 build remains blocked by pre-existing unrelated symbol error (`render_viewport_scroll_delta`), outside M2 scope.
+- Follow-up closure:
+  - `make -C commodore/c64 build`: pass
+  - `make -C commodore/c64 test`: pass (**24 passed, 0 failed**)
 
 ---
 
