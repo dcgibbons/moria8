@@ -1,7 +1,7 @@
-# Moria8 C128 Port — Architecture (C4 Baseline + Stability Fixes)
+# Moria8 C128 Port — Architecture (C4 Baseline + 10.8 Gate B)
 
-> Updated for C4 completion state (2026-03-02), including post-lock stability fixes.
-> This document tracks the shipping C128 memory/banking model after map relocation.
+> Updated for 10.8 ownership refactor plus Gate B overlay-cache validation.
+> This document tracks the shipping C128 memory/banking model, including the reclaimed Bank 1 cache window used for tier preload and fixed-slot overlay caching.
 
 ---
 
@@ -29,11 +29,30 @@ Key C4 outcome:
 | `$E000-$EFFF` | overlay load window in RAM under KERNAL |
 | `$E000-$FFFF` | RAM-visible only when KERNAL ROM is hidden |
 
-### 1.2 Bank 1 (map storage)
+### 1.2 Bank 1 (runtime ownership after boot)
 
 | Range | Purpose |
 | :--- | :--- |
+| `$0000-$0FFF` | 4 KB bottom common RAM (shared across banks; not cache-safe) |
+| `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; still unassigned to a 10.8 feature |
 | `$4000-$4EFF` | dungeon/town map (`MAP_BASE..MAP_END`) |
+| `$5000-$7FFF` | Bank 1 DB/data region retained from earlier C128 work (`BANK1_DB_BASE..BANK1_DB_END`) |
+| `$8000-$94F7` | active tier-cache window for `MONSTER.DB.1-4` |
+| `$A000-$AFFF` | overlay cache slot for `OVL_STARTUP` |
+| `$B000-$BFFF` | overlay cache slot for `OVL_TOWN` |
+| `$C000-$CFFF` | overlay cache slot for `OVL_DEATH` |
+| `$E000-$EFFF` | overlay cache slot for `OVL_DUNGEON_GEN` |
+| `$94F8-$9FFF`, `$D000-$DFFF`, `$F000-$FEFF` | currently unassigned / reserved high Bank 1 space |
+
+10.8.0 ownership conclusions:
+- `boot128` previously left the staged Bank 1 program image resident, which made Bank 1 ownership ambiguous and invalidated preload-cache assumptions.
+- `boot128` now scrubs each staged source page in Bank 1 immediately after buffering it into common RAM during the copy to Bank 0.
+- That reclaim step removes the staged-image overlap from the post-boot ownership model.
+- The current layout now has a documented reclaimed high Bank 1 region at `$8000-$FEFF`, which is large enough for the 5368-byte tier-preload footprint.
+- Startup now preloads the four monster tiers into `$8000-$94F7`.
+- Overlay cache is also active for fixed slots at `$A000-$AFFF`, `$B000-$BFFF`, `$C000-$CFFF`, and `$E000-$EFFF`.
+- MMU gateway hardening for map/DB access is in place for the tier-cache path.
+- `$D000-$DFFF` is intentionally left unused by the standard overlay-cache helpers because Bank 1 helper mode keeps I/O visible there.
 
 Map invariants:
 - `MAP_COLS=80`
@@ -69,7 +88,12 @@ KERNAL call safety:
 1. Relocates loader to safe RAM.
 2. Loads `MORIA128` into Bank 1 via KERNAL LOAD path.
 3. Uses a common-RAM copy stub to copy staged pages into Bank 0 program space.
-4. Restores normal bank mode and jumps to `$1C0E`.
+4. Scrubs each staged Bank 1 source page once buffered, reclaiming the staged image during the copy.
+5. Restores normal bank mode and jumps to `$1C0E`.
+
+10.8.0 clarification:
+- `boot128` now actively reclaims the staged Bank 1 image during the copy-to-Bank-0 step.
+- Any later Bank 1 feature must still use documented ownership ranges and compile-time assertions instead of informal "free RAM" assumptions.
 
 Diagnostics:
 - `BOOT_DIAG` mode writes signature bytes for transfer-stage debugging.
@@ -88,13 +112,37 @@ Current suites:
 3. `dungeon128`
 4. `soak128` (200 deterministic generation iterations)
 5. `boot_d64_smoke`
-6. `boot_diag_copy`
+6. `boot_title_idle_smoke`
+7. `boot_title_newgame_smoke`
+8. `boot_tier_transition_smoke`
+9. `town_overlay_smoke`
+10. `town_overlay_female_smoke`
+11. `death_overlay_smoke`
+12. `preload_partial_failure_smoke`
+13. `boot_diag_copy`
 
 ---
 
-## 5. Out of Scope (Post-C4)
+## 5. 10.8.0 Implications
+
+For the current build:
+- the Bank 1 ownership blocker has been addressed by reclaiming the staged image during boot
+- tier-only preload cache now uses the documented high Bank 1 window
+- overlay cache now uses fixed Bank 1 slots and falls back to disk if that cache class is unavailable
+- runtime now reasserts IRQ/vector/CHRIN/helper guard state across overlay and dungeon-generation boundaries
+- boot coverage now includes idle-title soak, explicit town overlay coverage for both male and female new-game flows, death overlay coverage, and a missing-tier preload smoke that proves runtime disk fallback still works
+- any future overlay cache design must continue to use documented reclaimed ranges and explicit MMU gateways
+
+Active overlay slot map:
+- `$A000-$AFFF` -> `OVL_STARTUP`
+- `$B000-$BFFF` -> `OVL_TOWN`
+- `$C000-$CFFF` -> `OVL_DEATH`
+- `$E000-$EFFF` -> `OVL_DUNGEON_GEN`
+
+## 6. Out of Scope (Post-C4 / Pre-MMU-Gateway-Hardening)
 
 Not part of the current shipping baseline:
 - `198x66` map rollout (Phase 10.3 follow-on effort)
 - Gameplay redesign tied to enlarged map geometry
+- Re-enabling overlay preload/cache before the upgraded 10.8 smoke coverage exists
 - Non-essential refactors unrelated to C128 banking correctness

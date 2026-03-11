@@ -12,6 +12,10 @@
 .const COL_LGREY = 15
 .const COL_MSG_TEXT = COL_LGREY
 
+// Stubbed dependency from ui_messages.s C128 guard path
+c128_restore_runtime_vectors:
+    rts
+
 // Stubbed dependency from ui_messages.s (only needed for -MORE- path)
 input_get_key:
     lda #0

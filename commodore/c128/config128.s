@@ -54,42 +54,18 @@ detect_machine:
 // C128 map-safe pointer access wrappers
 // ============================================================
 // These are the only MMU primitives used by common map macros.
-// Contract: mmu_select_bank1/mmu_select_bank0 preserve caller IRQ state.
+// Contract: these trampolines land in common-RAM helper code copied to $0C00.
 mmu_safe_map_read_ptr0:
-    jsr mmu_select_bank1
-    lda (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_read_ptr0
 
 mmu_safe_map_write_ptr0:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_write_ptr0
 
 mmu_safe_map_read_ptr1:
-    jsr mmu_select_bank1
-    lda (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_read_ptr1
 
 mmu_safe_map_write_ptr1:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_map_write_ptr1
 
 // Bulk map helpers enter/exit (single bank transition around hot loops)
 map_bulk_enter:
@@ -110,40 +86,16 @@ map_bulk_exit:
 // - Pointer access uses zp_ptr0/zp_ptr1 + Y offset for parity with map APIs.
 
 mmu_safe_db_read_ptr0:
-    jsr mmu_select_bank1
-    lda (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_db_read_ptr0
 
 mmu_safe_db_write_ptr0:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr0),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_db_write_ptr0
 
 mmu_safe_db_read_ptr1:
-    jsr mmu_select_bank1
-    lda (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_db_read_ptr1
 
 mmu_safe_db_write_ptr1:
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr1),y
-    pha
-    jsr mmu_select_bank0
-    pla
-    rts
+    jmp mmu_common_db_write_ptr1
 
 // db_bulk_enter/db_bulk_exit:
 // Optional fast-path wrappers for future bulk DB scans/copies.

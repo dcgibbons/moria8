@@ -611,6 +611,9 @@ player_get_stat_bonus:
 #endif
 
 ui_char_draw_background:
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     // --- Sex / Social Class (row 12) ---
     lda #12
     sta zp_cursor_row

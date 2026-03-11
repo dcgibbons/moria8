@@ -43,9 +43,9 @@
 .const MMU_RAM_BANK1    = $7E   // Bank 1, all RAM, I/O visible
                                 // Bits 7-6=01(Bank1), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=0(I/O)
                                 // Bank 1 has no ROMs — $C000-$CFFF is RAM, not Screen Ed ROM.
-                                // Use to read Bank 0 $C000-$CFFF which is masked by Screen
-                                // Editor ROM under MMU_NORMAL. Bank 1 still has the original
-                                // game binary loaded there by boot128 (SETBNK A=1 / KERNAL LOAD).
+                                // Use to access Bank 1 data regions. boot128 stages the
+                                // program into Bank 1 for the copy-to-Bank-0 step, then
+                                // scrubs the staged source pages during that copy.
 .const MMU_ALL_RAM      = $3E   // Bank 0, all RAM, I/O visible
                                 // Bits 7-6=00(Bank0), 5-4=11(RAM), 3-2=11(RAM), 1=1(RAM), 0=0(I/O)
                                 // Hides Screen Editor ROM ($C000-$CFFF) AND KERNAL ROM
@@ -87,6 +87,10 @@
 // C128 Plan C4 Banking Model:
 //   - Dungeon Map: Bank 1 RAM at $4000-$4EFF (3,840 bytes)
 //   - Tier staging DB: Bank 1 RAM at $5000-$7FFF (runtime tier payload mirror)
+//   - Bank 1 bottom common RAM: $0000-$0FFF (shared, not cache-safe)
+//   - boot128 staged program image: loaded into Bank 1 at $1C01-program_end,
+//     then scrubbed during copy-to-Bank-0
+//   - Reclaimed high Bank 1 free region: $8000-$FEFF
 //   - Floor Items: Bank 0 RAM at $1A00-$1AFF (256 bytes)
 //   - Creature Scratch: Bank 0 RAM at $1B00-$1BFF (256 bytes)
 //   - Program: Bank 0 RAM at $1C01-$BFFF
@@ -94,6 +98,20 @@
 .const MAP_END          = $4eff
 .const BANK1_DB_BASE    = $5000 // Tier payload staging (Bank 1)
 .const BANK1_DB_END     = $7fff
+.const BANK1_COMMON_END = $0fff // 4KB bottom common RAM shared across banks
+.const MMU_COMMON_HELPERS_BASE = $0c00
+.const BANK1_STAGE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
+.const BANK1_TAIL_END   = $feff // copy stub stops before $ff00
+.const BANK1_FREE_HIGH_BASE = $8000 // Reclaimed high Bank 1 region after boot scrub
+.const BANK1_FREE_HIGH_END  = $feff
+.const TIER_PRELOAD_REQUIRED = 5368
+.const BANK1_TIER_CACHE_END = BANK1_FREE_HIGH_BASE + TIER_PRELOAD_REQUIRED - 1
+.const OVERLAY_CACHE_SLOT_SIZE = $1000
+.const OVERLAY_CACHE_START_BASE = $a000
+.const OVERLAY_CACHE_TOWN_BASE  = $b000
+.const OVERLAY_CACHE_DEATH_BASE = $c000
+.const OVERLAY_CACHE_GEN_BASE   = $e000
+.const OVERLAY_CACHE_GEN_END    = OVERLAY_CACHE_GEN_BASE + OVERLAY_CACHE_SLOT_SIZE - 1
 .const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
 .const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
@@ -217,6 +235,19 @@ zp_save_buf:
 // Subroutines
 // ============================================================
 
+// init_common_mmu_helpers — Copy Bank 1-safe helper stubs into bottom common RAM.
+// These helpers must execute entirely from $0000-$0FFF because any instruction
+// fetched while Bank 1 is selected cannot rely on Bank 0 program space.
+init_common_mmu_helpers:
+    ldx #0
+!copy:
+    lda mmu_common_helpers_blob,x
+    sta MMU_COMMON_HELPERS_BASE,x
+    inx
+    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob
+    bne !copy-
+    rts
+
 // mmu_save_p — Static storage for CPU status register during bank switches
 mmu_save_p: .byte 0
 
@@ -246,21 +277,7 @@ mmu_select_bank0:
 // Output: 38 bytes copied to $0400 in Bank 0
 // Preserves: X
 mmu_copy_map_row:
-    php
-    sei                             // Shield against KERNAL interrupts
-    lda #MMU_RAM_BANK1              // Bank 1, RAM
-    sta MMU_CR
-    ldy #0
-!copy:
-    lda (zp_ptr0),y
-    sta SCREEN_RAM,y                // $0400 (visible as common RAM in Bank 1)
-    iny
-    cpy #38                         // VIEWPORT_W
-    bne !copy-
-    lda #MMU_ALL_RAM                // Restore Bank 0 All RAM
-    sta MMU_CR
-    plp
-    rts
+    jmp mmu_common_copy_map_row
 
 // save_zp — Copy $02–$8F to ZP_SAVE_BUF_ADDR
 save_zp:
@@ -320,6 +337,121 @@ c128_vdc_wait:
 // Keep explicit initial values so early calls still restore sane mode.
 c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
+
+// Common-RAM MMU helpers copied to $0C00 at startup.
+// Labels inside the pseudopc block resolve to their runtime common addresses.
+mmu_common_helpers_blob:
+.pseudopc MMU_COMMON_HELPERS_BASE {
+mmu_common_map_read_ptr0:
+    jsr mmu_common_select_bank1
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_map_write_ptr0:
+    pha
+    jsr mmu_common_select_bank1
+    pla
+    sta (zp_ptr0),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_map_read_ptr1:
+    jsr mmu_common_select_bank1
+    lda (zp_ptr1),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_map_write_ptr1:
+    pha
+    jsr mmu_common_select_bank1
+    pla
+    sta (zp_ptr1),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_db_read_ptr0:
+    jsr mmu_common_select_bank1
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_db_write_ptr0:
+    pha
+    jsr mmu_common_select_bank1
+    pla
+    sta (zp_ptr0),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_db_read_ptr1:
+    jsr mmu_common_select_bank1
+    lda (zp_ptr1),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_db_write_ptr1:
+    pha
+    jsr mmu_common_select_bank1
+    pla
+    sta (zp_ptr1),y
+    pha
+    jsr mmu_common_select_bank0
+    pla
+    rts
+
+mmu_common_copy_map_row:
+    php
+    sei
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta SCREEN_RAM,y
+    iny
+    cpy #38
+    bne !copy-
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    rts
+
+mmu_common_select_bank1:
+    php
+    sei
+    pla
+    sta mmu_common_save_p
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+    rts
+
+mmu_common_select_bank0:
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    lda mmu_common_save_p
+    pha
+    plp
+    rts
+
+mmu_common_save_p:
+    .byte 0
+}
+mmu_common_helpers_blob_end:
 
 // read_banked_byte_a000 — Read a byte from RAM under BASIC ROM
 // Input:  zp_ptr0/zp_ptr0_hi = address in $A000–$BFFF
@@ -388,3 +520,9 @@ copy_to_e000:
 .assert "Map size = 3840", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
+.assert "Bank1 common region ends below stage load base", BANK1_COMMON_END < BANK1_STAGE_BASE, true
+.assert "Bank1 map and DB regions do not overlap", MAP_END < BANK1_DB_BASE, true
+.assert "Bank1 DB ends before reclaimed high free region", BANK1_DB_END < BANK1_FREE_HIGH_BASE, true
+.assert "Reclaimed high Bank1 region can fit tier preload footprint", BANK1_FREE_HIGH_END - BANK1_FREE_HIGH_BASE + 1 >= TIER_PRELOAD_REQUIRED, true
+.assert "Overlay cache starts after tier cache window", OVERLAY_CACHE_START_BASE > BANK1_TIER_CACHE_END, true
+.assert "Overlay cache fits in reclaimed high Bank1 region", OVERLAY_CACHE_GEN_END <= BANK1_FREE_HIGH_END, true

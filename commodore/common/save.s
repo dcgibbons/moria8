@@ -765,10 +765,8 @@ save_write_map_c128:
     ora save_count_hi
     beq !swm_done+
     ldy #0
-    jsr mmu_select_bank1
-    lda (zp_ptr0),y
+    jsr mmu_safe_map_read_ptr0
     pha
-    jsr mmu_select_bank0
     lda #MMU_NORMAL
     sta $ff00
     pla
@@ -802,11 +800,9 @@ load_read_map_c128:
     beq !lrm_done+
     jsr load_read_byte
     pha
-    jsr mmu_select_bank1
     pla
     ldy #0
-    sta (zp_ptr0),y
-    jsr mmu_select_bank0
+    jsr mmu_safe_map_write_ptr0
     lda #MMU_NORMAL
     sta $ff00
     inc zp_ptr0

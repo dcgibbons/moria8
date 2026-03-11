@@ -28,13 +28,30 @@ player_create:
     jsr create_select_class
     jsr create_enter_name
     jsr create_select_gender
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     jsr create_gen_background
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     jsr create_init_character
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
 
-    // Show final character sheet (direct call — both at $F000/$E000 with $01=$34)
+    // Show final character sheet through the platform trampoline so the
+    // banked $F000 UI path always runs under the correct C128 mapping.
+#if C128
+    jsr tramp_ui_char_display
+#else
     jsr ui_char_display
+#endif
     jsr input_wait_release
     jsr input_get_key
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
 
     rts
 
@@ -775,7 +792,18 @@ create_gender_f:
 // Gender selection
 // ============================================================
 create_select_gender:
-    jsr screen_clear
+    // Match the safer row-by-row clear used by the other creation screens.
+    lda #COL_BLACK
+    sta zp_text_color
+    lda #0
+!csg_clear:
+    pha
+    jsr screen_clear_row
+    pla
+    clc
+    adc #1
+    cmp #25
+    bcc !csg_clear-
 
     lda #COL_WHITE
     sta zp_text_color
@@ -906,11 +934,12 @@ create_gen_background:
 !bg_copy_str:
     lda (zp_ptr0),y
     beq !bg_copy_done+
+    cpx #199                // Reserve final byte for null terminator
+    bcs !bg_copy_done+
     sta bg_text_buf,x
     inx
     iny
-    cpx #199                // Buffer overflow protection
-    bcc !bg_copy_str-
+    jmp !bg_copy_str-
 !bg_copy_done:
     stx bg_text_len
 
@@ -947,6 +976,11 @@ create_gen_background:
 !bg_chain_done:
     // Null-terminate text buffer
     ldx bg_text_len
+    cpx #200
+    bcc !bg_text_term_ok+
+    ldx #199
+    stx bg_text_len
+!bg_text_term_ok:
     lda #0
     sta bg_text_buf,x
 

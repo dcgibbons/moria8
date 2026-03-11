@@ -74,6 +74,8 @@ sound_init:
 sound_play:
     cmp #SFX_NONE
     beq !done+
+    cmp #8
+    bcs !done+              // Defensive: ignore invalid effect IDs instead of indirect-jumping into garbage
     sta zp_snd_effect
 
     // Gate off first (in case previous sound still playing)

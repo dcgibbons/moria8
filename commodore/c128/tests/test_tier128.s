@@ -13,6 +13,15 @@
 reu_present: .byte 0
 reu_loading_row: .byte 0
 reu_loading_hdr: .byte 0
+reu_fn_tier_lo: .byte 0, 0, 0, 0
+reu_fn_tier_hi: .byte 0, 0, 0, 0
+c128_cache_enabled: .byte 0
+c128_cache_tiers_ready: .byte 0
+c128_cache_overlays_ready: .byte 0
+c128_cache_failed: .byte 0
+c128_cache_tier_bits: .byte 0
+c128_cache_overlay_bits: .byte 0
+c128_cache_test_skip_tier: .byte 0
 active_dungeon_count: .byte 0
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
@@ -22,12 +31,18 @@ cr_name_hi: .fill MAX_DUNGEON_CREATURES, 0
 screen_clear: rts
 screen_put_string: rts
 reu_show_status: rts
+reu_show_file: rts
 reu_load_all_tiers: rts
 reu_stash_overlays: rts
 msg_print: rts
 overlay_invalidate: rts
 reu_fetch_tier: rts
 load_tier_to_buffer: rts
+c128_preload_asset_load:
+    clc
+    rts
+c128_preload_all_overlays:
+    rts
 
 #import "../../common/tier_manager.s"
 
@@ -63,9 +78,9 @@ fail_now:
     lda #$01
     sta tier_loaded
     lda #$12
-    sta c128_tier_db_size_lo
+    sta c128_tier_cache_size_lo
     lda #$34
-    sta c128_tier_db_size_hi
+    sta c128_tier_cache_size_hi
     lda #$56
     sta tier_name_lo_addr
     lda #$78
@@ -81,10 +96,10 @@ fail_now:
     lda tier_loaded
     beq *+5
     jmp test_fail
-    lda c128_tier_db_size_lo
+    lda c128_tier_cache_size_lo
     beq *+5
     jmp test_fail
-    lda c128_tier_db_size_hi
+    lda c128_tier_cache_size_hi
     beq *+5
     jmp test_fail
     lda tier_name_lo_addr

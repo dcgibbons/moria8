@@ -181,8 +181,10 @@ stub_start:
     dex
     bne !clr-
 
-    // Atomic Bank Copy (1 -> 0)
+    // Atomic Bank Copy (1 -> 0) with staged-source scrub
     // Page-buffered copy via common RAM to avoid MMU thrashing.
+    // Once a source page is buffered into common RAM, clear that Bank 1 page
+    // so the staged program image is reclaimed during boot.
     // MUST use _NOIO variants ($7F/$3F) to hide I/O at $D000-$DFFF.
     lda #$00
     sta $60
@@ -210,6 +212,14 @@ copy_loop:
     sta $0c00,y
     iny
     bne !read_pg-
+
+    // Scrub the staged source page in Bank 1 once it is buffered.
+    lda #0
+    ldy #0
+!clear_pg:
+    sta ($60),y
+    iny
+    bne !clear_pg-
 
     // Write 256 bytes from common RAM buffer to Bank 0
     lda #MMU_ALL_RAM_NOIO

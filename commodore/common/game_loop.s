@@ -5,6 +5,10 @@
 // Forward-references trampoline labels defined in the platform's main.s
 // (Kick Assembler resolves all labels globally within the compilation unit).
 
+#if C128_TEST_FORCE_DEATH
+c128_test_force_death_pending: .byte 1
+#endif
+
 // ============================================================
 // game_new_start — New game initialization
 // Called from platform main.s after title menu selects "New Game".
@@ -42,6 +46,9 @@ game_new_start:
 
     // --- Character creation ---
     jsr tramp_player_create
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
 
     // --- Starting equipment ---
     // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
@@ -111,7 +118,14 @@ game_new_start:
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
+#if C128_TEST_OVERLAY_STATE_CORRUPT
+    lda #OVL_TOWN
+    sta current_overlay
+#endif
     jsr tramp_store_init_all
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
 
     // --- Main game loop ---
     // Initialize dungeon level and generate map (new game only)
@@ -124,7 +138,13 @@ game_new_start:
     sta zp_run_dir              // Not running
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
+    bcc !gns_ovl_ok+
+    jmp entry_main
+!gns_ovl_ok:
     jsr tramp_level_generate
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility       // Reveal starting area
@@ -145,6 +165,14 @@ game_new_start:
     lda #>welcome_str
     sta zp_ptr0_hi
     jsr msg_print
+
+#if C128_TEST_SCRIPTED_INPUT
+    lda c128_test_summary_seen
+    bne !gns_script_pass+
+    jmp c128_test_town_fail_sym
+!gns_script_pass:
+    jmp c128_test_town_pass_sym
+#endif
 
     jmp main_loop
 
@@ -190,6 +218,21 @@ load_resume_game:
     jsr msg_print
 
 main_loop:
+#if C128
+    jsr c128_restore_runtime_vectors
+#endif
+#if C128_TEST_FORCE_DEATH
+    lda c128_test_force_death_pending
+    beq !test_force_death_done+
+    lda #0
+    sta c128_test_force_death_pending
+    lda #DEATH_CURSED
+    sta zp_death_source
+    jsr player_sync_from_zp
+    jsr tramp_game_over
+!test_force_death_done:
+#endif
+
     // --- Running continuation ---
     lda zp_run_dir
     cmp #$ff
@@ -556,7 +599,13 @@ main_loop:
     sta zp_run_dir              // Stop running on level change
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
+    bcc !stairs_dn_ovl_ok+
+    jmp entry_main
+!stairs_dn_ovl_ok:
     jsr tramp_level_generate
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility
@@ -611,7 +660,13 @@ main_loop:
     sta zp_run_dir              // Stop running on level change
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
+    bcc !stairs_up_ovl_ok+
+    jmp entry_main
+!stairs_up_ovl_ok:
     jsr tramp_level_generate
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility

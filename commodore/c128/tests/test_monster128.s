@@ -17,9 +17,9 @@ test_map_row:
     .fill 80, 0
 
 .pc = $3000 "Test Code"
-.const TEST_NAME_LO_TABLE = $5100
-.const TEST_NAME_HI_TABLE = $5120
-.const TEST_NAME_STR      = $5200
+.const TEST_NAME_LO_TABLE = $8100
+.const TEST_NAME_HI_TABLE = $8120
+.const TEST_NAME_STR      = $8200
 .const TEST_NAME_PTR      = $e200
 #import "../../common/monster.s"
 test_start:
@@ -96,8 +96,8 @@ test_start:
     // ==========================================
     // Stage tier name pointer tables and target string in Bank 1.
     jsr mmu_select_bank1
-    // Tier DB encodes historical $E0xx payload pointers; C128 runtime
-    // must translate these to Bank 1 staging addresses before copy.
+    // Tier cache encodes historical $E0xx payload pointers; C128 runtime
+    // must translate these to the reclaimed high Bank 1 cache window before copy.
     lda #<TEST_NAME_PTR
     sta TEST_NAME_LO_TABLE
     lda #>TEST_NAME_PTR

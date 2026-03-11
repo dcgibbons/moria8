@@ -6,6 +6,70 @@
 
 ---
 
+## 10.8 — C128 Bank 1 Preload Cache + Ownership Refactor ✅ COMPLETE (2026-03-11)
+
+### Scope Closed
+- Reworked 10.8 from the failed pseudo-REU preload attempts into a full ownership-first C128 cache effort.
+- Closed the path from cold boot through character creation summary, town entry, overlay transitions, and tier transitions under the new Bank 1 cache model.
+
+### Root Causes Addressed
+1. **Bank 1 ownership was not actually proven**
+   - `boot128` used to leave the staged program image resident in Bank 1.
+   - Any cache design built on “apparently free” Bank 1 ranges was unsound until boot reclaim behavior was fixed and asserted.
+2. **MMU-safe helper placement was invalid**
+   - Early C128 helper code executed from addresses that were not actually safe under the documented common-RAM regime.
+   - This caused real crashes during preload/cache transitions.
+3. **Cache helper contracts were broken**
+   - Multiple C128 tier/overlay cache helpers restored flags with `plp` after setting `clc`/`sec`, destroying the carry-based success/failure contract and forcing false cache misses/fallbacks.
+4. **Overlay/state transitions trusted stale runtime state**
+   - C128 overlay transitions could still depend on stale `current_overlay` / guard-state assumptions and jump into stale `$E000` contents.
+5. **The automated boundary was incomplete**
+   - VICE `-keybuf` smokes were not strong enough to prove the manual post-gender character-summary -> town path.
+   - A deterministic scripted-input fixture was required to close that gap.
+
+### Implemented
+1. **Bank 1 ownership refactor**
+   - `boot128.s` now scrubs the staged Bank 1 image as it is copied into Bank 0.
+   - `memory128.s`, `main.s`, and `ARCHITECTURE.md` now treat reclaimed Bank 1 ownership as explicit, asserted state instead of an informal assumption.
+2. **C128 cache model completion**
+   - Separate C128 cache control state from REU semantics.
+   - Tier cache uses the reclaimed high Bank 1 region.
+   - Fixed-slot overlay cache uses dedicated Bank 1 slots.
+   - Runtime now restores critical C128 guard state (vectors, CHRIN stub, MMU helper blob, runtime map) across overlay/dungeon-generation boundaries.
+3. **Cache/loader correctness fixes**
+   - Fixed carry-clobber regressions in tier/overlay cache stage/fetch helpers.
+   - Fixed preload transaction handling and MMU return behavior for KERNAL `LOAD`.
+   - Removed stale-overlay-state short-circuit behavior from the C128 overlay path.
+4. **Character-summary/town-flow stabilization**
+   - Moved `ui_character.s` out of the broken high banked-payload path and back into main RAM for C128.
+   - `player_create.s` now uses the platform trampoline for the final summary and reasserts runtime guards at the creation boundaries.
+   - Gender screen uses the safer row-by-row clear path.
+   - This resolved the manual “after gender selection the summary corrupts / JAMs” regression that survived the earlier preload/cache fixes.
+5. **Validation upgrades**
+   - Added/strengthened C128 harness coverage for:
+     - idle title soak
+     - title -> new game
+     - tier transition
+     - town overlay (male + female flows)
+     - death overlay
+     - partial tier-cache failure fallback
+     - boot-copy diagnostic
+     - **scripted summary-to-town flow** using internal C128 scripted input rather than VICE `-keybuf`
+
+### Result
+- 10.8 is now closed as implemented work, not just a plan:
+  - Bank 1 ownership refactor complete
+  - tier preload cache active
+  - overlay cache active
+  - summary -> town path stabilized
+  - deterministic regression coverage added for the previously manual-only failure path
+
+### Validation
+- `bash commodore/c128/run_tests128.sh`: pass (**26 passed, 0 failed**)
+- Manual validation reported successful character creation summary and town entry after the final summary-path fix.
+
+---
+
 ## SAV-2 — C128 Restore/Load Regression ✅ COMPLETE (2026-03-09)
 
 ### Symptom

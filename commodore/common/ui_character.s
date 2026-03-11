@@ -44,6 +44,13 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
+#if C128
+    jsr c128_restore_runtime_guards
+#if C128_TEST_SCRIPTED_INPUT
+    lda #1
+    sta c128_test_summary_seen
+#endif
+#endif
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all       // Clear row by row (same as help/inventory)

@@ -63,6 +63,9 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 
 The root Makefile delegates to `commodore/c64/Makefile`. All make targets work from the project root.
 
+When running VICE headless for testing, be sure to use -warp mode to improve
+test speed.
+
 ## Planning Docs (Commodore port)
 
 When working on the Commodore port:

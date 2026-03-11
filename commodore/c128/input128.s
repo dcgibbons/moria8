@@ -116,8 +116,13 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4
 // Output: A = nonzero (PETSCII) if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_check:
+#if C128_TEST_SCRIPTED_INPUT
+    lda #0
+    rts
+#else
     jsr cia_scan_petscii
     rts
+#endif
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
@@ -129,13 +134,20 @@ input_run_key_check:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
+#if C128_TEST_SCRIPTED_INPUT
+    ldx c128_test_input_idx
+    lda c128_test_input_script,x
+    bne !igk_script_ok+
+    brk                     // Script exhaustion is a hard test failure.
+!igk_script_ok:
+    inx
+    stx c128_test_input_idx
+    rts
+#else
     // Re-assert game MMU mode and keep Screen Editor blink disabled.
     // If any prior KERNAL path leaked MMU/ROM state, waiting for a key here
     // must not run the Screen Editor IRQ path that can touch VDC RAM.
-    lda #INPUT_MMU_ALL_RAM
-    sta $ff00
-    lda #$ff
-    sta $cc
+    jsr c128_restore_runtime_vectors
 
     txa
     pha                     // Save X
@@ -155,6 +167,8 @@ input_get_key:
     tax                     // Restore X
     lda igk_key
     rts
+#endif
+
 igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
@@ -164,12 +178,12 @@ igk_stable: .byte 0
 // a still-held selection key from the previous screen.
 // Preserves: nothing
 input_wait_release:
+#if C128_TEST_SCRIPTED_INPUT
+    rts
+#else
     // Same guard as input_get_key: release waits are long-lived and must
     // stay in game MMU mode with Screen Editor blink suppressed.
-    lda #INPUT_MMU_ALL_RAM
-    sta $ff00
-    lda #$ff
-    sta $cc
+    jsr c128_restore_runtime_vectors
 !iwr_wait:
     inc zp_entropy
     jsr cia_scan_petscii
@@ -180,6 +194,7 @@ input_wait_release:
     sta igk_last_sample
     sta igk_stable
     rts
+#endif
 
 // input_poll_key_event — One CIA scan + edge processing
 // Output: A = PETSCII on key-down edge, 0 otherwise
@@ -213,12 +228,36 @@ input_process_sample:
     beq !ips_none-          // Release edge (rearm only)
     rts                     // New stable key-down edge
 
+#if C128_TEST_SCRIPTED_INPUT
+c128_test_input_idx: .byte 0
+c128_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $41              // A = class
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4c              // L = move east toward store
+    .byte $4c
+    .byte $4c
+    .byte $4c
+    .byte $4c
+    .byte $4c
+    .byte $4c
+    .byte $4c
+    .byte $00
+#endif
+
 // cia_scan_petscii — Single CIA1 keyboard matrix scan
 // Drives each of 8 rows via $DC00, reads columns from $DC01.
 // Detects SHIFT (LSHIFT=row1/bit7, RSHIFT=row6/bit4) separately.
 // Output: A = PETSCII code of pressed key, $00 if no key or unmapped
 // Destroys: A, X, Y
 cia_scan_petscii:
+    php
+    sei
     // Ensure CIA1 DDR is set for keyboard scanning.
     // Port A ($DC02) = $FF (all outputs — drives row select lines)
     // Port B ($DC03) = $00 (all inputs — reads column key state)
@@ -245,6 +284,8 @@ cia_scan_petscii:
     // Without this pre-pass, right-shifted vi movement can decode as unshifted.
     lda #$FD            // Row 1 drive mask
     sta CIA1_PORTA
+    nop
+    nop
     lda CIA1_PORTB
     and #$80            // Active low: 0 = LSHIFT pressed
     bne !csp_shift_l_done+
@@ -254,6 +295,8 @@ cia_scan_petscii:
 
     lda #$BF            // Row 6 drive mask
     sta CIA1_PORTA
+    nop
+    nop
     lda CIA1_PORTB
     and #$10            // Active low: 0 = RSHIFT pressed
     bne !csp_shift_r_done+
@@ -266,6 +309,8 @@ cia_scan_petscii:
     ldx #0              // Row index (0–7)
 !csp_row:
     sta CIA1_PORTA
+    nop
+    nop
     pha                 // Save drive mask (for SEC/ROL rotation below)
     lda CIA1_PORTB
     sta csp_row_raw
@@ -314,6 +359,8 @@ cia_scan_petscii:
     ora #%11000000
     and #%10111111      // Drive line 8 low, keep line 9 high
     sta C128_KBD_EXT
+    nop
+    nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
     cmp #0
@@ -324,6 +371,8 @@ cia_scan_petscii:
     ora #%11000000
     and #%01111111      // Drive line 9 low, keep line 8 high
     sta C128_KBD_EXT
+    nop
+    nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
     cmp #0
@@ -335,7 +384,7 @@ cia_scan_petscii:
     lda csp_ext_save
     sta C128_KBD_EXT
     lda #0
-    rts
+    jmp !csp_return+
 
 !csp_key_row8:
     sta csp_col_bits
@@ -403,6 +452,7 @@ cia_scan_petscii:
 !csp_shift_default:
     ora #$80            // Letters ($41–$5A) + cursor keys ($11,$1D): add $80
 !csp_return:
+    plp
     rts
 
 csp_shift:    .byte $80   // 0=shifted, $80=unshifted (initialized to unshifted)

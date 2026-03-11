@@ -90,6 +90,12 @@ msg_print:
 // msg_print_cached — Display message using msg_src_lo/msg_src_hi as source.
 // Used by C128 Huffman path to avoid a decode->print ZP pointer race.
 msg_print_cached:
+#if C128
+    // Message rendering is hit constantly during live gameplay; reassert
+    // the RAM-side vectors/stubs here so leaked KERNAL state can't persist
+    // into the screen write path between overlay transitions.
+    jsr c128_restore_runtime_vectors
+#endif
 
     lda zp_msg_flags
     cmp #MSG_PENDING | MSG_FULL

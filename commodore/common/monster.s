@@ -1024,7 +1024,7 @@ creature_get_name:
 
 !cgn_tier_indexed:
     // --- Tier creature: read ptr from active tier name tables ---
-    // C128: read from Bank 1 staged DB via helper wrappers.
+    // C128: read from the active Bank 1 tier cache slot via helper wrappers.
     // C64: existing $E000 banked read path.
 #if C128
     php
@@ -1056,22 +1056,22 @@ creature_get_name:
 !cgn_translate_b1_ptr:
 #if C128
     // C128 tier name pointers are typically encoded as historical $E0xx
-    // payload addresses; convert those to Bank 1 staged DB space.
-    // If pointers are already in Bank 1 DB range ($50xx-$7Fxx), keep them.
+    // payload addresses; convert those to the active Bank 1 tier cache slot.
+    // If pointers are already inside the reclaimed Bank 1 cache window, keep them.
     // Any other range is invalid for banked name fetch.
     lda zp_ptr1_hi
     cmp #$e0
     bcc !cgn_ptr_maybe_b1+
     sec
-    sbc #$90
+    sbc #>(BANKED_DATA_BASE - BANK1_FREE_HIGH_BASE)
     sta zp_ptr1_hi
     jmp !cgn_copy+
 !cgn_ptr_maybe_b1:
-    cmp #>BANK1_DB_BASE
+    cmp #>BANK1_FREE_HIGH_BASE
     bcs !cgn_ptr_check_hi+
     jmp !cgn_stale+
 !cgn_ptr_check_hi:
-    cmp #$80
+    cmp #>(BANK1_FREE_HIGH_END + 1)
     bcc !cgn_copy+
     jmp !cgn_stale+
 #endif
@@ -1163,7 +1163,7 @@ creature_get_name:
     // Fall through to shared copy loop
 
 !cgn_copy:
-    // C128 staged DB copy path (no $01 banking required).
+    // C128 Bank 1 cache copy path (no $01 banking required).
     lda cgn_src_banked
     beq !cgn_copy_linear+
 #if C128

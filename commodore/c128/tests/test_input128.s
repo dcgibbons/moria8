@@ -3,6 +3,9 @@
 #import "../../common/zeropage.s"
 #import "../input128.s"
 
+c128_restore_runtime_vectors:
+    rts
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 

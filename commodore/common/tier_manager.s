@@ -16,7 +16,7 @@
 //   Tier 4: DL 20-100 (57 creatures)
 //
 // Exports:
-//   tier_init              — Call at startup to load all tiers to REU (if present)
+//   tier_init              — Startup preload/init for REU or C128 tier cache
 //   tier_check_transition  — Call after dlvl change; loads new tier if needed
 
 #import "creature_data/creature_tiers.s"
@@ -26,11 +26,11 @@
 // ============================================================
 current_tier:   .byte 0     // 0 = no tier (town/embedded), 1-4 = active tier
 tier_loaded:    .byte 0     // 1 = a tier has been loaded from disk/REU
-// C128 10.2 staging metadata: active tier payload mirrored to Bank 1 DB region.
-c128_tier_db_base_lo: .byte <BANK1_DB_BASE
-c128_tier_db_base_hi: .byte >BANK1_DB_BASE
-c128_tier_db_size_lo: .byte 0
-c128_tier_db_size_hi: .byte 0
+// C128 tier cache metadata: active tier payload mirrored into reclaimed Bank 1 RAM.
+c128_tier_cache_base_lo: .byte 0
+c128_tier_cache_base_hi: .byte 0
+c128_tier_cache_size_lo: .byte 0
+c128_tier_cache_size_hi: .byte 0
 c128_tier_soa_end_lo: .byte 0
 c128_tier_soa_end_hi: .byte 0
 
@@ -41,8 +41,8 @@ tier_invalidate_state:
     lda #0
     sta current_tier
     sta tier_loaded
-    sta c128_tier_db_size_lo
-    sta c128_tier_db_size_hi
+    sta c128_tier_cache_size_lo
+    sta c128_tier_cache_size_hi
     sta tier_name_lo_addr
     sta tier_name_lo_addr+1
     sta tier_name_hi_addr
@@ -73,7 +73,7 @@ tier_count_table:
     .byte TIER3_COUNT               // [3] = 39
     .byte TIER4_COUNT               // [4] = 57
 
-// Tier data sizes (for REU stash/fetch)
+// Tier data sizes (for REU stash/fetch and C128 cache slots)
 tier_size_lo:
     .byte 0
     .byte <TIER1_SIZE, <TIER2_SIZE, <TIER3_SIZE, <TIER4_SIZE
@@ -81,27 +81,76 @@ tier_size_hi:
     .byte 0
     .byte >TIER1_SIZE, >TIER2_SIZE, >TIER3_SIZE, >TIER4_SIZE
 
+#if C128
+.const C128_TIER1_CACHE_BASE = BANK1_FREE_HIGH_BASE
+.const C128_TIER2_CACHE_BASE = C128_TIER1_CACHE_BASE + TIER1_SIZE
+.const C128_TIER3_CACHE_BASE = C128_TIER2_CACHE_BASE + TIER2_SIZE
+.const C128_TIER4_CACHE_BASE = C128_TIER3_CACHE_BASE + TIER3_SIZE
+.const C128_TIER_CACHE_END   = C128_TIER4_CACHE_BASE + TIER4_SIZE - 1
+
+c128_tier_cache_slot_lo:
+    .byte 0
+    .byte <C128_TIER1_CACHE_BASE, <C128_TIER2_CACHE_BASE, <C128_TIER3_CACHE_BASE, <C128_TIER4_CACHE_BASE
+c128_tier_cache_slot_hi:
+    .byte 0
+    .byte >C128_TIER1_CACHE_BASE, >C128_TIER2_CACHE_BASE, >C128_TIER3_CACHE_BASE, >C128_TIER4_CACHE_BASE
+
+.assert "Tier cache stays inside reclaimed high Bank1 region", C128_TIER_CACHE_END <= BANK1_FREE_HIGH_END, true
+#endif
+
 
 // ============================================================
 // tier_init — Initialize tier system at startup
 // ============================================================
-// If REU is present: load all tier files from disk into REU
-// for instant DMA on tier transitions. No tier is activated
-// yet (player starts in town).
-// If no REU: nothing to do now; tiers load on demand.
+// C128: preload all monster tiers into the reclaimed high Bank 1 cache window.
+// C64/REU: load all tier files into REU for instant DMA on tier transitions.
+// No tier is activated yet (player starts in town).
+// Without cache/REU: nothing to do now; tiers load on demand.
 // Clobbers: A, X, Y, zp_ptr0, zp_temp0, zp_temp1
 tier_init:
     jsr tier_invalidate_state
+
+#if C128
+    lda #0
+    sta c128_cache_tiers_ready
+    sta c128_cache_overlays_ready
+    sta c128_cache_failed
+    sta c128_cache_tier_bits
+    sta c128_cache_overlay_bits
+
+    lda c128_cache_enabled
+    beq !ti_done+
+
+    lda #1
+    sta $cc                     // Suppress cursor blink during loading
+    lda #COL_LGREY
+    sta zp_text_color
+    jsr screen_clear
+    lda #1
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda #<c128_cache_loading_hdr
+    sta zp_ptr0
+    lda #>c128_cache_loading_hdr
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #4
+    sta reu_loading_row
+    jsr c128_preload_all_tiers
+    jsr c128_preload_all_overlays
+    rts
+#endif
 
     lda reu_present
     beq !ti_done+
 
     // Clear screen and show loading progress
-    jsr screen_clear
     lda #1
     sta $cc                     // Suppress cursor blink during loading
     lda #COL_LGREY
     sta zp_text_color
+    jsr screen_clear
     lda #1
     sta zp_cursor_row
     lda #1
@@ -199,7 +248,7 @@ tier_check_transition:
 // tier_load — Load a specific tier into the active creature buffer
 // ============================================================
 // Input: current_tier = tier number (1-4)
-// Uses REU (DMA) if available, otherwise KERNAL LOAD from disk.
+// Uses C128 tier cache, REU (DMA), or KERNAL LOAD from disk.
 // After loading, SoA arrays are copied to the active buffer.
 // Name strings remain at $E000+ (accessed via creature_get_name).
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
@@ -214,6 +263,20 @@ tier_load:
     sta zp_ptr0_hi
     jsr msg_print
 
+#if C128
+    lda c128_cache_tiers_ready
+    beq !tl_check_reu+
+    ldx current_tier
+    lda c128_tier_ready_mask_minus1,x
+    and c128_cache_tier_bits
+    beq !tl_check_reu+
+    jsr c128_fetch_tier_from_cache
+    bcc !tl_cache_ok+
+    lda #0
+    sta c128_cache_tiers_ready
+    sta c128_cache_failed
+!tl_check_reu:
+#endif
     lda reu_present
     bne !tl_reu+
 
@@ -223,6 +286,11 @@ tier_load:
     jmp !tl_failed+
 !tl_disk_ok:
     jmp !tl_activate+
+
+#if C128
+!tl_cache_ok:
+    jmp !tl_activate+
+#endif
 
 !tl_reu:
     // --- REU path: DMA tier data from REU to $E000 ---
@@ -265,62 +333,22 @@ tier_load:
     sta tier_name_lo_addr+1
 
 #if C128
-    // Preserve end-of-SoA pointer before staging helper clobbers zp_ptr0.
+    // Preserve end-of-SoA pointer before cache-base remap clobbers zp_ptr0.
     lda zp_ptr0
     sta c128_tier_soa_end_lo
     lda zp_ptr0_hi
     sta c128_tier_soa_end_hi
-
-    // C128 10.2.2: mirror loaded tier payload from $E000 into Bank 1 DB region.
-    // Runtime consumers still use the $E000 path until 10.2.3 migration.
-    lda #<BANK1_DB_BASE
-    sta c128_tier_db_base_lo
-    lda #>BANK1_DB_BASE
-    sta c128_tier_db_base_hi
-    ldx current_tier
-    lda tier_size_lo,x
-    sta c128_tier_db_size_lo
-    lda tier_size_hi,x
-    sta c128_tier_db_size_hi
-    jsr c128_stage_tier_to_bank1
 #endif
 
-    // C128 10.2.3: runtime name tables should point at Bank 1 staged payload,
-    // not at temporary $E000 load staging.
 #if C128
-    // Map the post-SoA pointer from $E000 staging into Bank 1 DB space.
-    // Use preserved value from before c128_stage_tier_to_bank1.
-    sec
-    lda c128_tier_soa_end_lo
-    sbc #<$e000
-    sta zp_ptr1
-    lda c128_tier_soa_end_hi
-    sbc #>$e000
-    sta zp_ptr1_hi               // zp_ptr1 = SoA offset from $E000
-
-    clc
-    lda c128_tier_db_base_lo
-    adc zp_ptr1
-    sta zp_ptr1
-    lda c128_tier_db_base_hi
-    adc zp_ptr1_hi
-    sta zp_ptr1_hi               // zp_ptr1 = Bank1 base + SoA offset
-
-    sec
-    lda zp_ptr1
-    sbc active_dungeon_count
-    sta tier_name_hi_addr
-    lda zp_ptr1_hi
-    sbc #0
-    sta tier_name_hi_addr+1
-
-    sec
-    lda tier_name_hi_addr
-    sbc active_dungeon_count
-    sta tier_name_lo_addr
-    lda tier_name_hi_addr+1
-    sbc #0
-    sta tier_name_lo_addr+1
+    lda c128_cache_tiers_ready
+    beq !tl_keep_e000_names+
+    ldx current_tier
+    lda c128_tier_ready_mask_minus1,x
+    and c128_cache_tier_bits
+    beq !tl_keep_e000_names+
+    jsr c128_set_tier_name_tables_from_cache
+!tl_keep_e000_names:
 #endif
 
     pla
@@ -351,6 +379,109 @@ tier_load:
     // tier path which reads from $E000 (now invalid).
     jsr tier_invalidate_state
     rts
+
+#if C128
+c128_preload_all_tiers:
+    ldx #1
+!cpat_loop:
+    stx current_tier
+
+    txa
+    cmp c128_cache_test_skip_tier
+    bne !cpat_show_file+
+    jmp !cpat_next+
+
+!cpat_show_file:
+    dex
+    lda reu_fn_tier_lo,x
+    sta zp_ptr0
+    lda reu_fn_tier_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
+    ldx current_tier
+    dex
+    lda tier_fn_addr_lo,x
+    pha
+    lda tier_fn_addr_hi,x
+    tay
+    pla
+    tax
+    lda #12
+    jsr c128_preload_asset_load
+    bcs !cpat_next+
+
+    jsr c128_stage_tier_to_cache
+    bcs !cpat_next+
+
+    ldx current_tier
+    lda c128_tier_ready_mask_minus1,x
+    ora c128_cache_tier_bits
+    sta c128_cache_tier_bits
+
+!cpat_next:
+    ldx current_tier
+    inx
+    cpx #5
+    bne !cpat_loop-
+
+    lda c128_cache_tier_bits
+    beq !cpat_none+
+    lda #1
+    sta c128_cache_tiers_ready
+!cpat_none:
+    lda #0
+    sta current_tier
+    rts
+
+c128_set_tier_name_tables_from_cache:
+    jsr c128_select_tier_cache_slot
+
+    sec
+    lda c128_tier_soa_end_lo
+    sbc #<$e000
+    sta zp_ptr1
+    lda c128_tier_soa_end_hi
+    sbc #>$e000
+    sta zp_ptr1_hi
+
+    clc
+    lda c128_tier_cache_base_lo
+    adc zp_ptr1
+    sta zp_ptr1
+    lda c128_tier_cache_base_hi
+    adc zp_ptr1_hi
+    sta zp_ptr1_hi
+
+    sec
+    lda zp_ptr1
+    sbc active_dungeon_count
+    sta tier_name_hi_addr
+    lda zp_ptr1_hi
+    sbc #0
+    sta tier_name_hi_addr+1
+
+    sec
+    lda tier_name_hi_addr
+    sbc active_dungeon_count
+    sta tier_name_lo_addr
+    lda tier_name_hi_addr+1
+    sbc #0
+    sta tier_name_lo_addr+1
+    rts
+
+c128_select_tier_cache_slot:
+    ldx current_tier
+    lda c128_tier_cache_slot_lo,x
+    sta c128_tier_cache_base_lo
+    lda c128_tier_cache_slot_hi,x
+    sta c128_tier_cache_base_hi
+    lda tier_size_lo,x
+    sta c128_tier_cache_size_lo
+    lda tier_size_hi,x
+    sta c128_tier_cache_size_hi
+    rts
+#endif
 
 
 // ============================================================
@@ -417,35 +548,42 @@ tier_loading_str:
     .text "Loading..." ; .byte 0
 
 // ============================================================
-// c128_stage_tier_to_bank1 — Mirror tier payload to Bank 1 DB region
+// c128_stage_tier_to_bank1 — Legacy entry name, now writes to the high Bank 1 cache slot
 // ============================================================
 // Precondition: caller has BankOutKernal active so Bank 0 $E000 RAM is readable.
 // Input: current_tier set; tier_size tables valid.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
 c128_stage_tier_to_bank1:
+    jsr c128_stage_tier_to_cache
+    rts
+
+c128_stage_tier_to_cache:
+    php
+    sei
+    jsr c128_select_tier_cache_slot
+
     // Source = Bank 0 $E000 (loaded tier payload)
     lda #<$e000
     sta zp_ptr0
     lda #>$e000
     sta zp_ptr0_hi
 
-    // Destination = Bank 1 staging base (fixed for now)
-    lda c128_tier_db_base_lo
+    // Destination = Bank 1 cache slot
+    lda c128_tier_cache_base_lo
     sta zp_ptr1
-    lda c128_tier_db_base_hi
+    lda c128_tier_cache_base_hi
     sta zp_ptr1_hi
 
-    // Copy size from tier table for current tier
-    ldx current_tier
-    lda tier_size_lo,x
+    lda c128_tier_cache_size_lo
     sta zp_temp0
-    lda tier_size_hi,x
+    lda c128_tier_cache_size_hi
     sta zp_temp1
 
     // Quick exit on zero length
     lda zp_temp0
     ora zp_temp1
     bne !cs_copy+
+    plp
     rts
 
 !cs_copy:
@@ -457,11 +595,7 @@ c128_stage_tier_to_bank1:
     beq !cs_tail+
 !cs_page:
     lda (zp_ptr0),y
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr1),y
-    jsr mmu_select_bank0
+    jsr mmu_safe_db_write_ptr1
     iny
     bne !cs_page-
     inc zp_ptr0_hi
@@ -475,13 +609,132 @@ c128_stage_tier_to_bank1:
     beq !cs_done+
 !cs_tail_loop:
     lda (zp_ptr0),y
-    pha
-    jsr mmu_select_bank1
-    pla
-    sta (zp_ptr1),y
-    jsr mmu_select_bank0
+    jsr mmu_safe_db_write_ptr1
     iny
     dex
     bne !cs_tail_loop-
 !cs_done:
+    jsr c128_verify_tier_cache_slot
+    bcc !cs_ok+
+    plp
+    sec
     rts
+!cs_ok:
+    plp
+    clc
+    rts
+
+c128_verify_tier_cache_slot:
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda c128_tier_cache_base_lo
+    sta zp_ptr1
+    lda c128_tier_cache_base_hi
+    sta zp_ptr1_hi
+    lda c128_tier_cache_size_lo
+    sta zp_temp0
+    lda c128_tier_cache_size_hi
+    sta zp_temp1
+
+    lda zp_temp0
+    ora zp_temp1
+    bne !cv_copy+
+    clc
+    rts
+
+!cv_copy:
+    ldy #0
+!cv_page_loop:
+    lda zp_temp1
+    beq !cv_tail+
+!cv_page:
+    lda (zp_ptr0),y
+    sta zp_temp2
+    jsr mmu_safe_db_read_ptr1
+    cmp zp_temp2
+    bne !cv_fail+
+    iny
+    bne !cv_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !cv_page_loop-
+!cv_tail:
+    ldx zp_temp0
+    beq !cv_ok+
+!cv_tail_loop:
+    lda (zp_ptr0),y
+    sta zp_temp2
+    jsr mmu_safe_db_read_ptr1
+    cmp zp_temp2
+    bne !cv_fail+
+    iny
+    dex
+    bne !cv_tail_loop-
+!cv_ok:
+    clc
+    rts
+!cv_fail:
+    sec
+    rts
+
+c128_fetch_tier_from_cache:
+    php
+    sei
+    jsr c128_select_tier_cache_slot
+
+    lda c128_tier_cache_base_lo
+    sta zp_ptr1
+    lda c128_tier_cache_base_hi
+    sta zp_ptr1_hi
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda c128_tier_cache_size_lo
+    sta zp_temp0
+    lda c128_tier_cache_size_hi
+    sta zp_temp1
+
+    lda zp_temp0
+    ora zp_temp1
+    bne !cft_copy+
+    plp
+    clc
+    rts
+
+!cft_copy:
+    ldy #0
+!cft_page_loop:
+    lda zp_temp1
+    beq !cft_tail+
+!cft_page:
+    jsr mmu_safe_db_read_ptr1
+    sta (zp_ptr0),y
+    iny
+    bne !cft_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !cft_page_loop-
+!cft_tail:
+    ldx zp_temp0
+    beq !cft_ok+
+!cft_tail_loop:
+    jsr mmu_safe_db_read_ptr1
+    sta (zp_ptr0),y
+    iny
+    dex
+    bne !cft_tail_loop-
+!cft_ok:
+    plp
+    clc
+    rts
+
+c128_tier_ready_mask_minus1:
+    .byte 0, %00000001, %00000010, %00000100, %00001000
+
+c128_cache_loading_hdr:
+    .text "Preloading tiers:" ; .byte 0

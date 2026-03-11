@@ -27,8 +27,6 @@
 // ============================================================
 // State
 // ============================================================
-current_overlay: .byte OVL_NONE
-reu_overlays_stashed: .byte 0   // Set to 1 after overlays are stashed in REU
 
 // ============================================================
 // overlay_load — Load a phase overlay to $E000
@@ -38,15 +36,50 @@ reu_overlays_stashed: .byte 0   // Set to 1 after overlays are stashed in REU
 // Output: carry clear = success, carry set = error (disk only)
 // Clobbers: A, X, Y
 overlay_load:
+#if C128
+    // C128 overlay transitions are cache-backed and cheap. Always resolve the
+    // requested overlay instead of trusting current_overlay, because stale
+    // overlay-state bytes can otherwise skip the load and execute whatever
+    // old image still occupies $E000.
+    sta ol_target
+#else
     cmp current_overlay
     beq !ol_skip+           // Already loaded — skip
     sta ol_target
+#endif
 
-    // C64: tier name payload is read from $E000, so overlays must invalidate it.
-    // C128: tier payload/name tables are staged in Bank 1 DB space; keep tier
-    // state alive so creature_get_name never reloads MONSTER.DB into $E000.
+    // When the active tier has no Bank 1 cache backing, overlays must invalidate
+    // the tier view because the runtime name pointers still reference $E000 data.
 #if !C128
     jsr tier_invalidate_state
+#else
+    lda current_tier
+    beq !ol_invalidate_tier+
+    tax
+    lda c128_cache_tiers_ready
+    beq !ol_invalidate_tier+
+    lda c128_tier_ready_mask_minus1,x
+    and c128_cache_tier_bits
+    bne !ol_keep_tier_state+
+!ol_invalidate_tier:
+    jsr tier_invalidate_state
+!ol_keep_tier_state:
+#endif
+
+#if C128
+    lda c128_cache_overlays_ready
+    beq !ol_check_reu+
+    ldx ol_target
+    lda ovl_ready_mask,x
+    and c128_cache_overlay_bits
+    beq !ol_check_reu+
+    jsr c128_fetch_overlay_from_cache
+    bcc !ol_cache_ok+
+    lda #0
+    sta c128_cache_overlays_ready
+    sta c128_cache_overlay_bits
+    sta c128_cache_failed
+!ol_check_reu:
 #endif
 
     lda reu_overlays_stashed
@@ -74,9 +107,19 @@ overlay_load:
     clc                     // REU always succeeds
     rts
 
+#if C128
+!ol_cache_ok:
+    lda ol_target
+    sta current_overlay
+    clc
+    rts
+#endif
+
+#if !C128
 !ol_skip:
     clc
     rts
+#endif
 
 
 // ============================================================
@@ -204,3 +247,185 @@ ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
 ol_target:        .byte 0
+
+#if C128
+c128_preload_all_overlays:
+    lda #0
+    sta c128_cache_overlays_ready
+    sta c128_cache_overlay_bits
+
+    ldx #1
+!cpao_loop:
+    stx ol_target
+
+    dex
+    lda reu_fn_ovl_lo,x
+    sta zp_ptr0
+    lda reu_fn_ovl_hi,x
+    sta zp_ptr0_hi
+    jsr reu_show_file
+
+    ldx ol_target
+    dex
+    lda ovl_fn_len,x
+    pha
+    lda ovl_fn_addr_lo,x
+    pha
+    lda ovl_fn_addr_hi,x
+    tay
+    pla
+    tax
+    pla
+    jsr c128_preload_asset_load
+    bcs !cpao_fail+
+
+    ldx ol_target
+    jsr c128_stage_overlay_to_cache
+    bcs !cpao_fail+
+
+    ldx ol_target
+    lda ovl_ready_mask,x
+    ora c128_cache_overlay_bits
+    sta c128_cache_overlay_bits
+
+    ldx ol_target
+    inx
+    cpx #5
+    bne !cpao_loop-
+
+    lda #1
+    sta c128_cache_overlays_ready
+    // Leave the startup overlay resident at $E000 for the title -> New Game
+    // path. This avoids an immediate redundant reload of OVL.START after
+    // preload has already cached and validated it.
+    lda #OVL_STARTUP
+    sta ol_target
+    jsr c128_fetch_overlay_from_cache
+    bcs !cpao_fail+
+    lda #OVL_STARTUP
+    sta current_overlay
+    rts
+
+!cpao_fail:
+    lda #0
+    sta c128_cache_overlays_ready
+    sta c128_cache_overlay_bits
+    sta c128_cache_failed
+    lda #OVL_NONE
+    sta current_overlay
+    rts
+
+c128_select_overlay_cache_slot:
+    lda ovl_cache_slot_lo,x
+    sta ovl_cache_base_lo
+    lda ovl_cache_slot_hi,x
+    sta ovl_cache_base_hi
+    rts
+
+c128_stage_overlay_to_cache:
+    php
+    sei
+    jsr c128_select_overlay_cache_slot
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda ovl_cache_base_lo
+    sta zp_ptr1
+    lda ovl_cache_base_hi
+    sta zp_ptr1_hi
+    lda #$00
+    sta zp_temp0
+    lda #$10
+    sta zp_temp1
+    ldy #0
+!csoc_page_loop:
+    lda zp_temp1
+    beq !csoc_done+
+!csoc_page:
+    lda (zp_ptr0),y
+    jsr mmu_safe_db_write_ptr1
+    iny
+    bne !csoc_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !csoc_page_loop-
+!csoc_done:
+    jsr c128_verify_overlay_cache_slot
+    bcc !csoc_ok+
+    plp
+    sec
+    rts
+!csoc_ok:
+    plp
+    clc
+    rts
+
+c128_verify_overlay_cache_slot:
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda ovl_cache_base_lo
+    sta zp_ptr1
+    lda ovl_cache_base_hi
+    sta zp_ptr1_hi
+    lda #$10
+    sta zp_temp1
+    ldy #0
+!cvoc_page_loop:
+    lda zp_temp1
+    beq !cvoc_ok+
+!cvoc_page:
+    lda (zp_ptr0),y
+    sta zp_temp2
+    jsr mmu_safe_db_read_ptr1
+    cmp zp_temp2
+    bne !cvoc_fail+
+    iny
+    bne !cvoc_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !cvoc_page_loop-
+!cvoc_ok:
+    clc
+    rts
+!cvoc_fail:
+    sec
+    rts
+
+c128_fetch_overlay_from_cache:
+    php
+    sei
+    ldx ol_target
+    jsr c128_select_overlay_cache_slot
+    lda ovl_cache_base_lo
+    sta zp_ptr1
+    lda ovl_cache_base_hi
+    sta zp_ptr1_hi
+    lda #<$e000
+    sta zp_ptr0
+    lda #>$e000
+    sta zp_ptr0_hi
+    lda #$10
+    sta zp_temp1
+    ldy #0
+!cfoc_page_loop:
+    lda zp_temp1
+    beq !cfoc_ok+
+!cfoc_page:
+    jsr mmu_safe_db_read_ptr1
+    sta (zp_ptr0),y
+    iny
+    bne !cfoc_page-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dec zp_temp1
+    jmp !cfoc_page_loop-
+!cfoc_ok:
+    plp
+    clc
+    rts
+#endif

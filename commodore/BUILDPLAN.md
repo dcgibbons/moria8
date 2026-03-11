@@ -5,17 +5,17 @@
 
 ---
 
-## Current State (2026-03-09, updated)
+## Current State (2026-03-11, updated)
 
 **All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, and M2 platformized screen blanking hooks are resolved.**
 
 ### Build Stats
 
-- **Test suites:** C64: 24 runtime suites, C128: 14 harness suites
-- **Compile-time asserts:** 101 (C128) / 70 (C64)
+- **Test suites:** C64: 24 runtime suites, C128: 26 harness suites
+- **Compile-time asserts:** 120 (C128) / 70 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
-- **C128 integration stability:** New game -> character creation -> town -> first dungeon entry is validated after C4 stabilization fixes.
+- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, tier-transition, town-overlay, death-overlay, partial-cache-failure, and boot-copy smokes.
 
 ---
 
@@ -23,6 +23,7 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
+| **BUG-X** | **LOW** | AUDIT: C64 IRQ `irq_no_blink` and C128 `safe_irq` do not `cld` before executing, making them susceptible to Decimal Mode bugs if math is ever added to the IRQs. | Pending |
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
@@ -32,6 +33,10 @@
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **REF-2** | **MED** | Refactor: Game Loop Coupling. Decouple `game_loop.s` to separate UI rendering, time management, and logic into an MVC-style pattern for better testability. | Pending |
 | **TST-1** | **HIGH** | Testing: Missing critical test suites for input parsing (`test_input.s`), command dispatch, and Line of Sight (`test_los.s`). | Pending |
+| **TST-2** | **HIGH** | Testing: Game Flow. Add coverage for main orchestration loops (`boot.s`, `config.s`, `main.s`, `game_loop.s`, `turn.s`). See `TEST_PLAN_TOP5.md` for `main_loop`. | Pending |
+| **TST-3** | **MED** | Testing: UI Menus & Views. Add isolation tests for character viewer, help, home, inventory, recall, and store visual layouts. See `TEST_PLAN_TOP5.md` for specific UI routines. | Pending |
+| **TST-4** | **MED** | Testing: Subsystems. Add unit tests for decompression (`huffman.s`), strings (`string_bank.s`), overlay execution, and audio (`sound.s`). | Pending |
+| **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
 | **DOC-1** | LOW | Documentation: Fix stale comments in `input.s` regarding numeric prefixes to accurately reflect the broken/deferred state shown in the history. | Pending |
 
 ### Investigation Tasks (R4)
@@ -53,6 +58,7 @@
 | **M2** | MED | Platformized screen blank/unblank hooks: removed direct `$D011` toggles from shared `game_loop.s`; C64 keeps VIC-II DEN behavior, C128 uses explicit no-op VDC policy hook. | **2026-03-09** |
 | **DTH-1** | **BLOCKER** | C128 death flow regression fixed by bracketing high-score KERNAL I/O in `tramp_game_over` with explicit MMU/ROM transitions while keeping death overlay routines in all-RAM mode. | **2026-03-09** |
 | **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map stream handling so map bytes are preserved across MMU restore (instead of being clobbered to `MMU_NORMAL`), with KERNAL byte I/O running in `MMU_NORMAL` context. | **2026-03-09** |
+| **BUG-Y / 10.8** | **BLOCKER** | C128 preload/cache rebaseline complete: Bank 1 ownership refactor, tier+overlay cache contract fixes, carry-return repair, runtime guard restoration, and character-summary/town-flow stabilization with deterministic scripted-input coverage. | **2026-03-11** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -67,7 +73,7 @@
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
 | 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Done** |
-| 10.8 | Bank 1 Pseudo-REU (Preloading) | C128: Preload all creature tiers and overlays into unused Bank 1 RAM at startup, eliminating disk access during phase/stair transitions (acting like the C64 REU). | **Planned** |
+| 10.8 | Bank 1 Preload Cache + Ownership Refactor | C128: ownership refactor, tier cache, fixed-slot overlay cache, runtime guard restoration, carry-contract fixes, and Gate B validation are complete. Verified coverage now includes idle-title soak, title/new-game, scripted summary-to-town, tier transition, town overlay (male + female paths), death overlay, partial tier-cache failure fallback, and boot-copy diagnostics. Follow-up hardening remains a separate task: explicit reserved/forbidden memory-region constants, assert-backed placement rules, one source-of-truth ownership map, preflight placement checklist for low-RAM/Bank-1 changes, and smoke coverage that snapshots must-survive regions across title/new-game flows. | **Done** |
 
 ---
 
@@ -93,7 +99,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 **High priority (C128 Port Stability):**
 1. No open C128 blocker after DTH-1/SAV-2 closure.
-2. Execute 10.8 Bank 1 pseudo-REU preload plan.
+2. Add a 10.8 follow-up hardening pass that converts C128 memory-ownership rules from prose into enforced code/test policy: reserved-region constants, compile-time placement asserts, ownership-map source of truth, low-RAM/Bank-1 placement checklist, and runtime smoke guards for must-survive regions.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

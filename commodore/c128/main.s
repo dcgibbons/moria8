@@ -45,6 +45,10 @@ entry:
 tramp_player_create:
     lda #1                      // OVL_STARTUP
     jsr overlay_load
+    bcc !tpc_loaded+
+    jmp entry_main
+!tpc_loaded:
+    jsr c128_restore_runtime_guards
     jmp player_create
 
 tramp_game_over:
@@ -59,6 +63,10 @@ tramp_game_over:
     // 2. Load death overlay at $0400
     lda #3                      // OVL_DEATH
     jsr overlay_load
+    bcc !tgo_loaded+
+    jmp entry_main
+!tgo_loaded:
+    jsr c128_restore_runtime_guards
 
     // 3. Calculate score
     jsr score_calculate
@@ -102,21 +110,43 @@ tramp_game_over:
 tramp_store_init_all:
     lda #2                      // OVL_TOWN
     jsr overlay_load
+    bcc !tsia_loaded+
+    jmp entry_main
+!tsia_loaded:
+    jsr c128_restore_runtime_guards
     jmp store_init_all
 
 tramp_store_restock_all:
     lda #2                      // OVL_TOWN
     jsr overlay_load
+    bcc !tsra_loaded+
+    jmp entry_main
+!tsra_loaded:
+    jsr c128_restore_runtime_guards
     jmp store_restock_all
 
 tramp_store_enter:
     lda #2                      // OVL_TOWN
     jsr overlay_load
+    bcc !tse_loaded+
+    jmp entry_main
+!tse_loaded:
+    jsr c128_restore_runtime_guards
     jmp store_enter
+
+#if C128_TEST_SCRIPTED_INPUT
+c128_test_town_fail_sym:
+    brk
+c128_test_town_pass_sym:
+    brk
+#endif
 
 tramp_ui_enter:
     sei
-    :BankOutKernal()
+    lda #$3e                    // MMU_ALL_RAM
+    sta $ff00
+    lda #$34                    // BANK_NO_ROMS
+    sta $01
     rts
 
 tramp_ui_exit:
@@ -191,7 +221,18 @@ title_show_sysinfo:
     sta $ff00
     cli
     rts
+
 tsi_krev_cached: .byte 0
+tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
+tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
+tsi_c64_str:    .text "C64"  ; .byte 0
+tsi_c128_str:   .text "C128" ; .byte 0
+tsi_sx64_str:   .text "SX-64" ; .byte 0
+tsi_kernal_str: .text "  KERNAL R" ; .byte 0
+tsi_reu_str:    .text "  REU " ; .byte 0
+tsi_kb_str:     .text "KB" ; .byte 0
+tsi_krev_table: .byte $aa, $00, $03, $43, $01  // KERNAL rev bytes (C64 R1/R2/R3, SX-64, C128)
+tsi_krev_chars: .byte $31, $32, $33, $31, $31  // '1', '2', '3', '1', '1' in screen codes
 
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
@@ -225,15 +266,7 @@ entry_real:
     ldx #$ff
     txs
 
-    lda #$7f
-    sta $dc0d               // Mask all CIA1 interrupt sources
-    sta $dd0d               // Mask all CIA2 interrupt sources
-    lda $dc0d               // Acknowledge pending CIA1
-    lda $dd0d               // Acknowledge pending CIA2
-    lda #0
-    sta $d01a               // Disable all VIC-II interrupt sources
     lda #$ff
-    sta $d019               // Acknowledge any pending VIC-II interrupts
     sta $d8                 // Screen Editor: 80-col mode
     // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
     // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
@@ -502,7 +535,7 @@ w_load:
 t_load: .word 0
     php
     pha
-    lda #MMU_ALL_RAM
+    lda c128_kernal_return_mmu
     sta $ff00
     pla
     plp
@@ -555,6 +588,61 @@ chrin_keyboard_stub:
     lda #0
     clc
     rts
+
+// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
+// Use this on long-lived runtime paths that do not need the full helper reinstall.
+c128_restore_runtime_vectors:
+    php
+    sei
+    lda #BANK_NO_BASIC
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    lda #<safe_irq
+    sta $fffe
+    lda #>safe_irq
+    sta $ffff
+    lda #<safe_nmi
+    sta $fffa
+    lda #>safe_nmi
+    sta $fffb
+    lda #<safe_irq_restore
+    sta $0314
+    lda #>safe_irq_restore
+    sta $0315
+    lda #<chrin_keyboard_stub
+    sta $0302
+    lda #>chrin_keyboard_stub
+    sta $0303
+    lda #$ff
+    sta $cc
+    plp
+    rts
+
+// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
+// Runtime KERNAL/editor paths and common-RAM users are still mutating
+// vector/helper state more aggressively than the cache path can tolerate.
+// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
+// blob before returning to gameplay/overlay code.
+c128_restore_runtime_guards:
+    pha
+    txa
+    pha
+    tya
+    pha
+    php
+    sei
+    jsr c128_restore_runtime_vectors
+    jsr init_common_mmu_helpers
+    plp
+    pla
+    tay
+    pla
+    tax
+    pla
+    rts
+
+c128_kernal_return_mmu: .byte MMU_ALL_RAM
 
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
@@ -732,20 +820,6 @@ entry_main:
     sta c128_vdc_reg25_cached
     jsr vdc_write_reg
 
-    // Disable Screen Editor software cursor blink.
-    // VDC reg 10 only disables hardware cursor display; the Screen Editor
-    // blink path still runs unless $CC is non-zero, and can write VDC RAM
-    // during KERNAL I/O IRQ windows.
-    lda #$ff
-    sta $cc
-    // Keep KERNAL IRQ tail dispatch off the Screen Editor path.
-    // KERNAL IRQ prologue has already serviced interrupt sources before
-    // it jumps through ($0314/$0315), so restore+RTI is sufficient.
-    lda #<safe_irq_restore
-    sta $0314
-    lda #>safe_irq_restore
-    sta $0315
-
     // Set VDC default colors: foreground white, background black.
     // In attribute mode these are defaults/fallbacks, but setting them
     // explicitly avoids emulator-dependent tinting.
@@ -758,6 +832,14 @@ entry_main:
     lda #0
     sta $d020               // Border
     sta $d021               // Background
+
+    // Capture the KERNAL-installed IRQ tail vector before preload starts.
+    // Shared preload LOAD transactions temporarily restore this vector.
+    lda $0314
+    sta kernal_irq_vec_lo
+    lda $0315
+    sta kernal_irq_vec_hi
+    jsr init_common_mmu_helpers
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -781,6 +863,29 @@ restart_entry:
     jsr tier_init
     jsr sound_init
     jsr rng_seed
+
+    // Runtime switches to an all-RAM IRQ regime only after preload/KERNAL I/O
+    // is complete. Preload asset LOADs require normal CIA/VIC interrupt service.
+    lda #$7f
+    sta $dc0d               // Mask all CIA1 interrupt sources
+    sta $dd0d               // Mask all CIA2 interrupt sources
+    lda $dc0d               // Acknowledge pending CIA1
+    lda $dd0d               // Acknowledge pending CIA2
+    lda #0
+    sta $d01a               // Disable all VIC-II interrupt sources
+    lda #$ff
+    sta $d019               // Acknowledge any pending VIC-II interrupts
+
+    // Disable Screen Editor software cursor blink.
+    // VDC reg 10 only disables hardware cursor display; the Screen Editor
+    // blink path still runs unless $CC is non-zero.
+    lda #$ff
+    sta $cc
+    // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
+    lda #<safe_irq_restore
+    sta $0314
+    lda #>safe_irq_restore
+    sta $0315
 
     lda #$ff
     sta $d8                     // Screen Editor: 80-col mode
@@ -1051,6 +1156,34 @@ tramp_ego_put_suffix:
 !teps_done:
     rts
 teps_save_y: .byte 0
+kernal_irq_vec_lo: .byte 0
+kernal_irq_vec_hi: .byte 0
+
+// C128 cache/overlay state lives in a dedicated main-RAM block.
+// Do not place this adjacent to preload UI strings or transient workspace.
+current_overlay: .byte 0
+reu_overlays_stashed: .byte 0
+c128_cache_enabled:        .byte 1
+c128_cache_tiers_ready:    .byte 0
+c128_cache_overlays_ready: .byte 0
+c128_cache_failed:         .byte 0
+c128_cache_tier_bits:      .byte 0
+c128_cache_overlay_bits:   .byte 0
+c128_preload_fn_len:       .byte 0
+c128_preload_status:       .byte 0
+#if C128_CACHE_TEST_SKIP_TIER
+c128_cache_test_skip_tier: .byte C128_CACHE_TEST_SKIP_TIER
+#else
+c128_cache_test_skip_tier: .byte 0
+#endif
+ovl_cache_base_lo: .byte 0
+ovl_cache_base_hi: .byte 0
+ovl_ready_mask:
+    .byte 0, %00000001, %00000010, %00000100, %00001000
+ovl_cache_slot_lo:
+    .byte 0, <OVERLAY_CACHE_START_BASE, <OVERLAY_CACHE_TOWN_BASE, <OVERLAY_CACHE_DEATH_BASE, <OVERLAY_CACHE_GEN_BASE
+ovl_cache_slot_hi:
+    .byte 0, >OVERLAY_CACHE_START_BASE, >OVERLAY_CACHE_TOWN_BASE, >OVERLAY_CACHE_DEATH_BASE, >OVERLAY_CACHE_GEN_BASE
 
 // ============================================================
 // Imports — Game Engine (Safe to spill past $C000)
@@ -1092,6 +1225,7 @@ teps_save_y: .byte 0
 #import "../common/game_loop.s"
 #import "../common/perf_p1.s"
 #import "../common/ui_help_clear.s"
+#import "../common/ui_character.s"
 #import "../common/player_move.s"
 #import "../common/combat.s"
 #import "../common/projectile.s"
@@ -1104,6 +1238,16 @@ teps_save_y: .byte 0
 // ============================================================
 title_str:
     .text "MORIA8 C=128" ; .byte 0
+#if C128_TEST_TITLE_KEY_TRAP
+title_key_trap_base:
+    .fill 256, $00
+#endif
+#if C128_TEST_SCRIPTED_INPUT
+c128_test_summary_seen:
+    .byte 0
+c128_test_pass_loop:
+    jmp c128_test_pass_loop
+#endif
 
 // Bank1Data segment — content moved to banked_payload ($EB00, Bank 0).
 // Segment kept empty; bank1.dat is no longer loaded at runtime.
@@ -1117,12 +1261,13 @@ title_str:
 // All Bank1Data functions (UI screens, home) are included here so
 // they live in Bank 0 and are accessible with $FF00=$3E (MMU_ALL_RAM).
 //
-// Keep $EB00-$EF78 reserved so runtime banked code starts above the
-// current DungeonGen overlay ceiling.
+// Keep $EB00-$EFFF reserved so runtime banked code stays completely out of
+// the shared $E000-$EFFF overlay window. C128 overlay cache copies full 4 KB
+// slots, so any callable banked routine in that window will be overwritten.
 // ============================================================
 banked_payload:
 .pseudopc $EB00 {
-    .fill ($EF79 - $EB00), 0
+    .fill ($F000 - $EB00), 0
 first_banked_function:
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
@@ -1132,7 +1277,6 @@ first_banked_function:
     #import "../common/ui_help_data.s"
     #import "../common/ui_help.s"
     #import "../common/ui_recall.s"
-    #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
 
 banked_code_end:
@@ -1141,10 +1285,19 @@ banked_payload_end:
 
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
+.assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
+.assert "Title sysinfo stays out of overlay window", title_show_sysinfo_banked >= $F000, true
+.assert "REU status stays out of overlay window", reu_show_status_banked >= $F000, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
+.print "Program image: $" + toHexString($1c01) + "-$" + toHexString(program_end - 1)
+#if C128
+.assert "boot128 staged image reaches map region", program_end - 1 >= MAP_BASE, true
+.assert "boot128 staged image reaches Bank1 DB region", program_end - 1 >= BANK1_DB_BASE, true
+.assert "Reclaimed high Bank1 region remains large enough for tier preload", BANK1_FREE_HIGH_END - BANK1_FREE_HIGH_BASE + 1 >= TIER_PRELOAD_REQUIRED, true
+#endif
 .assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
 .assert "UI enter trampoline stays below I/O hole", tramp_ui_enter < $D000, true
 .assert "UI exit trampoline stays below I/O hole", tramp_ui_exit < $D000, true
@@ -1175,7 +1328,7 @@ program_end:
 .assert "Help renderer stays out of overlay window", ui_help_display >= $F000, true
 .assert "Help title text stays out of overlay window", help_title_str >= $F000, true
 .assert "Help content table stays out of overlay window", help_lines >= $F000, true
-.assert "Character sheet renderer stays out of overlay window", ui_char_display >= $F000, true
+.assert "Character sheet renderer stays below I/O hole", ui_char_display < $D000, true
 .assert "Recall renderer stays out of overlay window", ui_recall_display >= $F000, true
 .assert "Inventory renderer stays out of overlay window", ui_inv_display >= $F000, true
 .assert "Equipment renderer stays out of overlay window", ui_equip_display >= $F000, true

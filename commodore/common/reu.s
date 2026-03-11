@@ -275,6 +275,84 @@ reu_probe_xfer:
     sta REU_COMMAND         // Execute DMA
     rts
 
+#if C128
+// ============================================================
+// c128_preload_asset_load — Shared preload-only LOAD transaction
+// ============================================================
+// Input:
+//   A = filename length
+//   X = filename pointer lo
+//   Y = filename pointer hi
+// Output:
+//   carry clear = success
+//   carry set   = LOAD failed
+// Clobbers: A, X, Y
+c128_preload_asset_load:
+    sta c128_preload_fn_len
+    stx c128_preload_fn_lo
+    sty c128_preload_fn_hi
+    php
+    sei
+
+    lda #MMU_NORMAL
+    sta $ff00
+    lda #MMU_NORMAL
+    sta c128_kernal_return_mmu
+    lda #BANK_ALL_ROM
+    sta $01
+    lda kernal_irq_vec_lo
+    sta $0314
+    lda kernal_irq_vec_hi
+    sta $0315
+
+    lda #2
+    jsr $ffc3                   // Pre-close stale preload channel
+    jsr $ffcc                   // Restore default I/O channels
+
+    lda c128_preload_fn_len
+    ldx c128_preload_fn_lo
+    ldy c128_preload_fn_hi
+    jsr $ffbd                   // SETNAM
+
+    lda #2
+    ldx #8
+    ldy #1
+    jsr $ffba                   // SETLFS (PRG header address)
+
+    lda #0
+    ldx #0
+    jsr $ff68                   // SETBNK: Bank 0
+    cli                         // C128 KERNAL serial LOAD requires IRQ service
+    jsr $ffd5                   // LOAD
+    lda #0
+    rol                         // A=1 on error, 0 on success
+    sta c128_preload_status
+    sei
+
+    lda #2
+    jsr $ffc3                   // CLOSE
+    jsr $ffcc                   // CLRCHN
+
+    lda #MMU_ALL_RAM
+    sta $ff00
+    lda #MMU_ALL_RAM
+    sta c128_kernal_return_mmu
+    lda #BANK_ALL_ROM
+    sta $01
+    jsr c128_vdc_reassert_mode
+    plp
+
+    lda c128_preload_status
+    beq !c128_preload_ok+
+    sec
+    rts
+!c128_preload_ok:
+    clc
+    rts
+c128_preload_fn_lo: .byte 0
+c128_preload_fn_hi: .byte 0
+#endif
+
 
 // ============================================================
 // reu_stash — Transfer C64 RAM → REU
