@@ -1418,6 +1418,59 @@ run_death_overlay_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_restart_to_title_smoke() {
+    local name="restart_to_title_smoke"
+    echo -n "  $name: "
+
+    build_death_overlay_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local title_show_sysinfo
+    title_show_sysinfo=$(awk '/\.title_show_sysinfo$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_show_sysinfo:-}" ]; then
+        echo "FAIL (missing title_show_sysinfo in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_death.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "until \$${title_show_sysinfo}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA  S' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 420000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! grep -qi "^UNTIL: .*C:\$${title_show_sysinfo}" "$log_file"; then
+        boot_log_report_failure "did not return to title_show_sysinfo after restart flow" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during restart-to-title flow" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_preload_partial_failure_smoke() {
     local name="preload_partial_failure_smoke"
     echo -n "  $name: "
@@ -1647,10 +1700,12 @@ run_symbol_placement_check
 run_prompt_irq_guard_check
 run_80col_layout_guard_check
 run_test "minimal128" "tests/test_minimal128.s"
+run_test "config128" "tests/test_config128.s"
 run_test "memory128" "tests/test_memory128.s"
 run_test "db128" "tests/test_db128.s"
 run_test "tier128" "tests/test_tier128.s"
 run_test "input128" "tests/test_input128.s"
+run_test "main_loop128" "tests/test_main_loop128.s" 500000000
 run_test "msg_prompt128" "tests/test_msg_prompt128.s" 120000000
 run_test "vdc_attr128" "tests/test_vdc_attr128.s"
 run_test "status_coherence128" "tests/test_status_coherence128.s"
@@ -1666,6 +1721,7 @@ run_town_overlay_state_smoke
 run_scripted_summary_to_town_smoke
 run_cache_survival_smoke
 run_death_overlay_smoke
+run_restart_to_title_smoke
 run_preload_partial_failure_smoke
 run_overlay_partial_failure_smoke
 run_boot_diag_copy

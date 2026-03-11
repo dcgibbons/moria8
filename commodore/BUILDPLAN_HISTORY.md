@@ -6,6 +6,48 @@
 
 ---
 
+## TST-2 — Orchestration Coverage Expansion ✅ COMPLETE (2026-03-11)
+
+### Scope Closed
+- Closed the broad TST-2 orchestration harness gap for the default runners without widening the task into UI-layout or rendering verification work.
+- Landed deterministic coverage for config entrypoints, `turn.s` orchestration, C128 `main_loop` parity, and restart-to-title flow.
+- Spun the remaining title-load/resume automation gap into a smaller follow-up issue because deterministic save-file seeding is still unresolved.
+
+### Implemented
+1. **C64 orchestration suites expanded**
+   - Added `commodore/c64/tests/test_config.s` to validate the C64 `detect_machine` default contract.
+   - Added `commodore/c64/tests/test_turn.s` to cover:
+     - `turn_post_action` sequencing
+     - turn counter wrap + periodic store restock
+     - poison regen suppression
+     - starvation damage/death-source handling
+     - light warning/depletion behavior
+     - word-of-recall town/dungeon transitions and fizzle case
+     - mana-regen cadence for casting classes
+2. **C128 deterministic harness coverage expanded**
+   - Added `commodore/c128/tests/test_config128.s` for the hardcoded C128/80-col `detect_machine` contract.
+   - Added `commodore/c128/tests/test_main_loop128.s` as a focused dispatch harness covering movement, `LOOK`, `OPEN`, and C128-specific dismiss gating for help/inventory flows.
+3. **C128 smoke coverage expanded**
+   - Added `restart_to_title_smoke` to `commodore/c128/run_tests128.sh` to validate the death-prompt `S` path returns cleanly to the title/sysinfo loop.
+4. **Runner integration completed**
+   - Enabled the new C64 suites in `commodore/c64/run_tests.sh`.
+   - Enabled the new C128 suites/smoke in `commodore/c128/run_tests128.sh`.
+
+### Result
+- The default runners now cover substantially more orchestration surface:
+  - C64 config entrypoint
+  - C64 turn orchestration
+  - C128 config entrypoint
+  - C128 `main_loop` dispatch parity
+  - C128 restart-to-title flow
+- The remaining title `L` -> `load_resume_game` automation gap is now isolated as a separate follow-up rather than buried inside the broader TST-2 tracking item.
+
+### Validation
+- `bash commodore/c64/run_tests.sh`: pass (**28 passed, 0 failed**)
+- `bash commodore/c128/run_tests128.sh`: pass (**31 passed, 0 failed**)
+
+---
+
 ## 10.8-HDN — C128 Ownership Hardening Follow-Up ✅ COMPLETE (2026-03-11)
 
 ### Scope Closed

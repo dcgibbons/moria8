@@ -7,16 +7,16 @@
 
 ## Current State (2026-03-11, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, and M2 platformized screen blanking hooks are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, and the main TST-2 orchestration harness expansion are resolved.** The remaining orchestration gap is now narrow: deterministic title `L` -> `load_resume_game` coverage on C128 still needs a reproducible save-file seeding path.
 
 ### Build Stats
 
-- **Test suites:** C64: 25 runtime suites, C128: 28 harness suites
+- **Test suites:** C64: 27 runtime suites, C128: 31 harness suites
 - **Compile-time asserts:** 136 (C128) / 69 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
-- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, cache-survival, tier-transition, town-overlay, death-overlay, tier-partial-failure, overlay-partial-failure, and boot-copy smokes.
-- **C64 suite stability:** `run_tests.sh` is green again with `test_input.s` and `test_main_loop.s` enabled in the default runner.
+- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8/TST-2 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, cache-survival, tier-transition, town-overlay, death-overlay, restart-to-title, tier-partial-failure, overlay-partial-failure, and boot-copy smokes.
+- **C64 suite stability:** `run_tests.sh` is green with `test_input.s`, `test_main_loop.s`, `test_turn.s`, and `test_config.s` enabled in the default runner.
 
 ---
 
@@ -34,7 +34,7 @@
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **REF-2** | **MED** | Refactor: Game Loop Coupling. Decouple `game_loop.s` to separate UI rendering, time management, and logic into an MVC-style pattern for better testability. | Pending |
 | **TST-1** | **MED** | Testing: Input parsing now has dedicated C64/C128 suites, LOS behavior is covered in existing dungeon/monster tests, and `main_loop` now has a focused dispatch harness (`test_main_loop.s`). | **Done (2026-03-11)** |
-| **TST-2** | **HIGH** | Testing: Game Flow. Add coverage for main orchestration loops (`boot.s`, `config.s`, `main.s`, `game_loop.s`, `turn.s`). See `TEST_PLAN_TOP5.md` for `main_loop`. | Pending |
+| **TST-2A** | **HIGH** | Testing: C128 title-load/resume flow still lacks a deterministic save-file seed path, so the title `L` -> `load_resume_game` orchestration smoke is not yet automated. The rest of the TST-2 harness expansion is complete. | Pending |
 | **TST-3** | **MED** | Testing: UI Menus & Views. Add isolation tests for character viewer, help, home, inventory, recall, and store visual layouts. See `TEST_PLAN_TOP5.md` for specific UI routines. | Pending |
 | **TST-4** | **MED** | Testing: Subsystems. Add unit tests for decompression (`huffman.s`), strings (`string_bank.s`), overlay execution, and audio (`sound.s`). | Pending |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
@@ -61,6 +61,7 @@
 | **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map stream handling so map bytes are preserved across MMU restore (instead of being clobbered to `MMU_NORMAL`), with KERNAL byte I/O running in `MMU_NORMAL` context. | **2026-03-09** |
 | **BUG-Y / 10.8** | **BLOCKER** | C128 preload/cache rebaseline complete: Bank 1 ownership refactor, tier+overlay cache contract fixes, carry-return repair, runtime guard restoration, and character-summary/town-flow stabilization with deterministic scripted-input coverage. | **2026-03-11** |
 | **10.8-HDN** | **MED** | Follow-up hardening complete: `memory128.s` is now the ownership source of truth, placement rules are assert-backed, the C128 architecture doc has a preflight checklist, and smoke coverage now verifies cache survival plus tier/overlay fallback isolation. | **2026-03-11** |
+| **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -102,6 +103,7 @@ These files in `common/` contain minor C64-specific code that will need paramete
 **High priority (C128 Port Stability):**
 1. No open C128 blocker after DTH-1/SAV-2 closure.
 2. No open C128 memory-ownership hardening blocker after 10.8-HDN closure; maintain the `memory128.s` ownership manifest and smoke coverage when changing Bank 1 layout.
+3. Finish `TST-2A`: add deterministic save-file seeding so title `L` -> `load_resume_game` can be covered in the C128 smoke runner without manual prep or fake success paths.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)
