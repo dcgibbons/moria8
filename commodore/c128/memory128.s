@@ -83,35 +83,72 @@
 .const COL_LBLUE    = $0e
 .const COL_LGREY    = $0f
 
-// Memory region bases
-// C128 Plan C4 Banking Model:
-//   - Dungeon Map: Bank 1 RAM at $4000-$4EFF (3,840 bytes)
-//   - Tier staging DB: Bank 1 RAM at $5000-$7FFF (runtime tier payload mirror)
-//   - Bank 1 bottom common RAM: $0000-$0FFF (shared, not cache-safe)
-//   - boot128 staged program image: loaded into Bank 1 at $1C01-program_end,
-//     then scrubbed during copy-to-Bank-0
-//   - Reclaimed high Bank 1 free region: $8000-$FEFF
-//   - Floor Items: Bank 0 RAM at $1A00-$1AFF (256 bytes)
-//   - Creature Scratch: Bank 0 RAM at $1B00-$1BFF (256 bytes)
-//   - Program: Bank 0 RAM at $1C01-$BFFF
-.const MAP_BASE         = $4000 // Dungeon map (Bank 1)
+// ============================================================
+// C128 ownership manifest (single source of truth)
+// ============================================================
+// Bank 1 runtime ownership after boot:
+//   - bottom common RAM:       $0000-$0FFF (shared across banks, not cache-safe)
+//   - scrubbed low reclaim:    $1000-$3FFF
+//   - map region:              $4000-$4EFF
+//   - DB mirror region:        $5000-$7FFF
+//   - tier cache window:       $8000-$94F7
+//   - reserved gap 0:          $94F8-$9FFF
+//   - overlay cache STARTUP:   $A000-$AFFF
+//   - overlay cache TOWN:      $B000-$BFFF
+//   - overlay cache DEATH:     $C000-$CFFF
+//   - reserved I/O-visible gap:$D000-$DFFF
+//   - overlay cache DUNGEON:   $E000-$EFFF
+//   - reserved top gap:        $F000-$FEFF
+//
+// boot128 staging source span before scrub:
+//   - $1C01-$FEFF in Bank 1, copied into Bank 0 and scrubbed page-by-page.
+
+.macro AssertRegionBefore(desc, left_end, right_base) {
+    .assert desc, left_end < right_base, true
+}
+
+.const BANK1_COMMON_BASE = $0000
+.const BANK1_COMMON_END  = $0fff
+.const BANK1_RECLAIMED_LOW_BASE = $1000
+.const BANK1_RECLAIMED_LOW_END  = $3fff
+.const MAP_BASE         = $4000
 .const MAP_END          = $4eff
-.const BANK1_DB_BASE    = $5000 // Tier payload staging (Bank 1)
+.const BANK1_DB_BASE    = $5000
 .const BANK1_DB_END     = $7fff
-.const BANK1_COMMON_END = $0fff // 4KB bottom common RAM shared across banks
+.const BANK1_TIER_CACHE_BASE = $8000
+.const BANK1_TIER_CACHE_SIZE = 5368
+.const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
+.const BANK1_RESERVED_GAP0_BASE = $94f8
+.const BANK1_RESERVED_GAP0_END  = $9fff
+.const BANK1_OVERLAY_STARTUP_BASE = $a000
+.const BANK1_OVERLAY_STARTUP_END  = $afff
+.const BANK1_OVERLAY_TOWN_BASE    = $b000
+.const BANK1_OVERLAY_TOWN_END     = $bfff
+.const BANK1_OVERLAY_DEATH_BASE   = $c000
+.const BANK1_OVERLAY_DEATH_END    = $cfff
+.const BANK1_RESERVED_IO_BASE     = $d000
+.const BANK1_RESERVED_IO_END      = $dfff
+.const BANK1_OVERLAY_DUNGEON_BASE = $e000
+.const BANK1_OVERLAY_DUNGEON_END  = $efff
+.const BANK1_RESERVED_TOP_BASE    = $f000
+.const BANK1_RESERVED_TOP_END     = $feff
+.const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
+.const BANK1_CACHE_OWNED_END      = BANK1_RESERVED_TOP_END
+
 .const MMU_COMMON_HELPERS_BASE = $0c00
-.const BANK1_STAGE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
-.const BANK1_TAIL_END   = $feff // copy stub stops before $ff00
-.const BANK1_FREE_HIGH_BASE = $8000 // Reclaimed high Bank 1 region after boot scrub
-.const BANK1_FREE_HIGH_END  = $feff
-.const TIER_PRELOAD_REQUIRED = 5368
-.const BANK1_TIER_CACHE_END = BANK1_FREE_HIGH_BASE + TIER_PRELOAD_REQUIRED - 1
+.const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
+.const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
+.const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
+.const BANK1_STAGE_BASE = BANK1_STAGE_SOURCE_BASE
+.const BANK1_TAIL_END   = BANK1_STAGE_SOURCE_END
+.const BANK1_FREE_HIGH_BASE = BANK1_TIER_CACHE_BASE
+.const BANK1_FREE_HIGH_END  = BANK1_CACHE_OWNED_END
 .const OVERLAY_CACHE_SLOT_SIZE = $1000
-.const OVERLAY_CACHE_START_BASE = $a000
-.const OVERLAY_CACHE_TOWN_BASE  = $b000
-.const OVERLAY_CACHE_DEATH_BASE = $c000
-.const OVERLAY_CACHE_GEN_BASE   = $e000
-.const OVERLAY_CACHE_GEN_END    = OVERLAY_CACHE_GEN_BASE + OVERLAY_CACHE_SLOT_SIZE - 1
+.const OVERLAY_CACHE_START_BASE = BANK1_OVERLAY_STARTUP_BASE
+.const OVERLAY_CACHE_TOWN_BASE  = BANK1_OVERLAY_TOWN_BASE
+.const OVERLAY_CACHE_DEATH_BASE = BANK1_OVERLAY_DEATH_BASE
+.const OVERLAY_CACHE_GEN_BASE   = BANK1_OVERLAY_DUNGEON_BASE
+.const OVERLAY_CACHE_GEN_END    = BANK1_OVERLAY_DUNGEON_END
 .const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
 .const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
@@ -338,6 +375,11 @@ c128_vdc_wait:
 c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
 
+bank1_overlay_cache_slot_lo:
+    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE
+bank1_overlay_cache_slot_hi:
+    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE
+
 // Common-RAM MMU helpers copied to $0C00 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
 mmu_common_helpers_blob:
@@ -520,9 +562,20 @@ copy_to_e000:
 .assert "Map size = 3840", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
-.assert "Bank1 common region ends below stage load base", BANK1_COMMON_END < BANK1_STAGE_BASE, true
-.assert "Bank1 map and DB regions do not overlap", MAP_END < BANK1_DB_BASE, true
-.assert "Bank1 DB ends before reclaimed high free region", BANK1_DB_END < BANK1_FREE_HIGH_BASE, true
-.assert "Reclaimed high Bank1 region can fit tier preload footprint", BANK1_FREE_HIGH_END - BANK1_FREE_HIGH_BASE + 1 >= TIER_PRELOAD_REQUIRED, true
-.assert "Overlay cache starts after tier cache window", OVERLAY_CACHE_START_BASE > BANK1_TIER_CACHE_END, true
-.assert "Overlay cache fits in reclaimed high Bank1 region", OVERLAY_CACHE_GEN_END <= BANK1_FREE_HIGH_END, true
+:AssertRegionBefore("Bank1 common region ends below staged source span", BANK1_COMMON_END, BANK1_STAGE_SOURCE_BASE)
+:AssertRegionBefore("Reclaimed low region ends before map region", BANK1_RECLAIMED_LOW_END, MAP_BASE)
+:AssertRegionBefore("Bank1 map and DB regions do not overlap", MAP_END, BANK1_DB_BASE)
+:AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
+:AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)
+:AssertRegionBefore("Reserved gap 0 ends before STARTUP overlay slot", BANK1_RESERVED_GAP0_END, BANK1_OVERLAY_STARTUP_BASE)
+:AssertRegionBefore("STARTUP overlay slot ends before TOWN overlay slot", BANK1_OVERLAY_STARTUP_END, BANK1_OVERLAY_TOWN_BASE)
+:AssertRegionBefore("TOWN overlay slot ends before DEATH overlay slot", BANK1_OVERLAY_TOWN_END, BANK1_OVERLAY_DEATH_BASE)
+:AssertRegionBefore("DEATH overlay slot ends before reserved I/O window", BANK1_OVERLAY_DEATH_END, BANK1_RESERVED_IO_BASE)
+:AssertRegionBefore("Reserved I/O window ends before DUNGEON overlay slot", BANK1_RESERVED_IO_END, BANK1_OVERLAY_DUNGEON_BASE)
+:AssertRegionBefore("DUNGEON overlay slot ends before reserved top gap", BANK1_OVERLAY_DUNGEON_END, BANK1_RESERVED_TOP_BASE)
+.assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED
+.assert "Cache-owned Bank1 span stays below $FF00", BANK1_CACHE_OWNED_END <= BANK1_RESERVED_TOP_END, true
+.assert "Tier cache stays below overlay cache", BANK1_TIER_CACHE_END < BANK1_OVERLAY_STARTUP_BASE, true
+.assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
+.assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
+.assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_GEN_END <= BANK1_CACHE_OWNED_END, true

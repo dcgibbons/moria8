@@ -26,7 +26,8 @@
 // ============================================================
 current_tier:   .byte 0     // 0 = no tier (town/embedded), 1-4 = active tier
 tier_loaded:    .byte 0     // 1 = a tier has been loaded from disk/REU
-// C128 tier cache metadata: active tier payload mirrored into reclaimed Bank 1 RAM.
+// C128 tier cache metadata: active tier payload mirrored into the named Bank 1
+// tier-cache ownership window from memory128.s.
 c128_tier_cache_base_lo: .byte 0
 c128_tier_cache_base_hi: .byte 0
 c128_tier_cache_size_lo: .byte 0
@@ -82,7 +83,7 @@ tier_size_hi:
     .byte >TIER1_SIZE, >TIER2_SIZE, >TIER3_SIZE, >TIER4_SIZE
 
 #if C128
-.const C128_TIER1_CACHE_BASE = BANK1_FREE_HIGH_BASE
+.const C128_TIER1_CACHE_BASE = BANK1_TIER_CACHE_BASE
 .const C128_TIER2_CACHE_BASE = C128_TIER1_CACHE_BASE + TIER1_SIZE
 .const C128_TIER3_CACHE_BASE = C128_TIER2_CACHE_BASE + TIER2_SIZE
 .const C128_TIER4_CACHE_BASE = C128_TIER3_CACHE_BASE + TIER3_SIZE
@@ -95,14 +96,14 @@ c128_tier_cache_slot_hi:
     .byte 0
     .byte >C128_TIER1_CACHE_BASE, >C128_TIER2_CACHE_BASE, >C128_TIER3_CACHE_BASE, >C128_TIER4_CACHE_BASE
 
-.assert "Tier cache stays inside reclaimed high Bank1 region", C128_TIER_CACHE_END <= BANK1_FREE_HIGH_END, true
+.assert "Tier cache stays inside named Bank1 tier-cache window", C128_TIER_CACHE_END <= BANK1_TIER_CACHE_END, true
 #endif
 
 
 // ============================================================
 // tier_init — Initialize tier system at startup
 // ============================================================
-// C128: preload all monster tiers into the reclaimed high Bank 1 cache window.
+// C128: preload all monster tiers into the named Bank 1 tier-cache window.
 // C64/REU: load all tier files into REU for instant DMA on tier transitions.
 // No tier is activated yet (player starts in town).
 // Without cache/REU: nothing to do now; tiers load on demand.
@@ -139,6 +140,9 @@ tier_init:
     sta reu_loading_row
     jsr c128_preload_all_tiers
     jsr c128_preload_all_overlays
+#if C128_TEST_CACHE_SURVIVAL
+    jsr c128_test_snapshot_cache_probes
+#endif
     rts
 #endif
 
@@ -281,6 +285,15 @@ tier_load:
     bne !tl_reu+
 
     // --- Disk path: KERNAL LOAD tier file to $E000 ---
+#if C128_CACHE_TEST_SKIP_TIER
+    lda current_tier
+    cmp c128_cache_test_skip_tier
+    bne !tl_partial_state_done+
+    jsr c128_test_validate_tier_partial_state
+    bcc !tl_partial_state_done+
+    jmp c128_test_partial_cache_fail_sym
+!tl_partial_state_done:
+#endif
     jsr tier_load_disk
     bcc !tl_disk_ok+
     jmp !tl_failed+

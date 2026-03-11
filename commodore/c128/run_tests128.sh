@@ -11,9 +11,11 @@ FAIL=0
 TOTAL=0
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
+OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
 DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
+CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 
 KA_DEFINES=(-define C128)
 if [ "$PERF_P1_MODE" = "1" ]; then
@@ -475,7 +477,7 @@ build_partial_failure_boot_assets() {
     local partial_main="out/moria128.skip1.prg"
     local partial_d64="out/moria128_skip1.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_CACHE_TEST_SKIP_TIER=1 -o "$partial_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_CACHE_TEST_SKIP_TIER -o "$partial_main" >"$build_log" 2>&1; then
         echo "FAIL (partial-failure main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -505,6 +507,51 @@ build_partial_failure_boot_assets() {
     fi
 
     PARTIAL_BOOT_ASSETS_BUILT=1
+    return 0
+}
+
+build_overlay_partial_failure_boot_assets() {
+    if [ "$OVERLAY_PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_boot_overlay_partial_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local partial_main="out/moria128.skipovl2.prg"
+    local partial_d64="out/moria128_skipovl2.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_CACHE_TEST_SKIP_OVERLAY -o "$partial_main" >"$build_log" 2>&1; then
+        echo "FAIL (overlay-partial main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$partial_d64" \
+            -attach "$partial_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write "$partial_main" "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (overlay-partial disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
     return 0
 }
 
@@ -644,6 +691,51 @@ build_scripted_input_boot_assets() {
     # do not accidentally reuse the scripted-input overlays.
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
+    return 0
+}
+
+build_cache_survival_boot_assets() {
+    if [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_boot_cache_survival_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local cache_d64="out/moria128_cache_survival.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (cache-survival main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$cache_d64" \
+            -attach "$cache_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (cache-survival disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
     return 0
 }
 
@@ -1210,6 +1302,69 @@ run_scripted_summary_to_town_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_cache_survival_smoke() {
+    local name="cache_survival_smoke"
+    echo -n "  $name: "
+
+    build_cache_survival_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_test_cache_survival_pass c128_test_cache_survival_fail
+    c128_test_cache_survival_pass=$(awk '/\.c128_test_cache_survival_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    c128_test_cache_survival_fail=$(awk '/\.c128_test_cache_survival_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_test_cache_survival_pass:-}" ] || [ -z "${c128_test_cache_survival_fail:-}" ]; then
+        echo "FAIL (missing cache-survival pass/fail symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_cache_survival.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    local fail_lc
+    : > "$log_file"
+    fail_lc=$(echo "$c128_test_cache_survival_fail" | tr '[:upper:]' '[:lower:]')
+
+    {
+        echo "break \$${c128_test_cache_survival_fail}"
+        echo "until \$${c128_test_cache_survival_pass}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qiE "Stop on  exec ${fail_lc}" "$log_file"; then
+        boot_log_report_failure "cache survival validation failed after summary-to-town flow" "$log_file" "c128_test_cache_survival_fail" "$c128_test_cache_survival_fail" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qi "^UNTIL: .*C:\$${c128_test_cache_survival_pass}" "$log_file"; then
+        boot_log_report_failure "did not reach cache-survival pass trap" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during cache-survival flow" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_death_overlay_smoke() {
     local name="death_overlay_smoke"
     echo -n "  $name: "
@@ -1270,10 +1425,11 @@ run_preload_partial_failure_smoke() {
     build_partial_failure_boot_assets || return
 
     local main_vs="out/main.vs"
-    local dungeon_generate tier_load_disk
+    local dungeon_generate tier_load_disk c128_test_partial_cache_fail
     dungeon_generate=$(awk '/\.dungeon_generate$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     tier_load_disk=$(awk '/\.tier_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${dungeon_generate:-}" ] || [ -z "${tier_load_disk:-}" ]; then
+    c128_test_partial_cache_fail=$(awk '/\.c128_test_partial_cache_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${dungeon_generate:-}" ] || [ -z "${tier_load_disk:-}" ] || [ -z "${c128_test_partial_cache_fail:-}" ]; then
         echo "FAIL (missing required symbols in out/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1284,9 +1440,12 @@ run_preload_partial_failure_smoke() {
     abs_d64="$(cd out && pwd)/moria128_skip1.d64"
     local mon_file="/tmp/test128_${name}.mon"
     local log_file="/tmp/test128_${name}.log"
+    local fail_lc
     : > "$log_file"
+    fail_lc=$(echo "$c128_test_partial_cache_fail" | tr '[:upper:]' '[:lower:]')
 
     {
+        echo "break \$${c128_test_partial_cache_fail}"
         echo "until \$${tier_load_disk}"
         echo "g"
     } > "$mon_file"
@@ -1297,6 +1456,13 @@ run_preload_partial_failure_smoke() {
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
+
+    if grep -qiE "Stop on  exec ${fail_lc}" "$log_file"; then
+        boot_log_report_failure "tier partial-failure readiness isolation check failed" "$log_file" "c128_test_partial_cache_fail" "$c128_test_partial_cache_fail" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
 
     if ! grep -qi "^UNTIL: .*C:\$${tier_load_disk}" "$log_file"; then
         boot_log_report_failure "missing-tier preload did not fall back to tier_load_disk" "$log_file" "tier_load_disk" "$tier_load_disk" "$vice_rc"
@@ -1327,6 +1493,91 @@ run_preload_partial_failure_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam after missing-tier fallback" "$log_file" "dungeon_generate" "$dungeon_generate" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_overlay_partial_failure_smoke() {
+    local name="overlay_partial_failure_smoke"
+    echo -n "  $name: "
+
+    build_overlay_partial_failure_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local store_enter overlay_load_disk c128_test_overlay_cache_fail
+    store_enter=$(awk '/\.store_enter$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    overlay_load_disk=$(awk '/\.overlay_load_disk$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    c128_test_overlay_cache_fail=$(awk '/\.c128_test_overlay_cache_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${store_enter:-}" ] || [ -z "${overlay_load_disk:-}" ] || [ -z "${c128_test_overlay_cache_fail:-}" ]; then
+        echo "FAIL (missing required symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_skipovl2.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    local fail_lc
+    : > "$log_file"
+    fail_lc=$(echo "$c128_test_overlay_cache_fail" | tr '[:upper:]' '[:lower:]')
+
+    {
+        echo "break \$${c128_test_overlay_cache_fail}"
+        echo "until \$${overlay_load_disk}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qiE "Stop on  exec ${fail_lc}" "$log_file"; then
+        boot_log_report_failure "overlay partial-failure readiness isolation check failed" "$log_file" "c128_test_overlay_cache_fail" "$c128_test_overlay_cache_fail" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qi "^UNTIL: .*C:\$${overlay_load_disk}" "$log_file"; then
+        boot_log_report_failure "missing overlay preload did not fall back to overlay_load_disk" "$log_file" "overlay_load_disk" "$overlay_load_disk" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    : > "$log_file"
+    {
+        echo "until \$${store_enter}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    vice_rc=$?
+
+    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
+        boot_log_report_failure "missing overlay preload did not continue to store_enter" "$log_file" "store_enter" "$store_enter" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam after missing-overlay fallback" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1413,8 +1664,10 @@ run_town_overlay_smoke
 run_town_overlay_female_smoke
 run_town_overlay_state_smoke
 run_scripted_summary_to_town_smoke
+run_cache_survival_smoke
 run_death_overlay_smoke
 run_preload_partial_failure_smoke
+run_overlay_partial_failure_smoke
 run_boot_diag_copy
 run_test "monster128" "tests/test_monster128.s"
 if [ "$PERF_P1_MODE" = "1" ]; then

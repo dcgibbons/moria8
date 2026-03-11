@@ -171,7 +171,25 @@ game_new_start:
     bne !gns_script_pass+
     jmp c128_test_town_fail_sym
 !gns_script_pass:
+#if C128_TEST_CACHE_SURVIVAL
+    jsr c128_test_verify_cache_survival
+    bcc !gns_cache_pass+
+    jmp c128_test_cache_survival_fail_sym
+!gns_cache_pass:
+    jmp c128_test_cache_survival_pass_sym
+#else
     jmp c128_test_town_pass_sym
+#endif
+#elif C128_TEST_CACHE_SURVIVAL
+    lda c128_test_summary_seen
+    bne !gns_script_pass+
+    jmp c128_test_town_fail_sym
+!gns_script_pass:
+    jsr c128_test_verify_cache_survival
+    bcc !gns_cache_pass+
+    jmp c128_test_cache_survival_fail_sym
+!gns_cache_pass:
+    jmp c128_test_cache_survival_pass_sym
 #endif
 
     jmp main_loop

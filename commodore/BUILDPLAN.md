@@ -11,11 +11,11 @@
 
 ### Build Stats
 
-- **Test suites:** C64: 25 runtime suites, C128: 26 harness suites
-- **Compile-time asserts:** 120 (C128) / 69 (C64)
+- **Test suites:** C64: 25 runtime suites, C128: 28 harness suites
+- **Compile-time asserts:** 136 (C128) / 69 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
-- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, tier-transition, town-overlay, death-overlay, partial-cache-failure, and boot-copy smokes.
+- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, cache-survival, tier-transition, town-overlay, death-overlay, tier-partial-failure, overlay-partial-failure, and boot-copy smokes.
 - **C64 suite stability:** `run_tests.sh` is green again with `test_input.s` and `test_main_loop.s` enabled in the default runner.
 
 ---
@@ -60,6 +60,7 @@
 | **DTH-1** | **BLOCKER** | C128 death flow regression fixed by bracketing high-score KERNAL I/O in `tramp_game_over` with explicit MMU/ROM transitions while keeping death overlay routines in all-RAM mode. | **2026-03-09** |
 | **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map stream handling so map bytes are preserved across MMU restore (instead of being clobbered to `MMU_NORMAL`), with KERNAL byte I/O running in `MMU_NORMAL` context. | **2026-03-09** |
 | **BUG-Y / 10.8** | **BLOCKER** | C128 preload/cache rebaseline complete: Bank 1 ownership refactor, tier+overlay cache contract fixes, carry-return repair, runtime guard restoration, and character-summary/town-flow stabilization with deterministic scripted-input coverage. | **2026-03-11** |
+| **10.8-HDN** | **MED** | Follow-up hardening complete: `memory128.s` is now the ownership source of truth, placement rules are assert-backed, the C128 architecture doc has a preflight checklist, and smoke coverage now verifies cache survival plus tier/overlay fallback isolation. | **2026-03-11** |
 ## What's Next
 
 **Phase 10 — C128 Enhancements:**
@@ -74,7 +75,7 @@
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
 | 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Done** |
-| 10.8 | Bank 1 Preload Cache + Ownership Refactor | C128: ownership refactor, tier cache, fixed-slot overlay cache, runtime guard restoration, carry-contract fixes, and Gate B validation are complete. Verified coverage now includes idle-title soak, title/new-game, scripted summary-to-town, tier transition, town overlay (male + female paths), death overlay, partial tier-cache failure fallback, and boot-copy diagnostics. Follow-up hardening remains a separate task: explicit reserved/forbidden memory-region constants, assert-backed placement rules, one source-of-truth ownership map, preflight placement checklist for low-RAM/Bank-1 changes, and smoke coverage that snapshots must-survive regions across title/new-game flows. | **Done** |
+| 10.8 | Bank 1 Preload Cache + Ownership Refactor | C128: ownership refactor, tier cache, fixed-slot overlay cache, runtime guard restoration, carry-contract fixes, Gate B validation, and the follow-up hardening pass are complete. `memory128.s` now owns the Bank 1 manifest and overlap rules, `ARCHITECTURE.md` carries the preflight checklist, and coverage includes cache-survival plus tier/overlay fallback-isolation smokes. | **Done** |
 
 ---
 
@@ -96,11 +97,11 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 ---
 
-### Priority Triage (updated 2026-03-05)
+### Priority Triage (updated 2026-03-11)
 
 **High priority (C128 Port Stability):**
 1. No open C128 blocker after DTH-1/SAV-2 closure.
-2. Add a 10.8 follow-up hardening pass that converts C128 memory-ownership rules from prose into enforced code/test policy: reserved-region constants, compile-time placement asserts, ownership-map source of truth, low-RAM/Bank-1 placement checklist, and runtime smoke guards for must-survive regions.
+2. No open C128 memory-ownership hardening blocker after 10.8-HDN closure; maintain the `memory128.s` ownership manifest and smoke coverage when changing Bank 1 layout.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

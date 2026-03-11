@@ -1,6 +1,7 @@
-// Relocated Map Model:
-//   - MAP_BASE = $0B00-$19FF (Empty Bank 0 RAM)
-//   - Main Code = $1C01-$BFFF
+// C128 operational layout:
+//   - Bank 0 main code = $1C01-$BFFF
+//   - Bank 1 map = $4000-$4EFF
+//   - Bank 1 ownership manifest lives in memory128.s
 //   - BASIC Stub = $1C01 (SYS 7182)
 //
 // MMU set to $0E at startup (System ROM in, BASIC out via MMU), then $01
@@ -27,6 +28,14 @@
 .segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef Bank1Data         [outPrg="out/bank1.dat", start=$e000, min=$e000, max=$feff]
+
+#if C128_TEST_SCRIPTED_INPUT
+.const C128_TEST_SCRIPTED_TOWN_FLOW = 1
+#elif C128_TEST_CACHE_SURVIVAL
+.const C128_TEST_SCRIPTED_TOWN_FLOW = 1
+#else
+.const C128_TEST_SCRIPTED_TOWN_FLOW = 0
+#endif
 
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
@@ -138,6 +147,25 @@ tramp_store_enter:
 c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
+    brk
+#elif C128_TEST_CACHE_SURVIVAL
+c128_test_town_fail_sym:
+    brk
+c128_test_town_pass_sym:
+    brk
+#endif
+#if C128_CACHE_TEST_SKIP_TIER
+c128_test_partial_cache_fail_sym:
+    brk
+#endif
+#if C128_CACHE_TEST_SKIP_OVERLAY
+c128_test_overlay_cache_fail_sym:
+    brk
+#endif
+#if C128_TEST_CACHE_SURVIVAL
+c128_test_cache_survival_fail_sym:
+    brk
+c128_test_cache_survival_pass_sym:
     brk
 #endif
 
@@ -1151,6 +1179,7 @@ kernal_irq_vec_hi: .byte 0
 
 // C128 cache/overlay state lives in a dedicated main-RAM block.
 // Do not place this adjacent to preload UI strings or transient workspace.
+c128_cache_state_start:
 c128_cache_enabled:        .byte 1
 c128_cache_tiers_ready:    .byte 0
 c128_cache_overlays_ready: .byte 0
@@ -1160,18 +1189,20 @@ c128_cache_overlay_bits:   .byte 0
 c128_preload_fn_len:       .byte 0
 c128_preload_status:       .byte 0
 #if C128_CACHE_TEST_SKIP_TIER
-c128_cache_test_skip_tier: .byte C128_CACHE_TEST_SKIP_TIER
+c128_cache_test_skip_tier: .byte 1
 #else
 c128_cache_test_skip_tier: .byte 0
+#endif
+#if C128_CACHE_TEST_SKIP_OVERLAY
+c128_cache_test_skip_overlay: .byte 2
+#else
+c128_cache_test_skip_overlay: .byte 0
 #endif
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000
-ovl_cache_slot_lo:
-    .byte 0, <OVERLAY_CACHE_START_BASE, <OVERLAY_CACHE_TOWN_BASE, <OVERLAY_CACHE_DEATH_BASE, <OVERLAY_CACHE_GEN_BASE
-ovl_cache_slot_hi:
-    .byte 0, >OVERLAY_CACHE_START_BASE, >OVERLAY_CACHE_TOWN_BASE, >OVERLAY_CACHE_DEATH_BASE, >OVERLAY_CACHE_GEN_BASE
+c128_cache_state_end:
 
 // ============================================================
 // Imports — Game Engine (Safe to spill past $C000)
@@ -1233,8 +1264,188 @@ title_key_trap_base:
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_summary_seen:
     .byte 0
-c128_test_pass_loop:
-    jmp c128_test_pass_loop
+#elif C128_TEST_CACHE_SURVIVAL
+c128_test_summary_seen:
+    .byte 0
+#endif
+#if C128_TEST_CACHE_SURVIVAL
+c128_test_cache_probe_common:      .byte 0
+c128_test_cache_probe_tier:        .byte 0
+c128_test_cache_probe_ovl_start:   .byte 0
+c128_test_cache_probe_ovl_town:    .byte 0
+c128_test_cache_probe_ovl_death:   .byte 0
+c128_test_cache_probe_ovl_gen:     .byte 0
+
+c128_test_read_bank1_probe_ptr1:
+    ldy #0
+    jsr mmu_safe_db_read_ptr1
+    rts
+
+c128_test_snapshot_cache_probes:
+    lda MMU_COMMON_HELPERS_BASE
+    sta c128_test_cache_probe_common
+
+    lda #<BANK1_TIER_CACHE_BASE
+    sta zp_ptr1
+    lda #>BANK1_TIER_CACHE_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_tier
+
+    lda #<BANK1_OVERLAY_STARTUP_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_STARTUP_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_ovl_start
+
+    lda #<BANK1_OVERLAY_TOWN_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_TOWN_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_ovl_town
+
+    lda #<BANK1_OVERLAY_DEATH_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DEATH_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_ovl_death
+
+    lda #<BANK1_OVERLAY_DUNGEON_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DUNGEON_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_ovl_gen
+    clc
+    rts
+#endif
+
+#if C128
+c128_test_expected_tier_bits:
+    lda #%00001111
+#if C128_CACHE_TEST_SKIP_TIER
+    ldx c128_cache_test_skip_tier
+    beq !ctet_done+
+    eor c128_tier_ready_mask_minus1,x
+!ctet_done:
+#endif
+    rts
+
+c128_test_expected_overlay_bits:
+    lda #%00001111
+#if C128_CACHE_TEST_SKIP_OVERLAY
+    ldx c128_cache_test_skip_overlay
+    beq !cteo_done+
+    eor ovl_ready_mask,x
+!cteo_done:
+#endif
+    rts
+
+c128_test_validate_tier_partial_state:
+    lda c128_cache_tiers_ready
+    cmp #1
+    bne !ctv_fail+
+    jsr c128_test_expected_tier_bits
+    cmp c128_cache_tier_bits
+    bne !ctv_fail+
+    lda c128_cache_overlays_ready
+    cmp #1
+    bne !ctv_fail+
+    jsr c128_test_expected_overlay_bits
+    cmp c128_cache_overlay_bits
+    bne !ctv_fail+
+    clc
+    rts
+!ctv_fail:
+    sec
+    rts
+
+c128_test_validate_overlay_partial_state:
+    lda c128_cache_tiers_ready
+    cmp #1
+    bne !ctvo_fail+
+    jsr c128_test_expected_tier_bits
+    cmp c128_cache_tier_bits
+    bne !ctvo_fail+
+    lda c128_cache_overlays_ready
+    cmp #1
+    bne !ctvo_fail+
+    jsr c128_test_expected_overlay_bits
+    cmp c128_cache_overlay_bits
+    bne !ctvo_fail+
+    clc
+    rts
+!ctvo_fail:
+    sec
+    rts
+#endif
+
+#if C128_TEST_CACHE_SURVIVAL
+c128_test_verify_cache_survival:
+    lda c128_cache_tiers_ready
+    cmp #1
+    bne !ctcs_fail+
+    lda c128_cache_tier_bits
+    cmp #%00001111
+    bne !ctcs_fail+
+    lda c128_cache_overlays_ready
+    cmp #1
+    bne !ctcs_fail+
+    lda c128_cache_overlay_bits
+    cmp #%00001111
+    bne !ctcs_fail+
+
+    lda MMU_COMMON_HELPERS_BASE
+    cmp c128_test_cache_probe_common
+    bne !ctcs_fail+
+
+    lda #<BANK1_TIER_CACHE_BASE
+    sta zp_ptr1
+    lda #>BANK1_TIER_CACHE_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_tier
+    bne !ctcs_fail+
+
+    lda #<BANK1_OVERLAY_STARTUP_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_STARTUP_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_ovl_start
+    bne !ctcs_fail+
+
+    lda #<BANK1_OVERLAY_TOWN_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_TOWN_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_ovl_town
+    bne !ctcs_fail+
+
+    lda #<BANK1_OVERLAY_DEATH_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DEATH_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_ovl_death
+    bne !ctcs_fail+
+
+    lda #<BANK1_OVERLAY_DUNGEON_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DUNGEON_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_ovl_gen
+    bne !ctcs_fail+
+    clc
+    rts
+!ctcs_fail:
+    sec
+    rts
 #endif
 
 // Bank1Data segment — content moved to banked_payload ($EB00, Bank 0).
@@ -1284,7 +1495,12 @@ program_end:
 #if C128
 .assert "boot128 staged image reaches map region", program_end - 1 >= MAP_BASE, true
 .assert "boot128 staged image reaches Bank1 DB region", program_end - 1 >= BANK1_DB_BASE, true
-.assert "Reclaimed high Bank1 region remains large enough for tier preload", BANK1_FREE_HIGH_END - BANK1_FREE_HIGH_BASE + 1 >= TIER_PRELOAD_REQUIRED, true
+.assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
+.assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
+.assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
+.assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
+.assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 #endif
 .assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
 .assert "UI enter trampoline stays below I/O hole", tramp_ui_enter < $D000, true

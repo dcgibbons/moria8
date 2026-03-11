@@ -49,7 +49,7 @@ overlay_load:
     sta ol_target
 #endif
 
-    // When the active tier has no Bank 1 cache backing, overlays must invalidate
+    // When the active tier has no named Bank 1 tier-cache backing, overlays must invalidate
     // the tier view because the runtime name pointers still reference $E000 data.
 #if !C128
     jsr tier_invalidate_state
@@ -87,6 +87,15 @@ overlay_load:
     bne !ol_reu+
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
+#if C128_CACHE_TEST_SKIP_OVERLAY
+    lda ol_target
+    cmp c128_cache_test_skip_overlay
+    bne !ol_partial_state_done+
+    jsr c128_test_validate_overlay_partial_state
+    bcc !ol_partial_state_done+
+    jmp c128_test_overlay_cache_fail_sym
+!ol_partial_state_done:
+#endif
     ldx ol_target
     dex                     // 0-based index (OVL_STARTUP=1 → index 0)
     jsr overlay_load_disk
@@ -259,6 +268,14 @@ c128_preload_all_overlays:
 !cpao_loop:
     stx ol_target
 
+#if C128_CACHE_TEST_SKIP_OVERLAY
+    txa
+    cmp c128_cache_test_skip_overlay
+    bne !cpao_show_file+
+    jmp cpao_next
+!cpao_show_file:
+#endif
+
     dex
     lda reu_fn_ovl_lo,x
     sta zp_ptr0
@@ -289,6 +306,7 @@ c128_preload_all_overlays:
     ora c128_cache_overlay_bits
     sta c128_cache_overlay_bits
 
+cpao_next:
     ldx ol_target
     inx
     cpx #5
@@ -317,9 +335,9 @@ c128_preload_all_overlays:
     rts
 
 c128_select_overlay_cache_slot:
-    lda ovl_cache_slot_lo,x
+    lda bank1_overlay_cache_slot_lo,x
     sta ovl_cache_base_lo
-    lda ovl_cache_slot_hi,x
+    lda bank1_overlay_cache_slot_hi,x
     sta ovl_cache_base_hi
     rts
 

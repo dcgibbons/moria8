@@ -1,7 +1,7 @@
 # Moria8 C128 Port — Architecture (C4 Baseline + 10.8 Gate B)
 
-> Updated for 10.8 ownership refactor plus Gate B overlay-cache validation.
-> This document tracks the shipping C128 memory/banking model, including the reclaimed Bank 1 cache window used for tier preload and fixed-slot overlay caching.
+> Updated for 10.8 ownership refactor, Gate B overlay-cache validation, and the 10.8 follow-up hardening pass.
+> This document tracks the shipping C128 memory/banking model, including the named Bank 1 ownership manifest enforced in `memory128.s`.
 
 ---
 
@@ -42,7 +42,9 @@ Key C4 outcome:
 | `$B000-$BFFF` | overlay cache slot for `OVL_TOWN` |
 | `$C000-$CFFF` | overlay cache slot for `OVL_DEATH` |
 | `$E000-$EFFF` | overlay cache slot for `OVL_DUNGEON_GEN` |
-| `$94F8-$9FFF`, `$D000-$DFFF`, `$F000-$FEFF` | currently unassigned / reserved high Bank 1 space |
+| `$94F8-$9FFF` | reserved gap between tier cache and overlay cache |
+| `$D000-$DFFF` | reserved I/O-visible gap; standard Bank 1 helpers do not treat this as cache-safe |
+| `$F000-$FEFF` | reserved top gap; available only after an explicit ownership change and new asserts |
 
 10.8.0 ownership conclusions:
 - `boot128` previously left the staged Bank 1 program image resident, which made Bank 1 ownership ambiguous and invalidated preload-cache assumptions.
@@ -53,6 +55,7 @@ Key C4 outcome:
 - Overlay cache is also active for fixed slots at `$A000-$AFFF`, `$B000-$BFFF`, `$C000-$CFFF`, and `$E000-$EFFF`.
 - MMU gateway hardening for map/DB access is in place for the tier-cache path.
 - `$D000-$DFFF` is intentionally left unused by the standard overlay-cache helpers because Bank 1 helper mode keeps I/O visible there.
+- The ownership manifest, overlap asserts, and overlay-slot base tables now live in `c128/memory128.s` as the source of truth for future Bank 1 edits.
 
 Map invariants:
 - `MAP_COLS=80`
@@ -99,6 +102,16 @@ Diagnostics:
 - `BOOT_DIAG` mode writes signature bytes for transfer-stage debugging.
 - C128 test harness includes boot smoke and boot-copy diagnostic suites.
 
+### 3.1 Preflight Checklist for Low-RAM / Bank 1 Changes
+
+Before adding or moving C128 data/code in low RAM or Bank 1:
+1. Name the exact ownership region being changed in `memory128.s`.
+2. State whether the bytes live in common RAM, Bank 0 only, or Bank 1 only.
+3. Decide whether `$D000-$DFFF` visibility matters and keep helpers out of that window unless the change explicitly needs it.
+4. Decide whether the bytes must survive boot, title, new-game, summary, and town transitions.
+5. Add or update the relevant compile-time assert for the region boundary/overlap.
+6. Update at least one smoke that exercises the survival or fallback contract affected by the change.
+
 ---
 
 ## 4. Test Harness (C4-Coverage)
@@ -117,9 +130,13 @@ Current suites:
 8. `boot_tier_transition_smoke`
 9. `town_overlay_smoke`
 10. `town_overlay_female_smoke`
-11. `death_overlay_smoke`
-12. `preload_partial_failure_smoke`
-13. `boot_diag_copy`
+11. `town_overlay_state_smoke`
+12. `scripted_summary_to_town_smoke`
+13. `cache_survival_smoke`
+14. `death_overlay_smoke`
+15. `preload_partial_failure_smoke`
+16. `overlay_partial_failure_smoke`
+17. `boot_diag_copy`
 
 ---
 
@@ -130,7 +147,7 @@ For the current build:
 - tier-only preload cache now uses the documented high Bank 1 window
 - overlay cache now uses fixed Bank 1 slots and falls back to disk if that cache class is unavailable
 - runtime now reasserts IRQ/vector/CHRIN/helper guard state across overlay and dungeon-generation boundaries
-- boot coverage now includes idle-title soak, explicit town overlay coverage for both male and female new-game flows, death overlay coverage, and a missing-tier preload smoke that proves runtime disk fallback still works
+- boot coverage now includes idle-title soak, scripted summary-to-town, cache survival across title/new-game/town, explicit town overlay coverage for both male and female new-game flows, death overlay coverage, missing-tier preload fallback, missing-overlay preload fallback, and boot-copy diagnostics
 - any future overlay cache design must continue to use documented reclaimed ranges and explicit MMU gateways
 
 Active overlay slot map:

@@ -6,6 +6,48 @@
 
 ---
 
+## 10.8-HDN — C128 Ownership Hardening Follow-Up ✅ COMPLETE (2026-03-11)
+
+### Scope Closed
+- Closed the remaining 10.8 hardening follow-up by converting the shipping C128 Bank 1 layout from documentation-only guidance into enforced code/test policy.
+- Kept the existing 10.8 runtime design intact; this pass hardened ownership, placement, and regression coverage rather than redesigning the cache model.
+
+### Implemented
+1. **Ownership manifest centralized**
+   - `commodore/c128/memory128.s` now defines the Bank 1 ownership manifest as the source of truth:
+     - common RAM
+     - reclaimed low region
+     - map region
+     - DB mirror region
+     - tier-cache window
+     - each fixed overlay cache slot
+     - reserved gaps (`$94F8-$9FFF`, `$D000-$DFFF`, `$F000-$FEFF`)
+   - Shared overlay-slot tables now come from `memory128.s` instead of being re-derived in runtime modules.
+2. **Placement policy enforced**
+   - Added consistent compile-time region-order assertions in `memory128.s`.
+   - Added C128 placement assertions in `main.s` for the MMU helper page, cache-state block, and staged-source assumptions so future low-RAM/Bank 1 edits must fit named ownership regions.
+3. **Cache contract hardening**
+   - Tier and overlay cache paths now consume the named ownership constants rather than ad hoc “high Bank 1” assumptions.
+   - Added targeted C128 test hooks so a missing tier cache line proves tier fallback does not corrupt overlay readiness, and a missing overlay cache line proves overlay fallback does not corrupt tier readiness.
+4. **Smoke coverage upgraded**
+   - Added `cache_survival_smoke` to verify cache/common-RAM probe bytes survive preload, title, character summary, and town entry.
+   - Added `overlay_partial_failure_smoke` alongside the existing tier partial-failure smoke to validate readiness-domain isolation in both directions.
+5. **Documentation closed out**
+   - Updated `commodore/c128/ARCHITECTURE.md` with the hardened ownership model and a preflight checklist for future low-RAM / Bank 1 changes.
+   - Updated `commodore/BUILDPLAN.md` to mark the follow-up hardening item resolved and record the expanded C128 test/assert counts.
+
+### Result
+- The 10.8 follow-up hardening work is now complete:
+  - Bank 1 ownership is named and asserted
+  - cache-slot tables derive from one source of truth
+  - future placement changes have a documented checklist
+  - runtime smokes now cover cache survival and both tier/overlay fallback-isolation cases
+
+### Validation
+- `bash commodore/c128/run_tests128.sh`: pass (**28 passed, 0 failed**)
+
+---
+
 ## TST-1 / C64 Test Harness Repair ✅ COMPLETE (2026-03-11)
 
 ### Scope Closed

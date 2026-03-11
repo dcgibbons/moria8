@@ -49,6 +49,9 @@ ui_char_display:
 #if C128_TEST_SCRIPTED_INPUT
     lda #1
     sta c128_test_summary_seen
+#elif C128_TEST_CACHE_SURVIVAL
+    lda #1
+    sta c128_test_summary_seen
 #endif
 #endif
     lda #COL_WHITE
