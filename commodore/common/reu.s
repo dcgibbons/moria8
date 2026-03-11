@@ -39,6 +39,7 @@
 reu_present:  .byte 0       // 0=no REU, 1=detected
 reu_banks:    .byte 0       // Number of 64KB banks (0/2/4/8)
 reu_size_kb:  .word 0       // Total KB (0/128/256/512)
+reu_overlays_stashed: .byte 0
 
 // Scratch byte for size probing (needs stable RAM address)
 reu_probe_byte: .byte 0

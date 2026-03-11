@@ -11,11 +11,12 @@
 
 ### Build Stats
 
-- **Test suites:** C64: 24 runtime suites, C128: 26 harness suites
-- **Compile-time asserts:** 120 (C128) / 70 (C64)
+- **Test suites:** C64: 25 runtime suites, C128: 26 harness suites
+- **Compile-time asserts:** 120 (C128) / 69 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
 - **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8 coverage now includes idle-title soak, title/new-game, scripted summary-to-town, tier-transition, town-overlay, death-overlay, partial-cache-failure, and boot-copy smokes.
+- **C64 suite stability:** `run_tests.sh` is green again with `test_input.s` and `test_main_loop.s` enabled in the default runner.
 
 ---
 
@@ -32,7 +33,7 @@
 | **OPT-3** | **MED** | Performance: Visibility Updates. Cache room ID and only re-evaluate `update_visibility` room checks upon entering a new room to save per-turn overhead. | Pending |
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **REF-2** | **MED** | Refactor: Game Loop Coupling. Decouple `game_loop.s` to separate UI rendering, time management, and logic into an MVC-style pattern for better testability. | Pending |
-| **TST-1** | **HIGH** | Testing: Missing critical test suites for input parsing (`test_input.s`), command dispatch, and Line of Sight (`test_los.s`). | Pending |
+| **TST-1** | **MED** | Testing: Input parsing now has dedicated C64/C128 suites, LOS behavior is covered in existing dungeon/monster tests, and `main_loop` now has a focused dispatch harness (`test_main_loop.s`). | **Done (2026-03-11)** |
 | **TST-2** | **HIGH** | Testing: Game Flow. Add coverage for main orchestration loops (`boot.s`, `config.s`, `main.s`, `game_loop.s`, `turn.s`). See `TEST_PLAN_TOP5.md` for `main_loop`. | Pending |
 | **TST-3** | **MED** | Testing: UI Menus & Views. Add isolation tests for character viewer, help, home, inventory, recall, and store visual layouts. See `TEST_PLAN_TOP5.md` for specific UI routines. | Pending |
 | **TST-4** | **MED** | Testing: Subsystems. Add unit tests for decompression (`huffman.s`), strings (`string_bank.s`), overlay execution, and audio (`sound.s`). | Pending |

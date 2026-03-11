@@ -78,3 +78,14 @@ tsi_print:
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp screen_put_string
+
+tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
+tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
+tsi_c64_str:    .text "C64" ; .byte 0
+tsi_c128_str:   .text "C128" ; .byte 0
+tsi_sx64_str:   .text "SX-64" ; .byte 0
+tsi_kernal_str: .text "  KERNAL R" ; .byte 0
+tsi_reu_str:    .text "  REU " ; .byte 0
+tsi_kb_str:     .text "KB" ; .byte 0
+tsi_krev_table: .byte $aa, $00, $03, $43, $01
+tsi_krev_chars: .byte $31, $32, $33, $31, $31

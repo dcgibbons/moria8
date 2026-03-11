@@ -31,9 +31,9 @@ run_test() {
         return
     fi
 
+    local end_addr
     # Extract end address from "Test Code" segment in assembler output
     # Format: "$0810-$0B10 Test Code" — the end address is where BRK sits
-    local end_addr
     end_addr=$(echo "$asm_output" | grep "Test Code" | sed 's/.*\$\([0-9A-Fa-f]*\) Test Code/\1/')
 
     if [ -z "$end_addr" ]; then
@@ -43,16 +43,24 @@ run_test() {
         return
     fi
 
-    # Create monitor script: set breakpoint at end of test code
+    # Create monitor script: set breakpoint, continue, dump results, exit.
     local mon_file="/tmp/test_${name}.mon"
-    echo "break exec \$${end_addr}" > "$mon_file"
+    {
+        echo "break exec \$${end_addr}"
+        echo "g"
+        echo "m ${result_range}"
+        echo "quit"
+    } > "$mon_file"
 
-    # Run in VICE: moncommands sets breakpoint, piped commands dump results after break
+    # Run in VICE with an all-in-one monitor script; piping monitor commands
+    # can race VICE startup and leave suites hanging.
     local result
-    result=$(echo -e "m ${result_range}\nquit\n" | \
+    result=$(
         "$VICE" -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
-        -limitcycles "$cycles" 2>&1 | grep "^>C:0")
+        -limitcycles "$cycles" +sound -sounddev dummy \
+        +remotemonitor +binarymonitor 2>&1 | grep "^>C:0"
+    )
 
     # Count $01 bytes (passes) in result
     local pass_count
@@ -92,6 +100,8 @@ TOTAL=$((TOTAL + 1))
 run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0408" 9
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
+run_test "input"  "tests/test_input.s"  "0400 0409" 10
+run_test "main_loop" "tests/test_main_loop.s" "0400 0404" 5 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0422" 35 500000000
 run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000

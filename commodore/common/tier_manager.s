@@ -547,6 +547,7 @@ tier_fn_addr_hi:
 tier_loading_str:
     .text "Loading..." ; .byte 0
 
+#if C128
 // ============================================================
 // c128_stage_tier_to_bank1 — Legacy entry name, now writes to the high Bank 1 cache slot
 // ============================================================
@@ -738,3 +739,4 @@ c128_tier_ready_mask_minus1:
 
 c128_cache_loading_hdr:
     .text "Preloading tiers:" ; .byte 0
+#endif

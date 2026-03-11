@@ -6,6 +6,35 @@
 
 ---
 
+## TST-1 / C64 Test Harness Repair ✅ COMPLETE (2026-03-11)
+
+### Scope Closed
+- Closed the stale `TST-1` tracking item by finishing the missing C64-side coverage and restoring the default C64 test runner to a clean state.
+
+### Implemented
+1. **Input coverage completed**
+   - Added `c64/tests/test_input.s` to cover C64 command parsing and run-key handling alongside the existing C128 input suite.
+2. **Focused `main_loop` coverage completed**
+   - Added `c64/tests/test_main_loop.s` as a deterministic dispatch harness for representative `game_loop.s` command paths (`REST`, `LOOK`, movement, and `OPEN`).
+3. **C64 runner compatibility repaired**
+   - Reworked the `test_main_loop.s` harness to use the standard low-memory `test_finish`/`brk` contract.
+   - Replaced the failing runtime patch helper with direct jump patching so the harness reliably intercepts `input_get_command` and other dispatch targets.
+   - Updated `c64/run_tests.sh` to use an all-in-one monitor script (`break`, `g`, `m`, `quit`) instead of racing monitor commands over stdin during VICE startup.
+4. **Shared build regressions cleaned up**
+   - Restored common definitions and C128-only fences needed to keep the C64 build/test path healthy after the 10.8 work.
+
+### Result
+- `TST-1` is now complete:
+  - dedicated C64/C128 input suites exist
+  - LOS coverage is already present in dungeon/monster tests
+  - `main_loop` has focused dispatch coverage
+- The default C64 runtime suite is green again with the new tests enabled.
+
+### Validation
+- `bash commodore/c64/run_tests.sh`: pass (**26 passed, 0 failed**)
+
+---
+
 ## 10.8 — C128 Bank 1 Preload Cache + Ownership Refactor ✅ COMPLETE (2026-03-11)
 
 ### Scope Closed
