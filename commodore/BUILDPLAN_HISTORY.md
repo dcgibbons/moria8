@@ -6,6 +6,38 @@
 
 ---
 
+## TST-2A — C128 Title Load/Resume Smoke ✅ COMPLETE (2026-03-11)
+
+### Scope Closed
+- Closed the last remaining TST-2 follow-up gap by automating the title `L` -> `load_resume_game` orchestration path on C128.
+- Replaced the unstable VICE disk-writeback seeding attempts with a deterministic generated save blob that the runner injects directly into the smoke D64.
+
+### Implemented
+1. **Deterministic save seed generation**
+   - Added `commodore/c128/tests/make_load_resume_save.py` to emit a valid `THE.GAME` payload with the current save format version and checksum.
+   - Kept the payload intentionally minimal: enough for `load_game` validation and title resume coverage, without depending on flaky emulator-side save persistence.
+2. **Runner integration**
+   - Updated `commodore/c128/run_tests128.sh` to:
+     - generate the save blob
+     - build `moria128_loadresume.d64`
+     - inject `THE.GAME` with `c1541`
+     - verify the file exists before boot
+     - boot the disk and drive the real title `L` path to `load_resume_game`
+3. **Title-load path cleanup**
+   - Promoted the C128 title load branch to the named `title_load_game` entrypoint in `commodore/c128/main.s`, making the load flow explicit and easier to target in future diagnostics.
+
+### Result
+- The full orchestration expansion is now closed:
+  - TST-2 is complete
+  - TST-2A is complete
+  - The default C128 runner now covers the title load/resume path without manual prep, emulator writeback assumptions, or fake pass conditions
+
+### Validation
+- `bash commodore/c128/run_tests128.sh`: pass (**32 passed, 0 failed**)
+- `bash commodore/c64/run_tests.sh`: pass (**28 passed, 0 failed**)
+
+---
+
 ## TST-2 — Orchestration Coverage Expansion ✅ COMPLETE (2026-03-11)
 
 ### Scope Closed

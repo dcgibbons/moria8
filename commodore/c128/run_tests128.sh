@@ -16,6 +16,7 @@ DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
 CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
+LOAD_RESUME_BOOT_ASSETS_BUILT=0
 
 KA_DEFINES=(-define C128)
 if [ "$PERF_P1_MODE" = "1" ]; then
@@ -739,6 +740,69 @@ build_cache_survival_boot_assets() {
     return 0
 }
 
+build_load_resume_boot_assets() {
+    if [ "$LOAD_RESUME_BOOT_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_boot_load_resume_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local loadresume_d64="out/moria128_loadresume.d64"
+    local save_blob="out/THE.GAME"
+
+    if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL (load-resume save generation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$loadresume_d64" \
+            -attach "$loadresume_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" \
+            -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
+        echo "FAIL (load-resume disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    local dir_list
+    if ! dir_list=$("$c1541_bin" -attach "$loadresume_d64" -list 2>&1); then
+        echo "FAIL (load-resume disk listing failed)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! echo "$dir_list" | grep -q '"THE.GAME"'; then
+        echo "FAIL (save-seed disk missing THE.GAME)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    LOAD_RESUME_BOOT_ASSETS_BUILT=1
+    return 0
+}
+
 run_test() {
     local name="$1"
     local src="$2"
@@ -940,6 +1004,59 @@ run_boot_title_newgame_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam after reaching game_new_start" "$log_file" "game_new_start" "$game_new_start" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_boot_title_load_resume_smoke() {
+    local name="boot_title_load_resume_smoke"
+    echo -n "  $name: "
+
+    build_load_resume_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local load_resume_game
+    load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${load_resume_game:-}" ]; then
+        echo "FAIL (missing load_resume_game in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_loadresume.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "until \$${load_resume_game}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf "L" -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 220000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
+        boot_log_report_failure "did not reach load_resume_game from title load flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during title load/resume flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1714,6 +1831,7 @@ run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke
 run_boot_title_idle_smoke
 run_boot_title_newgame_smoke
+run_boot_title_load_resume_smoke
 run_boot_tier_transition_smoke
 run_town_overlay_smoke
 run_town_overlay_female_smoke

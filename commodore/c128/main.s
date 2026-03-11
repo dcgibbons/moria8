@@ -335,7 +335,36 @@ entry_real:
     sta $ffc1
     lda #>w_open
     sta $ffc2
-    // Leave C128 low-RAM vectors untouched.
+    // FFC3 CLOSE
+    lda #<w_close
+    sta $ffc4
+    lda #>w_close
+    sta $ffc5
+    // FFC6 CHKIN
+    lda #<w_chkin
+    sta $ffc7
+    lda #>w_chkin
+    sta $ffc8
+    // FFC9 CHKOUT
+    lda #<w_chkout
+    sta $ffca
+    lda #>w_chkout
+    sta $ffcb
+    // FFCC CLRCHN
+    lda #<w_clrchn
+    sta $ffcd
+    lda #>w_clrchn
+    sta $ffce
+    // FFCF CHRIN
+    lda #<w_chrin
+    sta $ffd0
+    lda #>w_chrin
+    sta $ffd1
+    // FFD2 CHROUT
+    lda #<w_chrout
+    sta $ffd3
+    lda #>w_chrout
+    sta $ffd4
     // FFD5 LOAD
     lda $ffd6
     sta t_load
@@ -957,7 +986,7 @@ restart_entry:
 !not_n:
     cmp #$4c                // 'L' — load game
     bne !not_l+
-    jmp !title_load+
+    jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
@@ -1030,7 +1059,7 @@ disk_menu_show:
     sta zp_text_color
     jmp !title_menu_loop-
 
-!title_load:
+title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr sound_play
