@@ -294,19 +294,7 @@ c128_preload_asset_load:
     sty c128_preload_fn_hi
     php
     sei
-
-    // Full ROM map is required here so serial LOAD runs with the real KERNAL
-    // IRQ/vector environment rather than the game's all-RAM safe IRQ stub.
-    lda #$00
-    sta $ff00
-    lda #$00
-    sta c128_kernal_return_mmu
-    lda #BANK_ALL_ROM
-    sta $01
-    lda kernal_irq_vec_lo
-    sta $0314
-    lda kernal_irq_vec_hi
-    sta $0315
+    jsr c128_runtime_enter_kernal_io
 
     lda #2
     jsr $ffc3                   // Pre-close stale preload channel
@@ -336,12 +324,8 @@ c128_preload_asset_load:
     jsr $ffc3                   // CLOSE
     jsr $ffcc                   // CLRCHN
 
-    lda #MMU_ALL_RAM
-    sta $ff00
-    lda #MMU_ALL_RAM
-    sta c128_kernal_return_mmu
-    lda #BANK_ALL_ROM
-    sta $01
+    jsr c128_runtime_enter_game_ram
+    jsr c128_runtime_require_helpers
     jsr c128_vdc_reassert_mode
     plp
 

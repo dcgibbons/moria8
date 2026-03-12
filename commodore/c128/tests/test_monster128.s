@@ -3,6 +3,8 @@
 // Tests: monster_remove regression (Bug R4) where FLAG_OCCUPIED clear
 // clobbered map bytes by directly reading from Bank 0.
 
+c128_runtime_state_current: .byte 0
+
 #import "../../common/zeropage.s"
 #import "../config128.s"
 #import "../memory128.s"

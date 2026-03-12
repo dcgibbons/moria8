@@ -198,6 +198,10 @@ game_new_start:
 // load_resume_game — Entry point after successful load
 // ============================================================
 load_resume_game:
+#if C128_DIAG_LOAD_RESUME
+c128_diag_load_resume_hit:
+    .byte $02
+#endif
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level.
     jsr tier_invalidate_state
@@ -488,13 +492,25 @@ main_loop:
     pla                         // Restore command ID for player_try_move
 
     // Try to move
+#if C128_DIAG_TOWN_MOVE_STAGE_1
+c128_diag_town_move_hit:
+    .byte $02
+#endif
     jsr player_try_move
     bcc !move_blocked+
 
     // Move or attack succeeded — run AI before render so screen
     // reflects post-AI monster positions (BUG-17 fix)
     jsr trap_check_at_player
+#if C128_DIAG_TOWN_MOVE_STAGE_7
+c128_diag_town_move_hit:
+    .byte $02
+#endif
     jsr turn_post_action
+#if C128_DIAG_TOWN_MOVE_STAGE_8
+c128_diag_town_move_hit:
+    .byte $02
+#endif
     lda zp_game_flags
     and #$01
     beq !not_dead+
@@ -582,6 +598,10 @@ main_loop:
     jsr viewport_update
     jsr render_viewport
 !not_store_entry:
+#if C128_DIAG_TOWN_MOVE_STAGE_9
+c128_diag_town_move_hit:
+    .byte $02
+#endif
     jsr status_draw
     jmp main_loop
 

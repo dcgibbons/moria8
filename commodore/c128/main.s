@@ -271,6 +271,7 @@ tramp_reu_show_status:
 // ============================================================
 #import "../common/zeropage.s"
 #import "memory128.s"
+#import "runtime128.s"
 #import "../common/color.s"
 #import "../common/sound.s"
 #import "config128.s"
@@ -375,19 +376,8 @@ entry_real:
     lda #>w_load
     sta $ffd7
 
-    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM.
-    // When $FF00=$3E (game mode), CPU reads $FFFE from RAM.
-    // The mirrored ROM vector points to KERNAL code at $E000+ which is
-    // hidden by $FF00=$3E. Our safe handler just acknowledges CIA and RTIs.
-    lda #<safe_irq
-    sta $fffe
-    lda #>safe_irq
-    sta $ffff
-    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
-    lda #<safe_nmi
-    sta $fffa
-    lda #>safe_nmi
-    sta $fffb
+    jsr c128_runtime_capture_kernal_vectors
+    jsr c128_runtime_enter_game_ram
 
     :MachineRestoreDefault()
     jmp entry_main
@@ -588,108 +578,15 @@ t_load: .word 0
     plp
     rts
 
-// safe_irq — Minimal IRQ handler for $FF00=$3E mode.
-// When $FF00=$3E (game mode), the CPU reads the IRQ vector from RAM.
-// We can't dispatch to the KERNAL handler (hidden behind RAM), so we
-// just acknowledge ALL interrupt sources and return. Both CIA1 and VIC-II
-// share the IRQ line — if VIC-II raster IRQ fires and isn't acknowledged,
-// it reasserts immediately after RTI causing an infinite IRQ loop.
-safe_irq:
-    pha
-    txa
-    pha
-    tya
-    pha
-    lda $dc0d               // Acknowledge CIA1 interrupt (read clears flags)
-    lda #$ff
-    sta $d019               // Acknowledge VIC-II interrupts (write 1s clears flags)
-safe_irq_restore:
-    pla
-    tay
-    pla
-    tax
-    pla
-    rti
-
-// safe_nmi — Minimal NMI handler for $FF00=$3E mode.
-safe_nmi:
-    pha
-    lda $dd0d               // Acknowledge CIA2 NMI
-    pla
-    rti
-
 // kernal_load_safe — KERNAL LOAD wrapper for C128
 // Reinstalls keyboard stub on exit. Callers manage MMU.
 kernal_load_safe:
     sei
     jsr $ffd5
     php
-    lda #<chrin_keyboard_stub
-    sta $0302
-    lda #>chrin_keyboard_stub
-    sta $0303
+    jsr c128_runtime_enter_game_ram
     plp
     rts
-
-chrin_keyboard_stub:
-    lda #0
-    clc
-    rts
-
-// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
-// Use this on long-lived runtime paths that do not need the full helper reinstall.
-c128_restore_runtime_vectors:
-    php
-    sei
-    lda #BANK_NO_BASIC
-    sta $01
-    lda #MMU_ALL_RAM
-    sta $ff00
-    lda #<safe_irq
-    sta $fffe
-    lda #>safe_irq
-    sta $ffff
-    lda #<safe_nmi
-    sta $fffa
-    lda #>safe_nmi
-    sta $fffb
-    lda #<safe_irq_restore
-    sta $0314
-    lda #>safe_irq_restore
-    sta $0315
-    lda #<chrin_keyboard_stub
-    sta $0302
-    lda #>chrin_keyboard_stub
-    sta $0303
-    lda #$ff
-    sta $cc
-    plp
-    rts
-
-// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
-// Runtime KERNAL/editor paths and common-RAM users are still mutating
-// vector/helper state more aggressively than the cache path can tolerate.
-// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
-// blob before returning to gameplay/overlay code.
-c128_restore_runtime_guards:
-    pha
-    txa
-    pha
-    tya
-    pha
-    php
-    sei
-    jsr c128_restore_runtime_vectors
-    jsr init_common_mmu_helpers
-    plp
-    pla
-    tay
-    pla
-    tax
-    pla
-    rts
-
-c128_kernal_return_mmu: .byte MMU_ALL_RAM
 
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
@@ -880,13 +777,7 @@ entry_main:
     sta $d020               // Border
     sta $d021               // Background
 
-    // Capture the KERNAL-installed IRQ tail vector before preload starts.
-    // Shared preload LOAD transactions temporarily restore this vector.
-    lda $0314
-    sta kernal_irq_vec_lo
-    lda $0315
-    sta kernal_irq_vec_hi
-    jsr init_common_mmu_helpers
+    jsr c128_runtime_require_helpers
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -928,21 +819,12 @@ restart_entry:
     // blink path still runs unless $CC is non-zero.
     lda #$ff
     sta $cc
-    // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
-    lda #<safe_irq_restore
-    sta $0314
-    lda #>safe_irq_restore
-    sta $0315
+    jsr c128_runtime_enter_game_ram
 
     lda #$ff
     sta $d8                     // Screen Editor: 80-col mode
 
     cli
-
-    lda #<chrin_keyboard_stub
-    sta $0302
-    lda #>chrin_keyboard_stub
-    sta $0303
 
     lda #COL_LGREY
     sta zp_text_color
@@ -1203,8 +1085,6 @@ tramp_ego_put_suffix:
 !teps_done:
     rts
 teps_save_y: .byte 0
-kernal_irq_vec_lo: .byte 0
-kernal_irq_vec_hi: .byte 0
 
 // C128 cache/overlay state lives in a dedicated main-RAM block.
 // Do not place this adjacent to preload UI strings or transient workspace.
@@ -1528,8 +1408,14 @@ program_end:
 .assert "boot128 staged image reaches Bank1 DB region", program_end - 1 >= BANK1_DB_BASE, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
+.assert "MMU helper page keeps reserved common page base", MMU_COMMON_HELPERS_PAGE_BASE == $0F00, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Runtime enter-game stays below I/O hole", c128_runtime_enter_game_ram < $D000, true
+.assert "Runtime enter-KERNAL stays below I/O hole", c128_runtime_enter_kernal_io < $D000, true
+.assert "Safe IRQ stays below I/O hole", safe_irq < $D000, true
+.assert "Safe NMI stays below I/O hole", safe_nmi < $D000, true
+.assert "Helper integrity trap stays below I/O hole", c128_runtime_fail_helper_integrity < $D000, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 #endif

@@ -54,7 +54,7 @@ detect_machine:
 // C128 map-safe pointer access wrappers
 // ============================================================
 // These are the only MMU primitives used by common map macros.
-// Contract: these trampolines land in common-RAM helper code copied to $0C00.
+// Contract: these trampolines land in the dedicated common-RAM helper page.
 mmu_safe_map_read_ptr0:
     jmp mmu_common_map_read_ptr0
 

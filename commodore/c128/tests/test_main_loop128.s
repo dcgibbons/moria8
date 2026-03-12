@@ -13,6 +13,15 @@ c128_restore_runtime_vectors:
 c128_restore_runtime_guards:
     rts
 
+c128_runtime_enter_game_ram:
+    rts
+
+c128_runtime_enter_kernal_io:
+    rts
+
+c128_runtime_require_helpers:
+    rts
+
 entry_main:
     rts
 
@@ -72,9 +81,16 @@ tramp_ui_recall:
     rts
 
 c128_preload_fn_len: .byte 0
+c128_runtime_state_current: .byte 0
 c128_kernal_return_mmu: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
+kernal_chrin_vec_lo: .byte 0
+kernal_chrin_vec_hi: .byte 0
+kernal_nmi_vec_lo: .byte 0
+kernal_nmi_vec_hi: .byte 0
+kernal_hw_irq_vec_lo: .byte 0
+kernal_hw_irq_vec_hi: .byte 0
 c128_preload_status: .byte 0
 c128_cache_enabled: .byte 0
 c128_cache_tiers_ready: .byte 0
@@ -177,6 +193,12 @@ test_screen_clear_calls: .byte 0
 test_help_clear_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
+
+test_fail:
+    jmp test_fail
+
+test_pass:
+    jmp test_pass
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -494,10 +516,4 @@ test_start:
     cmp #1
     beq *+5
     jmp test_fail
-    jmp test_pass
-
-test_fail:
-    jmp test_fail
-
-test_pass:
     jmp test_pass

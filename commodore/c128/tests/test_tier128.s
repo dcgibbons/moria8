@@ -1,5 +1,7 @@
 // test_tier128.s — C128 tier transition/state regression checks for 10.2.5
 
+c128_runtime_state_current: .byte 0
+
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 #import "../config128.s"

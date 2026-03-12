@@ -265,6 +265,91 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_runtime_ownership_guard_check() {
+    echo -n "  runtime_state_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+root = Path("..").resolve()
+allowed = {
+    (root / "c128" / "runtime128.s").resolve(),
+    (root / "c128" / "memory128.s").resolve(),
+}
+forbidden = (
+    "sta $0314",
+    "sta $0315",
+    "sta $0302",
+    "sta $0303",
+    "sta $fffa",
+    "sta $fffb",
+    "sta $fffe",
+    "sta $ffff",
+    "jsr init_common_mmu_helpers",
+)
+
+bad = []
+for src in list((root / "c128").glob("*.s")) + list((root / "common").glob("*.s")):
+    if src.resolve() in allowed:
+        continue
+    for lineno, line in enumerate(src.read_text().splitlines(), start=1):
+        stripped = line.strip().lower()
+        for token in forbidden:
+            if token in stripped:
+                bad.append(f"{src.name}:{lineno}:{line.strip()}")
+
+main_sym = root / "c128" / "main.sym"
+if not main_sym.exists():
+    print("missing main.sym")
+    raise SystemExit(1)
+
+memory_src = (root / "c128" / "memory128.s").read_text()
+for snippet, desc in (
+    (".const MMU_COMMON_HELPERS_PAGE_BASE = $0f00", "helper page base"),
+    (".const MMU_COMMON_HELPERS_BASE = $0f08", "helper page payload base"),
+):
+    if snippet.lower() not in memory_src.lower():
+        bad.append(f"missing {desc} declaration")
+
+labels = {}
+for line in main_sym.read_text().splitlines():
+    if not line.startswith(".label "):
+        continue
+    body = line[len(".label "):]
+    if "=$" not in body:
+        continue
+    name, value = body.split("=$", 1)
+    value = value.split()[0]
+    labels[name] = int(value, 16)
+
+helper_start = labels.get("mmu_common_map_read_ptr0")
+helper_end = labels.get("mmu_common_select_bank0")
+if helper_start is None or helper_end is None:
+    bad.append("missing runtime helper entrypoint symbols")
+elif helper_start < 0x0F08 or helper_end > 0x0FFC:
+    bad.append(f"helper_runtime_range:${helper_start:04X}-${helper_end:04X}")
+
+if bad:
+    print("\n".join(bad))
+    raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_prompt_irq_guard_check() {
     echo -n "  prompt_irq_guard: "
 
@@ -500,7 +585,9 @@ build_boot_assets() {
     fi
 
     local build_log="/tmp/test128_boot_build.log"
-    if ! make -s build128 disk128 >"$build_log" 2>&1; then
+    local make_kickass="/tmp/moria128-kickass.jar"
+    ln -sf "$KICKASS" "$make_kickass"
+    if ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -856,6 +943,167 @@ build_load_resume_boot_assets() {
     fi
 
     LOAD_RESUME_BOOT_ASSETS_BUILT=1
+    return 0
+}
+
+build_main_diag_disk() {
+    local main_prg="$1"
+    local d64_path="$2"
+    local build_log="$3"
+    local save_blob="${4:-}"
+    local c1541_bin="${C1541:-c1541}"
+
+    if [ -n "$save_blob" ]; then
+        if ! "$c1541_bin" -format "moria128,m8" d64 "$d64_path" \
+                -attach "$d64_path" \
+                -write out/boot128.prg "moria8.128" \
+                -write "$main_prg" "moria128" \
+                -write out/title "title" \
+                -write out/monster.db.1 "monster.db.1" \
+                -write out/monster.db.2 "monster.db.2" \
+                -write out/monster.db.3 "monster.db.3" \
+                -write out/monster.db.4 "monster.db.4" \
+                -write out/ovl.town "ovl.town" \
+                -write out/ovl.start "ovl.start" \
+                -write out/ovl.death "ovl.death" \
+                -write out/ovl.gen "ovl.gen" \
+                -write out/bank1.dat "bank1.dat" \
+                -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
+            return 1
+        fi
+    else
+        if ! "$c1541_bin" -format "moria128,m8" d64 "$d64_path" \
+                -attach "$d64_path" \
+                -write out/boot128.prg "moria8.128" \
+                -write "$main_prg" "moria128" \
+                -write out/title "title" \
+                -write out/monster.db.1 "monster.db.1" \
+                -write out/monster.db.2 "monster.db.2" \
+                -write out/monster.db.3 "monster.db.3" \
+                -write out/monster.db.4 "monster.db.4" \
+                -write out/ovl.town "ovl.town" \
+                -write out/ovl.start "ovl.start" \
+                -write out/ovl.death "ovl.death" \
+                -write out/ovl.gen "ovl.gen" \
+                -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+build_town_move_diag_assets() {
+    local stage="$1"
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_town_move_diag_${stage}.build.log"
+    local diag_main="out/moria128.townmove.${stage}.prg"
+    local diag_d64="out/moria128_townmove_${stage}.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_SCRIPTED_INPUT -define "C128_DIAG_TOWN_MOVE_STAGE_${stage}" \
+            -o "$diag_main" >"$build_log" 2>&1; then
+        echo "FAIL (town-move diag stage ${stage} assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! build_main_diag_disk "$diag_main" "$diag_d64" "$build_log"; then
+        echo "FAIL (town-move diag stage ${stage} disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    return 0
+}
+
+build_store_entry_diag_assets() {
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_store_entry_diag.build.log"
+    local diag_main="out/moria128.storeentry.diag.prg"
+    local diag_d64="out/moria128_storeentry_diag.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_DIAG_STORE_ENTRY \
+            -o "$diag_main" >"$build_log" 2>&1; then
+        echo "FAIL (store-entry diag assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! build_main_diag_disk "$diag_main" "$diag_d64" "$build_log"; then
+        echo "FAIL (store-entry diag disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    return 0
+}
+
+build_load_resume_diag_assets() {
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_load_resume_diag.build.log"
+    local diag_main="out/moria128.loadresume.diag.prg"
+    local diag_d64="out/moria128_loadresume_diag.d64"
+    local save_blob="out/THE.GAME"
+    local c1541_bin="${C1541:-c1541}"
+
+    if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL (load-resume diag save generation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_DIAG_LOAD_RESUME \
+            -o "$diag_main" >>"$build_log" 2>&1; then
+        echo "FAIL (load-resume diag assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! build_main_diag_disk "$diag_main" "$diag_d64" "$build_log" "$save_blob"; then
+        echo "FAIL (load-resume diag disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    local dir_list
+    if ! dir_list=$("$c1541_bin" -attach "$diag_d64" -list 2>&1); then
+        echo "FAIL (load-resume diag disk listing failed)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+    if ! echo "$dir_list" | grep -q '"THE.GAME"'; then
+        echo "FAIL (load-resume diag disk missing THE.GAME)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
     return 0
 }
 
@@ -1475,6 +1723,138 @@ run_scripted_summary_to_town_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_town_move_diag() {
+    local stages="1 2 3 4 5 7 8 9"
+    local stage
+    for stage in $stages; do
+        local name="town_move_diag_${stage}"
+        echo -n "  $name: "
+
+        build_town_move_diag_assets "$stage" || return
+
+        local diag_addr
+        diag_addr=$(awk '/\.c128_diag_town_move_hit$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)
+        if [ -z "${diag_addr:-}" ]; then
+            echo "FAIL (missing c128_diag_town_move_hit in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+
+        local abs_d64
+        abs_d64="$(cd out && pwd)/moria128_townmove_${stage}.d64"
+        local mon_file="/tmp/test128_${name}.mon"
+        local log_file="/tmp/test128_${name}.log"
+        : > "$log_file"
+        {
+            echo "break \$${diag_addr}"
+            echo "g"
+        } > "$mon_file"
+
+        "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+            -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+            -limitcycles 500000000 +sound -sounddev dummy \
+            +remotemonitor +binarymonitor >/dev/null 2>&1
+        local vice_rc=$?
+
+        if ! grep -qi "C:\$${diag_addr}" "$log_file"; then
+            boot_log_report_failure "did not reach town-move diagnostic stage ${stage}" "$log_file" "c128_diag_town_move_hit" "$diag_addr" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+    done
+}
+
+run_store_entry_diag() {
+    local name="store_entry_diag"
+    echo -n "  $name: "
+
+    build_store_entry_diag_assets || return
+
+    local diag_addr
+    diag_addr=$(awk '/\.c128_diag_store_entry_hit$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)
+    if [ -z "${diag_addr:-}" ]; then
+        echo "FAIL (missing c128_diag_store_entry_hit in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_storeentry_diag.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+    {
+        echo "break \$${diag_addr}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA LLLLLLLL' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! grep -qi "C:\$${diag_addr}" "$log_file"; then
+        boot_log_report_failure "did not reach store-entry diagnostic trap" "$log_file" "c128_diag_store_entry_hit" "$diag_addr" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_load_resume_diag() {
+    local name="load_resume_diag"
+    echo -n "  $name: "
+
+    build_load_resume_diag_assets || return
+
+    local diag_addr
+    diag_addr=$(awk '/\.c128_diag_load_resume_hit$/ { split($2,a,":"); print toupper(a[2]); exit }' out/main.vs)
+    if [ -z "${diag_addr:-}" ]; then
+        echo "FAIL (missing c128_diag_load_resume_hit in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_loadresume_diag.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+    {
+        echo "break \$${diag_addr}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf "L" -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 220000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if ! grep -qi "C:\$${diag_addr}" "$log_file"; then
+        boot_log_report_failure "did not reach load-resume diagnostic trap" "$log_file" "c128_diag_load_resume_hit" "$diag_addr" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_cache_survival_smoke() {
     local name="cache_survival_smoke"
     echo -n "  $name: "
@@ -1870,6 +2250,7 @@ else
 fi
 run_main_assembly_check
 run_symbol_placement_check
+run_runtime_ownership_guard_check
 run_prompt_irq_guard_check
 run_80col_layout_guard_check
 run_test "minimal128" "tests/test_minimal128.s"
@@ -1893,9 +2274,12 @@ run_town_overlay_smoke
 run_town_overlay_female_smoke
 run_town_overlay_state_smoke
 run_scripted_summary_to_town_smoke
+run_town_move_diag
+run_store_entry_diag
 run_cache_survival_smoke
 run_death_overlay_smoke
 run_restart_to_title_smoke
+run_load_resume_diag
 run_preload_partial_failure_smoke
 run_overlay_partial_failure_smoke
 run_boot_diag_copy
