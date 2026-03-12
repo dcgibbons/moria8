@@ -1,7 +1,5 @@
 // test_memory128.s — C128 MMU smoke tests for C4.2
 
-c128_runtime_state_current: .byte 0
-
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 
@@ -28,22 +26,12 @@ test_start:
     sta $4000
     lda $4000
     cmp #$5a
-    beq *+5
-    jmp test_fail
-    lda c128_runtime_state_current
-    cmp #C128_RUNTIME_STATE_BANK1_MAP
-    beq *+5
-    jmp test_fail
+    bne test_fail
 
     jsr mmu_select_bank0
     lda $4000
     cmp #$a5
-    beq *+5
-    jmp test_fail
-    lda c128_runtime_state_current
-    cmp #C128_RUNTIME_STATE_GAME_RAM
-    beq *+5
-    jmp test_fail
+    bne test_fail
 
     // Test 2: mmu_select_bank1 preserves caller IRQ state
     
@@ -54,15 +42,13 @@ test_start:
     php
     pla
     and #$04
-    beq *+5
-    jmp test_fail
+    bne test_fail   // Fail if I=1 (disabled) outside
 
     jsr mmu_select_bank0 // Balanced restore
     php
     pla
     and #$04
-    beq *+5
-    jmp test_fail
+    bne test_fail   // Still should be enabled
 
     // Case B: Call from SEI state
     sei
@@ -70,15 +56,13 @@ test_start:
     php
     pla
     and #$04
-    bne *+5
-    jmp test_fail
+    beq test_fail   // Fail if I=0 (enabled) outside
 
     jsr mmu_select_bank0
     php
     pla
     and #$04
-    bne *+5
-    jmp test_fail
+    beq test_fail   // Still should be disabled
 
     // Test 3: mmu_copy_map_row isolation and boundary checks
     
@@ -117,41 +101,20 @@ test_start:
     // Verify boundaries to prove no clobbering
     lda $03ff
     cmp #$ff
-    beq *+5
-    jmp test_fail
+    bne test_fail
     lda $0426
     cmp #$ff
-    beq *+5
-    jmp test_fail
+    bne test_fail
 
     // Verify copied content
     ldx #0
 !chk_dest:
     txa
     cmp $0400,x
-    beq *+5
-    jmp test_fail
+    bne test_fail
     inx
     cpx #38
     bne !chk_dest-
-
-    // Test 4: helper blob integrity validation and reinstall path
-    jsr init_common_mmu_helpers
-    jsr c128_validate_common_mmu_helpers
-    bcc *+5
-    jmp test_fail
-    lda MMU_COMMON_HELPERS_BASE + 3
-    eor #$ff
-    sta MMU_COMMON_HELPERS_BASE + 3
-    jsr c128_validate_common_mmu_helpers
-    bcs *+5
-    jmp test_fail
-    jsr c128_ensure_common_mmu_helpers
-    bcc *+5
-    jmp test_fail
-    jsr c128_validate_common_mmu_helpers
-    bcc *+5
-    jmp test_fail
 
     jmp test_pass
 

@@ -1,7 +1,5 @@
 // test_dungeon128.s — Dungeon render color-path regression checks (C128)
 
-c128_runtime_state_current: .byte 0
-
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 #import "../../common/color.s"

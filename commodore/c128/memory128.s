@@ -37,10 +37,6 @@
 // ============================================================
 // MMU Constants (C128-specific)
 // ============================================================
-.const C128_RUNTIME_STATE_GAME_RAM  = 0
-.const C128_RUNTIME_STATE_KERNAL_IO = 1
-.const C128_RUNTIME_STATE_BANK1_MAP = 2
-
 .const MMU_CR           = $ff00 // MMU Configuration Register (fast write)
 .const MMU_NORMAL       = $0E   // Bank 0, System ROM (KERNAL+ScreenEd) at $C000, RAM $4000-$BFFF, I/O
                                 // Bits 7-6=00(Bank0), 5-4=00(SysROM), 3-2=11(RAM), 1=1(RAM), 0=0(I/O)
@@ -139,19 +135,7 @@
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_RESERVED_TOP_END
 
-.const MMU_COMMON_HELPERS_PAGE_BASE = $0f00
-.const MMU_COMMON_HELPERS_BASE = $0f08
-.const MMU_COMMON_HELPERS_GUARD_HEAD0 = MMU_COMMON_HELPERS_PAGE_BASE + 0
-.const MMU_COMMON_HELPERS_GUARD_HEAD1 = MMU_COMMON_HELPERS_PAGE_BASE + 1
-.const MMU_COMMON_HELPERS_GUARD_HEAD2 = MMU_COMMON_HELPERS_PAGE_BASE + 2
-.const MMU_COMMON_HELPERS_GUARD_HEAD3 = MMU_COMMON_HELPERS_PAGE_BASE + 3
-.const MMU_COMMON_HELPERS_CHECKSUM    = MMU_COMMON_HELPERS_PAGE_BASE + 4
-.const MMU_COMMON_HELPERS_LENGTH      = MMU_COMMON_HELPERS_PAGE_BASE + 5
-.const MMU_COMMON_HELPERS_FLAGS       = MMU_COMMON_HELPERS_PAGE_BASE + 6
-.const MMU_COMMON_HELPERS_GUARD_TAIL0 = MMU_COMMON_HELPERS_PAGE_BASE + $fc
-.const MMU_COMMON_HELPERS_GUARD_TAIL1 = MMU_COMMON_HELPERS_PAGE_BASE + $fd
-.const MMU_COMMON_HELPERS_GUARD_TAIL2 = MMU_COMMON_HELPERS_PAGE_BASE + $fe
-.const MMU_COMMON_HELPERS_GUARD_TAIL3 = MMU_COMMON_HELPERS_PAGE_BASE + $ff
+.const MMU_COMMON_HELPERS_BASE = $0c00
 .const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
 .const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
 .const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
@@ -288,112 +272,21 @@ zp_save_buf:
 // Subroutines
 // ============================================================
 
-// init_common_mmu_helpers — Install and stamp the common-RAM MMU helper page.
-// The helper blob now owns a dedicated page near the top of common RAM and
-// carries guard/checksum metadata so runtime code can detect corruption.
+// init_common_mmu_helpers — Copy Bank 1-safe helper stubs into bottom common RAM.
+// These helpers must execute entirely from $0000-$0FFF because any instruction
+// fetched while Bank 1 is selected cannot rely on Bank 0 program space.
 init_common_mmu_helpers:
-    lda #$4d                    // 'M'
-    sta MMU_COMMON_HELPERS_GUARD_HEAD0
-    lda #$4d                    // 'M'
-    sta MMU_COMMON_HELPERS_GUARD_HEAD1
-    lda #$55                    // 'U'
-    sta MMU_COMMON_HELPERS_GUARD_HEAD2
-    lda #$21                    // '!'
-    sta MMU_COMMON_HELPERS_GUARD_HEAD3
-    lda #$4d
-    sta MMU_COMMON_HELPERS_GUARD_TAIL0
-    lda #$4d
-    sta MMU_COMMON_HELPERS_GUARD_TAIL1
-    lda #$55
-    sta MMU_COMMON_HELPERS_GUARD_TAIL2
-    lda #$21
-    sta MMU_COMMON_HELPERS_GUARD_TAIL3
-    lda #mmu_common_helpers_blob_end - mmu_common_helpers_blob
-    sta MMU_COMMON_HELPERS_LENGTH
-    lda #0
-    sta MMU_COMMON_HELPERS_FLAGS
-    sta mmu_helper_checksum_work
     ldx #0
 !copy:
     lda mmu_common_helpers_blob,x
     sta MMU_COMMON_HELPERS_BASE,x
-    clc
-    adc mmu_helper_checksum_work
-    sta mmu_helper_checksum_work
     inx
     cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob
     bne !copy-
-    lda mmu_helper_checksum_work
-    sta MMU_COMMON_HELPERS_CHECKSUM
-    rts
-
-// c128_validate_common_mmu_helpers — Validate helper guards and checksum.
-// Output: carry clear = valid, carry set = invalid
-c128_validate_common_mmu_helpers:
-    lda MMU_COMMON_HELPERS_GUARD_HEAD0
-    cmp #$4d
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_HEAD1
-    cmp #$4d
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_HEAD2
-    cmp #$55
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_HEAD3
-    cmp #$21
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_TAIL0
-    cmp #$4d
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_TAIL1
-    cmp #$4d
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_TAIL2
-    cmp #$55
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_GUARD_TAIL3
-    cmp #$21
-    bne !invalid+
-    lda MMU_COMMON_HELPERS_LENGTH
-    cmp #mmu_common_helpers_blob_end - mmu_common_helpers_blob
-    bne !invalid+
-    lda #0
-    sta mmu_helper_checksum_work
-    ldx #0
-!sum:
-    lda MMU_COMMON_HELPERS_BASE,x
-    clc
-    adc mmu_helper_checksum_work
-    sta mmu_helper_checksum_work
-    inx
-    cpx MMU_COMMON_HELPERS_LENGTH
-    bne !sum-
-    lda mmu_helper_checksum_work
-    cmp MMU_COMMON_HELPERS_CHECKSUM
-    bne !invalid+
-    clc
-    rts
-!invalid:
-    sec
-    rts
-
-// c128_ensure_common_mmu_helpers — Reinstall helpers if validation fails.
-// Output: carry clear = helpers valid, carry set = reinstall failed
-c128_ensure_common_mmu_helpers:
-    jsr c128_validate_common_mmu_helpers
-    bcc !ok+
-    jsr init_common_mmu_helpers
-    jsr c128_validate_common_mmu_helpers
-    bcc !ok+
-    sec
-    rts
-!ok:
-    clc
     rts
 
 // mmu_save_p — Static storage for CPU status register during bank switches
 mmu_save_p: .byte 0
-mmu_helper_checksum_work: .byte 0
 
 // mmu_select_bank1 — Select Bank 1 RAM, preserve IRQ state
 // Contract: must be paired with mmu_select_bank0. Clobbers: A.
@@ -487,7 +380,7 @@ bank1_overlay_cache_slot_lo:
 bank1_overlay_cache_slot_hi:
     .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE
 
-// Common-RAM MMU helpers copied into the dedicated helper page at $0F00.
+// Common-RAM MMU helpers copied to $0C00 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
 mmu_common_helpers_blob:
 .pseudopc MMU_COMMON_HELPERS_BASE {
@@ -585,8 +478,6 @@ mmu_common_select_bank1:
     sei
     pla
     sta mmu_common_save_p
-    lda #C128_RUNTIME_STATE_BANK1_MAP
-    sta c128_runtime_state_current
     lda #MMU_RAM_BANK1
     sta MMU_CR
     rts
@@ -594,8 +485,6 @@ mmu_common_select_bank1:
 mmu_common_select_bank0:
     lda #MMU_ALL_RAM
     sta MMU_CR
-    lda #C128_RUNTIME_STATE_GAME_RAM
-    sta c128_runtime_state_current
     lda mmu_common_save_p
     pha
     plp

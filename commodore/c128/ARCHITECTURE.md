@@ -34,7 +34,6 @@ Key C4 outcome:
 | Range | Purpose |
 | :--- | :--- |
 | `$0000-$0FFF` | 4 KB bottom common RAM (shared across banks; not cache-safe) |
-| `$0F00-$0FFF` | reserved common-RAM MMU helper page with guard/checksum metadata |
 | `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; still unassigned to a 10.8 feature |
 | `$4000-$4EFF` | dungeon/town map (`MAP_BASE..MAP_END`) |
 | `$5000-$7FFF` | Bank 1 DB/data region retained from earlier C128 work (`BANK1_DB_BASE..BANK1_DB_END`) |
@@ -79,18 +78,6 @@ Rules used by shipping code:
 4. Bulk map work uses centralized `map_bulk_*` helpers and does not hold an ambient Bank 1 execution context while running overlay code at `$E000`.
 5. MMU select/restore helpers preserve caller IRQ state.
 6. C128 VDC rendering paths (`render_viewport` / `render_single_tile`) read map tiles through MMU-safe map macros, not raw Bank 0 pointer dereferences.
-7. Runtime vector and CHRIN ownership is centralized in `runtime128.s`; gameplay and KERNAL I/O transitions must go through named runtime states instead of writing vectors ad hoc.
-
-Runtime ownership:
-- `GAME_RAM` restores all-RAM gameplay mode, safe IRQ/NMI handlers, CHRIN stub, and helper integrity.
-- `KERNAL_IO` restores ROM-visible KERNAL/editor mode and the captured KERNAL vectors/stubs.
-- `BANK1_MAP_ACCESS` is the transient MMU state entered by the common helper blob for Bank 1 map/DB access.
-
-Helper-page integrity:
-- the helper blob lives at `$0F08` inside the reserved `$0F00-$0FFF` common page
-- `$0F00-$0F03` and `$0FFC-$0FFF` are fixed guard bytes
-- `$0F04` stores checksum and `$0F05` stores helper length
-- runtime re-entry validates and reinstalls this blob instead of assuming low/common RAM survived prior transitions
 
 KERNAL call safety:
 - `$FFC3..$FFD2` ROM entry points are indirect stubs on C128; RAM mirror patching must not rewrite them as direct JMP operands.
@@ -124,7 +111,6 @@ Before adding or moving C128 data/code in low RAM or Bank 1:
 4. Decide whether the bytes must survive boot, title, new-game, summary, and town transitions.
 5. Add or update the relevant compile-time assert for the region boundary/overlap.
 6. Update at least one smoke that exercises the survival or fallback contract affected by the change.
-7. If the change touches IRQ/NMI vectors, CHRIN, or helper installation, route it through `runtime128.s` and keep `run_tests128.sh` ownership guards green.
 
 ---
 

@@ -11,8 +11,6 @@
 
 .pc = $3000 "Test Code"
 
-c128_runtime_state_current: .byte 0
-
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 #import "../../common/rng.s"

@@ -52,10 +52,6 @@
 // Input: zp_store_idx = store index (0-5)
 // Clobbers: everything
 store_enter:
-#if C128_DIAG_STORE_ENTRY
-c128_diag_store_entry_hit:
-    .byte $02
-#endif
     // Home uses separate UI at $F000
     lda zp_store_idx
     cmp #STORE_HOME

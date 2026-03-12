@@ -1,7 +1,5 @@
 // test_db128.s — C128 banked database helper smoke tests for Phase 10.2.1
 
-c128_runtime_state_current: .byte 0
-
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 #import "../config128.s"
