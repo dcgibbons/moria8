@@ -295,9 +295,11 @@ c128_preload_asset_load:
     php
     sei
 
-    lda #MMU_NORMAL
+    // Full ROM map is required here so serial LOAD runs with the real KERNAL
+    // IRQ/vector environment rather than the game's all-RAM safe IRQ stub.
+    lda #$00
     sta $ff00
-    lda #MMU_NORMAL
+    lda #$00
     sta c128_kernal_return_mmu
     lda #BANK_ALL_ROM
     sta $01

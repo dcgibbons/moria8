@@ -12,14 +12,6 @@
 // ============================================================
 // Constants
 // ============================================================
-.const SAVE_FILE_NUM  = 2       // Logical file number for save/load data
-.const CHECK_FILE_NUM = 3       // Separate file number for check_savefile_exists
-.const SAVE_DEVICE    = 8       // Device 8 = first disk drive
-.const SAVE_SEC_ADDR  = 2       // Secondary address for write (1541 channel 2)
-.const LOAD_SEC_ADDR  = 2       // Secondary address for read (1541 channel 2) — same as write
-.const CHECK_SEC_ADDR = 6       // Secondary address for existence check (1541 channel 6)
-.const CMD_CHANNEL    = 15      // Command channel file number
-
 .const SAVE_MAGIC_SIZE = 8
 .const SAVE_VERSION    = $0b
 
@@ -42,20 +34,6 @@
 .const RLE_REPEAT_MIN  = 3     // Minimum repeat run
 .const RLE_REPEAT_MAX  = 130    // Max repeat run length
 
-// ============================================================
-// KERNAL vectors
-// ============================================================
-.const KERNAL_SETNAM = $ffbd
-.const KERNAL_SETLFS = $ffba
-.const KERNAL_OPEN   = $ffc0
-.const KERNAL_CLOSE  = $ffc3
-.const KERNAL_CHKOUT = $ffc9
-.const KERNAL_CHKIN  = $ffc6
-.const KERNAL_CLRCHN = $ffcc
-.const KERNAL_CHROUT = $ffd2
-.const KERNAL_CHRIN  = $ffcf
-.const KERNAL_READST = $ffb7
-
 .const SAVE_SETNAM = KERNAL_SETNAM
 .const SAVE_SETLFS = KERNAL_SETLFS
 .const SAVE_OPEN   = KERNAL_OPEN
@@ -66,7 +44,6 @@
 .const SAVE_CHROUT = KERNAL_CHROUT
 .const SAVE_CHRIN  = KERNAL_CHRIN
 .const SAVE_READST = KERNAL_READST
-.const KERNAL_LOAD   = $ffd5
 
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
@@ -116,25 +93,6 @@ save_magic:
     .byte $4d, $4f, $52, $49, $41, $30, $31  // "MORIA01"
     .byte SAVE_VERSION                          // Version byte
 .assert "Magic is 8 bytes", * - save_magic, SAVE_MAGIC_SIZE
-
-// Screen-code strings for status messages
-.encoding "screencode_mixed"
-save_saving_str:
-    .text "Saving game..." ; .byte 0
-save_done_str:
-    .text "Game saved." ; .byte 0
-save_load_str:
-    .text "Loading game..." ; .byte 0
-save_notfound_str:
-    .text "Save file not found." ; .byte 0
-save_corrupt_str:
-    .text "Save file corrupt!" ; .byte 0
-save_ioerr_str:
-    .text "Disk error!" ; .byte 0
-save_welcome_str:
-    .text "Welcome back to Moria8!" ; .byte 0
-title_menu_str:
-    .text "N)ew  L)oad  D)ual Disk" ; .byte 0
 
 // ============================================================
 // Macros for concise block I/O

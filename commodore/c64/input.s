@@ -90,11 +90,26 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 // GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
 // non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
-// input_run_key_check — Non-blocking: returns nonzero if any key is pending
-// Used by run-cancel check in game_loop.s. C64 reads KERNAL keyboard buffer count.
+// input_run_key_held — Non-blocking: returns nonzero if any key is pending
+// Used by the pre-arm running path in game_loop.s. C64 reads KERNAL keyboard buffer count.
 // Output: A = nonzero if key pending, 0 if no key
-input_run_key_check:
+input_run_key_held:
     lda KBDBUF_COUNT
+    rts
+
+// input_run_key_check — Backward-compatible alias for held-state polling
+input_run_key_check:
+    jmp input_run_key_held
+
+// input_run_cancel_check — Non-blocking run cancel poll
+// KERNAL buffer semantics are already edge-like enough on C64.
+input_run_cancel_check:
+    lda KBDBUF_COUNT
+    rts
+
+// input_run_cancel_reset — Reset run-cancel state
+// No-op on C64 because KERNAL owns the keyboard buffer.
+input_run_cancel_reset:
     rts
 
 input_get_key:

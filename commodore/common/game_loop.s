@@ -267,15 +267,16 @@ main_loop:
     // the keyboard returns to neutral once, then any new keypress cancels.
     lda run_input_armed
     bne !run_cancel_check+
-    jsr input_run_key_check
+    jsr input_run_key_held
     beq !run_arm_cancel+
     jmp run_step                // Still holding initiating key: keep running
 !run_arm_cancel:
     lda #1
     sta run_input_armed
+    jsr input_run_cancel_reset
     jmp run_step
 !run_cancel_check:
-    jsr input_run_key_check     // Returns nonzero if any key is pressed
+    jsr input_run_cancel_check  // Returns nonzero on a new cancel key edge
     bne !run_cancel+
     jmp run_step
 
@@ -286,6 +287,7 @@ main_loop:
     sta zp_run_dir
     lda #0
     sta run_input_armed
+    jsr input_run_cancel_reset
 !not_running:
     // Paralysis check — skip input, just tick the turn
     lda zp_eff_paralyze
@@ -1141,6 +1143,7 @@ main_loop:
     sta zp_run_dir
     lda #0
     sta run_input_armed
+    jsr input_run_cancel_reset
     jmp run_step                // Take first step
 !not_run:
 

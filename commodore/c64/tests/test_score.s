@@ -89,6 +89,8 @@ test_finish:
 #import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
 #import "../../common/ui_trampoline_stubs.s"
+#import "../../common/runtime_ui_strings.s"
+#import "../../common/io_kernal_consts.s"
 #import "../../common/save.s"
 #import "../../common/disk_swap.s"
 

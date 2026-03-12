@@ -111,11 +111,11 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4
 // Subroutines
 // ============================================================
 
-// input_run_key_check — Non-blocking: returns nonzero if any key is currently pressed
-// Used by run-cancel check in game_loop.s. C128 polls CIA directly (no KERNAL buffer).
+// input_run_key_held — Non-blocking: returns nonzero if any key is currently pressed
+// Used by the pre-arm running path in game_loop.s to ignore the initiating held key(s).
 // Output: A = nonzero (PETSCII) if key pressed, 0 if no key
 // Destroys: A, X, Y
-input_run_key_check:
+input_run_key_held:
 #if C128_TEST_SCRIPTED_INPUT
     lda #0
     rts
@@ -123,6 +123,56 @@ input_run_key_check:
     jsr cia_scan_petscii
     rts
 #endif
+
+// input_run_key_check — Backward-compatible alias for held-state polling
+input_run_key_check:
+    jmp input_run_key_held
+
+// input_run_cancel_reset — Reset the run-cancel edge detector
+// Used when entering/exiting running so stale scan state cannot cancel a new run.
+input_run_cancel_reset:
+    lda #0
+    sta irk_last_sample
+    sta irk_stable
+    rts
+
+// input_run_cancel_check — Non-blocking: returns nonzero only on a new key-down edge
+// after running cancel has been armed. This avoids cancelling on lingering held state.
+// Output: A = nonzero PETSCII on new key-down edge, 0 otherwise
+// Destroys: A, X, Y
+input_run_cancel_check:
+#if C128_TEST_SCRIPTED_INPUT
+    lda #0
+    rts
+#else
+    jsr cia_scan_petscii
+    // Fall through into shared run-cancel state machine for testability.
+#endif
+
+// input_run_process_sample — Edge/state machine for running cancel
+// Input: A = sampled PETSCII (0 = no key)
+// Output: A = PETSCII on key-down edge, 0 otherwise
+input_run_process_sample:
+    cmp irk_last_sample
+    beq !irps_stable+
+    sta irk_last_sample
+    beq !irps_none+
+    lda irk_stable
+    bne !irps_none+
+    lda irk_last_sample
+    sta irk_stable
+    lda irk_last_sample
+    rts
+!irps_none:
+    lda #0
+    rts
+
+!irps_stable:
+    cmp irk_stable
+    beq !irps_none-
+    sta irk_stable
+    beq !irps_none-
+    rts
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
@@ -172,6 +222,8 @@ input_get_key:
 igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
+irk_last_sample: .byte 0
+irk_stable: .byte 0
 
 // input_wait_release — Block until keyboard is released (C128 direct scan)
 // Used before one-shot "press any key" prompts to avoid consuming

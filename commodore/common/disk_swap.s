@@ -12,14 +12,6 @@
 disk_mode:      .byte 0                 // 0=single, 1=swap, 2=dual-drive
 save_device:    .byte 8                 // Device# for save/score I/O (8 or 9)
 
-// Screen-code strings (under .encoding "screencode_mixed" from main.s)
-ds_save_str:    .text "Insert save disk" ; .byte 0
-ds_game_str:    .text "Insert game disk" ; .byte 0
-ds_dual_str:    .text "[Save Disk]" ; .byte 0
-ds_menu_str:    .text "S)ame W)swap #)Drive #" ; .byte 0
-de_prompt_str:  .text "Save drive (8-30): " ; .byte 0  // 19 chars
-de_ind_pfx:     .text "[Drive " ; .byte 0               // 7 chars
-de_nodev_str:   .text "Drive not found!" ; .byte 0      // 16 chars
 // Device-entry state (transient, no save needed)
 de_digits:      .byte 0, 0    // buffered digit ASCII codes
 de_count:       .byte 0       // number of digits entered

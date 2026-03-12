@@ -316,6 +316,9 @@ store_buy:
     jsr show_msg
 
     // Get key
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -374,6 +377,9 @@ store_buy:
 !sb_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr sbuy_show_price
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     cmp #PETSCII_Y
     beq sbuy_execute
@@ -567,6 +573,9 @@ store_sell:
     jsr show_msg
 
     // Get key
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -652,6 +661,9 @@ store_sell:
 !ssell_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr ssell_show_offer
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     cmp #PETSCII_Y
     beq ssell_execute
@@ -821,6 +833,9 @@ input_read_number:
     sta hg_digit_cnt
 
 !irn_loop:
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
 
     // RETURN ($0D) = accept (if at least 1 digit)
@@ -1049,12 +1064,18 @@ haggle_buy:
 
     // Display "HOW ABOUT [ask] GP?"
     jsr hg_show_counter
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key           // Wait for key before next round
     jmp !hb_loop-
 
 !hb_final:
     // Final offer
     jsr hg_show_final
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     cmp #PETSCII_Y
     beq !hb_accept+
@@ -1212,11 +1233,17 @@ haggle_sell:
     bcs !hs_final+
 
     jsr hg_show_counter
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     jmp !hs_loop-
 
 !hs_final:
     jsr hg_show_final
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     cmp #PETSCII_Y
     beq !hs_accept+
@@ -1250,6 +1277,9 @@ hg_do_kick:
     jsr store_clear_msg_area
     ldx #MSG_KICKED
     jsr show_msg
+#if C128
+    jsr input_wait_release
+#endif
     jsr input_get_key
     clc
     rts
@@ -1282,6 +1312,9 @@ hg_show_insult_msg:
     tax
     jsr huff_decode_string
     jsr screen_put_string
+#if C128
+    jsr input_wait_release
+#endif
     jmp input_get_key           // Tail call
 
 // ============================================================

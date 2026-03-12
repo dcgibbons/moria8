@@ -1246,6 +1246,10 @@ c128_cache_state_end:
 #import "../common/ui_status.s"
 #import "../common/stat_display.s"
 #import "../common/huffman.s"
+#import "../common/runtime_ui_strings.s"
+#import "../common/io_kernal_consts.s"
+#import "../common/score_io.s"
+#import "../common/title_screen.s"
 
 #import "../common/dungeon_data.s"
 #import "../common/dungeon_features.s"
@@ -1256,31 +1260,29 @@ c128_cache_state_end:
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/item.s"
+#import "../common/combat.s"
+#import "../common/store_data.s"
+#import "../common/save.s"
+#import "../common/disk_swap.s"
 #import "../common/player_items.s"
 #import "../common/spell_data.s"
 #import "../common/spell_effects.s"
 #import "../common/player_magic.s"
-#import "dungeon_render_vdc.s"
 #import "../common/dungeon_los.s"
-#import "../common/turn.s"
-#import "../common/store_data.s"
-#import "../common/monster_attack.s"
-#import "../common/string_bank.s"
-#import "../common/save.s"
-#import "../common/disk_swap.s"
-#import "../common/score_io.s"
-#import "../common/title_screen.s"
+#import "dungeon_render_vdc.s"
 #import "../common/game_loop.s"
-#import "../common/perf_p1.s"
 #import "../common/ui_help_clear.s"
 #import "../common/ui_character.s"
 #import "../common/player_move.s"
-#import "../common/combat.s"
 #import "../common/projectile.s"
 #import "../common/ranged_fire.s"
 #import "../common/throw.s"
 #import "../common/bash.s"
 #import "../common/tunnel.s"
+#import "../common/turn.s"
+#import "../common/monster_attack.s"
+#import "../common/string_bank.s"
+#import "../common/perf_p1.s"
 
 // Init-only strings — kept in main RAM
 // ============================================================
@@ -1562,6 +1564,25 @@ program_end:
 .assert "Help title text stays out of overlay window", help_title_str >= $F000, true
 .assert "Help content table stays out of overlay window", help_lines >= $F000, true
 .assert "Character sheet renderer stays below I/O hole", ui_char_display < $D000, true
+.assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
+.assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
+.assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
+.assert "Drive prompt stays below I/O hole", de_prompt_str < $D000, true
+.assert "Save entry stays below I/O hole", save_game < $D000, true
+.assert "Load entry stays below I/O hole", load_game < $D000, true
+.assert "Load byte reader stays below I/O hole", load_read_byte < $D000, true
+.assert "Load block reader stays below I/O hole", load_read_block < $D000, true
+.assert "Load map reader stays below I/O hole", load_read_map_c128 < $D000, true
+.assert "Delete-save helper stays below I/O hole", delete_savefile < $D000, true
+.assert "Visibility update stays below I/O hole", update_visibility < $D000, true
+.assert "Room reveal stays below I/O hole", reveal_room < $D000, true
+.assert "Viewport renderer stays below I/O hole", render_viewport < $D000, true
+.assert "Player move stays below I/O hole", player_try_move < $D000, true
+.assert "Melee attack entry stays below I/O hole", player_attack_monster < $D000, true
+.assert "Combat hit-roll stays below I/O hole", combat_roll_tohit < $D000, true
+.assert "Combat damage apply stays below I/O hole", combat_apply_damage < $D000, true
+.assert "Combat message build stays below I/O hole", msg_build_action < $D000, true
+.assert "Combat message print stays below I/O hole", cmb_print_buf < $D000, true
 .assert "Recall renderer stays out of overlay window", ui_recall_display >= $F000, true
 .assert "Inventory renderer stays out of overlay window", ui_inv_display >= $F000, true
 .assert "Equipment renderer stays out of overlay window", ui_equip_display >= $F000, true

@@ -70,12 +70,16 @@ sound_init:
 
 // sound_play — Play a sound effect
 // Input: A = SFX_* constant
-// Preserves: nothing
+// Preserves: X, Y
 sound_play:
     cmp #SFX_NONE
     beq !done+
     cmp #8
     bcs !done+              // Defensive: ignore invalid effect IDs instead of indirect-jumping into garbage
+    txa
+    pha
+    tya
+    pha
     sta zp_snd_effect
 
     // Gate off first (in case previous sound still playing)
@@ -84,27 +88,50 @@ sound_play:
 
     // Dispatch to effect setup
     lda zp_snd_effect
-    asl                     // x2 for word-sized jump table
+    beq !play_bump+
+    cmp #SFX_HIT
+    beq !play_hit+
+    cmp #SFX_MISS
+    beq !play_miss+
+    cmp #SFX_PICKUP
+    beq !play_pickup+
+    cmp #SFX_DEATH
+    beq !play_death+
+    cmp #SFX_LEVELUP
+    beq !play_levelup+
+    cmp #SFX_SPELL
+    beq !play_spell+
+    jsr sfx_spell_fail
+    jmp !restore+
+!play_bump:
+    jsr sfx_bump
+    jmp !restore+
+!play_hit:
+    jsr sfx_hit
+    jmp !restore+
+!play_miss:
+    jsr sfx_miss
+    jmp !restore+
+!play_pickup:
+    jsr sfx_pickup
+    jmp !restore+
+!play_death:
+    jsr sfx_death
+    jmp !restore+
+!play_levelup:
+    jsr sfx_levelup
+    jmp !restore+
+!play_spell:
+    jsr sfx_spell
+
+!restore:
+    pla
+    tay
+    pla
     tax
-    lda sfx_table,x
-    sta zp_ptr0
-    lda sfx_table + 1,x
-    sta zp_ptr0_hi
-    jmp (zp_ptr0)           // Indirect jump to effect setup
 
 !done:
     rts
-
-// Sound effect jump table
-sfx_table:
-    .word sfx_bump
-    .word sfx_hit
-    .word sfx_miss
-    .word sfx_pickup
-    .word sfx_death
-    .word sfx_levelup
-    .word sfx_spell
-    .word sfx_spell_fail
 
 // --- Individual effect setups ---
 // Each sets frequency, ADSR, waveform, then gates on.

@@ -216,6 +216,41 @@ test_edge_checks:
     cmp #$45
     bne test_fail2
 
+    jmp test_run_cancel_checks
+
+test_run_cancel_checks:
+    jsr input_run_cancel_reset
+
+    lda #0
+    jsr input_run_process_sample
+    cmp #0
+    bne test_fail3
+
+    lda #$58               // First new key after arming => cancel edge
+    jsr input_run_process_sample
+    cmp #$58
+    bne test_fail3
+
+    lda #$58               // Held key => no repeat cancel
+    jsr input_run_process_sample
+    cmp #0
+    bne test_fail3
+
+    lda #0                 // First release sample => no event
+    jsr input_run_process_sample
+    cmp #0
+    bne test_fail3
+
+    lda #0                 // Stable release => fully rearmed
+    jsr input_run_process_sample
+    cmp #0
+    bne test_fail3
+
+    lda #$51               // New key after rearm => cancel edge again
+    jsr input_run_process_sample
+    cmp #$51
+    bne test_fail3
+
     jmp test_scan_restore_checks
 
 test_fail3:
