@@ -69,6 +69,9 @@ delete_savefile:
 tramp_ui_recall:
     rts
 
+tramp_dig_ability:
+    rts
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"

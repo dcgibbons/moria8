@@ -887,7 +887,11 @@ combat_check_levelup:
 
     // Recalculate mana and learn new spells
     jsr magic_recalc_mana
+#if C128
+    jsr tramp_magic_check_new_spells
+#else
     jsr magic_check_new_spells
+#endif
 
     // Play level-up sound
     lda #SFX_LEVELUP

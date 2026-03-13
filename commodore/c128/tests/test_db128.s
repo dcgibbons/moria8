@@ -13,6 +13,9 @@
 .const DB_TEST_ADDR1 = $5001
 .const DB_TEST_ADDR2 = $5002
 
+c128_restore_runtime_state:
+    rts
+
 test_start:
     sei
     cld

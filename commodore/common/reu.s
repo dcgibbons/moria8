@@ -292,21 +292,40 @@ c128_preload_asset_load:
     sta c128_preload_fn_len
     stx c128_preload_fn_lo
     sty c128_preload_fn_hi
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$11
+    jsr c128_stack_guard_begin
+    jsr c128_stack_guard_snapshot_banking
+#endif
     php
     sei
 
     // Full ROM map is required here so serial LOAD runs with the real KERNAL
     // IRQ/vector environment rather than the game's all-RAM safe IRQ stub.
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
     lda #$00
     sta $ff00
     lda #$00
     sta c128_kernal_return_mmu
     lda #BANK_ALL_ROM
     sta $01
+    lda kernal_hw_irq_vec_lo
+    sta $fffe
+    lda kernal_hw_irq_vec_hi
+    sta $ffff
+    lda kernal_hw_nmi_vec_lo
+    sta $fffa
+    lda kernal_hw_nmi_vec_hi
+    sta $fffb
     lda kernal_irq_vec_lo
     sta $0314
     lda kernal_irq_vec_hi
     sta $0315
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$14
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     lda #2
     jsr $ffc3                   // Pre-close stale preload channel
@@ -316,17 +335,37 @@ c128_preload_asset_load:
     ldx c128_preload_fn_lo
     ldy c128_preload_fn_hi
     jsr $ffbd                   // SETNAM
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$15
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     lda #2
     ldx #8
     ldy #1
     jsr $ffba                   // SETLFS (PRG header address)
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$16
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     lda #0
     ldx #0
     jsr $ff68                   // SETBNK: Bank 0
+    lda kernal_irq_vec_lo
+    sta $0314
+    lda kernal_irq_vec_hi
+    sta $0315
+    lda $dc0d                   // Clear any pending CIA1 IRQ latched in runtime mode
+    lda $dd0d                   // Clear any pending CIA2/NMI latch before CLI
+    lda #$ff
+    sta $d019                   // Clear any pending VIC-II IRQ flags
     cli                         // C128 KERNAL serial LOAD requires IRQ service
     jsr $ffd5                   // LOAD
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$17
+    jsr c128_stack_guard_snapshot_banking
+#endif
     lda #0
     rol                         // A=1 on error, 0 on success
     sta c128_preload_status
@@ -335,21 +374,32 @@ c128_preload_asset_load:
     lda #2
     jsr $ffc3                   // CLOSE
     jsr $ffcc                   // CLRCHN
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$18
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
-    lda #MMU_ALL_RAM
-    sta $ff00
-    lda #MMU_ALL_RAM
-    sta c128_kernal_return_mmu
-    lda #BANK_ALL_ROM
-    sta $01
+    jsr c128_restore_runtime_state
     jsr c128_vdc_reassert_mode
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$19
+    jsr c128_diag_validate_runtime_invariants
+#endif
     plp
 
     lda c128_preload_status
     beq !c128_preload_ok+
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$12
+    jsr c128_stack_guard_check
+#endif
     sec
     rts
 !c128_preload_ok:
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$13
+    jsr c128_stack_guard_check
+#endif
     clc
     rts
 c128_preload_fn_lo: .byte 0

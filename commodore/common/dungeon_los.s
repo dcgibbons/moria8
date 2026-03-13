@@ -36,6 +36,11 @@ town_light_all:
 // Dungeon: Phase A (torch radius) + Phase B (room reveal).
 // Preserves: nothing
 update_visibility:
+#if C128_REAL_BOOT_DIAG
+    ldx #$61
+    jsr c128_stack_guard_begin
+    jsr c128_stack_guard_snapshot_banking
+#endif
     // Blindness — skip all visibility updates
     lda zp_eff_blind
     beq !uv_not_blind+
@@ -180,6 +185,11 @@ update_visibility:
 
 !uv_blind_skip:
 !uv_done:
+#if C128_REAL_BOOT_DIAG
+    ldx #$62
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
+#endif
     rts
 
 // reveal_room — Set FLAG_VISITED on all tiles in room X (including walls)
@@ -187,6 +197,11 @@ update_visibility:
 // Iterates room_x-1..room_x+room_w, room_y-1..room_y+room_h
 // Preserves: nothing
 reveal_room:
+#if C128_REAL_BOOT_DIAG
+    ldx #$63
+    jsr c128_stack_guard_begin
+    jsr c128_stack_guard_snapshot_banking
+#endif
     // Compute bounds
     lda room_y,x
     sec
@@ -236,6 +251,11 @@ reveal_room:
     inx
     jmp !rr_row-
 !rr_done:
+#if C128_REAL_BOOT_DIAG
+    ldx #$64
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
+#endif
     rts
 
 // los_is_visible — Check if a map position is currently visible to the player

@@ -8,6 +8,9 @@
 
 .pc = $3000 "Test Code"
 
+c128_restore_runtime_state:
+    rts
+
 test_start:
     sei
     cld

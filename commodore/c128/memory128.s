@@ -62,6 +62,7 @@
 .const BANK_NO_BASIC    = $36  // KERNAL + I/O, RAM at $A000–$BFFF
 .const BANK_NO_KERNAL   = $35  // I/O + RAM everywhere ($A000, $D000=I/O, $E000)
 .const BANK_NO_ROMS     = $34  // I/O only, RAM at $A000 and $E000
+.const CPU_PORT_DDR_DEFAULT = $2F  // Standard 8502 DDR for banking bits as outputs
 
 // ============================================================
 // VIC-II Color Palette Constants (Standard indices)
@@ -214,6 +215,8 @@ zp_save_buf:
 
 // Restore default banking (BASIC + KERNAL + I/O)
 .macro BankRestoreDefault() {
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
     lda #BANK_ALL_ROM
     sta $01
 }
@@ -225,6 +228,8 @@ zp_save_buf:
 .macro MachineRestoreDefault() {
     lda #MMU_NORMAL
     sta $ff00
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
     lda #BANK_ALL_ROM
     sta $01
 }
@@ -234,6 +239,10 @@ zp_save_buf:
 .macro MachineRestoreAllRam() {
     lda #MMU_ALL_RAM
     sta $ff00
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
+    lda #BANK_NO_BASIC
+    sta $01
 }
 
 // EnterKernal — Prepare for KERNAL calls (C128)
@@ -247,8 +256,7 @@ zp_save_buf:
 
 // ExitKernal — Restore game state after KERNAL calls (C128)
 .macro ExitKernal() {
-    :MachineRestoreAllRam()
-    jsr c128_vdc_reassert_mode
+    jsr c128_restore_runtime_state
     plp
 }
 

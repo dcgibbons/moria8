@@ -62,6 +62,10 @@ exit_trampoline:
     jsr $ffd2               // KERNAL CHROUT
     jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)
 
+// tramp_dig_ability — pinned low for common tunnel code.
+tramp_dig_ability:
+    jmp calc_dig_ability
+
 // All .text directives produce screen codes (not PETSCII) since
 // all output uses direct screen RAM writes at $0400+.
 .encoding "screencode_mixed"

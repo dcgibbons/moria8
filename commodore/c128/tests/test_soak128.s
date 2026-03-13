@@ -11,6 +11,9 @@
 
 .pc = $3000 "Test Code"
 
+c128_restore_runtime_state:
+    rts
+
 #import "../../common/zeropage.s"
 #import "../memory128.s"
 #import "../../common/rng.s"

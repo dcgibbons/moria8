@@ -1,6 +1,6 @@
 // title_data.s — Title screen art data (standalone PRG)
 //
-// Assembles to out/title, loaded into MAP_BASE ($C000) at startup.
+// Assembles to out/title, loaded into MAP_BASE at startup.
 // Format: segments of [row, col, color, screen_codes..., $00]
 // Terminated by $FF end-of-data marker.
 //
@@ -9,7 +9,11 @@
 //   $2D = '-', $21 = '!', $2B = '+'
 //   Box borders: + for corners, - for horizontal, ! for vertical
 
+#if C128
+.pc = $4000 "Title Art"
+#else
 .pc = $C000 "Title Art"
+#endif
 .encoding "screencode_mixed"
 
 // Color constants (must match screen.s — standalone file)

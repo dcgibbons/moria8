@@ -10,7 +10,25 @@
 c128_restore_runtime_vectors:
     rts
 
+c128_restore_runtime_state_core:
+    rts
+
+c128_restore_runtime_state:
+    rts
+
+c128_restore_saved_banking:
+    rts
+
 c128_restore_runtime_guards:
+    rts
+
+c128_stack_guard_begin:
+    rts
+
+c128_stack_guard_check:
+    rts
+
+c128_stack_guard_snapshot_banking:
     rts
 
 entry_main:
@@ -71,11 +89,56 @@ tramp_player_create:
 tramp_ui_recall:
     rts
 
+tramp_dig_ability:
+    rts
+
+tramp_player_cast_spell:
+    jsr player_cast_spell
+    rts
+
+tramp_player_pray:
+    jsr player_pray
+    rts
+
+tramp_magic_check_new_spells:
+    jsr magic_check_new_spells
+    rts
+
+tramp_ranged_fire:
+    jsr ranged_fire
+    rts
+
+tramp_throw_item:
+    jsr throw_item
+    rts
+
+tramp_bash_command:
+    jsr bash_command
+    rts
+
 c128_preload_fn_len: .byte 0
 c128_kernal_return_mmu: .byte 0
+c128_kernal_return_port0: .byte 0
+c128_kernal_return_port1: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
+kernal_hw_irq_vec_lo: .byte 0
+kernal_hw_irq_vec_hi: .byte 0
+kernal_hw_nmi_vec_lo: .byte 0
+kernal_hw_nmi_vec_hi: .byte 0
 c128_preload_status: .byte 0
+c128_stack_guard_canary_lo: .byte $a5
+c128_stack_guard_expected: .byte 0
+c128_stack_guard_actual: .byte 0
+c128_stack_guard_stage: .byte 0
+c128_stack_guard_canary_hi: .byte $5a
+c128_stack_guard_port0: .byte 0
+c128_stack_guard_port1: .byte 0
+c128_stack_guard_mmu: .byte 0
+c128_stack_guard_ret_lo: .byte 0
+c128_stack_guard_ret_hi: .byte 0
+c128_stack_guard_fail_code: .byte 0
+c128_stack_guard_substage: .byte 0
 c128_cache_enabled: .byte 0
 c128_cache_tiers_ready: .byte 0
 c128_cache_overlays_ready: .byte 0

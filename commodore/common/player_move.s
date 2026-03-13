@@ -90,7 +90,13 @@ player_try_move:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp3            // map column
+#if C128
+c128_town_move_diag_after_map_ptr_setup:
+#endif
     :MapRead_ptr0_y()
+#if C128
+c128_town_move_diag_after_map_read:
+#endif
 
     // Extract tile type (bits 7-4 → 0-15)
     lsr
@@ -99,13 +105,25 @@ player_try_move:
     lsr
 
     // Check walkability (closed doors are blocked — use 'o' to open)
+#if C128
+c128_town_move_diag_before_walkable:
+#endif
     jsr tile_is_walkable
+#if C128
+c128_town_move_diag_after_walkable:
+#endif
     bcc !blocked+
 
     // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)
+#if C128
+c128_town_move_diag_before_occupied_read:
+#endif
     :MapRead_ptr0_y()             // Re-read map byte (zp_ptr0 still valid)
     and #FLAG_OCCUPIED
+#if C128
+c128_town_move_diag_after_occupied_read:
+#endif
     beq !not_occupied+          // No monster → continue to move
 
     // Monster present — attack if not running
@@ -128,6 +146,9 @@ player_try_move:
     rts
 
 !not_occupied:
+#if C128
+c128_town_move_diag_move_success:
+#endif
     // Move succeeded — update player position
     lda zp_temp3
     sta zp_player_x
@@ -140,6 +161,9 @@ player_try_move:
     rts
 
 !blocked:
+#if C128
+c128_town_move_diag_move_blocked:
+#endif
     // Suppress bump sound during running
     lda zp_run_dir
     cmp #$ff

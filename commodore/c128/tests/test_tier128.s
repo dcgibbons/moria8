@@ -9,6 +9,9 @@
 
 .pc = $3000 "Test Code"
 
+c128_restore_runtime_state:
+    rts
+
 // Minimal symbols required by tier_manager.s
 reu_present: .byte 0
 reu_loading_row: .byte 0

@@ -21,6 +21,9 @@ test_map_row:
 .const TEST_NAME_HI_TABLE = $8120
 .const TEST_NAME_STR      = $8200
 .const TEST_NAME_PTR      = $e200
+
+c128_restore_runtime_state:
+    rts
 #import "../../common/monster.s"
 test_start:
     sei

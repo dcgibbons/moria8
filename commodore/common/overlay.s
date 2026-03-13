@@ -150,6 +150,10 @@ overlay_invalidate:
 // Clobbers: A, X, Y
 overlay_load_disk:
     :EnterKernal()
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1b
+    jsr c128_stack_guard_snapshot_banking
+#endif
     lda ovl_fn_len,x
     pha                     // Save filename length
     lda ovl_fn_addr_lo,x
@@ -160,11 +164,19 @@ overlay_load_disk:
     tax                     // X = filename addr lo, Y = hi
     pla                     // A = filename length
     jsr $ffbd               // KERNAL SETNAM
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1c
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     lda #2                  // Logical file number
     ldx #8                  // Device 8
     ldy #1                  // Secondary 1 = use PRG header address ($E000)
     jsr $ffba               // KERNAL SETLFS
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1d
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     lda #0                  // 0 = LOAD
     ldx #$00                // Load address low ($E000 low byte = $00)
@@ -172,6 +184,10 @@ overlay_load_disk:
 
 !ol_do_load:
     :AssetLoad()            // Platform asset LOAD (handles C128 Bank 1)
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1e
+    jsr c128_stack_guard_snapshot_banking
+#endif
     // Carry clear = success, carry set = error
     php                     // Save carry (load result)
     lda #2
@@ -188,7 +204,22 @@ overlay_load_disk:
 #endif
 !ol_done:
     plp                     // Restore carry
+#if C128
+    php
+    pla
+    sta ol_status_p
+    jsr c128_restore_runtime_state
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1f
+    jsr c128_diag_validate_runtime_invariants
+#endif
+    pla                     // Drop EnterKernal-saved processor status
+    lda ol_status_p
+    pha
+    plp
+#else
     :ExitKernal()
+#endif
     rts
 
 
@@ -257,6 +288,9 @@ ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
 ol_target:        .byte 0
+#if C128
+ol_status_p:      .byte 0
+#endif
 
 #if C128
 c128_preload_all_overlays:
@@ -323,6 +357,10 @@ cpao_next:
     bcs !cpao_fail+
     lda #OVL_STARTUP
     sta current_overlay
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    ldx #$1a
+    jsr c128_diag_validate_runtime_invariants
+#endif
     rts
 
 !cpao_fail:

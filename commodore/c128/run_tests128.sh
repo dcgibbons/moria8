@@ -17,11 +17,27 @@ OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
 CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 LOAD_RESUME_BOOT_ASSETS_BUILT=0
+REAL_BOOT_DIAG_ASSETS_BUILT=0
+TITLE_ART_BOOT_ASSETS_BUILT=0
+OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=0
 
 KA_DEFINES=(-define C128)
 if [ "$PERF_P1_MODE" = "1" ]; then
     KA_DEFINES+=(-define PERF_P1)
 fi
+
+normalize_monitor_addr() {
+    python3 - "$1" <<'PY'
+import sys
+addr = sys.argv[1].strip().upper()
+if not addr:
+    print("")
+elif len(addr) > 4:
+    print(addr[-4:])
+else:
+    print(addr)
+PY
+}
 
 run_main_assembly_check() {
     echo -n "  main128_asm: "
@@ -46,6 +62,90 @@ run_main_assembly_check() {
     else
         echo "PASS"
     fi
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_artifact_budget_check() {
+    echo -n "  c128_artifact_budget: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+import re
+import sys
+
+prg = Path("out/moria128.prg")
+sym = Path("main.sym")
+vs = Path("out/main.vs")
+if not prg.exists() or not sym.exists() or not vs.exists():
+    print("missing build outputs")
+    raise SystemExit(1)
+
+data = prg.read_bytes()
+if len(data) < 2:
+    print("short prg")
+    raise SystemExit(1)
+load = data[0] | (data[1] << 8)
+end = load + len(data) - 2 - 1
+
+labels = {}
+for line in sym.read_text().splitlines():
+    m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
+    if m:
+        labels[m.group(1)] = int(m.group(2), 16)
+
+required = ["banked_code_end", "first_banked_function"]
+missing = [name for name in required if name not in labels]
+if missing:
+    print("missing:" + ",".join(missing))
+    raise SystemExit(1)
+
+bad = []
+if end > 0xFFFF:
+    bad.append(f"prg_end=${end:05X}")
+if labels["banked_code_end"] > 0xFFFA:
+    bad.append(f"banked_code_end=${labels['banked_code_end']:04X}")
+if labels["first_banked_function"] < 0xF000:
+    bad.append(f"first_banked_function=${labels['first_banked_function']:04X}")
+
+groups = {
+    "title/runtime": ["title_menu_ready", "game_new_start", "load_resume_game"],
+    "movement/render": ["main_loop", "vp_render_status_loop", "update_visibility", "render_viewport", "player_try_move"],
+    "combat": ["player_attack_monster", "combat_apply_damage", "monster_attack_player"],
+    "commands": ["item_aim_wand", "item_use_staff", "item_gain_spell", "player_cast_spell", "player_pray", "spell_list_display", "ranged_fire", "throw_item", "bash_command"],
+}
+
+for group, names in groups.items():
+    rendered = []
+    for name in names:
+        addr = labels.get(name)
+        if addr is None:
+            rendered.append(f"{name}=MISSING")
+            bad.append(f"missing:{name}")
+            continue
+        rendered.append(f"{name}=${addr:04X}")
+        if 0xD000 <= addr < 0xE000:
+            bad.append(f"io_hole:{name}=${addr:04X}")
+    print(group + ": " + ", ".join(rendered))
+
+if bad:
+    print("failures: " + ", ".join(bad))
+    raise SystemExit(1)
+
+print(f"budgets: prg_end=${end:04X}, first_banked_function=${labels['first_banked_function']:04X}, banked_code_end=${labels['banked_code_end']:04X}")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    echo "$check_out" | sed 's/^/    /'
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
@@ -76,7 +176,12 @@ for line in sym:
     labels[m.group(1)] = int(m.group(2), 16)
 
 assert_guards = set()
+out_of_hole_guards = set()
 for line in main_source:
+    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\s*\|\|\s*\1\s*>=\s*\$E000\b", line)
+    if m:
+        out_of_hole_guards.add(m.group(1))
+        continue
     m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\b", line)
     if m:
         assert_guards.add(m.group(1))
@@ -119,6 +224,10 @@ must_have_asserts = [
     "combat_apply_damage",
     "msg_build_action",
     "cmb_print_buf",
+    "monster_attack_player",
+    "mon_atk_calc_tohit",
+    "mon_atk_roll_tohit",
+    "mon_atk_apply_damage",
 ]
 bad = []
 missing = []
@@ -140,17 +249,34 @@ for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
         continue
-    # Help data must live outside the $E000-$EFFF overlay window.
-    if labels[name] < 0xF000:
+    # Help data lives in the reloadable banked UI window before the hot
+    # command block at first_banked_function.
+    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
         bad.append((name, labels[name]))
 
 for name in ("ui_help_display",):
     if name not in labels:
         missing.append(name)
         continue
-    # Help renderer code must not execute from $E000-$EFFF overlay window.
-    if labels[name] < 0xF000:
+    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
         bad.append((name, labels[name]))
+
+for name in ("ui_recall_display", "ui_inv_display", "ui_equip_display"):
+    if name not in labels:
+        missing.append(name)
+        continue
+    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
+        bad.append((name, labels[name]))
+
+for snippet, label in (
+    ("tramp_ui_help_display:\n    jsr init_copy_banked", "tramp_ui_help_display"),
+    ("tramp_ui_inv_display:\n    jsr init_copy_banked", "tramp_ui_inv_display"),
+    ("tramp_ui_equip_display:\n    jsr init_copy_banked", "tramp_ui_equip_display"),
+    ("tramp_ui_recall:\n    jsr init_copy_banked", "tramp_ui_recall"),
+):
+    if snippet not in main_text:
+        print(f"{label}: expected init_copy_banked reload before banked UI entry")
+        raise SystemExit(1)
 
 if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         // 20\n    jsr vdc_write_reg" not in main_text:
     print("vdc_attr_base_init: expected reg21/reg20 init sequence with lda #8 for reg20")
@@ -158,7 +284,7 @@ if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         
 
 # Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
 for name in must_have_asserts:
-    if name not in assert_guards:
+    if name not in assert_guards and name not in out_of_hole_guards:
         missing_asserts.append(name)
 
 # Every source-level <$D000 guard must be enforced by the runner.
@@ -167,6 +293,14 @@ for name in sorted(assert_guards):
         missing.append(name)
         continue
     if labels[name] >= 0xD000:
+        bad.append((name, labels[name]))
+
+# Every source-level "out of I/O hole" guard must be enforced by the runner.
+for name in sorted(out_of_hole_guards):
+    if name not in labels:
+        missing.append(name)
+        continue
+    if 0xD000 <= labels[name] < 0xE000:
         bad.append((name, labels[name]))
 
 if missing or bad or missing_asserts:
@@ -500,7 +634,11 @@ build_boot_assets() {
     fi
 
     local build_log="/tmp/test128_boot_build.log"
-    if ! make -s build128 disk128 >"$build_log" 2>&1; then
+    local make_kickass="/tmp/moria128-kickass.jar"
+    local kickass_abs
+    kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
+    ln -sf "$kickass_abs" "$make_kickass"
+    if ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -519,6 +657,246 @@ build_boot_assets() {
     fi
 
     BOOT_ASSETS_BUILT=1
+    return 0
+}
+
+run_vic40_clean_boot_smoke() {
+    local name="vic40_clean_boot_smoke"
+    echo -n "  $name: "
+
+    local build_log="/tmp/test128_${name}_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local probe_main="out/moria128.vic40probe.prg"
+    local probe_d64="out/moria128_vic40probe.d64"
+
+    build_boot_assets || return
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_VIC40_CLEAN_BOOT \
+            -o "$probe_main" >"$build_log" 2>&1; then
+        echo "FAIL (vic40 probe main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$probe_d64" \
+            -attach "$probe_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write "$probe_main" "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >/tmp/test128_${name}_c1541.log 2>&1; then
+        echo "FAIL (vic40 probe d64 creation failed)"
+        tail -20 /tmp/test128_${name}_c1541.log | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local probe_vs="out/main.vs"
+    local pass_addr fail_addr
+    pass_addr=$(awk '/\.c128_vic40_boot_probe_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
+    fail_addr=$(awk '/\.c128_vic40_boot_probe_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$probe_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing vic40 probe symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_vic40probe.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "break \$${fail_addr}"
+        echo "until \$${pass_addr}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 180000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if boot_log_has_stop_at "$log_file" "$fail_addr"; then
+        echo "FAIL (vic40 boot probe reported invalid display state)"
+        tail -20 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! boot_log_has_stop_at "$log_file" "$pass_addr"; then
+        boot_log_report_failure "did not reach vic40 boot probe pass" "$log_file" "c128_vic40_boot_probe_pass" "$pass_addr" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+build_real_boot_diag_assets() {
+    if [ "$REAL_BOOT_DIAG_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_real_boot_diag_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local diag_main="out/moria128.realdiag.prg"
+    local diag_d64="out/moria128_realdiag.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_REAL_BOOT_DIAG -define C128_TEST_FORCE_DUNGEON_MELEE \
+            -o "$diag_main" >"$build_log" 2>&1; then
+        echo "FAIL (real-boot diag main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
+            -attach "$diag_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write "$diag_main" "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (real-boot diag disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    REAL_BOOT_DIAG_ASSETS_BUILT=1
+    return 0
+}
+
+build_overlay_transition_diag_assets() {
+    if [ "$OVERLAY_TRANSITION_DIAG_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_overlay_transition_diag_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local diag_main="out/moria128.overlaydiag.prg"
+    local diag_d64="out/moria128_overlaydiag.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_OVERLAY_TRANSITION_DIAG \
+            -o "$diag_main" >"$build_log" 2>&1; then
+        echo "FAIL (overlay-transition diag main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$diag_d64" \
+            -attach "$diag_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write "$diag_main" "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (overlay-transition diag disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
+    return 0
+}
+
+build_title_art_boot_assets() {
+    if [ "$TITLE_ART_BOOT_ASSETS_BUILT" -eq 1 ]; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log="/tmp/test128_title_art_build.log"
+    local c1541_bin="${C1541:-c1541}"
+    local title_main="out/moria128.titleart.prg"
+    local title_d64="out/moria128_titleart.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
+            -define C128 -define C128_TEST_TITLE_ART_CONTENT \
+            -o "$title_main" >"$build_log" 2>&1; then
+        echo "FAIL (title-art main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$title_d64" \
+            -attach "$title_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write "$title_main" "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (title-art disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    TITLE_ART_BOOT_ASSETS_BUILT=1
     return 0
 }
 
@@ -899,6 +1277,9 @@ run_test() {
         return
     fi
 
+    start_addr=$(normalize_monitor_addr "$start_addr")
+    pass_addr=$(normalize_monitor_addr "$pass_addr")
+
     local mon_file="/tmp/test128_${name}.mon"
     local log_file="/tmp/test128_${name}.log"
     : > "$log_file"
@@ -974,6 +1355,62 @@ boot_log_report_failure() {
     tail -10 "$log_file" | sed 's/^/    /'
 }
 
+boot_log_report_crash_context() {
+    local log_file="$1"
+    echo "    crash context:"
+    python3 - "$log_file" <<'PY'
+from pathlib import Path
+import sys
+
+lines = Path(sys.argv[1]).read_text(errors="ignore").splitlines()
+start = 0
+for i, line in enumerate(lines):
+    if line.startswith("(C:$") or line.startswith(".C:") or line.startswith(">C:") or line.startswith("  ADDR "):
+        start = i
+        break
+for line in lines[start:]:
+    if line.startswith("(C:$") or line.startswith(".C:") or line.startswith(">C:") or line.startswith("  ADDR "):
+        print("    " + line)
+PY
+}
+
+boot_log_has_crash() {
+    local log_file="$1"
+    grep -qi "JAM\\|Invalid opcode" "$log_file"
+}
+
+boot_log_has_stop_at() {
+    local log_file="$1"
+    local addr
+    addr=$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')
+    python3 - "$log_file" "$addr" <<'PY'
+from pathlib import Path
+import sys
+
+lines = Path(sys.argv[1]).read_text(errors="ignore").splitlines()
+addr = sys.argv[2].upper()
+needles = ("C:$" + addr, "EXEC " + addr)
+for line in lines:
+    line = line.upper()
+    if not (line.startswith("#") or line.startswith("UNTIL:")):
+        continue
+    if any(n in line for n in needles):
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+boot_diag_dump_cmds() {
+    cat <<'EOF'
+r
+bt
+m 3400 340b
+m 0314 0315
+m fffa ffff
+m 0c00 0c10
+EOF
+}
+
 run_boot_d64_smoke() {
     local name="boot_d64_smoke"
     echo -n "  $name: "
@@ -1018,7 +1455,62 @@ run_boot_d64_smoke() {
 }
 
 run_boot_title_newgame_smoke() {
-    local name="boot_title_newgame_smoke"
+    local name="chargen_clean_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local loop_top
+    loop_top=$(awk '/\.c128_town_move_diag_loop_top$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${loop_top:-}" ]; then
+        echo "FAIL (missing c128_town_move_diag_loop_top in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "until \$${loop_top}"
+        echo "g"
+        boot_diag_dump_cmds
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qi "^UNTIL: .*C:\$${loop_top}" "$log_file"; then
+        boot_log_report_failure "did not reach first gameplay loop after character generation" "$log_file" "c128_town_move_diag_loop_top" "$loop_top" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_new_key_stability_smoke() {
+    local name="new_key_stability_smoke"
     echo -n "  $name: "
 
     build_boot_assets || return
@@ -1042,24 +1534,90 @@ run_boot_title_newgame_smoke() {
     {
         echo "until \$${game_new_start}"
         echo "g"
+        boot_diag_dump_cmds
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-        -keybuf "NN" -keybuf-delay 8 \
+        -keybuf 'N' -keybuf-delay 8 \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 180000000 +sound -sounddev dummy \
+        -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "^UNTIL: .*C:\$${game_new_start}" "$log_file"; then
-        boot_log_report_failure "did not reach game_new_start" "$log_file" "game_new_start" "$game_new_start" "$vice_rc"
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop after New key)"
+        boot_log_report_crash_context "$log_file"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-        boot_log_report_failure "jam after reaching game_new_start" "$log_file" "game_new_start" "$game_new_start" "$vice_rc"
+    if ! boot_log_has_stop_at "$log_file" "$game_new_start"; then
+        boot_log_report_failure "did not reach game_new_start after New key" "$log_file" "game_new_start" "$game_new_start" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_title_art_smoke() {
+    local name="title_art_smoke"
+    echo -n "  $name: "
+
+    build_title_art_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local title_art_pass title_art_fail
+    title_art_pass=$(awk '/\.c128_test_title_art_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    title_art_fail=$(awk '/\.c128_test_title_art_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_art_pass:-}" ] || [ -z "${title_art_fail:-}" ]; then
+        echo "FAIL (missing title art probe symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_titleart.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "break \$${title_art_fail}"
+        echo "until \$${title_art_pass}"
+        echo "g"
+        boot_diag_dump_cmds
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 180000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if boot_log_has_stop_at "$log_file" "$title_art_fail"; then
+        echo "FAIL (title art content probe failed)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! boot_log_has_stop_at "$log_file" "$title_art_pass"; then
+        boot_log_report_failure "did not reach title art content pass probe" "$log_file" "c128_test_title_art_pass_sym" "$title_art_pass" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1183,7 +1741,7 @@ run_boot_title_idle_smoke() {
 }
 
 run_boot_tier_transition_smoke() {
-    local name="boot_tier_transition_smoke"
+    local name="town_to_dungeon_stability_smoke"
     echo -n "  $name: "
 
     build_boot_assets || return
@@ -1475,8 +2033,253 @@ run_scripted_summary_to_town_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_real_input_town_move_diag() {
+    local name="town_move_stability_smoke"
+    echo -n "  $name: "
+
+    build_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local -a stage_names=(
+        "loop_top"
+        "after_input_get_command"
+        "before_player_try_move"
+        "after_map_ptr_setup"
+        "after_map_read"
+        "before_walkable"
+        "after_walkable"
+        "before_occupied_read"
+        "after_occupied_read"
+        "move_success"
+        "after_player_try_move"
+        "after_trap_check"
+        "after_turn_post_action"
+        "before_status_draw"
+        "after_status_draw"
+    )
+    local -a stage_labels=(
+        "c128_town_move_diag_loop_top"
+        "c128_town_move_diag_after_input_get_command"
+        "c128_town_move_diag_before_player_try_move"
+        "c128_town_move_diag_after_map_ptr_setup"
+        "c128_town_move_diag_after_map_read"
+        "c128_town_move_diag_before_walkable"
+        "c128_town_move_diag_after_walkable"
+        "c128_town_move_diag_before_occupied_read"
+        "c128_town_move_diag_after_occupied_read"
+        "c128_town_move_diag_move_success"
+        "c128_town_move_diag_after_player_try_move"
+        "c128_town_move_diag_after_trap_check"
+        "c128_town_move_diag_after_turn_post_action"
+        "c128_town_move_diag_before_status_draw"
+        "c128_town_move_diag_after_status_draw"
+    )
+    local -a stage_addrs=()
+    local idx
+    for idx in "${!stage_labels[@]}"; do
+        local addr
+        addr=$(awk "/\\.${stage_labels[$idx]}\$/ { split(\$2,a,\":\"); print toupper(a[2]); exit }" "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${stage_labels[$idx]} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        stage_addrs+=("$addr")
+    done
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128.d64"
+    local last_stage="boot"
+
+    for idx in "${!stage_names[@]}"; do
+        local mon_file="/tmp/test128_${name}_${idx}.mon"
+        local log_file="/tmp/test128_${name}_${idx}.log"
+        : > "$log_file"
+        {
+            echo "break \$${stage_addrs[$idx]}"
+            echo "g"
+        } > "$mon_file"
+
+        "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+            -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
+            -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+            -limitcycles 320000000 +sound -sounddev dummy \
+            +remotemonitor +binarymonitor >/dev/null 2>&1
+        local vice_rc=$?
+
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            echo "FAIL (jam before stage: ${stage_names[$idx]}; last reached: $last_stage)"
+            tail -20 "$log_file" | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+
+        if ! grep -qi "C:\$${stage_addrs[$idx]}" "$log_file"; then
+            echo "FAIL (did not reach stage: ${stage_names[$idx]}; last reached: $last_stage; vice_rc=$vice_rc)"
+            tail -20 "$log_file" | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+
+        last_stage="${stage_names[$idx]}"
+    done
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_real_boot_crash_harness() {
+    local name="real_boot_crash_harness"
+    echo -n "  $name: "
+
+    build_real_boot_diag_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_diag_fail
+    c128_diag_fail=$(awk '/\.c128_diag_fail_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${c128_diag_fail:-}" ]; then
+        echo "FAIL (missing c128_diag_fail_sym in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    local -a diag_stage_breaks=()
+    while IFS= read -r addr; do
+        [ -n "$addr" ] && diag_stage_breaks+=("$addr")
+    done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
+    if [ "${#diag_stage_breaks[@]}" -eq 0 ]; then
+        echo "FAIL (missing overlay diag stage traps in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        local addr
+        for addr in "${diag_stage_breaks[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "g"
+        boot_diag_dump_cmds
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA L>' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 520000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    local addr
+    for addr in "${diag_stage_breaks[@]}"; do
+        if boot_log_has_stop_at "$log_file" "$addr"; then
+            echo "FAIL (captured diag guard failure at \$${addr})"
+            boot_log_report_crash_context "$log_file"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_overlay_data_transition_smoke() {
+    local name="overlay_data_transition_smoke"
+    echo -n "  $name: "
+
+    build_overlay_transition_diag_assets || return
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    pass_addr=$(awk '/\.c128_overlay_transition_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing c128_overlay_transition_pass_sym in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local -a diag_stage_breaks=()
+    while IFS= read -r addr; do
+        [ -n "$addr" ] && diag_stage_breaks+=("$addr")
+    done < <(awk '/\.c128_diag_fail_stage_[0-9a-f][0-9a-f]$|\.c128_diag_fail_default$/ { split($2,a,":"); print toupper(a[2]); }' "$main_vs")
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_overlaydiag.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        local addr
+        for addr in "${diag_stage_breaks[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "until \$${pass_addr}"
+        echo "g"
+        boot_diag_dump_cmds
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 420000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    local addr
+    for addr in "${diag_stage_breaks[@]}"; do
+        if boot_log_has_stop_at "$log_file" "$addr"; then
+            echo "FAIL (captured overlay/data transition diag failure at \$${addr})"
+            boot_log_report_crash_context "$log_file"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! boot_log_has_stop_at "$log_file" "$pass_addr"; then
+        boot_log_report_failure "did not complete overlay/data transition to title menu" "$log_file" "c128_overlay_transition_pass_sym" "$pass_addr" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_cache_survival_smoke() {
-    local name="cache_survival_smoke"
+    local name="boot_cache_complete_smoke"
     echo -n "  $name: "
 
     build_cache_survival_boot_assets || return
@@ -1496,9 +2299,7 @@ run_cache_survival_smoke() {
     abs_d64="$(cd out && pwd)/moria128_cache_survival.d64"
     local mon_file="/tmp/test128_${name}.mon"
     local log_file="/tmp/test128_${name}.log"
-    local fail_lc
     : > "$log_file"
-    fail_lc=$(echo "$c128_test_cache_survival_fail" | tr '[:upper:]' '[:lower:]')
 
     {
         echo "break \$${c128_test_cache_survival_fail}"
@@ -1512,14 +2313,14 @@ run_cache_survival_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if grep -qiE "Stop on  exec ${fail_lc}" "$log_file"; then
+    if boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_fail"; then
         boot_log_report_failure "cache survival validation failed after summary-to-town flow" "$log_file" "c128_test_cache_survival_fail" "$c128_test_cache_survival_fail" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
-    if ! grep -qi "^UNTIL: .*C:\$${c128_test_cache_survival_pass}" "$log_file"; then
+    if ! boot_log_has_stop_at "$log_file" "$c128_test_cache_survival_pass"; then
         boot_log_report_failure "did not reach cache-survival pass trap" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1528,6 +2329,62 @@ run_cache_survival_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam during cache-survival flow" "$log_file" "c128_test_cache_survival_pass" "$c128_test_cache_survival_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_dungeon_attack_stability_smoke() {
+    local name="dungeon_attack_stability_smoke"
+    echo -n "  $name: "
+
+    build_real_boot_diag_assets || return
+
+    local main_vs="out/main.vs"
+    local player_attack monster_attack
+    player_attack=$(awk '/\.player_attack_monster$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    monster_attack=$(awk '/\.monster_attack_player$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${player_attack:-}" ] || [ -z "${monster_attack:-}" ]; then
+        echo "FAIL (missing combat symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "until \$${player_attack}"
+        echo "g"
+        boot_diag_dump_cmds
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA L>L' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 620000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qi "^UNTIL: .*C:\$${player_attack}" "$log_file"; then
+        boot_log_report_failure "did not reach player_attack_monster in dungeon attack flow" "$log_file" "player_attack_monster" "$player_attack" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -1869,6 +2726,7 @@ else
     echo "  mode: PERF_P1 instrumentation OFF"
 fi
 run_main_assembly_check
+run_artifact_budget_check
 run_symbol_placement_check
 run_prompt_irq_guard_check
 run_80col_layout_guard_check
@@ -1886,6 +2744,9 @@ run_test "dungeon128" "tests/test_dungeon128.s" 50000000
 run_test "soak128" "tests/test_soak128.s" 300000000
 run_boot_d64_smoke
 run_boot_title_idle_smoke
+run_title_art_smoke
+run_vic40_clean_boot_smoke
+run_new_key_stability_smoke
 run_boot_title_newgame_smoke
 run_boot_title_load_resume_smoke
 run_boot_tier_transition_smoke
@@ -1893,7 +2754,11 @@ run_town_overlay_smoke
 run_town_overlay_female_smoke
 run_town_overlay_state_smoke
 run_scripted_summary_to_town_smoke
+run_real_input_town_move_diag
+run_real_boot_crash_harness
+run_overlay_data_transition_smoke
 run_cache_survival_smoke
+run_dungeon_attack_stability_smoke
 run_death_overlay_smoke
 run_restart_to_title_smoke
 run_preload_partial_failure_smoke

@@ -137,17 +137,41 @@ game_new_start:
     lda #$ff
     sta zp_run_dir              // Not running
     lda #OVL_DUNGEON_GEN
+#if C128_REAL_BOOT_DIAG
+    ldx #$21
+    jsr c128_stack_guard_begin
+#endif
     jsr overlay_load
+#if C128_REAL_BOOT_DIAG
+    ldx #$22
+    jsr c128_stack_guard_check
+#endif
     bcc !gns_ovl_ok+
     jmp entry_main
 !gns_ovl_ok:
+#if C128_REAL_BOOT_DIAG
+    ldx #$23
+    jsr c128_stack_guard_begin
+#endif
     jsr tramp_level_generate
+#if C128_REAL_BOOT_DIAG
+    ldx #$24
+    jsr c128_stack_guard_check
+#endif
 #if C128
     jsr c128_restore_runtime_guards
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
+#if C128_REAL_BOOT_DIAG
+    ldx #$25
+    jsr c128_stack_guard_begin
+#endif
     jsr update_visibility       // Reveal starting area
+#if C128_REAL_BOOT_DIAG
+    ldx #$26
+    jsr c128_stack_guard_check
+#endif
 
     // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
     jsr sound_init
@@ -237,6 +261,7 @@ load_resume_game:
 
 main_loop:
 #if C128
+c128_town_move_diag_loop_top:
     jsr c128_restore_runtime_vectors
 #endif
 #if C128_TEST_FORCE_DEATH
@@ -303,6 +328,9 @@ main_loop:
     jmp main_loop
 !not_paralyzed:
     jsr input_get_command
+#if C128
+c128_town_move_diag_after_input_get_command:
+#endif
 
     // --- Dispatch command ---
 
@@ -488,13 +516,25 @@ main_loop:
     pla                         // Restore command ID for player_try_move
 
     // Try to move
+#if C128
+c128_town_move_diag_before_player_try_move:
+#endif
     jsr player_try_move
+#if C128
+c128_town_move_diag_after_player_try_move:
+#endif
     bcc !move_blocked+
 
     // Move or attack succeeded — run AI before render so screen
     // reflects post-AI monster positions (BUG-17 fix)
     jsr trap_check_at_player
+#if C128
+c128_town_move_diag_after_trap_check:
+#endif
     jsr turn_post_action
+#if C128
+c128_town_move_diag_after_turn_post_action:
+#endif
     lda zp_game_flags
     and #$01
     beq !not_dead+
@@ -582,7 +622,13 @@ main_loop:
     jsr viewport_update
     jsr render_viewport
 !not_store_entry:
+#if C128
+c128_town_move_diag_before_status_draw:
+#endif
     jsr status_draw
+#if C128
+c128_town_move_diag_after_status_draw:
+#endif
     jmp main_loop
 
 !move_blocked:
@@ -628,6 +674,9 @@ main_loop:
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
+#if C128_TEST_FORCE_DUNGEON_MELEE
+    jsr c128_test_force_dungeon_melee
+#endif
     jsr update_visibility
     jsr screen_clear
     jsr viewport_update
@@ -981,7 +1030,11 @@ main_loop:
     cmp #CMD_CAST
     bne !not_cast+
     jsr msg_clear
+#if C128
+    jsr tramp_player_cast_spell
+#else
     jsr player_cast_spell
+#endif
     bcc !cast_no_turn+
     jsr turn_post_action
     lda zp_game_flags
@@ -1001,7 +1054,11 @@ main_loop:
     cmp #CMD_PRAY
     bne !not_pray+
     jsr msg_clear
+#if C128
+    jsr tramp_player_pray
+#else
     jsr player_pray
+#endif
     bcc !pray_no_turn+
     jsr turn_post_action
     lda zp_game_flags
@@ -1038,7 +1095,11 @@ main_loop:
     cmp #CMD_FIRE
     bne !not_fire+
     jsr msg_clear
+#if C128
+    jsr tramp_ranged_fire
+#else
     jsr ranged_fire
+#endif
     bcc !fire_no_turn+
     jsr turn_post_action
     lda zp_game_flags
@@ -1056,7 +1117,11 @@ main_loop:
     cmp #CMD_THROW
     bne !not_throw+
     jsr msg_clear
+#if C128
+    jsr tramp_throw_item
+#else
     jsr throw_item
+#endif
     bcc !throw_no_turn+
     jsr turn_post_action
     lda zp_game_flags
@@ -1092,7 +1157,11 @@ main_loop:
     cmp #CMD_BASH
     bne !not_bash+
     jsr msg_clear
+#if C128
+    jsr tramp_bash_command
+#else
     jsr bash_command
+#endif
     bcc !bash_no_turn+
     jsr turn_post_action
     lda zp_game_flags
@@ -1362,12 +1431,73 @@ recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = 
 recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
 run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
 
-// tramp_dig_ability — Calculate digging ability
-// Now in main RAM — no banking needed.
-// Output: tun_dig_ability set
-// Clobbers: A, X
-tramp_dig_ability:
-    jmp calc_dig_ability
+#if C128_TEST_FORCE_DUNGEON_MELEE
+c128_test_force_dungeon_melee_pending: .byte 1
+
+c128_test_force_dungeon_melee:
+    lda c128_test_force_dungeon_melee_pending
+    beq !ctfdm_done+
+    lda zp_player_dlvl
+    beq !ctfdm_done+
+
+    lda zp_player_y
+    sta c128_test_force_melee_y
+    lda zp_player_x
+    clc
+    adc #1
+    sta c128_test_force_melee_x
+
+    lda c128_test_force_melee_x
+    ldy c128_test_force_melee_y
+    jsr monster_find_at
+    bcc !ctfdm_clear_tile+
+    jsr monster_remove
+
+!ctfdm_clear_tile:
+    ldx c128_test_force_melee_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy c128_test_force_melee_x
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK & (~FLAG_OCCUPIED & $ff)
+    :MapWrite_ptr0_y()
+
+    lda c128_test_force_melee_x
+    sta ms_spawn_x
+    lda c128_test_force_melee_y
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+    bcc !ctfdm_done+
+
+    lda #0
+    sta c128_test_force_dungeon_melee_pending
+    jsr monster_get_ptr
+    ldy #MX_SLEEP_CUR
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE | MF_PROVOKED
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #$ff
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_LO
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLEE_HI
+    sta (zp_ptr0),y
+!ctfdm_done:
+    rts
+
+c128_test_force_melee_x: .byte 0
+c128_test_force_melee_y: .byte 0
+#endif
 
 // ============================================================
 // calc_dig_ability — Calculate digging ability (STR + tool/weapon bonus)

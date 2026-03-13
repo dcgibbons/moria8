@@ -18,12 +18,16 @@
 // ============================================================
 title_load_and_draw:
     :EnterKernal()
-#if C128
+#if C128_REAL_BOOT_DIAG
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
+    ldx #$41
+    jsr c128_stack_guard_begin
     lda #1
     ldx #0
     jsr safe_setbnk
+    ldx #$42
+    jsr c128_stack_guard_check
 #endif
     // SETNAM: filename "TITLE" (5 chars)
     lda #5
@@ -31,32 +35,62 @@ title_load_and_draw:
     ldy #>title_filename
     jsr KERNAL_SETNAM
 
-    // SETLFS: logical file 2, device 8, secondary 0 (use X/Y load address)
+    // SETLFS: logical file 2, device 8.
+    // C64 title PRG is linked for MAP_BASE already, so use the file header.
+    // C128 MAP_BASE is Bank 1 $4000, so force caller-supplied X/Y destination.
     lda #2
     ldx #SAVE_DEVICE
+#if C128_REAL_BOOT_DIAG
+    ldy #1
+#else
     ldy #0
+#endif
     jsr KERNAL_SETLFS
 
     // LOAD: 0 = load, X/Y = destination (MAP_BASE)
     lda #0
     ldx #<MAP_BASE
     ldy #>MAP_BASE
+#if C128_REAL_BOOT_DIAG
+    ldx #$43
+    jsr c128_stack_guard_begin
+#endif
     jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
+#if C128_REAL_BOOT_DIAG
+    lda #$44
+    sta c128_stack_guard_stage
+    lda $00
+    sta c128_stack_guard_port0
+    lda $01
+    sta c128_stack_guard_port1
+    lda $ff00
+    sta c128_stack_guard_mmu
+#endif
     php                     // Save carry (LOAD success/failure)
     lda #2
-#if C128
+#if C128_REAL_BOOT_DIAG
+    ldx #$47
+    jsr c128_stack_guard_begin
     jsr w_close             // C128: force ROM mapping around CLOSE
+    ldx #$48
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
 #else
     jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
 #endif
-#if C128
+#if C128_REAL_BOOT_DIAG
     // Restore default LOAD destination to Bank 0 for subsequent file I/O.
+    ldx #$49
+    jsr c128_stack_guard_begin
     lda #0
     ldx #0
     jsr safe_setbnk
+    ldx #$4a
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
 #endif
     plp                     // Restore carry from LOAD
-    bcs !title_fallback+    // Carry set = error
+    bcs title_fallback_render    // Carry set = error
 
     // Restore VIC-II bank 0 after serial I/O
     lda $dd00
@@ -69,14 +103,31 @@ title_load_and_draw:
     sta $90
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
+#if C128_REAL_BOOT_DIAG
+    ldx #$4b
+    jsr c128_stack_guard_begin
+#endif
     jsr screen_clear
+#if C128_REAL_BOOT_DIAG
+    ldx #$4c
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
+#endif
 
     // Render the loaded art data
+#if C128_REAL_BOOT_DIAG
+    ldx #$45
+    jsr c128_stack_guard_begin
+#endif
     jsr title_render_data
+#if C128_REAL_BOOT_DIAG
+    ldx #$46
+    jsr c128_stack_guard_check
+#endif
     :ExitKernal()
     rts
 
-!title_fallback:
+title_fallback_render:
     // Simple text title (no disk art available)
     jsr screen_clear        // Clear KERNAL residue from failed load too
     lda #0
@@ -156,7 +207,13 @@ title_render_data:
     ldy #0
     jsr mmu_safe_map_read_ptr1
     beq !trd_found+
+    cmp #$a0
+    bne !trd_put_normal+
+    jsr title_put_block_char
+    jmp !trd_advance+
+!trd_put_normal:
     jsr screen_put_char
+!trd_advance:
     inc zp_ptr1
     bne !trd_draw_bank1-
     inc zp_ptr1_hi
@@ -200,6 +257,37 @@ title_render_data:
 
 !trd_done:
     rts
+
+#if C128
+// C64 title data uses $A0 as reverse-space solid blocks. On the C128 VDC
+// path, write a plain space and set reverse-video in the attribute byte so
+// the block glyph survives the 80-column character mapping.
+title_put_block_char:
+    php
+    stx tbc_save_x
+    jsr screen_set_cursor
+
+    sei
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    lda #SC_SPACE
+    jsr vdc_write_data
+
+    lda zp_color_hi
+    ldy zp_color_lo
+    jsr vdc_set_update_addr
+    ldx zp_text_color
+    lda vic_to_vdc_color,x
+    ora #$40
+    jsr vdc_write_data
+    plp
+
+    ldx tbc_save_x
+    inc zp_cursor_col
+    rts
+tbc_save_x: .byte 0
+#endif
 
 // Filename for KERNAL LOAD (PETSCII, NOT null-terminated — KERNAL uses length)
 // Must use explicit PETSCII bytes — .text produces screen codes under screencode_upper

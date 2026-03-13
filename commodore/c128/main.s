@@ -37,6 +37,24 @@
 .const C128_TEST_SCRIPTED_TOWN_FLOW = 0
 #endif
 
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+.const C128_REAL_BOOT_DIAG = 1
+#else
+.const C128_REAL_BOOT_DIAG = 0
+#endif
+
+#if C128_TEST_OVERLAY_TRANSITION_DIAG
+.const C128_OVERLAY_TRANSITION_DIAG = 1
+#else
+.const C128_OVERLAY_TRANSITION_DIAG = 0
+#endif
+
+#if C128_TEST_VIC40_CLEAN_BOOT
+.const C128_VIC40_BOOT_PROBE = 1
+#else
+.const C128_VIC40_BOOT_PROBE = 0
+#endif
+
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
 // ============================================================
@@ -53,11 +71,23 @@ entry:
 // ============================================================
 tramp_player_create:
     lda #1                      // OVL_STARTUP
+#if C128_REAL_BOOT_DIAG
+    ldx #$31
+    jsr c128_stack_guard_begin
+#endif
     jsr overlay_load
+#if C128_REAL_BOOT_DIAG
+    ldx #$32
+    jsr c128_stack_guard_check
+#endif
     bcc !tpc_loaded+
     jmp entry_main
 !tpc_loaded:
     jsr c128_restore_runtime_guards
+#if C128_REAL_BOOT_DIAG
+    ldx #$33
+    jsr c128_stack_guard_begin
+#endif
     jmp player_create
 
 tramp_game_over:
@@ -118,11 +148,23 @@ tramp_game_over:
 
 tramp_store_init_all:
     lda #2                      // OVL_TOWN
+#if C128_REAL_BOOT_DIAG
+    ldx #$34
+    jsr c128_stack_guard_begin
+#endif
     jsr overlay_load
+#if C128_REAL_BOOT_DIAG
+    ldx #$35
+    jsr c128_stack_guard_check
+#endif
     bcc !tsia_loaded+
     jmp entry_main
 !tsia_loaded:
     jsr c128_restore_runtime_guards
+#if C128_REAL_BOOT_DIAG
+    ldx #$36
+    jsr c128_stack_guard_begin
+#endif
     jmp store_init_all
 
 tramp_store_restock_all:
@@ -168,6 +210,383 @@ c128_test_cache_survival_fail_sym:
 c128_test_cache_survival_pass_sym:
     brk
 #endif
+#if C128_TEST_TITLE_ART_CONTENT
+c128_test_title_art_fail_sym:
+    brk
+c128_test_title_art_pass_sym:
+    brk
+#endif
+#if C128_TEST_OVERLAY_TRANSITION_DIAG
+c128_overlay_transition_fail_sym:
+    brk
+c128_overlay_transition_pass_sym:
+    brk
+#endif
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+c128_diag_fail_sym:
+    lda c128_stack_guard_stage
+    cmp #$11
+    bne !chk12+
+    jmp c128_diag_fail_stage_11
+!chk12:
+    cmp #$12
+    bne !chk13+
+    jmp c128_diag_fail_stage_12
+!chk13:
+    cmp #$13
+    bne !chk14+
+    jmp c128_diag_fail_stage_13
+!chk14:
+    cmp #$14
+    bne !chk15+
+    jmp c128_diag_fail_stage_14
+!chk15:
+    cmp #$15
+    bne !chk16+
+    jmp c128_diag_fail_stage_15
+!chk16:
+    cmp #$16
+    bne !chk17+
+    jmp c128_diag_fail_stage_16
+!chk17:
+    cmp #$17
+    bne !chk18+
+    jmp c128_diag_fail_stage_17
+!chk18:
+    cmp #$18
+    bne !chk19+
+    jmp c128_diag_fail_stage_18
+!chk19:
+    cmp #$19
+    bne !chk1a+
+    jmp c128_diag_fail_stage_19
+!chk1a:
+    cmp #$1a
+    bne !chk1b+
+    jmp c128_diag_fail_stage_1a
+!chk1b:
+    cmp #$1b
+    bne !chk1c+
+    jmp c128_diag_fail_stage_1b
+!chk1c:
+    cmp #$1c
+    bne !chk1d+
+    jmp c128_diag_fail_stage_1c
+!chk1d:
+    cmp #$1d
+    bne !chk1e+
+    jmp c128_diag_fail_stage_1d
+!chk1e:
+    cmp #$1e
+    bne !chk1f+
+    jmp c128_diag_fail_stage_1e
+!chk1f:
+    cmp #$1f
+    bne !chk21+
+    jmp c128_diag_fail_stage_1f
+!chk21:
+    cmp #$21
+    bne !chk22+
+    jmp c128_diag_fail_stage_21
+!chk22:
+    cmp #$22
+    bne !chk23+
+    jmp c128_diag_fail_stage_22
+!chk23:
+    cmp #$23
+    bne !chk24+
+    jmp c128_diag_fail_stage_23
+!chk24:
+    cmp #$24
+    bne !chk25+
+    jmp c128_diag_fail_stage_24
+!chk25:
+    cmp #$25
+    bne !chk26+
+    jmp c128_diag_fail_stage_25
+!chk26:
+    cmp #$26
+    bne !chk27+
+    jmp c128_diag_fail_stage_26
+!chk27:
+    cmp #$27
+    bne !chk28+
+    jmp c128_diag_fail_stage_27
+!chk28:
+    cmp #$28
+    bne !chk31+
+    jmp c128_diag_fail_stage_28
+!chk31:
+    cmp #$31
+    bne !chk32+
+    jmp c128_diag_fail_stage_31
+!chk32:
+    cmp #$32
+    bne !chk33+
+    jmp c128_diag_fail_stage_32
+!chk33:
+    cmp #$33
+    bne !chk34+
+    jmp c128_diag_fail_stage_33
+!chk34:
+    cmp #$34
+    bne !chk35+
+    jmp c128_diag_fail_stage_34
+!chk35:
+    cmp #$35
+    bne !chk36+
+    jmp c128_diag_fail_stage_35
+!chk36:
+    cmp #$36
+    bne !chk39+
+    jmp c128_diag_fail_stage_36
+!chk39:
+    cmp #$39
+    bne !chk3a+
+    jmp c128_diag_fail_stage_39
+!chk3a:
+    cmp #$3a
+    bne !chk41+
+    jmp c128_diag_fail_stage_3a
+!chk41:
+    cmp #$41
+    bne !chk42+
+    jmp c128_diag_fail_stage_41
+!chk42:
+    cmp #$42
+    bne !chk43+
+    jmp c128_diag_fail_stage_42
+!chk43:
+    cmp #$43
+    bne !chk44+
+    jmp c128_diag_fail_stage_43
+!chk44:
+    cmp #$44
+    bne !chk45+
+    jmp c128_diag_fail_stage_44
+!chk45:
+    cmp #$45
+    bne !chk46+
+    jmp c128_diag_fail_stage_45
+!chk46:
+    cmp #$46
+    bne !chk47+
+    jmp c128_diag_fail_stage_46
+!chk47:
+    cmp #$47
+    bne !chk48+
+    jmp c128_diag_fail_stage_47
+!chk48:
+    cmp #$48
+    bne !chk49+
+    jmp c128_diag_fail_stage_48
+!chk49:
+    cmp #$49
+    bne !chk4a+
+    jmp c128_diag_fail_stage_49
+!chk4a:
+    cmp #$4a
+    bne !chk4b+
+    jmp c128_diag_fail_stage_4a
+!chk4b:
+    cmp #$4b
+    bne !chk4c+
+    jmp c128_diag_fail_stage_4b
+!chk4c:
+    cmp #$4c
+    bne !chk51+
+    jmp c128_diag_fail_stage_4c
+!chk51:
+    cmp #$51
+    bne !chk52+
+    jmp c128_diag_fail_stage_51
+!chk52:
+    cmp #$52
+    bne !chk53+
+    jmp c128_diag_fail_stage_52
+!chk53:
+    cmp #$53
+    bne !chk54+
+    jmp c128_diag_fail_stage_53
+!chk54:
+    cmp #$54
+    bne !chk61+
+    jmp c128_diag_fail_stage_54
+!chk61:
+    cmp #$61
+    bne !chk62+
+    jmp c128_diag_fail_stage_61
+!chk62:
+    cmp #$62
+    bne !chk63+
+    jmp c128_diag_fail_stage_62
+!chk63:
+    cmp #$63
+    bne !chk64+
+    jmp c128_diag_fail_stage_63
+!chk64:
+    cmp #$64
+    bne !diag_default+
+    jmp c128_diag_fail_stage_64
+!diag_default:
+    jmp c128_diag_fail_default
+c128_diag_fail_default:
+    nop
+    jmp c128_diag_fail_default
+c128_diag_fail_stage_11:
+    nop
+    jmp c128_diag_fail_stage_11
+c128_diag_fail_stage_12:
+    nop
+    jmp c128_diag_fail_stage_12
+c128_diag_fail_stage_13:
+    nop
+    jmp c128_diag_fail_stage_13
+c128_diag_fail_stage_14:
+    nop
+    jmp c128_diag_fail_stage_14
+c128_diag_fail_stage_15:
+    nop
+    jmp c128_diag_fail_stage_15
+c128_diag_fail_stage_16:
+    nop
+    jmp c128_diag_fail_stage_16
+c128_diag_fail_stage_17:
+    nop
+    jmp c128_diag_fail_stage_17
+c128_diag_fail_stage_18:
+    nop
+    jmp c128_diag_fail_stage_18
+c128_diag_fail_stage_19:
+    nop
+    jmp c128_diag_fail_stage_19
+c128_diag_fail_stage_1a:
+    nop
+    jmp c128_diag_fail_stage_1a
+c128_diag_fail_stage_1b:
+    nop
+    jmp c128_diag_fail_stage_1b
+c128_diag_fail_stage_1c:
+    nop
+    jmp c128_diag_fail_stage_1c
+c128_diag_fail_stage_1d:
+    nop
+    jmp c128_diag_fail_stage_1d
+c128_diag_fail_stage_1e:
+    nop
+    jmp c128_diag_fail_stage_1e
+c128_diag_fail_stage_1f:
+    nop
+    jmp c128_diag_fail_stage_1f
+c128_diag_fail_stage_21:
+    nop
+    jmp c128_diag_fail_stage_21
+c128_diag_fail_stage_22:
+    nop
+    jmp c128_diag_fail_stage_22
+c128_diag_fail_stage_23:
+    nop
+    jmp c128_diag_fail_stage_23
+c128_diag_fail_stage_24:
+    nop
+    jmp c128_diag_fail_stage_24
+c128_diag_fail_stage_25:
+    nop
+    jmp c128_diag_fail_stage_25
+c128_diag_fail_stage_26:
+    nop
+    jmp c128_diag_fail_stage_26
+c128_diag_fail_stage_27:
+    nop
+    jmp c128_diag_fail_stage_27
+c128_diag_fail_stage_28:
+    nop
+    jmp c128_diag_fail_stage_28
+c128_diag_fail_stage_31:
+    nop
+    jmp c128_diag_fail_stage_31
+c128_diag_fail_stage_32:
+    nop
+    jmp c128_diag_fail_stage_32
+c128_diag_fail_stage_33:
+    nop
+    jmp c128_diag_fail_stage_33
+c128_diag_fail_stage_34:
+    nop
+    jmp c128_diag_fail_stage_34
+c128_diag_fail_stage_35:
+    nop
+    jmp c128_diag_fail_stage_35
+c128_diag_fail_stage_36:
+    nop
+    jmp c128_diag_fail_stage_36
+c128_diag_fail_stage_39:
+    nop
+    jmp c128_diag_fail_stage_39
+c128_diag_fail_stage_3a:
+    nop
+    jmp c128_diag_fail_stage_3a
+c128_diag_fail_stage_41:
+    nop
+    jmp c128_diag_fail_stage_41
+c128_diag_fail_stage_42:
+    nop
+    jmp c128_diag_fail_stage_42
+c128_diag_fail_stage_43:
+    nop
+    jmp c128_diag_fail_stage_43
+c128_diag_fail_stage_44:
+    nop
+    jmp c128_diag_fail_stage_44
+c128_diag_fail_stage_45:
+    nop
+    jmp c128_diag_fail_stage_45
+c128_diag_fail_stage_46:
+    nop
+    jmp c128_diag_fail_stage_46
+c128_diag_fail_stage_47:
+    nop
+    jmp c128_diag_fail_stage_47
+c128_diag_fail_stage_48:
+    nop
+    jmp c128_diag_fail_stage_48
+c128_diag_fail_stage_49:
+    nop
+    jmp c128_diag_fail_stage_49
+c128_diag_fail_stage_4a:
+    nop
+    jmp c128_diag_fail_stage_4a
+c128_diag_fail_stage_4b:
+    nop
+    jmp c128_diag_fail_stage_4b
+c128_diag_fail_stage_4c:
+    nop
+    jmp c128_diag_fail_stage_4c
+c128_diag_fail_stage_51:
+    nop
+    jmp c128_diag_fail_stage_51
+c128_diag_fail_stage_52:
+    nop
+    jmp c128_diag_fail_stage_52
+c128_diag_fail_stage_53:
+    nop
+    jmp c128_diag_fail_stage_53
+c128_diag_fail_stage_54:
+    nop
+    jmp c128_diag_fail_stage_54
+c128_diag_fail_stage_61:
+    nop
+    jmp c128_diag_fail_stage_61
+c128_diag_fail_stage_62:
+    nop
+    jmp c128_diag_fail_stage_62
+c128_diag_fail_stage_63:
+    nop
+    jmp c128_diag_fail_stage_63
+c128_diag_fail_stage_64:
+    nop
+    jmp c128_diag_fail_stage_64
+#endif
 
 tramp_ui_enter:
     sei
@@ -186,6 +605,7 @@ tramp_ui_exit:
     rts
 
 tramp_ui_help_display:
+    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_help_display
     jmp tramp_ui_exit
@@ -196,19 +616,108 @@ tramp_ui_char_display:
     jmp tramp_ui_exit
 
 tramp_ui_inv_display:
+    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_inv_display
     jmp tramp_ui_exit
 
 tramp_ui_equip_display:
+    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_equip_display
     jmp tramp_ui_exit
 
 tramp_ui_recall:
+    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_recall_display
     jmp tramp_ui_exit
+
+tramp_player_cast_spell:
+    sei
+    :BankOutKernal()
+    jsr player_cast_spell
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_player_pray:
+    sei
+    :BankOutKernal()
+    jsr player_pray
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_spell_list_display:
+    sei
+    :BankOutKernal()
+    jsr spell_list_display
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_magic_check_new_spells:
+    sei
+    :BankOutKernal()
+    jsr magic_check_new_spells
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_mage_effect_dispatch:
+    sei
+    :BankOutKernal()
+    jsr mage_effect_dispatch
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_priest_effect_dispatch:
+    sei
+    :BankOutKernal()
+    jsr priest_effect_dispatch
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_ranged_fire:
+    sei
+    :BankOutKernal()
+    jsr ranged_fire
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_throw_item:
+    sei
+    :BankOutKernal()
+    jsr throw_item
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+tramp_bash_command:
+    sei
+    :BankOutKernal()
+    jsr bash_command
+    lda #$3e
+    sta $ff00
+    cli
+    rts
+
+// tramp_dig_ability — Calculate digging ability.
+// Pinned low to avoid $D000 drift.
+tramp_dig_ability:
+    jmp calc_dig_ability
 
 // tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
 // Pinned low to avoid $D000 drift.
@@ -239,15 +748,13 @@ tramp_ego_get_ac_bonus:
 // title_show_sysinfo — trampoline to banked routine at $EB00.
 // Pinned low to avoid drifting into $D000 I/O space.
 title_show_sysinfo:
+    php
     sei
     lda #$35                    // BANK_NO_KERNAL (I/O visible)
     sta $01
     jsr title_show_sysinfo_banked
-    lda #$36                    // BANK_NO_BASIC
-    sta $01
-    lda #$3e                    // MMU_ALL_RAM
-    sta $ff00
-    cli
+    jsr c128_restore_runtime_guards
+    plp
     rts
 
 tsi_krev_cached: .byte 0
@@ -255,15 +762,13 @@ tsi_krev_cached: .byte 0
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
 tramp_reu_show_status:
+    php
     sei
     lda #$35                    // BANK_NO_KERNAL (I/O visible)
     sta $01
     jsr reu_show_status_banked
-    lda #$36                    // BANK_NO_BASIC
-    sta $01
-    lda #$3e                    // MMU_ALL_RAM
-    sta $ff00
-    cli
+    jsr c128_restore_runtime_guards
+    plp
     rts
 
 // ============================================================
@@ -275,6 +780,8 @@ tramp_reu_show_status:
 #import "../common/sound.s"
 #import "config128.s"
 #import "screen_vdc.s"
+#import "../common/title_sysinfo_banked.s"
+#import "../common/reu_loading_banked.s"
 #import "input128.s"
 
 // Bootstrap — sets up MMU and processor port, jumps to main code
@@ -375,6 +882,16 @@ entry_real:
     lda #>w_load
     sta $ffd7
 
+    // Save original hardware IRQ/NMI vectors before patching RAM copies.
+    lda $fffe
+    sta kernal_hw_irq_vec_lo
+    lda $ffff
+    sta kernal_hw_irq_vec_hi
+    lda $fffa
+    sta kernal_hw_nmi_vec_lo
+    lda $fffb
+    sta kernal_hw_nmi_vec_hi
+
     // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM.
     // When $FF00=$3E (game mode), CPU reads $FFFE from RAM.
     // The mirrored ROM vector points to KERNAL code at $E000+ which is
@@ -409,6 +926,12 @@ entry_real:
 // READST
 w_readst:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -418,14 +941,19 @@ w_readst:
 t_readst: .word 0
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // SETLFS
 w_setlfs:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -435,14 +963,19 @@ w_setlfs:
 t_setlfs: .word 0
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // SETNAM
 w_setnam:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -452,14 +985,19 @@ w_setnam:
 t_setnam: .word 0
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // OPEN
 w_open:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -469,14 +1007,19 @@ w_open:
 t_open: .word 0
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CLOSE
 w_close:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -485,14 +1028,19 @@ w_close:
     jsr K128_CLOSE
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CHKIN
 w_chkin:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -501,14 +1049,19 @@ w_chkin:
     jsr K128_CHKIN
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CHKOUT
 w_chkout:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -517,14 +1070,19 @@ w_chkout:
     jsr K128_CHKOUT
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CLRCHN
 w_clrchn:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -533,14 +1091,19 @@ w_clrchn:
     jsr K128_CLRCHN
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CHRIN
 w_chrin:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -549,14 +1112,19 @@ w_chrin:
     jsr K128_CHRIN
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // CHROUT
 w_chrout:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -565,28 +1133,63 @@ w_chrout:
     jsr K128_CHROUT
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 // LOAD
 w_load:
+    stx c128_load_arg_x
+    sty c128_load_arg_y
+#if C128_REAL_BOOT_DIAG
+    ldx #$51
+    jsr c128_stack_guard_begin
+    jsr c128_stack_guard_snapshot_banking
+#endif
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
     sta $01
+#if C128_REAL_BOOT_DIAG
+    ldx #$52
+    stx c128_stack_guard_stage
+    jsr c128_stack_guard_snapshot_banking
+#endif
     pla
+    ldx c128_load_arg_x
+    ldy c128_load_arg_y
     .byte $20
 t_load: .word 0
+#if C128_REAL_BOOT_DIAG
+    ldx #$53
+    stx c128_stack_guard_stage
+    jsr c128_stack_guard_snapshot_banking
+#endif
     php
     pha
-    lda c128_kernal_return_mmu
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
+#if C128_REAL_BOOT_DIAG
+    ldx #$54
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
+    jsr c128_stack_guard_snapshot_return
+#endif
     rts
+
+c128_restore_saved_banking:
+    jmp c128_return_to_runtime_after_kernal
+
+c128_load_arg_x: .byte 0
+c128_load_arg_y: .byte 0
 
 // safe_irq — Minimal IRQ handler for $FF00=$3E mode.
 // When $FF00=$3E (game mode), the CPU reads the IRQ vector from RAM.
@@ -622,12 +1225,21 @@ safe_nmi:
 // Reinstalls keyboard stub on exit. Callers manage MMU.
 kernal_load_safe:
     sei
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
     jsr $ffd5
     php
+    pha
+    jsr c128_restore_saved_banking
     lda #<chrin_keyboard_stub
     sta $0302
     lda #>chrin_keyboard_stub
     sta $0303
+    pla
     plp
     rts
 
@@ -638,9 +1250,9 @@ chrin_keyboard_stub:
 
 // c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
 // Use this on long-lived runtime paths that do not need the full helper reinstall.
-c128_restore_runtime_vectors:
-    php
-    sei
+c128_restore_runtime_state_core:
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
     lda #BANK_NO_BASIC
     sta $01
     lda #MMU_ALL_RAM
@@ -663,15 +1275,16 @@ c128_restore_runtime_vectors:
     sta $0303
     lda #$ff
     sta $cc
+    rts
+
+c128_restore_runtime_vectors:
+    php
+    sei
+    jsr c128_restore_runtime_state_core
     plp
     rts
 
-// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
-// Runtime KERNAL/editor paths and common-RAM users are still mutating
-// vector/helper state more aggressively than the cache path can tolerate.
-// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
-// blob before returning to gameplay/overlay code.
-c128_restore_runtime_guards:
+c128_return_to_runtime_after_kernal:
     pha
     txa
     pha
@@ -679,8 +1292,9 @@ c128_restore_runtime_guards:
     pha
     php
     sei
-    jsr c128_restore_runtime_vectors
+    jsr c128_restore_runtime_state_core
     jsr init_common_mmu_helpers
+    jsr c128_vdc_reassert_mode
     plp
     pla
     tay
@@ -689,7 +1303,20 @@ c128_restore_runtime_guards:
     pla
     rts
 
+// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
+// Runtime KERNAL/editor paths and common-RAM users are still mutating
+// vector/helper state more aggressively than the cache path can tolerate.
+// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
+// blob before returning to gameplay/overlay code.
+c128_restore_runtime_state:
+    jmp c128_return_to_runtime_after_kernal
+
+c128_restore_runtime_guards:
+    jmp c128_restore_runtime_state
+
 c128_kernal_return_mmu: .byte MMU_ALL_RAM
+c128_kernal_return_port0: .byte CPU_PORT_DDR_DEFAULT
+c128_kernal_return_port1: .byte BANK_NO_BASIC
 
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
@@ -697,6 +1324,14 @@ c128_kernal_return_mmu: .byte MMU_ALL_RAM
 // patched via the JMP table — call this routine directly instead.
 safe_setbnk:
     pha
+    lda $00
+    sta c128_kernal_return_port0
+    lda $01
+    sta c128_kernal_return_port1
+    lda $ff00
+    sta c128_kernal_return_mmu
+    lda #CPU_PORT_DDR_DEFAULT
+    sta $00
     lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
     sta $ff00
     lda #BANK_ALL_ROM
@@ -705,17 +1340,16 @@ safe_setbnk:
     jsr $ff68
     php
     pha
-    lda #MMU_ALL_RAM
-    sta $ff00
+    jsr c128_restore_saved_banking
     pla
     plp
     rts
 
-// init_copy_banked — Copy banked code payload to $EB00
+// init_copy_banked — Copy banked code payload to $E80E
 // Uses $3F (NOIO) instead of $3E because source data crosses the I/O
 // range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
 // garbage instead of game data.
-// NOTE: destination is $EB00, not $E000, because $E000-$E80D is used
+// NOTE: destination starts at $E80E because $E000-$E80D is used
 // at runtime by BANKED_DATA_BASE (tier monster/item databases).
 init_copy_banked:
     sei
@@ -723,9 +1357,9 @@ init_copy_banked:
     sta zp_ptr0
     lda #>banked_payload
     sta zp_ptr0_hi
-    lda #$00
+    lda #$0e
     sta zp_ptr1
-    lda #$EB
+    lda #$E8
     sta zp_ptr1_hi
     ldx #((banked_payload_end - banked_payload + 255) / 256)
     ldy #0
@@ -954,7 +1588,19 @@ restart_entry:
 
     jsr screen_clear
 
+#if C128_REAL_BOOT_DIAG
+    ldx #$27
+    jsr c128_stack_guard_begin
+#endif
     jsr title_load_and_draw
+#if C128_REAL_BOOT_DIAG
+    ldx #$28
+    jsr c128_stack_guard_check
+#endif
+#if C128_TEST_TITLE_ART_CONTENT
+    jsr c128_test_title_art_assert
+#endif
+    sei
 
     lda #STATUS_ROW
     jsr screen_clear_row
@@ -978,6 +1624,14 @@ restart_entry:
     sta zp_ptr0_hi
     jsr screen_put_string
 
+title_menu_ready:
+#if C128_VIC40_BOOT_PROBE
+    jsr c128_vic40_boot_probe
+#endif
+#if C128_TEST_OVERLAY_TRANSITION_DIAG
+    jmp c128_overlay_transition_pass_sym
+#endif
+    cli
 !title_menu_loop:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
@@ -1080,7 +1734,15 @@ title_load_game:
 // ============================================================
 
 tramp_level_generate:
+#if C128_REAL_BOOT_DIAG
+    ldx #$39
+    jsr c128_stack_guard_begin
+#endif
     jsr level_generate
+#if C128_REAL_BOOT_DIAG
+    ldx #$3a
+    jsr c128_stack_guard_check
+#endif
     rts
 
 // ============================================================
@@ -1205,6 +1867,10 @@ tramp_ego_put_suffix:
 teps_save_y: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
+kernal_hw_irq_vec_lo: .byte 0
+kernal_hw_irq_vec_hi: .byte 0
+kernal_hw_nmi_vec_lo: .byte 0
+kernal_hw_nmi_vec_hi: .byte 0
 
 // C128 cache/overlay state lives in a dedicated main-RAM block.
 // Do not place this adjacent to preload UI strings or transient workspace.
@@ -1226,6 +1892,210 @@ c128_cache_test_skip_tier: .byte 0
 c128_cache_test_skip_overlay: .byte 2
 #else
 c128_cache_test_skip_overlay: .byte 0
+#endif
+
+// c128_stack_guard_begin/check — capture and validate stack balance around
+// high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
+// expected SP, actual SP, and stage tag in RAM and break immediately.
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT
+c128_stack_guard_begin:
+    jsr c128_stack_guard_verify_canaries
+    stx c128_stack_guard_stage
+    lda #0
+    sta c128_stack_guard_fail_code
+    sta c128_stack_guard_substage
+    tsx
+    stx c128_stack_guard_expected
+    rts
+
+c128_stack_guard_check:
+    jsr c128_stack_guard_verify_canaries
+    stx c128_stack_guard_stage
+    tsx
+    stx c128_stack_guard_actual
+    cpx c128_stack_guard_expected
+    beq !c128_stack_guard_ok+
+    lda #$e1
+    sta c128_stack_guard_fail_code
+    stx c128_stack_guard_substage
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    jmp c128_diag_fail_sym
+#else
+    brk
+#endif
+!c128_stack_guard_ok:
+    rts
+
+c128_stack_guard_verify_canaries:
+    lda c128_stack_guard_canary_lo
+    cmp #$a5
+    bne !c128_stack_guard_bad+
+    lda c128_stack_guard_canary_hi
+    cmp #$5a
+    beq !c128_stack_guard_canaries_ok+
+!c128_stack_guard_bad:
+    lda #$e0
+    sta c128_stack_guard_fail_code
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    jmp c128_diag_fail_sym
+#else
+    brk
+#endif
+!c128_stack_guard_canaries_ok:
+    rts
+
+c128_stack_guard_snapshot_banking:
+    lda $00
+    sta c128_stack_guard_port0
+    lda $01
+    sta c128_stack_guard_port1
+    lda $ff00
+    sta c128_stack_guard_mmu
+    rts
+
+c128_stack_guard_snapshot_return:
+    tsx
+    lda $0103,x
+    sta c128_stack_guard_ret_lo
+    lda $0104,x
+    sta c128_stack_guard_ret_hi
+    rts
+
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+c128_diag_validate_runtime_invariants:
+    stx c128_stack_guard_stage
+    jsr c128_stack_guard_snapshot_banking
+    tsx
+    stx c128_stack_guard_actual
+    cpx #$40
+    bcs !stack_ok+
+    lda #$e2
+    sta c128_stack_guard_fail_code
+    stx c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!stack_ok:
+    lda $00
+    cmp #CPU_PORT_DDR_DEFAULT
+    beq !port0_ok+
+    sta c128_stack_guard_fail_code
+    lda #1
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!port0_ok:
+    lda $01
+    cmp #BANK_NO_BASIC
+    beq !port1_ok+
+    sta c128_stack_guard_fail_code
+    lda #2
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!port1_ok:
+    lda $ff00
+    cmp #MMU_ALL_RAM
+    beq !mmu_ok+
+    sta c128_stack_guard_fail_code
+    lda #3
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!mmu_ok:
+    lda $0314
+    cmp #<safe_irq_restore
+    beq !irq_lo_ok+
+    sta c128_stack_guard_fail_code
+    lda #4
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!irq_lo_ok:
+    lda $0315
+    cmp #>safe_irq_restore
+    beq !irq_hi_ok+
+    sta c128_stack_guard_fail_code
+    lda #5
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!irq_hi_ok:
+    lda $fffa
+    cmp #<safe_nmi
+    beq !nmi_lo_ok+
+    sta c128_stack_guard_fail_code
+    lda #6
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!nmi_lo_ok:
+    lda $fffb
+    cmp #>safe_nmi
+    beq !nmi_hi_ok+
+    sta c128_stack_guard_fail_code
+    lda #7
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!nmi_hi_ok:
+    lda $fffe
+    cmp #<safe_irq
+    beq !hw_irq_lo_ok+
+    sta c128_stack_guard_fail_code
+    lda #8
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!hw_irq_lo_ok:
+    lda $ffff
+    cmp #>safe_irq
+    beq !hw_irq_hi_ok+
+    sta c128_stack_guard_fail_code
+    lda #9
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!hw_irq_hi_ok:
+    lda $0302
+    cmp #<chrin_keyboard_stub
+    beq !chrin_lo_ok+
+    sta c128_stack_guard_fail_code
+    lda #$0a
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!chrin_lo_ok:
+    lda $0303
+    cmp #>chrin_keyboard_stub
+    beq !chrin_hi_ok+
+    sta c128_stack_guard_fail_code
+    lda #$0b
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!chrin_hi_ok:
+    jsr c128_diag_verify_helper_blob
+    rts
+
+c128_diag_verify_helper_blob:
+    ldx #0
+!helper_loop:
+    lda MMU_COMMON_HELPERS_BASE,x
+    cmp mmu_common_helpers_blob,x
+    beq !helper_next+
+    sta c128_stack_guard_fail_code
+    txa
+    sta c128_stack_guard_substage
+    jmp c128_diag_fail_sym
+!helper_next:
+    inx
+    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob
+    bne !helper_loop-
+    rts
+#endif
+
+.assert "Stack guard block reserve stays below fixed debug slot", * <= $3400, true
+.fill $3400 - *, 0
+c128_stack_guard_canary_lo: .byte $a5
+c128_stack_guard_expected:  .byte 0
+c128_stack_guard_actual:    .byte 0
+c128_stack_guard_stage:     .byte 0
+c128_stack_guard_canary_hi: .byte $5a
+c128_stack_guard_port0:     .byte 0
+c128_stack_guard_port1:     .byte 0
+c128_stack_guard_mmu:       .byte 0
+c128_stack_guard_ret_lo:    .byte 0
+c128_stack_guard_ret_hi:    .byte 0
+c128_stack_guard_fail_code: .byte 0
+c128_stack_guard_substage:  .byte 0
 #endif
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
@@ -1259,28 +2129,23 @@ c128_cache_state_end:
 #import "../common/monster_ai.s"
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
+#import "../common/spell_data.s"
+#import "../common/spell_effects.s"
 #import "../common/item.s"
-#import "../common/combat.s"
 #import "../common/store_data.s"
 #import "../common/save.s"
 #import "../common/disk_swap.s"
-#import "../common/player_items.s"
-#import "../common/spell_data.s"
-#import "../common/spell_effects.s"
-#import "../common/player_magic.s"
 #import "../common/dungeon_los.s"
 #import "dungeon_render_vdc.s"
-#import "../common/game_loop.s"
-#import "../common/ui_help_clear.s"
-#import "../common/ui_character.s"
-#import "../common/player_move.s"
-#import "../common/projectile.s"
-#import "../common/ranged_fire.s"
-#import "../common/throw.s"
-#import "../common/bash.s"
-#import "../common/tunnel.s"
-#import "../common/turn.s"
 #import "../common/monster_attack.s"
+#import "../common/combat.s"
+#import "../common/player_move.s"
+#import "../common/ui_help_clear.s"
+#import "../common/game_loop.s"
+#import "../common/turn.s"
+#import "../common/player_items.s"
+#import "../common/projectile.s"
+#import "../common/tunnel.s"
 #import "../common/string_bank.s"
 #import "../common/perf_p1.s"
 
@@ -1288,6 +2153,67 @@ c128_cache_state_end:
 // ============================================================
 title_str:
     .text "MORIA8 C=128" ; .byte 0
+#if C128_TEST_TITLE_ART_CONTENT
+c128_test_title_art_assert:
+    lda #<MAP_BASE
+    sta zp_ptr1
+    lda #>MAP_BASE
+    sta zp_ptr1_hi
+    ldy #0
+    jsr mmu_safe_map_read_ptr1
+    cmp #1
+    beq !check_screen+
+    sta c128_stack_guard_fail_code
+    lda #$10
+    sta c128_stack_guard_substage
+    jmp c128_test_title_art_fail_sym
+!check_screen:
+    lda #1
+    sta zp_cursor_row
+    lda #21
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$2b
+    beq !check_logo+
+    sta c128_stack_guard_fail_code
+    lda #1
+    sta c128_stack_guard_substage
+    jmp c128_test_title_art_fail_sym
+!check_logo:
+
+    lda #3
+    sta zp_cursor_row
+    lda #24
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$20
+    bne !block_fail+
+    lda zp_color_hi
+    ldy zp_color_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #(VDC_WHITE | $40)
+    beq !pass+
+!block_fail:
+    sta c128_stack_guard_fail_code
+    lda #2
+    sta c128_stack_guard_substage
+    jmp c128_test_title_art_fail_sym
+
+!pass:
+    jmp c128_test_title_art_pass_sym
+#endif
 #if C128_TEST_TITLE_KEY_TRAP
 title_key_trap_base:
     .fill 256, $00
@@ -1414,6 +2340,49 @@ c128_test_validate_overlay_partial_state:
     rts
 #endif
 
+#if C128_VIC40_BOOT_PROBE
+c128_vic40_boot_probe:
+    lda $d011
+    cmp #$1b
+    bne c128_vic40_boot_probe_fail_sym
+    lda $d018
+    cmp #$14
+    bne c128_vic40_boot_probe_fail_sym
+
+    ldx #0
+!vic40_screen_loop:
+    lda $0400,x
+    cmp #$20
+    beq !vic40_screen_ok+
+    cmp #$00
+    bne c128_vic40_boot_probe_fail_sym
+!vic40_screen_ok:
+    inx
+    cpx #$40
+    bne !vic40_screen_loop-
+
+    lda $d800
+    sta zp_temp0
+    ldx #0
+!vic40_color_loop:
+    lda $d800,x
+    cmp zp_temp0
+    bne c128_vic40_boot_probe_fail_sym
+    inx
+    cpx #$40
+    bne !vic40_color_loop-
+
+    jmp c128_vic40_boot_probe_pass_sym
+#endif
+
+c128_vic40_boot_probe_pass_sym:
+    nop
+    jmp c128_vic40_boot_probe_pass_sym
+
+c128_vic40_boot_probe_fail_sym:
+    nop
+    jmp c128_vic40_boot_probe_fail_sym
+
 #if C128_TEST_CACHE_SURVIVAL
 c128_test_verify_cache_survival:
     lda c128_cache_tiers_ready
@@ -1484,30 +2453,36 @@ c128_test_verify_cache_survival:
 .segment Bank1Data
 .segment Default
 
+// Moved out of the C128 banked payload to free room for command handlers,
+// but imported late so their shared-data dependencies are already defined.
+#import "../common/string_bank_banked.s"
+#import "../common/ego_items.s"
+#import "../common/ui_home.s"
+
 
 // ============================================================
-// Banked code payload — stored inline here, copied to $EB00
-// at startup by init_copy_banked. Runs in Bank 0 at $EB00-$FFFA.
+// Banked code payload — stored inline here, copied to $E80E
+// at startup by init_copy_banked. Runs in Bank 0 at $E80E-$FFFA.
 // All Bank1Data functions (UI screens, home) are included here so
 // they live in Bank 0 and are accessible with $FF00=$3E (MMU_ALL_RAM).
 //
-// Keep $EB00-$EFFF reserved so runtime banked code stays completely out of
-// the shared $E000-$EFFF overlay window. C128 overlay cache copies full 4 KB
-// slots, so any callable banked routine in that window will be overwritten.
+// Keep $E000-$E80D reserved for BANKED_DATA_BASE. Reloadable UI code occupies
+// the early banked window below first_banked_function; UI trampolines recopy
+// the payload before entry so overlay/cache activity cannot leave stale code
+// there. Hot banked gameplay command handlers start at first_banked_function.
 // ============================================================
 banked_payload:
-.pseudopc $EB00 {
-    .fill ($F000 - $EB00), 0
-first_banked_function:
-    #import "../common/title_sysinfo_banked.s"
-    #import "../common/reu_loading_banked.s"
-    #import "../common/string_bank_banked.s"
-    #import "../common/ego_items.s"
-    #import "../common/ui_home.s"
+.pseudopc $E80E {
     #import "../common/ui_help_data.s"
     #import "../common/ui_help.s"
     #import "../common/ui_recall.s"
     #import "../common/ui_inventory.s"
+first_banked_function:
+    #import "../common/player_magic.s"
+    #import "../common/ranged_fire.s"
+    #import "../common/throw.s"
+    #import "../common/bash.s"
+    #import "../common/ui_character.s"
 
 banked_code_end:
 }
@@ -1516,8 +2491,8 @@ banked_payload_end:
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
-.assert "Title sysinfo stays out of overlay window", title_show_sysinfo_banked >= $F000, true
-.assert "REU status stays out of overlay window", reu_show_status_banked >= $F000, true
+.assert "Title sysinfo stays out of I/O hole", title_show_sysinfo_banked < $D000 || title_show_sysinfo_banked >= $E000, true
+.assert "REU status stays out of I/O hole", reu_show_status_banked < $D000 || reu_show_status_banked >= $E000, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
@@ -1560,10 +2535,10 @@ program_end:
 .assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
-.assert "Help renderer stays out of overlay window", ui_help_display >= $F000, true
-.assert "Help title text stays out of overlay window", help_title_str >= $F000, true
-.assert "Help content table stays out of overlay window", help_lines >= $F000, true
-.assert "Character sheet renderer stays below I/O hole", ui_char_display < $D000, true
+.assert "Help renderer stays in reloadable banked window", ui_help_display >= $E80E && ui_help_display < first_banked_function, true
+.assert "Help title text stays in reloadable banked window", help_title_str >= $E80E && help_title_str < first_banked_function, true
+.assert "Help content table stays in reloadable banked window", help_lines >= $E80E && help_lines < first_banked_function, true
+.assert "Character sheet renderer stays out of overlay window", ui_char_display >= $F000, true
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
@@ -1572,8 +2547,13 @@ program_end:
 .assert "Load entry stays below I/O hole", load_game < $D000, true
 .assert "Load byte reader stays below I/O hole", load_read_byte < $D000, true
 .assert "Load block reader stays below I/O hole", load_read_block < $D000, true
+#if C128
 .assert "Load map reader stays below I/O hole", load_read_map_c128 < $D000, true
+#endif
 .assert "Delete-save helper stays below I/O hole", delete_savefile < $D000, true
+.assert "Load-resume entry stays below I/O hole", load_resume_game < $D000, true
+.assert "Main loop stays below I/O hole", main_loop < $D000, true
+.assert "Viewport/status tail stays below I/O hole", vp_render_status_loop < $D000, true
 .assert "Visibility update stays below I/O hole", update_visibility < $D000, true
 .assert "Room reveal stays below I/O hole", reveal_room < $D000, true
 .assert "Viewport renderer stays below I/O hole", render_viewport < $D000, true
@@ -1583,9 +2563,28 @@ program_end:
 .assert "Combat damage apply stays below I/O hole", combat_apply_damage < $D000, true
 .assert "Combat message build stays below I/O hole", msg_build_action < $D000, true
 .assert "Combat message print stays below I/O hole", cmb_print_buf < $D000, true
-.assert "Recall renderer stays out of overlay window", ui_recall_display >= $F000, true
-.assert "Inventory renderer stays out of overlay window", ui_inv_display >= $F000, true
-.assert "Equipment renderer stays out of overlay window", ui_equip_display >= $F000, true
+.assert "Monster melee entry stays below I/O hole", monster_attack_player < $D000, true
+.assert "Monster hit-roll calc stays below I/O hole", mon_atk_calc_tohit < $D000, true
+.assert "Monster hit-roll stays below I/O hole", mon_atk_roll_tohit < $D000, true
+.assert "Monster damage apply stays below I/O hole", mon_atk_apply_damage < $D000, true
+.assert "Find-doors effect stays below I/O hole", eff_find_doors < $D000, true
+.assert "Adjacent iterator stays below I/O hole", for_each_adjacent < $D000, true
+.assert "Sleep-adjacent effect stays below I/O hole", eff_sleep_adjacent < $D000, true
+.assert "Aim-wand handler stays out of I/O hole", item_aim_wand < $D000 || item_aim_wand >= $E000, true
+.assert "Use-staff handler stays out of I/O hole", item_use_staff < $D000 || item_use_staff >= $E000, true
+.assert "Study-spell handler stays out of I/O hole", item_gain_spell < $D000 || item_gain_spell >= $E000, true
+.assert "Cast-spell handler stays out of I/O hole", player_cast_spell < $D000 || player_cast_spell >= $E000, true
+.assert "Pray handler stays out of I/O hole", player_pray < $D000 || player_pray >= $E000, true
+.assert "Spell list renderer stays out of I/O hole", spell_list_display < $D000 || spell_list_display >= $E000, true
+.assert "Learn-new-spells helper stays out of I/O hole", magic_check_new_spells < $D000 || magic_check_new_spells >= $E000, true
+.assert "Mage effect dispatch stays out of I/O hole", mage_effect_dispatch < $D000 || mage_effect_dispatch >= $E000, true
+.assert "Priest effect dispatch stays out of I/O hole", priest_effect_dispatch < $D000 || priest_effect_dispatch >= $E000, true
+.assert "Ranged-fire handler stays out of I/O hole", ranged_fire < $D000 || ranged_fire >= $E000, true
+.assert "Throw-item handler stays out of I/O hole", throw_item < $D000 || throw_item >= $E000, true
+.assert "Bash handler stays out of I/O hole", bash_command < $D000 || bash_command >= $E000, true
+.assert "Recall renderer stays in reloadable banked window", ui_recall_display >= $E80E && ui_recall_display < first_banked_function, true
+.assert "Inventory renderer stays in reloadable banked window", ui_inv_display >= $E80E && ui_inv_display < first_banked_function, true
+.assert "Equipment renderer stays in reloadable banked window", ui_equip_display >= $E80E && ui_equip_display < first_banked_function, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
