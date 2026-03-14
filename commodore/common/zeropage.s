@@ -91,8 +91,8 @@
 .label zp_vol_10       = $2a   // KERNAL: serial scratch
 
 // --- C128 MMU Save state (KERNAL-Volatile) ---
-.label zp_mmu_save_01  = $fe   // C128 MMU save for EnterKernal
-.label zp_mmu_save_ff00 = $ff
+.label zp_temp_ptr     = $fe   // KERNAL-Volatile ($90-$FF)
+.label zp_temp_ptr_hi  = $ff
 
 // ============================================================
 // SAFE ZONE (continued) — BASIC working storage, free after

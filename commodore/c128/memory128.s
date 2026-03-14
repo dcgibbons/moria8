@@ -259,9 +259,9 @@ zp_save_buf:
 EnterKernal_sub:
     sei
     lda $01
-    sta zp_mmu_save_01
+    sta mmu_save_01
     lda $ff00
-    sta zp_mmu_save_ff00
+    sta mmu_save_ff00
     lda #$ff
     sta $cc
     :MachineRestoreDefault()
@@ -273,13 +273,17 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
-    lda zp_mmu_save_01
+    lda mmu_save_01
     sta $01
-    lda zp_mmu_save_ff00
+    lda mmu_save_ff00
     sta $ff00
     jsr c128_vdc_reassert_mode
     cli
     rts
+
+// Static storage for MMU state (outside Zero Page to avoid KERNAL clobber)
+mmu_save_01:   .byte 0
+mmu_save_ff00: .byte 0
 
 // MMU Bank 1 Access Macros
 .macro Bank1Read() {
