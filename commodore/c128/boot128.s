@@ -61,6 +61,11 @@ bootstrap_entry:
 loader_data_src:
 .pseudopc $2000 {
 loader_start:
+    // 3. Machine State — 4KB bottom/top common
+    // $07 = bit 0 (bottom common on) + bit 1 (top common on) + bits 3-2=01 (4KB size)
+    lda #$07
+    sta $d506
+
 #if BOOT_DIAG
     lda #$c1
     sta BOOT_DIAG_SIG_BASE + 0
@@ -68,18 +73,12 @@ loader_start:
     sta BOOT_DIAG_SIG_BASE + 1
 #endif
 
-    // 3. RESTORE KERNAL: Bank in ROMs for I/O
+    // 4. RESTORE KERNAL: Bank in ROMs for I/O
     lda #MMU_NORMAL
     sta $ff00
     lda #COL_BLACK
     sta $d020
     
-    // 4. Machine State — 4KB bottom/top common
-    // The copy stub lives at $0B00. It must be in common area so the CPU
-    // still fetches stub instructions from Bank 0 when $FF00 switches to Bank 1.
-    // $07 = bit 0 (bottom common on) + bit 1 (top common on) + bits 3-2=01 (4KB size)
-    lda #$07
-    sta $d506
     lda #$ff
     sta $d8                 // 80-column mode defense
     cli                     // Enable interrupts for Disk Driver

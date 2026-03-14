@@ -792,6 +792,13 @@ entry_real:
     ldx #$ff
     txs
 
+    // Hardware Quiet Down — Acknowledge and Clear
+    lda #$7f
+    sta $dc0d               // CIA1 Interrupt Control Register: disable all
+    sta $dd0d               // CIA2 Interrupt Control Register: disable all
+    lda $dc0d               // Clear CIA1 ICR
+    lda $dd0d               // Clear CIA2 ICR
+
     lda #$ff
     sta $d8                 // Screen Editor: 80-col mode
     // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
