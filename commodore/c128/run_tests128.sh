@@ -5,6 +5,7 @@ set -u
 
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="${VICE128:-/Applications/VICE/bin/x128}"
+C1541="${C1541:-c1541}"
 PERF_P1_MODE="${PERF_P1:-0}"
 PASS=0
 FAIL=0
@@ -21,7 +22,7 @@ REAL_BOOT_DIAG_ASSETS_BUILT=0
 TITLE_ART_BOOT_ASSETS_BUILT=0
 OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=0
 
-KA_DEFINES=(-define C128)
+KA_DEFINES=(-define C128 -var OVL_OUT='"out"')
 if [ "$PERF_P1_MODE" = "1" ]; then
     KA_DEFINES+=(-define PERF_P1)
 fi
@@ -647,7 +648,7 @@ build_boot_assets() {
     fi
 
     local diag_asm
-    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 -o out/boot128.diag.prg 2>&1)
+    diag_asm=$(java -jar "$KICKASS" boot128.s -define BOOT_DIAG=1 -var OVL_OUT='"out"' -o out/boot128.diag.prg 2>&1)
     if [ $? -ne 0 ]; then
         echo "FAIL (boot128 diag assembly error)"
         echo "$diag_asm" | grep -i error | head -3 | sed 's/^/    /'
@@ -672,7 +673,7 @@ run_vic40_clean_boot_smoke() {
     build_boot_assets || return
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -define C128_TEST_VIC40_CLEAN_BOOT \
+            -define C128 -var OVL_OUT='"out"' -define C128_TEST_VIC40_CLEAN_BOOT \
             -o "$probe_main" >"$build_log" 2>&1; then
         echo "FAIL (vic40 probe main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -772,7 +773,7 @@ build_real_boot_diag_assets() {
     local diag_d64="out/moria128_realdiag.d64"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -define C128_TEST_REAL_BOOT_DIAG -define C128_TEST_FORCE_DUNGEON_MELEE \
+            -define C128 -var OVL_OUT='"out"' -define C128_TEST_REAL_BOOT_DIAG -define C128_TEST_FORCE_DUNGEON_MELEE \
             -o "$diag_main" >"$build_log" 2>&1; then
         echo "FAIL (real-boot diag main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -819,7 +820,7 @@ build_overlay_transition_diag_assets() {
     local diag_d64="out/moria128_overlaydiag.d64"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -define C128_TEST_OVERLAY_TRANSITION_DIAG \
+            -define C128 -var OVL_OUT='"out"' -define C128_TEST_OVERLAY_TRANSITION_DIAG \
             -o "$diag_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -866,7 +867,7 @@ build_title_art_boot_assets() {
     local title_d64="out/moria128_titleart.d64"
 
     if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 \
-            -define C128 -define C128_TEST_TITLE_ART_CONTENT \
+            -define C128 -var OVL_OUT='"out"' -define C128_TEST_TITLE_ART_CONTENT \
             -o "$title_main" >"$build_log" 2>&1; then
         echo "FAIL (title-art main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -912,7 +913,7 @@ build_partial_failure_boot_assets() {
     local partial_main="out/moria128.skip1.prg"
     local partial_d64="out/moria128_skip1.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_CACHE_TEST_SKIP_TIER -o "$partial_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_CACHE_TEST_SKIP_TIER -o "$partial_main" >"$build_log" 2>&1; then
         echo "FAIL (partial-failure main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -957,7 +958,7 @@ build_overlay_partial_failure_boot_assets() {
     local partial_main="out/moria128.skipovl2.prg"
     local partial_d64="out/moria128_skipovl2.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_CACHE_TEST_SKIP_OVERLAY -o "$partial_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_CACHE_TEST_SKIP_OVERLAY -o "$partial_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-partial main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1002,7 +1003,7 @@ build_death_overlay_boot_assets() {
     local death_main="out/moria128.death.prg"
     local death_d64="out/moria128_death.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_FORCE_DEATH=1 -o "$death_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_FORCE_DEATH=1 -o "$death_main" >"$build_log" 2>&1; then
         echo "FAIL (death-overlay main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1047,7 +1048,7 @@ build_overlay_state_boot_assets() {
     local state_main="out/moria128.overlaystate.prg"
     local state_d64="out/moria128_overlaystate.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_OVERLAY_STATE_CORRUPT=1 -o "$state_main" >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_OVERLAY_STATE_CORRUPT=1 -o "$state_main" >"$build_log" 2>&1; then
         echo "FAIL (overlay-state main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1093,7 +1094,7 @@ build_scripted_input_boot_assets() {
 
     # Compile to the standard out/moria128.prg target so KickAssembler also
     # refreshes the companion out/ovl.* overlay PRGs for this special build.
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_INPUT -o out/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-input main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1130,47 +1131,50 @@ build_scripted_input_boot_assets() {
 }
 
 build_cache_survival_boot_assets() {
-    if [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    local target_out="${1:-out}"
+    if [ "$target_out" = "out" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
         return
     fi
 
-    build_boot_assets || return 1
+    build_boot_assets "$target_out" || return 1
 
-    local build_log="/tmp/test128_boot_cache_survival_build.log"
-    local c1541_bin="${C1541:-c1541}"
-    local cache_d64="out/moria128_cache_survival.d64"
+    local build_log="/tmp/test128_boot_cache_survival_build_$(basename "$target_out").log"
+    local cache_main="$target_out/moria128.prg"
+    local cache_d64="$target_out/moria128_cache_survival.d64"
 
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL -o out/moria128.prg >"$build_log" 2>&1; then
-        echo "FAIL (cache-survival main assembly failed)"
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_CACHE_SURVIVAL -var OVL_OUT='"$target_out"' -o "$cache_main" >"$build_log" 2>&1; then
+        echo "FAIL (cache-survival main assembly failed for $target_out)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return 1
     fi
 
-    if ! "$c1541_bin" -format "moria128,m8" d64 "$cache_d64" \
+    if ! "$C1541" -format "moria128,m8" d64 "$cache_d64" \
             -attach "$cache_d64" \
-            -write out/boot128.prg "moria8.128" \
-            -write out/moria128.prg "moria128" \
-            -write out/title "title" \
-            -write out/monster.db.1 "monster.db.1" \
-            -write out/monster.db.2 "monster.db.2" \
-            -write out/monster.db.3 "monster.db.3" \
-            -write out/monster.db.4 "monster.db.4" \
-            -write out/ovl.town "ovl.town" \
-            -write out/ovl.start "ovl.start" \
-            -write out/ovl.death "ovl.death" \
-            -write out/ovl.gen "ovl.gen" \
-            -write out/bank1.dat "bank1.dat" >>"$build_log" 2>&1; then
-        echo "FAIL (cache-survival disk build failed)"
+            -write "$target_out/boot128.prg" "moria8.128" \
+            -write "$cache_main" "moria128" \
+            -write "$target_out/title" "title" \
+            -write "$target_out/monster.db.1" "monster.db.1" \
+            -write "$target_out/monster.db.2" "monster.db.2" \
+            -write "$target_out/monster.db.3" "monster.db.3" \
+            -write "$target_out/monster.db.4" "monster.db.4" \
+            -write "$target_out/ovl.town" "ovl.town" \
+            -write "$target_out/ovl.start" "ovl.start" \
+            -write "$target_out/ovl.death" "ovl.death" \
+            -write "$target_out/ovl.gen" "ovl.gen" \
+            -write "$target_out/bank1.dat" "bank1.dat" >>"$build_log" 2>&1; then
+        echo "FAIL (cache-survival disk build failed for $target_out)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return 1
     fi
 
-    BOOT_ASSETS_BUILT=0
-    CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
+    if [ "$target_out" = "out" ]; then
+        BOOT_ASSETS_BUILT=0 # Force refresh
+        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
+    fi
     return 0
 }
 
@@ -1235,6 +1239,108 @@ build_load_resume_boot_assets() {
 
     LOAD_RESUME_BOOT_ASSETS_BUILT=1
     return 0
+}
+
+run_test_internal() {
+    local name="$1"
+    local src="$2"
+    local cycles="${3:-20000000}"
+    local result_file="$4"
+
+    local prg_file="${src%.s}.prg"
+    local abs_prg
+    abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
+    local vs_file="${src%.s}.vs"
+
+    local asm_output
+    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols 2>&1)
+    if [ $? -ne 0 ]; then
+        echo "FAIL $name: assembly error" >> "$result_file"
+        return
+    fi
+
+    if [ ! -f "$vs_file" ]; then
+        echo "FAIL $name: missing .vs symbol file" >> "$result_file"
+        return
+    fi
+
+    local start_addr pass_addr
+    start_addr=$(awk '/\.test_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
+    pass_addr=$(awk '/\.test_pass$/  { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
+
+    if [ -z "${start_addr:-}" ] || [ -z "${pass_addr:-}" ]; then
+        echo "FAIL $name: missing test_start/test_pass labels" >> "$result_file"
+        return
+    fi
+
+    # Simple python one-liner for address normalization
+    start_addr=$(python3 -c "import sys; a=sys.argv[1].strip().upper(); print(a[-4:] if len(a)>4 else a)" "$start_addr")
+    pass_addr=$(python3 -c "import sys; a=sys.argv[1].strip().upper(); print(a[-4:] if len(a)>4 else a)" "$pass_addr")
+
+    local mon_file="/tmp/test128_${name}.mon"
+    local log_file="/tmp/test128_${name}.log"
+    : > "$log_file"
+
+    {
+        echo "load \"${abs_prg}\" 0"
+        echo "r pc=${start_addr}"
+        echo "until \$${pass_addr}"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles "$cycles" +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+
+    if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+        echo "PASS $name" >> "$result_file"
+    else
+        echo "FAIL $name: execution failed" >> "$result_file"
+    fi
+}
+
+export -f run_test_internal
+export KICKASS VICE
+
+run_parallel_unit_tests() {
+    local result_file="/tmp/test128_results_unit.txt"
+    : > "$result_file"
+    
+    echo "  running unit tests in parallel..."
+    
+    local test_list=(
+        "minimal128 tests/test_minimal128.s 20000000"
+        "config128 tests/test_config128.s 20000000"
+        "memory128 tests/test_memory128.s 20000000"
+        "db128 tests/test_db128.s 20000000"
+        "tier128 tests/test_tier128.s 20000000"
+        "input128 tests/test_input128.s 20000000"
+        "main_loop128 tests/test_main_loop128.s 500000000"
+        "msg_prompt128 tests/test_msg_prompt128.s 120000000"
+        "vdc_attr128 tests/test_vdc_attr128.s 20000000"
+        "status_coherence128 tests/test_status_coherence128.s 20000000"
+        "dungeon128 tests/test_dungeon128.s 50000000"
+        "soak128 tests/test_soak128.s 300000000"
+        "monster128 tests/test_monster128.s 20000000"
+    )
+
+    printf "%s\n" "${test_list[@]}" | xargs -P 8 -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
+    
+    while read -r line; do
+        local status=$(echo "$line" | awk '{print $1}')
+        local name=$(echo "$line" | awk '{print $2}')
+        local detail=$(echo "$line" | cut -d: -f2-)
+        
+        echo -n "  $name: "
+        if [ "$status" = "PASS" ]; then
+            echo "PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL ($detail)"
+            FAIL=$((FAIL + 1))
+        fi
+        TOTAL=$((TOTAL + 1))
+    done < "$result_file"
 }
 
 run_test() {
@@ -2725,24 +2831,16 @@ if [ "$PERF_P1_MODE" = "1" ]; then
 else
     echo "  mode: PERF_P1 instrumentation OFF"
 fi
-run_main_assembly_check
-run_artifact_budget_check
-run_symbol_placement_check
-run_prompt_irq_guard_check
-run_80col_layout_guard_check
-run_test "minimal128" "tests/test_minimal128.s"
-run_test "config128" "tests/test_config128.s"
-run_test "memory128" "tests/test_memory128.s"
-run_test "db128" "tests/test_db128.s"
-run_test "tier128" "tests/test_tier128.s"
-run_test "input128" "tests/test_input128.s"
-run_test "main_loop128" "tests/test_main_loop128.s" 500000000
-run_test "msg_prompt128" "tests/test_msg_prompt128.s" 120000000
-run_test "vdc_attr128" "tests/test_vdc_attr128.s"
-run_test "status_coherence128" "tests/test_status_coherence128.s"
-run_test "dungeon128" "tests/test_dungeon128.s" 50000000
-run_test "soak128" "tests/test_soak128.s" 300000000
+run_main_assembly_check || exit 1
+run_artifact_budget_check || exit 1
+run_symbol_placement_check || exit 1
+run_prompt_irq_guard_check || exit 1
+run_80col_layout_guard_check || exit 1
+
+run_parallel_unit_tests
+
 run_boot_d64_smoke
+
 run_boot_title_idle_smoke
 run_title_art_smoke
 run_vic40_clean_boot_smoke
@@ -2764,7 +2862,7 @@ run_restart_to_title_smoke
 run_preload_partial_failure_smoke
 run_overlay_partial_failure_smoke
 run_boot_diag_copy
-run_test "monster128" "tests/test_monster128.s"
+
 if [ "$PERF_P1_MODE" = "1" ]; then
     run_test "perf_p1" "tests/test_perf_p1.s"
 fi

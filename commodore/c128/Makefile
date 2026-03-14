@@ -46,7 +46,7 @@ C128_SOURCES   := $(shell find . -maxdepth 1 -type f -name '*.s')
 SOURCES        := $(C128_SOURCES) $(COMMON_SOURCES)
 
 # ── KickAssembler flags ──────────────────────────────────
-KA_FLAGS    = -showmem -vicesymbols -libdir ../c64 -define C128
+KA_FLAGS    = -showmem -vicesymbols -libdir ../c64 -define C128 -define OVL_OUT='"$(OUT)"'
 ifeq ($(PERF_P1),1)
 KA_FLAGS    += -define PERF_P1
 endif

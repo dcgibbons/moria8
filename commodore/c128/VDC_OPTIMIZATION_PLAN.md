@@ -1,82 +1,53 @@
-# P1 (C128 VDC) — Responsiveness-First Performance Plan
+# C128 Test Harness Optimization Plan (Gate C)
 
-## Summary
-P1 is measured by player-perceived responsiveness in this turn-based game:
-movement commands should update the dungeon immediately (no perceived lag),
-while preserving rendering correctness and C128 stability.
+## Objective
+Reduce the total execution time of the C128 runtime test suite (40+ tests) from ~3-5 minutes to <30 seconds.
 
-## Scope and Intent
-- Primary goal: movement command -> visible dungeon update with low frame latency.
-- Secondary goal: improve render throughput and reduce unnecessary work safely.
-- Non-goal: real-time shooter-style frame budgets.
+## 1. Eliminate JVM Startup Overhead
+The current `run_tests128.sh` invokes `java -jar KickAss.jar` for every individual `.s` file.
+- **Strategy:** Transition to a **"Master Test Module"** approach or a dependency-aware Makefile.
+- **Implementation:** 
+  - Create a single `tests/all_tests128.s` that imports all individual test suites.
+  - Use `.segment` and `.pc` offsets to pack all tests into a single large binary.
+  - This allows a **single assembly pass** (one JVM startup) to generate the entire test executable.
+- **Goal:** Save ~60-80 seconds of JVM warm-up time.
 
-## Implementation Status
+## 2. Eliminate VICE Hardware Reset Latency
+Launching a new `x128` instance per test incurs a ~2-second boot tax.
+- **Strategy:** **Persistent Emulator Session** with binary injection.
+- **Implementation:**
+  - Launch one `x128` in the background with `-binarymonitor`.
+  - Use a python script (`vice_test_runner.py`) to connect to the monitor port.
+  - For each test:
+    1. `LOAD` the test binary into RAM via the monitor.
+    2. `SET PC` to the test entry point.
+    3. `RUN` until a `BRK` ($00) or a specific address is hit.
+    4. Capture the pass/fail byte from `$0400` (screen RAM).
+    5. `RESET` the PC and Stack without rebooting the whole machine.
+- **Goal:** Reduce per-test boot latency from 2000ms to <100ms.
 
-### 1. Baseline and Instrumentation (implemented)
-- Added compile-time guarded C128 instrumentation (`PERF_P1`) in:
-  - `common/perf_p1.s`
-  - movement path hooks in `common/game_loop.s`
-- Probe records:
-  - frame-delta histogram buckets: `0`, `1`, `2`, `>=3`
-  - path counters: local-area render, full redraw, scroll-driven full redraw
-  - max observed frame delta
-- Instrumentation is off by default; release behavior is unchanged.
+## 3. Parallel Execution
+The current `for` loop is strictly sequential (Serial Execution).
+- **Strategy:** Parallelize the test runner across multiple CPU cores.
+- **Implementation:**
+  - Use `xargs -P [n]` or a parallel Python `ThreadPoolExecutor`.
+  - Each worker launches its own background VICE on a unique monitor port (e.g., 6510, 6511, etc.).
+- **Goal:** 4x to 8x speedup on multi-core development machines.
 
-### 2. Existing fast path lock (implemented)
-- Kept `render_local_area` as the primary movement render path when:
-  - viewport does not scroll
-  - no room-reveal full redraw is required
-- Added explicit scroll-path marking in perf mode to distinguish full redraw causes.
+## 4. Testing "Warp Mode" Enforcement
+Ensure the emulator is doing zero unnecessary work.
+- **Strategy:** Force `-warp` and `-limitcycles`.
+- **Implementation:** 
+  - Update `run_tests128.sh` to always include `-warp`.
+  - Use the VICE monitor `exit` command instead of waiting for cycle timeouts.
+- **Goal:** Maximum possible execution speed during the test run.
 
-### 3. Low-risk-only optimization policy (active)
-- P1 phase A only accepts bounded-risk optimizations that preserve behavior.
-- High-risk options (major algorithm rewrites, aggressive VDC protocol changes)
-  remain gated behind perf evidence.
+## 5. Implementation Steps
+1. **Gate C.1:** Create `vice_test_runner.py` for binary injection and monitor-based verification.
+2. **Gate C.2:** Modify `Makefile` to assemble all tests into a single binary or use a parallel build strategy.
+3. **Gate C.3:** Update `run_tests128.sh` to orchestrate the parallel persistent-monitor sessions.
+4. **Gate C.4:** Verify all 40+ tests pass in the new optimized harness.
 
-### 4. High-risk options (deferred, gated)
-- Consider only if phase A cannot satisfy responsiveness SLOs:
-  - bulk map row copy via existing MMU helpers (`map_bulk_enter/exit`, `mmu_copy_map_row`)
-  - entity-overlay architecture changes with parity tests
-- VDC readiness polling remains mandatory by default.
-
-## Acceptance Criteria
-
-### A. Functional correctness
-- `make test128` passes with instrumentation disabled.
-- `PERF_P1=1 make test128` passes with instrumentation enabled.
-- Existing C128 dungeon/VDC and MMU safety suites remain green.
-
-### B. Responsiveness SLO (movement)
-Measured in frame deltas from movement command recognition to render completion:
-- Target profile:
-  - `P50 <= 1 frame`
-  - `P95 <= 2 frames`
-  - `Max <= 3 frames`
-- Hard fail:
-  - reproducible sustained `>=3` frame movement latency during ordinary play
-    (excluding loading/overlay transitions).
-
-### C. Path behavior guarantees
-- No-scroll movement continues to use local-area rendering by default.
-- Full redraw occurs only when required (viewport scroll, room reveal, explicit redraw).
-
-### D. Safety constraints
-- MMU IRQ-state preservation tests remain green.
-- No new map-buffer boundary clobber findings in perf-mode tests.
-- Manual smoke in VICE (`make run128`) shows no new JAM/crash in movement loops.
-
-## Test and Run Commands
-
-### Default mode (instrumentation OFF)
-- `make test128`
-
-### Perf mode (instrumentation ON)
-- `PERF_P1=1 make test128`
-
-### Manual smoke
-- `make run128`
-
-## Artifacts
-- Added: `common/perf_p1.s` (C128 `PERF_P1` probe module).
-- Added: `c128/tests/test_perf_p1.s` (histogram/counter runtime validation).
-- Updated: `c128/run_tests128.sh` to support `PERF_P1=1` mode.
+## 6. Success Metric
+- Total suite runtime <30 seconds on a standard modern developer machine.
+- Zero regressions in test coverage.

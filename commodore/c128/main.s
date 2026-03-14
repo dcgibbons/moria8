@@ -24,11 +24,12 @@
 // banked_payload runtime code is forced to start above the dungeon overlay
 // footprint so overlays ($E000-$EFFF) never overlap live banked routines.
 // ============================================================
-.segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
-.segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]
-.segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
-.segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
-.segmentdef Bank1Data         [outPrg="out/bank1.dat", start=$e000, min=$e000, max=$feff]
+.eval var OVL_OUT = "out"
+.segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
+.segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
+.segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
+.segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.segmentdef Bank1Data         [outPrg=OVL_OUT + "/bank1.dat", start=$e000, min=$e000, max=$feff]
 
 #if C128_TEST_SCRIPTED_INPUT
 .const C128_TEST_SCRIPTED_TOWN_FLOW = 1
