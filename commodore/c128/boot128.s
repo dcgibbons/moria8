@@ -66,6 +66,17 @@ loader_start:
     lda #$07
     sta $d506
 
+    // Mandatory RAM Vector Safety: Point vectors to safe RTI stub
+    // prevents crashes if an interrupt fires during All-RAM mode.
+    lda #<boot_safe_rti
+    sta $fffa               // NMI lo
+    sta $fffc               // RESET lo
+    sta $fffe               // IRQ lo
+    lda #>boot_safe_rti
+    sta $fffb               // NMI hi
+    sta $fffd               // RESET hi
+    sta $ffff               // IRQ hi
+
 #if BOOT_DIAG
     lda #$c1
     sta BOOT_DIAG_SIG_BASE + 0
@@ -112,6 +123,9 @@ loader_start:
     lda #0
     jsr $ffd5
     bcs load_err
+
+boot_safe_rti:
+    rti
 
 #if BOOT_DIAG
     lda #$c2

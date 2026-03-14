@@ -1,4 +1,5 @@
 #importonce
+#import "../common/zeropage.s"
 // C128 operational layout:
 //   - Bank 0 main code = $1C01-$BFFF
 //   - Bank 1 map = $4000-$4EFF
@@ -776,7 +777,6 @@ tramp_reu_show_status:
 // ============================================================
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
 // ============================================================
-#import "../common/zeropage.s"
 #import "memory128.s"
 #import "../common/color.s"
 #import "../common/sound.s"
@@ -914,6 +914,11 @@ entry_real:
     sta $fffa
     lda #>safe_nmi
     sta $fffb
+    // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
+    lda #<exit_trampoline
+    sta $fffc
+    lda #>exit_trampoline
+    sta $fffd
 
     :MachineRestoreDefault()
     jmp entry_main
@@ -1238,6 +1243,10 @@ c128_restore_runtime_state_core:
     sta $fffa
     lda #>safe_nmi
     sta $fffb
+    lda #<exit_trampoline
+    sta $fffc
+    lda #>exit_trampoline
+    sta $fffd
     lda #<safe_irq_restore
     sta $0314
     lda #>safe_irq_restore
@@ -2038,8 +2047,8 @@ c128_diag_verify_helper_blob:
     rts
 #endif
 
-.assert "Stack guard block reserve stays below fixed debug slot", * <= $3400, true
-.fill $3400 - *, 0
+.assert "Stack guard block reserve stays below fixed debug slot", * <= $3f00, true
+.fill $3f00 - *, 0
 c128_stack_guard_canary_lo: .byte $a5
 c128_stack_guard_expected:  .byte 0
 c128_stack_guard_actual:    .byte 0
@@ -2058,6 +2067,8 @@ ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000
 c128_cache_state_end:
+
+.assert "Program fits below map area", * <= MAP_BASE, true
 
 // ============================================================
 // Imports — Game Engine (Safe to spill past $C000)

@@ -123,6 +123,7 @@ c128_kernal_return_port0: .byte 0
 c128_kernal_return_port1: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
+safe_irq_restore: rts
 kernal_hw_irq_vec_lo: .byte 0
 kernal_hw_irq_vec_hi: .byte 0
 kernal_hw_nmi_vec_lo: .byte 0
@@ -154,6 +155,7 @@ ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000
 
 #import "../../common/zeropage.s"
+
 #import "../memory128.s"
 #import "../../common/reu.s"
 #import "../screen_vdc.s"

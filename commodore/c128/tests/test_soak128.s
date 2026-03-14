@@ -16,6 +16,7 @@ c128_restore_runtime_state:
     rts
 
 #import "../../common/zeropage.s"
+#import "test_helpers128.s"
 #import "../memory128.s"
 #import "../../common/rng.s"
 #import "../../common/math.s"

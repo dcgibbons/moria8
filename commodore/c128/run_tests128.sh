@@ -44,7 +44,7 @@ run_main_assembly_check() {
     echo -n "  main128_asm: "
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 "${KA_DEFINES[@]}" -o out/moria128.prg 2>&1)
+    asm_output=$(java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -o out/moria128.prg 2>&1)
 
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
@@ -1253,7 +1253,7 @@ run_test_internal() {
     local vs_file="${src%.s}.vs"
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols 2>&1)
+    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols -var OVL_OUT='"out"' 2>&1)
     if [ $? -ne 0 ]; then
         echo "FAIL $name: assembly error" >> "$result_file"
         return
@@ -1306,6 +1306,7 @@ run_parallel_unit_tests() {
     local result_file="/tmp/test128_results_unit.txt"
     : > "$result_file"
     
+    mkdir -p out
     echo "  running unit tests in parallel..."
     
     local test_list=(

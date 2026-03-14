@@ -164,7 +164,13 @@
 // Keep this as owned program data (not a fixed low-RAM page), because
 // native C128 KERNAL/BASIC workspace usage differs from C64.
 .const ZP_SAVE_SIZE     = 142   // $02–$8F inclusive
+
 zp_save_buf:
+    .fill ZP_SAVE_SIZE, 0
+
+// KERNAL ZP save buffer — used during EnterKernal/ExitKernal calls
+// to protect game state from KERNAL clobbering.
+kernal_zp_save_buf:
     .fill ZP_SAVE_SIZE, 0
 
 // ============================================================
@@ -266,13 +272,18 @@ EnterKernal_sub:
     sta mmu_save_01
     lda $ff00
     sta mmu_save_ff00
+    jsr save_kernal_zp      // Protect game state in kernal_zp_save_buf
     lda #$ff
     sta $cc                 // Force default keyboard row
     :MachineRestoreDefault() // Set MMU/IO for Kernal use
+    lda kernal_irq_vec_lo
+    sta $0314
+    lda kernal_irq_vec_hi
+    sta $0315
 !ek_nest:
     rts
 
-// ExitKernal — Restore game state after KERNAL calls (C128)
+// Exit Kernal — Restore game state after KERNAL calls (C128)
 .macro ExitKernal() {
     jsr ExitKernal_sub
 }
@@ -280,10 +291,16 @@ EnterKernal_sub:
 ExitKernal_sub:
     dec kernal_nesting_depth
     bne !ex_nest+           // Still nested — don't restore yet
+    jsr restore_kernal_zp   // Restore game state from kernal_zp_save_buf
     lda mmu_save_01
     sta $01
     lda mmu_save_ff00
     sta $ff00
+    lda #<safe_irq_restore
+    sta $0314
+    lda #>safe_irq_restore
+    sta $0315
+    jsr init_common_mmu_helpers
     jsr c128_vdc_reassert_mode
     cli
 !ex_nest:
@@ -358,7 +375,29 @@ mmu_select_bank0:
 mmu_copy_map_row:
     jmp mmu_common_copy_map_row
 
-// save_zp — Copy $02–$8F to ZP_SAVE_BUF_ADDR
+// save_kernal_zp — Copy $02–$8F to kernal_zp_save_buf
+save_kernal_zp:
+    ldx #0
+!loop:
+    lda $02,x
+    sta kernal_zp_save_buf,x
+    inx
+    cpx #ZP_SAVE_SIZE
+    bne !loop-
+    rts
+
+// restore_kernal_zp — Copy kernal_zp_save_buf back to $02–$8F
+restore_kernal_zp:
+    ldx #0
+!loop:
+    lda kernal_zp_save_buf,x
+    sta $02,x
+    inx
+    cpx #ZP_SAVE_SIZE
+    bne !loop-
+    rts
+
+// save_zp — Copy $02–$8F to zp_save_buf (original BASIC state)
 save_zp:
     ldx #0
 !loop:
@@ -369,7 +408,7 @@ save_zp:
     bne !loop-
     rts
 
-// restore_zp — Copy ZP_SAVE_BUF_ADDR back to $02–$8F
+// restore_zp — Copy zp_save_buf back to $02–$8F (original BASIC state)
 restore_zp:
     ldx #0
 !loop:

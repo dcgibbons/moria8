@@ -205,20 +205,10 @@ overlay_load_disk:
 #endif
 !ol_done:
     plp                     // Restore carry
-#if C128
-    php
-    pla
-    sta ol_status_p
-    jsr c128_restore_runtime_state
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+    :ExitKernal()
+#if C128 && (C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG)
     ldx #$1f
     jsr c128_diag_validate_runtime_invariants
-#endif
-    lda ol_status_p
-    pha
-    plp
-#else
-    :ExitKernal()
 #endif
     rts
 

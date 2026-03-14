@@ -6,6 +6,7 @@
 
 #import "../../common/zeropage.s"
 #import "../config128.s"
+#import "test_helpers128.s"
 #import "../memory128.s"
 #import "../../common/mmu_macros.s"
 #import "../../common/dungeon_data.s"

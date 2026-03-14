@@ -2,6 +2,7 @@
 // test_dungeon128.s — Dungeon render color-path regression checks (C128)
 
 #import "../../common/zeropage.s"
+#import "test_helpers128.s"
 #import "../memory128.s"
 #import "../../common/color.s"
 #import "../screen_vdc.s"

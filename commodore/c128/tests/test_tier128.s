@@ -2,6 +2,7 @@
 // test_tier128.s — C128 tier transition/state regression checks for 10.2.5
 
 #import "../../common/zeropage.s"
+#import "test_helpers128.s"
 #import "../memory128.s"
 #import "../config128.s"
 
