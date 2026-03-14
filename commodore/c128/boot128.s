@@ -74,11 +74,11 @@ loader_start:
     lda #COL_BLACK
     sta $d020
     
-    // 4. Machine State — 4KB bottom common ($0000-$0FFF)
+    // 4. Machine State — 4KB bottom/top common
     // The copy stub lives at $0B00. It must be in common area so the CPU
     // still fetches stub instructions from Bank 0 when $FF00 switches to Bank 1.
-    // $05 = bit 0 (bottom common on) + bits 3-2=01 (4KB size)
-    lda #$05
+    // $07 = bit 0 (bottom common on) + bit 1 (top common on) + bits 3-2=01 (4KB size)
+    lda #$07
     sta $d506
     lda #$ff
     sta $d8                 // 80-column mode defense
@@ -156,8 +156,8 @@ game_filename_end:
 stub_reloc_src:
 .pseudopc $0b00 {
 stub_start:
-    lda #$05
-    sta $d506               // 4KB bottom common ($0000-$0FFF) — stub at $0B00 must be common
+    lda #$07
+    sta $d506               // 4KB bottom/top common ($0000-$0FFF, $FC00-$FFFF)
 
 #if BOOT_DIAG
     lda #$d1

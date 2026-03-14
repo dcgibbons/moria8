@@ -33,8 +33,6 @@
 // --- General purpose / temporaries ($02–$0C) ---
 .label zp_temp0        = $02   // General temp byte
 .label zp_temp1        = $03   // General temp byte
-.label zp_mmu_save_01  = $02   // C128 MMU save for EnterKernal
-.label zp_mmu_save_ff00 = $03
 .label zp_temp2        = $04   // General temp byte
 .label zp_temp3        = $05   // General temp byte
 .label zp_ptr0         = $06   // General pointer (lo/hi)
@@ -91,6 +89,10 @@
 .label zp_vol_8        = $28   // KERNAL: serial scratch
 .label zp_vol_9        = $29   // KERNAL: serial scratch
 .label zp_vol_10       = $2a   // KERNAL: serial scratch
+
+// --- C128 MMU Save state (KERNAL-Volatile) ---
+.label zp_mmu_save_01  = $fe   // C128 MMU save for EnterKernal
+.label zp_mmu_save_ff00 = $ff
 
 // ============================================================
 // SAFE ZONE (continued) — BASIC working storage, free after
