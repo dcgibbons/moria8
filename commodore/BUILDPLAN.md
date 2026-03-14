@@ -5,17 +5,17 @@
 
 ---
 
-## Current State (2026-03-11, updated)
+## Current State (2026-03-14, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, and the full TST-2 / TST-2A orchestration harness expansion are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, and the C128 Hardened Execution Boundary are resolved.**
 
 ### Build Stats
 
-- **Test suites:** C64: 27 runtime suites, C128: 32 harness suites
-- **Compile-time asserts:** 136 (C128) / 69 (C64)
+- **Test suites:** C64: 27 runtime suites, C128: 40 harness suites
+- **Compile-time asserts:** 177 (C128) / 69 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
-- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 10.8/TST-2 coverage now includes idle-title soak, title/new-game, title/load-resume, scripted summary-to-town, cache-survival, tier-transition, town-overlay, death-overlay, restart-to-title, tier-partial-failure, overlay-partial-failure, and boot-copy smokes.
+- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 100% C128 test pass (40/40) includes all smoke tests and hardened boot-handoff verification.
 - **C64 suite stability:** `run_tests.sh` is green with `test_input.s`, `test_main_loop.s`, `test_turn.s`, and `test_config.s` enabled in the default runner.
 
 ---
@@ -46,6 +46,7 @@
 
 | # | Severity | Description | Resolution Date |
 |---|----------|-------------|-----------------|
+| **C128-HEB**| **HIGH** | C128 Hardened Execution Boundary: MMU stability, atomic KERNAL I/O, loader-to-game handoff stabilization, and 100% test pass (40/40). | **2026-03-14** |
 | **R2** | **MED** | C128 garbled prompt/message text in LOOK/TAKE-OFF/title flow. | **2026-03-05** |
 | **UX80 / 10.7** | **HIGH** | C128 full 80-column layout + post-rollout VDC color regression cleanup (coherent color mapping restored; dungeon color-path guard tests added). | **2026-03-08** |
 | **A7** | **HIGH** | Compile-time split hardening: removed runtime `zp_machine_type` gating from common hot paths and replaced with `#if C128`/`#if !C128`. | **2026-03-05** |
@@ -61,8 +62,10 @@
 | **BUG-Y / 10.8** | **BLOCKER** | C128 preload/cache rebaseline complete: Bank 1 ownership refactor, tier+overlay cache contract fixes, carry-return repair, runtime guard restoration, and character-summary/town-flow stabilization with deterministic scripted-input coverage. | **2026-03-11** |
 | **10.8-HDN** | **MED** | Follow-up hardening complete: `memory128.s` is now the ownership source of truth, placement rules are assert-backed, the C128 architecture doc has a preflight checklist, and smoke coverage now verifies cache survival plus tier/overlay fallback isolation. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
-| **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **2026-03-11** |
+| **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |
+| **OPT-TEST** | **HIGH** | **Gate C: Test Harness Optimization.** Resolve C128 testing slowness by addressing JVM startup overhead, VICE hardware reset latency, and sequential execution bottlenecks. | **Pending** |
 ## What's Next
+
 
 **Phase 10 — C128 Enhancements:**
 
@@ -77,6 +80,7 @@
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |
 | 10.7 | Full 80-column UI layout | Replace centered 40-column carry-over with native 80-column layouts for viewport framing, message lines, status panel, title/help/menu screens, and related constants/tables. | **Done** |
 | 10.8 | Bank 1 Preload Cache + Ownership Refactor | C128: ownership refactor, tier cache, fixed-slot overlay cache, runtime guard restoration, carry-contract fixes, Gate B validation, and the follow-up hardening pass are complete. `memory128.s` now owns the Bank 1 manifest and overlap rules, `ARCHITECTURE.md` carries the preflight checklist, and coverage includes cache-survival plus tier/overlay fallback-isolation smokes. | **Done** |
+| 10.9 | Hardened Execution Boundary | MMU stability, atomic KERNAL I/O, loader-to-game handoff stabilization, and 100% test pass. | **Done (2026-03-14)** |
 
 ---
 
@@ -98,11 +102,11 @@ These files in `common/` contain minor C64-specific code that will need paramete
 
 ---
 
-### Priority Triage (updated 2026-03-11)
+### Priority Triage (updated 2026-03-14)
 
 **High priority (C128 Port Stability):**
-1. No open C128 blocker after DTH-1/SAV-2 closure.
-2. No open C128 memory-ownership hardening blocker after 10.8-HDN closure; maintain the `memory128.s` ownership manifest and smoke coverage when changing Bank 1 layout.
+1. Maintain 100% C128 suite pass rate (40/40).
+2. No open C128 memory-ownership hardening blocker; maintain the `memory128.s` ownership manifest and smoke coverage when changing Bank 1 layout.
 3. Maintain the C128 smoke seed generator alongside save-format changes so title `L` -> `load_resume_game` coverage stays deterministic in the default runner.
 
 **Low priority (polish/completeness):**
