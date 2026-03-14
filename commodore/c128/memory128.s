@@ -258,13 +258,18 @@ zp_save_buf:
 
 EnterKernal_sub:
     sei
+    inc kernal_nesting_depth
+    lda kernal_nesting_depth
+    cmp #1
+    bne !ek_nest+           // Already in Kernal mode — don't overwrite saved state
     lda $01
     sta mmu_save_01
     lda $ff00
     sta mmu_save_ff00
     lda #$ff
-    sta $cc
-    :MachineRestoreDefault()
+    sta $cc                 // Force default keyboard row
+    :MachineRestoreDefault() // Set MMU/IO for Kernal use
+!ek_nest:
     rts
 
 // ExitKernal — Restore game state after KERNAL calls (C128)
@@ -273,17 +278,21 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
+    dec kernal_nesting_depth
+    bne !ex_nest+           // Still nested — don't restore yet
     lda mmu_save_01
     sta $01
     lda mmu_save_ff00
     sta $ff00
     jsr c128_vdc_reassert_mode
     cli
+!ex_nest:
     rts
 
 // Static storage for MMU state (outside Zero Page to avoid KERNAL clobber)
 mmu_save_01:   .byte 0
 mmu_save_ff00: .byte 0
+kernal_nesting_depth: .byte 0
 
 // MMU Bank 1 Access Macros
 .macro Bank1Read() {

@@ -214,7 +214,6 @@ overlay_load_disk:
     ldx #$1f
     jsr c128_diag_validate_runtime_invariants
 #endif
-    pla                     // Drop EnterKernal-saved processor status
     lda ol_status_p
     pha
     plp
