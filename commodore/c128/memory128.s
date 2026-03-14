@@ -275,7 +275,14 @@ EnterKernal_sub:
     jsr save_kernal_zp      // Protect game state in kernal_zp_save_buf
     lda #$ff
     sta $cc                 // Force default keyboard row
+    
+    // Bridge to KERNAL: Top Common MUST be OFF ($05) to expose ROM jump table
+    lda #$05
+    sta $d506
     :MachineRestoreDefault() // Set MMU/IO for Kernal use
+    
+    // Hand control of IRQ vector back to KERNAL so its ROM handler
+    // can safely pop its own MMU byte from the stack.
     lda kernal_irq_vec_lo
     sta $0314
     lda kernal_irq_vec_hi
@@ -296,6 +303,12 @@ ExitKernal_sub:
     sta $01
     lda mmu_save_ff00
     sta $ff00
+    
+    // Restore Runtime Invariant: Top Common ON ($07)
+    lda #$07
+    sta $d506
+
+    // Reclaim control of IRQ vector for All-RAM runtime mode.
     lda #<safe_irq_restore
     sta $0314
     lda #>safe_irq_restore

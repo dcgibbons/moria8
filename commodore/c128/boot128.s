@@ -61,21 +61,11 @@ bootstrap_entry:
 loader_data_src:
 .pseudopc $2000 {
 loader_start:
-    // 3. Machine State — 4KB bottom/top common
-    // $07 = bit 0 (bottom common on) + bit 1 (top common on) + bits 3-2=01 (4KB size)
-    lda #$07
+    // 3. Machine State — 4KB bottom common ($0000-$0FFF)
+    // $05 = bit 0 (bottom common on) + bits 3-2=01 (4KB size)
+    // Top common must be OFF ($D506 bit 1 = 0) so KERNAL ROM at $FF81+ is visible.
+    lda #$05
     sta $d506
-
-    // Mandatory RAM Vector Safety: Point vectors to safe RTI stub
-    // prevents crashes if an interrupt fires during All-RAM mode.
-    lda #<boot_safe_rti
-    sta $fffa               // NMI lo
-    sta $fffc               // RESET lo
-    sta $fffe               // IRQ lo
-    lda #>boot_safe_rti
-    sta $fffb               // NMI hi
-    sta $fffd               // RESET hi
-    sta $ffff               // IRQ hi
 
 #if BOOT_DIAG
     lda #$c1
@@ -169,8 +159,8 @@ game_filename_end:
 stub_reloc_src:
 .pseudopc $0b00 {
 stub_start:
-    lda #$07
-    sta $d506               // 4KB bottom/top common ($0000-$0FFF, $FC00-$FFFF)
+    lda #$05
+    sta $d506               // 4KB bottom common ($0000-$0FFF) — Top common OFF
 
 #if BOOT_DIAG
     lda #$d1
