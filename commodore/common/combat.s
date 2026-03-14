@@ -1,3 +1,4 @@
+#importonce
 // combat.s — Player melee combat
 //
 // Bump-to-attack: to-hit rolls, damage, monster death, XP awards, level-up.

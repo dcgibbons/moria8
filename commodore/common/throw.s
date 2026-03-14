@@ -1,3 +1,4 @@
+#importonce
 // throw.s — Throwing items at monsters
 //
 // SHIFT+T throws any inventory item at a target in a direction.

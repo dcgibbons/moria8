@@ -1,3 +1,4 @@
+#importonce
 // ui_inventory.s — Inventory and Equipment display screens
 //
 // Full-screen overlays following the ui_help.s / ui_character.s pattern.

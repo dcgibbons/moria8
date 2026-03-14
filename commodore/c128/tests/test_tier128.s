@@ -1,3 +1,4 @@
+#importonce
 // test_tier128.s — C128 tier transition/state regression checks for 10.2.5
 
 #import "../../common/zeropage.s"

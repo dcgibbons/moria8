@@ -1,3 +1,4 @@
+#importonce
 // test_soak128.s — C128 generation soak/integrity test for C4.7
 //
 // Runs 200 total dungeon generations (4 deterministic seed variants x 50).

@@ -1,3 +1,4 @@
+#importonce
 // item.s — Item data structures, floor items, inventory, and gold spawning
 //
 // Phase 6.1: Master item type table (SoA), floor item table at $CF00,

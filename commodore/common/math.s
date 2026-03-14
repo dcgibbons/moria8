@@ -1,3 +1,4 @@
+#importonce
 // math.s — Arithmetic routines
 //
 // 8x8→16 unsigned multiply

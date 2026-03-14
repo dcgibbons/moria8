@@ -1,3 +1,4 @@
+#importonce
 // reu.s — REU (RAM Expansion Unit) detection and DMA routines
 //
 // The REU provides fast DMA transfers between C64 RAM and expansion RAM.
@@ -302,13 +303,13 @@ c128_preload_asset_load:
 
     // Full ROM map is required here so serial LOAD runs with the real KERNAL
     // IRQ/vector environment rather than the game's all-RAM safe IRQ stub.
+    lda #$07
+    sta $d506
     lda #CPU_PORT_DDR_DEFAULT
     sta $00
-    lda #$00
+    lda #$0e                // MMU_NORMAL: Bank 0, System ROM (KERNAL), I/O
     sta $ff00
-    lda #$00
-    sta c128_kernal_return_mmu
-    lda #BANK_ALL_ROM
+    lda #$37                // BANK_ALL_ROM: KERNAL + I/O
     sta $01
     lda kernal_hw_irq_vec_lo
     sta $fffe

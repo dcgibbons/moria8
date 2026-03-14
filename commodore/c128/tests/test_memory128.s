@@ -1,3 +1,4 @@
+#importonce
 // test_memory128.s — C128 MMU smoke tests for C4.2
 
 #import "../../common/zeropage.s"

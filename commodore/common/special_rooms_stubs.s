@@ -1,3 +1,4 @@
+#importonce
 // special_rooms_stubs.s — Direct-call trampoline stubs for test context
 //
 // In main.s, the real trampolines (tramp_*) do SEI + bank out KERNAL

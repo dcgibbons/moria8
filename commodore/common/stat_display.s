@@ -1,3 +1,4 @@
+#importonce
 // stat_display.s — Stat value display helper
 //
 // Extracted from player_create.s so it remains in main RAM.

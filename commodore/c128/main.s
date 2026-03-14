@@ -1,3 +1,4 @@
+#importonce
 // C128 operational layout:
 //   - Bank 0 main code = $1C01-$BFFF
 //   - Bank 1 map = $4000-$4EFF
@@ -926,214 +927,204 @@ entry_real:
 // READST
 w_readst:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     .byte $20
 t_readst: .word 0
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // SETLFS
 w_setlfs:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     .byte $20
 t_setlfs: .word 0
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // SETNAM
 w_setnam:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     .byte $20
 t_setnam: .word 0
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // OPEN
 w_open:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     .byte $20
 t_open: .word 0
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CLOSE
 w_close:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CLOSE
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CHKIN
 w_chkin:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CHKIN
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CHKOUT
 w_chkout:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CHKOUT
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CLRCHN
 w_clrchn:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CLRCHN
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CHRIN
 w_chrin:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CHRIN
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
 // CHROUT
 w_chrout:
     pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
     pla
     jsr K128_CHROUT
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts
@@ -1144,25 +1135,13 @@ w_load:
 #if C128_REAL_BOOT_DIAG
     ldx #$51
     jsr c128_stack_guard_begin
-    jsr c128_stack_guard_snapshot_banking
 #endif
-    pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
+    :EnterKernal()
 #if C128_REAL_BOOT_DIAG
     ldx #$52
     stx c128_stack_guard_stage
     jsr c128_stack_guard_snapshot_banking
 #endif
-    pla
     ldx c128_load_arg_x
     ldy c128_load_arg_y
     .byte $20
@@ -1174,7 +1153,7 @@ t_load: .word 0
 #endif
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
 #if C128_REAL_BOOT_DIAG
@@ -1184,9 +1163,6 @@ t_load: .word 0
     jsr c128_stack_guard_snapshot_return
 #endif
     rts
-
-c128_restore_saved_banking:
-    jmp c128_return_to_runtime_after_kernal
 
 c128_load_arg_x: .byte 0
 c128_load_arg_y: .byte 0
@@ -1224,17 +1200,11 @@ safe_nmi:
 // kernal_load_safe — KERNAL LOAD wrapper for C128
 // Reinstalls keyboard stub on exit. Callers manage MMU.
 kernal_load_safe:
-    sei
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
+    :EnterKernal()
     jsr $ffd5
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     lda #<chrin_keyboard_stub
     sta $0302
     lda #>chrin_keyboard_stub
@@ -1251,12 +1221,7 @@ chrin_keyboard_stub:
 // c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
 // Use this on long-lived runtime paths that do not need the full helper reinstall.
 c128_restore_runtime_state_core:
-    lda #CPU_PORT_DDR_DEFAULT
-    sta $00
-    lda #BANK_NO_BASIC
-    sta $01
-    lda #MMU_ALL_RAM
-    sta $ff00
+    :MachineRestoreAllRam()
     lda #<safe_irq
     sta $fffe
     lda #>safe_irq
@@ -1292,7 +1257,7 @@ c128_return_to_runtime_after_kernal:
     pha
     php
     sei
-    jsr c128_restore_runtime_state_core
+    :MachineRestoreAllRam()
     jsr init_common_mmu_helpers
     jsr c128_vdc_reassert_mode
     plp
@@ -1314,33 +1279,16 @@ c128_restore_runtime_state:
 c128_restore_runtime_guards:
     jmp c128_restore_runtime_state
 
-c128_kernal_return_mmu: .byte MMU_ALL_RAM
-c128_kernal_return_port0: .byte CPU_PORT_DDR_DEFAULT
-c128_kernal_return_port1: .byte BANK_NO_BASIC
-
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
 // $FF68 is in the banked code range ($F000-$FFB6) so it can't be
 // patched via the JMP table — call this routine directly instead.
 safe_setbnk:
-    pha
-    lda $00
-    sta c128_kernal_return_port0
-    lda $01
-    sta c128_kernal_return_port1
-    lda $ff00
-    sta c128_kernal_return_mmu
-    lda #CPU_PORT_DDR_DEFAULT
-    sta $00
-    lda #$00                // Full ROM map for KERNAL vectors that may hit $A000-$BFFF
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
-    pla
+    :EnterKernal()
     jsr $ff68
     php
     pha
-    jsr c128_restore_saved_banking
+    :ExitKernal()
     pla
     plp
     rts

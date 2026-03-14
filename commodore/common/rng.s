@@ -1,3 +1,4 @@
+#importonce
 // rng.s — 32-bit Galois LFSR random number generator
 //
 // Polynomial: $ED (taps at bits 7,6,5,3,2,0 — period 2^32-1)

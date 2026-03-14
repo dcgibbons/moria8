@@ -1,3 +1,4 @@
+#importonce
 // string_bank.s — String bank loader (R7.5)
 //
 // Loads Huffman-compressed string bank PRG files from disk to $E000.

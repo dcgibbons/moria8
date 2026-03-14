@@ -1,3 +1,4 @@
+#importonce
 // monster.s — Creature data & active monster table
 //
 // Embedded creature types for dungeon levels 1-5 (26 types).

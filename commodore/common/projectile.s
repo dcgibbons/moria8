@@ -1,3 +1,4 @@
+#importonce
 // projectile.s — Shared projectile tracing helpers
 //
 // Used by ranged_fire.s, throw.s, spell_effects.s

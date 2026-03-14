@@ -1,3 +1,4 @@
+#importonce
 // test_monster128.s — C128-specific regression test for monster kill memory preservation
 //
 // Tests: monster_remove regression (Bug R4) where FLAG_OCCUPIED clear

@@ -1,3 +1,4 @@
+#importonce
 // test_status_coherence128.s — Status redraw coherence guards (C128 VDC)
 //
 // Ensures screen clear paths set UI dirty bits needed for status repaint:

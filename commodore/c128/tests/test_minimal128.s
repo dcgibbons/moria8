@@ -1,3 +1,4 @@
+#importonce
 // test_minimal128.s — Minimal monitor harness sanity test
 
 .pc = $0801 "BASIC Stub"

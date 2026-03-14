@@ -1,3 +1,4 @@
+#importonce
 // string_bank_banked.s — String bank decoder (banked at $F000)
 //
 // Runs in the $F000 banked region with KERNAL ROM banked out ($01=$35).

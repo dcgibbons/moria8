@@ -1,3 +1,4 @@
+#importonce
 // monster_attack.s — Monster melee attacks on the player
 //
 // Called from monster_try_step when a monster is adjacent to the player.

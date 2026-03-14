@@ -1,3 +1,4 @@
+#importonce
 // title_data.s — Title screen art data (standalone PRG)
 //
 // Assembles to out/title, loaded into MAP_BASE at startup.

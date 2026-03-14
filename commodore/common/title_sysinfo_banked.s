@@ -1,3 +1,4 @@
+#importonce
 // title_sysinfo_banked.s — System info display (banked at $F000)
 //
 // Shows machine type, KERNAL revision, and REU info on title screen.

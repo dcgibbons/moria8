@@ -1,3 +1,4 @@
+#importonce
 // monster_ai.s — Monster AI: wake/sleep, movement, speed
 //
 // Called once per turn from turn_post_action. Iterates all 32 monster

@@ -1,3 +1,4 @@
+#importonce
 // huffman.s — Huffman string decoder for compressed text
 //
 // Decodes variable-length Huffman-coded strings into screen codes.

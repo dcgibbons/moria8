@@ -1,3 +1,4 @@
+#importonce
 // color.s — Color palette definitions and color RAM management
 //
 // Defines the game's color scheme for map tiles, UI elements,

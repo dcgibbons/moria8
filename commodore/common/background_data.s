@@ -1,3 +1,4 @@
+#importonce
 // background_data.s — Character background history tables
 //
 // 72 entries from umoria charts 1-23 (family/occupation).

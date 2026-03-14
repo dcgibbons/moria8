@@ -1,3 +1,4 @@
+#importonce
 // sound.s — Minimal SID sound effects
 //
 // Simple fire-and-forget sound effects using SID voice 3.

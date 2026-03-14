@@ -1,3 +1,4 @@
+#importonce
 // test_perf_p1.s — P1 movement responsiveness instrumentation checks (C128)
 
 #if !PERF_P1

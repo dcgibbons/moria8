@@ -1,3 +1,4 @@
+#importonce
 // perf_p1.s — C128 movement responsiveness instrumentation (P1)
 //
 // Compile-time guarded by PERF_P1. When disabled, this file contributes no

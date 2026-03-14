@@ -1,3 +1,4 @@
+#importonce
 // turn.s — Turn processing routines
 //
 // The main loop (main.s) dispatches player commands directly and calls

@@ -1,3 +1,4 @@
+#importonce
 // dungeon_los.s — Line of sight / visibility
 //
 // Three-state tile visibility:

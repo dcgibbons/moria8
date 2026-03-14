@@ -1,3 +1,4 @@
+#importonce
 // tier_manager.s — Creature tier loading and transition management
 //
 // Manages the active creature tier. Detects tier boundaries on stair

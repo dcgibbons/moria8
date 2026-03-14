@@ -1,3 +1,4 @@
+#importonce
 // ui_help_clear.s — Screen clearing utility (always in main RAM)
 //
 // Separated from ui_help.s so it stays in main RAM while the

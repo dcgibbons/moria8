@@ -1,3 +1,4 @@
+#importonce
 // ui_help.s — Help screen rendering code (banked at $F000)
 //
 // Displays all available key bindings on a full screen with

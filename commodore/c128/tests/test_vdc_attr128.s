@@ -1,3 +1,4 @@
+#importonce
 // test_vdc_attr128.s — VDC attribute-mode regression guard
 //
 // Verifies that attribute writes keep bit 7 set (alternate charset mode),

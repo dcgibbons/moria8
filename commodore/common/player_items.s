@@ -1,3 +1,4 @@
+#importonce
 // player_items.s — Equip, Remove, Eat, and equipment recalculation
 //
 // Phase 6.3: Player item interaction routines.

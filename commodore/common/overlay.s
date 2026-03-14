@@ -1,3 +1,4 @@
+#importonce
 // overlay.s — Phase overlay loading for $E000 region
 //
 // Manages code overlays at $E000-$EFFF for different game phases.

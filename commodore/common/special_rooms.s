@@ -1,3 +1,4 @@
+#importonce
 // special_rooms.s — Monster pits, treasure vaults, and nests
 //
 // At most one special room per dungeon level:

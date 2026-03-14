@@ -1,3 +1,4 @@
+#importonce
 // score.s — Score calculation, death screen, and high score table
 //
 // Death overlay at $E000: scoring math, death screen display,

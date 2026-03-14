@@ -1,3 +1,4 @@
+#importonce
 // test_main_loop128.s — Focused dispatch tests for common/game_loop.s on C128
 
 .pc = $0801 "BASIC Stub"

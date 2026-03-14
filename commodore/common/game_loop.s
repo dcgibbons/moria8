@@ -1,3 +1,4 @@
+#importonce
 // game_loop.s — Main game loop, command dispatch, and shared gameplay routines
 //
 // Platform-independent game logic extracted from main.s.

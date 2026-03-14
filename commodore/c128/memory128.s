@@ -1,3 +1,4 @@
+#importonce
 // memory128.s — Bank switching routines and memory map management (C128)
 //
 // C128 banking uses BOTH the MMU Configuration Register ($FF00/$D500)
@@ -225,7 +226,10 @@ zp_save_buf:
 // safe, operational state for KERNAL/Screen Editor.
 // $FF00 = $0E (Bank 0, ROMs, I/O)
 // $01   = $37 (All ROMs + I/O visible)
+// $D506 = $07 (4KB Bottom/Top Common)
 .macro MachineRestoreDefault() {
+    lda #$07
+    sta $d506
     lda #MMU_NORMAL
     sta $ff00
     lda #CPU_PORT_DDR_DEFAULT
@@ -237,6 +241,8 @@ zp_save_buf:
 // MachineRestoreAllRam — Restore the game's operational MMU state.
 // $FF00 = $3E (Bank 0, All RAM, I/O visible)
 .macro MachineRestoreAllRam() {
+    lda #$07
+    sta $d506
     lda #MMU_ALL_RAM
     sta $ff00
     lda #CPU_PORT_DDR_DEFAULT
@@ -247,18 +253,33 @@ zp_save_buf:
 
 // EnterKernal — Prepare for KERNAL calls (C128)
 .macro EnterKernal() {
-    php
+    jsr EnterKernal_sub
+}
+
+EnterKernal_sub:
     sei
+    lda $01
+    sta zp_mmu_save_01
+    lda $ff00
+    sta zp_mmu_save_ff00
     lda #$ff
     sta $cc
     :MachineRestoreDefault()
-}
+    rts
 
 // ExitKernal — Restore game state after KERNAL calls (C128)
 .macro ExitKernal() {
-    jsr c128_restore_runtime_state
-    plp
+    jsr ExitKernal_sub
 }
+
+ExitKernal_sub:
+    lda zp_mmu_save_01
+    sta $01
+    lda zp_mmu_save_ff00
+    sta $ff00
+    jsr c128_vdc_reassert_mode
+    cli
+    rts
 
 // MMU Bank 1 Access Macros
 .macro Bank1Read() {

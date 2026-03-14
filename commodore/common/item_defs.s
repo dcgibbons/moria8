@@ -1,3 +1,4 @@
+#importonce
 // item_defs.s — Item system constants
 //
 // Extracted from item.s so player.s (and other early-imported modules)

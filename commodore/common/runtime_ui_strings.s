@@ -1,3 +1,4 @@
+#importonce
 // runtime_ui_strings.s — Shared runtime UI strings that must stay in normal RAM
 //
 // These strings are dereferenced directly during title/load/disk menu flows.

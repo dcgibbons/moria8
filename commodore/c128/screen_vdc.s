@@ -1,3 +1,4 @@
+#importonce
 // screen_vdc.s — Screen output routines (80-column VDC)
 //
 // All output uses VDC register-indirect writes. Screen codes are written

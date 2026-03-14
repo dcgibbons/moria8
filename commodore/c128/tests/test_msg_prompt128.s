@@ -1,3 +1,4 @@
+#importonce
 // test_msg_prompt128.s — C128 message prompt rendering race regression tests
 //
 // Reproduces the intermittent garbled prompt issue by running a high-rate CIA1

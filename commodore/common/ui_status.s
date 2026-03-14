@@ -1,3 +1,4 @@
+#importonce
 // ui_status.s — Bottom status bar rendering (umoria-style, 3 lines)
 //
 // Three-line status bar at rows 21–23:

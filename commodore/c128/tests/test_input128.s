@@ -1,3 +1,4 @@
+#importonce
 // test_input128.s — C128 input mapping smoke test for C2.5
 
 #import "../../common/zeropage.s"

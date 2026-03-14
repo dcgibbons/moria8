@@ -1,3 +1,4 @@
+#importonce
 // vdc_demo.s — Standalone VDC 80-column demo for C128
 //
 // Demonstrates VDC rendering pipeline:

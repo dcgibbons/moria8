@@ -1,3 +1,4 @@
+#importonce
 // ui_trampoline_stubs.s — Test-only aliases for trampolines
 //
 // In the game build, trampolines bank out KERNAL to call $F000/$E000 code.

@@ -1,3 +1,4 @@
+#importonce
 // reu_loading_banked.s — REU loading status display (banked at $F000)
 //
 // Shows "X/YYYКB" progress during REU preloading.

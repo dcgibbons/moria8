@@ -1,3 +1,4 @@
+#importonce
 // ranged_fire.s — Ranged combat (fire bows, crossbows, slings)
 //
 // SHIFT+F fires equipped ranged weapon at a target in a direction.

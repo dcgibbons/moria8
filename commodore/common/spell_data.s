@@ -1,3 +1,4 @@
+#importonce
 // spell_data.s — Spell and prayer data tables
 //
 // Phase 7.1: 16 mage spells + 16 priest prayers.

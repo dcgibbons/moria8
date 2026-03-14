@@ -1,3 +1,4 @@
+#importonce
 // ui_home.s — Player Home UI (deposit/retrieve items)
 //
 // Runs at $F000 (banked code area, $01=$35).

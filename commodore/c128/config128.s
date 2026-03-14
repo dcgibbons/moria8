@@ -1,3 +1,4 @@
+#importonce
 // config128.s — C128 configuration (hardcoded for MORIA128.PRG)
 //
 // No runtime detection needed — if this binary is running, we're C128 80-col.

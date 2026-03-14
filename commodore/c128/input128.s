@@ -1,3 +1,4 @@
+#importonce
 // input128.s — Keyboard input and command parsing (C128)
 //
 // Reads CIA1 keyboard matrix directly — bypasses Screen Editor entirely.

@@ -1,3 +1,4 @@
+#importonce
 // ui_character.s — Character sheet display
 //
 // Shows full character info on screen. Called from character

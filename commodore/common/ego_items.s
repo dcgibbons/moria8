@@ -1,3 +1,4 @@
+#importonce
 // ego_items.s — Ego item generation and suffix strings
 //
 // Lives at $F000 (RAM under KERNAL ROM), accessed via trampolines.

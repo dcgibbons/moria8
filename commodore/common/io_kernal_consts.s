@@ -1,3 +1,4 @@
+#importonce
 // io_kernal_consts.s — Shared disk I/O and KERNAL constants
 
 .const SAVE_FILE_NUM  = 2       // Logical file number for save/load data

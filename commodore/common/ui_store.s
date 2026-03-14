@@ -1,3 +1,4 @@
+#importonce
 // ui_store.s — Store screen rendering, buy/sell UI, entry detection
 //
 // The store is a separate mode with its own input loop.

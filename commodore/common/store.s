@@ -1,3 +1,4 @@
+#importonce
 // store.s — Store restocking, price calculation, gold ops
 //
 // 6 town stores with persistent inventory (SoA layout, 12 slots each).

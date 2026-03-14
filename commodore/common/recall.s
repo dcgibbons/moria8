@@ -1,3 +1,4 @@
+#importonce
 // recall.s — Monster recall data structures and tracking
 //
 // Per-creature-type counters for the monster recall system (R7.7).

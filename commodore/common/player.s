@@ -1,3 +1,4 @@
+#importonce
 // player.s — Player data structure and accessors
 //
 // The player struct is stored in a contiguous block in main RAM.

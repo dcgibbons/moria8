@@ -1,3 +1,4 @@
+#importonce
 // test_config128.s — C128 config contract smoke test
 
 #import "../../common/zeropage.s"

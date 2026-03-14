@@ -1,3 +1,4 @@
+#importonce
 // title_screen.s — Title screen loader and renderer
 //
 // Loads title art from disk ("TITLE" file) into MAP_BASE,

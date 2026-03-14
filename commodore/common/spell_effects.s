@@ -1,3 +1,4 @@
+#importonce
 // spell_effects.s — Shared effect subroutines for spells, potions, scrolls, etc.
 //
 // Phase 7.0: Extracted from player_items.s inline handlers.

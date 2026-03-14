@@ -1,3 +1,4 @@
+#importonce
 // monster_magic.s — Monster spellcasting system
 //
 // Provides spell chance/LOS checking, spell selection, and 7 spell

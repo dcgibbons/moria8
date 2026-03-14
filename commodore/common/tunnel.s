@@ -1,3 +1,4 @@
+#importonce
 // tunnel.s — Tunnel command (+ key)
 //
 // Dig through walls, magma, quartz, and rubble. Core umoria command.

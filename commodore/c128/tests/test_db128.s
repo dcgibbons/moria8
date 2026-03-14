@@ -1,3 +1,4 @@
+#importonce
 // test_db128.s — C128 banked database helper smoke tests for Phase 10.2.1
 
 #import "../../common/zeropage.s"

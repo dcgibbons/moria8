@@ -1,3 +1,4 @@
+#importonce
 // player_magic.s — Cast spell (m) and Pray (p) commands
 //
 // Phase 7.2: Spell list display, cast/pray logic, failure calculation.

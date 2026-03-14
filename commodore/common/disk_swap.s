@@ -1,3 +1,4 @@
+#importonce
 // disk_swap.s — Dual-disk mode support
 //
 // Provides disk swap prompts for separate game/save disks.

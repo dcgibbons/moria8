@@ -1,3 +1,4 @@
+#importonce
 // ui_messages.s — Message line management
 //
 // Top of screen (rows 0-1) displays game messages.

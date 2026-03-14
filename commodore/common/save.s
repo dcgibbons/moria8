@@ -1,3 +1,4 @@
+#importonce
 // save.s — Save/Load game system
 //
 // Writes all game state to a sequential file on 1541 disk via KERNAL I/O.

@@ -1,3 +1,4 @@
+#importonce
 // player_move.s — Player movement and collision
 //
 // Handles 8-direction movement, tile walkability checks,

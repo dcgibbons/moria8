@@ -1,3 +1,4 @@
+#importonce
 // dungeon_render_vdc.s — VDC viewport rendering (C128 80-column)
 //
 // Reads the map and draws a 78x19 viewport via VDC register writes.

@@ -1,3 +1,4 @@
+#importonce
 // ui_recall.s — Monster recall display (banked at $F000)
 //
 // Shows creature info for the creature type in recall_found_type.

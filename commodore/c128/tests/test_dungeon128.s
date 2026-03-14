@@ -1,3 +1,4 @@
+#importonce
 // test_dungeon128.s — Dungeon render color-path regression checks (C128)
 
 #import "../../common/zeropage.s"

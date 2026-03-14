@@ -1,3 +1,4 @@
+#importonce
 // tables.s — Game data tables
 //
 // Race stat modifiers, class data, XP thresholds, stat bonus tables.

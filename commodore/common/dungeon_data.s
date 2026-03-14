@@ -1,3 +1,4 @@
+#importonce
 // dungeon_data.s — Shared dungeon constants, tables, and variables
 //
 // Contains all data shared between dungeon_gen.s (generation overlay) and

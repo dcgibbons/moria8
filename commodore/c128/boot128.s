@@ -1,3 +1,4 @@
+#importonce
 // boot128.s — Bootloader for Moria8 C128 (Standard Model Refined)
 //
 // Relocates 4 pages to $2000. Filenames at $2300.

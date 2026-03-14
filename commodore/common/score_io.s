@@ -1,3 +1,4 @@
+#importonce
 // score_io.s — High score disk I/O (main RAM)
 //
 // hiscore_load and hiscore_save use KERNAL I/O and must stay in main RAM.

@@ -1,3 +1,4 @@
+#importonce
 // dungeon_features.s — Doors, traps, secret doors, search
 //
 // Phase 4.2: Explicit open/close door commands, stuck door mechanics,

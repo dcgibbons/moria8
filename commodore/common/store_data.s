@@ -1,3 +1,4 @@
+#importonce
 // store_data.s — Store persistent data and main-RAM helpers
 //
 // Store inventory arrays must persist across overlay loads ($E000).

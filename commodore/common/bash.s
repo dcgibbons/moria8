@@ -1,3 +1,4 @@
+#importonce
 // bash.s — Bash command (SHIFT+D)
 //
 // Bash doors open, stun monsters with shield attacks. Core umoria command.

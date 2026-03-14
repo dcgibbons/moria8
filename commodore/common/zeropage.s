@@ -1,3 +1,4 @@
+#importonce
 // zeropage.s — Zero page variable declarations
 // Uses BASIC's freed space $02–$8F (~140 bytes)
 //
@@ -32,6 +33,8 @@
 // --- General purpose / temporaries ($02–$0C) ---
 .label zp_temp0        = $02   // General temp byte
 .label zp_temp1        = $03   // General temp byte
+.label zp_mmu_save_01  = $02   // C128 MMU save for EnterKernal
+.label zp_mmu_save_ff00 = $03
 .label zp_temp2        = $04   // General temp byte
 .label zp_temp3        = $05   // General temp byte
 .label zp_ptr0         = $06   // General pointer (lo/hi)
