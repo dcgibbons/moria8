@@ -68,18 +68,41 @@ class MoriaEnv(gym.Env):
         
         self._last_state: GameState | None = None
         self._map_data: bytes | None = None
+        self._visit_counts: dict[tuple[int, int, int], int] = {}
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         """Reset the environment (re-launches VICE or loads snapshot)."""
         super().reset(seed=seed)
         self.turn_count = 0
+        self._visit_counts.clear()
         
-        # In a real training run, we'd use snapshots here.
-        # For now, just ensure we're connected and waiting for input.
         if not self.gi.bridge._sock:
             self.gi.connect()
             self.gi.setup_breakpoints()
+            self.gi.bridge.continue_execution()
         
+        # If we died in the previous episode, the game is paused at the
+        # Tombstone screen's input_get_key. Automate the recovery!
+        if self._last_state and self._last_state.is_dead:
+            logger.info("Player is dead. Automating recovery sequence...")
+            recovery_keys = [
+                0x20, # SPACE - Dismiss Tombstone
+                0x53, # 'S'   - Start over (from game over prompt)
+                0x20, # SPACE - Dismiss Title Screen
+                0x41, # 'A'   - Race (Human)
+                0x41, # 'A'   - Class (Warrior)
+                0x0D, # RET   - Accept stats
+                0x41, # 'A'   - Name ("A")
+                0x0D, # RET   - Accept name
+                0x41, # 'A'   - Gender (Male)
+                0x20, # SPACE - Dismiss char sheet
+                0x3E, # '>'   - Go down stairs (town -> dungeon)
+            ]
+            for key in recovery_keys:
+                self.gi.send_raw_key(key)
+                self.gi.wait_for_input()
+            logger.info("Recovery sequence complete. Back in the dungeon.")
+            
         self.gi.wait_for_input()
         self._last_state = self.gi.read_state()
         self._map_data = self.gi.read_map()
@@ -135,7 +158,7 @@ class MoriaEnv(gym.Env):
             # 1. Movement Masking (Walls/Closed Doors)
             if action in ACTION_DELTAS:
                 dx, dy = ACTION_DELTAS[action]
-                nx, ny = state.player_pos[0] + dx, state.player_pos[1] + dy
+                nx, ny = state.player_x + dx, state.player_y + dy
                 
                 if 0 <= nx < MAP_WIDTH and 0 <= ny < MAP_HEIGHT:
                     idx = ny * MAP_WIDTH + nx
@@ -150,7 +173,7 @@ class MoriaEnv(gym.Env):
             
             # 2. Stair Masking
             elif action == Action.GO_DOWN or action == Action.GO_UP:
-                idx = state.player_pos[1] * MAP_WIDTH + state.player_pos[0]
+                idx = state.player_y * MAP_WIDTH + state.player_x
                 tile_byte = m_data[idx]
                 t_type = (tile_byte >> 4) & 0x0F
                 if t_type != 3: # STAIRS
@@ -175,7 +198,7 @@ class MoriaEnv(gym.Env):
         
         # Get 11x11 map window
         window = np.zeros((11, 11), dtype=np.uint8)
-        px, py = s.player_pos
+        px, py = s.player_x, s.player_y
         for dy in range(-5, 6):
             for dx in range(-5, 6):
                 nx, ny = px + dx, py + dy
@@ -185,13 +208,13 @@ class MoriaEnv(gym.Env):
                     
         return {
             "vitals": vitals,
-            "pos": np.array(s.player_pos, dtype=np.uint8),
+            "pos": np.array([px, py], dtype=np.uint8),
             "map": window
         }
 
     def _compute_reward(self, prev: GameState, curr: GameState) -> float:
-        """Heuristic reward function (V2: Reward Shaping)."""
-        reward = 0.0
+        """Heuristic reward function (Stage 0: Maze Navigation)."""
+        reward = -0.01  # Small penalty every turn to encourage speed
         
         # HP Loss penalty
         if curr.hp < prev.hp:
@@ -199,15 +222,20 @@ class MoriaEnv(gym.Env):
             
         # Death penalty
         if curr.is_dead:
-            reward -= 500.0
+            reward -= 100.0  # Large penalty for dying
             
-        # Exploration reward (if pos changed)
-        if curr.player_pos != prev.player_pos:
-            reward += 0.1
+        # Curiosity / Exploration reward
+        pos_key = (curr.dungeon_level, curr.player_x, curr.player_y)
+        visits = self._visit_counts.get(pos_key, 0)
+        
+        if curr.player_x != prev.player_x or curr.player_y != prev.player_y:
+            # 1/sqrt(n) reward for exploration
+            reward += 1.0 / np.sqrt(visits + 1)
+            self._visit_counts[pos_key] = visits + 1
             
-        # Depth reward
+        # Stair Finding / Depth reward
         if curr.dungeon_level > prev.dungeon_level:
-            reward += 50.0
+            reward += 100.0  # Large reward for descending
             
         return reward
 
@@ -216,7 +244,7 @@ class MoriaEnv(gym.Env):
         s = self._last_state
         self.telemetry.send_turn_update(
             turn=self.turn_count,
-            pos=s.player_pos,
+            pos=(s.player_x, s.player_y),
             hp=(s.hp, s.max_hp),
             depth=s.dungeon_level,
             action=action_name,

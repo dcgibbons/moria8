@@ -104,6 +104,23 @@ class GameInterface:
         Raises:
             TimeoutError: If VICE doesn't stop within timeout.
         """
+        target_pc = self.symbols["input_get_key"]
+        
+        # Fast path: Check if we are ALREADY stopped at the input prompt.
+        try:
+            regs = self.bridge.registers_get()
+            if regs.get("pc", 0) == target_pc:
+                logger.debug("Already stopped at input_get_key ($%04X), forcing resume.", target_pc)
+                # We are already here, likely from a previous session.
+                # Send a dummy key (like SPACE or a null op) or just continue 
+                # so it re-evaluates the loop and hits the breakpoint cleanly.
+                # But since the game is waiting for a key, we MUST feed it a key to make it move.
+                self.bridge.keyboard_feed(b" ")
+                self.bridge.continue_execution()
+        except Exception as e:
+            logger.debug("Could not read registers (game might be running): %s", e)
+
+        # Slow path: Wait for execution to hit the breakpoint
         t = timeout or self.input_timeout
         return self.bridge.wait_for_stop(timeout=t)
 

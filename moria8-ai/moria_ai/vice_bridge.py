@@ -246,11 +246,22 @@ class ViceBridge:
         count = struct.unpack("<H", resp.body[:2])[0]
         off = 2
         for _ in range(count):
-            if off + 2 > len(resp.body): break
-            size, id = resp.body[off], resp.body[off+1]
-            off += 2
-            val = struct.unpack("<H", resp.body[off:off+2])[0] if size == 2 else resp.body[off]
-            off += size
+            if off + 1 > len(resp.body): break
+            item_size = resp.body[off]
+            if item_size == 0:
+                off += 1
+                continue
+            reg_id = resp.body[off + 1]
+            val_size = item_size - 1
+            if val_size == 1:
+                val = resp.body[off + 2]
+            elif val_size == 2:
+                val = struct.unpack("<H", resp.body[off+2:off+4])[0]
+            else:
+                val = 0
+            
             names = {3: 'pc', 35: 'pc', 0: 'a', 53: 'a', 1: 'x', 54: 'x', 2: 'y', 55: 'y'}
-            if id in names: regs[names[id]] = val
+            if reg_id in names: regs[names[reg_id]] = val
+            
+            off += 1 + item_size
         return regs

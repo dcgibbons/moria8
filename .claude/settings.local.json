@@ -76,7 +76,21 @@
       "Bash(elif grep -q '#import \"\"../item.s\"\"' \"$f\")",
       "Bash(then sed -i '' '/#import \"\"..\\\\/item.s\"\"/a#import \"\"../special_rooms.s\"\"#import \"\"../special_rooms_stubs.s\"\"\n' \"$f\")",
       "Bash(else echo \"$f: no item.s import found — needs manual check\")",
-      "Bash(fi)"
+      "Bash(fi)",
+      "Bash(brew list --formula)",
+      "Bash(mkdir:*)",
+      "Bash(chmod +x:*)",
+      "Bash(cd \"/Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/moria8-ai\" && pip3 install -e \".[dev]\" 2>&1 | tail -15)",
+      "Bash(cd \"/Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/moria8-ai\" && python3 -m venv .venv && source .venv/bin/activate && pip install -e \".[dev]\" 2>&1 | tail -10)",
+      "Bash(cd \"/Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/moria8-ai\" && source .venv/bin/activate && pip install -e \".[dev]\" 2>&1 | tail -10)",
+      "Bash(cd \"/Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/moria8-ai\" && source .venv/bin/activate && python -m pytest tests/ -v 2>&1)",
+      "Read(//Applications/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/Applications/VICE/bin/x64sc --help 2>&1 | head -5; echo \"---\"; /Applications/VICE/bin/x64sc -help 2>&1 | grep -i \"binarymonitor\\\\|autostart\\\\|autostartprg\" | head -10)",
+      "Bash(/Applications/VICE/bin/x64sc -help 2>&1 | grep -i \"autostartprg\\\\|binarymonitor\" | head -10)",
+      "Bash(PRG=\"/Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/commodore/c64/out/moria8.prg\")",
+      "Read(//Users/chadwick/Library/Mobile Documents/com~apple~CloudDocs/Projects/6502/moria8-testing/moria8-ai/**)",
+      "Bash(/Applications/VICE/bin/x64sc -help 2>&1 | grep -i \"^-sound\\\\|^\\\\+sound\" | head -5)"
     ]
   }
 }
