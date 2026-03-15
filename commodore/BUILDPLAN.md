@@ -63,7 +63,7 @@
 | **10.8-HDN** | **MED** | Follow-up hardening complete: `memory128.s` is now the ownership source of truth, placement rules are assert-backed, the C128 architecture doc has a preflight checklist, and smoke coverage now verifies cache survival plus tier/overlay fallback isolation. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |
-| **OPT-TEST** | **HIGH** | **Gate C: Test Harness Optimization.** Resolve C128 testing slowness by addressing JVM startup overhead, VICE hardware reset latency, and sequential execution bottlenecks. | **Pending** |
+| **OPT-TEST** | **HIGH** | **Gate C: Test Harness Optimization.** Resolve C128 testing slowness by addressing JVM startup overhead, VICE hardware reset latency, and sequential execution. See `c128/TEST_OPTIMIZATION_PLAN.md` for detailed strategies (Snapshots, Server Mode, Python Orchestration). | **Pending** |
 ## What's Next
 
 

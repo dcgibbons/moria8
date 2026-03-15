@@ -35,15 +35,7 @@ detect_machine:
 .label kernal_load = $ffd5
 
 .macro AssetLoad() {
-    lda #0
-    ldx #0
-    jsr $ff68                   // SETBNK: data=Bank 0
-    jsr $ffd5                   // LOAD
-    php
-    lda #0
-    ldx #0
-    jsr $ff68                   // Restore SETBNK: data=Bank 0
-    plp
+    jsr $ffd5                   // LOAD (calls w_load wrapper in main.s)
 }
 
 .const DEATH_ALIVE   = $00    // Player is alive

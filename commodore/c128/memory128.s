@@ -140,7 +140,10 @@
 .const MMU_SAVE_01           = $0c00
 .const MMU_SAVE_FF00         = $0c01
 .const KERNAL_NESTING_DEPTH  = $0c02
-.const MMU_COMMON_HELPERS_BASE = $0c03
+.const MMU_IRQ_SAVE_01       = $0c03
+.const MMU_IRQ_SAVE_FF00     = $0c04
+.const MMU_IRQ_SAVE_D506     = $0c05
+.const MMU_COMMON_HELPERS_BASE = $0c06
 .const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
 .const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
 .const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
@@ -300,22 +303,25 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
+    sei                     // Atomic start: KERNAL calls (like LOAD) often re-enable IRQs
     dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
     jsr restore_kernal_zp   // Restore game state from kernal_zp_save_buf
+    
+    // Restore Runtime Invariant: Top Common ON ($0D)
+    // MUST be done BEFORE restoring $FF00 because $FF00 may be Bank 1 (no vectors)
+    lda #$0D
+    sta $d506
+
     lda MMU_SAVE_01
     sta $01
     lda MMU_SAVE_FF00
     sta $ff00
-    
-    // Restore Runtime Invariant: Top Common ON ($0D)
-    lda #$0D
-    sta $d506
 
     // Reclaim control of IRQ vector for All-RAM runtime mode.
-    lda #<safe_irq_restore
+    lda #<mmu_common_irq
     sta $0314
-    lda #>safe_irq_restore
+    lda #>mmu_common_irq
     sta $0315
     jsr init_common_mmu_helpers
     jsr c128_vdc_reassert_mode
@@ -473,10 +479,61 @@ bank1_overlay_cache_slot_lo:
 bank1_overlay_cache_slot_hi:
     .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE
 
-// Common-RAM MMU helpers copied to $0C03 at startup.
+// Common-RAM MMU helpers copied to $0C06 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
 mmu_common_helpers_blob:
 .pseudopc MMU_COMMON_HELPERS_BASE {
+mmu_common_irq:
+    pha
+    txa
+    pha
+    tya
+    pha
+
+    // Save current MMU state to IRQ-specific statics in Common RAM
+    lda $01
+    sta MMU_IRQ_SAVE_01
+    lda $ff00
+    sta MMU_IRQ_SAVE_FF00
+    lda $d506
+    sta MMU_IRQ_SAVE_D506
+
+    // Force known-good Bank 0 All-RAM mode with I/O visible
+    lda #$0D                    // 4KB Bottom/Top Common ON
+    sta $d506
+    lda #MMU_ALL_RAM
+    sta $ff00
+    lda #BANK_NO_BASIC
+    sta $01
+
+    // Acknowledge all possible interrupt sources (CIA1 and VIC-II)
+    lda $dc0d
+    lda #$ff
+    sta $d019
+
+    // Restore original MMU state
+    lda MMU_IRQ_SAVE_D506
+    sta $d506
+    lda MMU_IRQ_SAVE_01
+    sta $01
+    lda MMU_IRQ_SAVE_FF00
+    sta $ff00
+
+    pla
+    tay
+    pla
+    tax
+    pla
+    pla                         // Discard C128 MMU byte from stack
+    rti
+
+mmu_common_nmi:
+    pha
+    lda $dd0d                   // Acknowledge CIA2 NMI
+    pla
+    pla                         // Discard C128 MMU byte from stack
+    rti
+
 mmu_common_map_read_ptr0:
     jsr mmu_common_select_bank1
     lda (zp_ptr0),y

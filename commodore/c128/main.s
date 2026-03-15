@@ -901,18 +901,16 @@ entry_real:
     lda $fffb
     sta kernal_hw_nmi_vec_hi
 
-    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM.
-    // When $FF00=$3E (game mode), CPU reads $FFFE from RAM.
-    // The mirrored ROM vector points to KERNAL code at $E000+ which is
-    // hidden by $FF00=$3E. Our safe handler just acknowledges CIA and RTIs.
-    lda #<safe_irq
+    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
+    // This ensures interrupts always find code even when Bank 1 is active.
+    lda #<mmu_common_irq
     sta $fffe
-    lda #>safe_irq
+    lda #>mmu_common_irq
     sta $ffff
     // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
-    lda #<safe_nmi
+    lda #<mmu_common_nmi
     sta $fffa
-    lda #>safe_nmi
+    lda #>mmu_common_nmi
     sta $fffb
     // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
     lda #<exit_trampoline
@@ -1180,37 +1178,8 @@ t_load: .word 0
 c128_load_arg_x: .byte 0
 c128_load_arg_y: .byte 0
 
-// safe_irq — Minimal IRQ handler for $FF00=$3E mode.
-// When $FF00=$3E (game mode), the CPU reads the IRQ vector from RAM.
-// We can't dispatch to the KERNAL handler (hidden behind RAM), so we
-// just acknowledge ALL interrupt sources and return. Both CIA1 and VIC-II
-// share the IRQ line — if VIC-II raster IRQ fires and isn't acknowledged,
-// it reasserts immediately after RTI causing an infinite IRQ loop.
-safe_irq:
-    pha
-    txa
-    pha
-    tya
-    pha
-    lda $dc0d               // Acknowledge CIA1 interrupt (read clears flags)
-    lda #$ff
-    sta $d019               // Acknowledge VIC-II interrupts (write 1s clears flags)
-safe_irq_restore:
-    pla
-    tay
-    pla
-    tax
-    pla
-    pla                     // Discard C128 MMU byte from stack
-    rti
-
-// safe_nmi — Minimal NMI handler for $FF00=$3E mode.
-safe_nmi:
-    pha
-    lda $dd0d               // Acknowledge CIA2 NMI
-    pla
-    pla                     // Discard C128 MMU byte from stack
-    rti
+// safe_irq and safe_nmi have been replaced by Common RAM trampolines
+// mmu_common_irq and mmu_common_nmi (see memory128.s).
 
 // kernal_load_safe — KERNAL LOAD wrapper for C128
 // Reinstalls keyboard stub on exit. Callers manage MMU.
@@ -1237,21 +1206,21 @@ chrin_keyboard_stub:
 // Use this on long-lived runtime paths that do not need the full helper reinstall.
 c128_restore_runtime_state_core:
     :MachineRestoreAllRam()
-    lda #<safe_irq
+    lda #<mmu_common_irq
     sta $fffe
-    lda #>safe_irq
+    lda #>mmu_common_irq
     sta $ffff
-    lda #<safe_nmi
+    lda #<mmu_common_nmi
     sta $fffa
-    lda #>safe_nmi
+    lda #>mmu_common_nmi
     sta $fffb
     lda #<exit_trampoline
     sta $fffc
     lda #>exit_trampoline
     sta $fffd
-    lda #<safe_irq_restore
+    lda #<mmu_common_irq
     sta $0314
-    lda #>safe_irq_restore
+    lda #>mmu_common_irq
     sta $0315
     lda #<chrin_keyboard_stub
     sta $0302
@@ -1499,8 +1468,7 @@ restart_entry:
     sta $ff00
     lda KERNAL_REV              // $FF80 — in KERNAL ROM
     sta tsi_krev_cached
-    lda #MMU_ALL_RAM            // Back to all-RAM mode
-    sta $ff00
+    :MachineRestoreAllRam()     // Stable runtime invariant: Top Common ON ($D506=$0D)
 
     lda #0                      // Force REU absent for C128 MVP
     sta reu_present
@@ -1530,9 +1498,9 @@ restart_entry:
     lda #$ff
     sta $cc
     // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
-    lda #<safe_irq_restore
+    lda #<mmu_common_irq
     sta $0314
-    lda #>safe_irq_restore
+    lda #>mmu_common_irq
     sta $0315
 
     lda #$ff
@@ -1966,7 +1934,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !mmu_ok:
     lda $0314
-    cmp #<safe_irq_restore
+    cmp #<mmu_common_irq
     beq !irq_lo_ok+
     sta c128_stack_guard_fail_code
     lda #4
@@ -1974,7 +1942,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !irq_lo_ok:
     lda $0315
-    cmp #>safe_irq_restore
+    cmp #>mmu_common_irq
     beq !irq_hi_ok+
     sta c128_stack_guard_fail_code
     lda #5
@@ -1982,7 +1950,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !irq_hi_ok:
     lda $fffa
-    cmp #<safe_nmi
+    cmp #<mmu_common_nmi
     beq !nmi_lo_ok+
     sta c128_stack_guard_fail_code
     lda #6
@@ -1990,7 +1958,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !nmi_lo_ok:
     lda $fffb
-    cmp #>safe_nmi
+    cmp #>mmu_common_nmi
     beq !nmi_hi_ok+
     sta c128_stack_guard_fail_code
     lda #7
@@ -1998,7 +1966,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !nmi_hi_ok:
     lda $fffe
-    cmp #<safe_irq
+    cmp #<mmu_common_irq
     beq !hw_irq_lo_ok+
     sta c128_stack_guard_fail_code
     lda #8
@@ -2006,7 +1974,7 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !hw_irq_lo_ok:
     lda $ffff
-    cmp #>safe_irq
+    cmp #>mmu_common_irq
     beq !hw_irq_hi_ok+
     sta c128_stack_guard_fail_code
     lda #9
