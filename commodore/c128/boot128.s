@@ -114,9 +114,6 @@ loader_start:
     jsr $ffd5
     bcs load_err
 
-boot_safe_rti:
-    rti
-
 #if BOOT_DIAG
     lda #$c2
     sta BOOT_DIAG_SIG_BASE + 0

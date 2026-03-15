@@ -232,9 +232,9 @@ kernal_zp_save_buf:
 // safe, operational state for KERNAL/Screen Editor.
 // $FF00 = $0E (Bank 0, ROMs, I/O)
 // $01   = $37 (All ROMs + I/O visible)
-// $D506 = $07 (4KB Bottom/Top Common)
+// $D506 = $05 (4KB Bottom Common only — Top Common OFF)
 .macro MachineRestoreDefault() {
-    lda #$07
+    lda #$05
     sta $d506
     lda #MMU_NORMAL
     sta $ff00
@@ -246,8 +246,9 @@ kernal_zp_save_buf:
 
 // MachineRestoreAllRam — Restore the game's operational MMU state.
 // $FF00 = $3E (Bank 0, All RAM, I/O visible)
+// $D506 = $05 (4KB Bottom Common only — Top Common OFF)
 .macro MachineRestoreAllRam() {
-    lda #$07
+    lda #$05
     sta $d506
     lda #MMU_ALL_RAM
     sta $ff00
