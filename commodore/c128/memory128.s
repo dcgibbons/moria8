@@ -137,7 +137,10 @@
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
 .const BANK1_CACHE_OWNED_END      = BANK1_RESERVED_TOP_END
 
-.const MMU_COMMON_HELPERS_BASE = $0c00
+.const MMU_SAVE_01           = $0c00
+.const MMU_SAVE_FF00         = $0c01
+.const KERNAL_NESTING_DEPTH  = $0c02
+.const MMU_COMMON_HELPERS_BASE = $0c03
 .const BANK1_STAGE_SOURCE_BASE = $1c01 // boot128 loads MORIA128 here in Bank 1 before copy
 .const BANK1_STAGE_SOURCE_END  = $feff // copy stub stops before $ff00
 .const TIER_PRELOAD_REQUIRED = BANK1_TIER_CACHE_SIZE
@@ -232,7 +235,7 @@ kernal_zp_save_buf:
 // safe, operational state for KERNAL/Screen Editor.
 // $FF00 = $0E (Bank 0, ROMs, I/O)
 // $01   = $37 (All ROMs + I/O visible)
-// $D506 = $05 (4KB Bottom Common only — Top Common OFF)
+// $D506 = $05 (4KB Bottom Common only — Top Common OFF for KERNAL ROM access)
 .macro MachineRestoreDefault() {
     lda #$05
     sta $d506
@@ -246,9 +249,9 @@ kernal_zp_save_buf:
 
 // MachineRestoreAllRam — Restore the game's operational MMU state.
 // $FF00 = $3E (Bank 0, All RAM, I/O visible)
-// $D506 = $05 (4KB Bottom Common only — Top Common OFF)
+// $D506 = $0D (4KB Bottom/Top ON — Expert Recommended for Vector Safety)
 .macro MachineRestoreAllRam() {
-    lda #$05
+    lda #$0D
     sta $d506
     lda #MMU_ALL_RAM
     sta $ff00
@@ -265,14 +268,14 @@ kernal_zp_save_buf:
 
 EnterKernal_sub:
     sei
-    inc kernal_nesting_depth
-    lda kernal_nesting_depth
+    inc KERNAL_NESTING_DEPTH
+    lda KERNAL_NESTING_DEPTH
     cmp #1
     bne !ek_nest+           // Already in Kernal mode — don't overwrite saved state
     lda $01
-    sta mmu_save_01
+    sta MMU_SAVE_01
     lda $ff00
-    sta mmu_save_ff00
+    sta MMU_SAVE_FF00
     jsr save_kernal_zp      // Protect game state in kernal_zp_save_buf
     lda #$ff
     sta $cc                 // Force default keyboard row
@@ -297,16 +300,16 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
-    dec kernal_nesting_depth
+    dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
     jsr restore_kernal_zp   // Restore game state from kernal_zp_save_buf
-    lda mmu_save_01
+    lda MMU_SAVE_01
     sta $01
-    lda mmu_save_ff00
+    lda MMU_SAVE_FF00
     sta $ff00
     
-    // Restore Runtime Invariant: Top Common ON ($07)
-    lda #$07
+    // Restore Runtime Invariant: Top Common ON ($0D)
+    lda #$0D
     sta $d506
 
     // Reclaim control of IRQ vector for All-RAM runtime mode.
@@ -319,11 +322,6 @@ ExitKernal_sub:
     cli
 !ex_nest:
     rts
-
-// Static storage for MMU state (outside Zero Page to avoid KERNAL clobber)
-mmu_save_01:   .byte 0
-mmu_save_ff00: .byte 0
-kernal_nesting_depth: .byte 0
 
 // MMU Bank 1 Access Macros
 .macro Bank1Read() {
@@ -475,7 +473,7 @@ bank1_overlay_cache_slot_lo:
 bank1_overlay_cache_slot_hi:
     .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE
 
-// Common-RAM MMU helpers copied to $0C00 at startup.
+// Common-RAM MMU helpers copied to $0C03 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
 mmu_common_helpers_blob:
 .pseudopc MMU_COMMON_HELPERS_BASE {

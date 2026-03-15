@@ -1201,6 +1201,7 @@ safe_irq_restore:
     pla
     tax
     pla
+    pla                     // Discard C128 MMU byte from stack
     rti
 
 // safe_nmi — Minimal NMI handler for $FF00=$3E mode.
@@ -1208,6 +1209,7 @@ safe_nmi:
     pha
     lda $dd0d               // Acknowledge CIA2 NMI
     pla
+    pla                     // Discard C128 MMU byte from stack
     rti
 
 // kernal_load_safe — KERNAL LOAD wrapper for C128
