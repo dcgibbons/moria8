@@ -35,7 +35,7 @@ detect_machine:
 .label kernal_load = $ffd5
 
 .macro AssetLoad() {
-    jsr $ffd5                   // LOAD (calls w_load wrapper in main.s)
+    jsr $ffd5                   // LOAD (via patched KERNAL jump table)
 }
 
 .const DEATH_ALIVE   = $00    // Player is alive

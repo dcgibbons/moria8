@@ -19,16 +19,12 @@
 // ============================================================
 title_load_and_draw:
     :EnterKernal()
-#if C128_REAL_BOOT_DIAG
+#if C128
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
-    ldx #$41
-    jsr c128_stack_guard_begin
     lda #1
     ldx #0
-    jsr safe_setbnk
-    ldx #$42
-    jsr c128_stack_guard_check
+    jsr $ff68               // SETBNK — ROM visible, direct call is safe
 #endif
     // SETNAM: filename "TITLE" (5 chars)
     lda #5
@@ -41,7 +37,7 @@ title_load_and_draw:
     // C128 MAP_BASE is Bank 1 $4000, so force caller-supplied X/Y destination.
     lda #2
     ldx #SAVE_DEVICE
-#if C128_REAL_BOOT_DIAG
+#if C128
     ldy #1
 #else
     ldy #0
@@ -52,43 +48,21 @@ title_load_and_draw:
     lda #0
     ldx #<MAP_BASE
     ldy #>MAP_BASE
-#if C128_REAL_BOOT_DIAG
-    ldx #$43
-    jsr c128_stack_guard_begin
-#endif
     jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
-#if C128_REAL_BOOT_DIAG
-    lda #$44
-    sta c128_stack_guard_stage
-    lda $00
-    sta c128_stack_guard_port0
-    lda $01
-    sta c128_stack_guard_port1
-    lda $ff00
-    sta c128_stack_guard_mmu
-#endif
+
     php                     // Save carry (LOAD success/failure)
     lda #2
-#if C128_REAL_BOOT_DIAG
-    ldx #$47
-    jsr c128_stack_guard_begin
+#if C128
     jsr w_close             // C128: force ROM mapping around CLOSE
-    ldx #$48
-    jsr c128_stack_guard_check
-    jsr c128_stack_guard_snapshot_banking
 #else
     jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
 #endif
-#if C128_REAL_BOOT_DIAG
+
+#if C128
     // Restore default LOAD destination to Bank 0 for subsequent file I/O.
-    ldx #$49
-    jsr c128_stack_guard_begin
     lda #0
     ldx #0
-    jsr safe_setbnk
-    ldx #$4a
-    jsr c128_stack_guard_check
-    jsr c128_stack_guard_snapshot_banking
+    jsr $ff68               // Reset SETBNK to Bank 0
 #endif
     plp                     // Restore carry from LOAD
     bcs title_fallback_render    // Carry set = error
@@ -104,27 +78,10 @@ title_load_and_draw:
     sta $90
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
-#if C128_REAL_BOOT_DIAG
-    ldx #$4b
-    jsr c128_stack_guard_begin
-#endif
     jsr screen_clear
-#if C128_REAL_BOOT_DIAG
-    ldx #$4c
-    jsr c128_stack_guard_check
-    jsr c128_stack_guard_snapshot_banking
-#endif
 
     // Render the loaded art data
-#if C128_REAL_BOOT_DIAG
-    ldx #$45
-    jsr c128_stack_guard_begin
-#endif
     jsr title_render_data
-#if C128_REAL_BOOT_DIAG
-    ldx #$46
-    jsr c128_stack_guard_check
-#endif
     :ExitKernal()
     rts
 

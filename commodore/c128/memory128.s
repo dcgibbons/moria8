@@ -237,7 +237,7 @@ kernal_zp_save_buf:
 // MachineRestoreDefault — Ensure MMU and processor port are in a
 // safe, operational state for KERNAL/Screen Editor.
 // $FF00 = $0E (Bank 0, ROMs, I/O)
-// $01   = $37 (All ROMs + I/O visible)
+// $01   = $36 (HIRAM=1, ROMs visible)
 // $D506 = $05 (4KB Bottom Common only — Top Common OFF for KERNAL ROM access)
 .macro MachineRestoreDefault() {
     lda #$05
@@ -246,7 +246,7 @@ kernal_zp_save_buf:
     sta $ff00
     lda #CPU_PORT_DDR_DEFAULT
     sta $00
-    lda #BANK_ALL_ROM
+    lda #$36
     sta $01
 }
 

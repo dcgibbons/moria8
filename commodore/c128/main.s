@@ -69,6 +69,572 @@ entry:
     jmp entry_real
 
 // ============================================================
+// Core System & UI Routines — MUST live in Safe Zone (<$C000)
+// ============================================================
+#import "memory128.s"
+#import "../common/color.s"
+#import "../common/sound.s"
+#import "config128.s"
+#import "screen_vdc.s"
+#import "../common/title_sysinfo_banked.s"
+#import "../common/reu_loading_banked.s"
+#import "input128.s"
+
+// Bootstrap — sets up MMU and processor port, jumps to main code
+entry_real:
+    sei
+    cld
+    ldx #$ff
+    txs
+
+    // Hardware Quiet Down — Acknowledge and Clear
+    lda #$7f
+    sta $dc0d               // CIA1 Interrupt Control Register: disable all
+    sta $dd0d               // CIA2 Interrupt Control Register: disable all
+    lda $dc0d               // Clear CIA1 ICR
+    lda $dd0d               // Clear CIA2 ICR
+
+    lda #$ff
+    sta $d8                 // Screen Editor: 80-col mode
+
+    // Copy banked payload BEFORE installing patches so it doesn't overwrite them
+    jsr init_copy_banked
+
+    // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
+    // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
+    lda #$00                // Bank 15 (KERNAL + I/O)
+    sta $ff00
+    ldx #5
+!mirror:
+    lda $ff00,x
+    sta $ff00,x
+    inx
+    bne !mirror-
+    lda #$3E                // Restore All-RAM
+    sta $ff00
+
+    // --- Patch KERNAL JMP table in RAM ---
+    // Read original targets from ROM stubs and patch stubs to point to our safe wrappers.
+    // This allows game code to call JSR $FFxx and have the wrapper manage the MMU.
+    
+    lda #$4C                    // JMP absolute
+    sta $ffb7                   // READST
+    sta $ffba                   // SETLFS
+    sta $ffbd                   // SETNAM
+    sta $ffc0                   // OPEN
+    sta $ffc3                   // CLOSE
+    sta $ffc6                   // CHKIN
+    sta $ffc9                   // CHKOUT
+    sta $ffcc                   // CLRCHN
+    sta $ffcf                   // CHRIN
+    sta $ffd2                   // CHROUT
+    sta $ffd5                   // LOAD
+
+    // FFB7 READST
+    lda #<w_readst
+    sta $ffb8
+    lda #>w_readst
+    sta $ffb9
+    // FFBA SETLFS
+    lda #<w_setlfs
+    sta $ffbb
+    lda #>w_setlfs
+    sta $ffbc
+    // FFBD SETNAM
+    lda #<w_setnam
+    sta $ffbe
+    lda #>w_setnam
+    sta $ffbf
+    // FFC0 OPEN
+    lda #<w_open
+    sta $ffc1
+    lda #>w_open
+    sta $ffc2
+    // FFC3 CLOSE
+    lda #<w_close
+    sta $ffc4
+    lda #>w_close
+    sta $ffc5
+    // FFC6 CHKIN
+    lda #<w_chkin
+    sta $ffc7
+    lda #>w_chkin
+    sta $ffc8
+    // FFC9 CHKOUT
+    lda #<w_chkout
+    sta $ffca
+    lda #>w_chkout
+    sta $ffcb
+    // FFCC CLRCHN
+    lda #<w_clrchn
+    sta $ffcd
+    lda #>w_clrchn
+    sta $ffce
+    // FFCF CHRIN
+    lda #<w_chrin
+    sta $ffd0
+    lda #>w_chrin
+    sta $ffd1
+    // FFD2 CHROUT
+    lda #<w_chrout
+    sta $ffd3
+    lda #>w_chrout
+    sta $ffd4
+    // FFD5 LOAD
+    lda #<w_load
+    sta $ffd6
+    lda #>w_load
+    sta $ffd7
+
+    // Save original hardware IRQ/NMI vectors before patching RAM copies.
+    lda $fffe
+    sta kernal_hw_irq_vec_lo
+    lda $ffff
+    sta kernal_hw_irq_vec_hi
+    lda $fffa
+    sta kernal_hw_nmi_vec_lo
+    lda $fffb
+    sta kernal_hw_nmi_vec_hi
+
+    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
+    // This ensures interrupts always find code even when Bank 1 is active.
+    lda #<mmu_common_irq
+    sta $fffe
+    lda #>mmu_common_irq
+    sta $ffff
+    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
+    lda #<mmu_common_nmi
+    sta $fffa
+    lda #>mmu_common_nmi
+    sta $fffb
+    // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
+    lda #<exit_trampoline
+    sta $fffc
+    lda #>exit_trampoline
+    sta $fffd
+
+    :MachineRestoreDefault()
+    jmp entry_main
+
+// ============================================================
+// Safe KERNAL Wrappers
+// Each wrapper switches to MMU_NORMAL, calls real target,
+// then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
+// ============================================================
+// KERNAL calls now use the Official Jump Table ($FF81-$FFF5) safely in Bank 15.
+
+// READST
+w_readst:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffb7
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// SETLFS
+w_setlfs:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffba
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// SETNAM
+w_setnam:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffbd
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// OPEN
+w_open:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffc0
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CLOSE
+w_close:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffc3
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CHKIN
+w_chkin:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffc6
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CHKOUT
+w_chkout:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffc9
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CLRCHN
+w_clrchn:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffcc
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CHRIN
+w_chrin:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffcf
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// CHROUT
+w_chrout:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ffd2
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+// LOAD
+w_load:
+    stx c128_load_arg_x
+    sty c128_load_arg_y
+    pha
+#if C128_REAL_BOOT_DIAG
+    ldx #$51
+    jsr c128_stack_guard_begin
+#endif
+    :EnterKernal()
+#if C128_REAL_BOOT_DIAG
+    ldx #$52
+    stx c128_stack_guard_stage
+    jsr c128_stack_guard_snapshot_banking
+#endif
+    pla
+    ldx c128_load_arg_x
+    ldy c128_load_arg_y
+    jsr $ffd5
+#if C128_REAL_BOOT_DIAG
+    ldx #$53
+    stx c128_stack_guard_stage
+    jsr c128_stack_guard_snapshot_banking
+#endif
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+#if C128_REAL_BOOT_DIAG
+    ldx #$54
+    jsr c128_stack_guard_check
+    jsr c128_stack_guard_snapshot_banking
+    jsr c128_stack_guard_snapshot_return
+#endif
+    rts
+
+// safe_irq and safe_nmi have been replaced by Common RAM trampolines
+// mmu_common_irq and mmu_common_nmi (see memory128.s).
+
+// kernal_load_safe — KERNAL LOAD wrapper for C128
+// Reinstalls keyboard stub on exit. Callers manage MMU.
+kernal_load_safe:
+    :EnterKernal()
+    jsr $ffd5
+    php
+    pha
+    :ExitKernal()
+    lda #<chrin_keyboard_stub
+    sta $0302
+    lda #>chrin_keyboard_stub
+    sta $0303
+    pla
+    plp
+    rts
+
+chrin_keyboard_stub:
+    lda #0
+    clc
+    rts
+
+// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
+// Use this on long-lived runtime paths that do not need the full helper reinstall.
+c128_restore_runtime_state_core:
+    :MachineRestoreAllRam()
+    lda #<mmu_common_irq
+    sta $fffe
+    lda #>mmu_common_irq
+    sta $ffff
+    lda #<mmu_common_nmi
+    sta $fffa
+    lda #>mmu_common_nmi
+    sta $fffb
+    lda #<exit_trampoline
+    sta $fffc
+    lda #>exit_trampoline
+    sta $fffd
+    lda #<mmu_common_irq
+    sta $0314
+    lda #>mmu_common_irq
+    sta $0315
+    lda #<chrin_keyboard_stub
+    sta $0302
+    lda #>chrin_keyboard_stub
+    sta $0303
+    lda #$ff
+    sta $cc
+    rts
+
+c128_restore_runtime_vectors:
+    php
+    sei
+    jsr c128_restore_runtime_state_core
+    plp
+    rts
+
+c128_return_to_runtime_after_kernal:
+    pha
+    txa
+    pha
+    tya
+    pha
+    php
+    sei
+    :MachineRestoreAllRam()
+    jsr init_common_mmu_helpers
+    jsr c128_vdc_reassert_mode
+    plp
+    pla
+    tay
+    pla
+    tax
+    pla
+    rts
+
+// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
+// Runtime KERNAL/editor paths and common-RAM users are still mutating
+// vector/helper state more aggressively than the cache path can tolerate.
+// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
+// blob before returning to gameplay/overlay code.
+c128_restore_runtime_state:
+    jmp c128_return_to_runtime_after_kernal
+
+c128_restore_runtime_guards:
+    jmp c128_restore_runtime_state
+
+// safe_setbnk — SETBNK ($FF68) wrapper for C128
+// Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
+// $FF68 is in the banked code range ($F000-$FFB6) so it can't be
+// patched via the JMP table — call this routine directly instead.
+safe_setbnk:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr $ff68
+    php
+    pha
+    :ExitKernal()
+    pla
+    plp
+    rts
+
+// init_copy_banked — Copy banked code payload to $E80E
+// Uses $3F (NOIO) instead of $3E because source data crosses the I/O
+// range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
+// garbage instead of game data.
+// NOTE: destination starts at $E80E because $E000-$E80D is used
+// at runtime by BANKED_DATA_BASE (tier monster/item databases).
+init_copy_banked:
+    sei
+    lda #<banked_payload
+    sta zp_ptr0
+    lda #>banked_payload
+    sta zp_ptr0_hi
+    lda #$0e
+    sta zp_ptr1
+    lda #$E8
+    sta zp_ptr1_hi
+    ldx #((banked_payload_end - banked_payload + 255) / 256)
+    ldy #0
+    // Switch to NOIO for the copy (source crosses $D000)
+    lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
+    sta $ff00
+!copy:
+    lda zp_ptr1_hi
+    cmp #$ff
+    beq !skip_copy+             // Skip ALL of page $FF
+    cmp #$fe
+    bne !do_copy+
+    cpy #$f2
+    bcs !skip_copy+             // Skip $FE writes that reach $FF00+
+!do_copy:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+!skip_copy:
+    iny
+    bne !copy-
+    inc zp_ptr0_hi
+    inc zp_ptr1_hi
+    dex
+    bne !copy-
+    lda #MMU_ALL_RAM
+    sta $ff00
+    rts
+
+// Exit trampoline — MUST live below $A000
+exit_trampoline:
+    lda #0
+    sta $d418
+    sei
+    // Restore full ROM map before handing control back to ROM.
+    lda #$00
+    sta $ff00
+    lda #BANK_ALL_ROM
+    sta $01
+
+    // Native C128 warm-start paths proved unstable after game runtime state
+    // mutation. Use the hardware reset vector for deterministic return.
+    // This is equivalent to a soft reboot to BASIC.
+    jmp ($fffc)
+
+
+
+// ============================================================
 // Critical trampolines — pin these near program start so they
 // can never drift into the $D000 I/O hole.
 // ============================================================
@@ -775,568 +1341,6 @@ tramp_reu_show_status:
     rts
 
 // ============================================================
-// Core System & UI Routines — MUST live in Safe Zone (<$C000)
-// ============================================================
-#import "memory128.s"
-#import "../common/color.s"
-#import "../common/sound.s"
-#import "config128.s"
-#import "screen_vdc.s"
-#import "../common/title_sysinfo_banked.s"
-#import "../common/reu_loading_banked.s"
-#import "input128.s"
-
-// Bootstrap — sets up MMU and processor port, jumps to main code
-entry_real:
-    sei
-    cld
-    ldx #$ff
-    txs
-
-    // Hardware Quiet Down — Acknowledge and Clear
-    lda #$7f
-    sta $dc0d               // CIA1 Interrupt Control Register: disable all
-    sta $dd0d               // CIA2 Interrupt Control Register: disable all
-    lda $dc0d               // Clear CIA1 ICR
-    lda $dd0d               // Clear CIA2 ICR
-
-    lda #$ff
-    sta $d8                 // Screen Editor: 80-col mode
-    // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
-    // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
-    ldx #5
-!mirror:
-    lda $ff00,x
-    sta $ff00,x
-    inx
-    bne !mirror-
-
-    // --- Patch KERNAL JMP table in RAM ---
-    // Read original targets from ROM stubs and patch stubs to point to our safe wrappers.
-    // This allows game code to call JSR $FFxx and have the wrapper manage the MMU.
-    
-    // FFB7 READST
-    lda $ffb8
-    sta t_readst
-    lda $ffb9
-    sta t_readst+1
-    lda #<w_readst
-    sta $ffb8
-    lda #>w_readst
-    sta $ffb9
-    // FFBA SETLFS
-    lda $ffbb
-    sta t_setlfs
-    lda $ffbc
-    sta t_setlfs+1
-    lda #<w_setlfs
-    sta $ffbb
-    lda #>w_setlfs
-    sta $ffbc
-    // FFBD SETNAM
-    lda $ffbe
-    sta t_setnam
-    lda $ffbf
-    sta t_setnam+1
-    lda #<w_setnam
-    sta $ffbe
-    lda #>w_setnam
-    sta $ffbf
-    // FFC0 OPEN
-    lda $ffc1
-    sta t_open
-    lda $ffc2
-    sta t_open+1
-    lda #<w_open
-    sta $ffc1
-    lda #>w_open
-    sta $ffc2
-    // FFC3 CLOSE
-    lda #<w_close
-    sta $ffc4
-    lda #>w_close
-    sta $ffc5
-    // FFC6 CHKIN
-    lda #<w_chkin
-    sta $ffc7
-    lda #>w_chkin
-    sta $ffc8
-    // FFC9 CHKOUT
-    lda #<w_chkout
-    sta $ffca
-    lda #>w_chkout
-    sta $ffcb
-    // FFCC CLRCHN
-    lda #<w_clrchn
-    sta $ffcd
-    lda #>w_clrchn
-    sta $ffce
-    // FFCF CHRIN
-    lda #<w_chrin
-    sta $ffd0
-    lda #>w_chrin
-    sta $ffd1
-    // FFD2 CHROUT
-    lda #<w_chrout
-    sta $ffd3
-    lda #>w_chrout
-    sta $ffd4
-    // FFD5 LOAD
-    lda $ffd6
-    sta t_load
-    lda $ffd7
-    sta t_load+1
-    lda #<w_load
-    sta $ffd6
-    lda #>w_load
-    sta $ffd7
-
-    // Save original hardware IRQ/NMI vectors before patching RAM copies.
-    lda $fffe
-    sta kernal_hw_irq_vec_lo
-    lda $ffff
-    sta kernal_hw_irq_vec_hi
-    lda $fffa
-    sta kernal_hw_nmi_vec_lo
-    lda $fffb
-    sta kernal_hw_nmi_vec_hi
-
-    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
-    // This ensures interrupts always find code even when Bank 1 is active.
-    lda #<mmu_common_irq
-    sta $fffe
-    lda #>mmu_common_irq
-    sta $ffff
-    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
-    lda #<mmu_common_nmi
-    sta $fffa
-    lda #>mmu_common_nmi
-    sta $fffb
-    // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
-    lda #<exit_trampoline
-    sta $fffc
-    lda #>exit_trampoline
-    sta $fffd
-
-    :MachineRestoreDefault()
-    jmp entry_main
-
-// ============================================================
-// Safe KERNAL Wrappers
-// Each wrapper switches to MMU_NORMAL, calls real target,
-// then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
-// ============================================================
-// C128 KERNAL R1 direct routine entries used to bypass low-RAM indirect
-// vectors ($031C-$0327), which are unstable during current save-path bug.
-.const K128_CLOSE  = $f188
-.const K128_CHKIN  = $f106
-.const K128_CHKOUT = $f14c
-.const K128_CLRCHN = $f226
-.const K128_CHRIN  = $ef06
-.const K128_CHROUT = $ef79
-
-// READST
-w_readst:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    .byte $20
-t_readst: .word 0
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// SETLFS
-w_setlfs:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    .byte $20
-t_setlfs: .word 0
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// SETNAM
-w_setnam:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    .byte $20
-t_setnam: .word 0
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// OPEN
-w_open:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    .byte $20
-t_open: .word 0
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CLOSE
-w_close:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CLOSE
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHKIN
-w_chkin:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CHKIN
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHKOUT
-w_chkout:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CHKOUT
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CLRCHN
-w_clrchn:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CLRCHN
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHRIN
-w_chrin:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CHRIN
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHROUT
-w_chrout:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr K128_CHROUT
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// LOAD
-w_load:
-    stx c128_load_arg_x
-    sty c128_load_arg_y
-#if C128_REAL_BOOT_DIAG
-    ldx #$51
-    jsr c128_stack_guard_begin
-#endif
-    :EnterKernal()
-#if C128_REAL_BOOT_DIAG
-    ldx #$52
-    stx c128_stack_guard_stage
-    jsr c128_stack_guard_snapshot_banking
-#endif
-    ldx c128_load_arg_x
-    ldy c128_load_arg_y
-    .byte $20
-t_load: .word 0
-#if C128_REAL_BOOT_DIAG
-    ldx #$53
-    stx c128_stack_guard_stage
-    jsr c128_stack_guard_snapshot_banking
-#endif
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-#if C128_REAL_BOOT_DIAG
-    ldx #$54
-    jsr c128_stack_guard_check
-    jsr c128_stack_guard_snapshot_banking
-    jsr c128_stack_guard_snapshot_return
-#endif
-    rts
-
-c128_load_arg_x: .byte 0
-c128_load_arg_y: .byte 0
-
-// safe_irq and safe_nmi have been replaced by Common RAM trampolines
-// mmu_common_irq and mmu_common_nmi (see memory128.s).
-
-// kernal_load_safe — KERNAL LOAD wrapper for C128
-// Reinstalls keyboard stub on exit. Callers manage MMU.
-kernal_load_safe:
-    :EnterKernal()
-    jsr $ffd5
-    php
-    pha
-    :ExitKernal()
-    lda #<chrin_keyboard_stub
-    sta $0302
-    lda #>chrin_keyboard_stub
-    sta $0303
-    pla
-    plp
-    rts
-
-chrin_keyboard_stub:
-    lda #0
-    clc
-    rts
-
-// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
-// Use this on long-lived runtime paths that do not need the full helper reinstall.
-c128_restore_runtime_state_core:
-    :MachineRestoreAllRam()
-    lda #<mmu_common_irq
-    sta $fffe
-    lda #>mmu_common_irq
-    sta $ffff
-    lda #<mmu_common_nmi
-    sta $fffa
-    lda #>mmu_common_nmi
-    sta $fffb
-    lda #<exit_trampoline
-    sta $fffc
-    lda #>exit_trampoline
-    sta $fffd
-    lda #<mmu_common_irq
-    sta $0314
-    lda #>mmu_common_irq
-    sta $0315
-    lda #<chrin_keyboard_stub
-    sta $0302
-    lda #>chrin_keyboard_stub
-    sta $0303
-    lda #$ff
-    sta $cc
-    rts
-
-c128_restore_runtime_vectors:
-    php
-    sei
-    jsr c128_restore_runtime_state_core
-    plp
-    rts
-
-c128_return_to_runtime_after_kernal:
-    pha
-    txa
-    pha
-    tya
-    pha
-    php
-    sei
-    :MachineRestoreAllRam()
-    jsr init_common_mmu_helpers
-    jsr c128_vdc_reassert_mode
-    plp
-    pla
-    tay
-    pla
-    tax
-    pla
-    rts
-
-// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
-// Runtime KERNAL/editor paths and common-RAM users are still mutating
-// vector/helper state more aggressively than the cache path can tolerate.
-// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
-// blob before returning to gameplay/overlay code.
-c128_restore_runtime_state:
-    jmp c128_return_to_runtime_after_kernal
-
-c128_restore_runtime_guards:
-    jmp c128_restore_runtime_state
-
-// safe_setbnk — SETBNK ($FF68) wrapper for C128
-// Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
-// $FF68 is in the banked code range ($F000-$FFB6) so it can't be
-// patched via the JMP table — call this routine directly instead.
-safe_setbnk:
-    :EnterKernal()
-    jsr $ff68
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-
-// init_copy_banked — Copy banked code payload to $E80E
-// Uses $3F (NOIO) instead of $3E because source data crosses the I/O
-// range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
-// garbage instead of game data.
-// NOTE: destination starts at $E80E because $E000-$E80D is used
-// at runtime by BANKED_DATA_BASE (tier monster/item databases).
-init_copy_banked:
-    sei
-    lda #<banked_payload
-    sta zp_ptr0
-    lda #>banked_payload
-    sta zp_ptr0_hi
-    lda #$0e
-    sta zp_ptr1
-    lda #$E8
-    sta zp_ptr1_hi
-    ldx #((banked_payload_end - banked_payload + 255) / 256)
-    ldy #0
-    // Switch to NOIO for the copy (source crosses $D000)
-    lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
-    sta $ff00
-!copy:
-    lda zp_ptr1_hi
-    cmp #$ff
-    beq !skip_copy+             // Protect Page $FF ($FF00-$FFFF) entirely
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-!skip_copy:
-    iny
-    bne !copy-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dex
-    bne !copy-
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    rts
-
-// Exit trampoline — MUST live below $A000
-exit_trampoline:
-    lda #0
-    sta $d418
-    sei
-    // Restore full ROM map before handing control back to ROM.
-    lda #$00
-    sta $ff00
-    lda #BANK_ALL_ROM
-    sta $01
-
-    // Native C128 warm-start paths proved unstable after game runtime state
-    // mutation. Use the hardware reset vector for deterministic return.
-    // This is equivalent to a soft reboot to BASIC.
-    jmp ($fffc)
-
-// ============================================================
 // game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
 // ============================================================
 game_over_str:
@@ -1397,10 +1401,6 @@ entry_main:
     jsr $ff68                   // SETBNK: reset to Bank 0
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
-
-    // Relocate banked code payload to $E000.
-    // MUST be done before any UI or overlay call.
-    jsr init_copy_banked
 
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
@@ -1800,6 +1800,8 @@ tramp_ego_put_suffix:
 !teps_done:
     rts
 teps_save_y: .byte 0
+c128_load_arg_x: .byte 0
+c128_load_arg_y: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
 kernal_hw_irq_vec_lo: .byte 0
@@ -2395,7 +2397,7 @@ c128_test_verify_cache_survival:
 #import "../common/string_bank_banked.s"
 #import "../common/ego_items.s"
 #import "../common/ui_home.s"
-
+#import "../common/ui_character.s"
 
 // ============================================================
 // Banked code payload — stored inline here, copied to $E80E
@@ -2419,7 +2421,6 @@ first_banked_function:
     #import "../common/ranged_fire.s"
     #import "../common/throw.s"
     #import "../common/bash.s"
-    #import "../common/ui_character.s"
 
 banked_code_end:
 }
@@ -2475,7 +2476,7 @@ program_end:
 .assert "Help renderer stays in reloadable banked window", ui_help_display >= $E80E && ui_help_display < first_banked_function, true
 .assert "Help title text stays in reloadable banked window", help_title_str >= $E80E && help_title_str < first_banked_function, true
 .assert "Help content table stays in reloadable banked window", help_lines >= $E80E && help_lines < first_banked_function, true
-.assert "Character sheet renderer stays out of overlay window", ui_char_display >= $F000, true
+.assert "Character sheet renderer stays out of overlay window", ui_char_display < $E000 || ui_char_display >= $F000, true
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
