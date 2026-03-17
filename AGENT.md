@@ -76,6 +76,17 @@ When working on the Commodore port:
 
 When completing a feature or optimization from `commodore/BUILDPLAN.md`, move the finished section to `commodore/BUILDPLAN_HISTORY.md`.
 
+## Memory Segment Boundaries (ABSOLUTE — NEVER VIOLATE)
+
+Moving code or data between segments (e.g., pulling an `#import` out of a `.pseudopc` block into the main segment) changes segment sizes. **You MUST verify segment boundaries after ANY such change.** Violations cause silent corruption, wild jumps into data, and CPU JAMs.
+
+- **Main segment MUST end below $C000.** MAP_BASE (dungeon map) lives at $C000. $D000–$DFFF is the I/O hole — code placed there reads back as register garbage.
+- **Banked payload (`.pseudopc $E80E`) must fit below $FFFA** (CPU vectors).
+- **Each overlay segment must fit in $E000–$EFFF** (4 KB).
+- **Test code MUST start below $A000** (BASIC ROM boundary).
+
+After ANY `#import` reordering: rebuild, check the Memory Map output, confirm Default segment ends below $C000. **NEVER delete boundary-checking `.assert` statements** — if an assert fails, fix your change, not the assert.
+
 ## Architecture
 
 - **Display:** 40-column on C64; 40 or 80-column selectable on C128. PETSCII characters only (no bitmap graphics).

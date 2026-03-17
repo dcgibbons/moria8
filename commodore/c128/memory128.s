@@ -303,29 +303,23 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
-    sei                     // Atomic start: KERNAL calls (like LOAD) often re-enable IRQs
+    sei                     // Atomic: KERNAL calls (like LOAD) often re-enable IRQs
     dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
     jsr restore_kernal_zp   // Restore game state from kernal_zp_save_buf
-    
     // Restore Runtime Invariant: Top Common ON ($0D)
     // MUST be done BEFORE restoring $FF00 because $FF00 may be Bank 1 (no vectors)
     lda #$0D
     sta $d506
-
     lda MMU_SAVE_01
     sta $01
     lda MMU_SAVE_FF00
     sta $ff00
-
-    // Reclaim control of IRQ vector for All-RAM runtime mode.
+    // Software IRQ dispatch — lightweight, no I/O
     lda #<mmu_common_irq
     sta $0314
     lda #>mmu_common_irq
     sta $0315
-    jsr init_common_mmu_helpers
-    jsr c128_vdc_reassert_mode
-    cli
 !ex_nest:
     rts
 
@@ -524,14 +518,17 @@ mmu_common_irq:
     pla
     tax
     pla
-    pla                         // Discard C128 MMU byte from stack
+    // C128 MMU saves/restores $FF00 via internal hardware latch on
+    // interrupt entry/exit — no extra byte is pushed to the stack.
+    // The previous extra PLA here was a dormant bug (stole caller's P
+    // register, causing RTI to jump to a garbage address).
     rti
 
 mmu_common_nmi:
     pha
     lda $dd0d                   // Acknowledge CIA2 NMI
     pla
-    pla                         // Discard C128 MMU byte from stack
+    // No extra PLA — see mmu_common_irq comment above.
     rti
 
 mmu_common_map_read_ptr0:

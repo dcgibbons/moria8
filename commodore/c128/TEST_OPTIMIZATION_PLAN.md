@@ -1,0 +1,56 @@
+# C128 Test Harness Optimization Plan (Gate C: Extreme Edition)
+
+## Objective
+Transition the C128 test suite from "Fast" to "Near-Instant." Target total suite execution (40+ tests) in **<10 seconds**.
+
+## 1. Eliminate JVM Startup (KickAssembler Server)
+Even with a master module, single-file changes trigger a JVM reboot.
+- **Strategy:** Use `java -jar KickAss.jar -server`.
+- **Implementation:** 
+  - Start a background KickAssembler server.
+  - The Python orchestrator sends "Build" commands over a socket.
+- **Result:** Assembly time drops from ~2s to ~200ms.
+
+## 2. Eliminate Boot Latency (The "Golden Snapshot")
+The C128 KERNAL boot process is dead time.
+- **Strategy:** **VICE Snapshots (.vsf)**.
+- **Implementation:**
+  - Create a "ready.vsf" snapshot: A C128 booted to BASIC with the MMU already set to `$07` (Common RAM) and `$D011` cleared (blanked).
+  - Launch VICE with `x128 -snapshot ready.vsf -binarymonitor`.
+- **Result:** Machine is "Ready" in <10ms instead of 1.5s.
+
+## 3. Persistent Binary Monitor Orchestration
+Stop using `.prg` files and disk images for unit tests.
+- **Strategy:** **Memory Poking via Monitor Port**.
+- **Implementation:**
+  - Replace the Bash loop with a Python orchestrator (`harness128.py`).
+  - For each test:
+    1. `memory-set` (POKE): Write the test binary directly into Bank 0 RAM via the monitor socket.
+    2. `register-set`: Force the Program Counter (`PC`) to the test entry point and `SP` to `$FF`.
+    3. `break-set`: Set a breakpoint at the `brk` instruction or the pass/fail signal address.
+    4. `resume`: Let the CPU run at Warp speed.
+    5. `memory-get`: Read result from `$0400`.
+- **Result:** Zero disk I/O, zero file-system overhead.
+
+## 4. Parallel "Worker" Clusters
+Scaling to multi-core.
+- **Strategy:** Multi-process VICE Pool.
+- **Implementation:** 
+  - Spawn `N` persistent VICE instances (where `N` = CPU cores).
+  - Each instance listens on a unique monitor port (6510, 6511, etc.).
+  - Distribute the 40 tests across the pool using a work queue.
+- **Result:** 4x-8x throughput increase.
+
+## 5. Implementation Roadmap
+1. **Gate C.1 (The Orchestrator):** Build the Python `VICEConnector` class to handle socket-level binary monitor commands.
+2. **Gate C.2 (The Snapshot):** Generate the optimized `.vsf` and verify monitor connectivity.
+3. **Gate C.3 (Assembly Server):** Update the Makefile to support an persistent assembly server.
+4. **Gate C.4 (Verification):** Port 5 tests to the new harness and compare timings.
+
+## 6. Comparison Table
+| Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
+|-------|--------------------|--------------------|-------------|
+| Assembly | 2.0s (per file) | 0.2s (Server) | 10x |
+| Boot/Reset | 1.5s (per test) | 0.01s (Snapshot) | 150x |
+| Code Load | 0.5s (Disk/VFS) | 0.05s (Monitor Poke) | 10x |
+| **Total (40 tests)** | **~160s** | **~10s** | **~16x faster** |

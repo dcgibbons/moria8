@@ -361,6 +361,14 @@ c128_preload_asset_load:
     lda $dd0d                   // Clear any pending CIA2/NMI latch before CLI
     lda #$ff
     sta $d019                   // Clear any pending VIC-II IRQ flags
+    // Fix: KERNAL LOAD's INDSTA triggers $FF01 which loads PCRA ($D501)
+    // into $FF00 to switch to the target bank for each byte write. If PCRA
+    // is corrupted (e.g., $03 instead of $3F), INDSTA writes under KERNAL
+    // ROM and data is lost.
+    // IMPORTANT: $D500 is the Configuration Register (CR) — a mirror of
+    // $FF00 that takes effect IMMEDIATELY. $D501 is PCRA (Pre-Config A).
+    lda #$3f                    // Bank 0, all RAM, no I/O
+    sta $d501                   // PCRA ($D501): INDSTA target bank
     cli                         // C128 KERNAL serial LOAD requires IRQ service
     jsr $ffd5                   // LOAD
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG

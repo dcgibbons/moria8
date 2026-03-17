@@ -1180,9 +1180,18 @@ tramp_ui_help_display:
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
-    jsr tramp_ui_enter
+    sei
+    lda #$3f                    // All RAM, I/O HIDDEN — code at $D75E readable
+    sta $ff00
+    lda #$34                    // BANK_NO_ROMS (processor port, belt-and-suspenders)
+    sta $01
     jsr ui_char_display
-    jmp tramp_ui_exit
+    lda #$36                    // BANK_NO_BASIC
+    sta $01
+    lda #$3e                    // Restore runtime: I/O visible
+    sta $ff00
+    cli
+    rts
 
 tramp_ui_inv_display:
     jsr init_copy_banked

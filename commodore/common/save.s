@@ -128,7 +128,9 @@ save_magic:
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 save_game:
+#if !C128
     :EnterKernal()
+#endif
     // Show "SAVING GAME..." message
     lda #<save_saving_str
     sta zp_ptr0
@@ -290,7 +292,9 @@ save_game:
     lda #>save_done_str
     sta zp_ptr0_hi
     jsr msg_print
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 !save_error_close:
@@ -306,7 +310,9 @@ save_game:
     lda #>save_ioerr_str
     sta zp_ptr0_hi
     jsr msg_print
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 // ============================================================
@@ -318,7 +324,9 @@ save_game:
 // ============================================================
 
 load_game:
+#if !C128
     :EnterKernal()
+#endif
     // Show "LOADING GAME..." message
     lda #<save_load_str
     sta zp_ptr0
@@ -513,7 +521,9 @@ load_game:
     jsr delete_savefile_core
 
     sec                     // Success
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 !load_corrupt:
@@ -531,7 +541,9 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 !load_close_notfound:
@@ -550,7 +562,9 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 !load_fail:
@@ -560,7 +574,9 @@ load_game:
     sta zp_ptr0_hi
     jsr msg_print
     clc                     // Failure
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 // ============================================================
@@ -784,9 +800,13 @@ load_read_map_c128:
 // Clobbers: A, X, Y
 // ============================================================
 delete_savefile:
+#if !C128
     :EnterKernal()              // External entrypoint for non-KERNAL callers
+#endif
     jsr delete_savefile_core
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 // delete_savefile_core — Internal helper (assumes EnterKernal context)

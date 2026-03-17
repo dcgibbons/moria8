@@ -505,7 +505,9 @@ c128_select_tier_cache_slot:
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 tier_load_disk:
+#if !C128
     :EnterKernal()
+#endif
     // Select filename from table
     ldx current_tier
     dex                         // 0-based index (tier 1 → index 0)
@@ -540,7 +542,9 @@ tier_load_disk:
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
     plp                         // Restore carry
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 

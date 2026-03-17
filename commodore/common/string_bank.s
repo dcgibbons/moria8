@@ -31,7 +31,9 @@ bank_fn_recall:
 // Clobbers: A, X, Y
 // ============================================================
 bank_load_recall:
+#if !C128
     :EnterKernal()
+#endif
     // Invalidate overlay before loading into $E000.
     // Tier invalidation is C64-only: C128 tier metadata points to Bank 1 DB.
     lda #OVL_NONE
@@ -68,5 +70,7 @@ bank_load_recall:
 #endif
 !bl_done:
     plp                     // Restore carry
+#if !C128
     :ExitKernal()
+#endif
     rts

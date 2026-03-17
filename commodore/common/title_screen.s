@@ -18,13 +18,15 @@
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
 // ============================================================
 title_load_and_draw:
+#if !C128
     :EnterKernal()
+#endif
 #if C128
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
     lda #1
     ldx #0
-    jsr $ff68               // SETBNK — ROM visible, direct call is safe
+    jsr safe_setbnk         // SETBNK (handles Enter/Exit internally)
 #endif
     // SETNAM: filename "TITLE" (5 chars)
     lda #5
@@ -62,7 +64,7 @@ title_load_and_draw:
     // Restore default LOAD destination to Bank 0 for subsequent file I/O.
     lda #0
     ldx #0
-    jsr $ff68               // Reset SETBNK to Bank 0
+    jsr safe_setbnk         // SETBNK (handles Enter/Exit internally)
 #endif
     plp                     // Restore carry from LOAD
     bcs title_fallback_render    // Carry set = error
@@ -82,7 +84,9 @@ title_load_and_draw:
 
     // Render the loaded art data
     jsr title_render_data
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 title_fallback_render:
@@ -101,7 +105,9 @@ title_fallback_render:
     lda #TITLE_FALLBACK_COL
     sta zp_cursor_col
     jsr screen_put_string
+#if !C128
     :ExitKernal()
+#endif
     rts
 
 // ============================================================

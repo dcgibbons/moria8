@@ -84,8 +84,10 @@ overlay_load:
 !ol_check_reu:
 #endif
 
+#if !C128
     lda reu_overlays_stashed
     bne !ol_reu+
+#endif
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
 #if C128_CACHE_TEST_SKIP_OVERLAY
@@ -150,6 +152,23 @@ overlay_invalidate:
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 overlay_load_disk:
+#if C128
+    // C128: delegate to c128_preload_asset_load which handles the full
+    // KERNAL environment setup (SETBNK Bank 0, ROM banking, IRQ enable,
+    // SETNAM/SETLFS/LOAD/CLOSE/CLRCHN, and runtime restore).
+    // Without proper SETBNK, KERNAL LOAD puts data in the wrong bank.
+    //
+    lda ovl_fn_len,x
+    pha
+    lda ovl_fn_addr_lo,x
+    pha
+    lda ovl_fn_addr_hi,x
+    tay
+    pla
+    tax
+    pla
+    jmp c128_preload_asset_load
+#else
     :EnterKernal()
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$1b
@@ -164,6 +183,7 @@ overlay_load_disk:
     pla
     tax                     // X = filename addr lo, Y = hi
     pla                     // A = filename length
+
     jsr $ffbd               // KERNAL SETNAM
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$1c
@@ -194,23 +214,31 @@ overlay_load_disk:
     lda #2
     jsr $ffc3               // KERNAL CLOSE — release file #2
     jsr $ffcc               // KERNAL CLRCHN — restore default I/O
-    
-#if !C128
+
     // Restore VIC-II bank 0 — KERNAL serial I/O uses CIA2 ($DD00)
     // bits 3-5 for the serial bus; bits 0-1 select VIC bank.
     // Ensure bank 0 ($0000-$3FFF) so VIC sees screen RAM at $0400.
     lda $dd00
     ora #%00000011
     sta $dd00
-#endif
 !ol_done:
-    plp                     // Restore carry
+    plp                     // Restore carry from LOAD result
+    // ExitKernal clobbers carry (init_common_mmu_helpers leaves carry SET
+    // via its CPX loop termination). Save the LOAD result to a byte so the
+    // caller sees the real success/failure status.
+    php
+    pla
+    sta ol_save_p
     :ExitKernal()
 #if C128 && (C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG)
     ldx #$1f
     jsr c128_diag_validate_runtime_invariants
 #endif
+    lda ol_save_p
+    pha
+    plp                     // Restore true LOAD result carry
     rts
+#endif
 
 
 // ============================================================
@@ -278,6 +306,7 @@ ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
 ol_target:        .byte 0
+ol_save_p:        .byte 0
 #if C128
 ol_status_p:      .byte 0
 #endif

@@ -12,6 +12,25 @@ This file provides foundational mandates that take absolute precedence over gene
 - **Source Control:** Do not stage or commit changes unless explicitly requested by the user.
 - **Zero Page Integrity:** $02–$8F is "Game-Owned." $90–$FF is "KERNAL-Volatile." Never use KERNAL-Volatile ZP for long-lived game state without a caller-save strategy.
 
+## 2a. Memory Segment Boundaries (ABSOLUTE — NEVER VIOLATE)
+Moving code or data between segments (e.g., pulling an `#import` out of a `.pseudopc` block into the main segment, or vice versa) changes segment sizes. **You MUST verify segment boundaries after ANY such change.** Violations cause silent corruption, wild jumps into data, and CPU JAMs that are extremely hard to diagnose.
+
+### C64 Boundaries
+- **Main segment MUST end below $C000.** MAP_BASE (dungeon map) lives at $C000. Code past this overwrites the map.
+- **Test code MUST start below $A000.** BASIC ROM is banked in at $A000–$BFFF at startup.
+
+### C128 Boundaries
+- **Main segment MUST end below $C000.** Same MAP_BASE constraint as C64.
+- **$D000–$DFFF is the I/O hole.** Code or data placed here by the assembler will read back as VIC-II/SID/CIA register values, not your code. The CPU will execute garbage.
+- **Banked payload (`.pseudopc $E80E`) must fit below $FFFA** (CPU vectors).
+- **Each overlay segment must fit in $E000–$EFFF** (4 KB).
+
+### Mandatory Verification Steps
+1. **After ANY `#import` reordering or movement between segments:** rebuild and check the Memory Map output. Confirm the Default segment ends below $C000.
+2. **Check the `.print` output** for segment sizes (e.g., "Banked payload: NNNN bytes").
+3. **Do NOT delete boundary-checking `.assert` statements.** They exist to catch exactly this class of mistake. If an assert fails, it means your change broke the memory layout — fix the change, not the assert.
+4. **If the main segment is near $C000:** move overflow code to $F000 (RAM under KERNAL ROM) via trampoline, or into the banked payload / an overlay. Do NOT just pull code from the payload into main.
+
 ## 3. Engineering Standards
 - **Simplicity First:** Impact minimal code. Avoid "just-in-case" alternatives.
 - **No Laziness:** Find root causes. No temporary "defensive" traps unless specifically for debugging a known, transient race condition.

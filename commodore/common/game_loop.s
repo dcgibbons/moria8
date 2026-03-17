@@ -150,6 +150,9 @@ game_new_start:
     bcc !gns_ovl_ok+
     jmp entry_main
 !gns_ovl_ok:
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
 #if C128_REAL_BOOT_DIAG
     ldx #$23
     jsr c128_stack_guard_begin
@@ -158,9 +161,6 @@ game_new_start:
 #if C128_REAL_BOOT_DIAG
     ldx #$24
     jsr c128_stack_guard_check
-#endif
-#if C128
-    jsr c128_restore_runtime_guards
 #endif
     jsr monster_spawn_level
     jsr item_spawn_level
@@ -669,10 +669,10 @@ c128_town_move_diag_after_status_draw:
     bcc !stairs_dn_ovl_ok+
     jmp entry_main
 !stairs_dn_ovl_ok:
-    jsr tramp_level_generate
 #if C128
     jsr c128_restore_runtime_guards
 #endif
+    jsr tramp_level_generate
     jsr monster_spawn_level
     jsr item_spawn_level
 #if C128_TEST_FORCE_DUNGEON_MELEE
@@ -733,10 +733,10 @@ c128_town_move_diag_after_status_draw:
     bcc !stairs_up_ovl_ok+
     jmp entry_main
 !stairs_up_ovl_ok:
-    jsr tramp_level_generate
 #if C128
     jsr c128_restore_runtime_guards
 #endif
+    jsr tramp_level_generate
     jsr monster_spawn_level
     jsr item_spawn_level
     jsr update_visibility
