@@ -21,33 +21,34 @@
 // player_create — Full character creation flow
 // Output: player_data struct fully initialized
 // Preserves: nothing
-.macro PlayerCreateReturn() {
-    rts
-}
+//
+// Incident-scoped cutpoints are kept here for chargen bisection because they
+// were high-signal during the overlay/payload failure investigation. The normal
+// build uses C128_CHARGEN_CUTPOINT=-1, so none of these early returns fire.
 
 player_create:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$72
     jsr c128_town_dump_mark
 #endif
-    .if (C128_CHARGEN_CUTPOINT == -2) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == -2) { rts }
     jsr player_init
-    .if (C128_CHARGEN_CUTPOINT == 0) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 0) { rts }
 
     jsr create_select_race
-    .if (C128_CHARGEN_CUTPOINT == 1) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 1) { rts }
     jsr create_roll_stats
-    .if (C128_CHARGEN_CUTPOINT == 2) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 2) { rts }
     jsr create_select_class
-    .if (C128_CHARGEN_CUTPOINT == 3) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 3) { rts }
     jsr create_enter_name
-    .if (C128_CHARGEN_CUTPOINT == 4) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 4) { rts }
     jsr create_select_gender
-    .if (C128_CHARGEN_CUTPOINT == 5) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 5) { rts }
 #if C128
     jsr c128_restore_runtime_guards
 #endif
-    .if (C128_CHARGEN_CUTPOINT == 6) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 6) { rts }
     jsr create_gen_background
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($89)
@@ -55,7 +56,7 @@ player_create:
 #if C128
     jsr c128_restore_runtime_guards
 #endif
-    .if (C128_CHARGEN_CUTPOINT == 7) { :PlayerCreateReturn() }
+    .if (C128_CHARGEN_CUTPOINT == 7) { rts }
     jsr create_init_character
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($8a)
@@ -76,7 +77,7 @@ player_create_epilogue:
     :C128FinalReturnCapture($94)
     :C128FinalReturnCheck($95)
 #endif
-    :PlayerCreateReturn()
+    rts
 
 // ============================================================
 // Race selection

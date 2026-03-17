@@ -13,6 +13,9 @@ KICKASS_JAR="${KICKASS:-../../tools/kickass/KickAss.jar}"
 out_dir="out"
 diag_main="$out_dir/moria128.stacklow.prg"
 diag_d64="$out_dir/moria128_stacklow.d64"
+normal_vs="$out_dir/main.vs"
+normal_vs_saved="$out_dir/moria128.normal.vs"
+diag_vs_saved="$out_dir/moria128_stacklow.vs"
 build_log="/tmp/moria128_stacklow_build.log"
 
 mkdir -p "$out_dir"
@@ -23,6 +26,10 @@ if ! make -s build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_lo
     exit 1
 fi
 
+if [[ -f "$normal_vs" ]]; then
+    cp "$normal_vs" "$normal_vs_saved"
+fi
+
 if ! "$JAVA_BIN" -jar "$KICKASS_JAR" main.s -showmem -vicesymbols -libdir ../c64 \
         -define C128 -define OVL_OUT='"out"' -define C128_TEST_STACK_LOW_WATER \
         -define C128_TEST_OVERLAY_LOAD_FAIL_TRAP -define C128_TEST_OVERLAY_FN_GUARD \
@@ -30,6 +37,13 @@ if ! "$JAVA_BIN" -jar "$KICKASS_JAR" main.s -showmem -vicesymbols -libdir ../c64
     echo "stack_low_water KickAssembler build failed"
     cat /tmp/moria128_stacklow_kickass.log
     exit 1
+fi
+
+if [[ -f "$normal_vs" ]]; then
+    cp "$normal_vs" "$diag_vs_saved"
+fi
+if [[ -f "$normal_vs_saved" ]]; then
+    cp "$normal_vs_saved" "$normal_vs"
 fi
 
 if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
@@ -53,5 +67,6 @@ fi
 
 abs_d64="$(cd "$out_dir" && pwd)/moria128_stacklow.d64"
 echo "Launching: $abs_d64"
+echo "Diagnostic symbols: $(cd "$out_dir" && pwd)/moria128_stacklow.vs"
 "$VICE" -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
     -sound -sounddev coreaudio -autostart "$abs_d64"

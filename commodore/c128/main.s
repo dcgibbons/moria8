@@ -32,102 +32,16 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef Bank1Data         [outPrg=OVL_OUT + "/bank1.dat", start=$e000, min=$e000, max=$feff]
 
-#if C128_TEST_SCRIPTED_INPUT
-.const C128_TEST_SCRIPTED_TOWN_FLOW = 1
-#elif C128_TEST_CACHE_SURVIVAL
-.const C128_TEST_SCRIPTED_TOWN_FLOW = 1
-#else
-.const C128_TEST_SCRIPTED_TOWN_FLOW = 0
-#endif
-
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_REAL_BOOT_DIAG = 1
 #else
 .const C128_REAL_BOOT_DIAG = 0
 #endif
 
-#if C128_TEST_STATUS_SP_CANARY
-.const C128_STATUS_SP_CANARY_DIAG = 1
-#else
-.const C128_STATUS_SP_CANARY_DIAG = 0
-#endif
-
-#if C128_TEST_STACK_SLOT_DIAG
-.const C128_STACK_SLOT_DIAG = 1
-#else
-.const C128_STACK_SLOT_DIAG = 0
-#endif
-
-#if C128_TEST_STACK_BOTTOM_DIAG
-.const C128_STACK_BOTTOM_DIAG = 1
-#else
-.const C128_STACK_BOTTOM_DIAG = 0
-#endif
-
-#if C128_TEST_FINAL_RETURN_DIAG
-.const C128_FINAL_RETURN_DIAG = 1
-#else
-.const C128_FINAL_RETURN_DIAG = 0
-#endif
-
-#if C128_TEST_OVERLAY_RELOAD_GUARD
-.const C128_OVERLAY_RELOAD_GUARD = 1
-#else
-.const C128_OVERLAY_RELOAD_GUARD = 0
-#endif
-
-#if C128_TEST_STACK_LOW_WATER
-.const C128_STACK_LOW_WATER_DIAG = 1
-#else
-.const C128_STACK_LOW_WATER_DIAG = 0
-#endif
-
-#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
-.const C128_OVERLAY_LOAD_FAIL_TRAP_DIAG = 1
-#else
-.const C128_OVERLAY_LOAD_FAIL_TRAP_DIAG = 0
-#endif
-
-#if C128_TEST_OVERLAY_FN_GUARD
-.const C128_OVERLAY_FN_GUARD_DIAG = 1
-#else
-.const C128_OVERLAY_FN_GUARD_DIAG = 0
-#endif
-
-#if C128_TEST_SKIP_PLAYER_CREATE_OVERLAY
-.const C128_SKIP_PLAYER_CREATE_OVERLAY_DIAG = 1
-#else
-.const C128_SKIP_PLAYER_CREATE_OVERLAY_DIAG = 0
-#endif
-
-#if C128_TEST_SKIP_PLAYER_SUMMARY
-.const C128_SKIP_PLAYER_SUMMARY_DIAG = 1
-#else
-.const C128_SKIP_PLAYER_SUMMARY_DIAG = 0
-#endif
-
-#if C128_TEST_SKIP_PLAYER_CREATE_CALL
-.const C128_SKIP_PLAYER_CREATE_CALL_DIAG = 1
-#else
-.const C128_SKIP_PLAYER_CREATE_CALL_DIAG = 0
-#endif
-
-#if C128_TEST_SKIP_PLAYER_CREATE_GUARDS
-.const C128_SKIP_PLAYER_CREATE_GUARDS_DIAG = 1
-#else
-.const C128_SKIP_PLAYER_CREATE_GUARDS_DIAG = 0
-#endif
-
 #if C128_TEST_CHARGEN_CUTPOINT
 .const C128_CHARGEN_CUTPOINT = C128_TEST_CHARGEN_CUTPOINT
 #else
 .const C128_CHARGEN_CUTPOINT = -1
-#endif
-
-#if C128_TEST_TOWN_SELF_DUMP
-.const C128_TOWN_SELF_DUMP_DIAG = 1
-#else
-.const C128_TOWN_SELF_DUMP_DIAG = 0
 #endif
 
 #if C128_TEST_TOWN_SELF_DUMP_TARGET
@@ -828,6 +742,11 @@ c128_restore_runtime_vectors:
     plp
     rts
 
+// Reassert runtime-owned low/common RAM state after KERNAL-visible work.
+// Multiple public entry labels resolve to the same implementation so callers
+// can keep their semantic name without paying extra trampoline hops.
+c128_restore_runtime_state:
+c128_restore_runtime_guards:
 c128_return_to_runtime_after_kernal:
     pha
     txa
@@ -846,17 +765,6 @@ c128_return_to_runtime_after_kernal:
     tax
     pla
     rts
-
-// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
-// Runtime KERNAL/editor paths and common-RAM users are still mutating
-// vector/helper state more aggressively than the cache path can tolerate.
-// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
-// blob before returning to gameplay/overlay code.
-c128_restore_runtime_state:
-    jmp c128_return_to_runtime_after_kernal
-
-c128_restore_runtime_guards:
-    jmp c128_restore_runtime_state
 
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
@@ -986,7 +894,7 @@ tramp_player_create:
 #if !C128_TEST_SKIP_PLAYER_CREATE_CALL
     lda #1
     sta c128_startup_overlay_executing
-    jsr startup_overlay_player_create_entry
+    jsr player_create
 tramp_player_create_return_site:
     lda #0
     sta c128_startup_overlay_executing
@@ -1672,6 +1580,9 @@ tramp_ui_help_display:
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
+    // ui_character.s now lives in the reloadable $F000 banked payload, so the
+    // character sheet must refresh that payload exactly like the other banked UI
+    // screens before entering the shared trampoline contract.
     jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_char_display
@@ -3310,16 +3221,11 @@ ovl_town_end:
 // Startup overlay — character creation at $E000
 // ============================================================
 .segment StartupOverlay
-startup_overlay_player_create_entry:
-    jsr player_create
-    rts
-
     #import "../common/background_data.s"
     #import "../common/player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)
 .assert "Startup overlay fits in $E000-$EFFF", ovl_start_end <= $f000, true
-.assert "Startup overlay entry stays in safe zone", startup_overlay_player_create_entry < $E80E, true
 
 // ============================================================
 // Death overlay — score + high score display at $E000
