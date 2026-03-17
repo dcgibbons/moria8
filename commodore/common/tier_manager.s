@@ -314,10 +314,12 @@ tier_load:
 !tl_activate:
     // Data is now in RAM at $E000 (under KERNAL ROM).
     // Bank out KERNAL to read, copy SoA to active buffer.
+#if !C128
     sei
     lda $01
     pha                         // Save bank config
     :BankOutKernal()
+#endif
 
     lda #<$e000
     sta zp_ptr0
@@ -365,9 +367,11 @@ tier_load:
 !tl_keep_e000_names:
 #endif
 
+#if !C128
     pla
     sta $01                     // Restore bank config
     cli
+#endif
 
     // Clear stale name pointers for indices beyond this tier's range.
     // A previous larger tier may have left $E0xx pointers in

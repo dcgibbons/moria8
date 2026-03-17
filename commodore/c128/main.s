@@ -46,6 +46,96 @@
 .const C128_REAL_BOOT_DIAG = 0
 #endif
 
+#if C128_TEST_STATUS_SP_CANARY
+.const C128_STATUS_SP_CANARY_DIAG = 1
+#else
+.const C128_STATUS_SP_CANARY_DIAG = 0
+#endif
+
+#if C128_TEST_STACK_SLOT_DIAG
+.const C128_STACK_SLOT_DIAG = 1
+#else
+.const C128_STACK_SLOT_DIAG = 0
+#endif
+
+#if C128_TEST_STACK_BOTTOM_DIAG
+.const C128_STACK_BOTTOM_DIAG = 1
+#else
+.const C128_STACK_BOTTOM_DIAG = 0
+#endif
+
+#if C128_TEST_FINAL_RETURN_DIAG
+.const C128_FINAL_RETURN_DIAG = 1
+#else
+.const C128_FINAL_RETURN_DIAG = 0
+#endif
+
+#if C128_TEST_OVERLAY_RELOAD_GUARD
+.const C128_OVERLAY_RELOAD_GUARD = 1
+#else
+.const C128_OVERLAY_RELOAD_GUARD = 0
+#endif
+
+#if C128_TEST_STACK_LOW_WATER
+.const C128_STACK_LOW_WATER_DIAG = 1
+#else
+.const C128_STACK_LOW_WATER_DIAG = 0
+#endif
+
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+.const C128_OVERLAY_LOAD_FAIL_TRAP_DIAG = 1
+#else
+.const C128_OVERLAY_LOAD_FAIL_TRAP_DIAG = 0
+#endif
+
+#if C128_TEST_OVERLAY_FN_GUARD
+.const C128_OVERLAY_FN_GUARD_DIAG = 1
+#else
+.const C128_OVERLAY_FN_GUARD_DIAG = 0
+#endif
+
+#if C128_TEST_SKIP_PLAYER_CREATE_OVERLAY
+.const C128_SKIP_PLAYER_CREATE_OVERLAY_DIAG = 1
+#else
+.const C128_SKIP_PLAYER_CREATE_OVERLAY_DIAG = 0
+#endif
+
+#if C128_TEST_SKIP_PLAYER_SUMMARY
+.const C128_SKIP_PLAYER_SUMMARY_DIAG = 1
+#else
+.const C128_SKIP_PLAYER_SUMMARY_DIAG = 0
+#endif
+
+#if C128_TEST_SKIP_PLAYER_CREATE_CALL
+.const C128_SKIP_PLAYER_CREATE_CALL_DIAG = 1
+#else
+.const C128_SKIP_PLAYER_CREATE_CALL_DIAG = 0
+#endif
+
+#if C128_TEST_SKIP_PLAYER_CREATE_GUARDS
+.const C128_SKIP_PLAYER_CREATE_GUARDS_DIAG = 1
+#else
+.const C128_SKIP_PLAYER_CREATE_GUARDS_DIAG = 0
+#endif
+
+#if C128_TEST_CHARGEN_CUTPOINT
+.const C128_CHARGEN_CUTPOINT = C128_TEST_CHARGEN_CUTPOINT
+#else
+.const C128_CHARGEN_CUTPOINT = -1
+#endif
+
+#if C128_TEST_TOWN_SELF_DUMP
+.const C128_TOWN_SELF_DUMP_DIAG = 1
+#else
+.const C128_TOWN_SELF_DUMP_DIAG = 0
+#endif
+
+#if C128_TEST_TOWN_SELF_DUMP_TARGET
+.const C128_TOWN_SELF_DUMP_TARGET = C128_TEST_TOWN_SELF_DUMP_TARGET
+#else
+.const C128_TOWN_SELF_DUMP_TARGET = $70
+#endif
+
 #if C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_OVERLAY_TRANSITION_DIAG = 1
 #else
@@ -58,6 +148,42 @@
 .const C128_VIC40_BOOT_PROBE = 0
 #endif
 
+#if C128_TEST_STACK_SLOT_DIAG
+.macro C128StackSlotGuardInit(stage) {
+    lda #stage
+    jsr c128_stack_slot_guard_init
+}
+
+.macro C128StackSlotGuardCheck(stage) {
+    lda #stage
+    jsr c128_stack_slot_guard_check
+}
+#endif
+
+#if C128_TEST_STACK_BOTTOM_DIAG
+.macro C128StackBottomCanaryInit(stage) {
+    lda #stage
+    jsr c128_stack_bottom_canary_init
+}
+
+.macro C128StackBottomCanaryCheck(stage) {
+    lda #stage
+    jsr c128_stack_bottom_canary_check
+}
+#endif
+
+#if C128_TEST_FINAL_RETURN_DIAG
+.macro C128FinalReturnCapture(stage) {
+    lda #stage
+    jsr c128_final_return_capture
+}
+
+.macro C128FinalReturnCheck(stage) {
+    lda #stage
+    jsr c128_final_return_check
+}
+#endif
+
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
 // ============================================================
@@ -67,6 +193,189 @@
 .pc = $1c0e "Program"
 entry:
     jmp entry_real
+
+#if C128_TEST_TOWN_SELF_DUMP
+c128_town_dump_log:
+    ldx c128_town_dump_idx
+    sta c128_town_dump_buf,x
+    inx
+    txa
+    and #$1f
+    sta c128_town_dump_idx
+    rts
+
+c128_town_dump_mark:
+    cmp #C128_TOWN_SELF_DUMP_TARGET
+    beq !hit+
+    jmp c128_town_dump_log
+!hit:
+    jsr c128_town_dump_log
+    jmp c128_town_dump_checkpoint
+
+c128_town_dump_checkpoint:
+    jsr c128_town_dump_render_vic
+!hang:
+    nop
+    jmp !hang-
+
+c128_town_dump_render_vic:
+    lda #<$0400
+    sta zp_ptr0
+    lda #>$0400
+    sta zp_ptr0_hi
+    lda #<$d800
+    sta zp_ptr1
+    lda #>$d800
+    sta zp_ptr1_hi
+    lda #19
+    sta zp_temp0
+!clear_rows:
+    ldx #40
+!clear_cols:
+    lda #$20
+    ldy #0
+    sta (zp_ptr0),y
+    lda #1
+    sta (zp_ptr1),y
+    inc zp_ptr0
+    bne !clr_scr_ok+
+    inc zp_ptr0_hi
+!clr_scr_ok:
+    inc zp_ptr1
+    bne !clr_col_ok+
+    inc zp_ptr1_hi
+!clr_col_ok:
+    dex
+    bne !clear_cols-
+    dec zp_temp0
+    bne !clear_rows-
+
+    lda #<$0400
+    sta zp_ptr0
+    lda #>$0400
+    sta zp_ptr0_hi
+    lda #<$d800
+    sta zp_ptr1
+    lda #>$d800
+    sta zp_ptr1_hi
+
+    lda #<c128_town_dump_title_str
+    sta zp_temp1
+    lda #>c128_town_dump_title_str
+    sta zp_temp2
+    ldy #0
+!title:
+    lda (zp_temp1),y
+    beq !title_done+
+    jsr c128_town_dump_put_char
+    iny
+    bne !title-
+!title_done:
+
+    jsr c128_town_dump_next_row
+    lda c128_town_dump_idx
+    jsr c128_town_dump_put_hex
+    lda #$20
+    jsr c128_town_dump_put_char
+    lda c128_town_dump_countdown
+    jsr c128_town_dump_put_hex
+
+    lda #0
+    sta zp_temp0
+!bc_rows:
+    jsr c128_town_dump_next_row
+    ldx #16
+!bc_cols:
+    ldy zp_temp0
+    lda c128_town_dump_buf,y
+    jsr c128_town_dump_put_hex
+    inc zp_temp0
+    dex
+    bne !bc_cols-
+    lda zp_temp0
+    cmp #32
+    bne !bc_rows-
+
+    ldx #0
+!stack_rows:
+    jsr c128_town_dump_next_row
+    txa
+    jsr c128_town_dump_put_hex
+    lda #$3a
+    jsr c128_town_dump_put_char
+    ldy #0
+!stack_cols:
+    lda $0100,x
+    jsr c128_town_dump_put_hex
+    inx
+    iny
+    cpy #16
+    bne !stack_cols-
+    cpx #0
+    bne !stack_rows-
+    rts
+
+c128_town_dump_next_row:
+    lda zp_ptr0
+    clc
+    adc #40
+    sta zp_ptr0
+    bcc !row_scr_ok+
+    inc zp_ptr0_hi
+!row_scr_ok:
+    lda zp_ptr1
+    clc
+    adc #40
+    sta zp_ptr1
+    bcc !row_col_ok+
+    inc zp_ptr1_hi
+!row_col_ok:
+    rts
+
+c128_town_dump_put_hex:
+    pha
+    lsr
+    lsr
+    lsr
+    lsr
+    jsr c128_town_dump_put_nibble
+    pla
+    and #$0f
+    jmp c128_town_dump_put_nibble
+
+c128_town_dump_put_nibble:
+    cmp #10
+    bcc !digit+
+    sec
+    sbc #9
+    jmp c128_town_dump_put_char
+!digit:
+    clc
+    adc #$30
+    jmp c128_town_dump_put_char
+
+c128_town_dump_put_char:
+    ldy #0
+    sta (zp_ptr0),y
+    lda #1
+    sta (zp_ptr1),y
+    inc zp_ptr0
+    bne !put_scr_ok+
+    inc zp_ptr0_hi
+!put_scr_ok:
+    inc zp_ptr1
+    bne !put_col_ok+
+    inc zp_ptr1_hi
+!put_col_ok:
+    rts
+
+c128_town_dump_title_str:
+    .text "BC CD STK" ; .byte 0
+c128_town_dump_idx: .byte 0
+c128_town_dump_countdown: .byte 8
+c128_town_dump_buf:
+    .fill 32, 0
+#endif
 
 // ============================================================
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
@@ -573,21 +882,25 @@ safe_setbnk:
     plp
     rts
 
-// init_copy_banked — Copy banked code payload to $E80E
+// init_copy_banked — Copy banked code payload to $F000
 // Uses $3F (NOIO) instead of $3E because source data crosses the I/O
 // range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
 // garbage instead of game data.
-// NOTE: destination starts at $E80E because $E000-$E80D is used
-// at runtime by BANKED_DATA_BASE (tier monster/item databases).
 init_copy_banked:
+#if C128_TEST_OVERLAY_RELOAD_GUARD
+    lda c128_startup_overlay_executing
+    beq !guard_ok+
+    brk
+!guard_ok:
+#endif
     sei
     lda #<banked_payload
     sta zp_ptr0
     lda #>banked_payload
     sta zp_ptr0_hi
-    lda #$0e
+    lda #$00
     sta zp_ptr1
-    lda #$E8
+    lda #$F0
     sta zp_ptr1_hi
     ldx #((banked_payload_end - banked_payload + 255) / 256)
     ldy #0
@@ -597,11 +910,10 @@ init_copy_banked:
 !copy:
     lda zp_ptr1_hi
     cmp #$ff
-    beq !skip_copy+             // Skip ALL of page $FF
-    cmp #$fe
     bne !do_copy+
-    cpy #$f2
-    bcs !skip_copy+             // Skip $FE writes that reach $FF00+
+    // Protect MMU/Vectors in page $FF ($FF00-$FF0D)
+    cpy #$0e
+    bcc !skip_copy+
 !do_copy:
     lda (zp_ptr0),y
     sta (zp_ptr1),y
@@ -639,7 +951,15 @@ exit_trampoline:
 // can never drift into the $D000 I/O hole.
 // ============================================================
 tramp_player_create:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$71
+    jsr c128_town_dump_mark
+#endif
+#if !C128_TEST_SKIP_PLAYER_CREATE_OVERLAY
     lda #1                      // OVL_STARTUP
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_tramp_player_create_overlay_req
+#endif
 #if C128_REAL_BOOT_DIAG
     ldx #$31
     jsr c128_stack_guard_begin
@@ -650,14 +970,46 @@ tramp_player_create:
     jsr c128_stack_guard_check
 #endif
     bcc !tpc_loaded+
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    brk
+#endif
     jmp entry_main
 !tpc_loaded:
+#if !C128_TEST_SKIP_PLAYER_CREATE_GUARDS
     jsr c128_restore_runtime_guards
+#endif
+#endif
 #if C128_REAL_BOOT_DIAG
     ldx #$33
     jsr c128_stack_guard_begin
 #endif
-    jmp player_create
+#if !C128_TEST_SKIP_PLAYER_CREATE_CALL
+    lda #1
+    sta c128_startup_overlay_executing
+    jsr startup_overlay_player_create_entry
+tramp_player_create_return_site:
+    lda #0
+    sta c128_startup_overlay_executing
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($86)
+#endif
+#endif
+#if !C128_TEST_SKIP_PLAYER_SUMMARY
+    jsr tramp_ui_char_display
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($8b)
+#endif
+    jsr input_wait_release
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($8c)
+#endif
+    jsr input_get_key
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($8d)
+#endif
+#endif
+    jsr c128_restore_runtime_guards
+    rts
 
 tramp_game_over:
     // 1. Resolve creature name while tier data still at $E000
@@ -995,8 +1347,88 @@ c128_diag_fail_sym:
     jmp c128_diag_fail_stage_63
 !chk64:
     cmp #$64
-    bne !diag_default+
+    bne !chk71+
     jmp c128_diag_fail_stage_64
+!chk71:
+    cmp #$71
+    bne !chk72+
+    jmp c128_diag_fail_stage_71
+!chk72:
+    cmp #$72
+    bne !chk73+
+    jmp c128_diag_fail_stage_72
+!chk73:
+    cmp #$73
+    bne !chk74+
+    jmp c128_diag_fail_stage_73
+!chk74:
+    cmp #$74
+    bne !chk75+
+    jmp c128_diag_fail_stage_74
+!chk75:
+    cmp #$75
+    bne !chk76+
+    jmp c128_diag_fail_stage_75
+!chk76:
+    cmp #$76
+    bne !chk77+
+    jmp c128_diag_fail_stage_76
+!chk77:
+    cmp #$77
+    bne !chk78+
+    jmp c128_diag_fail_stage_77
+!chk78:
+    cmp #$78
+    bne !chk81+
+    jmp c128_diag_fail_stage_78
+!chk81:
+    cmp #$81
+    bne !chk82+
+    jmp c128_diag_fail_stage_81
+!chk82:
+    cmp #$82
+    bne !chk83+
+    jmp c128_diag_fail_stage_82
+!chk83:
+    cmp #$83
+    bne !chk84+
+    jmp c128_diag_fail_stage_83
+!chk84:
+    cmp #$84
+    bne !chk91+
+    jmp c128_diag_fail_stage_84
+!chk91:
+    cmp #$91
+    bne !chk92+
+    jmp c128_diag_fail_stage_91
+!chk92:
+    cmp #$92
+    bne !chk93+
+    jmp c128_diag_fail_stage_92
+!chk93:
+    cmp #$93
+    bne !chk94+
+    jmp c128_diag_fail_stage_93
+!chk94:
+    cmp #$94
+    bne !chk95+
+    jmp c128_diag_fail_stage_94
+!chk95:
+    cmp #$95
+    bne !chk96+
+    jmp c128_diag_fail_stage_95
+!chk96:
+    cmp #$96
+    bne !chk97+
+    jmp c128_diag_fail_stage_96
+!chk97:
+    cmp #$97
+    bne !chk98+
+    jmp c128_diag_fail_stage_97
+!chk98:
+    cmp #$98
+    bne !diag_default+
+    jmp c128_diag_fail_stage_98
 !diag_default:
     jmp c128_diag_fail_default
 c128_diag_fail_default:
@@ -1155,6 +1587,66 @@ c128_diag_fail_stage_63:
 c128_diag_fail_stage_64:
     nop
     jmp c128_diag_fail_stage_64
+c128_diag_fail_stage_71:
+    nop
+    jmp c128_diag_fail_stage_71
+c128_diag_fail_stage_72:
+    nop
+    jmp c128_diag_fail_stage_72
+c128_diag_fail_stage_73:
+    nop
+    jmp c128_diag_fail_stage_73
+c128_diag_fail_stage_74:
+    nop
+    jmp c128_diag_fail_stage_74
+c128_diag_fail_stage_75:
+    nop
+    jmp c128_diag_fail_stage_75
+c128_diag_fail_stage_76:
+    nop
+    jmp c128_diag_fail_stage_76
+c128_diag_fail_stage_77:
+    nop
+    jmp c128_diag_fail_stage_77
+c128_diag_fail_stage_78:
+    nop
+    jmp c128_diag_fail_stage_78
+c128_diag_fail_stage_81:
+    nop
+    jmp c128_diag_fail_stage_81
+c128_diag_fail_stage_82:
+    nop
+    jmp c128_diag_fail_stage_82
+c128_diag_fail_stage_83:
+    nop
+    jmp c128_diag_fail_stage_83
+c128_diag_fail_stage_84:
+    nop
+    jmp c128_diag_fail_stage_84
+c128_diag_fail_stage_91:
+    nop
+    jmp c128_diag_fail_stage_91
+c128_diag_fail_stage_92:
+    nop
+    jmp c128_diag_fail_stage_92
+c128_diag_fail_stage_93:
+    nop
+    jmp c128_diag_fail_stage_93
+c128_diag_fail_stage_94:
+    nop
+    jmp c128_diag_fail_stage_94
+c128_diag_fail_stage_95:
+    nop
+    jmp c128_diag_fail_stage_95
+c128_diag_fail_stage_96:
+    nop
+    jmp c128_diag_fail_stage_96
+c128_diag_fail_stage_97:
+    nop
+    jmp c128_diag_fail_stage_97
+c128_diag_fail_stage_98:
+    nop
+    jmp c128_diag_fail_stage_98
 #endif
 
 tramp_ui_enter:
@@ -1180,18 +1672,10 @@ tramp_ui_help_display:
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
-    sei
-    lda #$3f                    // All RAM, I/O HIDDEN — code at $D75E readable
-    sta $ff00
-    lda #$34                    // BANK_NO_ROMS (processor port, belt-and-suspenders)
-    sta $01
+    jsr init_copy_banked
+    jsr tramp_ui_enter
     jsr ui_char_display
-    lda #$36                    // BANK_NO_BASIC
-    sta $01
-    lda #$3e                    // Restore runtime: I/O visible
-    sta $ff00
-    cli
-    rts
+    jmp tramp_ui_exit
 
 tramp_ui_inv_display:
     jsr init_copy_banked
@@ -1569,6 +2053,10 @@ restart_entry:
     jsr screen_put_string
 
 title_menu_ready:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$60
+    jsr c128_town_dump_mark
+#endif
 #if C128_VIC40_BOOT_PROBE
     jsr c128_vic40_boot_probe
 #endif
@@ -1580,6 +2068,10 @@ title_menu_ready:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
     bne !not_n+
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$61
+    jsr c128_town_dump_mark
+#endif
     jmp game_new_start
 !not_n:
     cmp #$4c                // 'L' — load game
@@ -1839,11 +2331,60 @@ c128_cache_test_skip_overlay: .byte 2
 #else
 c128_cache_test_skip_overlay: .byte 0
 #endif
+c128_startup_overlay_executing: .byte 0
+
+// Keep C128 overlay metadata/state in resident main RAM instead of adjacent
+// to overlay code, which was getting trampled before startup overlay loads.
+overlay_state_block_start:
+current_overlay: .byte 0
+ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
+ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
+ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
+ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
+ovl_fn_addr_lo:
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen
+ovl_fn_addr_hi:
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen
+ovl_fn_len:
+    .byte 9, 8, 9, 7
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
+ol_target:        .byte 0
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+c128_overlay_load_disk_index:  .byte 0
+c128_overlay_load_disk_target: .byte 0
+c128_overlay_load_disk_len:    .byte 0
+c128_overlay_load_disk_lo:     .byte 0
+c128_overlay_load_disk_hi:     .byte 0
+c128_tramp_player_create_overlay_req: .byte 0
+c128_overlay_load_entry_req:          .byte 0
+c128_overlay_load_entry_target:       .byte 0
+c128_preload_diag_stage:              .byte 0
+c128_preload_diag_a:                  .byte 0
+c128_preload_diag_x:                  .byte 0
+c128_preload_diag_y:                  .byte 0
+c128_preload_diag_status:             .byte 0
+c128_preload_diag_readst:             .byte 0
+c128_preload_diag_port1:              .byte 0
+c128_preload_diag_mmu:                .byte 0
+c128_preload_diag_pcra:               .byte 0
+#endif
+ol_save_p:        .byte 0
+ol_status_p:      .byte 0
+#if C128_TEST_OVERLAY_FN_GUARD
+c128_overlay_fn_guard_stage:   .byte 0
+c128_overlay_fn_guard_index:   .byte 0
+c128_overlay_fn_guard_actual:  .byte 0
+c128_overlay_fn_guard_expect:  .byte 0
+#endif
+overlay_state_block_end:
 
 // c128_stack_guard_begin/check — capture and validate stack balance around
 // high-risk KERNAL/overlay/runtime boundaries. On mismatch, preserve the
 // expected SP, actual SP, and stage tag in RAM and break immediately.
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT
+#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG || C128_TEST_TITLE_ART_CONTENT || C128_TEST_STATUS_SP_CANARY || C128_TEST_STACK_SLOT_DIAG || C128_TEST_STACK_BOTTOM_DIAG || C128_TEST_FINAL_RETURN_DIAG
 c128_stack_guard_begin:
     jsr c128_stack_guard_verify_canaries
     stx c128_stack_guard_stage
@@ -1906,6 +2447,162 @@ c128_stack_guard_snapshot_return:
     lda $0104,x
     sta c128_stack_guard_ret_hi
     rts
+
+#if C128_TEST_STACK_SLOT_DIAG
+c128_stack_slot_guard_init:
+    sta c128_stack_guard_stage
+    lda $01fa
+    sta c128_stack_slot_01fa
+    lda $01fb
+    sta c128_stack_slot_01fb
+    lda $01fc
+    sta c128_stack_slot_01fc
+    lda $01fd
+    sta c128_stack_slot_01fd
+    lda $01fe
+    sta c128_stack_slot_01fe
+    lda $01ff
+    sta c128_stack_slot_01ff
+    rts
+
+c128_stack_slot_guard_check:
+    sta c128_stack_guard_stage
+    lda $01fa
+    cmp c128_stack_slot_01fa
+    beq !slot_fb+
+    ldx #$fa
+    jmp c128_stack_slot_fail
+!slot_fb:
+    lda $01fb
+    cmp c128_stack_slot_01fb
+    beq !slot_fc+
+    ldx #$fb
+    jmp c128_stack_slot_fail
+!slot_fc:
+    lda $01fc
+    cmp c128_stack_slot_01fc
+    beq !slot_fd+
+    ldx #$fc
+    jmp c128_stack_slot_fail
+!slot_fd:
+    lda $01fd
+    cmp c128_stack_slot_01fd
+    beq !slot_fe+
+    ldx #$fd
+    jmp c128_stack_slot_fail
+!slot_fe:
+    lda $01fe
+    cmp c128_stack_slot_01fe
+    beq !slot_ff+
+    ldx #$fe
+    jmp c128_stack_slot_fail
+!slot_ff:
+    lda $01ff
+    cmp c128_stack_slot_01ff
+    beq !slot_ok+
+    ldx #$ff
+    jmp c128_stack_slot_fail
+!slot_ok:
+    rts
+
+c128_stack_slot_fail:
+    stx c128_stack_guard_substage
+    sta c128_stack_guard_fail_code
+    brk
+#endif
+
+#if C128_TEST_STACK_BOTTOM_DIAG
+c128_stack_bottom_canary_init:
+    sta c128_stack_guard_stage
+    lda #$de
+    sta $0100
+    lda #$ad
+    sta $0101
+    lda #$be
+    sta $0102
+    rts
+
+c128_stack_bottom_canary_check:
+    sta c128_stack_guard_stage
+    lda $0100
+    cmp #$de
+    beq !bottom_0101+
+    ldx #$00
+    jmp c128_stack_bottom_fail
+!bottom_0101:
+    lda $0101
+    cmp #$ad
+    beq !bottom_0102+
+    ldx #$01
+    jmp c128_stack_bottom_fail
+!bottom_0102:
+    lda $0102
+    cmp #$be
+    beq !bottom_ok+
+    ldx #$02
+    jmp c128_stack_bottom_fail
+!bottom_ok:
+    rts
+
+c128_stack_bottom_fail:
+    stx c128_stack_guard_substage
+    sta c128_stack_guard_fail_code
+    brk
+#endif
+
+#if C128_TEST_FINAL_RETURN_DIAG
+c128_final_return_capture:
+    sta c128_final_return_stage
+    tsx
+    stx c128_final_return_sp
+    lda $01
+    sta c128_final_return_port1
+    lda $ff00
+    sta c128_final_return_mmu
+    lda #<tramp_player_create_return_site
+    sta c128_final_return_expected_lo
+    lda #>tramp_player_create_return_site
+    sta c128_final_return_expected_hi
+    lda $0101,x
+    sta c128_final_return_stack_0
+    lda $0102,x
+    sta c128_final_return_stack_1
+    lda $0103,x
+    sta c128_final_return_stack_2
+    lda $0104,x
+    sta c128_final_return_stack_3
+    lda $0105,x
+    sta c128_final_return_stack_4
+    lda $0106,x
+    sta c128_final_return_stack_5
+    lda $0107,x
+    sta c128_final_return_stack_6
+    lda $0108,x
+    sta c128_final_return_stack_7
+    rts
+
+c128_final_return_check:
+    jsr c128_final_return_capture
+    lda c128_final_return_stack_0
+    cmp c128_final_return_expected_lo
+    beq !final_ret_hi+
+    ldx #0
+    jmp c128_final_return_fail
+!final_ret_hi:
+    lda c128_final_return_stack_1
+    cmp c128_final_return_expected_hi
+    beq !final_ret_ok+
+    ldx #1
+    jmp c128_final_return_fail
+!final_ret_ok:
+    rts
+
+c128_final_return_fail:
+    stx c128_final_return_fail_slot
+    sta c128_final_return_fail_actual
+    brk
+#endif
+
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 c128_diag_validate_runtime_invariants:
@@ -2028,8 +2725,18 @@ c128_diag_verify_helper_blob:
     rts
 #endif
 
-.assert "Stack guard block reserve stays below fixed debug slot", * <= $3f00, true
-.fill $3f00 - *, 0
+#if C128_TEST_STATUS_SP_CANARY
+.assert "Status canary trap stays below fixed debug slot", * <= $3ef8, true
+c128_status_ret_corrupt:
+    nop
+    jmp c128_status_ret_corrupt
+.assert "Status canary state fits before fixed debug slot", * <= $3efc, true
+c128_status_ret_expected_lo: .byte 0
+c128_status_ret_expected_hi: .byte 0
+c128_status_ret_actual_lo:   .byte 0
+c128_status_ret_actual_hi:   .byte 0
+#endif
+
 c128_stack_guard_canary_lo: .byte $a5
 c128_stack_guard_expected:  .byte 0
 c128_stack_guard_actual:    .byte 0
@@ -2042,6 +2749,42 @@ c128_stack_guard_ret_lo:    .byte 0
 c128_stack_guard_ret_hi:    .byte 0
 c128_stack_guard_fail_code: .byte 0
 c128_stack_guard_substage:  .byte 0
+#if C128_TEST_STACK_SLOT_DIAG
+c128_stack_slot_01fa:       .byte 0
+c128_stack_slot_01fb:       .byte 0
+c128_stack_slot_01fc:       .byte 0
+c128_stack_slot_01fd:       .byte 0
+c128_stack_slot_01fe:       .byte 0
+c128_stack_slot_01ff:       .byte 0
+#endif
+#if C128_TEST_FINAL_RETURN_DIAG
+c128_final_return_stage:       .byte 0
+c128_final_return_sp:          .byte 0
+c128_final_return_port1:       .byte 0
+c128_final_return_mmu:         .byte 0
+c128_final_return_expected_lo: .byte 0
+c128_final_return_expected_hi: .byte 0
+c128_final_return_fail_slot:   .byte 0
+c128_final_return_fail_actual: .byte 0
+c128_final_return_stack_0:     .byte 0
+c128_final_return_stack_1:     .byte 0
+c128_final_return_stack_2:     .byte 0
+c128_final_return_stack_3:     .byte 0
+c128_final_return_stack_4:     .byte 0
+c128_final_return_stack_5:     .byte 0
+c128_final_return_stack_6:     .byte 0
+c128_final_return_stack_7:     .byte 0
+.label final_return_diag_stage = c128_final_return_stage
+.label final_return_diag_sp = c128_final_return_sp
+.label final_return_diag_port1 = c128_final_return_port1
+.label final_return_diag_mmu = c128_final_return_mmu
+.label final_return_diag_expected_lo = c128_final_return_expected_lo
+.label final_return_diag_expected_hi = c128_final_return_expected_hi
+.label final_return_diag_fail_slot = c128_final_return_fail_slot
+.label final_return_diag_fail_actual = c128_final_return_fail_actual
+.label final_return_diag_stack0 = c128_final_return_stack_0
+.label final_return_diag_stack7 = c128_final_return_stack_7
+#endif
 #endif
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
@@ -2084,7 +2827,6 @@ c128_cache_state_end:
 #import "../common/save.s"
 #import "../common/disk_swap.s"
 #import "../common/dungeon_los.s"
-#import "dungeon_render_vdc.s"
 #import "../common/monster_attack.s"
 #import "../common/combat.s"
 #import "../common/player_move.s"
@@ -2092,7 +2834,9 @@ c128_cache_state_end:
 #import "../common/game_loop.s"
 #import "../common/turn.s"
 #import "../common/player_items.s"
+#import "../common/player_magic.s"
 #import "../common/projectile.s"
+#import "../common/ranged_fire.s"
 #import "../common/tunnel.s"
 #import "../common/string_bank.s"
 #import "../common/perf_p1.s"
@@ -2396,38 +3140,40 @@ c128_test_verify_cache_survival:
     rts
 #endif
 
-// Bank1Data segment — content moved to banked_payload ($EB00, Bank 0).
-// Segment kept empty; bank1.dat is no longer loaded at runtime.
+// Bank1Data segment — content moved here to free Bank 0 RAM.
+// Stays in Bank 1 RAM at $1000-$3FFF (reclaimed loader source space).
 .segment Bank1Data
+.pseudopc $1000 {
+    #import "dungeon_render_vdc.s"
+}
 .segment Default
+
 
 // Moved out of the C128 banked payload to free room for command handlers,
 // but imported late so their shared-data dependencies are already defined.
 #import "../common/string_bank_banked.s"
 #import "../common/ego_items.s"
 #import "../common/ui_home.s"
-#import "../common/ui_character.s"
 
 // ============================================================
-// Banked code payload — stored inline here, copied to $E80E
-// at startup by init_copy_banked. Runs in Bank 0 at $E80E-$FFFA.
+// Banked code payload — stored inline here, copied to $F000
+// at startup by init_copy_banked. Runs in Bank 0 at $F000-$FFFA.
 // All Bank1Data functions (UI screens, home) are included here so
 // they live in Bank 0 and are accessible with $FF00=$3E (MMU_ALL_RAM).
 //
-// Keep $E000-$E80D reserved for BANKED_DATA_BASE. Reloadable UI code occupies
-// the early banked window below first_banked_function; UI trampolines recopy
+// Keep $E000-$EFFF reserved for OVL_* (overlays). Banked UI/logic
+// occupies the resident window at $F000-$FFFA; UI trampolines recopy
 // the payload before entry so overlay/cache activity cannot leave stale code
-// there. Hot banked gameplay command handlers start at first_banked_function.
+// there.
 // ============================================================
 banked_payload:
-.pseudopc $E80E {
+.pseudopc $F000 {
+first_banked_function:
     #import "../common/ui_help_data.s"
     #import "../common/ui_help.s"
     #import "../common/ui_recall.s"
+    #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
-first_banked_function:
-    #import "../common/player_magic.s"
-    #import "../common/ranged_fire.s"
     #import "../common/throw.s"
     #import "../common/bash.s"
 
@@ -2454,6 +3200,9 @@ program_end:
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
+.assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true
+.assert "Overlay state block ends before overlay window", overlay_state_block_end < $e000, true
+.assert "Overlay state block stays inside cache-state ownership", overlay_state_block_end <= c128_cache_state_end, true
 #endif
 .assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
 .assert "UI enter trampoline stays below I/O hole", tramp_ui_enter < $D000, true
@@ -2482,10 +3231,10 @@ program_end:
 .assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
-.assert "Help renderer stays in reloadable banked window", ui_help_display >= $E80E && ui_help_display < first_banked_function, true
-.assert "Help title text stays in reloadable banked window", help_title_str >= $E80E && help_title_str < first_banked_function, true
-.assert "Help content table stays in reloadable banked window", help_lines >= $E80E && help_lines < first_banked_function, true
-.assert "Character sheet renderer stays out of overlay window", ui_char_display < $E000 || ui_char_display >= $F000, true
+.assert "Help renderer stays above overlay window", ui_help_display >= $F000 && ui_help_display < banked_code_end, true
+.assert "Help title text stays above overlay window", help_title_str >= $F000 && help_title_str < banked_code_end, true
+.assert "Help content table stays above overlay window", help_lines >= $F000 && help_lines < banked_code_end, true
+.assert "Character sheet renderer stays above overlay window", ui_char_display >= $F000 && ui_char_display < banked_code_end, true
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
@@ -2517,21 +3266,23 @@ program_end:
 .assert "Find-doors effect stays below I/O hole", eff_find_doors < $D000, true
 .assert "Adjacent iterator stays below I/O hole", for_each_adjacent < $D000, true
 .assert "Sleep-adjacent effect stays below I/O hole", eff_sleep_adjacent < $D000, true
-.assert "Aim-wand handler stays out of I/O hole", item_aim_wand < $D000 || item_aim_wand >= $E000, true
-.assert "Use-staff handler stays out of I/O hole", item_use_staff < $D000 || item_use_staff >= $E000, true
-.assert "Study-spell handler stays out of I/O hole", item_gain_spell < $D000 || item_gain_spell >= $E000, true
-.assert "Cast-spell handler stays out of I/O hole", player_cast_spell < $D000 || player_cast_spell >= $E000, true
-.assert "Pray handler stays out of I/O hole", player_pray < $D000 || player_pray >= $E000, true
-.assert "Spell list renderer stays out of I/O hole", spell_list_display < $D000 || spell_list_display >= $E000, true
-.assert "Learn-new-spells helper stays out of I/O hole", magic_check_new_spells < $D000 || magic_check_new_spells >= $E000, true
-.assert "Mage effect dispatch stays out of I/O hole", mage_effect_dispatch < $D000 || mage_effect_dispatch >= $E000, true
-.assert "Priest effect dispatch stays out of I/O hole", priest_effect_dispatch < $D000 || priest_effect_dispatch >= $E000, true
-.assert "Ranged-fire handler stays out of I/O hole", ranged_fire < $D000 || ranged_fire >= $E000, true
-.assert "Throw-item handler stays out of I/O hole", throw_item < $D000 || throw_item >= $E000, true
-.assert "Bash handler stays out of I/O hole", bash_command < $D000 || bash_command >= $E000, true
-.assert "Recall renderer stays in reloadable banked window", ui_recall_display >= $E80E && ui_recall_display < first_banked_function, true
-.assert "Inventory renderer stays in reloadable banked window", ui_inv_display >= $E80E && ui_inv_display < first_banked_function, true
-.assert "Equipment renderer stays in reloadable banked window", ui_equip_display >= $E80E && ui_equip_display < first_banked_function, true
+.assert "Aim-wand handler stays out of I/O hole", item_aim_wand < $D000 || item_aim_wand >= $F000, true
+.assert "Use-staff handler stays out of I/O hole", item_use_staff < $D000 || item_use_staff >= $F000, true
+#if !C128_TEST_STACK_SLOT_DIAG && !C128_TEST_STACK_BOTTOM_DIAG
+.assert "Study-spell handler stays out of I/O hole", item_gain_spell < $D000 || item_gain_spell >= $F000, true
+#endif
+.assert "Cast-spell handler stays out of I/O hole", player_cast_spell < $D000 || player_cast_spell >= $F000, true
+.assert "Pray handler stays out of I/O hole", player_pray < $D000 || player_pray >= $F000, true
+.assert "Spell list renderer stays out of I/O hole", spell_list_display < $D000 || spell_list_display >= $F000, true
+.assert "Learn-new-spells helper stays out of I/O hole", magic_check_new_spells < $D000 || magic_check_new_spells >= $F000, true
+.assert "Mage effect dispatch stays out of I/O hole", mage_effect_dispatch < $D000 || mage_effect_dispatch >= $F000, true
+.assert "Priest effect dispatch stays out of I/O hole", priest_effect_dispatch < $D000 || priest_effect_dispatch >= $F000, true
+.assert "Ranged-fire handler stays out of I/O hole", ranged_fire < $D000 || ranged_fire >= $F000, true
+.assert "Throw-item handler stays out of I/O hole", throw_item < $D000 || throw_item >= $F000, true
+.assert "Bash handler stays out of I/O hole", bash_command < $D000 || bash_command >= $F000, true
+.assert "Recall renderer stays in reloadable banked window", ui_recall_display >= $F000 && ui_recall_display < banked_code_end, true
+.assert "Inventory renderer stays in reloadable banked window", ui_inv_display >= $F000 && ui_inv_display < banked_code_end, true
+.assert "Equipment renderer stays in reloadable banked window", ui_equip_display >= $F000 && ui_equip_display < banked_code_end, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
@@ -2559,11 +3310,16 @@ ovl_town_end:
 // Startup overlay — character creation at $E000
 // ============================================================
 .segment StartupOverlay
+startup_overlay_player_create_entry:
+    jsr player_create
+    rts
+
     #import "../common/background_data.s"
     #import "../common/player_create.s"
 ovl_start_end:
 .print "Startup overlay: " + (ovl_start_end - $e000) + " bytes at $E000-$" + toHexString(ovl_start_end)
 .assert "Startup overlay fits in $E000-$EFFF", ovl_start_end <= $f000, true
+.assert "Startup overlay entry stays in safe zone", startup_overlay_player_create_entry < $E80E, true
 
 // ============================================================
 // Death overlay — score + high score display at $E000

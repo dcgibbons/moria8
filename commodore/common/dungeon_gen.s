@@ -79,6 +79,10 @@ map_bulk_and_mask: .byte 0
 // Sets player start position.
 // Preserves: nothing
 town_generate:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$73
+    jsr c128_town_dump_mark
+#endif
     // Clear trap table for safety (town has no traps)
     lda #0
     sta trap_count

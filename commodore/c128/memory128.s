@@ -270,6 +270,10 @@ kernal_zp_save_buf:
 }
 
 EnterKernal_sub:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a1
+    jsr c128_stack_low_water_check
+#endif
     sei
     inc KERNAL_NESTING_DEPTH
     lda KERNAL_NESTING_DEPTH
@@ -295,6 +299,10 @@ EnterKernal_sub:
     lda kernal_irq_vec_hi
     sta $0315
 !ek_nest:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a2
+    jsr c128_stack_low_water_check
+#endif
     rts
 
 // Exit Kernal — Restore game state after KERNAL calls (C128)
@@ -303,7 +311,26 @@ EnterKernal_sub:
 }
 
 ExitKernal_sub:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a3
+    jsr c128_stack_low_water_check
+#endif
     sei                     // Atomic: KERNAL calls (like LOAD) often re-enable IRQs
+    
+#if C128_TEST_STACK_SLOT_DIAG
+    // Diagnostic invariant check: ensure stack hasn't underflowed
+    // A stray PLA or missing PHA will make SP too high.
+    tsx
+    cpx #$f0
+    bcc !ex_stack_ok+       // SP < $F0 (Safe)
+    jmp c128_stack_leak_trap
+!ex_stack_ok:
+#endif
+
+#if C128_TEST_STACK_BOTTOM_DIAG
+    :C128StackBottomCanaryCheck($91)
+#endif
+
     dec KERNAL_NESTING_DEPTH
     bne !ex_nest+           // Still nested — don't restore yet
     jsr restore_kernal_zp   // Restore game state from kernal_zp_save_buf
@@ -321,6 +348,10 @@ ExitKernal_sub:
     lda #>mmu_common_irq
     sta $0315
 !ex_nest:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a4
+    jsr c128_stack_low_water_check
+#endif
     rts
 
 // MMU Bank 1 Access Macros
@@ -338,6 +369,59 @@ ExitKernal_sub:
     lda #MMU_ALL_RAM
     sta MMU_CR
 }
+
+// ============================================================
+// Diagnostics — Traps for fatal invariant failures
+// ============================================================
+c128_stack_leak_trap:
+    lda #COL_RED
+    sta $d020
+    jmp *               // Clear JAM for stack leak (SP >= $F0 in ExitKernal)
+
+#if C128_TEST_STACK_LOW_WATER
+c128_stack_low_water_check:
+    sta c128_stack_low_water_stage
+    tsx
+    stx c128_stack_low_water_sp
+    cpx #$20
+    bcs !ok+
+    lda $01
+    sta c128_stack_low_water_port1
+    lda $ff00
+    sta c128_stack_low_water_mmu
+    lda $0101,x
+    sta c128_stack_low_water_stack_0
+    lda $0102,x
+    sta c128_stack_low_water_stack_1
+    lda $0103,x
+    sta c128_stack_low_water_stack_2
+    lda $0104,x
+    sta c128_stack_low_water_stack_3
+    lda $0105,x
+    sta c128_stack_low_water_stack_4
+    lda $0106,x
+    sta c128_stack_low_water_stack_5
+    lda $0107,x
+    sta c128_stack_low_water_stack_6
+    lda $0108,x
+    sta c128_stack_low_water_stack_7
+    brk
+!ok:
+    rts
+
+c128_stack_low_water_stage:   .byte 0
+c128_stack_low_water_sp:      .byte 0
+c128_stack_low_water_port1:   .byte 0
+c128_stack_low_water_mmu:     .byte 0
+c128_stack_low_water_stack_0: .byte 0
+c128_stack_low_water_stack_1: .byte 0
+c128_stack_low_water_stack_2: .byte 0
+c128_stack_low_water_stack_3: .byte 0
+c128_stack_low_water_stack_4: .byte 0
+c128_stack_low_water_stack_5: .byte 0
+c128_stack_low_water_stack_6: .byte 0
+c128_stack_low_water_stack_7: .byte 0
+#endif
 
 // ============================================================
 // Subroutines

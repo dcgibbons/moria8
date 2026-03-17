@@ -47,6 +47,19 @@
 // status_draw — Redraw the full status bar (3 rows)
 // Preserves: nothing
 status_draw:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$24
+    jsr c128_town_dump_log
+#endif
+#if C128_STATUS_SP_CANARY_DIAG
+    // Snapshot the live RTS target so we can catch direct corruption of
+    // status_draw's return slot even when SP itself stays balanced.
+    tsx
+    lda $0101,x
+    sta c128_status_ret_expected_lo
+    lda $0102,x
+    sta c128_status_ret_expected_hi
+#endif
     // Dirty row bitmask in status_dirty_rows:
     // bit0=row21, bit1=row22, bit2=row23
     lda #$07
@@ -525,7 +538,25 @@ status_draw:
     pla
     sta zp_cursor_row
 !sd_done:
+#if C128_STATUS_SP_CANARY_DIAG
+    tsx
+    lda $0101,x
+    sta c128_status_ret_actual_lo
+    cmp c128_status_ret_expected_lo
+    bne !sd_ret_corrupt+
+    lda $0102,x
+    sta c128_status_ret_actual_hi
+    cmp c128_status_ret_expected_hi
+    bne !sd_ret_corrupt+
+#endif
     rts
+
+#if C128_STATUS_SP_CANARY_DIAG
+!sd_ret_corrupt:
+    lda #$e2
+    sta c128_stack_guard_fail_code
+    jmp c128_status_ret_corrupt
+#endif
 
 !sd_clear_dirty_only:
     // No drawing happened; only clear dirty flag.

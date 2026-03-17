@@ -290,111 +290,106 @@ reu_probe_xfer:
 //   carry set   = LOAD failed
 // Clobbers: A, X, Y
 c128_preload_asset_load:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a5
+    jsr c128_stack_low_water_check
+#endif
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_preload_diag_a
+    stx c128_preload_diag_x
+    sty c128_preload_diag_y
+    lda #$c1
+    sta c128_preload_diag_stage
+#endif
     sta c128_preload_fn_len
     stx c128_preload_fn_lo
     sty c128_preload_fn_hi
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$11
     jsr c128_stack_guard_begin
-    jsr c128_stack_guard_snapshot_banking
-#endif
-    php
-    sei
-
-    // Full ROM map is required here so serial LOAD runs with the real KERNAL
-    // IRQ/vector environment rather than the game's all-RAM safe IRQ stub.
-    lda #$07
-    sta $d506
-    lda #CPU_PORT_DDR_DEFAULT
-    sta $00
-    lda #$0e                // MMU_NORMAL: Bank 0, System ROM (KERNAL), I/O
-    sta $ff00
-    lda #$37                // BANK_ALL_ROM: KERNAL + I/O
-    sta $01
-    lda kernal_hw_irq_vec_lo
-    sta $fffe
-    lda kernal_hw_irq_vec_hi
-    sta $ffff
-    lda kernal_hw_nmi_vec_lo
-    sta $fffa
-    lda kernal_hw_nmi_vec_hi
-    sta $fffb
-    lda kernal_irq_vec_lo
-    sta $0314
-    lda kernal_irq_vec_hi
-    sta $0315
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$14
-    jsr c128_stack_guard_snapshot_banking
-#endif
-
-    lda #2
-    jsr $ffc3                   // Pre-close stale preload channel
-    jsr $ffcc                   // Restore default I/O channels
-
-    lda c128_preload_fn_len
-    ldx c128_preload_fn_lo
-    ldy c128_preload_fn_hi
-    jsr $ffbd                   // SETNAM
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$15
-    jsr c128_stack_guard_snapshot_banking
-#endif
-
-    lda #2
-    ldx #8
-    ldy #1
-    jsr $ffba                   // SETLFS (PRG header address)
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$16
-    jsr c128_stack_guard_snapshot_banking
 #endif
 
     lda #0
     ldx #0
-    jsr $ff68                   // SETBNK: Bank 0
-    lda kernal_irq_vec_lo
-    sta $0314
-    lda kernal_irq_vec_hi
-    sta $0315
-    lda $dc0d                   // Clear any pending CIA1 IRQ latched in runtime mode
-    lda $dd0d                   // Clear any pending CIA2/NMI latch before CLI
-    lda #$ff
-    sta $d019                   // Clear any pending VIC-II IRQ flags
-    // Fix: KERNAL LOAD's INDSTA triggers $FF01 which loads PCRA ($D501)
-    // into $FF00 to switch to the target bank for each byte write. If PCRA
-    // is corrupted (e.g., $03 instead of $3F), INDSTA writes under KERNAL
-    // ROM and data is lost.
-    // IMPORTANT: $D500 is the Configuration Register (CR) — a mirror of
-    // $FF00 that takes effect IMMEDIATELY. $D501 is PCRA (Pre-Config A).
-    lda #$3f                    // Bank 0, all RAM, no I/O
-    sta $d501                   // PCRA ($D501): INDSTA target bank
-    cli                         // C128 KERNAL serial LOAD requires IRQ service
-    jsr $ffd5                   // LOAD
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$17
-    jsr c128_stack_guard_snapshot_banking
+    jsr safe_setbnk             // LOAD destination bank = Bank 0
+
+    lda #2
+    jsr w_close                 // Pre-close stale preload channel
+    jsr w_clrchn                // Restore default I/O channels
+
+    lda c128_preload_fn_len
+    ldx c128_preload_fn_lo
+    ldy c128_preload_fn_hi
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_preload_diag_a
+    stx c128_preload_diag_x
+    sty c128_preload_diag_y
+    lda #$c2
+    sta c128_preload_diag_stage
+#endif
+    jsr w_setnam
+
+    lda #2
+    ldx #8
+    ldy #1
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_preload_diag_a
+    stx c128_preload_diag_x
+    sty c128_preload_diag_y
+    lda #$c3
+    sta c128_preload_diag_stage
+#endif
+    jsr w_setlfs                // PRG header address
+
+    lda #0
+    ldx #0
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    lda #$00
+    sta c128_preload_diag_a
+    sta c128_preload_diag_x
+    lda #$e0
+    sta c128_preload_diag_y
+    lda #$c4
+    sta c128_preload_diag_stage
+#endif
+    ldy #$e0
+    jsr w_load
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a6
+    jsr c128_stack_low_water_check
 #endif
     lda #0
     rol                         // A=1 on error, 0 on success
     sta c128_preload_status
-    sei
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_preload_diag_status
+    lda $90
+    sta c128_preload_diag_readst
+    lda $01
+    sta c128_preload_diag_port1
+    lda $ff00
+    sta c128_preload_diag_mmu
+    lda $d501
+    sta c128_preload_diag_pcra
+    lda #$c5
+    sta c128_preload_diag_stage
+#endif
 
     lda #2
-    jsr $ffc3                   // CLOSE
-    jsr $ffcc                   // CLRCHN
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$18
-    jsr c128_stack_guard_snapshot_banking
+    jsr w_close
+    jsr w_clrchn
+    lda #0
+    ldx #0
+    jsr safe_setbnk             // Restore default LOAD destination bank
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a7
+    jsr c128_stack_low_water_check
 #endif
-
-    jsr c128_restore_runtime_state
-    jsr c128_vdc_reassert_mode
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$19
+    jsr c128_stack_guard_snapshot_banking
     jsr c128_diag_validate_runtime_invariants
 #endif
-    plp
 
     lda c128_preload_status
     beq !c128_preload_ok+
@@ -405,6 +400,10 @@ c128_preload_asset_load:
     sec
     rts
 !c128_preload_ok:
+#if C128_TEST_STACK_LOW_WATER
+    lda #$a8
+    jsr c128_stack_low_water_check
+#endif
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$13
     jsr c128_stack_guard_check

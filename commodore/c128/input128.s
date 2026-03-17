@@ -195,10 +195,18 @@ input_get_key:
     stx c128_test_input_idx
     rts
 #else
+#if C128_REAL_BOOT_DIAG
+    ldx #$81
+    jsr c128_stack_guard_begin
+#endif
     // Re-assert game MMU mode and keep Screen Editor blink disabled.
     // If any prior KERNAL path leaked MMU/ROM state, waiting for a key here
     // must not run the Screen Editor IRQ path that can touch VDC RAM.
     jsr c128_restore_runtime_vectors
+#if C128_REAL_BOOT_DIAG
+    ldx #$82
+    jsr c128_stack_guard_check
+#endif
 
     txa
     pha                     // Save X
@@ -234,9 +242,17 @@ input_wait_release:
 #if C128_TEST_SCRIPTED_INPUT
     rts
 #else
+#if C128_REAL_BOOT_DIAG
+    ldx #$83
+    jsr c128_stack_guard_begin
+#endif
     // Same guard as input_get_key: release waits are long-lived and must
     // stay in game MMU mode with Screen Editor blink suppressed.
     jsr c128_restore_runtime_vectors
+#if C128_REAL_BOOT_DIAG
+    ldx #$84
+    jsr c128_stack_guard_check
+#endif
 !iwr_wait:
     inc zp_entropy
     jsr cia_scan_petscii

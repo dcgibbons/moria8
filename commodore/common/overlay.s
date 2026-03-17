@@ -28,7 +28,9 @@
 // ============================================================
 // State
 // ============================================================
+#if !C128
 current_overlay: .byte 0
+#endif
 
 // ============================================================
 // overlay_load — Load a phase overlay to $E000
@@ -38,12 +40,24 @@ current_overlay: .byte 0
 // Output: carry clear = success, carry set = error (disk only)
 // Clobbers: A, X, Y
 overlay_load:
+#if C128 && C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_overlay_load_entry_req
+#endif
+#if C128_TEST_OVERLAY_FN_GUARD
+    pha
+    lda #$b1
+    jsr c128_overlay_fn_guard_check
+    pla
+#endif
 #if C128
     // C128 overlay transitions are cache-backed and cheap. Always resolve the
     // requested overlay instead of trusting current_overlay, because stale
     // overlay-state bytes can otherwise skip the load and execute whatever
     // old image still occupies $E000.
     sta ol_target
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_overlay_load_entry_target
+#endif
 #else
     cmp current_overlay
     beq !ol_skip+           // Already loaded — skip
@@ -70,23 +84,23 @@ overlay_load:
 
 #if C128
     lda c128_cache_overlays_ready
-    beq !ol_check_reu+
+    beq ol_check_disk
     ldx ol_target
     lda ovl_ready_mask,x
     and c128_cache_overlay_bits
-    beq !ol_check_reu+
+    beq ol_check_disk
     jsr c128_fetch_overlay_from_cache
     bcc !ol_cache_ok+
     lda #0
     sta c128_cache_overlays_ready
     sta c128_cache_overlay_bits
     sta c128_cache_failed
+ol_check_disk:
+#else
 !ol_check_reu:
-#endif
-
-#if !C128
     lda reu_overlays_stashed
     bne !ol_reu+
+ol_check_disk:
 #endif
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
@@ -144,6 +158,48 @@ overlay_invalidate:
     sta current_overlay
     rts
 
+#if C128_TEST_OVERLAY_FN_GUARD
+c128_overlay_fn_guard_check:
+    pha
+    txa
+    pha
+    sta c128_overlay_fn_guard_stage
+    ldx #0
+!fn_loop:
+    lda ovl_fn_guard_expected,x
+    cmp ovl_fn_start,x
+    beq !next+
+    sta c128_overlay_fn_guard_expect
+    stx c128_overlay_fn_guard_index
+    lda ovl_fn_start,x
+    sta c128_overlay_fn_guard_actual
+    brk
+!next:
+    inx
+    cpx #ovl_fn_guard_expected_end - ovl_fn_guard_expected
+    bne !fn_loop-
+    pla
+    tax
+    pla
+    rts
+
+ovl_fn_guard_expected:
+    .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54
+    .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e
+    .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48
+    .byte $4f,$56,$4c,$2e,$47,$45,$4e
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen
+    .byte 9, 8, 9, 7
+ovl_fn_guard_expected_end:
+#if !C128
+c128_overlay_fn_guard_stage:   .byte 0
+c128_overlay_fn_guard_index:   .byte 0
+c128_overlay_fn_guard_actual:  .byte 0
+c128_overlay_fn_guard_expect:  .byte 0
+#endif
+#endif
+
 
 // ============================================================
 // overlay_load_disk — KERNAL LOAD overlay PRG file
@@ -152,17 +208,35 @@ overlay_invalidate:
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 overlay_load_disk:
+#if C128_TEST_OVERLAY_FN_GUARD
+    lda #$b2
+    jsr c128_overlay_fn_guard_check
+#endif
 #if C128
     // C128: delegate to c128_preload_asset_load which handles the full
     // KERNAL environment setup (SETBNK Bank 0, ROM banking, IRQ enable,
     // SETNAM/SETLFS/LOAD/CLOSE/CLRCHN, and runtime restore).
     // Without proper SETBNK, KERNAL LOAD puts data in the wrong bank.
     //
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    stx c128_overlay_load_disk_index
+    lda ol_target
+    sta c128_overlay_load_disk_target
+#endif
     lda ovl_fn_len,x
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_overlay_load_disk_len
+#endif
     pha
     lda ovl_fn_addr_lo,x
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_overlay_load_disk_lo
+#endif
     pha
     lda ovl_fn_addr_hi,x
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+    sta c128_overlay_load_disk_hi
+#endif
     tay
     pla
     tax
@@ -249,10 +323,12 @@ overlay_load_disk:
 // Clobbers: A, X
 overlay_fetch_reu:
     sei
+#if !C128
     lda $01
     pha
     lda #$35                // Bank out KERNAL for DMA to write RAM at $E000
     sta $01
+#endif
 
     lda #<$e000
     sta REU_C64LO
@@ -275,8 +351,10 @@ overlay_fetch_reu:
     lda #REU_CMD_FETCH
     sta REU_COMMAND         // DMA completes before next instruction
 
+#if !C128
     pla
     sta $01
+#endif
     cli
     rts
 
@@ -284,6 +362,7 @@ overlay_fetch_reu:
 // ============================================================
 // Overlay filename data (PETSCII for KERNAL — NOT screen codes)
 // ============================================================
+#if !C128
 ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
 ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
 ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
@@ -306,9 +385,17 @@ ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
 ol_target:        .byte 0
+#if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+c128_overlay_load_disk_index:  .byte 0
+c128_overlay_load_disk_target: .byte 0
+c128_overlay_load_disk_len:    .byte 0
+c128_overlay_load_disk_lo:     .byte 0
+c128_overlay_load_disk_hi:     .byte 0
+#endif
 ol_save_p:        .byte 0
 #if C128
 ol_status_p:      .byte 0
+#endif
 #endif
 
 #if C128
@@ -376,6 +463,10 @@ cpao_next:
     bcs !cpao_fail+
     lda #OVL_STARTUP
     sta current_overlay
+#if C128_TEST_OVERLAY_FN_GUARD
+    lda #$b3
+    jsr c128_overlay_fn_guard_check
+#endif
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$1a
     jsr c128_diag_validate_runtime_invariants

@@ -30,6 +30,13 @@ Every design decision flows from these two constraints.
 On the C128, the full 128 KB is available through bank switching, which gives us
 much more room. The design should target C64 as the constrained baseline.
 
+**C128 high-memory ownership rule:** The C128 port must keep the live overlay
+window and the reloadable banked payload physically separate in Bank 0 RAM.
+`$E000-$EFFF` is the overlay execution window; `$F000-$FFFA` is the reloadable
+banked payload window. Persistent overlay metadata/state must live in resident
+Bank 0 RAM, not adjacent to overlay code. No startup-overlay routine may trigger
+`init_copy_banked` while startup overlay execution is active.
+
 **Zero page KERNAL conflicts:** Although $02–$8F is nominally free from BASIC,
 some locations are clobbered by KERNAL routines. In particular, $22–$25 are used
 by KERNAL LOAD/SAVE, $14–$15 by KERNAL OPEN, and several others by KERNAL I/O.

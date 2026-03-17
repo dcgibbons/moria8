@@ -15,6 +15,16 @@ c128_test_force_death_pending: .byte 1
 // Called from platform main.s after title menu selects "New Game".
 // ============================================================
 game_new_start:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$70
+    jsr c128_town_dump_mark
+#endif
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardInit($85)
+#endif
+#if C128_TEST_STACK_BOTTOM_DIAG
+    :C128StackBottomCanaryInit($90)
+#endif
     // Re-seed RNG after user input for better entropy
     jsr rng_seed
 
@@ -47,6 +57,9 @@ game_new_start:
 
     // --- Character creation ---
     jsr tramp_player_create
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($86)
+#endif
 #if C128
     jsr c128_restore_runtime_guards
 #endif
@@ -124,6 +137,9 @@ game_new_start:
     sta current_overlay
 #endif
     jsr tramp_store_init_all
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($87)
+#endif
 #if C128
     jsr c128_restore_runtime_guards
 #endif
@@ -150,6 +166,9 @@ game_new_start:
     bcc !gns_ovl_ok+
     jmp entry_main
 !gns_ovl_ok:
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($88)
+#endif
 #if C128
     jsr c128_restore_runtime_guards
 #endif
@@ -182,7 +201,15 @@ game_new_start:
     jsr viewport_update
     jsr render_viewport
     jsr screen_unblank
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$91
+    jsr c128_stack_guard_begin
+#endif
     jsr status_draw
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$92
+    jsr c128_stack_guard_check
+#endif
 
     // Welcome message
     lda #<welcome_str
@@ -265,6 +292,19 @@ main_loop:
 c128_town_move_diag_loop_top:
     jsr c128_restore_runtime_vectors
 #endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda c128_town_dump_countdown
+    beq !town_dump_trap+
+    sec
+    sbc #1
+    sta c128_town_dump_countdown
+    bne !town_dump_log+
+!town_dump_trap:
+    jmp c128_town_dump_checkpoint
+!town_dump_log:
+    lda #$10
+    jsr c128_town_dump_log
+#endif
 #if C128_TEST_FORCE_DEATH
     lda c128_test_force_death_pending
     beq !test_force_death_done+
@@ -325,12 +365,36 @@ c128_town_move_diag_loop_top:
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$93
+    jsr c128_stack_guard_begin
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1e
+    jsr c128_town_dump_log
+#endif
     jsr status_draw
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$94
+    jsr c128_stack_guard_check
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1f
+    jsr c128_town_dump_log
+#endif
     jmp main_loop
 !not_paralyzed:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$11
+    jsr c128_town_dump_log
+#endif
     jsr input_get_command
 #if C128
 c128_town_move_diag_after_input_get_command:
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$12
+    jsr c128_town_dump_log
 #endif
 
     // --- Dispatch command ---
@@ -513,6 +577,10 @@ c128_town_move_diag_after_input_get_command:
 
     // Clear message before move so combat messages survive
     pha                         // Save command ID (A) — msg_clear clobbers A
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$13
+    jsr c128_town_dump_log
+#endif
     jsr msg_clear
     pla                         // Restore command ID for player_try_move
 
@@ -520,27 +588,53 @@ c128_town_move_diag_after_input_get_command:
 #if C128
 c128_town_move_diag_before_player_try_move:
 #endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$14
+    jsr c128_town_dump_log
+#endif
     jsr player_try_move
 #if C128
 c128_town_move_diag_after_player_try_move:
 #endif
-    bcc !move_blocked+
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$15
+    jsr c128_town_dump_log
+#endif
+    bcs !move_ok+
+    jmp !move_blocked+
+!move_ok:
 
     // Move or attack succeeded — run AI before render so screen
     // reflects post-AI monster positions (BUG-17 fix)
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$16
+    jsr c128_town_dump_log
+#endif
     jsr trap_check_at_player
 #if C128
 c128_town_move_diag_after_trap_check:
 #endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$17
+    jsr c128_town_dump_log
+#endif
     jsr turn_post_action
 #if C128
 c128_town_move_diag_after_turn_post_action:
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$18
+    jsr c128_town_dump_log
 #endif
     lda zp_game_flags
     and #$01
     beq !not_dead+
     jmp !player_died+
 !not_dead:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$19
+    jsr c128_town_dump_log
+#endif
     jsr update_visibility
     jsr viewport_update
 
@@ -579,6 +673,10 @@ c128_town_move_diag_after_turn_post_action:
     bne !full_redraw+
 
     // No scroll, no room reveal — render local area around old+new position
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1a
+    jsr c128_town_dump_log
+#endif
     jsr render_local_area
 #if C128
 #if PERF_P1
@@ -590,9 +688,17 @@ c128_town_move_diag_after_turn_post_action:
 
 !full_redraw:
 #if C128
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1b
+    jsr c128_town_dump_log
+#endif
     jsr render_viewport_scroll_delta
     bcc !full_draw_fallback+
     // Scroll-delta path handled viewport shift; refresh local dynamic area.
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1c
+    jsr c128_town_dump_log
+#endif
     jsr render_local_area
 #if C128
 #if PERF_P1
@@ -602,6 +708,10 @@ c128_town_move_diag_after_turn_post_action:
 #endif
     jmp !post_move+
 !full_draw_fallback:
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1d
+    jsr c128_town_dump_log
 #endif
     jsr render_viewport
 #if C128
@@ -626,7 +736,23 @@ c128_town_move_diag_after_turn_post_action:
 #if C128
 c128_town_move_diag_before_status_draw:
 #endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1e
+    jsr c128_town_dump_log
+#endif
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$95
+    jsr c128_stack_guard_begin
+#endif
     jsr status_draw
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$96
+    jsr c128_stack_guard_check
+#endif
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$1f
+    jsr c128_town_dump_log
+#endif
 #if C128
 c128_town_move_diag_after_status_draw:
 #endif
@@ -683,7 +809,15 @@ c128_town_move_diag_after_status_draw:
     jsr viewport_update
     jsr render_viewport
     jsr screen_unblank
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$97
+    jsr c128_stack_guard_begin
+#endif
     jsr status_draw
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$98
+    jsr c128_stack_guard_check
+#endif
     lda #<descend_str
     sta zp_ptr0
     lda #>descend_str

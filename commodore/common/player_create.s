@@ -21,40 +21,62 @@
 // player_create — Full character creation flow
 // Output: player_data struct fully initialized
 // Preserves: nothing
+.macro PlayerCreateReturn() {
+    rts
+}
+
 player_create:
+#if C128_TEST_TOWN_SELF_DUMP
+    lda #$72
+    jsr c128_town_dump_mark
+#endif
+    .if (C128_CHARGEN_CUTPOINT == -2) { :PlayerCreateReturn() }
     jsr player_init
+    .if (C128_CHARGEN_CUTPOINT == 0) { :PlayerCreateReturn() }
 
     jsr create_select_race
+    .if (C128_CHARGEN_CUTPOINT == 1) { :PlayerCreateReturn() }
     jsr create_roll_stats
+    .if (C128_CHARGEN_CUTPOINT == 2) { :PlayerCreateReturn() }
     jsr create_select_class
+    .if (C128_CHARGEN_CUTPOINT == 3) { :PlayerCreateReturn() }
     jsr create_enter_name
+    .if (C128_CHARGEN_CUTPOINT == 4) { :PlayerCreateReturn() }
     jsr create_select_gender
+    .if (C128_CHARGEN_CUTPOINT == 5) { :PlayerCreateReturn() }
 #if C128
     jsr c128_restore_runtime_guards
 #endif
+    .if (C128_CHARGEN_CUTPOINT == 6) { :PlayerCreateReturn() }
     jsr create_gen_background
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($89)
+#endif
 #if C128
     jsr c128_restore_runtime_guards
 #endif
+    .if (C128_CHARGEN_CUTPOINT == 7) { :PlayerCreateReturn() }
     jsr create_init_character
+#if C128_TEST_STACK_SLOT_DIAG
+    :C128StackSlotGuardCheck($8a)
+#endif
 #if C128
+#if C128_TEST_FINAL_RETURN_DIAG
+    :C128FinalReturnCapture($92)
+#endif
     jsr c128_restore_runtime_guards
+#if C128_TEST_FINAL_RETURN_DIAG
+    :C128FinalReturnCapture($93)
 #endif
+#endif
+    .if (C128_CHARGEN_CUTPOINT == 8) { jmp player_create_epilogue }
 
-    // Show final character sheet through the platform trampoline so the
-    // banked $F000 UI path always runs under the correct C128 mapping.
-#if C128
-    jsr tramp_ui_char_display
-#else
-    jsr ui_char_display
+player_create_epilogue:
+#if C128_TEST_FINAL_RETURN_DIAG
+    :C128FinalReturnCapture($94)
+    :C128FinalReturnCheck($95)
 #endif
-    jsr input_wait_release
-    jsr input_get_key
-#if C128
-    jsr c128_restore_runtime_guards
-#endif
-
-    rts
+    :PlayerCreateReturn()
 
 // ============================================================
 // Race selection
@@ -628,10 +650,26 @@ create_init_character:
     sta player_data + PL_DLEVEL
 
     // Calculate stats with modifiers
+#if C128_REAL_BOOT_DIAG
+    ldx #$71
+    jsr c128_stack_guard_begin
+#endif
     jsr player_calc_stats
+#if C128_REAL_BOOT_DIAG
+    ldx #$72
+    jsr c128_stack_guard_check
+#endif
 
     // Calculate max HP
+#if C128_REAL_BOOT_DIAG
+    ldx #$73
+    jsr c128_stack_guard_begin
+#endif
     jsr player_calc_hp
+#if C128_REAL_BOOT_DIAG
+    ldx #$74
+    jsr c128_stack_guard_check
+#endif
     // Set current HP = max HP
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO
@@ -672,7 +710,15 @@ create_init_character:
 !mana_done:
 
     // Starting gold — umoria formula based on social class, stats, gender
+#if C128_REAL_BOOT_DIAG
+    ldx #$75
+    jsr c128_stack_guard_begin
+#endif
     jsr create_calc_gold
+#if C128_REAL_BOOT_DIAG
+    ldx #$76
+    jsr c128_stack_guard_check
+#endif
 
     // Experience factor = race_xp% + class_xp% (range 100-165)
     ldx player_data + PL_RACE
@@ -713,7 +759,15 @@ create_init_character:
     // Flags: gender already set by create_select_gender
 
     // Sync to ZP
+#if C128_REAL_BOOT_DIAG
+    ldx #$77
+    jsr c128_stack_guard_begin
+#endif
     jsr player_sync_to_zp
+#if C128_REAL_BOOT_DIAG
+    ldx #$78
+    jsr c128_stack_guard_check
+#endif
 
     // Set starting spells for spell-casting classes
     // Level 1 + Book 1 (given in main.s): mage learns 4, priest learns 3

@@ -1158,9 +1158,11 @@ creature_get_name:
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
+#if !C128
     sei
     lda $01
     sta cgn_saved_p01           // Save bank config without using stack
+#endif
     // Fall through to shared copy loop
 
 !cgn_copy:
@@ -1206,9 +1208,11 @@ creature_get_name:
     lda #0
     sta creature_name_buf,y
 !cgn_done:
+#if !C128
     lda cgn_saved_p01
     sta $01
     cli
+#endif
     lda #<creature_name_buf
     ldy #>creature_name_buf
     rts
