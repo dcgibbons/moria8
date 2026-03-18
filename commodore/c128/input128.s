@@ -177,11 +177,9 @@ input_run_process_sample:
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
-// Uses asymmetric edge filtering:
-// - key-down from idle (stable=0) is accepted on first sample for snappy feel
-// - key-up (release) requires 2 stable zero samples before rearm
-// This preserves bounce resistance on release while reducing perceived latency
-// for rapid taps in command entry.
+// Uses strict 2-sample press/release stabilization because this entry point is
+// used primarily by secondary prompts and dismiss screens, where accidental
+// phantom presses are worse UX than 1-sample latency.
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
@@ -215,7 +213,8 @@ input_get_key:
 
 !igk_wait:
     inc zp_entropy
-    jsr input_poll_key_event
+    jsr cia_scan_petscii
+    jsr input_process_sample_strict
     beq !igk_wait-          // Wait for key-up -> key-down edge
 
 !igk_return:
@@ -295,6 +294,25 @@ input_process_sample:
     sta igk_stable
     beq !ips_none-          // Release edge (rearm only)
     rts                     // New stable key-down edge
+
+// input_process_sample_strict — 2-sample stable press/release filter
+// Input:  A = sampled PETSCII (0 = no key)
+// Output: A = PETSCII on stable key-down edge, 0 otherwise
+input_process_sample_strict:
+    cmp igk_last_sample
+    beq !ipss_repeat+
+    sta igk_last_sample
+    lda #0
+    rts
+!ipss_repeat:
+    cmp igk_stable
+    beq !ipss_none+
+    sta igk_stable
+    beq !ipss_none+
+    rts
+!ipss_none:
+    lda #0
+    rts
 
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_input_idx: .byte 0
@@ -576,7 +594,7 @@ input_get_command:
     sta zp_input_count      // Default repeat count = 1
 
 !get_key:
-    jsr input_get_key
+    jsr input_get_key_fast
 #if PERF_P1
     // Debug-only shortcut: 'V' dumps PERF_P1 counters in-game.
     cmp #$56                    // PETSCII 'V'
@@ -595,6 +613,43 @@ input_get_command:
 !got_cmd:
     sta zp_input_cmd
     rts
+
+// input_get_key_fast — low-latency command-entry variant
+// Uses the existing asymmetric edge policy for snappy primary gameplay input.
+// Output: A = PETSCII code of key pressed
+// Preserves: X, Y
+input_get_key_fast:
+#if C128_TEST_SCRIPTED_INPUT
+    jmp input_get_key
+#else
+#if C128_REAL_BOOT_DIAG
+    ldx #$81
+    jsr c128_stack_guard_begin
+#endif
+    jsr c128_restore_runtime_vectors
+#if C128_REAL_BOOT_DIAG
+    ldx #$82
+    jsr c128_stack_guard_check
+#endif
+
+    txa
+    pha
+    tya
+    pha
+
+!igkf_wait:
+    inc zp_entropy
+    jsr input_poll_key_event
+    beq !igkf_wait-
+
+    sta igk_key
+    pla
+    tay
+    pla
+    tax
+    lda igk_key
+    rts
+#endif
 
 // petscii_to_command — Convert PETSCII key code to command ID
 // Input:  A = PETSCII code

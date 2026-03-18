@@ -73,3 +73,13 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Root cause of the two-week blocker was the missing/incorrect low-RAM runtime loader contract for callable `$1000` VDC code, not chargen summary logic.
 - Final fix: emit `bank1.dat` with a `$1000` header, load it into Bank 0 low RAM during startup, and harden the summary release path for normal-speed runs.
 - Manual validation now reaches town successfully; the summary auto-dismiss symptom was only reproduced during warp-mode testing.
+
+## 2026-03-18 next issue
+- New UX bug: secondary/prompt input (look direction, wear selection, shop buy/sell, etc.) is too sensitive and appears to pick up phantom keypresses.
+- Goal: fix this in the shared C128 input path rather than sprinkling prompt-specific release gates.
+- Plan: inspect prompt callsites plus the CIA edge detector, design the smallest shared fix, then verify with focused smokes/manual guidance.
+
+## 2026-03-18 prompt-input outcome
+- Shared fix applied: prompt-style input now uses strict 2-sample stabilization, while primary command entry keeps the fast edge path.
+- Manual report: secondary prompts feel better and no obvious phantom key issue remains in the quick pass.
+- Verification: `test_input128.s` and `run_scripted_summary_to_town_smoke` passed after the split.

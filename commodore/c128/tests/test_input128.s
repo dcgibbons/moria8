@@ -164,9 +164,9 @@ test_fail2:
     jmp test_fail_loop
 
 test_edge_checks:
-    // Edge-transition behavior:
+    // Fast command-entry edge behavior:
     // - key-down from idle is accepted on first sample
-    // - key release also requires 2 stable samples
+    // - key release requires 2 stable samples
     lda #0
     sta igk_last_sample
     sta igk_stable
@@ -207,17 +207,66 @@ test_edge_checks:
     cmp #0
     bne test_fail2
 
-    lda #$45               // Retap sample 1 => no event
-    jsr input_process_sample
-    cmp #0
-    bne test_fail2
-
-    lda #$45               // Retap sample 2 => event again
+    lda #$45               // Retap sample 1 => event again (fast path)
     jsr input_process_sample
     cmp #$45
     bne test_fail2
 
+    jmp test_strict_prompt_checks
+
+test_strict_prompt_checks:
+    // Prompt-input behavior:
+    // - key-down requires 2 stable samples
+    // - key release requires 2 stable samples
+    lda #0
+    sta igk_last_sample
+    sta igk_stable
+
+    lda #0
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_fail+
+
+    lda #$45               // First prompt sample => no event
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_fail+
+    lda igk_stable
+    cmp #0
+    bne !strict_fail+
+
+    lda #$45               // Second prompt sample => stable key-down event
+    jsr input_process_sample_strict
+    cmp #$45
+    bne !strict_fail+
+    lda igk_stable
+    cmp #$45
+    bne !strict_fail+
+
+    lda #$45               // Held key => no repeat event
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_fail+
+
+    lda #0                 // First release sample => no event, still armed
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_fail+
+    lda igk_stable
+    cmp #$45
+    bne !strict_fail+
+
+    lda #0                 // Second release sample => rearmed
+    jsr input_process_sample_strict
+    cmp #0
+    bne !strict_fail+
+    lda igk_stable
+    cmp #0
+    bne !strict_fail+
+
     jmp test_run_cancel_checks
+!strict_fail:
+    jmp test_fail2
 
 test_run_cancel_checks:
     jsr input_run_cancel_reset
