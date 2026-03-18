@@ -6,6 +6,53 @@
 
 ---
 
+## LDR-1 — C128 Low-RAM Runtime Loader Repair ✅ COMPLETE (2026-03-18)
+
+### Scope Closed
+- Closed the long-running C128 `JAM` that occurred after character creation, before stable town entry.
+- Replaced a false chargen/summary hypothesis with the actual root cause: callable VDC runtime code at `$1000` was not being loaded into the bank that was executing it.
+
+### Root Causes Addressed
+1. **Missing Stage 2 loader contract**
+   - `bank1.dat` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
+2. **Incorrect PRG load address**
+   - The segment was linked for runtime execution at `$1000`, but the emitted PRG still carried an `$E000` load header.
+3. **Wrong bank assumption for direct low-RAM calls**
+   - The first repair attempt loaded `bank1.dat` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
+   - `$1000-$3FFF` is not bottom common RAM, so Bank 1 residency does not satisfy a Bank 0 callsite.
+4. **Prompt handoff release sensitivity**
+   - After the loader repair, the summary dismiss path still needed a safer release handoff between gender selection and the summary prompt in normal-speed runs.
+
+### Implemented
+1. **Loader/header alignment**
+   - Changed `Bank1Data` to emit `bank1.dat` with a `$1000` load header matching its callable runtime symbols.
+2. **Startup low-RAM loader**
+   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `BANK1.DAT` into Bank 0 low RAM before gameplay can call `viewport_update` / `render_viewport`.
+3. **Placement guard**
+   - Added a compile-time assert to keep the low-RAM callable runtime block below `FLOOR_ITEM_BASE`, making future overlap mistakes visible at build time.
+4. **Summary prompt release hardening**
+   - Added a release wait after gender selection in `commodore/common/player_create.s`.
+   - Hardened `input_wait_release` in `commodore/c128/input128.s` to use the shared edge-state logic rather than two ad hoc raw-zero scans.
+5. **VICE 3.10 run compatibility**
+   - Removed the deprecated `+iecdevice8` flag from the C128 `run128` target.
+
+### Result
+- C128 now completes:
+  - title -> new game
+  - full character creation
+  - summary
+  - town entry
+- The two-week town-entry `JAM` regression is closed.
+
+### Validation
+- `make -B -C commodore/c128 build128`: **PASS**
+- `make -C commodore/c128 disk128`: **PASS**
+- `run_boot_title_newgame_smoke`: **PASS**
+- `run_scripted_summary_to_town_smoke`: **PASS**
+- Manual validation: normal-speed run reaches town and summary no longer auto-dismisses in the observed non-warp path.
+
+---
+
 ## C128-HEB — Hardened Execution Boundary ✅ COMPLETE (2026-03-14)
 
 ### Scope Closed

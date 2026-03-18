@@ -34,7 +34,7 @@ Key C4 outcome:
 | Range | Purpose |
 | :--- | :--- |
 | `$0000-$0FFF` | 4 KB bottom common RAM (shared across banks; not cache-safe) |
-| `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; still unassigned to a 10.8 feature |
+| `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; currently unassigned |
 | `$4000-$4EFF` | dungeon/town map (`MAP_BASE..MAP_END`) |
 | `$5000-$7FFF` | Bank 1 DB/data region retained from earlier C128 work (`BANK1_DB_BASE..BANK1_DB_END`) |
 | `$8000-$94F7` | active tier-cache window for `MONSTER.DB.1-4` |

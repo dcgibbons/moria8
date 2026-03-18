@@ -256,12 +256,11 @@ input_wait_release:
 !iwr_wait:
     inc zp_entropy
     jsr cia_scan_petscii
+    jsr input_process_sample
+    lda igk_stable
     bne !iwr_wait-
-    jsr cia_scan_petscii
+    lda igk_last_sample
     bne !iwr_wait-
-    lda #0
-    sta igk_last_sample
-    sta igk_stable
     rts
 #endif
 

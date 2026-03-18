@@ -39,3 +39,23 @@
 - **Root Cause:** A subroutine starts with `php` to save the caller's processor status. Before returning, it sets or clears the carry flag to indicate a result to the caller. However, if `plp` is executed *after* setting the flag and *before* `rts`, it restores the original processor status from the stack, completely overwriting the newly set/cleared carry flag. This causes the caller to receive whatever the carry flag happened to be when the subroutine was entered, rather than the intended result, leading to silent logical failures like cache misses.
 - **Resolution:** If a subroutine uses `php`/`plp` and uses the carry flag for its return value, the `plp` must occur *before* the `clc` or `sec` instruction. (e.g., `plp` then `clc` then `rts`).
 - **Rule:** **Never place `plp` immediately after `clc` or `sec`** when those flags are intended as return values. Always execute `plp` first to restore the original state, and *then* modify the specific flag(s) you are using to return status.
+
+## Stop Patching Before Reconfirming the Failing Region
+
+- **Issue:** I kept changing the summary/display path even after monitor traces no longer pointed there.
+- **Root Cause:** I let an early hypothesis drive several edits instead of re-anchoring on the latest evidence from the monitor. Once the PC moved to `$E58A` inside the startup overlay, the active failure domain was chargen background generation, not summary display.
+- **Resolution:** When low-level debugging produces a new PC / backtrace, treat that as the current source of truth and rebuild the plan around that region before making more code changes.
+- **Rule:** **If the latest trace points to a different subsystem than the current hypothesis, stop editing and re-plan from the new trace before proceeding.**
+
+## 2026-03-18 lesson 2
+- When a new monitor trace moves the failure to a different address range, stop attributing it to the prior subsystem. Re-anchor the investigation on the new PC/backtrace before proposing next steps.
+
+## 2026-03-18 lesson 3
+- On C128, do not assume a low address like `$1000` is callable just because the symbol resolves there. First prove which bank is visible at the call site and whether the address lies in common RAM or bank-private RAM.
+
+## Low-RAM Runtime Code vs. Bank Ownership (C128)
+
+- **Issue:** A long-running C128 `JAM` after character creation looked like chargen/summary corruption, but the active crash was a direct `JSR $1000` into garbage during the first town render.
+- **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `bank1.dat` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
+- **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `bank1.dat` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
+- **Rule:** **For any callable low-RAM segment on C128, verify all three together before patching: (1) symbol address, (2) visible bank at the callsite, and (3) common-vs-private RAM ownership.** Never infer one from the others.

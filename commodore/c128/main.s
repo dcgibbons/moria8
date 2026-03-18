@@ -30,7 +30,7 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
-.segmentdef Bank1Data         [outPrg=OVL_OUT + "/bank1.dat", start=$e000, min=$e000, max=$feff]
+.segmentdef Bank1Data         [outPrg=OVL_OUT + "/bank1.dat", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_REAL_BOOT_DIAG = 1
@@ -1939,6 +1939,10 @@ restart_entry:
 #if C128_TEST_TITLE_ART_CONTENT
     jsr c128_test_title_art_assert
 #endif
+    jsr c128_load_bank1_data
+    bcc !bank1_data_loaded+
+    jmp entry_main
+!bank1_data_loaded:
     sei
 
     lda #STATUS_ROW
@@ -2074,6 +2078,55 @@ title_load_game:
     jsr disk_prompt_game
     jsr input_get_key
     jmp !title_menu_loop-
+
+// ============================================================
+// c128_load_bank1_data — Load low-RAM runtime code to $1000 in Bank 0
+// Output: carry clear = success, carry set = error
+// ============================================================
+.const BANK1_DATA_FILE_NUM = 2
+bank1_data_filename:
+    .byte $42, $41, $4e, $4b, $31, $2e, $44, $41, $54 // "BANK1.DAT"
+.const BANK1_DATA_FILENAME_LEN = * - bank1_data_filename
+
+c128_load_bank1_data:
+    lda #0
+    ldx #0
+    jsr safe_setbnk
+
+    lda #BANK1_DATA_FILENAME_LEN
+    ldx #<bank1_data_filename
+    ldy #>bank1_data_filename
+    jsr $ffbd
+
+    lda #BANK1_DATA_FILE_NUM
+    ldx save_device
+    ldy #1
+    jsr $ffba
+
+    lda #0
+    ldx #$00
+    ldy #$10
+    jsr kernal_load
+    php
+
+    lda #BANK1_DATA_FILE_NUM
+    jsr $ffc3
+    jsr $ffcc
+
+    lda #0
+    ldx #0
+    jsr safe_setbnk
+
+    plp
+    bcs !done+
+
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    lda #0
+    sta $90
+!done:
+    rts
 
 
 // ============================================================
@@ -3051,11 +3104,12 @@ c128_test_verify_cache_survival:
     rts
 #endif
 
-// Bank1Data segment — content moved here to free Bank 0 RAM.
-// Stays in Bank 1 RAM at $1000-$3FFF (reclaimed loader source space).
+// Bank1Data segment — low-RAM runtime code loaded into Bank 0 at startup.
 .segment Bank1Data
 .pseudopc $1000 {
+bank1_data_runtime_start:
     #import "dungeon_render_vdc.s"
+bank1_data_runtime_end:
 }
 .segment Default
 
@@ -3109,6 +3163,7 @@ program_end:
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Low runtime code stays below floor-item table", bank1_data_runtime_end <= FLOOR_ITEM_BASE, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true

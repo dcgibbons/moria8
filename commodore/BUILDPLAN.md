@@ -5,17 +5,17 @@
 
 ---
 
-## Current State (2026-03-14, updated)
+## Current State (2026-03-18, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, and the C128 Hardened Execution Boundary are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, and the low-RAM runtime loader repair for the post-chargen town-entry `JAM` are resolved.**
 
 ### Build Stats
 
 - **Test suites:** C64: 27 runtime suites, C128: 40 harness suites
-- **Compile-time asserts:** 177 (C128) / 69 (C64)
+- **Compile-time asserts:** 182 (C128) / 69 (C64)
 - **Source files:** 64 common + 7 c64-specific + ~10 c128-specific
 - **C128 memory model (C4 baseline):** Map at Bank 1 `$4000-$4EFF`; floor items at Bank 0 `$1A00-$1AFF`; creature scratch at Bank 0 `$1B00-$1BFF`; main program starts at `$1C0E`.
-- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 100% C128 test pass (40/40) includes all smoke tests and hardened boot-handoff verification.
+- **C128 integration stability:** New game -> character creation summary -> town -> first dungeon entry is validated, and 100% C128 test pass (40/40) includes all smoke tests, hardened boot-handoff verification, and the repaired low-RAM VDC runtime loader path.
 - **C64 suite stability:** `run_tests.sh` is green with `test_input.s`, `test_main_loop.s`, `test_turn.s`, and `test_config.s` enabled in the default runner.
 
 ---
@@ -61,6 +61,7 @@
 | **SAV-2** | **BLOCKER** | C128 restore/load stabilization: fixed load-resume stale tier metadata reuse and corrected C128 map stream handling so map bytes are preserved across MMU restore (instead of being clobbered to `MMU_NORMAL`), with KERNAL byte I/O running in `MMU_NORMAL` context. | **2026-03-09** |
 | **BUG-Y / 10.8** | **BLOCKER** | C128 preload/cache rebaseline complete: Bank 1 ownership refactor, tier+overlay cache contract fixes, carry-return repair, runtime guard restoration, and character-summary/town-flow stabilization with deterministic scripted-input coverage. | **2026-03-11** |
 | **10.8-HDN** | **MED** | Follow-up hardening complete: `memory128.s` is now the ownership source of truth, placement rules are assert-backed, the C128 architecture doc has a preflight checklist, and smoke coverage now verifies cache survival plus tier/overlay fallback isolation. | **2026-03-11** |
+| **LDR-1** | **BLOCKER** | C128 post-chargen town-entry `JAM` fixed by restoring the missing low-RAM runtime loader contract for `bank1.dat`, aligning the PRG header with `$1000`, and loading the callable VDC runtime code into Bank 0 (the actual `MMU_ALL_RAM` execution context). | **2026-03-18** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |
 | **OPT-TEST** | **HIGH** | **Gate C: Test Harness Optimization.** Resolve C128 testing slowness by addressing JVM startup overhead, VICE hardware reset latency, and sequential execution. See `c128/TEST_OPTIMIZATION_PLAN.md` for detailed strategies (Snapshots, Server Mode, Python Orchestration). | **Pending** |
@@ -107,7 +108,8 @@ These files in `common/` contain minor C64-specific code that will need paramete
 **High priority (C128 Port Stability):**
 1. Maintain 100% C128 suite pass rate (40/40).
 2. No open C128 memory-ownership hardening blocker; maintain the `memory128.s` ownership manifest and smoke coverage when changing Bank 1 layout.
-3. Maintain the C128 smoke seed generator alongside save-format changes so title `L` -> `load_resume_game` coverage stays deterministic in the default runner.
+3. Maintain the startup low-RAM runtime loader contract for callable `$1000` code: symbol address, PRG load header, and visible execution bank must stay aligned.
+4. Maintain the C128 smoke seed generator alongside save-format changes so title `L` -> `load_resume_game` coverage stays deterministic in the default runner.
 
 **Low priority (polish/completeness):**
 - A6 Large file split — opportunistic refactoring (item.s)

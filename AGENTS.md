@@ -113,3 +113,14 @@ Test files that grow past $A000 will **silently hang** in VICE. `BasicUpstart2(t
 NEVER use more than 30 seconds for a test timeout; tests taking longer than
 that are failing or stuck.
 
+# AI Team Instructions
+
+## Testing Workflow
+- When a feature is implemented, the **tester** agent must run tests.
+- Use the `monitor` tool for suites taking longer than 30 seconds.
+- The **writer** cannot finalize a task until the **tester** reports 'ALL TESTS PASSED'.
+
+## Environment
+- Python: Use the local `.venv` (run commands via `source .venv/bin/activate && ...`)
+- Node: Use `npm`
+

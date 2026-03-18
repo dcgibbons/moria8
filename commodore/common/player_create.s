@@ -911,10 +911,12 @@ create_select_gender:
 !gender_male:
     lda #PLF_MALE
     sta player_data + PL_FLAGS
+    jsr input_wait_release
     rts
 !gender_female:
     lda #0
     sta player_data + PL_FLAGS
+    jsr input_wait_release
     rts
 
 // ============================================================

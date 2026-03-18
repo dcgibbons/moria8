@@ -110,7 +110,7 @@ $(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(O
 
 # Launch in VICE x128 (80-column mode) with D64 disk image
 run128: $(DISK_IMAGE)
-	$(VICE128) -80col -drive8truedrive -drive8type 1541 +iecdevice8 \
+	$(VICE128) -80col -drive8truedrive -drive8type 1541  \
 		-sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
 # Auto-download KickAssembler if not present
