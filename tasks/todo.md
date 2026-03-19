@@ -352,3 +352,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified:
   - `KICKASS=/tmp/missing.jar TEST_SUMMARY=json TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh || true` followed by `TEST_RERUN_LAST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `KICKASS=/tmp/missing.jar TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_last_explicit.json TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh || true` followed by `TEST_RERUN_LAST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_STATUS slice
+- Goal: let summary replay target more than just failed suites when summaries carry other useful statuses.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_STATUS=<regex>` with default `FAIL`
+  - apply the status selector to both JSON and TSV replay sources
+  - show the active rerun status selector in the banner
+  - record `rerun_status` in JSON summary metadata
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_status.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_status.tsv TEST_RERUN_STATUS='SKIP' TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_status_exec.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅

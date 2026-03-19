@@ -148,6 +148,11 @@ Scaling to multi-core.
 - When no explicit `TEST_SUMMARY_FILE` is provided, summaries now default to a stable `out/.test128_last_summary.{json,tsv}` path so the next invocation can replay them.
 - The harness records the resolved summary path in `out/.test128_last_summary_path` and shows the resolved replay source in the banner.
 
+### Incremental Step Landed (2026-03-18, rerun status selection)
+- `run_tests128.sh` now accepts `TEST_RERUN_STATUS=<regex>` to control which summary statuses are replayed.
+- The default remains `FAIL`, but replay can now target other statuses or combinations such as `FAIL|SKIP`.
+- The active rerun status selector is shown in the banner and recorded in JSON summary metadata.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

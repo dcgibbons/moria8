@@ -25,6 +25,7 @@ TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
 TEST_RERUN_FROM="${TEST_RERUN_FROM:-}"
 TEST_RERUN_LAST="${TEST_RERUN_LAST:-0}"
+TEST_RERUN_STATUS="${TEST_RERUN_STATUS:-FAIL}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -137,7 +138,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -153,11 +154,12 @@ payload = {
     "phase": sys.argv[8],
     "rerun_from": sys.argv[9],
     "rerun_last": sys.argv[10] != "0",
-    "jobs_requested": sys.argv[11],
-    "jobs_resolved": int(sys.argv[12]),
-    "repeat": int(sys.argv[13]),
-    "timings": sys.argv[14] != "0",
-    "fail_fast": sys.argv[15] != "0",
+    "rerun_status": sys.argv[11],
+    "jobs_requested": sys.argv[12],
+    "jobs_resolved": int(sys.argv[13]),
+    "repeat": int(sys.argv[14]),
+    "timings": sys.argv[15] != "0",
+    "fail_fast": sys.argv[16] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -224,13 +226,15 @@ load_rerun_selection() {
     fi
 
     TEST128_RERUN_COUNT="$(
-        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" <<'PY'
+        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" "$TEST_RERUN_STATUS" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
 src = Path(sys.argv[1])
 dst = Path(sys.argv[2])
+status_pattern = sys.argv[3]
 text = src.read_text()
 lines = [line for line in text.splitlines() if line.strip()]
 suites = []
@@ -239,10 +243,13 @@ def add(name):
     if name and name not in suites:
         suites.append(name)
 
+def status_matches(value):
+    return re.fullmatch(status_pattern, value or "") is not None
+
 if src.suffix.lower() == ".json" or (lines and lines[0].lstrip().startswith("{")):
     payload = json.loads(text)
     for entry in payload.get("results", []):
-        if entry.get("status") == "FAIL":
+        if status_matches(entry.get("status", "")):
             add(entry.get("suite", ""))
 else:
     start = 0
@@ -250,7 +257,7 @@ else:
         start = 1
     for line in lines[start:]:
         parts = line.split("\t")
-        if len(parts) >= 2 and parts[0] == "FAIL":
+        if len(parts) >= 2 and status_matches(parts[0]):
             add(parts[1])
 
 dst.write_text("".join(f"{suite}\n" for suite in suites))
@@ -3720,6 +3727,9 @@ if [ -n "$TEST_RERUN_FROM" ]; then
     echo "  rerun-from: $TEST_RERUN_FROM"
 elif [ "$TEST_RERUN_LAST" != "0" ]; then
     echo "  rerun-last: ON"
+fi
+if [ -n "$TEST_RERUN_FROM" ] || [ "$TEST_RERUN_LAST" != "0" ]; then
+    echo "  rerun-status: $TEST_RERUN_STATUS"
 fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
     echo "  describe: ON"
