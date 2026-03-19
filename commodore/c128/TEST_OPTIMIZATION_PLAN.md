@@ -113,6 +113,11 @@ Scaling to multi-core.
 - The harness records per-suite outcomes during execution and emits a machine-readable summary file at the end of the run.
 - This provides a clean bridge to automation without scraping the human console text.
 
+### Incremental Step Landed (2026-03-18, phase presets)
+- `run_tests128.sh` now accepts `TEST_PHASE=` with explicit presets: `guards`, `units`, `smokes`, `diag`, `perf`, and comma-separated combinations.
+- Phase presets compose with the existing filter/skip/list/repeat controls.
+- This reduces the need to hand-maintain regexes for common harness subsets.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

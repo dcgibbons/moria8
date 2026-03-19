@@ -270,3 +270,14 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified:
   - `TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_check.json TEST_FILTER='main128_asm|config128|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_SUMMARY=tsv TEST_SUMMARY_FILE=/tmp/test128_summary_check.tsv TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_PHASE slice
+- Goal: make common suite groups selectable without writing ad hoc regexes each time.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_PHASE=` preset groups: `guards`, `units`, `smokes`, `diag`, `perf`
+  - allow comma-separated phase combinations
+  - compose phase selection with the existing filter/skip/list controls
+- Verified:
+  - `TEST_PHASE=guards TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_PHASE='units,smokes' TEST_LIST=1 TEST_FILTER='config128|boot_title_idle_smoke|real_boot_crash_harness|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_PHASE=units TEST_FILTER='config128|input128' bash commodore/c128/run_tests128.sh` ✅

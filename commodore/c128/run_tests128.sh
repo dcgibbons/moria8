@@ -20,6 +20,7 @@ fi
 C1541="${C1541:-c1541}"
 PERF_P1_MODE="${PERF_P1:-0}"
 TEST_JOBS="${TEST_JOBS:-8}"
+TEST_PHASE="${TEST_PHASE:-}"
 TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
 TEST_LIST="${TEST_LIST:-0}"
@@ -280,8 +281,66 @@ c128_set_active_variant() {
     printf '%s\n' "$variant" > "$C128_ACTIVE_VARIANT_FILE"
 }
 
+suite_matches_phase_token() {
+    local phase="$1"
+    local suite_name="$2"
+    case "$phase" in
+        all)
+            return 0
+            ;;
+        guards)
+            case "$suite_name" in
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard) return 0 ;;
+            esac
+            ;;
+        units)
+            case "$suite_name" in
+                minimal128|config128|memory128|db128|tier128|input128|main_loop128|msg_prompt128|vdc_attr128|status_coherence128|dungeon128|soak128|monster128) return 0 ;;
+            esac
+            ;;
+        smokes)
+            case "$suite_name" in
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+            esac
+            ;;
+        diag)
+            case "$suite_name" in
+                real_input_town_move_diag|real_boot_crash_harness|overlay_data_transition_smoke|boot_diag_copy) return 0 ;;
+            esac
+            ;;
+        perf)
+            case "$suite_name" in
+                perf_p1) return 0 ;;
+            esac
+            ;;
+    esac
+    return 1
+}
+
+suite_matches_phase() {
+    local suite_name="$1"
+    if [ -z "$TEST_PHASE" ]; then
+        return 0
+    fi
+
+    local phase_list phase
+    IFS=',' read -r -a phase_list <<< "$TEST_PHASE"
+    for phase in "${phase_list[@]}"; do
+        phase="${phase//[[:space:]]/}"
+        [ -z "$phase" ] && continue
+        if suite_matches_phase_token "$phase" "$suite_name"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 suite_matches_filter() {
     local suite_name="$1"
+    if ! suite_matches_phase "$suite_name"; then
+        return 1
+    fi
+
     if [ -z "$TEST_FILTER" ]; then
         :
     elif ! [[ "$suite_name" =~ $TEST_FILTER ]]; then
@@ -3476,6 +3535,9 @@ if [ "$PERF_P1_MODE" = "1" ]; then
     echo "  mode: PERF_P1 instrumentation ON"
 else
     echo "  mode: PERF_P1 instrumentation OFF"
+fi
+if [ -n "$TEST_PHASE" ]; then
+    echo "  phase: $TEST_PHASE"
 fi
 if [ -n "$TEST_FILTER" ]; then
     echo "  filter: $TEST_FILTER"
