@@ -37,18 +37,22 @@ class TestCase:
     name: str
     source: Path
     timeout: float
+    force_moncommands: bool = False
+    break_on_fail: bool = True
+    cold_ready: bool = True
+    snapshot_ready: bool = True
 
 
 BATCH_TESTS: dict[str, TestCase] = {
     "minimal128": TestCase("minimal128", SCRIPT_DIR / "tests" / "test_minimal128.s", 5.0),
     "config128": TestCase("config128", SCRIPT_DIR / "tests" / "test_config128.s", 5.0),
-    "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0),
+    "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0, True, False, False, False),
     "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0),
     "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0),
-    "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0),
+    "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0, True, False, False, False),
     "main_loop128": TestCase("main_loop128", SCRIPT_DIR / "tests" / "test_main_loop128.s", 5.0),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
-    "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0),
+    "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, True, False, False, False),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
     "vdc_attr128": TestCase("vdc_attr128", SCRIPT_DIR / "tests" / "test_vdc_attr128.s", 5.0),
 }
@@ -56,12 +60,10 @@ BATCH_TESTS: dict[str, TestCase] = {
 DEFAULT_BATCH_TESTS = [
     "minimal128",
     "config128",
-    "memory128",
     "status_coherence128",
     "vdc_attr128",
-    "msg_prompt128",
-    "tier128",
     "dungeon128",
+    "main_loop128",
 ]
 
 
@@ -124,6 +126,8 @@ def run_one_test(
     connector,
     base_args: argparse.Namespace,
     *,
+    force_moncommands: bool,
+    break_on_fail: bool,
     test_name: str,
     prg_path: Path,
     vs_path: Path,
@@ -133,11 +137,17 @@ def run_one_test(
 ) -> tuple[bool, str, float]:
     symbols = extract_test_symbols(vs_path)
     start_time = time.perf_counter()
-    if symbols_need_moncommands(symbols):
+    if force_moncommands or symbols_need_moncommands(symbols):
         mon_args = argparse.Namespace(**vars(base_args))
         mon_args.name = test_name
         mon_args.timeout = timeout
-        exit_code = run_test_via_moncommands(mon_args, prg_path=prg_path, symbols=symbols, snapshot_path=snapshot_path)
+        exit_code = run_test_via_moncommands(
+            mon_args,
+            prg_path=prg_path,
+            symbols=symbols,
+            snapshot_path=snapshot_path,
+            break_on_fail=break_on_fail,
+        )
         duration = time.perf_counter() - start_time
         return exit_code == 0, "" if exit_code == 0 else "moncommands execution failed", duration
     if snapshot_path is not None and connector is not None:
@@ -159,19 +169,24 @@ def run_one_test(
 def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[tuple[str, bool, str, float]]:
     results: list[tuple[str, bool, str, float]] = []
     for test_case in tests:
+        if not test_case.cold_ready:
+            results.append((test_case.name, False, "not cold-batch-ready", 0.0))
+            continue
         prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
         symbols = extract_test_symbols(vs_path)
         if symbols_need_moncommands(symbols):
-            passed, reason, duration = run_one_test(
-                None,
-                base_args,
-                test_name=test_case.name,
-                prg_path=prg_path,
-                vs_path=vs_path,
-                timeout=test_case.timeout,
-                snapshot_path=None,
-                verbose=base_args.verbose,
-            )
+                passed, reason, duration = run_one_test(
+                    None,
+                    base_args,
+                    force_moncommands=test_case.force_moncommands,
+                    break_on_fail=test_case.break_on_fail,
+                    test_name=test_case.name,
+                    prg_path=prg_path,
+                    vs_path=vs_path,
+                    timeout=test_case.timeout,
+                    snapshot_path=None,
+                    verbose=base_args.verbose,
+                )
         else:
             vice_process = subprocess.Popen(
                 build_vice_command(base_args),
@@ -188,6 +203,8 @@ def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[
                 passed, reason, duration = run_one_test(
                     connector,
                     base_args,
+                    force_moncommands=test_case.force_moncommands,
+                    break_on_fail=test_case.break_on_fail,
                     test_name=test_case.name,
                     prg_path=prg_path,
                     vs_path=vs_path,
@@ -220,10 +237,15 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
         )
         results: list[tuple[str, bool, str, float]] = []
         for test_case in tests:
+            if not test_case.snapshot_ready:
+                results.append((test_case.name, False, "not snapshot-ready", 0.0))
+                continue
             prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
             passed, reason, duration = run_one_test(
                 connector,
                 base_args,
+                force_moncommands=test_case.force_moncommands,
+                break_on_fail=test_case.break_on_fail,
                 test_name=test_case.name,
                 prg_path=prg_path,
                 vs_path=vs_path,

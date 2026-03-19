@@ -621,3 +621,28 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_FILTER='main_loop128' bash commodore/c128/run_tests128.sh`
   - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests main_loop128 ...`
 - The broader default batch set remains unchanged for now because a separate compare run exposed unrelated failures in `memory128`, `msg_prompt128`, and `tier128`.
+
+## 2026-03-19 OPT-TEST Gate C.4 stable compare-set correction
+
+### Plan
+- [x] Reproduce the remaining Python batch failures in `memory128`, `msg_prompt128`, and `tier128`.
+- [x] Compare the Python harness behavior against the shell-harness moncommands path.
+- [x] Correct the default Gate C.4 batch set to only include tests proven under both cold and snapshot modes.
+- [x] Make unsupported Python batch selections fail immediately with explicit reasons.
+
+### Review
+- Root cause: shell-harness success did not imply Python batch readiness. `memory128`, `msg_prompt128`, and `tier128` still depend on execution conditions that the current Python cold/snapshot paths do not reproduce faithfully.
+- The default Gate C.4 compare batch is now the verified six-test set:
+  - `minimal128`
+  - `config128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `dungeon128`
+  - `main_loop128`
+- Verified with:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - cold: `2.761s`
+  - snapshot: `2.416s`
+- Explicit Python batch selection of the unsupported tests now stops immediately with honest status instead of long timeouts:
+  - `not cold-batch-ready`
+  - `not snapshot-ready`

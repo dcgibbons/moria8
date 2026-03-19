@@ -286,6 +286,30 @@ Scaling to multi-core.
   - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests main_loop128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS in both cold and snapshot modes
 - `main_loop128` is now batch-eligible, but it stays out of the default stable batch set for the moment because a separate 9-test compare exposed unrelated failures in `memory128`, `msg_prompt128`, and `tier128`.
 
+### Incremental Step Landed (2026-03-19, Gate C.4 stable compare-set correction)
+
+- The Python batch harness was treating shell-harness passes as if they implied snapshot readiness. That was false for:
+  - `memory128`
+  - `msg_prompt128`
+  - `tier128`
+- Those three tests still pass in the shell harness, but they are not currently valid Python batch targets:
+  - cold Python batch path is not trustworthy for them yet
+  - ready-snapshot restore does not recreate the environment they expect
+- The default stable Gate C.4 compare batch is now the set proven under both cold and snapshot modes:
+  - `minimal128`
+  - `config128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `dungeon128`
+  - `main_loop128`
+- Verification:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - cold total: `2.761s`
+  - snapshot total: `2.416s`
+- Explicit selection of the unsupported tests now fails immediately with honest reasons instead of timing out:
+  - `not cold-batch-ready`
+  - `not snapshot-ready`
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

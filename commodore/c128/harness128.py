@@ -55,6 +55,7 @@ def run_test_via_moncommands(
     prg_path: Path,
     symbols,
     snapshot_path: Path | None,
+    break_on_fail: bool = True,
 ) -> int:
     with tempfile.TemporaryDirectory(prefix="harness128_") as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -65,7 +66,7 @@ def run_test_via_moncommands(
         if snapshot_path is not None:
             commands.append(f'undump "{snapshot_path.resolve()}"')
         commands.append(f'load "{prg_path.resolve()}" 0')
-        if symbols.fail_addr is not None:
+        if break_on_fail and symbols.fail_addr is not None:
             commands.append(f"break {symbols.fail_addr}")
         commands.append(f"r pc={symbols.start_addr}")
         commands.append(f"until ${symbols.pass_addr}")

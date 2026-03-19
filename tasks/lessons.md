@@ -92,3 +92,13 @@
   2. check any `xargs` / subshell worker paths explicitly, and
   3. update harness assertions when the underlying architecture contract has changed.
 - **Rule:** **A shell harness change is not verified by `bash -n`. It must be exercised through the same subshell/worker path the real test runner uses.**
+
+## Shell Passes Do Not Imply Snapshot Readiness
+
+- **Issue:** I initially treated `memory128`, `msg_prompt128`, and `tier128` as ready for the Python Gate C.4 batch harness because they passed under the shell moncommands runner.
+- **Root Cause:** The shell path (`load` + `r pc=` + `until`) and the Python cold/snapshot paths do not reproduce the same machine state. A test can be valid under the shell harness yet still be invalid under the current ready-snapshot contract or the Python reset model.
+- **Resolution:** Promote a test into the default Python batch set only after it passes in both:
+  1. direct Python cold mode, and
+  2. Python snapshot mode using the current prepared snapshot contract.
+  If either path is not trustworthy, mark the test explicitly unsupported instead of leaving it in the default compare set.
+- **Rule:** **For Gate C.4, shell-harness success is necessary but not sufficient. A test is only “snapshot-ready” after direct Python cold/snapshot verification.**
