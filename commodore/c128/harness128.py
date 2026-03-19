@@ -75,6 +75,10 @@ def create_ready_snapshot(args: argparse.Namespace, snapshot_path: Path) -> None
         raise RuntimeError(f"failed to create snapshot at {snapshot_path}")
 
 
+def build_connector(args: argparse.Namespace) -> VICEConnector:
+    return VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
+
+
 def run_monitor_test(args: argparse.Namespace) -> int:
     snapshot_path = Path(args.snapshot).resolve() if args.snapshot else None
     if snapshot_path is not None and args.ensure_snapshot and not snapshot_path.exists():

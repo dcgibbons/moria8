@@ -216,6 +216,35 @@ Scaling to multi-core.
   - the restored snapshot state was explicitly probed and preserved `FF00=$3E` and `D506=$07`
 - This is the first Gate C.2 slice only: it proves prepared snapshot generation plus exact restore over the text monitor, but it does not yet deliver the final near-zero startup path envisioned for a binary-monitor/snapshot worker pool.
 
+### 2026-03-19 Gate C.3 investigation result
+- The bundled KickAssembler in this repo is `v5.25` from `tools/kickass/KickAss.jar`.
+- Direct probes show that this jar does **not** recognize `-server` or `--server`; both are treated as input filenames:
+  - `java -jar tools/kickass/KickAss.jar -server`
+  - `java -jar tools/kickass/KickAss.jar --server`
+- The bundled manual (`tools/kickass/KickAssembler.pdf`) contains no `server` references, and the jar strings/class names likewise expose no server-related symbols.
+- Practical consequence:
+  - Gate C.3 is blocked on toolchain capability, not harness code.
+  - To proceed, the repo needs either:
+    1. a newer KickAssembler version that actually exposes persistent server mode, or
+    2. a deliberate re-scope away from KickAssembler server mode toward a different assembly-cache strategy.
+
+### Incremental Step Landed (2026-03-19, Gate C.4 initial 5-test slice)
+- Added `commodore/c128/harness128_batch.py` as a small Python batch runner for the first ported C128 unit-test subset.
+- The initial stable 5-test port set is:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+- Proven comparison command:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests minimal128,config128,memory128,status_coherence128,vdc_attr128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- Proven result on this machine:
+  - cold total: `2.052s`
+  - snapshot total: `1.540s`
+- Notes:
+  - `input128`, `db128`, and `monster128` were explicitly probed and did **not** make a good first C.4 slice because they timed out under the current 5-second harness timeout.
+  - This slice proves that 5 existing tests can run through the Python harness with a measurable snapshot-backed speedup, but it does not yet replace `run_tests128.sh`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

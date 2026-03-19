@@ -318,6 +318,54 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `python3 -u commodore/c128/harness128.py --name minimal128 --prg commodore/c128/tests/test_minimal128.prg --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --connect-timeout 12 --verbose`
 - Live proof result:
   - `PASS: minimal128`
+
+## 2026-03-19 OPT-TEST Gate C.3 investigation
+
+### Plan
+- [x] Verify whether the bundled KickAssembler actually exposes server mode.
+- [x] Check both runtime behavior and bundled documentation before writing integration code.
+- [x] Record the result and stop if the capability is absent.
+
+### Review
+- The repo-bundled assembler is `tools/kickass/KickAss.jar` version `5.25`.
+- Probes run:
+  - `java -jar tools/kickass/KickAss.jar -server`
+  - `java -jar tools/kickass/KickAss.jar --server`
+- Both were interpreted as missing input files, not as a server mode.
+- The bundled manual (`tools/kickass/KickAssembler.pdf`) contains no server-mode documentation.
+- `strings`/class inspection of the jar also found no server-related identifiers.
+- Conclusion:
+  - Gate C.3 cannot be completed against the current bundled KickAssembler.
+  - The next real move is either to provide a newer server-capable KickAssembler or to re-scope the optimization plan away from KickAssembler server mode.
+
+## 2026-03-19 OPT-TEST Gate C.4 initial 5-test slice
+
+### Plan
+- [x] Choose a small stable first-port set instead of forcing the full suite into the Python harness at once.
+- [x] Add a Python batch runner for repeated C128 test execution and timing comparison.
+- [x] Prove the selected test subset in both cold and snapshot modes.
+- [x] Record the first timing comparison and the excluded tests that did not fit the starter slice.
+
+### Review
+- Added `commodore/c128/harness128_batch.py` as the first batch-oriented Python runner over the C.1/C.2 harness pieces.
+- Final starter set:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+- Verified comparison command:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests minimal128,config128,memory128,status_coherence128,vdc_attr128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- Verified result on this machine:
+  - cold total: `2.052s`
+  - snapshot total: `1.540s`
+- Explicitly excluded from the first slice after direct probes:
+  - `input128` — timed out at 5s
+  - `db128` — timed out at 5s
+  - `monster128` — timed out at 5s
+- Practical meaning:
+  - the Python harness now has a real 5-test C128 subset with measurable snapshot-backed improvement
+  - further C.4 work should either raise per-test timeouts selectively or port the next stable tests one by one
   - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
 
 ## 2026-03-18 OPT-TEST TEST_SUMMARY slice
