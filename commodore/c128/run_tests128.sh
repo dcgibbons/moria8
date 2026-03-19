@@ -23,6 +23,7 @@ TEST_JOBS="${TEST_JOBS:-8}"
 TEST_PHASE="${TEST_PHASE:-}"
 TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
+TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
 TEST_REPEAT="${TEST_REPEAT:-1}"
@@ -281,6 +282,33 @@ c128_set_active_variant() {
     printf '%s\n' "$variant" > "$C128_ACTIVE_VARIANT_FILE"
 }
 
+describe_phase_token() {
+    local phase="$1"
+    case "$phase" in
+        all)
+            printf 'all\tAll suites\n'
+            ;;
+        guards)
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard\n'
+            ;;
+        units)
+            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,status_coherence128,dungeon128,soak128,monster128\n'
+            ;;
+        smokes)
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            ;;
+        diag)
+            printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
+            ;;
+        perf)
+            printf 'perf\tperf_p1\n'
+            ;;
+        *)
+            printf '%s\t<unknown>\n' "$phase"
+            ;;
+    esac
+}
+
 suite_matches_phase_token() {
     local phase="$1"
     local suite_name="$2"
@@ -315,6 +343,22 @@ suite_matches_phase_token() {
             ;;
     esac
     return 1
+}
+
+describe_phases() {
+    local phase_list phase
+    if [ -n "$TEST_PHASE" ]; then
+        IFS=',' read -r -a phase_list <<< "$TEST_PHASE"
+    else
+        phase_list=(all guards units smokes diag perf)
+    fi
+
+    echo "=== C128 Harness Phases ==="
+    for phase in "${phase_list[@]}"; do
+        phase="${phase//[[:space:]]/}"
+        [ -z "$phase" ] && continue
+        describe_phase_token "$phase"
+    done
 }
 
 suite_matches_phase() {
@@ -3539,6 +3583,9 @@ fi
 if [ -n "$TEST_PHASE" ]; then
     echo "  phase: $TEST_PHASE"
 fi
+if [ "$TEST_DESCRIBE" != "0" ]; then
+    echo "  describe: ON"
+fi
 if [ -n "$TEST_FILTER" ]; then
     echo "  filter: $TEST_FILTER"
 fi
@@ -3566,6 +3613,11 @@ if [ "$TEST_REPEAT_RESOLVED" -gt 1 ] && [ "$TEST_LIST" = "0" ]; then
     echo "  repeat: $TEST_REPEAT_RESOLVED"
 elif [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
     echo "  repeat: $TEST_REPEAT_RESOLVED (list-only ignored)"
+fi
+
+if [ "$TEST_DESCRIBE" != "0" ]; then
+    describe_phases
+    exit 0
 fi
 
 if [ "$TEST_LIST" != "0" ]; then

@@ -118,6 +118,11 @@ Scaling to multi-core.
 - Phase presets compose with the existing filter/skip/list/repeat controls.
 - This reduces the need to hand-maintain regexes for common harness subsets.
 
+### Incremental Step Landed (2026-03-18, preset discovery)
+- `run_tests128.sh` now accepts `TEST_DESCRIBE=1` to print the available phase presets and their suite expansions.
+- When `TEST_PHASE` is also set, describe mode limits output to the selected preset names.
+- This makes the preset layer discoverable without opening the shell script itself.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

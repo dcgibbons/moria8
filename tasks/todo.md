@@ -281,3 +281,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_PHASE=guards TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_PHASE='units,smokes' TEST_LIST=1 TEST_FILTER='config128|boot_title_idle_smoke|real_boot_crash_harness|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_PHASE=units TEST_FILTER='config128|input128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_DESCRIBE slice
+- Goal: make the `TEST_PHASE` preset layer discoverable without opening `run_tests128.sh`.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_DESCRIBE=1`
+  - print all preset definitions by default
+  - print only the selected phase definitions when `TEST_PHASE` is also set
+  - exit before any test execution
+- Verified:
+  - `TEST_DESCRIBE=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_DESCRIBE=1 TEST_PHASE='units,diag' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_DESCRIBE=1 TEST_FILTER='config128' bash commodore/c128/run_tests128.sh` ✅
