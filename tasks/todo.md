@@ -248,3 +248,14 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified:
   - `TEST_REPEAT=2 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_REPEAT=3 TEST_LIST=1 TEST_FILTER='main128_asm|config128|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_FAIL_FAST slice
+- Goal: stop wasting time on later selected suites once the first focused failure is already known.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_FAIL_FAST=1` control
+  - stop after the first failing selected suite
+  - switch unit tests to serial execution under fail-fast so the harness can stop at the first failing unit
+  - print an explicit early-stop summary line
+- Verified:
+  - `TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
+  - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅

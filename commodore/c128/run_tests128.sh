@@ -25,6 +25,7 @@ TEST_SKIP="${TEST_SKIP:-}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
 TEST_REPEAT="${TEST_REPEAT:-1}"
+TEST_FAIL_FAST="${TEST_FAIL_FAST:-0}"
 PASS=0
 FAIL=0
 TOTAL=0
@@ -237,6 +238,7 @@ run_named_suite() {
     fi
     local timing_start=""
     local total_before="$TOTAL"
+    local fail_before="$FAIL"
     if [ "$TEST_TIMINGS" != "0" ]; then
         timing_start="$(test128_now_ms)"
     fi
@@ -244,6 +246,9 @@ run_named_suite() {
     local suite_rc=$?
     if [ -n "$timing_start" ] && [ "$TOTAL" -gt "$total_before" ]; then
         record_suite_timing "$suite_name" "$(( $(test128_now_ms) - timing_start ))"
+    fi
+    if [ "$TEST_FAIL_FAST" != "0" ] && [ "$FAIL" -gt "$fail_before" ]; then
+        return 1
     fi
     return "$suite_rc"
 }
@@ -1706,6 +1711,41 @@ run_parallel_unit_tests() {
     : > "$result_file"
     
     mkdir -p out
+    if [ "$TEST_FAIL_FAST" != "0" ]; then
+        echo "  running unit tests serially (fail-fast)..."
+        local test_entry
+        for test_entry in "${filtered_tests[@]}"; do
+            : > "$result_file"
+            bash -c 'run_test_internal "$1" "$2" "$3" "$4"' -- ${test_entry} "$result_file"
+            while IFS=$'\t' read -r status name duration_ms detail; do
+                echo -n "  $name: "
+                if [ "$status" = "PASS" ]; then
+                    if [ "$TEST_TIMINGS" != "0" ]; then
+                        echo "PASS (${duration_ms}ms)"
+                    else
+                        echo "PASS"
+                    fi
+                    PASS=$((PASS + 1))
+                    record_suite_timing "$name" "$duration_ms"
+                else
+                    if [ "$TEST_TIMINGS" != "0" ] && [ -n "${duration_ms:-}" ]; then
+                        echo "FAIL ($detail; ${duration_ms}ms)"
+                    else
+                        echo "FAIL ($detail)"
+                    fi
+                    FAIL=$((FAIL + 1))
+                    if [ -n "${duration_ms:-}" ]; then
+                        record_suite_timing "$name" "$duration_ms"
+                    fi
+                    TOTAL=$((TOTAL + 1))
+                    return 1
+                fi
+                TOTAL=$((TOTAL + 1))
+            done < "$result_file"
+        done
+        return 0
+    fi
+
     echo "  running unit tests in parallel..."
 
     printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS_RESOLVED" -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
@@ -1740,6 +1780,7 @@ run_test() {
     local name="$1"
     local src="$2"
     local cycles="${3:-20000000}"
+    local failed=0
 
     if ! suite_matches_filter "$name"; then
         return
@@ -1769,6 +1810,10 @@ run_test() {
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+            failed=1
+            if [ "$TEST_FAIL_FAST" != "0" ]; then
+                return 1
+            fi
             return
         fi
     fi
@@ -1778,6 +1823,10 @@ run_test() {
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+        failed=1
+        if [ "$TEST_FAIL_FAST" != "0" ]; then
+            return 1
+        fi
         return
     fi
 
@@ -1790,6 +1839,10 @@ run_test() {
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+        failed=1
+        if [ "$TEST_FAIL_FAST" != "0" ]; then
+            return 1
+        fi
         return
     fi
 
@@ -1830,10 +1883,14 @@ run_test() {
         fi
         tail -3 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
+        failed=1
     fi
 
     record_suite_timing "$name" "$duration_ms"
     TOTAL=$((TOTAL + 1))
+    if [ "$TEST_FAIL_FAST" != "0" ] && [ "$failed" -ne 0 ]; then
+        return 1
+    fi
 }
 
 boot_log_last_pc() {
@@ -3297,34 +3354,34 @@ run_selected_suites() {
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
-    run_parallel_unit_tests
+    run_parallel_unit_tests || return 1
 
-    run_named_suite boot_d64_smoke run_boot_d64_smoke
+    run_named_suite boot_d64_smoke run_boot_d64_smoke || return 1
 
-    run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke
-    run_named_suite title_art_smoke run_title_art_smoke
-    run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke
-    run_named_suite new_key_stability_smoke run_new_key_stability_smoke
-    run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke
-    run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke
-    run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke
-    run_named_suite town_overlay_smoke run_town_overlay_smoke
-    run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke
-    run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke
-    run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke
-    run_named_suite real_input_town_move_diag run_real_input_town_move_diag
-    run_named_suite real_boot_crash_harness run_real_boot_crash_harness
-    run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke
-    run_named_suite cache_survival_smoke run_cache_survival_smoke
-    run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke
-    run_named_suite death_overlay_smoke run_death_overlay_smoke
-    run_named_suite restart_to_title_smoke run_restart_to_title_smoke
-    run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke
-    run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke
-    run_named_suite boot_diag_copy run_boot_diag_copy
+    run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke || return 1
+    run_named_suite title_art_smoke run_title_art_smoke || return 1
+    run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
+    run_named_suite new_key_stability_smoke run_new_key_stability_smoke || return 1
+    run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke || return 1
+    run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke || return 1
+    run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke || return 1
+    run_named_suite town_overlay_smoke run_town_overlay_smoke || return 1
+    run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke || return 1
+    run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke || return 1
+    run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke || return 1
+    run_named_suite real_input_town_move_diag run_real_input_town_move_diag || return 1
+    run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
+    run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1
+    run_named_suite cache_survival_smoke run_cache_survival_smoke || return 1
+    run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke || return 1
+    run_named_suite death_overlay_smoke run_death_overlay_smoke || return 1
+    run_named_suite restart_to_title_smoke run_restart_to_title_smoke || return 1
+    run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke || return 1
+    run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke || return 1
+    run_named_suite boot_diag_copy run_boot_diag_copy || return 1
 
     if [ "$PERF_P1_MODE" = "1" ]; then
-        run_test "perf_p1" "tests/test_perf_p1.s"
+        run_test "perf_p1" "tests/test_perf_p1.s" || return 1
     fi
 }
 
@@ -3351,6 +3408,9 @@ fi
 if [ "$TEST_TIMINGS" != "0" ]; then
     echo "  timings: ON"
 fi
+if [ "$TEST_FAIL_FAST" != "0" ]; then
+    echo "  fail-fast: ON"
+fi
 if [ "$TEST_REPEAT_RESOLVED" -gt 1 ] && [ "$TEST_LIST" = "0" ]; then
     echo "  repeat: $TEST_REPEAT_RESOLVED"
 elif [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
@@ -3363,15 +3423,22 @@ if [ "$TEST_LIST" != "0" ]; then
     exit 0
 fi
 
+stopped_early=0
 repeat_idx=1
 while [ "$repeat_idx" -le "$TEST_REPEAT_RESOLVED" ]; do
     if [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
         echo "--- Iteration $repeat_idx/$TEST_REPEAT_RESOLVED ---"
     fi
-    run_selected_suites || exit 1
+    if ! run_selected_suites; then
+        stopped_early=1
+        break
+    fi
     repeat_idx=$((repeat_idx + 1))
 done
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
+if [ "$stopped_early" -ne 0 ]; then
+    echo "=== Stopped early after first failure ==="
+fi
 print_timing_summary
 
 if [ "$FAIL" -gt 0 ]; then

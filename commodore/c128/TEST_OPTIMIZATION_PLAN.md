@@ -103,6 +103,11 @@ Scaling to multi-core.
 - Repeat works with `TEST_FILTER` and `TEST_SKIP`; `TEST_LIST=1` remains single-pass and reports that repeat is ignored in list-only mode.
 - This gives a cheap flake-checking tool for a focused subset without external shell loops.
 
+### Incremental Step Landed (2026-03-18, fail-fast execution)
+- `run_tests128.sh` now accepts `TEST_FAIL_FAST=1` to stop after the first failing selected suite.
+- Unit tests switch to serial execution when fail-fast is enabled so the harness can stop on the first failing unit instead of waiting for a parallel batch to finish.
+- This is aimed at focused debugging runs where fast failure signal matters more than aggregate throughput.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
