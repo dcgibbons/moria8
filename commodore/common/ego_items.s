@@ -1,7 +1,9 @@
 #importonce
 // ego_items.s — Ego item generation and suffix strings
 //
-// Lives at $F000 (RAM under KERNAL ROM), accessed via trampolines.
+// C128: lives in loaded low RAM (`bank1.dat`, runtime at `$1000+`) so it stays
+// out of the `$D000-$DFFF` I/O hole while remaining callable through the
+// existing trampolines. C64/tests may link it elsewhere.
 // Ego types are enchanted weapon variants (e.g., "Long Sword (Flame)").
 //
 // Ego Type IDs:

@@ -100,3 +100,19 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Validation:
   - `make -B -C commodore/c128 build128`
   - manual validation: `i`, item-prompt `?`, and help `?` all render content and dismiss correctly
+
+## 2026-03-18 dungeon-descent JAM
+- New blocker: descending from town into the first dungeon level triggers a CPU `JAM` at `$D323`.
+- Fresh symbol mapping shows the live path is `item_spawn_level -> tramp_roll_ego_type -> roll_ego_type`, with the trampoline at `$307D` calling a callee at `$D310`.
+- The built PRG contains valid ego-item code at `$D310`, but runtime execution sees I/O-hole garbage there, so this is an execution-placement bug rather than data corruption.
+- Goal: move the ego-item runtime block back into always-executable RAM and add asserts so ego generation can never silently drift above `$D000` again.
+
+## 2026-03-18 dungeon-descent outcome
+- Root cause: `ego_items.s` had drifted into the main program at `$D310+`, so `tramp_roll_ego_type` entered the `$D000-$DFFF` I/O hole during dungeon item generation.
+- Final fix:
+  - move `ego_items.s` into the loaded low-RAM runtime block (`bank1.dat`, runtime `$1000+`)
+  - remove the late Default-segment import that allowed ego code to spill into the I/O hole
+  - add placement asserts so `roll_ego_type`, `ego_apply_damage`, and `ego_get_ac_bonus` must stay below `FLOOR_ITEM_BASE`
+- Validation:
+  - `make -B -C commodore/c128 build128`
+  - manual validation: town -> first dungeon descent now completes without CPU `JAM`

@@ -6,6 +6,41 @@
 
 ---
 
+## DGN-1 — C128 Dungeon-Descent Ego Runtime Placement Repair ✅ COMPLETE (2026-03-18)
+
+### Scope Closed
+- Closed the C128 crash where descending from town into the first dungeon level could `JAM` during level item generation.
+- Replaced the earlier “overlay/data corruption” suspicion with the actual failure: a valid trampoline calling a callee that had drifted into the visible I/O hole.
+
+### Root Causes Addressed
+1. **Callee placement drifted into `$D000-$DFFF`**
+   - `tramp_roll_ego_type` remained safely below `$D000`, but `roll_ego_type` itself had linked at `$D310`.
+   - With normal `MMU_ALL_RAM` runtime (`$FF00=$3E`) and I/O visible, execution in `$D000-$DFFF` reads device space rather than program code.
+2. **The failure surfaced during dungeon item generation**
+   - The live path was `item_spawn_level -> tramp_roll_ego_type -> roll_ego_type`, so the first town->dungeon descent could crash as soon as ego-item logic ran.
+3. **Placement coverage only guarded the trampoline**
+   - Existing asserts guaranteed the trampoline stayed below the I/O hole, but nothing prevented the ego routines themselves from silently drifting upward.
+
+### Implemented
+1. **Moved ego runtime into loaded low RAM**
+   - Imported `ego_items.s` into the C128 `Bank1Data` runtime block (`bank1.dat`, runtime `$1000+` in Bank 0).
+   - Removed the late Default-segment import that allowed ego generation logic to spill into the `$D000-$DFFF` region.
+2. **Added placement asserts for the full call surface**
+   - `roll_ego_type`
+   - `ego_apply_damage`
+   - `ego_get_ac_bonus`
+   - These must now remain below `FLOOR_ITEM_BASE`, keeping them in always-executable low runtime RAM.
+
+### Result
+- Town -> first dungeon descent no longer `JAM`s during item generation.
+- Ego generation stays in executable low runtime RAM instead of device space.
+
+### Validation
+- `make -B -C commodore/c128 build128`: **PASS**
+- Manual validation: town -> first dungeon descent completes without CPU `JAM`
+
+---
+
 ## UIB-1 — C128 Banked UI Source/Recopy Repair ✅ COMPLETE (2026-03-18)
 
 ### Scope Closed

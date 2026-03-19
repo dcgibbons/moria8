@@ -3103,6 +3103,7 @@ c128_test_verify_cache_survival:
 .pseudopc $1000 {
 bank1_data_runtime_start:
     #import "dungeon_render_vdc.s"
+    #import "../common/ego_items.s"
 bank1_data_runtime_end:
 }
 .segment Default
@@ -3111,7 +3112,6 @@ bank1_data_runtime_end:
 // Moved out of the C128 banked payload to free room for command handlers,
 // but imported late so their shared-data dependencies are already defined.
 #import "../common/string_bank_banked.s"
-#import "../common/ego_items.s"
 #import "../common/ui_home.s"
 
 // ============================================================
@@ -3158,6 +3158,9 @@ program_end:
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
 .assert "Low runtime code stays below floor-item table", bank1_data_runtime_end <= FLOOR_ITEM_BASE, true
+.assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
+.assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
+.assert "Ego AC routine stays in low runtime RAM", ego_get_ac_bonus < FLOOR_ITEM_BASE, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true

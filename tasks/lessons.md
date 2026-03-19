@@ -75,3 +75,10 @@
   1. the destination/runtime window is safe, and
   2. the source/staging window does not overlap transient overlay or loader regions that can mutate before the next copy.
 - **Rule:** **On C128, overlay-safety analysis must cover both the resident destination and the staged copy source. A resident block can still be corrupted if its recopy source overlaps `$E000-$EFFF`.**
+
+## I/O-Hole Placement Drift (C128)
+
+- **Issue:** Town -> dungeon descent `JAM`ed during `item_spawn_level`, even though the trampoline path itself stayed below `$D000`.
+- **Root Cause:** I only asserted the trampoline placement and missed that the callee (`roll_ego_type`) had drifted to `$D310`, inside the `$D000-$DFFF` I/O hole. The PRG contained code there, but runtime execution with I/O visible read garbage.
+- **Resolution:** For any banked/trampolined C128 call path, verify both sides of the jump: the caller/trampoline location and the callee’s runtime residency. If the callee must execute with I/O visible, it cannot live in `$D000-$DFFF`.
+- **Rule:** **On C128, “trampoline below `$D000`” is not enough. Every callable target in that path must also be asserted out of the I/O hole or explicitly executed with a no-I/O banking mode.**
