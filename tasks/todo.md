@@ -764,3 +764,23 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -C commodore/c128 test128-fast-smoke`
   - `make test128-fast-smoke`
 - This keeps `test128-fast` focused on the Python unit compare path while giving agents and humans a separate fast smoke pass for the most failure-prone runtime flows.
+
+## 2026-03-19 OPT-1 command dispatch jump table
+
+### Plan
+- [x] Map the current `main_loop` command dispatch hot path and identify the commands that still need bespoke range handling.
+- [x] Replace the discrete `cmp`/branch chain with a bounded jump table while keeping movement and running as explicit fast paths.
+- [x] Extend the focused C128 `main_loop128` test so the new table is exercised on a turn-consuming command.
+- [x] Verify shared-path correctness on C64 and C128 builds/tests.
+
+### Review
+- Replaced the discrete `CMD_STAIRS_DN..CMD_TUNNEL` equality chain in `commodore/common/game_loop.s` with a bounded indirect jump table backed by `command_dispatch_lo/hi`.
+- Kept movement and running as explicit fast paths outside the table, preserving the existing range-based behavior and avoiding extra per-step table work on the hot movement path.
+- Added a `CMD_REST` case to the focused C128 `main_loop128` harness so the table is exercised on a turn-consuming command, instead of only display/no-turn handlers.
+- Verified with:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make -C commodore/c128 test128-fast`
+  - `make -C commodore/c128 test128-fast-smoke`
+- Manual in-game check confirmed normal command behavior after the dispatch change.

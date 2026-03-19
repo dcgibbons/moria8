@@ -6,6 +6,36 @@
 
 ---
 
+## OPT-1 — Main-Loop Command Dispatch Jump Table ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the open gameplay hot-path optimization for the non-movement command dispatcher in `commodore/common/game_loop.s`.
+- Replaced the long equality chain for discrete commands with a bounded O(1) dispatch table without perturbing the movement/running fast paths.
+
+### What Changed
+1. **Bounded jump-table dispatch**
+   - `CMD_STAIRS_DN..CMD_TUNNEL` now dispatch through `command_dispatch_lo/hi` and a single indirect `jmp (zp_ptr0)`.
+   - Unsupported and pre-handled slots inside that numeric range map to a shared ignore target instead of falling through a comparison chain.
+2. **Movement/running remain bespoke**
+   - `CMD_MOVE_*` remains the explicit hot movement range path.
+   - `CMD_RUN_*` remains an explicit fast path that still feeds `run_step` directly.
+3. **Focused harness coverage expanded**
+   - `commodore/c128/tests/test_main_loop128.s` now includes a `CMD_REST` case, so the table is exercised on a turn-consuming command rather than only no-turn UI commands.
+
+### Why This Shape
+- It removes the long `cmp`/`bne` ladder from the common command loop without forcing the two hottest range-based behaviors (movement and running) through an extra indirection layer.
+- That keeps the optimization targeted: lower steady-state dispatch cost for the broad discrete command set, with minimal behavioral churn.
+
+### Validation
+- `make -C commodore/c64 build` — PASS
+- `cd commodore/c64 && ./run_tests.sh` — PASS
+- `make -B -C commodore/c128 build128` — PASS
+- `make -C commodore/c128 test128-fast` — PASS
+- `make -C commodore/c128 test128-fast-smoke` — PASS
+- Manual in-game validation — PASS
+
+---
+
 ## OPT-TEST — C128 Fast-Test Workflow ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed

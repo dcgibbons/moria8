@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-18, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, and the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift, and the OPT-1 main-loop command-dispatch jump-table conversion are resolved.**
 
 ### Build Stats
 
@@ -28,7 +28,6 @@
 | **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
-| **OPT-1** | **MED** | Performance: O(1) Command Dispatch. Convert massive `cmp`/`bne` chain in `game_loop.s` to a jump table (array of function pointers). | Pending |
 | **OPT-2** | LOW | Performance: Bounding Box Math. Optimize `dungeon_los.s` room bounds checks to save instructions. | Pending |
 | **OPT-3** | **MED** | Performance: Visibility Updates. Cache room ID and only re-evaluate `update_visibility` room checks upon entering a new room to save per-turn overhead. | Pending |
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
@@ -64,6 +63,7 @@
 | **UIB-1** | **BLOCKER** | C128 banked help/inventory blank-screen and dismiss hangs fixed by stopping per-entry recopy from an overlay-clobbered banked-payload source and tightening the inventory/equipment dismiss input path. | **2026-03-18** |
 | **DGN-1** | **BLOCKER** | C128 town-to-dungeon descent `JAM` fixed by moving ego-item generation out of the `$D000-$DFFF` I/O hole and into loaded low runtime RAM, with placement asserts covering the entire call path. | **2026-03-18** |
 | **OPT-TEST** | **HIGH** | C128 fast-test workflow is operational: `test128-fast` now runs the Python Gate C unit compare batch, `test128-fast-smoke` runs a small high-value smoke subset, and the workflow docs now direct agents to use them. The deeper Gate C.3 KickAssembler-server path remains toolchain-blocked/deferred. | **2026-03-19** |
+| **OPT-1** | **MED** | Main-loop command dispatch is now O(1) for the discrete non-movement command set: the `CMD_STAIRS_DN..CMD_TUNNEL` equality chain in `game_loop.s` has been replaced with a bounded jump table while movement/running remain explicit fast paths. | **2026-03-19** |
 | **TST-1** | **MED** | Input parsing suites, LOS coverage via dungeon/monster tests, and the focused `main_loop` dispatch harness are complete. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |

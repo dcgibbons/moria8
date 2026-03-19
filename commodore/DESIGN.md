@@ -174,7 +174,8 @@ encounters.
 ## Architecture Overview
 
 ```
-main.s                    Entry point, BASIC stub, initialization, command dispatch
+main.s                    Entry point, BASIC stub, initialization
+game_loop.s               Shared main loop, command dispatch, running, and gameplay tails
 ├── config.s              System detection (C64/C128), column mode selection
 ├── memory.s              Bank switching routines, memory map management
 ├── zeropage.s            Zero page variable declarations (with KERNAL-safe zones)

@@ -763,11 +763,121 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 !not_move:
 
-    // Stairs down?
+    // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
+    cmp #CMD_RUN_N
+    bcc !dispatch_discrete+
+    cmp #CMD_RUN_SE + 1
+    bcs !dispatch_discrete+
+    jmp cmd_run
+
+!dispatch_discrete:
     cmp #CMD_STAIRS_DN
-    beq !stairs_dn+
-    jmp !not_stairs_dn+
-!stairs_dn:
+    bcc !unknown_command+
+    cmp #CMD_TUNNEL + 1
+    bcs !unknown_command+
+    sec
+    sbc #CMD_STAIRS_DN
+    tax
+    lda command_dispatch_lo,x
+    sta zp_ptr0
+    lda command_dispatch_hi,x
+    sta zp_ptr0_hi
+    jmp (zp_ptr0)
+
+!unknown_command:
+    // Unknown command — ignore
+    jmp main_loop
+
+command_dispatch_lo:
+    .byte <cmd_stairs_dn
+    .byte <cmd_stairs_up
+    .byte <cmd_rest
+    .byte <cmd_search
+    .byte <cmd_open
+    .byte <cmd_close
+    .byte <cmd_pickup
+    .byte <cmd_drop
+    .byte <cmd_inventory
+    .byte <cmd_equipment
+    .byte <cmd_wear
+    .byte <cmd_takeoff
+    .byte <cmd_eat
+    .byte <cmd_quaff
+    .byte <cmd_read
+    .byte <cmd_aim
+    .byte <cmd_use
+    .byte <cmd_cast
+    .byte <cmd_pray
+    .byte <cmd_dispatch_ignore    // CMD_CHAR_INFO handled above
+    .byte <cmd_dispatch_ignore    // CMD_MAP unused
+    .byte <cmd_dispatch_ignore    // CMD_RECALL handled above
+    .byte <cmd_look
+    .byte <cmd_dispatch_ignore    // CMD_RUN meta-command unused
+    .byte <cmd_dispatch_ignore    // CMD_SAVE handled above
+    .byte <cmd_dispatch_ignore    // CMD_QUIT handled above
+    .byte <cmd_dispatch_ignore    // CMD_HELP handled above
+    .byte <cmd_dispatch_ignore    // CMD_VERSION handled above / ignored
+    .byte <cmd_dispatch_ignore    // CMD_RUN_N handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_S handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_W handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_E handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_NW handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_NE handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_SW handled above
+    .byte <cmd_dispatch_ignore    // CMD_RUN_SE handled above
+    .byte <cmd_gain
+    .byte <cmd_fire
+    .byte <cmd_throw
+    .byte <cmd_refuel
+    .byte <cmd_bash
+    .byte <cmd_tunnel
+command_dispatch_hi:
+    .byte >cmd_stairs_dn
+    .byte >cmd_stairs_up
+    .byte >cmd_rest
+    .byte >cmd_search
+    .byte >cmd_open
+    .byte >cmd_close
+    .byte >cmd_pickup
+    .byte >cmd_drop
+    .byte >cmd_inventory
+    .byte >cmd_equipment
+    .byte >cmd_wear
+    .byte >cmd_takeoff
+    .byte >cmd_eat
+    .byte >cmd_quaff
+    .byte >cmd_read
+    .byte >cmd_aim
+    .byte >cmd_use
+    .byte >cmd_cast
+    .byte >cmd_pray
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_look
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_dispatch_ignore
+    .byte >cmd_gain
+    .byte >cmd_fire
+    .byte >cmd_throw
+    .byte >cmd_refuel
+    .byte >cmd_bash
+    .byte >cmd_tunnel
+
+cmd_dispatch_ignore:
+    jmp main_loop
+
+cmd_stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
     beq !stairs_dn_ok+
@@ -831,13 +941,8 @@ c128_town_move_diag_after_status_draw:
     sta zp_ptr0_hi
     jsr msg_print
     jmp main_loop
-!not_stairs_dn:
 
-    // Stairs up?
-    cmp #CMD_STAIRS_UP
-    beq !stairs_up+
-    jmp !not_stairs_up+
-!stairs_up:
+cmd_stairs_up:
     jsr check_stairs_at_player
     cmp #10                 // Stairs up type
     beq !stairs_up_ok+
@@ -899,11 +1004,8 @@ c128_town_move_diag_after_status_draw:
     sta zp_ptr0_hi
     jsr msg_print
     jmp main_loop
-!not_stairs_up:
 
-    // Open door?
-    cmp #CMD_OPEN
-    bne !not_open+
+cmd_open:
     jsr msg_clear
     jsr get_direction_target
     bcc !open_no_turn+          // Invalid direction, no turn consumed
@@ -919,11 +1021,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !open_no_turn:
     jmp main_loop
-!not_open:
 
-    // Close door?
-    cmp #CMD_CLOSE
-    bne !not_close+
+cmd_close:
     jsr msg_clear
     jsr get_direction_target
     bcc !close_no_turn+
@@ -939,11 +1038,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !close_no_turn:
     jmp main_loop
-!not_close:
 
-    // Search?
-    cmp #CMD_SEARCH
-    bne !not_search+
+cmd_search:
     jsr msg_clear
     jsr do_search
     // Always consumes a turn
@@ -954,11 +1050,8 @@ c128_town_move_diag_after_status_draw:
     jmp !player_died+
 !not_dead:
     jmp vp_render_status_loop
-!not_search:
 
-    // Rest?
-    cmp #CMD_REST
-    bne !not_rest+
+cmd_rest:
     jsr msg_clear
     jsr turn_post_action
     lda zp_game_flags
@@ -968,11 +1061,8 @@ c128_town_move_diag_after_status_draw:
 !not_dead:
     jsr status_draw
     jmp main_loop
-!not_rest:
 
-    // Pickup?
-    cmp #CMD_PICKUP
-    bne !not_pickup+
+cmd_pickup:
     jsr msg_clear
     jsr item_pickup
     bcc !pickup_no_turn+
@@ -985,11 +1075,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !pickup_no_turn:
     jmp main_loop
-!not_pickup:
 
-    // Drop?
-    cmp #CMD_DROP
-    bne !not_drop+
+cmd_drop:
     jsr msg_clear
     jsr item_drop
     bcc !drop_no_turn+
@@ -1002,11 +1089,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !drop_no_turn:
     jmp main_loop
-!not_drop:
 
-    // Inventory? (display only, no turn consumed)
-    cmp #CMD_INVENTORY
-    bne !not_inventory+
+cmd_inventory:
     lda #$ff
     sta uinv_filter             // Show all items
     jsr tramp_ui_inv_display
@@ -1019,11 +1103,8 @@ c128_town_move_diag_after_status_draw:
     sta zp_text_color
     jsr ui_help_clear_all
     jmp vp_render_status_loop
-!not_inventory:
 
-    // Equipment? (display only, no turn consumed)
-    cmp #CMD_EQUIPMENT
-    bne !not_equipment+
+cmd_equipment:
     jsr tramp_ui_equip_display
 #if C128
     jsr input_wait_release
@@ -1034,11 +1115,8 @@ c128_town_move_diag_after_status_draw:
     sta zp_text_color
     jsr ui_help_clear_all
     jmp vp_render_status_loop
-!not_equipment:
 
-    // Wear/Wield?
-    cmp #CMD_WEAR
-    bne !not_wear+
+cmd_wear:
     jsr msg_clear
     jsr item_wear
     bcc !wear_no_turn+
@@ -1051,11 +1129,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !wear_no_turn:
     jmp main_loop
-!not_wear:
 
-    // Take off?
-    cmp #CMD_TAKEOFF
-    bne !not_takeoff+
+cmd_takeoff:
     jsr msg_clear
     jsr item_takeoff
     bcc !takeoff_no_turn+
@@ -1068,11 +1143,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !takeoff_no_turn:
     jmp main_loop
-!not_takeoff:
 
-    // Eat?
-    cmp #CMD_EAT
-    bne !not_eat+
+cmd_eat:
     jsr msg_clear
     jsr item_eat
     bcc !eat_no_turn+
@@ -1086,11 +1158,8 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 !eat_no_turn:
     jmp main_loop
-!not_eat:
 
-    // Quaff potion?
-    cmp #CMD_QUAFF
-    bne !not_quaff+
+cmd_quaff:
     jsr msg_clear
     jsr item_quaff
     bcc !quaff_no_turn+
@@ -1104,11 +1173,8 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 !quaff_no_turn:
     jmp main_loop
-!not_quaff:
 
-    // Read scroll?
-    cmp #CMD_READ
-    bne !not_read+
+cmd_read:
     jsr msg_clear
     jsr item_read_scroll
     bcc !read_no_turn+
@@ -1123,11 +1189,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !read_no_turn:
     jmp main_loop
-!not_read:
 
-    // Aim wand?
-    cmp #CMD_AIM
-    bne !not_aim+
+cmd_aim:
     jsr msg_clear
     jsr item_aim_wand
     bcc !aim_no_turn+
@@ -1141,11 +1204,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !aim_no_turn:
     jmp main_loop
-!not_aim:
 
-    // Use staff?
-    cmp #CMD_USE
-    bne !not_use+
+cmd_use:
     jsr msg_clear
     jsr item_use_staff
     bcc !use_no_turn+
@@ -1159,11 +1219,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !use_no_turn:
     jmp main_loop
-!not_use:
 
-    // Cast spell?
-    cmp #CMD_CAST
-    bne !not_cast+
+cmd_cast:
     jsr msg_clear
 #if C128
     jsr tramp_player_cast_spell
@@ -1183,11 +1240,8 @@ c128_town_move_diag_after_status_draw:
     // Restore screen after spell list overlay
     jsr screen_clear
     jmp vp_render_status_loop
-!not_cast:
 
-    // Pray?
-    cmp #CMD_PRAY
-    bne !not_pray+
+cmd_pray:
     jsr msg_clear
 #if C128
     jsr tramp_player_pray
@@ -1206,11 +1260,8 @@ c128_town_move_diag_after_status_draw:
 !pray_no_turn:
     jsr screen_clear
     jmp vp_render_status_loop
-!not_pray:
 
-    // Gain spell from book?
-    cmp #CMD_GAIN
-    bne !not_gain+
+cmd_gain:
     jsr msg_clear
     jsr item_gain_spell
     bcc !gain_no_turn+
@@ -1224,11 +1275,8 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 !gain_no_turn:
     jmp main_loop
-!not_gain:
 
-    // Fire ranged weapon?
-    cmp #CMD_FIRE
-    bne !not_fire+
+cmd_fire:
     jsr msg_clear
 #if C128
     jsr tramp_ranged_fire
@@ -1246,11 +1294,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !fire_no_turn:
     jmp main_loop
-!not_fire:
 
-    // Throw item?
-    cmp #CMD_THROW
-    bne !not_throw+
+cmd_throw:
     jsr msg_clear
 #if C128
     jsr tramp_throw_item
@@ -1268,11 +1313,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !throw_no_turn:
     jmp main_loop
-!not_throw:
 
-    // Refuel lamp?
-    cmp #CMD_REFUEL
-    bne !not_refuel+
+cmd_refuel:
     jsr msg_clear
     jsr item_refuel
     bcc !refuel_no_turn+
@@ -1286,11 +1328,8 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 !refuel_no_turn:
     jmp main_loop
-!not_refuel:
 
-    // Bash?
-    cmp #CMD_BASH
-    bne !not_bash+
+cmd_bash:
     jsr msg_clear
 #if C128
     jsr tramp_bash_command
@@ -1308,11 +1347,8 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !bash_no_turn:
     jmp main_loop
-!not_bash:
 
-    // Tunnel?
-    cmp #CMD_TUNNEL
-    bne !not_tunnel+
+cmd_tunnel:
     jsr msg_clear
     jsr player_tunnel
     bcc !tunnel_no_turn+
@@ -1326,22 +1362,13 @@ c128_town_move_diag_after_status_draw:
     jmp vp_render_status_loop
 !tunnel_no_turn:
     jmp main_loop
-!not_tunnel:
 
-    // Look?
-    cmp #CMD_LOOK
-    bne !not_look+
+cmd_look:
     jsr msg_clear
     jsr do_look
     jmp main_loop
-!not_look:
 
-    // Running? (CMD_RUN_N through CMD_RUN_SE = $25-$2c)
-    cmp #CMD_RUN_N
-    bcc !not_run+
-    cmp #CMD_RUN_SE + 1
-    bcs !not_run+
-
+cmd_run:
     sec
     sbc #CMD_RUN_N              // Direction index 0-7
     sta zp_run_dir
@@ -1349,10 +1376,6 @@ c128_town_move_diag_after_status_draw:
     sta run_input_armed
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
-!not_run:
-
-    // Unknown command — ignore
-    jmp main_loop
 
 // ============================================================
 // run_step — Execute one step of corridor running

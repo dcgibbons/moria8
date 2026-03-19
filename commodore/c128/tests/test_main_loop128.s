@@ -665,8 +665,26 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 2: LOOK dispatches helper and consumes no turn.
+    // Test 2: REST consumes one turn and redraws status.
     lda #2
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 3: LOOK dispatches helper and consumes no turn.
+    lda #3
     sta test_case_id
     jsr reset_state
     lda #CMD_LOOK
@@ -682,8 +700,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 3: OPEN success consumes a turn and redraws.
-    lda #3
+    // Test 4: OPEN success consumes a turn and redraws.
+    lda #4
     sta test_case_id
     jsr reset_state
     lda #1
@@ -715,8 +733,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 4: HELP waits for key release and redraws via help clear.
-    lda #4
+    // Test 5: HELP waits for key release and redraws via help clear.
+    lda #5
     sta test_case_id
     jsr reset_state
     lda #CMD_HELP
@@ -745,8 +763,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 5: INVENTORY uses dismiss gating and redraws via help-clear.
-    lda #5
+    // Test 6: INVENTORY uses dismiss gating and redraws via help-clear.
+    lda #6
     sta test_case_id
     jsr reset_state
     lda #CMD_INVENTORY
