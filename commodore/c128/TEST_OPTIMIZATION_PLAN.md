@@ -168,6 +168,11 @@ Scaling to multi-core.
 - This makes large summary-driven reruns easier to sample or bisect without editing the source summary file.
 - The active limit is shown in the banner, and JSON summary metadata now records `rerun_limit`.
 
+### Incremental Step Landed (2026-03-18, replay order selection)
+- `run_tests128.sh` now accepts `TEST_RERUN_ORDER=forward|reverse` to control which end of the replay-selected suite set is consumed first when a cap is active.
+- This makes `TEST_RERUN_LIMIT` useful for both “first N” and “last N” triage loops.
+- The active replay order is shown in the banner when not using the default `forward`, and JSON summary metadata now records `rerun_order`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

@@ -29,6 +29,7 @@ TEST_RERUN_STATUS="${TEST_RERUN_STATUS:-FAIL}"
 TEST_RERUN_ONLY_LATEST="${TEST_RERUN_ONLY_LATEST:-0}"
 TEST_RERUN_INVERT="${TEST_RERUN_INVERT:-0}"
 TEST_RERUN_LIMIT="${TEST_RERUN_LIMIT:-0}"
+TEST_RERUN_ORDER="${TEST_RERUN_ORDER:-forward}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -141,7 +142,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_INVERT" "$TEST_RERUN_LIMIT" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_INVERT" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -161,11 +162,12 @@ payload = {
     "rerun_only_latest": sys.argv[12] != "0",
     "rerun_invert": sys.argv[13] != "0",
     "rerun_limit": int(sys.argv[14]),
-    "jobs_requested": sys.argv[15],
-    "jobs_resolved": int(sys.argv[16]),
-    "repeat": int(sys.argv[17]),
-    "timings": sys.argv[18] != "0",
-    "fail_fast": sys.argv[19] != "0",
+    "rerun_order": sys.argv[15],
+    "jobs_requested": sys.argv[16],
+    "jobs_resolved": int(sys.argv[17]),
+    "repeat": int(sys.argv[18]),
+    "timings": sys.argv[19] != "0",
+    "fail_fast": sys.argv[20] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -232,7 +234,7 @@ load_rerun_selection() {
     fi
 
     TEST128_RERUN_COUNT="$(
-        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_LIMIT" <<'PY'
+        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" <<'PY'
 import json
 import re
 import sys
@@ -246,17 +248,16 @@ try:
     limit = int(sys.argv[5])
 except ValueError:
     limit = 0
+order_mode = sys.argv[6]
 text = src.read_text()
 lines = [line for line in text.splitlines() if line.strip()]
 suites = []
+raw_suites = []
 
 def add(name):
-    if not name or name in suites:
+    if not name or name in raw_suites:
         return
-    if limit > 0 and len(suites) >= limit:
-        return
-    if name and name not in suites:
-        suites.append(name)
+    raw_suites.append(name)
 
 def status_matches(value):
     return re.fullmatch(status_pattern, value or "") is not None
@@ -308,8 +309,16 @@ else:
             if entry.get("suite") and status_matches(entry.get("status", "")):
                 add(entry["suite"])
 
-dst.write_text("".join(f"{suite}\n" for suite in suites))
-print(len(suites))
+if order_mode == "reverse":
+    ordered = list(reversed(raw_suites))
+else:
+    ordered = list(raw_suites)
+
+if limit > 0:
+    ordered = ordered[:limit]
+
+dst.write_text("".join(f"{suite}\n" for suite in ordered))
+print(len(ordered))
 PY
     )" || return 1
 }
@@ -3796,6 +3805,9 @@ if [ -n "$TEST_RERUN_FROM" ] || [ "$TEST_RERUN_LAST" != "0" ]; then
     fi
     if [ "$TEST_RERUN_LIMIT" != "0" ]; then
         echo "  rerun-limit: $TEST_RERUN_LIMIT"
+    fi
+    if [ "$TEST_RERUN_ORDER" != "forward" ]; then
+        echo "  rerun-order: $TEST_RERUN_ORDER"
     fi
 fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
