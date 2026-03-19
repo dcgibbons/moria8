@@ -163,6 +163,11 @@ Scaling to multi-core.
 - This makes summary-driven “all except known failures/skips” loops possible without hand-writing exclusion regexes.
 - The active invert mode is shown in the banner, and JSON summary metadata now records `rerun_invert`.
 
+### Incremental Step Landed (2026-03-18, capped replay selection)
+- `run_tests128.sh` now accepts `TEST_RERUN_LIMIT=<n>` to cap the replay-selected suite set after status/latest/invert preprocessing.
+- This makes large summary-driven reruns easier to sample or bisect without editing the source summary file.
+- The active limit is shown in the banner, and JSON summary metadata now records `rerun_limit`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
