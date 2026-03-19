@@ -116,3 +116,13 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Validation:
   - `make -B -C commodore/c128 build128`
   - manual validation: town -> first dungeon descent now completes without CPU `JAM`
+
+## 2026-03-18 documentation hardening
+- Goal: bake the expensive C128 stability lessons into agent-facing and architecture docs so future work checks the full load/bank/execute/copy contract up front.
+- Updated:
+  - `AGENTS.md`
+  - `GEMINI.md`
+  - `commodore/c128/GEMINI.md`
+  - `commodore/c128/ARCHITECTURE.md`
+  - `commodore/DESIGN.md`
+- Key rule now repeated in the docs: for runtime-loaded or banked C128 code, verify linked address, PRG header, load bank, execution bank, and recopy-source safety together.

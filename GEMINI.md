@@ -31,6 +31,22 @@ Moving code or data between segments (e.g., pulling an `#import` out of a `.pseu
 3. **Do NOT delete boundary-checking `.assert` statements.** They exist to catch exactly this class of mistake. If an assert fails, it means your change broke the memory layout — fix the change, not the assert.
 4. **If the main segment is near $C000:** move overflow code to $F000 (RAM under KERNAL ROM) via trampoline, or into the banked payload / an overlay. Do NOT just pull code from the payload into main.
 
+### C128 Runtime Contract Law (NEW)
+For any runtime-loaded or trampolined C128 code path, it is not enough to verify only the trampoline or only the symbol. You must verify the full contract:
+
+1. linked symbol address
+2. PRG load header
+3. destination bank at load time
+4. visible bank at execution time
+5. survival of any staged source used for later recopies
+
+Concrete failure patterns that already happened in this repo:
+- callable low-RAM code linked at `$1000` but loaded into the wrong bank
+- banked UI code recopied from a staged source span later clobbered by overlays
+- a safe trampoline below `$D000` calling a callee that had drifted into the `$D000-$DFFF` I/O hole
+
+If the crash address moves, stop treating it as a local logic bug until you have checked this contract.
+
 ## 3. Engineering Standards
 - **Simplicity First:** Impact minimal code. Avoid "just-in-case" alternatives.
 - **No Laziness:** Find root causes. No temporary "defensive" traps unless specifically for debugging a known, transient race condition.

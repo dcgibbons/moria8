@@ -12,6 +12,8 @@ This file provides tactical mandates for C128-specific development. These instru
 - **Bank 1 Contract:** Adhere to the `Bank 1 runtime ownership after boot` map in `memory128.s`. Do not use "unassigned" RAM without an explicit ownership update and compile-time `.assert`.
 - **Top/Bottom Common:** Bottom Common RAM ($0000-$0FFF) contains the Stack and Zero Page. Top Common RAM ($FC00-$FFFF) contains the Vectors. Both must remain enabled for system stability.
 - **Overlay Slots:** Use the fixed slots defined in `ARCHITECTURE.md` (e.g., OVL_STARTUP at $A000, OVL_TOWN at $B000).
+- **Low-RAM Reality:** `$1000-$3FFF` is **Bank-private**, not common RAM. Any direct call into that range must prove the code is loaded into the same bank the CPU is executing.
+- **I/O Hole Reality:** `$D000-$DFFF` is not “high RAM you can borrow later.” With I/O visible, execution there reads device space and returns garbage.
 
 ### 2a. Segment Boundary Law (ABSOLUTE — NEVER VIOLATE)
 The C128 memory map has hard physical boundaries that the assembler cannot enforce automatically. Violating them causes silent corruption, CPU JAMs in data tables, and I/O hole reads that return register garbage instead of code.
@@ -26,7 +28,23 @@ The C128 memory map has hard physical boundaries that the assembler cannot enfor
 2. Check `.print` lines for banked payload and overlay sizes.
 3. **NEVER delete `.assert` statements that check boundaries** (e.g., `first_banked_function >= $F000`, `program_end < $C000`). If an assert fails, your change broke the layout. Fix the change, not the assert.
 
+### 2b. Runtime-Loaded / Copied Code Checklist (MANDATORY)
+Before changing any C128 runtime-loaded or banked code path, verify all five:
+1. **symbol address** — where the routine links
+2. **PRG header** — where the file loads
+3. **load bank** — where the loader writes it
+4. **execution bank** — which bank is visible at the callsite
+5. **source-span safety** — whether any staged source used for recopies survives overlays/boot scrub
+
+Failure to check all five caused three separate regressions in this repo:
+- post-chargen town-entry `JSR $1000` into unloaded/wrong-bank code
+- help/inventory blank-screen hangs from recopying a payload source clobbered by overlays
+- dungeon descent `JAM` from a trampoline calling ego-item code that had drifted into `$D000-$DFFF`
+
+Also: asserting the trampoline address is not sufficient. Assert the callee placement too.
+
 ## 3. Implementation and Verification
 - **No Defensive Traps:** Remove `c128_diag_fail_stage_XX` once a root cause is confirmed. Do not add more labels to debug a crash; instead, fix the atomicity and context-switching logic.
 - **Test Suit Verification:** A C128 fix is only complete when `boot_diag_copy` and `boot_tier_transition_smoke` pass. Failure of these is a regression.
 - **VDC Re-assertion:** Always use `c128_vdc_reassert_mode` on KERNAL exit paths to ensure the 80-column display remains in its expected state.
+- **Trace Discipline:** If monitor traces move, treat the newest PC/backtrace as the active truth. Re-evaluate the load/bank/ownership contract before patching another nearby function.

@@ -37,6 +37,18 @@ banked payload window. Persistent overlay metadata/state must live in resident
 Bank 0 RAM, not adjacent to overlay code. No startup-overlay routine may trigger
 `init_copy_banked` while startup overlay execution is active.
 
+**C128 runtime-loaded code rule:** For any copied or disk-loaded runtime code,
+the linked address, PRG load header, load destination bank, visible execution
+bank, and recopy source span must all agree. A callable symbol is not enough.
+This exact class of mismatch caused:
+- post-chargen `JSR $1000` crashes when low-RAM VDC code loaded into the wrong bank
+- help/inventory blank screens when a recopy source overlapped `$E000-$EFFF`
+- dungeon-descent `JAM`s when ego-item code drifted into `$D000-$DFFF`
+
+**C128 low/high RAM caveats:**
+- `$1000-$3FFF` is not common RAM in the shipping C128 runtime model
+- `$D000-$DFFF` is the I/O hole and cannot be treated as ordinary executable RAM with I/O visible
+
 **Zero page KERNAL conflicts:** Although $02–$8F is nominally free from BASIC,
 some locations are clobbered by KERNAL routines. In particular, $22–$25 are used
 by KERNAL LOAD/SAVE, $14–$15 by KERNAL OPEN, and several others by KERNAL I/O.

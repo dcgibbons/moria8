@@ -112,6 +112,26 @@ Before adding or moving C128 data/code in low RAM or Bank 1:
 5. Add or update the relevant compile-time assert for the region boundary/overlap.
 6. Update at least one smoke that exercises the survival or fallback contract affected by the change.
 
+### 3.2 Runtime-Loaded Code Checklist (MANDATORY)
+
+For any C128 routine that is loaded from disk, copied at startup, recopied later, or entered through a trampoline, verify the full runtime contract:
+
+1. **Linked address** — symbol location in `out/main.vs` / `main.sym`
+2. **Load address** — PRG header / emitted segment base
+3. **Load bank** — which bank receives the bytes
+4. **Execution bank** — which bank is visible when the CPU calls it
+5. **Source-span survival** — whether any staged source used for later recopies remains valid after overlays or boot scrubs
+
+These are separate checks. The last C128 stability wave came from failing them independently:
+- `$1000` runtime code existed but was not loaded into the executing bank
+- banked UI destination was safe, but its staged recopy source overlapped the overlay window
+- a trampoline stayed below `$D000`, but its callee drifted into the I/O hole
+
+Operational rules:
+- Do not assume low RAM is common RAM; in shipping C128 mode, only `$0000-$0FFF` is common.
+- Do not place normal runtime code in `$D000-$DFFF` unless the entire path explicitly runs with I/O hidden and that design is documented.
+- When asserting safety, cover both the trampoline and the callee, and both the resident runtime block and its staged recopy source.
+
 ---
 
 ## 4. Test Harness (C4-Coverage)

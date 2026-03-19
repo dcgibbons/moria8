@@ -87,6 +87,33 @@ Moving code or data between segments (e.g., pulling an `#import` out of a `.pseu
 
 After ANY `#import` reordering: rebuild, check the Memory Map output, confirm Default segment ends below $C000. **NEVER delete boundary-checking `.assert` statements** — if an assert fails, fix your change, not the assert.
 
+## C128 Runtime-Loaded Code Contract (NEW — MUST VERIFY)
+
+Several multi-week C128 regressions came from treating “the symbol exists” as if that meant “the CPU can execute it.” That assumption is false on C128.
+
+For any runtime-loaded, banked, copied, or trampolined C128 code path, you MUST verify all of the following together:
+
+1. **Linked symbol address** — where the assembler says the routine lives
+2. **PRG load header** — where the file says it should load
+3. **Load destination bank** — which bank actually receives the bytes
+4. **Visible execution bank** — which bank the CPU is executing when the call happens
+5. **Copy source and destination safety** — whether any staged source used for later recopies survives overlays/boot scrubs and whether the runtime destination stays out of reserved regions
+
+If any one of those is wrong, the bug will usually present as a “random” `JAM`, `BRK`, or moving crash address.
+
+### C128-specific failure modes to keep in mind
+- **Low address does not mean common RAM.** `$1000-$3FFF` is **not** common RAM in the shipping C128 runtime. A direct `JSR $1000` only works if the code is loaded into the bank visible at that callsite.
+- **The I/O hole executes garbage.** `$D000-$DFFF` is never safe for normal code/data execution with I/O visible. A trampoline below `$D000` is not enough; the callee must also stay out of the hole.
+- **Overlay safety includes recopy sources.** A resident `$F000` payload can still be corrupted if the staged source bytes used by `init_copy_banked` overlap `$E000-$EFFF` and get overwritten by overlay loads.
+- **Moving crashes usually mean ownership drift.** Re-anchor on the latest monitor trace and ask what memory/bank contract changed, not just which function ran last.
+
+### Mandatory verification after C128 layout or banking changes
+- Rebuild and read the Memory Map / `.print` output.
+- Check the emitted symbol addresses in `out/main.vs` or `main.sym`.
+- Confirm the PRG header matches the intended runtime address.
+- Confirm the loader writes to the bank the callsite actually executes.
+- Add or update `.assert` statements for both trampolines **and** their callees.
+
 ## Architecture
 
 - **Display:** 40-column on C64; 40 or 80-column selectable on C128. PETSCII characters only (no bitmap graphics).
@@ -123,4 +150,3 @@ that are failing or stuck.
 ## Environment
 - Python: Use the local `.venv` (run commands via `source .venv/bin/activate && ...`)
 - Node: Use `npm`
-
