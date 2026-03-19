@@ -133,6 +133,11 @@ Scaling to multi-core.
 - This keeps `TEST_FILTER`, `TEST_PHASE`, console output, and summary exports aligned.
 - The cleanup covered `boot_title_newgame_smoke`, `boot_tier_transition_smoke`, `real_input_town_move_diag`, and `cache_survival_smoke`.
 
+### Incremental Step Landed (2026-03-18, summary export metadata)
+- Summary exports now carry run metadata needed for repeated filtered runs: `phase`, `jobs_requested`, `jobs_resolved`, and per-result `iteration`.
+- TSV exports gained an `iteration` column; JSON exports gained matching result-level `iteration` plus top-level run metadata.
+- This keeps machine-readable output aligned with the console banner and repeat loop.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

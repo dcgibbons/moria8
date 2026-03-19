@@ -37,6 +37,7 @@ TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
+TEST128_ITERATION=1
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
@@ -91,7 +92,7 @@ record_suite_result() {
     if [ "$TEST_LIST" != "0" ]; then
         return
     fi
-    printf '%s\t%s\t%s\t%s\n' "$status" "$suite_name" "$duration_ms" "$detail" >> "$TEST128_RESULTS_FILE"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$status" "$suite_name" "$duration_ms" "$detail" "$TEST128_ITERATION" >> "$TEST128_RESULTS_FILE"
 }
 
 print_timing_summary() {
@@ -118,12 +119,12 @@ emit_test_summary() {
     case "$TEST_SUMMARY" in
         tsv)
             {
-                printf 'status\tsuite\tduration_ms\tdetail\n'
+                printf 'status\tsuite\tduration_ms\tdetail\titeration\n'
                 cat "$TEST128_RESULTS_FILE"
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -136,18 +137,22 @@ payload = {
     "total": int(sys.argv[5]),
     "filter": sys.argv[6],
     "skip": sys.argv[7],
-    "repeat": int(sys.argv[8]),
-    "timings": sys.argv[9] != "0",
-    "fail_fast": sys.argv[10] != "0",
+    "phase": sys.argv[8],
+    "jobs_requested": sys.argv[9],
+    "jobs_resolved": int(sys.argv[10]),
+    "repeat": int(sys.argv[11]),
+    "timings": sys.argv[12] != "0",
+    "fail_fast": sys.argv[13] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
-    status, suite, duration_ms, detail = (line.split("\t", 3) + ["", "", "", ""])[:4]
+    status, suite, duration_ms, detail, iteration = (line.split("\t", 4) + ["", "", "", "", ""])[:5]
     payload["results"].append({
         "status": status,
         "suite": suite,
         "duration_ms": int(duration_ms) if duration_ms else None,
         "detail": detail,
+        "iteration": int(iteration) if iteration else 1,
     })
 summary_path.write_text(json.dumps(payload, indent=2) + "\n")
 PY
@@ -3653,6 +3658,7 @@ fi
 stopped_early=0
 repeat_idx=1
 while [ "$repeat_idx" -le "$TEST_REPEAT_RESOLVED" ]; do
+    TEST128_ITERATION="$repeat_idx"
     if [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
         echo "--- Iteration $repeat_idx/$TEST_REPEAT_RESOLVED ---"
     fi

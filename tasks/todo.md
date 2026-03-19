@@ -315,3 +315,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - rename the printed label for `run_cache_survival_smoke` to `cache_survival_smoke`
 - Verified:
   - `TEST_FILTER='boot_title_newgame_smoke|boot_tier_transition_smoke|real_input_town_move_diag|cache_survival_smoke' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST summary export metadata slice
+- Goal: make machine-readable summaries useful for repeated filtered runs without scraping console state.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add top-level JSON metadata for `phase`, `jobs_requested`, and `jobs_resolved`
+  - add per-result `iteration` to JSON exports
+  - add `iteration` column to TSV exports
+  - thread the current repeat iteration through summary recording
+- Verified:
+  - `TEST_REPEAT=2 TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_meta.json TEST_FILTER='main128_asm|config128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_REPEAT=2 TEST_SUMMARY=tsv TEST_SUMMARY_FILE=/tmp/test128_summary_meta.tsv TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_PHASE=boot TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_phase.json TEST_FILTER='boot_title_idle_smoke' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
