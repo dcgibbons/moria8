@@ -2256,7 +2256,7 @@ run_boot_d64_smoke() {
 }
 
 run_boot_title_newgame_smoke() {
-    local name="chargen_clean_smoke"
+    local name="boot_title_newgame_smoke"
     echo -n "  $name: "
 
     build_boot_assets || return
@@ -2552,7 +2552,7 @@ run_boot_title_idle_smoke() {
 }
 
 run_boot_tier_transition_smoke() {
-    local name="town_to_dungeon_stability_smoke"
+    local name="boot_tier_transition_smoke"
     echo -n "  $name: "
 
     build_boot_assets || return
@@ -2855,7 +2855,7 @@ run_scripted_summary_to_town_smoke() {
 }
 
 run_real_input_town_move_diag() {
-    local name="town_move_stability_smoke"
+    local name="real_input_town_move_diag"
     echo -n "  $name: "
 
     build_boot_assets || return
@@ -3106,7 +3106,7 @@ run_overlay_data_transition_smoke() {
 }
 
 run_cache_survival_smoke() {
-    local name="boot_cache_complete_smoke"
+    local name="cache_survival_smoke"
     echo -n "  $name: "
 
     build_cache_survival_boot_assets || return

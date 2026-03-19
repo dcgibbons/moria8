@@ -305,3 +305,13 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh`
   - `TEST_PHASE='town,cache' TEST_LIST=1 TEST_FILTER='town_overlay_smoke|cache_survival_smoke|real_boot_crash_harness|overlay_partial_failure_smoke' TEST_SKIP='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`
   - `TEST_PHASE=boot TEST_FILTER='boot_title_idle_smoke|boot_title_newgame_smoke' bash commodore/c128/run_tests128.sh`
+
+## 2026-03-18 OPT-TEST suite-name consistency slice
+- Goal: keep selected suite ids, printed console labels, and summary rows aligned.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - rename the printed label for `run_boot_title_newgame_smoke` to `boot_title_newgame_smoke`
+  - rename the printed label for `run_boot_tier_transition_smoke` to `boot_tier_transition_smoke`
+  - rename the printed label for `run_real_input_town_move_diag` to `real_input_town_move_diag`
+  - rename the printed label for `run_cache_survival_smoke` to `cache_survival_smoke`
+- Verified:
+  - `TEST_FILTER='boot_title_newgame_smoke|boot_tier_transition_smoke|real_input_town_move_diag|cache_survival_smoke' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅

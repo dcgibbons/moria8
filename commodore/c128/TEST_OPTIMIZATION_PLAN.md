@@ -128,6 +128,11 @@ Scaling to multi-core.
 - These sit alongside the broader `guards`, `units`, `smokes`, `diag`, and `perf` groups.
 - The narrower presets reduce regex churn for the most common focused smoke-debug loops.
 
+### Incremental Step Landed (2026-03-18, suite-name consistency)
+- The harness now prints the actual selected suite ids for renamed smokes and diags instead of legacy internal labels.
+- This keeps `TEST_FILTER`, `TEST_PHASE`, console output, and summary exports aligned.
+- The cleanup covered `boot_title_newgame_smoke`, `boot_tier_transition_smoke`, `real_input_town_move_diag`, and `cache_survival_smoke`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
