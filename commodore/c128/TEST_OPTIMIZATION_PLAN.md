@@ -123,6 +123,11 @@ Scaling to multi-core.
 - When `TEST_PHASE` is also set, describe mode limits output to the selected preset names.
 - This makes the preset layer discoverable without opening the shell script itself.
 
+### Incremental Step Landed (2026-03-18, narrower phase presets)
+- `run_tests128.sh` now exposes narrower `TEST_PHASE` presets: `boot`, `town`, and `cache`.
+- These sit alongside the broader `guards`, `units`, `smokes`, `diag`, and `perf` groups.
+- The narrower presets reduce regex churn for the most common focused smoke-debug loops.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

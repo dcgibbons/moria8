@@ -297,6 +297,15 @@ describe_phase_token() {
         smokes)
             printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
+        boot)
+            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
+            ;;
+        town)
+            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
+            ;;
+        cache)
+            printf 'cache\tcache_survival_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
+            ;;
         diag)
             printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
             ;;
@@ -331,6 +340,21 @@ suite_matches_phase_token() {
                 boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
+        boot)
+            case "$suite_name" in
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
+            esac
+            ;;
+        town)
+            case "$suite_name" in
+                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
+            esac
+            ;;
+        cache)
+            case "$suite_name" in
+                cache_survival_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke|overlay_data_transition_smoke) return 0 ;;
+            esac
+            ;;
         diag)
             case "$suite_name" in
                 real_input_town_move_diag|real_boot_crash_harness|overlay_data_transition_smoke|boot_diag_copy) return 0 ;;
@@ -350,7 +374,7 @@ describe_phases() {
     if [ -n "$TEST_PHASE" ]; then
         IFS=',' read -r -a phase_list <<< "$TEST_PHASE"
     else
-        phase_list=(all guards units smokes diag perf)
+        phase_list=(all guards units smokes boot town cache diag perf)
     fi
 
     echo "=== C128 Harness Phases ==="

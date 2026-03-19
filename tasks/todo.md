@@ -293,3 +293,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_DESCRIBE=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_DESCRIBE=1 TEST_PHASE='units,diag' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_DESCRIBE=1 TEST_FILTER='config128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST narrower phase presets slice
+- Goal: cut down on repeated custom regexes for the most common smoke-debug loops.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_PHASE=boot`
+  - add `TEST_PHASE=town`
+  - add `TEST_PHASE=cache`
+  - include the new presets in `TEST_DESCRIBE=1` default output
+- Verified:
+  - `TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh`
+  - `TEST_PHASE='town,cache' TEST_LIST=1 TEST_FILTER='town_overlay_smoke|cache_survival_smoke|real_boot_crash_harness|overlay_partial_failure_smoke' TEST_SKIP='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`
+  - `TEST_PHASE=boot TEST_FILTER='boot_title_idle_smoke|boot_title_newgame_smoke' bash commodore/c128/run_tests128.sh`
