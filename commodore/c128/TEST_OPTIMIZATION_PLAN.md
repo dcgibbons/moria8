@@ -274,6 +274,18 @@ Scaling to multi-core.
     - snapshot total: `2.301s`
 - This keeps the default batch harness honest: the out-of-the-box selection is now a set that actually passes through the current C.1/C.2 path.
 
+### Incremental Step Landed (2026-03-19, Gate C.4 `main_loop128` requalification)
+
+- `test_main_loop128.s` was rebuilt as a focused non-wrapping unit test again.
+- The critical structural fix was to stop patching one-byte local `rts` stubs with three-byte `jmp` overlays; the local hook targets are now explicit jump stubs, so `install_jump_patch` no longer corrupts adjacent test stubs.
+- `run_tests128.sh` unit-test workers now use `commodore/c128/run_test_internal_worker.sh` instead of relying on exported shell functions across child `bash` processes.
+- Proven results:
+  - `python3 -u commodore/c128/harness128.py --name main_loop128 --prg commodore/c128/tests/test_main_loop128.prg --vs commodore/c128/tests/test_main_loop128.vs --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --timeout 30 --connect-timeout 12` → PASS
+  - `python3 -u commodore/c128/harness128.py --name main_loop128 --prg commodore/c128/tests/test_main_loop128.prg --vs commodore/c128/tests/test_main_loop128.vs --vice /opt/homebrew/bin/x128 --timeout 30 --connect-timeout 12` → PASS
+  - `TEST_FILTER='main_loop128' bash commodore/c128/run_tests128.sh` → PASS
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests main_loop128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS in both cold and snapshot modes
+- `main_loop128` is now batch-eligible, but it stays out of the default stable batch set for the moment because a separate 9-test compare exposed unrelated failures in `memory128`, `msg_prompt128`, and `tier128`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

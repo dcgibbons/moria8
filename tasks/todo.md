@@ -595,3 +595,29 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-19 OPT-TEST Gate C.4 main_loop128 investigation
+
+### Plan
+- [x] Compare `test_main_loop128` assumptions with the current Python harness launch/reset path.
+- [x] Reproduce the `main_loop128` snapshot-harness failure with enough monitor detail to classify it.
+- [x] Patch the harness or test contract at the root cause instead of widening timeouts blindly.
+- [x] Verify `main_loop128` directly through `harness128.py`.
+- [x] Verify `main_loop128` through the shell harness after repairing the unit-test worker path.
+- [x] Verify `main_loop128` in isolated Gate C.4 compare mode.
+- [x] Keep it out of the default stable batch set until the unrelated compare regressions are resolved.
+
+### Review
+- Root cause in `test_main_loop128.s`: the reduced local hook stubs were one-byte `rts` bodies, but `install_jump_patch` writes three-byte `jmp` patches. That corrupted adjacent local stubs and produced false hangs.
+- Root cause in `run_tests128.sh`: the shell unit-test worker path was too fragile. Replacing the exported-function worker call with `commodore/c128/run_test_internal_worker.sh` made the shell path deterministic again.
+- `test_main_loop128.s` now assembles as a focused non-wrapping unit test:
+  - `.test_start=$0300`
+  - `.test_fail=$0303`
+  - `.test_pass=$0306`
+  - payload end `$4779`
+- `main_loop128` now passes in:
+  - `python3 -u commodore/c128/harness128.py ... --snapshot ...`
+  - `python3 -u commodore/c128/harness128.py ...` (cold/reset)
+  - `TEST_FILTER='main_loop128' bash commodore/c128/run_tests128.sh`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests main_loop128 ...`
+- The broader default batch set remains unchanged for now because a separate compare run exposed unrelated failures in `memory128`, `msg_prompt128`, and `tier128`.

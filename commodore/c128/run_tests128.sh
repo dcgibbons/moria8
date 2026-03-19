@@ -2138,7 +2138,7 @@ run_parallel_unit_tests() {
         local test_entry
         for test_entry in "${filtered_tests[@]}"; do
             : > "$result_file"
-            bash -c 'run_test_internal "$1" "$2" "$3" "$4"' -- ${test_entry} "$result_file"
+            bash "$RUN_TESTS128_DIR/run_test_internal_worker.sh" "$result_file" ${test_entry}
             while IFS=$'\t' read -r status name duration_ms detail; do
                 echo -n "  $name: "
                 if [ "$status" = "PASS" ]; then
@@ -2170,7 +2170,7 @@ run_parallel_unit_tests() {
 
     echo "  running unit tests in parallel..."
 
-    printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS_RESOLVED" -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
+    printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS_RESOLVED" -n 3 bash "$RUN_TESTS128_DIR/run_test_internal_worker.sh" "$result_file"
     
     while IFS=$'\t' read -r status name duration_ms detail; do
         

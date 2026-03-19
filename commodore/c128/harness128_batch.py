@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -15,11 +16,20 @@ TESTS_DIR = SCRIPT_DIR / "tests"
 if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
-from harness128 import build_arg_parser, build_connector, build_vice_command, create_ready_snapshot, terminate_vice
+from harness128 import (
+    build_arg_parser,
+    build_connector,
+    build_vice_command,
+    create_ready_snapshot,
+    run_test_via_moncommands,
+    symbols_need_moncommands,
+    terminate_vice,
+)
 from vice_connector import extract_test_symbols, run_test_case
 
 REPO_ROOT = SCRIPT_DIR.parent.parent
 KICKASS_JAR = REPO_ROOT / "tools" / "kickass" / "KickAss.jar"
+IMPORT_RE = re.compile(r'^\s*#import\s+"([^"]+)"')
 
 
 @dataclass(frozen=True)
@@ -36,6 +46,7 @@ BATCH_TESTS: dict[str, TestCase] = {
     "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0),
     "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0),
     "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0),
+    "main_loop128": TestCase("main_loop128", SCRIPT_DIR / "tests" / "test_main_loop128.s", 5.0),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
     "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
@@ -58,11 +69,12 @@ def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path,
     source = test_case.source
     prg_path = source.with_suffix(".prg")
     vs_path = source.with_suffix(".vs")
+    source_stamp = compute_source_stamp(source)
     if (
         prg_path.exists()
         and vs_path.exists()
-        and prg_path.stat().st_mtime >= source.stat().st_mtime
-        and vs_path.stat().st_mtime >= source.stat().st_mtime
+        and prg_path.stat().st_mtime >= source_stamp
+        and vs_path.stat().st_mtime >= source_stamp
     ):
         return prg_path, vs_path
 
@@ -71,15 +83,15 @@ def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path,
         "-jar",
         str(KICKASS_JAR),
         str(source),
-        "-o",
-        str(prg_path),
         "-libdir",
         str(REPO_ROOT / "commodore" / "c64"),
         "-define",
         "C128",
+        "-define",
+        'OVL_OUT="out"',
         "-vicesymbols",
-        "-var",
-        "OVL_OUT=\"out\"",
+        "-o",
+        str(prg_path),
     ]
     result = subprocess.run(command, cwd=SCRIPT_DIR, capture_output=True, text=True)
     if result.returncode != 0:
@@ -89,19 +101,47 @@ def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path,
     return prg_path, vs_path
 
 
+def compute_source_stamp(source: Path, seen: set[Path] | None = None) -> float:
+    if seen is None:
+        seen = set()
+    source = source.resolve()
+    if source in seen:
+        return 0.0
+    seen.add(source)
+
+    stamp = source.stat().st_mtime
+    for line in source.read_text(encoding="utf-8").splitlines():
+        match = IMPORT_RE.match(line)
+        if not match:
+            continue
+        imported_path = (source.parent / match.group(1)).resolve()
+        if imported_path.exists():
+            stamp = max(stamp, compute_source_stamp(imported_path, seen))
+    return stamp
+
+
 def run_one_test(
     connector,
+    base_args: argparse.Namespace,
     *,
+    test_name: str,
     prg_path: Path,
     vs_path: Path,
     timeout: float,
     snapshot_path: Path | None,
     verbose: bool,
 ) -> tuple[bool, str, float]:
-    if snapshot_path is not None:
-        connector.undump_snapshot(snapshot_path, debug=verbose)
     symbols = extract_test_symbols(vs_path)
     start_time = time.perf_counter()
+    if symbols_need_moncommands(symbols):
+        mon_args = argparse.Namespace(**vars(base_args))
+        mon_args.name = test_name
+        mon_args.timeout = timeout
+        exit_code = run_test_via_moncommands(mon_args, prg_path=prg_path, symbols=symbols, snapshot_path=snapshot_path)
+        duration = time.perf_counter() - start_time
+        return exit_code == 0, "" if exit_code == 0 else "moncommands execution failed", duration
+    if snapshot_path is not None and connector is not None:
+        connector.undump_snapshot(snapshot_path, debug=verbose)
     result = run_test_case(
         connector,
         prg_path=prg_path,
@@ -120,29 +160,44 @@ def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[
     results: list[tuple[str, bool, str, float]] = []
     for test_case in tests:
         prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
-        vice_process = subprocess.Popen(
-            build_vice_command(base_args),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        connector = build_connector(base_args)
-        try:
-            connector.connect(
-                retries=max(1, int(base_args.connect_timeout / base_args.connect_retry_delay)),
-                retry_delay=base_args.connect_retry_delay,
-                debug=base_args.verbose,
-            )
+        symbols = extract_test_symbols(vs_path)
+        if symbols_need_moncommands(symbols):
             passed, reason, duration = run_one_test(
-                connector,
+                None,
+                base_args,
+                test_name=test_case.name,
                 prg_path=prg_path,
                 vs_path=vs_path,
                 timeout=test_case.timeout,
                 snapshot_path=None,
                 verbose=base_args.verbose,
             )
-        finally:
-            connector.close()
-            terminate_vice(vice_process)
+        else:
+            vice_process = subprocess.Popen(
+                build_vice_command(base_args),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            connector = build_connector(base_args)
+            try:
+                connector.connect(
+                    retries=max(1, int(base_args.connect_timeout / base_args.connect_retry_delay)),
+                    retry_delay=base_args.connect_retry_delay,
+                    debug=base_args.verbose,
+                )
+                passed, reason, duration = run_one_test(
+                    connector,
+                    base_args,
+                    test_name=test_case.name,
+                    prg_path=prg_path,
+                    vs_path=vs_path,
+                    timeout=test_case.timeout,
+                    snapshot_path=None,
+                    verbose=base_args.verbose,
+                )
+            finally:
+                connector.close()
+                terminate_vice(vice_process)
         results.append((test_case.name, passed, reason, duration))
     return results
 
@@ -168,6 +223,8 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
             prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
             passed, reason, duration = run_one_test(
                 connector,
+                base_args,
+                test_name=test_case.name,
                 prg_path=prg_path,
                 vs_path=vs_path,
                 timeout=test_case.timeout,

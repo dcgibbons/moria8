@@ -13,10 +13,12 @@ SYMBOL_RE = re.compile(r"^\S+\s+\S:([0-9A-Fa-f]+)\s+(\S+)$")
 
 def normalize_addr(addr: int | str) -> str:
     if isinstance(addr, int):
-        return f"{addr:04X}"
+        return f"{addr & 0xFFFF:04X}"
     value = addr.strip().upper()
     if value.startswith("$"):
         value = value[1:]
+    if len(value) > 4:
+        value = value[-4:]
     return value.zfill(4)
 
 
@@ -25,6 +27,9 @@ class TestSymbols:
     start_addr: str
     pass_addr: str
     fail_addr: str | None = None
+    raw_start_addr: str | None = None
+    raw_pass_addr: str | None = None
+    raw_fail_addr: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,12 +56,22 @@ def parse_vs_symbols(vs_path: str | Path) -> dict[str, str]:
 
 def extract_test_symbols(vs_path: str | Path) -> TestSymbols:
     symbols = parse_vs_symbols(vs_path)
-    start_addr = symbols.get(".test_start")
-    pass_addr = symbols.get(".test_pass")
-    fail_addr = symbols.get(".test_fail")
+    raw_start_addr = symbols.get(".test_start")
+    raw_pass_addr = symbols.get(".test_pass")
+    raw_fail_addr = symbols.get(".test_fail")
+    start_addr = raw_start_addr
+    pass_addr = raw_pass_addr
+    fail_addr = raw_fail_addr
     if not start_addr or not pass_addr:
         raise ValueError(f"missing .test_start/.test_pass in {vs_path}")
-    return TestSymbols(start_addr=start_addr, pass_addr=pass_addr, fail_addr=fail_addr)
+    return TestSymbols(
+        start_addr=start_addr,
+        pass_addr=pass_addr,
+        fail_addr=fail_addr,
+        raw_start_addr=raw_start_addr,
+        raw_pass_addr=raw_pass_addr,
+        raw_fail_addr=raw_fail_addr,
+    )
 
 
 class VICEConnector:
@@ -244,22 +259,9 @@ def run_test_case(
         connector.poke("D506", "07", debug=debug)
     connector.load_prg(prg_path, debug=debug)
     connector.clear_breakpoints(debug=debug)
+    connector.break_at(pass_addr, debug=debug)
     if fail_addr is not None:
         connector.break_at(fail_addr, debug=debug)
     connector.set_register("pc", start_addr, debug=debug)
-    try:
-        last_status = connector.run_until(pass_addr, timeout=timeout, debug=debug)
-    except TimeoutError:
-        return MonitorTestResult(False, f"timeout after {timeout}s", "")
-
-    upper_status = last_status.upper()
-    pass_marker = f"C:${normalize_addr(pass_addr)}"
-    fail_marker = f"C:${normalize_addr(fail_addr)}" if fail_addr is not None else None
-
-    if pass_marker in upper_status:
-        return MonitorTestResult(True, "", last_status)
-    if fail_marker and fail_marker in upper_status:
-        return MonitorTestResult(False, f"reached test_fail label at ${normalize_addr(fail_addr)}", last_status)
-    if "JAM" in upper_status or "INVALID OPCODE" in upper_status:
-        return MonitorTestResult(False, "CPU JAM", last_status)
-    return MonitorTestResult(False, "stopped without reaching pass/fail breakpoint", last_status)
+    connector.go()
+    return connector.wait_for_stop(pass_addr=pass_addr, fail_addr=fail_addr, timeout=timeout)

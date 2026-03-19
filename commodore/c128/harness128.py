@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -32,6 +34,83 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
     for extra_arg in args.vice_arg:
         command.append(extra_arg)
     return command
+
+
+def symbols_need_moncommands(symbols) -> bool:
+    raw_values = [symbols.raw_start_addr, symbols.raw_pass_addr, symbols.raw_fail_addr]
+    for raw in raw_values:
+        if raw is None:
+            continue
+        value = raw.strip().upper()
+        if value.startswith("$"):
+            value = value[1:]
+        if len(value) > 4:
+            return True
+    return False
+
+
+def run_test_via_moncommands(
+    args: argparse.Namespace,
+    *,
+    prg_path: Path,
+    symbols,
+    snapshot_path: Path | None,
+) -> int:
+    with tempfile.TemporaryDirectory(prefix="harness128_") as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        mon_file = temp_dir_path / "test.mon"
+        log_file = temp_dir_path / "test.log"
+
+        commands: list[str] = []
+        if snapshot_path is not None:
+            commands.append(f'undump "{snapshot_path.resolve()}"')
+        commands.append(f'load "{prg_path.resolve()}" 0')
+        if symbols.fail_addr is not None:
+            commands.append(f"break {symbols.fail_addr}")
+        commands.append(f"r pc={symbols.start_addr}")
+        commands.append(f"until ${symbols.pass_addr}")
+        mon_file.write_text("\n".join(commands) + "\n", encoding="utf-8")
+
+        command = [
+            args.vice,
+            "-console",
+            "-nativemonitor",
+            "-warp",
+            "-80col",
+            "+sound",
+            "-sounddev",
+            "dummy",
+        ]
+        for extra_arg in args.vice_arg:
+            command.append(extra_arg)
+        command.extend(["-moncommands", str(mon_file), "-monlog", "-monlogname", str(log_file)])
+
+        try:
+            subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=args.timeout + args.connect_timeout + 2.0,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"FAIL: {args.name} (timeout after {args.timeout:.1f}s)")
+            return 2
+
+        log_text = log_file.read_text(encoding="utf-8", errors="ignore") if log_file.exists() else ""
+        pass_marker = f"C:${symbols.pass_addr}"
+        fail_marker = f"C:${symbols.fail_addr}" if symbols.fail_addr is not None else None
+        if re.search(rf"UNTIL: .*{re.escape(pass_marker)}", log_text, flags=re.IGNORECASE):
+            print(f"PASS: {args.name}")
+            return 0
+        if fail_marker and re.search(rf"(BREAK|STOP): .*{re.escape(fail_marker)}", log_text, flags=re.IGNORECASE):
+            print(f"FAIL: {args.name} (reached test_fail label at ${symbols.fail_addr})")
+            return 2
+        if "JAM" in log_text.upper() or "INVALID OPCODE" in log_text.upper():
+            print(f"FAIL: {args.name} (CPU JAM)")
+            return 2
+        print(f"FAIL: {args.name} (stopped without reaching pass/fail breakpoint)")
+        return 2
 
 
 def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
@@ -87,6 +166,9 @@ def run_monitor_test(args: argparse.Namespace) -> int:
     prg_path = Path(args.prg).resolve()
     vs_path = Path(args.vs).resolve() if args.vs else prg_path.with_suffix(".vs")
     symbols = extract_test_symbols(vs_path)
+
+    if symbols_need_moncommands(symbols):
+        return run_test_via_moncommands(args, prg_path=prg_path, symbols=symbols, snapshot_path=snapshot_path)
 
     vice_process: subprocess.Popen[bytes] | None = None
     if not args.attach_only:

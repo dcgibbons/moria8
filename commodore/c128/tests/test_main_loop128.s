@@ -4,9 +4,24 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 
+.pc = $0300 "Test Stub"
+
+test_start:
+    jmp test_entry
+
+test_fail:
+    jmp test_fail
+
+test_pass:
+    jmp test_pass
+
 .pc = $3000 "Test Code"
 
 .encoding "screencode_mixed"
+
+.macro MapRead_ptr0_y() {
+    jsr mmu_safe_map_read_ptr0
+}
 
 c128_restore_runtime_vectors:
     rts
@@ -21,6 +36,48 @@ c128_restore_saved_banking:
     rts
 
 c128_restore_runtime_guards:
+    rts
+
+rng_seed:
+    rts
+
+sound_play:
+    rts
+
+msg_init:
+    rts
+
+eff_fear_timer:
+    .byte 0
+
+safe_setbnk:
+    rts
+
+w_readst:
+    rts
+
+w_setlfs:
+    rts
+
+w_setnam:
+    rts
+
+w_open:
+    rts
+
+w_close:
+    rts
+
+w_chkin:
+    rts
+
+w_clrchn:
+    rts
+
+w_chrout:
+    rts
+
+w_load:
     rts
 
 c128_stack_guard_begin:
@@ -87,34 +144,185 @@ tramp_store_enter:
 tramp_player_create:
     rts
 
+player_recalc_equipment:
+    rts
+
+overlay_load:
+    clc
+    rts
+
+monster_spawn_level:
+    rts
+
+item_spawn_level:
+    rts
+
+level_entry_dir:
+    .byte 0
+
+screen_blank:
+    rts
+
+screen_clear:
+    jmp test_screen_clear
+
+item_init_identification:
+    rts
+
+player_try_move:
+    jmp test_player_try_move
+
+update_visibility:
+    jmp test_update_visibility
+
+trap_check_at_player:
+    jmp test_trap_check
+
+check_player_on_store_door:
+    jmp test_check_store_door
+
+check_stairs_at_player:
+    rts
+
+door_try_close:
+    rts
+
+do_search:
+    rts
+
+item_pickup:
+    rts
+
+item_drop:
+    rts
+
+item_wear:
+    rts
+
+item_takeoff:
+    rts
+
+item_eat:
+    rts
+
+item_quaff:
+    rts
+
+item_read_scroll:
+    rts
+
+item_aim_wand:
+    rts
+
+item_use_staff:
+    rts
+
+item_gain_spell:
+    rts
+
+item_refuel:
+    rts
+
+player_tunnel:
+    rts
+
+do_look:
+    jmp test_do_look
+
+run_check_stop:
+    clc
+    rts
+
+msg_show_more:
+    rts
+
+player_sync_from_zp:
+    rts
+
+rng_range:
+    lda #0
+    rts
+
+ego_get_suffix_ptr:
+    lda #0
+    tay
+    rts
+
+item_get_name_ptr:
+    lda #0
+    tay
+    rts
+
+sound_init:
+    rts
+
+viewport_update:
+    jmp test_viewport_update
+
+render_local_area:
+    jmp test_render_local_area
+
+render_viewport:
+    jmp test_render_viewport
+
+render_viewport_scroll_delta:
+    rts
+
+screen_unblank:
+    rts
+
+status_draw:
+    jmp test_status_draw
+
+msg_print:
+    rts
+
+tier_invalidate_state:
+    rts
+
+tier_check_transition:
+    rts
+
+player_calc_stats:
+    rts
+
+player_calc_hp:
+    rts
+
+msg_clear:
+    rts
+
+turn_post_action:
+    jmp test_turn_post_action
+
+ui_help_clear_all:
+    jmp test_ui_help_clear_all
+
 tramp_ui_recall:
+    rts
+
+creature_get_name:
     rts
 
 tramp_dig_ability:
     rts
 
 tramp_player_cast_spell:
-    jsr player_cast_spell
     rts
 
 tramp_player_pray:
-    jsr player_pray
     rts
 
 tramp_magic_check_new_spells:
-    jsr magic_check_new_spells
     rts
 
 tramp_ranged_fire:
-    jsr ranged_fire
     rts
 
 tramp_throw_item:
-    jsr throw_item
     rts
 
 tramp_bash_command:
-    jsr bash_command
     rts
 
 c128_preload_fn_len: .byte 0
@@ -153,66 +361,55 @@ ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000
+.const SFX_PICKUP = 0
+.const SPELL_MAGE = 1
+.const OVL_DUNGEON_GEN = 4
+.const EQUIP_WEAPON = 22
+.const EQUIP_BODY = 23
+.const EQUIP_LIGHT = 28
+.const ICAT_DIGGING = 0
+.const INPUT_ROW = 24
+.const FLAG_LIT = $08
+.const MAX_CREATURES = 65
+.const PL_DLEVEL = 20
+.const PL_MAX_DLVL = 56
+.const PL_LIGHT_RAD = 55
+.const PL_SPELL_TYPE = 60
+.const PL_TODMG = 41
+current_overlay: .byte 0
+ovl_fn_addr_lo: .byte 0, 0, 0, 0
+ovl_fn_addr_hi: .byte 0, 0, 0, 0
+ovl_fn_len:     .byte 0, 0, 0, 0
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
+ol_target:        .byte 0
+map_row_lo: .fill 66, <($c000 + i * 80)
+map_row_hi: .fill 66, >($c000 + i * 80)
+player_data: .fill 80, 0
+it_category: .fill 256, 0
+inv_item_id: .fill 30, 0
+inv_ego: .fill 30, 0
+inv_qty: .fill 30, 0
+inv_p1: .fill 30, 0
+inv_flags: .fill 30, 0
+uinv_filter: .byte $ff
+tun_dig_ability: .byte 0
+old_player_x: .byte 0
+old_player_y: .byte 0
+old_view_x: .byte 0
+old_view_y: .byte 0
+run_was_lit: .byte 0
+cr_display: .fill MAX_CREATURES, 0
+recall_kills: .fill MAX_CREATURES, 0
+recall_deaths: .fill MAX_CREATURES, 0
+recall_attacks: .fill MAX_CREATURES, 0
+recall_spells: .fill MAX_CREATURES, 0
 
 #import "../../common/zeropage.s"
-
 #import "../memory128.s"
-#import "../../common/reu.s"
-#import "../screen_vdc.s"
-#import "../../common/color.s"
-#import "../config128.s"
 #import "../input128.s"
-#import "../../common/rng.s"
-#import "../../common/math.s"
-#import "../../common/tables.s"
-#import "../../common/item_defs.s"
-#import "../../common/player.s"
-#import "../../common/ui_messages.s"
-#import "../../common/ui_status.s"
-#import "../../common/ui_help_clear.s"
-#import "../../common/ui_character.s"
-#import "../../common/stat_display.s"
-.segmentdef TestCreateOverlay [start=$D000]
-.segment TestCreateOverlay
-#import "../../common/background_data.s"
-#import "../../common/player_create.s"
-.segment Default
-#import "../../common/sound.s"
-#import "../../common/dungeon_data.s"
-#import "../../common/dungeon_gen.s"
-#import "../../common/huffman.s"
-#import "../../common/dungeon_features.s"
-#import "../../common/monster.s"
-#import "../../common/tier_manager.s"
-#import "../../common/overlay.s"
-#import "../../common/monster_ai.s"
-#import "../../common/recall.s"
-#import "../../common/monster_magic.s"
-#import "../../common/item.s"
-#import "../../common/special_rooms.s"
-#import "../../common/ego_items.s"
-#import "../../common/special_rooms_stubs.s"
-#import "../../common/player_items.s"
-#import "../../common/spell_data.s"
-#import "../../common/projectile.s"
-#import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_recall.s"
-#import "../dungeon_render_vdc.s"
-#import "../../common/dungeon_los.s"
-#import "../../common/player_move.s"
-#import "../../common/combat.s"
-#import "../../common/ranged_fire.s"
-#import "../../common/throw.s"
-#import "../../common/bash.s"
-#import "../../common/tunnel.s"
-#import "../../common/monster_attack.s"
-#import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
 #import "../../common/game_loop.s"
 
 save_welcome_str:
@@ -235,6 +432,7 @@ test_door_open_calls: .byte 0
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
 test_open_ok: .byte 0
+vis_room_revealed: .byte 0
 test_wait_release_calls: .byte 0
 test_get_key_calls: .byte 0
 test_help_calls: .byte 0
@@ -243,6 +441,7 @@ test_screen_clear_calls: .byte 0
 test_help_clear_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
+test_case_id: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -255,22 +454,8 @@ test_exit_calls: .byte 0
 
 install_jump_patch:
     :PatchJump(input_get_command, test_input_get_command)
-    :PatchJump(turn_post_action, test_turn_post_action)
-    :PatchJump(status_draw, test_status_draw)
-    :PatchJump(viewport_update, test_viewport_update)
-    :PatchJump(update_visibility, test_update_visibility)
-    :PatchJump(render_local_area, test_render_local_area)
-    :PatchJump(render_viewport, test_render_viewport)
-    :PatchJump(player_try_move, test_player_try_move)
-    :PatchJump(trap_check_at_player, test_trap_check)
-    :PatchJump(check_player_on_store_door, test_check_store_door)
-    :PatchJump(do_look, test_do_look)
-    :PatchJump(get_direction_target, test_get_direction_target)
-    :PatchJump(door_try_open, test_door_try_open)
     :PatchJump(input_wait_release, test_input_wait_release)
     :PatchJump(input_get_key, test_input_get_key)
-    :PatchJump(screen_clear, test_screen_clear)
-    :PatchJump(ui_help_clear_all, test_ui_help_clear_all)
     rts
 
 reset_state:
@@ -416,11 +601,30 @@ test_screen_clear:
     inc test_screen_clear_calls
     rts
 
+screen_clear_row:
+    rts
+
 test_ui_help_clear_all:
     inc test_help_clear_calls
     rts
 
-test_start:
+mmu_safe_map_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+get_direction_target:
+    jmp test_get_direction_target
+
+door_try_open:
+    jmp test_door_try_open
+
+screen_put_string:
+    rts
+
+screen_put_char:
+    rts
+
+test_entry:
     sei
     cld
     ldx #$ff
@@ -430,6 +634,8 @@ test_start:
     jsr install_jump_patch
 
     // Test 1: MOVE_N routes through player_try_move and consumes a turn.
+    lda #1
+    sta test_case_id
     jsr reset_state
     lda #1
     sta test_move_ok
@@ -460,6 +666,8 @@ test_start:
     jmp test_fail
 
     // Test 2: LOOK dispatches helper and consumes no turn.
+    lda #2
+    sta test_case_id
     jsr reset_state
     lda #CMD_LOOK
     sta test_cmd_script
@@ -475,6 +683,8 @@ test_start:
     jmp test_fail
 
     // Test 3: OPEN success consumes a turn and redraws.
+    lda #3
+    sta test_case_id
     jsr reset_state
     lda #1
     sta test_dir_ok
@@ -506,6 +716,8 @@ test_start:
     jmp test_fail
 
     // Test 4: HELP waits for key release and redraws via help clear.
+    lda #4
+    sta test_case_id
     jsr reset_state
     lda #CMD_HELP
     sta test_cmd_script
@@ -533,7 +745,9 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 5: INVENTORY uses dismiss gating and explicit screen clear.
+    // Test 5: INVENTORY uses dismiss gating and redraws via help-clear.
+    lda #5
+    sta test_case_id
     jsr reset_state
     lda #CMD_INVENTORY
     sta test_cmd_script
@@ -552,7 +766,7 @@ test_start:
     cmp #1
     beq *+5
     jmp test_fail
-    lda test_screen_clear_calls
+    lda test_help_clear_calls
     cmp #1
     beq *+5
     jmp test_fail
@@ -560,10 +774,4 @@ test_start:
     cmp #1
     beq *+5
     jmp test_fail
-    jmp test_pass
-
-test_fail:
-    jmp test_fail
-
-test_pass:
     jmp test_pass
