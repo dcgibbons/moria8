@@ -199,6 +199,23 @@ Scaling to multi-core.
   - `PASS: minimal128`
 - This is the first Gate C.1 slice only: it proves the Python monitor path for one test, but it does not yet replace `run_tests128.sh`, add snapshots, speak the binary monitor protocol, or add a KickAssembler server.
 
+### Incremental Step Landed (2026-03-19, Gate C.2 initial snapshot slice)
+- `commodore/c128/harness128.py` now supports:
+  - `--prepare-snapshot <path>` to build a prepared `.vsf` through monitor-side `dump`
+  - `--snapshot <path>` to restore that `.vsf` through monitor-side `undump` before running a test
+  - `--ensure-snapshot` to create the snapshot lazily when needed
+- Proven snapshot build path:
+  - `python3 -u commodore/c128/harness128.py --prepare-snapshot commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12 --verbose`
+- Proven snapshot-backed test path:
+  - `python3 -u commodore/c128/harness128.py --name minimal128 --prg commodore/c128/tests/test_minimal128.prg --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --connect-timeout 12 --verbose`
+- Proven result:
+  - `PASS: minimal128`
+- Important VICE 3.10 detail:
+  - the reliable restore contract is monitor-side `undump`
+  - `-autostart <snapshot.vsf>` is not an exact state restore path for this harness
+  - the restored snapshot state was explicitly probed and preserved `FF00=$3E` and `D506=$07`
+- This is the first Gate C.2 slice only: it proves prepared snapshot generation plus exact restore over the text monitor, but it does not yet deliver the final near-zero startup path envisioned for a binary-monitor/snapshot worker pool.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

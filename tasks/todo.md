@@ -288,6 +288,36 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - persistent VICE workers
   - assembly server
   - actual `run_tests128.sh` integration/replacement
+
+## 2026-03-19 OPT-TEST Gate C.2 initial snapshot slice
+
+### Plan
+- [x] Determine the actual VICE 3.10 snapshot save/load contract instead of assuming a command-line flag.
+- [x] Add snapshot creation support to `commodore/c128/harness128.py`.
+- [x] Add snapshot restore support to `commodore/c128/harness128.py`.
+- [x] Prove a test can run from a prepared snapshot without the cold-start reset sequence.
+- [x] Record the Gate C.2 slice and the VICE 3.10 contract in the optimization docs.
+
+### Review
+- VICE 3.10 monitor-side snapshot commands are `dump` and `undump`.
+- The reliable restore path for this harness is **not** `-autostart <snapshot.vsf>`. That path did not behave like an exact state restore for the prepared machine state.
+- The harness now supports:
+  - `--prepare-snapshot <path>` to create a ready `.vsf`
+  - `--snapshot <path>` to restore it via `undump`
+  - `--ensure-snapshot` to create it lazily
+- Prepared snapshot setup currently writes:
+  - `FF00 = $3E`
+  - `D506 = $07`
+  - `D011 = $00`
+- Verified exact restored state through a direct monitor probe after `undump`:
+  - `FF00 = $3E`
+  - `D506 = $07`
+  - `D011` read back as `$80` on VICE 3.10, so MMU/common-RAM are the trusted invariants from this slice
+- Live proof commands:
+  - `python3 -u commodore/c128/harness128.py --prepare-snapshot commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12 --verbose`
+  - `python3 -u commodore/c128/harness128.py --name minimal128 --prg commodore/c128/tests/test_minimal128.prg --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --connect-timeout 12 --verbose`
+- Live proof result:
+  - `PASS: minimal128`
   - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
 
 ## 2026-03-18 OPT-TEST TEST_SUMMARY slice

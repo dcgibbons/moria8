@@ -66,6 +66,24 @@ class VICEConnector:
         self.timeout = timeout
         self.sock: socket.socket | None = None
 
+    def _drain_after_prompt(self, data: bytes, quiet_window: float = 0.05) -> bytes:
+        if self.sock is None:
+            return data
+        original_timeout = self.sock.gettimeout()
+        try:
+            self.sock.settimeout(quiet_window)
+            while True:
+                try:
+                    chunk = self.sock.recv(4096)
+                except socket.timeout:
+                    break
+                if not chunk:
+                    break
+                data += chunk
+        finally:
+            self.sock.settimeout(original_timeout)
+        return data
+
     def connect(
         self,
         *,
@@ -118,6 +136,7 @@ class VICEConnector:
                 break
             data += chunk
             if PROMPT_RE.search(data):
+                data = self._drain_after_prompt(data)
                 break
         return data.decode("ascii", errors="ignore")
 
@@ -156,6 +175,12 @@ class VICEConnector:
 
     def load_prg(self, prg_path: str | Path, *, debug: bool = False) -> str:
         return self.send_command(f'load "{Path(prg_path).resolve()}" 0', debug=debug)
+
+    def dump_snapshot(self, snapshot_path: str | Path, *, debug: bool = False) -> str:
+        return self.send_command(f'dump "{Path(snapshot_path).resolve()}"', debug=debug)
+
+    def undump_snapshot(self, snapshot_path: str | Path, *, debug: bool = False) -> str:
+        return self.send_command(f'undump "{Path(snapshot_path).resolve()}"', debug=debug)
 
     def clear_breakpoints(self, *, debug: bool = False) -> str:
         return self.send_command("del", debug=debug)
