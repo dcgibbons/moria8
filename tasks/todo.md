@@ -808,3 +808,39 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -B -C commodore/c128 build128`
   - `make -C commodore/c128 test128-fast`
   - `make -C commodore/c128 test128-fast-smoke`
+
+## 2026-03-19 TST-3 UI view isolation tests
+
+### Plan
+- [x] Audit the shared UI render entry points and choose the smallest direct-draw coverage that matches the `TST-3` backlog scope.
+- [x] Add a focused C64 runtime suite covering character, help, inventory, equipment, recall, store, and home layouts.
+- [x] Wire the suite into the standard C64 runner and verify the updated C64/C128 test paths.
+- [x] Update the backlog/history docs to close `TST-3`.
+
+### Review
+- Added `commodore/c64/tests/test_ui_views.s`, a focused runtime suite that directly exercises the shared view renderers for:
+  - character sheet
+  - help
+  - inventory
+  - equipment
+  - recall
+  - store
+  - home
+- Kept the coverage isolated to direct draw/layout paths where possible:
+  - `ui_char_display`
+  - `ui_help_display`
+  - `ui_inv_display`
+  - `ui_equip_display`
+  - `ui_recall_display`
+  - `store_draw_screen`
+  - `home_enter` with patched input and exit-clear suppression so the rendered screen remains inspectable
+- Fixed the test expectations to match real screen-code rendering:
+  - slot letters are written as screen codes (`$01` for `A`) rather than textual `A`
+  - recall stat assertions now follow the stable rendered row instead of assuming ad hoc test data
+- Wired the suite into `commodore/c64/run_tests.sh` as `ui_views`.
+- Verified with:
+  - focused headless `ui_views` run → `7/7`
+  - `cd commodore/c64 && ./run_tests.sh` → `29 passed, 0 failed`
+  - `make -B -C commodore/c128 build128`
+  - `make -C commodore/c128 test128-fast`
+  - `make -C commodore/c128 test128-fast-smoke`

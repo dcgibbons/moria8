@@ -6,6 +6,51 @@
 
 ---
 
+## TST-3 — UI Menus & Views Isolation Coverage ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the open shared-UI isolation-testing gap for the main menu/view surfaces:
+  - character viewer
+  - help
+  - home
+  - inventory
+  - recall
+  - store
+- Added equipment coverage alongside inventory because it shares the same overlay family and item-line rendering path.
+
+### What Changed
+1. **Focused C64 runtime suite**
+   - Added `commodore/c64/tests/test_ui_views.s`.
+   - The suite calls the shared renderers directly where possible instead of routing through full gameplay loops.
+2. **Covered direct view/layout paths**
+   - `ui_char_display`
+   - `ui_help_display`
+   - `ui_inv_display`
+   - `ui_equip_display`
+   - `ui_recall_display`
+   - `store_draw_screen`
+   - `home_enter`
+3. **Home-path testability**
+   - The `home` case patches `input_get_key` to exit immediately and suppresses the final clear so the rendered layout remains assertable.
+4. **Runner integration**
+   - Wired the new suite into `commodore/c64/run_tests.sh` as `ui_views`.
+
+### Why This Shape
+- It closes the actual regression gap with minimal fragility:
+  - direct layout assertions instead of loop-heavy gameplay orchestration
+  - shared-code coverage through the authoritative C64 runtime path
+  - no new platform-specific test harnesses were needed to validate the common UI renderers
+- The suite checks real rendered screen content, not just control flow, including item lines, menu text, headers, and footers.
+
+### Validation
+- Focused headless `ui_views` run — PASS (`7/7`)
+- `cd commodore/c64 && ./run_tests.sh` — PASS (`29 passed, 0 failed`)
+- `make -B -C commodore/c128 build128` — PASS
+- `make -C commodore/c128 test128-fast` — PASS
+- `make -C commodore/c128 test128-fast-smoke` — PASS
+
+---
+
 ## OPT-3 — Visibility Room Cache ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed
