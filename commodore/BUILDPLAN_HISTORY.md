@@ -6,6 +6,41 @@
 
 ---
 
+## OPT-3 — Visibility Room Cache ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the open `update_visibility` hot-path optimization for room reveal checks.
+- Removed the unconditional per-turn lit-room scan in favor of a transient current-room cache plus an early unlit-tile bailout.
+
+### What Changed
+1. **Transient room cache in `dungeon_los.s`**
+   - Added `vis_cached_room_idx` to remember the current lit room.
+   - `update_visibility` now reuses cached bounds when the player remains in the same room.
+2. **Skip scans on non-room tiles**
+   - If the current tile is not lit, `update_visibility` clears the cache and skips the room-reveal scan entirely.
+   - This removes the room loop from ordinary corridor turns.
+3. **Lit-room rescan only on transitions**
+   - The code scans lit rooms only when the cache is invalid or the player leaves the cached room.
+   - No save-format changes were required because the cache is transient.
+4. **Direct regression coverage**
+   - Added a new effects regression proving that the cache sets when the player enters a lit room and clears when the player moves onto a corridor tile.
+
+### Why This Shape
+- It delivers the intended optimization with minimal surface area:
+  - no save/load changes
+  - no level-transition plumbing
+  - no gameplay-contract changes outside `dungeon_los.s`
+- The current tile’s `FLAG_LIT` state is enough to cheaply rule out room-reveal work on corridor turns, which are the common case.
+
+### Validation
+- `make -C commodore/c64 build` — PASS
+- `cd commodore/c64 && ./run_tests.sh` — PASS
+- `make -B -C commodore/c128 build128` — PASS
+- `make -C commodore/c128 test128-fast` — PASS
+- `make -C commodore/c128 test128-fast-smoke` — PASS
+
+---
+
 ## OPT-1 — Main-Loop Command Dispatch Jump Table ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed

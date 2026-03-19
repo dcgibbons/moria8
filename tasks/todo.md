@@ -784,3 +784,27 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -C commodore/c128 test128-fast`
   - `make -C commodore/c128 test128-fast-smoke`
 - Manual in-game check confirmed normal command behavior after the dispatch change.
+
+## 2026-03-19 OPT-3 visibility room-cache optimization
+
+### Plan
+- [x] Inspect the current `update_visibility` room-reveal path and identify where the per-turn room scan still happens.
+- [x] Design a transient room-cache approach that avoids save-format churn and preserves corridor / lit-room behavior.
+- [x] Patch `dungeon_los.s` and add a direct regression covering room-cache set/clear behavior.
+- [x] Verify shared-path correctness on C64 and C128 builds/tests.
+
+### Review
+- Added `vis_cached_room_idx` in `commodore/common/dungeon_los.s` and changed `update_visibility` to:
+  - clear the cache on blind/town/unlit-tile paths
+  - skip the room scan entirely when the current tile is not lit
+  - reuse the cached room bounds when the player stays inside the same lit room
+  - rescan lit rooms only when the cache is invalid or the player has left the cached room
+- Kept the cache transient only; no save-format or level-transition serialization changes were required.
+- Added a direct C64 regression in `commodore/c64/tests/test_effects.s` covering cache set-in-room and clear-in-corridor behavior.
+- Updated the C64 effects runner expectation in `commodore/c64/run_tests.sh`.
+- Verified with:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make -C commodore/c128 test128-fast`
+  - `make -C commodore/c128 test128-fast-smoke`

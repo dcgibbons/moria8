@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #20
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -95,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 21, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
 
@@ -1145,10 +1145,74 @@ test_start:
     bne !t21_fail+
     lda #$01
     sta tc_results + 20
-    jmp !tests_done+
+    jmp !t22+
 !t21_fail:
     lda #$00
     sta tc_results + 20
+
+    // ==========================================
+    // Test 22: Visibility room cache sets in lit room and clears in corridor
+    // ==========================================
+!t22:
+    jsr fill_map_rock
+
+    lda #1
+    sta zp_player_dlvl
+    sta room_count
+    lda #20
+    sta room_x
+    sta dg_room_x
+    lda #10
+    sta room_y
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta dg_room_w
+    lda #3
+    sta room_h
+    sta dg_room_h
+    lda #1
+    sta room_lit
+    lda #0
+    sta zp_eff_blind
+    lda #1
+    sta zp_light_radius
+    lda #$ff
+    sta vis_cached_room_idx
+    jsr draw_dungeon_room
+
+    lda #20
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    jsr update_visibility
+    lda vis_cached_room_idx
+    cmp #0
+    bne !t22_fail+
+
+    lda #30
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr update_visibility
+    lda vis_cached_room_idx
+    cmp #$ff
+    bne !t22_fail+
+
+    lda #$01
+    sta tc_results + 21
+    jmp !tests_done+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
 
 !tests_done:
     jmp test_finish

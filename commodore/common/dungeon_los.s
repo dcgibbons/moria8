@@ -14,6 +14,7 @@
 // Data
 // ============================================================
 vis_room_revealed: .byte 0    // Set to 1 if a room was batch-revealed this turn
+vis_cached_room_idx: .byte $ff // Current lit-room cache; $ff = no cached room
 
 // Scratch for update_visibility
 vis_min_x: .byte 0
@@ -45,11 +46,15 @@ update_visibility:
     // Blindness — skip all visibility updates
     lda zp_eff_blind
     beq !uv_not_blind+
+    lda #$ff
+    sta vis_cached_room_idx
     jmp !uv_blind_skip+
 !uv_not_blind:
 
     lda zp_player_dlvl
     bne !uv_dungeon+
+    lda #$ff
+    sta vis_cached_room_idx
     rts                         // Town: everything pre-lit
 
 !uv_dungeon:
@@ -128,61 +133,44 @@ update_visibility:
 !uv_torch_done:
 
     // === Phase B: Room reveal ===
-    // Check if player is inside any lit room (expanded bounds include walls).
-    lda #0
-    sta vis_min_x               // Reuse as room loop index
+    // If current tile is not lit, the player cannot be in a revealable room.
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    :MapRead_ptr0_y()
+    and #FLAG_LIT
+    bne !uv_room_tile_lit+
+    lda #$ff
+    sta vis_cached_room_idx
+    jmp !uv_done+
 
-!uv_room_loop:
-    ldx vis_min_x
+!uv_room_tile_lit:
+    ldx vis_cached_room_idx
+    cpx #$ff
+    beq !uv_find_room+
     cpx room_count
-    bcs !uv_done+
-
-    // Skip dark rooms (no batch reveal)
+    bcs !uv_find_room+
+    jsr uv_player_in_room_x
+    bcc !uv_find_room+
     lda room_lit,x
-    beq !uv_next_room+
-
-    // Check player within expanded room bounds:
-    // x: [room_x-1, room_x+room_w]  y: [room_y-1, room_y+room_h]
-
-    // Check left bound: player_x >= room_x[i] - 1
-    lda room_x,x
-    sec
-    sbc #1
-    cmp zp_player_x
-    beq !uv_x_ok+               // Equal is within
-    bcs !uv_next_room+          // room_x-1 > player_x → outside
-!uv_x_ok:
-
-    // Check right bound: player_x <= room_x[i] + room_w[i]
-    lda room_x,x
-    clc
-    adc room_w,x
-    cmp zp_player_x
-    bcc !uv_next_room+          // room_x+w < player_x → outside
-
-    // Check top bound: player_y >= room_y[i] - 1
-    lda room_y,x
-    sec
-    sbc #1
-    cmp zp_player_y
-    beq !uv_y_ok+
-    bcs !uv_next_room+
-!uv_y_ok:
-
-    // Check bottom bound: player_y <= room_y[i] + room_h[i]
-    lda room_y,x
-    clc
-    adc room_h,x
-    cmp zp_player_y
-    bcc !uv_next_room+
-
-    // Player is inside this lit room — reveal it
+    beq !uv_done+
     jsr reveal_room
-    jmp !uv_done+               // Only one room at a time
+    jmp !uv_done+
 
-!uv_next_room:
-    inc vis_min_x
-    jmp !uv_room_loop-
+!uv_find_room:
+    jsr uv_find_current_room
+    bcs !uv_found_room+
+    lda #$ff
+    sta vis_cached_room_idx
+    jmp !uv_done+
+!uv_found_room:
+    stx vis_cached_room_idx
+    lda room_lit,x
+    beq !uv_done+
+    jsr reveal_room
 
 !uv_blind_skip:
 !uv_done:
@@ -191,6 +179,67 @@ update_visibility:
     jsr c128_stack_guard_check
     jsr c128_stack_guard_snapshot_banking
 #endif
+    rts
+
+// uv_find_current_room — Find lit room containing player
+// Output: carry set = found, X = room index
+//         carry clear = not found
+uv_find_current_room:
+    ldx #0
+!uv_find_loop:
+    cpx room_count
+    bcs !uv_find_fail+
+    lda room_lit,x
+    beq !uv_find_next+
+    jsr uv_player_in_room_x
+    bcs !uv_find_done+
+!uv_find_next:
+    inx
+    jmp !uv_find_loop-
+!uv_find_fail:
+    clc
+    rts
+!uv_find_done:
+    sec
+    rts
+
+// uv_player_in_room_x — Check whether player is within room X bounds
+// Input: X = room index
+// Output: carry set = inside expanded room bounds, carry clear = outside
+uv_player_in_room_x:
+    lda room_x,x
+    sec
+    sbc #1
+    cmp zp_player_x
+    beq !uv_check_right+
+    bcc !uv_check_right+
+    clc
+    rts
+!uv_check_right:
+    lda room_x,x
+    clc
+    adc room_w,x
+    cmp zp_player_x
+    bcc !uv_room_miss+
+
+    lda room_y,x
+    sec
+    sbc #1
+    cmp zp_player_y
+    beq !uv_check_bottom+
+    bcc !uv_check_bottom+
+    clc
+    rts
+!uv_check_bottom:
+    lda room_y,x
+    clc
+    adc room_h,x
+    cmp zp_player_y
+    bcc !uv_room_miss+
+    sec
+    rts
+!uv_room_miss:
+    clc
     rts
 
 // reveal_room — Set FLAG_VISITED on all tiles in room X (including walls)
