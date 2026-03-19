@@ -414,3 +414,16 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun_order.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_ORDER=reverse TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_order.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=1 TEST_RERUN_ORDER=reverse TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_order_exec.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_ORDER=reverse TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_SHUFFLE slice
+- Goal: let capped replay take a deterministic sample of a large replay-selected suite set.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_SHUFFLE=1`
+  - add `TEST_RERUN_SEED=<n>` with default `0`
+  - apply seeded shuffle before `TEST_RERUN_LIMIT`
+  - show `rerun-shuffle` and `rerun-seed` in the banner
+  - record `rerun_shuffle` and `rerun_seed` in JSON summary metadata
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=17 TEST_LIST=1 bash commodore/c128/run_tests128.sh` twice => identical selection ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=23 TEST_LIST=1 bash commodore/c128/run_tests128.sh` => different selection ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=17 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅
