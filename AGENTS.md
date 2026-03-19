@@ -55,6 +55,9 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 - **Build:** `make` (or `make build`) — assembles `main.s` → `out/moria8.prg`
 - **Run:** `make run` — build and launch in VICE
 - **Test:** `make test` — assemble + run all tests in VICE headless
+- **C128 fast units:** `make test128-fast` — Python Gate C compare harness for the stable C128 unit batch
+- **C128 fast smokes:** `make test128-fast-smoke` — small high-value C128 smoke subset (`boot_title_idle_smoke`, `scripted_summary_to_town_smoke`, `town_overlay_smoke`)
+- **C128 full suite:** `make test128` — authoritative full C128 shell harness
 - **Disk image:** `make disk` — create a .d64 disk image
 - **Clean:** `make clean` — remove build artifacts
 - **Assembler:** Kick Assembler — auto-downloaded on first `make` into `tools/kickass/` (override: `make KICKASS=/path/to/KickAss.jar`)
@@ -65,6 +68,11 @@ The root Makefile delegates to `commodore/c64/Makefile`. All make targets work f
 
 When running VICE headless for testing, be sure to use -warp mode to improve
 test speed.
+
+### C128 test-selection policy
+- For **fast iteration on C128 unit-level changes**, prefer `make test128-fast`.
+- For **fast runtime regression checks on C128 boot/chargen/town paths**, prefer `make test128-fast-smoke`.
+- Before declaring a broad C128 refactor or high-risk memory/banking change complete, run the authoritative suite with `make test128`.
 
 ## Planning Docs (Commodore port)
 

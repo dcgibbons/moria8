@@ -48,3 +48,8 @@ Also: asserting the trampoline address is not sufficient. Assert the callee plac
 - **Test Suit Verification:** A C128 fix is only complete when `boot_diag_copy` and `boot_tier_transition_smoke` pass. Failure of these is a regression.
 - **VDC Re-assertion:** Always use `c128_vdc_reassert_mode` on KERNAL exit paths to ensure the 80-column display remains in its expected state.
 - **Trace Discipline:** If monitor traces move, treat the newest PC/backtrace as the active truth. Re-evaluate the load/bank/ownership contract before patching another nearby function.
+
+### C128 Test Workflow
+- For fast unit-level iteration, prefer `make test128-fast`.
+- For fast runtime regression checks, prefer `make test128-fast-smoke`.
+- `make test128` remains the authoritative full C128 suite and must be used before closing high-risk MMU/layout/overlay work.

@@ -55,3 +55,7 @@ If the crash address moves, stop treating it as a local logic bug until you have
 ## 4. Verification Protocol
 - **Empirical Reproduction:** Bug fixes must start with a reproduction script or test case that fails *before* the fix is applied.
 - **Validation is Final:** A change is incomplete without verification logic (tests or manual VICE verification).
+- **C128 Fast-Path Policy:** For C128 work, prefer:
+  - `make test128-fast` for unit-level iteration
+  - `make test128-fast-smoke` for quick runtime regression coverage
+  - `make test128` before signing off high-risk banking/layout/overlay changes

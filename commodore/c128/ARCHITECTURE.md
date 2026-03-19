@@ -138,6 +138,13 @@ Operational rules:
 
 C128 harness target:
 - `make -C commodore/c128 test128`
+- `make -C commodore/c128 test128-fast`
+- `make -C commodore/c128 test128-fast-smoke`
+
+Recommended use:
+- `test128-fast` — Python Gate C compare harness for the stable C128 unit batch
+- `test128-fast-smoke` — quick runtime coverage for boot/title, chargen-to-town, and town overlay entry
+- `test128` — authoritative full shell harness; use this before closing broad C128 banking, overlay, or loader changes
 
 Current suites:
 1. `minimal128`
