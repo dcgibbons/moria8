@@ -83,3 +83,20 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Shared fix applied: prompt-style input now uses strict 2-sample stabilization, while primary command entry keeps the fast edge path.
 - Manual report: secondary prompts feel better and no obvious phantom key issue remains in the quick pass.
 - Verification: `test_input128.s` and `run_scripted_summary_to_town_smoke` passed after the split.
+
+## 2026-03-18 inventory-help issue
+- New bug: pressing `?` at secondary item prompts clears to inventory display and then hangs with repeated IRQ/BRK frames.
+- Monitor evidence: repeated IRQ into `$E036`, with stack pollution and frames around `$383D` / `$F8EB`.
+- Goal: map the active crash addresses to symbols, trace the `?` -> inventory display path, and fix the execution/IRQ boundary rather than adding more prompt-local input workarounds.
+
+## 2026-03-18 inventory-help outcome
+- The exact-length copy experiment was a regression. Its tail copy reached `$FF00`, which is the C128 MMU control register, so startup could break before overlays loaded.
+- The final root cause was the **source span** for the banked UI payload, not just the exit trampoline: the staged payload bytes extend into `$E000-$EFFF`, so any post-overlay `init_copy_banked` call recopies overlay-clobbered source bytes back into the resident `$F000` banked UI window.
+- Final fix:
+  - keep the startup `init_copy_banked` copy
+  - remove per-entry `init_copy_banked` calls from the C128 UI trampolines
+  - restore runtime guards + runtime vectors in `tramp_ui_exit`
+  - use `input_wait_release` + `input_get_key_fast` for inventory/equipment dismiss on C128
+- Validation:
+  - `make -B -C commodore/c128 build128`
+  - manual validation: `i`, item-prompt `?`, and help `?` all render content and dismiss correctly

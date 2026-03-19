@@ -6,6 +6,50 @@
 
 ---
 
+## UIB-1 — C128 Banked UI Source/Recopy Repair ✅ COMPLETE (2026-03-18)
+
+### Scope Closed
+- Closed the C128 regression where help/inventory/equipment screens could clear or draw only partial framing, then hang or return with missing content.
+- Replaced the wrong “input-only” hypothesis with the actual runtime linkage issue: the banked UI payload was being recopied from a source span that overlapped the active overlay window.
+
+### Root Causes Addressed
+1. **Overlay-clobbered banked-payload source**
+   - The banked payload source bytes in the main staged image extended into `$E000-$EFFF`, the same window used by overlays.
+   - After an overlay load, any later `init_copy_banked` call recopied corrupted source bytes back into the resident `$F000-$FFFA` banked UI window.
+2. **Runtime corruption lined up with the failing UI routines**
+   - The overlap offset mapped directly into the resident banked window at the point where `ui_inv_display` / `ui_equip_display` live, explaining why borders could appear while content vanished or execution drifted.
+3. **Dismiss-screen input policy was too strict for overlay return**
+   - After the banked UI path returned, inventory/equipment dismiss used the prompt-style strict wait, which was too conservative for a “press any key to continue” overlay once release gating was already in place.
+
+### Implemented
+1. **Stopped per-entry banked UI recopy**
+   - Removed `init_copy_banked` from the C128 UI trampolines:
+     - `tramp_ui_help_display`
+     - `tramp_ui_char_display`
+     - `tramp_ui_inv_display`
+     - `tramp_ui_equip_display`
+     - `tramp_ui_recall`
+   - The stable startup copy remains the source of truth for the resident `$F000` banked window.
+2. **Hardened banked UI exit**
+   - `tramp_ui_exit` now restores both runtime guards and runtime vectors before `cli`, so the return path re-enters the gameplay/input environment with the MMU helper blob, IRQ/NMI vectors, and CHRIN stub all reasserted.
+3. **Tuned dismiss behavior for inventory/equipment overlays**
+   - `show_inv_and_restore` and `show_equip_and_restore` now use `input_wait_release` followed by `input_get_key_fast` on C128.
+   - This preserves the release gate while using the correct edge policy for a full-screen dismiss prompt.
+
+### Result
+- C128 help/inventory/equipment screens render content again instead of blanking after an overlay load.
+- `?` from item prompts now displays inventory and dismisses correctly.
+- The regression-inducing exact-length copy experiment is not part of the final fix.
+
+### Validation
+- `make -B -C commodore/c128 build128`: **PASS**
+- Manual validation:
+  - `i` inventory screen renders correctly
+  - `?` inventory-help from item prompt renders and dismisses correctly
+  - `?` help screen shows border **and content** correctly
+
+---
+
 ## LDR-1 — C128 Low-RAM Runtime Loader Repair ✅ COMPLETE (2026-03-18)
 
 ### Scope Closed

@@ -1570,38 +1570,32 @@ tramp_ui_exit:
     sta $01
     lda #$3e                    // MMU_ALL_RAM
     sta $ff00
+    jsr c128_restore_runtime_guards
+    jsr c128_restore_runtime_vectors
     cli
     rts
 
 tramp_ui_help_display:
-    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_help_display
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
-    // ui_character.s now lives in the reloadable $F000 banked payload, so the
-    // character sheet must refresh that payload exactly like the other banked UI
-    // screens before entering the shared trampoline contract.
-    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_char_display
     jmp tramp_ui_exit
 
 tramp_ui_inv_display:
-    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_inv_display
     jmp tramp_ui_exit
 
 tramp_ui_equip_display:
-    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_equip_display
     jmp tramp_ui_exit
 
 tramp_ui_recall:
-    jsr init_copy_banked
     jsr tramp_ui_enter
     jsr ui_recall_display
     jmp tramp_ui_exit

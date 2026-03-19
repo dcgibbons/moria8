@@ -59,3 +59,19 @@
 - **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `bank1.dat` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
 - **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `bank1.dat` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
 - **Rule:** **For any callable low-RAM segment on C128, verify all three together before patching: (1) symbol address, (2) visible bank at the callsite, and (3) common-vs-private RAM ownership.** Never infer one from the others.
+
+## Corrections From the 2026-03-18 Inventory-Help Regression
+
+- **Issue:** I changed the banked payload copy routine based on the inventory-help IRQ trace, but the new helper caused an earlier startup `BRK` before overlays loaded.
+- **Root Cause:** I optimized around the vector-overwrite symptom without preserving the original page-`$FF` copy contract. On C128, `$FF00` is the MMU control register, so a naive tail copy into `$FF00-$FFC4` is not safe even if it avoids `$FFFA-$FFFF`.
+- **Resolution:** When page `$FF` is involved, enumerate every special address in that window (`$FF00`, RAM vectors, ROM-shadowed helpers) before replacing an existing copy strategy. In this case the safer repair is to restore runtime vectors on banked UI exit, not redesign the copy loop under pressure.
+- **Rule:** **If a fix touches C128 page `$FF`, prove every special address in `$FF00-$FFFF` remains safe before changing the routine. Do not replace a specialized copy strategy with a generic one on inference alone.**
+
+## Banked Payload Source vs. Runtime Window (C128)
+
+- **Issue:** Help/inventory/equipment screens could blank or half-render only after overlay activity, even though the resident banked UI code itself lived safely at `$F000-$FFFA`.
+- **Root Cause:** I focused on the resident runtime addresses but missed that the **source bytes** for `init_copy_banked` were staged in the main image across `$D6xx-$E6xx`. Because that source span overlaps the overlay load window at `$E000-$EFFF`, any later recopy after an overlay load can silently reintroduce corruption into the otherwise-safe resident `$F000` banked window.
+- **Resolution:** For any copied resident block, verify both:
+  1. the destination/runtime window is safe, and
+  2. the source/staging window does not overlap transient overlay or loader regions that can mutate before the next copy.
+- **Rule:** **On C128, overlay-safety analysis must cover both the resident destination and the staged copy source. A resident block can still be corrupted if its recopy source overlaps `$E000-$EFFF`.**

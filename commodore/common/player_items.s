@@ -73,8 +73,10 @@ show_inv_and_restore:
     // C128: require a fresh dismiss key after opening the overlay.
 #if C128
     jsr input_wait_release
-#endif
+    jsr input_get_key_fast
+#else
     jsr input_get_key
+#endif
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
@@ -91,8 +93,10 @@ show_equip_and_restore:
     // C128: require a fresh dismiss key after opening the overlay.
 #if C128
     jsr input_wait_release
-#endif
+    jsr input_get_key_fast
+#else
     jsr input_get_key
+#endif
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
