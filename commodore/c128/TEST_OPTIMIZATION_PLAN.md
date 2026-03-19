@@ -138,6 +138,11 @@ Scaling to multi-core.
 - TSV exports gained an `iteration` column; JSON exports gained matching result-level `iteration` plus top-level run metadata.
 - This keeps machine-readable output aligned with the console banner and repeat loop.
 
+### Incremental Step Landed (2026-03-18, rerun from summary)
+- `run_tests128.sh` now accepts `TEST_RERUN_FROM=/path/to/summary.{json,tsv}` to rerun only suites that previously failed.
+- Replay selection is exact-suite based, deduplicated, and composes with `TEST_PHASE`, `TEST_FILTER`, and `TEST_SKIP`.
+- This turns summary exports into a direct debugging input instead of a passive report artifact.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

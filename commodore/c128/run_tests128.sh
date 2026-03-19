@@ -23,6 +23,7 @@ TEST_JOBS="${TEST_JOBS:-8}"
 TEST_PHASE="${TEST_PHASE:-}"
 TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
+TEST_RERUN_FROM="${TEST_RERUN_FROM:-}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -37,6 +38,7 @@ TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
+TEST128_RERUN_FILE="${TEST128_TMP_DIR}/rerun_suites.txt"
 TEST128_ITERATION=1
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
@@ -124,7 +126,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "$TEST_RERUN_FROM" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -138,11 +140,12 @@ payload = {
     "filter": sys.argv[6],
     "skip": sys.argv[7],
     "phase": sys.argv[8],
-    "jobs_requested": sys.argv[9],
-    "jobs_resolved": int(sys.argv[10]),
-    "repeat": int(sys.argv[11]),
-    "timings": sys.argv[12] != "0",
-    "fail_fast": sys.argv[13] != "0",
+    "rerun_from": sys.argv[9],
+    "jobs_requested": sys.argv[10],
+    "jobs_resolved": int(sys.argv[11]),
+    "repeat": int(sys.argv[12]),
+    "timings": sys.argv[13] != "0",
+    "fail_fast": sys.argv[14] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -164,6 +167,58 @@ PY
     esac
 
     echo "=== Summary written: $summary_file ==="
+}
+
+load_rerun_selection() {
+    if [ -z "$TEST_RERUN_FROM" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$TEST_RERUN_FROM" ]; then
+        echo "error: TEST_RERUN_FROM file not found: $TEST_RERUN_FROM" >&2
+        return 1
+    fi
+
+    python3 - "$TEST_RERUN_FROM" "$TEST128_RERUN_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+src = Path(sys.argv[1])
+dst = Path(sys.argv[2])
+text = src.read_text()
+lines = [line for line in text.splitlines() if line.strip()]
+suites = []
+
+def add(name):
+    if name and name not in suites:
+        suites.append(name)
+
+if src.suffix.lower() == ".json" or (lines and lines[0].lstrip().startswith("{")):
+    payload = json.loads(text)
+    for entry in payload.get("results", []):
+        if entry.get("status") == "FAIL":
+            add(entry.get("suite", ""))
+else:
+    start = 0
+    if lines and lines[0].startswith("status\t"):
+        start = 1
+    for line in lines[start:]:
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0] == "FAIL":
+            add(parts[1])
+
+dst.write_text("".join(f"{suite}\n" for suite in suites))
+print(len(suites))
+PY
+}
+
+suite_matches_rerun() {
+    local suite_name="$1"
+    if [ -z "$TEST_RERUN_FROM" ]; then
+        return 0
+    fi
+    [ -f "$TEST128_RERUN_FILE" ] && grep -Fxq "$suite_name" "$TEST128_RERUN_FILE"
 }
 
 resolve_test_jobs() {
@@ -410,6 +465,9 @@ suite_matches_phase() {
 
 suite_matches_filter() {
     local suite_name="$1"
+    if ! suite_matches_rerun "$suite_name"; then
+        return 1
+    fi
     if ! suite_matches_phase "$suite_name"; then
         return 1
     fi
@@ -3612,6 +3670,9 @@ fi
 if [ -n "$TEST_PHASE" ]; then
     echo "  phase: $TEST_PHASE"
 fi
+if [ -n "$TEST_RERUN_FROM" ]; then
+    echo "  rerun-from: $TEST_RERUN_FROM"
+fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
     echo "  describe: ON"
 fi
@@ -3647,6 +3708,13 @@ fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
     describe_phases
     exit 0
+fi
+
+if ! rerun_count="$(load_rerun_selection)"; then
+    exit 1
+fi
+if [ -n "$TEST_RERUN_FROM" ]; then
+    echo "  rerun suites: $rerun_count"
 fi
 
 if [ "$TEST_LIST" != "0" ]; then

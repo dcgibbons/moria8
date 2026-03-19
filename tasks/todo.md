@@ -327,3 +327,16 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_REPEAT=2 TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_meta.json TEST_FILTER='main128_asm|config128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_REPEAT=2 TEST_SUMMARY=tsv TEST_SUMMARY_FILE=/tmp/test128_summary_meta.tsv TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_PHASE=boot TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_phase.json TEST_FILTER='boot_title_idle_smoke' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_FROM slice
+- Goal: let a previous summary export drive a focused rerun without rewriting filters by hand.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_FROM=/path/to/summary.{json,tsv}`
+  - load failed suite ids from JSON or TSV summary files
+  - deduplicate exact suite names into a rerun selection set
+  - compose rerun selection with `TEST_PHASE`, `TEST_FILTER`, and `TEST_SKIP`
+  - print rerun source path and selected rerun suite count in the banner
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun.json TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun.tsv TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_exec.json TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
