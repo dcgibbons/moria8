@@ -47,6 +47,27 @@ Scaling to multi-core.
 3. **Gate C.3 (Assembly Server):** Update the Makefile to support an persistent assembly server.
 4. **Gate C.4 (Verification):** Port 5 tests to the new harness and compare timings.
 
+### Incremental Step Landed (2026-03-18)
+- `run_tests128.sh` now takes a pragmatic first optimization step before the full Gate C rollout:
+  - `run_main_assembly_check` reuses `make build128` instead of unconditionally invoking raw KickAssembler
+  - unit-test assembly now reuses fresh `.prg` / `.vs` artifacts instead of recompiling every test on every run
+  - `TEST_JOBS` controls unit-test parallelism instead of a hardcoded worker count
+  - hot-path address normalization reuses the shared shell helper instead of spawning extra Python one-liners
+- This is **not** the final OPT-TEST state; it is a safe intermediate reduction in redundant work while the larger snapshot/monitor architecture remains pending.
+
+### Incremental Step Landed (2026-03-18, variant reuse)
+- The smoke/diagnostic asset builders in `run_tests128.sh` now reuse fresh outputs instead of blindly rebuilding every variant on each run.
+- The harness now tracks which variant currently owns the shared `out/main.vs` / overlay scratch space and only skips work when that ownership matches.
+- Base `build128` refresh is forced only when the active scratch outputs belong to a non-base variant, avoiding false reuse without forcing a full `make -B` rebuild.
+
+### Incremental Step Landed (2026-03-18, targeted execution)
+- `run_tests128.sh` now accepts `TEST_FILTER` as a regex over suite names.
+- The filter applies to:
+  - assembly/layout guard suites
+  - parallel unit tests
+  - smoke/diagnostic suites
+- This allows fast focused runs such as `TEST_FILTER='main128_asm|input128' bash run_tests128.sh` and `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash run_tests128.sh`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

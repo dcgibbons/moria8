@@ -131,3 +131,48 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Cleaned the active backlog so `commodore/BUILDPLAN.md` reflects true open work.
 - Removed `TST-1` from the open-issues table and recorded it only under resolved work.
 - Removed pending `OPT-TEST` from the resolved table and kept it only in the open backlog.
+
+## 2026-03-18 OPT-TEST first slice
+- Goal: reduce obvious redundant work in the C128 harness before attempting the larger snapshot/monitor rewrite.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - `run_main_assembly_check` now reuses `make build128`
+  - unit tests reuse fresh `.prg` / `.vs` artifacts instead of always reassembling
+  - `TEST_JOBS` now controls the unit-test worker count
+  - repeated address normalization now uses the existing shell helper
+- This is an incremental harness optimization, not the full Gate C implementation from `commodore/c128/TEST_OPTIMIZATION_PLAN.md`.
+
+## 2026-03-18 OPT-TEST regression correction
+- First OPT-TEST pass broke the real runner even though `bash -n` passed.
+- Causes:
+  - helper functions were not exported to the `xargs` worker shells
+  - `run_symbol_placement_check` still expected the pre-UIB-1 `init_copy_banked` contract
+  - the default VICE path in `run_tests128.sh` still pointed at a dead app-bundle path on this machine
+- Correction:
+  - export `normalize_monitor_addr` and `c128_target_is_stale`
+  - update the layout guard to enforce the current `tramp_ui_exit` restore contract and reject stale per-entry `init_copy_banked`
+  - prefer `x128` / `/opt/homebrew/bin/x128` before the legacy app path
+
+## 2026-03-18 OPT-TEST variant reuse slice
+- Goal: stop rebuilding every smoke/diagnostic asset variant on every `test128` run when the current outputs are already fresh.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add shared freshness helpers for multi-file outputs plus explicit active-variant tracking for the shared `out/main.vs` / overlay scratch space
+  - reuse fresh base boot assets only when the active scratch owner is `base`
+  - reuse fresh diagnostic/smoke variants only when the active scratch owner matches that variant
+  - force base refresh via `make -W main.s -W boot128.s build128 disk128` when returning from a non-base variant, instead of a broad `make -B` that would retrigger the KickAssembler download rule
+- Function-level verification:
+  - repeated `build_boot_assets` leaves timestamps unchanged
+  - repeated `build_real_boot_diag_assets` leaves timestamps unchanged
+  - repeated `build_scripted_input_boot_assets` leaves timestamps unchanged
+  - switching scripted/diag variants back to `build_boot_assets` refreshes the base outputs and resets the active variant to `base`
+
+## 2026-03-18 OPT-TEST TEST_FILTER slice
+- Goal: allow fast targeted harness runs without editing `run_tests128.sh`.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_FILTER` as a regex match over suite names
+  - apply it to assembly/layout guards, parallel unit tests, and smoke/diagnostic suites
+  - keep default behavior unchanged when `TEST_FILTER` is unset
+- Verified from `commodore/c128`:
+  - `TEST_FILTER='main128_asm|input128' bash run_tests128.sh` ✅
+  - `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash run_tests128.sh` ✅
+- Limitation noted:
+  - direct root-level invocation (`bash commodore/c128/run_tests128.sh`) still assumes `commodore/c128` as the working directory; that is a separate path-hardening cleanup, not part of this slice

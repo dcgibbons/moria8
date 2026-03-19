@@ -4,12 +4,23 @@
 set -u
 
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
-VICE="${VICE128:-/Applications/VICE/bin/x128}"
+if [ -n "${VICE128:-}" ]; then
+    VICE="$VICE128"
+elif command -v x128 >/dev/null 2>&1; then
+    VICE="$(command -v x128)"
+elif [ -x /opt/homebrew/bin/x128 ]; then
+    VICE="/opt/homebrew/bin/x128"
+else
+    VICE="/Applications/VICE/bin/x128"
+fi
 C1541="${C1541:-c1541}"
 PERF_P1_MODE="${PERF_P1:-0}"
+TEST_JOBS="${TEST_JOBS:-8}"
+TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
 FAIL=0
 TOTAL=0
+C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
 OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
@@ -40,24 +51,115 @@ else:
 PY
 }
 
+c128_target_is_stale() {
+    local target="$1"
+    if [ ! -f "$target" ]; then
+        return 0
+    fi
+
+    if find . -maxdepth 1 -type f \( -name '*.s' -o -name 'Makefile' \) -newer "$target" -print -quit | grep -q .; then
+        return 0
+    fi
+    if find tests ../common ../c64 -type f -name '*.s' -newer "$target" -print -quit | grep -q .; then
+        return 0
+    fi
+
+    return 1
+}
+
+c128_outputs_need_refresh() {
+    local parsing_inputs=0
+    local -a outputs=()
+    local -a inputs=()
+    local path output input
+
+    for path in "$@"; do
+        if [ "$path" = "--" ]; then
+            parsing_inputs=1
+            continue
+        fi
+        if [ "$parsing_inputs" -eq 0 ]; then
+            outputs+=("$path")
+        else
+            inputs+=("$path")
+        fi
+    done
+
+    if [ "${#outputs[@]}" -eq 0 ]; then
+        return 0
+    fi
+
+    for output in "${outputs[@]}"; do
+        if [ ! -f "$output" ]; then
+            return 0
+        fi
+        if c128_target_is_stale "$output"; then
+            return 0
+        fi
+    done
+
+    for input in "${inputs[@]}"; do
+        if [ ! -e "$input" ]; then
+            return 0
+        fi
+        for output in "${outputs[@]}"; do
+            if [ "$input" -nt "$output" ]; then
+                return 0
+            fi
+        done
+    done
+
+    return 1
+}
+
+c128_active_variant_is() {
+    local expected="$1"
+    [ -f "$C128_ACTIVE_VARIANT_FILE" ] && [ "$(cat "$C128_ACTIVE_VARIANT_FILE")" = "$expected" ]
+}
+
+c128_set_active_variant() {
+    local variant="$1"
+    printf '%s\n' "$variant" > "$C128_ACTIVE_VARIANT_FILE"
+}
+
+suite_matches_filter() {
+    local suite_name="$1"
+    if [ -z "$TEST_FILTER" ]; then
+        return 0
+    fi
+    [[ "$suite_name" =~ $TEST_FILTER ]]
+}
+
+run_named_suite() {
+    local suite_name="$1"
+    shift
+    if ! suite_matches_filter "$suite_name"; then
+        return 0
+    fi
+    "$@"
+}
+
 run_main_assembly_check() {
     echo -n "  main128_asm: "
 
-    local asm_output
-    asm_output=$(java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -o out/moria128.prg 2>&1)
+    local build_log="/tmp/test128_main_build.log"
+    local make_kickass="/tmp/moria128-kickass.jar"
+    local kickass_abs
+    kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
+    ln -sf "$kickass_abs" "$make_kickass"
 
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
-    if [ $? -ne 0 ] || echo "$asm_output" | grep -q "FAILED!"; then
+    if ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL"
-        echo "$asm_output" | grep -E "assert|FAILED|ERROR" | tail -5 | sed 's/^/    /'
+        grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
 
     local assert_line
-    assert_line=$(echo "$asm_output" | grep "Made .*asserts" | tail -1)
+    assert_line=$(grep "Made .*asserts" "$build_log" | tail -1)
     if [ -n "${assert_line:-}" ]; then
         echo "PASS (${assert_line})"
     else
@@ -177,11 +279,11 @@ for line in sym:
     labels[m.group(1)] = int(m.group(2), 16)
 
 assert_guards = set()
-out_of_hole_guards = set()
+out_of_hole_guards = {}
 for line in main_source:
-    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\s*\|\|\s*\1\s*>=\s*\$E000\b", line)
+    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\s*\|\|\s*\1\s*>=\s*\$(\w+)\b", line)
     if m:
-        out_of_hole_guards.add(m.group(1))
+        out_of_hole_guards[m.group(1)] = int(m.group(2), 16)
         continue
     m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\b", line)
     if m:
@@ -250,34 +352,36 @@ for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
         continue
-    # Help data lives in the reloadable banked UI window before the hot
-    # command block at first_banked_function.
-    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
+    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
         bad.append((name, labels[name]))
 
 for name in ("ui_help_display",):
     if name not in labels:
         missing.append(name)
         continue
-    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
+    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
         bad.append((name, labels[name]))
 
 for name in ("ui_recall_display", "ui_inv_display", "ui_equip_display"):
     if name not in labels:
         missing.append(name)
         continue
-    if labels[name] < 0xE80E or labels[name] >= labels["first_banked_function"]:
+    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
         bad.append((name, labels[name]))
 
-for snippet, label in (
-    ("tramp_ui_help_display:\n    jsr init_copy_banked", "tramp_ui_help_display"),
-    ("tramp_ui_inv_display:\n    jsr init_copy_banked", "tramp_ui_inv_display"),
-    ("tramp_ui_equip_display:\n    jsr init_copy_banked", "tramp_ui_equip_display"),
-    ("tramp_ui_recall:\n    jsr init_copy_banked", "tramp_ui_recall"),
+for label in (
+    "tramp_ui_help_display",
+    "tramp_ui_inv_display",
+    "tramp_ui_equip_display",
+    "tramp_ui_recall",
 ):
-    if snippet not in main_text:
-        print(f"{label}: expected init_copy_banked reload before banked UI entry")
+    if f"{label}:\n    jsr init_copy_banked" in main_text:
+        print(f"{label}: stale per-entry init_copy_banked reload reintroduced")
         raise SystemExit(1)
+
+if "tramp_ui_exit:\n    lda #$36                    // BANK_NO_BASIC\n    sta $01\n    lda #$3e                    // MMU_ALL_RAM\n    sta $ff00\n    jsr c128_restore_runtime_guards\n    jsr c128_restore_runtime_vectors" not in main_text:
+    print("tramp_ui_exit: expected runtime guard/vector restore before CLI")
+    raise SystemExit(1)
 
 if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         // 20\n    jsr vdc_write_reg" not in main_text:
     print("vdc_attr_base_init: expected reg21/reg20 init sequence with lda #8 for reg20")
@@ -297,11 +401,11 @@ for name in sorted(assert_guards):
         bad.append((name, labels[name]))
 
 # Every source-level "out of I/O hole" guard must be enforced by the runner.
-for name in sorted(out_of_hole_guards):
+for name, low_ok in sorted(out_of_hole_guards.items()):
     if name not in labels:
         missing.append(name)
         continue
-    if 0xD000 <= labels[name] < 0xE000:
+    if 0xD000 <= labels[name] < low_ok:
         bad.append((name, labels[name]))
 
 if missing or bad or missing_asserts:
@@ -630,7 +734,21 @@ PY
 }
 
 build_boot_assets() {
-    if [ "$BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "base"; then
+        return
+    fi
+
+    local force_base_rebuild=0
+    if ! c128_active_variant_is "base"; then
+        force_base_rebuild=1
+    fi
+
+    if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
+            out/boot128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat out/main.vs -- \
+            main.s boot128.s Makefile; then
+        BOOT_ASSETS_BUILT=1
         return
     fi
 
@@ -639,7 +757,15 @@ build_boot_assets() {
     local kickass_abs
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
-    if ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    if [ "$force_base_rebuild" -eq 1 ]; then
+        if ! make -s -W main.s -W boot128.s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+            echo "FAIL (build128/disk128 failed)"
+            tail -20 "$build_log" | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return 1
+        fi
+    elif ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -658,6 +784,7 @@ build_boot_assets() {
     fi
 
     BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "base"
     return 0
 }
 
@@ -761,11 +888,20 @@ run_vic40_clean_boot_smoke() {
 }
 
 build_real_boot_diag_assets() {
-    if [ "$REAL_BOOT_DIAG_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$REAL_BOOT_DIAG_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "real_boot_diag"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "real_boot_diag" && ! c128_outputs_need_refresh \
+            out/moria128.realdiag.prg out/moria128_realdiag.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        REAL_BOOT_DIAG_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_real_boot_diag_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -804,15 +940,25 @@ build_real_boot_diag_assets() {
     fi
 
     REAL_BOOT_DIAG_ASSETS_BUILT=1
+    c128_set_active_variant "real_boot_diag"
     return 0
 }
 
 build_overlay_transition_diag_assets() {
-    if [ "$OVERLAY_TRANSITION_DIAG_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$OVERLAY_TRANSITION_DIAG_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "overlay_transition_diag"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "overlay_transition_diag" && ! c128_outputs_need_refresh \
+            out/moria128.overlaydiag.prg out/moria128_overlaydiag.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_overlay_transition_diag_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -851,15 +997,25 @@ build_overlay_transition_diag_assets() {
     fi
 
     OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
+    c128_set_active_variant "overlay_transition_diag"
     return 0
 }
 
 build_title_art_boot_assets() {
-    if [ "$TITLE_ART_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$TITLE_ART_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "title_art"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "title_art" && ! c128_outputs_need_refresh \
+            out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        TITLE_ART_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_title_art_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -898,15 +1054,25 @@ build_title_art_boot_assets() {
     fi
 
     TITLE_ART_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "title_art"
     return 0
 }
 
 build_partial_failure_boot_assets() {
-    if [ "$PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "partial_failure"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "partial_failure" && ! c128_outputs_need_refresh \
+            out/moria128.skip1.prg out/moria128_skip1.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        PARTIAL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_partial_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -943,15 +1109,25 @@ build_partial_failure_boot_assets() {
     fi
 
     PARTIAL_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "partial_failure"
     return 0
 }
 
 build_overlay_partial_failure_boot_assets() {
-    if [ "$OVERLAY_PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$OVERLAY_PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "overlay_partial_failure"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "overlay_partial_failure" && ! c128_outputs_need_refresh \
+            out/moria128.skipovl2.prg out/moria128_skipovl2.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_overlay_partial_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -988,15 +1164,25 @@ build_overlay_partial_failure_boot_assets() {
     fi
 
     OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "overlay_partial_failure"
     return 0
 }
 
 build_death_overlay_boot_assets() {
-    if [ "$DEATH_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$DEATH_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "death_overlay"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "death_overlay" && ! c128_outputs_need_refresh \
+            out/moria128.death.prg out/moria128_death.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        DEATH_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_death_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -1033,15 +1219,25 @@ build_death_overlay_boot_assets() {
     fi
 
     DEATH_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "death_overlay"
     return 0
 }
 
 build_overlay_state_boot_assets() {
-    if [ "$OVERLAY_STATE_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$OVERLAY_STATE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "overlay_state"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "overlay_state" && ! c128_outputs_need_refresh \
+            out/moria128.overlaystate.prg out/moria128_overlaystate.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        OVERLAY_STATE_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_overlay_state_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -1078,15 +1274,25 @@ build_overlay_state_boot_assets() {
     fi
 
     OVERLAY_STATE_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "overlay_state"
     return 0
 }
 
 build_scripted_input_boot_assets() {
-    if [ "$SCRIPTED_INPUT_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$SCRIPTED_INPUT_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_input"; then
         return
     fi
 
     build_boot_assets || return 1
+
+    if c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_scripted_input_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -1127,16 +1333,26 @@ build_scripted_input_boot_assets() {
     # do not accidentally reuse the scripted-input overlays.
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_input"
     return 0
 }
 
 build_cache_survival_boot_assets() {
     local target_out="${1:-out}"
-    if [ "$target_out" = "out" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ]; then
+    if [ "$target_out" = "out" ] && [ "$CACHE_SURVIVAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "cache_survival"; then
         return
     fi
 
     build_boot_assets "$target_out" || return 1
+
+    if [ "$target_out" = "out" ] && c128_active_variant_is "cache_survival" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_cache_survival.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/bank1.dat; then
+        CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_cache_survival_build_$(basename "$target_out").log"
     local cache_main="$target_out/moria128.prg"
@@ -1174,6 +1390,7 @@ build_cache_survival_boot_assets() {
     if [ "$target_out" = "out" ]; then
         BOOT_ASSETS_BUILT=0 # Force refresh
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
+        c128_set_active_variant "cache_survival"
     fi
     return 0
 }
@@ -1184,6 +1401,15 @@ build_load_resume_boot_assets() {
     fi
 
     build_boot_assets || return 1
+
+    if ! c128_outputs_need_refresh \
+            out/THE.GAME out/moria128_loadresume.d64 -- \
+            tests/make_load_resume_save.py out/boot128.prg out/moria128.prg out/title \
+            out/monster.db.1 out/monster.db.2 out/monster.db.3 out/monster.db.4 \
+            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen out/bank1.dat; then
+        LOAD_RESUME_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
 
     local build_log="/tmp/test128_boot_load_resume_build.log"
     local c1541_bin="${C1541:-c1541}"
@@ -1252,11 +1478,13 @@ run_test_internal() {
     abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
     local vs_file="${src%.s}.vs"
 
-    local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols -var OVL_OUT='"out"' 2>&1)
-    if [ $? -ne 0 ]; then
-        echo "FAIL $name: assembly error" >> "$result_file"
-        return
+    if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
+        local asm_output
+        asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols -var OVL_OUT='"out"' 2>&1)
+        if [ $? -ne 0 ]; then
+            echo "FAIL $name: assembly error" >> "$result_file"
+            return
+        fi
     fi
 
     if [ ! -f "$vs_file" ]; then
@@ -1273,9 +1501,8 @@ run_test_internal() {
         return
     fi
 
-    # Simple python one-liner for address normalization
-    start_addr=$(python3 -c "import sys; a=sys.argv[1].strip().upper(); print(a[-4:] if len(a)>4 else a)" "$start_addr")
-    pass_addr=$(python3 -c "import sys; a=sys.argv[1].strip().upper(); print(a[-4:] if len(a)>4 else a)" "$pass_addr")
+    start_addr=$(normalize_monitor_addr "$start_addr")
+    pass_addr=$(normalize_monitor_addr "$pass_addr")
 
     local mon_file="/tmp/test128_${name}.mon"
     local log_file="/tmp/test128_${name}.log"
@@ -1299,6 +1526,8 @@ run_test_internal() {
     fi
 }
 
+export -f normalize_monitor_addr
+export -f c128_target_is_stale
 export -f run_test_internal
 export KICKASS VICE
 
@@ -1324,8 +1553,20 @@ run_parallel_unit_tests() {
         "soak128 tests/test_soak128.s 300000000"
         "monster128 tests/test_monster128.s 20000000"
     )
+    local filtered_tests=()
+    local test_entry
+    for test_entry in "${test_list[@]}"; do
+        local test_name="${test_entry%% *}"
+        if suite_matches_filter "$test_name"; then
+            filtered_tests+=("$test_entry")
+        fi
+    done
 
-    printf "%s\n" "${test_list[@]}" | xargs -P 8 -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
+    if [ "${#filtered_tests[@]}" -eq 0 ]; then
+        return
+    fi
+
+    printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS" -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
     
     while read -r line; do
         local status=$(echo "$line" | awk '{print $1}')
@@ -1349,6 +1590,10 @@ run_test() {
     local src="$2"
     local cycles="${3:-20000000}"
 
+    if ! suite_matches_filter "$name"; then
+        return
+    fi
+
     echo -n "  $name: "
 
     local prg_file="${src%.s}.prg"
@@ -1356,14 +1601,16 @@ run_test() {
     abs_prg="$(cd "$(dirname "$prg_file")" && pwd)/$(basename "$prg_file")"
     local vs_file="${src%.s}.vs"
 
-    local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 "${KA_DEFINES[@]}" -vicesymbols 2>&1)
-    if [ $? -ne 0 ]; then
-        echo "FAIL (assembly error)"
-        echo "$asm_output" | grep -i error | head -3
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
+    if c128_target_is_stale "$prg_file" || c128_target_is_stale "$vs_file"; then
+        local asm_output
+        asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 "${KA_DEFINES[@]}" -vicesymbols 2>&1)
+        if [ $? -ne 0 ]; then
+            echo "FAIL (assembly error)"
+            echo "$asm_output" | grep -i error | head -3
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
     fi
 
     if [ ! -f "$vs_file" ]; then
@@ -2832,37 +3079,40 @@ if [ "$PERF_P1_MODE" = "1" ]; then
 else
     echo "  mode: PERF_P1 instrumentation OFF"
 fi
-run_main_assembly_check || exit 1
-run_artifact_budget_check || exit 1
-run_symbol_placement_check || exit 1
-run_prompt_irq_guard_check || exit 1
-run_80col_layout_guard_check || exit 1
+if [ -n "$TEST_FILTER" ]; then
+    echo "  filter: $TEST_FILTER"
+fi
+run_named_suite main128_asm run_main_assembly_check || exit 1
+run_named_suite c128_artifact_budget run_artifact_budget_check || exit 1
+run_named_suite c128_symbol_placement run_symbol_placement_check || exit 1
+run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || exit 1
+run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || exit 1
 
 run_parallel_unit_tests
 
-run_boot_d64_smoke
+run_named_suite boot_d64_smoke run_boot_d64_smoke
 
-run_boot_title_idle_smoke
-run_title_art_smoke
-run_vic40_clean_boot_smoke
-run_new_key_stability_smoke
-run_boot_title_newgame_smoke
-run_boot_title_load_resume_smoke
-run_boot_tier_transition_smoke
-run_town_overlay_smoke
-run_town_overlay_female_smoke
-run_town_overlay_state_smoke
-run_scripted_summary_to_town_smoke
-run_real_input_town_move_diag
-run_real_boot_crash_harness
-run_overlay_data_transition_smoke
-run_cache_survival_smoke
-run_dungeon_attack_stability_smoke
-run_death_overlay_smoke
-run_restart_to_title_smoke
-run_preload_partial_failure_smoke
-run_overlay_partial_failure_smoke
-run_boot_diag_copy
+run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke
+run_named_suite title_art_smoke run_title_art_smoke
+run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke
+run_named_suite new_key_stability_smoke run_new_key_stability_smoke
+run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke
+run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke
+run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke
+run_named_suite town_overlay_smoke run_town_overlay_smoke
+run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke
+run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke
+run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke
+run_named_suite real_input_town_move_diag run_real_input_town_move_diag
+run_named_suite real_boot_crash_harness run_real_boot_crash_harness
+run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke
+run_named_suite cache_survival_smoke run_cache_survival_smoke
+run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke
+run_named_suite death_overlay_smoke run_death_overlay_smoke
+run_named_suite restart_to_title_smoke run_restart_to_title_smoke
+run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke
+run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke
+run_named_suite boot_diag_copy run_boot_diag_copy
 
 if [ "$PERF_P1_MODE" = "1" ]; then
     run_test "perf_p1" "tests/test_perf_p1.s"

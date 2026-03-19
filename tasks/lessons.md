@@ -82,3 +82,13 @@
 - **Root Cause:** I only asserted the trampoline placement and missed that the callee (`roll_ego_type`) had drifted to `$D310`, inside the `$D000-$DFFF` I/O hole. The PRG contained code there, but runtime execution with I/O visible read garbage.
 - **Resolution:** For any banked/trampolined C128 call path, verify both sides of the jump: the caller/trampoline location and the callee’s runtime residency. If the callee must execute with I/O visible, it cannot live in `$D000-$DFFF`.
 - **Rule:** **On C128, “trampoline below `$D000`” is not enough. Every callable target in that path must also be asserted out of the I/O hole or explicitly executed with a no-I/O banking mode.**
+
+## Harness Optimizations Need Runtime Verification
+
+- **Issue:** I changed `run_tests128.sh` for `OPT-TEST`, and `bash -n` passed, but the real runner broke badly: helper functions were not visible inside `xargs` worker shells, and a layout guard still enforced an obsolete banked-UI contract.
+- **Root Cause:** I treated syntax validation and ad hoc sourcing as enough proof for a shell harness change. That missed two real execution contexts: exported functions in child shells and stale assertions inside the harness itself.
+- **Resolution:** For shell-runner changes, always validate the actual execution mode:
+  1. run the real target (`make -C commodore/c128 test128` or a focused sourced runner path),
+  2. check any `xargs` / subshell worker paths explicitly, and
+  3. update harness assertions when the underlying architecture contract has changed.
+- **Rule:** **A shell harness change is not verified by `bash -n`. It must be exercised through the same subshell/worker path the real test runner uses.**
