@@ -5,6 +5,7 @@
 #   make disk128    Build D64 disk image with all game files
 #   make run128     Build D64 disk image + launch in VICE x128 (80-col mode)
 #   make test128-fast  Run the Python Gate C compare harness against the stable C128 unit batch
+#   make test128-fast-smoke  Run a small high-value C128 smoke subset
 #   make clean128   Remove C128 build artifacts
 
 # ── Tool paths ────────────────────────────────────────────
@@ -53,7 +54,7 @@ KA_FLAGS    += -define PERF_P1
 endif
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: build128 run128 disk128 clean128 test128 test128-fast
+.PHONY: build128 run128 disk128 clean128 test128 test128-fast test128-fast-smoke
 
 build128: $(MAIN_PRG) $(BOOT_PRG)
 
@@ -62,6 +63,9 @@ test128:
 
 test128-fast:
 	python3 -u ./harness128_batch.py --mode compare --snapshot-path $(OUT)/ready.vsf --vice $(VICE128) --connect-timeout 12
+
+test128-fast-smoke:
+	TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|town_overlay_smoke' ./run_tests128.sh
 
 # Main program
 $(MAIN_PRG): $(SOURCES) $(KICKASS) | $(OUT)

@@ -394,6 +394,22 @@ Scaling to multi-core.
   - `monster128`
   - `soak128`
 
+### Incremental Step Landed (2026-03-19, fast smoke target integration)
+
+- Added a small high-value smoke subset to the standard build entry points:
+  - `boot_title_idle_smoke`
+  - `scripted_summary_to_town_smoke`
+  - `town_overlay_smoke`
+- New targets:
+  - `make -C commodore/c128 test128-fast-smoke`
+  - `make test128-fast-smoke`
+- Rationale:
+  - keep `test128-fast` focused on the Python unit batch
+  - add a separate, cheap smoke layer that exercises the boot/title, chargen-to-town, and overlay-entry paths
+- Verified:
+  - `make -C commodore/c128 test128-fast-smoke` → PASS
+  - `make test128-fast-smoke` → PASS
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

@@ -744,3 +744,23 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `main_loop128`
   - `monster128`
   - `soak128`
+
+## 2026-03-19 OPT-TEST fast smoke target integration
+
+### Plan
+- [x] Identify a minimal high-value smoke subset worth exposing as a standard fast target.
+- [x] Add Makefile targets for the smoke subset at both the C128 and repo root levels.
+- [x] Verify both new make entry points.
+
+### Review
+- Added `test128-fast-smoke` with this subset:
+  - `boot_title_idle_smoke`
+  - `scripted_summary_to_town_smoke`
+  - `town_overlay_smoke`
+- New entry points:
+  - `make -C commodore/c128 test128-fast-smoke`
+  - `make test128-fast-smoke`
+- Verified:
+  - `make -C commodore/c128 test128-fast-smoke`
+  - `make test128-fast-smoke`
+- This keeps `test128-fast` focused on the Python unit compare path while giving agents and humans a separate fast smoke pass for the most failure-prone runtime flows.
