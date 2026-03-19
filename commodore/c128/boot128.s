@@ -91,6 +91,16 @@ loader_start:
     lda #$93
     jsr $ffd2
 
+    // Print "LOADING MORIA8..."
+    ldx #0
+!loop:
+    lda loading_msg,x
+    beq !done+
+    jsr $ffd2               // KERNAL CHROUT
+    inx
+    bne !loop-
+!done:
+
     // 5. SETBNK (Bank 1 data, Bank 0 filenames)
     // Filenames are at $2300 (Bank 0 RAM, visible to Bank 15)
     lda #1
@@ -141,7 +151,8 @@ load_err:
     jmp load_err
 
 loading_msg:
-    .text "LOADING MORIA8..." ; .byte 0
+    .text "LOADING MORIA8..."
+    .byte $0d, 0            // CR, null
 
 // Filenames at $2300 (inside the 1KB payload)
 .fill $2300 - *, 0
