@@ -24,6 +24,7 @@ TEST_PHASE="${TEST_PHASE:-}"
 TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
 TEST_RERUN_FROM="${TEST_RERUN_FROM:-}"
+TEST_RERUN_LAST="${TEST_RERUN_LAST:-0}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -39,7 +40,9 @@ TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
 TEST128_RERUN_FILE="${TEST128_TMP_DIR}/rerun_suites.txt"
+TEST128_LAST_SUMMARY_MARKER="out/.test128_last_summary_path"
 TEST128_ITERATION=1
+TEST128_RERUN_COUNT=0
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
@@ -68,6 +71,14 @@ trap cleanup_test128_tmp EXIT
 
 test128_tmp_file() {
     printf '%s/%s\n' "$TEST128_TMP_DIR" "$1"
+}
+
+test128_abs_path() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).resolve())
+PY
 }
 
 test128_now_ms() {
@@ -115,7 +126,7 @@ emit_test_summary() {
 
     local summary_file="$TEST_SUMMARY_FILE"
     if [ -z "$summary_file" ]; then
-        summary_file="$(test128_tmp_file "summary.${TEST_SUMMARY}")"
+        summary_file="out/.test128_last_summary.${TEST_SUMMARY}"
     fi
 
     case "$TEST_SUMMARY" in
@@ -126,7 +137,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "$TEST_RERUN_FROM" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -141,11 +152,12 @@ payload = {
     "skip": sys.argv[7],
     "phase": sys.argv[8],
     "rerun_from": sys.argv[9],
-    "jobs_requested": sys.argv[10],
-    "jobs_resolved": int(sys.argv[11]),
-    "repeat": int(sys.argv[12]),
-    "timings": sys.argv[13] != "0",
-    "fail_fast": sys.argv[14] != "0",
+    "rerun_last": sys.argv[10] != "0",
+    "jobs_requested": sys.argv[11],
+    "jobs_resolved": int(sys.argv[12]),
+    "repeat": int(sys.argv[13]),
+    "timings": sys.argv[14] != "0",
+    "fail_fast": sys.argv[15] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -166,20 +178,53 @@ PY
             ;;
     esac
 
+    local summary_file_abs
+    summary_file_abs="$(test128_abs_path "$summary_file")"
+    printf '%s\n' "$summary_file_abs" > "$TEST128_LAST_SUMMARY_MARKER"
+
     echo "=== Summary written: $summary_file ==="
 }
 
-load_rerun_selection() {
-    if [ -z "$TEST_RERUN_FROM" ]; then
+resolve_rerun_source() {
+    if [ -n "$TEST_RERUN_FROM" ]; then
+        printf '%s\n' "$TEST_RERUN_FROM"
         return 0
     fi
 
-    if [ ! -f "$TEST_RERUN_FROM" ]; then
-        echo "error: TEST_RERUN_FROM file not found: $TEST_RERUN_FROM" >&2
+    if [ "$TEST_RERUN_LAST" = "0" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$TEST128_LAST_SUMMARY_MARKER" ]; then
+        echo "error: no recorded last summary path ($TEST128_LAST_SUMMARY_MARKER)" >&2
         return 1
     fi
 
-    python3 - "$TEST_RERUN_FROM" "$TEST128_RERUN_FILE" <<'PY'
+    local last_summary
+    last_summary="$(head -n 1 "$TEST128_LAST_SUMMARY_MARKER" | tr -d '\r')"
+    if [ -z "$last_summary" ]; then
+        echo "error: empty last summary path in $TEST128_LAST_SUMMARY_MARKER" >&2
+        return 1
+    fi
+
+    printf '%s\n' "$last_summary"
+}
+
+load_rerun_selection() {
+    TEST128_RERUN_SOURCE="$(resolve_rerun_source)" || return 1
+    TEST128_RERUN_COUNT=0
+
+    if [ -z "$TEST128_RERUN_SOURCE" ]; then
+        return 0
+    fi
+
+    if [ ! -f "$TEST128_RERUN_SOURCE" ]; then
+        echo "error: rerun summary file not found: $TEST128_RERUN_SOURCE" >&2
+        return 1
+    fi
+
+    TEST128_RERUN_COUNT="$(
+        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -211,11 +256,12 @@ else:
 dst.write_text("".join(f"{suite}\n" for suite in suites))
 print(len(suites))
 PY
+    )" || return 1
 }
 
 suite_matches_rerun() {
     local suite_name="$1"
-    if [ -z "$TEST_RERUN_FROM" ]; then
+    if [ -z "${TEST128_RERUN_SOURCE:-}" ]; then
         return 0
     fi
     [ -f "$TEST128_RERUN_FILE" ] && grep -Fxq "$suite_name" "$TEST128_RERUN_FILE"
@@ -3672,6 +3718,8 @@ if [ -n "$TEST_PHASE" ]; then
 fi
 if [ -n "$TEST_RERUN_FROM" ]; then
     echo "  rerun-from: $TEST_RERUN_FROM"
+elif [ "$TEST_RERUN_LAST" != "0" ]; then
+    echo "  rerun-last: ON"
 fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
     echo "  describe: ON"
@@ -3710,11 +3758,14 @@ if [ "$TEST_DESCRIBE" != "0" ]; then
     exit 0
 fi
 
-if ! rerun_count="$(load_rerun_selection)"; then
+if ! load_rerun_selection; then
     exit 1
 fi
-if [ -n "$TEST_RERUN_FROM" ]; then
-    echo "  rerun suites: $rerun_count"
+if [ -n "${TEST128_RERUN_SOURCE:-}" ]; then
+    if [ "$TEST_RERUN_LAST" != "0" ] && [ -z "$TEST_RERUN_FROM" ]; then
+        echo "  rerun-from: $TEST128_RERUN_SOURCE"
+    fi
+    echo "  rerun suites: $TEST128_RERUN_COUNT"
 fi
 
 if [ "$TEST_LIST" != "0" ]; then

@@ -340,3 +340,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun.json TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun.tsv TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_exec.json TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_LAST slice
+- Goal: replay the most recent summary without manually copying its path into `TEST_RERUN_FROM`.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_LAST=1`
+  - default unspecific summary output to `out/.test128_last_summary.{json,tsv}`
+  - record the resolved last-summary path in `out/.test128_last_summary_path`
+  - resolve replay source from that marker when `TEST_RERUN_LAST=1`
+  - show both `rerun-last: ON` and the resolved `rerun-from:` path in the banner
+- Verified:
+  - `KICKASS=/tmp/missing.jar TEST_SUMMARY=json TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh || true` followed by `TEST_RERUN_LAST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `KICKASS=/tmp/missing.jar TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_last_explicit.json TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh || true` followed by `TEST_RERUN_LAST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅

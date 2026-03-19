@@ -143,6 +143,11 @@ Scaling to multi-core.
 - Replay selection is exact-suite based, deduplicated, and composes with `TEST_PHASE`, `TEST_FILTER`, and `TEST_SKIP`.
 - This turns summary exports into a direct debugging input instead of a passive report artifact.
 
+### Incremental Step Landed (2026-03-18, rerun last summary)
+- `run_tests128.sh` now accepts `TEST_RERUN_LAST=1` to reuse the most recent recorded summary path automatically.
+- When no explicit `TEST_SUMMARY_FILE` is provided, summaries now default to a stable `out/.test128_last_summary.{json,tsv}` path so the next invocation can replay them.
+- The harness records the resolved summary path in `out/.test128_last_summary_path` and shows the resolved replay source in the banner.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
