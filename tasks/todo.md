@@ -238,3 +238,13 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified:
   - `TEST_TIMINGS=1 TEST_FILTER='main128_asm|config128|input128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_TIMINGS=1 TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_REPEAT slice
+- Goal: make focused flake checks possible without wrapping the harness in outer shell loops.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_REPEAT=<n>` iteration control
+  - repeat the selected suite set `n` times in one invocation
+  - keep `TEST_LIST=1` single-pass and explicitly note that repeat is ignored in list-only mode
+- Verified:
+  - `TEST_REPEAT=2 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_REPEAT=3 TEST_LIST=1 TEST_FILTER='main128_asm|config128|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅

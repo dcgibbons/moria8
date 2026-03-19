@@ -98,6 +98,11 @@ Scaling to multi-core.
 - Timing data is written through the run-local temp directory and printed as a summary sorted by slowest suite first.
 - This provides a measurement baseline for future harness work before moving into deeper architectural changes such as snapshots or persistent monitor orchestration.
 
+### Incremental Step Landed (2026-03-18, repeated execution)
+- `run_tests128.sh` now accepts `TEST_REPEAT=<n>` to execute the selected suite set multiple times in one invocation.
+- Repeat works with `TEST_FILTER` and `TEST_SKIP`; `TEST_LIST=1` remains single-pass and reports that repeat is ignored in list-only mode.
+- This gives a cheap flake-checking tool for a focused subset without external shell loops.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

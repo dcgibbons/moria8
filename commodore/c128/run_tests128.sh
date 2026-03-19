@@ -24,6 +24,7 @@ TEST_FILTER="${TEST_FILTER:-}"
 TEST_SKIP="${TEST_SKIP:-}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
+TEST_REPEAT="${TEST_REPEAT:-1}"
 PASS=0
 FAIL=0
 TOTAL=0
@@ -112,6 +113,17 @@ resolve_test_jobs() {
 }
 
 TEST_JOBS_RESOLVED="$(resolve_test_jobs "$TEST_JOBS")"
+
+resolve_test_repeat() {
+    local requested="$1"
+    if [[ "$requested" =~ ^[0-9]+$ ]] && [ "$requested" -ge 1 ]; then
+        printf '%s\n' "$requested"
+        return
+    fi
+    printf '1\n'
+}
+
+TEST_REPEAT_RESOLVED="$(resolve_test_repeat "$TEST_REPEAT")"
 
 normalize_monitor_addr() {
     python3 - "$1" <<'PY'
@@ -3278,6 +3290,44 @@ run_boot_diag_copy() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_selected_suites() {
+    run_named_suite main128_asm run_main_assembly_check || return 1
+    run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
+    run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
+    run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
+
+    run_parallel_unit_tests
+
+    run_named_suite boot_d64_smoke run_boot_d64_smoke
+
+    run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke
+    run_named_suite title_art_smoke run_title_art_smoke
+    run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke
+    run_named_suite new_key_stability_smoke run_new_key_stability_smoke
+    run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke
+    run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke
+    run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke
+    run_named_suite town_overlay_smoke run_town_overlay_smoke
+    run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke
+    run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke
+    run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke
+    run_named_suite real_input_town_move_diag run_real_input_town_move_diag
+    run_named_suite real_boot_crash_harness run_real_boot_crash_harness
+    run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke
+    run_named_suite cache_survival_smoke run_cache_survival_smoke
+    run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke
+    run_named_suite death_overlay_smoke run_death_overlay_smoke
+    run_named_suite restart_to_title_smoke run_restart_to_title_smoke
+    run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke
+    run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke
+    run_named_suite boot_diag_copy run_boot_diag_copy
+
+    if [ "$PERF_P1_MODE" = "1" ]; then
+        run_test "perf_p1" "tests/test_perf_p1.s"
+    fi
+}
+
 echo "=== Moria C128 Tests ==="
 if [ "$PERF_P1_MODE" = "1" ]; then
     echo "  mode: PERF_P1 instrumentation ON"
@@ -3301,45 +3351,26 @@ fi
 if [ "$TEST_TIMINGS" != "0" ]; then
     echo "  timings: ON"
 fi
-run_named_suite main128_asm run_main_assembly_check || exit 1
-run_named_suite c128_artifact_budget run_artifact_budget_check || exit 1
-run_named_suite c128_symbol_placement run_symbol_placement_check || exit 1
-run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || exit 1
-run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || exit 1
-
-run_parallel_unit_tests
-
-run_named_suite boot_d64_smoke run_boot_d64_smoke
-
-run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke
-run_named_suite title_art_smoke run_title_art_smoke
-run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke
-run_named_suite new_key_stability_smoke run_new_key_stability_smoke
-run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke
-run_named_suite boot_title_load_resume_smoke run_boot_title_load_resume_smoke
-run_named_suite boot_tier_transition_smoke run_boot_tier_transition_smoke
-run_named_suite town_overlay_smoke run_town_overlay_smoke
-run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke
-run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke
-run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke
-run_named_suite real_input_town_move_diag run_real_input_town_move_diag
-run_named_suite real_boot_crash_harness run_real_boot_crash_harness
-run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke
-run_named_suite cache_survival_smoke run_cache_survival_smoke
-run_named_suite dungeon_attack_stability_smoke run_dungeon_attack_stability_smoke
-run_named_suite death_overlay_smoke run_death_overlay_smoke
-run_named_suite restart_to_title_smoke run_restart_to_title_smoke
-run_named_suite preload_partial_failure_smoke run_preload_partial_failure_smoke
-run_named_suite overlay_partial_failure_smoke run_overlay_partial_failure_smoke
-run_named_suite boot_diag_copy run_boot_diag_copy
-
-if [ "$PERF_P1_MODE" = "1" ]; then
-    run_test "perf_p1" "tests/test_perf_p1.s"
+if [ "$TEST_REPEAT_RESOLVED" -gt 1 ] && [ "$TEST_LIST" = "0" ]; then
+    echo "  repeat: $TEST_REPEAT_RESOLVED"
+elif [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
+    echo "  repeat: $TEST_REPEAT_RESOLVED (list-only ignored)"
 fi
+
 if [ "$TEST_LIST" != "0" ]; then
+    run_selected_suites || exit 1
     echo "=== Selected: $TOTAL suites ==="
     exit 0
 fi
+
+repeat_idx=1
+while [ "$repeat_idx" -le "$TEST_REPEAT_RESOLVED" ]; do
+    if [ "$TEST_REPEAT_RESOLVED" -gt 1 ]; then
+        echo "--- Iteration $repeat_idx/$TEST_REPEAT_RESOLVED ---"
+    fi
+    run_selected_suites || exit 1
+    repeat_idx=$((repeat_idx + 1))
+done
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 print_timing_summary
 
