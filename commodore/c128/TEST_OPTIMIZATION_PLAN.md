@@ -153,6 +153,11 @@ Scaling to multi-core.
 - The default remains `FAIL`, but replay can now target other statuses or combinations such as `FAIL|SKIP`.
 - The active rerun status selector is shown in the banner and recorded in JSON summary metadata.
 
+### Incremental Step Landed (2026-03-18, rerun latest-only selection)
+- `run_tests128.sh` now accepts `TEST_RERUN_ONLY_LATEST=1` to evaluate replay status against only the latest summary entry for each suite.
+- This avoids replaying suites that failed earlier in a repeated run but passed in a later iteration.
+- Latest-only replay uses the summary `iteration` field when present and otherwise falls back to last occurrence order.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

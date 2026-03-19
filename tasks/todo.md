@@ -364,3 +364,16 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun_status.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_status.tsv TEST_RERUN_STATUS='SKIP' TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_status_exec.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_ONLY_LATEST slice
+- Goal: avoid replaying stale failures from earlier iterations in repeated summary files.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_ONLY_LATEST=1`
+  - evaluate replay status against only the latest entry per suite
+  - use explicit `iteration` when present, else fall back to last occurrence order
+  - show `rerun-only-latest: ON` in the banner
+  - record `rerun_only_latest` in JSON summary metadata
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_latest.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_ONLY_LATEST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_latest.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_ONLY_LATEST=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_latest_exec.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_ONLY_LATEST=1 TEST_FAIL_FAST=1 bash commodore/c128/run_tests128.sh` ✅
