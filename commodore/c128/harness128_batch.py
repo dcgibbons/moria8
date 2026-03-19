@@ -37,6 +37,7 @@ class TestCase:
     name: str
     source: Path
     timeout: float
+    limitcycles: int | None = None
     force_moncommands: bool = False
     break_on_fail: bool = True
     cold_ready: bool = True
@@ -46,13 +47,13 @@ class TestCase:
 BATCH_TESTS: dict[str, TestCase] = {
     "minimal128": TestCase("minimal128", SCRIPT_DIR / "tests" / "test_minimal128.s", 5.0),
     "config128": TestCase("config128", SCRIPT_DIR / "tests" / "test_config128.s", 5.0),
-    "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0, True, False, False, False),
+    "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0, 20000000, True, False, True, True),
     "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0),
     "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0),
-    "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0, True, False, False, False),
+    "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0, 120000000, True, False, True, True),
     "main_loop128": TestCase("main_loop128", SCRIPT_DIR / "tests" / "test_main_loop128.s", 5.0),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
-    "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, True, False, False, False),
+    "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, 20000000, True, False, True, True),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
     "vdc_attr128": TestCase("vdc_attr128", SCRIPT_DIR / "tests" / "test_vdc_attr128.s", 5.0),
 }
@@ -60,8 +61,11 @@ BATCH_TESTS: dict[str, TestCase] = {
 DEFAULT_BATCH_TESTS = [
     "minimal128",
     "config128",
+    "memory128",
     "status_coherence128",
     "vdc_attr128",
+    "msg_prompt128",
+    "tier128",
     "dungeon128",
     "main_loop128",
 ]
@@ -128,6 +132,7 @@ def run_one_test(
     *,
     force_moncommands: bool,
     break_on_fail: bool,
+    limitcycles: int | None,
     test_name: str,
     prg_path: Path,
     vs_path: Path,
@@ -147,6 +152,7 @@ def run_one_test(
             symbols=symbols,
             snapshot_path=snapshot_path,
             break_on_fail=break_on_fail,
+            limitcycles=limitcycles,
         )
         duration = time.perf_counter() - start_time
         return exit_code == 0, "" if exit_code == 0 else "moncommands execution failed", duration
@@ -180,6 +186,7 @@ def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[
                     base_args,
                     force_moncommands=test_case.force_moncommands,
                     break_on_fail=test_case.break_on_fail,
+                    limitcycles=test_case.limitcycles,
                     test_name=test_case.name,
                     prg_path=prg_path,
                     vs_path=vs_path,
@@ -205,6 +212,7 @@ def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[
                     base_args,
                     force_moncommands=test_case.force_moncommands,
                     break_on_fail=test_case.break_on_fail,
+                    limitcycles=test_case.limitcycles,
                     test_name=test_case.name,
                     prg_path=prg_path,
                     vs_path=vs_path,
@@ -246,6 +254,7 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
                 base_args,
                 force_moncommands=test_case.force_moncommands,
                 break_on_fail=test_case.break_on_fail,
+                limitcycles=test_case.limitcycles,
                 test_name=test_case.name,
                 prg_path=prg_path,
                 vs_path=vs_path,

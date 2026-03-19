@@ -56,6 +56,7 @@ def run_test_via_moncommands(
     symbols,
     snapshot_path: Path | None,
     break_on_fail: bool = True,
+    limitcycles: int | None = None,
 ) -> int:
     with tempfile.TemporaryDirectory(prefix="harness128_") as temp_dir:
         temp_dir_path = Path(temp_dir)
@@ -70,6 +71,7 @@ def run_test_via_moncommands(
             commands.append(f"break {symbols.fail_addr}")
         commands.append(f"r pc={symbols.start_addr}")
         commands.append(f"until ${symbols.pass_addr}")
+        commands.append("quit")
         mon_file.write_text("\n".join(commands) + "\n", encoding="utf-8")
 
         command = [
@@ -81,9 +83,13 @@ def run_test_via_moncommands(
             "+sound",
             "-sounddev",
             "dummy",
+            "+remotemonitor",
+            "+binarymonitor",
         ]
         for extra_arg in args.vice_arg:
             command.append(extra_arg)
+        if limitcycles is not None:
+            command.extend(["-limitcycles", str(limitcycles)])
         command.extend(["-moncommands", str(mon_file), "-monlog", "-monlogname", str(log_file)])
 
         try:

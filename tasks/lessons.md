@@ -102,3 +102,10 @@
   2. Python snapshot mode using the current prepared snapshot contract.
   If either path is not trustworthy, mark the test explicitly unsupported instead of leaving it in the default compare set.
 - **Rule:** **For Gate C.4, shell-harness success is necessary but not sufficient. A test is only “snapshot-ready” after direct Python cold/snapshot verification.**
+
+## Moncommands Paths Must Match Exactly
+
+- **Issue:** I initially classified several Gate C.4 tests as incompatible with the Python batch harness when they were really failing because the Python moncommands path did not match the shell harness execution contract.
+- **Root Cause:** The Python moncommands runner omitted `+remotemonitor +binarymonitor` and the per-test `-limitcycles` budget. That left VICE alive at the monitor prompt and produced false timeout failures.
+- **Resolution:** When reproducing a shell-based VICE flow in Python, mirror the full invocation contract before concluding a test is incompatible. For moncommands-driven tests, carry over the shell runner’s flags and cycle budgets explicitly.
+- **Rule:** **If a Python VICE harness disagrees with the shell harness, compare the exact emulator invocation first. Missing VICE flags or cycle budgets can look like test failures.**

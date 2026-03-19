@@ -646,3 +646,35 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Explicit Python batch selection of the unsupported tests now stops immediately with honest status instead of long timeouts:
   - `not cold-batch-ready`
   - `not snapshot-ready`
+
+## 2026-03-19 OPT-TEST Gate C.4 moncommands contract alignment
+
+### Plan
+- [x] Compare the Python moncommands runner against the shell harness invocation directly.
+- [x] Restore the missing VICE execution contract in the Python moncommands path.
+- [x] Carry shell-equivalent `-limitcycles` budgets for moncommands-driven batch tests.
+- [x] Re-qualify `memory128`, `msg_prompt128`, and `tier128` under cold and snapshot compare mode.
+- [x] Restore the proven tests to the default stable Gate C.4 compare set.
+
+### Review
+- Root cause: the Python moncommands path was not actually equivalent to the shell harness. It was missing:
+  - `+remotemonitor +binarymonitor`
+  - the per-test `-limitcycles` budget
+- Without that contract, VICE remained alive at the monitor prompt and the Python batch harness reported false timeouts.
+- After aligning the contract, the previously excluded tests now pass in both cold and snapshot compare mode:
+  - `memory128`
+  - `msg_prompt128`
+  - `tier128`
+- Verified with:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests memory128,msg_prompt128,tier128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- The stable default Gate C.4 compare batch is now:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`

@@ -310,6 +310,32 @@ Scaling to multi-core.
   - `not cold-batch-ready`
   - `not snapshot-ready`
 
+### Incremental Step Landed (2026-03-19, Gate C.4 moncommands contract alignment)
+
+- The previous correction was too conservative. `memory128`, `msg_prompt128`, and `tier128` were not fundamentally incompatible with the Python batch harness; the Python moncommands path was incomplete.
+- Root cause:
+  - the Python moncommands runner did not mirror the shell harness contract
+  - it omitted `+remotemonitor +binarymonitor`
+  - it omitted the per-test `-limitcycles` budget
+  - without that contract, VICE stayed alive at the monitor prompt and the batch harness reported false timeouts
+- Fix:
+  - `run_test_via_moncommands()` now uses the shell-compatible VICE flags
+  - moncommands-driven batch tests now carry explicit cycle budgets
+  - `memory128`, `msg_prompt128`, and `tier128` are restored to the stable snapshot compare set
+- Verified:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests memory128,msg_prompt128,tier128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+- Current stable Gate C.4 default compare set:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
