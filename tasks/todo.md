@@ -126,3 +126,8 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `commodore/c128/ARCHITECTURE.md`
   - `commodore/DESIGN.md`
 - Key rule now repeated in the docs: for runtime-loaded or banked C128 code, verify linked address, PRG header, load bank, execution bank, and recopy-source safety together.
+
+## 2026-03-18 BUILDPLAN cleanup
+- Cleaned the active backlog so `commodore/BUILDPLAN.md` reflects true open work.
+- Removed `TST-1` from the open-issues table and recorded it only under resolved work.
+- Removed pending `OPT-TEST` from the resolved table and kept it only in the open backlog.
