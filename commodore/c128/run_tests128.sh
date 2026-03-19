@@ -26,12 +26,15 @@ TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
 TEST_REPEAT="${TEST_REPEAT:-1}"
 TEST_FAIL_FAST="${TEST_FAIL_FAST:-0}"
+TEST_SUMMARY="${TEST_SUMMARY:-}"
+TEST_SUMMARY_FILE="${TEST_SUMMARY_FILE:-}"
 PASS=0
 FAIL=0
 TOTAL=0
 TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
+TEST128_RESULTS_FILE="${TEST128_TMP_DIR}/results.tsv"
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
@@ -78,6 +81,17 @@ record_suite_timing() {
     printf '%s\t%s\n' "$duration_ms" "$suite_name" >> "$TEST128_TIMINGS_FILE"
 }
 
+record_suite_result() {
+    local status="$1"
+    local suite_name="$2"
+    local duration_ms="${3:-}"
+    local detail="${4:-}"
+    if [ "$TEST_LIST" != "0" ]; then
+        return
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$status" "$suite_name" "$duration_ms" "$detail" >> "$TEST128_RESULTS_FILE"
+}
+
 print_timing_summary() {
     if [ "$TEST_TIMINGS" = "0" ] || [ ! -f "$TEST128_TIMINGS_FILE" ]; then
         return
@@ -87,6 +101,62 @@ print_timing_summary() {
     sort -nr "$TEST128_TIMINGS_FILE" | while IFS=$'\t' read -r duration suite_name; do
         printf '  %s\t%s\n' "$duration" "$suite_name"
     done
+}
+
+emit_test_summary() {
+    if [ -z "$TEST_SUMMARY" ] || [ ! -f "$TEST128_RESULTS_FILE" ]; then
+        return
+    fi
+
+    local summary_file="$TEST_SUMMARY_FILE"
+    if [ -z "$summary_file" ]; then
+        summary_file="$(test128_tmp_file "summary.${TEST_SUMMARY}")"
+    fi
+
+    case "$TEST_SUMMARY" in
+        tsv)
+            {
+                printf 'status\tsuite\tduration_ms\tdetail\n'
+                cat "$TEST128_RESULTS_FILE"
+            } > "$summary_file"
+            ;;
+        json)
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+results_path = Path(sys.argv[1])
+summary_path = Path(sys.argv[2])
+payload = {
+    "pass": int(sys.argv[3]),
+    "fail": int(sys.argv[4]),
+    "total": int(sys.argv[5]),
+    "filter": sys.argv[6],
+    "skip": sys.argv[7],
+    "repeat": int(sys.argv[8]),
+    "timings": sys.argv[9] != "0",
+    "fail_fast": sys.argv[10] != "0",
+    "results": [],
+}
+for line in results_path.read_text().splitlines():
+    status, suite, duration_ms, detail = (line.split("\t", 3) + ["", "", "", ""])[:4]
+    payload["results"].append({
+        "status": status,
+        "suite": suite,
+        "duration_ms": int(duration_ms) if duration_ms else None,
+        "detail": detail,
+    })
+summary_path.write_text(json.dumps(payload, indent=2) + "\n")
+PY
+            ;;
+        *)
+            echo "warning: unsupported TEST_SUMMARY='$TEST_SUMMARY' (expected json or tsv)" >&2
+            return
+            ;;
+    esac
+
+    echo "=== Summary written: $summary_file ==="
 }
 
 resolve_test_jobs() {
@@ -239,13 +309,19 @@ run_named_suite() {
     local timing_start=""
     local total_before="$TOTAL"
     local fail_before="$FAIL"
-    if [ "$TEST_TIMINGS" != "0" ]; then
+    if [ "$TEST_TIMINGS" != "0" ] || [ -n "$TEST_SUMMARY" ]; then
         timing_start="$(test128_now_ms)"
     fi
     "$@"
     local suite_rc=$?
     if [ -n "$timing_start" ] && [ "$TOTAL" -gt "$total_before" ]; then
-        record_suite_timing "$suite_name" "$(( $(test128_now_ms) - timing_start ))"
+        local duration_ms="$(( $(test128_now_ms) - timing_start ))"
+        record_suite_timing "$suite_name" "$duration_ms"
+        if [ "$FAIL" -gt "$fail_before" ]; then
+            record_suite_result "FAIL" "$suite_name" "$duration_ms" "see console log"
+        else
+            record_suite_result "PASS" "$suite_name" "$duration_ms" ""
+        fi
     fi
     if [ "$TEST_FAIL_FAST" != "0" ] && [ "$FAIL" -gt "$fail_before" ]; then
         return 1
@@ -1761,6 +1837,7 @@ run_parallel_unit_tests() {
             fi
             PASS=$((PASS + 1))
             record_suite_timing "$name" "$duration_ms"
+            record_suite_result "$status" "$name" "$duration_ms" ""
         else
             if [ "$TEST_TIMINGS" != "0" ] && [ -n "${duration_ms:-}" ]; then
                 echo "FAIL ($detail; ${duration_ms}ms)"
@@ -1771,6 +1848,7 @@ run_parallel_unit_tests() {
             if [ -n "${duration_ms:-}" ]; then
                 record_suite_timing "$name" "$duration_ms"
             fi
+            record_suite_result "$status" "$name" "$duration_ms" "$detail"
         fi
         TOTAL=$((TOTAL + 1))
     done < "$result_file"
@@ -1809,7 +1887,9 @@ run_test() {
             echo "$asm_output" | grep -i error | head -3
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
-            record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+            local duration_ms="$(( $(test128_now_ms) - start_ms ))"
+            record_suite_timing "$name" "$duration_ms"
+            record_suite_result "FAIL" "$name" "$duration_ms" "assembly error"
             failed=1
             if [ "$TEST_FAIL_FAST" != "0" ]; then
                 return 1
@@ -1822,7 +1902,9 @@ run_test() {
         echo "FAIL (missing .vs symbol file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
-        record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+        local duration_ms="$(( $(test128_now_ms) - start_ms ))"
+        record_suite_timing "$name" "$duration_ms"
+        record_suite_result "FAIL" "$name" "$duration_ms" "missing .vs symbol file"
         failed=1
         if [ "$TEST_FAIL_FAST" != "0" ]; then
             return 1
@@ -1838,7 +1920,9 @@ run_test() {
         echo "FAIL (missing test_start/test_pass labels in .vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
-        record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
+        local duration_ms="$(( $(test128_now_ms) - start_ms ))"
+        record_suite_timing "$name" "$duration_ms"
+        record_suite_result "FAIL" "$name" "$duration_ms" "missing test_start/test_pass labels in .vs"
         failed=1
         if [ "$TEST_FAIL_FAST" != "0" ]; then
             return 1
@@ -1875,6 +1959,7 @@ run_test() {
             echo "PASS"
         fi
         PASS=$((PASS + 1))
+        record_suite_result "PASS" "$name" "$duration_ms" ""
     else
         if [ "$TEST_TIMINGS" != "0" ]; then
             echo "FAIL (${duration_ms}ms)"
@@ -1884,6 +1969,7 @@ run_test() {
         tail -3 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         failed=1
+        record_suite_result "FAIL" "$name" "$duration_ms" "execution failed"
     fi
 
     record_suite_timing "$name" "$duration_ms"
@@ -3408,6 +3494,9 @@ fi
 if [ "$TEST_TIMINGS" != "0" ]; then
     echo "  timings: ON"
 fi
+if [ -n "$TEST_SUMMARY" ]; then
+    echo "  summary: $TEST_SUMMARY"
+fi
 if [ "$TEST_FAIL_FAST" != "0" ]; then
     echo "  fail-fast: ON"
 fi
@@ -3440,6 +3529,7 @@ if [ "$stopped_early" -ne 0 ]; then
     echo "=== Stopped early after first failure ==="
 fi
 print_timing_summary
+emit_test_summary
 
 if [ "$FAIL" -gt 0 ]; then
     exit 1

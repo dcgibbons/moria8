@@ -259,3 +259,14 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified:
   - `TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
   - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_SUMMARY slice
+- Goal: let automation consume suite outcomes directly without parsing the human console output.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_SUMMARY=json|tsv`
+  - add optional `TEST_SUMMARY_FILE=/path`
+  - record per-suite results during execution
+  - emit machine-readable summary output at end of run
+- Verified:
+  - `TEST_SUMMARY=json TEST_SUMMARY_FILE=/tmp/test128_summary_check.json TEST_FILTER='main128_asm|config128|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_SUMMARY=tsv TEST_SUMMARY_FILE=/tmp/test128_summary_check.tsv TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅

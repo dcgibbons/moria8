@@ -108,6 +108,11 @@ Scaling to multi-core.
 - Unit tests switch to serial execution when fail-fast is enabled so the harness can stop on the first failing unit instead of waiting for a parallel batch to finish.
 - This is aimed at focused debugging runs where fast failure signal matters more than aggregate throughput.
 
+### Incremental Step Landed (2026-03-18, machine-readable summaries)
+- `run_tests128.sh` now accepts `TEST_SUMMARY=json|tsv` plus optional `TEST_SUMMARY_FILE=/path/to/output`.
+- The harness records per-suite outcomes during execution and emits a machine-readable summary file at the end of the run.
+- This provides a clean bridge to automation without scraping the human console text.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
