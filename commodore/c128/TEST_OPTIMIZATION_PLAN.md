@@ -336,6 +336,64 @@ Scaling to multi-core.
   - `dungeon128`
   - `main_loop128`
 
+### Incremental Step Landed (2026-03-19, Gate C.4 `input128` requalification)
+
+- `input128` was not a slow test; it was another moncommands-driven test that the Python batch harness had been sending through the socket path.
+- Root cause:
+  - `symbols_need_moncommands()` was too narrow as a selection heuristic
+  - `input128` has normal 16-bit symbol addresses, but it still behaves correctly only under the shell-style moncommands contract
+- Fix:
+  - `input128` now carries the same explicit moncommands metadata as the other moncommands-driven tests
+  - cycle budget: `20,000,000`
+- Verified:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests input128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+- Updated stable Gate C.4 default compare set:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `input128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`
+
+### Incremental Step Landed (2026-03-19, Gate C.4 full unit-batch requalification)
+
+- The remaining excluded unit tests also turned out to be moncommands-driven rather than fundamentally incompatible:
+  - `db128`
+  - `monster128`
+  - `soak128`
+- Root cause was the same as `input128`: ordinary 16-bit symbol addresses, but execution behavior that only matches the shell-style moncommands contract.
+- Fix:
+  - added explicit moncommands metadata for:
+    - `db128` with `20,000,000` cycles
+    - `monster128` with `20,000,000` cycles
+    - `soak128` with `300,000,000` cycles
+- Verified:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests db128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests monster128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests soak128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → PASS
+  - full default compare:
+    - cold total: `5.191s`
+    - snapshot total: `12.836s`
+- Current stable Gate C.4 default compare set now includes all current unit tests:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `input128`
+  - `db128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`
+  - `monster128`
+  - `soak128`
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

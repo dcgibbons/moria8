@@ -109,3 +109,10 @@
 - **Root Cause:** The Python moncommands runner omitted `+remotemonitor +binarymonitor` and the per-test `-limitcycles` budget. That left VICE alive at the monitor prompt and produced false timeout failures.
 - **Resolution:** When reproducing a shell-based VICE flow in Python, mirror the full invocation contract before concluding a test is incompatible. For moncommands-driven tests, carry over the shell runner’s flags and cycle budgets explicitly.
 - **Rule:** **If a Python VICE harness disagrees with the shell harness, compare the exact emulator invocation first. Missing VICE flags or cycle budgets can look like test failures.**
+
+## Symbol Width Is Not Enough To Choose A Harness Path
+
+- **Issue:** I initially assumed only wrapped/wide symbol addresses needed the moncommands fallback. `input128` disproved that assumption.
+- **Root Cause:** The `symbols_need_moncommands()` heuristic only captures one class of incompatibility. Some tests with ordinary 16-bit symbols still require the shell-style moncommands contract to execute correctly.
+- **Resolution:** Treat moncommands-vs-socket execution mode as explicit per-test metadata once a test proves it needs that path. Do not rely on symbol width alone as the selector.
+- **Rule:** **For Gate C.4, “4-digit symbols” does not imply “safe for socket-run execution.” Use explicit per-test execution metadata when needed.**

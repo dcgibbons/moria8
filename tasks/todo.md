@@ -678,3 +678,69 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `tier128`
   - `dungeon128`
   - `main_loop128`
+
+## 2026-03-19 OPT-TEST Gate C.4 input128 requalification
+
+### Plan
+- [x] Reproduce `input128` under the shell harness and Python batch harness.
+- [x] Verify whether `input128` is a timeout problem or another moncommands-selection problem.
+- [x] Route `input128` through the shell-equivalent moncommands contract in the Python batch harness.
+- [x] Re-verify `input128` alone and in the default Gate C.4 compare set.
+
+### Review
+- Root cause: `input128` has normal 16-bit symbols, so `symbols_need_moncommands()` did not flag it, but it still behaves correctly only under the moncommands-driven execution path.
+- Fix:
+  - `input128` now carries explicit moncommands metadata in `harness128_batch.py`
+  - cycle budget: `20,000,000`
+- Verified with:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests input128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- The stable default Gate C.4 compare batch now includes:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `input128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`
+
+## 2026-03-19 OPT-TEST Gate C.4 full unit-batch requalification
+
+### Plan
+- [x] Reproduce the remaining excluded unit tests under shell and Python paths.
+- [x] Verify whether `db128`, `monster128`, and `soak128` are moncommands-driven like the other recent failures.
+- [x] Add explicit moncommands metadata and shell-equivalent cycle budgets where required.
+- [x] Re-verify each test in cold and snapshot compare mode.
+- [x] Re-verify the full default Gate C.4 compare batch.
+
+### Review
+- Root cause: the last excluded unit tests were not special snapshot blockers. They were ordinary 16-bit-symbol tests that still require the shell-style moncommands contract:
+  - `db128`
+  - `monster128`
+  - `soak128`
+- Added explicit batch metadata:
+  - `db128` → `20,000,000` cycles
+  - `monster128` → `20,000,000` cycles
+  - `soak128` → `300,000,000` cycles
+- Verified with:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests db128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests monster128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests soak128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- The stable default Gate C.4 compare batch now contains all current unit tests:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `input128`
+  - `db128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+  - `main_loop128`
+  - `monster128`
+  - `soak128`

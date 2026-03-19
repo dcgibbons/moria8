@@ -48,26 +48,32 @@ BATCH_TESTS: dict[str, TestCase] = {
     "minimal128": TestCase("minimal128", SCRIPT_DIR / "tests" / "test_minimal128.s", 5.0),
     "config128": TestCase("config128", SCRIPT_DIR / "tests" / "test_config128.s", 5.0),
     "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0, 20000000, True, False, True, True),
-    "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0),
-    "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0),
+    "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0, 20000000, True),
+    "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0, 20000000, True),
     "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0, 120000000, True, False, True, True),
     "main_loop128": TestCase("main_loop128", SCRIPT_DIR / "tests" / "test_main_loop128.s", 5.0),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
     "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, 20000000, True, False, True, True),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
     "vdc_attr128": TestCase("vdc_attr128", SCRIPT_DIR / "tests" / "test_vdc_attr128.s", 5.0),
+    "monster128": TestCase("monster128", SCRIPT_DIR / "tests" / "test_monster128.s", 5.0, 20000000, True),
+    "soak128": TestCase("soak128", SCRIPT_DIR / "tests" / "test_soak128.s", 5.0, 300000000, True),
 }
 
 DEFAULT_BATCH_TESTS = [
     "minimal128",
     "config128",
     "memory128",
+    "input128",
+    "db128",
     "status_coherence128",
     "vdc_attr128",
     "msg_prompt128",
     "tier128",
     "dungeon128",
     "main_loop128",
+    "monster128",
+    "soak128",
 ]
 
 
