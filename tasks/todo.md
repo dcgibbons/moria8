@@ -258,6 +258,36 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - print an explicit early-stop summary line
 - Verified:
   - `TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST Gate C.1 initial connector slice
+
+### Plan
+- [x] Extract a reusable Python VICE monitor connector from the old one-off test runner.
+- [x] Add a small `commodore/c128/harness128.py` CLI that can spawn `x128`, attach to the monitor socket, and run one test PRG end-to-end from `.vs` symbols.
+- [x] Keep `commodore/c128/tests/vice_test_runner.py` working as a compatibility wrapper over the shared connector.
+- [x] Prove the live monitor-driven path against `tests/test_minimal128.prg`.
+- [x] Record the Gate C.1 slice in the optimization plan.
+
+### Review
+- The repo already had a prototype text-monitor socket runner in `commodore/c128/tests/vice_test_runner.py`; Gate C.1 did not need a second implementation.
+- The new shared module `commodore/c128/tests/vice_connector.py` now owns:
+  - monitor socket connect/retry
+  - prompt reads
+  - zero-page/MMU/common-RAM test reset
+  - PRG load
+  - breakpoint management
+  - pass/fail/JAM polling
+- `commodore/c128/harness128.py` is the first reusable Python entry point for the monitor path. It is intentionally narrow: one test case, one VICE instance, no snapshots yet.
+- Important VICE 3.10 detail: the text remote monitor is exposed on `127.0.0.1:6510`; the `6502` socket is the separate binary-monitor endpoint and is not spoken by this slice yet.
+- Live proof command:
+  - `python3 -u commodore/c128/harness128.py --name minimal128 --prg commodore/c128/tests/test_minimal128.prg --vice /opt/homebrew/bin/x128 --timeout 5 --connect-timeout 12 --verbose`
+- Live proof result:
+  - `PASS: minimal128`
+- Expected next Gate C steps remain unchanged:
+  - snapshot boot path
+  - persistent VICE workers
+  - assembly server
+  - actual `run_tests128.sh` integration/replacement
   - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
 
 ## 2026-03-18 OPT-TEST TEST_SUMMARY slice

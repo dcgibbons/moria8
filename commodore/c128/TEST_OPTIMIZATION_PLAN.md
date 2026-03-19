@@ -188,6 +188,17 @@ Scaling to multi-core.
 - This makes deterministic paging possible when combined with `TEST_RERUN_STRIDE` and `TEST_RERUN_LIMIT`.
 - The active offset is shown in the banner when non-zero, and JSON summary metadata now records `rerun_offset`.
 
+### Incremental Step Landed (2026-03-18, Gate C.1 initial connector slice)
+- Added a reusable Python `VICEConnector` module at `commodore/c128/tests/vice_connector.py`.
+- Added `commodore/c128/harness128.py` as a small single-test monitor orchestrator that can spawn `x128`, attach over the monitor socket, load a test PRG, set pass/fail breakpoints from the `.vs` file, and report the result.
+- Refactored the existing `commodore/c128/tests/vice_test_runner.py` prototype to use the shared connector instead of carrying a second socket implementation.
+- On VICE 3.10 this initial slice uses the text remote monitor socket on `127.0.0.1:6510`; the separate binary-monitor socket on `6502` is **not** spoken yet.
+- Proven command path:
+  - `python3 -u commodore/c128/harness128.py --name minimal128 --prg commodore/c128/tests/test_minimal128.prg --vice /opt/homebrew/bin/x128 --timeout 5 --connect-timeout 12 --verbose`
+- Proven result:
+  - `PASS: minimal128`
+- This is the first Gate C.1 slice only: it proves the Python monitor path for one test, but it does not yet replace `run_tests128.sh`, add snapshots, speak the binary monitor protocol, or add a KickAssembler server.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
