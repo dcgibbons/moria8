@@ -25,6 +25,9 @@
 // Incident-scoped cutpoints are kept here for chargen bisection because they
 // were high-signal during the overlay/payload failure investigation. The normal
 // build uses C128_CHARGEN_CUTPOINT=-1, so none of these early returns fire.
+#if !C128
+.const C128_CHARGEN_CUTPOINT = -1
+#endif
 
 player_create:
 #if C128_TEST_TOWN_SELF_DUMP

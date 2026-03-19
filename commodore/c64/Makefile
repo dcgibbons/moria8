@@ -94,18 +94,18 @@ $(BOOT_PRG): $(BOOT_SRC) | $(OUT)
 
 # Launch with D64 disk image + true drive emulation (bypasses FileSystemDevice)
 rundisk: disk
-	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
+	$(VICE) -drive8truedrive -drive8type 1541 +busdevice8 -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
 # Launch with two drives (game on 8, save on 9) for dual-drive testing
 rundual: disk savedisk
-	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 \
-	        -drive9truedrive -drive9type 1541 +iecdevice9 \
+	$(VICE) -drive8truedrive -drive8type 1541 +busdevice8 \
+	        -drive9truedrive -drive9type 1541 +busdevice9 \
 	        -8 $(DISK_IMAGE) -9 $(SAVE_IMAGE) \
 	        -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
 # Launch with VICE monitor commands for save/load debugging
 debug: $(MAIN_PRG) disk
-	$(VICE) -drive8truedrive -drive8type 1541 -iecdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
+	$(VICE) -drive8truedrive -drive8type 1541 -busdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
 
 # Delegate to existing test runner (assembles tests + runs in VICE headless)
 test: $(MAIN_PRG)
