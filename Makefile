@@ -1,9 +1,9 @@
 # Root Makefile — delegates to commodore/c64/ and commodore/c128/
-.PHONY: all build rundisk rundual debug test test128 disk savedisk clean run128demo
+.PHONY: all build rundisk rundual debug test test128 test128-fast disk savedisk clean run128demo
 .PHONY: build128 run128 clean128
 
 all build rundisk rundual debug test disk savedisk clean run128demo:
 	$(MAKE) -C commodore/c64 $@
 
-build128 run128 rundisk128 disk128 clean128 test128:
+build128 run128 rundisk128 disk128 clean128 test128 test128-fast:
 	$(MAKE) -C commodore/c128 $@

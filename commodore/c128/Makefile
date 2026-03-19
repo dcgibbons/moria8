@@ -4,6 +4,7 @@
 #   make build128   Build moria128.prg + boot128.prg
 #   make disk128    Build D64 disk image with all game files
 #   make run128     Build D64 disk image + launch in VICE x128 (80-col mode)
+#   make test128-fast  Run the Python Gate C compare harness against the stable C128 unit batch
 #   make clean128   Remove C128 build artifacts
 
 # ── Tool paths ────────────────────────────────────────────
@@ -52,12 +53,15 @@ KA_FLAGS    += -define PERF_P1
 endif
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: build128 run128 disk128 clean128 test128
+.PHONY: build128 run128 disk128 clean128 test128 test128-fast
 
 build128: $(MAIN_PRG) $(BOOT_PRG)
 
 test128:
 	./run_tests128.sh
+
+test128-fast:
+	python3 -u ./harness128_batch.py --mode compare --snapshot-path $(OUT)/ready.vsf --vice $(VICE128) --connect-timeout 12
 
 # Main program
 $(MAIN_PRG): $(SOURCES) $(KICKASS) | $(OUT)
