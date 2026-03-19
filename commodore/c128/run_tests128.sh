@@ -3,7 +3,11 @@
 
 set -u
 
-KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
+REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/commodore/c128}"
+cd "$RUN_TESTS128_DIR"
+
+KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
 if [ -n "${VICE128:-}" ]; then
     VICE="$VICE128"
 elif command -v x128 >/dev/null 2>&1; then
@@ -20,6 +24,8 @@ TEST_FILTER="${TEST_FILTER:-}"
 PASS=0
 FAIL=0
 TOTAL=0
+TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
+TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
@@ -37,6 +43,18 @@ KA_DEFINES=(-define C128 -var OVL_OUT='"out"')
 if [ "$PERF_P1_MODE" = "1" ]; then
     KA_DEFINES+=(-define PERF_P1)
 fi
+
+cleanup_test128_tmp() {
+    if [ -n "${TEST128_TMP_DIR:-}" ] && [ -d "$TEST128_TMP_DIR" ]; then
+        rm -rf "$TEST128_TMP_DIR"
+    fi
+}
+
+trap cleanup_test128_tmp EXIT
+
+test128_tmp_file() {
+    printf '%s/%s\n' "$TEST128_TMP_DIR" "$1"
+}
 
 normalize_monitor_addr() {
     python3 - "$1" <<'PY'
@@ -142,8 +160,10 @@ run_named_suite() {
 run_main_assembly_check() {
     echo -n "  main128_asm: "
 
-    local build_log="/tmp/test128_main_build.log"
-    local make_kickass="/tmp/moria128-kickass.jar"
+    local build_log
+    build_log="$(test128_tmp_file test128_main_build.log)"
+    local make_kickass
+    make_kickass="$(test128_tmp_file moria128-kickass.jar)"
     local kickass_abs
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
@@ -752,8 +772,10 @@ build_boot_assets() {
         return
     fi
 
-    local build_log="/tmp/test128_boot_build.log"
-    local make_kickass="/tmp/moria128-kickass.jar"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_build.log)"
+    local make_kickass
+    make_kickass="$(test128_tmp_file moria128-kickass.jar)"
     local kickass_abs
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
@@ -792,7 +814,8 @@ run_vic40_clean_boot_smoke() {
     local name="vic40_clean_boot_smoke"
     echo -n "  $name: "
 
-    local build_log="/tmp/test128_${name}_build.log"
+    local build_log
+    build_log="$(test128_tmp_file "test128_${name}_build.log")"
     local c1541_bin="${C1541:-c1541}"
     local probe_main="out/moria128.vic40probe.prg"
     local probe_d64="out/moria128_vic40probe.d64"
@@ -822,9 +845,9 @@ run_vic40_clean_boot_smoke() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/bank1.dat "bank1.dat" >/tmp/test128_${name}_c1541.log 2>&1; then
+            -write out/bank1.dat "bank1.dat" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
-        tail -20 /tmp/test128_${name}_c1541.log | sed 's/^/    /'
+        tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -843,8 +866,10 @@ run_vic40_clean_boot_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_vic40probe.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -903,7 +928,8 @@ build_real_boot_diag_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_real_boot_diag_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_real_boot_diag_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local diag_main="out/moria128.realdiag.prg"
     local diag_d64="out/moria128_realdiag.d64"
@@ -960,7 +986,8 @@ build_overlay_transition_diag_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_overlay_transition_diag_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_overlay_transition_diag_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local diag_main="out/moria128.overlaydiag.prg"
     local diag_d64="out/moria128_overlaydiag.d64"
@@ -1017,7 +1044,8 @@ build_title_art_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_title_art_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_title_art_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local title_main="out/moria128.titleart.prg"
     local title_d64="out/moria128_titleart.d64"
@@ -1074,7 +1102,8 @@ build_partial_failure_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_partial_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_partial_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local partial_main="out/moria128.skip1.prg"
     local partial_d64="out/moria128_skip1.d64"
@@ -1129,7 +1158,8 @@ build_overlay_partial_failure_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_overlay_partial_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_overlay_partial_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local partial_main="out/moria128.skipovl2.prg"
     local partial_d64="out/moria128_skipovl2.d64"
@@ -1184,7 +1214,8 @@ build_death_overlay_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_death_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_death_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local death_main="out/moria128.death.prg"
     local death_d64="out/moria128_death.d64"
@@ -1239,7 +1270,8 @@ build_overlay_state_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_overlay_state_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_overlay_state_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local state_main="out/moria128.overlaystate.prg"
     local state_d64="out/moria128_overlaystate.d64"
@@ -1294,7 +1326,8 @@ build_scripted_input_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_scripted_input_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_input_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local scripted_d64="out/moria128_scriptedinput.d64"
 
@@ -1354,7 +1387,8 @@ build_cache_survival_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_cache_survival_build_$(basename "$target_out").log"
+    local build_log
+    build_log="$(test128_tmp_file "test128_boot_cache_survival_build_$(basename "$target_out").log")"
     local cache_main="$target_out/moria128.prg"
     local cache_d64="$target_out/moria128_cache_survival.d64"
 
@@ -1411,7 +1445,8 @@ build_load_resume_boot_assets() {
         return 0
     fi
 
-    local build_log="/tmp/test128_boot_load_resume_build.log"
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_load_resume_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local loadresume_d64="out/moria128_loadresume.d64"
     local save_blob="out/THE.GAME"
@@ -1504,8 +1539,10 @@ run_test_internal() {
     start_addr=$(normalize_monitor_addr "$start_addr")
     pass_addr=$(normalize_monitor_addr "$pass_addr")
 
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -1528,11 +1565,13 @@ run_test_internal() {
 
 export -f normalize_monitor_addr
 export -f c128_target_is_stale
+export -f test128_tmp_file
 export -f run_test_internal
-export KICKASS VICE
+export KICKASS VICE TEST128_TMP_DIR
 
 run_parallel_unit_tests() {
-    local result_file="/tmp/test128_results_unit.txt"
+    local result_file
+    result_file="$(test128_tmp_file test128_results_unit.txt)"
     : > "$result_file"
     
     mkdir -p out
@@ -1634,8 +1673,10 @@ run_test() {
     start_addr=$(normalize_monitor_addr "$start_addr")
     pass_addr=$(normalize_monitor_addr "$pass_addr")
 
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -1783,8 +1824,10 @@ run_boot_d64_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -1826,8 +1869,10 @@ run_boot_title_newgame_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -1881,8 +1926,10 @@ run_new_key_stability_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -1937,8 +1984,10 @@ run_title_art_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_titleart.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2000,8 +2049,10 @@ run_boot_title_load_resume_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_loadresume.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2053,8 +2104,10 @@ run_boot_title_idle_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2112,8 +2165,10 @@ run_boot_tier_transition_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2165,8 +2220,10 @@ run_town_overlay_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2217,8 +2274,10 @@ run_town_overlay_female_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2279,8 +2338,10 @@ run_town_overlay_state_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_overlaystate.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2342,8 +2403,10 @@ run_scripted_summary_to_town_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_scriptedinput.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     local pass_lc fail_lc
     : > "$log_file"
     pass_lc=$(echo "$c128_test_town_pass" | tr '[:upper:]' '[:lower:]')
@@ -2447,8 +2510,10 @@ run_real_input_town_move_diag() {
     local last_stage="boot"
 
     for idx in "${!stage_names[@]}"; do
-        local mon_file="/tmp/test128_${name}_${idx}.mon"
-        local log_file="/tmp/test128_${name}_${idx}.log"
+        local mon_file
+        mon_file="$(test128_tmp_file "test128_${name}_${idx}.mon")"
+        local log_file
+        log_file="$(test128_tmp_file "test128_${name}_${idx}.log")"
         : > "$log_file"
         {
             echo "break \$${stage_addrs[$idx]}"
@@ -2514,8 +2579,10 @@ run_real_boot_crash_harness() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2581,8 +2648,10 @@ run_overlay_data_transition_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_overlaydiag.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2651,8 +2720,10 @@ run_cache_survival_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_cache_survival.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2712,8 +2783,10 @@ run_dungeon_attack_stability_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_realdiag.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2767,8 +2840,10 @@ run_death_overlay_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_death.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2820,8 +2895,10 @@ run_restart_to_title_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_death.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {
@@ -2875,8 +2952,10 @@ run_preload_partial_failure_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_skip1.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     local fail_lc
     : > "$log_file"
     fail_lc=$(echo "$c128_test_partial_cache_fail" | tr '[:upper:]' '[:lower:]')
@@ -2960,8 +3039,10 @@ run_overlay_partial_failure_smoke() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_skipovl2.d64"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     local fail_lc
     : > "$log_file"
     fail_lc=$(echo "$c128_test_overlay_cache_fail" | tr '[:upper:]' '[:lower:]')
@@ -3044,8 +3125,10 @@ run_boot_diag_copy() {
     local abs_d64 abs_diag_boot
     abs_d64="$(cd out && pwd)/moria128.d64"
     abs_diag_boot="$(cd out && pwd)/boot128.diag.prg"
-    local mon_file="/tmp/test128_${name}.mon"
-    local log_file="/tmp/test128_${name}.log"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
     : > "$log_file"
 
     {

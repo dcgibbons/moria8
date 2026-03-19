@@ -68,6 +68,16 @@ Scaling to multi-core.
   - smoke/diagnostic suites
 - This allows fast focused runs such as `TEST_FILTER='main128_asm|input128' bash run_tests128.sh` and `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash run_tests128.sh`.
 
+### Incremental Step Landed (2026-03-18, path hardening)
+- `run_tests128.sh` now self-locates via the git repo root and changes into `commodore/c128` before running.
+- The default KickAssembler path is now rooted at the detected repo root instead of depending on the caller's current working directory.
+- This removes the previous mismatch where `bash commodore/c128/run_tests128.sh` worked differently from `cd commodore/c128 && bash run_tests128.sh`.
+
+### Incremental Step Landed (2026-03-18, temp isolation)
+- `run_tests128.sh` now allocates a per-run temp directory under `/tmp` and routes harness logs, monitor scripts, result files, and the KickAssembler symlink through that directory.
+- The temp directory path is exported to child worker shells so parallel unit tests share the same run-local scratch space without colliding with other harness invocations.
+- This removes the prior shared `/tmp/test128_*` namespace that could leak results across concurrent or back-to-back runs.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

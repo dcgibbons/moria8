@@ -174,5 +174,25 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - Verified from `commodore/c128`:
   - `TEST_FILTER='main128_asm|input128' bash run_tests128.sh` ✅
   - `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash run_tests128.sh` ✅
-- Limitation noted:
-  - direct root-level invocation (`bash commodore/c128/run_tests128.sh`) still assumes `commodore/c128` as the working directory; that is a separate path-hardening cleanup, not part of this slice
+
+## 2026-03-18 OPT-TEST path-hardening slice
+- Goal: remove the current-working-directory dependency from `commodore/c128/run_tests128.sh`.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - detect `REPO_ROOT` via git
+  - derive `RUN_TESTS128_DIR` from that root
+  - `cd` into `commodore/c128` before any relative-path work
+  - root the default `KICKASS` path at the detected repo root
+- Verified:
+  - `TEST_FILTER='main128_asm|input128' bash commodore/c128/run_tests128.sh` ✅
+  - `cd commodore/c128 && TEST_FILTER='main128_asm|input128' bash run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST temp-isolation slice
+- Goal: remove shared `/tmp/test128_*` state so separate harness runs cannot interfere with each other.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - create a per-run temp directory with `mktemp -d`
+  - route build logs, monitor command files, monitor logs, unit-test result files, and the KickAssembler symlink through that run-local directory
+  - export the temp directory and helper to child worker shells so `xargs` unit tests stay isolated from other harness invocations
+- Verified:
+  - `TEST_FILTER='main128_asm|input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
+  - two concurrent `TEST_FILTER='main128_asm|input128'` root-path runs both completed cleanly with no duplicate suite output ✅
