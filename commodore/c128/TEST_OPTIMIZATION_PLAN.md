@@ -178,6 +178,11 @@ Scaling to multi-core.
 - Shuffle applies before `TEST_RERUN_LIMIT`, letting capped replay take a reproducible sample instead of only the front or back of the list.
 - The active shuffle mode and seed are shown in the banner, and JSON summary metadata now records `rerun_shuffle` and `rerun_seed`.
 
+### Incremental Step Landed (2026-03-18, replay stride sampling)
+- `run_tests128.sh` now accepts `TEST_RERUN_STRIDE=<n>` to take every nth suite from the replay-selected set after ordering/shuffle and before limit.
+- This provides deterministic sampling without relying only on random shuffle.
+- The active stride is shown in the banner when not using the default `1`, and JSON summary metadata now records `rerun_stride`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

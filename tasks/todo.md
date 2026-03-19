@@ -427,3 +427,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=17 TEST_LIST=1 bash commodore/c128/run_tests128.sh` twice => identical selection ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=23 TEST_LIST=1 bash commodore/c128/run_tests128.sh` => different selection ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_shuffle.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_LIMIT=2 TEST_RERUN_SHUFFLE=1 TEST_RERUN_SEED=17 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_STRIDE slice
+- Goal: let replay sampling deterministically take every nth suite from the replay-selected set.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_STRIDE=<n>` with default `1`
+  - apply stride after replay order/shuffle and before replay limit
+  - show `rerun-stride` in the banner
+  - record `rerun_stride` in JSON summary metadata
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅
