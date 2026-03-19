@@ -844,3 +844,35 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -B -C commodore/c128 build128`
   - `make -C commodore/c128 test128-fast`
   - `make -C commodore/c128 test128-fast-smoke`
+
+## 2026-03-19 TST-4 subsystem test expansion
+
+### Plan
+- [x] Audit the four open subsystem gaps (`huffman.s`, `string_bank.s`, overlay execution, `sound.s`) and order them by implementation risk.
+- [x] Define a staged closure plan instead of trying to land all four subsystem families in one patch.
+- [x] Implement the first focused slice: direct C64 runtime coverage for Huffman decode correctness.
+- [x] Verify the updated C64 runner and shared C128 fast paths.
+- [ ] Follow with separate slices for string-bank decode/load behavior and narrow overlay execution contracts.
+
+### Notes
+- The practical order is:
+  1. `huffman.s` decode/data integrity
+  2. `sound.s` via a specialized harness that does not rely on CPU readback from write-only SID voice registers
+  3. `string_bank.s` / `string_bank_banked.s` (requires loader/banked decode harness)
+  4. overlay execution contracts (likely C64 + C128 focused harnesses around invalidate/load/return behavior)
+- `TST-4` should be closed only after those later sound/string-bank/overlay slices land; the first patch is intentionally a partial closure step, not the full item.
+
+### Review
+- Added `commodore/c64/tests/test_subsystems.s` and wired it into `commodore/c64/run_tests.sh` as `subsystems`.
+- The first slice is intentionally Huffman-only:
+  - index/data integrity for representative entries
+  - direct decode of `Direction?`
+  - direct decode of `Take off which item (a-h)?`
+  - `huff_decode_to_ptr2`
+  - `huff_append_combat`
+- Fixed the helper bug uncovered during bring-up: the expected-string compare path was using an indirect pointer in normal RAM instead of zero page, so valid literals failed at runtime. The helper now uses `zp_ptr1`.
+- `sound.s` stays deferred. SID voice-register CPU readback is not a valid runtime assertion mechanism because those registers are write-only; that subsystem needs a specialized harness.
+- Verified with:
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`

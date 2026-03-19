@@ -114,6 +114,7 @@ run_test "effects" "tests/test_effects.s" "0400 0415" 22 500000000
 run_test "item" "tests/test_item.s" "0400 042a" 43 1000000000
 run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0406" 7 500000000
+run_test "subsystems" "tests/test_subsystems.s" "0400 0404" 5
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 0409" 10 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
