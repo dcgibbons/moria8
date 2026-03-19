@@ -158,6 +158,11 @@ Scaling to multi-core.
 - This avoids replaying suites that failed earlier in a repeated run but passed in a later iteration.
 - Latest-only replay uses the summary `iteration` field when present and otherwise falls back to last occurrence order.
 
+### Incremental Step Landed (2026-03-18, inverted replay selection)
+- `run_tests128.sh` now accepts `TEST_RERUN_INVERT=1` to run everything except the replay-selected suite set.
+- This makes summary-driven “all except known failures/skips” loops possible without hand-writing exclusion regexes.
+- The active invert mode is shown in the banner, and JSON summary metadata now records `rerun_invert`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

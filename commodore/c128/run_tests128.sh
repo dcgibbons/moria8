@@ -27,6 +27,7 @@ TEST_RERUN_FROM="${TEST_RERUN_FROM:-}"
 TEST_RERUN_LAST="${TEST_RERUN_LAST:-0}"
 TEST_RERUN_STATUS="${TEST_RERUN_STATUS:-FAIL}"
 TEST_RERUN_ONLY_LATEST="${TEST_RERUN_ONLY_LATEST:-0}"
+TEST_RERUN_INVERT="${TEST_RERUN_INVERT:-0}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -139,7 +140,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_INVERT" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -157,11 +158,12 @@ payload = {
     "rerun_last": sys.argv[10] != "0",
     "rerun_status": sys.argv[11],
     "rerun_only_latest": sys.argv[12] != "0",
-    "jobs_requested": sys.argv[13],
-    "jobs_resolved": int(sys.argv[14]),
-    "repeat": int(sys.argv[15]),
-    "timings": sys.argv[16] != "0",
-    "fail_fast": sys.argv[17] != "0",
+    "rerun_invert": sys.argv[13] != "0",
+    "jobs_requested": sys.argv[14],
+    "jobs_resolved": int(sys.argv[15]),
+    "repeat": int(sys.argv[16]),
+    "timings": sys.argv[17] != "0",
+    "fail_fast": sys.argv[18] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -307,7 +309,17 @@ suite_matches_rerun() {
     if [ -z "${TEST128_RERUN_SOURCE:-}" ]; then
         return 0
     fi
-    [ -f "$TEST128_RERUN_FILE" ] && grep -Fxq "$suite_name" "$TEST128_RERUN_FILE"
+    local matched=1
+    if [ -f "$TEST128_RERUN_FILE" ] && grep -Fxq "$suite_name" "$TEST128_RERUN_FILE"; then
+        matched=0
+    fi
+    if [ "$TEST_RERUN_INVERT" != "0" ]; then
+        if [ "$matched" -eq 0 ]; then
+            return 1
+        fi
+        return 0
+    fi
+    return "$matched"
 }
 
 resolve_test_jobs() {
@@ -3769,6 +3781,9 @@ if [ -n "$TEST_RERUN_FROM" ] || [ "$TEST_RERUN_LAST" != "0" ]; then
     if [ "$TEST_RERUN_ONLY_LATEST" != "0" ]; then
         echo "  rerun-only-latest: ON"
     fi
+    if [ "$TEST_RERUN_INVERT" != "0" ]; then
+        echo "  rerun-invert: ON"
+    fi
 fi
 if [ "$TEST_DESCRIBE" != "0" ]; then
     echo "  describe: ON"
@@ -3814,7 +3829,11 @@ if [ -n "${TEST128_RERUN_SOURCE:-}" ]; then
     if [ "$TEST_RERUN_LAST" != "0" ] && [ -z "$TEST_RERUN_FROM" ]; then
         echo "  rerun-from: $TEST128_RERUN_SOURCE"
     fi
-    echo "  rerun suites: $TEST128_RERUN_COUNT"
+    if [ "$TEST_RERUN_INVERT" != "0" ]; then
+        echo "  excluded rerun suites: $TEST128_RERUN_COUNT"
+    else
+        echo "  rerun suites: $TEST128_RERUN_COUNT"
+    fi
 fi
 
 if [ "$TEST_LIST" != "0" ]; then
