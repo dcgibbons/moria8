@@ -29,15 +29,29 @@ class TestCase:
     timeout: float
 
 
-CORE5_TESTS: dict[str, TestCase] = {
+BATCH_TESTS: dict[str, TestCase] = {
     "minimal128": TestCase("minimal128", SCRIPT_DIR / "tests" / "test_minimal128.s", 5.0),
     "config128": TestCase("config128", SCRIPT_DIR / "tests" / "test_config128.s", 5.0),
     "memory128": TestCase("memory128", SCRIPT_DIR / "tests" / "test_memory128.s", 5.0),
     "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0),
     "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0),
+    "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
+    "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0),
+    "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
     "vdc_attr128": TestCase("vdc_attr128", SCRIPT_DIR / "tests" / "test_vdc_attr128.s", 5.0),
 }
+
+DEFAULT_BATCH_TESTS = [
+    "minimal128",
+    "config128",
+    "memory128",
+    "status_coherence128",
+    "vdc_attr128",
+    "msg_prompt128",
+    "tier128",
+    "dungeon128",
+]
 
 
 def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path, Path]:
@@ -189,8 +203,8 @@ def build_batch_parser() -> argparse.ArgumentParser:
     parser.add_argument("--snapshot-path", default=str(SCRIPT_DIR / "out" / "ready.vsf"))
     parser.add_argument(
         "--tests",
-        default="minimal128,config128,memory128,input128,vdc_attr128",
-        help="Comma-separated test ids; defaults to the first 5 Gate C.4 ports",
+        default=",".join(DEFAULT_BATCH_TESTS),
+        help="Comma-separated test ids; defaults to the stable snapshot-friendly Gate C.4 batch set",
     )
     return parser
 
@@ -200,9 +214,9 @@ def main() -> int:
     args = parser.parse_args()
     selected_tests: list[TestCase] = []
     for test_name in [item.strip() for item in args.tests.split(",") if item.strip()]:
-        if test_name not in CORE5_TESTS:
+        if test_name not in BATCH_TESTS:
             parser.error(f"unknown test id: {test_name}")
-        selected_tests.append(CORE5_TESTS[test_name])
+        selected_tests.append(BATCH_TESTS[test_name])
 
     snapshot_path = Path(args.snapshot_path).resolve()
     failures = 0

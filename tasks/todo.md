@@ -368,6 +368,42 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - further C.4 work should either raise per-test timeouts selectively or port the next stable tests one by one
   - `KICKASS=/tmp/does-not-exist.jar TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128' bash commodore/c128/run_tests128.sh` ✅
 
+## 2026-03-19 OPT-TEST Gate C.4 stable batch expansion plan
+
+### Plan
+- [x] Probe the next C128 candidates under the Python snapshot harness instead of assuming they fit the batch path.
+- [x] Update `commodore/c128/harness128_batch.py` so its default test set matches the stable passing slice.
+- [x] Expand the batch catalog with the next proven snapshot-friendly tests.
+- [x] Verify both direct snapshot runs and `--mode compare` on the expanded set.
+- [x] Record timings and the pass/fail boundary for the still-excluded tests.
+
+### Review
+- Probed the next candidate tests directly through `commodore/c128/harness128.py --snapshot commodore/c128/out/ready.vsf` before widening the batch runner.
+- Added the next proven snapshot-friendly tests to `commodore/c128/harness128_batch.py`:
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+- Updated the batch runner default set to the current stable 8-test slice:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+- Verified explicit compare run:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests minimal128,config128,memory128,status_coherence128,vdc_attr128,msg_prompt128,tier128,dungeon128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - cold total: `3.270s`
+  - snapshot total: `2.298s`
+- Verified default compare run:
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+  - cold total: `3.261s`
+  - snapshot total: `2.301s`
+- Boundary from direct snapshot probes:
+  - passes: `msg_prompt128`, `tier128`, `dungeon128`
+  - not in the stable batch set yet: `main_loop128` (stopped without pass/fail), `input128` (timeout after 8.0s), `db128` (timeout after 8.0s), `monster128` (timeout after 8.0s), `soak128` (timeout after 8.0s)
+
 ## 2026-03-18 OPT-TEST TEST_SUMMARY slice
 - Goal: let automation consume suite outcomes directly without parsing the human console output.
 - Implemented in `commodore/c128/run_tests128.sh`:

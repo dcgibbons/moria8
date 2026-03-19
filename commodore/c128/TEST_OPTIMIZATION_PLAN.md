@@ -245,6 +245,35 @@ Scaling to multi-core.
   - `input128`, `db128`, and `monster128` were explicitly probed and did **not** make a good first C.4 slice because they timed out under the current 5-second harness timeout.
   - This slice proves that 5 existing tests can run through the Python harness with a measurable snapshot-backed speedup, but it does not yet replace `run_tests128.sh`.
 
+### Incremental Step Landed (2026-03-19, Gate C.4 stable batch expansion)
+- Expanded `commodore/c128/harness128_batch.py` to include the next proven snapshot-friendly tests:
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+- Updated the default batch selection to the current stable 8-test set:
+  - `minimal128`
+  - `config128`
+  - `memory128`
+  - `status_coherence128`
+  - `vdc_attr128`
+  - `msg_prompt128`
+  - `tier128`
+  - `dungeon128`
+- Probe results used to set the boundary for this slice:
+  - passes under the snapshot harness: `msg_prompt128`, `tier128`, `dungeon128`
+  - still excluded from the default batch set: `input128`, `db128`, `monster128`, `soak128`
+  - explicitly not added to the stable batch set yet: `main_loop128` (stopped without reaching pass/fail breakpoint)
+- Proven comparison commands/results for the expanded stable set:
+  - explicit 8-test compare:
+    - `python3 -u commodore/c128/harness128_batch.py --mode compare --tests minimal128,config128,memory128,status_coherence128,vdc_attr128,msg_prompt128,tier128,dungeon128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - cold total: `3.270s`
+    - snapshot total: `2.298s`
+  - default compare:
+    - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - cold total: `3.261s`
+    - snapshot total: `2.301s`
+- This keeps the default batch harness honest: the out-of-the-box selection is now a set that actually passes through the current C.1/C.2 path.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|
