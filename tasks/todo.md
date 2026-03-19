@@ -439,3 +439,15 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
   - `TEST_RERUN_FROM=/tmp/test128_rerun_stride.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_RERUN_OFFSET slice
+- Goal: let deterministic replay sampling start from an arbitrary index instead of always from the first selected suite.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_RERUN_OFFSET=<n>` with default `0`
+  - apply offset before replay stride and replay limit
+  - show `rerun-offset` in the banner
+  - record `rerun_offset` in JSON summary metadata
+- Verified:
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.tsv TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_PHASE=boot TEST_LIST=1 bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_RERUN_FROM=/tmp/test128_rerun_offset.json TEST_RERUN_STATUS='FAIL|SKIP' TEST_RERUN_STRIDE=2 TEST_RERUN_OFFSET=1 TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|config128|input128|memory128' bash commodore/c128/run_tests128.sh` ✅

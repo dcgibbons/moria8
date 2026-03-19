@@ -183,6 +183,11 @@ Scaling to multi-core.
 - This provides deterministic sampling without relying only on random shuffle.
 - The active stride is shown in the banner when not using the default `1`, and JSON summary metadata now records `rerun_stride`.
 
+### Incremental Step Landed (2026-03-18, replay offset sampling)
+- `run_tests128.sh` now accepts `TEST_RERUN_OFFSET=<n>` to skip the first `n` replay-selected suites before stride and limit are applied.
+- This makes deterministic paging possible when combined with `TEST_RERUN_STRIDE` and `TEST_RERUN_LIMIT`.
+- The active offset is shown in the banner when non-zero, and JSON summary metadata now records `rerun_offset`.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

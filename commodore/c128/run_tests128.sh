@@ -33,6 +33,7 @@ TEST_RERUN_ORDER="${TEST_RERUN_ORDER:-forward}"
 TEST_RERUN_SHUFFLE="${TEST_RERUN_SHUFFLE:-0}"
 TEST_RERUN_SEED="${TEST_RERUN_SEED:-0}"
 TEST_RERUN_STRIDE="${TEST_RERUN_STRIDE:-1}"
+TEST_RERUN_OFFSET="${TEST_RERUN_OFFSET:-0}"
 TEST_DESCRIBE="${TEST_DESCRIBE:-0}"
 TEST_LIST="${TEST_LIST:-0}"
 TEST_TIMINGS="${TEST_TIMINGS:-0}"
@@ -145,7 +146,7 @@ emit_test_summary() {
             } > "$summary_file"
             ;;
         json)
-            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_INVERT" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" "$TEST_RERUN_SHUFFLE" "$TEST_RERUN_SEED" "$TEST_RERUN_STRIDE" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
+            python3 - "$TEST128_RESULTS_FILE" "$summary_file" "$PASS" "$FAIL" "$TOTAL" "$TEST_FILTER" "$TEST_SKIP" "$TEST_PHASE" "${TEST128_RERUN_SOURCE:-}" "$TEST_RERUN_LAST" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_INVERT" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" "$TEST_RERUN_SHUFFLE" "$TEST_RERUN_SEED" "$TEST_RERUN_STRIDE" "$TEST_RERUN_OFFSET" "$TEST_JOBS" "$TEST_JOBS_RESOLVED" "$TEST_REPEAT_RESOLVED" "$TEST_TIMINGS" "$TEST_FAIL_FAST" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -169,11 +170,12 @@ payload = {
     "rerun_shuffle": sys.argv[16] != "0",
     "rerun_seed": int(sys.argv[17]),
     "rerun_stride": int(sys.argv[18]),
-    "jobs_requested": sys.argv[19],
-    "jobs_resolved": int(sys.argv[20]),
-    "repeat": int(sys.argv[21]),
-    "timings": sys.argv[22] != "0",
-    "fail_fast": sys.argv[23] != "0",
+    "rerun_offset": int(sys.argv[19]),
+    "jobs_requested": sys.argv[20],
+    "jobs_resolved": int(sys.argv[21]),
+    "repeat": int(sys.argv[22]),
+    "timings": sys.argv[23] != "0",
+    "fail_fast": sys.argv[24] != "0",
     "results": [],
 }
 for line in results_path.read_text().splitlines():
@@ -240,7 +242,7 @@ load_rerun_selection() {
     fi
 
     TEST128_RERUN_COUNT="$(
-        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" "$TEST_RERUN_SHUFFLE" "$TEST_RERUN_SEED" "$TEST_RERUN_STRIDE" <<'PY'
+        python3 - "$TEST128_RERUN_SOURCE" "$TEST128_RERUN_FILE" "$TEST_RERUN_STATUS" "$TEST_RERUN_ONLY_LATEST" "$TEST_RERUN_LIMIT" "$TEST_RERUN_ORDER" "$TEST_RERUN_SHUFFLE" "$TEST_RERUN_SEED" "$TEST_RERUN_STRIDE" "$TEST_RERUN_OFFSET" <<'PY'
 import json
 import random
 import re
@@ -267,6 +269,12 @@ except ValueError:
     stride = 1
 if stride < 1:
     stride = 1
+try:
+    offset = int(sys.argv[10])
+except ValueError:
+    offset = 0
+if offset < 0:
+    offset = 0
 text = src.read_text()
 lines = [line for line in text.splitlines() if line.strip()]
 suites = []
@@ -335,6 +343,9 @@ elif order_mode == "reverse":
     ordered = list(reversed(raw_suites))
 else:
     ordered = list(raw_suites)
+
+if offset > 0:
+    ordered = ordered[offset:]
 
 if stride > 1:
     ordered = ordered[::stride]
@@ -3833,6 +3844,9 @@ if [ -n "$TEST_RERUN_FROM" ] || [ "$TEST_RERUN_LAST" != "0" ]; then
     fi
     if [ "$TEST_RERUN_STRIDE" != "1" ]; then
         echo "  rerun-stride: $TEST_RERUN_STRIDE"
+    fi
+    if [ "$TEST_RERUN_OFFSET" != "0" ]; then
+        echo "  rerun-offset: $TEST_RERUN_OFFSET"
     fi
     if [ "$TEST_RERUN_SHUFFLE" != "0" ]; then
         echo "  rerun-shuffle: ON"
