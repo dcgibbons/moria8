@@ -6,6 +6,55 @@
 
 ---
 
+## OPT-TEST — C128 Fast-Test Workflow ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the operational C128 harness-speedup task by turning the Gate C work into standard development targets instead of one-off Python commands.
+- Established a practical split between:
+  - fast unit-level iteration
+  - fast runtime smoke coverage
+  - authoritative full-suite validation
+
+### What Landed
+1. **Python Gate C unit compare harness**
+   - `harness128.py` / `harness128_batch.py` are now operational for the full current C128 unit-test set.
+   - Cold/snapshot compare mode is exposed through:
+     - `make test128-fast`
+     - `make -C commodore/c128 test128-fast`
+2. **Fast smoke integration**
+   - Added a small high-value smoke subset:
+     - `boot_title_idle_smoke`
+     - `scripted_summary_to_town_smoke`
+     - `town_overlay_smoke`
+   - Exposed through:
+     - `make test128-fast-smoke`
+     - `make -C commodore/c128 test128-fast-smoke`
+3. **Execution-contract alignment**
+   - The Python moncommands runner now mirrors the shell harness VICE contract:
+     - `+remotemonitor +binarymonitor`
+     - per-test `-limitcycles`
+   - This re-qualified the full current C128 unit batch instead of leaving several tests as false timeout cases.
+4. **Workflow integration**
+   - Updated `AGENTS.md`, `GEMINI.md`, `commodore/c128/GEMINI.md`, and `commodore/c128/ARCHITECTURE.md` so future agent work actually uses the fast C128 targets by default where appropriate.
+
+### Delivered Operational State
+- `test128-fast` = Python Gate C compare harness for the full current C128 unit-test batch
+- `test128-fast-smoke` = quick runtime regression subset for boot/title, chargen-to-town, and overlay entry
+- `test128` = authoritative full shell harness for broad/high-risk validation
+
+### Deferred / Blocked Follow-on
+- The original deeper Gate C.3 assembly-server goal remains blocked by the bundled KickAssembler version, which does not support the required server mode.
+- Further testing work is now feature-coverage work (`TST-3` / `TST-4` / `TST-5`), not core harness bring-up.
+
+### Validation
+- `make test128-fast`: **PASS**
+- `make test128-fast-smoke`: **PASS**
+- Full stable Gate C unit compare batch:
+  - cold total: **5.191s**
+  - snapshot total: **12.836s**
+
+---
+
 ## DGN-1 — C128 Dungeon-Descent Ego Runtime Placement Repair ✅ COMPLETE (2026-03-18)
 
 ### Scope Closed

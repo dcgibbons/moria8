@@ -33,7 +33,6 @@
 | **OPT-3** | **MED** | Performance: Visibility Updates. Cache room ID and only re-evaluate `update_visibility` room checks upon entering a new room to save per-turn overhead. | Pending |
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **REF-2** | **MED** | Refactor: Game Loop Coupling. Decouple `game_loop.s` to separate UI rendering, time management, and logic into an MVC-style pattern for better testability. | Pending |
-| **OPT-TEST** | **HIGH** | Testing Infrastructure: speed up the C128 harness by reducing JVM startup overhead, VICE reset latency, and sequential orchestration cost. See `c128/TEST_OPTIMIZATION_PLAN.md`. | Pending |
 | **TST-3** | **MED** | Testing: UI Menus & Views. Add isolation tests for character viewer, help, home, inventory, recall, and store visual layouts. See `TEST_PLAN_TOP5.md` for specific UI routines. | Pending |
 | **TST-4** | **MED** | Testing: Subsystems. Add unit tests for decompression (`huffman.s`), strings (`string_bank.s`), overlay execution, and audio (`sound.s`). | Pending |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
@@ -64,6 +63,7 @@
 | **LDR-1** | **BLOCKER** | C128 post-chargen town-entry `JAM` fixed by restoring the missing low-RAM runtime loader contract for `bank1.dat`, aligning the PRG header with `$1000`, and loading the callable VDC runtime code into Bank 0 (the actual `MMU_ALL_RAM` execution context). | **2026-03-18** |
 | **UIB-1** | **BLOCKER** | C128 banked help/inventory blank-screen and dismiss hangs fixed by stopping per-entry recopy from an overlay-clobbered banked-payload source and tightening the inventory/equipment dismiss input path. | **2026-03-18** |
 | **DGN-1** | **BLOCKER** | C128 town-to-dungeon descent `JAM` fixed by moving ego-item generation out of the `$D000-$DFFF` I/O hole and into loaded low runtime RAM, with placement asserts covering the entire call path. | **2026-03-18** |
+| **OPT-TEST** | **HIGH** | C128 fast-test workflow is operational: `test128-fast` now runs the Python Gate C unit compare batch, `test128-fast-smoke` runs a small high-value smoke subset, and the workflow docs now direct agents to use them. The deeper Gate C.3 KickAssembler-server path remains toolchain-blocked/deferred. | **2026-03-19** |
 | **TST-1** | **MED** | Input parsing suites, LOS coverage via dungeon/monster tests, and the focused `main_loop` dispatch harness are complete. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |

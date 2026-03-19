@@ -3,6 +3,16 @@
 ## Objective
 Transition the C128 test suite from "Fast" to "Near-Instant." Target total suite execution (40+ tests) in **<10 seconds**.
 
+## Current Status (2026-03-19)
+- **Operationally complete for day-to-day development use**
+  - `make test128-fast` is the standard fast C128 unit path
+  - `make test128-fast-smoke` is the standard fast C128 smoke path
+- **Gate C.1:** landed
+- **Gate C.2:** landed
+- **Gate C.3:** blocked/deferred by bundled KickAssembler lacking server-mode support
+- **Gate C.4:** landed for the full current C128 unit-test batch
+- **Remaining value, if revisited later:** deeper architectural work toward the original “near-instant” objective, not more shell/harness bring-up
+
 ## 1. Eliminate JVM Startup (KickAssembler Server)
 Even with a master module, single-file changes trigger a JVM reboot.
 - **Strategy:** Use `java -jar KickAss.jar -server`.
