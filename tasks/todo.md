@@ -196,3 +196,45 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `TEST_FILTER='main128_asm|input128' bash commodore/c128/run_tests128.sh` ✅
   - `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
   - two concurrent `TEST_FILTER='main128_asm|input128'` root-path runs both completed cleanly with no duplicate suite output ✅
+
+## 2026-03-18 OPT-TEST TEST_SKIP slice
+- Goal: allow focused exclusion of known-bad or irrelevant suites without editing the harness.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_SKIP` as a regex exclusion over suite names
+  - compose skip logic with the existing `TEST_FILTER` matcher
+  - print the active skip regex in the harness banner when set
+- Verified:
+  - `TEST_FILTER='main128_asm|input128|config128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_LIST slice
+- Goal: inspect the resolved suite set after filter/skip matching without running assembly or VICE.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_LIST=1` list-only mode
+  - print selected suite names instead of executing them
+  - report a final selected-suite count
+- Verified:
+  - `TEST_LIST=1 TEST_FILTER='main128_asm|input128|config128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_LIST=1 TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_JOBS auto slice
+- Goal: remove the last machine-specific tuning knob for parallel unit-test workers.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_JOBS=auto` worker-count resolution via local CPU count
+  - keep `TEST_JOBS=<n>` as an explicit override
+  - print the resolved jobs value in the harness banner
+  - fall back to the default worker count for invalid explicit values
+- Verified:
+  - `TEST_JOBS=auto TEST_FILTER='main128_asm|config128|input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_JOBS=3 TEST_LIST=1 TEST_FILTER='main128_asm|config128|input128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh` ✅
+
+## 2026-03-18 OPT-TEST TEST_TIMINGS slice
+- Goal: surface real per-suite cost before attempting deeper harness architecture changes.
+- Implemented in `commodore/c128/run_tests128.sh`:
+  - add `TEST_TIMINGS=1` timing collection mode
+  - collect suite timings into the run-local temp directory
+  - print a final timing summary sorted by slowest suite first
+  - include timing data in unit-test status lines and selected single-suite paths
+- Verified:
+  - `TEST_TIMINGS=1 TEST_FILTER='main128_asm|config128|input128' bash commodore/c128/run_tests128.sh` ✅
+  - `TEST_TIMINGS=1 TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke' TEST_SKIP='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` ✅

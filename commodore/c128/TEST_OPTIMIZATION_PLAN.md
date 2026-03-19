@@ -78,6 +78,26 @@ Scaling to multi-core.
 - The temp directory path is exported to child worker shells so parallel unit tests share the same run-local scratch space without colliding with other harness invocations.
 - This removes the prior shared `/tmp/test128_*` namespace that could leak results across concurrent or back-to-back runs.
 
+### Incremental Step Landed (2026-03-18, selective exclusion)
+- `run_tests128.sh` now accepts `TEST_SKIP` as a regex exclusion over suite names.
+- `TEST_SKIP` composes with `TEST_FILTER`: a suite must match the filter (if any) and must not match the skip regex.
+- This supports focused commands like `TEST_FILTER='main128_asm|input128|config128' TEST_SKIP='input128' bash commodore/c128/run_tests128.sh`.
+
+### Incremental Step Landed (2026-03-18, list-only resolution)
+- `run_tests128.sh` now accepts `TEST_LIST=1` to print the resolved suite set without running any tests.
+- The listing respects both `TEST_FILTER` and `TEST_SKIP`, and prints a final selected-suite count.
+- This gives a cheap way to inspect what the harness will execute before spending time on assembly or VICE startup.
+
+### Incremental Step Landed (2026-03-18, auto worker count)
+- `run_tests128.sh` now accepts `TEST_JOBS=auto` to resolve the parallel unit-test worker count from the local CPU count.
+- The resolved worker count is printed in the banner, and invalid/non-positive `TEST_JOBS` values fall back to the default worker count.
+- This keeps the existing `TEST_JOBS=<n>` override while removing the need to hand-tune worker count on each machine.
+
+### Incremental Step Landed (2026-03-18, timing visibility)
+- `run_tests128.sh` now accepts `TEST_TIMINGS=1` to collect and print per-suite timing data.
+- Timing data is written through the run-local temp directory and printed as a summary sorted by slowest suite first.
+- This provides a measurement baseline for future harness work before moving into deeper architectural changes such as snapshots or persistent monitor orchestration.
+
 ## 6. Comparison Table
 | Phase | Cold Boot (Current) | Optimized (Gate C) | Improvement |
 |-------|--------------------|--------------------|-------------|

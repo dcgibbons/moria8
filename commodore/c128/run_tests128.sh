@@ -21,11 +21,15 @@ C1541="${C1541:-c1541}"
 PERF_P1_MODE="${PERF_P1:-0}"
 TEST_JOBS="${TEST_JOBS:-8}"
 TEST_FILTER="${TEST_FILTER:-}"
+TEST_SKIP="${TEST_SKIP:-}"
+TEST_LIST="${TEST_LIST:-0}"
+TEST_TIMINGS="${TEST_TIMINGS:-0}"
 PASS=0
 FAIL=0
 TOTAL=0
 TEST128_TMP_PARENT="${TEST128_TMP_PARENT:-/tmp}"
 TEST128_TMP_DIR="${TEST128_TMP_DIR:-$(mktemp -d "${TEST128_TMP_PARENT%/}/test128.$$.XXXXXX")}"
+TEST128_TIMINGS_FILE="${TEST128_TMP_DIR}/timings.tsv"
 C128_ACTIVE_VARIANT_FILE="out/.test128_active_variant"
 BOOT_ASSETS_BUILT=0
 PARTIAL_BOOT_ASSETS_BUILT=0
@@ -55,6 +59,59 @@ trap cleanup_test128_tmp EXIT
 test128_tmp_file() {
     printf '%s/%s\n' "$TEST128_TMP_DIR" "$1"
 }
+
+test128_now_ms() {
+    python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+}
+
+record_suite_timing() {
+    local suite_name="$1"
+    local duration_ms="$2"
+    if [ "$TEST_TIMINGS" = "0" ]; then
+        return
+    fi
+    printf '%s\t%s\n' "$duration_ms" "$suite_name" >> "$TEST128_TIMINGS_FILE"
+}
+
+print_timing_summary() {
+    if [ "$TEST_TIMINGS" = "0" ] || [ ! -f "$TEST128_TIMINGS_FILE" ]; then
+        return
+    fi
+
+    echo "=== Timings (ms, slowest first) ==="
+    sort -nr "$TEST128_TIMINGS_FILE" | while IFS=$'\t' read -r duration suite_name; do
+        printf '  %s\t%s\n' "$duration" "$suite_name"
+    done
+}
+
+resolve_test_jobs() {
+    local requested="$1"
+    local detected
+
+    if [ "$requested" = "auto" ]; then
+        detected="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+        if [ -z "$detected" ] || ! [[ "$detected" =~ ^[0-9]+$ ]] || [ "$detected" -lt 1 ]; then
+            detected="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+        fi
+        if [ -z "$detected" ] || ! [[ "$detected" =~ ^[0-9]+$ ]] || [ "$detected" -lt 1 ]; then
+            detected=8
+        fi
+        printf '%s\n' "$detected"
+        return
+    fi
+
+    if [[ "$requested" =~ ^[0-9]+$ ]] && [ "$requested" -ge 1 ]; then
+        printf '%s\n' "$requested"
+        return
+    fi
+
+    printf '8\n'
+}
+
+TEST_JOBS_RESOLVED="$(resolve_test_jobs "$TEST_JOBS")"
 
 normalize_monitor_addr() {
     python3 - "$1" <<'PY'
@@ -143,9 +200,16 @@ c128_set_active_variant() {
 suite_matches_filter() {
     local suite_name="$1"
     if [ -z "$TEST_FILTER" ]; then
-        return 0
+        :
+    elif ! [[ "$suite_name" =~ $TEST_FILTER ]]; then
+        return 1
     fi
-    [[ "$suite_name" =~ $TEST_FILTER ]]
+
+    if [ -n "$TEST_SKIP" ] && [[ "$suite_name" =~ $TEST_SKIP ]]; then
+        return 1
+    fi
+
+    return 0
 }
 
 run_named_suite() {
@@ -154,7 +218,22 @@ run_named_suite() {
     if ! suite_matches_filter "$suite_name"; then
         return 0
     fi
+    if [ "$TEST_LIST" != "0" ]; then
+        echo "  $suite_name"
+        TOTAL=$((TOTAL + 1))
+        return 0
+    fi
+    local timing_start=""
+    local total_before="$TOTAL"
+    if [ "$TEST_TIMINGS" != "0" ]; then
+        timing_start="$(test128_now_ms)"
+    fi
     "$@"
+    local suite_rc=$?
+    if [ -n "$timing_start" ] && [ "$TOTAL" -gt "$total_before" ]; then
+        record_suite_timing "$suite_name" "$(( $(test128_now_ms) - timing_start ))"
+    fi
+    return "$suite_rc"
 }
 
 run_main_assembly_check() {
@@ -1507,6 +1586,8 @@ run_test_internal() {
     local src="$2"
     local cycles="${3:-20000000}"
     local result_file="$4"
+    local start_ms
+    start_ms="$(test128_now_ms)"
 
     local prg_file="${src%.s}.prg"
     local abs_prg
@@ -1517,13 +1598,13 @@ run_test_internal() {
         local asm_output
         asm_output=$(java -jar "$KICKASS" "$src" -o "$prg_file" -libdir ../c64 -define C128 -vicesymbols -var OVL_OUT='"out"' 2>&1)
         if [ $? -ne 0 ]; then
-            echo "FAIL $name: assembly error" >> "$result_file"
+            printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "assembly error" >> "$result_file"
             return
         fi
     fi
 
     if [ ! -f "$vs_file" ]; then
-        echo "FAIL $name: missing .vs symbol file" >> "$result_file"
+        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "missing .vs symbol file" >> "$result_file"
         return
     fi
 
@@ -1532,7 +1613,7 @@ run_test_internal() {
     pass_addr=$(awk '/\.test_pass$/  { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
 
     if [ -z "${start_addr:-}" ] || [ -z "${pass_addr:-}" ]; then
-        echo "FAIL $name: missing test_start/test_pass labels" >> "$result_file"
+        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "missing test_start/test_pass labels" >> "$result_file"
         return
     fi
 
@@ -1557,26 +1638,20 @@ run_test_internal() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
     if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
-        echo "PASS $name" >> "$result_file"
+        printf 'PASS\t%s\t%s\t\n' "$name" "$(( $(test128_now_ms) - start_ms ))" >> "$result_file"
     else
-        echo "FAIL $name: execution failed" >> "$result_file"
+        printf 'FAIL\t%s\t%s\t%s\n' "$name" "$(( $(test128_now_ms) - start_ms ))" "execution failed" >> "$result_file"
     fi
 }
 
 export -f normalize_monitor_addr
 export -f c128_target_is_stale
 export -f test128_tmp_file
+export -f test128_now_ms
 export -f run_test_internal
-export KICKASS VICE TEST128_TMP_DIR
+export KICKASS VICE TEST128_TMP_DIR TEST_JOBS TEST_JOBS_RESOLVED TEST_TIMINGS TEST128_TIMINGS_FILE
 
 run_parallel_unit_tests() {
-    local result_file
-    result_file="$(test128_tmp_file test128_results_unit.txt)"
-    : > "$result_file"
-    
-    mkdir -p out
-    echo "  running unit tests in parallel..."
-    
     local test_list=(
         "minimal128 tests/test_minimal128.s 20000000"
         "config128 tests/test_config128.s 20000000"
@@ -1605,20 +1680,45 @@ run_parallel_unit_tests() {
         return
     fi
 
-    printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS" -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
+    if [ "$TEST_LIST" != "0" ]; then
+        local listed_entry
+        for listed_entry in "${filtered_tests[@]}"; do
+            echo "  ${listed_entry%% *}"
+            TOTAL=$((TOTAL + 1))
+        done
+        return
+    fi
+
+    local result_file
+    result_file="$(test128_tmp_file test128_results_unit.txt)"
+    : > "$result_file"
     
-    while read -r line; do
-        local status=$(echo "$line" | awk '{print $1}')
-        local name=$(echo "$line" | awk '{print $2}')
-        local detail=$(echo "$line" | cut -d: -f2-)
+    mkdir -p out
+    echo "  running unit tests in parallel..."
+
+    printf "%s\n" "${filtered_tests[@]}" | xargs -P "$TEST_JOBS_RESOLVED" -I {} bash -c 'run_test_internal $1 $2 $3 '"$result_file"'' -- {}
+    
+    while IFS=$'\t' read -r status name duration_ms detail; do
         
         echo -n "  $name: "
         if [ "$status" = "PASS" ]; then
-            echo "PASS"
+            if [ "$TEST_TIMINGS" != "0" ]; then
+                echo "PASS (${duration_ms}ms)"
+            else
+                echo "PASS"
+            fi
             PASS=$((PASS + 1))
+            record_suite_timing "$name" "$duration_ms"
         else
-            echo "FAIL ($detail)"
+            if [ "$TEST_TIMINGS" != "0" ] && [ -n "${duration_ms:-}" ]; then
+                echo "FAIL ($detail; ${duration_ms}ms)"
+            else
+                echo "FAIL ($detail)"
+            fi
             FAIL=$((FAIL + 1))
+            if [ -n "${duration_ms:-}" ]; then
+                record_suite_timing "$name" "$duration_ms"
+            fi
         fi
         TOTAL=$((TOTAL + 1))
     done < "$result_file"
@@ -1632,6 +1732,14 @@ run_test() {
     if ! suite_matches_filter "$name"; then
         return
     fi
+
+    if [ "$TEST_LIST" != "0" ]; then
+        echo "  $name"
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    local start_ms
+    start_ms="$(test128_now_ms)"
 
     echo -n "  $name: "
 
@@ -1648,6 +1756,7 @@ run_test() {
             echo "$asm_output" | grep -i error | head -3
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
+            record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
             return
         fi
     fi
@@ -1656,6 +1765,7 @@ run_test() {
         echo "FAIL (missing .vs symbol file)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
+        record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
         return
     fi
 
@@ -1667,6 +1777,7 @@ run_test() {
         echo "FAIL (missing test_start/test_pass labels in .vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
+        record_suite_timing "$name" "$(( $(test128_now_ms) - start_ms ))"
         return
     fi
 
@@ -1690,15 +1801,26 @@ run_test() {
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
 
+    local duration_ms
+    duration_ms="$(( $(test128_now_ms) - start_ms ))"
     if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
-        echo "PASS"
+        if [ "$TEST_TIMINGS" != "0" ]; then
+            echo "PASS (${duration_ms}ms)"
+        else
+            echo "PASS"
+        fi
         PASS=$((PASS + 1))
     else
-        echo "FAIL"
+        if [ "$TEST_TIMINGS" != "0" ]; then
+            echo "FAIL (${duration_ms}ms)"
+        else
+            echo "FAIL"
+        fi
         tail -3 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
     fi
 
+    record_suite_timing "$name" "$duration_ms"
     TOTAL=$((TOTAL + 1))
 }
 
@@ -3165,6 +3287,20 @@ fi
 if [ -n "$TEST_FILTER" ]; then
     echo "  filter: $TEST_FILTER"
 fi
+if [ -n "$TEST_SKIP" ]; then
+    echo "  skip: $TEST_SKIP"
+fi
+if [ "$TEST_LIST" != "0" ]; then
+    echo "  list-only: ON"
+fi
+if [ "$TEST_JOBS" = "auto" ]; then
+    echo "  jobs: auto -> $TEST_JOBS_RESOLVED"
+else
+    echo "  jobs: $TEST_JOBS_RESOLVED"
+fi
+if [ "$TEST_TIMINGS" != "0" ]; then
+    echo "  timings: ON"
+fi
 run_named_suite main128_asm run_main_assembly_check || exit 1
 run_named_suite c128_artifact_budget run_artifact_budget_check || exit 1
 run_named_suite c128_symbol_placement run_symbol_placement_check || exit 1
@@ -3200,7 +3336,12 @@ run_named_suite boot_diag_copy run_boot_diag_copy
 if [ "$PERF_P1_MODE" = "1" ]; then
     run_test "perf_p1" "tests/test_perf_p1.s"
 fi
+if [ "$TEST_LIST" != "0" ]; then
+    echo "=== Selected: $TOTAL suites ==="
+    exit 0
+fi
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
+print_timing_summary
 
 if [ "$FAIL" -gt 0 ]; then
     exit 1
