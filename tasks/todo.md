@@ -1367,3 +1367,28 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make test128-fast`
   - `make test128-fast-smoke`
 - `REF-1` remains open after Slice 1. The next safe slice, if desired, is the preserve-A / preserve-flags wrapper family.
+
+### Slice 2 Review
+
+- Added two more low-risk macro families in `commodore/c128/main.s`:
+  - **preserve-A wrappers**:
+    - `tramp_ego_apply_damage`
+    - `tramp_find_special_room`
+  - **preserve-A-return wrappers**:
+    - `tramp_ego_get_ac_bonus`
+    - `tramp_roll_ego_type`
+  - **preserve-flags / restore-$01 wrappers**:
+    - `tramp_assign_special_room`
+    - `tramp_vault_seal_entrance`
+- The key constraint stayed the same:
+  - preserve the existing labels
+  - preserve the exact entry/exit contract
+  - preserve placement below the I/O hole
+- Overlay/UI/text trampolines remain untouched.
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- `REF-1` is still open after Slice 2. The remaining work is the genuinely custom trampoline bodies, where duplication is lower and contract risk is higher.

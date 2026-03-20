@@ -1643,31 +1643,36 @@ tramp_bash_command:
 tramp_dig_ability:
     jmp calc_dig_ability
 
+.macro C128BankedPreserveATrampoline(target) {
+    pha
+    sei
+    :BankOutKernal()
+    pla
+    jsr target
+    jmp tramp_sr_epilogue
+}
+
+.macro C128BankedPreserveAReturnTrampoline(target) {
+    pha
+    sei
+    :BankOutKernal()
+    pla
+    jsr target
+    pha
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    pla
+    rts
+}
+
 // tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
 // Pinned low to avoid $D000 drift.
 tramp_ego_apply_damage:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr ego_apply_damage
-    lda #$3e                    // MMU_ALL_RAM
-    sta $ff00
-    cli
-    rts
+    :C128BankedPreserveATrampoline(ego_apply_damage)
 
 tramp_ego_get_ac_bonus:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr ego_get_ac_bonus
-    pha
-    lda #$3e                    // MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    rts
+    :C128BankedPreserveAReturnTrampoline(ego_get_ac_bonus)
 
 // title_show_sysinfo — trampoline to banked routine at $EB00.
 // Pinned low to avoid drifting into $D000 I/O space.
@@ -2107,29 +2112,24 @@ tramp_level_generate:
 // ============================================================
 // Special rooms trampolines — SEI + bank out KERNAL, call $E000+
 // ============================================================
-tramp_assign_special_room:
+.macro C128BankedPreserveFlagsTrampoline(target) {
     php
     sei
     lda $01
     pha
     :BankOutKernal()
-    jsr assign_special_room
+    jsr target
     pla
     sta $01
     plp
     rts
+}
+
+tramp_assign_special_room:
+    :C128BankedPreserveFlagsTrampoline(assign_special_room)
 
 tramp_vault_seal_entrance:
-    php
-    sei
-    lda $01
-    pha
-    :BankOutKernal()
-    jsr vault_seal_entrance
-    pla
-    sta $01
-    plp
-    rts
+    :C128BankedPreserveFlagsTrampoline(vault_seal_entrance)
 
 tramp_spawn_special_room_monsters:
     sei
@@ -2144,12 +2144,7 @@ tramp_spawn_nest_gold:
     jmp tramp_sr_epilogue
 
 tramp_find_special_room:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr find_special_room
-    jmp tramp_sr_epilogue
+    :C128BankedPreserveATrampoline(find_special_room)
 
 tramp_sr_epilogue:
     lda #MMU_ALL_RAM
@@ -2161,17 +2156,7 @@ tramp_sr_epilogue:
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
 // ============================================================
 tramp_roll_ego_type:
-    pha
-    sei
-    :BankOutKernal()
-    pla
-    jsr roll_ego_type
-    pha
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-    pla
-    rts
+    :C128BankedPreserveAReturnTrampoline(roll_ego_type)
 
 tramp_ego_append_suffix:
     cmp #0
