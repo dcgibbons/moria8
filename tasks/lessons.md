@@ -56,8 +56,8 @@
 ## Low-RAM Runtime Code vs. Bank Ownership (C128)
 
 - **Issue:** A long-running C128 `JAM` after character creation looked like chargen/summary corruption, but the active crash was a direct `JSR $1000` into garbage during the first town render.
-- **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `bank1.dat` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
-- **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `bank1.dat` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
+- **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `runtime_low.prg` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
+- **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `runtime_low.prg` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
 - **Rule:** **For any callable low-RAM segment on C128, verify all three together before patching: (1) symbol address, (2) visible bank at the callsite, and (3) common-vs-private RAM ownership.** Never infer one from the others.
 
 ## Corrections From the 2026-03-18 Inventory-Help Regression
@@ -116,3 +116,10 @@
 - **Root Cause:** The `symbols_need_moncommands()` heuristic only captures one class of incompatibility. Some tests with ordinary 16-bit symbols still require the shell-style moncommands contract to execute correctly.
 - **Resolution:** Treat moncommands-vs-socket execution mode as explicit per-test metadata once a test proves it needs that path. Do not rely on symbol width alone as the selector.
 - **Rule:** **For Gate C.4, “4-digit symbols” does not imply “safe for socket-run execution.” Use explicit per-test execution metadata when needed.**
+
+## Closed Technical Fixes vs Misleading Names
+
+- **Issue:** I answered as if the low-RAM runtime payload issue was fully “done,” but the user was pointing at the still-misleading artifact name, not just the runtime loader contract.
+- **Root Cause:** I collapsed two separate concerns into one: the runtime fix (load/address contract) and the naming/architecture clarity problem.
+- **Resolution:** When a historical bug involved both runtime behavior and confusing naming, answer both explicitly: what is fixed in code, and what remains misleading in naming/docs. Then actually clean up the naming so future work does not preserve the confusion.
+- **Rule:** **Do not call a historically expensive issue “fully fixed” if the naming still contradicts the runtime contract. Distinguish behavioral closure from naming/architecture clarity, and fix both when possible.**

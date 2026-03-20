@@ -34,7 +34,7 @@ OVL_TOWN    = $(OUT)/ovl.town
 OVL_START   = $(OUT)/ovl.start
 OVL_DEATH   = $(OUT)/ovl.death
 OVL_GEN     = $(OUT)/ovl.gen
-BANK1_DAT   = $(OUT)/bank1.dat
+RUNTIME_LOW_PRG = $(OUT)/runtime_low.prg
 
 # Disk image
 DISK_IMAGE  = $(OUT)/moria128.d64
@@ -80,7 +80,7 @@ $(OVL_TOWN): $(MAIN_PRG)
 $(OVL_START): $(MAIN_PRG)
 $(OVL_DEATH): $(MAIN_PRG)
 $(OVL_GEN): $(MAIN_PRG)
-$(BANK1_DAT): $(MAIN_PRG)
+$(RUNTIME_LOW_PRG): $(MAIN_PRG)
 
 # Title screen art — pass -define C128 so title_data.s emits "Commodore 128 Edition"
 $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
@@ -100,7 +100,7 @@ $(OUT)/monster.db.4: $(TIER_DIR)/tier4_prg.s $(TIER_DIR)/tier4.s | $(OUT)
 # boot128 is the autostart entry — chain-loads moria128
 disk128: $(DISK_IMAGE)
 
-$(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) $(BANK1_DAT) Makefile | $(OUT)
+$(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) $(RUNTIME_LOW_PRG) Makefile | $(OUT)
 	$(C1541) -format $(DISK_NAME) d64 $@ \
 	         -attach $@ \
 	         -write $(BOOT_PRG) "moria8.128" \
@@ -114,7 +114,7 @@ $(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(O
 	         -write $(OVL_START) "ovl.start" \
 	         -write $(OVL_DEATH) "ovl.death" \
 	         -write $(OVL_GEN) "ovl.gen" \
-	         -write $(BANK1_DAT) "bank1.dat"
+	         -write $(RUNTIME_LOW_PRG) "runtime_low.prg"
 
 # Launch in VICE x128 (80-column mode) with D64 disk image
 run128: $(DISK_IMAGE)

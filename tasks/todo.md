@@ -31,18 +31,18 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 
 ## Executed Fix Plan
 
-- [x] Confirm `viewport_update` is linked at `$1000` while `bank1.dat` was emitted with an `$E000` PRG header.
-- [x] Confirm no runtime Stage 2 loader existed for `bank1.dat`.
-- [x] Change `Bank1Data` to emit a `$1000` PRG matching its runtime addresses.
-- [x] Add a C128-safe runtime loader for `bank1.dat` using the existing KERNAL wrapper path.
-- [x] Load `bank1.dat` during startup before any gameplay path can call `viewport_update`.
+- [x] Confirm `viewport_update` is linked at `$1000` while `runtime_low.prg` was emitted with an `$E000` PRG header.
+- [x] Confirm no runtime Stage 2 loader existed for `runtime_low.prg`.
+- [x] Change `RuntimeLowData` to emit a `$1000` PRG matching its runtime addresses.
+- [x] Add a C128-safe runtime loader for `runtime_low.prg` using the existing KERNAL wrapper path.
+- [x] Load `runtime_low.prg` during startup before any gameplay path can call `viewport_update`.
 - [x] Rebuild, regenerate the D64, and run targeted smokes that exercise chargen through first render.
 
 ## Review
 
-- Root cause was not chargen summary code. `viewport_update` and related VDC routines are linked at low RAM `$1000`, but `bank1.dat` was never loaded at runtime and the PRG itself still carried an `$E000` load header.
-- First repair attempt loaded `bank1.dat` into Bank 1, which was still wrong because normal runtime executes in `MMU_ALL_RAM` (Bank 0) and calls `$1000` directly.
-- Correct fix is to emit `bank1.dat` with a `$1000` header and load it into Bank 0 low RAM during startup before the title menu is shown.
+- Root cause was not chargen summary code. `viewport_update` and related VDC routines are linked at low RAM `$1000`, but `runtime_low.prg` was never loaded at runtime and the PRG itself still carried an `$E000` load header.
+- First repair attempt loaded `runtime_low.prg` into Bank 1, which was still wrong because normal runtime executes in `MMU_ALL_RAM` (Bank 0) and calls `$1000` directly.
+- Correct fix is to emit `runtime_low.prg` with a `$1000` header and load it into Bank 0 low RAM during startup before the title menu is shown.
 - Validation:
   - `make -B -C commodore/c128 build128` ✅
   - `make -C commodore/c128 disk128` ✅
@@ -52,16 +52,16 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 ## 2026-03-18 follow-up
 - New failure: CPU JAM at $1016 after sex selection. Backtrace shows `JSR $1000` from $B2D9, and runtime memory at $1016 contains text (`DIRECTORY...`), not executable code.
 - Conclusion: chargen progressed farther; current active bug is Bank 1 low-memory runtime corruption or missing staging/loading for `viewport_update` at $1000.
-- Next: trace how `BANK1.DAT` is loaded/relocated into Bank 1 reclaimed low RAM ($1000-$3FFF), then patch the root cause.
+- Next: trace how `RUNTIME_LOW.PRG` is loaded/relocated into Bank 1 reclaimed low RAM ($1000-$3FFF), then patch the root cause.
 
 ## 2026-03-18 follow-up 2
 - New trace after the first loader fix still JAMs on `JSR $1000`, now with garbage bytes rather than BASIC text.
-- Conclusion: the direct `$1000` call executes in visible Bank 0 runtime context, so loading `bank1.dat` into Bank 1 was insufficient.
+- Conclusion: the direct `$1000` call executes in visible Bank 0 runtime context, so loading `runtime_low.prg` into Bank 1 was insufficient.
 - Next: retarget the startup loader to Bank 0 low RAM and re-run targeted smokes.
 
 ## 2026-03-18 follow-up 2
 - New trace after loader fix: CPU JAM still occurs on `JSR $1000`, now with garbage at `$10DA`/`$1016` instead of BASIC text.
-- Key implication: the call executes in currently visible Bank 0 context; loading `bank1.dat` only into Bank 1 does not make `$1000` executable from that path.
+- Key implication: the call executes in currently visible Bank 0 context; loading `runtime_low.prg` only into Bank 1 does not make `$1000` executable from that path.
 - Next: prove intended residency/execution bank for `$1000` code, then retarget the loader or trampoline accordingly.
 
 ## 2026-03-18 follow-up 3
@@ -71,7 +71,7 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 
 ## 2026-03-18 final outcome
 - Root cause of the two-week blocker was the missing/incorrect low-RAM runtime loader contract for callable `$1000` VDC code, not chargen summary logic.
-- Final fix: emit `bank1.dat` with a `$1000` header, load it into Bank 0 low RAM during startup, and harden the summary release path for normal-speed runs.
+- Final fix: emit `runtime_low.prg` with a `$1000` header, load it into Bank 0 low RAM during startup, and harden the summary release path for normal-speed runs.
 - Manual validation now reaches town successfully; the summary auto-dismiss symptom was only reproduced during warp-mode testing.
 
 ## 2026-03-18 next issue
@@ -110,7 +110,7 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 ## 2026-03-18 dungeon-descent outcome
 - Root cause: `ego_items.s` had drifted into the main program at `$D310+`, so `tramp_roll_ego_type` entered the `$D000-$DFFF` I/O hole during dungeon item generation.
 - Final fix:
-  - move `ego_items.s` into the loaded low-RAM runtime block (`bank1.dat`, runtime `$1000+`)
+  - move `ego_items.s` into the loaded low-RAM runtime block (`runtime_low.prg`, runtime `$1000+`)
   - remove the late Default-segment import that allowed ego code to spill into the I/O hole
   - add placement asserts so `roll_ego_type`, `ego_apply_damage`, and `ego_get_ac_bonus` must stay below `FLOOR_ITEM_BASE`
 - Validation:
@@ -1162,3 +1162,26 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make test128-fast-smoke`
   - `make test128`
 - Result: `REF-2` is complete. The game loop now has a cleaner orchestration file plus a dedicated helper file, while preserving the proven C64/C128 memory layout.
+
+## 2026-03-20 runtime payload rename + pre-title preload
+
+- [x] Rename the misleading C128 low-RAM resident payload from `bank1.dat` / `BANK1.DAT` to `runtime_low.prg` / `RUNTIME_LOW.PRG`.
+- [x] Rename the resident segment from `Bank1Data` to `RuntimeLowData`.
+- [x] Move the startup load so the low-RAM resident payload is loaded before `title_load_and_draw`.
+- [x] Show `RUNTIME_LOW.PRG` on the same visible preload screen as the other preloaded C128 assets.
+- [x] Update build/test scripts and current documentation to use `runtime_low.prg` consistently.
+- [x] Rebuild and rerun the critical C128 verification gates after the startup-order change.
+
+### Review
+
+- The old name obscured the actual runtime contract. The payload is not a Bank 1 overlay; it is Bank 0 low-RAM resident code linked at `$1000-$3FFF`.
+- Address-space check: pre-title loading is safe because the title/startup overlay remains at `$E000-$EFFF`, while `runtime_low.prg` is loaded at `$1000-$3FFF`.
+- Behavior change: `entry_main` now loads the resident runtime payload before the title screen so the VDC/runtime code is present before any title or gameplay render path can reach it.
+- UI change: the C128 preload header now reads `Preloading files:` and the runtime payload is appended to the same visible preload list instead of being loaded silently on a freshly cleared screen.
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `TEST_FILTER='boot_d64_smoke|boot_title_idle_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|town_overlay_smoke|scripted_summary_to_town_smoke|real_boot_crash_harness|overlay_data_transition_smoke|cache_survival_smoke' bash commodore/c128/run_tests128.sh`

@@ -1,7 +1,7 @@
 #importonce
 // ego_items.s — Ego item generation and suffix strings
 //
-// C128: lives in loaded low RAM (`bank1.dat`, runtime at `$1000+`) so it stays
+// C128: lives in loaded low RAM (`runtime_low.prg`, runtime at `$1000+`) so it stays
 // out of the `$D000-$DFFF` I/O hole while remaining callable through the
 // existing trampolines. C64/tests may link it elsewhere.
 // Ego types are enchanted weapon variants (e.g., "Long Sword (Flame)").

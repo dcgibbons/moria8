@@ -131,8 +131,9 @@ loader_start:
     sta BOOT_DIAG_SIG_BASE + 2
 #endif
     
-    // 7. SUCCESS: Relocate stub to $0B00 and Hand-off
-    // Data load (BANK1.DAT) will be handled by the engine in Stage 2.
+    // 7. SUCCESS: Relocate stub to $0B00 and hand off.
+    // The engine will preload `RUNTIME_LOW.PRG` into Bank 0 low RAM before
+    // drawing the title screen.
     lda #COL_BLACK
     sta $d020
     sei
