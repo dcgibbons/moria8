@@ -1298,3 +1298,72 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `cd commodore/c64 && ./run_tests.sh`
   - `make test128-fast`
   - `make test128-fast-smoke`
+
+## 2026-03-20 REF-1 — C128 trampoline sprawl consolidation plan
+
+- [ ] Inventory the current `tramp_*` routines in `commodore/c128/main.s` and group them by calling convention, state-restoration contract, and register/flag preservation requirements.
+- [ ] Identify the exact trampoline families that are byte-for-byte or structurally identical enough to consolidate safely without changing behavior.
+- [ ] Stage the refactor so the first slice only replaces duplicated bodies with macros/in-file templates while preserving:
+  - existing public trampoline labels
+  - current segment placement
+  - current MMU / `$01` / IRQ restore sequencing
+- [ ] Add or extend focused regression coverage that proves the affected trampolines still preserve their expected call contracts.
+- [ ] Re-run the standard C64 and C128 verification gates after each slice.
+- [ ] Only consider a generic parameterized `call_banked` helper **after** the low-risk macro slice proves out; do not start there.
+
+### Planning Notes
+
+- `REF-1` is **implemented only in C128-specific source** (`commodore/c128/main.s`), but it is not “safe because it is C128-only.” These trampolines are the call boundary for shared `common/` code, so changing them can break shared gameplay/UI flows even if C64 source is untouched.
+- Current surface area in `commodore/c128/main.s` is 37 low-level trampoline/bridge labels. They are not one thing; they break into several distinct families:
+  1. **Overlay-loader trampolines** — e.g. `tramp_player_create`, `tramp_game_over`, `tramp_store_*`. These carry overlay-load ordering, runtime-guard restore, and in some cases KERNAL/MMU transitions. High-risk. Do **not** consolidate first.
+  2. **UI banked-display wrappers** — `tramp_ui_help_display`, `tramp_ui_char_display`, `tramp_ui_inv_display`, `tramp_ui_equip_display`, `tramp_ui_recall`, all built on `tramp_ui_enter` / `tramp_ui_exit`. These are already partially normalized and have a delicate restore contract after the banked-UI blank-screen fixes. Low code duplication remains; low payoff.
+  3. **Compute-style banked call wrappers** — `tramp_player_cast_spell`, `tramp_player_pray`, `tramp_spell_list_display`, `tramp_magic_check_new_spells`, `tramp_mage_effect_dispatch`, `tramp_priest_effect_dispatch`, `tramp_ranged_fire`, `tramp_throw_item`, `tramp_bash_command`. These share the same `SEI -> BankOutKernal -> JSR -> MMU_ALL_RAM -> CLI -> RTS` shape. This is the safest first consolidation target.
+  4. **Argument/return-preserving wrappers** — `tramp_ego_apply_damage`, `tramp_ego_get_ac_bonus`, `tramp_roll_ego_type`, `tramp_find_special_room`, etc. These add `PHA/PLA/PHP/PLP` semantics on top of bank switching. Medium risk; second wave only.
+  5. **Custom trampoline bodies** — `tramp_ego_append_suffix`, `tramp_ego_put_suffix`, `title_show_sysinfo`, `tramp_reu_show_status`, `tramp_sr_epilogue`, direct-jump aliases like `tramp_dig_ability`. These are not good genericization candidates up front.
+- The main technical trap is assuming “generic call_banked” means one universal helper. The actual contracts differ on:
+  - whether A must be preserved across entry/exit
+  - whether flags must be preserved
+  - whether the callee writes to screen/color RAM
+  - whether runtime guards/vectors must be restored before returning
+  - whether the trampoline exits via `RTS`, shared epilogue, or inlined postprocessing
+- Recommended implementation strategy:
+  1. **Slice 1:** macroize the compute-style banked wrappers only, keeping the same labels and generated sequence in-place.
+  2. **Slice 2:** if Slice 1 is stable, macroize the simple preserve-A/preserve-flags families separately.
+  3. **Slice 3:** only then revisit whether shared epilogues or a parameterized helper are worth the complexity.
+- Do **not** move trampoline code across files or out of the existing low-memory region during the first slices. Placement below the `$D000` I/O hole remains part of the contract.
+- Verification must keep the current cross-platform gate set:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+
+### Recommendation
+
+- Start `REF-1` with **Slice 1 only**:
+  - consolidate the nine compute-style banked wrappers with an in-file macro
+  - preserve every trampoline label and exact MMU/IRQ sequence
+  - leave overlay/UI/ego/text trampolines untouched for the first pass
+- This gives real duplication reduction without reopening the fragile overlay/runtime-boundary bugs that have already been fixed.
+
+### Slice 1 Review
+
+- Implemented exactly the recommended first slice in `commodore/c128/main.s`:
+  - the nine compute-style banked wrappers now share one local macro body
+  - every existing trampoline label remains present
+  - the generated sequence remains:
+    - `SEI`
+    - `BankOutKernal`
+    - `JSR target`
+    - restore `MMU_ALL_RAM`
+    - `CLI`
+    - `RTS`
+- No overlay trampolines, UI banked-display wrappers, ego helpers, or custom postprocessing trampolines were touched.
+- This was intentionally a duplication-reduction pass, not a semantic refactor.
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- `REF-1` remains open after Slice 1. The next safe slice, if desired, is the preserve-A / preserve-flags wrapper family.

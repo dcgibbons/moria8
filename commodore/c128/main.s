@@ -1601,86 +1601,42 @@ tramp_ui_recall:
     jsr ui_recall_display
     jmp tramp_ui_exit
 
-tramp_player_cast_spell:
+.macro C128BankedComputeTrampoline(target) {
     sei
     :BankOutKernal()
-    jsr player_cast_spell
-    lda #$3e
+    jsr target
+    lda #MMU_ALL_RAM
     sta $ff00
     cli
     rts
+}
+
+tramp_player_cast_spell:
+    :C128BankedComputeTrampoline(player_cast_spell)
 
 tramp_player_pray:
-    sei
-    :BankOutKernal()
-    jsr player_pray
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(player_pray)
 
 tramp_spell_list_display:
-    sei
-    :BankOutKernal()
-    jsr spell_list_display
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(spell_list_display)
 
 tramp_magic_check_new_spells:
-    sei
-    :BankOutKernal()
-    jsr magic_check_new_spells
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(magic_check_new_spells)
 
 tramp_mage_effect_dispatch:
-    sei
-    :BankOutKernal()
-    jsr mage_effect_dispatch
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(mage_effect_dispatch)
 
 tramp_priest_effect_dispatch:
-    sei
-    :BankOutKernal()
-    jsr priest_effect_dispatch
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(priest_effect_dispatch)
 
 tramp_ranged_fire:
-    sei
-    :BankOutKernal()
-    jsr ranged_fire
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(ranged_fire)
 
 tramp_throw_item:
-    sei
-    :BankOutKernal()
-    jsr throw_item
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(throw_item)
 
 tramp_bash_command:
-    sei
-    :BankOutKernal()
-    jsr bash_command
-    lda #$3e
-    sta $ff00
-    cli
-    rts
+    :C128BankedComputeTrampoline(bash_command)
 
 // tramp_dig_ability — Calculate digging ability.
 // Pinned low to avoid $D000 drift.
