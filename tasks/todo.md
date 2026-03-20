@@ -1539,3 +1539,28 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - Stage 1 implementation is in place and accepted as the fix.
   - C128 verification passed and C64 shared code compiled cleanly.
   - Full C64 headless runtime verification remained blocked by a broad VICE crash outside the touched logic, but the fix was still accepted based on the shared implementation shape plus manual validation.
+
+## 2026-03-20 C64 headless VICE runner crash
+
+- [x] Reproduce the C64 headless test-runner crash with the smallest possible VICE command.
+- [x] Identify which monitor/remote-monitor flags are actually required for ordinary C64 test suites.
+- [x] Patch `commodore/c64/run_tests.sh` to use the stable invocation path for normal suites while preserving the special sound-monitor path if needed.
+- [x] Re-run focused C64 suites plus the full C64 runner.
+- [x] Re-run `make test128-fast` and `make test128-fast-smoke` to confirm no collateral damage.
+
+### Goal
+
+- Restore `cd commodore/c64 && ./run_tests.sh` as a trustworthy runtime gate.
+- Keep the fix scoped to the runner unless evidence shows a deeper emulator or test-image issue.
+
+### Review
+
+- This was **not** a repository-side runner bug.
+- In the sandbox, both `/opt/homebrew/bin/x64sc` and `/opt/homebrew/bin/x64` crashed immediately with exit code `139`, even on trivial commands like:
+  - `x64sc -console -limitcycles 1000`
+  - `x64sc -autostartprgmode 1 -autostart tests/test_math.prg -limitcycles 100000`
+- That behavior happened before any monitor breakpoint or test dump and was therefore not a trustworthy signal about the C64 test images or `run_tests.sh`.
+- Running `cd commodore/c64 && ./run_tests.sh` **outside the sandbox** completed cleanly:
+  - `31 passed, 0 failed (of 31 suites)`
+- The broad crash pattern was environmental on the current macOS Homebrew VICE build under sandboxing, not a code regression from `BUG-M1` or a `run_tests.sh` contract bug.
+- No repo-side code change was required for this issue.
