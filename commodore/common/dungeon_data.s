@@ -11,9 +11,19 @@
 // ============================================================
 // Map constants
 // ============================================================
-.const MAP_COLS     = 80
-.const MAP_ROWS     = 48
-.const MAP_SIZE     = MAP_COLS * MAP_ROWS  // 3840
+.const C64_MAP_COLS = 80
+.const C64_MAP_ROWS = 48
+.const C128_MAP_COLS = 198
+.const C128_MAP_ROWS = 66
+
+#if C128
+.const MAP_COLS     = C128_MAP_COLS
+.const MAP_ROWS     = C128_MAP_ROWS
+#else
+.const MAP_COLS     = C64_MAP_COLS
+.const MAP_ROWS     = C64_MAP_ROWS
+#endif
+.const MAP_SIZE     = MAP_COLS * MAP_ROWS
 
 // Tile type values (upper nibble)
 .const TILE_FLOOR   = $00
@@ -62,8 +72,8 @@
 .const RT_NEST   = 3
 
 // ============================================================
-// Pre-computed row address table (48 bytes each, base $C000)
-// map_row_lo[n] / map_row_hi[n] = $C000 + n*80
+// Pre-computed row address table
+// map_row_lo[n] / map_row_hi[n] = MAP_BASE + n*MAP_COLS
 // ============================================================
 map_row_lo:
     .fill MAP_ROWS, <(MAP_BASE + i * MAP_COLS)
@@ -141,7 +151,11 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 // Compile-time validation
 // ============================================================
 .assert "Map row table size", map_row_hi - map_row_lo, MAP_ROWS
-.assert "Map size = 3840", MAP_SIZE, 3840
+#if C128
+.assert "C128 map size = 13068", MAP_SIZE, 13068
+#else
+.assert "C64 map size = 3840", MAP_SIZE, 3840
+#endif
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 8
 

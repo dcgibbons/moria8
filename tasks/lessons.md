@@ -144,3 +144,17 @@
 - **Root Cause:** I anchored on the static code discrepancy (missing floor-item stop and oversensitive side-junction logic) without first proving that the observed stop was actually coming from those branches. The reported fixed-distance stop in both town and dungeon suggests the real cause is in run continuation/cancel handling, not corridor geometry.
 - **Resolution:** For movement/running bugs, first classify the symptom by behavior pattern: geometry-sensitive stop, sight-sensitive stop, or fixed-distance/cancel stop. If the stop distance is roughly constant across town and dungeon, inspect input/run-cancel state before touching map-intersection logic.
 - **Rule:** **Do not patch running stop-policy code until the observed stop pattern has been tied to that code path. A fixed-distance stop pattern points to run continuation/cancel logic first.**
+
+## One-Sample Run-Cancel Edges Are Too Fragile
+
+- **Issue:** I left the running cancel path on a one-sample edge detector after the earlier fix. After the 10.3 map expansion, the user immediately hit early running cancellation again.
+- **Root Cause:** The run-cancel detector treated any single nonzero sample as a fresh cancel edge once armed. That is too fragile for direct keyboard scanning, especially when frame cadence changes and scan noise gets more opportunities to land as a transient sample.
+- **Resolution:** Normalize run-cancel samples to boolean held/not-held state and require a newly-stable pressed state before emitting a cancel edge. Keep the logic shared across C64/C128 so behavior does not drift again.
+- **Rule:** **For direct-scan run cancel, do not use a one-sample raw-key edge. Use a debounced boolean held-state edge detector.**
+
+## Running Must Use Physical Held State, Not Decoded PETSCII
+
+- **Issue:** After the debounce fix, C128 running still stopped after a few steps while C64 behaved correctly.
+- **Root Cause:** The C128 running path was still sampling `cia_scan_petscii` for held/cancel state. Shifted run movement depends on PETSCII decoding staying visible, but running logic only cares whether the initiating keys are physically still down.
+- **Resolution:** Use a raw matrix-held helper for `input_run_key_held` and `input_run_cancel_check` on C128, matching the C64 contract. Keep PETSCII decoding for command entry, not held-state detection.
+- **Rule:** **For held/cancel polling, sample physical key state. Do not route running through PETSCII decoding on C128.**

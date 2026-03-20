@@ -388,8 +388,12 @@ ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
 ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
 ol_target:        .byte 0
-map_row_lo: .fill 66, <($c000 + i * 80)
-map_row_hi: .fill 66, >($c000 + i * 80)
+// Local test map stub: keep the synthetic map below $C000 so it stays in plain RAM
+// even with C128 I/O visible. Width/height must match live MAP_COLS/MAP_ROWS.
+.const TEST_MAP_COLS = 198
+.const TEST_MAP_ROWS = 66
+map_row_lo: .fill TEST_MAP_ROWS, <($8000 + i * TEST_MAP_COLS)
+map_row_hi: .fill TEST_MAP_ROWS, >($8000 + i * TEST_MAP_COLS)
 player_data: .fill 80, 0
 it_category: .fill 256, 0
 inv_item_id: .fill 30, 0

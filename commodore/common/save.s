@@ -4,7 +4,7 @@
 // Writes all game state to a sequential file on 1541 disk via KERNAL I/O.
 // Load restores state and deletes the savefile to enforce permadeath.
 // Uses 16-bit additive complement checksum for integrity.
-// Map data is written raw (3840 bytes). RLE compressor is kept for tests only.
+// Map data is written raw (`MAP_SIZE` bytes). RLE compressor is kept for tests only.
 //
 // KERNAL calls: SETNAM($FFBD), SETLFS($FFBA), OPEN($FFC0), CLOSE($FFC3),
 //   CHKOUT($FFC9), CHKIN($FFC6), CLRCHN($FFCC), CHROUT($FFD2),
@@ -14,7 +14,11 @@
 // Constants
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
+#if C128
+.const SAVE_VERSION    = $0c
+#else
 .const SAVE_VERSION    = $0b
+#endif
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -259,7 +263,7 @@ save_game:
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :save_block(recall_data_start, RECALL_DATA_SIZE)
 
-    // 17. Map data (3840 bytes raw)
+    // 17. Map data (`MAP_SIZE` bytes raw)
 #if C128
     jsr save_write_map_c128
 #else
@@ -472,7 +476,7 @@ load_game:
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :load_block(recall_data_start, RECALL_DATA_SIZE)
 
-    // 17. Map data (3840 bytes raw)
+    // 17. Map data (`MAP_SIZE` bytes raw)
 #if C128
     jsr load_read_map_c128
 #else
@@ -910,7 +914,7 @@ rle_compress_map:
     lda rle_work_hi
     sta zp_ptr1_hi
 
-    // Remaining bytes = MAP_SIZE (3840)
+    // Remaining bytes = MAP_SIZE
     lda #<MAP_SIZE
     sta save_count_lo
     lda #>MAP_SIZE
@@ -1106,9 +1110,9 @@ rle_d_advance_dst:
     bne !rdad_no+
     inc zp_ptr1_hi
 !rdad_no:
-    // Bounds check: dest must not exceed MAP_END ($CEFF).
-    // After writing the final byte at $CEFF, ptr1 advances to $CF00 ($CF hi).
-    // That is still valid — only $D000+ (I/O area) is a true overflow.
+    // Bounds check: dest must not exceed MAP_END.
+    // After writing the final byte at MAP_END, ptr1 may advance to MAP_END+1.
+    // That is still valid — only the I/O area and beyond is a true overflow.
     lda zp_ptr1_hi
     cmp #>(MAP_END + 1) + 1 // $D0 = into I/O area, truly past map
     bcc !rdad_ok+

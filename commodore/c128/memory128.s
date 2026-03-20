@@ -91,8 +91,8 @@
 // Bank 1 runtime ownership after boot:
 //   - bottom common RAM:       $0000-$0FFF (shared across banks, not cache-safe)
 //   - scrubbed low reclaim:    $1000-$3FFF
-//   - map region:              $4000-$4EFF
-//   - DB mirror region:        $5000-$7FFF
+//   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
+//   - DB/data region:          $7400-$7FFF
 //   - tier cache window:       $8000-$94F7
 //   - reserved gap 0:          $94F8-$9FFF
 //   - overlay cache STARTUP:   $A000-$AFFF
@@ -113,9 +113,13 @@
 .const BANK1_COMMON_END  = $0fff
 .const BANK1_RECLAIMED_LOW_BASE = $1000
 .const BANK1_RECLAIMED_LOW_END  = $3fff
+.const C128_FUTURE_MAP_COLS = 198
+.const C128_FUTURE_MAP_ROWS = 66
+.const C128_FUTURE_MAP_SIZE = C128_FUTURE_MAP_COLS * C128_FUTURE_MAP_ROWS
 .const MAP_BASE         = $4000
-.const MAP_END          = $4eff
-.const BANK1_DB_BASE    = $5000
+.const BANK1_MAP_RESERVED_END = MAP_BASE + C128_FUTURE_MAP_SIZE - 1
+.const MAP_END          = BANK1_MAP_RESERVED_END
+.const BANK1_DB_BASE    = $7400
 .const BANK1_DB_END     = $7fff
 .const BANK1_TIER_CACHE_BASE = $8000
 .const BANK1_TIER_CACHE_SIZE = 5368
@@ -794,14 +798,15 @@ copy_to_e000:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Map size = 3840", MAP_END - MAP_BASE + 1, 3840
+.assert "Live map size = 13068", MAP_END - MAP_BASE + 1, 13068
+.assert "Reserved future map span = 13068", BANK1_MAP_RESERVED_END - MAP_BASE + 1, 13068
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
 .assert "mmu_common_irq begins with CLD", mmu_common_irq_after_cld == mmu_common_irq + 1, true
 .assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true
 :AssertRegionBefore("Bank1 common region ends below staged source span", BANK1_COMMON_END, BANK1_STAGE_SOURCE_BASE)
 :AssertRegionBefore("Reclaimed low region ends before map region", BANK1_RECLAIMED_LOW_END, MAP_BASE)
-:AssertRegionBefore("Bank1 map and DB regions do not overlap", MAP_END, BANK1_DB_BASE)
+:AssertRegionBefore("Reserved future map span ends before Bank1 DB region", BANK1_MAP_RESERVED_END, BANK1_DB_BASE)
 :AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
 :AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)
 :AssertRegionBefore("Reserved gap 0 ends before STARTUP overlay slot", BANK1_RESERVED_GAP0_END, BANK1_OVERLAY_STARTUP_BASE)

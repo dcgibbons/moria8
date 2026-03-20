@@ -38,7 +38,7 @@
 | 10.0 | Code split | `common/` + `c64/` + `c128/` directory structure complete. | **Done** |
 | 10.1 | 80-column VDC mode | VDC rendering backend with row batching and dirty-rect optimization. | **Done (baseline)** |
 | 10.2 | Extended memory | Use C128 128KB MMU bank-switch path for creature/item database. | **Done** |
-| 10.3 | Larger dungeon | Expand map to 198x66 (original size) in a follow-on plan after C4 baseline. | |
+| 10.3 | Larger dungeon | C128 map expanded to `198x66` with Bank 1 ownership redesign, save-format split, and runtime validation. | **Done** |
 | 10.4 | Enhanced display | VDC color attributes for threat-coded monsters and special effects. | |
 | 10.5 | VDC Performance | Implementation of high-speed row-blasting and streaming optimizations. | **Done** |
 | 10.6 | Compile-time platform split hardening | Remove remaining runtime C64/C128 dispatch in `common/` hot paths; replace with compile-time branches and platform hooks. | **Done** |

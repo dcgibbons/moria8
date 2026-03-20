@@ -276,14 +276,14 @@ test_run_cancel_checks:
     cmp #0
     bne test_fail3
 
-    lda #$58               // First new key after arming => cancel edge
-    jsr input_run_process_sample
-    cmp #$58
-    bne test_fail3
-
-    lda #$58               // Held key => no repeat cancel
+    lda #$58               // First press sample => no event yet
     jsr input_run_process_sample
     cmp #0
+    bne test_fail3
+
+    lda #$58               // Stable held key => cancel edge
+    jsr input_run_process_sample
+    cmp #1
     bne test_fail3
 
     lda #0                 // First release sample => no event
@@ -296,9 +296,14 @@ test_run_cancel_checks:
     cmp #0
     bne test_fail3
 
-    lda #$51               // New key after rearm => cancel edge again
+    lda #$51               // First press sample after rearm => no event yet
     jsr input_run_process_sample
-    cmp #$51
+    cmp #0
+    bne test_fail3
+
+    lda #$51               // Stable press => cancel edge again
+    jsr input_run_process_sample
+    cmp #1
     bne test_fail3
 
     jmp test_scan_restore_checks
@@ -323,6 +328,20 @@ test_scan_restore_checks:
     bne test_fail3
     lda test_ext_orig
     sta C128_KBD_EXT
+
+    lda #%00110011
+    sta C128_KBD_EXT
+    lda #$00
+    sta CIA1_PORTA
+    jsr input_run_scan_held_raw
+    cmp #0
+    bne test_fail3
+    lda CIA1_PORTA
+    cmp #$FF
+    bne test_fail3
+    lda C128_KBD_EXT
+    cmp #%00110011
+    bne test_fail3
 
     jmp test_pass
 

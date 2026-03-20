@@ -11,7 +11,7 @@ The C128 build keeps gameplay logic shared with C64 while using C128-specific pl
 
 Key C4 outcome:
 - Dungeon map is no longer in Bank 0.
-- Map storage is now Bank 1 RAM at `$4000-$4EFF` (`80x48`, 3840 bytes).
+- Map storage is now Bank 1 RAM at `$4000-$730B` (`198x66`, 13068 bytes).
 
 ---
 
@@ -35,8 +35,8 @@ Key C4 outcome:
 | :--- | :--- |
 | `$0000-$0FFF` | 4 KB bottom common RAM (shared across banks; not cache-safe) |
 | `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; currently unassigned |
-| `$4000-$4EFF` | dungeon/town map (`MAP_BASE..MAP_END`) |
-| `$5000-$7FFF` | Bank 1 DB/data region retained from earlier C128 work (`BANK1_DB_BASE..BANK1_DB_END`) |
+| `$4000-$730B` | live dungeon/town map (`MAP_BASE..MAP_END`) |
+| `$7400-$7FFF` | Bank 1 DB/data region retained after reserving the full future map span (`BANK1_DB_BASE..BANK1_DB_END`) |
 | `$8000-$94F7` | active tier-cache window for `MONSTER.DB.1-4` |
 | `$A000-$AFFF` | overlay cache slot for `OVL_STARTUP` |
 | `$B000-$BFFF` | overlay cache slot for `OVL_TOWN` |
@@ -58,9 +58,9 @@ Key C4 outcome:
 - The ownership manifest, overlap asserts, and overlay-slot base tables now live in `c128/memory128.s` as the source of truth for future Bank 1 edits.
 
 Map invariants:
-- `MAP_COLS=80`
-- `MAP_ROWS=48`
-- `MAP_SIZE=3840`
+- `MAP_COLS=198`
+- `MAP_ROWS=66`
+- `MAP_SIZE=13068`
 
 ---
 

@@ -24,6 +24,8 @@
 // CIA1 keyboard hardware registers
 .const CIA1_PORTA = $DC00   // Row drive (write): 0 in a bit selects that row
 .const CIA1_PORTB = $DC01   // Column read: 0 = key pressed (active low)
+.const CIA1_DDRA  = $DC02
+.const CIA1_DDRB  = $DC03
 .const C128_KBD_EXT = $D02F // Extended keyboard line drive (bit6=line8, bit7=line9)
 
 // Virtual key codes for C128 extended keypad keys (rows 8/9).
@@ -112,16 +114,79 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4
 // Subroutines
 // ============================================================
 
+// input_run_scan_held_raw — Non-blocking: returns nonzero if any physical key is held
+// Used by the running path so shifted movement keys remain visible while physically held.
+// Output: A = nonzero if any key held, 0 if no key
+// Destroys: A, X
+input_run_scan_held_raw:
+    php
+    sei
+    lda #$ff
+    sta CIA1_DDRA
+    lda #$00
+    sta CIA1_DDRB
+
+    lda C128_KBD_EXT
+    sta irk_ext_save
+    ora #%11000000
+    sta C128_KBD_EXT
+
+    lda #$00
+    sta CIA1_PORTA
+    nop
+    nop
+    lda CIA1_PORTB
+    cmp #$ff
+    bne !irk_pressed+
+
+    lda #$ff
+    sta CIA1_PORTA
+    lda irk_ext_save
+    ora #%11000000
+    and #%10111111
+    sta C128_KBD_EXT
+    nop
+    nop
+    lda CIA1_PORTB
+    cmp #$ff
+    bne !irk_pressed+
+
+    lda irk_ext_save
+    ora #%11000000
+    and #%01111111
+    sta C128_KBD_EXT
+    nop
+    nop
+    lda CIA1_PORTB
+    cmp #$ff
+    bne !irk_pressed+
+
+    lda #0
+    beq !irk_store+
+
+!irk_pressed:
+    lda #1
+
+!irk_store:
+    sta irk_result
+    lda #$ff
+    sta CIA1_PORTA
+    lda irk_ext_save
+    sta C128_KBD_EXT
+    plp
+    lda irk_result
+    rts
+
 // input_run_key_held — Non-blocking: returns nonzero if any key is currently pressed
 // Used by the pre-arm running path in game_loop.s to ignore the initiating held key(s).
-// Output: A = nonzero (PETSCII) if key pressed, 0 if no key
+// Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_held:
 #if C128_TEST_SCRIPTED_INPUT
     lda #0
     rts
 #else
-    jsr cia_scan_petscii
+    jsr input_run_scan_held_raw
     rts
 #endif
 
@@ -139,40 +204,38 @@ input_run_cancel_reset:
 
 // input_run_cancel_check — Non-blocking: returns nonzero only on a new key-down edge
 // after running cancel has been armed. This avoids cancelling on lingering held state.
-// Output: A = nonzero PETSCII on new key-down edge, 0 otherwise
+// Output: A = 1 on new key-down edge, 0 otherwise
 // Destroys: A, X, Y
 input_run_cancel_check:
 #if C128_TEST_SCRIPTED_INPUT
     lda #0
     rts
 #else
-    jsr cia_scan_petscii
+    jsr input_run_scan_held_raw
     // Fall through into shared run-cancel state machine for testability.
 #endif
 
-// input_run_process_sample — Edge/state machine for running cancel
-// Input: A = sampled PETSCII (0 = no key)
-// Output: A = PETSCII on key-down edge, 0 otherwise
+// input_run_process_sample — Debounced edge/state machine for running cancel
+// Input: A = sampled PETSCII/held-state (0 = no key, nonzero = key held)
+// Output: A = 1 on a newly-stable key-down edge, 0 otherwise
 input_run_process_sample:
+    beq !irps_norm_done+
+    lda #1
+!irps_norm_done:
     cmp irk_last_sample
-    beq !irps_stable+
+    beq !irps_confirm+
     sta irk_last_sample
-    beq !irps_none+
-    lda irk_stable
-    bne !irps_none+
-    lda irk_last_sample
-    sta irk_stable
-    lda irk_last_sample
-    rts
-!irps_none:
     lda #0
     rts
 
-!irps_stable:
+!irps_confirm:
     cmp irk_stable
-    beq !irps_none-
+    beq !irps_none+
     sta irk_stable
-    beq !irps_none-
+    beq !irps_none+
+    rts
+!irps_none:
+    lda #0
     rts
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
@@ -232,6 +295,8 @@ igk_last_sample: .byte 0
 igk_stable: .byte 0
 irk_last_sample: .byte 0
 irk_stable: .byte 0
+irk_result: .byte 0
+irk_ext_save: .byte 0
 
 // input_wait_release — Block until keyboard is released (C128 direct scan)
 // Used before one-shot "press any key" prompts to avoid consuming
@@ -350,9 +415,9 @@ cia_scan_petscii:
     // On C128, boot sequence or KERNAL calls may leave DDR in wrong state,
     // causing phantom key readings if Port B bits are set as outputs.
     lda #$ff
-    sta $dc02
+    sta CIA1_DDRA
     lda #$00
-    sta $dc03
+    sta CIA1_DDRB
 
     // Save extended keyboard drive register and force lines 8/9 idle-high.
     // We must always restore this register before returning.

@@ -301,12 +301,12 @@ test_start:
 
     lda #1
     jsr input_run_process_sample
-    cmp #1
+    cmp #0
     bne !t10_fail+
 
     lda #1
     jsr input_run_process_sample
-    cmp #0
+    cmp #1
     bne !t10_fail+
 
     lda #0
@@ -315,6 +315,11 @@ test_start:
     bne !t10_fail+
 
     lda #0
+    jsr input_run_process_sample
+    cmp #0
+    bne !t10_fail+
+
+    lda #1
     jsr input_run_process_sample
     cmp #0
     bne !t10_fail+

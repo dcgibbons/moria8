@@ -6,6 +6,56 @@
 
 ---
 
+## 2026-03-20 — Phase 10.3 larger C128 dungeon ✅ COMPLETE
+
+### Scope Closed
+- Expanded the live C128 dungeon/town map from `80x48` to `198x66`.
+- Completed the prerequisite Bank 1 ownership redesign so the larger map fits without colliding with C128 DB/cache regions.
+- Split save compatibility so C64 and C128 can intentionally carry different raw `MAP_SIZE` payloads.
+
+### What Changed
+1. **Platform-parameterized map dimensions**
+   - `commodore/common/dungeon_data.s` now resolves `MAP_COLS`, `MAP_ROWS`, and `MAP_SIZE` by platform.
+   - C64 stays at `80x48`; C128 now uses `198x66`.
+2. **C128 Bank 1 ownership redesign**
+   - `commodore/c128/memory128.s` now reserves the full live map span at `$4000-$730B`.
+   - The Bank 1 DB/data region now begins at `$7400`, after the full map span.
+   - Compile-time asserts now prove the larger map does not overlap DB/cache ownership.
+3. **Save-format compatibility split**
+   - `commodore/common/save.s` now uses:
+     - C64 `SAVE_VERSION = $0b`
+     - C128 `SAVE_VERSION = $0c`
+   - This intentionally separates raw-map save payloads once `MAP_SIZE` diverged by platform.
+   - `commodore/c128/tests/make_load_resume_save.py` was updated to emit the new C128 version.
+4. **Test/runtime fixtures updated**
+   - `commodore/c128/tests/test_main_loop128.s` now uses the larger synthetic map dimensions.
+   - `commodore/common/dungeon_gen.s` and `commodore/common/save.s` comments were updated to reflect `MAP_SIZE`-driven behavior.
+   - `commodore/c128/ARCHITECTURE.md` now documents the live `198x66` map and revised Bank 1 ownership.
+
+### Why This Shape
+- A direct map-size toggle would have overlapped the old C128 Bank 1 DB region, so ownership had to be redesigned first.
+- The save format already validates a version byte in the save header, so the smallest correct compatibility split was a C128 version bump instead of a new dynamic-size field.
+- The staged rollout kept the risky part narrow:
+  - platform split first
+  - Bank 1 manifest second
+  - live C128 dimensions third
+  - save-format split fourth
+
+### Validation
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+- `TEST_FILTER='boot_title_load_resume_smoke' bash commodore/c128/run_tests128.sh`
+- manual in-game validation accepted by the user
+
+### Follow-up Note
+- The 10.3 rollout exposed a separate C128 running regression because held/cancel polling still used decoded PETSCII instead of raw physical held-key state.
+- That follow-up fix is documented in the existing running-stop history entry below.
+
+---
+
 ## 2026-03-20 — Planning doc role cleanup ✅ COMPLETE
 
 ### Scope Closed
@@ -122,6 +172,25 @@
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `make test128-fast-smoke`
+
+### Follow-up Correction
+- After the later C128 `10.3` map expansion, the user still saw running stop after a few steps in town.
+- The remaining bug was **not** corridor geometry and **not** the shared debounce logic.
+- C64 running already polled raw physical held-key state, but C128 running was still polling `cia_scan_petscii` for both:
+  - `input_run_key_held`
+  - `input_run_cancel_check`
+- That was the wrong abstraction for held/cancel polling. Running only cares whether the key is physically still down; PETSCII decoding of shifted run keys can disappear before physical release.
+- Final C128 fix:
+  - added a raw matrix-held helper in `commodore/c128/input128.s`
+  - switched C128 running pre-arm and cancel polling to that helper
+  - kept the shared debounced boolean edge detector in place
+  - extended `commodore/c128/tests/test_input128.s` to prove the raw held-key helper restores scan registers and stays inert when idle
+
+### Follow-up Validation
+- `make -B -C commodore/c128 build128`
+- `TEST_FILTER='input128' bash commodore/c128/run_tests128.sh`
+- `python3 -u commodore/c128/harness128_batch.py --mode compare --tests input128 --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+- manual in-game retest: running no longer stops after a few steps in town
 
 ### Outcome
 - C64 running no longer cancels after a short fixed distance due to key repeat.

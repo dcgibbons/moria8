@@ -1,7 +1,7 @@
 #importonce
 // dungeon_gen.s — Town and dungeon map generation (loaded as $E000 overlay)
 //
-// Populates the 3,840-byte map at MAP_BASE..MAP_END (80x48 tiles, 1 byte/tile).
+// Populates the map at MAP_BASE..MAP_END (`MAP_COLS x MAP_ROWS`, 1 byte/tile).
 // Each map byte: bits 7-4 = tile type (0-15), bits 3-0 = flags.
 //
 // Shared constants and data tables (map_row_lo/hi, room_count, stairs, etc.)
