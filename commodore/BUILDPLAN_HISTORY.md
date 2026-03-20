@@ -6,6 +6,41 @@
 
 ---
 
+## BUG-X — IRQ Decimal-Mode Hardening ✅ COMPLETE (2026-03-20)
+
+### Scope Closed
+- Closed the remaining IRQ decimal-mode audit item on both supported targets.
+- Brought the live entry points in line with the documented invariant that interrupt handlers must begin from binary-arithmetic mode even if interrupted code left Decimal Mode set.
+
+### What Changed
+1. **C64 IRQ entry hardened**
+   - Added `cld` at `irq_no_blink` in `commodore/c64/main.s`.
+   - Kept the existing cursor-blink suppression and KERNAL handoff unchanged.
+2. **C128 Common-RAM interrupt entries hardened**
+   - Added `cld` at `mmu_common_irq` in `commodore/c128/memory128.s`.
+   - Added `cld` at `mmu_common_nmi` in `commodore/c128/memory128.s` for symmetry and future-proofing.
+3. **Focused regression coverage**
+   - Extended `commodore/c64/tests/test_config.s` to assert that `irq_no_blink` begins with `CLD`.
+   - Extended `commodore/c128/tests/test_memory128.s` to assert that both `mmu_common_irq` and `mmu_common_nmi` begin with `CLD`.
+
+### Why This Shape
+- The current handlers do not perform decimal-sensitive arithmetic today, so this is hardening, not a bugfix for an active failure.
+- The correct low-risk fix is at the handler entry points themselves, not in callers.
+- Opcode-level checks are the right regression seam here: they directly protect the intended entry contract without requiring fragile interrupt-timing tests.
+
+### Validation
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+
+### Outcome
+- `BUG-X` is closed.
+- Both platforms now force binary arithmetic on interrupt entry while preserving the existing IRQ/NMI control flow and memory layout.
+
+---
+
 ## REF-2 — Game Loop Decoupling ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed

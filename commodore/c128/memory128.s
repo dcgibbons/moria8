@@ -562,6 +562,8 @@ bank1_overlay_cache_slot_hi:
 mmu_common_helpers_blob:
 .pseudopc MMU_COMMON_HELPERS_BASE {
 mmu_common_irq:
+    cld
+mmu_common_irq_after_cld:
     pha
     txa
     pha
@@ -609,6 +611,8 @@ mmu_common_irq:
     rti
 
 mmu_common_nmi:
+    cld
+mmu_common_nmi_after_cld:
     pha
     lda $dd0d                   // Acknowledge CIA2 NMI
     pla
@@ -793,6 +797,8 @@ copy_to_e000:
 .assert "Map size = 3840", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
+.assert "mmu_common_irq begins with CLD", mmu_common_irq_after_cld == mmu_common_irq + 1, true
+.assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true
 :AssertRegionBefore("Bank1 common region ends below staged source span", BANK1_COMMON_END, BANK1_STAGE_SOURCE_BASE)
 :AssertRegionBefore("Reclaimed low region ends before map region", BANK1_RECLAIMED_LOW_END, MAP_BASE)
 :AssertRegionBefore("Bank1 map and DB regions do not overlap", MAP_END, BANK1_DB_BASE)

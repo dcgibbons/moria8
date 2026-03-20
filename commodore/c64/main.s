@@ -320,6 +320,8 @@ disk_menu_show:
 // Must live in main RAM (always accessible during IRQ).
 // ============================================================
 irq_no_blink:
+    cld
+irq_no_blink_after_cld:
     lda #1
     sta $cc                 // Force non-zero (inc wraps $FF→$00, re-enabling blink)
     jmp $ea31               // Continue to standard KERNAL IRQ handler
@@ -915,3 +917,4 @@ ovl_death_end:
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
+.assert "irq_no_blink begins with CLD", irq_no_blink_after_cld == irq_no_blink + 1, true

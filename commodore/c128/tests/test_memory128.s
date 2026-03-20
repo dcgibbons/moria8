@@ -19,6 +19,28 @@ test_start:
     ldx #$ff
     txs
 
+    // Test 0: Common-RAM IRQ/NMI entries must clear Decimal Mode first.
+    lda mmu_common_irq
+    cmp #$d8                    // CLD opcode
+    beq !irq_cld_ok+
+    jmp test_fail
+!irq_cld_ok:
+    lda mmu_common_irq + 1
+    cmp #$48                    // PHA remains second opcode
+    beq !irq_pha_ok+
+    jmp test_fail
+!irq_pha_ok:
+    lda mmu_common_nmi
+    cmp #$d8                    // CLD opcode
+    beq !nmi_cld_ok+
+    jmp test_fail
+!nmi_cld_ok:
+    lda mmu_common_nmi + 1
+    cmp #$48                    // PHA remains second opcode
+    beq !nmi_pha_ok+
+    jmp test_fail
+!nmi_pha_ok:
+
     // Test 1: mmu_select_bank1/0 isolation at $4000
     // (Note: $4000 is RAM in both banks)
     

@@ -1186,3 +1186,28 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make test128-fast`
   - `make test128-fast-smoke`
   - `TEST_FILTER='boot_d64_smoke|boot_title_idle_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|town_overlay_smoke|scripted_summary_to_town_smoke|real_boot_crash_harness|overlay_data_transition_smoke|cache_survival_smoke' bash commodore/c128/run_tests128.sh`
+
+## 2026-03-20 BUG-X — IRQ decimal-mode hardening
+
+- [x] Confirm the live IRQ/NMI entry points that actually need decimal-mode hardening on C64 and C128.
+- [x] Add `cld` at those entry points without changing segment ownership or handler contracts.
+- [x] Add focused regression coverage that proves the hardening stays at the handler entry bytes.
+- [x] Move `BUG-X` from active backlog to resolved history if verification passes.
+- [x] Re-run the standard C64 and C128 verification gates after the IRQ change.
+
+### Review
+
+- The live C128 entry point is `mmu_common_irq`, not the stale `safe_irq` name in the older backlog text. I hardened the actual Common-RAM IRQ/NMI trampolines instead of patching comments or dead labels.
+- The implementation is intentionally small:
+  - C64 `irq_no_blink` now begins with `cld`
+  - C128 `mmu_common_irq` and `mmu_common_nmi` now begin with `cld`
+- This does not change handler banking, stack shape, or MMU restore flow. It only forces binary arithmetic mode on interrupt entry before any future `adc`/`sbc` can become hazardous.
+- Regression coverage was split by the right seam:
+  - C64: compile-time assert in `commodore/c64/main.s` proves `irq_no_blink` still begins with `CLD`
+  - C128: compile-time asserts in `commodore/c128/memory128.s` plus runtime opcode checks in `commodore/c128/tests/test_memory128.s` prove the Common-RAM IRQ/NMI entries still begin with `CLD`
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
