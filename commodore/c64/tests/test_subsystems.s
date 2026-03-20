@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #6
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -48,7 +48,29 @@ msg_print:
 #import "../../common/huffman.s"
 #import "../../common/string_bank_banked.s"
 
-tc_results: .fill 7, $ff
+.const OVL_NONE = 0
+.const OVL_TOWN = 2
+
+current_overlay: .byte 0
+sb_tier_invalidate_calls: .byte 0
+sb_load_arg_a: .byte 0
+sb_load_arg_x: .byte 0
+sb_load_arg_y: .byte 0
+
+tier_invalidate_state:
+    inc sb_tier_invalidate_calls
+    rts
+
+kernal_load:
+    sta sb_load_arg_a
+    stx sb_load_arg_x
+    sty sb_load_arg_y
+    sec
+    rts
+
+#import "../../common/string_bank.s"
+
+tc_results: .fill 8, $ff
 
 test_start:
     sei
@@ -56,7 +78,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #6
+    ldx #7
     lda #$ff
 !clr:
     sta tc_results,x
@@ -70,6 +92,7 @@ test_start:
     jsr test_huff_append_combat
     jsr test_bank_decode_direction
     jsr test_bank_decode_takeoff
+    jsr test_bank_load_recall_error_path
 
     jmp test_exit_trampoline
 
@@ -237,6 +260,47 @@ test_bank_decode_takeoff:
     lda #$01
 !store:
     sta tc_results + 6
+    rts
+
+test_bank_load_recall_error_path:
+    lda #OVL_TOWN
+    sta current_overlay
+    lda #0
+    sta sb_tier_invalidate_calls
+    sta sb_load_arg_a
+    sta sb_load_arg_x
+    sta sb_load_arg_y
+    lda $dd00
+    and #%11111100
+    sta $dd00
+
+    jsr bank_load_recall
+    bcc !fail+
+    lda current_overlay
+    cmp #OVL_NONE
+    bne !fail+
+    lda sb_tier_invalidate_calls
+    cmp #1
+    bne !fail+
+    lda sb_load_arg_a
+    cmp #0
+    bne !fail+
+    lda sb_load_arg_x
+    cmp #0
+    bne !fail+
+    lda sb_load_arg_y
+    cmp #$e0
+    bne !fail+
+    lda $dd00
+    and #%00000011
+    cmp #%00000011
+    bne !fail+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 7
     rts
 
 // assert_decode_literal

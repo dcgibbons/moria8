@@ -874,6 +874,13 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - string-bank entry 0 → `Direction?`
   - string-bank entry 1 → `Take off which item (a-h)?`
 - Kept the string-bank work scoped to decode semantics first. The disk loader contract (`bank_load_recall`, KERNAL call sequence, overlay/tier invalidation) is still pending as a later slice.
+- Added a narrow C64 loader-contract test for `bank_load_recall` error handling:
+  - forces `kernal_load` to fail deterministically via a local stub
+  - verifies `current_overlay` is invalidated to `OVL_NONE`
+  - verifies `tier_invalidate_state` is called once on the C64 path
+  - verifies the wrapper receives the expected LOAD arguments (`A=0`, `X=$00`, `Y=$E0`)
+  - verifies `$DD00` low bits are restored to VIC bank 0 after the loader path
+- This still does not prove the full real-disk LOAD path. It proves the C64-side loader bookkeeping and error contract without depending on external media.
 - Fixed the helper bug uncovered during bring-up: the expected-string compare path was using an indirect pointer in normal RAM instead of zero page, so valid literals failed at runtime. The helper now uses `zp_ptr1`.
 - `sound.s` stays deferred. SID voice-register CPU readback is not a valid runtime assertion mechanism because those registers are write-only; that subsystem needs a specialized harness.
 - Verified with:
@@ -881,3 +888,4 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make test128-fast`
   - `make test128-fast-smoke`
   - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `7/7`)
+  - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `8/8`)
