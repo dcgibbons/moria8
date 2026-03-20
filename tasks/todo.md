@@ -904,3 +904,261 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `cd commodore/c64 && ./run_tests.sh` (with `sound: PASS (11/11 checkpoints)` and `31 passed, 0 failed`)
   - `make test128-fast`
   - `make test128-fast-smoke`
+
+## 2026-03-19 REF-2 game_loop decoupling plan
+
+### Scope
+- `REF-2` is a shared-code refactor, not a C128-only task.
+- Primary target: `commodore/common/game_loop.s`
+- Impacted platforms:
+  - C64, because `game_loop.s` is linked into the default shared main segment and must stay below the hard `$C000` ceiling.
+  - C128, because the same shared code is used there and changes can shift banked/runtime/overlay boundaries indirectly.
+
+### Non-Negotiable Safety Rules
+- Do not move code across segment boundaries casually.
+- Do not change any `#import` ordering into/out of overlay or banked regions as part of the first refactor slice.
+- Treat this as a control-flow and ownership refactor first, not a memory-layout refactor.
+- After every slice:
+  - verify C64 main segment still ends below `$C000`
+  - verify C128 layout/build still passes all asserts
+  - verify no trampoline/banked/overlay placement moved into forbidden ranges
+
+### Refactor Goal
+- Reduce `game_loop.s` from a “does everything” orchestrator into a narrower coordinator with clearer seams between:
+  - command acquisition / normalization
+  - command execution / gameplay mutations
+  - turn advancement / time-consuming tails
+  - redraw / UI follow-up
+- Do this without introducing new runtime indirection layers that bloat hot paths or destabilize memory layout.
+
+### Staged Plan
+- [x] Stage 0 — Baseline and boundaries
+  - Map `game_loop.s` into concrete regions:
+    - entry / new-game start
+    - input + command normalization
+    - command dispatch
+    - turn-consuming tails
+    - UI/prompt flows
+    - redraw/end-of-loop logic
+  - Record current symbol sizes and hot-path labels before changing code.
+- [x] Stage 1 — Extract pure command-postprocessing helpers
+  - Move the lowest-risk, non-I/O, non-platform-specific decision tails into adjacent shared helper routines.
+  - Candidate first targets: “does this command consume time?”, “does this command require redraw?”, and other branch-heavy bookkeeping that does not directly perform rendering.
+  - Keep helpers in the same shared segment initially.
+- [x] Stage 2 — Separate prompt/UI command flows from turn logic
+  - Isolate full-screen and prompt-style paths (`help`, `character`, `inventory`, `equipment`, `recall`, etc.) behind explicit helper entry points.
+  - Goal: make it obvious which commands are UI-only and which mutate world/turn state.
+  - Do not change overlay/banked ownership in this stage.
+- [x] Stage 3 — Separate turn advancement from command dispatch
+  - Narrow the main loop so it:
+    - gets a command
+    - executes command helper
+    - receives explicit flags/state about:
+      - consumed turn
+      - redraw needed
+      - loop exit / restart / title transition
+  - This is the key structural decoupling step.
+- [x] Stage 4 — Testability pass
+  - Extend or split focused loop tests so the new helpers can be exercised without relying on the full `game_loop` orchestration path.
+  - Prefer evolving the existing `main_loop` / `main_loop128` harnesses over inventing a second unrelated loop harness.
+- [x] Stage 5 — Optional physical file split
+  - Only after the behavioral seams are proven stable, consider moving parts of `game_loop.s` into new shared files.
+  - This is explicitly last because file/segment movement is where the memory risk rises sharply.
+
+### Verification Gates
+- For every stage:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Before closing `REF-2`:
+  - `make test128`
+  - manual in-game sanity on at least:
+    - movement
+    - one turn-consuming command
+    - one menu/view command
+    - one overlay/town transition
+
+### Recommended First Slice
+- Start with Stage 0 + Stage 1 only.
+- Reason:
+  - lowest layout risk
+  - highest clarity payoff
+  - establishes helper seams before any file movement
+  - gives a hard checkpoint before the broader command/turn separation work
+
+### Stage 0 Baseline
+- `commodore/common/game_loop.s` is currently `1877` lines and has these main responsibility zones:
+  - **new-game / resume orchestration** — `game_new_start` through `load_resume_game` (`commodore/common/game_loop.s:17` to `commodore/common/game_loop.s:288`)
+  - **main loop entry and pre-input turn gating** — running continuation, cancel handling, paralysis tick, status redraw, command fetch (`commodore/common/game_loop.s:290` to `commodore/common/game_loop.s:391`)
+  - **UI-only / prompt-heavy command handling before generic dispatch** — save, quit, character, help, recall prompt + recall search (`commodore/common/game_loop.s:403` to `commodore/common/game_loop.s:550`)
+  - **movement path** — move attempt, AI tick, visibility update, viewport/render decision, store-door entry, status redraw (`commodore/common/game_loop.s:552` to `commodore/common/game_loop.s:761`)
+  - **discrete command dispatch table and handlers** — stairs, doors, inventory/equipment, items, spells, combat actions, run setup, look (`commodore/common/game_loop.s:766` to `commodore/common/game_loop.s:1380`)
+  - **running engine** — repeated move execution, stop conditions, partial/full redraw, death exit (`commodore/common/game_loop.s:1383` to `commodore/common/game_loop.s:1544`)
+  - **shared render tail + static data** — `vp_render_status_loop` plus strings/scratch/helpers below it (`commodore/common/game_loop.s:1551` onward)
+
+### Stage 0 Findings
+- The biggest coupling is not the jump table anymore; it is the repeated **post-command tail logic** embedded directly into many handlers.
+- There are three dominant turn-consuming tail patterns:
+  1. **post-turn -> death check -> full redraw loop**
+     - used by `open`, `close`, `search`, `pickup`, `drop`, `wear`, `takeoff`
+  2. **post-turn -> death check -> status-only loop**
+     - used by `rest`, `eat`, `quaff`, `gain`, `refuel`
+  3. **post-turn -> death check -> visibility update -> full redraw loop**
+     - used by `read`, `aim`, `use`, `cast`, `pray`, `fire`, `throw`, `bash`, `tunnel`
+- There is a separate **UI-only redraw family**:
+  - `character`, `help`, `inventory`, `equipment`, `recall`
+  - these do not primarily advance game time; they clear/dismiss and then rebuild the gameplay view
+- The highest-risk coupled regions are:
+  - **movement + running**, because they mix AI, redraw policy, store-entry, and death handling
+  - **stairs transitions**, because they mix overlay/tier loading, map generation, redraw, and state reset
+- The lowest-risk extraction region is the repeated tail bookkeeping in the discrete handlers.
+
+### Stage 1 Candidate Extractions
+- Keep all of these in the same shared segment at first; do not move them to new files yet.
+- Best first helper candidates:
+  - `post_turn_redraw_full_or_die`
+  - `post_turn_status_only_or_die`
+  - `post_turn_update_visibility_or_die`
+  - `ui_view_return_to_gameplay_view`
+- These candidates are attractive because they:
+  - remove repeated control-flow ladders without changing command semantics
+  - do not require new platform-specific ownership decisions
+  - avoid touching movement/running and overlay-generation paths in the first slice
+
+### Stage 0 Conclusion
+- The safe Stage 1 refactor is **not** to split files or rewrite dispatch again.
+- The safe Stage 1 refactor is to collapse the repeated post-command tails into local shared helpers inside `game_loop.s`, verify layout, and stop there before any broader structural move.
+
+### Stage 1 Implementation
+- Extracted the repeated terminal post-command tails into local helpers inside `commodore/common/game_loop.s`:
+  - `post_turn_redraw_full_or_die`
+  - `post_turn_status_only_or_die`
+  - `post_turn_update_visibility_or_die`
+  - `ui_view_return_to_gameplay_view`
+- Repointed these handlers to the shared helpers without moving code across files or segments:
+  - full redraw: `open`, `close`, `search`, `pickup`, `drop`, `wear`, `takeoff`
+  - status only: `rest`, `eat`, `quaff`, `gain`, `refuel`
+  - visibility + redraw: `read`, `aim`, `use`, `cast`, `pray`, `fire`, `throw`, `bash`, `tunnel`
+  - UI dismiss path: `help`, `inventory`, `equipment`
+- Added a stable global alias `player_died` so the new helpers can jump to the existing death flow without relying on forward-only local-label resolution.
+
+### Stage 1 Review
+- This slice stayed within the original shared segment and did not change `#import` ordering, overlay ownership, or banked/runtime placement.
+- Verified after extraction:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Result: the first `REF-2` code slice is behavior-preserving and layout-safe on both C64 and C128.
+- Next safe step is Stage 2: isolate more of the UI/prompt-only command flows from the turn-consuming gameplay paths, while still avoiding file/segment movement.
+
+### Stage 2 Implementation
+- Extracted the non-turn-consuming UI/prompt command flows into explicit local helpers inside `commodore/common/game_loop.s`:
+  - `cmd_show_character_view`
+  - `cmd_show_help_view`
+  - `cmd_show_inventory_view`
+  - `cmd_show_equipment_view`
+  - `cmd_recall_view`
+  - `recall_key_to_screen_code`
+  - `recall_show_matching_entry`
+- Repointed the top-level command dispatch to jump directly to these helpers instead of embedding the full UI/prompt flow inline.
+- Kept the extraction in the same shared file and segment. No overlay, banked-runtime, or import ownership changed.
+
+### Stage 2 Review
+- This stage made the separation between **UI-only commands** and **turn-consuming gameplay commands** explicit without introducing new platform-specific dispatch or memory ownership.
+- The most coupled prompt path in the file was `CMD_RECALL`; it is now isolated behind `cmd_recall_view` and two narrow helper routines:
+  - input normalization (`recall_key_to_screen_code`)
+  - search/display cycle (`recall_show_matching_entry`)
+- Verified after extraction:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Result: Stage 2 is behavior-preserving and keeps the shared memory layout safe on both C64 and C128.
+- Next safe step is Stage 3: separate turn advancement/result handling from command dispatch for more of the gameplay path, still without moving files or segment boundaries.
+
+### Stage 3 Implementation
+- Extracted the common **carry-based command result handling** into local helpers inside `commodore/common/game_loop.s`:
+  - `command_result_main_or_redraw_full`
+  - `command_result_main_or_status_only`
+  - `command_result_main_or_update_visibility`
+  - `command_result_restore_view_or_update_visibility`
+- Repointed the command bodies so they now:
+  - perform the command action
+  - jump to a shared result helper that decides between:
+    - no-turn return to `main_loop`
+    - turn-consuming post-action tail
+    - spell-list/view restore on no-turn (`cast` / `pray`)
+- This stage covers the carry-returning gameplay commands:
+  - inventory/item actions: `pickup`, `drop`, `wear`, `takeoff`, `eat`, `quaff`, `gain`, `refuel`
+  - effect/visibility actions: `read`, `aim`, `use`, `fire`, `throw`, `bash`, `tunnel`
+  - spell actions: `cast`, `pray`
+
+### Stage 3 Review
+- This is the first `REF-2` slice that clearly separates **command execution** from **result handling** for a broad gameplay subset.
+- The command bodies are now thinner and more consistent:
+  - action call
+  - jump to shared result policy
+- The special no-turn restore path for spell-list overlays is now explicit and isolated in one helper instead of being duplicated in both `cast` and `pray`.
+- Verified after extraction:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Result: Stage 3 remains behavior-preserving and memory-layout-safe on both C64 and C128.
+- The next safe step is Stage 4: expand the focused loop tests around the new helpers/seams before considering any physical file split.
+
+### Stage 4 Implementation
+- Expanded the focused loop tests instead of creating a second orchestration harness:
+  - `commodore/c64/tests/test_main_loop.s`
+  - `commodore/c128/tests/test_main_loop128.s`
+- Added C64 seam coverage for the new Stage 3 result-policy helpers:
+  - `CMD_READ` success path → visibility update + redraw
+  - `CMD_CAST` no-turn path → gameplay view restore without turn consumption
+- Added C128 seam coverage for the new Stage 2/3 helpers:
+  - `CMD_CHAR_INFO` dismiss path → wait-release + key + screen clear + redraw
+  - `CMD_CAST` no-turn path → gameplay view restore without turn consumption
+- Updated the C64 suite expectation in `commodore/c64/run_tests.sh` so the focused `main_loop` suite now expects `7/7` checkpoints.
+
+### Stage 4 Review
+- The loop tests now cover both major refactor seams introduced so far:
+  - UI/prompt-only command helpers
+  - carry-based result-policy helpers
+- This materially improves confidence in `REF-2` without broadening runtime indirection or creating a parallel test architecture.
+- Verified after the test expansion:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Result: Stage 4 is complete, and the refactor seams introduced in Stages 1–3 are now protected by focused C64 and C128 loop tests.
+- The remaining open step under `REF-2` is Stage 5, which should stay optional and only be attempted if a physical file split still has clear value after the current in-place decoupling.
+
+### Stage 5 Implementation
+- Performed the smallest safe physical split:
+  - added `commodore/common/game_loop_helpers.s`
+  - moved only the already-isolated helper block out of `commodore/common/game_loop.s`
+  - re-imported that helper file **at the same assembly location** inside `commodore/common/game_loop.s`
+- The extracted file now owns:
+  - UI-only command helpers
+  - recall prompt/search helpers
+  - carry-based result-policy helpers
+  - shared post-turn tails
+  - gameplay-view restore + `vp_render_status_loop`
+- `player_died`, `main_loop`, running, movement, stairs, and the core command bodies remain in `commodore/common/game_loop.s`.
+
+### Stage 5 Review
+- This physical split kept the memory-risk surface intentionally low:
+  - no segment ownership changes
+  - no overlay/banked import moves
+  - no relocation of the helper block in the assembled image
+- Two C128 diagnostic regressions showed up immediately under the full suite and were fixed before closing Stage 5:
+  - `c128_diag_verify_helper_blob` was incorrectly comparing the mutable `mmu_common_save_p` tail byte as if it were immutable helper code
+  - `c128_overlay_transition_pass_sym` used `BRK`, which let the monitor-driven overlay diag fall through into `c128_diag_fail_default` instead of stopping cleanly at the pass probe
+- Verified after the split:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test128`
+- Result: `REF-2` is complete. The game loop now has a cleaner orchestration file plus a dedicated helper file, while preserving the proven C64/C128 memory layout.

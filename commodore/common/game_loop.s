@@ -417,31 +417,13 @@ c128_town_move_diag_after_input_get_command:
     // Character info?
     cmp #CMD_CHAR_INFO
     bne !not_char+
-    jsr tramp_ui_char_display
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    // Redraw map on return
-    jsr screen_clear
-    jmp vp_render_status_loop
+    jmp cmd_show_character_view
 !not_char:
 
     // Help?
     cmp #CMD_HELP
     bne !not_help+
-    jsr tramp_ui_help_display
-    lda #0
-    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    // Redraw map on return — clear all rows then redraw
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jmp vp_render_status_loop
+    jmp cmd_show_help_view
 !not_help:
 
 #if C128
@@ -459,94 +441,7 @@ c128_town_move_diag_after_input_get_command:
     cmp #CMD_RECALL
     beq !+
     jmp !not_recall+
-!:  jsr msg_clear
-    // Show prompt on message row
-    lda #0
-    sta zp_cursor_row
-    sta zp_cursor_col
-    lda #<recall_prompt_str
-    sta zp_ptr0
-    lda #>recall_prompt_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    // Convert PETSCII letter to screen code (lowercase/uppercase mode)
-    // Unshifted letters ($41-$5A) → lowercase screen codes ($01-$1A)
-    cmp #$41                    // 'A' unshifted
-    bcc !recall_try_shifted+
-    cmp #$5b                    // 'Z'+1
-    bcs !recall_try_shifted+
-    sec
-    sbc #$40                    // PETSCII→screen code: $41→$01 (lowercase)
-    sta recall_query_sc
-    jmp !recall_start+
-!recall_try_shifted:
-    // Shifted letters ($C1-$DA) → uppercase screen codes ($41-$5A)
-    cmp #$c1                    // shifted 'A'
-    bcc !recall_done+
-    cmp #$db                    // shifted 'Z'+1
-    bcs !recall_done+
-    and #$3f                    // $C1→$01
-    clc
-    adc #$40                    // $01→$41 (uppercase screen code)
-    sta recall_query_sc
-!recall_start:
-    // Cycling: same char as last recall → start after last match, else start from 0
-    lda recall_query_sc
-    cmp recall_last_sc
-    bne !recall_new_char+
-    lda recall_last_idx
-    clc
-    adc #1
-    cmp #MAX_CREATURES
-    bcc !recall_set_start+
-    lda #0
-    jmp !recall_set_start+
-!recall_new_char:
-    lda #0
-!recall_set_start:
-    tax                         // X = search start index
-    lda #MAX_CREATURES
-    sta zp_temp1                // Loop counter (search all MAX_CREATURES slots)
-!recall_search:
-    lda cr_display,x
-    cmp recall_query_sc
-    bne !recall_next+
-    lda recall_kills,x
-    ora recall_deaths,x
-    ora recall_attacks,x
-    ora recall_spells,x
-    bne !recall_found+
-!recall_next:
-    inx
-    cpx #MAX_CREATURES
-    bcc !recall_no_wrap+
-    ldx #0
-!recall_no_wrap:
-    dec zp_temp1
-    bne !recall_search-
-    lda #0                      // No match — clear cycling state
-    sta recall_last_sc
-    jmp !recall_done+
-!recall_found:
-    stx recall_found_type
-    lda recall_query_sc         // Update cycling state for next recall
-    sta recall_last_sc
-    stx recall_last_idx
-    jsr creature_get_name       // Populates creature_name_buf
-    jsr tramp_ui_recall
-    lda #0
-    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key           // Wait for dismiss
-!recall_done:
-    jsr screen_clear
-    jmp vp_render_status_loop
+!:  jmp cmd_recall_view
 !not_recall:
 
     // Movement? (CMD_MOVE_N through CMD_MOVE_SE = $01-$08)
@@ -1012,13 +907,7 @@ cmd_open:
     jsr door_try_open
     bcc !open_no_turn+          // No door there, no turn consumed
     // Door opened or stuck — consume turn and re-render
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
+    jmp post_turn_redraw_full_or_die
 !open_no_turn:
     jmp main_loop
 
@@ -1029,13 +918,7 @@ cmd_close:
     jsr door_try_close
     bcc !close_no_turn+
     // Door closed — consume turn and re-render
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
+    jmp post_turn_redraw_full_or_die
 !close_no_turn:
     jmp main_loop
 
@@ -1043,182 +926,65 @@ cmd_search:
     jsr msg_clear
     jsr do_search
     // Always consumes a turn
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
+    jmp post_turn_redraw_full_or_die
 
 cmd_rest:
     jsr msg_clear
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr status_draw
-    jmp main_loop
+    jmp post_turn_status_only_or_die
 
 cmd_pickup:
     jsr msg_clear
     jsr item_pickup
-    bcc !pickup_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
-!pickup_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_redraw_full
 
 cmd_drop:
     jsr msg_clear
     jsr item_drop
-    bcc !drop_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
-!drop_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_redraw_full
 
 cmd_inventory:
     lda #$ff
     sta uinv_filter             // Show all items
-    jsr tramp_ui_inv_display
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    // Redraw map on return
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jmp vp_render_status_loop
+    jmp cmd_show_inventory_view
 
 cmd_equipment:
-    jsr tramp_ui_equip_display
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    // Redraw map on return
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jmp vp_render_status_loop
+    jmp cmd_show_equipment_view
 
 cmd_wear:
     jsr msg_clear
     jsr item_wear
-    bcc !wear_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
-!wear_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_redraw_full
 
 cmd_takeoff:
     jsr msg_clear
     jsr item_takeoff
-    bcc !takeoff_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jmp vp_render_status_loop
-!takeoff_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_redraw_full
 
 cmd_eat:
     jsr msg_clear
     jsr item_eat
-    bcc !eat_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr status_draw
-    jmp main_loop
-!eat_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_status_only
 
 cmd_quaff:
     jsr msg_clear
     jsr item_quaff
-    bcc !quaff_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr status_draw
-    jmp main_loop
-!quaff_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_status_only
 
 cmd_read:
     jsr msg_clear
     jsr item_read_scroll
-    bcc !read_no_turn+
     // After teleportation or light, need visibility + render
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!read_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_aim:
     jsr msg_clear
     jsr item_aim_wand
-    bcc !aim_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!aim_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_use:
     jsr msg_clear
     jsr item_use_staff
-    bcc !use_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!use_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_cast:
     jsr msg_clear
@@ -1227,19 +993,7 @@ cmd_cast:
 #else
     jsr player_cast_spell
 #endif
-    bcc !cast_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!cast_no_turn:
-    // Restore screen after spell list overlay
-    jsr screen_clear
-    jmp vp_render_status_loop
+    jmp command_result_restore_view_or_update_visibility
 
 cmd_pray:
     jsr msg_clear
@@ -1248,33 +1002,12 @@ cmd_pray:
 #else
     jsr player_pray
 #endif
-    bcc !pray_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!pray_no_turn:
-    jsr screen_clear
-    jmp vp_render_status_loop
+    jmp command_result_restore_view_or_update_visibility
 
 cmd_gain:
     jsr msg_clear
     jsr item_gain_spell
-    bcc !gain_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr status_draw
-    jmp main_loop
-!gain_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_status_only
 
 cmd_fire:
     jsr msg_clear
@@ -1283,17 +1016,7 @@ cmd_fire:
 #else
     jsr ranged_fire
 #endif
-    bcc !fire_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!fire_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_throw:
     jsr msg_clear
@@ -1302,32 +1025,12 @@ cmd_throw:
 #else
     jsr throw_item
 #endif
-    bcc !throw_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!throw_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_refuel:
     jsr msg_clear
     jsr item_refuel
-    bcc !refuel_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr status_draw
-    jmp main_loop
-!refuel_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_status_only
 
 cmd_bash:
     jsr msg_clear
@@ -1336,32 +1039,12 @@ cmd_bash:
 #else
     jsr bash_command
 #endif
-    bcc !bash_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
-    jmp !player_died+
-!not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!bash_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_tunnel:
     jsr msg_clear
     jsr player_tunnel
-    bcc !tunnel_no_turn+
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !tun_not_dead+
-    jmp !player_died+
-!tun_not_dead:
-    jsr update_visibility
-    jmp vp_render_status_loop
-!tunnel_no_turn:
-    jmp main_loop
+    jmp command_result_main_or_update_visibility
 
 cmd_look:
     jsr msg_clear
@@ -1511,6 +1194,7 @@ run_step:
     jsr status_draw
     jmp main_loop
 
+player_died:
 !player_died:
     // Render current positions before showing death message (BUG-46 fix).
     // All death paths skip the normal post-AI render, leaving stale monster
@@ -1544,17 +1228,7 @@ run_step:
 exit:
     jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
 
-// ============================================================
-// Shared tail — viewport update + render + status + main loop
-// Used by most command handlers after turn_post_action.
-// ============================================================
-vp_render_status_loop:
-    lda #INPUT_ROW
-    jsr screen_clear_row
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
-    jmp main_loop
+#import "game_loop_helpers.s"
 
 // ============================================================
 // String data — gameplay strings (MUST stay below $C000)

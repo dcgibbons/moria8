@@ -381,6 +381,7 @@ c128_preload_asset_load:
     lda #0
     ldx #0
     jsr safe_setbnk             // Restore default LOAD destination bank
+    jsr c128_restore_runtime_vectors
 #if C128_TEST_STACK_LOW_WATER
     lda #$a7
     jsr c128_stack_low_water_check

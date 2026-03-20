@@ -1059,6 +1059,7 @@ loop_mod = (root / "common" / "game_loop.s").read_text().splitlines()
 dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
 help_mod = (root / "common" / "ui_help.s").read_text().splitlines()
 store_mod = (root / "common" / "ui_store.s").read_text().splitlines()
+loop_helpers = (root / "common" / "game_loop_helpers.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1177,37 +1178,37 @@ required_chains = [
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_inventory_dismiss", loop_mod, [
-        "cmp #CMD_INVENTORY",
+    ("cmd_inventory_dismiss", loop_helpers, [
+        "cmd_show_inventory_view:",
         "jsr tramp_ui_inv_display",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_equipment_dismiss", loop_mod, [
-        "cmp #CMD_EQUIPMENT",
+    ("cmd_equipment_dismiss", loop_helpers, [
+        "cmd_show_equipment_view:",
         "jsr tramp_ui_equip_display",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_help_dismiss", loop_mod, [
-        "cmp #CMD_HELP",
+    ("cmd_help_dismiss", loop_helpers, [
+        "cmd_show_help_view:",
         "jsr tramp_ui_help_display",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_char_info_dismiss", loop_mod, [
-        "cmp #CMD_CHAR_INFO",
+    ("cmd_char_info_dismiss", loop_helpers, [
+        "cmd_show_character_view:",
         "jsr tramp_ui_char_display",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_recall_prompt", loop_mod, [
-        "cmp #CMD_RECALL",
+    ("cmd_recall_prompt", loop_helpers, [
+        "cmd_recall_view:",
         "jsr screen_put_string",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
-    ("cmd_recall_dismiss", loop_mod, [
+    ("cmd_recall_dismiss", loop_helpers, [
         "jsr tramp_ui_recall",
         "jsr input_wait_release",
         "jsr input_get_key",

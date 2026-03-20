@@ -127,9 +127,11 @@ tramp_ui_inv_display:
     rts
 
 tramp_ui_char_display:
+    inc test_char_calls
     rts
 
 tramp_ui_equip_display:
+    inc test_equipment_calls
     rts
 
 tramp_store_init_all:
@@ -299,6 +301,7 @@ ui_help_clear_all:
     jmp test_ui_help_clear_all
 
 tramp_ui_recall:
+    inc test_recall_calls
     rts
 
 creature_get_name:
@@ -308,7 +311,7 @@ tramp_dig_ability:
     rts
 
 tramp_player_cast_spell:
-    rts
+    jmp test_tramp_player_cast_spell
 
 tramp_player_pray:
     rts
@@ -437,11 +440,16 @@ test_wait_release_calls: .byte 0
 test_get_key_calls: .byte 0
 test_help_calls: .byte 0
 test_inventory_calls: .byte 0
+test_char_calls: .byte 0
+test_equipment_calls: .byte 0
+test_recall_calls: .byte 0
 test_screen_clear_calls: .byte 0
 test_help_clear_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
 test_case_id: .byte 0
+test_cast_spell_calls: .byte 0
+test_cast_ok: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -479,10 +487,15 @@ reset_state:
     sta test_get_key_calls
     sta test_help_calls
     sta test_inventory_calls
+    sta test_char_calls
+    sta test_equipment_calls
+    sta test_recall_calls
     sta test_screen_clear_calls
     sta test_help_clear_calls
     sta test_game_over_prompt_calls
     sta test_exit_calls
+    sta test_cast_spell_calls
+    sta test_cast_ok
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -595,6 +608,16 @@ test_input_wait_release:
 test_input_get_key:
     inc test_get_key_calls
     lda #$20
+    rts
+
+test_tramp_player_cast_spell:
+    inc test_cast_spell_calls
+    lda test_cast_ok
+    beq !fail+
+    sec
+    rts
+!fail:
+    clc
     rts
 
 test_screen_clear:
@@ -785,6 +808,69 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_help_clear_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 7: CHAR INFO dismisses with a key and restores gameplay via screen clear.
+    lda #7
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_CHAR_INFO
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_char_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_wait_release_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_get_key_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_screen_clear_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 8: CAST no-turn restores gameplay view without consuming a turn.
+    lda #8
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_CAST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_cast_spell_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    beq *+5
+    jmp test_fail
+    lda test_screen_clear_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
     cmp #1
     beq *+5
     jmp test_fail

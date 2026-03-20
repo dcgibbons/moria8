@@ -6,6 +6,67 @@
 
 ---
 
+## REF-2 — Game Loop Decoupling ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the shared `game_loop.s` coupling refactor across both C64 and C128.
+- Kept the work memory-safe by:
+  - staying in the shared segment through Stages 1–4
+  - deferring the physical file split until the helper seams were already proven
+  - importing the final helper file back at the same assembly location
+
+### What Changed
+1. **Separated repeated post-command tails**
+   - Added dedicated local helpers for:
+     - full redraw after a turn
+     - status-only redraw after a turn
+     - visibility+redraw after a turn
+     - UI-view restore back to gameplay
+2. **Separated UI/prompt-only command flows**
+   - Extracted explicit helper flows for:
+     - character
+     - help
+     - inventory
+     - equipment
+     - recall prompt/input/search/display
+3. **Separated command execution from result policy**
+   - Added carry-based helpers that centralize:
+     - no-turn return to `main_loop`
+     - turn-consuming redraw policy
+     - spell no-turn restore behavior
+4. **Expanded focused loop-harness coverage**
+   - `commodore/c64/tests/test_main_loop.s`
+   - `commodore/c128/tests/test_main_loop128.s`
+   - Added coverage for:
+     - `CMD_READ` success/result path
+     - `CMD_CAST` no-turn restore path
+     - `CMD_CHAR_INFO` dismiss flow
+5. **Completed the minimal physical split**
+   - Added `commodore/common/game_loop_helpers.s`
+   - Left `game_loop.s` as the orchestration/core-command file
+   - Imported `game_loop_helpers.s` in place so the assembled layout remained stable
+6. **Closed the split-specific C128 diagnostic regressions**
+   - Excluded the mutable `mmu_common_save_p` tail byte from the helper-blob integrity check
+   - Changed the overlay-transition pass probe from `BRK` to a self-loop so monitor `until` stops at the pass address instead of falling into the default fail trap
+
+### Validation
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make test128-fast`
+- `make test128-fast-smoke`
+- `make test128`
+
+### Outcome
+- `REF-2` is complete.
+- The game loop is now organized around a clearer split between:
+  - orchestration / core command bodies
+  - UI-only flows
+  - result-policy helpers
+  - shared post-turn tails
+- This improved testability and maintainability without reopening the C64/C128 memory-placement risks that had previously caused loader, overlay, and runtime corruption bugs.
+
+---
+
 ## TST-4 — Subsystem Coverage Expansion ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed

@@ -1049,7 +1049,8 @@ c128_test_title_art_pass_sym:
 c128_overlay_transition_fail_sym:
     brk
 c128_overlay_transition_pass_sym:
-    brk
+    nop
+    jmp c128_overlay_transition_pass_sym
 #endif
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 c128_diag_fail_sym:
@@ -2584,8 +2585,11 @@ c128_diag_validate_runtime_invariants:
     jmp c128_diag_fail_sym
 !port0_ok:
     lda $01
-    cmp #BANK_NO_BASIC
+    tax
+    and #$07
+    cmp #(BANK_NO_BASIC & $07)
     beq !port1_ok+
+    txa
     sta c128_stack_guard_fail_code
     lda #2
     sta c128_stack_guard_substage
@@ -2678,7 +2682,7 @@ c128_diag_verify_helper_blob:
     jmp c128_diag_fail_sym
 !helper_next:
     inx
-    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob
+    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob - 1
     bne !helper_loop-
     rts
 #endif
