@@ -1446,7 +1446,10 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - [x] Inspect the corridor-running stop logic in `commodore/common/player_move.s`.
 - [x] Restore the documented stop-on-floor-item behavior.
 - [x] Refine side-junction detection so lit plain-floor room mouths do not stop running one tile early.
+- [x] Diagnose the actual fixed-distance premature-stop behavior in the run-cancel path.
+- [x] Replace C64 buffered-key repeat cancellation with physical held-key edge detection.
 - [x] Add focused dungeon tests for the item-stop case and the lit-side-mouth case.
+- [x] Add focused input tests for C64 run-cancel edge behavior.
 - [x] Re-run the C64/C128 verification gates and confirm the fix holds.
 
 ### Review
@@ -1454,6 +1457,8 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - `run_check_stop` now stops when the current tile has `FLAG_HAS_ITEM`, which restores the documented running behavior.
 - `run_check_intersection` now ignores lit plain-floor side openings when deciding whether a side junction should stop running.
 - This keeps dark side branches and genuinely interesting side exits as stop conditions, but avoids halting one tile early at a lit room mouth where room-entry logic already handles the transition.
+- The observed “about 6 tiles then stop” behavior was a different bug on C64: running cancel still used KERNAL keyboard-buffer semantics, so normal key-repeat looked like a fresh cancel press after a short delay.
+- `commodore/c64/input.s` now samples physical held-key state through CIA1 and runs it through the same edge-style cancel state machine used on C128.
 - Verification:
   - `make -C commodore/c64 build`
   - `cd commodore/c64 && ./run_tests.sh`

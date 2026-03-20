@@ -9,24 +9,32 @@
 ## 2026-03-20 — Running stop logic cleanup ✅ COMPLETE
 
 ### Scope Closed
-- Fixed two running-behavior issues that were not represented on the active backlog:
+- Fixed the real C64 premature-running-stop bug and one related running-policy mismatch that were not represented on the active backlog:
+  - C64 running cancelled after a short fixed distance because key repeat was being treated as a fresh cancel input
   - running did not stop on floor items even though the project docs said it should
   - corridor running stopped one tile early at lit side room mouths because side-junction detection was too eager
 
 ### What Changed
-1. **Documented item-stop behavior restored**
+1. **C64 run-cancel path corrected**
+   - Updated `commodore/c64/input.s` so running no longer uses KERNAL keyboard-buffer semantics for cancel detection.
+   - `input_run_key_held` now samples physical held-key state through CIA1.
+   - `input_run_cancel_check` now uses an edge-style detector, matching the C128 contract and preventing normal key-repeat from cancelling a run after a short delay.
+2. **Documented item-stop behavior restored**
    - Updated `commodore/common/player_move.s` so `run_check_stop` now stops when the current tile carries `FLAG_HAS_ITEM`.
    - This brings the live code back in line with the documented running contract.
-2. **Side-junction policy narrowed**
+3. **Side-junction policy narrowed**
    - Updated `run_check_intersection` so lit plain-floor side openings do not count as intersections by themselves.
    - Dark side branches and other walkable side exits still count, so corridor safety remains intact.
-3. **Focused regression coverage**
+4. **Focused regression coverage**
+   - Extended `commodore/c64/tests/test_input.s` with a run-cancel edge-state regression.
    - Extended `commodore/c64/tests/test_dungeon.s` with:
      - a stop-on-floor-item case
      - a lit-side-mouth case that proves running does not halt one tile early
    - Updated `commodore/c64/run_tests.sh` for the expanded dungeon suite count.
 
 ### Why This Shape
+- The fixed-distance stop pattern in both town and dungeon pointed away from map geometry and toward input semantics.
+- On C64, using `KBDBUF_COUNT` for run cancel was the wrong abstraction because key repeat naturally appears after a short delay and looks like a new cancel event.
 - The item-stop change is a direct correctness fix: the docs and intended UX already required it.
 - The side-junction refinement is intentionally narrow:
   - lit plain-floor room mouths are ignored at the intersection layer
@@ -42,6 +50,7 @@
 - `make test128-fast-smoke`
 
 ### Outcome
+- C64 running no longer cancels after a short fixed distance due to key repeat.
 - Running now stops for floor items as documented.
 - Lit room mouths no longer interrupt corridor running one tile before the real room-entry transition.
 

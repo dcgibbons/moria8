@@ -290,17 +290,40 @@ test_start:
 !t9_done:
 
     // ==========================================
-    // Test 10: input_run_key_check mirrors keyboard buffer count
+    // Test 10: run cancel edge logic ignores held state and rearms on release
     // ==========================================
+    jsr input_run_cancel_reset
+
     lda #0
-    sta KBDBUF_COUNT
-    jsr input_run_key_check
+    jsr input_run_process_sample
+    cmp #0
     bne !t10_fail+
-    lda #3
-    sta KBDBUF_COUNT
-    jsr input_run_key_check
-    cmp #3
+
+    lda #1
+    jsr input_run_process_sample
+    cmp #1
     bne !t10_fail+
+
+    lda #1
+    jsr input_run_process_sample
+    cmp #0
+    bne !t10_fail+
+
+    lda #0
+    jsr input_run_process_sample
+    cmp #0
+    bne !t10_fail+
+
+    lda #0
+    jsr input_run_process_sample
+    cmp #0
+    bne !t10_fail+
+
+    lda #1
+    jsr input_run_process_sample
+    cmp #1
+    bne !t10_fail+
+
     lda #$01
     sta $0409
     jmp !t10_done+

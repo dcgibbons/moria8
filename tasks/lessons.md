@@ -130,3 +130,17 @@
 - **Root Cause:** I collapsed two separate concerns into one: the runtime fix (load/address contract) and the naming/architecture clarity problem.
 - **Resolution:** When a historical bug involved both runtime behavior and confusing naming, answer both explicitly: what is fixed in code, and what remains misleading in naming/docs. Then actually clean up the naming so future work does not preserve the confusion.
 - **Rule:** **Do not call a historically expensive issue “fully fixed” if the naming still contradicts the runtime contract. Distinguish behavioral closure from naming/architecture clarity, and fix both when possible.**
+
+## Commit Policy Must Be Explicit
+
+- **Issue:** I committed the running fix as soon as verification was complete without waiting for explicit user approval.
+- **Root Cause:** I treated the repository's frequent commit cadence as implicit permission instead of checking for an explicit "OK to commit" signal in the current task.
+- **Resolution:** Treat commit authority as opt-in for the current task unless the user has clearly told me to commit when done. Verification and documentation can complete before that point, but the final `git commit` must wait for explicit approval.
+- **Rule:** **Do not commit changes in this repo until the user explicitly says to commit, even if the code is done and fully verified.**
+
+## Premature Running Stop Needs Runtime Diagnosis First
+
+- **Issue:** I treated the user's "running stops too early" report as a corridor-stop-policy problem and patched `run_check_stop` / `run_check_intersection`, but manual testing showed the real symptom did not change.
+- **Root Cause:** I anchored on the static code discrepancy (missing floor-item stop and oversensitive side-junction logic) without first proving that the observed stop was actually coming from those branches. The reported fixed-distance stop in both town and dungeon suggests the real cause is in run continuation/cancel handling, not corridor geometry.
+- **Resolution:** For movement/running bugs, first classify the symptom by behavior pattern: geometry-sensitive stop, sight-sensitive stop, or fixed-distance/cancel stop. If the stop distance is roughly constant across town and dungeon, inspect input/run-cancel state before touching map-intersection logic.
+- **Rule:** **Do not patch running stop-policy code until the observed stop pattern has been tied to that code path. A fixed-distance stop pattern points to run continuation/cancel logic first.**

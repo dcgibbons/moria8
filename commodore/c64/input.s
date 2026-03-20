@@ -13,8 +13,12 @@
 // KERNAL vectors
 .const KERNAL_GETIN = $ffe4
 
-// Keyboard buffer count location (C64: $C6, C128: $D0)
+// Keyboard/CIA registers
 .const KBDBUF_COUNT = $c6
+.const CIA1_PORTA   = $dc00
+.const CIA1_PORTB   = $dc01
+.const CIA1_DDRA    = $dc02
+.const CIA1_DDRB    = $dc03
 
 // ============================================================
 // Command IDs — internal constants, not key codes
@@ -91,11 +95,53 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 // GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
 // non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
-// input_run_key_held — Non-blocking: returns nonzero if any key is pending
-// Used by the pre-arm running path in game_loop.s. C64 reads KERNAL keyboard buffer count.
-// Output: A = nonzero if key pending, 0 if no key
+// input_run_key_held — Non-blocking: returns nonzero if any key is physically held
+// Used by the pre-arm running path in game_loop.s. This must ignore KERNAL
+// key-repeat semantics; buffered repeats would cancel a run after a short delay.
+// Output: A = nonzero if any key held, 0 if no key
+// Preserves: X, Y
 input_run_key_held:
-    lda KBDBUF_COUNT
+    lda $01
+    pha
+    php
+    sei
+    lda #BANK_NO_BASIC
+    sta $01
+
+    lda CIA1_PORTA
+    sta irk_save_pra
+    lda CIA1_DDRA
+    sta irk_save_ddra
+    lda CIA1_DDRB
+    sta irk_save_ddrb
+
+    lda #$ff
+    sta CIA1_DDRA
+    lda #$00
+    sta CIA1_DDRB
+    lda #$00
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    cmp #$ff
+    beq !irk_none+
+    lda #1
+    bne !irk_store+
+!irk_none:
+    lda #0
+!irk_store:
+    sta irk_result
+
+    lda irk_save_pra
+    sta CIA1_PORTA
+    lda irk_save_ddra
+    sta CIA1_DDRA
+    lda irk_save_ddrb
+    sta CIA1_DDRB
+
+    plp
+    pla
+    sta $01
+    lda irk_result
     rts
 
 // input_run_key_check — Backward-compatible alias for held-state polling
@@ -103,15 +149,49 @@ input_run_key_check:
     jmp input_run_key_held
 
 // input_run_cancel_check — Non-blocking run cancel poll
-// KERNAL buffer semantics are already edge-like enough on C64.
+// Uses the same edge detector contract as C128, but samples only physical held state.
 input_run_cancel_check:
-    lda KBDBUF_COUNT
-    rts
+    jsr input_run_key_held
+    jmp input_run_process_sample
 
 // input_run_cancel_reset — Reset run-cancel state
-// No-op on C64 because KERNAL owns the keyboard buffer.
 input_run_cancel_reset:
+    lda #0
+    sta irk_last_sample
+    sta irk_stable
     rts
+
+// input_run_process_sample — Edge/state machine for running cancel
+// Input: A = sampled held-state (0 = no key, nonzero = key held)
+// Output: A = nonzero on new key-down edge, 0 otherwise
+input_run_process_sample:
+    cmp irk_last_sample
+    beq !irps_stable+
+    sta irk_last_sample
+    beq !irps_none+
+    lda irk_stable
+    bne !irps_none+
+    lda irk_last_sample
+    sta irk_stable
+    lda irk_last_sample
+    rts
+!irps_none:
+    lda #0
+    rts
+
+!irps_stable:
+    cmp irk_stable
+    beq !irps_none-
+    sta irk_stable
+    beq !irps_none-
+    rts
+
+irk_save_pra:  .byte 0
+irk_save_ddra: .byte 0
+irk_save_ddrb: .byte 0
+irk_last_sample: .byte 0
+irk_stable: .byte 0
+irk_result: .byte 0
 
 input_get_key:
     lda $01
