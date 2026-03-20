@@ -6,6 +6,32 @@
 
 ---
 
+## 2026-03-20 — Planning doc role cleanup ✅ COMPLETE
+
+### Scope Closed
+- Removed the stale historical/archive role from `tasks/todo.md`.
+- Re-established a single-source split for project planning docs:
+  - `commodore/BUILDPLAN.md` = active backlog
+  - `commodore/BUILDPLAN_HISTORY.md` = completed work and postmortems
+  - `tasks/todo.md` = current-task scratchpad only
+
+### What Changed
+1. **`tasks/todo.md` reset to an active-work template**
+   - Replaced the accumulated historical log with a minimal scratchpad structure.
+   - Kept only role guidance, current-status marker, and a reusable task template.
+2. **History ownership clarified by practice**
+   - Durable historical notes are now expected to live in `commodore/BUILDPLAN_HISTORY.md` instead of being duplicated in `tasks/todo.md`.
+
+### Why This Shape
+- `tasks/todo.md` had become a second history file, which created drift and made the current backlog harder to read.
+- The cleanup gives each planning file one job and removes the need to reconcile multiple archival sources.
+
+### Validation
+- Confirmed the live backlog still resides in `commodore/BUILDPLAN.md`.
+- Confirmed `tasks/todo.md` now contains only active-scratchpad guidance and no legacy historical sections.
+
+---
+
 ## 2026-03-20 — BUG-M1 stale monster rendering after AI turns ✅ COMPLETE
 
 ### Scope Closed
