@@ -142,7 +142,7 @@ vic_to_vdc_color:
     .byte vdc_encode_rgbi(6)|VDC_ATTR_MODE    // $09 brown
     .byte vdc_encode_rgbi(12)|VDC_ATTR_MODE   // $0a lt red
     .byte vdc_encode_rgbi(8)|VDC_ATTR_MODE    // $0b dk grey
-    .byte vdc_encode_rgbi(7)|VDC_ATTR_MODE    // $0c grey
+    .byte vdc_encode_rgbi(8)|VDC_ATTR_MODE    // $0c grey → fallback to VDC dark grey
     .byte vdc_encode_rgbi(10)|VDC_ATTR_MODE   // $0d lt green
     .byte vdc_encode_rgbi(9)|VDC_ATTR_MODE    // $0e lt blue
     .byte vdc_encode_rgbi(7)|VDC_ATTR_MODE    // $0f lt grey
@@ -162,7 +162,7 @@ vic_to_vdc_color:
 .const VDC_ORANGE =  vdc_encode_rgbi(12)|VDC_ATTR_MODE  // COL_ORANGE
 .const VDC_BROWN  =  vdc_encode_rgbi(6)|VDC_ATTR_MODE   // COL_BROWN
 .const VDC_DGREY  =  vdc_encode_rgbi(8)|VDC_ATTR_MODE   // COL_DGREY
-.const VDC_GREY   =  vdc_encode_rgbi(7)|VDC_ATTR_MODE   // COL_GREY
+.const VDC_GREY   =  vdc_encode_rgbi(8)|VDC_ATTR_MODE   // COL_GREY fallback on VDC
 .const VDC_LGREY  =  vdc_encode_rgbi(7)|VDC_ATTR_MODE   // COL_LGREY
 .const VDC_LGREEN =  vdc_encode_rgbi(10)|VDC_ATTR_MODE  // COL_LGREEN
 .const VDC_LBLUE  =  vdc_encode_rgbi(9)|VDC_ATTR_MODE   // COL_LBLUE

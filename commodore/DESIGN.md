@@ -353,6 +353,7 @@ The C64's 16 colors are used to improve map readability via color RAM ($D800+).
 The palette is defined in `color.s`:
 - Walls: light grey — structural, background
 - Floor: dark grey — recedes visually
+- C128 VDC note: the hardware only provides two practical grey luminance steps. The shared palette still keeps `COL_DGREY` / `COL_GREY` / `COL_LGREY`, but the C128 VDC translation intentionally falls canonical `COL_GREY` back to dark grey while preserving `COL_LGREY` as the brighter wall/UI grey.
 - Doors: brown — interactive, stands out from walls
 - Stairs: white — high importance navigation
 - Player `@`: white — always visible

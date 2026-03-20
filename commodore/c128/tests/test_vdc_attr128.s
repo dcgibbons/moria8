@@ -8,6 +8,8 @@
 #import "../screen_vdc.s"
 
 .const COL_WHITE = 1
+.const COL_GREY = 12
+.const COL_LGREY = 15
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -78,6 +80,20 @@ test_start:
     cmp attr_byte
     bne test_fail
 
+    // Grey and light grey must not collapse on C128 VDC.
+    ldx #COL_GREY
+    lda vic_to_vdc_color,x
+    cmp #VDC_DGREY
+    bne test_fail
+    sta grey_attr
+
+    ldx #COL_LGREY
+    lda vic_to_vdc_color,x
+    cmp #VDC_LGREY
+    bne test_fail
+    cmp grey_attr
+    beq test_fail
+
     jmp test_pass
 
 test_fail:
@@ -88,3 +104,4 @@ test_pass:
 
 test_space_str: .text "A B" ; .byte 0
 attr_byte: .byte 0
+grey_attr: .byte 0

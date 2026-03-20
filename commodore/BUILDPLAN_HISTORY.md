@@ -6,6 +6,44 @@
 
 ---
 
+## L3 — C128 Grey/Light-Grey VDC Collapse ✅ COMPLETE (2026-03-20)
+
+### Scope Closed
+- Closed the remaining C128 VDC grayscale ambiguity where canonical `COL_GREY` and `COL_LGREY` both translated to the same RGBI value.
+- Kept the fix strictly C128-local so the shared/C64 palette stays unchanged.
+
+### What Changed
+1. **C128 VDC translation policy corrected**
+   - Updated `commodore/c128/screen_vdc.s` so:
+     - `COL_GREY` falls back to `VDC_DGREY`
+     - `COL_LGREY` remains `VDC_LGREY`
+   - Updated the pretranslated `VDC_GREY` constant to match the fallback.
+2. **Focused color-path regression coverage**
+   - Extended `commodore/c128/tests/test_vdc_attr128.s` to prove:
+     - `COL_GREY` translates to `VDC_DGREY`
+     - `COL_LGREY` translates to `VDC_LGREY`
+     - the two attributes are no longer equal
+   - Extended `commodore/c128/tests/test_dungeon128.s` to prove rubble (`tile type 11`) resolves through the new dark-grey fallback.
+
+### Why This Shape
+- The VDC has no true medium-grey equivalent, so this was a policy decision, not a missing hardware mode.
+- Usage audit showed:
+  - `COL_LGREY` is the dominant wall/UI secondary-text color and should stay brighter
+  - `COL_GREY` is sparse and mostly accent/rubble/border usage
+  - `COL_DGREY` already carries floor/dimmed-terrain semantics
+- Mapping canonical `COL_GREY` down to dark grey restores visible contrast between “grey” and “light grey” without disturbing the shared palette model.
+
+### Validation
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+
+### Outcome
+- `L3` is closed.
+- C128 VDC rendering now has a deliberate two-grey policy instead of an accidental grey/light-grey collapse.
+
+---
+
 ## BUG-X — IRQ Decimal-Mode Hardening ✅ COMPLETE (2026-03-20)
 
 ### Scope Closed

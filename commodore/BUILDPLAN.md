@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-18, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift, the OPT-1 main-loop command-dispatch jump-table conversion, and BUG-X IRQ decimal-mode hardening are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift, the OPT-1 main-loop command-dispatch jump-table conversion, BUG-X IRQ decimal-mode hardening, and L3 VDC grey/light-grey policy cleanup are resolved.**
 
 ### Build Stats
 
@@ -24,7 +24,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| **L3** | LOW | C128: Grey and Light Grey colors collapse to same RGBI value on VDC. | Tracked |
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
 | **OPT-2** | LOW | Performance: Bounding Box Math. Optimize `dungeon_los.s` room bounds checks to save instructions. | Pending |
@@ -64,6 +63,7 @@
 | **TST-4** | **MED** | Subsystem coverage is now in place for Huffman decode, string-bank decode, C64 string-bank loader bookkeeping, C64 overlay bookkeeping, and SID/audio programming via a specialized monitor-driven sound harness. The work also fixed a real `sound_play` dispatch bug that had been collapsing all valid effects to `SFX_BUMP`. | **2026-03-19** |
 | **REF-2** | **MED** | `game_loop.s` is now decoupled into a thinner orchestration file plus an in-place-imported `game_loop_helpers.s` split covering UI-only command flows, result-policy helpers, and shared post-turn tails, with focused C64/C128 loop-harness coverage protecting the new seams. | **2026-03-19** |
 | **BUG-X** | **LOW** | IRQ decimal-mode hardening complete: C64 `irq_no_blink` and C128 Common-RAM `mmu_common_irq` / `mmu_common_nmi` now execute `cld` on entry, with focused opcode-level regression checks in the C64 config and C128 memory smokes. | **2026-03-20** |
+| **L3** | **LOW** | C128 VDC grayscale policy is now coherent: `COL_LGREY` remains the brighter wall/UI grey, while canonical `COL_GREY` intentionally falls back to VDC dark grey so grey and light-grey no longer collapse. | **2026-03-20** |
 | **TST-1** | **MED** | Input parsing suites, LOS coverage via dungeon/monster tests, and the focused `main_loop` dispatch harness are complete. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |

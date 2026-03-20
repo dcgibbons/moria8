@@ -1211,3 +1211,48 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -B -C commodore/c128 build128`
   - `make test128-fast`
   - `make test128-fast-smoke`
+
+## 2026-03-20 L3 — C128 grey/light-grey collapse
+
+- [x] Confirm the exact C128 VDC translation points that currently collapse `COL_GREY` and `COL_LGREY`.
+- [x] Define the C128-specific grayscale policy explicitly: which canonical game color should map to VDC dark grey, light grey, and white, given that the VDC has no true medium grey.
+- [x] Audit where `COL_GREY`, `COL_LGREY`, and `COL_DGREY` are actually used in shared gameplay/UI code so the remap choice is intentional, not cosmetic guesswork.
+- [x] Add or extend focused C128 color-path tests to lock the chosen policy down at both:
+  - translation-table level (`vic_to_vdc_color` / `VDC_*` constants)
+  - representative rendering-path level (`dungeon_render_vdc` / UI attribute writes)
+- [x] Implement the smallest C128-only translation fix that produces a coherent, distinct luminance policy without changing shared C64 color semantics.
+- [x] Re-run the standard C128 build + fast test gates after the remap.
+
+### Planning Notes
+
+- Root cause is explicit in `commodore/c128/screen_vdc.s`: both `COL_GREY` and `COL_LGREY` currently map to RGBI 7 (`VDC_LGREY`), so the collapse is not accidental runtime corruption.
+- This is **C128-specific**, not shared C64 work. The canonical game palette in `commodore/common/color.s` is still correct; the issue is the VDC translation policy.
+- The VDC hardware limitation matters: it has distinct dark grey (`8`) and light grey (`7`), but no direct “medium grey” equivalent. That means `COL_GREY` cannot be made “true grey”; it must be assigned a deliberate fallback.
+- Lowest-risk implementation slice:
+  1. decide the fallback policy for `COL_GREY`
+  2. change only the C128 translation/constants in `screen_vdc.s`
+  3. update the C128 tests that currently assume the old collapsed mapping
+  4. leave shared palette constants and C64 behavior untouched
+- The key design choice is semantic, not mechanical:
+  - either map `COL_GREY` down to `VDC_DGREY` to maximize distinction from `COL_LGREY`
+  - or map it up to `VDC_LGREY` and document the collapse as intentional
+- Based on the current usage pattern (`COL_DGREY` for floor/dimmed terrain, `COL_LGREY` for walls/messages/UI descriptions, `COL_GREY` for rubble and some item/material accents), the likely best fix is to remap `COL_GREY` to **VDC dark grey or another intentionally distinct fallback** after usage audit, not to leave it collapsed.
+
+### Review
+
+- The collapse was explicit in `commodore/c128/screen_vdc.s`, not a runtime bug: both `COL_GREY` and `COL_LGREY` translated to RGBI 7.
+- The usage audit made the policy choice clear:
+  - `COL_LGREY` is the dominant wall/UI secondary-text color and needs to remain the brighter grey.
+  - `COL_GREY` is sparse and mostly appears as rubble, help borders, and item/material accents.
+  - `COL_DGREY` already owns the floor/dimmed-terrain role.
+- Implemented C128-only fallback policy:
+  - `COL_GREY` now maps to `VDC_DGREY`
+  - `COL_LGREY` remains `VDC_LGREY`
+  - shared C64 palette constants and semantics remain unchanged
+- Focused regression coverage now proves the distinction:
+  - `commodore/c128/tests/test_vdc_attr128.s` checks that grey translates to dark grey, light grey stays light grey, and the two differ
+  - `commodore/c128/tests/test_dungeon128.s` checks that rubble (`tile type 11`) resolves through the dark-grey fallback
+- Verification:
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`

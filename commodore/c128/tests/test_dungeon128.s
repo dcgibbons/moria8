@@ -75,6 +75,12 @@ test_start:
     cmp vic_to_vdc_color + COL_LGREY
     bne test_fail
 
+    // Rubble uses canonical grey, which intentionally falls back to VDC dark grey.
+    ldx tile_colors + 11
+    lda vic_to_vdc_color,x
+    cmp #VDC_DGREY
+    bne test_fail
+
     // Magma in LOS: tile type 12 -> COL_RED -> VDC_RED
     ldx tile_colors + 12
     lda vic_to_vdc_color,x
