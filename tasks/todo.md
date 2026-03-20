@@ -1424,3 +1424,19 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `tramp_ego_append_suffix`
   - `tramp_ego_put_suffix`
   - plus the shared `tramp_ui_enter` / `tramp_ui_exit` primitives themselves
+
+## 2026-03-20 BUILDPLAN cleanup — remove noisy resolved table
+
+- [x] Confirm that the recent resolved items called out in `commodore/BUILDPLAN.md` are already archived in `commodore/BUILDPLAN_HISTORY.md`.
+- [x] Remove the noisy `Recently Resolved` section from the active build plan.
+- [x] Keep `BUILDPLAN.md` focused on open items only, with history delegated to `BUILDPLAN_HISTORY.md`.
+- [x] Verify the remaining active plan still reads coherently after the section removal.
+
+### Review
+
+- The reconciliation pass confirmed that the recent work is already present in history, including the 10.7 and 10.8 closures under their phase headings rather than under the exact shorthand labels from the active plan.
+- `commodore/BUILDPLAN.md` now carries only:
+  - current state
+  - open issues
+  - future phases / triage
+- The resolved-work table was removed because it duplicated `BUILDPLAN_HISTORY.md` and made the active plan noisy.
