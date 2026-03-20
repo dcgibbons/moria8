@@ -3,7 +3,8 @@
 // Uses KERNAL GETIN ($FFE4) to read keyboard buffer.
 // Maps PETSCII key codes to internal command IDs.
 // Supports vi-keys (HJKLYUBN) for 8-direction movement
-// Numeric prefix for repeat counts deferred to Phase 6+.
+// Numeric repeat prefixes are intentionally unimplemented.
+// `zp_input_count` is currently fixed to 1 for all commands.
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
 // via a lookup table. The KERNAL IRQ handler must remain active
@@ -168,7 +169,7 @@ input_wait_release:
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)
 //         zp_input_cmd = same
-//         zp_input_count = repeat count (1 if no numeric prefix)
+//         zp_input_count = repeat count (currently always 1; numeric prefixes are deferred)
 // Preserves: nothing
 input_get_command:
     // Flush keyboard buffer to discard keys pressed during rendering
@@ -177,9 +178,8 @@ input_get_command:
 
     lda #1
     sta zp_input_count      // Default repeat count = 1
-    // TODO: Numeric prefix (repeat count) deferred to Phase 6+.
-    // Requires: save PETSCII before conversion, accumulate digits,
-    // multiply count, then parse the actual command key.
+    // Numeric repeat prefixes are not implemented.
+    // Keep `zp_input_count` pinned to 1 until the feature is explicitly revived.
 
 !get_key:
     jsr input_get_key

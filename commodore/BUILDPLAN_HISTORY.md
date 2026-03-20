@@ -5647,3 +5647,15 @@ cancels on keypress.
 - **Character Creation:** Pressing 'N' on the title screen now reliably proceeds to race/class selection.
 - **Dungeon Entry:** Moving from town to level 1 via stairs now correctly loads the creature tier and generates the level without crashing.
 - **Build:** `make build128` completes with 69 asserts passing.
+## DOC-1 — Input Numeric-Prefix Comment Cleanup ✅ COMPLETE (2026-03-20)
+
+**Problem**
+- `commodore/c64/input.s` still carried stale wording around numeric repeat prefixes, even though the feature had already been explicitly deferred in prior history cleanup.
+
+**What changed**
+- The file header now states that numeric repeat prefixes are intentionally unimplemented.
+- `input_get_command` now documents that `zp_input_count` stays pinned to `1` unless the feature is deliberately revived.
+- The stale “TODO for a future phase” wording was removed so the comments match current behavior and backlog reality.
+
+**Verification**
+- `rg -n "Numeric|prefix|zp_input_count" commodore/c64/input.s`

@@ -1256,3 +1256,20 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -B -C commodore/c128 build128`
   - `make test128-fast`
   - `make test128-fast-smoke`
+
+## 2026-03-20 DOC-1 — input.s numeric-prefix comment cleanup
+
+- [x] Find the stale `commodore/c64/input.s` comments that still imply numeric repeat prefixes are an active or near-term feature.
+- [x] Rewrite those comments so they match current behavior: numeric prefixes are intentionally unimplemented and `zp_input_count` remains fixed to `1`.
+- [x] Close `DOC-1` in the active backlog and archive the result in history.
+- [x] Verify the cleanup with a focused grep instead of claiming a code-path change.
+
+### Review
+
+- This was documentation-only work in `commodore/c64/input.s`; no behavior changed.
+- The important correction is explicitness:
+  - numeric repeat prefixes are not merely “todo”
+  - they are intentionally unimplemented in the current design
+  - `zp_input_count` is therefore fixed to `1`
+- Verification:
+  - `rg -n "Numeric|prefix|zp_input_count" commodore/c64/input.s`

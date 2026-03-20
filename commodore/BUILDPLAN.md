@@ -29,7 +29,6 @@
 | **OPT-2** | LOW | Performance: Bounding Box Math. Optimize `dungeon_los.s` room bounds checks to save instructions. | Pending |
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
-| **DOC-1** | LOW | Documentation: Fix stale comments in `input.s` regarding numeric prefixes to accurately reflect the broken/deferred state shown in the history. | Pending |
 
 ### Investigation Tasks (R4)
 *(Moved to BUILDPLAN_HISTORY pending next cleanup)*
@@ -64,6 +63,7 @@
 | **REF-2** | **MED** | `game_loop.s` is now decoupled into a thinner orchestration file plus an in-place-imported `game_loop_helpers.s` split covering UI-only command flows, result-policy helpers, and shared post-turn tails, with focused C64/C128 loop-harness coverage protecting the new seams. | **2026-03-19** |
 | **BUG-X** | **LOW** | IRQ decimal-mode hardening complete: C64 `irq_no_blink` and C128 Common-RAM `mmu_common_irq` / `mmu_common_nmi` now execute `cld` on entry, with focused opcode-level regression checks in the C64 config and C128 memory smokes. | **2026-03-20** |
 | **L3** | **LOW** | C128 VDC grayscale policy is now coherent: `COL_LGREY` remains the brighter wall/UI grey, while canonical `COL_GREY` intentionally falls back to VDC dark grey so grey and light-grey no longer collapse. | **2026-03-20** |
+| **DOC-1** | **LOW** | `commodore/c64/input.s` comments now explicitly state that numeric repeat prefixes are intentionally unimplemented and that `zp_input_count` stays pinned to 1 until the feature is deliberately revived. | **2026-03-20** |
 | **TST-1** | **MED** | Input parsing suites, LOS coverage via dungeon/monster tests, and the focused `main_loop` dispatch harness are complete. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |
