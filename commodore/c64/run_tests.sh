@@ -77,6 +77,121 @@ run_test() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_sound_monitor_test() {
+    local name="sound"
+    local src="tests/test_sound_monitor.s"
+    local cycles="500000000"
+
+    echo -n "  $name: "
+
+    local asm_output
+    asm_output=$(java -jar "$KICKASS" "$src" -o "${src%.s}.prg" 2>&1)
+
+    if ! echo "$asm_output" | grep -q "0 failed"; then
+        echo "FAIL (assembly error)"
+        echo "$asm_output" | grep -i error | head -3
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local sym_file="${src%.s}.sym"
+    local mon_file="/tmp/test_${name}.mon"
+    local log_file="/tmp/test_${name}.log"
+
+    lookup_label() {
+        local label="$1"
+        awk -F'[$=]' "/\\.label ${label}=\\$/{print toupper(\$3); exit}" "$sym_file"
+    }
+
+    local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail)
+
+    {
+        local stage addr
+        for stage in "${stages[@]}"; do
+            addr="$(lookup_label "sound_stage_${stage}")"
+            if [ -z "$addr" ]; then
+                echo "FAIL (missing sound stage label: $stage)"
+                return 1
+            fi
+            echo "break exec \$${addr}"
+            echo "g"
+            echo "m d40e d414"
+            echo "m d418 d418"
+            echo "m 006c 006c"
+        done
+        echo "quit"
+    } > "$mon_file" || {
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    }
+
+    "$VICE" -console -nativemonitor -autostartprgmode 1 \
+        -autostart "${src%.s}.prg" -moncommands "$mon_file" \
+        -limitcycles "$cycles" +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > "$log_file" 2>&1
+
+    if python3 - "$log_file" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+expected = [
+    ("init",      ["00","00","00","00","00","00","00"], "0F", "FF"),
+    ("none",      ["00","00","00","00","00","00","00"], "0F", "FF"),
+    ("invalid",   ["00","00","00","00","00","00","00"], "0F", "FF"),
+    ("bump",      ["00","04","00","00","81","08","00"], "0F", "00"),
+    ("hit",       ["00","10","00","00","21","09","00"], "0F", "01"),
+    ("miss",      ["00","20","00","00","81","05","00"], "0F", "02"),
+    ("pickup",    ["00","18","00","00","11","0A","00"], "0F", "03"),
+    ("death",     ["00","03","00","00","81","0F","09"], "0F", "04"),
+    ("levelup",   ["00","1C","00","08","41","0C","00"], "0F", "05"),
+    ("spell",     ["00","14","00","00","11","08","00"], "0F", "06"),
+    ("spell_fail",["00","0C","00","00","81","06","00"], "0F", "07"),
+]
+
+lines = Path(sys.argv[1]).read_text(encoding="latin-1").splitlines()
+d40e = []
+d418 = []
+snd = []
+
+for line in lines:
+    upper = line.upper()
+    if upper.startswith(">C:D40E"):
+        payload = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
+        d40e.append(re.findall(r"\b[0-9A-Fa-f]{2}\b", payload)[:7])
+    elif upper.startswith(">C:D418"):
+        payload = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
+        vals = re.findall(r"\b[0-9A-Fa-f]{2}\b", payload)
+        d418.append(vals[:1])
+    elif upper.startswith(">C:006C"):
+        payload = line.split(None, 1)[1] if len(line.split(None, 1)) > 1 else ""
+        vals = re.findall(r"\b[0-9A-Fa-f]{2}\b", payload)
+        snd.append(vals[:1])
+
+if not (len(d40e) == len(d418) == len(snd) == len(expected)):
+    print(f"FAIL (unexpected dump counts d40e={len(d40e)} d418={len(d418)} snd={len(snd)})")
+    sys.exit(1)
+
+for index, (stage, exp_regs, exp_vol, exp_snd) in enumerate(expected):
+    got_regs = [value.upper() for value in d40e[index]]
+    got_vol = d418[index][0].upper() if d418[index] else ""
+    got_snd = snd[index][0].upper() if snd[index] else ""
+    if got_regs != exp_regs or got_vol != exp_vol or got_snd != exp_snd:
+        print(f"FAIL ({stage}: regs={got_regs} vol={got_vol} snd={got_snd})")
+        sys.exit(1)
+
+print(f"PASS ({len(expected)}/{len(expected)} checkpoints)")
+PY
+    then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -114,7 +229,8 @@ run_test "effects" "tests/test_effects.s" "0400 0415" 22 500000000
 run_test "item" "tests/test_item.s" "0400 042a" 43 1000000000
 run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0406" 7 500000000
-run_test "subsystems" "tests/test_subsystems.s" "0400 0407" 8
+run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
+run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 0409" 10 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000

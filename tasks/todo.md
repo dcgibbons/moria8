@@ -852,7 +852,7 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
 - [x] Define a staged closure plan instead of trying to land all four subsystem families in one patch.
 - [x] Implement the first focused slice: direct C64 runtime coverage for Huffman decode correctness.
 - [x] Verify the updated C64 runner and shared C128 fast paths.
-- [ ] Follow with separate slices for string-bank decode/load behavior and narrow overlay execution contracts.
+- [x] Follow with separate slices for string-bank decode/load behavior, narrow overlay execution contracts, and a specialized sound harness.
 
 ### Notes
 - The practical order is:
@@ -881,11 +881,26 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - verifies the wrapper receives the expected LOAD arguments (`A=0`, `X=$00`, `Y=$E0`)
   - verifies `$DD00` low bits are restored to VIC bank 0 after the loader path
 - This still does not prove the full real-disk LOAD path. It proves the C64-side loader bookkeeping and error contract without depending on external media.
+- Added a first narrow overlay-contract slice for the C64 path:
+  - `overlay_load` skips cleanly when the requested overlay is already active
+  - `overlay_load` propagates disk-load failure and resets `current_overlay` to `OVL_NONE`
+  - `overlay_load` still invalidates tier state before a failed disk transition
+- Kept the overlay coverage scoped to loader/dispatch bookkeeping. It does not yet prove full overlay execution after load, cross-phase rendering, or C128 cache-backed overlay transitions.
+- Added `commodore/c64/tests/test_sound_monitor.s` plus a specialized `sound` runner path in `commodore/c64/run_tests.sh` that uses the VICE monitor to inspect SID write-only register state externally.
+- The sound harness covers:
+  - `sound_init`
+  - `sound_play` ignore paths for `SFX_NONE` and invalid IDs
+  - all eight real effects (`BUMP`, `HIT`, `MISS`, `PICKUP`, `DEATH`, `LEVELUP`, `SPELL`, `SPELL_FAIL`)
+- The sound slice exposed and fixed a real shared-code bug in `commodore/common/sound.s`: `sound_play` was saving `Y` into `zp_snd_effect`, so every valid effect dispatched as `SFX_BUMP`. The routine now stores the incoming effect ID before preserving registers.
 - Fixed the helper bug uncovered during bring-up: the expected-string compare path was using an indirect pointer in normal RAM instead of zero page, so valid literals failed at runtime. The helper now uses `zp_ptr1`.
-- `sound.s` stays deferred. SID voice-register CPU readback is not a valid runtime assertion mechanism because those registers are write-only; that subsystem needs a specialized harness.
+- `TST-4` is now materially complete at the subsystem level: Huffman decode, string-bank decode, C64 string-bank loader bookkeeping, C64 overlay bookkeeping, and SID/audio programming all have direct coverage.
 - Verified with:
   - `cd commodore/c64 && ./run_tests.sh`
   - `make test128-fast`
   - `make test128-fast-smoke`
   - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `7/7`)
   - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `8/8`)
+  - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `10/10`)
+  - `cd commodore/c64 && ./run_tests.sh` (with `sound: PASS (11/11 checkpoints)` and `31 passed, 0 failed`)
+  - `make test128-fast`
+  - `make test128-fast-smoke`

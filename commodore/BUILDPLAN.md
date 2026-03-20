@@ -31,7 +31,6 @@
 | **OPT-2** | LOW | Performance: Bounding Box Math. Optimize `dungeon_los.s` room bounds checks to save instructions. | Pending |
 | **REF-1** | LOW | Refactor: Trampoline Sprawl. Consolidate the numerous `tramp_*` routines in `main.s` into a generic macro or parameterized `call_banked` routine to reduce redundancy. | Pending |
 | **REF-2** | **MED** | Refactor: Game Loop Coupling. Decouple `game_loop.s` to separate UI rendering, time management, and logic into an MVC-style pattern for better testability. | Pending |
-| **TST-4** | **MED** | Testing: Subsystems. Add unit tests for decompression (`huffman.s`), strings (`string_bank.s`), overlay execution, and audio (`sound.s`). | Pending |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
 | **DOC-1** | LOW | Documentation: Fix stale comments in `input.s` regarding numeric prefixes to accurately reflect the broken/deferred state shown in the history. | Pending |
 
@@ -64,6 +63,7 @@
 | **OPT-1** | **MED** | Main-loop command dispatch is now O(1) for the discrete non-movement command set: the `CMD_STAIRS_DN..CMD_TUNNEL` equality chain in `game_loop.s` has been replaced with a bounded jump table while movement/running remain explicit fast paths. | **2026-03-19** |
 | **OPT-3** | **MED** | `update_visibility` now caches the current lit room and skips room scans entirely when the player is on an unlit tile, so room bounds are only re-evaluated when the player enters or leaves a lit room. | **2026-03-19** |
 | **TST-3** | **MED** | Shared UI menu/view isolation coverage is now in place via the focused C64 `ui_views` runtime suite, which validates character/help/inventory/equipment/recall/store/home layouts and is wired into the standard C64 runner. | **2026-03-19** |
+| **TST-4** | **MED** | Subsystem coverage is now in place for Huffman decode, string-bank decode, C64 string-bank loader bookkeeping, C64 overlay bookkeeping, and SID/audio programming via a specialized monitor-driven sound harness. The work also fixed a real `sound_play` dispatch bug that had been collapsing all valid effects to `SFX_BUMP`. | **2026-03-19** |
 | **TST-1** | **MED** | Input parsing suites, LOS coverage via dungeon/monster tests, and the focused `main_loop` dispatch harness are complete. | **2026-03-11** |
 | **TST-2** | **HIGH** | Orchestration coverage expansion complete: added C64 `config` + `turn` runtime suites, C128 `config128` + `main_loop128` harnesses, and a restart-to-title death-path smoke. | **2026-03-11** |
 | **TST-2A** | **HIGH** | Deterministic C128 title-load/resume smoke completed with generated `THE.GAME` seed injection and verified title `L` -> `load_resume_game` coverage in the default runner. | **Done (2026-03-11)** |

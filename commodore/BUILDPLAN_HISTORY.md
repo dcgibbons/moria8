@@ -6,6 +6,53 @@
 
 ---
 
+## TST-4 — Subsystem Coverage Expansion ✅ COMPLETE (2026-03-19)
+
+### Scope Closed
+- Closed the remaining subsystem-testing gap for:
+  - Huffman decode/data integrity
+  - string-bank decode semantics
+  - C64 string-bank loader bookkeeping/error contract
+  - C64 overlay loader bookkeeping/error contract
+  - SID/audio programming via monitor-observed register writes
+
+### What Changed
+1. **Expanded `subsystems` runtime suite**
+   - Added `commodore/c64/tests/test_subsystems.s`.
+   - Wired it into `commodore/c64/run_tests.sh` as `subsystems`.
+   - The suite now covers:
+     - direct Huffman decode of representative literals
+     - `huff_decode_to_ptr2`
+     - `huff_append_combat`
+     - synthetic `$E000` string-bank decode through `bank_decode_string`
+     - `bank_load_recall` C64 failure-path bookkeeping
+     - `overlay_load` skip/failure bookkeeping on the C64 path
+2. **Specialized sound harness**
+   - Added `commodore/c64/tests/test_sound_monitor.s`.
+   - Added a dedicated `sound` runner path in `commodore/c64/run_tests.sh`.
+   - The runner uses VICE monitor breakpoints and memory dumps to validate SID voice-3 register programming externally, because CPU readback of those registers is not valid.
+3. **Real bug fixed while closing the gap**
+   - The sound harness exposed a production bug in `commodore/common/sound.s`:
+     - `sound_play` stored `Y` into `zp_snd_effect`
+     - all valid effects therefore dispatched as `SFX_BUMP`
+   - Fixed by storing the incoming effect ID before preserving registers.
+
+### Why This Shape
+- It closes the intended subsystem gap without forcing fragile end-to-end flows into a unit-test role.
+- The string-bank and overlay checks stay narrow and deterministic:
+  - synthetic bank image for decode math
+  - loader/overlay bookkeeping validated with local stubs and direct state assertions
+- The sound harness uses the only defensible assertion seam for SID voice programming: the monitor-observed register state, not CPU reads from write-only registers.
+
+### Validation
+- `cd commodore/c64 && ./run_tests.sh` — PASS (`31 passed, 0 failed`)
+  - `subsystems: PASS (10/10 tests)`
+  - `sound: PASS (11/11 checkpoints)`
+- `make test128-fast` — PASS
+- `make test128-fast-smoke` — PASS
+
+---
+
 ## TST-3 — UI Menus & Views Isolation Coverage ✅ COMPLETE (2026-03-19)
 
 ### Scope Closed

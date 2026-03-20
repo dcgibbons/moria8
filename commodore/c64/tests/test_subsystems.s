@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -48,10 +48,22 @@ msg_print:
 #import "../../common/huffman.s"
 #import "../../common/string_bank_banked.s"
 
-.const OVL_NONE = 0
-.const OVL_TOWN = 2
+.const REU_COMMAND  = $df01
+.const REU_C64LO    = $df02
+.const REU_C64HI    = $df03
+.const REU_REULO    = $df04
+.const REU_REUHI    = $df05
+.const REU_BANK     = $df06
+.const REU_LENLO    = $df07
+.const REU_LENHI    = $df08
+.const REU_CONTROL  = $df0a
+.const REU_CMD_FETCH = $91
 
-current_overlay: .byte 0
+.macro AssetLoad() {
+    jsr kernal_load
+}
+
+reu_overlays_stashed: .byte 0
 sb_tier_invalidate_calls: .byte 0
 sb_load_arg_a: .byte 0
 sb_load_arg_x: .byte 0
@@ -68,9 +80,10 @@ kernal_load:
     sec
     rts
 
+#import "../../common/overlay.s"
 #import "../../common/string_bank.s"
 
-tc_results: .fill 8, $ff
+tc_results: .fill 10, $ff
 
 test_start:
     sei
@@ -78,7 +91,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #7
+    ldx #9
     lda #$ff
 !clr:
     sta tc_results,x
@@ -93,6 +106,8 @@ test_start:
     jsr test_bank_decode_direction
     jsr test_bank_decode_takeoff
     jsr test_bank_load_recall_error_path
+    jsr test_overlay_skip_loaded
+    jsr test_overlay_disk_fail
 
     jmp test_exit_trampoline
 
@@ -301,6 +316,53 @@ test_bank_load_recall_error_path:
     lda #$00
 !store:
     sta tc_results + 7
+    rts
+
+test_overlay_skip_loaded:
+    lda #OVL_TOWN
+    sta current_overlay
+    lda #0
+    sta sb_tier_invalidate_calls
+    sta reu_overlays_stashed
+
+    lda #OVL_TOWN
+    jsr overlay_load
+    bcs !fail+
+    lda current_overlay
+    cmp #OVL_TOWN
+    bne !fail+
+    lda sb_tier_invalidate_calls
+    bne !fail+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 8
+    rts
+
+test_overlay_disk_fail:
+    lda #OVL_STARTUP
+    sta current_overlay
+    lda #0
+    sta sb_tier_invalidate_calls
+    sta reu_overlays_stashed
+
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcc !fail+
+    lda current_overlay
+    cmp #OVL_NONE
+    bne !fail+
+    lda sb_tier_invalidate_calls
+    cmp #1
+    bne !fail+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 9
     rts
 
 // assert_decode_literal
