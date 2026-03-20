@@ -1392,3 +1392,35 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make test128-fast`
   - `make test128-fast-smoke`
 - `REF-1` is still open after Slice 2. The remaining work is the genuinely custom trampoline bodies, where duplication is lower and contract risk is higher.
+
+### Slice 3 Review
+
+- Added three more exact-match macro families in `commodore/c128/main.s`:
+  - **UI display wrappers**:
+    - `tramp_ui_help_display`
+    - `tramp_ui_char_display`
+    - `tramp_ui_inv_display`
+    - `tramp_ui_equip_display`
+    - `tramp_ui_recall`
+  - **banked status wrappers**:
+    - `title_show_sysinfo`
+    - `tramp_reu_show_status`
+  - **shared-epilogue special-room wrappers**:
+    - `tramp_spawn_special_room_monsters`
+    - `tramp_spawn_nest_gold`
+- As with the earlier slices, the labels and exact entry/exit contracts were preserved.
+- No overlay-loader trampolines or custom suffix/text trampolines were changed.
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- After Slice 3, the remaining REF-1 surface is almost entirely the custom high-risk trampolines:
+  - `tramp_player_create`
+  - `tramp_game_over`
+  - `tramp_store_*`
+  - `tramp_level_generate`
+  - `tramp_ego_append_suffix`
+  - `tramp_ego_put_suffix`
+  - plus the shared `tramp_ui_enter` / `tramp_ui_exit` primitives themselves

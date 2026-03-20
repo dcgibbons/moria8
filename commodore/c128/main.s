@@ -1576,30 +1576,26 @@ tramp_ui_exit:
     cli
     rts
 
-tramp_ui_help_display:
+.macro C128UIBankedDisplayTrampoline(target) {
     jsr tramp_ui_enter
-    jsr ui_help_display
+    jsr target
     jmp tramp_ui_exit
+}
+
+tramp_ui_help_display:
+    :C128UIBankedDisplayTrampoline(ui_help_display)
 
 tramp_ui_char_display:
-    jsr tramp_ui_enter
-    jsr ui_char_display
-    jmp tramp_ui_exit
+    :C128UIBankedDisplayTrampoline(ui_char_display)
 
 tramp_ui_inv_display:
-    jsr tramp_ui_enter
-    jsr ui_inv_display
-    jmp tramp_ui_exit
+    :C128UIBankedDisplayTrampoline(ui_inv_display)
 
 tramp_ui_equip_display:
-    jsr tramp_ui_enter
-    jsr ui_equip_display
-    jmp tramp_ui_exit
+    :C128UIBankedDisplayTrampoline(ui_equip_display)
 
 tramp_ui_recall:
-    jsr tramp_ui_enter
-    jsr ui_recall_display
-    jmp tramp_ui_exit
+    :C128UIBankedDisplayTrampoline(ui_recall_display)
 
 .macro C128BankedComputeTrampoline(target) {
     sei
@@ -1674,31 +1670,28 @@ tramp_ego_apply_damage:
 tramp_ego_get_ac_bonus:
     :C128BankedPreserveAReturnTrampoline(ego_get_ac_bonus)
 
-// title_show_sysinfo — trampoline to banked routine at $EB00.
-// Pinned low to avoid drifting into $D000 I/O space.
-title_show_sysinfo:
+.macro C128BankedStatusTrampoline(target) {
     php
     sei
     lda #$35                    // BANK_NO_KERNAL (I/O visible)
     sta $01
-    jsr title_show_sysinfo_banked
+    jsr target
     jsr c128_restore_runtime_guards
     plp
     rts
+}
+
+// title_show_sysinfo — trampoline to banked routine at $EB00.
+// Pinned low to avoid drifting into $D000 I/O space.
+title_show_sysinfo:
+    :C128BankedStatusTrampoline(title_show_sysinfo_banked)
 
 tsi_krev_cached: .byte 0
 
 // tramp_reu_show_status — banked status display hook.
 // Pinned low to avoid drifting into $D000 I/O space.
 tramp_reu_show_status:
-    php
-    sei
-    lda #$35                    // BANK_NO_KERNAL (I/O visible)
-    sta $01
-    jsr reu_show_status_banked
-    jsr c128_restore_runtime_guards
-    plp
-    rts
+    :C128BankedStatusTrampoline(reu_show_status_banked)
 
 // ============================================================
 // game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
@@ -2131,17 +2124,18 @@ tramp_assign_special_room:
 tramp_vault_seal_entrance:
     :C128BankedPreserveFlagsTrampoline(vault_seal_entrance)
 
-tramp_spawn_special_room_monsters:
+.macro C128BankedSharedEpilogueTrampoline(target) {
     sei
     :BankOutKernal()
-    jsr spawn_special_room_monsters
+    jsr target
     jmp tramp_sr_epilogue
+}
+
+tramp_spawn_special_room_monsters:
+    :C128BankedSharedEpilogueTrampoline(spawn_special_room_monsters)
 
 tramp_spawn_nest_gold:
-    sei
-    :BankOutKernal()
-    jsr spawn_nest_gold
-    jmp tramp_sr_epilogue
+    :C128BankedSharedEpilogueTrampoline(spawn_nest_gold)
 
 tramp_find_special_room:
     :C128BankedPreserveATrampoline(find_special_room)

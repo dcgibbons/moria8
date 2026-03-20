@@ -5677,3 +5677,35 @@ cancels on keypress.
 - `cd commodore/c64 && ./run_tests.sh`
 - `make test128-fast`
 - `make test128-fast-smoke`
+## REF-1 — C128 Trampoline-Sprawl Consolidation ✅ COMPLETE (2026-03-20)
+
+**Problem**
+- `commodore/c128/main.s` had accumulated many small `tramp_*` wrappers with duplicated bank-switch and restore logic.
+- The duplication made the low-memory trampoline surface harder to review and maintain, but a naive “generic call_banked” abstraction would have blurred together several distinct contracts and reopened C128 banking risks.
+
+**What changed**
+- Consolidated the **exact-match** trampoline families into local macros while preserving every public trampoline label and its placement below the `$D000` I/O hole:
+  - compute-style banked calls
+  - preserve-A wrappers
+  - preserve-A-return wrappers
+  - preserve-flags / restore-`$01` wrappers
+  - UI display wrappers
+  - banked status wrappers
+  - shared-epilogue special-room wrappers
+- Left the genuinely custom trampolines explicit:
+  - overlay loaders
+  - UI enter/exit primitives
+  - suffix/text postprocessing trampolines
+  - other wrappers with bespoke sequencing
+
+**Why this is complete**
+- The backlog goal was to reduce the trampoline sprawl by normalizing the duplicated families.
+- That is now done.
+- The remaining wrappers are not “missed consolidation”; they are the wrappers where a generic helper would obscure materially different contracts.
+
+**Verification**
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
