@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #21
+    ldx #22
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -95,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 23, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
 
@@ -1209,10 +1209,62 @@ test_start:
 
     lda #$01
     sta tc_results + 21
-    jmp !tests_done+
+    jmp !t23+
 !t22_fail:
     lda #$00
     sta tc_results + 21
+
+    // ==========================================
+    // Test 23: Room bounds include perimeter walls only
+    // ==========================================
+!t23:
+    lda #20
+    sta room_x
+    lda #10
+    sta room_y
+    lda #5
+    sta room_w
+    lda #3
+    sta room_h
+
+    lda #19                     // Left perimeter wall: inside
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcc !t23_fail+
+
+    lda #20                     // Top perimeter wall: inside
+    sta zp_player_x
+    lda #9
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcc !t23_fail+
+
+    lda #18                     // Two tiles left: outside
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcs !t23_fail+
+
+    lda #20                     // Two tiles above: outside
+    sta zp_player_x
+    lda #8
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcs !t23_fail+
+
+    lda #$01
+    sta tc_results + 22
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
 
 !tests_done:
     jmp test_finish

@@ -207,30 +207,24 @@ uv_find_current_room:
 // Input: X = room index
 // Output: carry set = inside expanded room bounds, carry clear = outside
 uv_player_in_room_x:
-    lda room_x,x
-    sec
-    sbc #1
-    cmp zp_player_x
-    beq !uv_check_right+
-    bcc !uv_check_right+
+    lda zp_player_x
     clc
-    rts
-!uv_check_right:
+    adc #1
+    cmp room_x,x
+    bcc !uv_room_miss+
+
     lda room_x,x
     clc
     adc room_w,x
     cmp zp_player_x
     bcc !uv_room_miss+
 
-    lda room_y,x
-    sec
-    sbc #1
-    cmp zp_player_y
-    beq !uv_check_bottom+
-    bcc !uv_check_bottom+
+    lda zp_player_y
     clc
-    rts
-!uv_check_bottom:
+    adc #1
+    cmp room_y,x
+    bcc !uv_room_miss+
+
     lda room_y,x
     clc
     adc room_h,x

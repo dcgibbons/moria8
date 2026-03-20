@@ -5659,3 +5659,21 @@ cancels on keypress.
 
 **Verification**
 - `rg -n "Numeric|prefix|zp_input_count" commodore/c64/input.s`
+## OPT-2 — LOS Room-Bounds Predicate Cleanup ✅ COMPLETE (2026-03-20)
+
+**Problem**
+- `uv_player_in_room_x` in `commodore/common/dungeon_los.s` was still using a branch-heavy compare pattern to test the player against expanded room bounds.
+- The logic was correct, but it spent extra instructions on the left/top checks in the hottest part of the room-reveal path.
+
+**What changed**
+- The left/top expanded-bound checks now use `player + 1 >= room_origin` instead of `room_origin - 1 <= player`, which removes the extra `SEC/SBC` and dual-branch equality handling.
+- Right/bottom bounds remain inclusive and unchanged semantically.
+- A focused C64 regression in `commodore/c64/tests/test_effects.s` now proves:
+  - perimeter walls are still treated as inside the expanded room bounds
+  - tiles two cells outside the perimeter are still treated as outside
+
+**Verification**
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make test128-fast`
+- `make test128-fast-smoke`

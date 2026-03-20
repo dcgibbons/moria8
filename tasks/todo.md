@@ -1273,3 +1273,28 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `zp_input_count` is therefore fixed to `1`
 - Verification:
   - `rg -n "Numeric|prefix|zp_input_count" commodore/c64/input.s`
+
+## 2026-03-20 OPT-2 — LOS room-bounds predicate cleanup
+
+- [x] Inspect the current `update_visibility` room-membership hot path and identify the cheapest safe predicate cleanup.
+- [x] Add focused regression coverage that locks the expanded room-perimeter semantics down before changing the predicate.
+- [x] Implement the in-place shared optimization without moving code across files or segments.
+- [x] Close `OPT-2` in the active backlog and archive the result in history.
+- [x] Re-run the standard C64 and C128 verification gates after the optimization.
+
+### Review
+
+- The optimization target was `uv_player_in_room_x` in `commodore/common/dungeon_los.s`, not the broader LOS flow.
+- The safe win was to rewrite the left/top expanded-bound tests from:
+  - `room_origin - 1 <= player`
+  to:
+  - `player + 1 >= room_origin`
+- That removes the extra subtract path and equality-branch pair while preserving the exact inclusive perimeter semantics.
+- Focused regression coverage in `commodore/c64/tests/test_effects.s` now proves:
+  - the left/top perimeter walls are still considered inside
+  - tiles two cells beyond the perimeter are still outside
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
