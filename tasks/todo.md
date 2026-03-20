@@ -870,9 +870,14 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - direct decode of `Take off which item (a-h)?`
   - `huff_decode_to_ptr2`
   - `huff_append_combat`
+- Extended the same `subsystems` suite with a synthetic `$E000` string-bank image and direct `bank_decode_string` coverage for:
+  - string-bank entry 0 → `Direction?`
+  - string-bank entry 1 → `Take off which item (a-h)?`
+- Kept the string-bank work scoped to decode semantics first. The disk loader contract (`bank_load_recall`, KERNAL call sequence, overlay/tier invalidation) is still pending as a later slice.
 - Fixed the helper bug uncovered during bring-up: the expected-string compare path was using an indirect pointer in normal RAM instead of zero page, so valid literals failed at runtime. The helper now uses `zp_ptr1`.
 - `sound.s` stays deferred. SID voice-register CPU readback is not a valid runtime assertion mechanism because those registers are write-only; that subsystem needs a specialized harness.
 - Verified with:
   - `cd commodore/c64 && ./run_tests.sh`
   - `make test128-fast`
   - `make test128-fast-smoke`
+  - `cd commodore/c64 && ./run_tests.sh` (after expanding `subsystems` to `7/7`)

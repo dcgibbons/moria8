@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #4
+    ldx #6
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -46,8 +46,9 @@ msg_print:
     rts
 
 #import "../../common/huffman.s"
+#import "../../common/string_bank_banked.s"
 
-tc_results: .fill 5, $ff
+tc_results: .fill 7, $ff
 
 test_start:
     sei
@@ -55,7 +56,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #4
+    ldx #6
     lda #$ff
 !clr:
     sta tc_results,x
@@ -67,6 +68,8 @@ test_start:
     jsr test_huff_takeoff
     jsr test_huff_decode_to_ptr2
     jsr test_huff_append_combat
+    jsr test_bank_decode_direction
+    jsr test_bank_decode_takeoff
 
     jmp test_exit_trampoline
 
@@ -200,6 +203,42 @@ test_huff_append_combat:
     sta tc_results + 4
     rts
 
+test_bank_decode_direction:
+    jsr install_test_bank
+    sei
+    :BankOutKernal()
+    lda #0
+    jsr bank_decode_string
+    :BankInKernal()
+    cli
+    lda #<expected_direction
+    ldy #>expected_direction
+    jsr compare_hd_literal
+    lda #$00
+    bcc !store+
+    lda #$01
+!store:
+    sta tc_results + 5
+    rts
+
+test_bank_decode_takeoff:
+    jsr install_test_bank
+    sei
+    :BankOutKernal()
+    lda #1
+    jsr bank_decode_string
+    :BankInKernal()
+    cli
+    lda #<expected_takeoff
+    ldy #>expected_takeoff
+    jsr compare_hd_literal
+    lda #$00
+    bcc !store+
+    lda #$01
+!store:
+    sta tc_results + 6
+    rts
+
 // assert_decode_literal
 // Input: X = HSTR_* id, A/Y = expected null-terminated screen-code string
 // Output: carry set = decoded bytes exactly match expected literal
@@ -242,8 +281,52 @@ compare_ptr2_literal:
     sec
     rts
 
+compare_hd_literal:
+    sta zp_ptr1
+    sty zp_ptr1_hi
+    ldy #0
+!cmp:
+    lda hd_decode_buf,y
+    cmp (zp_ptr1),y
+    bne !bad+
+    cmp #0
+    beq !ok+
+    iny
+    cpy #41
+    bcc !cmp-
+!bad:
+    clc
+    rts
+!ok:
+    sec
+    rts
+
+install_test_bank:
+    lda #<test_bank_image
+    sta zp_ptr0
+    lda #>test_bank_image
+    sta zp_ptr0_hi
+    lda #<$e000
+    sta zp_ptr1
+    lda #>$e000
+    sta zp_ptr1_hi
+    lda #$21
+    sta zp_temp0
+    lda #$00
+    sta zp_temp1
+    jmp copy_to_e000
+
 expected_direction:
     .byte $44,$09,$12,$05,$03,$14,$09,$0f,$0e,$3f,$00
 
 expected_takeoff:
     .byte $54,$01,$0b,$05,$20,$0f,$06,$06,$20,$17,$08,$09,$03,$08,$20,$09,$14,$05,$0d,$20,$28,$01,$2d,$08,$29,$3f,$00
+
+test_bank_image:
+    .byte 2
+    .byte 7, 0
+    .byte 0, 0
+    .byte 8, 0
+    .byte $8c, $77, $fe, $98, $f7, $9a, $42, $a0
+    .byte $4c, $e8, $3a, $e0, $01, $45, $96, $e6, $95, $d9, $f2, $56, $71, $da, $a5, $3a, $85, $40
+.const TEST_BANK_IMAGE_LEN = * - test_bank_image
