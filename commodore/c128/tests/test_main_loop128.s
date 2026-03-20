@@ -450,6 +450,7 @@ test_exit_calls: .byte 0
 test_case_id: .byte 0
 test_cast_spell_calls: .byte 0
 test_cast_ok: .byte 0
+test_scene_dirty: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -496,6 +497,7 @@ reset_state:
     sta test_exit_calls
     sta test_cast_spell_calls
     sta test_cast_ok
+    sta test_scene_dirty
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -537,6 +539,8 @@ test_input_get_command:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda test_scene_dirty
+    sta turn_scene_dirty
     rts
 
 test_status_draw:
@@ -878,4 +882,68 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
+
+    // Test 9: REST redraws viewport when the turn changed the scene.
+    lda #9
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_scene_dirty
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 10: MOVE with remote scene change falls back to full redraw.
+    lda #10
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    lda #CMD_MOVE_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
     jmp test_pass

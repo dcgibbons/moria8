@@ -6,6 +6,54 @@
 
 ---
 
+## 2026-03-20 — BUG-M1 stale monster rendering after AI turns ✅ COMPLETE
+
+### Scope Closed
+- Closed the shared stale-render bug where monster movement during `turn_post_action` could leave the viewport showing old monster positions or omit newly moved monsters.
+- Closed the linked status-only redraw gap where commands like `cmd_rest` updated status but skipped the viewport refresh entirely.
+
+### What Changed
+1. **Shared per-turn scene-dirty signal**
+   - Added `commodore/common/turn_render_state.s` with shared `turn_scene_dirty`.
+   - `commodore/common/monster_ai.s` now reports whether AI activity changed the visible scene.
+   - `commodore/common/turn.s` now clears/sets `turn_scene_dirty` during `turn_post_action`.
+2. **Status-only turn tails corrected**
+   - Updated `commodore/common/game_loop_helpers.s` so `post_turn_status_only_or_die` routes through `vp_render_status_loop` when `turn_scene_dirty` is set.
+   - This keeps the old fast path for pure status-only turns but redraws the viewport when monsters moved.
+3. **Local-render fast path narrowed**
+   - Updated `commodore/common/game_loop.s` so movement/run tails bypass `render_local_area` and force a full viewport redraw when `turn_scene_dirty` is set after `turn_post_action`.
+   - Pure local player-motion turns still use the existing local redraw optimization.
+4. **Focused seam coverage**
+   - Extended `commodore/c64/tests/test_main_loop.s`
+   - Extended `commodore/c128/tests/test_main_loop128.s`
+   - New cases prove:
+     - status-only turns trigger a viewport redraw when the scene changed
+     - movement turns skip local redraw and take the full redraw path when monsters moved
+
+### Why This Shape
+- The stale-render bug was a shared orchestration problem, not a platform-specific renderer bug.
+- `render_local_area` is still a useful optimization for pure player-motion turns, so the fix kept it and added a shared scene-dirty gate instead of replacing it wholesale.
+- The smallest correct repair was to teach the turn pipeline when the scene changed and use that signal to choose between status-only/local redraw and full viewport redraw.
+
+### Validation
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+- `make -C commodore/c64 build`
+- Manual in-game validation accepted by the user
+
+### Validation Caveat
+- `cd commodore/c64 && ./run_tests.sh` was not usable as final runtime signal in the current environment during this fix.
+- Both `x64sc` and `x64` crashed broadly before monitor breakpoints on tiny unrelated suites as well, so that behavior did not provide BUG-M1-specific evidence.
+- The implementation is still shared and C64-compiled cleanly, but the full C64 headless runtime suite was not a trustworthy gate for this closure.
+
+### Outcome
+- Monster movement after AI turns no longer relies on `render_local_area` being accidentally large enough.
+- Status-only turns no longer leave monster movement unrendered.
+- The local redraw fast path remains in place for turns where the visible scene did not change.
+
+---
+
 ## 2026-03-20 — Running stop logic cleanup ✅ COMPLETE
 
 ### Scope Closed

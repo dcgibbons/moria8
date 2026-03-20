@@ -180,7 +180,7 @@ game_loop.s               Shared main loop orchestration, movement/running core,
 ├── config.s              System detection (C64/C128), column mode selection
 ├── memory.s              Bank switching routines, memory map management
 ├── zeropage.s            Zero page variable declarations (with KERNAL-safe zones)
-├── turn.s                Turn post-action (effects → hunger → regen → AI → turn counter)
+├── turn.s                Turn post-action (effects → hunger → regen → AI → turn counter), sets shared scene-dirty state for redraw policy
 │
 ├── screen.s              Screen output routines (40-col)
 ├── input.s               Keyboard input, command parsing

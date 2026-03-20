@@ -6,6 +6,8 @@
 // Forward-references trampoline labels defined in the platform's main.s
 // (Kick Assembler resolves all labels globally within the compilation unit).
 
+#import "turn_render_state.s"
+
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
 #endif
@@ -567,7 +569,11 @@ c128_town_move_diag_after_turn_post_action:
     lda vis_room_revealed
     bne !full_redraw+
 
-    // No scroll, no room reveal — render local area around old+new position
+    // Did monsters or other scene elements move this turn?
+    lda turn_scene_dirty
+    bne !scene_dirty_redraw+
+
+    // No scroll, no room reveal, no remote scene changes — render local area around old+new position
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1a
     jsr c128_town_dump_log
@@ -576,6 +582,16 @@ c128_town_move_diag_after_turn_post_action:
 #if C128
 #if PERF_P1
     jsr perf_p1_mark_local
+    jsr perf_p1_move_end
+#endif
+#endif
+    jmp !post_move+
+
+!scene_dirty_redraw:
+    jsr render_viewport
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full
     jsr perf_p1_move_end
 #endif
 #endif
@@ -1178,8 +1194,13 @@ run_step:
     bne !rsm_full+
     lda vis_room_revealed
     bne !rsm_full+
+    lda turn_scene_dirty
+    bne !rsm_scene_full+
 
     jsr render_local_area
+    jmp !rsm_post+
+!rsm_scene_full:
+    jsr render_viewport
     jmp !rsm_post+
 !rsm_full:
 #if C128

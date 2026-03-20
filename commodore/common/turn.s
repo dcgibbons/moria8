@@ -6,6 +6,8 @@
 // provides the post-action processing: effect timers, hunger, turn
 // counter, HP regeneration, and status dirty flag.
 
+#import "turn_render_state.s"
+
 // Hunger thresholds
 .const FOOD_HUNGRY_AT   = 150   // Food counter below this = hungry
 .const FOOD_WEAK_AT     = 50    // Below this = weak
@@ -353,12 +355,19 @@ turn_tick_regen:
 // Runs effect timers, hunger tick, regen, monster AI, turn counter, status dirty.
 // Preserves: nothing
 turn_post_action:
+    lda #0
+    sta turn_scene_dirty
+
     jsr turn_tick_effects
     jsr turn_tick_hunger
     jsr turn_tick_regen
     jsr turn_tick_light
     jsr turn_tick_pseudo_id
     jsr monster_ai_tick
+    bcc !tpa_no_scene_change+
+    lda #1
+    sta turn_scene_dirty
+!tpa_no_scene_change:
 
     // Increment turn counter
     inc zp_turn_lo

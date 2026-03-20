@@ -15,7 +15,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #6
+    ldx #8
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -135,7 +135,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 7, $ff
+tc_results: .fill 9, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -164,6 +164,7 @@ test_dir_ok: .byte 0
 test_open_ok: .byte 0
 test_read_ok: .byte 0
 test_cast_ok: .byte 0
+test_scene_dirty: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -220,6 +221,7 @@ reset_state:
     sta test_open_ok
     sta test_read_ok
     sta test_cast_ok
+    sta test_scene_dirty
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -268,6 +270,8 @@ test_msg_clear:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda test_scene_dirty
+    sta turn_scene_dirty
     rts
 
 test_status_draw:
@@ -581,8 +585,75 @@ test_start:
     bne !t7_fail+
     lda #$01
     sta tc_results + 6
-    jmp test_finish
+    jmp !t7_done+
 !t7_fail:
     lda #$00
     sta tc_results + 6
+!t7_done:
+
+    // Test 8: REST redraws viewport when the turn changed the scene.
+    jsr reset_state
+    lda #7
+    sta test_case_idx
+    lda #1
+    sta test_scene_dirty
+    lda #CMD_REST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t8_fail+
+    lda test_viewport_calls
+    cmp #1
+    bne !t8_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t8_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t8_fail+
+    lda #$01
+    sta tc_results + 7
+    jmp !t8_done+
+!t8_fail:
+    lda #$00
+    sta tc_results + 7
+!t8_done:
+
+    // Test 9: MOVE with remote scene change falls back to full redraw.
+    jsr reset_state
+    lda #8
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    lda #CMD_MOVE_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t9_fail+
+    lda test_render_local_calls
+    beq !t9_chk_full+
+    jmp !t9_fail+
+!t9_chk_full:
+    lda test_viewport_calls
+    cmp #1
+    bne !t9_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t9_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp test_finish
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
     jmp test_finish

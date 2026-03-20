@@ -1465,3 +1465,77 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - `make -B -C commodore/c128 build128`
   - `make test128-fast`
   - `make test128-fast-smoke`
+
+## 2026-03-20 BUG-M1 — stale monster rendering plan
+
+### Diagnosis
+
+- `BUG-M1` is a **shared gameplay/render contract bug**, not a C128-only issue.
+- `render_local_area` exists on both platforms and only redraws a bounding box around the player's old/new positions.
+- That optimization is safe for pure player movement, but it is not sufficient when monsters move outside that local box during `turn_post_action`.
+- There is also a separate shared helper problem: `post_turn_status_only_or_die` calls `status_draw` directly and skips the viewport redraw path entirely, so turns like `cmd_rest` can leave monster movement unrendered.
+
+### Constraints
+
+- Keep the first fix **shared and minimal**.
+- Avoid segment movement, overlay changes, or large render-pipeline rewrites.
+- Do not start with platform-specific hacks; the behavior is shared and the first repair should live in shared turn/render orchestration.
+- Preserve the existing local-render fast path for turns where monsters did not move.
+
+### Plan
+
+- [x] Add focused regression coverage for BUG-M1 before changing behavior.
+- [x] Introduce a shared per-turn "monster moved / scene changed" signal during `turn_post_action`.
+- [x] Update shared post-turn helpers so status-only turns route through `vp_render_status_loop` when scene redraw is required.
+- [x] Update player-move / run tails to use full redraw when monsters moved this turn, keeping `render_local_area` only for pure local player-motion turns.
+- [x] Re-run C64 and C128 verification gates.
+- [x] Only if stale rendering remains, evaluate a second-stage dirty-region scheme for monster old/new positions.
+
+### Recommended Fix Order
+
+1. **Stage 1 — correctness first**
+   - Change `post_turn_status_only_or_die` to stop being status-only when the turn changed the scene.
+   - Add a shared `turn_scene_dirty` / `turn_monsters_moved` flag and set it from `monster_ai_tick` (and any other truly scene-mutating turn-side events if needed).
+   - In move/run tails, if that flag is set after `turn_post_action`, take the existing full viewport redraw path instead of `render_local_area`.
+
+2. **Stage 2 — test hardening**
+   - Add focused main-loop tests for:
+     - rest/other status-only commands causing a viewport redraw when monsters move
+     - move+AI turns taking full redraw when the scene changed
+   - If practical, add a rendering-level regression around monster old/new positions.
+
+3. **Stage 3 — only if needed**
+   - If Stage 1 fixes correctness but costs too much performance, then design a bounded dirty-region system for monster old/new positions.
+   - That should be a separate optimization pass, not the initial bug fix.
+
+### Recommendation
+
+- Start with **Stage 1 only**.
+- It is the smallest fix that matches the actual bug report, stays in shared code, and avoids overcommitting to a new dirty-region architecture before correctness is restored.
+
+### Stage 1 Review
+
+- Implemented the shared Stage 1 correctness fix:
+  - `monster_ai_tick` now reports whether monster-side AI changed the scene this turn.
+  - `turn_post_action` now clears/sets a shared `turn_scene_dirty` flag.
+  - `post_turn_status_only_or_die` now routes through `vp_render_status_loop` when the turn changed the scene.
+  - movement/run tails now bypass `render_local_area` and force a full viewport redraw when `turn_scene_dirty` is set.
+- Added focused seam coverage:
+  - `commodore/c64/tests/test_main_loop.s`
+  - `commodore/c128/tests/test_main_loop128.s`
+  - new cases cover:
+    - status-only turns that still require a viewport redraw
+    - movement turns that must skip local redraw after monster movement
+- Verification status:
+  - `make -B -C commodore/c128 build128` — PASS
+  - `make test128-fast` — PASS
+  - `make test128-fast-smoke` — PASS
+  - `make -C commodore/c64 build` — PASS
+- Current blocker:
+  - `cd commodore/c64 && ./run_tests.sh` is not giving trustworthy runtime signal in the current environment.
+  - After the symbol-ownership fix for `turn_scene_dirty`, the C64 test runner still fails broadly because headless VICE is crashing before any monitor breakpoints/dumps are reached, including on tiny unrelated suites like `test_math`.
+  - That broad `x64/x64sc` crash pattern does not match the BUG-M1 code changes and should be treated as a separate runner/environment issue unless reproduced as a logic failure elsewhere.
+- Conclusion:
+  - Stage 1 implementation is in place and accepted as the fix.
+  - C128 verification passed and C64 shared code compiled cleanly.
+  - Full C64 headless runtime verification remained blocked by a broad VICE crash outside the touched logic, but the fix was still accepted based on the shared implementation shape plus manual validation.

@@ -7,7 +7,7 @@
 
 ## Current State (2026-03-18, updated)
 
-**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift, the OPT-1 main-loop command-dispatch jump-table conversion, OPT-2 room-bounds LOS cleanup, REF-1 trampoline-sprawl consolidation, BUG-X IRQ decimal-mode hardening, and L3 VDC grey/light-grey policy cleanup are resolved.**
+**All core phases (1–9) complete.** Phase 10.0 (C64/C128 split), C4 map-collision stabilization, Phase 10.2 (C128 extended-memory creature DB path), and **Phase 10.7 (full 80-column UI layout)** are complete. C128 now runs with map/tier access on the banked model, full-width 80-column viewport/UI layout, and stabilized VDC color-path mapping after 10.7 regression cleanup. Q1 (Quit/Reboot exit stability) is now resolved. R4 (post-kill render glitch) has also been fixed. **R2 garbled prompt/message corruption, C5 help-screen corruption/JAM, C2 keyboard responsiveness/matrix stabilization, M2 platformized screen blanking hooks, the full TST-2 / TST-2A orchestration harness expansion, the C128 Hardened Execution Boundary, the low-RAM runtime loader repair for the post-chargen town-entry `JAM`, the banked-UI source/recopy repair for help/inventory blank-screen hangs, the dungeon-descent ego-generation `JAM` caused by I/O-hole placement drift, BUG-M1 stale-monster rendering after AI turns, the OPT-1 main-loop command-dispatch jump-table conversion, OPT-2 room-bounds LOS cleanup, REF-1 trampoline-sprawl consolidation, BUG-X IRQ decimal-mode hardening, and L3 VDC grey/light-grey policy cleanup are resolved.**
 
 ### Build Stats
 
@@ -25,13 +25,9 @@
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
 | MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
+| UI-80 | MED | C128 80-col Umoria UI Layout: Implement vertical status panel on the left (stats, HP/MP, AC, Gold) and reposition the viewport to the right, matching the original 80-column Umoria layout. | Backlog |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |
-
-### Investigation Tasks (R4)
-*(Moved to BUILDPLAN_HISTORY pending next cleanup)*
-
-Resolved work lives in `commodore/BUILDPLAN_HISTORY.md`. The active plan stays focused on open items only.
 ## What's Next
 
 

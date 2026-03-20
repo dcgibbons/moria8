@@ -186,6 +186,8 @@ post_turn_status_only_or_die:
     beq !ptso_alive+
     jmp player_died
 !ptso_alive:
+    lda turn_scene_dirty
+    bne vp_render_status_loop
     jsr status_draw
     jmp main_loop
 

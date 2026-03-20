@@ -19,6 +19,8 @@ mat_target_y: .byte 0
 mat_sign_dx:  .byte 0       // Direction sign toward player (-1, 0, +1)
 mat_sign_dy:  .byte 0
 mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
+mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
+mat_action_dirty: .byte 0    // 1 if current monster changed visible scene
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -29,6 +31,7 @@ mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 monster_ai_tick:
     lda #0
     sta zp_mon_idx
+    sta mat_any_moved
 
 !mat_loop:
     lda zp_mon_idx
@@ -74,6 +77,10 @@ monster_ai_tick:
 
     // Process once
     jsr monster_process_one
+    bcc !mat_no_move1+
+    lda #1
+    sta mat_any_moved
+!mat_no_move1:
 
     // Check if player died
     lda zp_game_flags
@@ -85,6 +92,10 @@ monster_ai_tick:
     cmp #2
     bne !mat_next+
     jsr monster_process_one
+    bcc !mat_no_move2+
+    lda #1
+    sta mat_any_moved
+!mat_no_move2:
 
     // Check if player died on second move
     lda zp_game_flags
@@ -96,6 +107,12 @@ monster_ai_tick:
     jmp !mat_loop-
 
 !mat_done:
+    lda mat_any_moved
+    beq !mat_done_clear+
+    sec
+    rts
+!mat_done_clear:
+    clc
     rts
 
 // ============================================================
@@ -104,6 +121,9 @@ monster_ai_tick:
 // After processing, writes back updated state.
 // ============================================================
 monster_process_one:
+    lda #0
+    sta mat_action_dirty
+
     // If not awake, try to wake up
     lda zp_mon_flags
     and #MF_AWAKE
@@ -156,6 +176,10 @@ monster_process_one:
     and #MF_PROVOKED
     bne !mpo_not_town+
     jsr monster_move_random
+    bcc !mpo_town_no_move+
+    lda #1
+    sta mat_action_dirty
+!mpo_town_no_move:
     jmp !mpo_writeback+
 !mpo_not_town:
 
@@ -165,14 +189,26 @@ monster_process_one:
 
     // Normal movement: move toward player
     jsr monster_move_toward
+    bcc !mpo_toward_no_move+
+    lda #1
+    sta mat_action_dirty
+!mpo_toward_no_move:
     jmp !mpo_writeback+
 
 !mpo_flee:
     jsr monster_move_away
+    bcc !mpo_flee_no_move+
+    lda #1
+    sta mat_action_dirty
+!mpo_flee_no_move:
     jmp !mpo_writeback+
 
 !mpo_confused:
     jsr monster_move_random
+    bcc !mpo_conf_no_move+
+    lda #1
+    sta mat_action_dirty
+!mpo_conf_no_move:
 
 !mpo_writeback:
     jsr monster_write_back
@@ -199,11 +235,19 @@ monster_process_one:
     bcc !breed_fail+
     lda zp_mon_type
     jsr monster_spawn_one
+    lda #1
+    sta mat_action_dirty
 !breed_fail:
     pla
     sta zp_mon_idx              // Restore original monster index
 
 !mpo_done:
+    lda mat_action_dirty
+    beq !mpo_done_clear+
+    sec
+    rts
+!mpo_done_clear:
+    clc
     rts
 
 // ============================================================
