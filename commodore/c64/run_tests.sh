@@ -220,7 +220,7 @@ run_test "input"  "tests/test_input.s"  "0400 0409" 10
 run_test "main_loop" "tests/test_main_loop.s" "0400 0406" 7 500000000
 run_test "turn" "tests/test_turn.s" "0400 0407" 8 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
-run_test "dungeon" "tests/test_dungeon.s" "0400 0422" 35 500000000
+run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0414" 21 500000000
 run_test "combat" "tests/test_combat.s" "0400 0413" 20 500000000

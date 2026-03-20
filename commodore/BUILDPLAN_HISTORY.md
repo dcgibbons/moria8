@@ -6,6 +6,47 @@
 
 ---
 
+## 2026-03-20 — Running stop logic cleanup ✅ COMPLETE
+
+### Scope Closed
+- Fixed two running-behavior issues that were not represented on the active backlog:
+  - running did not stop on floor items even though the project docs said it should
+  - corridor running stopped one tile early at lit side room mouths because side-junction detection was too eager
+
+### What Changed
+1. **Documented item-stop behavior restored**
+   - Updated `commodore/common/player_move.s` so `run_check_stop` now stops when the current tile carries `FLAG_HAS_ITEM`.
+   - This brings the live code back in line with the documented running contract.
+2. **Side-junction policy narrowed**
+   - Updated `run_check_intersection` so lit plain-floor side openings do not count as intersections by themselves.
+   - Dark side branches and other walkable side exits still count, so corridor safety remains intact.
+3. **Focused regression coverage**
+   - Extended `commodore/c64/tests/test_dungeon.s` with:
+     - a stop-on-floor-item case
+     - a lit-side-mouth case that proves running does not halt one tile early
+   - Updated `commodore/c64/run_tests.sh` for the expanded dungeon suite count.
+
+### Why This Shape
+- The item-stop change is a direct correctness fix: the docs and intended UX already required it.
+- The side-junction refinement is intentionally narrow:
+  - lit plain-floor room mouths are ignored at the intersection layer
+  - room-entry logic still stops running when the player actually enters the room
+  - dark branches, doors, monsters, stairs, and traps remain stop conditions
+- That avoids regressing safe corridor running while removing the visible early-stop annoyance.
+
+### Validation
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+
+### Outcome
+- Running now stops for floor items as documented.
+- Lit room mouths no longer interrupt corridor running one tile before the real room-entry transition.
+
+---
+
 ## L3 — C128 Grey/Light-Grey VDC Collapse ✅ COMPLETE (2026-03-20)
 
 ### Scope Closed

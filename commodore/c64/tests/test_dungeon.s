@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #34
+    ldx #36
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -119,7 +119,7 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 35, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 37, $ff              // Test results buffer (copied to $0400 before brk)
 
 test_start:
     // Initialize result area to $ff (untested)
@@ -1974,6 +1974,94 @@ test_start:
     lda #$00
     sta tc_results + 34
 !t35_done:
+
+    // ============================================================
+    // Test 36: run_check_stop stops on floor items
+    // ============================================================
+    jsr fill_map_rock
+
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_HAS_ITEM
+    sta (zp_ptr0),y
+
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #0
+    sta run_was_lit
+
+    jsr run_check_stop
+    bcs !t36_pass+
+    jmp !t36_fail+
+!t36_pass:
+    lda #$01
+    sta tc_results + 35
+    jmp !t36_done+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+!t36_done:
+
+    // ============================================================
+    // Test 37: lit room mouth on the side does not stop one tile early
+    // Corridor remains unlit; north side tile is lit floor.
+    // Running should continue here and stop on actual room entry instead.
+    // ============================================================
+    jsr fill_map_rock
+
+    // Straight east-west corridor at y=20, x=19..21
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+!t37_corridor:
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    cpy #22
+    bne !t37_corridor-
+
+    // Lit room mouth immediately north of the current corridor tile.
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #0
+    sta run_was_lit
+
+    jsr run_check_stop
+    bcc !t37_pass+
+    jmp !t37_fail+
+!t37_pass:
+    lda #$01
+    sta tc_results + 36
+    jmp !t37_done+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+!t37_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

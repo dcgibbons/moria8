@@ -1440,3 +1440,23 @@ Superseded by the later `$1000` / `JSR $1000` Bank 1 trace.
   - open issues
   - future phases / triage
 - The resolved-work table was removed because it duplicated `BUILDPLAN_HISTORY.md` and made the active plan noisy.
+
+## 2026-03-20 running stop cleanup
+
+- [x] Inspect the corridor-running stop logic in `commodore/common/player_move.s`.
+- [x] Restore the documented stop-on-floor-item behavior.
+- [x] Refine side-junction detection so lit plain-floor room mouths do not stop running one tile early.
+- [x] Add focused dungeon tests for the item-stop case and the lit-side-mouth case.
+- [x] Re-run the C64/C128 verification gates and confirm the fix holds.
+
+### Review
+
+- `run_check_stop` now stops when the current tile has `FLAG_HAS_ITEM`, which restores the documented running behavior.
+- `run_check_intersection` now ignores lit plain-floor side openings when deciding whether a side junction should stop running.
+- This keeps dark side branches and genuinely interesting side exits as stop conditions, but avoids halting one tile early at a lit room mouth where room-entry logic already handles the transition.
+- Verification:
+  - `make -C commodore/c64 build`
+  - `cd commodore/c64 && ./run_tests.sh`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`

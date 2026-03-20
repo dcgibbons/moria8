@@ -237,7 +237,12 @@ run_check_stop:
     cmp #TILE_TRAP
     beq !rcs_stop+
 
-    // 3. Room entry: was in unlit area, now in lit area
+    // 3. Item at current tile → stop
+    lda zp_temp0
+    and #FLAG_HAS_ITEM
+    bne !rcs_stop+
+
+    // 4. Room entry: was in unlit area, now in lit area
     lda run_was_lit
     bne !rcs_not_entry+
     lda zp_temp0
@@ -245,7 +250,7 @@ run_check_stop:
     bne !rcs_stop+          // Entered a lit room → stop
 !rcs_not_entry:
 
-    // 4. Room exit: was in lit area, now in unlit area
+    // 5. Room exit: was in lit area, now in unlit area
     lda run_was_lit
     beq !rcs_not_exit+
     lda zp_temp0
@@ -253,15 +258,15 @@ run_check_stop:
     beq !rcs_stop+          // Left a lit room → stop
 !rcs_not_exit:
 
-    // 5. Adjacent door check (6 neighbors, skip forward/backward)
+    // 6. Adjacent door check (6 neighbors, skip forward/backward)
     jsr run_check_adjacent_doors
     bcs !rcs_stop+
 
-    // 6. Adjacent monster check (6 neighbors, skip forward/backward)
+    // 7. Adjacent monster check (6 neighbors, skip forward/backward)
     jsr run_check_adjacent_monsters
     bcs !rcs_stop+
 
-    // 7. Intersection check (corridors only — unlit area)
+    // 8. Intersection check (corridors only — unlit area)
     lda zp_temp0
     and #FLAG_LIT
     bne !rcs_continue+      // In lit room → no intersection check
@@ -415,7 +420,9 @@ run_check_adjacent_monsters:
 
 // run_check_intersection — Check for corridor intersection
 // Checks 4 cardinal directions (N/S/W/E), skipping forward/backward.
-// If any passable exit found → intersection detected.
+// If any unlit side exit found → intersection detected.
+// Lit plain-floor side openings are ignored here so running stops on
+// actual room entry instead of one tile early at the corridor mouth.
 // Only called when current tile is NOT lit (corridor).
 // Input: zp_run_dir, zp_player_x/y
 // Output: carry set = intersection, carry clear = no intersection
@@ -468,6 +475,19 @@ run_check_intersection:
     sta zp_ptr0_hi
     ldy zp_temp1
     :MapRead_ptr0_y()
+    sta zp_temp0
+
+    // Ignore lit plain-floor side openings; room-entry logic handles those.
+    lda zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !rci_not_lit_floor+
+    lda zp_temp0
+    and #FLAG_LIT
+    bne !rci_next+
+!rci_not_lit_floor:
+
+    lda zp_temp0
     and #TILE_TYPE_MASK
     lsr
     lsr
