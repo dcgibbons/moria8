@@ -132,7 +132,7 @@ loader_start:
 #endif
     
     // 7. SUCCESS: Relocate stub to $0B00 and hand off.
-    // The engine will preload `RUNTIME_LOW.PRG` into Bank 0 low RAM before
+    // The engine will preload `RUNTIME.LOW.PRG` into Bank 0 low RAM before
     // drawing the title screen.
     lda #COL_BLACK
     sta $d020

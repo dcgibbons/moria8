@@ -56,9 +56,16 @@
 ## Low-RAM Runtime Code vs. Bank Ownership (C128)
 
 - **Issue:** A long-running C128 `JAM` after character creation looked like chargen/summary corruption, but the active crash was a direct `JSR $1000` into garbage during the first town render.
-- **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `runtime_low.prg` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
-- **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `runtime_low.prg` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
+- **Root Cause:** `viewport_update` / `render_viewport` were linked at low RAM `$1000`, `runtime.low.prg` had no real Stage 2 runtime loader, and the initial repair loaded it into **Bank 1** even though normal gameplay runs in `MMU_ALL_RAM` (**Bank 0**) and `$1000-$3FFF` is not bottom common RAM. The callsite was correct; the residency assumption was wrong.
+- **Resolution:** Prove the execution context first: identify the visible bank at the callsite, confirm whether the target address is common or bank-private, then make the loader/header match that execution model. In this case, `runtime.low.prg` needed a `$1000` PRG header and a startup loader into **Bank 0** low RAM, not Bank 1.
 - **Rule:** **For any callable low-RAM segment on C128, verify all three together before patching: (1) symbol address, (2) visible bank at the callsite, and (3) common-vs-private RAM ownership.** Never infer one from the others.
+
+## PETSCII Disk Names vs. Source-Friendly Names
+
+- **Issue:** I renamed the low-RAM runtime payload to `runtime_low.prg`, but the C128 directory display rendered `_` as a shifted graphic, not a readable underscore.
+- **Root Cause:** I optimized for source readability instead of the actual PETSCII on-screen filename that users see in the disk directory and preload list.
+- **Resolution:** For user-visible C64/C128 disk asset names, prefer characters that render cleanly in PETSCII directory listings. In this case, `runtime.low.prg` is the correct name and the on-disk filename bytes must match the displayed string exactly.
+- **Rule:** **When renaming a Commodore disk file, verify the actual PETSCII directory rendering, not just the source string or host filename.**
 
 ## Corrections From the 2026-03-18 Inventory-Help Regression
 

@@ -290,7 +290,7 @@
 
 ### Implemented
 1. **Moved ego runtime into loaded low RAM**
-   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`runtime_low.prg`, runtime `$1000+` in Bank 0).
+   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`runtime.low.prg`, runtime `$1000+` in Bank 0).
    - Removed the late Default-segment import that allowed ego generation logic to spill into the `$D000-$DFFF` region.
 2. **Added placement asserts for the full call surface**
    - `roll_ego_type`
@@ -360,20 +360,20 @@
 
 ### Root Causes Addressed
 1. **Missing Stage 2 loader contract**
-   - `runtime_low.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
+   - `runtime.low.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
 2. **Incorrect PRG load address**
    - The segment was linked for runtime execution at `$1000`, but the emitted PRG still carried an `$E000` load header.
 3. **Wrong bank assumption for direct low-RAM calls**
-   - The first repair attempt loaded `runtime_low.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
+   - The first repair attempt loaded `runtime.low.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
    - `$1000-$3FFF` is not bottom common RAM, so Bank 1 residency does not satisfy a Bank 0 callsite.
 4. **Prompt handoff release sensitivity**
    - After the loader repair, the summary dismiss path still needed a safer release handoff between gender selection and the summary prompt in normal-speed runs.
 
 ### Implemented
 1. **Loader/header alignment**
-   - Changed `RuntimeLowData` to emit `runtime_low.prg` with a `$1000` load header matching its callable runtime symbols.
+   - Changed `RuntimeLowData` to emit `runtime.low.prg` with a `$1000` load header matching its callable runtime symbols.
 2. **Startup low-RAM loader**
-   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `RUNTIME_LOW.PRG` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
+   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `RUNTIME.LOW.PRG` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
 3. **Placement guard**
    - Added a compile-time assert to keep the low-RAM callable runtime block below `FLOOR_ITEM_BASE`, making future overlap mistakes visible at build time.
 4. **Summary prompt release hardening**

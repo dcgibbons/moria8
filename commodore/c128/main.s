@@ -30,7 +30,7 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
-.segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/runtime_low.prg", start=$1000, min=$1000, max=$3fff]
+.segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/runtime.low.prg", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_REAL_BOOT_DIAG = 1
@@ -2086,10 +2086,10 @@ title_load_game:
 // ============================================================
 .const RUNTIME_LOW_FILE_NUM = 2
 runtime_low_filename:
-    .byte $52, $55, $4e, $54, $49, $4d, $45, $5f, $4c, $4f, $57, $2e, $50, $52, $47 // "RUNTIME_LOW.PRG"
+    .byte $52, $55, $4e, $54, $49, $4d, $45, $2e, $4c, $4f, $57, $2e, $50, $52, $47 // "RUNTIME.LOW.PRG"
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
-    .text "RUNTIME_LOW.PRG" ; .byte 0
+    .text "RUNTIME.LOW.PRG" ; .byte 0
 
 c128_load_runtime_low_prg:
     lda #0

@@ -74,7 +74,7 @@ Once the first-half corruption was removed, the remaining blocker became visible
 
 Specifically:
 
-1. `runtime_low.prg` existed on disk but **was not actually loaded by the engine** before the first render-capable runtime path.
+1. `runtime.low.prg` existed on disk but **was not actually loaded by the engine** before the first render-capable runtime path.
 2. The segment was linked for execution at `$1000`, but the emitted PRG initially still carried the wrong load assumptions.
 3. The first attempted repair loaded the code into **Bank 1**, but the real callsites execute under `MMU_ALL_RAM` — **Bank 0**.
 4. `$1000-$3FFF` is **not** bottom common RAM, so Bank 1 residency does not satisfy a direct Bank 0 `JSR $1000`.
@@ -89,10 +89,10 @@ Specifically:
 ### Second-half fixes
 
 1. **Aligned header and symbol address**
-   - `runtime_low.prg` now emits with a `$1000` PRG header
+   - `runtime.low.prg` now emits with a `$1000` PRG header
 
 2. **Added the missing startup loader**
-   - startup now explicitly loads `RUNTIME_LOW.PRG` before the title screen and any later VDC render path
+   - startup now explicitly loads `RUNTIME.LOW.PRG` before the title screen and any later VDC render path
 
 3. **Loaded into the correct bank**
    - the callable `$1000` runtime block is loaded into **Bank 0**, matching the actual `MMU_ALL_RAM` execution context

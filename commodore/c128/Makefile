@@ -34,7 +34,7 @@ OVL_TOWN    = $(OUT)/ovl.town
 OVL_START   = $(OUT)/ovl.start
 OVL_DEATH   = $(OUT)/ovl.death
 OVL_GEN     = $(OUT)/ovl.gen
-RUNTIME_LOW_PRG = $(OUT)/runtime_low.prg
+RUNTIME_LOW_PRG = $(OUT)/runtime.low.prg
 
 # Disk image
 DISK_IMAGE  = $(OUT)/moria128.d64
@@ -114,7 +114,7 @@ $(DISK_IMAGE): $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(O
 	         -write $(OVL_START) "ovl.start" \
 	         -write $(OVL_DEATH) "ovl.death" \
 	         -write $(OVL_GEN) "ovl.gen" \
-	         -write $(RUNTIME_LOW_PRG) "runtime_low.prg"
+	         -write $(RUNTIME_LOW_PRG) "runtime.low.prg"
 
 # Launch in VICE x128 (80-column mode) with D64 disk image
 run128: $(DISK_IMAGE)
