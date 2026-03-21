@@ -24,7 +24,6 @@
 
 | # | Severity | Description | Status |
 |---|----------|-------------|--------|
-| MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
 | UI-80 | MED | C128 80-col Umoria UI Layout: Implement vertical status panel on the left (stats, HP/MP, AC, Gold) and reposition the viewport to the right, matching the original 80-column Umoria layout. | Backlog |
 | FEAT1 | LOW | Expand Mage/Priest spells from 16 to 31 each (62 total). Will require UI pagination and `magic_overlay.prg` if resident RAM limits are hit, but struct and effects logic already support this size. | Feature Request |
 | **TST-5** | LOW | Testing: Miscellaneous Mechanics. Add isolated tests for disk swap procedures, palette mapping, and rendering draw routines. | Pending |

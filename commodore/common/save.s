@@ -15,9 +15,9 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 #if C128
-.const SAVE_VERSION    = $0c
+.const SAVE_VERSION    = $0d
 #else
-.const SAVE_VERSION    = $0b
+.const SAVE_VERSION    = $0c
 #endif
 
 // ZP game state range to save ($40–$5f = 32 bytes)

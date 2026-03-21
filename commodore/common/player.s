@@ -71,7 +71,9 @@
 // Reserved
 .const PL_RESERVED  = 64   // Start of reserved area
 .const PL_SOCIAL_CLASS = 65 // 1 byte: social class (1-100)
-.const PL_STRUCT_SIZE = 80  // Total struct size (with padding)
+.const PL_XP_FRAC_LO = 66  // Hidden fractional XP (16-bit fixed point)
+.const PL_XP_FRAC_HI = 67
+.const PL_STRUCT_SIZE = 82  // Total struct size (with padding)
 
 // Player flags
 .const PLF_MALE     = $01
@@ -696,4 +698,4 @@ udb_line_hi:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Player struct size", PL_STRUCT_SIZE, 80
+.assert "Player struct size", PL_STRUCT_SIZE, 82

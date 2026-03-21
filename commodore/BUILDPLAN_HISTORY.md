@@ -115,6 +115,29 @@
 
 ---
 
+## 2026-03-20 — MC2.2 fractional XP accumulation ✅ COMPLETE
+
+### Scope Closed
+- Hidden fractional XP stack that stores the `ccl_div_24x8` remainder in a 16-bit fixed-point field so repeated low-XP kills contribute exactly the expected whole XP over time.
+- Full-XP level-up halving that treats the excess as a 24-bit whole + 16-bit fractional value and carries fractional overflow into the integer portion.
+- Save-format bump so C64 ($0C) and C128 ($0D) know to expect the extra fractional bytes after the player struct.
+
+### What Changed
+1. `player.s` now declares `PL_XP_FRAC_LO/H I`, increments `PL_STRUCT_SIZE` to 82, and uses the hidden bytes in `combat_award_xp` to accumulate fractional XP (remainder `<< 16 / player_level`) with a carry into the 24-bit XP when the fraction overflows.
+2. `combat_check_levelup` subtracts the threshold from the full 40-bit XP total, halves the combined integer+fraction, and adds the threshold back so level-ups honor fractional progress instead of throwing it away.
+3. `common/save.s` (C64: previously `$0B`, C128: `$0C`) now emits `$0C`/$0D, and `commodore/c128/tests/make_load_resume_save.py` reflects the new size and header byte.
+
+### Why This Shape
+- Weak monsters remain strategic rather than mathematically worthless because their fractional XP still accumulates behind the scenes and eventually produces a whole point without the UI needing to show fractions.
+- Level-up halving stays faithful to the original “excess/2” contract while treating the hidden fractional portion consistently, so you do not lose or double-count fractional increments.
+- The save-version bump ensures old builds do not misinterpret the new struct size and fractional bytes.
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -C commodore/c128 build128` *(KickAssembler printed `Ranged-fire handler stays out of I/O hole=false (true)` as a failing assertion while still emitting the PRG, so please note the assertion in case it resurfaces.)*
+
+---
+
 ## 2026-03-20 — BUG-M1 stale monster rendering after AI turns ✅ COMPLETE
 
 ### Scope Closed

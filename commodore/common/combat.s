@@ -796,6 +796,34 @@ combat_award_xp:
     adc ccl_adj_2
     sta player_data + PL_XP_2
 
+    lda zp_temp4
+    beq cax_frac_done
+    lda #0
+    sta ccl_adj_0
+    sta ccl_adj_1
+    lda zp_temp4
+    sta ccl_adj_2
+    lda zp_player_lvl
+    bne !cax_frac_div+
+    lda #1
+!cax_frac_div:
+    sta ccl_divisor
+    jsr ccl_div_24x8
+
+    lda player_data + PL_XP_FRAC_LO
+    clc
+    adc ccl_adj_0
+    sta player_data + PL_XP_FRAC_LO
+    lda player_data + PL_XP_FRAC_HI
+    adc ccl_adj_1
+    sta player_data + PL_XP_FRAC_HI
+    bcc cax_frac_done
+    inc player_data + PL_XP_0
+    bne cax_frac_done
+    inc player_data + PL_XP_1
+    bne cax_frac_done
+    inc player_data + PL_XP_2
+cax_frac_done:
     rts
 
 // combat_check_levelup — Check if XP exceeds adjusted level threshold
@@ -854,11 +882,14 @@ combat_check_levelup:
     // Compare 16-bit: PL_XP >= adjusted threshold?
     lda player_data + PL_XP_1
     cmp ccl_adj_1
-    bcc !ccl_no+                // XP_hi < threshold_hi → no
+    bcc ccl_no_short            // XP_hi < threshold_hi → no
     bne !ccl_yes+               // XP_hi > threshold_hi → yes
     lda player_data + PL_XP_0
     cmp ccl_adj_0
-    bcc !ccl_no+                // XP_lo < threshold_lo → no
+    bcc ccl_no_short           // XP_lo < threshold_lo → no
+
+ccl_no_short:
+    jmp ccl_no
 
 !ccl_yes:
     // Level up!
@@ -904,28 +935,55 @@ combat_check_levelup:
 
     // Halve excess XP above new threshold (umoria behavior).
     // Prevents a single big kill from cascading through many levels.
-    // ccl_adj_0/1 still holds the adjusted threshold from the comparison.
+    // Operates on full XP total (24-bit whole + 16-bit fraction).
     lda player_data + PL_XP_0
     sec
     sbc ccl_adj_0
     sta zp_temp0                    // excess_lo
     lda player_data + PL_XP_1
     sbc ccl_adj_1
-    sta zp_temp1                    // excess_hi
-    lsr zp_temp1                    // 16-bit halve
-    ror zp_temp0
-    lda ccl_adj_0                   // new XP = threshold + excess/2
+    sta zp_temp1                    // excess_mid
+    lda player_data + PL_XP_2
+    sbc #0
+    sta zp_temp2                    // excess_hi
+    lda player_data + PL_XP_FRAC_LO
+    sta zp_temp3                    // excess fraction lo
+    lda player_data + PL_XP_FRAC_HI
+    sta zp_temp4                    // excess fraction hi
+    lda zp_temp2
+    lsr
+    sta zp_temp2
+    lda zp_temp1
+    ror
+    sta zp_temp1
+    lda zp_temp0
+    ror
+    sta zp_temp0
+    lda zp_temp4
+    ror
+    sta zp_temp4
+    lda zp_temp3
+    ror
+    sta zp_temp3
+    lda zp_temp0                   // new XP = threshold + halved excess
     clc
-    adc zp_temp0
+    adc ccl_adj_0
     sta player_data + PL_XP_0
-    lda ccl_adj_1
-    adc zp_temp1
+    lda zp_temp1
+    adc ccl_adj_1
     sta player_data + PL_XP_1
+    lda zp_temp2
+    adc #0
+    sta player_data + PL_XP_2
+    lda zp_temp3
+    sta player_data + PL_XP_FRAC_LO
+    lda zp_temp4
+    sta player_data + PL_XP_FRAC_HI
 
     // Cap at 1 level per kill — excess XP retained (halved above)
     rts
 
-!ccl_no:
+ccl_no:
     rts
 
 // Scratch for 24-bit threshold computation
