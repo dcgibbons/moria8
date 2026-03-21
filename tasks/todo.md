@@ -20,11 +20,11 @@ This file is a temporary working scratchpad.
 - [ ] Step 3: Define the gating verification steps (KickAssembler `build128`, memory-map review, targeted smoke tests) that each new VDC change must pass before we commit again, and note how we’ll capture lessons if we hit regressions.
 ### Step 2 details
 - **Phase A – Block-copy helpers**: Implemented `rvsd_block_copy_chars`, `rvsd_block_copy_attrs`, and `rvsd_issue_block_copy` plus the supporting zero-page scratch bytes inside `RuntimeLowData`; we now stage the dest/source pairs before writing the copy length and triggering the VDC block-copy engine via registers 24/30. Everything stays in runtime-low RAM and the helpers are exposed through `screen_vdc.s`.
-- **Phase B – Row-batching & occupancy caches**: Add `rv_map_row_buf`, `rv_row_monsters`, `rv_row_items` (and their populations) to the low-RAM segment. Use `map_bulk_enter/exit` before the row loops and keep the per-row caches in the same segment so calls from `render_viewport` never jump into an unloaded helper. Document in the roadmap which bank is active when each helper runs and add `.assert` checks or comments for the I/O-hole boundaries.
+- **Phase B – Row-batching & occupancy caches**: Reused `row_char_buf` as the temporary map row buffer, replaced the separate item/monster tables with one bit-encoded `rv_row_occ` array, and now populate it with items first (bit7=1) followed by monsters so the later monster check overrides. This keeps the buffer footprint low (runtime segment now fits below `FLOOR_ITEM_BASE`), keeps `map_bulk_enter/exit` around each row, and still feeds the viewport loop without extra Bank 1 round trips.
 - **Phase C – VDC burst streaming**: Replace the repeated `for` loops that poke register 31 with a single `rv_stream_buffer` that holds `rv_stream_buf_lo/hi` for the active row buffer. Register this helper and its workspace in `RuntimeLowData` so the renderer can call it safely even under Bank 0/1 switching.
 
 ### Verification
-- [x] `make -C commodore/c128 build128` (baseline with the 2 MHz toggle + new block-copy helpers; still only the historical “Ranged-fire handler stays out of I/O hole=false” assertion)
+- [x] `make -C commodore/c128 build128` (baseline with the 2 MHz toggle + block-copy + row-batching; still only the historical “Ranged-fire handler stays out of I/O hole=false” assertion)
 - [ ] Memory map / `.vs` diff review to confirm new helpers/buffers stay below $C000 and outside the I/O hole once they’re added
 
 ### Review

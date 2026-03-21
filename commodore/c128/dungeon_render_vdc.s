@@ -112,6 +112,7 @@ render_viewport:
     lda zp_view_y
     clc
     adc zp_render_y
+    sta rv_row_map_y
     tax                     // X = map row
 
     // Pre-compute |dy| = abs(map_y - player_y) for this row (Opt 4: per-row dimming early-exit)
@@ -134,6 +135,24 @@ render_viewport:
     adc #0
     sta rv_row_ptr_hi
 
+    // Bulk-read the entire row into a temporary buffer while Bank 1 is selected
+    lda rv_row_ptr_lo
+    sta zp_ptr0
+    lda rv_row_ptr_hi
+    sta zp_ptr0_hi
+    jsr map_bulk_enter
+    ldx #0
+!rv_map_buf_read:
+    lda (zp_ptr0),x
+    sta row_char_buf,x
+    inx
+    cpx #VIEWPORT_W
+    bne !rv_map_buf_read-
+    jsr map_bulk_exit
+
+    jsr rv_populate_row_items
+    jsr rv_populate_row_monsters
+
     // Get VDC screen/attribute row addresses
     lda zp_render_y
     clc
@@ -153,14 +172,8 @@ render_viewport:
     sta zp_render_x         // Screen column counter (0-37)
 
 !col_loop:
-    // Read map byte. Restore row pointer each column because monster/item
-    // helpers may clobber zp_ptr0 as a generic scratch pointer.
-    lda rv_row_ptr_lo
-    sta zp_ptr0
-    lda rv_row_ptr_hi
-    sta zp_ptr0_hi
     ldy zp_render_x
-    :MapRead_ptr0_y()
+    lda row_char_buf,y
     sta zp_tile_tmp
 
     // Check if visited (bit 2)
@@ -302,24 +315,22 @@ render_viewport:
     lda zp_tile_tmp
     and #FLAG_HAS_ITEM
     beq !rv_no_item+
-    // Compute map x,y for item lookup
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    pha                         // Save map_x
-    lda zp_view_y
-    clc
-    adc zp_render_y
-    tay                         // Y = map_y
-    pla                         // A = map_x
-    jsr floor_item_find_at
-    bcc !rv_no_item+
-    // X = slot — look up item type
+    ldy zp_render_x
+    lda rv_row_occ,y
+    beq !rv_no_item+
+    sta rv_occ_value
+    and #$80
+    beq !rv_no_item+
+    lda rv_occ_value
+    and #%00111111
+    sec
+    sbc #$01
+    tax                             // X = slot index
     lda fi_item_id,x
     tax
     lda it_display,x
     sta zp_temp0
-    txa                             // A = item type ID
+    txa
     jsr item_get_floor_color        // A = VIC color (identification-aware)
     tax
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
@@ -330,23 +341,21 @@ render_viewport:
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
     beq !rv_no_monster+
-    // Compute map x,y
-    lda zp_view_x
-    clc
-    adc zp_render_x
-    sta rv_mon_x
-    lda zp_view_y
-    clc
-    adc zp_render_y
-    tay                         // Y = map_y
-    lda rv_mon_x                // A = map_x
-    jsr monster_find_at
-    bcc !rv_no_monster+         // Not found (stale flag?)
-    // X = slot index — get creature type
+    ldy zp_render_x
+    lda rv_row_occ,y
+    beq !rv_no_monster+
+    sta rv_occ_value
+    and #$80
+    bne !rv_no_monster+
+    lda rv_occ_value
+    and #%00111111
+    sec
+    sbc #$01
+    tax                         // X = monster slot index
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
-    tax                         // X = creature type
+    tax
     lda cr_display,x
     sta zp_temp0
     lda cr_color,x              // VIC color
@@ -699,6 +708,77 @@ render_viewport_scroll_delta:
     clc
     rts
 
+rv_populate_row_items:
+    ldx #0
+rv_items_zero:
+    lda #0
+    sta rv_row_occ,x
+    inx
+    cpx #VIEWPORT_W
+    bne rv_items_zero
+
+    ldx #0
+rv_items_scan:
+    cpx #MAX_FLOOR_ITEMS
+    bcs rv_items_done
+    lda fi_item_id,x
+    cmp #FI_EMPTY
+    beq rv_items_next
+    lda fi_y,x
+    cmp rv_row_map_y
+    bne rv_items_next
+    lda fi_x,x
+    sec
+    sbc zp_view_x
+    bmi rv_items_next
+    cmp #VIEWPORT_W
+    bcs rv_items_next
+    sta rv_row_col_idx
+    txa
+    clc
+    adc #1
+    ora #$80
+    ldy rv_row_col_idx
+    sta rv_row_occ,y
+rv_items_next:
+    inx
+    jmp rv_items_scan
+rv_items_done:
+    rts
+
+rv_populate_row_monsters:
+    ldx #0
+rv_mon_scan:
+    cpx #MAX_MONSTERS
+    bcs rv_mon_done
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq rv_mon_next
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    cmp rv_row_map_y
+    bne rv_mon_next
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sec
+    sbc zp_view_x
+    bmi rv_mon_next
+    cmp #VIEWPORT_W
+    bcs rv_mon_next
+    sta rv_row_col_idx
+    txa
+    clc
+    adc #1
+    ldy rv_row_col_idx
+    sta rv_row_occ,y
+rv_mon_next:
+    inx
+    jmp rv_mon_scan
+rv_mon_done:
+    rts
+
 // rvsd_copy_segment — Copy one viewport segment (char+attr) via VDC block copy
 // Inputs:
 //   rvsd_src_row, rvsd_dst_row = absolute screen rows
@@ -799,10 +879,14 @@ rvsd_dst_col:  .byte 0
 rvsd_copy_len: .byte 0
 rvsd_map_x:    .byte 0
 rvsd_map_y:    .byte 0
+rv_row_map_y:  .byte 0        // Current map row for item/monster caches
+rv_row_col_idx: .byte 0       // Column scratch for caches
+rv_occ_value:  .byte 0        // Scratch for occupant decoding
 
 // Row char/attribute buffers — filled during col_loop, streamed to VDC after
 row_char_buf: .fill VIEWPORT_W, 0
 row_attr_buf: .fill VIEWPORT_W, 0
+rv_row_occ:     .fill VIEWPORT_W, 0
 
 rvsd_src_char_lo: .byte 0
 rvsd_src_char_hi: .byte 0
