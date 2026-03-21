@@ -216,10 +216,6 @@
 .label zp_pseudo_id_timer = $8e // Pseudo-ID turn countdown
 .label zp_entropy      = $8f   // Accumulated user input entropy
 
-// --- MMU row copy helper destination pointer ($90–$91) ---
-.label mmu_copy_row_dst_lo = $90
-.label mmu_copy_row_dst_hi = $91
-
 // ============================================================
 // Compile-time validation
 // ============================================================

@@ -140,11 +140,14 @@ render_viewport:
     sta zp_ptr0
     lda rv_row_ptr_hi
     sta zp_ptr0_hi
-    lda #<row_char_buf
-    sta mmu_copy_row_dst_lo
-    lda #>row_char_buf
-    sta mmu_copy_row_dst_hi
     jsr mmu_copy_map_row
+    ldx #0
+!rv_map_buf_copy:
+    lda SCREEN_RAM,x
+    sta row_char_buf,x
+    inx
+    cpx #VIEWPORT_W
+    bne !rv_map_buf_copy-
 
     jsr rv_populate_row_items
     jsr rv_populate_row_monsters

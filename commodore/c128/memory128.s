@@ -704,7 +704,7 @@ mmu_common_copy_map_row:
     ldy #0
 !copy:
     lda (zp_ptr0),y
-    sta (mmu_copy_row_dst_lo),y
+    sta SCREEN_RAM,y
     iny
     cpy #MMU_COPY_MAP_ROW_LEN
     bne !copy-
