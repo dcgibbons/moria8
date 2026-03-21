@@ -146,7 +146,14 @@ Do not keep patching the earlier hypothesis once the PC/backtrace moves. Treat t
 
 ---
 
-## 5. Final State
+## 5. Corridor door policy alignment
+
+- `add_corridor_doors` is now a compatibility stub; corridor-carving routines (`carve_h_corridor`, `carve_v_corridor`) are the only door-placement sites.
+- `dungeon_generate` no longer invokes the helper, so corridor adjacency without actual penetration leaves the room wall intact.
+- `commodore/c64/tests/test_dungeon.s` gained regressions proving that adjacency alone does not create a door and that a true corridor penetration still produces one. The new cases lock the contract.
+- This change keeps hallways clear of phantom doors and restores running/doorflow behavior closer to original Umoria.
+
+## 6. Final State
 
 The C128 town-entry crash is closed.
 

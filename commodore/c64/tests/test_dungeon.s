@@ -824,10 +824,10 @@ test_start:
 !t16_done:
 
     // ==========================================
-    // Test 17: add_corridor_doors creates door when corridor is adjacent to room
+    // Test 17: add_corridor_doors does NOT synthesize a side-entry door
     // Set up a room, then manually place corridor floor tiles adjacent to the
     // room's right wall. Call add_corridor_doors. The wall between them should
-    // become a door.
+    // remain a wall; only actual corridor penetration should place doors.
     // ==========================================
     jsr fill_map_rock
 
@@ -872,10 +872,10 @@ test_start:
     cmp #TILE_WALL_V
     bne !t17_fail+
 
-    // Run add_corridor_doors
+    // Run add_corridor_doors (now intentionally a no-op)
     jsr add_corridor_doors
 
-    // Now check (24, 11) — should be a door (TILE_DOOR_OPEN or TILE_DOOR_CLOSED)
+    // Now check (24, 11) — should still be TILE_WALL_V
     ldx #11
     lda map_row_lo,x
     sta zp_ptr0
@@ -884,9 +884,7 @@ test_start:
     ldy #24
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    beq !t17_pass+
-    cmp #TILE_DOOR_CLOSED
+    cmp #TILE_WALL_V
     beq !t17_pass+
     jmp !t17_fail+
 
@@ -900,8 +898,8 @@ test_start:
 !t17_done:
 
     // ==========================================
-    // Test 18: add_corridor_doors does NOT create door when only one side is floor
-    // Wall with floor on one side and rock on the other should stay a wall.
+    // Test 18: add_corridor_doors leaves existing corridor door placement alone
+    // Corridor carving itself should still place a door when it penetrates a room wall.
     // ==========================================
     jsr fill_map_rock
 
@@ -916,33 +914,30 @@ test_start:
     sta dg_room_h
     jsr draw_dungeon_room
 
-    // Also populate room arrays
-    lda #1
-    sta room_count
-    lda #20
-    sta room_x
-    lda #10
-    sta room_y
-    lda #4
-    sta room_w
-    lda #3
-    sta room_h
+    // Carve an actual corridor through the room's left wall at y=11
+    lda #15
+    sta dg_cx1
+    lda #22
+    sta dg_cx2
+    lda #11
+    sta dg_cy1
+    jsr carve_h_corridor
 
-    // DON'T place any corridor floor — right wall has room floor on left, rock on right
-
-    // Run add_corridor_doors
+    // Run add_corridor_doors afterwards; it must not disturb the corridor door
     jsr add_corridor_doors
 
-    // Wall at (24, 11) should still be TILE_WALL_V (no corridor on other side)
+    // Door at (19, 11) must still be present
     ldx #11
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #24
+    ldy #19
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_WALL_V
+    cmp #TILE_DOOR_OPEN
+    beq !t18_pass+
+    cmp #TILE_DOOR_CLOSED
     beq !t18_pass+
     jmp !t18_fail+
 

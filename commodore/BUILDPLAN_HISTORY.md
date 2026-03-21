@@ -54,6 +54,39 @@
 - The 10.3 rollout exposed a separate C128 running regression because held/cancel polling still used decoded PETSCII instead of raw physical held-key state.
 - That follow-up fix is documented in the existing running-stop history entry below.
 
+## 2026-03-21 — DG-A corridor door policy cleanup ✅ COMPLETE
+
+### Scope Closed
+- Removed the aggressive `add_corridor_doors` post-pass that synthesized doors whenever a corridor tile ran alongside a room wall.
+- Maintained the original corridor-carving door insertion logic so real room entrances still create doors.
+- Added regression tests covering both the absence of synthetic doors and the continued presence of corridor-penetrating doors.
+
+### What Changed
+1. **`add_corridor_doors` is now a compatibility stub.**
+   - The helper returns immediately so it no longer scans walls or mutates the map.
+   - The remaining stub documents that corridor door placement happens during carving and exists only for backwards compatibility.
+2. **Dungeon generation no longer invokes the stub.**
+   - `dungeon_generate` now stops after `connect_rooms` and before `tramp_vault_seal_entrance`, so door placement relies on `carve_h_corridor` / `carve_v_corridor`.
+3. **Focused regression coverage.**
+   - `commodore/c64/tests/test_dungeon.s` gained two scenarios: adjacency without penetration should not create a door, and an actual corridor penetration door still appears.
+   - Documentation now explicitly states that true doors come from corridor carving plus `random_door_type`.
+
+### Why This Shape
+- The former post-pass produced “side-entry” doors that felt like hallway shortcuts and conflicted with the original Umoria behavior.
+- Keeping door placement within the carving routines prevents new doors from appearing merely because a corridor tile happens to brush a room wall, while still allowing true penetrations to create doors.
+- The new regression tests seal the contract by proving both the absence of synthetic doors and the retention of carved-penetration doors.
+
+### Validation
+- `make -C commodore/c64 build`
+- `cd commodore/c64 && ./run_tests.sh` (fails: VICE segfaulted while running the `sound` suite)
+- `make -B -C commodore/c128 build128`
+- `make test128-fast` (fails: harness128_batch cannot connect to the VICE monitor at 127.0.0.1:6510 due to permission restrictions)
+
+### Outcome
+- Corridors adjacent to rooms now leave the wall intact unless the carving explicitly breached the wall.
+- The map is no longer cluttered with phantom doors, so hallway running and direction-based behavior feel closer to the original Umoria experience.
+- The regression tests guard the contract so future refactors cannot silently reintroduce aggressive door synthesis.
+
 ---
 
 ## 2026-03-20 — Planning doc role cleanup ✅ COMPLETE
@@ -2469,7 +2502,7 @@ are needed:
 
 | # | Issue | Resolution |
 |---|-------|------------|
-| DG-A | Corridors adjacent to rooms without doors | **Fixed** — `add_corridor_doors` iterates per-room-wall (max 1 door per wall side) |
+| DG-A | Corridors adjacent to rooms no longer synthesize phantom doors | **Fixed** — `add_corridor_doors` is a legacy stub and corridor penetrations (via `carve_h_corridor`/`carve_v_corridor`) still place doors; tests enforce both behaviors. |
 | DG-B | Secret doors at corridor junctions block passage | **Fixed** — `random_door_type` produces only open/closed for door placement; `place_secrets` converts 1-3 closed doors to TILE_SECRET per level (Phase 4.6) |
 | DG-C | Room overlap detection off-by-one | **Fixed** — `check_room_overlap` uses ROOM_GAP correctly |
 

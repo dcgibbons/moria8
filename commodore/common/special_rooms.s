@@ -140,7 +140,7 @@ find_special_room:
 
 // ============================================================
 // vault_seal_entrance — Convert first door on vault perimeter to secret door
-// Called after add_corridor_doors in dungeon_generate.
+// Called after corridor carving / door placement in dungeon_generate.
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 vault_seal_entrance:

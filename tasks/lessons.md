@@ -158,3 +158,9 @@
 - **Root Cause:** The C128 running path was still sampling `cia_scan_petscii` for held/cancel state. Shifted run movement depends on PETSCII decoding staying visible, but running logic only cares whether the initiating keys are physically still down.
 - **Resolution:** Use a raw matrix-held helper for `input_run_key_held` and `input_run_cancel_check` on C128, matching the C64 contract. Keep PETSCII decoding for command entry, not held-state detection.
 - **Rule:** **For held/cancel polling, sample physical key state. Do not route running through PETSCII decoding on C128.**
+
+## Corridor door placement must reflect actual tunnel penetration
+
+- **Issue:** `add_corridor_doors` used to synthesize lateral doors whenever a corridor tile ran next to a room wall, which cluttered hallways with phantom doors and confused both running heuristics and dungeon semantics.
+- **Resolution:** Make the helper a compatibility stub, remove the `dungeon_generate` call, and rely on `carve_h_corridor` / `carve_v_corridor` plus `random_door_type` to place doors only when a corridor actually breaches a wall. The new `commodore/c64/tests/test_dungeon.s` cases prove adjacency alone does not produce a door while actual penetration still does.
+- **Rule:** **Door placement must always occur during corridor carving; never add a door solely because a corridor tile lies adjacent to a room wall. Tests must guard the contract on both adjacency and penetration conditions.**
