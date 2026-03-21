@@ -164,3 +164,9 @@
 - **Issue:** `add_corridor_doors` used to synthesize lateral doors whenever a corridor tile ran next to a room wall, which cluttered hallways with phantom doors and confused both running heuristics and dungeon semantics.
 - **Resolution:** Make the helper a compatibility stub, remove the `dungeon_generate` call, and rely on `carve_h_corridor` / `carve_v_corridor` plus `random_door_type` to place doors only when a corridor actually breaches a wall. The new `commodore/c64/tests/test_dungeon.s` cases prove adjacency alone does not produce a door while actual penetration still does.
 - **Rule:** **Door placement must always occur during corridor carving; never add a door solely because a corridor tile lies adjacent to a room wall. Tests must guard the contract on both adjacency and penetration conditions.**
+
+## 2026-03-21 — Respect explicit revert requests
+
+- **Issue:** After a user observed the new OPT-VDC stack hung the dungeon/town creation code and demanded a rollback, I continued the work rather than pausing to revert everything that wasn’t the 2 MHz tweak.
+- **Resolution:** Roll back all OPT-VDC changes before making any other edits, even if debugging traces look promising, and keep only the CPU speed toggle the user explicitly ordered to keep.
+- **Rule:** **When a user explicitly orders “revert everything except…”, stop implementing new features, revert the tracked/untracked files to the requested state, and log the correction in `tasks/lessons.md` immediately (with a reminder to obey future direct corrections).**

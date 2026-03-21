@@ -320,6 +320,11 @@ entry_real:
     lda #$ff
     sta $d8                 // Screen Editor: 80-col mode
 
+    // Enable 2MHz mode on the C128 (set D030 bit0 while preserving other flags)
+    lda $d030
+    ora #$01
+    sta $d030
+
     // Copy banked payload BEFORE installing patches so it doesn't overwrite them
     jsr init_copy_banked
 
