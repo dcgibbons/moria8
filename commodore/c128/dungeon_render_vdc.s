@@ -699,99 +699,90 @@ render_viewport_scroll_delta:
     clc
     rts
 
-// rvsd_copy_segment — Copy one viewport segment (char+attr) via row buffers
+// rvsd_copy_segment — Copy one viewport segment (char+attr) via VDC block copy
 // Inputs:
 //   rvsd_src_row, rvsd_dst_row = absolute screen rows
 //   rvsd_src_col, rvsd_dst_col = absolute screen cols
 //   rvsd_copy_len              = byte count (1..78)
 rvsd_copy_segment:
     sei
-
-    // -------- Char read --------
-    ldx rvsd_src_row
-    lda screen_row_lo,x
-    clc
-    adc rvsd_src_col
-    tay
-    lda screen_row_hi,x
-    adc #0
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg
-    ldy #0
-!rvsd_char_read:
-    bit VDC_ADDR_REG
-    bpl !rvsd_char_read-
-    lda VDC_DATA_REG
-    sta row_char_buf,y
-    iny
-    cpy rvsd_copy_len
-    bne !rvsd_char_read-
-
-    // -------- Char write --------
-    ldx rvsd_dst_row
-    lda screen_row_lo,x
-    clc
-    adc rvsd_dst_col
-    tay
-    lda screen_row_hi,x
-    adc #0
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg
-    ldy #0
-!rvsd_char_write:
-    bit VDC_ADDR_REG
-    bpl !rvsd_char_write-
-    lda row_char_buf,y
-    sta VDC_DATA_REG
-    iny
-    cpy rvsd_copy_len
-    bne !rvsd_char_write-
-
-    // -------- Attr read --------
-    ldx rvsd_src_row
-    lda color_row_lo,x
-    clc
-    adc rvsd_src_col
-    tay
-    lda color_row_hi,x
-    adc #0
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg
-    ldy #0
-!rvsd_attr_read:
-    bit VDC_ADDR_REG
-    bpl !rvsd_attr_read-
-    lda VDC_DATA_REG
-    sta row_attr_buf,y
-    iny
-    cpy rvsd_copy_len
-    bne !rvsd_attr_read-
-
-    // -------- Attr write --------
-    ldx rvsd_dst_row
-    lda color_row_lo,x
-    clc
-    adc rvsd_dst_col
-    tay
-    lda color_row_hi,x
-    adc #0
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg
-    ldy #0
-!rvsd_attr_write:
-    bit VDC_ADDR_REG
-    bpl !rvsd_attr_write-
-    lda row_attr_buf,y
-    sta VDC_DATA_REG
-    iny
-    cpy rvsd_copy_len
-    bne !rvsd_attr_write-
-
+    jsr rvsd_block_copy_chars
+    jsr rvsd_block_copy_attrs
     cli
+    rts
+
+rvsd_block_copy_chars:
+    ldx rvsd_src_row
+    lda screen_row_lo,x
+    clc
+    adc rvsd_src_col
+    sta rvsd_src_char_lo
+    lda screen_row_hi,x
+    adc #0
+    sta rvsd_src_char_hi
+
+    ldx rvsd_dst_row
+    lda screen_row_lo,x
+    clc
+    adc rvsd_dst_col
+    sta rvsd_dst_char_lo
+    lda screen_row_hi,x
+    adc #0
+    sta rvsd_dst_char_hi
+
+    lda rvsd_dst_char_lo
+    tay
+    lda rvsd_dst_char_hi
+    jsr vdc_set_update_addr
+
+    lda rvsd_src_char_lo
+    tay
+    lda rvsd_src_char_hi
+    jsr vdc_set_block_src_addr
+
+    jsr rvsd_issue_block_copy
+    rts
+
+rvsd_block_copy_attrs:
+    ldx rvsd_src_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_src_col
+    sta rvsd_src_attr_lo
+    lda color_row_hi,x
+    adc #0
+    sta rvsd_src_attr_hi
+
+    ldx rvsd_dst_row
+    lda color_row_lo,x
+    clc
+    adc rvsd_dst_col
+    sta rvsd_dst_attr_lo
+    lda color_row_hi,x
+    adc #0
+    sta rvsd_dst_attr_hi
+
+    lda rvsd_dst_attr_lo
+    tay
+    lda rvsd_dst_attr_hi
+    jsr vdc_set_update_addr
+
+    lda rvsd_src_attr_lo
+    tay
+    lda rvsd_src_attr_hi
+    jsr vdc_set_block_src_addr
+
+    jsr rvsd_issue_block_copy
+    rts
+
+rvsd_issue_block_copy:
+    lda rvsd_copy_len
+    ldx #30
+    jsr vdc_write_reg
+    lda #%10000000
+    ldx #24
+    jsr vdc_write_reg
+    jsr vdc_wait
     rts
 
 // Scratch bytes for store door check in render_viewport
@@ -812,6 +803,15 @@ rvsd_map_y:    .byte 0
 // Row char/attribute buffers — filled during col_loop, streamed to VDC after
 row_char_buf: .fill VIEWPORT_W, 0
 row_attr_buf: .fill VIEWPORT_W, 0
+
+rvsd_src_char_lo: .byte 0
+rvsd_src_char_hi: .byte 0
+rvsd_dst_char_lo: .byte 0
+rvsd_dst_char_hi: .byte 0
+rvsd_src_attr_lo: .byte 0
+rvsd_src_attr_hi: .byte 0
+rvsd_dst_attr_lo: .byte 0
+rvsd_dst_attr_hi: .byte 0
 
 // Pre-translated VDC attribute bytes for standard tile types (indexed by tile type 0-15).
 // Values are VDC RGBI + Set1 flag ($80), matching vic_to_vdc_color[tile_colors[i]].

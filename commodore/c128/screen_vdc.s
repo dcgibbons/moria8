@@ -86,6 +86,21 @@ vdc_set_update_addr:
     sta VDC_DATA_REG        // Write low byte
     rts
 
+// vdc_set_block_src_addr — Fill VDC block-copy source pointer (Regs 32/33)
+// Input: A = high byte, Y = low byte
+vdc_set_block_src_addr:
+    pha
+    ldx #32
+    jsr vdc_select_reg
+    pla
+    sta VDC_DATA_REG
+
+    tya
+    ldx #33
+    jsr vdc_select_reg
+    sta VDC_DATA_REG
+    rts
+
 // vdc_write_data — Write A to VDC data register 31 (auto-increments)
 vdc_write_data:
     ldx #31
