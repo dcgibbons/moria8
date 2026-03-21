@@ -123,6 +123,10 @@ test_start:
     sta zp_ptr0
     lda #>$4000
     sta zp_ptr0_hi
+    lda #<SCREEN_RAM
+    sta mmu_copy_row_dst_lo
+    lda #>SCREEN_RAM
+    sta mmu_copy_row_dst_hi
     jsr mmu_copy_map_row
 
     // Verify boundaries to prove no clobbering
