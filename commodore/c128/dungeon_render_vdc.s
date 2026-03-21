@@ -493,7 +493,9 @@ render_viewport_scroll_delta:
 !rvsd_check_h_right:
     cmp #$ff
     bne !rvsd_no_fast_h+
-    jmp !rvsd_h_scroll_right+
+    // Rightward screen shift (player moving left) is overlap-unsafe with the
+    // current VDC block-copy path. Fall back to full redraw for correctness.
+    jmp !rvsd_no_fast_h+
 !rvsd_no_fast_h:
     clc
     rts
