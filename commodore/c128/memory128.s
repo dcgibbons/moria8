@@ -118,6 +118,7 @@
 .const C128_FUTURE_MAP_SIZE = C128_FUTURE_MAP_COLS * C128_FUTURE_MAP_ROWS
 .const MAP_BASE         = $4000
 .const BANK1_MAP_RESERVED_END = MAP_BASE + C128_FUTURE_MAP_SIZE - 1
+.const MMU_COPY_MAP_ROW_LEN = 78
 .const MAP_END          = BANK1_MAP_RESERVED_END
 .const BANK1_DB_BASE    = $7400
 .const BANK1_DB_END     = $7fff
@@ -705,7 +706,7 @@ mmu_common_copy_map_row:
     lda (zp_ptr0),y
     sta SCREEN_RAM,y
     iny
-    cpy #38
+    cpy #MMU_COPY_MAP_ROW_LEN
     bne !copy-
     lda #MMU_ALL_RAM
     sta MMU_CR

@@ -135,20 +135,19 @@ render_viewport:
     adc #0
     sta rv_row_ptr_hi
 
-    // Bulk-read the entire row into a temporary buffer while Bank 1 is selected
+    // Copy the map row via the MMU helper so we stay in Bank 0 code space
     lda rv_row_ptr_lo
     sta zp_ptr0
     lda rv_row_ptr_hi
     sta zp_ptr0_hi
-    jsr map_bulk_enter
+    jsr mmu_copy_map_row
     ldx #0
-!rv_map_buf_read:
-    lda (zp_ptr0),x
+!rv_map_buf_copy:
+    lda SCREEN_RAM,x
     sta row_char_buf,x
     inx
     cpx #VIEWPORT_W
-    bne !rv_map_buf_read-
-    jsr map_bulk_exit
+    bne !rv_map_buf_copy-
 
     jsr rv_populate_row_items
     jsr rv_populate_row_monsters

@@ -100,22 +100,22 @@ test_start:
     txa
     sta $4000,x
     inx
-    cpx #38
+    cpx #MMU_COPY_MAP_ROW_LEN
     bne !setup_src-
     jsr mmu_select_bank0
 
-    // Setup sentinels at $03FF and $0400+38 ($0426)
+    // Setup sentinels at $03FF and SCREEN_RAM + len
     lda #$ff
     sta $03ff
-    sta $0426
+    sta SCREEN_RAM + MMU_COPY_MAP_ROW_LEN
     
-    // Clear destination $0400-$0425
+    // Clear destination $0400-$0400+len-1
     lda #0
     ldx #0
 !clr_dest:
     sta $0400,x
     inx
-    cpx #38
+    cpx #MMU_COPY_MAP_ROW_LEN
     bne !clr_dest-
 
     // Call the copy routine
@@ -129,7 +129,7 @@ test_start:
     lda $03ff
     cmp #$ff
     bne test_fail
-    lda $0426
+    lda SCREEN_RAM + MMU_COPY_MAP_ROW_LEN
     cmp #$ff
     bne test_fail
 
@@ -137,10 +137,10 @@ test_start:
     ldx #0
 !chk_dest:
     txa
-    cmp $0400,x
+    cmp SCREEN_RAM,x
     bne test_fail
     inx
-    cpx #38
+    cpx #MMU_COPY_MAP_ROW_LEN
     bne !chk_dest-
 
     jmp test_pass

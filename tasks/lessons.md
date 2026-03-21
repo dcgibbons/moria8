@@ -137,7 +137,14 @@
 - **Root Cause:** I treated the repository's frequent commit cadence as implicit permission instead of checking for an explicit "OK to commit" signal in the current task.
 - **Resolution:** Treat commit authority as opt-in for the current task unless the user has clearly told me to commit when done. Verification and documentation can complete before that point, but the final `git commit` must wait for explicit approval.
 - **Rule:** **Do not commit changes in this repo until the user explicitly says to commit, even if the code is done and fully verified.**
+- **Follow-up:** The recent town-entry regression and subsequent fix were committed before the user said “OK,” so this is a second reminder that every task ends with an explicit approval step.
 
+## 2026-03-20 — Bank 1 cannot execute bank 0 code
+
+- **Issue:** Entering town after the row-buffer changes triggered a JAM in `mmu_select_bank1` (`C:$01F8`) because the new loop executed while Bank 1 was active, so the CPU fetched the wrong instructions.
+- **Root Cause:** `map_bulk_enter` was called before the `row_char_buf` copy loop, leaving Bank 1 selected while the renderer kept executing Bank 0 code; the bytes under Bank 1 at the same addresses were not valid instructions, so the CPU fell into an illegal opcode.
+- **Resolution:** Use the `mmu_copy_map_row` helper to pull the entire row into the shared scratch buffer while Bank 1 is active, return to Bank 0, and then copy from `SCREEN_RAM` into `row_char_buf`; this keeps us executing Bank 0 code with Bank 0 visible and relies on the bank-safe helper for the single transition.
+- **Rule:** **Whenever a bank switch is required for data access, either run the affected code entirely from a helper located in that bank/common area or switch back before executing Bank 0 code; do not run Bank 0 instructions while Bank 1 is still selected.**
 ## Premature Running Stop Needs Runtime Diagnosis First
 
 - **Issue:** I treated the user's "running stops too early" report as a corridor-stop-policy problem and patched `run_check_stop` / `run_check_intersection`, but manual testing showed the real symptom did not change.
