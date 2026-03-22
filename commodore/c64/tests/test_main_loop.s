@@ -15,7 +15,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #8
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -135,7 +135,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 9, $ff
+tc_results: .fill 10, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -158,12 +158,14 @@ test_get_dir_calls: .byte 0
 test_door_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
+test_item_pickup_calls: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
 test_open_ok: .byte 0
 test_read_ok: .byte 0
 test_cast_ok: .byte 0
+test_pickup_ok: .byte 0
 test_scene_dirty: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -192,6 +194,7 @@ install_jump_patch:
     :PatchJump(do_look, test_do_look)
     :PatchJump(get_direction_target, test_get_direction_target)
     :PatchJump(door_try_open, test_door_try_open)
+    :PatchJump(item_pickup, test_item_pickup)
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
     rts
@@ -216,11 +219,13 @@ reset_state:
     sta test_door_open_calls
     sta test_read_scroll_calls
     sta test_cast_spell_calls
+    sta test_item_pickup_calls
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
     sta test_read_ok
     sta test_cast_ok
+    sta test_pickup_ok
     sta test_scene_dirty
     sta zp_game_flags
     sta zp_eff_confuse
@@ -302,6 +307,16 @@ test_player_try_move:
     sec
     rts
 !blocked:
+    clc
+    rts
+
+test_item_pickup:
+    inc test_item_pickup_calls
+    lda test_pickup_ok
+    beq !fail+
+    sec
+    rts
+!fail:
     clc
     rts
 
@@ -652,8 +667,42 @@ test_start:
     bne !t9_fail+
     lda #$01
     sta tc_results + 8
-    jmp test_finish
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results + 8
+    jmp !t10+
+
+    // Test 10: PICKUP success consumes a turn and stays on the status-only tail
+    // when the scene is otherwise clean.
+!t10:
+    jsr reset_state
+    lda #9
+    sta test_case_idx
+    lda #1
+    sta test_pickup_ok
+    lda #CMD_PICKUP
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_item_pickup_calls
+    cmp #1
+    bne !t10_fail+
+    lda test_turn_calls
+    cmp #1
+    bne !t10_fail+
+    lda test_render_full_calls
+    bne !t10_fail+
+    lda test_viewport_calls
+    bne !t10_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp test_finish
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
     jmp test_finish

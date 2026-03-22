@@ -5959,7 +5959,7 @@ cancels on keypress.
 - `make test128-fast`
 - `make test128-fast-smoke`
 
-## BUG-LIT — Dark-Room Full-Redraw Flash ✅ COMPLETE (2026-03-22)
+## BUG-LIT — Dark-Room Full-Redraw Flash ⚠️ PARTIAL FIX ONLY (2026-03-22)
 
 **Problem**
 - In dark rooms, actions that routed through a full redraw, especially item pickup and monster death, could make the room appear to "flash" visible even though the room was not actually lit.
@@ -5978,8 +5978,12 @@ cancels on keypress.
   - `eff_light_room` must synchronize `room_lit[]` and tile `FLAG_LIT`
 - Updated [commodore/c64/run_tests.sh](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/run_tests.sh) for the expanded `test_effects` result count.
 
-**Verification**
-- User manual repro confirmed the dark-room flash is fixed in gameplay.
+**Status**
+- This was only a partial fix. It resolved the `room_lit[]` / tile `FLAG_LIT` drift, but later same-day gameplay still reproduced BUG-LIT through a different dark-room pickup/full-redraw path.
+- The pickup/full-redraw trigger was then fixed by routing `cmd_pickup` through the status-only tail instead of forcing a full viewport redraw. The umbrella bug remains open until monster-death and other redraw-trigger cases are rechecked.
+
+**Verification at the time**
+- User manual repro confirmed that one dark-room flash trigger was fixed in gameplay.
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_effects.s -o tests/test_effects.prg`

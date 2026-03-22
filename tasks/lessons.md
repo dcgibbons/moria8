@@ -191,3 +191,24 @@
 - **Root Cause:** I treated `BUILDPLAN_HISTORY.md` as sufficient for closure and did not re-check whether the active status summary also needed to be updated to reflect the completion.
 - **Resolution:** When closing a task that is mentioned in planning docs, update both the archival completion record and the active build-plan state in the same pass, then verify the result with a direct grep.
 - **Rule:** **If a bug or phase is closed, do not stop at `BUILDPLAN_HISTORY.md`. Also reconcile `commodore/BUILDPLAN.md` so the active plan no longer contradicts the completion record.**
+
+## 2026-03-22 — Do not close a multi-cause bug after fixing only one trigger
+
+- **Issue:** I declared BUG-LIT fixed after correcting the `room_lit[]` / `FLAG_LIT` drift, but the user immediately reproduced another dark-room pickup case that still revealed hidden room tiles.
+- **Root Cause:** I treated one verified sub-cause as if it exhausted the whole bug class, without requiring a broader repro matrix or a test that matched the original gameplay symptom closely enough.
+- **Resolution:** Reopen the bug as soon as a real repro survives, keep the partial fix, and do not mark the overall issue complete until at least one targeted test or manual matrix covers the remaining symptom family.
+- **Rule:** **For long-standing rendering bugs with multiple plausible causes, do not close the umbrella bug after fixing one trigger. Keep it open until the original gameplay repro family is actually covered.**
+
+## 2026-03-22 — Do not generalize a bad tool invocation into a global environment claim
+
+- **Issue:** After my C64 headless test invocation crashed, I claimed that VICE itself was broken in this environment.
+- **Root Cause:** I inferred a broad environment failure from one failing command sequence without validating the simpler counterexample: whether `/opt/homebrew/bin/x64sc` itself ran normally outside my exact headless/autostart setup.
+- **Resolution:** Treat failures like this as invocation-specific until proven otherwise. Separate "this command line crashed" from "the tool is broken," and say exactly which invocation failed.
+- **Rule:** **Never claim a tool/environment is generally broken when only one scripted invocation has failed. State the exact failing command path and keep the scope narrow until independently confirmed.**
+
+## 2026-03-22 — Keep umbrella bug status narrower than individual trigger fixes
+
+- **Issue:** BUG-LIT turned out to have multiple trigger paths, and after fixing the pickup/full-redraw path I still needed the docs to reflect "one trigger fixed, umbrella still open."
+- **Root Cause:** I had already made the mistake in the opposite direction earlier by declaring the whole bug fixed after one sub-cause. The durable rule needs to be symmetric: doc status must match the exact scope of what was just proven.
+- **Resolution:** When a multi-cause bug is partially fixed, record exactly which trigger is closed and keep the umbrella item open until the remaining trigger family is rechecked.
+- **Rule:** **For multi-trigger bugs, document the exact trigger path that is fixed. Do not collapse partial progress into either "fully fixed" or "still unchanged."**

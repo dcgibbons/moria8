@@ -951,7 +951,7 @@ cmd_rest:
 cmd_pickup:
     jsr msg_clear
     jsr item_pickup
-    jmp command_result_main_or_redraw_full
+    jmp command_result_main_or_status_only
 
 cmd_drop:
     jsr msg_clear
