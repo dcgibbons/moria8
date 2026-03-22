@@ -184,6 +184,17 @@ status_draw:
     lda zp_text_color
     pha
 
+    // Clear the full 3-line status block before redrawing it. Several
+    // numeric fields are variable-width, so redraw without a clear can leave
+    // stale trailing digits behind (for example 21 -> 211).
+    ldx #STATUS_ROW
+!sd_clear_rows:
+    txa
+    jsr screen_clear_row
+    inx
+    cpx #STATUS_ROW + 3
+    bne !sd_clear_rows-
+
     // Clear input row (row 24) — many code paths bypass vp_render_status_loop
     lda #INPUT_ROW
     jsr screen_clear_row

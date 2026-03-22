@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #7
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -71,7 +71,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 8, $ff
+tc_results: .fill 10, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -301,7 +301,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #7
+    ldx #9
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -544,10 +544,74 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp !t1_seq+
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+
+!t9:
+    // Test 9: poison damage clamps at 0 instead of wrapping to $FFFF.
+    jsr reset_state
+    lda #2
+    sta zp_eff_poison
+    lda #0
+    sta zp_player_hp_lo
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_LO
+    sta player_data + PL_HP_HI
+    jsr turn_tick_effects
+    lda zp_player_hp_lo
+    bne !t9_fail+
+    lda zp_player_hp_hi
+    bne !t9_fail+
+    lda player_data + PL_HP_LO
+    bne !t9_fail+
+    lda player_data + PL_HP_HI
+    bne !t9_fail+
+    lda zp_death_source
+    cmp #DEATH_POISON
+    bne !t9_fail+
+    lda test_player_death_calls
+    cmp #1
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp !t10+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+
+!t10:
+    // Test 10: starvation damage clamps at 0 instead of wrapping to $FFFF.
+    jsr reset_state
+    lda #0
+    sta zp_player_food
+    sta zp_player_food_hi
+    sta zp_player_hp_lo
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_LO
+    sta player_data + PL_HP_HI
+    jsr turn_tick_hunger
+    lda zp_player_hp_lo
+    bne !t10_fail+
+    lda zp_player_hp_hi
+    bne !t10_fail+
+    lda player_data + PL_HP_LO
+    bne !t10_fail+
+    lda player_data + PL_HP_HI
+    bne !t10_fail+
+    lda zp_death_source
+    cmp #DEATH_STARVE
+    bne !t10_fail+
+    lda test_player_death_calls
+    cmp #1
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !t1_seq+
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
 
 !t1_seq:
     jsr install_turn_patches

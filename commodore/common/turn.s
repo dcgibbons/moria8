@@ -31,17 +31,8 @@ turn_tick_effects:
     jsr huff_print_msg
     jmp !no_poison+
 !poison_still:
-    // Poison tick: 1 HP damage per turn (only while timer > 0)
-    lda zp_player_hp_lo
-    sec
-    sbc #1
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    bcs !poison_no_borrow+
-    dec zp_player_hp_hi
-    lda zp_player_hp_hi
-    sta player_data + PL_HP_HI
-!poison_no_borrow:
+    // Poison tick: 1 HP damage per turn (only while timer > 0), clamped at 0.
+    jsr turn_apply_one_damage
     lda #DEATH_POISON
     sta zp_death_source
     jsr player_death_check
@@ -257,20 +248,37 @@ turn_tick_hunger:
     lda #HUNGER_FAINT
     sta zp_hunger_state
 
-    // Starvation: 1 HP damage per turn
+    // Starvation: 1 HP damage per turn, clamped at 0.
+    jsr turn_apply_one_damage
+    lda #DEATH_STARVE
+    sta zp_death_source
+    jsr player_death_check
+    rts
+
+// turn_apply_one_damage — Subtract 1 HP from the player, clamped at 0.
+// Syncs HP back to player_data.
+turn_apply_one_damage:
     lda zp_player_hp_lo
     sec
     sbc #1
     sta zp_player_hp_lo
+    lda zp_player_hp_hi
+    sbc #0
+    sta zp_player_hp_hi
+
+    lda zp_player_hp_hi
+    bmi !dead+
+    ora zp_player_hp_lo
+    bne !sync+
+!dead:
+    lda #0
+    sta zp_player_hp_lo
+    sta zp_player_hp_hi
+!sync:
+    lda zp_player_hp_lo
     sta player_data + PL_HP_LO
-    bcs !starve_no_borrow+
-    dec zp_player_hp_hi
     lda zp_player_hp_hi
     sta player_data + PL_HP_HI
-!starve_no_borrow:
-    lda #DEATH_STARVE
-    sta zp_death_source
-    jsr player_death_check
     rts
 
 // turn_tick_regen — HP regeneration each turn

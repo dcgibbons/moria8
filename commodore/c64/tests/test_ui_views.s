@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #6
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -126,7 +126,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 7, $ff
+tc_results: .fill 8, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -148,7 +148,7 @@ test_start:
     lda #>help_lines
     sta help_lines_src_hi
 
-    ldx #6
+    ldx #7
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -164,6 +164,7 @@ test_start:
     jsr test_recall_view
     jsr test_store_view
     jsr test_home_view
+    jsr test_status_redraw_shrinks_numbers
 
     jmp test_exit_trampoline
 
@@ -635,6 +636,54 @@ test_home_view:
     sta tc_results + 6
     rts
 
+test_status_redraw_shrinks_numbers:
+    jsr reset_shared_state
+
+    lda #0
+    sta status_cache_valid
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta player_data + PL_HP_HI
+    sta player_data + PL_MHP_HI
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #1
+    sta zp_player_dlvl
+
+    lda #211
+    sta zp_player_hp_lo
+    sta zp_player_mhp_lo
+    sta player_data + PL_HP_LO
+    sta player_data + PL_MHP_LO
+    jsr status_draw
+
+    lda #5
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #21
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    jsr status_draw
+
+    lda #<expected_status_hp_shrunk
+    sta zp_ptr0
+    lda #>expected_status_hp_shrunk
+    sta zp_ptr0_hi
+    lda #23
+    ldx #0
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 7
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -694,3 +743,5 @@ expected_recall_lv:
 expected_home_line:
     .byte $01
     .text ") Dagger" ; .byte 0
+expected_status_hp_shrunk:
+    .text "HP:5/21   " ; .byte 0

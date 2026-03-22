@@ -5959,6 +5959,28 @@ cancels on keypress.
 - `make test128-fast`
 - `make test128-fast-smoke`
 
+## BUG-1 — Poison/Death HP Corruption ✅ COMPLETE (2026-03-22)
+
+**Problem**
+- Poison and starvation damage could subtract from zero HP and underflow the 16-bit HP field to `$FFFF` before death handling ran.
+- Separately, the status bar could leave stale trailing digits in variable-width numeric fields, so a real max HP of `21` could still display as `211` after a redraw.
+
+**What changed**
+- Added a shared 1-HP damage helper in [commodore/common/turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/turn.s) and routed both poison ticks and starvation through it.
+- The helper clamps HP at `0` and syncs the corrected value back to `player_data` before death checks run.
+- Updated [commodore/common/ui_status.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/ui_status.s) so the full 3-line status block is cleared before redraw, preventing stale digits from surviving when 16-bit values shrink.
+- Added focused C64 regression coverage in:
+  - [commodore/c64/tests/test_turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/tests/test_turn.s) for poison/starvation clamp-at-zero behavior
+  - [commodore/c64/tests/test_ui_views.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/tests/test_ui_views.s) for the `21 -> 211` stale-digit status case
+- Updated [commodore/c64/run_tests.sh](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/run_tests.sh) for the expanded test counts.
+
+**Verification**
+- User manual repro no longer showed the poison/death HP corruption.
+- Focused C64 `turn` runtime suite: `10/10`
+- Focused C64 `ui_views` runtime suite: `8/8`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
 ## BUG-LIT — Dark-Room Full-Redraw Flash ✅ COMPLETE (2026-03-22)
 
 **Problem**

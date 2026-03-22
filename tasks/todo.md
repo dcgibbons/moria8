@@ -10,12 +10,11 @@ This file is a temporary working scratchpad.
 
 ## Current Status
 - No active task.
-- BUG-LIT is closed as of `fix dark-room redraw after visibility updates` plus the earlier pickup and room-lighting fixes.
+- BUG-1 is closed as of the poison/death HP corruption fix.
 - C128 VDC optimization work remains paused.
 
 ### Review
-- BUG-LIT required three separate fixes:
-  - synchronize `room_lit[]` with per-tile `FLAG_LIT`
-  - stop forcing full redraw on `cmd_pickup`
-  - stop forcing full redraw on clean-scene `command_result_main_or_update_visibility` tails
-- Keep treating long-standing redraw bugs as multi-trigger families until gameplay repros are cleared, not just one code path.
+- BUG-1 had two distinct causes:
+  - poison/starvation damage could underflow HP to `$FFFF` before death handling
+  - status redraw could leave stale trailing digits because row 23 was redrawn without clearing variable-width numeric fields first
+- Fix both the state mutation and the display path when a bug report shows “bad number on screen”; one is often hiding the other.
