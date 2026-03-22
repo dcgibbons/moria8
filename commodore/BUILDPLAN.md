@@ -16,7 +16,6 @@
 
 | Priority | Item | Type | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|---|
-| High | `BUG-LIT` remaining dark-room redraw mismatch beyond pickup | Bug | Medium | High | Yes | Pickup/full-redraw path is now fixed; keep this open until monster-death and other forced-redraw triggers are rechecked. |
 | High | `BUG-1` HP wraps to `65535` on poison decrement | Bug | Low | High | Yes | Real gameplay correctness bug; currently the clearest open defect. |
 | High | Maintain 100% C128 suite pass rate | Merge gate | Medium | High | Yes | Ongoing requirement, not feature work. |
 | High | Preserve `memory128.s` ownership / overlap guarantees | Merge gate | Medium | High | Yes | Bank/layout regressions remain a primary C128 risk. |
@@ -36,7 +35,6 @@
 ## Merge Readiness Summary
 
 - **Must be true before merging C128 to `main`:**
-- `BUG-LIT` is actually closed against the live pickup/full-redraw repro family.
 - `BUG-1` is fixed.
 - C128 fast and authoritative suites remain green.
 - Memory ownership, low-RAM loader, and smoke-seed stability gates remain intact.

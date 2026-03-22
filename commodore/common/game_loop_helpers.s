@@ -199,7 +199,26 @@ post_turn_update_visibility_or_die:
     jmp player_died
 !ptuv_alive:
     jsr update_visibility
-    jmp vp_render_status_loop
+    jsr viewport_update
+    lda zp_view_x
+    cmp old_view_x
+    bne !ptuv_full+
+    lda zp_view_y
+    cmp old_view_y
+    bne !ptuv_full+
+    lda vis_room_revealed
+    bne !ptuv_full+
+    lda turn_scene_dirty
+    bne !ptuv_full+
+    jsr render_local_area
+    jsr status_draw
+    jmp main_loop
+!ptuv_full:
+    lda #INPUT_ROW
+    jsr screen_clear_row
+    jsr render_viewport
+    jsr status_draw
+    jmp main_loop
 
 ui_view_return_to_gameplay_view:
     lda #COL_BLACK

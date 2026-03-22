@@ -5959,11 +5959,14 @@ cancels on keypress.
 - `make test128-fast`
 - `make test128-fast-smoke`
 
-## BUG-LIT — Dark-Room Full-Redraw Flash ⚠️ PARTIAL FIX ONLY (2026-03-22)
+## BUG-LIT — Dark-Room Full-Redraw Flash ✅ COMPLETE (2026-03-22)
 
 **Problem**
-- In dark rooms, actions that routed through a full redraw, especially item pickup and monster death, could make the room appear to "flash" visible even though the room was not actually lit.
-- The trigger was redraw-path selection, but the underlying state bug was that room-light effects could leave `room_lit[]` and per-tile `FLAG_LIT` out of sync.
+- In dark rooms, several command tails could force a full redraw and make hidden room edges appear to "flash" visible even though the room was not actually lit.
+- The bug was not one single renderer fault. It combined:
+  - stale room-light state (`room_lit[]` drifting from per-tile `FLAG_LIT`)
+  - item pickup forcing a full viewport redraw when a status-only tail was sufficient
+  - generic non-movement `update_visibility` tails redrawing fully even when movement-equivalent conditions only needed a local redraw
 
 **What changed**
 - Added `light_room_x` in [commodore/common/dungeon_los.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/dungeon_los.s) as the authoritative helper for permanently lighting a room.
@@ -5977,13 +5980,24 @@ cancels on keypress.
   - dark-room pickup + forced full redraw must not change unrelated viewport tiles
   - `eff_light_room` must synchronize `room_lit[]` and tile `FLAG_LIT`
 - Updated [commodore/c64/run_tests.sh](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/run_tests.sh) for the expanded `test_effects` result count.
+- Updated [commodore/common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/game_loop.s) so `cmd_pickup` returns through `command_result_main_or_status_only` instead of forcing a full viewport redraw.
+- Updated [commodore/common/game_loop_helpers.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/game_loop_helpers.s) so `post_turn_update_visibility_or_die` now:
+  - runs `update_visibility`
+  - updates the viewport once
+  - uses `render_local_area` when there is no scroll, room reveal, or scene-dirty state
+  - falls back to full redraw only when those conditions require it
+- Expanded [commodore/c64/tests/test_main_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/tests/test_main_loop.s) and [commodore/c64/run_tests.sh](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/run_tests.sh) to cover:
+  - pickup using the status-only tail
+  - clean-scene `update_visibility` commands using local redraw
+  - room-reveal `update_visibility` commands still forcing full redraw
 
 **Status**
-- This was only a partial fix. It resolved the `room_lit[]` / tile `FLAG_LIT` drift, but later same-day gameplay still reproduced BUG-LIT through a different dark-room pickup/full-redraw path.
-- The pickup/full-redraw trigger was then fixed by routing `cmd_pickup` through the status-only tail instead of forcing a full viewport redraw. The umbrella bug remains open until monster-death and other redraw-trigger cases are rechecked.
+- Manual gameplay rechecks cleared the original repro family after the final command-tail fixes.
+- BUG-LIT is now closed as a multi-step repair: lighting-state synchronization plus removal of unnecessary full redraws on the affected command tails.
 
-**Verification at the time**
-- User manual repro confirmed that one dark-room flash trigger was fixed in gameplay.
+**Verification**
+- User manual repro confirmed the dark-room pickup and follow-on forced-redraw cases stopped reproducing in gameplay.
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_effects.s -o tests/test_effects.prg`
+- Focused C64 `main_loop` runtime suite: `11/11`

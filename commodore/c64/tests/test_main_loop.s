@@ -15,7 +15,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #9
+    ldx #10
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -135,7 +135,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 10, $ff
+tc_results: .fill 11, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -385,7 +385,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #4
+    ldx #10
     lda #$ff
 !clr:
     sta tc_results,x
@@ -535,7 +535,8 @@ test_start:
     sta tc_results + 4
 !t5_done:
 
-    // Test 6: READ success consumes a turn, updates visibility, and redraws.
+    // Test 6: READ success consumes a turn, updates visibility, and uses
+    // local redraw when the scene is otherwise clean.
     jsr reset_state
     lda #5
     sta test_case_idx
@@ -558,8 +559,10 @@ test_start:
     lda test_viewport_calls
     cmp #1
     bne !t6_fail+
-    lda test_render_full_calls
+    lda test_render_local_calls
     cmp #1
+    bne !t6_fail+
+    lda test_render_full_calls
     bne !t6_fail+
     lda test_status_calls
     cmp #1
@@ -701,8 +704,43 @@ test_start:
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp test_finish
+    jmp !t11+
 !t10_fail:
     lda #$00
     sta tc_results + 9
+    jmp !t11+
+
+    // Test 11: READ still falls back to full redraw when a room reveal is pending.
+!t11:
+    jsr reset_state
+    lda #10
+    sta test_case_idx
+    lda #1
+    sta test_read_ok
+    sta vis_room_revealed
+    lda #CMD_READ
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_update_visibility_calls
+    cmp #1
+    bne !t11_fail+
+    lda test_viewport_calls
+    cmp #1
+    bne !t11_fail+
+    lda test_render_local_calls
+    bne !t11_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t11_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp test_finish
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
     jmp test_finish
