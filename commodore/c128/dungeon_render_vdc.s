@@ -399,7 +399,6 @@ render_viewport:
 
 !not_player:
     jmp !write_tile+
-
 !draw_blank:
     lda #SC_SPACE
     sta zp_temp0
