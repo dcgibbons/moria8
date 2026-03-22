@@ -56,6 +56,7 @@ BATCH_TESTS: dict[str, TestCase] = {
     "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, 20000000, True, False, True, True),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
     "vdc_attr128": TestCase("vdc_attr128", SCRIPT_DIR / "tests" / "test_vdc_attr128.s", 5.0),
+    "vdc_scroll_delta128": TestCase("vdc_scroll_delta128", SCRIPT_DIR / "tests" / "test_vdc_scroll_delta128.s", 5.0, 30000000, True),
     "monster128": TestCase("monster128", SCRIPT_DIR / "tests" / "test_monster128.s", 5.0, 20000000, True),
     "soak128": TestCase("soak128", SCRIPT_DIR / "tests" / "test_soak128.s", 5.0, 300000000, True),
 }
@@ -68,6 +69,7 @@ DEFAULT_BATCH_TESTS = [
     "db128",
     "status_coherence128",
     "vdc_attr128",
+    "vdc_scroll_delta128",
     "msg_prompt128",
     "tier128",
     "dungeon128",

@@ -141,13 +141,6 @@ render_viewport:
     lda rv_row_ptr_hi
     sta zp_ptr0_hi
     jsr mmu_copy_map_row
-    ldx #0
-!rv_map_buf_copy:
-    lda SCREEN_RAM,x
-    sta row_char_buf,x
-    inx
-    cpx #VIEWPORT_W
-    bne !rv_map_buf_copy-
 
     jsr rv_populate_row_items
     jsr rv_populate_row_monsters
@@ -172,7 +165,7 @@ render_viewport:
 
 !col_loop:
     ldy zp_render_x
-    lda row_char_buf,y
+    lda SCREEN_RAM,y
     sta zp_tile_tmp
 
     // Check if visited (bit 2)

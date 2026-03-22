@@ -39,6 +39,9 @@ test_entry:
 .filenamespace vdc_attr128
 #import "test_vdc_attr128.s"
 
+.filenamespace vdc_scroll_delta128
+#import "test_vdc_scroll_delta128.s"
+
 .filenamespace status_coherence128
 #import "test_status_coherence128.s"
 

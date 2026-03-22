@@ -508,7 +508,7 @@ describe_phase_token() {
             printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard\n'
             ;;
         units)
-            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,status_coherence128,dungeon128,soak128,monster128\n'
+            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
             ;;
         smokes)
             printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
@@ -548,7 +548,7 @@ suite_matches_phase_token() {
             ;;
         units)
             case "$suite_name" in
-                minimal128|config128|memory128|db128|tier128|input128|main_loop128|msg_prompt128|vdc_attr128|status_coherence128|dungeon128|soak128|monster128) return 0 ;;
+                minimal128|config128|memory128|db128|tier128|input128|main_loop128|msg_prompt128|vdc_attr128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128) return 0 ;;
             esac
             ;;
         smokes)
@@ -2102,6 +2102,7 @@ run_parallel_unit_tests() {
         "main_loop128 tests/test_main_loop128.s 500000000"
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
+        "vdc_scroll_delta128 tests/test_vdc_scroll_delta128.s 30000000"
         "status_coherence128 tests/test_status_coherence128.s 20000000"
         "dungeon128 tests/test_dungeon128.s 50000000"
         "soak128 tests/test_soak128.s 300000000"
