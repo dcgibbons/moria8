@@ -184,3 +184,10 @@
 - **Root Cause:** `room_lit[]` and per-tile `FLAG_LIT` could drift apart, so a forced full redraw after pickup/kill would render the room as lit even though the room tiles had not been synchronized to that state.
 - **Resolution:** Add one authoritative helper to light an entire room and make room-light effects use it, so room-level and tile-level lighting state stay synchronized before investigating renderer-specific causes.
 - **Rule:** **When a visibility or redraw bug affects entire rooms, check room-level state (`room_lit[]`, room caches) against per-tile flags before changing renderer logic.**
+
+## 2026-03-22 — Close completed work in both active and history docs
+
+- **Issue:** After fixing BUG-LIT and adding the completed history entry, I still left the active build plan stale, so the resolved bug was not reflected in `commodore/BUILDPLAN.md`.
+- **Root Cause:** I treated `BUILDPLAN_HISTORY.md` as sufficient for closure and did not re-check whether the active status summary also needed to be updated to reflect the completion.
+- **Resolution:** When closing a task that is mentioned in planning docs, update both the archival completion record and the active build-plan state in the same pass, then verify the result with a direct grep.
+- **Rule:** **If a bug or phase is closed, do not stop at `BUILDPLAN_HISTORY.md`. Also reconcile `commodore/BUILDPLAN.md` so the active plan no longer contradicts the completion record.**
