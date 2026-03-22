@@ -142,8 +142,21 @@ render_viewport:
     sta zp_ptr0_hi
     jsr mmu_copy_map_row
 
+    // Most rows have no item/monster flags. Skip the expensive row-occupancy
+    // population passes unless the staged map row actually advertises one.
+    ldx #0
+!rv_occ_scan:
+    lda SCREEN_RAM,x
+    and #(FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    bne !rv_occ_found+
+    inx
+    cpx #VIEWPORT_W
+    bne !rv_occ_scan-
+    jmp !rv_occ_done+
+!rv_occ_found:
     jsr rv_populate_row_items
     jsr rv_populate_row_monsters
+!rv_occ_done:
 
     // Get VDC screen/attribute row addresses
     lda zp_render_y
