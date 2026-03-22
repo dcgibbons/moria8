@@ -104,6 +104,13 @@ render_viewport:
     // external ROM paths touched VDC mode registers.
     jsr c128_vdc_reassert_mode
 
+    // Player is guaranteed to be inside the current viewport. Cache the
+    // viewport-relative X once so the hot per-tile path only compares columns.
+    lda zp_player_x
+    sec
+    sbc zp_view_x
+    sta rv_mon_x
+
     lda #0
     sta zp_render_y         // Screen row counter (0-18)
 
@@ -366,15 +373,11 @@ render_viewport:
 
 !rv_no_monster:
     // Check if this is the player position
-    lda zp_render_x
-    clc
-    adc zp_view_x
-    cmp zp_player_x
-    bne !not_player+
-    lda zp_render_y
-    clc
-    adc zp_view_y
+    lda rv_row_map_y
     cmp zp_player_y
+    bne !not_player+
+    lda zp_render_x
+    cmp rv_mon_x
     bne !not_player+
 
     // Override with player character
@@ -1150,7 +1153,7 @@ render_single_tile:
 rst_col_tmp: .byte 0
 rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
-rv_mon_x:    .byte 0          // Monster check scratch
+rv_mon_x:    .byte 0          // Cached player viewport X / monster scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
 rv_row_ptr_lo: .byte 0        // Stable map-row pointer (view_x applied)
 rv_row_ptr_hi: .byte 0
