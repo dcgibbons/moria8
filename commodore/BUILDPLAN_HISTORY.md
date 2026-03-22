@@ -5958,3 +5958,28 @@ cancels on keypress.
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `make test128-fast-smoke`
+
+## BUG-LIT — Dark-Room Full-Redraw Flash ✅ COMPLETE (2026-03-22)
+
+**Problem**
+- In dark rooms, actions that routed through a full redraw, especially item pickup and monster death, could make the room appear to "flash" visible even though the room was not actually lit.
+- The trigger was redraw-path selection, but the underlying state bug was that room-light effects could leave `room_lit[]` and per-tile `FLAG_LIT` out of sync.
+
+**What changed**
+- Added `light_room_x` in [commodore/common/dungeon_los.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/dungeon_los.s) as the authoritative helper for permanently lighting a room.
+- `light_room_x` now:
+  - sets `room_lit[x]`
+  - sets `vis_room_revealed`
+  - updates `vis_cached_room_idx`
+  - applies `FLAG_LIT | FLAG_VISITED` across the room rectangle, including walls
+- Updated `eff_light_room` in [commodore/common/spell_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/spell_effects.s) to use that helper instead of only setting `room_lit[]`.
+- Added focused C64 regression coverage in [commodore/c64/tests/test_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/tests/test_effects.s):
+  - dark-room pickup + forced full redraw must not change unrelated viewport tiles
+  - `eff_light_room` must synchronize `room_lit[]` and tile `FLAG_LIT`
+- Updated [commodore/c64/run_tests.sh](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/run_tests.sh) for the expanded `test_effects` result count.
+
+**Verification**
+- User manual repro confirmed the dark-room flash is fixed in gameplay.
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_effects.s -o tests/test_effects.prg`

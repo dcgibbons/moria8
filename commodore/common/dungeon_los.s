@@ -236,6 +236,61 @@ uv_player_in_room_x:
     clc
     rts
 
+// light_room_x — Permanently light and reveal room X
+// Input: X = room index
+// Output: room_lit[x] = 1, all room tiles gain FLAG_LIT | FLAG_VISITED,
+//         vis_room_revealed = 1, vis_cached_room_idx = X
+// Preserves: nothing
+light_room_x:
+    lda #1
+    sta room_lit,x
+    sta vis_room_revealed
+    stx vis_cached_room_idx
+
+    // Compute bounds
+    lda room_y,x
+    sec
+    sbc #1
+    sta vis_min_y
+    lda room_y,x
+    clc
+    adc room_h,x
+    sta vis_max_y
+
+    lda room_x,x
+    sec
+    sbc #1
+    sta vis_min_x
+    lda room_x,x
+    clc
+    adc room_w,x
+    sta vis_max_x
+
+    ldx vis_min_y
+!lr_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy vis_min_x
+!lr_col:
+    :MapRead_ptr0_y()
+    ora #(FLAG_LIT | FLAG_VISITED)
+    :MapWrite_ptr0_y()
+    cpy vis_max_x
+    beq !lr_col_done+
+    iny
+    jmp !lr_col-
+!lr_col_done:
+
+    cpx vis_max_y
+    beq !lr_done+
+    inx
+    jmp !lr_row-
+!lr_done:
+    rts
+
 // reveal_room — Set FLAG_VISITED on all tiles in room X (including walls)
 // Input: X = room index
 // Iterates room_x-1..room_x+room_w, room_y-1..room_y+room_h

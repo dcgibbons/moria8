@@ -100,9 +100,7 @@ eff_light_room:
     bcc !elr_next+
 
     // Player is in room X — light it
-    lda #1
-    sta room_lit,x
-    sta vis_room_revealed           // Trigger full redraw
+    jsr light_room_x
     rts
 
 !elr_next:
