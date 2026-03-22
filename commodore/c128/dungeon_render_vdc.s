@@ -137,16 +137,12 @@ render_viewport:
     lda map_row_lo,x
     clc
     adc zp_view_x           // Pre-add view_x: ptr = row_base + view_x
-    sta rv_row_ptr_lo
+    sta zp_ptr0
     lda map_row_hi,x
     adc #0
-    sta rv_row_ptr_hi
+    sta zp_ptr0_hi
 
     // Copy the map row via the MMU helper so we stay in Bank 0 code space
-    lda rv_row_ptr_lo
-    sta zp_ptr0
-    lda rv_row_ptr_hi
-    sta zp_ptr0_hi
     jsr mmu_copy_map_row
 
     // Most rows have no item/monster flags. Accumulate both bits across the
@@ -1157,8 +1153,6 @@ rst_row_tmp: .byte 0
 rst_dim_tmp: .byte 0          // Scratch for dimming distance calc
 rv_mon_x:    .byte 0          // Cached player viewport X / monster scratch
 rv_row_dy:   .byte 0          // Pre-computed |dy| for current row (Opt 4)
-rv_row_ptr_lo: .byte 0        // Stable map-row pointer (view_x applied)
-rv_row_ptr_hi: .byte 0
 // Saved positions for dirty render detection
 old_view_x:    .byte 0
 old_view_y:    .byte 0
