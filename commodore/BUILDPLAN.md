@@ -44,6 +44,45 @@
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
 | Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |
 
+## C128 -> `main` Merge Checklist
+
+### Must
+
+- Resolve the remaining known C128 layout/assert issue(s), especially the historical `ranged_fire` I/O-hole placement failure.
+- Keep C128 verification green:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test128`
+- Reconfirm real-play stability on C128:
+  - boot and title flow
+  - new game
+  - town
+  - descend / ascend
+  - save / load resume
+  - death / game-over flow
+- Reconfirm no shared-code regressions on C64 from the merged gameplay changes.
+- Keep the C128 memory/layout contract intact:
+  - main segment below `$C000`
+  - banked payload below `$FFFA`
+  - overlays fit their windows
+  - low-RAM runtime loader contract remains valid
+  - no callable code executes from the I/O hole
+
+### Strongly Preferred
+
+- Land `TST-5` or equivalent targeted coverage for disk swap, palette mapping, and rendering draw routines.
+- Resolve or explicitly defer the two highest-risk remaining shared-code assumptions:
+  - `spell_effects.s:574`
+  - `dungeon_gen.s:1901`
+
+### Not Required
+
+- `10.4` VDC threat/effect color work
+- `UI-80` refinement
+- `FEAT1`
+- `FEAT-AUD`
+- cleanup/refactor backlog items that do not affect merge safety
+
 ## Merge Notes
 
 - This file should contain actual open work only.
