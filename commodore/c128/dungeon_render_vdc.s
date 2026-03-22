@@ -184,15 +184,12 @@ render_viewport:
     lda color_row_hi,x
     sta zp_color_hi
 
-    lda rv_row_map_y
-    cmp zp_player_y
-    beq !rv_row_has_player+
     lda #0
     sta rst_row_tmp
-    jmp !rv_player_row_done+
-!rv_row_has_player:
-    lda #1
-    sta rst_row_tmp
+    lda rv_row_map_y
+    cmp zp_player_y
+    bne !rv_player_row_done+
+    inc rst_row_tmp
 !rv_player_row_done:
 
     // Inner loop: 38 columns
@@ -341,11 +338,7 @@ render_viewport:
     beq !rv_no_item+
     ldy zp_render_x
     lda rv_row_occ,y
-    beq !rv_no_item+
-    sta rv_occ_value
-    and #$80
-    beq !rv_no_item+
-    lda rv_occ_value
+    bpl !rv_no_item+
     and #%00111111
     sec
     sbc #$01
@@ -368,10 +361,7 @@ render_viewport:
     ldy zp_render_x
     lda rv_row_occ,y
     beq !rv_no_monster+
-    sta rv_occ_value
-    and #$80
-    bne !rv_no_monster+
-    lda rv_occ_value
+    bmi !rv_no_monster+
     and #%00111111
     sec
     sbc #$01
@@ -401,7 +391,6 @@ render_viewport:
     lda #VDC_WHITE          // Pre-translated VDC white (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp1
     jmp !write_tile+
-
 !not_player:
     jmp !write_tile+
 !draw_blank:
@@ -901,7 +890,6 @@ rvsd_map_x:    .byte 0
 rvsd_map_y:    .byte 0
 rv_row_map_y:  .byte 0        // Current map row for item/monster caches
 rv_row_col_idx: .byte 0       // Column scratch for caches
-rv_occ_value:  .byte 0        // Scratch for occupant decoding
 
 // Row char/attribute buffers — filled during col_loop, streamed to VDC after
 row_char_buf: .fill VIEWPORT_W, 0
