@@ -149,19 +149,24 @@ render_viewport:
     sta zp_ptr0_hi
     jsr mmu_copy_map_row
 
-    // Most rows have no item/monster flags. Skip the expensive row-occupancy
-    // population passes unless the staged map row actually advertises one.
+    // Most rows have no item/monster flags. Accumulate both bits across the
+    // staged row so we only run the population pass(es) that are actually
+    // needed for this row.
+    lda #0
     ldx #0
 !rv_occ_scan:
-    lda SCREEN_RAM,x
-    and #(FLAG_HAS_ITEM | FLAG_OCCUPIED)
-    bne !rv_occ_found+
+    ora SCREEN_RAM,x
     inx
     cpx #VIEWPORT_W
     bne !rv_occ_scan-
-    jmp !rv_occ_done+
-!rv_occ_found:
+    tay
+    and #FLAG_HAS_ITEM
+    beq !rv_occ_no_items+
     jsr rv_populate_row_items
+!rv_occ_no_items:
+    tya
+    and #FLAG_OCCUPIED
+    beq !rv_occ_done+
     jsr rv_populate_row_monsters
 !rv_occ_done:
 
