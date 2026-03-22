@@ -179,6 +179,17 @@ render_viewport:
     lda color_row_hi,x
     sta zp_color_hi
 
+    lda rv_row_map_y
+    cmp zp_player_y
+    beq !rv_row_has_player+
+    lda #0
+    sta rst_row_tmp
+    jmp !rv_player_row_done+
+!rv_row_has_player:
+    lda #1
+    sta rst_row_tmp
+!rv_player_row_done:
+
     // Inner loop: 38 columns
     lda #0
     sta zp_render_x         // Screen column counter (0-37)
@@ -373,9 +384,8 @@ render_viewport:
 
 !rv_no_monster:
     // Check if this is the player position
-    lda rv_row_map_y
-    cmp zp_player_y
-    bne !not_player+
+    lda rst_row_tmp
+    beq !not_player+
     lda zp_render_x
     cmp rv_mon_x
     bne !not_player+
