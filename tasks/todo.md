@@ -9,38 +9,10 @@ This file is a temporary working scratchpad.
 - Keep the long-lived active backlog in `commodore/BUILDPLAN.md`.
 
 ## Current Status
-- Working on the cautious reintroduction of OPT‑VDC enhancements without retriggering the low‑RAM/overlay corruption that caused the recent dungeon/town hang.
+- No active implementation is in progress.
+- Most recent completed fix: BUG-LIT dark-room lighting state drift, committed in `15ae12e`.
+- Durable completion notes for that fix live in `commodore/BUILDPLAN_HISTORY.md`.
+- C128 VDC optimization work is paused until a fresh design pass is started.
 
-### Objective
-- Revisit the VDC renderer (`render_viewport`, scroll helpers, and screen helpers) and plan a phased return of the block-copy + occupancy optimizations, ensuring every new helper/data block lives inside `RuntimeLowData`, avoids `$D000-$DFFF`, and keeps the runtime layout assertions satisfied.
-
-### Plan
-- [x] Step 1: Review the current `commodore/c128/dungeon_render_vdc.s`/`screen_vdc.s` flow and the temporary OPT-VDC patchset to understand where helpers, buffers, and data must live so we can pin future additions to the correct segments.
-- [x] Step 2: Draft the “safe VDC optimization path” roadmap (block copy, row buffers, occupancy caches) with explicit placement guidelines (e.g., `.segment RuntimeLowData` for helpers, `.assert`s for I/O-hole avoidance, tracker for bank ownership) so future edits don’t drift into unsafe memory.
-- [x] Step 3: Define the gating verification steps (KickAssembler `build128`, memory-map review, targeted smoke tests) that each new VDC change must pass before we commit again, and note how we’ll capture lessons if we hit regressions.
-### Step 2 details
-- **Phase A – Block-copy helpers**: Implemented `rvsd_block_copy_chars`, `rvsd_block_copy_attrs`, and `rvsd_issue_block_copy` plus the supporting zero-page scratch bytes inside `RuntimeLowData`; we now stage the dest/source pairs before writing the copy length and triggering the VDC block-copy engine via registers 24/30. Everything stays in runtime-low RAM and the helpers are exposed through `screen_vdc.s`.
-- **Phase B – Row-batching & occupancy caches**: Reused `row_char_buf` as the temporary map row buffer, replaced the separate item/monster tables with one bit-encoded `rv_row_occ` array, and now populate it with items first (bit7=1) followed by monsters so the later monster check overrides. This keeps the buffer footprint low (runtime segment now fits below `FLOOR_ITEM_BASE`), stages each map row via the bank-safe `mmu_copy_map_row` helper, and copies the helper’s `SCREEN_RAM` staging area back into `row_char_buf` before rendering so we never execute Bank 0 code while Bank 1 is selected.
-- **Phase C – VDC burst streaming**: Replace the repeated `for` loops that poke register 31 with a single `rv_stream_buffer` that holds `rv_stream_buf_lo/hi` for the active row buffer. Register this helper and its workspace in `RuntimeLowData` so the renderer can call it safely even under Bank 0/1 switching.
-
-### Verification
-- [x] `make -C commodore/c128 build128` (baseline with the 2 MHz toggle + block-copy + row-batching; still only the historical “Ranged-fire handler stays out of I/O hole=false” assertion)
-- [ ] Memory map / `.vs` diff review to confirm new helpers/buffers stay below $C000 and outside the I/O hole once they’re added
-
-### Review
-- Record any further lessons about runtime segments, banked helpers, or overlay collisions in `tasks/lessons.md` while the plan is active.
-
-### Step 3 details
-- **Build verification:** `make -C commodore/c128 build128` must pass after every staged addition (particularly after we add new helpers/buffers) and the existing `.assert` for "Ranged-fire handler stays out of I/O hole" should remain the only failure noted before reintroduction.
-- **Memory-map review:** Whenever we add a new helper or buffer, run `rg`/`sed` on the emitted `.map` or `main.sym` to confirm the symbol resides below `$C000` (or in `RuntimeLowData`) and not in `$D000-$DFFF`. Document these placements with inline comments or `.assert`s.
-- **Targeted runtime check:** After Phase B or C adds new caches, run the `town_overlay` or `dungeon_overlay` path (via limited smoke or `make test128-fast-smoke` once Phase C is stable) to ensure we no longer hang in dungeon/town creation.
-
-### Phase summary
-- **Phase B complete:** Row-batching now stages each map row via the bank-safe `mmu_copy_map_row` helper into the shared `SCREEN_RAM` staging buffer, copies the row into `row_char_buf` while Bank 0 is active, and keeps items+monsters encoded in the single `rv_row_occ` bit mask so the runtime segment stays below `FLOOR_ITEM_BASE`. The renderer now reads from the row buffer and selectively looks up occupants without repeated bank switches (see `commodore/c128/dungeon_render_vdc.s` around the row loop and the new `rv_populate_row_*` helpers through `rv_row_occ` and scratch bytes).
-- **Constraints enforced:** Row caches, helpers, and occupancy storage remain in `RuntimeLowData` and never touch `$D000-$DFFF`; this keeps the existing `.assert`s valid and the new data/buffer footprints safely under `FLOOR_ITEM_BASE`.
-- **Next phase (Phase C) prep:** The upcoming work will add `rv_stream_buffer` burst streaming, place its workspace in `RuntimeLowData`, verify the memory map after each addition, and exercise a focused smoke test (dungeon/town overlay) before merging.
-
-### Phase C plan
-- **Step 1 – Helper/layout design:** Sketch `rv_stream_buffer`’s registers/buffers (`rv_stream_buf_lo/hi`, buffer cursor, in-flight row flag) inside `RuntimeLowData`, record how the helper will consume `row_char_buf`/`row_attr_buf`, and ensure all new storage is claimed by `.segment RuntimeLowData`.
-- **Step 2 – Renderer wiring:** Update `render_viewport` (and scroll delta helpers) to call `rv_stream_buffer` once per row, letting the helper handle the register 31 setup, busy polling, and chunked writes for both char and attr data so the cortex only selects reg 31 once per pass.
-- **Step 3 – Verification:** After each Phase C change run `make -C commodore/c128 build128`, inspect the Memory Map/`.vs` output for the new helper/storage, and run the town/dungeon overlay smoke (`make test128-fast-smoke` or the specific overlay path) to prove the renderer stays stable before moving to the next phase.
+## Next Use
+- Start a new checklist here only when the next active task begins.

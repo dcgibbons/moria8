@@ -177,3 +177,10 @@
 - **Issue:** After a user observed the new OPT-VDC stack hung the dungeon/town creation code and demanded a rollback, I continued the work rather than pausing to revert everything that wasn’t the 2 MHz tweak.
 - **Resolution:** Roll back all OPT-VDC changes before making any other edits, even if debugging traces look promising, and keep only the CPU speed toggle the user explicitly ordered to keep.
 - **Rule:** **When a user explicitly orders “revert everything except…”, stop implementing new features, revert the tracked/untracked files to the requested state, and log the correction in `tasks/lessons.md` immediately (with a reminder to obey future direct corrections).**
+
+## 2026-03-22 — Check room-level and tile-level lighting state together
+
+- **Issue:** The long-standing dark-room "flash" on item pickup or monster death looked like a redraw bug, but the real failure was stale lighting state.
+- **Root Cause:** `room_lit[]` and per-tile `FLAG_LIT` could drift apart, so a forced full redraw after pickup/kill would render the room as lit even though the room tiles had not been synchronized to that state.
+- **Resolution:** Add one authoritative helper to light an entire room and make room-light effects use it, so room-level and tile-level lighting state stay synchronized before investigating renderer-specific causes.
+- **Rule:** **When a visibility or redraw bug affects entire rooms, check room-level state (`room_lit[]`, room caches) against per-tile flags before changing renderer logic.**
