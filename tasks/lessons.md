@@ -212,3 +212,10 @@
 - **Root Cause:** I had already made the mistake in the opposite direction earlier by declaring the whole bug fixed after one sub-cause. The durable rule needs to be symmetric: doc status must match the exact scope of what was just proven.
 - **Resolution:** When a multi-cause bug is partially fixed, record exactly which trigger is closed and keep the umbrella item open until the remaining trigger family is rechecked.
 - **Rule:** **For multi-trigger bugs, document the exact trigger path that is fixed. Do not collapse partial progress into either "fully fixed" or "still unchanged."**
+
+## 2026-03-22 — Keep BUILDPLAN for backlog, not guardrails
+
+- **Issue:** I reorganized `commodore/BUILDPLAN.md` into a single open-items table, but I mixed real backlog items with merge guardrails like “keep the suite green” and “preserve memory ownership,” which made the table harder to read and less useful.
+- **Root Cause:** I treated every true project constraint as if it belonged in the same artifact as actionable work. That conflates two different purposes: planning outstanding tasks versus recording engineering discipline.
+- **Resolution:** Keep `BUILDPLAN.md` for actual open bugs, features, phases, and cleanup work. Put “don’t break this” operational rules in `AGENTS.md`, `tasks/lessons.md`, asserts, and tests instead.
+- **Rule:** **Do not put ongoing engineering guardrails into the active backlog table. `BUILDPLAN.md` should answer “what is left to do?”, not “what must always stay true?”**
