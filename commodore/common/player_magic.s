@@ -11,6 +11,8 @@
 //
 // Returns: carry SET = turn consumed, carry CLEAR = cancelled/no turn
 
+.encoding "screencode_mixed"
+
 
 // ============================================================
 // Scratch variables

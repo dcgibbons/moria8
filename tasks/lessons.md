@@ -254,3 +254,17 @@
 - **Root Cause:** I treated a shared-file split as if only the C128 placement changed, but the shared source graph changed too. C64 still imported only `player_magic.s`, so the split silently removed required symbols there.
 - **Resolution:** When factoring shared code for C128-only residency, explicitly retain the non-C128 import path in the shared source and immediately rebuild C64 before treating the change as valid.
 - **Rule:** **Any C128-only relocation that splits a shared source file must preserve the non-C128 import graph and be followed immediately by a C64 build check.**
+
+## 2026-03-23 — Runtime-installed busy shims must be proven live, not just referenced
+
+- **Issue:** The generation spinner logic was wired into `game_loop.s` and `turn.s`, but the player still only saw the old `Loading...` message and never the full-screen `GENERATING...` UI.
+- **Root Cause:** The gameplay path called `generation_busy_*_api`, but those symbols still assembled to default `RTS` stubs because startup never patched them live. I verified the call sites and not the installed shim bytes.
+- **Resolution:** Convert the busy API to an explicit startup-installed jump table, patch it during platform startup, and use the shared `generation_busy_active_api` state for any suppression logic that depends on the UI being active.
+- **Rule:** **For startup-installed shim APIs, verify both that the game calls the shim and that startup patches the shipped stub bytes before gameplay begins. Referenced symbols alone do not prove the feature is live.**
+
+## 2026-03-23 — Do not inject UI helpers into generation inner loops that still own live scratch state
+
+- **Issue:** After the busy UI finally appeared, the initial town map came up corrupted.
+- **Root Cause:** I had added `generation_busy_tick` calls inside dungeon-generation inner loops (`place_rooms`, `connect_rooms`, `place_streamers`). Those loops still owned generator scratch/register state, and the UI helper clobbered it.
+- **Resolution:** Keep progress UI calls only at coarse, explicitly safe phase boundaries unless the callee contract is proven re-entrant with the generator’s scratch usage.
+- **Rule:** **For long-running generation/codegen loops, do not call screen/UI helpers from inside inner loops unless scratch/register ownership has been audited end-to-end. Prefer outer phase boundaries.**

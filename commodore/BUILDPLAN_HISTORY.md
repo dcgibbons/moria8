@@ -6077,3 +6077,51 @@ cancels on keypress.
 - `make test128-fast`
 - `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_effects.s -o tests/test_effects.prg`
 - Focused C64 `main_loop` runtime suite: `11/11`
+
+## PERF-DG-C128 — Faster Dungeon Generation + Visible Busy Feedback ✅ COMPLETE (2026-03-23)
+
+**Problem**
+- Larger C128 dungeons (`198x66`) had become noticeably slow to generate in real play.
+- There was no explicit user feedback during dungeon generation, so stairs / recall transitions felt like a hang.
+- The original design target included a rotating spinner, but the safe generation seams did not provide enough honest tick points for a spinner that would not appear stalled.
+
+**What changed**
+- Added a shared dungeon-generation busy UI in:
+  - [commodore/common/generation_busy.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/generation_busy.s)
+  - [commodore/common/generation_busy_api.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/generation_busy_api.s)
+- Startup now installs the busy-UI shim on both platforms:
+  - [commodore/c64/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c64/main.s)
+  - [commodore/c128/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/c128/main.s)
+- Wired the busy UI into real dungeon-generation transitions in:
+  - [commodore/common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/game_loop.s)
+  - [commodore/common/turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/turn.s)
+- Scope was intentionally narrowed to **dungeon** generation only:
+  - descending stairs
+  - ascending between dungeon levels
+  - recall into / between dungeon levels
+  - not new-game town generation
+  - not return-to-town generation
+- `tier_manager.s` now suppresses its top-line `Loading...` message while the full-screen generation UI is active, so the two layers do not stomp each other.
+- `dungeon_generate` in [commodore/common/dungeon_gen.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/dungeon_gen.s) no longer runs the shipping-time `verify_connectivity` retry loop.
+  - The structural generation pipeline remains:
+    - `fill_map_rock`
+    - `place_rooms`
+    - `place_streamers`
+    - `connect_rooms`
+    - stairs / traps / secrets / room darkening
+  - The expensive tile-BFS connectivity check remains in source for diagnostics/tests, but it is out of the production generation hot path.
+- The spell/prayer list header in [commodore/common/player_magic.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-c128/commodore/common/player_magic.s) was also corrected to `screencode_mixed` during this pass, fixing the visible header garbage that surfaced while validating the busy UI work.
+
+**UX result**
+- The final shipped feedback is a static full-screen `GENERATING...` message rather than a rotating spinner.
+- That is deliberate: with the now-faster generator, the safe high-level phase seams are too coarse for a spinner that feels truthful instead of appearing frozen on one frame.
+
+**Verification**
+- Manual validation confirmed:
+  - new-game town stays clean and does not show the full-screen busy message
+  - `>` into a dungeon shows `GENERATING...`
+  - the resulting dungeon renders correctly
+  - generation feels materially faster
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`

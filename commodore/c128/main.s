@@ -1831,6 +1831,7 @@ entry_main:
     lda $0315
     sta kernal_irq_vec_hi
     jsr init_common_mmu_helpers
+    jsr generation_busy_install
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -2716,6 +2717,8 @@ c128_cache_state_end:
 
 .assert "Program fits below map area", * <= MAP_BASE, true
 
+.const DUNGEON_GEN_BUSY = 1
+
 // ============================================================
 // Imports — Game Engine (Safe to spill past $C000)
 // ============================================================
@@ -2727,6 +2730,7 @@ c128_cache_state_end:
 #import "../common/player.s"
 #import "../common/ui_messages.s"
 #import "../common/ui_status.s"
+#import "../common/generation_busy.s"
 #import "../common/stat_display.s"
 #import "../common/huffman.s"
 #import "../common/runtime_ui_strings.s"

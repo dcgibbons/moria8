@@ -1,4 +1,5 @@
 #importonce
+#import "generation_busy_api.s"
 // tier_manager.s — Creature tier loading and transition management
 //
 // Manages the active creature tier. Detects tier boundaries on stair
@@ -261,12 +262,16 @@ tier_load:
     // Invalidate overlay — tier data will overwrite $E000
     jsr overlay_invalidate
 
-    // Show loading message
+    // Show loading message only when we are not already presenting the
+    // full-screen generation busy UI.
+    lda generation_busy_active_api
+    bne !tl_skip_loading_msg+
     lda #<tier_loading_str
     sta zp_ptr0
     lda #>tier_loading_str
     sta zp_ptr0_hi
     jsr msg_print
+!tl_skip_loading_msg:
 
 #if C128
     lda c128_cache_tiers_ready

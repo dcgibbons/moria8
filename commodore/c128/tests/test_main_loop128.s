@@ -103,6 +103,15 @@ game_over_prompt:
 tramp_level_generate:
     rts
 
+generation_busy_begin:
+    rts
+
+generation_busy_tick:
+    rts
+
+generation_busy_end:
+    rts
+
 tramp_game_over:
     rts
 

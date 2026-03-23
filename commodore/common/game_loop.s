@@ -7,6 +7,7 @@
 // (Kick Assembler resolves all labels globally within the compilation unit).
 
 #import "turn_render_state.s"
+#import "generation_busy_api.s"
 
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
@@ -127,10 +128,6 @@ game_new_start:
 
     // Recalculate combat stats with equipped items
     jsr player_recalc_equipment
-
-    // Blank screen during lengthy init (hides BFS queue garbage + KERNAL messages)
-    jsr screen_blank
-    jsr screen_clear
 
     // Randomize item identification (shuffle potion/scroll/ring descriptors)
     jsr item_init_identification
@@ -804,8 +801,7 @@ cmd_stairs_dn:
     beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
-    jsr screen_blank
-    jsr screen_clear            // Clear old level before lengthy load/generate
+    jsr generation_busy_begin_api
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #0
     sta level_entry_dir         // 0 = descended
@@ -813,6 +809,7 @@ cmd_stairs_dn:
     sta zp_run_dir              // Stop running on level change
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
+    jsr generation_busy_tick_api
     bcc !stairs_dn_ovl_ok+
     jmp entry_main
 !stairs_dn_ovl_ok:
@@ -820,12 +817,16 @@ cmd_stairs_dn:
     jsr c128_restore_runtime_guards
 #endif
     jsr tramp_level_generate
+    jsr generation_busy_tick_api
     jsr monster_spawn_level
+    jsr generation_busy_tick_api
     jsr item_spawn_level
+    jsr generation_busy_tick_api
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
 #endif
     jsr update_visibility
+    jsr generation_busy_end_api
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
@@ -871,8 +872,7 @@ cmd_stairs_up:
     bne !not_entering_town+
     jsr tramp_store_restock_all
 !not_entering_town:
-    jsr screen_blank
-    jsr screen_clear            // Clear old level before lengthy load/generate
+    jsr generation_busy_begin_if_dungeon_api
     jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
     sta level_entry_dir         // 1 = ascended
@@ -880,6 +880,7 @@ cmd_stairs_up:
     sta zp_run_dir              // Stop running on level change
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
+    jsr generation_busy_tick_if_dungeon_api
     bcc !stairs_up_ovl_ok+
     jmp entry_main
 !stairs_up_ovl_ok:
@@ -887,9 +888,13 @@ cmd_stairs_up:
     jsr c128_restore_runtime_guards
 #endif
     jsr tramp_level_generate
+    jsr generation_busy_tick_if_dungeon_api
     jsr monster_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
     jsr update_visibility
+    jsr generation_busy_end_if_dungeon_api
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport

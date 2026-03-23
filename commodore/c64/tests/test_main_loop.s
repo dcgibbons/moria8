@@ -10,12 +10,14 @@
 
 .encoding "screencode_mixed"
 
+.const DUNGEON_GEN_BUSY = 1
+
 bootstrap:
     :BankOutBasic()
     jmp test_start
 
 test_finish:
-    ldx #10
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -40,6 +42,18 @@ game_over_prompt:
     rts
 
 tramp_level_generate:
+    rts
+
+generation_busy_begin:
+    inc test_busy_begin_calls
+    rts
+
+generation_busy_tick:
+    inc test_busy_tick_calls
+    rts
+
+generation_busy_end:
+    inc test_busy_end_calls
     rts
 
 tramp_game_over:
@@ -135,7 +149,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 11, $ff
+tc_results: .fill 12, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -159,6 +173,9 @@ test_door_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
 test_item_pickup_calls: .byte 0
+test_busy_begin_calls: .byte 0
+test_busy_tick_calls: .byte 0
+test_busy_end_calls: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -167,6 +184,7 @@ test_read_ok: .byte 0
 test_cast_ok: .byte 0
 test_pickup_ok: .byte 0
 test_scene_dirty: .byte 0
+test_stairs_tile: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -178,6 +196,9 @@ test_scene_dirty: .byte 0
 }
 
 install_jump_patch:
+    :PatchJump(generation_busy_begin_api, generation_busy_begin)
+    :PatchJump(generation_busy_tick_api, generation_busy_tick)
+    :PatchJump(generation_busy_end_api, generation_busy_end)
     :PatchJump(input_get_command, test_input_get_command)
     :PatchJump(msg_clear, test_msg_clear)
     :PatchJump(turn_post_action, test_turn_post_action)
@@ -191,12 +212,14 @@ install_jump_patch:
     :PatchJump(player_cast_spell, test_player_cast_spell)
     :PatchJump(trap_check_at_player, test_trap_check)
     :PatchJump(check_player_on_store_door, test_check_store_door)
+    :PatchJump(check_stairs_at_player, test_check_stairs_at_player)
     :PatchJump(do_look, test_do_look)
     :PatchJump(get_direction_target, test_get_direction_target)
     :PatchJump(door_try_open, test_door_try_open)
     :PatchJump(item_pickup, test_item_pickup)
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
+    :PatchJump(overlay_load, test_overlay_load)
     rts
 
 reset_state:
@@ -220,6 +243,9 @@ reset_state:
     sta test_read_scroll_calls
     sta test_cast_spell_calls
     sta test_item_pickup_calls
+    sta test_busy_begin_calls
+    sta test_busy_tick_calls
+    sta test_busy_end_calls
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -227,6 +253,7 @@ reset_state:
     sta test_cast_ok
     sta test_pickup_ok
     sta test_scene_dirty
+    sta test_stairs_tile
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -328,6 +355,10 @@ test_check_store_door:
     clc
     rts
 
+test_check_stairs_at_player:
+    lda test_stairs_tile
+    rts
+
 test_do_look:
     inc test_do_look_calls
     rts
@@ -379,13 +410,17 @@ test_screen_clear:
 test_screen_clear_row:
     rts
 
+test_overlay_load:
+    clc
+    rts
+
 test_start:
     sei
     cld
     ldx #$ff
     txs
 
-    ldx #10
+    ldx #11
     lda #$ff
 !clr:
     sta tc_results,x
@@ -739,8 +774,39 @@ test_start:
     bne !t11_fail+
     lda #$01
     sta tc_results + 10
-    jmp test_finish
+    jmp !t12+
 !t11_fail:
     lda #$00
     sta tc_results + 10
+!t12:
+    jsr reset_state
+    lda #11
+    sta test_case_idx
+    lda #TILE_STAIRS_DN
+    sta test_stairs_tile
+    lda #CMD_STAIRS_DN
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_busy_begin_calls
+    cmp #1
+    bne !t12_fail+
+    lda test_busy_end_calls
+    cmp #1
+    bne !t12_fail+
+    lda test_busy_tick_calls
+    beq !t12_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t12_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp test_finish
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
     jmp test_finish

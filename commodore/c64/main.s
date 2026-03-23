@@ -70,6 +70,8 @@ tramp_dig_ability:
 // all output uses direct screen RAM writes at $0400+.
 .encoding "screencode_mixed"
 
+.const DUNGEON_GEN_BUSY = 1
+
 #import "../common/zeropage.s"
 #import "memory.s"
 #import "../common/reu.s"
@@ -84,6 +86,7 @@ tramp_dig_ability:
 #import "../common/player.s"
 #import "../common/ui_messages.s"
 #import "../common/ui_status.s"
+#import "../common/generation_busy.s"
 #import "../common/stat_display.s"
 #import "../common/sound.s"
 #import "../common/huffman.s"
@@ -141,6 +144,8 @@ entry_main:
     sta reu_show_status + 1
     lda #>tramp_reu_show_status
     sta reu_show_status + 2
+
+    jsr generation_busy_install
 
     // Select lowercase/uppercase character set (52 letter symbols)
     // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase

@@ -1,4 +1,5 @@
 #importonce
+#import "generation_busy_api.s"
 // turn.s — Turn processing routines
 //
 // The main loop (main.s) dispatches player commands directly and calls
@@ -152,11 +153,17 @@ turn_tick_effects:
     sta zp_run_dir                   // Stop running
     lda #0
     sta current_tier                 // Force first-entry tier lookup
+    jsr generation_busy_begin_if_dungeon_api
     jsr tier_check_transition        // Load correct tier for new dlvl
+    jsr generation_busy_tick_if_dungeon_api
     jsr level_generate
+    jsr generation_busy_tick_if_dungeon_api
     jsr monster_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
     jsr update_visibility
+    jsr generation_busy_end_if_dungeon_api
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport

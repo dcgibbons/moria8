@@ -16,6 +16,13 @@
 .const STORE_W = 10
 .const STORE_H = 5
 
+dg_progress_tick:
+#if DUNGEON_GEN_BUSY
+    jmp generation_busy_tick
+#else
+    rts
+#endif
+
 // ============================================================
 // Bulk map helpers (overlay-local, centralized high-volume operations)
 // ============================================================
@@ -351,7 +358,9 @@ dungeon_generate:
     lda #0
     sta trap_count
     jsr fill_map_rock
+    jsr dg_progress_tick
     jsr place_rooms
+    jsr dg_progress_tick
     // Safety: if fewer than 2 rooms placed, retry entire generation
     lda room_count
     cmp #2
@@ -364,19 +373,17 @@ dungeon_generate:
     jsr tramp_assign_special_room   // Pick special room type (if any)
     jsr place_streamers         // Before corridors (umoria order):
                                 // corridors overwrite veins they cross
+    jsr dg_progress_tick
     jsr connect_rooms
+    jsr dg_progress_tick
     jsr tramp_vault_seal_entrance   // Seal vault entrance with secret door
     jsr place_stairs_dungeon
     jsr place_traps
     jsr place_secrets
     jsr darken_rooms            // Strip FLAG_LIT from dark rooms (after all generation)
+    jsr dg_progress_tick
     jsr verify_stairs
     jsr position_player_dungeon
-    jsr verify_connectivity
-    bcc !dg_gen_done+           // All rooms reachable → success
-    dec dg_gen_retries
-    bne !dg_gen_retry-
-    // Give up after max retries (shouldn't happen with circular chain)
 !dg_gen_done:
     rts
 
