@@ -30,6 +30,25 @@ Every design decision flows from these two constraints.
 On the C128, the full 128 KB is available through bank switching, which gives us
 much more room. The design should target C64 as the constrained baseline.
 
+**C128 high-memory ownership rule:** The C128 port must keep the live overlay
+window and the reloadable banked payload physically separate in Bank 0 RAM.
+`$E000-$EFFF` is the overlay execution window; `$F000-$FFFA` is the reloadable
+banked payload window. Persistent overlay metadata/state must live in resident
+Bank 0 RAM, not adjacent to overlay code. No startup-overlay routine may trigger
+`init_copy_banked` while startup overlay execution is active.
+
+**C128 runtime-loaded code rule:** For any copied or disk-loaded runtime code,
+the linked address, PRG load header, load destination bank, visible execution
+bank, and recopy source span must all agree. A callable symbol is not enough.
+This exact class of mismatch caused:
+- post-chargen `JSR $1000` crashes when low-RAM VDC code loaded into the wrong bank
+- help/inventory blank screens when a recopy source overlapped `$E000-$EFFF`
+- dungeon-descent `JAM`s when ego-item code drifted into `$D000-$DFFF`
+
+**C128 low/high RAM caveats:**
+- `$1000-$3FFF` is not common RAM in the shipping C128 runtime model
+- `$D000-$DFFF` is the I/O hole and cannot be treated as ordinary executable RAM with I/O visible
+
 **Zero page KERNAL conflicts:** Although $02–$8F is nominally free from BASIC,
 some locations are clobbered by KERNAL routines. In particular, $22–$25 are used
 by KERNAL LOAD/SAVE, $14–$15 by KERNAL OPEN, and several others by KERNAL I/O.
@@ -155,11 +174,13 @@ encounters.
 ## Architecture Overview
 
 ```
-main.s                    Entry point, BASIC stub, initialization, command dispatch
+main.s                    Entry point, BASIC stub, initialization
+game_loop.s               Shared main loop orchestration, movement/running core, death/exit flow
+├── game_loop_helpers.s   Shared UI-only command flows, result-policy helpers, post-turn tails
 ├── config.s              System detection (C64/C128), column mode selection
 ├── memory.s              Bank switching routines, memory map management
 ├── zeropage.s            Zero page variable declarations (with KERNAL-safe zones)
-├── turn.s                Turn post-action (effects → hunger → regen → AI → turn counter)
+├── turn.s                Turn post-action (effects → hunger → regen → AI → turn counter), sets shared scene-dirty state for redraw policy
 │
 ├── screen.s              Screen output routines (40-col)
 ├── input.s               Keyboard input, command parsing
@@ -332,6 +353,7 @@ The C64's 16 colors are used to improve map readability via color RAM ($D800+).
 The palette is defined in `color.s`:
 - Walls: light grey — structural, background
 - Floor: dark grey — recedes visually
+- C128 VDC note: the hardware only provides two practical grey luminance steps. The shared palette still keeps `COL_DGREY` / `COL_GREY` / `COL_LGREY`, but the C128 VDC translation intentionally falls canonical `COL_GREY` back to dark grey while preserving `COL_LGREY` as the brighter wall/UI grey.
 - Doors: brown — interactive, stands out from walls
 - Stairs: white — high importance navigation
 - Player `@`: white — always visible

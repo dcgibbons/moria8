@@ -1,122 +1,78 @@
-# Moria C64/C128 Project Audit
+# Code Health & Bug Audit: Moria8 C64/C128
 
-## 1. Feature Comparison
+**Date:** March 22, 2026  
+**Auditor:** Senior Quality Engineer  
+**Status:** Operational with Critical Gameplay & Performance Issues
 
-### a) Features in `vms-moria` not present in `moria8`
-- **Map Size**: Original is 66 rows x 198 columns. `moria8` is 48 rows x 80 columns (split into 4 screens).
-- **Monster Count**: Original has ~351 monsters. `moria8` has 160 monsters (Tier 0: 8, Tier 1: 24, Tier 2: 32, Tier 3: 39, Tier 4: 57).
-- **Item Count**: Original has ~400+ item templates. `moria8` has only 55 base item types.
-- **Active Monsters**: Original allows ~100+ active monsters. `moria8` caps at 32 active monsters per level due to RAM constraints.
-- **Haggling**: `vms-moria` has a complex haggling system where charisma impacts price negotiation. `moria8` uses a simplified "Simplified Haggling" model (accept/decline at calculated price).
-- **Party Mode**: Some variations of `vms-moria` had experimental party support. `moria8` is strictly single-player.
-- **Save Scumming Prevention**: `moria8` deletes the save file upon loading, enforcing permadeath. This matches the spirit but is technically a "feature" present in the port that enforces the rule strictly.
-- **Stores**: Original has 8 stores (including Black Market and Home). `moria8` has 6 stores (General, Armory, Weapon, Temple, Alchemy, Magic). Missing: Black Market and Player Home (Storage).
+---
 
-### b) Features in `umoria` not present in `moria8`
-- **Character History**: `umoria` generates a detailed text history for the character background. `moria8` has a streamlined creation process.
-- **Artifacts**: Original has fixed artifacts (e.g. Phial of Galadriel). `moria8` **does not implement fixed artifacts**.
-- **Ego Items**: Original has ego items (e.g. "Long Sword of Slay Orc"). `moria8` implements basic enchantment (+x to hit/dmg) but **no complex ego powers** or slay flags are visible in the item structure.
-- **Detailed Inscriptions**: `umoria` allows inscribing items with custom text (e.g. "{empty}"). `moria8` does not support custom string inscriptions.
-- **Grouping**: `moria8` implements basic stacking, but advanced grouping options are not present.
+## 1. Executive Summary
+The Moria8 codebase is a robust and sophisticated 6502 assembly project with a clear separation between common game logic and platform-specific drivers for C64 and C128. However, several critical bugs and performance bottlenecks were identified during this audit that affect gameplay balance, random number quality, and system performance on the C128.
 
-## 2. Bugs in Implemented Features
+---
 
-### Known Bugs (from BUILDPLAN & Analysis)
-- **Input Lag**: `BUILDPLAN.md` notes "Full viewport redraw on every move causes visible input lag". This was marked as fixed, but should be verified in playtesting.
-- **Key Stacking**: "Keyboard buffer not flushed before input poll" was identified and fixed.
+## 2. Critical Bugs & Quality Issues
 
-### Potential Issues
-- **Monster AI Stack Depth**: The recursive or deep call chains (main -> move -> combat -> effects) can risk stack overflow on 6502 (only 256 bytes stack). `BUILDPLAN.md` identifies this as a risk.
-- **Memory Safety**: `screen_clear` had a bug writing past screen RAM, marked as fixed.
-- **Item Generation**: Random generation logic in `item.s` is simplified (Phase 1 gold, Phase 2 items). It might not match the distribution curves of the original.
+### 2.1 Combat BTH Overflow (Shared Logic)
+**Location:** `commodore/common/combat.s:230-250` (`combat_calc_tohit_common`)  
+**Issue:** The 16-bit logic for `PL_TOHIT * 3` is implemented using 8-bit arithmetic without proper overflow handling.
+**Impact:** If a player's `TOHIT` bonus is large (e.g., > 85), the calculation wraps around. For example, a `TOHIT` of 100 results in an added bonus of 44 instead of 300 (capped at 255). Conversely, very large negative penalties also wrap, potentially making weak characters hit much more often than intended.
+**Recommendation:** Implement 16-bit addition or explicit carry checks before clearing the carry for the next addition.
 
-## 3. Code Quality Issues
+### 2.2 RNG Correlation / 1-Bit LFSR (Shared Utility)
+**Location:** `commodore/common/rng.s:55` (`rng_next`)  
+**Issue:** The 32-bit Galois LFSR only advances by **one bit** per `rng_next` call.  
+**Impact:** Sequential calls to `rng_next` return bytes that are 87.5% correlated (bit-shifted versions of each other). This leads to extremely poor 16-bit distributions in `rng_range_word` and visible patterns in dungeon generation and combat rolls.
+**Recommendation:** Loop the LFSR shift 8 times inside `rng_next` to produce a fresh, uncorrelated byte per call.
 
-### TODOs (from Source Scan)
-- `input.s`: Numeric prefix parsing is marked as deferred/broken in `BUILDPLAN`.
-- `BUILDPLAN.md` lists many TODOs for Phase 10 (C128 features), such as 80-column mode, extended memory usage, and larger dungeon.
-- `store.s`: `Black Market` and `Player Home` are listed as TODO in `BUILDPLAN`. `store.s` code confirms they are missing.
-- `player_magic.s`: Full spellbook set is incomplete (only 2 books implemented, 8 total in original).
-- `dungeon_gen.s`: Room placement is random; originally it used a specific grid logic.
+### 2.3 C128 IRQ Disabling via KERNAL Wrappers (Platform C128)
+**Location:** `commodore/c128/main.s:450+` (`w_readst`, `w_open`, etc.)  
+**Issue:** The KERNAL wrappers use `php` to capture the processor status **after** `EnterKernal` has already executed `sei`.  
+**Impact:** `ExitKernal` always restores the status with the Interrupt flag set. This means **every KERNAL call permanently disables IRQs** until the next explicit `cli` (which is rare in the main loop). This breaks KERNAL features like the STOP-key check and prevents any background IRQ tasks from running.
+**Recommendation:** Move `php` to the very top of the wrapper, before `EnterKernal`.
 
-### Refactoring Needs
-- **Large Files**: `dungeon_gen.s` (60KB) and `item.s` (52KB) are very large single files. They should be split into sub-modules (e.g., `dungeon_gen_rooms.s`, `dungeon_gen_corridors.s`).
-- **Hardcoded Values**: Tier data generation scripts (`parse_creatures.py`, mentioned in headers) suggest a good pipeline, but the assembly files themselves contain many magic numbers for colors and attributes that could be symbolic.
-- **Magic Numbers**: `item.s` uses raw indices (0-54) for item types in many places effectively hardcoding the table order.
+### 2.4 C128 Bulk Map Performance (Platform C128)
+**Location:** `commodore/common/dungeon_gen.s:27` (`map_bulk_fill_all`)  
+**Issue:** Despite being labeled as "bulk," these routines use the single-tile `:MapWrite_ptr0_y()` macro.  
+**Impact:** On C128, every single byte write triggers two bank switches (Bank 0 -> Bank 1 -> Bank 0). A full map fill performs over 26,000 bank switches. This is orders of magnitude slower than a single `jsr map_bulk_enter` followed by direct `sta (zp),y` writes.
+**Recommendation:** Refactor `map_bulk_fill_all` and `map_bulk_and_all` to use platform-specific bulk enter/exit hooks.
 
-## 4. Product Quality / Playability Issues
+---
 
-### Screen Constraints
-- **40 Column Display**: The original game assumes 80 columns. The 40-column viewport requires scrolling or panel switching, which significantly changes the tactical awareness.
-- **Message Truncation**: Messages often exceed 40 characters. The "—more—" prompt usage is critical and might be intrusive if too frequent.
+## 3. 6502 Assembly Health
 
-### Performance
-- **Disk I/O**: Tier transitions require loading data from disk. On a stock 1541, this is slow (~30s). A fastloader is required and implemented, but real hardware performance is a key playability factor.
-- **Turn Speed**: Generating a level or processing 32 monsters might be slow on a 1MHz 6502 compared to a VAX. `BUILDPLAN.md` notes this risk.
+### 3.1 Redundant Comparisons
+**Pattern:** `jsr some_func / cmp #0 / bne ...`  
+**Finding:** Pervasive redundant `cmp #0` calls throughout the codebase. Since `lda`, `ldx`, `ldy`, `inx`, `dex`, and most math operations already set the Zero flag, these are unnecessary and consume both space and cycles.
 
-### Balance
-- **Reduced Content**: With fewer monsters (160 vs 351) and items (55 vs 400+), the game balance (XP gain, drop rates) needs careful tuning to match the original's progression curve.
-- **Spell Variety**: Reduced spell list (32 vs 62+) changes the utility of caster classes.
-- **Lack of Artifacts**: The endgame might feel less rewarding without the chase for specific named artifacts.
+### 3.2 8502 2MHz Silicon Bug
+**Finding:** The project is aware of the 2MHz RMW bug (as seen in `huffman.s`). While other RMW instructions (`inc zp_ptr0`) exist, they are safe because the project keeps the VIC-II blanked on C128, preventing the DMA cycle-stealing that triggers the corruption.
 
-## 5. Architecture & Physical Build
+---
 
-### Single Binary Tax
-The current "Single Binary" plan (detect C128 at runtime, adapt behavior) imposes a significant penalty on the C64 version.
-- **Dead Code**: C64 users must load VDC drivers and MMU logic they cannot use.
-- **Memory Pressure**: The ~2-4KB wasted on C128 support code could otherwise store ~20 more active monsters or reduce disk thrashing.
-- **Complexity**: Runtime checks for `MACHINE_C128` add overhead to tight loops (screen rendering).
+## 4. Platform-Specific Observations
 
-### Recommendation: Separate Binaries
-The project should pivot to a "Universal Loader" model:
-1.  **BOOT.PRG**: Tiny launcher that detects the machine.
-2.  **MORIA64.PRG**: Optimized strictly for 64KB. No VDC code. Maximize RAM for gameplay.
-3.  **MORIA128.PRG**: Optimized for 128KB + 80 columns. Keep entire database in RAM (no disk loading pauses).
+### 4.1 Commodore 64
+*   **Memory Margin:** EXTREMELY TIGHT. `program_end` ($BFF0) is only 16 bytes away from `MAP_BASE` ($C000). Any significant code addition will require further Huffman compression or moving logic to overlays.
+*   **Safety:** Banking and IRQ handling are correct and robust. `input_get_key` correctly preserves the I-flag state.
 
-This solves the memory constraint on 100% of C64s while allowing the C128 version to realize its "Full Experience" potential without being held back.
+### 4.2 Commodore 128
+*   **Memory Margin:** Good in Bank 0, but Bank 1 is tightly packed.
+*   **Innovation:** Excellent use of Common RAM ($0C00) for bank-switching bridges and hardware vectors.
+*   **Inconsistency:** `screen_put_char` translates PETSCII, but `screen_put_string` expects pre-translated screen codes. This is managed by the assembler encoding but remains a potential trap for runtime-generated strings.
 
-### Hardware Utilization (REU)
-The current codebase includes **REU (Ram Expansion Unit)** support (`reu.s`).
-- **Cost**: ~400 bytes of code.
-- **Benefit**: If detected, all 4 monster tiers are loaded to the REU at startup. Tier transitions become instant (DMA) instead of slow disk loads.
-- **Verdict**: **Keep it.** The code cost is negligible (<1%) for a massive playability gain. It aligns perfectly with the "Separate Binaries" strategy (as `MORIA64.PRG` can simply include the module).
+---
 
-## 6. UX & Polish
+## 5. Coverage Analysis
+*   **Unit Tests:** Extensive Python-driven unit tests for C128.
+*   **Smoke Tests:** Good coverage for boot, title, and transitions.
+*   **Gap:** Melee combat formulas and high-range `TOHIT` bonuses lack automated edge-case verification, which allowed the overflow bug to remain undetected.
 
-### Directory Art
-- **Requirement**: The disk directory listing should look professional and thematic.
-- **Implementation**: Use PETSCII art characters in filenames (0-length files or dummy files) to create a logo or title ("DUNGEONS OF MORIA") that appears when the user types `LOAD "$",8` and `LIST`.
+---
 
-## 7. File Naming Review
-
-### Current State
-| Usage | Filename | Source File | Notes |
-| :--- | :--- | :--- | :--- |
-| **Save Game** | `MORIA.SAV` | `save.s` | Functional but generic. |
-| **High Scores** | `MORIA.HI` | `score.s` | Standard generic extension. |
-| **Tier Data** | `CR T1` - `CR T4` | `tier_manager.s` | Very cryptic. Looks like debug names. |
-
-### Recommendations
-1.  **Save Game**: Rename to **`THE.GAME`**.
-    *   *Why*: It adds a classic flair (referencing old Infocom or RPG styles) and looks cleaner in the directory.
-2.  **High Scores**: Rename to **`HALL.OF.FAME`**.
-    *   *Why*: Much more thematic than `MORIA.HI`.
-3.  **Tier Data**: Rename to **`MONSTER.DB.1`**, **`MONSTER.DB.2`**, etc.
-    *   *Why*: "CR T1" is obscure. Users browsing the disk should know what these files are (and that they shouldn't delete them).
-
-## 8. Release Strategy & Data Persistence
-
-### The Update Problem
-If the game and save data reside on the same disk image, releasing a new version (`moria8_v1.1.d64`) forces the user to lose their save file (`THE.GAME`) and high scores (`HALL.OF.FAME`) unless they manually copy files. This is a poor user experience.
-
-### Recommendation: The "Character Disk"
-The standard RPG solution on C64 is to separate the **Game Disk** (read-only code & static data) from the **Character Disk** (read/write save & high score data).
-
-1.  **Boot & Play**: User boots the Game Disk.
-2.  **Save/Load**: when the user attempts to Save, Load, or view High Scores, the game prompts:
-    > `PLEASE INSERT SAVE DISK AND PRESS RETURN`
-3.  **Update Safety**: A new game version is just a new Game Disk. The user keeps their existing Character Disk, preserving all progress and high scores across engine updates.
-
-### Implementation Requirements
-- Code needs to handle disk swapping (wait for keypress, re-initialize drive if needed).
-- Code needs to handle "Wrong Disk" errors gracefully (check for a specific ID file on the Save Disk).
+## 6. Recommendations for Next Steps
+1.  **Fix `combat_calc_tohit` overflow** to restore gameplay balance.
+2.  **Upgrade RNG to 8-step** to improve procedural generation quality.
+3.  **Repair C128 KERNAL wrappers** to stop accidental IRQ disabling.
+4.  **Implement true Bulk Map paths** for C128 to speed up generation.
+5.  **Audit C64 memory usage** to find at least 256 bytes of emergency headroom.

@@ -1,52 +1,81 @@
-# Moria C64/C128 — Build Plan
+# Moria C64/C128 — Active Build Plan
 
-> Active development plans and tracking for the Moria C64/C128 port.
-> See [DESIGN.md](DESIGN.md) for architecture reference, [BUILDPLAN_HISTORY.md](BUILDPLAN_HISTORY.md) for completed work.
-
----
-
-## Current State (2026-02-21 — R17 + BUG-48 complete)
-
-**All core phases (1–9) complete.** The game is fully playable from title screen through dungeon exploration, combat, magic, stores, save/load, death, and high scores. All feature work (R1.1–R17), optimizations (OPT-1–OPT-5), and 48 bug fixes complete. See BUILDPLAN_HISTORY.md for the full phase completion summary and resolved bug list.
-
-### Build Stats
-
-- **Test suites:** 24 (320 runtime tests)
-- **Compile-time asserts:** 71
-- **Source files:** ~51 .s files
-- **Program size:** $B48E (program_end) — **2,930 bytes headroom** to MAP_BASE ($C000)
-- **Banked code:** $F000-$FF98 (at limit)
-- **Banked payload:** $B4A9-$C444
-- **Town overlay:** 3,016 of 4,096 bytes (1,080 free)
-- **Startup overlay:** 4,017 of 4,096 bytes (79 free)
-- **DungeonGen overlay:** 3,530 of 4,096 bytes (566 free)
+> Active outstanding work only.
+> See [DESIGN.md](DESIGN.md) for architecture reference and [BUILDPLAN_HISTORY.md](BUILDPLAN_HISTORY.md) for completed phases, fixes, and reviews.
 
 ---
 
-## Open Issues
+## Current State (2026-03-23)
 
-| # | Severity | Description | Status |
-|---|----------|-------------|--------|
-| MC2.2 | LOW | No fractional XP accumulation (integer-only, documented simplification) | Deferred |
+- All core phases 1–9 are complete.
+- C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, and the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees.
+- C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
----
+## Open Bugs
 
-## What's Next
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| None | None at the moment. | — | — | — | Recent gameplay bugs BUG-LIT and BUG-1 are both closed. |
 
-**Phase 10 — C128 Enhancements** (not started):
+## Open Phases / Display Work
 
-| # | What | Summary |
-|---|------|---------|
-| 10.0 | Separate binaries | BOOT.PRG + MORIA64 + MORIA128 — prerequisite for all C128 work |
-| 10.1 | 80-column VDC mode | Second rendering backend for VDC 80x25 display |
-| 10.2 | Extended memory | C128 128KB MMU bank-switch path (no disk tier loading) |
-| 10.3 | Larger dungeon | Expand map to 120x80+, more rooms, up to 64 active monsters |
-| 10.4 | Enhanced display | VDC color attributes for threat-coded monsters |
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Medium | `UI-80` refine the C128 80-column layout to a true Umoria-style left status panel | High | Medium | No | Treat as a refinement of the shipped 80-column baseline, not a contradiction of 10.7 completion. |
 
----
+## Open Test / Cleanup Work
 
-### Priority Triage (updated 2026-02-21)
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
+| Low | Clean up remaining 40-column layout assumptions in `ui_messages.s`, `title_data.s`, `ui_help.s`, `ui_status.s`, and `disk_swap.s` | Medium | Low | No | Mostly polish and consistency work. |
+| Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
+| Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |
 
-**Low priority (polish/completeness):**
-- A6 Large file split — opportunistic refactoring (item.s)
-- OPT-5 (Options 2+3) — further overlays for magic/spells and UI screens if main segment tightens again
+## Open Features
+
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
+| Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |
+
+## C128 -> `main` Merge Checklist
+
+### Must
+
+- Keep C128 verification green:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test128`
+- Reconfirm real-play stability on C128:
+  - boot and title flow
+  - new game
+  - town
+  - descend / ascend
+  - save / load resume
+  - death / game-over flow
+- Reconfirm no shared-code regressions on C64 from the merged gameplay changes.
+- Keep the C128 memory/layout contract intact:
+  - main segment below `$C000`
+  - banked payload below `$FFFA`
+  - staged `banked_payload` source below `$E000`
+  - overlays fit their windows
+  - low-RAM runtime loader contract remains valid
+  - no callable code executes from the I/O hole
+
+### Strongly Preferred
+
+- Keep the new isolated disk-swap and renderer tests in the regular pre-merge verification path.
+
+### Not Required
+
+- `UI-80` refinement
+- `FEAT1`
+- `FEAT-AUD`
+- cleanup/refactor backlog items that do not affect merge safety
+
+## Merge Notes
+
+- This file should contain actual open work only.
+- Ongoing engineering guardrails belong in `AGENTS.md`, `tasks/lessons.md`, asserts, and test coverage, not in the backlog table.

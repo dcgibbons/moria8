@@ -33,8 +33,14 @@
 .const CREATURE_END     = $c0ff
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
+// C128-only constant used by shared tier_manager staging metadata.
+// C64 never executes this path (runtime machine check), but symbol must exist.
+.const BANK1_DB_BASE    = $e000
 .const SCREEN_RAM       = $0400
 .const COLOR_RAM        = $d800
+.const DUNGEON_GEN_BFS_QUEUE_BASE = SCREEN_RAM
+.const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
+.const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
 
 // ZP save buffer — stores $02–$8F during game, restored on exit
 // Allocated as program data so it can't collide with code.
@@ -90,6 +96,12 @@
     lda #BANK_ALL_ROM
     sta $01
 }
+
+// Platform compatibility macros (no-ops for C64)
+.macro MachineRestoreDefault() {}
+.macro MachineRestoreAllRam() {}
+.macro EnterKernal() { php }
+.macro ExitKernal() { plp }
 
 // ============================================================
 // Subroutines
@@ -187,10 +199,19 @@ copy_to_e000:
 !done:
     rts
 
+// C128 MMU compatibility stubs for shared code paths that are runtime-gated.
+mmu_select_bank1:
+    rts
+
+mmu_select_bank0:
+    rts
+
 // ============================================================
 // Compile-time validation
 // ============================================================
 .assert "Map fits in $C000 region", MAP_END - MAP_BASE + 1, 3840
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
+.assert "Dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
+.assert "Dungeon-gen BFS queue stays in screen scratch window", DUNGEON_GEN_BFS_QUEUE_END <= $07ff, true
 .assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

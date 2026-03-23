@@ -1,0 +1,2501 @@
+Output: diff --git a/commodore/c128/main.s b/commodore/c128/main.s
+index 4114516..e0d1737 100644
+--- a/commodore/c128/main.s
++++ b/commodore/c128/main.s
+@@ -69,1272 +69,1273 @@ entry:
+     jmp entry_real
+ 
+ // ============================================================
+-// Critical trampolines — pin these near program start so they
+-// can never drift into the $D000 I/O hole.
++// Core System & UI Routines — MUST live in Safe Zone (<$C000)
+ // ============================================================
+-tramp_player_create:
+-    lda #1                      // OVL_STARTUP
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$31
+-    jsr c128_stack_guard_begin
+-#endif
+-    jsr overlay_load
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$32
+-    jsr c128_stack_guard_check
+-#endif
+-    bcc !tpc_loaded+
+-    jmp entry_main
+-!tpc_loaded:
+-    jsr c128_restore_runtime_guards
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$33
+-    jsr c128_stack_guard_begin
+-#endif
+-    jmp player_create
+-
+-tramp_game_over:
+-    // 1. Resolve creature name while tier data still at $E000
+-    lda zp_death_source
+-    cmp #$fd                    // DEATH_CURSED
+-    bcs !tgo_load_overlay+
+-    tax
+-    jsr creature_get_name
++#import "memory128.s"
++#import "../common/color.s"
++#import "../common/sound.s"
++#import "config128.s"
++#import "screen_vdc.s"
++#import "../common/title_sysinfo_banked.s"
++#import "../common/reu_loading_banked.s"
++#import "input128.s"
+ 
+-!tgo_load_overlay:
+-    // 2. Load death overlay at $0400
+-    lda #3                      // OVL_DEATH
+-    jsr overlay_load
+-    bcc !tgo_loaded+
+-    jmp entry_main
+-!tgo_loaded:
+-    jsr c128_restore_runtime_guards
++// Bootstrap — sets up MMU and processor port, jumps to main code
++entry_real:
++    sei
++    cld
++    ldx #$ff
++    txs
+ 
+-    // 3. Calculate score
+-    jsr score_calculate
++    // Hardware Quiet Down — Acknowledge and Clear
++    lda #$7f
++    sta $dc0d               // CIA1 Interrupt Control Register: disable all
++    sta $dd0d               // CIA2 Interrupt Control Register: disable all
++    lda $dc0d               // Clear CIA1 ICR
++    lda $dd0d               // Clear CIA2 ICR
+ 
+-    // 4. Load high scores from disk (needs KERNAL-visible ROM)
+-    php
+-    sei
+     lda #$ff
+-    sta $cc
+-    lda #$0e                    // MMU_NORMAL
++    sta $d8                 // Screen Editor: 80-col mode
++    // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
++    // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
++    lda #$00                // Bank 15 (KERNAL + I/O)
+     sta $ff00
+-    lda #$37                    // BANK_ALL_ROM
+-    sta $01
+-    jsr hiscore_load
+-    lda #$3e                    // MMU_ALL_RAM
++    ldx #5
++!mirror:
++    lda $ff00,x
++    sta $ff00,x
++    inx
++    bne !mirror-
++    lda #$3E                // Restore All-RAM
+     sta $ff00
+-    jsr c128_vdc_reassert_mode
+-    plp
+ 
+-    // 5. Insert into high score table (death overlay code at $E000)
+-    jsr hiscore_insert
++    // --- Patch KERNAL JMP table in RAM ---
++    // Read original targets from ROM stubs and patch stubs to point to our safe wrappers.
++    // This allows game code to call JSR $FFxx and have the wrapper manage the MMU.
++    
++    lda #$4C                    // JMP absolute
++    sta $ffb7                   // READST
++    sta $ffba                   // SETLFS
++    sta $ffbd                   // SETNAM
++    sta $ffc0                   // OPEN
++    sta $ffc3                   // CLOSE
++    sta $ffc6                   // CHKIN
++    sta $ffc9                   // CHKOUT
++    sta $ffcc                   // CLRCHN
++    sta $ffcf                   // CHRIN
++    sta $ffd2                   // CHROUT
++    sta $ffd5                   // LOAD
+ 
+-    // 6. Save high scores to disk (needs KERNAL-visible ROM)
+-    php
+-    sei
+-    lda #$ff
+-    sta $cc
+-    lda #$0e                    // MMU_NORMAL
+-    sta $ff00
+-    lda #$37                    // BANK_ALL_ROM
+-    sta $01
+-    jsr hiscore_save
+-    lda #$3e                    // MMU_ALL_RAM
+-    sta $ff00
+-    jsr c128_vdc_reassert_mode
+-    plp
++    // FFB7 READST
++    lda #<w_readst
++    sta $ffb8
++    lda #>w_readst
++    sta $ffb9
++    // FFBA SETLFS
++    lda #<w_setlfs
++    sta $ffbb
++    lda #>w_setlfs
++    sta $ffbc
++    // FFBD SETNAM
++    lda #<w_setnam
++    sta $ffbe
++    lda #>w_setnam
++    sta $ffbf
++    // FFC0 OPEN
++    lda #<w_open
++    sta $ffc1
++    lda #>w_open
++    sta $ffc2
++    // FFC3 CLOSE
++    lda #<w_close
++    sta $ffc4
++    lda #>w_close
++    sta $ffc5
++    // FFC6 CHKIN
++    lda #<w_chkin
++    sta $ffc7
++    lda #>w_chkin
++    sta $ffc8
++    // FFC9 CHKOUT
++    lda #<w_chkout
++    sta $ffca
++    lda #>w_chkout
++    sta $ffcb
++    // FFCC CLRCHN
++    lda #<w_clrchn
++    sta $ffcd
++    lda #>w_clrchn
++    sta $ffce
++    // FFCF CHRIN
++    lda #<w_chrin
++    sta $ffd0
++    lda #>w_chrin
++    sta $ffd1
++    // FFD2 CHROUT
++    lda #<w_chrout
++    sta $ffd3
++    lda #>w_chrout
++    sta $ffd4
++    // FFD5 LOAD
++    lda #<w_load
++    sta $ffd6
++    lda #>w_load
++    sta $ffd7
+ 
+-    // 7. Display death screen (death overlay code at $E000)
+-    jmp score_death_screen
++    // Save original hardware IRQ/NMI vectors before patching RAM copies.
++    lda $fffe
++    sta kernal_hw_irq_vec_lo
++    lda $ffff
++    sta kernal_hw_irq_vec_hi
++    lda $fffa
++    sta kernal_hw_nmi_vec_lo
++    lda $fffb
++    sta kernal_hw_nmi_vec_hi
+ 
+-tramp_store_init_all:
+-    lda #2                      // OVL_TOWN
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$34
+-    jsr c128_stack_guard_begin
+-#endif
+-    jsr overlay_load
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$35
+-    jsr c128_stack_guard_check
+-#endif
+-    bcc !tsia_loaded+
+-    jmp entry_main
+-!tsia_loaded:
+-    jsr c128_restore_runtime_guards
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$36
+-    jsr c128_stack_guard_begin
+-#endif
+-    jmp store_init_all
++    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
++    // This ensures interrupts always find code even when Bank 1 is active.
++    lda #<mmu_common_irq
++    sta $fffe
++    lda #>mmu_common_irq
++    sta $ffff
++    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
++    lda #<mmu_common_nmi
++    sta $fffa
++    lda #>mmu_common_nmi
++    sta $fffb
++    // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
++    lda #<exit_trampoline
++    sta $fffc
++    lda #>exit_trampoline
++    sta $fffd
+ 
+-tramp_store_restock_all:
+-    lda #2                      // OVL_TOWN
+-    jsr overlay_load
+-    bcc !tsra_loaded+
++    :MachineRestoreDefault()
+     jmp entry_main
+-!tsra_loaded:
+-    jsr c128_restore_runtime_guards
+-    jmp store_restock_all
+ 
+-tramp_store_enter:
+-    lda #2                      // OVL_TOWN
+-    jsr overlay_load
+-    bcc !tse_loaded+
+-    jmp entry_main
+-!tse_loaded:
+-    jsr c128_restore_runtime_guards
+-    jmp store_enter
++// ============================================================
++// Safe KERNAL Wrappers
++// Each wrapper switches to MMU_NORMAL, calls real target,
++// then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
++// ============================================================
++// KERNAL calls now use the Official Jump Table ($FF81-$FFF5) safely in Bank 15.
+ 
+-#if C128_TEST_SCRIPTED_INPUT
+-c128_test_town_fail_sym:
+-    brk
+-c128_test_town_pass_sym:
+-    brk
+-#elif C128_TEST_CACHE_SURVIVAL
+-c128_test_town_fail_sym:
+-    brk
+-c128_test_town_pass_sym:
+-    brk
+-#endif
+-#if C128_CACHE_TEST_SKIP_TIER
+-c128_test_partial_cache_fail_sym:
+-    brk
+-#endif
+-#if C128_CACHE_TEST_SKIP_OVERLAY
+-c128_test_overlay_cache_fail_sym:
+-    brk
+-#endif
+-#if C128_TEST_CACHE_SURVIVAL
+-c128_test_cache_survival_fail_sym:
+-    brk
+-c128_test_cache_survival_pass_sym:
+-    brk
+-#endif
+-#if C128_TEST_TITLE_ART_CONTENT
+-c128_test_title_art_fail_sym:
+-    brk
+-c128_test_title_art_pass_sym:
+-    brk
+-#endif
+-#if C128_TEST_OVERLAY_TRANSITION_DIAG
+-c128_overlay_transition_fail_sym:
+-    brk
+-c128_overlay_transition_pass_sym:
+-    brk
++// READST
++w_readst:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffb7
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// SETLFS
++w_setlfs:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffba
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// SETNAM
++w_setnam:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffbd
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// OPEN
++w_open:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffc0
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CLOSE
++w_close:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffc3
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CHKIN
++w_chkin:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffc6
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CHKOUT
++w_chkout:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffc9
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CLRCHN
++w_clrchn:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffcc
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CHRIN
++w_chrin:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffcf
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// CHROUT
++w_chrout:
++    pha
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
++    pla
++    tay
++    pla
++    tax
++    pla
++    jsr $ffd2
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++    rts
++// LOAD
++w_load:
++    stx c128_load_arg_x
++    sty c128_load_arg_y
++    pha
++#if C128_REAL_BOOT_DIAG
++    ldx #$51
++    jsr c128_stack_guard_begin
+ #endif
+-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
+-c128_diag_fail_sym:
+-    lda c128_stack_guard_stage
+-    cmp #$11
+-    bne !chk12+
+-    jmp c128_diag_fail_stage_11
+-!chk12:
+-    cmp #$12
+-    bne !chk13+
+-    jmp c128_diag_fail_stage_12
+-!chk13:
+-    cmp #$13
+-    bne !chk14+
+-    jmp c128_diag_fail_stage_13
+-!chk14:
+-    cmp #$14
+-    bne !chk15+
+-    jmp c128_diag_fail_stage_14
+-!chk15:
+-    cmp #$15
+-    bne !chk16+
+-    jmp c128_diag_fail_stage_15
+-!chk16:
+-    cmp #$16
+-    bne !chk17+
+-    jmp c128_diag_fail_stage_16
+-!chk17:
+-    cmp #$17
+-    bne !chk18+
+-    jmp c128_diag_fail_stage_17
+-!chk18:
+-    cmp #$18
+-    bne !chk19+
+-    jmp c128_diag_fail_stage_18
+-!chk19:
+-    cmp #$19
+-    bne !chk1a+
+-    jmp c128_diag_fail_stage_19
+-!chk1a:
+-    cmp #$1a
+-    bne !chk1b+
+-    jmp c128_diag_fail_stage_1a
+-!chk1b:
+-    cmp #$1b
+-    bne !chk1c+
+-    jmp c128_diag_fail_stage_1b
+-!chk1c:
+-    cmp #$1c
+-    bne !chk1d+
+-    jmp c128_diag_fail_stage_1c
+-!chk1d:
+-    cmp #$1d
+-    bne !chk1e+
+-    jmp c128_diag_fail_stage_1d
+-!chk1e:
+-    cmp #$1e
+-    bne !chk1f+
+-    jmp c128_diag_fail_stage_1e
+-!chk1f:
+-    cmp #$1f
+-    bne !chk21+
+-    jmp c128_diag_fail_stage_1f
+-!chk21:
+-    cmp #$21
+-    bne !chk22+
+-    jmp c128_diag_fail_stage_21
+-!chk22:
+-    cmp #$22
+-    bne !chk23+
+-    jmp c128_diag_fail_stage_22
+-!chk23:
+-    cmp #$23
+-    bne !chk24+
+-    jmp c128_diag_fail_stage_23
+-!chk24:
+-    cmp #$24
+-    bne !chk25+
+-    jmp c128_diag_fail_stage_24
+-!chk25:
+-    cmp #$25
+-    bne !chk26+
+-    jmp c128_diag_fail_stage_25
+-!chk26:
+-    cmp #$26
+-    bne !chk27+
+-    jmp c128_diag_fail_stage_26
+-!chk27:
+-    cmp #$27
+-    bne !chk28+
+-    jmp c128_diag_fail_stage_27
+-!chk28:
+-    cmp #$28
+-    bne !chk31+
+-    jmp c128_diag_fail_stage_28
+-!chk31:
+-    cmp #$31
+-    bne !chk32+
+-    jmp c128_diag_fail_stage_31
+-!chk32:
+-    cmp #$32
+-    bne !chk33+
+-    jmp c128_diag_fail_stage_32
+-!chk33:
+-    cmp #$33
+-    bne !chk34+
+-    jmp c128_diag_fail_stage_33
+-!chk34:
+-    cmp #$34
+-    bne !chk35+
+-    jmp c128_diag_fail_stage_34
+-!chk35:
+-    cmp #$35
+-    bne !chk36+
+-    jmp c128_diag_fail_stage_35
+-!chk36:
+-    cmp #$36
+-    bne !chk39+
+-    jmp c128_diag_fail_stage_36
+-!chk39:
+-    cmp #$39
+-    bne !chk3a+
+-    jmp c128_diag_fail_stage_39
+-!chk3a:
+-    cmp #$3a
+-    bne !chk41+
+-    jmp c128_diag_fail_stage_3a
+-!chk41:
+-    cmp #$41
+-    bne !chk42+
+-    jmp c128_diag_fail_stage_41
+-!chk42:
+-    cmp #$42
+-    bne !chk43+
+-    jmp c128_diag_fail_stage_42
+-!chk43:
+-    cmp #$43
+-    bne !chk44+
+-    jmp c128_diag_fail_stage_43
+-!chk44:
+-    cmp #$44
+-    bne !chk45+
+-    jmp c128_diag_fail_stage_44
+-!chk45:
+-    cmp #$45
+-    bne !chk46+
+-    jmp c128_diag_fail_stage_45
+-!chk46:
+-    cmp #$46
+-    bne !chk47+
+-    jmp c128_diag_fail_stage_46
+-!chk47:
+-    cmp #$47
+-    bne !chk48+
+-    jmp c128_diag_fail_stage_47
+-!chk48:
+-    cmp #$48
+-    bne !chk49+
+-    jmp c128_diag_fail_stage_48
+-!chk49:
+-    cmp #$49
+-    bne !chk4a+
+-    jmp c128_diag_fail_stage_49
+-!chk4a:
+-    cmp #$4a
+-    bne !chk4b+
+-    jmp c128_diag_fail_stage_4a
+-!chk4b:
+-    cmp #$4b
+-    bne !chk4c+
+-    jmp c128_diag_fail_stage_4b
+-!chk4c:
+-    cmp #$4c
+-    bne !chk51+
+-    jmp c128_diag_fail_stage_4c
+-!chk51:
+-    cmp #$51
+-    bne !chk52+
+-    jmp c128_diag_fail_stage_51
+-!chk52:
+-    cmp #$52
+-    bne !chk53+
+-    jmp c128_diag_fail_stage_52
+-!chk53:
+-    cmp #$53
+-    bne !chk54+
+-    jmp c128_diag_fail_stage_53
+-!chk54:
+-    cmp #$54
+-    bne !chk61+
+-    jmp c128_diag_fail_stage_54
+-!chk61:
+-    cmp #$61
+-    bne !chk62+
+-    jmp c128_diag_fail_stage_61
+-!chk62:
+-    cmp #$62
+-    bne !chk63+
+-    jmp c128_diag_fail_stage_62
+-!chk63:
+-    cmp #$63
+-    bne !chk64+
+-    jmp c128_diag_fail_stage_63
+-!chk64:
+-    cmp #$64
+-    bne !diag_default+
+-    jmp c128_diag_fail_stage_64
+-!diag_default:
+-    jmp c128_diag_fail_default
+-c128_diag_fail_default:
+-    nop
+-    jmp c128_diag_fail_default
+-c128_diag_fail_stage_11:
+-    nop
+-    jmp c128_diag_fail_stage_11
+-c128_diag_fail_stage_12:
+-    nop
+-    jmp c128_diag_fail_stage_12
+-c128_diag_fail_stage_13:
+-    nop
+-    jmp c128_diag_fail_stage_13
+-c128_diag_fail_stage_14:
+-    nop
+-    jmp c128_diag_fail_stage_14
+-c128_diag_fail_stage_15:
+-    nop
+-    jmp c128_diag_fail_stage_15
+-c128_diag_fail_stage_16:
+-    nop
+-    jmp c128_diag_fail_stage_16
+-c128_diag_fail_stage_17:
+-    nop
+-    jmp c128_diag_fail_stage_17
+-c128_diag_fail_stage_18:
+-    nop
+-    jmp c128_diag_fail_stage_18
+-c128_diag_fail_stage_19:
+-    nop
+-    jmp c128_diag_fail_stage_19
+-c128_diag_fail_stage_1a:
+-    nop
+-    jmp c128_diag_fail_stage_1a
+-c128_diag_fail_stage_1b:
+-    nop
+-    jmp c128_diag_fail_stage_1b
+-c128_diag_fail_stage_1c:
+-    nop
+-    jmp c128_diag_fail_stage_1c
+-c128_diag_fail_stage_1d:
+-    nop
+-    jmp c128_diag_fail_stage_1d
+-c128_diag_fail_stage_1e:
+-    nop
+-    jmp c128_diag_fail_stage_1e
+-c128_diag_fail_stage_1f:
+-    nop
+-    jmp c128_diag_fail_stage_1f
+-c128_diag_fail_stage_21:
+-    nop
+-    jmp c128_diag_fail_stage_21
+-c128_diag_fail_stage_22:
+-    nop
+-    jmp c128_diag_fail_stage_22
+-c128_diag_fail_stage_23:
+-    nop
+-    jmp c128_diag_fail_stage_23
+-c128_diag_fail_stage_24:
+-    nop
+-    jmp c128_diag_fail_stage_24
+-c128_diag_fail_stage_25:
+-    nop
+-    jmp c128_diag_fail_stage_25
+-c128_diag_fail_stage_26:
+-    nop
+-    jmp c128_diag_fail_stage_26
+-c128_diag_fail_stage_27:
+-    nop
+-    jmp c128_diag_fail_stage_27
+-c128_diag_fail_stage_28:
+-    nop
+-    jmp c128_diag_fail_stage_28
+-c128_diag_fail_stage_31:
+-    nop
+-    jmp c128_diag_fail_stage_31
+-c128_diag_fail_stage_32:
+-    nop
+-    jmp c128_diag_fail_stage_32
+-c128_diag_fail_stage_33:
+-    nop
+-    jmp c128_diag_fail_stage_33
+-c128_diag_fail_stage_34:
+-    nop
+-    jmp c128_diag_fail_stage_34
+-c128_diag_fail_stage_35:
+-    nop
+-    jmp c128_diag_fail_stage_35
+-c128_diag_fail_stage_36:
+-    nop
+-    jmp c128_diag_fail_stage_36
+-c128_diag_fail_stage_39:
+-    nop
+-    jmp c128_diag_fail_stage_39
+-c128_diag_fail_stage_3a:
+-    nop
+-    jmp c128_diag_fail_stage_3a
+-c128_diag_fail_stage_41:
+-    nop
+-    jmp c128_diag_fail_stage_41
+-c128_diag_fail_stage_42:
+-    nop
+-    jmp c128_diag_fail_stage_42
+-c128_diag_fail_stage_43:
+-    nop
+-    jmp c128_diag_fail_stage_43
+-c128_diag_fail_stage_44:
+-    nop
+-    jmp c128_diag_fail_stage_44
+-c128_diag_fail_stage_45:
+-    nop
+-    jmp c128_diag_fail_stage_45
+-c128_diag_fail_stage_46:
+-    nop
+-    jmp c128_diag_fail_stage_46
+-c128_diag_fail_stage_47:
+-    nop
+-    jmp c128_diag_fail_stage_47
+-c128_diag_fail_stage_48:
+-    nop
+-    jmp c128_diag_fail_stage_48
+-c128_diag_fail_stage_49:
+-    nop
+-    jmp c128_diag_fail_stage_49
+-c128_diag_fail_stage_4a:
+-    nop
+-    jmp c128_diag_fail_stage_4a
+-c128_diag_fail_stage_4b:
+-    nop
+-    jmp c128_diag_fail_stage_4b
+-c128_diag_fail_stage_4c:
+-    nop
+-    jmp c128_diag_fail_stage_4c
+-c128_diag_fail_stage_51:
+-    nop
+-    jmp c128_diag_fail_stage_51
+-c128_diag_fail_stage_52:
+-    nop
+-    jmp c128_diag_fail_stage_52
+-c128_diag_fail_stage_53:
+-    nop
+-    jmp c128_diag_fail_stage_53
+-c128_diag_fail_stage_54:
+-    nop
+-    jmp c128_diag_fail_stage_54
+-c128_diag_fail_stage_61:
+-    nop
+-    jmp c128_diag_fail_stage_61
+-c128_diag_fail_stage_62:
+-    nop
+-    jmp c128_diag_fail_stage_62
+-c128_diag_fail_stage_63:
+-    nop
+-    jmp c128_diag_fail_stage_63
+-c128_diag_fail_stage_64:
+-    nop
+-    jmp c128_diag_fail_stage_64
++    :EnterKernal()
++#if C128_REAL_BOOT_DIAG
++    ldx #$52
++    stx c128_stack_guard_stage
++    jsr c128_stack_guard_snapshot_banking
++#endif
++    pla
++    ldx c128_load_arg_x
++    ldy c128_load_arg_y
++    jsr $ffd5
++#if C128_REAL_BOOT_DIAG
++    ldx #$53
++    stx c128_stack_guard_stage
++    jsr c128_stack_guard_snapshot_banking
++#endif
++    php
++    pha
++    :ExitKernal()
++    pla
++    plp
++#if C128_REAL_BOOT_DIAG
++    ldx #$54
++    jsr c128_stack_guard_check
++    jsr c128_stack_guard_snapshot_banking
++    jsr c128_stack_guard_snapshot_return
+ #endif
+-
+-tramp_ui_enter:
+-    sei
+-    lda #$3e                    // MMU_ALL_RAM
+-    sta $ff00
+-    lda #$34                    // BANK_NO_ROMS
+-    sta $01
+-    rts
+-
+-tramp_ui_exit:
+-    lda #$36                    // BANK_NO_BASIC
+-    sta $01
+-    lda #$3e                    // MMU_ALL_RAM
+-    sta $ff00
+-    cli
+-    rts
+-
+-tramp_ui_help_display:
+-    jsr init_copy_banked
+-    jsr tramp_ui_enter
+-    jsr ui_help_display
+-    jmp tramp_ui_exit
+-
+-tramp_ui_char_display:
+-    jsr tramp_ui_enter
+-    jsr ui_char_display
+-    jmp tramp_ui_exit
+-
+-tramp_ui_inv_display:
+-    jsr init_copy_banked
+-    jsr tramp_ui_enter
+-    jsr ui_inv_display
+-    jmp tramp_ui_exit
+-
+-tramp_ui_equip_display:
+-    jsr init_copy_banked
+-    jsr tramp_ui_enter
+-    jsr ui_equip_display
+-    jmp tramp_ui_exit
+-
+-tramp_ui_recall:
+-    jsr init_copy_banked
+-    jsr tramp_ui_enter
+-    jsr ui_recall_display
+-    jmp tramp_ui_exit
+-
+-tramp_player_cast_spell:
+-    sei
+-    :BankOutKernal()
+-    jsr player_cast_spell
+-    lda #$3e
+-    sta $ff00
+-    cli
+-    rts
+-
+-tramp_player_pray:
+-    sei
+-    :BankOutKernal()
+-    jsr player_pray
+-    lda #$3e
+-    sta $ff00
+-    cli
+-    rts
+-
+-tramp_spell_list_display:
+-    sei
+-    :BankOutKernal()
+-    jsr spell_list_display
+-    lda #$3e
+-    sta $ff00
+-    cli
+-    rts
+-
+-tramp_magic_check_new_spells:
+-    sei
+-    :BankOutKernal()
+-    jsr magic_check_new_spells
+-    lda #$3e
+-    sta $ff00
+-    cli
+-    rts
+-
+-tramp_mage_effect_dispatch:
+-    sei
+-    :BankOutKernal()
+-    jsr mage_effect_dispatch
+-    lda #$3e
+-    sta $ff00
+-    cli
+     rts
+ 
+-tramp_priest_effect_dispatch:
+-    sei
+-    :BankOutKernal()
+-    jsr priest_effect_dispatch
+-    lda #$3e
+-    sta $ff00
+-    cli
+-    rts
++// safe_irq and safe_nmi have been replaced by Common RAM trampolines
++// mmu_common_irq and mmu_common_nmi (see memory128.s).
+ 
+-tramp_ranged_fire:
+-    sei
+-    :BankOutKernal()
+-    jsr ranged_fire
+-    lda #$3e
+-    sta $ff00
+-    cli
++// kernal_load_safe — KERNAL LOAD wrapper for C128
++// Reinstalls keyboard stub on exit. Callers manage MMU.
++kernal_load_safe:
++    :EnterKernal()
++    jsr $ffd5
++    php
++    pha
++    :ExitKernal()
++    lda #<chrin_keyboard_stub
++    sta $0302
++    lda #>chrin_keyboard_stub
++    sta $0303
++    pla
++    plp
+     rts
+ 
+-tramp_throw_item:
+-    sei
+-    :BankOutKernal()
+-    jsr throw_item
+-    lda #$3e
+-    sta $ff00
+-    cli
++chrin_keyboard_stub:
++    lda #0
++    clc
+     rts
+ 
+-tramp_bash_command:
+-    sei
+-    :BankOutKernal()
+-    jsr bash_command
+-    lda #$3e
+-    sta $ff00
+-    cli
++// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
++// Use this on long-lived runtime paths that do not need the full helper reinstall.
++c128_restore_runtime_state_core:
++    :MachineRestoreAllRam()
++    lda #<mmu_common_irq
++    sta $fffe
++    lda #>mmu_common_irq
++    sta $ffff
++    lda #<mmu_common_nmi
++    sta $fffa
++    lda #>mmu_common_nmi
++    sta $fffb
++    lda #<exit_trampoline
++    sta $fffc
++    lda #>exit_trampoline
++    sta $fffd
++    lda #<mmu_common_irq
++    sta $0314
++    lda #>mmu_common_irq
++    sta $0315
++    lda #<chrin_keyboard_stub
++    sta $0302
++    lda #>chrin_keyboard_stub
++    sta $0303
++    lda #$ff
++    sta $cc
+     rts
+ 
+-// tramp_dig_ability — Calculate digging ability.
+-// Pinned low to avoid $D000 drift.
+-tramp_dig_ability:
+-    jmp calc_dig_ability
++c128_restore_runtime_vectors:
++    php
++    sei
++    jsr c128_restore_runtime_state_core
++    plp
++    rts
+ 
+-// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
+-// Pinned low to avoid $D000 drift.
+-tramp_ego_apply_damage:
++c128_return_to_runtime_after_kernal:
++    pha
++    txa
++    pha
++    tya
+     pha
++    php
+     sei
+-    :BankOutKernal()
++    :MachineRestoreAllRam()
++    jsr init_common_mmu_helpers
++    jsr c128_vdc_reassert_mode
++    plp
++    pla
++    tay
++    pla
++    tax
+     pla
+-    jsr ego_apply_damage
+-    lda #$3e                    // MMU_ALL_RAM
+-    sta $ff00
+-    cli
+     rts
+ 
+-tramp_ego_get_ac_bonus:
++// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
++// Runtime KERNAL/editor paths and common-RAM users are still mutating
++// vector/helper state more aggressively than the cache path can tolerate.
++// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
++// blob before returning to gameplay/overlay code.
++c128_restore_runtime_state:
++    jmp c128_return_to_runtime_after_kernal
++
++c128_restore_runtime_guards:
++    jmp c128_restore_runtime_state
++
++// safe_setbnk — SETBNK ($FF68) wrapper for C128
++// Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
++// $FF68 is in the banked code range ($F000-$FFB6) so it can't be
++// patched via the JMP table — call this routine directly instead.
++safe_setbnk:
+     pha
+-    sei
+-    :BankOutKernal()
++    txa
++    pha
++    tya
++    pha
++    :EnterKernal()
+     pla
+-    jsr ego_get_ac_bonus
++    tay
++    pla
++    tax
++    pla
++    jsr $ff68
++    php
+     pha
+-    lda #$3e                    // MMU_ALL_RAM
+-    sta $ff00
+-    cli
++    :ExitKernal()
+     pla
++    plp
+     rts
+ 
+-// title_show_sysinfo — trampoline to banked routine at $EB00.
+-// Pinned low to avoid drifting into $D000 I/O space.
+-title_show_sysinfo:
+-    php
++// init_copy_banked — Copy banked code payload to $E80E
++// Uses $3F (NOIO) instead of $3E because source data crosses the I/O
++// range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
++// garbage instead of game data.
++// NOTE: destination starts at $E80E because $E000-$E80D is used
++// at runtime by BANKED_DATA_BASE (tier monster/item databases).
++init_copy_banked:
+     sei
+-    lda #$35                    // BANK_NO_KERNAL (I/O visible)
+-    sta $01
+-    jsr title_show_sysinfo_banked
+-    jsr c128_restore_runtime_guards
+-    plp
++    lda #<banked_payload
++    sta zp_ptr0
++    lda #>banked_payload
++    sta zp_ptr0_hi
++    lda #$0e
++    sta zp_ptr1
++    lda #$E8
++    sta zp_ptr1_hi
++    ldx #((banked_payload_end - banked_payload + 255) / 256)
++    ldy #0
++    // Switch to NOIO for the copy (source crosses $D000)
++    lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
++    sta $ff00
++!copy:
++    lda zp_ptr1_hi
++    cmp #$ff
++    beq !skip_copy+             // Skip ALL of page $FF
++    cmp #$fe
++    bne !do_copy+
++    cpy #$f2
++    bcs !skip_copy+             // Skip $FE writes that reach $FF00+
++!do_copy:
++    lda (zp_ptr0),y
++    sta (zp_ptr1),y
++!skip_copy:
++    iny
++    bne !copy-
++    inc zp_ptr0_hi
++    inc zp_ptr1_hi
++    dex
++    bne !copy-
++    lda #MMU_ALL_RAM
++    sta $ff00
++    cli
+     rts
+ 
+-tsi_krev_cached: .byte 0
+-
+-// tramp_reu_show_status — banked status display hook.
+-// Pinned low to avoid drifting into $D000 I/O space.
+-tramp_reu_show_status:
+-    php
++// Exit trampoline — MUST live below $A000
++exit_trampoline:
++    lda #0
++    sta $d418
+     sei
+-    lda #$35                    // BANK_NO_KERNAL (I/O visible)
++    // Restore full ROM map before handing control back to ROM.
++    lda #$00
++    sta $ff00
++    lda #BANK_ALL_ROM
+     sta $01
+-    jsr reu_show_status_banked
+-    jsr c128_restore_runtime_guards
+-    plp
+-    rts
+ 
+-// ============================================================
+-// Core System & UI Routines — MUST live in Safe Zone (<$C000)
+-// ============================================================
+-#import "memory128.s"
+-#import "../common/color.s"
+-#import "../common/sound.s"
+-#import "config128.s"
+-#import "screen_vdc.s"
+-#import "../common/title_sysinfo_banked.s"
+-#import "../common/reu_loading_banked.s"
+-#import "input128.s"
++    // Native C128 warm-start paths proved unstable after game runtime state
++    // mutation. Use the hardware reset vector for deterministic return.
++    // This is equivalent to a soft reboot to BASIC.
++    jmp ($fffc)
+ 
+-// Bootstrap — sets up MMU and processor port, jumps to main code
+-entry_real:
+-    sei
+-    cld
+-    ldx #$ff
+-    txs
+ 
+-    // Hardware Quiet Down — Acknowledge and Clear
+-    lda #$7f
+-    sta $dc0d               // CIA1 Interrupt Control Register: disable all
+-    sta $dd0d               // CIA2 Interrupt Control Register: disable all
+-    lda $dc0d               // Clear CIA1 ICR
+-    lda $dd0d               // Clear CIA2 ICR
+ 
+-    lda #$ff
+-    sta $d8                 // Screen Editor: 80-col mode
+-    // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
+-    // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
+-    ldx #5
+-!mirror:
+-    lda $ff00,x
+-    sta $ff00,x
+-    inx
+-    bne !mirror-
++// ============================================================
++// Critical trampolines — pin these near program start so they
++// can never drift into the $D000 I/O hole.
++// ============================================================
++tramp_player_create:
++    lda #1                      // OVL_STARTUP
++#if C128_REAL_BOOT_DIAG
++    ldx #$31
++    jsr c128_stack_guard_begin
++#endif
++    jsr overlay_load
++#if C128_REAL_BOOT_DIAG
++    ldx #$32
++    jsr c128_stack_guard_check
++#endif
++    bcc !tpc_loaded+
++    jmp entry_main
++!tpc_loaded:
++    jsr c128_restore_runtime_guards
++#if C128_REAL_BOOT_DIAG
++    ldx #$33
++    jsr c128_stack_guard_begin
++#endif
++    jmp player_create
+ 
+-    // --- Patch KERNAL JMP table in RAM ---
+-    // Read original targets from ROM stubs and patch stubs to point to our safe wrappers.
+-    // This allows game code to call JSR $FFxx and have the wrapper manage the MMU.
+-    
+-    // FFB7 READST
+-    lda $ffb8
+-    sta t_readst
+-    lda $ffb9
+-    sta t_readst+1
+-    lda #<w_readst
+-    sta $ffb8
+-    lda #>w_readst
+-    sta $ffb9
+-    // FFBA SETLFS
+-    lda $ffbb
+-    sta t_setlfs
+-    lda $ffbc
+-    sta t_setlfs+1
+-    lda #<w_setlfs
+-    sta $ffbb
+-    lda #>w_setlfs
+-    sta $ffbc
+-    // FFBD SETNAM
+-    lda $ffbe
+-    sta t_setnam
+-    lda $ffbf
+-    sta t_setnam+1
+-    lda #<w_setnam
+-    sta $ffbe
+-    lda #>w_setnam
+-    sta $ffbf
+-    // FFC0 OPEN
+-    lda $ffc1
+-    sta t_open
+-    lda $ffc2
+-    sta t_open+1
+-    lda #<w_open
+-    sta $ffc1
+-    lda #>w_open
+-    sta $ffc2
+-    // FFC3 CLOSE
+-    lda #<w_close
+-    sta $ffc4
+-    lda #>w_close
+-    sta $ffc5
+-    // FFC6 CHKIN
+-    lda #<w_chkin
+-    sta $ffc7
+-    lda #>w_chkin
+-    sta $ffc8
+-    // FFC9 CHKOUT
+-    lda #<w_chkout
+-    sta $ffca
+-    lda #>w_chkout
+-    sta $ffcb
+-    // FFCC CLRCHN
+-    lda #<w_clrchn
+-    sta $ffcd
+-    lda #>w_clrchn
+-    sta $ffce
+-    // FFCF CHRIN
+-    lda #<w_chrin
+-    sta $ffd0
+-    lda #>w_chrin
+-    sta $ffd1
+-    // FFD2 CHROUT
+-    lda #<w_chrout
+-    sta $ffd3
+-    lda #>w_chrout
+-    sta $ffd4
+-    // FFD5 LOAD
+-    lda $ffd6
+-    sta t_load
+-    lda $ffd7
+-    sta t_load+1
+-    lda #<w_load
+-    sta $ffd6
+-    lda #>w_load
+-    sta $ffd7
++tramp_game_over:
++    // 1. Resolve creature name while tier data still at $E000
++    lda zp_death_source
++    cmp #$fd                    // DEATH_CURSED
++    bcs !tgo_load_overlay+
++    tax
++    jsr creature_get_name
+ 
+-    // Save original hardware IRQ/NMI vectors before patching RAM copies.
+-    lda $fffe
+-    sta kernal_hw_irq_vec_lo
+-    lda $ffff
+-    sta kernal_hw_irq_vec_hi
+-    lda $fffa
+-    sta kernal_hw_nmi_vec_lo
+-    lda $fffb
+-    sta kernal_hw_nmi_vec_hi
++!tgo_load_overlay:
++    // 2. Load death overlay at $0400
++    lda #3                      // OVL_DEATH
++    jsr overlay_load
++    bcc !tgo_loaded+
++    jmp entry_main
++!tgo_loaded:
++    jsr c128_restore_runtime_guards
+ 
+-    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
+-    // This ensures interrupts always find code even when Bank 1 is active.
+-    lda #<mmu_common_irq
+-    sta $fffe
+-    lda #>mmu_common_irq
+-    sta $ffff
+-    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
+-    lda #<mmu_common_nmi
+-    sta $fffa
+-    lda #>mmu_common_nmi
+-    sta $fffb
+-    // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
+-    lda #<exit_trampoline
+-    sta $fffc
+-    lda #>exit_trampoline
+-    sta $fffd
++    // 3. Calculate score
++    jsr score_calculate
+ 
+-    :MachineRestoreDefault()
++    // 4. Load high scores from disk (needs KERNAL-visible ROM)
++    php
++    sei
++    lda #$ff
++    sta $cc
++    lda #$0e                    // MMU_NORMAL
++    sta $ff00
++    lda #$37                    // BANK_ALL_ROM
++    sta $01
++    jsr hiscore_load
++    lda #$3e                    // MMU_ALL_RAM
++    sta $ff00
++    jsr c128_vdc_reassert_mode
++    plp
++
++    // 5. Insert into high score table (death overlay code at $E000)
++    jsr hiscore_insert
++
++    // 6. Save high scores to disk (needs KERNAL-visible ROM)
++    php
++    sei
++    lda #$ff
++    sta $cc
++    lda #$0e                    // MMU_NORMAL
++    sta $ff00
++    lda #$37                    // BANK_ALL_ROM
++    sta $01
++    jsr hiscore_save
++    lda #$3e                    // MMU_ALL_RAM
++    sta $ff00
++    jsr c128_vdc_reassert_mode
++    plp
++
++    // 7. Display death screen (death overlay code at $E000)
++    jmp score_death_screen
++
++tramp_store_init_all:
++    lda #2                      // OVL_TOWN
++#if C128_REAL_BOOT_DIAG
++    ldx #$34
++    jsr c128_stack_guard_begin
++#endif
++    jsr overlay_load
++#if C128_REAL_BOOT_DIAG
++    ldx #$35
++    jsr c128_stack_guard_check
++#endif
++    bcc !tsia_loaded+
+     jmp entry_main
++!tsia_loaded:
++    jsr c128_restore_runtime_guards
++#if C128_REAL_BOOT_DIAG
++    ldx #$36
++    jsr c128_stack_guard_begin
++#endif
++    jmp store_init_all
+ 
+-// ============================================================
+-// Safe KERNAL Wrappers
+-// Each wrapper switches to MMU_NORMAL, calls real target,
+-// then restores MMU_ALL_RAM. Flags (Carry!) are preserved via PHP/PLP.
+-// ============================================================
+-// C128 KERNAL R1 direct routine entries used to bypass low-RAM indirect
+-// vectors ($031C-$0327), which are unstable during current save-path bug.
+-.const K128_CLOSE  = $f188
+-.const K128_CHKIN  = $f106
+-.const K128_CHKOUT = $f14c
+-.const K128_CLRCHN = $f226
+-.const K128_CHRIN  = $ef06
+-.const K128_CHROUT = $ef79
++tramp_store_restock_all:
++    lda #2                      // OVL_TOWN
++    jsr overlay_load
++    bcc !tsra_loaded+
++    jmp entry_main
++!tsra_loaded:
++    jsr c128_restore_runtime_guards
++    jmp store_restock_all
++
++tramp_store_enter:
++    lda #2                      // OVL_TOWN
++    jsr overlay_load
++    bcc !tse_loaded+
++    jmp entry_main
++!tse_loaded:
++    jsr c128_restore_runtime_guards
++    jmp store_enter
++
++#if C128_TEST_SCRIPTED_INPUT
++c128_test_town_fail_sym:
++    brk
++c128_test_town_pass_sym:
++    brk
++#elif C128_TEST_CACHE_SURVIVAL
++c128_test_town_fail_sym:
++    brk
++c128_test_town_pass_sym:
++    brk
++#endif
++#if C128_CACHE_TEST_SKIP_TIER
++c128_test_partial_cache_fail_sym:
++    brk
++#endif
++#if C128_CACHE_TEST_SKIP_OVERLAY
++c128_test_overlay_cache_fail_sym:
++    brk
++#endif
++#if C128_TEST_CACHE_SURVIVAL
++c128_test_cache_survival_fail_sym:
++    brk
++c128_test_cache_survival_pass_sym:
++    brk
++#endif
++#if C128_TEST_TITLE_ART_CONTENT
++c128_test_title_art_fail_sym:
++    brk
++c128_test_title_art_pass_sym:
++    brk
++#endif
++#if C128_TEST_OVERLAY_TRANSITION_DIAG
++c128_overlay_transition_fail_sym:
++    brk
++c128_overlay_transition_pass_sym:
++    brk
++#endif
++#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
++c128_diag_fail_sym:
++    lda c128_stack_guard_stage
++    cmp #$11
++    bne !chk12+
++    jmp c128_diag_fail_stage_11
++!chk12:
++    cmp #$12
++    bne !chk13+
++    jmp c128_diag_fail_stage_12
++!chk13:
++    cmp #$13
++    bne !chk14+
++    jmp c128_diag_fail_stage_13
++!chk14:
++    cmp #$14
++    bne !chk15+
++    jmp c128_diag_fail_stage_14
++!chk15:
++    cmp #$15
++    bne !chk16+
++    jmp c128_diag_fail_stage_15
++!chk16:
++    cmp #$16
++    bne !chk17+
++    jmp c128_diag_fail_stage_16
++!chk17:
++    cmp #$17
++    bne !chk18+
++    jmp c128_diag_fail_stage_17
++!chk18:
++    cmp #$18
++    bne !chk19+
++    jmp c128_diag_fail_stage_18
++!chk19:
++    cmp #$19
++    bne !chk1a+
++    jmp c128_diag_fail_stage_19
++!chk1a:
++    cmp #$1a
++    bne !chk1b+
++    jmp c128_diag_fail_stage_1a
++!chk1b:
++    cmp #$1b
++    bne !chk1c+
++    jmp c128_diag_fail_stage_1b
++!chk1c:
++    cmp #$1c
++    bne !chk1d+
++    jmp c128_diag_fail_stage_1c
++!chk1d:
++    cmp #$1d
++    bne !chk1e+
++    jmp c128_diag_fail_stage_1d
++!chk1e:
++    cmp #$1e
++    bne !chk1f+
++    jmp c128_diag_fail_stage_1e
++!chk1f:
++    cmp #$1f
++    bne !chk21+
++    jmp c128_diag_fail_stage_1f
++!chk21:
++    cmp #$21
++    bne !chk22+
++    jmp c128_diag_fail_stage_21
++!chk22:
++    cmp #$22
++    bne !chk23+
++    jmp c128_diag_fail_stage_22
++!chk23:
++    cmp #$23
++    bne !chk24+
++    jmp c128_diag_fail_stage_23
++!chk24:
++    cmp #$24
++    bne !chk25+
++    jmp c128_diag_fail_stage_24
++!chk25:
++    cmp #$25
++    bne !chk26+
++    jmp c128_diag_fail_stage_25
++!chk26:
++    cmp #$26
++    bne !chk27+
++    jmp c128_diag_fail_stage_26
++!chk27:
++    cmp #$27
++    bne !chk28+
++    jmp c128_diag_fail_stage_27
++!chk28:
++    cmp #$28
++    bne !chk31+
++    jmp c128_diag_fail_stage_28
++!chk31:
++    cmp #$31
++    bne !chk32+
++    jmp c128_diag_fail_stage_31
++!chk32:
++    cmp #$32
++    bne !chk33+
++    jmp c128_diag_fail_stage_32
++!chk33:
++    cmp #$33
++    bne !chk34+
++    jmp c128_diag_fail_stage_33
++!chk34:
++    cmp #$34
++    bne !chk35+
++    jmp c128_diag_fail_stage_34
++!chk35:
++    cmp #$35
++    bne !chk36+
++    jmp c128_diag_fail_stage_35
++!chk36:
++    cmp #$36
++    bne !chk39+
++    jmp c128_diag_fail_stage_36
++!chk39:
++    cmp #$39
++    bne !chk3a+
++    jmp c128_diag_fail_stage_39
++!chk3a:
++    cmp #$3a
++    bne !chk41+
++    jmp c128_diag_fail_stage_3a
++!chk41:
++    cmp #$41
++    bne !chk42+
++    jmp c128_diag_fail_stage_41
++!chk42:
++    cmp #$42
++    bne !chk43+
++    jmp c128_diag_fail_stage_42
++!chk43:
++    cmp #$43
++    bne !chk44+
++    jmp c128_diag_fail_stage_43
++!chk44:
++    cmp #$44
++    bne !chk45+
++    jmp c128_diag_fail_stage_44
++!chk45:
++    cmp #$45
++    bne !chk46+
++    jmp c128_diag_fail_stage_45
++!chk46:
++    cmp #$46
++    bne !chk47+
++    jmp c128_diag_fail_stage_46
++!chk47:
++    cmp #$47
++    bne !chk48+
++    jmp c128_diag_fail_stage_47
++!chk48:
++    cmp #$48
++    bne !chk49+
++    jmp c128_diag_fail_stage_48
++!chk49:
++    cmp #$49
++    bne !chk4a+
++    jmp c128_diag_fail_stage_49
++!chk4a:
++    cmp #$4a
++    bne !chk4b+
++    jmp c128_diag_fail_stage_4a
++!chk4b:
++    cmp #$4b
++    bne !chk4c+
++    jmp c128_diag_fail_stage_4b
++!chk4c:
++    cmp #$4c
++    bne !chk51+
++    jmp c128_diag_fail_stage_4c
++!chk51:
++    cmp #$51
++    bne !chk52+
++    jmp c128_diag_fail_stage_51
++!chk52:
++    cmp #$52
++    bne !chk53+
++    jmp c128_diag_fail_stage_52
++!chk53:
++    cmp #$53
++    bne !chk54+
++    jmp c128_diag_fail_stage_53
++!chk54:
++    cmp #$54
++    bne !chk61+
++    jmp c128_diag_fail_stage_54
++!chk61:
++    cmp #$61
++    bne !chk62+
++    jmp c128_diag_fail_stage_61
++!chk62:
++    cmp #$62
++    bne !chk63+
++    jmp c128_diag_fail_stage_62
++!chk63:
++    cmp #$63
++    bne !chk64+
++    jmp c128_diag_fail_stage_63
++!chk64:
++    cmp #$64
++    bne !diag_default+
++    jmp c128_diag_fail_stage_64
++!diag_default:
++    jmp c128_diag_fail_default
++c128_diag_fail_default:
++    nop
++    jmp c128_diag_fail_default
++c128_diag_fail_stage_11:
++    nop
++    jmp c128_diag_fail_stage_11
++c128_diag_fail_stage_12:
++    nop
++    jmp c128_diag_fail_stage_12
++c128_diag_fail_stage_13:
++    nop
++    jmp c128_diag_fail_stage_13
++c128_diag_fail_stage_14:
++    nop
++    jmp c128_diag_fail_stage_14
++c128_diag_fail_stage_15:
++    nop
++    jmp c128_diag_fail_stage_15
++c128_diag_fail_stage_16:
++    nop
++    jmp c128_diag_fail_stage_16
++c128_diag_fail_stage_17:
++    nop
++    jmp c128_diag_fail_stage_17
++c128_diag_fail_stage_18:
++    nop
++    jmp c128_diag_fail_stage_18
++c128_diag_fail_stage_19:
++    nop
++    jmp c128_diag_fail_stage_19
++c128_diag_fail_stage_1a:
++    nop
++    jmp c128_diag_fail_stage_1a
++c128_diag_fail_stage_1b:
++    nop
++    jmp c128_diag_fail_stage_1b
++c128_diag_fail_stage_1c:
++    nop
++    jmp c128_diag_fail_stage_1c
++c128_diag_fail_stage_1d:
++    nop
++    jmp c128_diag_fail_stage_1d
++c128_diag_fail_stage_1e:
++    nop
++    jmp c128_diag_fail_stage_1e
++c128_diag_fail_stage_1f:
++    nop
++    jmp c128_diag_fail_stage_1f
++c128_diag_fail_stage_21:
++    nop
++    jmp c128_diag_fail_stage_21
++c128_diag_fail_stage_22:
++    nop
++    jmp c128_diag_fail_stage_22
++c128_diag_fail_stage_23:
++    nop
++    jmp c128_diag_fail_stage_23
++c128_diag_fail_stage_24:
++    nop
++    jmp c128_diag_fail_stage_24
++c128_diag_fail_stage_25:
++    nop
++    jmp c128_diag_fail_stage_25
++c128_diag_fail_stage_26:
++    nop
++    jmp c128_diag_fail_stage_26
++c128_diag_fail_stage_27:
++    nop
++    jmp c128_diag_fail_stage_27
++c128_diag_fail_stage_28:
++    nop
++    jmp c128_diag_fail_stage_28
++c128_diag_fail_stage_31:
++    nop
++    jmp c128_diag_fail_stage_31
++c128_diag_fail_stage_32:
++    nop
++    jmp c128_diag_fail_stage_32
++c128_diag_fail_stage_33:
++    nop
++    jmp c128_diag_fail_stage_33
++c128_diag_fail_stage_34:
++    nop
++    jmp c128_diag_fail_stage_34
++c128_diag_fail_stage_35:
++    nop
++    jmp c128_diag_fail_stage_35
++c128_diag_fail_stage_36:
++    nop
++    jmp c128_diag_fail_stage_36
++c128_diag_fail_stage_39:
++    nop
++    jmp c128_diag_fail_stage_39
++c128_diag_fail_stage_3a:
++    nop
++    jmp c128_diag_fail_stage_3a
++c128_diag_fail_stage_41:
++    nop
++    jmp c128_diag_fail_stage_41
++c128_diag_fail_stage_42:
++    nop
++    jmp c128_diag_fail_stage_42
++c128_diag_fail_stage_43:
++    nop
++    jmp c128_diag_fail_stage_43
++c128_diag_fail_stage_44:
++    nop
++    jmp c128_diag_fail_stage_44
++c128_diag_fail_stage_45:
++    nop
++    jmp c128_diag_fail_stage_45
++c128_diag_fail_stage_46:
++    nop
++    jmp c128_diag_fail_stage_46
++c128_diag_fail_stage_47:
++    nop
++    jmp c128_diag_fail_stage_47
++c128_diag_fail_stage_48:
++    nop
++    jmp c128_diag_fail_stage_48
++c128_diag_fail_stage_49:
++    nop
++    jmp c128_diag_fail_stage_49
++c128_diag_fail_stage_4a:
++    nop
++    jmp c128_diag_fail_stage_4a
++c128_diag_fail_stage_4b:
++    nop
++    jmp c128_diag_fail_stage_4b
++c128_diag_fail_stage_4c:
++    nop
++    jmp c128_diag_fail_stage_4c
++c128_diag_fail_stage_51:
++    nop
++    jmp c128_diag_fail_stage_51
++c128_diag_fail_stage_52:
++    nop
++    jmp c128_diag_fail_stage_52
++c128_diag_fail_stage_53:
++    nop
++    jmp c128_diag_fail_stage_53
++c128_diag_fail_stage_54:
++    nop
++    jmp c128_diag_fail_stage_54
++c128_diag_fail_stage_61:
++    nop
++    jmp c128_diag_fail_stage_61
++c128_diag_fail_stage_62:
++    nop
++    jmp c128_diag_fail_stage_62
++c128_diag_fail_stage_63:
++    nop
++    jmp c128_diag_fail_stage_63
++c128_diag_fail_stage_64:
++    nop
++    jmp c128_diag_fail_stage_64
++#endif
+ 
+-// READST
+-w_readst:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    .byte $20
+-t_readst: .word 0
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// SETLFS
+-w_setlfs:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    .byte $20
+-t_setlfs: .word 0
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// SETNAM
+-w_setnam:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    .byte $20
+-t_setnam: .word 0
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// OPEN
+-w_open:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    .byte $20
+-t_open: .word 0
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// CLOSE
+-w_close:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CLOSE
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// CHKIN
+-w_chkin:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CHKIN
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// CHKOUT
+-w_chkout:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CHKOUT
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// CLRCHN
+-w_clrchn:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CLRCHN
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-    rts
+-// CHRIN
+-w_chrin:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CHRIN
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
++tramp_ui_enter:
++    sei
++    lda #$3e                    // MMU_ALL_RAM
++    sta $ff00
++    lda #$34                    // BANK_NO_ROMS
++    sta $01
+     rts
+-// CHROUT
+-w_chrout:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    :EnterKernal()
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
+-    jsr K128_CHROUT
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
++
++tramp_ui_exit:
++    lda #$36                    // BANK_NO_BASIC
++    sta $01
++    lda #$3e                    // MMU_ALL_RAM
++    sta $ff00
++    cli
+     rts
+-// LOAD
+-w_load:
+-    stx c128_load_arg_x
+-    sty c128_load_arg_y
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$51
+-    jsr c128_stack_guard_begin
+-#endif
+-    :EnterKernal()
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$52
+-    stx c128_stack_guard_stage
+-    jsr c128_stack_guard_snapshot_banking
+-#endif
+-    ldx c128_load_arg_x
+-    ldy c128_load_arg_y
+-    .byte $20
+-t_load: .word 0
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$53
+-    stx c128_stack_guard_stage
+-    jsr c128_stack_guard_snapshot_banking
+-#endif
+-    php
+-    pha
+-    :ExitKernal()
+-    pla
+-    plp
+-#if C128_REAL_BOOT_DIAG
+-    ldx #$54
+-    jsr c128_stack_guard_check
+-    jsr c128_stack_guard_snapshot_banking
+-    jsr c128_stack_guard_snapshot_return
+-#endif
++
++tramp_ui_help_display:
++    jsr init_copy_banked
++    jsr tramp_ui_enter
++    jsr ui_help_display
++    jmp tramp_ui_exit
++
++tramp_ui_char_display:
++    jsr tramp_ui_enter
++    jsr ui_char_display
++    jmp tramp_ui_exit
++
++tramp_ui_inv_display:
++    jsr init_copy_banked
++    jsr tramp_ui_enter
++    jsr ui_inv_display
++    jmp tramp_ui_exit
++
++tramp_ui_equip_display:
++    jsr init_copy_banked
++    jsr tramp_ui_enter
++    jsr ui_equip_display
++    jmp tramp_ui_exit
++
++tramp_ui_recall:
++    jsr init_copy_banked
++    jsr tramp_ui_enter
++    jsr ui_recall_display
++    jmp tramp_ui_exit
++
++tramp_player_cast_spell:
++    sei
++    :BankOutKernal()
++    jsr player_cast_spell
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-c128_load_arg_x: .byte 0
+-c128_load_arg_y: .byte 0
++tramp_player_pray:
++    sei
++    :BankOutKernal()
++    jsr player_pray
++    lda #$3e
++    sta $ff00
++    cli
++    rts
+ 
+-// safe_irq and safe_nmi have been replaced by Common RAM trampolines
+-// mmu_common_irq and mmu_common_nmi (see memory128.s).
++tramp_spell_list_display:
++    sei
++    :BankOutKernal()
++    jsr spell_list_display
++    lda #$3e
++    sta $ff00
++    cli
++    rts
+ 
+-// kernal_load_safe — KERNAL LOAD wrapper for C128
+-// Reinstalls keyboard stub on exit. Callers manage MMU.
+-kernal_load_safe:
+-    :EnterKernal()
+-    jsr $ffd5
+-    php
+-    pha
+-    :ExitKernal()
+-    lda #<chrin_keyboard_stub
+-    sta $0302
+-    lda #>chrin_keyboard_stub
+-    sta $0303
+-    pla
+-    plp
++tramp_magic_check_new_spells:
++    sei
++    :BankOutKernal()
++    jsr magic_check_new_spells
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-chrin_keyboard_stub:
+-    lda #0
+-    clc
++tramp_mage_effect_dispatch:
++    sei
++    :BankOutKernal()
++    jsr mage_effect_dispatch
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-// c128_restore_runtime_vectors — Reassert the all-RAM IRQ/NMI and CHRIN stubs.
+-// Use this on long-lived runtime paths that do not need the full helper reinstall.
+-c128_restore_runtime_state_core:
+-    :MachineRestoreAllRam()
+-    lda #<mmu_common_irq
+-    sta $fffe
+-    lda #>mmu_common_irq
+-    sta $ffff
+-    lda #<mmu_common_nmi
+-    sta $fffa
+-    lda #>mmu_common_nmi
+-    sta $fffb
+-    lda #<exit_trampoline
+-    sta $fffc
+-    lda #>exit_trampoline
+-    sta $fffd
+-    lda #<mmu_common_irq
+-    sta $0314
+-    lda #>mmu_common_irq
+-    sta $0315
+-    lda #<chrin_keyboard_stub
+-    sta $0302
+-    lda #>chrin_keyboard_stub
+-    sta $0303
+-    lda #$ff
+-    sta $cc
++tramp_priest_effect_dispatch:
++    sei
++    :BankOutKernal()
++    jsr priest_effect_dispatch
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-c128_restore_runtime_vectors:
+-    php
++tramp_ranged_fire:
+     sei
+-    jsr c128_restore_runtime_state_core
+-    plp
++    :BankOutKernal()
++    jsr ranged_fire
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-c128_return_to_runtime_after_kernal:
+-    pha
+-    txa
+-    pha
+-    tya
+-    pha
+-    php
++tramp_throw_item:
+     sei
+-    :MachineRestoreAllRam()
+-    jsr init_common_mmu_helpers
+-    jsr c128_vdc_reassert_mode
+-    plp
+-    pla
+-    tay
+-    pla
+-    tax
+-    pla
++    :BankOutKernal()
++    jsr throw_item
++    lda #$3e
++    sta $ff00
++    cli
+     rts
+ 
+-// c128_restore_runtime_guards — Reassert runtime-owned low/common RAM state.
+-// Runtime KERNAL/editor paths and common-RAM users are still mutating
+-// vector/helper state more aggressively than the cache path can tolerate.
+-// Reinstall the all-RAM IRQ/NMI vectors, title CHRIN stub, and MMU helper
+-// blob before returning to gameplay/overlay code.
+-c128_restore_runtime_state:
+-    jmp c128_return_to_runtime_after_kernal
++tramp_bash_command:
++    sei
++    :BankOutKernal()
++    jsr bash_command
++    lda #$3e
++    sta $ff00
++    cli
++    rts
+ 
+-c128_restore_runtime_guards:
+-    jmp c128_restore_runtime_state
++// tramp_dig_ability — Calculate digging ability.
++// Pinned low to avoid $D000 drift.
++tramp_dig_ability:
++    jmp calc_dig_ability
+ 
+-// safe_setbnk — SETBNK ($FF68) wrapper for C128
+-// Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
+-// $FF68 is in the banked code range ($F000-$FFB6) so it can't be
+-// patched via the JMP table — call this routine directly instead.
+-safe_setbnk:
+-    :EnterKernal()
+-    jsr $ff68
+-    php
++// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
++// Pinned low to avoid $D000 drift.
++tramp_ego_apply_damage:
+     pha
+-    :ExitKernal()
++    sei
++    :BankOutKernal()
+     pla
+-    plp
++    jsr ego_apply_damage
++    lda #$3e                    // MMU_ALL_RAM
++    sta $ff00
++    cli
+     rts
+ 
+-// init_copy_banked — Copy banked code payload to $E80E
+-// Uses $3F (NOIO) instead of $3E because source data crosses the I/O
+-// range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
+-// garbage instead of game data.
+-// NOTE: destination starts at $E80E because $E000-$E80D is used
+-// at runtime by BANKED_DATA_BASE (tier monster/item databases).
+-init_copy_banked:
++tramp_ego_get_ac_bonus:
++    pha
+     sei
+-    lda #<banked_payload
+-    sta zp_ptr0
+-    lda #>banked_payload
+-    sta zp_ptr0_hi
+-    lda #$0e
+-    sta zp_ptr1
+-    lda #$E8
+-    sta zp_ptr1_hi
+-    ldx #((banked_payload_end - banked_payload + 255) / 256)
+-    ldy #0
+-    // Switch to NOIO for the copy (source crosses $D000)
+-    lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
+-    sta $ff00
+-!copy:
+-    lda zp_ptr1_hi
+-    cmp #$ff
+-    beq !skip_copy+             // Protect Page $FF ($FF00-$FFFF) entirely
+-    lda (zp_ptr0),y
+-    sta (zp_ptr1),y
+-!skip_copy:
+-    iny
+-    bne !copy-
+-    inc zp_ptr0_hi
+-    inc zp_ptr1_hi
+-    dex
+-    bne !copy-
+-    lda #MMU_ALL_RAM
++    :BankOutKernal()
++    pla
++    jsr ego_get_ac_bonus
++    pha
++    lda #$3e                    // MMU_ALL_RAM
+     sta $ff00
+     cli
++    pla
+     rts
+ 
+-// Exit trampoline — MUST live below $A000
+-exit_trampoline:
+-    lda #0
+-    sta $d418
++// title_show_sysinfo — trampoline to banked routine at $EB00.
++// Pinned low to avoid drifting into $D000 I/O space.
++title_show_sysinfo:
++    php
+     sei
+-    // Restore full ROM map before handing control back to ROM.
+-    lda #$00
+-    sta $ff00
+-    lda #BANK_ALL_ROM
++    lda #$35                    // BANK_NO_KERNAL (I/O visible)
+     sta $01
++    jsr title_show_sysinfo_banked
++    jsr c128_restore_runtime_guards
++    plp
++    rts
+ 
+-    // Native C128 warm-start paths proved unstable after game runtime state
+-    // mutation. Use the hardware reset vector for deterministic return.
+-    // This is equivalent to a soft reboot to BASIC.
+-    jmp ($fffc)
++tsi_krev_cached: .byte 0
++
++// tramp_reu_show_status — banked status display hook.
++// Pinned low to avoid drifting into $D000 I/O space.
++tramp_reu_show_status:
++    php
++    sei
++    lda #$35                    // BANK_NO_KERNAL (I/O visible)
++    sta $01
++    jsr reu_show_status_banked
++    jsr c128_restore_runtime_guards
++    plp
++    rts
+ 
+ // ============================================================
+ // game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
+@@ -1800,6 +1801,8 @@ tramp_ego_put_suffix:
+ !teps_done:
+     rts
+ teps_save_y: .byte 0
++c128_load_arg_x: .byte 0
++c128_load_arg_y: .byte 0
+ kernal_irq_vec_lo: .byte 0
+ kernal_irq_vec_hi: .byte 0
+ kernal_hw_irq_vec_lo: .byte 0
+@@ -2390,13 +2393,6 @@ c128_test_verify_cache_survival:
+ .segment Bank1Data
+ .segment Default
+ 
+-// Moved out of the C128 banked payload to free room for command handlers,
+-// but imported late so their shared-data dependencies are already defined.
+-#import "../common/string_bank_banked.s"
+-#import "../common/ego_items.s"
+-#import "../common/ui_home.s"
+-
+-
+ // ============================================================
+ // Banked code payload — stored inline here, copied to $E80E
+ // at startup by init_copy_banked. Runs in Bank 0 at $E80E-$FFFA.
+@@ -2419,6 +2415,9 @@ first_banked_function:
+     #import "../common/ranged_fire.s"
+     #import "../common/throw.s"
+     #import "../common/bash.s"
++    #import "../common/string_bank_banked.s"
++    #import "../common/ego_items.s"
++    #import "../common/ui_home.s"
+     #import "../common/ui_character.s"
+ 
+ banked_code_end:
+@@ -2475,7 +2474,7 @@ program_end:
+ .assert "Help renderer stays in reloadable banked window", ui_help_display >= $E80E && ui_help_display < first_banked_function, true
+ .assert "Help title text stays in reloadable banked window", help_title_str >= $E80E && help_title_str < first_banked_function, true
+ .assert "Help content table stays in reloadable banked window", help_lines >= $E80E && help_lines < first_banked_function, true
+-.assert "Character sheet renderer stays out of overlay window", ui_char_display >= $F000, true
++.assert "Character sheet renderer stays out of overlay window", ui_char_display < $E000 || ui_char_display >= $F000, true
+ .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
+ .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
+ .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
+Process Group PGID: 15654

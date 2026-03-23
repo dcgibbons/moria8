@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #34
+    ldx #36
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -29,37 +29,37 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
-#import "../zeropage.s"
+#import "../../common/zeropage.s"
 #import "../memory.s"
-#import "../reu.s"
+#import "../../common/reu.s"
 #import "../screen.s"
-#import "../color.s"
+#import "../../common/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../rng.s"
-#import "../math.s"
-#import "../tables.s"
-#import "../item_defs.s"
-#import "../player.s"
-#import "../ui_messages.s"
-#import "../ui_status.s"
-#import "../ui_help_clear.s"
-#import "../ui_character.s"
-#import "../stat_display.s"
+#import "../../common/rng.s"
+#import "../../common/math.s"
+#import "../../common/tables.s"
+#import "../../common/item_defs.s"
+#import "../../common/player.s"
+#import "../../common/ui_messages.s"
+#import "../../common/ui_status.s"
+#import "../../common/ui_help_clear.s"
+#import "../../common/ui_character.s"
+#import "../../common/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../background_data.s"
-#import "../player_create.s"
+#import "../../common/background_data.s"
+#import "../../common/player_create.s"
 .segment Default
-#import "../sound.s"
-#import "../dungeon_data.s"
-#import "../dungeon_gen.s"
-#import "../huffman.s"
-#import "../dungeon_features.s"
-#import "../monster.s"
-#import "../tier_manager.s"
-#import "../overlay.s"
-#import "../monster_ai.s"
+#import "../../common/sound.s"
+#import "../../common/dungeon_data.s"
+#import "../../common/dungeon_gen.s"
+#import "../../common/huffman.s"
+#import "../../common/dungeon_features.s"
+#import "../../common/monster.s"
+#import "../../common/tier_manager.s"
+#import "../../common/overlay.s"
+#import "../../common/monster_ai.s"
 // Recall stubs — minimal footprint to keep test below MAP_BASE ($C000).
 // Full recall.s adds 267 bytes; stubs save ~260 bytes.
 // Safe: dungeon tests never exercise recall code paths.
@@ -72,33 +72,33 @@ recall_spells:  .byte 0
 recall_data_end:
 recall_spell_bit: .byte 1, 2, 4, 8, 16, 32, 64
 recall_clear: rts
-#import "../monster_magic.s"
-#import "../item.s"
-#import "../special_rooms.s"
-#import "../ego_items.s"
-#import "../special_rooms_stubs.s"
-#import "../player_items.s"
-#import "../spell_data.s"
-#import "../projectile.s"
-#import "../spell_effects.s"
-#import "../player_magic.s"
-#import "../ui_inventory.s"
+#import "../../common/monster_magic.s"
+#import "../../common/item.s"
+#import "../../common/special_rooms.s"
+#import "../../common/ego_items.s"
+#import "../../common/special_rooms_stubs.s"
+#import "../../common/player_items.s"
+#import "../../common/spell_data.s"
+#import "../../common/projectile.s"
+#import "../../common/spell_effects.s"
+#import "../../common/player_magic.s"
+#import "../../common/ui_inventory.s"
 #import "../dungeon_render.s"
-#import "../dungeon_los.s"
-#import "../player_move.s"
-#import "../combat.s"
-#import "../monster_attack.s"
-#import "../turn.s"
-#import "../store_data.s"
-#import "../store.s"
-#import "../ui_store.s"
+#import "../../common/dungeon_los.s"
+#import "../../common/player_move.s"
+#import "../../common/combat.s"
+#import "../../common/monster_attack.s"
+#import "../../common/turn.s"
+#import "../../common/store_data.s"
+#import "../../common/store.s"
+#import "../../common/ui_store.s"
 // ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
 // Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
     rts
-#import "../ui_trampoline_stubs.s"
+#import "../../common/ui_trampoline_stubs.s"
 
 .assert "Test code must not cross MAP_BASE", * < MAP_BASE, true
 
@@ -119,7 +119,7 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 35, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 37, $ff              // Test results buffer (copied to $0400 before brk)
 
 test_start:
     // Initialize result area to $ff (untested)
@@ -824,10 +824,10 @@ test_start:
 !t16_done:
 
     // ==========================================
-    // Test 17: add_corridor_doors creates door when corridor is adjacent to room
+    // Test 17: add_corridor_doors does NOT synthesize a side-entry door
     // Set up a room, then manually place corridor floor tiles adjacent to the
     // room's right wall. Call add_corridor_doors. The wall between them should
-    // become a door.
+    // remain a wall; only actual corridor penetration should place doors.
     // ==========================================
     jsr fill_map_rock
 
@@ -872,10 +872,10 @@ test_start:
     cmp #TILE_WALL_V
     bne !t17_fail+
 
-    // Run add_corridor_doors
+    // Run add_corridor_doors (now intentionally a no-op)
     jsr add_corridor_doors
 
-    // Now check (24, 11) — should be a door (TILE_DOOR_OPEN or TILE_DOOR_CLOSED)
+    // Now check (24, 11) — should still be TILE_WALL_V
     ldx #11
     lda map_row_lo,x
     sta zp_ptr0
@@ -884,9 +884,7 @@ test_start:
     ldy #24
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_DOOR_OPEN
-    beq !t17_pass+
-    cmp #TILE_DOOR_CLOSED
+    cmp #TILE_WALL_V
     beq !t17_pass+
     jmp !t17_fail+
 
@@ -900,8 +898,8 @@ test_start:
 !t17_done:
 
     // ==========================================
-    // Test 18: add_corridor_doors does NOT create door when only one side is floor
-    // Wall with floor on one side and rock on the other should stay a wall.
+    // Test 18: add_corridor_doors leaves existing corridor door placement alone
+    // Corridor carving itself should still place a door when it penetrates a room wall.
     // ==========================================
     jsr fill_map_rock
 
@@ -916,33 +914,30 @@ test_start:
     sta dg_room_h
     jsr draw_dungeon_room
 
-    // Also populate room arrays
-    lda #1
-    sta room_count
-    lda #20
-    sta room_x
-    lda #10
-    sta room_y
-    lda #4
-    sta room_w
-    lda #3
-    sta room_h
+    // Carve an actual corridor through the room's left wall at y=11
+    lda #15
+    sta dg_cx1
+    lda #22
+    sta dg_cx2
+    lda #11
+    sta dg_cy1
+    jsr carve_h_corridor
 
-    // DON'T place any corridor floor — right wall has room floor on left, rock on right
-
-    // Run add_corridor_doors
+    // Run add_corridor_doors afterwards; it must not disturb the corridor door
     jsr add_corridor_doors
 
-    // Wall at (24, 11) should still be TILE_WALL_V (no corridor on other side)
+    // Door at (19, 11) must still be present
     ldx #11
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #24
+    ldy #19
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
-    cmp #TILE_WALL_V
+    cmp #TILE_DOOR_OPEN
+    beq !t18_pass+
+    cmp #TILE_DOOR_CLOSED
     beq !t18_pass+
     jmp !t18_fail+
 
@@ -1974,6 +1969,94 @@ test_start:
     lda #$00
     sta tc_results + 34
 !t35_done:
+
+    // ============================================================
+    // Test 36: run_check_stop stops on floor items
+    // ============================================================
+    jsr fill_map_rock
+
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_HAS_ITEM
+    sta (zp_ptr0),y
+
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #0
+    sta run_was_lit
+
+    jsr run_check_stop
+    bcs !t36_pass+
+    jmp !t36_fail+
+!t36_pass:
+    lda #$01
+    sta tc_results + 35
+    jmp !t36_done+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+!t36_done:
+
+    // ============================================================
+    // Test 37: lit room mouth on the side does not stop one tile early
+    // Corridor remains unlit; north side tile is lit floor.
+    // Running should continue here and stop on actual room entry instead.
+    // ============================================================
+    jsr fill_map_rock
+
+    // Straight east-west corridor at y=20, x=19..21
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+!t37_corridor:
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    iny
+    cpy #22
+    bne !t37_corridor-
+
+    // Lit room mouth immediately north of the current corridor tile.
+    ldx #19
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta zp_player_x
+    lda #20
+    sta zp_player_y
+    lda #3                      // DIR_E
+    sta zp_run_dir
+    lda #0
+    sta run_was_lit
+
+    jsr run_check_stop
+    bcc !t37_pass+
+    jmp !t37_fail+
+!t37_pass:
+    lda #$01
+    sta tc_results + 36
+    jmp !t37_done+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
+!t37_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

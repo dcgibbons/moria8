@@ -2,7 +2,6 @@
 #
 # Targets:
 #   make          Build moria8.prg (auto-downloads KickAssembler if needed)
-#   make run      Build and launch in VICE
 #   make rundisk  Build D64 + launch with true drive emulation
 #   make debug    Build + launch with VICE monitor watchpoints
 #   make test     Assemble + run all tests in VICE headless
@@ -26,7 +25,7 @@ MAIN_SRC    = main.s
 MAIN_PRG    = $(OUT)/moria8.prg
 BOOT_SRC    = boot.s
 BOOT_PRG    = $(OUT)/boot.prg
-TITLE_SRC   = title_data.s
+TITLE_SRC   = ../common/title_data.s
 TITLE_PRG   = $(OUT)/title
 TIER_PRGS   = $(OUT)/monster.db.1 $(OUT)/monster.db.2 $(OUT)/monster.db.3 $(OUT)/monster.db.4
 OVL_TOWN    = $(OUT)/ovl.town
@@ -38,18 +37,25 @@ DISK_NAME   = "moria8,m8"
 DISKART     = ../../tools/diskart.py
 
 # All source files that main.s imports (dependency list)
-SOURCES     = $(wildcard *.s)
+COMMON_SOURCES = $(wildcard ../common/*.s)
+SOURCES     = $(wildcard *.s) $(COMMON_SOURCES)
 TEST_SOURCES = $(wildcard tests/*.s)
 
 # ── KickAssembler flags ──────────────────────────────────
 KA_FLAGS    = -showmem -vicesymbols
+
+# ── C128 VDC demo ────────────────────────────────────────
+C128_DIR     = ../c128
+VDC_DEMO_SRC = $(C128_DIR)/vdc_demo.s
+VDC_DEMO_PRG = $(OUT)/vdc_demo.prg
+VICE128      ?= x128
 
 # ── VICE flags ────────────────────────────────────────────
 # For interactive play
 RUN_FLAGS   = -autostartprgmode 1 -sound -sounddev coreaudio
 
 # ── Targets ───────────────────────────────────────────────
-.PHONY: all build run rundisk rundual debug test disk savedisk clean
+.PHONY: all build rundisk rundual debug test disk savedisk clean run128demo
 
 all: build
 
@@ -86,24 +92,20 @@ $(OUT)/monster.db.4: creature_data/tier4_prg.s creature_data/tier4.s | $(OUT)
 $(BOOT_PRG): $(BOOT_SRC) | $(OUT)
 	$(JAVA) -jar $(KICKASS) $(BOOT_SRC) -o $(BOOT_PRG)
 
-# Launch in VICE emulator
-run: $(MAIN_PRG) $(TITLE_PRG) $(TIER_PRGS)
-	$(VICE) $(RUN_FLAGS) -autostart $(MAIN_PRG)
-
 # Launch with D64 disk image + true drive emulation (bypasses FileSystemDevice)
 rundisk: disk
-	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
+	$(VICE) -drive8truedrive -drive8type 1541 +busdevice8 -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
 # Launch with two drives (game on 8, save on 9) for dual-drive testing
 rundual: disk savedisk
-	$(VICE) -drive8truedrive -drive8type 1541 +iecdevice8 \
-	        -drive9truedrive -drive9type 1541 +iecdevice9 \
+	$(VICE) -drive8truedrive -drive8type 1541 +busdevice8 \
+	        -drive9truedrive -drive9type 1541 +busdevice9 \
 	        -8 $(DISK_IMAGE) -9 $(SAVE_IMAGE) \
 	        -sound -sounddev coreaudio -autostart $(DISK_IMAGE)
 
 # Launch with VICE monitor commands for save/load debugging
 debug: $(MAIN_PRG) disk
-	$(VICE) -drive8truedrive -drive8type 1541 -iecdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
+	$(VICE) -drive8truedrive -drive8type 1541 -busdevice8 -sound -sounddev coreaudio     -8 $(DISK_IMAGE) -moncommands debug_load.mon -autostart $(MAIN_PRG)
 
 # Delegate to existing test runner (assembles tests + runs in VICE headless)
 test: $(MAIN_PRG)
@@ -137,6 +139,13 @@ SAVE_IMAGE  = $(OUT)/moria8_save.d64
 
 savedisk: | $(OUT)
 	$(C1541) -format "moria8 save,sv" d64 $(SAVE_IMAGE)
+
+# C128 VDC demo — standalone VDC rendering test
+$(VDC_DEMO_PRG): $(VDC_DEMO_SRC) $(KICKASS) | $(OUT)
+	$(JAVA) -jar $(KICKASS) $(VDC_DEMO_SRC) $(KA_FLAGS) -o $(VDC_DEMO_PRG)
+
+run128demo: $(VDC_DEMO_PRG)
+	$(VICE128) -80col -autostartprgmode 1 -autostart $(VDC_DEMO_PRG)
 
 # Auto-download KickAssembler if not present
 $(KICKASS):

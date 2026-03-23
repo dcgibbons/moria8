@@ -3,7 +3,8 @@
 // Uses KERNAL GETIN ($FFE4) to read keyboard buffer.
 // Maps PETSCII key codes to internal command IDs.
 // Supports vi-keys (HJKLYUBN) for 8-direction movement
-// Numeric prefix for repeat counts deferred to Phase 6+.
+// Numeric repeat prefixes are intentionally unimplemented.
+// `zp_input_count` is currently fixed to 1 for all commands.
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
 // via a lookup table. The KERNAL IRQ handler must remain active
@@ -11,6 +12,13 @@
 
 // KERNAL vectors
 .const KERNAL_GETIN = $ffe4
+
+// Keyboard/CIA registers
+.const KBDBUF_COUNT = $c6
+.const CIA1_PORTA   = $dc00
+.const CIA1_PORTB   = $dc01
+.const CIA1_DDRA    = $dc02
+.const CIA1_DDRB    = $dc03
 
 // ============================================================
 // Command IDs — internal constants, not key codes
@@ -87,6 +95,102 @@ dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 // GETIN sets $CC=$C6 internally — calling with $C6>0 keeps $CC
 // non-zero, preventing KERNAL cursor blink from corrupting color RAM.
 // Preserves: X, Y
+// input_run_key_held — Non-blocking: returns nonzero if any key is physically held
+// Used by the pre-arm running path in game_loop.s. This must ignore KERNAL
+// key-repeat semantics; buffered repeats would cancel a run after a short delay.
+// Output: A = nonzero if any key held, 0 if no key
+// Preserves: X, Y
+input_run_key_held:
+    lda $01
+    pha
+    php
+    sei
+    lda #BANK_NO_BASIC
+    sta $01
+
+    lda CIA1_PORTA
+    sta irk_save_pra
+    lda CIA1_DDRA
+    sta irk_save_ddra
+    lda CIA1_DDRB
+    sta irk_save_ddrb
+
+    lda #$ff
+    sta CIA1_DDRA
+    lda #$00
+    sta CIA1_DDRB
+    lda #$00
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    cmp #$ff
+    beq !irk_none+
+    lda #1
+    bne !irk_store+
+!irk_none:
+    lda #0
+!irk_store:
+    sta irk_result
+
+    lda irk_save_pra
+    sta CIA1_PORTA
+    lda irk_save_ddra
+    sta CIA1_DDRA
+    lda irk_save_ddrb
+    sta CIA1_DDRB
+
+    plp
+    pla
+    sta $01
+    lda irk_result
+    rts
+
+// input_run_key_check — Backward-compatible alias for held-state polling
+input_run_key_check:
+    jmp input_run_key_held
+
+// input_run_cancel_check — Non-blocking run cancel poll
+// Uses the same edge detector contract as C128, but samples only physical held state.
+input_run_cancel_check:
+    jsr input_run_key_held
+    jmp input_run_process_sample
+
+// input_run_cancel_reset — Reset run-cancel state
+input_run_cancel_reset:
+    lda #0
+    sta irk_last_sample
+    sta irk_stable
+    rts
+
+// input_run_process_sample — Debounced edge/state machine for running cancel
+// Input: A = sampled held-state (0 = no key, nonzero = key held)
+// Output: A = 1 on a newly-stable key-down edge, 0 otherwise
+input_run_process_sample:
+    beq !irps_norm_done+
+    lda #1
+!irps_norm_done:
+    cmp irk_last_sample
+    beq !irps_confirm+
+    sta irk_last_sample
+    lda #0
+    rts
+
+!irps_confirm:
+    cmp irk_stable
+    beq !irps_none+
+    sta irk_stable
+    beq !irps_none+
+    rts
+!irps_none:
+    lda #0
+    rts
+
+irk_save_pra:  .byte 0
+irk_save_ddra: .byte 0
+irk_save_ddrb: .byte 0
+irk_last_sample: .byte 0
+irk_stable: .byte 0
+irk_result: .byte 0
+
 input_get_key:
     lda $01
     pha
@@ -95,6 +199,7 @@ input_get_key:
     sta $01
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
+    inc zp_entropy
     lda $c6                 // Keyboard buffer count (filled by IRQ handler)
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
@@ -106,10 +211,43 @@ input_get_key:
     rts
 igk_key: .byte 0
 
+// input_wait_release — Drain pending buffered keys and wait until no key is pending
+// Used before one-shot "press any key" prompts so a prior selection key does
+// not auto-dismiss the next screen.
+// Preserves: X, Y
+input_wait_release:
+    lda $01
+    pha
+    php                     // Save processor flags (preserves I flag)
+    lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
+    sta $01
+    cli                     // Keep KERNAL keyboard IRQ scanning active
+
+    // Drain any already-buffered keypresses.
+!iwr_drain:
+    inc zp_entropy
+    lda KBDBUF_COUNT
+    beq !iwr_wait+
+    jsr KERNAL_GETIN
+    jmp !iwr_drain-
+
+    // Require two consecutive empty-buffer polls for stability.
+!iwr_wait:
+    inc zp_entropy
+    lda KBDBUF_COUNT
+    bne !iwr_drain-
+    lda KBDBUF_COUNT
+    bne !iwr_drain-
+
+    plp                     // Restore original I flag
+    pla
+    sta $01                 // Restore original banking state
+    rts
+
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)
 //         zp_input_cmd = same
-//         zp_input_count = repeat count (1 if no numeric prefix)
+//         zp_input_count = repeat count (currently always 1; numeric prefixes are deferred)
 // Preserves: nothing
 input_get_command:
     // Flush keyboard buffer to discard keys pressed during rendering
@@ -118,9 +256,8 @@ input_get_command:
 
     lda #1
     sta zp_input_count      // Default repeat count = 1
-    // TODO: Numeric prefix (repeat count) deferred to Phase 6+.
-    // Requires: save PETSCII before conversion, accumulate digits,
-    // multiply count, then parse the actual command key.
+    // Numeric repeat prefixes are not implemented.
+    // Keep `zp_input_count` pinned to 1 until the feature is explicitly revived.
 
 !get_key:
     jsr input_get_key

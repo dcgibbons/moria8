@@ -1,0 +1,7 @@
+// Diagnostic: trace the $3117 crash
+// Break at player_create entry to verify overlay code
+break exec C:$E822
+// Break at the crash address
+break exec C:$3117
+// Break at create_init_character entry
+break exec C:$EB62

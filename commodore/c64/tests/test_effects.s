@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #20
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -33,60 +33,60 @@ test_finish:
 
 .pc = * "Test Body"
 
-#import "../zeropage.s"
+#import "../../common/zeropage.s"
 #import "../memory.s"
-#import "../reu.s"
+#import "../../common/reu.s"
 #import "../screen.s"
-#import "../color.s"
+#import "../../common/color.s"
 #import "../config.s"
 #import "../input.s"
-#import "../rng.s"
-#import "../math.s"
-#import "../tables.s"
-#import "../item_defs.s"
-#import "../player.s"
-#import "../ui_messages.s"
-#import "../ui_status.s"
-#import "../ui_help_clear.s"
-#import "../ui_character.s"
-#import "../stat_display.s"
+#import "../../common/rng.s"
+#import "../../common/math.s"
+#import "../../common/tables.s"
+#import "../../common/item_defs.s"
+#import "../../common/player.s"
+#import "../../common/ui_messages.s"
+#import "../../common/ui_status.s"
+#import "../../common/ui_help_clear.s"
+#import "../../common/ui_character.s"
+#import "../../common/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
-#import "../background_data.s"
-#import "../player_create.s"
+#import "../../common/background_data.s"
+#import "../../common/player_create.s"
 .segment Default
-#import "../sound.s"
-#import "../dungeon_data.s"
-#import "../dungeon_gen.s"
-#import "../huffman.s"
-#import "../dungeon_features.s"
-#import "../monster.s"
-#import "../tier_manager.s"
-#import "../overlay.s"
-#import "../monster_ai.s"
-#import "../recall.s"
-#import "../monster_magic.s"
-#import "../item.s"
-#import "../special_rooms.s"
-#import "../ego_items.s"
-#import "../special_rooms_stubs.s"
-#import "../player_items.s"
-#import "../spell_data.s"
-#import "../projectile.s"
-#import "../spell_effects.s"
-#import "../player_magic.s"
-#import "../ui_inventory.s"
+#import "../../common/sound.s"
+#import "../../common/dungeon_data.s"
+#import "../../common/dungeon_gen.s"
+#import "../../common/huffman.s"
+#import "../../common/dungeon_features.s"
+#import "../../common/monster.s"
+#import "../../common/tier_manager.s"
+#import "../../common/overlay.s"
+#import "../../common/monster_ai.s"
+#import "../../common/recall.s"
+#import "../../common/monster_magic.s"
+#import "../../common/item.s"
+#import "../../common/special_rooms.s"
+#import "../../common/ego_items.s"
+#import "../../common/special_rooms_stubs.s"
+#import "../../common/player_items.s"
+#import "../../common/spell_data.s"
+#import "../../common/projectile.s"
+#import "../../common/spell_effects.s"
+#import "../../common/player_magic.s"
+#import "../../common/ui_inventory.s"
 #import "../dungeon_render.s"
-#import "../dungeon_los.s"
-#import "../player_move.s"
-#import "../combat.s"
-#import "../monster_attack.s"
-#import "../turn.s"
-#import "../store_data.s"
-#import "../store.s"
-#import "../ui_store.s"
-#import "../ui_help.s"
-#import "../ui_trampoline_stubs.s"
+#import "../../common/dungeon_los.s"
+#import "../../common/player_move.s"
+#import "../../common/combat.s"
+#import "../../common/monster_attack.s"
+#import "../../common/turn.s"
+#import "../../common/store_data.s"
+#import "../../common/store.s"
+#import "../../common/ui_store.s"
+#import "../../common/ui_help.s"
+#import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -95,7 +95,14 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 21, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
+tv_buf_idx: .byte 0
+tv_step_idx: .byte 0
+tv_row_idx: .byte 0
+tv_prev_x:  .byte 0
+tv_prev_y:  .byte 0
+tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
+tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0
 
 test_start:
 
@@ -1145,10 +1152,384 @@ test_start:
     bne !t21_fail+
     lda #$01
     sta tc_results + 20
-    jmp !tests_done+
+    jmp !t22+
 !t21_fail:
     lda #$00
     sta tc_results + 20
 
+    // ==========================================
+    // Test 22: Visibility room cache sets in lit room and clears in corridor
+    // ==========================================
+!t22:
+    jsr fill_map_rock
+
+    lda #1
+    sta zp_player_dlvl
+    sta room_count
+    lda #20
+    sta room_x
+    sta dg_room_x
+    lda #10
+    sta room_y
+    sta dg_room_y
+    lda #5
+    sta room_w
+    sta dg_room_w
+    lda #3
+    sta room_h
+    sta dg_room_h
+    lda #1
+    sta room_lit
+    lda #0
+    sta zp_eff_blind
+    lda #1
+    sta zp_light_radius
+    lda #$ff
+    sta vis_cached_room_idx
+    jsr draw_dungeon_room
+
+    lda #20
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    jsr update_visibility
+    lda vis_cached_room_idx
+    cmp #0
+    bne !t22_fail+
+
+    lda #30
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #30
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    jsr update_visibility
+    lda vis_cached_room_idx
+    cmp #$ff
+    bne !t22_fail+
+
+    lda #$01
+    sta tc_results + 21
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
+
+    // ==========================================
+    // Test 23: Room bounds include perimeter walls only
+    // ==========================================
+!t23:
+    lda #20
+    sta room_x
+    lda #10
+    sta room_y
+    lda #5
+    sta room_w
+    lda #3
+    sta room_h
+
+    lda #19                     // Left perimeter wall: inside
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcc !t23_fail+
+
+    lda #20                     // Top perimeter wall: inside
+    sta zp_player_x
+    lda #9
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcc !t23_fail+
+
+    lda #18                     // Two tiles left: outside
+    sta zp_player_x
+    lda #10
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcs !t23_fail+
+
+    lda #20                     // Two tiles above: outside
+    sta zp_player_x
+    lda #8
+    sta zp_player_y
+    ldx #0
+    jsr uv_player_in_room_x
+    bcs !t23_fail+
+
+    lda #$01
+    sta tc_results + 22
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
+
+    // ==========================================
+    // Test 24: Dark-room pickup redraw must not change unrelated viewport tiles
+    // Walk inside a dark room using local redraws, then pick up an item hidden
+    // under the player and force a full redraw. The viewport image should stay
+    // identical because the player already masked the item.
+    // ==========================================
+!t24:
+    jsr tv_setup_dark_room
+
+    lda #5
+    sta tv_step_idx
+!t24_walk:
+    lda zp_player_x
+    sta tv_prev_x
+    lda zp_player_y
+    sta tv_prev_y
+    sta old_player_y
+    lda tv_prev_x
+    sta old_player_x
+
+    inc zp_player_x
+    lda zp_player_x
+    sta player_data + PL_MAP_X
+    lda zp_player_y
+    sta player_data + PL_MAP_Y
+
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_local_area
+
+    dec tv_step_idx
+    bne !t24_walk-
+
+    lda zp_player_x
+    sta fi_add_x
+    lda zp_player_y
+    sta fi_add_y
+    lda #17                     // Cure Light Wounds potion
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcs !t24_item_ok+
+    jmp !t24_fail+
+!t24_item_ok:
+    lda #0
+    sta zp_temp0
+    lda zp_player_x
+    sta zp_temp0
+    lda zp_player_y
+    sta zp_temp1
+    jsr render_single_tile
+
+    jsr tv_snapshot_viewport
+    jsr item_pickup
+    bcs !t24_pickup_ok+
+    jmp !t24_fail+
+!t24_pickup_ok:
+    jsr render_viewport
+    jsr tv_compare_viewport
+    bcs !t24_fail+
+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: eff_light_room must synchronize room_lit and tile FLAG_LIT
+    // ==========================================
+!t25:
+    jsr tv_setup_dark_room
+    jsr eff_light_room
+
+    lda room_lit
+    cmp #1
+    bne !t25_fail+
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    beq !t25_fail+
+
+    ldy #19                     // Left wall of the room rectangle
+    lda (zp_ptr0),y
+    and #FLAG_LIT
+    beq !t25_fail+
+
+    lda #$01
+    sta tc_results + 24
+    jmp !tests_done+
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
+
 !tests_done:
     jmp test_finish
+
+tv_setup_dark_room:
+    jsr fill_map_rock
+    jsr item_init_floor
+    jsr monster_init_table
+    lda #0
+    sta vis_room_revealed
+    lda #$ff
+    sta vis_cached_room_idx
+    lda #0
+    sta room_count
+
+    lda #1
+    sta room_count
+    lda #20
+    sta room_x
+    sta dg_room_x
+    lda #10
+    sta room_y
+    sta dg_room_y
+    lda #10
+    sta room_w
+    sta dg_room_w
+    lda #6
+    sta room_h
+    sta dg_room_h
+    lda #0
+    sta room_lit
+    jsr draw_dungeon_room
+    jsr darken_rooms
+
+    lda #22
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #12
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    lda #1
+    sta zp_player_dlvl
+    lda #0
+    sta zp_eff_blind
+    lda #1
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr screen_clear
+    jsr update_visibility
+    jsr viewport_update
+    jsr render_viewport
+    rts
+
+tv_snapshot_viewport:
+    lda #0
+    sta tv_buf_idx
+    sta tv_row_idx
+!tv_snap_row:
+    ldx tv_row_idx
+    txa
+    clc
+    adc #VIEWPORT_Y
+    tax
+    lda screen_row_lo,x
+    clc
+    adc #VIEWPORT_X
+    sta zp_screen_lo
+    lda screen_row_hi,x
+    adc #0
+    sta zp_screen_hi
+
+    lda color_row_lo,x
+    clc
+    adc #VIEWPORT_X
+    sta zp_color_lo
+    lda color_row_hi,x
+    adc #0
+    sta zp_color_hi
+
+    ldy #0
+!tv_snap_col:
+    lda tv_buf_idx
+    tax
+    lda (zp_screen_lo),y
+    sta tv_snapshot_screen,x
+    lda (zp_color_lo),y
+    sta tv_snapshot_color,x
+    inc tv_buf_idx
+    iny
+    cpy #VIEWPORT_W
+    bne !tv_snap_col-
+
+    inc tv_row_idx
+    lda tv_row_idx
+    cmp #VIEWPORT_H
+    beq !tv_snap_done+
+    jmp !tv_snap_row-
+!tv_snap_done:
+    rts
+
+tv_compare_viewport:
+    lda #0
+    sta tv_buf_idx
+    sta tv_row_idx
+!tv_cmp_row:
+    ldx tv_row_idx
+    txa
+    clc
+    adc #VIEWPORT_Y
+    tax
+    lda screen_row_lo,x
+    clc
+    adc #VIEWPORT_X
+    sta zp_screen_lo
+    lda screen_row_hi,x
+    adc #0
+    sta zp_screen_hi
+
+    lda color_row_lo,x
+    clc
+    adc #VIEWPORT_X
+    sta zp_color_lo
+    lda color_row_hi,x
+    adc #0
+    sta zp_color_hi
+
+    ldy #0
+!tv_cmp_col:
+    lda tv_buf_idx
+    tax
+    lda (zp_screen_lo),y
+    cmp tv_snapshot_screen,x
+    bne !tv_cmp_mismatch+
+    lda (zp_color_lo),y
+    cmp tv_snapshot_color,x
+    bne !tv_cmp_mismatch+
+    inc tv_buf_idx
+    iny
+    cpy #VIEWPORT_W
+    bne !tv_cmp_col-
+
+    inc tv_row_idx
+    lda tv_row_idx
+    cmp #VIEWPORT_H
+    beq !tv_cmp_match+
+    jmp !tv_cmp_row-
+!tv_cmp_mismatch:
+    sec
+    rts
+!tv_cmp_match:
+    clc
+    rts

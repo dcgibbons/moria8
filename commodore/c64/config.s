@@ -64,7 +64,66 @@ detect_machine:
 // ============================================================
 // Death source constants (used by turn.s, player_items.s, score.s)
 // ============================================================
+// kernal_load — Platform LOAD wrapper (C64: direct KERNAL call)
+kernal_load:
+    jmp $ffd5
+
+.macro AssetLoad() {
+    jsr kernal_load
+}
+
 .const DEATH_ALIVE   = $00    // Player is alive
 .const DEATH_CURSED  = $FD    // Killed by cursed item
 .const DEATH_POISON  = $FE    // Killed by poison
 .const DEATH_STARVE  = $FF    // Killed by starvation
+
+// ============================================================
+// C64 map-safe pointer wrappers (no MMU; direct access)
+// ============================================================
+mmu_safe_map_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_map_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_map_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_map_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
+// Bulk map helpers enter/exit (no-op on C64)
+map_bulk_enter:
+    rts
+
+map_bulk_exit:
+    rts
+
+// ============================================================
+// C64 DB-safe pointer wrappers (no MMU; direct access)
+// ============================================================
+mmu_safe_db_read_ptr0:
+    lda (zp_ptr0),y
+    rts
+
+mmu_safe_db_write_ptr0:
+    sta (zp_ptr0),y
+    rts
+
+mmu_safe_db_read_ptr1:
+    lda (zp_ptr1),y
+    rts
+
+mmu_safe_db_write_ptr1:
+    sta (zp_ptr1),y
+    rts
+
+db_bulk_enter:
+    rts
+
+db_bulk_exit:
+    rts
