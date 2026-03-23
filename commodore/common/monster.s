@@ -1058,13 +1058,27 @@ creature_get_name:
 #if C128
     // C128 tier name pointers are typically encoded as historical $E0xx
     // payload addresses; convert those to the active Bank 1 tier cache slot.
-    // If pointers are already inside the reclaimed Bank 1 cache window, keep them.
-    // Any other range is invalid for banked name fetch.
+    // Do not assume every cached tier lives at $8000. Tier 2/3/4 occupy later
+    // Bank 1 slots, so translate by offset-from-$E000 plus the current tier's
+    // actual cache base. If pointers are already inside the reclaimed Bank 1
+    // cache window, keep them. Any other range is invalid for banked fetch.
     lda zp_ptr1_hi
     cmp #$e0
     bcc !cgn_ptr_maybe_b1+
     sec
-    sbc #>(BANKED_DATA_BASE - BANK1_FREE_HIGH_BASE)
+    lda zp_ptr1
+    sbc #<BANKED_DATA_BASE
+    sta cgn_saved_x
+    lda zp_ptr1_hi
+    sbc #>BANKED_DATA_BASE
+    sta cgn_saved_p01
+    ldx current_tier
+    lda c128_tier_cache_slot_lo,x
+    clc
+    adc cgn_saved_x
+    sta zp_ptr1
+    lda c128_tier_cache_slot_hi,x
+    adc cgn_saved_p01
     sta zp_ptr1_hi
     jmp !cgn_copy+
 !cgn_ptr_maybe_b1:

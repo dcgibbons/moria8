@@ -926,6 +926,9 @@ tramp_player_create_return_site:
     rts
 
 tramp_game_over:
+    lda death_source_saved
+    sta zp_death_source
+
     // 1. Resolve creature name while tier data still at $E000
     lda zp_death_source
     cmp #$fd                    // DEATH_CURSED
@@ -960,7 +963,10 @@ tramp_game_over:
     jsr c128_vdc_reassert_mode
     plp
 
-    // 5. Insert into high score table (death overlay code at $E000)
+    // 5. Insert/save only for non-wizard characters
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    bne !tgo_skip_hiscore+
     jsr hiscore_insert
 
     // 6. Save high scores to disk (needs KERNAL-visible ROM)
@@ -977,6 +983,9 @@ tramp_game_over:
     sta $ff00
     jsr c128_vdc_reassert_mode
     plp
+!tgo_skip_hiscore:
+    lda death_source_saved
+    sta zp_death_source
 
     // 7. Display death screen (death overlay code at $E000)
     jmp score_death_screen
@@ -1612,6 +1621,9 @@ tramp_ui_inv_display:
 tramp_ui_equip_display:
     :C128UIOverlayDisplayTrampoline(ui_equip_display)
 
+tramp_ui_wizard_display:
+    :C128UIOverlayDisplayTrampoline(ui_wizard_display)
+
 tramp_ui_recall:
     :C128UIBankedDisplayTrampoline(ui_recall_display)
 
@@ -1634,8 +1646,17 @@ tramp_player_pray:
 tramp_spell_list_display:
     :C128BankedComputeTrampoline(spell_list_display)
 
+tramp_magic_recalc_mana:
+    :C128BankedComputeTrampoline(magic_recalc_mana)
+
 tramp_magic_check_new_spells:
-    :C128BankedComputeTrampoline(magic_check_new_spells)
+    jsr tramp_ui_enter
+    lda #C128_UI_OVERLAY_ID
+    jsr overlay_load
+    bcs !tmcns_done+
+    jsr magic_check_new_spells
+!tmcns_done:
+    jmp tramp_ui_exit
 
 tramp_mage_effect_dispatch:
     :C128BankedComputeTrampoline(mage_effect_dispatch)
@@ -2757,6 +2778,7 @@ c128_cache_state_end:
 #import "../common/combat.s"
 #import "../common/player_move.s"
 #import "../common/ui_help_clear.s"
+#import "../common/wizard.s"
 #import "../common/game_loop.s"
 #import "../common/turn.s"
 #import "../common/player_items.s"
@@ -3141,6 +3163,7 @@ program_end:
 .assert "UI char display trampoline stays below I/O hole", tramp_ui_char_display < $D000, true
 .assert "UI inventory display trampoline stays below I/O hole", tramp_ui_inv_display < $D000, true
 .assert "UI equip display trampoline stays below I/O hole", tramp_ui_equip_display < $D000, true
+.assert "UI wizard display trampoline stays below I/O hole", tramp_ui_wizard_display < $D000, true
 .assert "Store trampoline init stays below I/O hole", tramp_store_init_all < $D000, true
 .assert "Store trampoline restock stays below I/O hole", tramp_store_restock_all < $D000, true
 .assert "Store trampoline enter stays below I/O hole", tramp_store_enter < $D000, true
@@ -3160,6 +3183,7 @@ program_end:
 .assert "Ego-append-suffix trampoline stays below I/O hole", tramp_ego_append_suffix < $D000, true
 .assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
 .assert "Player-tunnel trampoline stays below I/O hole", tramp_player_tunnel < $D000, true
+.assert "Magic-recalc trampoline stays below I/O hole", tramp_magic_recalc_mana < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
 .assert "Character sheet overlay renderer stays inside overlay window", ui_char_display >= $E000 && ui_char_display < $F000, true
@@ -3202,7 +3226,8 @@ program_end:
 .assert "Cast-spell handler stays out of I/O hole", player_cast_spell < $D000 || player_cast_spell >= $F000, true
 .assert "Pray handler stays out of I/O hole", player_pray < $D000 || player_pray >= $F000, true
 .assert "Spell list renderer stays out of I/O hole", spell_list_display < $D000 || spell_list_display >= $F000, true
-.assert "Learn-new-spells helper stays out of I/O hole", magic_check_new_spells < $D000 || magic_check_new_spells >= $F000, true
+.assert "Mana-recalc helper stays out of I/O hole", magic_recalc_mana < $D000 || magic_recalc_mana >= $F000, true
+.assert "Learn-new-spells helper stays inside UI overlay", magic_check_new_spells >= $E000 && magic_check_new_spells < ovl_ui_end, true
 .assert "Mage effect dispatch stays out of I/O hole", mage_effect_dispatch < $D000 || mage_effect_dispatch >= $F000, true
 .assert "Priest effect dispatch stays out of I/O hole", priest_effect_dispatch < $D000 || priest_effect_dispatch >= $F000, true
 .assert "Ranged-fire handler stays out of I/O hole", ranged_fire < $D000 || ranged_fire >= $F000, true
@@ -3255,13 +3280,15 @@ ovl_death_end:
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
 
 // ============================================================
-// UI overlay — help + inventory/equipment modal screens at $E000
+// UI overlay — help + inventory/equipment/character/wizard modal screens at $E000
 // ============================================================
 .segment UiOverlay
     #import "../common/ui_help_data.s"
     #import "../common/ui_help.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_character.s"
+    #import "../common/player_magic_levelup.s"
+    #import "../common/ui_wizard.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true

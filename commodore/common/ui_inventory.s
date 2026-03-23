@@ -298,7 +298,7 @@ uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 // ============================================================
 uinv_title_str:   .text "Inventory" ; .byte 0
 uinv_sep_str:     .text "---------" ; .byte 0
-uinv_nothing_str: .text "You have nothing." ; .byte 0
+uinv_nothing_str: .text "Nothing." ; .byte 0
 
 ueq_title_str:    .text "Equipment" ; .byte 0
 ueq_none_str:     .text "(none)" ; .byte 0

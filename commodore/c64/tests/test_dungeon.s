@@ -108,6 +108,7 @@ press_key_str:
 
 // Test scratch variables
 t9_sum_before: .byte 0
+t9_sig_before: .byte 0
 t14_magma:     .byte 0
 t14_quartz:    .byte 0
 t16_counter:   .byte 0
@@ -437,8 +438,9 @@ test_start:
 !t8_done:
 
     // ==========================================
-    // Test 9: shuffle_rooms preserves all room data
-    // Set up 4 rooms with known values, shuffle, verify all present
+    // Test 9: shuffle_rooms preserves room geometry and metadata alignment
+    // Set up 4 rooms with known values, shuffle, verify both geometry and
+    // parallel metadata survive together.
     // ==========================================
     lda #4
     sta room_count
@@ -451,6 +453,10 @@ test_start:
     sta room_w + 0
     lda #3
     sta room_h + 0
+    lda #1
+    sta room_lit + 0
+    lda #2
+    sta room_type + 0
 
     // Room 1: x=30,y=10,w=6,h=4
     lda #30
@@ -461,6 +467,10 @@ test_start:
     sta room_w + 1
     lda #4
     sta room_h + 1
+    lda #0
+    sta room_lit + 1
+    lda #3
+    sta room_type + 1
 
     // Room 2: x=50,y=20,w=7,h=5
     lda #50
@@ -471,6 +481,10 @@ test_start:
     sta room_w + 2
     lda #5
     sta room_h + 2
+    lda #1
+    sta room_lit + 2
+    lda #1
+    sta room_type + 2
 
     // Room 3: x=10,y=30,w=4,h=3
     lda #10
@@ -481,6 +495,10 @@ test_start:
     sta room_w + 3
     lda #3
     sta room_h + 3
+    lda #0
+    sta room_lit + 3
+    lda #0
+    sta room_type + 3
 
     // Compute sum of all room_x values before shuffle
     lda room_x + 0
@@ -492,12 +510,54 @@ test_start:
     adc room_x + 3
     sta t9_sum_before              // Sum should be 10+30+50+10 = 100
 
+    // Compute an order-independent signature that still couples geometry and
+    // metadata, so mis-shuffling room_lit/room_type changes the result.
+    // signature += (x + y + w + h) * (1 + room_lit + 2*room_type)
+    lda #0
+    sta t9_sig_before
+    ldx #0
+!t9_sig_pre_loop:
+    lda room_type,x
+    asl                         // 2 * room_type
+    clc
+    adc room_lit,x
+    clc
+    adc #1
+    sta zp_temp0                // weight
+
+    lda room_x,x
+    clc
+    adc room_y,x
+    clc
+    adc room_w,x
+    clc
+    adc room_h,x
+    sta zp_temp1                // key
+
+    lda #0
+    sta zp_temp2
+!t9_sig_pre_mul:
+    lda t9_sig_before
+    clc
+    adc zp_temp1
+    sta t9_sig_before
+    inc zp_temp2
+    lda zp_temp2
+    cmp zp_temp0
+    bcc !t9_sig_pre_mul-
+
+    inx
+    cpx #4
+    bcc !t9_sig_pre_loop-
+
     jsr shuffle_rooms
 
     // room_count should be unchanged
     lda room_count
     cmp #4
-    bne !t9_fail+
+    beq !t9_count_ok+
+    jmp !t9_fail+
+!t9_count_ok:
 
     // Compute sum after shuffle — should still be 100
     lda room_x + 0
@@ -508,8 +568,54 @@ test_start:
     clc
     adc room_x + 3
     cmp t9_sum_before
-    bne !t9_fail+
+    beq !t9_sum_ok+
+    jmp !t9_fail+
+!t9_sum_ok:
 
+    // Recompute the geometry+metadata signature after shuffle.
+    lda #0
+    sta zp_temp3
+    ldx #0
+!t9_sig_post_loop:
+    lda room_type,x
+    asl
+    clc
+    adc room_lit,x
+    clc
+    adc #1
+    sta zp_temp0
+
+    lda room_x,x
+    clc
+    adc room_y,x
+    clc
+    adc room_w,x
+    clc
+    adc room_h,x
+    sta zp_temp1
+
+    lda #0
+    sta zp_temp2
+!t9_sig_post_mul:
+    lda zp_temp3
+    clc
+    adc zp_temp1
+    sta zp_temp3
+    inc zp_temp2
+    lda zp_temp2
+    cmp zp_temp0
+    bcc !t9_sig_post_mul-
+
+    inx
+    cpx #4
+    bcc !t9_sig_post_loop-
+
+    lda zp_temp3
+    cmp t9_sig_before
+    beq !t9_pass+
+    jmp !t9_fail+
+
+!t9_pass:
     lda #$01
     sta tc_results+8
     jmp !t9_done+

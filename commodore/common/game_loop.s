@@ -45,6 +45,10 @@ game_new_start:
 #endif
 #endif
 
+    lda #0
+    sta zp_game_flags
+    jsr wizard_reset_session_state
+
     // Clear status effect timers ($50–$5f) — BASIC ZP may have residual values
     ldx #0
     lda #0
@@ -249,6 +253,8 @@ game_new_start:
 // load_resume_game — Entry point after successful load
 // ============================================================
 load_resume_game:
+    jsr wizard_reset_session_state
+
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level.
     jsr tier_invalidate_state
@@ -424,6 +430,12 @@ c128_town_move_diag_after_input_get_command:
     bne !not_help+
     jmp cmd_show_help_view
 !not_help:
+
+    // Wizard mode?
+    cmp #CMD_WIZARD
+    bne !not_wizard+
+    jmp cmd_wizard_entry
+!not_wizard:
 
 #if C128
 #if PERF_P1
@@ -801,45 +813,9 @@ cmd_stairs_dn:
     beq !dn_not_deeper+
     sta player_data + PL_MAX_DLVL
 !dn_not_deeper:
-    jsr generation_busy_begin_api
-    jsr tier_check_transition   // Load new tier if crossing boundary
     lda #0
     sta level_entry_dir         // 0 = descended
-    lda #$ff
-    sta zp_run_dir              // Stop running on level change
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    jsr generation_busy_tick_api
-    bcc !stairs_dn_ovl_ok+
-    jmp entry_main
-!stairs_dn_ovl_ok:
-#if C128
-    jsr c128_restore_runtime_guards
-#endif
-    jsr tramp_level_generate
-    jsr generation_busy_tick_api
-    jsr monster_spawn_level
-    jsr generation_busy_tick_api
-    jsr item_spawn_level
-    jsr generation_busy_tick_api
-#if C128_TEST_FORCE_DUNGEON_MELEE
-    jsr c128_test_force_dungeon_melee
-#endif
-    jsr update_visibility
-    jsr generation_busy_end_api
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr screen_unblank
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$97
-    jsr c128_stack_guard_begin
-#endif
-    jsr status_draw
-#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
-    ldx #$98
-    jsr c128_stack_guard_check
-#endif
+    jsr level_change_generate_current
     lda #<descend_str
     sta zp_ptr0
     lda #>descend_str
@@ -872,34 +848,9 @@ cmd_stairs_up:
     bne !not_entering_town+
     jsr tramp_store_restock_all
 !not_entering_town:
-    jsr generation_busy_begin_if_dungeon_api
-    jsr tier_check_transition   // Load new tier if crossing boundary
     lda #1
     sta level_entry_dir         // 1 = ascended
-    lda #$ff
-    sta zp_run_dir              // Stop running on level change
-    lda #OVL_DUNGEON_GEN
-    jsr overlay_load
-    jsr generation_busy_tick_if_dungeon_api
-    bcc !stairs_up_ovl_ok+
-    jmp entry_main
-!stairs_up_ovl_ok:
-#if C128
-    jsr c128_restore_runtime_guards
-#endif
-    jsr tramp_level_generate
-    jsr generation_busy_tick_if_dungeon_api
-    jsr monster_spawn_level
-    jsr generation_busy_tick_if_dungeon_api
-    jsr item_spawn_level
-    jsr generation_busy_tick_if_dungeon_api
-    jsr update_visibility
-    jsr generation_busy_end_if_dungeon_api
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr screen_unblank
-    jsr status_draw
+    jsr level_change_generate_current
     lda #<ascend_str
     sta zp_ptr0
     lda #>ascend_str
@@ -920,6 +871,49 @@ cmd_stairs_up:
     sta zp_ptr0_hi
     jsr msg_print
     jmp main_loop
+
+// level_change_generate_current — Shared tail after caller has already updated
+// depth/max-depth/restock state and set level_entry_dir.
+// Restores gameplay view and returns.
+level_change_generate_current:
+    jsr generation_busy_begin_if_dungeon_api
+    jsr tier_check_transition
+    lda #$ff
+    sta zp_run_dir
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    jsr generation_busy_tick_if_dungeon_api
+    bcc !lcgc_ovl_ok+
+    jmp entry_main
+!lcgc_ovl_ok:
+#if C128
+    jsr c128_restore_runtime_guards
+#endif
+    jsr tramp_level_generate
+    jsr generation_busy_tick_if_dungeon_api
+    jsr monster_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
+    jsr item_spawn_level
+    jsr generation_busy_tick_if_dungeon_api
+#if C128_TEST_FORCE_DUNGEON_MELEE
+    jsr c128_test_force_dungeon_melee
+#endif
+    jsr update_visibility
+    jsr generation_busy_end_if_dungeon_api
+    jsr screen_clear
+    jsr viewport_update
+    jsr render_viewport
+    jsr screen_unblank
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$97
+    jsr c128_stack_guard_begin
+#endif
+    jsr status_draw
+#if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
+    ldx #$98
+    jsr c128_stack_guard_check
+#endif
+    rts
 
 cmd_open:
     jsr msg_clear
@@ -1226,6 +1220,9 @@ run_step:
 
 player_died:
 !player_died:
+    lda zp_death_source
+    sta death_source_saved
+
     // Render current positions before showing death message (BUG-46 fix).
     // All death paths skip the normal post-AI render, leaving stale monster
     // positions on screen. Render now so the killing blow is visible.
@@ -1246,8 +1243,11 @@ player_died:
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr delete_savefile
     jsr player_sync_from_zp
+    lda death_source_saved
+    sta zp_death_source
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
     jsr disk_prompt_game        // Swap back to game disk if dual
+    jsr input_wait_release
     jsr input_get_key
     jmp !quit+
 
@@ -1284,6 +1284,9 @@ no_stairs_str:
 
 slain_str:
     .text "You have been slain." ; .byte 0
+
+death_source_saved:
+    .byte 0
 
 // Recall command variables
 recall_prompt_str: .text "Recall which? " ; .byte 0

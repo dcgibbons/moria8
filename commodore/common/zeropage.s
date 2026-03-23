@@ -26,6 +26,9 @@
 // Layout strategy: put the hottest variables (pointers, counters used
 // every frame) in the lowest addresses. Group by module.
 
+.const GAME_FLAG_OVER   = $01
+.const GAME_FLAG_WIZARD = $02
+
 // ============================================================
 // SAFE ZONE — never touched by KERNAL
 // ============================================================
@@ -156,7 +159,7 @@
 .label zp_eff_free_act = $5c   // Free action flag
 .label zp_eff_see_inv  = $5d   // See invisible flag
 .label zp_eff_word_recall = $5e // Word of recall timer
-.label zp_death_source = $5f   // Death cause ($00=alive, $01-FC=monster, $FD-FF=special)
+.label zp_death_source = $5f   // Death cause (monster index or special DEATH_* code)
 
 // --- Viewport / map rendering ($60–$6b) ---
 .label zp_view_x       = $60   // Viewport top-left X in map coords

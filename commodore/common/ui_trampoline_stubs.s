@@ -9,6 +9,21 @@
 .label tramp_ui_inv_display = ui_inv_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
+.label ui_wizard_display = wizard_test_ui_wizard_display
+.label tramp_ui_wizard_display = ui_wizard_display
+
+wizard_test_ui_wizard_display:
+    rts
+
+wizard_reset_session_state:
+    rts
+
+wizard_wall_walk_active:
+    lda #0
+    rts
+
+cmd_wizard_entry:
+    rts
 
 // $E000 store overlay trampolines
 .label tramp_store_init_all = store_init_all

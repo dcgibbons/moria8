@@ -826,12 +826,10 @@ combat_award_xp:
 cax_frac_done:
     rts
 
-// combat_check_levelup — Check if XP exceeds adjusted level threshold
-// Adjusted threshold = base_threshold * PL_EXPFACT / 100
-// Compares 16-bit PL_XP against adjusted threshold.
-// Levels up once if exceeded; caps at 1 level per kill (excess XP halved and retained).
+// combat_compute_level_threshold — Compute adjusted threshold for current level
+// Output: ccl_adj_0/1 = 16-bit adjusted threshold
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
-combat_check_levelup:
+combat_compute_level_threshold:
     // Get base threshold for current level
     lda zp_player_lvl
     sec
@@ -878,6 +876,15 @@ combat_check_levelup:
     sta ccl_adj_0
     sta ccl_adj_1
 !ccl_no_cap:
+    rts
+
+// combat_check_levelup — Check if XP exceeds adjusted level threshold
+// Adjusted threshold = base_threshold * PL_EXPFACT / 100
+// Compares 16-bit PL_XP against adjusted threshold.
+// Levels up once if exceeded; caps at 1 level per kill (excess XP halved and retained).
+// Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
+combat_check_levelup:
+    jsr combat_compute_level_threshold
 
     // Compare 16-bit: PL_XP >= adjusted threshold?
     lda player_data + PL_XP_1
@@ -892,46 +899,7 @@ ccl_no_short:
     jmp ccl_no
 
 !ccl_yes:
-    // Level up!
-    inc zp_player_lvl
-    lda zp_player_lvl
-    sta player_data + PL_LEVEL
-
-    // Recalculate HP
-    jsr player_calc_hp
-
-    // Heal to full
-    lda player_data + PL_MHP_LO
-    sta player_data + PL_HP_LO
-    sta zp_player_hp_lo
-    lda player_data + PL_MHP_HI
-    sta player_data + PL_HP_HI
-    sta zp_player_hp_hi
-
-    // Sync max HP to ZP
-    lda player_data + PL_MHP_LO
-    sta zp_player_mhp_lo
-    lda player_data + PL_MHP_HI
-    sta zp_player_mhp_hi
-
-    // Recalculate combat bonuses (may change with level)
-    jsr player_calc_combat
-
-    // Recalculate mana and learn new spells
-    jsr magic_recalc_mana
-#if C128
-    jsr tramp_magic_check_new_spells
-#else
-    jsr magic_check_new_spells
-#endif
-
-    // Play level-up sound
-    lda #SFX_LEVELUP
-    jsr sound_play
-
-    // Print level-up message: "Welcome to level N."
-    jsr msg_build_levelup
-    jsr cmb_print_buf
+    jsr combat_apply_levelup
 
     // Halve excess XP above new threshold (umoria behavior).
     // Prevents a single big kill from cascading through many levels.
@@ -984,6 +952,56 @@ ccl_no_short:
     rts
 
 ccl_no:
+    rts
+
+// combat_apply_levelup — Apply one real level-up event
+// Shared by normal XP gain and Wizard Mode. Performs the actual level
+// increment, HP/mana/combat recompute, spell learning, sound, and message.
+combat_apply_levelup:
+    // Level up!
+    inc zp_player_lvl
+    lda zp_player_lvl
+    sta player_data + PL_LEVEL
+
+    // Recalculate HP
+    jsr player_calc_hp
+
+    // Heal to full
+    lda player_data + PL_MHP_LO
+    sta player_data + PL_HP_LO
+    sta zp_player_hp_lo
+    lda player_data + PL_MHP_HI
+    sta player_data + PL_HP_HI
+    sta zp_player_hp_hi
+
+    // Sync max HP to ZP
+    lda player_data + PL_MHP_LO
+    sta zp_player_mhp_lo
+    lda player_data + PL_MHP_HI
+    sta zp_player_mhp_hi
+
+    // Recalculate combat bonuses (may change with level)
+    jsr player_calc_combat
+
+    // Recalculate mana and learn new spells
+ #if C128
+    jsr tramp_magic_recalc_mana
+#else
+    jsr magic_recalc_mana
+#endif
+#if C128
+    jsr tramp_magic_check_new_spells
+#else
+    jsr magic_check_new_spells
+#endif
+
+    // Play level-up sound
+    lda #SFX_LEVELUP
+    jsr sound_play
+
+    // Print level-up message: "Welcome to level N."
+    jsr msg_build_levelup
+    jsr cmb_print_buf
     rts
 
 // Scratch for 24-bit threshold computation

@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -57,6 +57,17 @@ generation_busy_end:
     rts
 
 tramp_game_over:
+    rts
+
+wizard_reset_session_state:
+    rts
+
+wizard_wall_walk_active:
+    lda #0
+    rts
+
+cmd_wizard_entry:
+    inc test_wizard_calls
     rts
 
 save_game:
@@ -149,7 +160,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -173,6 +184,7 @@ test_door_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
 test_item_pickup_calls: .byte 0
+test_wizard_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
 test_busy_end_calls: .byte 0
@@ -243,6 +255,7 @@ reset_state:
     sta test_read_scroll_calls
     sta test_cast_spell_calls
     sta test_item_pickup_calls
+    sta test_wizard_calls
     sta test_busy_begin_calls
     sta test_busy_tick_calls
     sta test_busy_end_calls
@@ -420,7 +433,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #11
+    ldx #12
     lda #$ff
 !clr:
     sta tc_results,x
@@ -805,8 +818,31 @@ test_start:
     bne !t12_fail+
     lda #$01
     sta tc_results + 11
-    jmp test_finish
+    jmp !t13+
 !t12_fail:
     lda #$00
     sta tc_results + 11
+    jmp !t13+
+
+    // Test 13: WIZARD dispatches to the wizard entry handler and consumes no turn.
+!t13:
+    jsr reset_state
+    lda #12
+    sta test_case_idx
+    lda #CMD_WIZARD
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_wizard_calls
+    cmp #1
+    bne !t13_fail+
+    lda test_turn_calls
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp test_finish
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
     jmp test_finish

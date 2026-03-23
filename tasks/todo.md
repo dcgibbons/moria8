@@ -3,37 +3,35 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- None active. `TST-5a` and `TST-5b` are complete; only optional `TST-5c` palette add-ons remain.
+- [x] Add the carried-light faithfulness issue to the backlog with a research note.
+- [x] Bring Wizard Mode docs/history up to the final shipped behavior before commit.
 
 ## Plan
-- [x] Inspect the existing disk-swap code paths and current test harness pattern.
-- [x] Add a focused C64 `test_disk_swap.s` with stubbed KERNAL/UI/input helpers.
-- [x] Wire the new test into `commodore/c64/run_tests.sh`.
-- [x] Verify the new test plus baseline C64/C128 build/test gates.
-- [x] Add narrow isolated renderer decision-tree coverage on C64 and C128.
-- [x] Verify the renderer tests plus baseline C64/C128 gates.
+- [x] Audit the active backlog and Wizard history entry for stale or missing items.
+- [x] Add the carried-light research/fidelity item as explicit open backlog work.
+- [x] Update Wizard Mode scratch/history notes to reflect the actual final behavior and follow-up bugs.
 
 ## Review
-- Added `commodore/c64/tests/test_disk_swap.s` covering:
-  - `disk_prompt`
-  - `disk_init_drive`
-  - `probe_device`
-  - `disk_enter_device`
-- Added `commodore/c64/tests/test_render.s` covering:
-  - unvisited tile blanks
-  - visible item overrides floor
-  - visible monster overrides item
-  - player overrides monster/item
-- Extended `commodore/c128/tests/test_vdc_scroll_delta128.s` with the same single-tile override cases against the real VDC renderer.
-- Added the suite to `commodore/c64/run_tests.sh`.
-- Verification completed:
-  - `java -jar tools/kickass/KickAss.jar commodore/c64/tests/test_disk_swap.s -o commodore/c64/tests/test_disk_swap.prg`
-  - direct VICE monitor run of `test_disk_swap.prg`: `11/11` result bytes at `$0400-$040A`
-  - `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_render.s -o tests/test_render.prg`
-  - direct VICE monitor run of `test_render.prg`: `4/4` result bytes at `$0400-$0403`
-  - `make -C commodore/c64 build`
-  - `make -B -C commodore/c128 build128`
-  - `make test128-fast`
+Wizard Mode is implemented and manually validated on both C64 and C128, and the active docs now reflect the final user-accepted shape instead of the earlier midpoint design.
+
+Closed scope:
+- persisted one-way Wizard Mode on `Ctrl+W`
+- Wizard tag on the character sheet
+- modal Wizard menu and command handlers
+- Wizard no-rank death-screen path
+- C128 overlay/runtime fixes required to keep Wizard commands out of the I/O hole
+- final manual-play hardening for:
+  - C128 `Ctrl+W` entry flow
+  - C128 level jump / gain-level overlay safety
+  - deep-tier monster names after Wizard jumps
+  - mapping-style Reveal semantics with hidden doors
+  - Wizard generate-item using the real item-init path
+  - correct death-cause display and post-death key gating
+
+Known follow-up issues were split back into the active backlog instead of being left implicit inside the Wizard work:
+- `BUG-LIGHT-RANGE`
+- `BUG-RECALL`
+- `BUG-EGO-NAME`
 
 ## Coverage Read
 
