@@ -32,26 +32,62 @@ c128_restore_runtime_state:
 
 // Minimal renderer dependencies for paths we intentionally do not exercise.
 eff_detect_timer: .byte 0
+test_item_active:    .byte 0
+test_item_x:         .byte 0
+test_item_y:         .byte 0
+test_item_type:      .byte 0
+test_item_color:     .byte COL_WHITE
+test_mon_active:     .byte 0
+test_mon_x:          .byte 0
+test_mon_y:          .byte 0
+test_mon_type:       .byte 0
+test_mon_color_vic:  .byte COL_WHITE
 
 fi_item_id: .fill MAX_FLOOR_ITEMS, FI_EMPTY
 fi_x:       .fill MAX_FLOOR_ITEMS, 0
 fi_y:       .fill MAX_FLOOR_ITEMS, 0
-it_display: .fill 1, 0
+it_display: .fill 2, 0
 
-cr_display: .fill 1, 0
-cr_color:   .fill 1, 0
+cr_display: .fill 2, 0
+cr_color:   .fill 2, 0
 monster_stub_entry:
-    .fill 3, EMPTY_SLOT
+    .fill 12, EMPTY_SLOT
 
 item_get_floor_color:
-    lda #COL_WHITE
+    lda test_item_color
     rts
 
 floor_item_find_at:
+    ldx test_item_active
+    beq !miss+
+    cmp test_item_x
+    bne !miss+
+    tya
+    cmp test_item_y
+    bne !miss+
+    lda test_item_type
+    sta fi_item_id
+    ldx #0
+    sec
+    rts
+!miss:
     clc
     rts
 
 monster_find_at:
+    ldx test_mon_active
+    beq !miss+
+    cmp test_mon_x
+    bne !miss+
+    tya
+    cmp test_mon_y
+    bne !miss+
+    lda test_mon_type
+    sta monster_stub_entry + MX_TYPE
+    ldx #0
+    sec
+    rts
+!miss:
     clc
     rts
 
@@ -63,7 +99,7 @@ monster_get_ptr:
     rts
 
 monster_get_threat_color:
-    lda #COL_WHITE
+    lda test_mon_color_vic
     rts
 
 test_row_seed:
@@ -108,6 +144,10 @@ test_start:
     sta eff_detect_timer
 
     jsr init_floor_items
+    jsr test_render_single_tile_hidden_blank
+    jsr test_render_single_tile_item_override
+    jsr test_render_single_tile_monster_override
+    jsr test_render_single_tile_player_override
 
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
@@ -123,6 +163,195 @@ init_floor_items:
     sta fi_item_id,x
     dex
     bpl !loop-
+    jsr reset_render_overrides
+    lda #$69
+    sta it_display + 1
+    lda #$4d
+    sta cr_display + 1
+    rts
+
+reset_render_overrides:
+    lda #0
+    sta test_item_active
+    sta test_mon_active
+    rts
+
+setup_single_tile_scene:
+    jsr reset_render_overrides
+    jsr screen_clear
+    lda #10
+    sta zp_view_x
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #20
+    sta zp_player_x
+    sta old_player_x
+    lda #20
+    sta zp_player_y
+    sta old_player_y
+    lda #1
+    sta zp_light_radius
+    lda #1
+    sta zp_player_dlvl
+    rts
+
+test_render_single_tile_hidden_blank:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_item_active
+    lda #24
+    sta test_item_x
+    lda #20
+    sta test_item_y
+    lda #1
+    sta test_item_type
+    lda #COL_GREEN
+    sta test_item_color
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda #SC_SPACE
+    sta test_expected_char
+    lda #VDC_BLACK
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_item_override:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_item_active
+    lda #21
+    sta test_item_x
+    lda #20
+    sta test_item_y
+    lda #1
+    sta test_item_type
+    lda #COL_GREEN
+    sta test_item_color
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM)
+    jsr map_set_tile
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #11
+    sta test_col_rel
+    lda it_display + 1
+    sta test_expected_char
+    lda vic_to_vdc_color + COL_GREEN
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_monster_override:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_item_active
+    lda #21
+    sta test_item_x
+    lda #20
+    sta test_item_y
+    lda #1
+    sta test_item_type
+    lda #COL_GREEN
+    sta test_item_color
+    lda #1
+    sta test_mon_active
+    lda #21
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #21
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #21
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #11
+    sta test_col_rel
+    lda cr_display + 1
+    sta test_expected_char
+    lda vic_to_vdc_color + COL_RED
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_player_override:
+    jsr setup_single_tile_scene
+    lda #1
+    sta test_item_active
+    lda #20
+    sta test_item_x
+    lda #20
+    sta test_item_y
+    lda #1
+    sta test_item_type
+    lda #COL_GREEN
+    sta test_item_color
+    lda #1
+    sta test_mon_active
+    lda #20
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #COL_RED
+    sta test_mon_color_vic
+    ldx #20
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT | FLAG_HAS_ITEM | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #20
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #10
+    sta test_col_rel
+    lda #SC_PLAYER
+    sta test_expected_char
+    lda #VDC_WHITE
+    sta test_expected_attr
+    jsr assert_vdc_cell
     rts
 
 test_h_scroll_left_fast_path:

@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, and the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions).
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, and the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -28,8 +28,6 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `TST-5` add isolated tests for disk swap, palette mapping, and rendering draw routines | Medium | Medium | Prefer | Good merge hardening if branch scope remains broad. |
-| Medium | Platformize `dungeon_gen.s` BFS queue screen-RAM scratch assumption (`BFS_QUEUE = $0400`) | Medium | Medium | Prefer | Important if common dungeon generation logic continues to evolve. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | Clean up remaining 40-column layout assumptions in `ui_messages.s`, `title_data.s`, `ui_help.s`, `ui_status.s`, and `disk_swap.s` | Medium | Low | No | Mostly polish and consistency work. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
@@ -68,9 +66,7 @@
 
 ### Strongly Preferred
 
-- Land `TST-5` or equivalent targeted coverage for disk swap, palette mapping, and rendering draw routines.
-- Resolve or explicitly defer the highest-risk remaining shared-code scratch assumption:
-  - `dungeon_gen.s` BFS queue scratch region (`BFS_QUEUE = $0400`)
+- Keep the new isolated disk-swap and renderer tests in the regular pre-merge verification path.
 
 ### Not Required
 

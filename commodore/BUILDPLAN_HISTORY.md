@@ -6,6 +6,55 @@
 
 ---
 
+## 2026-03-23 — `TST-5a/b` isolated merge-hardening coverage ✅ COMPLETE
+
+### Scope Closed
+- Closed the high-value portion of `TST-5` by adding isolated test coverage for:
+  - `disk_swap.s`
+  - renderer decision-tree overrides on both C64 and C128
+- Removed the stale active-plan framing that still treated `TST-5` and the already-completed `dungeon_gen` BFS scratch cleanup as open merge work.
+
+### What Changed
+1. **C64 disk-swap unit coverage**
+   - Added `commodore/c64/tests/test_disk_swap.s` with stubbed KERNAL/IEC, UI, and input helpers.
+   - Covered:
+     - `disk_prompt`
+     - `disk_init_drive`
+     - `probe_device`
+     - `disk_enter_device`
+   - Wired the suite into `commodore/c64/run_tests.sh`.
+2. **Renderer decision-tree coverage**
+   - Added `commodore/c64/tests/test_render.s` to directly prove:
+     - unvisited tile blanks
+     - visible item overrides floor
+     - visible monster overrides item
+     - player overrides everything
+   - Extended `commodore/c128/tests/test_vdc_scroll_delta128.s` with the same single-tile override cases against the real VDC renderer.
+3. **Backlog cleanup**
+   - Updated `commodore/BUILDPLAN.md` so `TST-5` no longer appears as an open umbrella item.
+   - Removed the already-resolved `dungeon_gen` BFS scratch cleanup from the active backlog.
+
+### Why This Shape
+- The consultant review and local code audit both pointed to:
+  - disk swap as the least-covered shared high-branching logic
+  - renderer override logic as the next best isolated proof target
+- Palette mapping already had meaningful coverage, so the right outcome was to close the high-value `TST-5a/b` work and leave only optional palette add-ons out of scope.
+
+### Validation
+- `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_disk_swap.s -o tests/test_disk_swap.prg`
+- direct VICE monitor run of `test_disk_swap.prg`: `11/11`
+- `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_render.s -o tests/test_render.prg`
+- direct VICE monitor run of `test_render.prg`: `4/4`
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
+### Outcome
+- The merge-relevant portion of `TST-5` is complete.
+- The active backlog is smaller and more accurate.
+
+---
+
 ## 2026-03-23 — Phase 10.4 VDC threat/effect colors ✅ COMPLETE
 
 ### Scope Closed
