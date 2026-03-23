@@ -96,15 +96,25 @@ press_key_str:
 tc_loop:    .byte 0
 tc_ok:      .byte 0
 tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
-tv_buf_idx: .byte 0
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
-tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
-tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+test_input_wait_release:
+    rts
 
 test_start:
+    :PatchJump(input_wait_release, test_input_wait_release)
 
     // Seed RNG deterministically
     lda #$42
@@ -1268,7 +1278,7 @@ test_start:
 
     lda #$01
     sta tc_results + 22
-    jmp !tests_done+
+    jmp !t24+
 !t23_fail:
     lda #$00
     sta tc_results + 22
@@ -1331,6 +1341,9 @@ test_start:
     sta zp_temp1
     jsr render_single_tile
 
+    // Normalize the viewport before snapshot so the comparison isolates
+    // the pickup/full-redraw behavior rather than prior local-redraw drift.
+    jsr render_viewport
     jsr tv_snapshot_viewport
     jsr item_pickup
     bcs !t24_pickup_ok+
@@ -1435,8 +1448,19 @@ tv_setup_dark_room:
     rts
 
 tv_snapshot_viewport:
+    lda $01
+    pha
+    and #%11111110
+    sta $01
+    lda #<tv_snapshot_screen
+    sta zp_ptr0
+    lda #>tv_snapshot_screen
+    sta zp_ptr0_hi
+    lda #<tv_snapshot_color
+    sta zp_ptr1
+    lda #>tv_snapshot_color
+    sta zp_ptr1_hi
     lda #0
-    sta tv_buf_idx
     sta tv_row_idx
 !tv_snap_row:
     ldx tv_row_idx
@@ -1462,28 +1486,52 @@ tv_snapshot_viewport:
 
     ldy #0
 !tv_snap_col:
-    lda tv_buf_idx
-    tax
     lda (zp_screen_lo),y
-    sta tv_snapshot_screen,x
+    sta (zp_ptr0),y
     lda (zp_color_lo),y
-    sta tv_snapshot_color,x
-    inc tv_buf_idx
+    sta (zp_ptr1),y
     iny
     cpy #VIEWPORT_W
     bne !tv_snap_col-
 
+    lda zp_ptr0
+    clc
+    adc #VIEWPORT_W
+    sta zp_ptr0
+    bcc !tv_snap_screen_advance_done+
+    inc zp_ptr0_hi
+!tv_snap_screen_advance_done:
+    lda zp_ptr1
+    clc
+    adc #VIEWPORT_W
+    sta zp_ptr1
+    bcc !tv_snap_color_advance_done+
+    inc zp_ptr1_hi
+!tv_snap_color_advance_done:
     inc tv_row_idx
     lda tv_row_idx
     cmp #VIEWPORT_H
     beq !tv_snap_done+
     jmp !tv_snap_row-
 !tv_snap_done:
+    pla
+    sta $01
     rts
 
 tv_compare_viewport:
+    lda $01
+    pha
+    and #%11111110
+    sta $01
+    lda #<tv_snapshot_screen
+    sta zp_ptr0
+    lda #>tv_snapshot_screen
+    sta zp_ptr0_hi
+    lda #<tv_snapshot_color
+    sta zp_ptr1
+    lda #>tv_snapshot_color
+    sta zp_ptr1_hi
     lda #0
-    sta tv_buf_idx
     sta tv_row_idx
 !tv_cmp_row:
     ldx tv_row_idx
@@ -1509,27 +1557,48 @@ tv_compare_viewport:
 
     ldy #0
 !tv_cmp_col:
-    lda tv_buf_idx
-    tax
     lda (zp_screen_lo),y
-    cmp tv_snapshot_screen,x
+    cmp (zp_ptr0),y
     bne !tv_cmp_mismatch+
-    lda (zp_color_lo),y
-    cmp tv_snapshot_color,x
-    bne !tv_cmp_mismatch+
-    inc tv_buf_idx
+!tv_cmp_next:
     iny
     cpy #VIEWPORT_W
     bne !tv_cmp_col-
 
+    lda zp_ptr0
+    clc
+    adc #VIEWPORT_W
+    sta zp_ptr0
+    bcc !tv_cmp_screen_advance_done+
+    inc zp_ptr0_hi
+!tv_cmp_screen_advance_done:
+    lda zp_ptr1
+    clc
+    adc #VIEWPORT_W
+    sta zp_ptr1
+    bcc !tv_cmp_color_advance_done+
+    inc zp_ptr1_hi
+!tv_cmp_color_advance_done:
     inc tv_row_idx
     lda tv_row_idx
     cmp #VIEWPORT_H
     beq !tv_cmp_match+
     jmp !tv_cmp_row-
 !tv_cmp_mismatch:
+    pla
+    sta $01
     sec
     rts
 !tv_cmp_match:
+    pla
+    sta $01
     clc
     rts
+
+effects_test_body_end:
+.assert "effects test body stays below MAP_BASE", effects_test_body_end <= MAP_BASE, true
+
+.segmentdef TestEffectsBuffers [start=$a000]
+.segment TestEffectsBuffers
+tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
+tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0

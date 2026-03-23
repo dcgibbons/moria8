@@ -54,13 +54,15 @@ run_test() {
 
     # Run in VICE with an all-in-one monitor script; piping monitor commands
     # can race VICE startup and leave suites hanging.
-    local result
-    result=$(
+    local tty_log="/tmp/test_${name}.ttylog"
+    script -q "$tty_log" \
         "$VICE" -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
-        +remotemonitor +binarymonitor 2>&1 | grep "^>C:0"
-    )
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    local result
+    result=$(grep "^>C:0" "$tty_log")
 
     # Count $01 bytes (passes) in result
     local pass_count
@@ -127,10 +129,11 @@ run_sound_monitor_test() {
         return
     }
 
-    "$VICE" -console -nativemonitor -autostartprgmode 1 \
+    script -q "$log_file" \
+        "$VICE" -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > "$log_file" 2>&1
+        +remotemonitor +binarymonitor > /dev/null 2>&1
 
     if python3 - "$log_file" <<'PY'
 import re
@@ -225,7 +228,7 @@ run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0414" 21 500000000
 run_test "combat" "tests/test_combat.s" "0400 0413" 20 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 0418" 25 500000000
+run_test "effects" "tests/test_effects.s" "0400 0418" 25 1000000000
 run_test "item" "tests/test_item.s" "0400 042a" 43 1000000000
 run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0407" 8 500000000

@@ -7,9 +7,24 @@
 //  4. Player overrides monster and item
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(test_start)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+// Keep the exit trampoline in the "Test Code" segment so run_tests.sh breaks
+// on the final BRK after copying tc_results to $0400.
+.pc = $080E "Test Code"
+test_bootstrap:
+    :BankOutBasic()
+    jmp test_start
+test_exit_trampoline:
+    ldx #3
+!copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !copy-
+    brk
+
+.pc = $0824 "Main"
 
 .encoding "screencode_mixed"
 
@@ -125,13 +140,7 @@ test_start:
     jsr test_item_override
     jsr test_monster_override
     jsr test_player_override
-    ldx #3
-!copy:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy-
-    brk
+    jmp test_exit_trampoline
 
 setup_scene:
     lda #0

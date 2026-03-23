@@ -24,7 +24,7 @@
 .const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
 .const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
 .const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
-.const HELP_FOOTER_COL = (SCREEN_COLS - 3) / 2
+.const HELP_FOOTER_COL = (SCREEN_COLS - 13) / 2
 
 // Inline control codes for help_draw_line
 .const CT = $fc     // Tab-to-column (next byte = target column)
@@ -269,7 +269,7 @@ help_draw_hborder:
 
 // Local title/footer strings keep ui_help.s linkable in isolated unit tests.
 uh_title_str: .text "Command Reference" ; .byte 0
-uh_press_key_str: .text "Key" ; .byte 0
+uh_press_key_str: .text "Press any key" ; .byte 0
 
 // Bindable help-line source pointer. Main programs set this to help_lines.
 // Fallback keeps isolated unit assemblies linkable even without ui_help_data.s.
