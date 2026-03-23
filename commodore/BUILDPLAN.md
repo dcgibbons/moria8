@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, and the major C128 loader / banking stability repairs.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, and the resident C128 banked combat relocation plus cached `OVL.UI`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -48,7 +48,6 @@
 
 ### Must
 
-- Resolve the remaining known C128 layout/assert issue(s), especially the historical `ranged_fire` I/O-hole placement failure.
 - Keep C128 verification green:
   - `make test128-fast`
   - `make test128-fast-smoke`
@@ -64,6 +63,7 @@
 - Keep the C128 memory/layout contract intact:
   - main segment below `$C000`
   - banked payload below `$FFFA`
+  - staged `banked_payload` source below `$E000`
   - overlays fit their windows
   - low-RAM runtime loader contract remains valid
   - no callable code executes from the I/O hole

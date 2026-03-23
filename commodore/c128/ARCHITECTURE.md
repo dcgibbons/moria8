@@ -34,7 +34,8 @@ Key C4 outcome:
 | Range | Purpose |
 | :--- | :--- |
 | `$0000-$0FFF` | 4 KB bottom common RAM (shared across banks; not cache-safe) |
-| `$1000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; currently unassigned |
+| `$1000-$1FFF` | overlay cache slot for `OVL_UI` |
+| `$2000-$3FFF` | reclaimed low Bank 1 RAM after staged-image scrub; currently unassigned |
 | `$4000-$730B` | live dungeon/town map (`MAP_BASE..MAP_END`) |
 | `$7400-$7FFF` | Bank 1 DB/data region retained after reserving the full future map span (`BANK1_DB_BASE..BANK1_DB_END`) |
 | `$8000-$94F7` | active tier-cache window for `MONSTER.DB.1-4` |
@@ -52,7 +53,7 @@ Key C4 outcome:
 - That reclaim step removes the staged-image overlap from the post-boot ownership model.
 - The current layout now has a documented reclaimed high Bank 1 region at `$8000-$FEFF`, which is large enough for the 5368-byte tier-preload footprint.
 - Startup now preloads the four monster tiers into `$8000-$94F7`.
-- Overlay cache is also active for fixed slots at `$A000-$AFFF`, `$B000-$BFFF`, `$C000-$CFFF`, and `$E000-$EFFF`.
+- Overlay cache is also active for fixed slots at `$1000-$1FFF`, `$A000-$AFFF`, `$B000-$BFFF`, `$C000-$CFFF`, and `$E000-$EFFF`.
 - MMU gateway hardening for map/DB access is in place for the tier-cache path.
 - `$D000-$DFFF` is intentionally left unused by the standard overlay-cache helpers because Bank 1 helper mode keeps I/O visible there.
 - The ownership manifest, overlap asserts, and overlay-slot base tables now live in `c128/memory128.s` as the source of truth for future Bank 1 edits.
@@ -178,10 +179,26 @@ For the current build:
 - any future overlay cache design must continue to use documented reclaimed ranges and explicit MMU gateways
 
 Active overlay slot map:
+- `$1000-$1FFF` -> `OVL_UI`
 - `$A000-$AFFF` -> `OVL_STARTUP`
 - `$B000-$BFFF` -> `OVL_TOWN`
 - `$C000-$CFFF` -> `OVL_DEATH`
 - `$E000-$EFFF` -> `OVL_DUNGEON_GEN`
+
+Resident `$F000` banked compute/UI window:
+- `ui_recall.s`
+- `player_magic_tail.s`
+- `projectile.s`
+- `ranged_fire.s`
+- `tunnel.s`
+- `throw.s`
+- `bash.s`
+
+Moved out of the resident `$F000` window into `OVL_UI`:
+- `ui_help_data.s`
+- `ui_help.s`
+- `ui_inventory.s`
+- `ui_character.s`
 
 ## 6. Out of Scope (Post-C4 / Pre-MMU-Gateway-Hardening)
 

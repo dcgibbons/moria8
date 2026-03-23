@@ -6,6 +6,60 @@
 
 ---
 
+## 2026-03-22 — C128 banked combat relocation + cached `OVL.UI` ✅ COMPLETE
+
+### Scope Closed
+- Eliminated the long-standing C128 `ranged_fire` / spell / tunnel I/O-hole spill by relocating the callable combat/spell cluster into the resident `$F000` banked runtime window.
+- Added a dedicated cached `OVL.UI` overlay so low-frequency modal UI no longer consumes resident `$F000` banked space.
+- Restored C64 compatibility after the shared `player_magic` split by keeping the tail imported on non-C128 builds.
+
+### What Changed
+1. **Resident `$F000` banked compute cluster**
+   - `commodore/c128/main.s` now keeps these shared handlers resident in the banked runtime window:
+     - `player_magic_tail.s`
+     - `projectile.s`
+     - `ranged_fire.s`
+     - `tunnel.s`
+     - plus the existing resident `ui_recall.s`, `throw.s`, and `bash.s`
+   - Compile-time asserts now prove the relocated call targets live at `$F000+` and that the staged `banked_payload` source ends below the overlay window.
+2. **New cached `OVL.UI` overlay**
+   - Added a C128-only `OVL.UI` containing:
+     - `ui_help_data.s`
+     - `ui_help.s`
+     - `ui_inventory.s`
+     - `ui_character.s`
+   - C128 trampolines for help, inventory, equipment, and character sheet now load `OVL.UI` into `$E000`.
+   - The overlay is preloaded into a new Bank 1 cache slot at `$1000-$1FFF`, so those modal screens are cache-backed instead of disk-loaded on each use.
+3. **Shared-code follow-through**
+   - Split `player_magic_tail.s` out of `player_magic.s` for C128 placement purposes.
+   - Kept the non-C128 build path importing that tail directly so C64 still resolves `mage_effect_dispatch` and `priest_effect_dispatch`.
+4. **Follow-up fixes discovered during bring-up**
+   - `ui_help.s` now points directly at in-overlay help data on C128, fixing the empty help-content regression.
+   - `player_magic.s` now waits for the initiating cast/pray key to be released before reading spell selection, fixing the spell-list flash/instant-dismiss regression.
+
+### Why This Shape
+- Earlier C128 attempts proved that:
+  - `$0800-$0BFF` is not safe for permanent executable code
+  - `$E000-$EFFF` is only safe as the live overlay window, not as resident shared compute
+- The correct execution model was therefore to use the already-valid resident `$F000` banked runtime and make room there by moving only infrequent modal UI out to an overlay.
+- The staged-source constraint also mattered: the solution is only valid because the rebuilt `banked_payload` source now ends below `$E000`, so later `init_copy_banked` recopies cannot be corrupted by overlay loads.
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke`
+- `TEST_FILTER='main128_layout|boot_title_idle_smoke|scripted_summary_to_town_smoke|town_overlay_smoke|death_overlay_smoke' bash commodore/c128/run_tests128.sh`
+- manual in-game validation accepted by the user for:
+  - help / inventory / equipment / character sheet
+  - cast / pray
+  - cached `OVL.UI` behavior
+
+### Outcome
+- The historical C128 `ranged_fire` I/O-hole placement blocker is closed.
+- Spell dispatch, projectile helpers, ranged fire, and tunneling now execute from the established resident banked runtime instead of drifting into `$D000-$DFFF`.
+- Modal UI no longer spends resident `$F000` space and still feels immediate because `OVL.UI` is cache-backed in Bank 1.
+
 ## 2026-03-20 — Phase 10.3 larger C128 dungeon ✅ COMPLETE
 
 ### Scope Closed

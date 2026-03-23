@@ -111,10 +111,17 @@ ui_help_display:
     jsr screen_put_string
 
     // 5. Draw content lines — sequential walk through packed help data.
+#if C128
+    lda #<help_lines
+    sta zp_ptr0
+    lda #>help_lines
+    sta zp_ptr0_hi
+#else
     lda help_lines_src_lo
     sta zp_ptr0
     lda help_lines_src_hi
     sta zp_ptr0_hi
+#endif
     lda #1
     sta help_line_idx           // row counter (rows 1-23)
 

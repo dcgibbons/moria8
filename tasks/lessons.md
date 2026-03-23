@@ -218,4 +218,39 @@
 - **Issue:** I reorganized `commodore/BUILDPLAN.md` into a single open-items table, but I mixed real backlog items with merge guardrails like “keep the suite green” and “preserve memory ownership,” which made the table harder to read and less useful.
 - **Root Cause:** I treated every true project constraint as if it belonged in the same artifact as actionable work. That conflates two different purposes: planning outstanding tasks versus recording engineering discipline.
 - **Resolution:** Keep `BUILDPLAN.md` for actual open bugs, features, phases, and cleanup work. Put “don’t break this” operational rules in `AGENTS.md`, `tasks/lessons.md`, asserts, and tests instead.
+
+## 2026-03-22 — Do not repurpose the live `$E000` overlay window for resident compute code
+
+- **Issue:** I moved `player_magic.s` into a reloadable `$E000` compute payload because the symbol layout and fast C128 suite looked good, but live gameplay immediately corrupted character creation and town/spell paths.
+- **Root Cause:** `$E000-$EFFF` is not an abstract “free reloadable code window.” It is the active startup/town/death/dungeon-generation overlay execution region, and those overlays are live earlier and more often than the focused tests proved. Recopying spell compute code there destroyed the active overlay image.
+- **Resolution:** Reject `$E000` as a general-purpose resident compute relocation target for shared gameplay code. Any future relocation must use a region that is not the active overlay execution window, or it must come with explicit overlay coexistence proof in real gameplay.
+- **Rule:** **On C128, do not move shared gameplay compute code into `$E000-$EFFF` just because it is reloadable. Treat the overlay window as owned by overlays unless coexistence is explicitly proven in live game flows, including startup/chargen.**
 - **Rule:** **Do not put ongoing engineering guardrails into the active backlog table. `BUILDPLAN.md` should answer “what is left to do?”, not “what must always stay true?”**
+
+## 2026-03-22 — Assert the whole callable routine, not just its entry label
+
+- **Issue:** Casting still JAMmed at `$D013/$D023` even after the relocation work looked clean and the old C128 assert said `trace_step < $D000`.
+- **Root Cause:** That assert only checked the routine entry label. `trace_step` started at `$CFF7` but its body extended into `$D000-$DFFF`, so runtime execution still fetched garbage from the I/O hole.
+- **Resolution:** Treat I/O-hole safety as a whole-routine placement problem. In this case the right fix was to relocate the projectile helper routines into the copied common combat window and update the assert to cover that actual residency contract.
+- **Rule:** **On C128, never assert only that a callable symbol starts below `$D000`. Also prove the routine body cannot execute into `$D000-$DFFF`, or relocate the routine into a region with a stronger contract.**
+
+## 2026-03-22 — Do not stack speculative prompt and redraw fixes on top of a working input guard
+
+- **Issue:** After fixing the spell-list entry key edge, I layered on an extra post-selection release wait, a special no-release direction prompt, and an extra `update_visibility` during spell-list restore. That regressed spell casting again and muddied the BUG-LIT signal.
+- **Root Cause:** I kept “improving” a narrow input fix without evidence that the first correction was insufficient. That combined three different concerns: key-edge handling, nested prompt behavior, and visibility/redraw state.
+- **Resolution:** Roll back the extra nested-prompt and redraw changes, keep only the original spell-selection release guard, and re-test from that narrower baseline.
+- **Rule:** **When an input fix works, do not immediately pile on prompt-specialization and redraw-state changes. Keep the minimal guard first, then re-test before changing adjacent systems.**
+
+## 2026-03-22 — `$0800-$0BFF` is not safe permanent executable space for C128 gameplay code
+
+- **Issue:** I relocated the combat/spell spill cluster into a copied common-RAM blob at `$0800-$0BFF`. Spell casting started to work, but the death path still hung deep inside ROM with traces like `C:$E7F2  LDA $0A0F`.
+- **Root Cause:** Under `MMU_NORMAL`, those `$E7xx` addresses are KERNAL / Screen Editor ROM, not our overlays. ROM was reading low RAM around `$0A0F`, which the new combat blob had overwritten. So `$0800-$0BFF` is part of ROM workspace expectations during KERNAL-visible flows and cannot be treated as permanently safe code storage.
+- **Resolution:** Abandon the `$0800-$0BFF` relocation design entirely and revert the branch to the last stable baseline.
+- **Rule:** **On C128, do not treat `$0800-$0BFF` as free permanent executable common RAM for gameplay code unless you have explicit proof it survives all KERNAL/ROM paths. A ROM trace reading that region is evidence the design is invalid, not a cue to patch around it.**
+
+## 2026-03-22 — Shared C64/C128 file splits must preserve the non-C128 import path
+
+- **Issue:** Splitting `player_magic_tail.s` out for C128 banked placement broke the C64 build because `mage_effect_dispatch` and `priest_effect_dispatch` disappeared from the non-C128 link path.
+- **Root Cause:** I treated a shared-file split as if only the C128 placement changed, but the shared source graph changed too. C64 still imported only `player_magic.s`, so the split silently removed required symbols there.
+- **Resolution:** When factoring shared code for C128-only residency, explicitly retain the non-C128 import path in the shared source and immediately rebuild C64 before treating the change as valid.
+- **Rule:** **Any C128-only relocation that splits a shared source file must preserve the non-C128 import graph and be followed immediately by a C64 build check.**

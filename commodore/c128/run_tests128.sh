@@ -890,17 +890,17 @@ for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
         continue
-    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
+    if labels[name] < 0xE000 or labels[name] >= 0xF000:
         bad.append((name, labels[name]))
 
-for name in ("ui_help_display",):
+for name in ("ui_help_display", "ui_char_display", "ui_inv_display", "ui_equip_display"):
     if name not in labels:
         missing.append(name)
         continue
-    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
+    if labels[name] < 0xE000 or labels[name] >= 0xF000:
         bad.append((name, labels[name]))
 
-for name in ("ui_recall_display", "ui_inv_display", "ui_equip_display"):
+for name in ("ui_recall_display",):
     if name not in labels:
         missing.append(name)
         continue

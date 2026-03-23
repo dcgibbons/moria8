@@ -322,6 +322,9 @@ tramp_magic_check_new_spells:
 tramp_ranged_fire:
     rts
 
+tramp_player_tunnel:
+    jmp player_tunnel
+
 tramp_throw_item:
     rts
 

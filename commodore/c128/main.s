@@ -30,6 +30,7 @@
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg=OVL_OUT + "/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/runtime.low.prg", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -1587,17 +1588,29 @@ tramp_ui_exit:
     jmp tramp_ui_exit
 }
 
+.const C128_UI_OVERLAY_ID = 5
+
+.macro C128UIOverlayDisplayTrampoline(target) {
+    jsr tramp_ui_enter
+    lda #C128_UI_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr target
+!done:
+    jmp tramp_ui_exit
+}
+
 tramp_ui_help_display:
-    :C128UIBankedDisplayTrampoline(ui_help_display)
+    :C128UIOverlayDisplayTrampoline(ui_help_display)
 
 tramp_ui_char_display:
-    :C128UIBankedDisplayTrampoline(ui_char_display)
+    :C128UIOverlayDisplayTrampoline(ui_char_display)
 
 tramp_ui_inv_display:
-    :C128UIBankedDisplayTrampoline(ui_inv_display)
+    :C128UIOverlayDisplayTrampoline(ui_inv_display)
 
 tramp_ui_equip_display:
-    :C128UIBankedDisplayTrampoline(ui_equip_display)
+    :C128UIOverlayDisplayTrampoline(ui_equip_display)
 
 tramp_ui_recall:
     :C128UIBankedDisplayTrampoline(ui_recall_display)
@@ -1632,6 +1645,9 @@ tramp_priest_effect_dispatch:
 
 tramp_ranged_fire:
     :C128BankedComputeTrampoline(ranged_fire)
+
+tramp_player_tunnel:
+    :C128BankedComputeTrampoline(player_tunnel)
 
 tramp_throw_item:
     :C128BankedComputeTrampoline(throw_item)
@@ -1873,11 +1889,6 @@ restart_entry:
 
     lda #COL_LGREY
     sta zp_text_color
-
-    lda #<help_lines
-    sta help_lines_src_lo
-    lda #>help_lines
-    sta help_lines_src_hi
 
     lda c128_cache_enabled
     beq !load_runtime_low+
@@ -2248,12 +2259,13 @@ ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
 ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
 ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
 ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
+ovl_fn_ui:    .byte $4f,$56,$4c,$2e,$55,$49              // "OVL.UI"
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_ui
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_ui
 ovl_fn_len:
-    .byte 9, 8, 9, 7
+    .byte 9, 8, 9, 7, 6
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
@@ -2699,7 +2711,7 @@ c128_final_return_stack_7:     .byte 0
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000
 c128_cache_state_end:
 
 .assert "Program fits below map area", * <= MAP_BASE, true
@@ -2745,9 +2757,6 @@ c128_cache_state_end:
 #import "../common/turn.s"
 #import "../common/player_items.s"
 #import "../common/player_magic.s"
-#import "../common/projectile.s"
-#import "../common/ranged_fire.s"
-#import "../common/tunnel.s"
 #import "../common/string_bank.s"
 #import "../common/perf_p1.s"
 
@@ -2894,7 +2903,7 @@ c128_test_expected_tier_bits:
     rts
 
 c128_test_expected_overlay_bits:
-    lda #%00001111
+    lda #%00011111
 #if C128_CACHE_TEST_SKIP_OVERLAY
     ldx c128_cache_test_skip_overlay
     beq !cteo_done+
@@ -2997,7 +3006,7 @@ c128_test_verify_cache_survival:
     cmp #1
     bne !ctcs_fail+
     lda c128_cache_overlay_bits
-    cmp #%00001111
+    cmp #%00011111
     bne !ctcs_fail+
 
     lda MMU_COMMON_HELPERS_BASE
@@ -3080,11 +3089,11 @@ runtime_low_data_end:
 banked_payload:
 .pseudopc $F000 {
 first_banked_function:
-    #import "../common/ui_help_data.s"
-    #import "../common/ui_help.s"
     #import "../common/ui_recall.s"
-    #import "../common/ui_character.s"
-    #import "../common/ui_inventory.s"
+    #import "../common/player_magic_tail.s"
+    #import "../common/projectile.s"
+    #import "../common/ranged_fire.s"
+    #import "../common/tunnel.s"
     #import "../common/throw.s"
     #import "../common/bash.s"
 
@@ -3095,6 +3104,7 @@ banked_payload_end:
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
+.assert "Banked payload staged source ends below overlay window", banked_payload_end <= $E000, true
 .assert "Title sysinfo stays out of I/O hole", title_show_sysinfo_banked < $D000 || title_show_sysinfo_banked >= $E000, true
 .assert "REU status stays out of I/O hole", reu_show_status_banked < $D000 || reu_show_status_banked >= $E000, true
 
@@ -3144,12 +3154,10 @@ program_end:
 .assert "Roll-ego-type trampoline stays below I/O hole", tramp_roll_ego_type < $D000, true
 .assert "Ego-append-suffix trampoline stays below I/O hole", tramp_ego_append_suffix < $D000, true
 .assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
+.assert "Player-tunnel trampoline stays below I/O hole", tramp_player_tunnel < $D000, true
 .assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
 .assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
-.assert "Help renderer stays above overlay window", ui_help_display >= $F000 && ui_help_display < banked_code_end, true
-.assert "Help title text stays above overlay window", help_title_str >= $F000 && help_title_str < banked_code_end, true
-.assert "Help content table stays above overlay window", help_lines >= $F000 && help_lines < banked_code_end, true
-.assert "Character sheet renderer stays above overlay window", ui_char_display >= $F000 && ui_char_display < banked_code_end, true
+.assert "Character sheet overlay renderer stays inside overlay window", ui_char_display >= $E000 && ui_char_display < $F000, true
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
@@ -3196,8 +3204,9 @@ program_end:
 .assert "Throw-item handler stays out of I/O hole", throw_item < $D000 || throw_item >= $F000, true
 .assert "Bash handler stays out of I/O hole", bash_command < $D000 || bash_command >= $F000, true
 .assert "Recall renderer stays in reloadable banked window", ui_recall_display >= $F000 && ui_recall_display < banked_code_end, true
-.assert "Inventory renderer stays in reloadable banked window", ui_inv_display >= $F000 && ui_inv_display < banked_code_end, true
-.assert "Equipment renderer stays in reloadable banked window", ui_equip_display >= $F000 && ui_equip_display < banked_code_end, true
+.assert "UI help overlay renderer stays inside overlay window", ui_help_display >= $E000 && ui_help_display < $F000, true
+.assert "UI inventory overlay renderer stays inside overlay window", ui_inv_display >= $E000 && ui_inv_display < $F000, true
+.assert "UI equip overlay renderer stays inside overlay window", ui_equip_display >= $E000 && ui_equip_display < $F000, true
 .assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
@@ -3239,6 +3248,20 @@ ovl_start_end:
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
+
+// ============================================================
+// UI overlay — help + inventory/equipment modal screens at $E000
+// ============================================================
+.segment UiOverlay
+    #import "../common/ui_help_data.s"
+    #import "../common/ui_help.s"
+    #import "../common/ui_inventory.s"
+    #import "../common/ui_character.s"
+ovl_ui_end:
+.print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
+.assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
+.assert "Help title text stays inside UI overlay", help_title_str >= $E000 && help_title_str < ovl_ui_end, true
+.assert "Help content table stays inside UI overlay", help_lines >= $E000 && help_lines < ovl_ui_end, true
 
 // ============================================================
 // Dungeon generation overlay

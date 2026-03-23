@@ -1059,7 +1059,11 @@ cmd_bash:
 
 cmd_tunnel:
     jsr msg_clear
+#if C128
+    jsr tramp_player_tunnel
+#else
     jsr player_tunnel
+#endif
     jmp command_result_main_or_update_visibility
 
 cmd_look:
