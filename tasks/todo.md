@@ -3,37 +3,79 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- None active. `TST-5a` and `TST-5b` are complete; only optional `TST-5c` palette add-ons remain.
+- Design pass: re-evaluate the backlog item for remaining 40-column assumptions in shared UI/data files.
 
 ## Plan
-- [x] Inspect the existing disk-swap code paths and current test harness pattern.
-- [x] Add a focused C64 `test_disk_swap.s` with stubbed KERNAL/UI/input helpers.
-- [x] Wire the new test into `commodore/c64/run_tests.sh`.
-- [x] Verify the new test plus baseline C64/C128 build/test gates.
-- [x] Add narrow isolated renderer decision-tree coverage on C64 and C128.
-- [x] Verify the renderer tests plus baseline C64/C128 gates.
+- [x] Inspect the current backlog wording and the named files for real width-coupled behavior.
+- [x] Get a consultant second opinion on which assumptions are real cleanup vs stale/non-issues.
+- [x] Consolidate the result into a cleanup design with recommended backlog re-triage.
 
 ## Review
-- Added `commodore/c64/tests/test_disk_swap.s` covering:
-  - `disk_prompt`
-  - `disk_init_drive`
-  - `probe_device`
-  - `disk_enter_device`
-- Added `commodore/c64/tests/test_render.s` covering:
-  - unvisited tile blanks
-  - visible item overrides floor
-  - visible monster overrides item
-  - player overrides monster/item
-- Extended `commodore/c128/tests/test_vdc_scroll_delta128.s` with the same single-tile override cases against the real VDC renderer.
-- Added the suite to `commodore/c64/run_tests.sh`.
-- Verification completed:
-  - `java -jar tools/kickass/KickAss.jar commodore/c64/tests/test_disk_swap.s -o commodore/c64/tests/test_disk_swap.prg`
-  - direct VICE monitor run of `test_disk_swap.prg`: `11/11` result bytes at `$0400-$040A`
-  - `cd commodore/c64 && java -jar ../../tools/kickass/KickAss.jar tests/test_render.s -o tests/test_render.prg`
-  - direct VICE monitor run of `test_render.prg`: `4/4` result bytes at `$0400-$0403`
-  - `make -C commodore/c64 build`
-  - `make -B -C commodore/c128 build128`
-  - `make test128-fast`
+The backlog item is mostly stale. The named files fall into three different buckets:
+
+1. Already width-aware, no cleanup needed
+- `commodore/common/ui_messages.s`
+  - `MSG_HIST_LEN = SCREEN_COLS`
+  - `MSG_MORE_MAX_COL = SCREEN_COLS - MSG_MORE_LEN`
+  - this is already a proper width-derived implementation, not a leftover 40-col bug
+- `commodore/common/disk_swap.s`
+  - prompt placement is centered from `SCREEN_COLS`
+  - the only fixed values are prompt-string widths and chosen rows
+  - that is prompt-layout math, not a stale 40-col assumption worth its own backlog item
+
+2. Data/assets intentionally authored for 40-column presentation
+- `commodore/common/title_data.s`
+  - this is a literal 40-col art stream with fixed columns (`1`, `38`, 36-char borders, etc.)
+  - `commodore/common/title_screen.s` already compensates on C128 with `TITLE_ART_COL_OFFSET = (SCREEN_COLS - 40) / 2`
+  - if we want a true 80-col title, that is a new native-80 art task, not a cleanup of shared logic
+- `commodore/common/ui_help_data.s`
+  - the renderer in `ui_help.s` is already width-aware
+  - the actual 40-col coupling is in the packed help content/tab stops (`10`, `20`, two-column packing)
+  - if we want a true 80-col help screen, the work is a data reflow / content redesign, not a renderer refactor
+
+3. Work that already belongs under `UI-80`
+- `commodore/common/ui_status.s`
+  - this already has explicit C64 and C128 layout tables
+  - the C128 side is the current 80-col baseline
+  - any further cleanup or refinement belongs under `UI-80`, not under a generic 40-col-assumption cleanup item
+
+## Consultant Second Opinion
+- The consultant reached the same conclusion:
+  - `ui_messages.s` should drop out entirely
+  - `disk_swap.s` is mostly fine as-is
+  - `ui_status.s` belongs under `UI-80`
+  - `title_data.s` and `ui_help_data.s` are the only real 40-col-native assets, and only matter if we decide to create true 80-col-native replacements
+
+## Recommended Backlog Re-triage
+
+### Remove as stale/non-issues
+- `ui_messages.s`
+- `disk_swap.s`
+
+### Fold into existing `UI-80`
+- `ui_status.s`
+
+### Split into optional native-80 follow-ons only if desired
+- `title_data.s` + `title_screen.s`
+  - optional `UI-80-TITLE`: native 80-col title art
+- `ui_help_data.s` + `ui_help.s`
+  - optional `UI-80-HELP`: native 80-col help content layout
+
+## Recommended Implementation Order
+1. Keep the current backlog item out of `BUILDPLAN.md` as a single mixed bucket.
+2. Treat status-bar refinement only as part of `UI-80`.
+3. If we want more native 80-col polish after that:
+   - reflow `ui_help_data.s` first
+   - then decide whether a native 80-col title screen is worth a separate art task
+4. Do not schedule `ui_messages.s` or `disk_swap.s` cleanup unless a real bug appears.
+
+## Bottom Line
+- This is not one real cleanup task anymore.
+- The only substantial remaining work is:
+  - `UI-80`
+  - optionally, native-80 help data
+  - optionally, native-80 title art
+- The current BUILDPLAN wording should eventually be simplified to match that.
 
 ## Coverage Read
 

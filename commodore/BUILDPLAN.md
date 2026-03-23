@@ -29,7 +29,6 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
-| Low | Clean up remaining 40-column layout assumptions in `ui_messages.s`, `title_data.s`, `ui_help.s`, `ui_status.s`, and `disk_swap.s` | Medium | Low | No | Mostly polish and consistency work. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
 | Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |
 
