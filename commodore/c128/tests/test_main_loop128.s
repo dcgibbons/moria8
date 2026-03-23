@@ -115,6 +115,17 @@ generation_busy_end:
 tramp_game_over:
     rts
 
+wizard_reset_session_state:
+    rts
+
+wizard_wall_walk_active:
+    lda #0
+    rts
+
+cmd_wizard_entry:
+    inc test_wizard_calls
+    rts
+
 save_game:
     rts
 
@@ -465,6 +476,7 @@ test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
 test_case_id: .byte 0
 test_cast_spell_calls: .byte 0
+test_wizard_calls: .byte 0
 test_cast_ok: .byte 0
 test_scene_dirty: .byte 0
 
@@ -512,6 +524,7 @@ reset_state:
     sta test_game_over_prompt_calls
     sta test_exit_calls
     sta test_cast_spell_calls
+    sta test_wizard_calls
     sta test_cast_ok
     sta test_scene_dirty
     sta zp_game_flags
@@ -959,6 +972,23 @@ test_entry:
     jmp test_fail
     lda test_status_calls
     cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 11: WIZARD dispatches to the wizard handler and consumes no turn.
+    lda #11
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_WIZARD
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_wizard_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
     beq *+5
     jmp test_fail
 

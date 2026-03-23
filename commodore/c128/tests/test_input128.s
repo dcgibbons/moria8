@@ -1,6 +1,7 @@
 #importonce
 // test_input128.s — C128 input mapping smoke test for C2.5
 
+#define C128_INPUT_TEST
 #import "../../common/zeropage.s"
 #import "../input128.s"
 
@@ -67,6 +68,25 @@ test_start:
     lda #KEY_KP_PLUS
     jsr petscii_to_command
     cmp #CMD_TUNNEL
+    bne test_fail
+    
+    // Ctrl+W normalization helper should rescue fast-path chord races.
+    lda #$57               // W
+    ldy #1                 // Ctrl held
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$17
+    bne test_fail
+
+    lda #$d7               // SHIFT+W fallback
+    ldy #1
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$17
+    bne test_fail
+
+    lda #$57
+    ldy #0                 // No Ctrl => stays W
+    jsr input_normalize_ctrl_chords_with_state
+    cmp #$57
     bne test_fail
     jmp test_continue
 

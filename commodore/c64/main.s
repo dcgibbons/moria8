@@ -122,6 +122,7 @@ tramp_dig_ability:
 #import "../common/disk_swap.s"
 #import "../common/score_io.s"
 #import "../common/title_screen.s"
+#import "../common/wizard.s"
 #import "../common/game_loop.s"
 
 // ============================================================
@@ -606,6 +607,9 @@ tramp_ui_equip_display:
     jsr ui_equip_display
     jmp tramp_sr_epilogue
 
+tramp_ui_wizard_display:
+    jmp wizard_c64_menu_display
+
 tramp_ui_recall:
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
@@ -660,6 +664,9 @@ tramp_player_create:
 // Interleaves overlay calls ($E000, $01=$34) with KERNAL I/O ($01=$36).
 // Pre-resolves creature name before overlay overwrites tier data.
 tramp_game_over:
+    lda death_source_saved
+    sta zp_death_source
+
     // 1. Resolve creature name while tier data still at $E000
     lda zp_death_source
     cmp #DEATH_CURSED           // Special sources ($FD-$FF) don't need name
@@ -685,6 +692,9 @@ tramp_game_over:
     jsr hiscore_load
 
     // 5. Insert into high score table (overlay code)
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    bne !tgo_skip_hiscore+
     sei
     lda #BANK_NO_ROMS
     sta $01
@@ -695,6 +705,9 @@ tramp_game_over:
 
     // 6. Save high scores to disk (main RAM, needs KERNAL)
     jsr hiscore_save
+!tgo_skip_hiscore:
+    lda death_source_saved
+    sta zp_death_source
 
     // 7. Display death screen (overlay code)
     // Defensive: restore VIC-II bank 0 after KERNAL serial I/O

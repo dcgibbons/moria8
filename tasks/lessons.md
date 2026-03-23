@@ -219,6 +219,13 @@
 - **Root Cause:** I treated every true project constraint as if it belonged in the same artifact as actionable work. That conflates two different purposes: planning outstanding tasks versus recording engineering discipline.
 - **Resolution:** Keep `BUILDPLAN.md` for actual open bugs, features, phases, and cleanup work. Put “don’t break this” operational rules in `AGENTS.md`, `tasks/lessons.md`, asserts, and tests instead.
 
+## 2026-03-23 — Do not invent cross-platform input portability doubts without evidence
+
+- **Issue:** I pushed back on a fixed `Ctrl+W` Wizard Mode hotkey by speculating that the key might not be portable across C64 and C128.
+- **Root Cause:** I ignored established project knowledge: the platforms differ in polling implementation, but the actual command-key identity layer is already aligned.
+- **Resolution:** Treat proven command-mapping parity as the default. Only argue for an implementation-defined hotkey if the actual key identity differs in code or observed behavior.
+- **Rule:** **Do not raise speculative cross-platform input objections when the repo already standardizes the key mapping across platforms. Require evidence before arguing for a flexible hotkey.**
+
 ## 2026-03-22 — Do not repurpose the live `$E000` overlay window for resident compute code
 
 - **Issue:** I moved `player_magic.s` into a reloadable `$E000` compute payload because the symbol layout and fast C128 suite looked good, but live gameplay immediately corrupted character creation and town/spell paths.
@@ -268,3 +275,54 @@
 - **Root Cause:** I had added `generation_busy_tick` calls inside dungeon-generation inner loops (`place_rooms`, `connect_rooms`, `place_streamers`). Those loops still owned generator scratch/register state, and the UI helper clobbered it.
 - **Resolution:** Keep progress UI calls only at coarse, explicitly safe phase boundaries unless the callee contract is proven re-entrant with the generator’s scratch usage.
 - **Rule:** **For long-running generation/codegen loops, do not call screen/UI helpers from inside inner loops unless scratch/register ownership has been audited end-to-end. Prefer outer phase boundaries.**
+
+## 2026-03-23 — C64 `msg_print` strings must be screen-coded, and banked UI fixes must be re-budgeted immediately
+
+- **Issue:** C64 Wizard actions like Reveal and Generate Item showed junk text (`8&>e`) instead of the expected completion message, and the follow-up fix work kept brushing against the C64 banked-vector ceiling.
+- **Root Cause:** I introduced Wizard strings in a shared/common file with plain `.text` bytes while the C64 message renderer expects screen-code strings. Separately, I treated small common/UI tweaks as if they were “free,” even though the C64 banked payload was already only a few bytes from `$FFFA`.
+- **Resolution:** Emit C64-facing Wizard/message strings with the correct screen-code encoding, then immediately rebuild and read the banked payload boundary after any shared banked-UI change. If space is needed, trim low-value banked UI text rather than touching logic again.
+- **Rule:** **On C64, any string that goes through `msg_print` or `screen_put_string` in gameplay UI must be verified as screen code, not assumed from `.text`. After any shared banked UI change, re-check `banked_code_end` before assuming the fix is safe.**
+
+## 2026-03-23 — C128 fast command input can race on modifier chords
+
+- **Issue:** `Ctrl+W` worked on C64 but on C128 it fell through to a plain gameplay command instead of opening Wizard Mode.
+- **Root Cause:** The C128 fast command-entry path accepts the first stable key-down sample immediately. For a chord like `Ctrl+W`, the `W` sample can arrive one scan before the Ctrl modifier settles, so the command path locks in plain `W` unless the chord is normalized after acquisition.
+- **Resolution:** Recheck live Ctrl state for `W` immediately after fast key acquisition and normalize it to the Wizard pseudo-key before PETSCII-to-command decode. Keep the runtime fix compact, and cover the pure normalization rule in a unit test.
+- **Rule:** **On C128, do not assume modifier chords are stable on the first fast input sample. For any modifier-based command, verify whether the command-entry path needs a post-acquisition normalization step.**
+
+## 2026-03-23 — Do not merge Magic Mapping and global light into one Wizard reveal action by guesswork
+
+- **Issue:** Wizard Reveal was implemented by setting `FLAG_VISITED | FLAG_LIT` across the whole map, forcing every room lit and piggybacking on the visibility-update redraw tail. On C64 that produced incorrect-looking results and led to a post-reveal crash.
+- **Root Cause:** I guessed at the semantics of “reveal” instead of checking the actual classic behavior split. In Umoria, Magic Mapping and global overhead light are separate Wizard commands, so collapsing them into one blanket-lighting action was too blunt.
+- **Resolution:** Make Wizard Reveal do mapping-only semantics (`FLAG_VISITED` without global `FLAG_LIT` / `room_lit` mutation), redraw through the plain gameplay restore path, and only add a separate global-light command later if we explicitly want it.
+- **Rule:** **When cloning classic Wizard/debug commands, verify whether upstream separates “map memory” from “global light” before implementing a one-step reveal action.**
+
+## 2026-03-23 — Overlay-resident C128 UI code cannot keep running after loading a different overlay
+
+- **Issue:** C128 Wizard level jump reached generation and then got stuck on the busy screen. The monitor trace showed the game back in `input_get_command`, meaning control had returned to the main loop without restoring the gameplay view.
+- **Root Cause:** `ui_wizard_cmd_level_jump` lived in `OVL.UI` at `$E000`, but it tried to call `overlay_load(OVL_DUNGEON_GEN)` and then continue executing more Wizard code from the same overlay window. Once the new overlay was loaded, the remaining Wizard code in `$E000` was no longer valid.
+- **Resolution:** Move the actual level-jump execution tail into main-resident code and let the overlay UI only collect input and then jump to that stable main routine.
+- **Rule:** **On C128, any command handler that lives in an overlay must not continue executing after swapping in a different overlay. Collect input in the overlay, then transfer control to main- or banked-resident code before `overlay_load` of another overlay.**
+
+## 2026-03-23 — If Wizard Mode is meant to force an outcome, call the shared effect helper directly
+
+- **Issue:** Wizard `Gain Level` kept doing nothing in manual play even though the code path looked equivalent to normal XP-driven level-up.
+- **Root Cause:** I kept routing Wizard `Gain Level` through `combat_check_levelup` because the threshold/XP setup looked correct on inspection. That was the wrong level of abstraction for a forced Wizard action, and I trusted code symmetry over manual evidence.
+- **Resolution:** Extract the actual level-up body into `combat_apply_levelup` and have Wizard `Gain Level` call that shared helper directly after seeding XP, instead of reusing the ordinary threshold gate.
+- **Rule:** **When a Wizard/debug action is supposed to force a state transition, do not keep it behind the normal gameplay eligibility wrapper once manual testing disproves that path. Extract and call the real shared effect helper directly.**
+- Wizard/debug commands should reuse existing gameplay reveal/effect helpers where possible; ad hoc map-flag edits miss side effects like secret-door conversion.
+- For map-reveal/debug features, do not mark the whole map `FLAG_VISITED` blindly; that exposes solid-rock filler and produces misleading layouts on deep levels. Reveal the floor plan, then add corridor boundaries and reuse existing door/trap reveal helpers.
+
+## 2026-03-23 — When a rare C128 gameplay helper does not fit low runtime, prefer an overlay over forcing it into resident banks
+
+- **Issue:** I moved `magic_check_new_spells` out of the I/O hole by pinning it in `RuntimeLowData`, which fixed the immediate `$D023` JAM but immediately overflowed the `$1000-$19FF` low-runtime ownership fence at `FLOOR_ITEM_BASE`.
+- **Root Cause:** I treated “low runtime is resident” as the default safe destination without re-checking its real ownership budget. That region is tightly bounded by floor-item and creature tables, so a one-off helper there can be just as wrong as leaving it in the I/O hole.
+- **Resolution:** Move the helper into `OVL.UI` and make the C128 trampoline load that overlay before calling it. For low-frequency helpers like learned-spell updates, overlay residence is safer than overfilling either low runtime or the resident `$F000` payload.
+- **Rule:** **On C128, when relocating a low-frequency helper out of the I/O hole, do not force it into `RuntimeLowData` or the resident banked payload by default. First ask whether an existing overlay is the safer ownership match.**
+
+## 2026-03-23 — Verify sentinel assumptions against live table indexing before patching a display path
+
+- **Issue:** After adding save/restore protection for the death source, the death screen still showed `Unknown Causes` for some Wizard deaths.
+- **Root Cause:** I assumed `zp_death_source == 0` meant "alive/unknown" because of a stale zeropage comment and matching fallback branch in `score.s`. In reality, monster index `0` is a valid creature (`White Harpy`), so the death screen was misclassifying real monster deaths as unknown.
+- **Resolution:** Check the actual indexed table owner (`monster.s`) before trusting sentinel comments, then treat any non-special `zp_death_source` as a monster id in the death screen.
+- **Rule:** **Whenever a byte is documented as a sentinel-bearing enum, verify that claim against the real indexed data tables before writing fallback logic around value `0`.**

@@ -6,6 +6,67 @@
 
 ---
 
+## 2026-03-23 — `FEAT-WIZ` Wizard Mode ✅ COMPLETE
+
+### Scope Closed
+- Added a one-way Wizard Mode for debug/test play on both C64 and C128.
+- Persisted Wizard state with the character, surfaced it in player-facing UI, and suppressed rank insertion/save for wizard runs.
+- Added the modal Wizard command menu plus the first round of regression hardening discovered during real manual play.
+
+### What Changed
+1. **Activation, persistence, and UI**
+   - `Ctrl+W` now enters Wizard Mode after confirmation and reopens the Wizard menu once enabled.
+   - Wizard state is persisted via `zp_game_flags` and reset only for transient session-only helpers like wall-walk.
+   - Character-sheet display now shows a clear `WIZARD` tag on both C64 and C128.
+2. **Wizard command set**
+   - Added commands for:
+     - level jump
+     - reveal level / secret doors
+     - heal & cure
+     - identify inventory
+     - gain one level
+     - generate item
+     - summon monster
+     - teleport
+     - wall-walk toggle
+   - C128 reuses `OVL.UI` for the Wizard menu and the low-frequency learned-spell helper.
+3. **Death/high-score behavior**
+   - Wizard characters now skip high-score insertion/save while still getting the normal death screen.
+   - The death screen now explicitly shows `WIZARD RUN - NO RANK`.
+   - The post-death key gate now waits for a fresh keypress instead of being skipped by stale input.
+4. **Follow-up fixes discovered during bring-up**
+   - Fixed C128 `Ctrl+W` command decoding and first-entry control flow.
+   - Fixed C128 overlay self-overwrite on Wizard level jump by moving the generation tail into main-resident code.
+   - Fixed C128 learned-spell helper placement so Wizard `Gain Level` no longer JAMs in the I/O hole.
+   - Fixed C128 cached-tier monster-name translation so deep-level Wizard jumps show correct monster names.
+   - Fixed death-cause formatting so monster id `0` is no longer misreported as `Unknown Causes`.
+
+### Why This Shape
+- The safest C128 implementation path was to reuse the already-established `OVL.UI` modal overlay rather than create a new overlay or another resident banked window.
+- Wizard Mode was intentionally made one-way per character so a single persisted bit can drive:
+  - eligibility gating for high scores
+  - character-sheet surfacing
+  - save/load continuity
+- Reveal semantics were narrowed toward mapping behavior instead of a blanket “global light” action after manual testing showed that the broader interpretation was both incorrect and unstable.
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- manual in-game validation accepted by the user for:
+  - C64 and C128 Wizard activation
+  - C128 level jump, gain level, reveal, and death flow
+  - wizard tag display
+  - deep-level monster-name correctness
+  - death-screen Wizard status and real death-cause display
+
+### Outcome
+- `FEAT-WIZ` is closed.
+- Wizard Mode now exists as a practical debug/test tool instead of just a backlog design.
+- Two newly discovered gameplay bugs remain tracked separately in the active backlog:
+  - `BUG-RECALL`
+  - `BUG-EGO-NAME`
+
 ## 2026-03-23 — `TST-5a/b` isolated merge-hardening coverage ✅ COMPLETE
 
 ### Scope Closed

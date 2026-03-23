@@ -113,7 +113,10 @@ c128_town_move_diag_before_walkable:
 #if C128
 c128_town_move_diag_after_walkable:
 #endif
-    bcc !blocked+
+    bcs !walkable+
+    jsr wizard_wall_walk_active
+    beq !blocked+
+!walkable:
 
     // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)

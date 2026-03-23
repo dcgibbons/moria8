@@ -18,6 +18,7 @@
 
 #if C128
 .const UCHAR_TITLE_COL = (SCREEN_COLS - 14) / 2
+.const UCHAR_WIZARD_COL = SCREEN_COLS - 9
 .const UCHAR_FOOTER_COL = (SCREEN_COLS - 13) / 2
 .const UCHAR_COL_L = (SCREEN_COLS - 36) / 2
 .const UCHAR_COL_NAME = UCHAR_COL_L + 6
@@ -28,6 +29,7 @@
 .const UCHAR_STAT_COL2 = UCHAR_COL_L + 26
 #else
 .const UCHAR_TITLE_COL = 12
+.const UCHAR_WIZARD_COL = 32
 .const UCHAR_FOOTER_COL = 10
 .const UCHAR_COL_L = 1
 .const UCHAR_COL_NAME = 7
@@ -69,6 +71,22 @@ ui_char_display:
     lda #>char_title_str
     sta zp_ptr0_hi
     jsr screen_put_string
+
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    beq !ucd_not_wizard+
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #0
+    sta zp_cursor_row
+    lda #UCHAR_WIZARD_COL
+    sta zp_cursor_col
+    lda #<char_wizard_str
+    sta zp_ptr0
+    lda #>char_wizard_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!ucd_not_wizard:
 
     lda #COL_LGREY
     sta zp_text_color
@@ -385,6 +403,8 @@ char_class_label:
     .text "Class: " ; .byte $00
 char_level_label:
     .text "Level: " ; .byte $00
+char_wizard_str:
+    .text "WIZARD" ; .byte $00
 char_mana_label:
     .text "Mana: " ; .byte $00
 char_gold_label:

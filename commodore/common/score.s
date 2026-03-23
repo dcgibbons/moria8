@@ -368,6 +368,22 @@ score_death_screen:
     jsr score_calculate
     jsr screen_put_decimal_24
 
+    lda zp_game_flags
+    and #GAME_FLAG_WIZARD
+    beq !sds_not_wizard+
+    lda #13
+    sta zp_cursor_row
+    lda #9
+    sta zp_cursor_col
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #<sds_wizard_str
+    sta zp_ptr0
+    lda #>sds_wizard_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!sds_not_wizard:
+
     // Row 14: High score header
     lda #14
     sta zp_cursor_row
@@ -416,8 +432,6 @@ sds_print_death_source:
     cmp #DEATH_CURSED
     beq !sds_cursed+
     // Monster: print "A " + pre-resolved creature name
-    cmp #0
-    beq !sds_unknown+           // Should not happen ($00 = alive)
     lda #<sds_a_str
     sta zp_ptr0
     lda #>sds_a_str
@@ -762,6 +776,7 @@ sds_xp_str:        .text "Experience:" ; .byte 0
 sds_gold_str:      .text "Gold:" ; .byte 0
 sds_depth_str:     .text "Depth Bonus:" ; .byte 0
 sds_total_str:     .text "Total Score:" ; .byte 0
+sds_wizard_str:    .text "WIZARD RUN - NO RANK" ; .byte 0
 sds_hiscore_hdr:   .text "-------- High Scores --------" ; .byte 0
 sds_lv_str:        .text "LV" ; .byte 0
 sds_anykey_str:    .text "Press any key" ; .byte 0

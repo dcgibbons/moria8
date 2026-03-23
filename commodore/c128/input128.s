@@ -104,6 +104,7 @@
 .const CMD_REFUEL    = $30
 .const CMD_BASH      = $31
 .const CMD_TUNNEL    = $32
+.const CMD_WIZARD    = $33
 
 // Direction offsets: dx, dy for each movement command
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1  // N S W E NW NE SW SE
@@ -429,6 +430,8 @@ cia_scan_petscii:
     // Default shift state: unshifted ($80). Updated inline during row scan.
     lda #$80
     sta csp_shift
+    lda #0
+    sta csp_ctrl
 
     // Pre-detect shift state so both LSHIFT (row 1) and RSHIFT (row 6)
     // are known before scanning rows that contain movement letters (HJKL on row 4).
@@ -454,6 +457,19 @@ cia_scan_petscii:
     lda #$00
     sta csp_shift
 !csp_shift_r_done:
+
+    // Detect CTRL before row scan so control-modified command keys can be
+    // normalized to their C64 PETSCII equivalents.
+    lda #$7f            // Row 7 drive mask
+    sta CIA1_PORTA
+    nop
+    nop
+    lda CIA1_PORTB
+    and #$04            // Active low: 0 = CTRL pressed
+    bne !csp_ctrl_done+
+    lda #1
+    sta csp_ctrl
+!csp_ctrl_done:
 
     // --- Scan all 8 rows for a non-shift key ---
     lda #$FE            // Row 0: bit 0 driven low
@@ -583,7 +599,7 @@ cia_scan_petscii:
 
     // Apply shift modifier
     ldy csp_shift
-    bne !csp_return+    // $80 = unshifted → return as-is
+    bne !csp_ctrl_fix+  // $80 = unshifted → still allow CTRL remap
 
     // Shifted: handle special cases for symbols that don't follow +$80 rule
     cmp #$2E            // unshifted . → shifted > ($3E)
@@ -602,11 +618,18 @@ cia_scan_petscii:
     bne !csp_return+
 !csp_shift_default:
     ora #$80            // Letters ($41–$5A) + cursor keys ($11,$1D): add $80
+!csp_ctrl_fix:
+    ldy csp_ctrl
+    beq !csp_return+
+    cmp #$57            // CTRL+W -> PETSCII $17
+    bne !csp_return+
+    lda #$17
 !csp_return:
     plp
     rts
 
 csp_shift:    .byte $80   // 0=shifted, $80=unshifted (initialized to unshifted)
+csp_ctrl:     .byte 0
 csp_col_bits: .byte 0
 csp_ext_save: .byte 0
 csp_row_raw:  .byte 0
@@ -660,6 +683,20 @@ input_get_command:
 
 !get_key:
     jsr input_get_key_fast
+    cmp #$57                // W
+    beq !igc_ctrl_chord+
+    cmp #$d7                // SHIFT+W fallback
+    bne !igc_got_key+
+!igc_ctrl_chord:
+    pha
+    jsr input_ctrl_held_raw
+    beq !igc_no_ctrl+
+    pla
+    lda #$17                // CTRL+W pseudo-PETSCII
+    bne !igc_got_key+
+!igc_no_ctrl:
+    pla
+!igc_got_key:
 #if PERF_P1
     // Debug-only shortcut: 'V' dumps PERF_P1 counters in-game.
     cmp #$56                    // PETSCII 'V'
@@ -678,6 +715,48 @@ input_get_command:
 !got_cmd:
     sta zp_input_cmd
     rts
+
+// input_ctrl_held_raw — Non-blocking physical Ctrl-state probe
+// Output: A = 1 if Ctrl currently held, 0 otherwise
+// Preserves: X, Y
+input_ctrl_held_raw:
+    php
+    sei
+    lda #$7f                // Row 7 drive mask
+    sta CIA1_PORTA
+    nop
+    nop
+    lda CIA1_PORTB
+    and #$04                // Active low: 0 = CTRL pressed
+    lda #0
+    bne !icrh_done+
+    lda #1
+!icrh_done:
+    pha
+    lda #$ff
+    sta CIA1_PORTA
+    pla
+    plp
+    rts
+
+#if C128_INPUT_TEST
+// input_normalize_ctrl_chords_with_state — Pure normalization helper used by
+// the unit test to cover the Ctrl+W chord rescue without requiring live CIA
+// state.
+// Input: A = PETSCII candidate, Y = 0 if Ctrl not held, nonzero if held
+// Output: A = normalized PETSCII
+input_normalize_ctrl_chords_with_state:
+    cpy #0
+    beq !inct_done+
+    cmp #$57
+    beq !inct_ctrl_w+
+    cmp #$d7
+    bne !inct_done+
+!inct_ctrl_w:
+    lda #$17
+!inct_done:
+    rts
+#endif
 
 // input_get_key_fast — low-latency command-entry variant
 // Uses the existing asymmetric edge policy for snappy primary gameplay input.
@@ -788,6 +867,7 @@ key_map_petscii:
     .byte $c4   // SHIFT+D — bash
     .byte $2b   // + — tunnel
     .byte $2f   // / — monster recall
+    .byte $17   // CTRL+W — wizard mode
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -822,7 +902,7 @@ key_map_cmd:
     .byte CMD_LOOK, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_BASH
-    .byte CMD_TUNNEL, CMD_RECALL
+    .byte CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
     // C128 keypad/extended key command mappings

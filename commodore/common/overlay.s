@@ -11,7 +11,7 @@
 //   OVL_TOWN        = 2  Stores
 //   OVL_DEATH       = 3  Score + high scores
 //   OVL_DUNGEON_GEN = 4  Town + dungeon generation
-//   OVL_UI          = 5  Help + inventory/equipment modal UI
+//   OVL_UI          = 5  Help + inventory/equipment/character/wizard modal UI
 //
 // Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN, OVL.UI
 // REU: stashed alongside creature tiers at startup

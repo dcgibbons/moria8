@@ -9,14 +9,15 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, and the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| None | None at the moment. | — | — | — | Recent gameplay bugs BUG-LIT and BUG-1 are both closed. |
+| Medium | `BUG-RECALL` Word of Recall does not reliably return the player to town | Medium | High | Prefer | Recall return path is still misrouting or failing to complete the town transition; needs a focused gameplay fix and regression coverage. |
+| Medium | `BUG-EGO-NAME` ego/slay item names render as garbage in inventory/equipment views | Medium | Medium | No | Special-prefix item names (for example slaying/special swords) are rendering corrupted suffix/prefix text in the UI instead of a clean item name. |
 
 ## Open Phases / Display Work
 
@@ -28,6 +29,7 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
+| Medium | `AUDIT-IO-C128` full audit of C128 callable code vs I/O-hole / residency contracts | Medium | High | Prefer | Inventory every callable C128 routine path, confirm final execution residency (`< $D000`, `OVL.*`, or resident `$F000`), add missing asserts for both trampolines and callees, and catch future `$D000-$DFFF` regressions before manual play does. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
 | Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |

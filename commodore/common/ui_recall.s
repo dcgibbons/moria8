@@ -266,14 +266,14 @@ rcl_print_atk:
 // ============================================================
 // String data (screen codes, null-terminated)
 // ============================================================
-rcl_s_title: .text "Monster Recall" ; .byte 0
+rcl_s_title: .text "Recall" ; .byte 0
 rcl_s_lv:    .text "LV " ; .byte 0
 rcl_s_ac:    .text "AC " ; .byte 0
 rcl_s_hp:    .text "HP " ; .byte 0
 rcl_s_atk:   .text "Atk: " ; .byte 0
-rcl_s_spl:   .text "Spells: " ; .byte 0
-rcl_s_kill:  .text "Killed " ; .byte 0
-rcl_s_died:  .text "Died " ; .byte 0
+rcl_s_spl:   .text "Spl: " ; .byte 0
+rcl_s_kill:  .text "K: " ; .byte 0
+rcl_s_died:  .text "D: " ; .byte 0
 rcl_s_none:  .text "None" ; .byte 0
 rcl_s_yes:   .text "Yes" ; .byte 0
 

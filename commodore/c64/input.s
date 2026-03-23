@@ -74,6 +74,7 @@
 .const CMD_REFUEL    = $30  // Refuel lamp (SHIFT+R)
 .const CMD_BASH      = $31  // Bash (SHIFT+D)
 .const CMD_TUNNEL    = $32  // Tunnel (+)
+.const CMD_WIZARD    = $33  // Wizard mode (CTRL+W)
 
 // Direction offsets: dx, dy for each movement command
 // Index = CMD_MOVE_x - CMD_MOVE_N
@@ -346,6 +347,7 @@ key_map_petscii:
     .byte $c4   // SHIFT+D — bash
     .byte $2b   // + — tunnel
     .byte $2f   // / — monster recall
+    .byte $17   // CTRL+W — wizard mode
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north
     .byte $ca   // SHIFT+J — run south
@@ -406,6 +408,7 @@ key_map_cmd:
     .byte CMD_BASH
     .byte CMD_TUNNEL
     .byte CMD_RECALL
+    .byte CMD_WIZARD
     // Shifted vi-keys (running)
     .byte CMD_RUN_N
     .byte CMD_RUN_S
