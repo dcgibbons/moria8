@@ -25,13 +25,19 @@
 | Medium | `10.4` Enhanced display: VDC color attributes for threat-coded monsters and special effects | Medium | Medium | No | Product improvement, not a stability blocker. |
 | Medium | `UI-80` refine the C128 80-column layout to a true Umoria-style left status panel | High | Medium | No | Treat as a refinement of the shipped 80-column baseline, not a contradiction of 10.7 completion. |
 
+## Open Performance Work
+
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Medium | `PERF-DG-C128` reduce C128 dungeon-generation latency on larger maps | High | High | Prefer | Larger `198x66` C128 dungeons are functionally correct but level generation is noticeably slow in real play. Focus should stay on generation-time hot paths and avoid reopening the stable banking/overlay contracts. |
+
 ## Open Test / Cleanup Work
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `TST-5` add isolated tests for disk swap, palette mapping, and rendering draw routines | Medium | Medium | Prefer | Good merge hardening if branch scope remains broad. |
 | Medium | Platformize `spell_effects.s:574` screen-to-color RAM assumption | Medium | Medium | Prefer | Most correctness-sensitive remaining `common/` platform assumption. |
-| Medium | Platformize `dungeon_gen.s:1901` screen-RAM scratch queue | Medium | Medium | Prefer | Important if common dungeon generation logic continues to evolve. |
+| Medium | Platformize `dungeon_gen.s` BFS queue screen-RAM scratch assumption (`BFS_QUEUE = $0400`) | Medium | Medium | Prefer | Important if common dungeon generation logic continues to evolve. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | Clean up remaining 40-column layout assumptions in `ui_messages.s`, `title_data.s`, `ui_help.s`, `ui_status.s`, and `disk_swap.s` | Medium | Low | No | Mostly polish and consistency work. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
@@ -73,7 +79,7 @@
 - Land `TST-5` or equivalent targeted coverage for disk swap, palette mapping, and rendering draw routines.
 - Resolve or explicitly defer the two highest-risk remaining shared-code assumptions:
   - `spell_effects.s:574`
-  - `dungeon_gen.s:1901`
+  - `dungeon_gen.s` BFS queue scratch region (`BFS_QUEUE = $0400`)
 
 ### Not Required
 
