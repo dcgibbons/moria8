@@ -66,6 +66,7 @@ inv_p1:              .fill TOTAL_INV_SLOTS, 0
 inv_flags:           .fill TOTAL_INV_SLOTS, 0
 level_entry_dir:     .byte 0
 current_tier:        .byte 0
+tier_loaded:         .byte 0
 vis_room_revealed:   .byte 0
 test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
@@ -93,6 +94,8 @@ test_viewport_update_calls: .byte 0
 test_render_viewport_calls: .byte 0
 test_status_draw_calls: .byte 0
 test_tier_transition_calls: .byte 0
+test_tier_invalidate_calls: .byte 0
+test_level_change_calls: .byte 0
 test_inv_remove_calls: .byte 0
 test_monster_ai_calls: .byte 0
 test_player_death_calls: .byte 0
@@ -123,6 +126,28 @@ tramp_store_restock_all:
 
 tier_check_transition:
     inc test_tier_transition_calls
+    rts
+
+tier_invalidate_state:
+    inc test_tier_invalidate_calls
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    rts
+
+level_change_generate_current:
+    inc test_level_change_calls
+    inc test_tier_transition_calls
+    inc test_level_generate_calls
+    inc test_monster_spawn_calls
+    inc test_item_spawn_calls
+    inc test_update_visibility_calls
+    inc test_screen_clear_calls
+    inc test_viewport_update_calls
+    inc test_render_viewport_calls
+    inc test_status_draw_calls
+    lda #$ff
+    sta zp_run_dir
     rts
 
 level_generate:
@@ -215,6 +240,8 @@ reset_state:
     sta test_render_viewport_calls
     sta test_status_draw_calls
     sta test_tier_transition_calls
+    sta test_tier_invalidate_calls
+    sta test_level_change_calls
     sta test_inv_remove_calls
     sta test_monster_ai_calls
     sta test_player_death_calls
@@ -437,6 +464,12 @@ test_start:
     lda test_tier_transition_calls
     cmp #1
     bne !t5_fail+
+    lda test_tier_invalidate_calls
+    cmp #1
+    bne !t5_fail+
+    lda test_level_change_calls
+    cmp #1
+    bne !t5_fail+
     lda test_level_generate_calls
     cmp #1
     bne !t5_fail+
@@ -494,6 +527,12 @@ test_start:
     bne !t6_fail+
     lda test_store_restock_calls
     bne !t6_fail+
+    lda test_tier_invalidate_calls
+    cmp #1
+    bne !t6_fail+
+    lda test_level_change_calls
+    cmp #1
+    bne !t6_fail+
     lda test_tier_transition_calls
     cmp #1
     bne !t6_fail+
@@ -517,10 +556,17 @@ test_start:
     bne !t7_fail+
     lda test_level_generate_calls
     bne !t7_fail+
+    lda test_tier_invalidate_calls
+    bne !t7_fail+
+    lda test_level_change_calls
+    bne !t7_fail+
     lda test_tier_transition_calls
     bne !t7_fail+
     lda test_last_huff_id
     bne !t7_fail+
+    lda test_map_row
+    and #FLAG_OCCUPIED
+    beq !t7_fail+
     lda #$01
     sta tc_results + 6
     jmp !t7_done+

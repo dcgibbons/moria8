@@ -3,72 +3,134 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Audit `BUG-LIGHT-RANGE` against original Umoria/VMS Moria source and close or narrow it.
+- [x] Implement `BUG-RECALL` by routing Word of Recall through the shared level-transition helper.
 
 ## Plan
-- [x] Inspect the current carried-light implementation and all places that hard-code light radius.
-- [x] Verify what original Umoria documentation actually says about carried light versus room lighting.
-- [x] Get a consultant second opinion on the safest product goal and implementation shape.
-- [x] Write the recommended `BUG-LIGHT-RANGE` design.
+- [x] Inspect the current Word of Recall code path, related state, and existing regression coverage.
+- [x] Compare the recall transition path with the hardened stairs / level-change path.
+- [x] Get parallel second opinions on likely root cause and safest fix shape.
+- [x] Write the recommended `BUG-RECALL` design.
+- [x] Patch recall expiry to invalidate transient tier state and reuse the shared level-change helper.
+- [x] Update regression coverage for the new recall path.
+- [x] Verify with C64/C128 builds and tests.
 
 ## Review
-`BUG-LIGHT-RANGE` is resolved as a source-confirmed non-bug: original source code shows that carried light is a 3x3 local bubble around the player, and torch vs lantern differ by fuel duration, not by a larger visibility radius.
+`BUG-RECALL` is most likely a transition-path drift bug, not a scroll/timer bug.
 
-Source findings:
-- The current port hard-codes carried light to `zp_light_radius = 1` in multiple places:
-  - equipping a light in `commodore/common/player_items.s`
-  - removing/depleting a light in `commodore/common/player_items.s` / `commodore/common/turn.s`
-  - starting equipment/new game in `commodore/common/game_loop.s`
-  - player bootstrap defaults in `commodore/common/player_create.s`
-- Visibility uses a Chebyshev-distance bubble in `commodore/common/dungeon_los.s`, separate from room-level lighting via `room_lit[]`.
-- `umoria` source uses a boolean carried-light state and lights a 3x3 area around the player:
-  - `~/Projects/thirdparty/umoria/src/dungeon.cpp` `sub1MoveLight()`
-  - `~/Projects/thirdparty/umoria/src/dungeon.cpp` `dungeonMoveCharacterLight()`
-- `vms-moria` shows the same rule:
-  - `~/Projects/thirdparty/vms-moria/source/include/moria.inc` `sub1_move_light`
-  - `~/Projects/thirdparty/vms-moria/source/include/misc.inc` `test_light`
-- In both original trees, torch and lantern share the same visibility semantics; they differ by fuel capacity / refueling behavior, not light radius.
-- We already matched original fuel-duration behavior earlier; the remaining gap is visibility semantics, not charge length.
+Key findings:
+- The scroll-use path in `commodore/common/player_items.s` only arms `zp_eff_word_recall`; nothing looks wrong there.
+- The expiry path in `commodore/common/turn.s` duplicates its own level-change orchestration instead of reusing the hardened shared helper in `commodore/common/game_loop.s`.
+- Recall currently does:
+  - adjust `zp_player_dlvl`
+  - set `level_entry_dir`
+  - maybe restock stores
+  - call `tier_check_transition`
+  - call `level_generate` directly
+  - then run spawn / visibility / redraw directly
+- The stairs path instead uses `level_change_generate_current`, which:
+  - loads `OVL_DUNGEON_GEN`
+  - uses `tramp_level_generate`
+  - restores C128 runtime guards
+  - runs the shared generation / redraw tail in one place
 
-Consultant second opinion:
-- With the source finding in hand, this should no longer be treated as a gameplay bug.
-- The safest next step is optional cleanup only: centralize the carried-light contract and add tests so future changes do not drift from the confirmed original rule.
+Most likely root cause:
+- `level_generate` lives in the dungeon-generation overlay, so the recall path can execute whatever overlay happens to be resident at `$E000` instead of the real generation code.
+- That explains a “does not reliably return to town” report much better than the timer math does, and it also explains why the existing unit tests did not catch it.
 
-## `BUG-LIGHT-RANGE` Audit Result
+Secondary risk:
+- Recall currently does only `sta current_tier` with `0` before recomputing the transition.
+- The hardened load-resume path already learned that stale tier metadata (`tier_loaded`, name-table pointers, cache-size state) can survive across transitions and produce hybrid runtime state.
+- A safer recall design should use `tier_invalidate_state`, not just clear `current_tier`.
 
-### Confirmed Behavior
-- carried light = local radius-1 / 3x3 bubble
-- room lighting remains a separate concept
-- torch and lantern differ by duration/refuel behavior, not viewport radius
+Test gap:
+- Existing C64 unit tests in `commodore/c64/tests/test_turn.s` and `commodore/c64/tests/test_effects.s` stub out `level_generate` and the rest of the transition tail with counters.
+- That proves timer/orchestration intent, but it cannot catch overlay-residency or stale-tier-state bugs.
+- Current C128 coverage does not appear to exercise a real recall teleport transition end-to-end.
 
-### Cleanup Rules If Revisited Later
-1. Do **not** change room-lighting semantics (`room_lit[]`, `FLAG_LIT`, room reveal) as part of this bug.
-2. Do **not** conflate "lantern should feel stronger" with "lit rooms should flood-fill."
-3. Do **not** invent a torch-vs-lantern radius distinction unless a deeper source contradiction is found.
-4. Make carried-light behavior come from one helper/table, not repeated `lda #1` writes.
+Consultant / subagent second opinion:
+- Strong agreement that the overlay mismatch is the primary suspect.
+- Recommended design: all level-changing paths should share one transition helper, with recall responsible only for choosing destination and preconditions.
+- Also flagged one design choice to settle explicitly: whether recall destination should be based on live depth when the timer expires, or snapshotted when the scroll is read.
 
-### Optional Cleanup Shape
-1. Add a single shared helper or table-driven routine, e.g. `player_update_light_radius` or `item_light_radius_for_id`.
-   - Inputs: equipped light item id and possibly charge count
-   - Output: canonical `zp_light_radius`
-2. Replace duplicated hard-coded light-radius writes in:
-   - `commodore/common/player_items.s`
-   - `commodore/common/turn.s`
-   - `commodore/common/game_loop.s`
-   - `commodore/common/player_create.s`
-3. Keep `commodore/common/dungeon_los.s` and the renderers unchanged unless the original-game research proves the visibility geometry itself is wrong.
+## Recommended `BUG-RECALL` Design
 
-### Optional Test Additions
-If we want extra hardening later, add focused runtime coverage for:
-1. equipping a torch sets the expected canonical radius
-2. equipping a lantern sets the expected canonical radius
-3. removing/depleting the light clears the radius
-4. visibility around the player matches the canonical radius on both C64 and C128 paths
+### Product Goal
+- Make Word of Recall use the same reliable town/dungeon transition machinery as stairs and Wizard jumps.
+- Eliminate any path-specific generation / overlay / redraw logic from the recall timer expiry branch.
 
-### Outcome
-- No gameplay change is needed.
-- Close the backlog bug.
-- Leave only optional cleanup/proof work if we want to harden the contract later.
+### Core Design
+1. Keep the timer arming logic where it is.
+2. In the expiry path, keep only the recall-specific decision logic:
+   - dungeon -> town
+   - town -> `PL_MAX_DLVL`
+   - fizzle if `PL_MAX_DLVL == 0`
+   - restock stores on town re-entry
+   - set `level_entry_dir`
+3. After that, hand off to the same shared transition helper the stairs path uses:
+   - `level_change_generate_current`
+4. Invalidate transient tier state before recomputing the transition:
+   - use `tier_invalidate_state`
+   - do not rely on only `current_tier = 0`
+
+### Why This Is The Right Shape
+- It removes overlay-load drift by making recall load/use `OVL_DUNGEON_GEN` the same way as stairs.
+- It removes duplicated generation/redraw logic.
+- It reuses the path that already carries the C128 runtime-guard and overlay correctness work.
+- It aligns with the earlier `SAV-2` lesson that transient tier metadata must be invalidated on cross-level entry points.
+
+### Open Semantics Decision
+- Current behavior chooses destination from live `zp_player_dlvl` when the timer expires.
+- That may be acceptable if it matches original Moria behavior.
+- If the user wants stronger reliability semantics, a follow-up design could snapshot the intended destination when the scroll is read.
+- Recommendation: keep current live-depth semantics unless original-source review or user expectation says otherwise; fix the transition machinery first.
+
+### Test Plan
+1. Strengthen unit tests:
+   - recall dungeon -> town
+   - recall town -> deepest level
+   - recall fizzle in town with `PL_MAX_DLVL = 0`
+   - assert `tier_invalidate_state`-equivalent state reset, not just `current_tier = 0`
+2. Add integration coverage that does **not** stub the generation path:
+   - one real C64 runtime recall transition
+   - one real C128 smoke recall transition
+3. Specifically verify:
+   - town map after recall is actually town
+   - store restock happens on town return
+   - correct arrival message
+   - no stale dungeon-tier creature state/name pointers remain after town return
+
+### Likely Outcome
+- Small code change if implemented elegantly:
+  - mostly deleting duplicated recall-tail code and reusing the shared helper
+- High confidence payoff:
+  - fixes the likely real bug
+  - reduces future drift between stairs, Wizard jumps, and recall
+
+## Implementation Result
+
+### What Changed
+- `commodore/common/turn.s`
+  - recall expiry now keeps only the destination decision logic
+  - actual town/dungeon transition now goes through:
+    - `tier_invalidate_state`
+    - `level_change_generate_current`
+  - the old duplicated generation/redraw tail was deleted
+  - the occupied-bit clear now happens only on real recall teleports, not on town-side recall fizzles
+- `commodore/c64/tests/test_turn.s`
+  - added focused stubs/counters for `tier_invalidate_state` and `level_change_generate_current`
+  - strengthened the dungeon->town and town->deepest assertions to prove the shared helper is used
+  - added a fizzle assertion that the current tile remains occupied when recall does not fire
+
+### Why This Fix
+- It removes recall's private overlay/generation path and reuses the already-hardened stairs transition helper.
+- It fixes the likely real failure mode on C128: direct `level_generate` calls against whichever overlay happened to be resident at `$E000`.
+- It also aligns recall with the learned tier-state invalidation rules from earlier cross-level fixes.
+
+### Verification
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- Focused C64 runtime `test_turn` verification was attempted separately, but local `x64sc` exited `139` before any monitor dump in this environment, so that result is inconclusive rather than failing.
 
 ## Coverage Read
 

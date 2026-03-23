@@ -894,6 +894,7 @@ combat_check_levelup:
     lda player_data + PL_XP_0
     cmp ccl_adj_0
     bcc ccl_no_short           // XP_lo < threshold_lo → no
+    jmp !ccl_yes+
 
 ccl_no_short:
     jmp ccl_no

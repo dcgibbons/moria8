@@ -232,6 +232,7 @@ install_jump_patch:
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
     :PatchJump(overlay_load, test_overlay_load)
+    :PatchJump(level_change_generate_current, test_level_change_generate_current)
     rts
 
 reset_state:
@@ -370,6 +371,10 @@ test_check_store_door:
 
 test_check_stairs_at_player:
     lda test_stairs_tile
+    lsr
+    lsr
+    lsr
+    lsr
     rts
 
 test_do_look:
@@ -425,6 +430,21 @@ test_screen_clear_row:
 
 test_overlay_load:
     clc
+    rts
+
+test_level_change_generate_current:
+    jsr generation_busy_begin
+    jsr generation_busy_tick
+    jsr generation_busy_tick
+    jsr generation_busy_tick
+    jsr generation_busy_tick
+    lda #$ff
+    sta zp_run_dir
+    jsr test_screen_clear
+    jsr test_viewport_update
+    jsr test_render_viewport
+    jsr generation_busy_end
+    jsr test_status_draw
     rts
 
 test_start:

@@ -6,6 +6,59 @@
 
 ---
 
+## 2026-03-23 — `BUG-RECALL` Word of Recall transition path ✅ FIXED
+
+### Scope Closed
+- Fixed the active gameplay bug where Word of Recall could fail to complete a reliable town/dungeon transition.
+- Replaced recall's private level-generation tail with the same shared helper already used by stairs and Wizard jumps.
+
+### Root Cause
+- Recall expiry in `commodore/common/turn.s` had drifted into its own custom transition path.
+- That code:
+  - adjusted depth/direction
+  - directly called `tier_check_transition`
+  - directly called `level_generate`
+  - then ran spawn / visibility / redraw steps inline
+- The hardened stairs path already used `level_change_generate_current`, which:
+  - loads the correct generation overlay
+  - runs the shared generation/spawn/redraw tail
+  - carries the C128 overlay/runtime residency fixes
+- So recall could execute generation against whichever overlay happened to be resident at `$E000`, which explains the intermittent “does not reliably return to town” behavior.
+
+### What Changed
+1. **Recall now reuses the shared transition helper**
+   - `commodore/common/turn.s` now keeps only the recall-specific destination logic:
+     - dungeon -> town
+     - town -> `PL_MAX_DLVL`
+     - town-side fizzle if `PL_MAX_DLVL == 0`
+     - store restock on town return
+     - `level_entry_dir` selection
+   - After that it now calls:
+     - `tier_invalidate_state`
+     - `level_change_generate_current`
+2. **Fizzle behavior was hardened**
+   - The old code cleared `FLAG_OCCUPIED` before it even knew whether recall would actually fire.
+   - The fix moves the occupied-bit clear behind the real teleport path, so a town-side recall fizzle leaves the player tile intact.
+3. **Regression coverage was updated**
+   - `commodore/c64/tests/test_turn.s` now asserts:
+     - recall dungeon -> town uses the shared level-change helper
+     - recall town -> deepest level uses the shared level-change helper
+     - recall fizzle does not invoke the helper and does not clear the occupied bit
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- Focused C64 runtime `test_turn` verification was attempted separately, but local `x64sc` exited `139` before producing a monitor dump in this environment, so that runtime result remained inconclusive rather than failing.
+
+### Outcome
+- `BUG-RECALL` is closed.
+- Recall now follows the same reliable level-transition machinery as stairs and Wizard jumps.
+- The active backlog keeps only the remaining gameplay bug:
+  - `BUG-EGO-NAME`
+
+---
+
 ## 2026-03-23 — `BUG-LIGHT-RANGE` carried-light audit ✅ CONFIRMED NON-BUG
 
 ### Scope Closed
