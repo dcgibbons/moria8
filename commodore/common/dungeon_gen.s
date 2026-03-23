@@ -1753,10 +1753,8 @@ verify_stairs:
 // Starts from stairs_up position, floods through passable tiles.
 // Checks that every room has at least one reachable interior tile.
 // Output: carry set = failed (unreachable room), carry clear = OK
-// Uses: BFS queue at $0400 (screen RAM — safe, screen redrawn after generation)
+// Uses: platform-owned BFS queue scratch window from memory config.
 // ============================================================
-.const BFS_QUEUE = $0400
-.const BFS_QUEUE_MAX = 512         // Max queue entries (×2 bytes = 1024, fits $0400–$07FF)
 
 verify_connectivity:
     php                          // Save interrupt state — caller may already be in sei context
@@ -1767,7 +1765,7 @@ verify_connectivity:
     jsr map_bulk_and_all
 
     // --- Step 2: BFS from stairs_up position ---
-    // Queue head/tail as 16-bit indices into BFS_QUEUE
+    // Queue head/tail as 16-bit indices into the platform-owned BFS queue
     lda #0
     sta bfs_head_lo
     sta bfs_head_hi
@@ -1964,24 +1962,24 @@ bfs_enqueue_nb:
 bfs_enqueue_do:
     // Bounds check: drop entry if queue is full
     lda bfs_tail_hi
-    cmp #>BFS_QUEUE_MAX
+    cmp #>DUNGEON_GEN_BFS_QUEUE_MAX
     bcc !bfe_ok+
     bne !bfe_full+
     lda bfs_tail_lo
-    cmp #<BFS_QUEUE_MAX
+    cmp #<DUNGEON_GEN_BFS_QUEUE_MAX
     bcc !bfe_ok+
 !bfe_full:
     rts
 !bfe_ok:
 
-    // Address = BFS_QUEUE + tail * 2
+    // Address = DUNGEON_GEN_BFS_QUEUE_BASE + tail * 2
     lda bfs_tail_lo
     asl
     sta zp_ptr1
     lda bfs_tail_hi
     rol
     clc
-    adc #>BFS_QUEUE
+    adc #>DUNGEON_GEN_BFS_QUEUE_BASE
     sta zp_ptr1_hi
 
     ldy #0
@@ -2003,14 +2001,14 @@ bfs_eq_y: .byte 0
 
 // bfs_dequeue — Remove (x, y) from BFS queue at head → bfs_cur_x/y
 bfs_dequeue:
-    // Address = BFS_QUEUE + head * 2
+    // Address = DUNGEON_GEN_BFS_QUEUE_BASE + head * 2
     lda bfs_head_lo
     asl
     sta zp_ptr1
     lda bfs_head_hi
     rol
     clc
-    adc #>BFS_QUEUE
+    adc #>DUNGEON_GEN_BFS_QUEUE_BASE
     sta zp_ptr1_hi
 
     ldy #0

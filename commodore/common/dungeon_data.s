@@ -5,8 +5,9 @@
 // the rest of the game engine. Stays in the main segment so it is always
 // accessible (map row table, room data, stairs coordinates, etc.).
 //
-// dungeon_gen.s (overlay) handles generation; all its private constants
-// (STORE_W/H, ROOM_MIN/MAX, BFS_QUEUE) remain there.
+// dungeon_gen.s (overlay) handles generation; only generation-private
+// constants remain there. Platform-owned scratch regions such as the BFS
+// queue now come from the memory layer.
 
 // ============================================================
 // Map constants

@@ -29,7 +29,6 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `TST-5` add isolated tests for disk swap, palette mapping, and rendering draw routines | Medium | Medium | Prefer | Good merge hardening if branch scope remains broad. |
-| Medium | Platformize `spell_effects.s:574` screen-to-color RAM assumption | Medium | Medium | Prefer | Most correctness-sensitive remaining `common/` platform assumption. |
 | Medium | Platformize `dungeon_gen.s` BFS queue screen-RAM scratch assumption (`BFS_QUEUE = $0400`) | Medium | Medium | Prefer | Important if common dungeon generation logic continues to evolve. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | Clean up remaining 40-column layout assumptions in `ui_messages.s`, `title_data.s`, `ui_help.s`, `ui_status.s`, and `disk_swap.s` | Medium | Low | No | Mostly polish and consistency work. |
@@ -70,8 +69,7 @@
 ### Strongly Preferred
 
 - Land `TST-5` or equivalent targeted coverage for disk swap, palette mapping, and rendering draw routines.
-- Resolve or explicitly defer the two highest-risk remaining shared-code assumptions:
-  - `spell_effects.s:574`
+- Resolve or explicitly defer the highest-risk remaining shared-code scratch assumption:
   - `dungeon_gen.s` BFS queue scratch region (`BFS_QUEUE = $0400`)
 
 ### Not Required

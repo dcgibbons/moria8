@@ -174,6 +174,9 @@
 .const BANKED_DATA_END  = $ffff
 .const SCREEN_RAM       = $0400 // VIC-II screen RAM (used as scratch buffer on C128)
 .const COLOR_RAM        = $d800 // VIC-II color RAM (VDC has separate attributes)
+.const DUNGEON_GEN_BFS_QUEUE_BASE = SCREEN_RAM
+.const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
+.const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
 
 // ZP save buffer — stores $02–$8F during game, restored on exit.
 // Keep this as owned program data (not a fixed low-RAM page), because
@@ -806,6 +809,8 @@ copy_to_e000:
 .assert "Live map size = 13068", MAP_END - MAP_BASE + 1, 13068
 .assert "Reserved future map span = 13068", BANK1_MAP_RESERVED_END - MAP_BASE + 1, 13068
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
+.assert "Dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
+.assert "Dungeon-gen BFS queue stays in VIC scratch window", DUNGEON_GEN_BFS_QUEUE_END <= $07ff, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
 .assert "mmu_common_irq begins with CLD", mmu_common_irq_after_cld == mmu_common_irq + 1, true
 .assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true
