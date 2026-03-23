@@ -552,7 +552,14 @@ eff_bolt:
     adc #VIEWPORT_X                 // Screen column
     tay                             // Y = absolute screen column
 
+#if (C128)
+    lda #COL_CYAN
+    jsr screen_flash_set_color
+#endif
     jsr screen_flash_at             // Flash '*' white, restore after delay
+#if (C128)
+    jsr screen_flash_reset_color
+#endif
 
 !eb_no_anim:
     // Check for monster at this position

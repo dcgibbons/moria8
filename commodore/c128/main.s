@@ -3067,6 +3067,7 @@ c128_test_verify_cache_survival:
 .segment RuntimeLowData
 .pseudopc $1000 {
 runtime_low_data_start:
+    #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../common/ego_items.s"
 runtime_low_data_end:

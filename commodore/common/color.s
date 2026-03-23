@@ -25,6 +25,7 @@ tile_colors:
     .byte COL_WHITE     // 13: Quartz vein
     .byte COL_RED       // 14: Trap (visible)
     .byte COL_LGREY     // 15: Secret door (looks like wall)
+tile_colors_end:
 
 // ============================================================
 // Tile screen codes — indexed by tile type
@@ -74,4 +75,4 @@ tile_screen_codes:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Tile color table = 16 entries", * - tile_screen_codes, 16
+.assert "Tile color table = 16 entries", tile_colors_end - tile_colors, 16

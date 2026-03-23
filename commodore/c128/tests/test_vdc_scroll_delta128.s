@@ -62,6 +62,10 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
+monster_get_threat_color:
+    lda #COL_WHITE
+    rts
+
 test_row_seed:
     .byte $11, $18, $1f, $26, $2d, $34, $3b, $42, $49, $50
     .byte $57, $5e, $65, $6c, $73, $7a, $81, $88, $8f

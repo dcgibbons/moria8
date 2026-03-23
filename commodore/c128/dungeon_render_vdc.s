@@ -368,7 +368,7 @@ render_viewport:
     tax
     lda cr_display,x
     sta zp_temp0
-    lda cr_color,x              // VIC color
+    jsr monster_get_threat_color
     tax
     lda vic_to_vdc_color,x      // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp1
@@ -1096,7 +1096,7 @@ render_single_tile:
     tax
     lda cr_display,x
     sta zp_temp3
-    lda cr_color,x              // VIC color
+    jsr monster_get_threat_color
     tax
     lda vic_to_vdc_color,x      // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4

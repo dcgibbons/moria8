@@ -6,6 +6,51 @@
 
 ---
 
+## 2026-03-23 — Phase 10.4 VDC threat/effect colors ✅ COMPLETE
+
+### Scope Closed
+- Completed the remaining C128-only enhanced display work for live threat-coded monsters and a first colored transient spell effect.
+- Kept C64 and shared authored monster palettes unchanged.
+
+### What Changed
+1. **C128 live viewport threat colors**
+   - Added a C128-local helper in `commodore/c128/monster_threat_vdc.s` that maps monster level relative to player level onto the existing threat palette:
+     - green = low
+     - yellow = moderate
+     - red = high
+     - light red = deadly
+   - `commodore/c128/dungeon_render_vdc.s` now uses that helper for live monster rendering in both full-redraw and single-tile paths.
+   - Town NPCs intentionally keep their authored species colors.
+2. **First colored special-effect path**
+   - `commodore/c128/screen_vdc.s` now exposes `screen_flash_set_color` / `screen_flash_reset_color` for transient effect flashes.
+   - `commodore/common/spell_effects.s` now uses that hook so bolt effects flash cyan on C128 instead of always white.
+3. **Focused regression coverage**
+   - `commodore/c128/tests/test_dungeon128.s` now guards:
+     - the threat-color thresholds
+     - town-NPC species-color fallback
+     - the VDC transient flash color setter/resetter
+   - `commodore/c128/tests/test_vdc_scroll_delta128.s` gained the small compatibility stub needed by the new C128-local helper.
+
+### Why This Shape
+- Earlier phase notes already defined the intended monster semantics as threat-coded by depth/level relative to the player.
+- The correct implementation point was the C128 live viewport renderer, not the shared `cr_color` table:
+  - C64 should keep its existing species palette
+  - recall and other non-live views should keep authored colors
+- `eff_bolt -> screen_flash_at` was the smallest real "special effects" hook already present in the engine, so that became the first VDC-only transient color path.
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- manual in-game validation accepted by the user for:
+  - weak vs dangerous monsters in the C128 dungeon viewport
+  - town NPC colors remaining unchanged
+  - cast/pray bolt-path visuals behaving correctly
+
+### Outcome
+- Phase 10.4 is closed.
+- C128 now uses VDC attributes for live threat-coded monsters and a first colored transient spell effect without changing C64 rendering semantics or the shared authored creature palette.
+
 ## 2026-03-22 — C128 banked combat relocation + cached `OVL.UI` ✅ COMPLETE
 
 ### Scope Closed

@@ -502,7 +502,21 @@ screen_put_char_at:
     rts
 spca_char: .byte 0
 
-// screen_flash_at — Flash '*' white at screen position, restore after delay (VDC)
+// screen_flash_set_color — Set the transient VDC flash color from a VIC color
+// Input: A = VIC color
+screen_flash_set_color:
+    tax
+    lda vic_to_vdc_color,x
+    sta sfa_flash_attr
+    rts
+
+// screen_flash_reset_color — Restore the default transient flash color
+screen_flash_reset_color:
+    lda #VDC_WHITE
+    sta sfa_flash_attr
+    rts
+
+// screen_flash_at — Flash '*' at screen position, restore after delay (VDC)
 // Input:  X = screen row (absolute), Y = screen column (absolute)
 // Clobbers: A, X, Y
 screen_flash_at:
@@ -548,7 +562,7 @@ screen_flash_at:
     lda #$2a                    // '*'
     jsr vdc_write_data
 
-    // Write white attribute
+    // Write transient effect attribute
     ldx sfa_row
     lda color_row_lo,x
     clc
@@ -557,7 +571,7 @@ screen_flash_at:
     lda color_row_hi,x
     adc #0
     jsr vdc_set_update_addr
-    lda #15                     // RGBI white
+    lda sfa_flash_attr
     jsr vdc_write_data
 
     // Delay (~10ms)
@@ -600,6 +614,7 @@ sfa_row:       .byte 0
 sfa_col:       .byte 0
 sfa_save_char: .byte 0
 sfa_save_attr: .byte 0
+sfa_flash_attr: .byte VDC_WHITE
 
 // ============================================================
 // Numeric display functions — call screen_put_char internally

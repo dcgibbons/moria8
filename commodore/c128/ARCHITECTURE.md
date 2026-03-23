@@ -200,6 +200,16 @@ Moved out of the resident `$F000` window into `OVL_UI`:
 - `ui_inventory.s`
 - `ui_character.s`
 
+Current C128 display-specific behavior:
+- live dungeon viewport monsters are threat-colored relative to `zp_player_lvl`
+  - low = green
+  - moderate = yellow
+  - high = red
+  - deadly = light red
+- town NPCs keep their authored species colors
+- non-live views such as recall still use the shared species palette
+- transient bolt flashes use an explicit cyan VDC attribute path instead of the old hardcoded white flash
+
 ## 6. Out of Scope (Post-C4 / Pre-MMU-Gateway-Hardening)
 
 Not part of the current shipping baseline:

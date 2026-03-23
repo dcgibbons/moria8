@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, and the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions).
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, and the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions).
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -22,7 +22,6 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `10.4` Enhanced display: VDC color attributes for threat-coded monsters and special effects | Medium | Medium | No | Product improvement, not a stability blocker. |
 | Medium | `UI-80` refine the C128 80-column layout to a true Umoria-style left status panel | High | Medium | No | Treat as a refinement of the shipped 80-column baseline, not a contradiction of 10.7 completion. |
 
 ## Open Test / Cleanup Work
@@ -77,7 +76,6 @@
 
 ### Not Required
 
-- `10.4` VDC threat/effect color work
 - `UI-80` refinement
 - `FEAT1`
 - `FEAT-AUD`
