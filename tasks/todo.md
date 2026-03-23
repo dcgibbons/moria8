@@ -3,35 +3,72 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Add the carried-light faithfulness issue to the backlog with a research note.
-- [x] Bring Wizard Mode docs/history up to the final shipped behavior before commit.
+- [x] Audit `BUG-LIGHT-RANGE` against original Umoria/VMS Moria source and close or narrow it.
 
 ## Plan
-- [x] Audit the active backlog and Wizard history entry for stale or missing items.
-- [x] Add the carried-light research/fidelity item as explicit open backlog work.
-- [x] Update Wizard Mode scratch/history notes to reflect the actual final behavior and follow-up bugs.
+- [x] Inspect the current carried-light implementation and all places that hard-code light radius.
+- [x] Verify what original Umoria documentation actually says about carried light versus room lighting.
+- [x] Get a consultant second opinion on the safest product goal and implementation shape.
+- [x] Write the recommended `BUG-LIGHT-RANGE` design.
 
 ## Review
-Wizard Mode is implemented and manually validated on both C64 and C128, and the active docs now reflect the final user-accepted shape instead of the earlier midpoint design.
+`BUG-LIGHT-RANGE` is resolved as a source-confirmed non-bug: original source code shows that carried light is a 3x3 local bubble around the player, and torch vs lantern differ by fuel duration, not by a larger visibility radius.
 
-Closed scope:
-- persisted one-way Wizard Mode on `Ctrl+W`
-- Wizard tag on the character sheet
-- modal Wizard menu and command handlers
-- Wizard no-rank death-screen path
-- C128 overlay/runtime fixes required to keep Wizard commands out of the I/O hole
-- final manual-play hardening for:
-  - C128 `Ctrl+W` entry flow
-  - C128 level jump / gain-level overlay safety
-  - deep-tier monster names after Wizard jumps
-  - mapping-style Reveal semantics with hidden doors
-  - Wizard generate-item using the real item-init path
-  - correct death-cause display and post-death key gating
+Source findings:
+- The current port hard-codes carried light to `zp_light_radius = 1` in multiple places:
+  - equipping a light in `commodore/common/player_items.s`
+  - removing/depleting a light in `commodore/common/player_items.s` / `commodore/common/turn.s`
+  - starting equipment/new game in `commodore/common/game_loop.s`
+  - player bootstrap defaults in `commodore/common/player_create.s`
+- Visibility uses a Chebyshev-distance bubble in `commodore/common/dungeon_los.s`, separate from room-level lighting via `room_lit[]`.
+- `umoria` source uses a boolean carried-light state and lights a 3x3 area around the player:
+  - `~/Projects/thirdparty/umoria/src/dungeon.cpp` `sub1MoveLight()`
+  - `~/Projects/thirdparty/umoria/src/dungeon.cpp` `dungeonMoveCharacterLight()`
+- `vms-moria` shows the same rule:
+  - `~/Projects/thirdparty/vms-moria/source/include/moria.inc` `sub1_move_light`
+  - `~/Projects/thirdparty/vms-moria/source/include/misc.inc` `test_light`
+- In both original trees, torch and lantern share the same visibility semantics; they differ by fuel capacity / refueling behavior, not light radius.
+- We already matched original fuel-duration behavior earlier; the remaining gap is visibility semantics, not charge length.
 
-Known follow-up issues were split back into the active backlog instead of being left implicit inside the Wizard work:
-- `BUG-LIGHT-RANGE`
-- `BUG-RECALL`
-- `BUG-EGO-NAME`
+Consultant second opinion:
+- With the source finding in hand, this should no longer be treated as a gameplay bug.
+- The safest next step is optional cleanup only: centralize the carried-light contract and add tests so future changes do not drift from the confirmed original rule.
+
+## `BUG-LIGHT-RANGE` Audit Result
+
+### Confirmed Behavior
+- carried light = local radius-1 / 3x3 bubble
+- room lighting remains a separate concept
+- torch and lantern differ by duration/refuel behavior, not viewport radius
+
+### Cleanup Rules If Revisited Later
+1. Do **not** change room-lighting semantics (`room_lit[]`, `FLAG_LIT`, room reveal) as part of this bug.
+2. Do **not** conflate "lantern should feel stronger" with "lit rooms should flood-fill."
+3. Do **not** invent a torch-vs-lantern radius distinction unless a deeper source contradiction is found.
+4. Make carried-light behavior come from one helper/table, not repeated `lda #1` writes.
+
+### Optional Cleanup Shape
+1. Add a single shared helper or table-driven routine, e.g. `player_update_light_radius` or `item_light_radius_for_id`.
+   - Inputs: equipped light item id and possibly charge count
+   - Output: canonical `zp_light_radius`
+2. Replace duplicated hard-coded light-radius writes in:
+   - `commodore/common/player_items.s`
+   - `commodore/common/turn.s`
+   - `commodore/common/game_loop.s`
+   - `commodore/common/player_create.s`
+3. Keep `commodore/common/dungeon_los.s` and the renderers unchanged unless the original-game research proves the visibility geometry itself is wrong.
+
+### Optional Test Additions
+If we want extra hardening later, add focused runtime coverage for:
+1. equipping a torch sets the expected canonical radius
+2. equipping a lantern sets the expected canonical radius
+3. removing/depleting the light clears the radius
+4. visibility around the player matches the canonical radius on both C64 and C128 paths
+
+### Outcome
+- No gameplay change is needed.
+- Close the backlog bug.
+- Leave only optional cleanup/proof work if we want to harden the contract later.
 
 ## Coverage Read
 

@@ -6,6 +6,30 @@
 
 ---
 
+## 2026-03-23 — `BUG-LIGHT-RANGE` carried-light audit ✅ CONFIRMED NON-BUG
+
+### Scope Closed
+- Audited the carried-light visibility model against original `umoria` and `vms-moria` source trees.
+- Verified that the current Commodore port’s local carried-light radius is already consistent with the original game.
+
+### What Was Verified
+- Original `umoria` uses a boolean carried-light state and lights a 3x3 block around the player:
+  - `src/dungeon.cpp` `sub1MoveLight()`
+  - `src/dungeon.cpp` `dungeonMoveCharacterLight()`
+- Original `vms-moria` shows the same behavior:
+  - `source/include/moria.inc` `sub1_move_light`
+  - `source/include/misc.inc` `test_light`
+- In both original trees, torch and brass lantern differ by fuel capacity/refueling behavior, not by a larger visibility radius.
+
+### Outcome
+- `BUG-LIGHT-RANGE` is closed as a source-confirmed non-bug.
+- The current port’s `zp_light_radius = 1` / local 3x3 carried-light bubble is correct.
+- Any future work here is cleanup only:
+  - centralize the carried-light contract in one helper/table
+  - add focused equip/deplete/visibility tests
+
+---
+
 ## 2026-03-23 — `FEAT-WIZ` Wizard Mode ✅ COMPLETE
 
 ### Scope Closed
@@ -67,8 +91,7 @@
 ### Outcome
 - `FEAT-WIZ` is closed.
 - Wizard Mode now exists as a practical debug/test tool instead of just a backlog design.
-- Three newly discovered gameplay bugs remain tracked separately in the active backlog:
-  - `BUG-LIGHT-RANGE`
+- Two newly discovered gameplay bugs remain tracked separately in the active backlog:
   - `BUG-RECALL`
   - `BUG-EGO-NAME`
 
