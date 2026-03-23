@@ -326,3 +326,24 @@
 - **Root Cause:** I assumed `zp_death_source == 0` meant "alive/unknown" because of a stale zeropage comment and matching fallback branch in `score.s`. In reality, monster index `0` is a valid creature (`White Harpy`), so the death screen was misclassifying real monster deaths as unknown.
 - **Resolution:** Check the actual indexed table owner (`monster.s`) before trusting sentinel comments, then treat any non-special `zp_death_source` as a monster id in the death screen.
 - **Rule:** **Whenever a byte is documented as a sentinel-bearing enum, verify that claim against the real indexed data tables before writing fallback logic around value `0`.**
+
+## 2026-03-23 — When shuffling room order, keep all parallel room metadata arrays in lockstep
+
+- **Issue:** Lit rooms started behaving like dark rooms even with a lantern equipped; only torch/LoS visibility still worked.
+- **Root Cause:** `shuffle_rooms` was only swapping `room_x`, `room_y`, `room_w`, and `room_h`. It left `room_lit[]` behind, so the room geometry and the “this room is lit” flag drifted apart after generation.
+- **Resolution:** Treat `room_lit[]` and other room-parallel metadata as part of the shuffled room record, and extend the dungeon test to verify the metadata stays aligned with the shuffled geometry.
+- **Rule:** **Whenever SoA room records are reordered, audit every parallel array (`room_*`) and update the shuffle/copy path for all of them, not just geometry.**
+
+## 2026-03-23 — Wizard item generation must reuse the real item-initialization path
+
+- **Issue:** Wizard `Generate Item` reported `FAIL` for ordinary items like `Brass Lantern`, and even a “successful” raw spawn would have created unusable lights/wands/staves with zero charges.
+- **Root Cause:** The Wizard command was hand-writing a bare floor item entry with `p1=0` and relying on floor placement success. That skipped the normal item initialization path (`roll_enchantment`, charges, ego rolls, ammo stack sizing) and made the command depend on floor-slot state instead of producing a usable test item.
+- **Resolution:** Route Wizard item generation through the normal item-creation helpers, prefer inventory placement for non-gold items, and only fall back to floor placement if inventory insertion fails.
+- **Rule:** **Wizard/debug item creation should not hand-assemble raw item structs unless the intent is explicitly “broken placeholder item.” Reuse the normal item initialization helpers so charges, enchantment, ego flags, and stack sizing stay coherent.**
+
+## 2026-03-23 — Do not claim original-game behavior without a primary source
+
+- **Issue:** I talked about the current carried-light radius as if it were plausibly faithful to original Umoria, even though I had not verified the original game’s exact numeric behavior.
+- **Root Cause:** I generalized from the current port implementation and broad manual language about lamps/torches instead of checking whether the original game actually specified the radius or differentiated torch vs lantern reach.
+- **Resolution:** When the user asks for original-game parity, either verify the exact behavior in primary Umoria sources or say explicitly that the precise rule is still unverified and needs research.
+- **Rule:** **For historical-faithfulness questions, do not infer a specific gameplay parameter from the current port. Verify it in primary sources or turn the gap into explicit backlog research.**

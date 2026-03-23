@@ -3,15 +3,16 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- No active task.
+- [x] Add the carried-light faithfulness issue to the backlog with a research note.
+- [x] Bring Wizard Mode docs/history up to the final shipped behavior before commit.
 
 ## Plan
-- [x] Implement Wizard Mode on C64 and C128.
-- [x] Harden the C128 memory/layout path enough to keep clean builds and `test128-fast` green.
-- [x] Record the remaining follow-up bugs separately in the active backlog.
+- [x] Audit the active backlog and Wizard history entry for stale or missing items.
+- [x] Add the carried-light research/fidelity item as explicit open backlog work.
+- [x] Update Wizard Mode scratch/history notes to reflect the actual final behavior and follow-up bugs.
 
 ## Review
-Wizard Mode is implemented and manually validated on both C64 and C128.
+Wizard Mode is implemented and manually validated on both C64 and C128, and the active docs now reflect the final user-accepted shape instead of the earlier midpoint design.
 
 Closed scope:
 - persisted one-way Wizard Mode on `Ctrl+W`
@@ -19,8 +20,16 @@ Closed scope:
 - modal Wizard menu and command handlers
 - Wizard no-rank death-screen path
 - C128 overlay/runtime fixes required to keep Wizard commands out of the I/O hole
+- final manual-play hardening for:
+  - C128 `Ctrl+W` entry flow
+  - C128 level jump / gain-level overlay safety
+  - deep-tier monster names after Wizard jumps
+  - mapping-style Reveal semantics with hidden doors
+  - Wizard generate-item using the real item-init path
+  - correct death-cause display and post-death key gating
 
 Known follow-up issues were split back into the active backlog instead of being left implicit inside the Wizard work:
+- `BUG-LIGHT-RANGE`
 - `BUG-RECALL`
 - `BUG-EGO-NAME`
 

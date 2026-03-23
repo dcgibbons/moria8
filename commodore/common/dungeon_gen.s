@@ -805,7 +805,7 @@ draw_dungeon_room:
 // ============================================================
 // shuffle_rooms — Fisher-Yates shuffle of room arrays
 // Randomizes connection order to avoid predictable linear chains.
-// Swaps all 4 parallel arrays (room_x, room_y, room_w, room_h).
+// Swaps all room-parallel arrays so geometry and metadata stay aligned.
 // Preserves: nothing
 // ============================================================
 shuffle_rooms:
@@ -858,6 +858,22 @@ shuffle_rooms:
     sta room_h,x
     pla
     sta room_h,y
+
+    // Swap room_lit[i] ↔ room_lit[j]
+    lda room_lit,x
+    pha
+    lda room_lit,y
+    sta room_lit,x
+    pla
+    sta room_lit,y
+
+    // Swap room_type[i] ↔ room_type[j]
+    lda room_type,x
+    pha
+    lda room_type,y
+    sta room_type,x
+    pla
+    sta room_type,y
 
 !shuf_skip:
     ldx shuf_i

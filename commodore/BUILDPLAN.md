@@ -16,6 +16,7 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
+| Medium | `BUG-LIGHT-RANGE` research and align carried-light visibility with original Umoria | Medium | Medium | No | Carried light currently appears to use a very small local radius and may not distinguish torch vs brass lantern. Research original Umoria light behavior first, then align torch/lantern visibility semantics without conflating them with room-level lighting. |
 | Medium | `BUG-RECALL` Word of Recall does not reliably return the player to town | Medium | High | Prefer | Recall return path is still misrouting or failing to complete the town transition; needs a focused gameplay fix and regression coverage. |
 | Medium | `BUG-EGO-NAME` ego/slay item names render as garbage in inventory/equipment views | Medium | Medium | No | Special-prefix item names (for example slaying/special swords) are rendering corrupted suffix/prefix text in the UI instead of a clean item name. |
 

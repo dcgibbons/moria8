@@ -30,15 +30,19 @@
      - teleport
      - wall-walk toggle
    - C128 reuses `OVL.UI` for the Wizard menu and the low-frequency learned-spell helper.
+   - Wizard item generation now reuses the normal item-initialization path instead of creating broken raw floor items.
 3. **Death/high-score behavior**
    - Wizard characters now skip high-score insertion/save while still getting the normal death screen.
    - The death screen now explicitly shows `WIZARD RUN - NO RANK`.
    - The post-death key gate now waits for a fresh keypress instead of being skipped by stale input.
+   - Real monster deaths now preserve and display the correct death cause on the death screen instead of falling back to `Unknown Causes`.
 4. **Follow-up fixes discovered during bring-up**
    - Fixed C128 `Ctrl+W` command decoding and first-entry control flow.
    - Fixed C128 overlay self-overwrite on Wizard level jump by moving the generation tail into main-resident code.
    - Fixed C128 learned-spell helper placement so Wizard `Gain Level` no longer JAMs in the I/O hole.
    - Fixed C128 cached-tier monster-name translation so deep-level Wizard jumps show correct monster names.
+   - Fixed Reveal semantics so Wizard `A` behaves like a mapping-style reveal with secret doors instead of a brittle global-light action.
+   - Fixed C64 screen-code issues in Wizard prompts/messages and cleaned up the right-edge `WIZARD` surfacing in the character sheet title.
    - Fixed death-cause formatting so monster id `0` is no longer misreported as `Unknown Causes`.
 
 ### Why This Shape
@@ -63,7 +67,8 @@
 ### Outcome
 - `FEAT-WIZ` is closed.
 - Wizard Mode now exists as a practical debug/test tool instead of just a backlog design.
-- Two newly discovered gameplay bugs remain tracked separately in the active backlog:
+- Three newly discovered gameplay bugs remain tracked separately in the active backlog:
+  - `BUG-LIGHT-RANGE`
   - `BUG-RECALL`
   - `BUG-EGO-NAME`
 

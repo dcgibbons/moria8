@@ -59,6 +59,72 @@ wizard_wall_walk_active:
     lda #0
     rts
 
+// wizard_generate_item_execute — Create a usable item for Wizard mode.
+// Non-gold items prefer inventory placement so the item is immediately usable.
+// Gold and inventory-overflow cases fall back to floor placement at the
+// player's current tile.
+// Input: fi_add_id = item type
+//        fi_add_x / fi_add_y = desired floor position for fallback
+// Output: carry set = success, carry clear = failure
+wizard_generate_item_execute:
+    lda fi_add_id
+    tax
+    lda it_category,x
+    cmp #ICAT_GOLD
+    beq !wiz_make_gold+
+
+    // Roll the normal item fields so Wizard-generated items are usable.
+    lda fi_add_id
+    jsr roll_enchantment
+    sta fi_add_p1
+    lda fi_add_id
+    jsr tramp_roll_ego_type
+    sta fi_add_ego
+
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+
+    ldx fi_add_id
+    jsr item_get_missile
+    bpl !wiz_try_inv+
+    lda #6
+    jsr rng_range
+    clc
+    adc #5
+    sta fi_add_qty
+
+!wiz_try_inv:
+    jsr inv_add_item
+    bcs !wiz_item_ok+
+    jmp !wiz_try_floor+
+
+!wiz_make_gold:
+    lda fi_add_id
+    bne !wiz_large_gold+
+    lda #25
+    bne !wiz_gold_qty+
+!wiz_large_gold:
+    lda #100
+!wiz_gold_qty:
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+
+!wiz_try_floor:
+    jsr floor_item_add
+    bcs !wiz_item_ok+
+    clc
+    rts
+
+!wiz_item_ok:
+    sec
+    rts
+
 // wizard_reveal_level — Reveal a floor-plan view of the current level without
 // marking every solid-rock tile as explored. Reveals lit room geometry plus
 // traversable/special features, then exposes hidden doors.
@@ -305,14 +371,11 @@ wizard_cmd_generate_item:
     sta fi_add_y
     lda wizard_prompt_value
     sta fi_add_id
-    lda #1
-    sta fi_add_qty
     lda #0
-    sta fi_add_qty_hi
     sta fi_add_p1
     sta fi_add_flags
     sta fi_add_ego
-    jsr floor_item_add
+    jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp wizard_fail_message
 !wiz_item_ok:
