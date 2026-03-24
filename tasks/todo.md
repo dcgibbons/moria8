@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Reproduce the C128 dungeon-entry JAM from the user's `make clean128; make disk128` path.
+- [x] Trace the reported `$E18C` crash against the C128 tier/overlay ownership contract.
+- [x] Restore the dungeon-generation overlay before post-generation special-room helpers run.
+- [x] Add C128 regression coverage for the post-tier overlay restore path.
 - [x] Audit the current XP/level-up implementation and history context for `BUG-XP-PACE`.
 - [x] Compare the current behavior against original Umoria source/runtime expectations.
 - [x] Get a consultant second opinion on the likely remaining pace drift.
@@ -10,6 +14,10 @@ This file is a temporary working scratchpad.
 - [x] Implement the threshold / level-up parity fix and prove it with runtime coverage.
 
 ## Plan
+- [x] Rebuild the same C128 disk image path the user is testing.
+- [x] Reconcile the reported backtrace with `level_change_generate_current`, `tier_check_transition`, and `$E000` overlay ownership.
+- [x] Implement the minimal root-cause fix in the shared descent path.
+- [x] Prove the fix with both C128 unit coverage and real D64 boot/descent smoke coverage.
 - [x] Inspect `combat_award_xp`, `combat_compute_level_threshold`, and `combat_check_levelup`.
 - [x] Re-read the prior fractional-XP history entry so the new design does not duplicate solved work.
 - [x] Verify original Umoria level-threshold / expfact / level-up-halving behavior from primary source.
@@ -118,6 +126,28 @@ This file is a temporary working scratchpad.
 - That is the highest-confidence fix, the lowest-risk change, and the one most clearly proven wrong by the current code.
 
 ## Review
+
+### C128 dungeon-entry JAM follow-up
+
+#### Root Cause
+- `level_change_generate_current` called `tier_check_transition` and then immediately entered `monster_spawn_level` / `item_spawn_level`.
+- On C128, `tier_load` reuses `$E000` for tier payloads, invalidating the dungeon-generation overlay that still owned `find_special_room`, `spawn_special_room_monsters`, and `spawn_nest_gold`.
+- So the first dungeon descent could jump through valid special-room trampolines into whatever tier bytes now occupied `$E000`, matching the user's `$E18C` JAM report.
+
+#### Fix
+- Added a C128-only `c128_restore_generation_overlay` step in `commodore/common/game_loop.s` immediately after `tier_check_transition`.
+- That helper reloads `OVL_DUNGEON_GEN` when tier activation has displaced the overlay and then reasserts the C128 runtime guards before monster/item spawning continues.
+- Strengthened `commodore/c128/tests/test_main_loop128.s` so the C128 main-loop test now proves:
+  - the overlay is loaded once for generation
+  - tier activation invalidates it
+  - `level_change_generate_current` loads it a second time before monster spawning
+  - monster spawning sees `OVL_DUNGEON_GEN` active again
+
+#### Validation
+- `make -B -C commodore/c128 build128`: passed, `197` asserts, `0` failed
+- `make test128-fast`: passed
+- `TEST_FILTER='boot_tier_transition_smoke' ./commodore/c128/run_tests128.sh`: passed
+- `TEST_FILTER='real_boot_crash_harness' ./commodore/c128/run_tests128.sh`: passed
 
 ### Implemented
 - Replaced the late-game `65535` threshold saturation with source-matched current-level transition thresholds.

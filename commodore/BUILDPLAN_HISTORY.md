@@ -6504,3 +6504,29 @@ cancels on keypress.
 - `make -C commodore/c64 build`
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
+
+## C128 Dungeon-Entry Overlay/Tier Ownership Fix ✅ COMPLETE (2026-03-24)
+
+**Problem**
+- Entering dungeon level 1 on C128 could crash with a CPU `JAM` at `$E18C` after a fresh `make clean128; make disk128` build.
+- The monitor bytes at the crash site matched tier payload data, not the built `OVL.GEN` overlay image.
+
+**Root Cause**
+- [level_change_generate_current](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/game_loop.s) loaded `OVL_DUNGEON_GEN` and ran dungeon generation, then called `tier_check_transition`.
+- On C128, [tier_load](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/tier_manager.s) intentionally invalidates the active overlay and reuses `$E000` for tier data.
+- The shared descent path then continued straight into `monster_spawn_level` and `item_spawn_level`, which still call special-room helpers living in the dungeon-generation overlay.
+- That let valid trampolines jump into tier bytes occupying `$E000`, producing the `JAM`.
+
+**Fix**
+- Added a C128-only `c128_restore_generation_overlay` step in [commodore/common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/game_loop.s) immediately after `tier_check_transition`.
+- The helper reloads `OVL_DUNGEON_GEN` only when tier activation displaced it, then restores the C128 runtime guards before post-generation spawning continues.
+- Added focused C128 regression coverage in [commodore/c128/tests/test_main_loop128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/c128/tests/test_main_loop128.s) proving the overlay is reloaded before monster spawning sees the post-tier state.
+
+**Architectural note**
+- This is the correct tactical fix for the current ownership model because it restores the explicit runtime contract at the point it was violated.
+- The cleaner future refactor is to stop relying on implicit overlay residency across the tier-load boundary: either move the post-tier special-room helpers out of the overlay, or split dungeon entry into overlay-only and resident post-tier phases.
+
+**Verification**
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `TEST_FILTER='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`

@@ -891,6 +891,9 @@ level_change_generate_current:
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
     jsr tier_check_transition
+#if C128
+    jsr c128_restore_generation_overlay
+#endif
     jsr monster_spawn_level
     jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
@@ -914,6 +917,24 @@ level_change_generate_current:
     jsr c128_stack_guard_check
 #endif
     rts
+
+#if C128
+// tier_load reuses the $E000 overlay window for tier payloads. Restore the
+// dungeon-generation overlay before any post-generation special-room helpers
+// jump back into overlay-resident code.
+c128_restore_generation_overlay:
+    lda current_overlay
+    cmp #OVL_DUNGEON_GEN
+    beq !crgo_done+
+    lda #OVL_DUNGEON_GEN
+    jsr overlay_load
+    bcc !crgo_loaded+
+    jmp entry_main
+!crgo_loaded:
+    jsr c128_restore_runtime_guards
+!crgo_done:
+    rts
+#endif
 
 cmd_open:
     jsr msg_clear

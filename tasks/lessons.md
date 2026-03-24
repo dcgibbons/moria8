@@ -396,3 +396,24 @@
 - **Root Cause:** I anchored on the merged result first instead of diffing the bad target branch against the known-good source branch immediately. That risks catching stale reopenings while missing legitimate backlog items that were dropped by the merge.
 - **Resolution:** When the user names the source branch of a bad merge, compare that branch against the merged target first and use that diff to decide both directions of the repair: what must be removed and what must be restored.
 - **Rule:** **For merge-fallout doc repairs, do not patch from memory or partial history. Diff the merged branch against the user-named source branch first so stale reopenings and dropped backlog items are handled together.**
+
+## 2026-03-24 — Before claiming a fix is ready, inspect the whole workspace and remove stray side-track edits
+
+- **Issue:** I reported a good two-file C128 JAM fix while the workspace still contained unrelated uncommitted `main.s` / test-runner changes and a half-finished `special_rooms_banked.s`, which made the user's next local build fail.
+- **Root Cause:** I validated the targeted fix but did not re-check `git status` and reconcile unrelated in-flight edits before telling the user the tree was ready to test.
+- **Resolution:** Before saying a fix is ready, inspect the full working tree, build from that exact tree, and either revert or explicitly call out any unrelated uncommitted edits that could affect the user's build.
+- **Rule:** **Do not present an uncommitted fix as ready until the actual workspace is clean except for intentional files, and the build/test results come from that same exact tree state.**
+
+## 2026-03-24 — Reproduce C128 runtime bugs from the user's exact disk-image path before blaming stale artifacts
+
+- **Issue:** I initially leaned on a "current disk image looks fine" theory even after the user was reproducing the JAM from `make clean128; make disk128`.
+- **Root Cause:** I checked assembled overlay bytes and prior smokes before grounding the investigation in the exact build-and-run path the user was actually using.
+- **Resolution:** For C128 boot/runtime crashes, first rebuild with the user's exact target sequence and treat that D64 path as the primary truth before narrowing the fault to runtime ownership or control flow.
+- **Rule:** **When a user reports a C128 crash from a specific `make ...` disk path, reproduce from that exact path first. Do not spend time on stale-build theories until that path is ruled out.**
+
+## 2026-03-24 — Treat `$E000` ownership as invalid after tier activation unless the overlay is explicitly restored
+
+- **Issue:** Entering dungeon level 1 on C128 could JAM in `spawn_special_room_monsters` even though the dungeon-generation overlay had loaded correctly.
+- **Root Cause:** `tier_check_transition` reused `$E000` for tier payloads and invalidated the overlay, but `level_change_generate_current` still called post-generation special-room helpers that lived in the dungeon-generation overlay window.
+- **Resolution:** After any C128 tier transition that can reclaim `$E000`, explicitly reload the required overlay before calling helpers that still execute from that window, and add a regression that proves the helper runs after the restore.
+- **Rule:** **On C128, once a step like `tier_load` reuses `$E000`, assume overlay-resident helpers are dead until the overlay is explicitly reloaded.**
