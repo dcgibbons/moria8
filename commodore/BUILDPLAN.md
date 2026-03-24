@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -18,7 +18,6 @@
 |---|---|---|---|---|---|
 | Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
 | Medium | `BUG-XP-PACE` experience gain / level-up pacing is faster than original Umoria | Medium | Medium | No | Re-audit kill XP, award timing, and level thresholds against original source/runtime behavior; current playtesting suggests characters level too quickly compared with stock Umoria. |
-| Medium | `BUG-DEEP-SPAWN` deep levels can degenerate into repeated `White Harpy` spawns | Medium | High | Prefer | At DL45-50, seeing repeated `White Harpy` is not normal. The likely failure mode is that the active deep-tier monster pool is missing/invalid, `pick_creature_type` exhausts retries against the shallow embedded roster, and then falls back to creature type 0 (`White Harpy`). Audit tier-load state and spawn fallback behavior. |
 
 ## Open Phases / Display Work
 
@@ -40,6 +39,7 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `FEAT-DISK` separate persistence media from the program disk | High | High | No | Probe available save drives, let the player pick a save target, reject the program disk for save/load/high-score persistence, and validate before destructive scratch/delete actions. |
+| Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
 | Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |
 
@@ -75,6 +75,7 @@
 
 - `UI-80` refinement
 - `FEAT-DISK`
+- `FEAT-DEPTH`
 - `FEAT1`
 - `FEAT-AUD`
 - cleanup/refactor backlog items that do not affect merge safety

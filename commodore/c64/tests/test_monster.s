@@ -356,34 +356,54 @@ test_start:
     sta tc_results+6
 
     // ==========================================
-    // Test 8: pick_creature_type within range (dlvl=3)
-    // Level range: max(1, 3-2)=1 to 3+3=6
+    // Test 8: pick_creature_type deep fallback chooses the highest loaded
+    //         creature level <= dlvl when the preferred band is empty.
+    // Old broken behavior collapsed to index 0.
     // ==========================================
-    lda #3
-    sta zp_player_dlvl
-    lda #10
-    sta t7_count
+    lda cr_level+0
+    pha
+    lda cr_level+1
+    pha
+    lda cr_level+2
+    pha
+    lda cr_level+3
+    pha
+    lda active_dungeon_count
+    pha
+
+    lda #4
+    sta active_dungeon_count
     lda #1
-    sta t7_ok
+    sta cr_level+0
+    lda #20
+    sta cr_level+1
+    lda #25
+    sta cr_level+2
+    lda #30
+    sta cr_level+3
 
-!t8_loop:
+    lda #45
+    sta zp_player_dlvl
     jsr pick_creature_type
-    tax
-    lda cr_level,x
-    cmp #1
-    bcc !t8_bad+
-    cmp #7
-    bcs !t8_bad+
-    jmp !t8_next+
-!t8_bad:
-    lda #0
-    sta t7_ok
-!t8_next:
-    dec t7_count
-    bne !t8_loop-
-
-    lda t7_ok
+    cmp #3
+    beq !t8_pass+
+    lda #$00
     sta tc_results+7
+    jmp !t8_restore+
+!t8_pass:
+    lda #$01
+    sta tc_results+7
+!t8_restore:
+    pla
+    sta active_dungeon_count
+    pla
+    sta cr_level+3
+    pla
+    sta cr_level+2
+    pla
+    sta cr_level+1
+    pla
+    sta cr_level+0
 
     // ==========================================
     // Test 9: monster_spawn_level correct count (dlvl=1)

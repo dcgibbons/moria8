@@ -373,7 +373,7 @@ hm_retrieve_str:
 hm_deposit_title:
     .text "Deposit Item" ; .byte 0
 hm_which_str:
-    .text "Which item? (Q=cancel)" ; .byte 0
+    .text "Which item? (Q)" ; .byte 0
 hm_deposited_str:
     .text "Deposited!" ; .byte 0
 hm_retrieved_str:

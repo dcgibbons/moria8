@@ -25,20 +25,21 @@ title_show_sysinfo_banked:
     dex
 !:  stx zp_cursor_col
 
-    // Machine type: X = 0(C64), 1(C128), 2(SX-64)
+    // Machine type
 #if C128
-    ldx #1                      // C128 build
+    lda #<tsi_c128_str
+    ldy #>tsi_c128_str
 #else
     ldx #0                      // C64 default; check for SX-64
     // C64 — check for SX-64 (KERNAL_REV = $43)
     lda tsi_krev_cached         // Cached by trampoline before banking
     cmp #$43
     bne !pm+
-    ldx #2                      // SX-64
-#endif
+    ldx #1                      // SX-64
 !pm:
     lda tsi_mach_lo,x
     ldy tsi_mach_hi,x
+#endif
     jsr tsi_print
 
     // "  KERNAL R"
@@ -80,10 +81,14 @@ tsi_print:
     sty zp_ptr0_hi
     jmp screen_put_string
 
-tsi_mach_lo:    .byte <tsi_c64_str, <tsi_c128_str, <tsi_sx64_str
-tsi_mach_hi:    .byte >tsi_c64_str, >tsi_c128_str, >tsi_sx64_str
+#if !C128
+tsi_mach_lo:    .byte <tsi_c64_str, <tsi_sx64_str
+tsi_mach_hi:    .byte >tsi_c64_str, >tsi_sx64_str
+#endif
 tsi_c64_str:    .text "C64" ; .byte 0
+#if C128
 tsi_c128_str:   .text "C128" ; .byte 0
+#endif
 tsi_sx64_str:   .text "SX-64" ; .byte 0
 tsi_kernal_str: .text "  KERNAL R" ; .byte 0
 tsi_reu_str:    .text "  REU " ; .byte 0

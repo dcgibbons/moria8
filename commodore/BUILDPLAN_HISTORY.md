@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-03-23 — `BUG-DEEP-SPAWN` deep-level monster fallback ✅ FIXED
+
+### Scope Closed
+- Fixed the deep-level spawn bug where dungeon levels around `45-50` could degenerate into implausible repeated fallback monsters.
+- Added focused runtime coverage for the empty-band deep selector case.
+
+### Root Cause
+- `pick_creature_type` in `commodore/common/monster.s` preferred a narrow level band:
+  - `max(1, dlvl - 2)` through `dlvl + 3`
+- If the loaded roster had no creature in that band, the routine fell through to hardcoded creature index `0`.
+- That made deep-level failure collapse to the first loaded creature slot instead of a plausible deep monster.
+
+### What Changed
+1. **Deep fallback no longer collapses to slot 0**
+   - `commodore/common/monster.s`
+   - Kept the existing narrow-band fast path.
+   - Replaced the bad fallback with a scan that chooses the highest loaded creature level `<= current dungeon depth`.
+2. **Added an empty-band regression**
+   - `commodore/c64/tests/test_monster.s`
+   - Added a synthetic deep-roster case proving `dlvl 45` with an empty preferred band resolves to the highest valid loaded creature instead of `0`.
+3. **Recovered C64 layout headroom**
+   - `commodore/common/title_sysinfo_banked.s`
+   - `commodore/common/ui_home.s`
+   - Trimmed a few low-value banked UI bytes so the C64 banked payload remained below `$D000` after the fix.
+
+### Validation
+- `make test`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
+### Outcome
+- `BUG-DEEP-SPAWN` is closed.
+- Deep empty-band selection now resolves to a plausible loaded deep creature instead of collapsing to the first roster slot.
+- C64/C128 authoritative verification remained green after the fix.
+
 ## 2026-03-23 — `BUG-EGO-NAME` and dungeon visibility/render follow-ups ✅ FIXED
 
 ### Scope Closed
