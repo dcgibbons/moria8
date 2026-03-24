@@ -31,6 +31,10 @@ test_map_row:
 
 c128_restore_runtime_state:
     rts
+
+tier_check_transition:
+    rts
+
 #import "../../common/monster.s"
 test_start:
     sei

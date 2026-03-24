@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #12
+    ldx #13
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -160,7 +160,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 13, $ff
+tc_results: .fill 14, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -188,6 +188,9 @@ test_wizard_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
 test_busy_end_calls: .byte 0
+test_tier_transition_calls: .byte 0
+test_force_overlay_tier_reset: .byte 0
+test_spawn_tier_seen: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -232,7 +235,9 @@ install_jump_patch:
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
     :PatchJump(overlay_load, test_overlay_load)
-    :PatchJump(level_change_generate_current, test_level_change_generate_current)
+    :PatchJump(tier_check_transition, test_tier_check_transition)
+    :PatchJump(monster_spawn_level, test_monster_spawn_level)
+    :PatchJump(item_spawn_level, test_item_spawn_level)
     rts
 
 reset_state:
@@ -260,6 +265,9 @@ reset_state:
     sta test_busy_begin_calls
     sta test_busy_tick_calls
     sta test_busy_end_calls
+    sta test_tier_transition_calls
+    sta test_force_overlay_tier_reset
+    sta test_spawn_tier_seen
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -429,22 +437,52 @@ test_screen_clear_row:
     rts
 
 test_overlay_load:
+    lda test_force_overlay_tier_reset
+    beq !done+
+    lda #0
+    sta current_tier
+    sta tier_loaded
+!done:
     clc
     rts
 
-test_level_change_generate_current:
-    jsr generation_busy_begin
-    jsr generation_busy_tick
-    jsr generation_busy_tick
-    jsr generation_busy_tick
-    jsr generation_busy_tick
-    lda #$ff
-    sta zp_run_dir
-    jsr test_screen_clear
-    jsr test_viewport_update
-    jsr test_render_viewport
-    jsr generation_busy_end
-    jsr test_status_draw
+test_tier_check_transition:
+    inc test_tier_transition_calls
+    lda zp_player_dlvl
+    beq !town+
+    cmp #9
+    bcc !tier1+
+    cmp #16
+    bcc !tier2+
+    cmp #26
+    bcc !tier3+
+    lda #4
+    bne !store+
+!tier3:
+    lda #3
+    bne !store+
+!tier2:
+    lda #2
+    bne !store+
+!tier1:
+    lda #1
+!store:
+    sta current_tier
+    lda #1
+    sta tier_loaded
+    rts
+!town:
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    rts
+
+test_monster_spawn_level:
+    lda current_tier
+    sta test_spawn_tier_seen
+    rts
+
+test_item_spawn_level:
     rts
 
 test_start:
@@ -453,7 +491,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #12
+    ldx #13
     lda #$ff
 !clr:
     sta tc_results,x
@@ -861,8 +899,31 @@ test_start:
     bne !t13_fail+
     lda #$01
     sta tc_results + 12
-    jmp test_finish
+    jmp !t14+
 !t13_fail:
     lda #$00
     sta tc_results + 12
+    jmp !t14+
+
+    // Test 14: level_change_generate_current restores tier state after overlay
+    // load invalidation, before monster spawning on deep levels.
+!t14:
+    jsr reset_state
+    lda #49
+    sta zp_player_dlvl
+    lda #1
+    sta test_force_overlay_tier_reset
+    jsr level_change_generate_current
+    lda test_tier_transition_calls
+    cmp #1
+    bne !t14_fail+
+    lda test_spawn_tier_seen
+    cmp #4
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp test_finish
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
     jmp test_finish

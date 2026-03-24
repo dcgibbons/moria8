@@ -97,6 +97,7 @@ press_key_str:
 tc_results: .fill 44, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
+t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
@@ -798,7 +799,7 @@ test_start:
 
     // Save base AC
     lda player_data + PL_AC
-    sta zp_temp0                // Save base AC
+    sta t16_base_ac
 
     // Put leather armor (type 7, base AC = 4) in inv slot 0
     lda #7
@@ -823,7 +824,7 @@ test_start:
     // Check AC increased by 4
     lda player_data + PL_AC
     sec
-    sbc zp_temp0
+    sbc t16_base_ac
     cmp #4
     beq !t16_pass+
 !t16_fail:

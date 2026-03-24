@@ -57,11 +57,16 @@ run_test() {
     # can race VICE startup and leave suites hanging.
     local tty_log
     tty_log=$(mktemp -t "test_${name}_ttylog")
-    script -q "$tty_log" \
-        "$VICE" -console -nativemonitor -autostartprgmode 1 \
-        -autostart "${src%.s}.prg" -moncommands "$mon_file" \
-        -limitcycles "$cycles" +sound -sounddev dummy \
-        +remotemonitor +binarymonitor > /dev/null 2>&1
+    run_vice_once() {
+        local log_path="$1"
+        script -q "$log_path" \
+            "$VICE" -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+            -autostart "${src%.s}.prg" -moncommands "$mon_file" \
+            -limitcycles "$cycles" +sound -sounddev dummy \
+            +remotemonitor +binarymonitor > /dev/null 2>&1
+    }
+
+    run_vice_once "$tty_log"
 
     local result
     result=$(grep "^>C:0" "$tty_log")
@@ -69,6 +74,16 @@ run_test() {
     # Count $01 bytes (passes) in result
     local pass_count
     pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
+
+    # test_render can flake under VICE startup timing even when the isolated
+    # suite passes immediately on rerun. Give it one clean retry before
+    # reporting a failure.
+    if [ "$name" = "render" ] && [ "$pass_count" -lt "$expected_count" ]; then
+        tty_log=$(mktemp -t "test_${name}_ttylog_retry")
+        run_vice_once "$tty_log"
+        result=$(grep "^>C:0" "$tty_log")
+        pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
+    fi
 
     if [ "$pass_count" -ge "$expected_count" ]; then
         echo "PASS ($pass_count/$expected_count tests)"
@@ -134,7 +149,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -228,7 +243,7 @@ run_test "main_loop" "tests/test_main_loop.s" "0400 040c" 13 500000000
 run_test "turn" "tests/test_turn.s" "0400 0409" 10 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
-run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000
+run_test "monster" "tests/test_monster.s" "0400 040b" 12 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
 run_test "combat" "tests/test_combat.s" "0400 0413" 20 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000

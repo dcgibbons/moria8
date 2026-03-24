@@ -877,7 +877,6 @@ cmd_stairs_up:
 // Restores gameplay view and returns.
 level_change_generate_current:
     jsr generation_busy_begin_if_dungeon_api
-    jsr tier_check_transition
     lda #$ff
     sta zp_run_dir
     lda #OVL_DUNGEON_GEN
@@ -891,6 +890,7 @@ level_change_generate_current:
 #endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
+    jsr tier_check_transition
     jsr monster_spawn_level
     jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level

@@ -173,16 +173,26 @@ player_recalc_equipment:
     rts
 
 overlay_load:
+    lda test_force_overlay_tier_reset
+    beq !done+
+    jsr tier_invalidate_state
+!done:
     clc
     rts
 
 monster_spawn_level:
+    lda current_tier
+    sta test_spawn_tier_seen
     rts
 
 item_spawn_level:
     rts
 
 level_entry_dir:
+    .byte 0
+current_tier:
+    .byte 0
+tier_loaded:
     .byte 0
 
 screen_blank:
@@ -303,9 +313,40 @@ msg_print:
     rts
 
 tier_invalidate_state:
+    lda #0
+    sta current_tier
+    sta tier_loaded
     rts
 
 tier_check_transition:
+    inc test_tier_transition_calls
+    lda zp_player_dlvl
+    beq !town+
+    cmp #9
+    bcc !tier1+
+    cmp #16
+    bcc !tier2+
+    cmp #26
+    bcc !tier3+
+    lda #4
+    bne !store+
+!tier3:
+    lda #3
+    bne !store+
+!tier2:
+    lda #2
+    bne !store+
+!tier1:
+    lda #1
+!store:
+    sta current_tier
+    lda #1
+    sta tier_loaded
+    rts
+!town:
+    lda #0
+    sta current_tier
+    sta tier_loaded
     rts
 
 player_calc_stats:
@@ -482,6 +523,9 @@ test_cast_spell_calls: .byte 0
 test_wizard_calls: .byte 0
 test_cast_ok: .byte 0
 test_scene_dirty: .byte 0
+test_tier_transition_calls: .byte 0
+test_force_overlay_tier_reset: .byte 0
+test_spawn_tier_seen: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -530,6 +574,9 @@ reset_state:
     sta test_wizard_calls
     sta test_cast_ok
     sta test_scene_dirty
+    sta test_tier_transition_calls
+    sta test_force_overlay_tier_reset
+    sta test_spawn_tier_seen
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -992,6 +1039,25 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_turn_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 12: level_change_generate_current restores tier state after overlay
+    // load invalidation, before monster spawning on deep levels.
+    lda #12
+    sta test_case_id
+    jsr reset_state
+    lda #49
+    sta zp_player_dlvl
+    lda #1
+    sta test_force_overlay_tier_reset
+    jsr level_change_generate_current
+    lda test_tier_transition_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_spawn_tier_seen
+    cmp #4
     beq *+5
     jmp test_fail
 
