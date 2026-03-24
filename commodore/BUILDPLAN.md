@@ -16,7 +16,9 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| None | None at the moment | — | — | — | — |
+| Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
+| Medium | `BUG-XP-PACE` experience gain / level-up pacing is faster than original Umoria | Medium | Medium | No | Re-audit kill XP, award timing, and level thresholds against original source/runtime behavior; current playtesting suggests characters level too quickly compared with stock Umoria. |
+| Medium | `BUG-DEEP-SPAWN` deep levels can degenerate into repeated `White Harpy` spawns | Medium | High | Prefer | At DL45-50, seeing repeated `White Harpy` is not normal. The likely failure mode is that the active deep-tier monster pool is missing/invalid, `pick_creature_type` exhausts retries against the shallow embedded roster, and then falls back to creature type 0 (`White Harpy`). Audit tier-load state and spawn fallback behavior. |
 
 ## Open Phases / Display Work
 
