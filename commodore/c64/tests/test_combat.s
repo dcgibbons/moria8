@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #19
+    ldx #22
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -92,7 +92,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 20, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 23, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -372,6 +372,10 @@ test_start:
     bne !t9_fail+
     lda player_data + PL_XP_2
     bne !t9_fail+               // Should be 0
+    lda player_data + PL_XP_FRAC_LO
+    bne !t9_fail+
+    lda player_data + PL_XP_FRAC_HI
+    bne !t9_fail+
     lda #$01
     sta tc_results + 8
     jmp !t10+
@@ -762,6 +766,124 @@ test_start:
 !t20_fail:
     lda #$00
     sta tc_results + 19
+
+    // ==========================================
+    // Test 21: combat_compute_level_threshold uses full 24-bit late table
+    // Level 30 threshold should be 100000 at expfact 100.
+    // ==========================================
+!t21:
+    lda #30
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #100
+    sta player_data + PL_EXPFACT
+
+    jsr combat_compute_level_threshold
+
+    lda ccl_adj_0
+    cmp #$a0
+    bne !t21_fail+
+    lda ccl_adj_1
+    cmp #$86
+    bne !t21_fail+
+    lda ccl_adj_2
+    cmp #$01
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // ==========================================
+    // Test 22: non-100 expfact scales late threshold correctly
+    // Level 30 threshold 100000 * 150 / 100 = 150000 = $0249F0.
+    // ==========================================
+!t22:
+    lda #30
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #150
+    sta player_data + PL_EXPFACT
+
+    jsr combat_compute_level_threshold
+
+    lda ccl_adj_0
+    cmp #$f0
+    bne !t22_fail+
+    lda ccl_adj_1
+    cmp #$49
+    bne !t22_fail+
+    lda ccl_adj_2
+    cmp #$02
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
+
+    // ==========================================
+    // Test 23: combat_check_levelup can gain multiple levels from one award
+    // Level 1, XP=100, expfact=100 should end at level 4 with XP retained at 52.
+    // ==========================================
+!t23:
+    // Pre-stuff keyboard buffer for repeated levelup messages
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #100
+    sta player_data + PL_EXPFACT
+    lda #12
+    sta player_data + PL_STR_CUR
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_CON_CUR
+    lda #100
+    sta player_data + PL_XP_0
+    lda #0
+    sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
+    sta player_data + PL_XP_FRAC_LO
+    sta player_data + PL_XP_FRAC_HI
+
+    jsr combat_check_levelup
+
+    lda zp_player_lvl
+    cmp #4
+    bne !t23_fail+
+    lda player_data + PL_XP_0
+    cmp #52
+    bne !t23_fail+
+    lda player_data + PL_XP_1
+    bne !t23_fail+
+    lda player_data + PL_XP_2
+    bne !t23_fail+
+    lda player_data + PL_XP_FRAC_LO
+    bne !t23_fail+
+    lda player_data + PL_XP_FRAC_HI
+    bne !t23_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp !tests_done+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
 
 !tests_done:
     jmp test_exit_trampoline

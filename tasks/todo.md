@@ -4,16 +4,17 @@ This file is a temporary working scratchpad.
 
 ## Current Task
 - [x] Audit the current XP/level-up implementation and history context for `BUG-XP-PACE`.
-- [ ] Compare the current behavior against original Umoria source/runtime expectations.
-- [ ] Get a consultant second opinion on the likely remaining pace drift.
-- [ ] Write a concrete `BUG-XP-PACE` design with recommended audit/fix order.
+- [x] Compare the current behavior against original Umoria source/runtime expectations.
+- [x] Get a consultant second opinion on the likely remaining pace drift.
+- [x] Write a concrete `BUG-XP-PACE` design with recommended audit/fix order.
+- [x] Implement the threshold / level-up parity fix and prove it with runtime coverage.
 
 ## Plan
 - [x] Inspect `combat_award_xp`, `combat_compute_level_threshold`, and `combat_check_levelup`.
 - [x] Re-read the prior fractional-XP history entry so the new design does not duplicate solved work.
-- [ ] Verify original Umoria level-threshold / expfact / level-up-halving behavior from primary source.
-- [ ] Identify which remaining drift hypotheses are most plausible and cheapest to prove.
-- [ ] Write the recommended design and consultant-backed next steps here.
+- [x] Verify original Umoria level-threshold / expfact / level-up-halving behavior from primary source.
+- [x] Identify which remaining drift hypotheses are most plausible and cheapest to prove.
+- [x] Write the recommended design and consultant-backed next steps here.
 
 ## Working Read
 
@@ -115,3 +116,25 @@ This file is a temporary working scratchpad.
 ### Recommended Next Step
 - Start with a narrow source-and-test audit focused on threshold representation.
 - That is the highest-confidence fix, the lowest-risk change, and the one most clearly proven wrong by the current code.
+
+## Review
+
+### Implemented
+- Replaced the late-game `65535` threshold saturation with source-matched current-level transition thresholds.
+- Reworked `combat_compute_level_threshold` to produce a 24-bit adjusted threshold without blowing the C64 main segment past `$C000`.
+- Reworked `combat_check_levelup` to loop like original Umoria instead of hard-capping to one gain per award.
+- Updated C64 and C128 wizard gain-level helpers to compare and seed the full 24-bit threshold.
+- Added focused C64 combat regressions for:
+  - level-30 threshold at `100%`
+  - level-30 threshold at `150%`
+  - repeated level gains from one award
+  - clean fractional-XP carry behavior
+
+### Validation
+- Direct C64 KickAssembler build with local jar override: passed, `program_end` back below `$C000`
+- Direct C128 KickAssembler build with local jar override: passed, `197` asserts, `0` failed
+- `./commodore/c64/run_tests.sh`: `33` passed, `0` failed
+- `make test128-fast`: passed
+
+### Result
+- `BUG-XP-PACE` is fixed and can be closed from the active build plan.

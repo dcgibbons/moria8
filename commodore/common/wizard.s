@@ -296,6 +296,10 @@ wizard_cmd_gain_level:
     jmp wizard_restore_gameplay_with_message
 !wiz_gain_ok:
     jsr combat_compute_level_threshold
+    lda player_data + PL_XP_2
+    cmp ccl_adj_2
+    bcc !wiz_set_xp+
+    bne !wiz_do_level+
     lda player_data + PL_XP_1
     cmp ccl_adj_1
     bcc !wiz_set_xp+
@@ -308,8 +312,9 @@ wizard_cmd_gain_level:
     sta player_data + PL_XP_0
     lda ccl_adj_1
     sta player_data + PL_XP_1
-    lda #0
+    lda ccl_adj_2
     sta player_data + PL_XP_2
+    lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
 !wiz_do_level:

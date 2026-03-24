@@ -6,6 +6,54 @@
 
 ---
 
+## 2026-03-23 — `BUG-XP-PACE` XP threshold / level-up parity ✅ FIXED
+
+### Scope Closed
+- Fixed the remaining XP pacing drift that made characters level faster than stock Umoria in longer runs.
+- Added focused regression coverage for late thresholds, non-100 experience factors, retained fractional XP, and repeated level gains from one award.
+
+### Root Cause
+1. **Late-game XP thresholds were truncated**
+   - `commodore/common/tables.s` stored only 16-bit threshold values and saturated level `29+` progression at `65535`.
+   - Original Umoria continues the curve through `75000`, `100000`, `150000`, `200000`, `300000`, `400000`, `500000`, `750000`, `1500000`, `2500000`, and `5000000` for current levels `29-39`.
+2. **Level gains were hard-capped to one level per award**
+   - `combat_check_levelup` stopped after a single gain even if retained XP still exceeded the next threshold.
+   - Original Umoria keeps checking until the post-halving retained XP falls below the next threshold.
+
+### What Changed
+1. **Threshold computation now matches the original late-game curve**
+   - `commodore/common/tables.s`
+   - Kept the compact early 16-bit threshold table for levels `1-28`.
+   - Added exact late `threshold / 100` data for levels `29-39`, which is sufficient for the real level-transition path and avoids the old `65535` saturation bug.
+2. **Threshold scaling now produces a real 24-bit gate**
+   - `commodore/common/combat.s`
+   - Reworked `combat_compute_level_threshold` to use `math_mul_16x8` and produce a full 24-bit adjusted threshold.
+   - Early levels still divide by `100` at runtime; late levels use the exact pre-divided values because the original thresholds are clean multiples of `100`.
+3. **Level-up checks now follow Umoria's repeated-gain behavior**
+   - `commodore/common/combat.s`
+   - `combat_check_levelup` now compares full 24-bit whole XP against the full adjusted threshold and loops until the retained post-halving XP no longer qualifies for another gain.
+4. **Wizard gain-level helpers now respect 24-bit thresholds**
+   - `commodore/common/wizard.s`
+   - `commodore/common/ui_wizard.s`
+   - Wizard level promotion now seeds and compares the full 24-bit threshold instead of silently truncating the high byte.
+5. **Added regression coverage for the fixed parity points**
+   - `commodore/c64/tests/test_combat.s`
+   - Added late-threshold checks for level `30` at `100%` and `150%` experience factors.
+   - Added a repeated-gain case proving a single award can advance from level `1` to level `4` with retained XP `52`.
+   - Tightened the existing fractional-XP award case so hidden fractional state must stay zero when the whole award divides cleanly.
+
+### Validation
+- Direct C64 KickAssembler build with local jar override
+- Direct C128 KickAssembler build with local jar override
+- `./commodore/c64/run_tests.sh` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+
+### Outcome
+- `BUG-XP-PACE` is closed.
+- Late-game level thresholds now match the original source curve instead of flattening at `65535`.
+- Excess XP now follows the original repeated level-gain contract after each halving step.
+- Shared C64/C128 combat verification remained green after the change.
+
 ## 2026-03-23 — `BUG-DEEP-SPAWN` deep-level monster fallback ✅ FIXED
 
 ### Scope Closed

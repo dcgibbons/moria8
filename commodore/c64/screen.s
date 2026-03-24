@@ -109,6 +109,10 @@ screen_clear:
     sta COLOR_RAM + $300,x
     dex
     bpl !col_last-
+    // Full clear wipes status rows; force next status_draw to repaint.
+    lda zp_ui_dirty
+    ora #%10000001          // bit7=force status redraw, bit0=status dirty
+    sta zp_ui_dirty
     rts
 
 // screen_blank — Hide display during long operations (C64 VIC-II DEN bit)

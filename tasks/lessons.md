@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-24 — Full-screen clears must invalidate the status cache
+
+- **Issue:** On C64, returning from the character sheet left the status rows blank until a later gameplay update happened to redraw them.
+- **Root Cause:** `screen_clear` wiped the status rows, but `status_draw` saw unchanged cached values and skipped repainting because no force-redraw flag was set.
+- **Resolution:** Any full-screen clear that can erase the status area must set the status force-redraw bit so the next `status_draw` repaints even when player values are unchanged.
+- **Rule:** **When a UI path uses `screen_clear` and then returns to gameplay, invalidate or force the status redraw explicitly. Do not rely on cached-value changes to redraw erased rows.**
+
 ## VDC Hardware Fill (C128)
 
 - **Issue:** Using VDC hardware fill (Reg 30) for `screen_clear` and `screen_clear_row` caused a fatal CPU crash (JAM) during character creation (after pressing 'N' on the title screen).
