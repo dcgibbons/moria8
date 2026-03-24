@@ -30,8 +30,14 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `AUDIT-IO-C128` full audit of C128 callable code vs I/O-hole / residency contracts | Medium | High | Prefer | Inventory every callable C128 routine path, confirm final execution residency (`< $D000`, `OVL.*`, or resident `$F000`), add missing asserts for both trampolines and callees, and catch future `$D000-$DFFF` regressions before manual play does. |
+| Medium | `REF-HAL` formalize platform service hooks so shared gameplay code stops accumulating `#if C128` branches | High | Medium | No | Introduce a thin platform-services layer for shared gameplay entry points such as pre-turn hooks, platform guard restore, and other runtime quirks. Treat this as the main structural refactor; it should precede further trampoline cleanups. |
+| Low | `REF-INPUT-TABLES` centralize shared command/input tables and direction constants in `commodore/common/` | Medium | Medium | No | Move truly shared `CMD_*` command codes, direction tables, and PETSCII-to-command lookup tables into common data. Do not try to unify the C64/C128 keyscan or modifier-chord implementations themselves. |
+| Low | `REF-CONSTS` consolidate shared `CMD_*`, `SC_*`, and `COL_*` constants into common headers | Low | Medium | No | Cleanup for constants that are genuinely platform-neutral. Keep platform-specific screen-code or scan-code quirks local. |
+| Low | `REF-NUMFMT` move duplicated numeric formatting helpers into shared screen helper code | Low | Low | No | `screen_put_hex`, `screen_put_decimal`, and `screen_put_decimal_16` are duplicated in the VIC-II and VDC backends but only depend on a `screen_put_char` primitive. Share the formatter logic without merging the platform screen drivers themselves. |
+| Low | `REF-C128-TRAMP` macro-generate repetitive C128 trampoline boilerplate in `commodore/c128/main.s` | Medium | Low | No | Many C128 trampolines share the same save-bank / switch / call / restore shape. This cleanup should follow `REF-HAL`, once the callable surface is stable. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
+| Low | `REF-MON-SOA` evaluate converting the active monster table from AoS to SoA | High | High | No | Potential 6502 performance win, but risky: it touches AI, accessors, save/load, and tests. Keep it firmly backlog-only until profiling proves the win is worth the churn. |
 | Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |
 
 ## Open Features

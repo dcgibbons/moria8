@@ -3,51 +3,81 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Fix `BUG-DEEP-SPAWN`.
+- [x] Add the new refactor backlog intake to `commodore/BUILDPLAN.md`.
+- [x] Record the triage/design notes for those refactors here.
 
-## Plan
-- [x] Re-check the deep-spawn selector and original Umoria behavior.
-- [x] Implement the selector/fallback fix in `pick_creature_type`.
-- [x] Add a focused runtime regression for the empty-band deep fallback case.
-- [x] Keep C64/C128 authoritative verification green after the fix.
+## Refactor Backlog Intake
 
-## Review
-`BUG-DEEP-SPAWN` is fixed.
+Consultant triage matched the repo reality closely:
 
-### Root cause
-- Deep-level selection in `commodore/common/monster.s:pick_creature_type` used a narrow preferred level band:
-  - `min = max(1, dlvl - 2)`
-  - `max = dlvl + 3`
-- When no loaded creature matched that band, the code fell through to hardcoded creature index `0`.
-- That made deep-level failure collapse to whatever happened to live at slot `0`, which is structurally wrong.
+- `REF-HAL` is the main structural refactor.
+- Shared input tables/constants are worthwhile cleanup once the platform surface is clearer.
+- Shared numeric formatting helpers are safe low-risk deduplication.
+- C128 trampoline cleanup is worthwhile, but only after the callable surface stabilizes.
+- Monster AoS -> SoA is a real performance idea, but it is risky enough that it should stay far in the backlog until profiling justifies it.
 
-### Fix shape
-- Kept the existing narrow-band fast path so shallow/normal selection behavior stays familiar.
-- Replaced the bad fallback with:
-  - scan the currently loaded roster
-  - choose the highest loaded creature level `<= current dungeon depth`
-  - return that slot instead of `0`
-- This is the narrow fix from the design, not a full Umoria-weighted selector rewrite.
+## Recommended Order
 
-### Additional support work
-- `commodore/c64/tests/test_monster.s`
-  - added a synthetic empty-band deep fallback regression (`dlvl 45`, roster `[1,20,25,30]`, expects index `3`)
-- `commodore/common/title_sysinfo_banked.s`
-  - removed unused machine-string/table bytes from the C64 banked payload
-- `commodore/common/ui_home.s`
-  - shortened one low-value home prompt to recover the last C64 banked-payload bytes needed to stay below `$D000`
+1. `REF-HAL`
+2. `REF-INPUT-TABLES`
+3. `REF-CONSTS`
+4. `REF-NUMFMT`
+5. `REF-C128-TRAMP`
+6. `REF-MON-SOA` only if profiling still says it is worth the churn
 
-### Why the support trims were needed
-- The selector fix itself was small, but C64 banked payload was already near the `$D000` ceiling.
-- After the selector/test changes, the C64 banked payload crossed the I/O-hole guard by a handful of bytes.
-- The title/home byte trims were the smallest safe way to restore the payload contract without redesigning more code.
+## Item Notes
 
-### Verification
-- `make test`
-- `make -B -C commodore/c128 build128`
-- `make test128-fast`
+### `REF-HAL`
+- Goal: move platform-owned runtime services out of shared gameplay files such as `commodore/common/game_loop.s`.
+- Likely shape:
+  - define a thin platform-services surface in common code
+  - keep gameplay flow in common code
+  - push C64/C128 quirks into platform-owned entry points
+- This should come before any attempt to abstract more C128 trampolines, because it clarifies which calls actually need trampolines.
 
-### Outcome
-- Deep empty-band selection no longer collapses to creature index `0`.
-- The specific DL45-50 repeated-`White Harpy` failure mode is closed.
-- C64 and C128 authoritative verification are green.
+### `REF-INPUT-TABLES`
+- Share:
+  - command ids
+  - direction tables
+  - PETSCII-to-command lookup tables where they are truly identical
+- Do not share:
+  - platform keyscan
+  - modifier/chord decode
+  - C128-specific input timing quirks
+
+### `REF-CONSTS`
+- Safe target for constants that are genuinely shared:
+  - `CMD_*`
+  - selected `SC_*`
+  - shared color constants
+- Do not force platform-specific scan-code or display quirks into fake common headers.
+
+### `REF-NUMFMT`
+- Shared target:
+  - `screen_put_hex`
+  - `screen_put_decimal`
+  - `screen_put_decimal_16`
+- Keep platform drivers separate; only the formatter logic should move.
+- The shared helper should depend only on a platform `screen_put_char` primitive.
+
+### `REF-C128-TRAMP`
+- Use a higher-level macro to generate repetitive save-bank / switch / call / restore trampolines in `commodore/c128/main.s`.
+- This is cleanup, not a behavior change.
+- It should follow `REF-HAL`, not precede it.
+
+### `REF-MON-SOA`
+- Potential upside:
+  - cheaper field access in `monster.s` / `monster_ai.s`
+  - less pointer math and indirect indexing
+- Real risks:
+  - touches active gameplay state layout
+  - touches save/load assumptions
+  - touches tests and every monster accessor
+- This should stay backlog-only until profiling proves the win is worth the churn.
+
+## Outcome
+
+- `commodore/BUILDPLAN.md` now tracks the refactor ideas as explicit backlog items instead of leaving them as a loose proposal.
+- The backlog wording now reflects the real dependency order:
+  - `REF-HAL` before `REF-C128-TRAMP`
+  - `REF-MON-SOA` only as a late, profiling-justified refactor
