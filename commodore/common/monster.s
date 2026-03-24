@@ -444,61 +444,57 @@ find_monster_floor:
     rts
 
 // pick_creature_type — Pick random creature type for current dungeon level
-// Range: cr_level in [max(1, dlvl-2), dlvl+3], from dungeon creatures only
-// Output: A = creature type index (0-19)
-// Clobbers: X, Y, zp_temp3, zp_temp4
+// Uses the loaded dungeon roster and chooses uniformly from all creatures with
+// cr_level <= current dungeon depth. Unlike the old narrow-band picker, this
+// cannot collapse deep floors to a single monster just because the tier has
+// sparse high-end entries.
+// Output: A = creature type index within [0, active_dungeon_count)
+// Clobbers: X, Y, zp_temp3
 pick_creature_type:
-    // Compute min_level = max(1, dlvl - 2)
     lda zp_player_dlvl
-    sec
-    sbc #2
-    bcs !pct_minok+
-    lda #0                      // Underflow
-!pct_minok:
-    cmp #1
-    bcs !pct_min1+
-    lda #1                      // Floor at 1
-!pct_min1:
-    sta pct_min_lvl
-
-    // Compute max_level = dlvl + 3
-    lda zp_player_dlvl
-    clc
-    adc #3
-    sta pct_max_lvl
-
+    beq !pct_fallback+
     lda active_dungeon_count
-    beq !pct_fallback+          // No dungeon creatures available
-    lda #50
-    sta pct_retries             // Retry limit (prevent infinite loop)
-
-!pct_retry:
-    // Pick random creature index [0, active_dungeon_count-1]
-    lda active_dungeon_count
-    jsr rng_range
-    tax                         // X = candidate type
-
-    // Check cr_level in [min_lvl, max_lvl]
+    beq !pct_fallback+
+    ldx #0
+    ldy #0
+!pct_count_loop:
+    cpx active_dungeon_count
+    bcs !pct_count_done+
     lda cr_level,x
-    cmp pct_min_lvl
-    bcc !pct_next+              // Too low
-    cmp pct_max_lvl
-    beq !pct_accept+            // Equal to max = ok
-    bcs !pct_next+              // Too high
-!pct_accept:
-    txa                         // A = type index
-    rts
-
-!pct_next:
-    dec pct_retries
-    bne !pct_retry-
+    cmp zp_player_dlvl
+    bcc !pct_count_hit+
+    bne !pct_count_next+
+!pct_count_hit:
+    iny
+!pct_count_next:
+    inx
+    jmp !pct_count_loop-
+!pct_count_done:
+    tya
+    beq !pct_fallback+
+    jsr rng_range
+    sta zp_temp3
+    ldx #0
+!pct_pick_loop:
+    cpx active_dungeon_count
+    bcs !pct_fallback+
+    lda cr_level,x
+    cmp zp_player_dlvl
+    bcc !pct_pick_hit+
+    bne !pct_pick_next+
+!pct_pick_hit:
+    lda zp_temp3
+    beq !pct_found+
+    dec zp_temp3
+!pct_pick_next:
+    inx
+    jmp !pct_pick_loop-
 !pct_fallback:
-    lda #0                      // Fallback: creature type 0
+    lda #0
     rts
-
-pct_min_lvl: .byte 0
-pct_max_lvl: .byte 0
-pct_retries: .byte 0
+!pct_found:
+    txa
+    rts
 
 // monster_spawn_one — Create one monster at ms_spawn_x/y
 // Input:  A = creature type index

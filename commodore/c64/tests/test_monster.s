@@ -3,7 +3,7 @@
 // Tests: monster_init_table, monster_spawn_one, monster_find_at,
 //        monster_remove, pick_creature_type, monster_spawn_level.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400-$040b: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #11
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -90,16 +90,45 @@ press_key_str:
 t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
-tc_results: .fill 10, $ff       // Test results buffer (copied to $0400 by trampoline)
+t9_mask:   .byte 0
+tc_results: .fill 12, $ff       // Test results buffer (copied to $0400 by trampoline)
+test_force_deep_tier_spawn: .byte 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+test_tier_check_transition:
+    lda test_force_deep_tier_spawn
+    beq !done+
+    lda #4
+    sta current_tier
+    lda #1
+    sta tier_loaded
+    lda #2
+    sta active_dungeon_count
+    lda #49
+    sta cr_level+0
+    lda #60
+    sta cr_level+1
+!done:
+    rts
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #9
+    ldx #11
     lda #$ff
 !clr:
     sta tc_results,x
     dex
     bpl !clr-
+
+    :PatchJump(tier_check_transition, test_tier_check_transition)
 
     // Seed RNG deterministically
     lda #$42
@@ -118,6 +147,8 @@ test_start:
     // Set light radius for rendering tests
     lda #1
     sta zp_light_radius
+    lda #0
+    sta test_force_deep_tier_spawn
 
     // ==========================================
     // Test 1: monster_init_table clears all slots
@@ -323,8 +354,7 @@ test_start:
     sta tc_results+5
 
     // ==========================================
-    // Test 7: pick_creature_type within range (dlvl=1)
-    // Level range: max(1, 1-2)=1 to 1+3=4
+    // Test 7: pick_creature_type respects the cumulative depth cap (dlvl=1).
     // ==========================================
 !t7:
     lda #1
@@ -338,11 +368,7 @@ test_start:
     jsr pick_creature_type
     tax
     lda cr_level,x
-    // Must be >= 1
-    cmp #1
-    bcc !t7_bad+
-    // Must be <= 4
-    cmp #5
+    cmp #2
     bcs !t7_bad+
     jmp !t7_next+
 !t7_bad:
@@ -356,37 +382,115 @@ test_start:
     sta tc_results+6
 
     // ==========================================
-    // Test 8: pick_creature_type within range (dlvl=3)
-    // Level range: max(1, 3-2)=1 to 3+3=6
+    // Test 8: pick_creature_type returns the only eligible creature when a
+    //         loaded deep roster has a single entry at or below dlvl.
     // ==========================================
-    lda #3
+    lda cr_level+0
+    pha
+    lda cr_level+1
+    pha
+    lda active_dungeon_count
+    pha
+    lda #49
     sta zp_player_dlvl
-    lda #10
-    sta t7_count
-    lda #1
-    sta t7_ok
-
-!t8_loop:
+    lda #2
+    sta active_dungeon_count
+    lda #49
+    sta cr_level+0
+    lda #60
+    sta cr_level+1
     jsr pick_creature_type
-    tax
-    lda cr_level,x
-    cmp #1
-    bcc !t8_bad+
-    cmp #7
-    bcs !t8_bad+
-    jmp !t8_next+
-!t8_bad:
-    lda #0
-    sta t7_ok
-!t8_next:
-    dec t7_count
-    bne !t8_loop-
-
-    lda t7_ok
+    cmp #0
+    bne !t8_fail+
+!t8_pass:
+    lda #$01
     sta tc_results+7
+    jmp !t8_restore+
+!t8_fail:
+    lda #$00
+    sta tc_results+7
+!t8_restore:
+    pla
+    sta active_dungeon_count
+    pla
+    sta cr_level+1
+    pla
+    sta cr_level+0
+    jmp !t9+
 
     // ==========================================
-    // Test 9: monster_spawn_level correct count (dlvl=1)
+    // Test 9: pick_creature_type uses every loaded creature at or below the
+    // current depth instead of collapsing to a narrow high-end band.
+    // ==========================================
+!t9:
+    lda cr_level+0
+    pha
+    lda cr_level+1
+    pha
+    lda cr_level+2
+    pha
+    lda cr_level+3
+    pha
+    lda active_dungeon_count
+    pha
+
+    lda #4
+    sta active_dungeon_count
+    lda #1
+    sta cr_level+0
+    lda #20
+    sta cr_level+1
+    lda #25
+    sta cr_level+2
+    lda #30
+    sta cr_level+3
+
+    lda #35
+    sta zp_player_dlvl
+    lda #16
+    sta t9_count
+    lda #0
+    sta t9_mask
+!t9_loop:
+    jsr pick_creature_type
+    cmp #4
+    bcs !t9_fail+
+    tax
+    lda t9_mask
+    ora bit_mask_table,x
+    sta t9_mask
+    jmp !t9_next+
+!t9_fail:
+    lda #$00
+    sta tc_results+8
+    jmp !t9_restore+
+!t9_next:
+    dec t9_count
+    bne !t9_loop-
+    lda t9_mask
+    and #%00000111
+    beq !t9_fail+
+!t9_pass:
+    lda #$01
+    sta tc_results+8
+    jmp !t9_restore+
+!t9_fail:
+    lda #$00
+    sta tc_results+8
+!t9_restore:
+    pla
+    sta active_dungeon_count
+    pla
+    sta cr_level+3
+    pla
+    sta cr_level+2
+    pla
+    sta cr_level+1
+    pla
+    sta cr_level+0
+
+    // ==========================================
+    // Test 10: monster_spawn_level correct count (dlvl=1)
     // Count = 2 + rng(4) + 1/3 = 2 + [0,3] + 0 = [2,5], cap 14
     // ==========================================
     lda #1
@@ -408,14 +512,14 @@ test_start:
     cmp #MAX_MONSTERS+1
     bcs !t9_fail+               // Must be <= MAX_MONSTERS (group spawn adds extras)
     lda #$01
-    sta tc_results+8
+    sta tc_results+9
     jmp !t10+
 !t9_fail:
     lda #$00
-    sta tc_results+8
+    sta tc_results+9
 
     // ==========================================
-    // Test 10: monster_spawn_level spawns townspeople (dlvl=0)
+    // Test 11: monster_spawn_level spawns townspeople (dlvl=0)
     // Count should be 4-7 (4 + rng(4))
     // ==========================================
 !t10:
@@ -436,11 +540,66 @@ test_start:
     cmp #8
     bcs !t10_fail+
     lda #$01
-    sta tc_results+9
-    jmp !tests_done+
+    sta tc_results+10
+    jmp !t11+
 !t10_fail:
     lda #$00
-    sta tc_results+9
+    sta tc_results+10
+
+    // ==========================================
+    // Test 12: monster_spawn_level uses the active deep roster when it is
+    // already valid, rather than collapsing to a single fallback monster.
+    // ==========================================
+!t11:
+    lda cr_level+0
+    pha
+    lda cr_level+1
+    pha
+    lda active_dungeon_count
+    pha
+    lda #49
+    sta zp_player_dlvl
+    lda #0
+    sta level_entry_dir
+    jsr level_generate
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #2
+    sta active_dungeon_count
+    lda #49
+    sta cr_level+0
+    lda #60
+    sta cr_level+1
+    jsr monster_spawn_level
+
+    lda zp_mon_count
+    beq !t11_fail+
+    ldx #0
+!t11_loop:
+    cpx zp_mon_count
+    bcs !t11_pass+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #0
+    bne !t11_fail+
+    inx
+    jmp !t11_loop-
+!t11_pass:
+    lda #$01
+    sta tc_results+11
+    jmp !t11_restore+
+!t11_fail:
+    lda #$00
+    sta tc_results+11
+!t11_restore:
+    pla
+    sta active_dungeon_count
+    pla
+    sta cr_level+1
+    pla
+    sta cr_level+0
 
 !tests_done:
     jmp test_exit_trampoline

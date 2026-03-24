@@ -29,6 +29,10 @@ cmd_show_inventory_view:
     jsr tramp_ui_inv_display
 #if C128
     jsr input_wait_release
+#else
+    lda #0
+    sta KBDBUF_COUNT
+    jsr input_wait_release
 #endif
     jsr input_get_key
     jmp ui_view_return_to_gameplay_view
@@ -36,6 +40,10 @@ cmd_show_inventory_view:
 cmd_show_equipment_view:
     jsr tramp_ui_equip_display
 #if C128
+    jsr input_wait_release
+#else
+    lda #0
+    sta KBDBUF_COUNT
     jsr input_wait_release
 #endif
     jsr input_get_key

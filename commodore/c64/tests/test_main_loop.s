@@ -188,6 +188,9 @@ test_wizard_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
 test_busy_end_calls: .byte 0
+test_tier_transition_calls: .byte 0
+test_force_overlay_tier_reset: .byte 0
+test_spawn_tier_seen: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -232,6 +235,9 @@ install_jump_patch:
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
     :PatchJump(overlay_load, test_overlay_load)
+    :PatchJump(tier_check_transition, test_tier_check_transition)
+    :PatchJump(monster_spawn_level, test_monster_spawn_level)
+    :PatchJump(item_spawn_level, test_item_spawn_level)
     rts
 
 reset_state:
@@ -259,6 +265,9 @@ reset_state:
     sta test_busy_begin_calls
     sta test_busy_tick_calls
     sta test_busy_end_calls
+    sta test_tier_transition_calls
+    sta test_force_overlay_tier_reset
+    sta test_spawn_tier_seen
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -370,6 +379,10 @@ test_check_store_door:
 
 test_check_stairs_at_player:
     lda test_stairs_tile
+    lsr
+    lsr
+    lsr
+    lsr
     rts
 
 test_do_look:
@@ -424,7 +437,52 @@ test_screen_clear_row:
     rts
 
 test_overlay_load:
+    lda test_force_overlay_tier_reset
+    beq !done+
+    lda #0
+    sta current_tier
+    sta tier_loaded
+!done:
     clc
+    rts
+
+test_tier_check_transition:
+    inc test_tier_transition_calls
+    lda zp_player_dlvl
+    beq !town+
+    cmp #9
+    bcc !tier1+
+    cmp #16
+    bcc !tier2+
+    cmp #26
+    bcc !tier3+
+    lda #4
+    bne !store+
+!tier3:
+    lda #3
+    bne !store+
+!tier2:
+    lda #2
+    bne !store+
+!tier1:
+    lda #1
+!store:
+    sta current_tier
+    lda #1
+    sta tier_loaded
+    rts
+!town:
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    rts
+
+test_monster_spawn_level:
+    lda current_tier
+    sta test_spawn_tier_seen
+    rts
+
+test_item_spawn_level:
     rts
 
 test_start:

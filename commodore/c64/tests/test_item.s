@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #42
+    ldx #43
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -94,13 +94,14 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 43, $ff
+tc_results: .fill 44, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
+t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #29
+    ldx #43
     lda #$ff
 !clr:
     sta tc_results,x
@@ -798,7 +799,7 @@ test_start:
 
     // Save base AC
     lda player_data + PL_AC
-    sta zp_temp0                // Save base AC
+    sta t16_base_ac
 
     // Put leather armor (type 7, base AC = 4) in inv slot 0
     lda #7
@@ -823,7 +824,7 @@ test_start:
     // Check AC increased by 4
     lda player_data + PL_AC
     sec
-    sbc zp_temp0
+    sbc t16_base_ac
     cmp #4
     beq !t16_pass+
 !t16_fail:
@@ -1998,6 +1999,45 @@ test_start:
 !t43_pass:
     lda #$01
     sta tc_results + 42
+
+    // ==========================================
+    // Test 44: item_spawn_level skips placement when no floor exists
+    // ==========================================
+!t44:
+    jsr item_init_floor
+    jsr fill_map_rock
+
+    lda #10
+    sta zp_player_dlvl
+
+    lda #0
+    sta room_count
+
+    jsr item_spawn_level
+
+    lda zp_item_count
+    beq !t44_check_flag+
+    lda #$00
+    sta tc_results + 43
+    jmp !tests_done+
+
+!t44_check_flag:
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #FLAG_HAS_ITEM
+    beq !t44_pass+
+    lda #$00
+    sta tc_results + 43
+    jmp !tests_done+
+
+!t44_pass:
+    lda #$01
+    sta tc_results + 43
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

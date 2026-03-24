@@ -116,21 +116,11 @@ turn_tick_effects:
     bne !no_recall+
 
     // Word of recall expired — teleport between town and dungeon
-    // Clear FLAG_OCCUPIED at old position
-    ldx zp_player_y
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy zp_player_x
-    :MapRead_ptr0_y()
-    and #~FLAG_OCCUPIED
-    :MapWrite_ptr0_y()
-
     lda zp_player_dlvl
     beq !recall_to_dungeon+
 
     // In dungeon → go to town (dlvl 0)
+    jsr turn_recall_clear_old_occupied
     lda #0
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
@@ -143,31 +133,17 @@ turn_tick_effects:
     // In town → go to max depth reached
     lda player_data + PL_MAX_DLVL
     beq !no_recall+                  // Never been to dungeon — fizzle
+    pha
+    jsr turn_recall_clear_old_occupied
+    pla
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
     lda #0
     sta level_entry_dir              // Descending (arrive at up stairs)
 
 !recall_generate:
-    lda #$ff
-    sta zp_run_dir                   // Stop running
-    lda #0
-    sta current_tier                 // Force first-entry tier lookup
-    jsr generation_busy_begin_if_dungeon_api
-    jsr tier_check_transition        // Load correct tier for new dlvl
-    jsr generation_busy_tick_if_dungeon_api
-    jsr level_generate
-    jsr generation_busy_tick_if_dungeon_api
-    jsr monster_spawn_level
-    jsr generation_busy_tick_if_dungeon_api
-    jsr item_spawn_level
-    jsr generation_busy_tick_if_dungeon_api
-    jsr update_visibility
-    jsr generation_busy_end_if_dungeon_api
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr tier_invalidate_state
+    jsr level_change_generate_current
 
     ldx #HSTR_RECALL_ARRIVE
     jsr huff_print_msg
@@ -399,6 +375,21 @@ turn_post_action:
     // Mark status bar as dirty so it redraws
     jsr status_mark_dirty
 
+    rts
+
+// turn_recall_clear_old_occupied — clear the current map tile occupied bit
+// before an actual recall teleport transition.
+// Safe to skip on recall fizzles, because the player remains on the same tile.
+turn_recall_clear_old_occupied:
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    :MapRead_ptr0_y()
+    and #~FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
     rts
 
 // turn_tick_light — Decrement light charges if torch/lantern equipped

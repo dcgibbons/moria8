@@ -415,10 +415,11 @@ monster_cast_summon:
     and #FLAG_OCCUPIED
     bne !mcs_fail+
 
-    // Spawn random dungeon creature (not town)
-    lda active_dungeon_count
-    beq !mcs_fail+              // No dungeon creatures → skip
-    jsr rng_range
+    // Spawn a depth-appropriate dungeon creature using the shared selector.
+    lda zp_player_dlvl
+    beq !mcs_fail+
+    jsr tier_check_transition
+    jsr pick_creature_type
     jsr monster_spawn_one
     // Ignore failure (table could be full)
 

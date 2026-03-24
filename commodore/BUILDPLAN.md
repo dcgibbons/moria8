@@ -33,6 +33,7 @@
 | Medium | `AUDIT-IO-C128` full audit of C128 callable code vs I/O-hole / residency contracts | Medium | High | Prefer | Inventory every callable C128 routine path, confirm final execution residency (`< $D000`, `OVL.*`, or resident `$F000`), add missing asserts for both trampolines and callees, and catch future `$D000-$DFFF` regressions before manual play does. |
 | Low | Platformize `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore assumptions | Medium | Low | No | Cleanup unless future C128 overlay work reopens the area. |
 | Low | `A6` split large file `item.s` | Medium | Low | No | Opportunistic maintainability work. |
+| Low | `REF-MON-SOA` evaluate converting the active monster table from AoS to SoA | High | High | No | Potential 6502 performance win, but risky: it touches AI, accessors, save/load, and tests. Keep it firmly backlog-only until profiling proves the win is worth the churn. |
 | Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |
 
 ## Open Features
