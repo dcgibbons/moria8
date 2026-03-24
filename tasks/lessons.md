@@ -382,3 +382,10 @@
 - **Root Cause:** The suite grew into the `$C000` map region. Later dark-room/map-fill tests wrote through the dungeon map helpers and corrupted live test code/data.
 - **Resolution:** Move large scratch buffers into a separate segment and add an explicit assert proving the executable test body stays below `MAP_BASE`.
 - **Rule:** **For C64 suites that import map-generation/render code and also carry bulky local buffers, keep the executable test body below `MAP_BASE` and assert that contract directly.**
+
+## 2026-03-23 — For bad-merge backlog questions, compare the merged branch against the named source branch first
+
+- **Issue:** I started proving the stale build-plan bugs from local history/code evidence before checking the exact branch the user identified as the pre-merge source of truth.
+- **Root Cause:** I anchored on the merged result first instead of diffing the bad target branch against the known-good source branch immediately. That risks catching stale reopenings while missing legitimate backlog items that were dropped by the merge.
+- **Resolution:** When the user names the source branch of a bad merge, compare that branch against the merged target first and use that diff to decide both directions of the repair: what must be removed and what must be restored.
+- **Rule:** **For merge-fallout doc repairs, do not patch from memory or partial history. Diff the merged branch against the user-named source branch first so stale reopenings and dropped backlog items are handled together.**
