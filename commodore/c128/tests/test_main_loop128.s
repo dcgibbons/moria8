@@ -154,6 +154,9 @@ tramp_ui_equip_display:
     inc test_equipment_calls
     rts
 
+tramp_ego_put_suffix:
+    rts
+
 tramp_store_init_all:
     rts
 

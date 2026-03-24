@@ -792,6 +792,7 @@ item_spawn_level:
 
     // Find a random floor tile
     jsr find_random_floor
+    bcc !isl_gold_done+
 
     // Set up floor item add
     lda df_target_x
@@ -880,6 +881,7 @@ item_spawn_level:
 
     // Find a random floor tile
     jsr find_random_floor
+    bcc !isl_ngold_done+
     lda df_target_x
     sta fi_add_x
     lda df_target_y

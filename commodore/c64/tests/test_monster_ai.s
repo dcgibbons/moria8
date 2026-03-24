@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #20
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -97,7 +97,7 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 21, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
 
@@ -1666,10 +1666,79 @@ test_start:
 
     lda #$01
     sta tc_results + 20
-    jmp !tests_done+
+    jmp !t22+
 !t21_fail:
     lda #$00
     sta tc_results + 20
+
+    // ==========================================
+    // Test 22: summon spell marks scene dirty through monster_ai_tick
+    // Spellcasts that change visible state must force the shared full-render path.
+    // ==========================================
+!t22:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    // Clear a 5x5 floor area around the caster so summon cannot fail on adjacency.
+    ldx #13
+!t22_row:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+!t22_col:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #28
+    bne !t22_col-
+    inx
+    cpx #18
+    bne !t22_row-
+
+    // Spawn caster at (25,15) and force summon-only casting.
+    lda #25
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    lda #100
+    sta cr_spell_chance
+    lda #MSF_SUMMON
+    sta cr_spell_flags
+
+    lda #27
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    jsr monster_ai_tick
+    bcc !t22_fail+
+
+    lda zp_mon_count
+    cmp #2
+    bcc !t22_fail+
+
+    lda #$01
+    sta tc_results + 21
+    jmp !t22_cleanup+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
+!t22_cleanup:
+    lda #0
+    sta cr_spell_chance
+    sta cr_spell_flags
 
 !tests_done:
     jmp test_finish

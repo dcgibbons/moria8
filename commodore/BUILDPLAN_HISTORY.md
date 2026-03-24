@@ -6,6 +6,66 @@
 
 ---
 
+## 2026-03-23 — `BUG-EGO-NAME` and dungeon visibility/render follow-ups ✅ FIXED
+
+### Scope Closed
+- Fixed the active UI bug where ego/slay item names rendered corrupted suffix text in inventory/equipment views.
+- Fixed two related live-map visibility/render drift bugs found during manual gameplay:
+  - `look` could identify monsters on remembered dark tiles that were not actually visible
+  - monster spellcasts that summoned visible blockers did not always force a full scene redraw
+- Fixed a floor-search contract bug that could hand non-floor coordinates to item/trap/teleport callers after repeated search failure.
+
+### Root Causes
+1. **Ego suffix rendering bypassed the safe platform contract**
+   - `put_inv_name_with_ego` printed base names in shared code, then called `banked_ego_put_suffix` directly.
+   - Ego suffix strings live in banked `$F000` RAM and must be read through the platform-owned trampoline path.
+2. **`look` used remembered visibility instead of current visibility**
+   - `do_look` treated `FLAG_VISITED` as enough to describe a tile, even when the live renderer correctly hid monsters/items outside the current light bubble.
+3. **Monster spellcasts did not mark the scene dirty**
+   - Summon/help casts could change the visible scene without forcing the shared full-render path, leaving real occupied monsters present in gameplay state but missing from the live map until a later redraw.
+4. **`find_random_floor` had a bad failure contract**
+   - After 200 failed attempts it returned the last random coordinates as if they were valid.
+   - Callers could then place traps, items, or teleports onto non-floor or occupied tiles.
+
+### What Changed
+1. **Ego item rendering now uses the safe platform suffix path**
+   - `commodore/common/game_loop.s` now routes inventory/equipment suffix printing through `tramp_ego_put_suffix`.
+   - Test stubs were updated on C64/C128 to match that shared helper contract.
+2. **`look` now matches live visibility**
+   - `commodore/common/player_move.s` now uses `los_is_visible` instead of `FLAG_VISITED` when deciding whether `look` can describe a tile.
+3. **Monster spellcasts now force a scene redraw**
+   - `commodore/common/monster_ai.s` marks spellcasting turns as `mat_action_dirty`, so summon/help casts take the shared full-render path.
+4. **Random-floor search now reports failure correctly**
+   - `commodore/common/dungeon_features.s` now returns carry-set only on success and carry-clear on failure.
+   - `commodore/common/item.s` and `commodore/common/spell_effects.s` now honor that contract instead of consuming stale coordinates.
+
+### Regression Coverage
+- `commodore/c64/tests/test_ui_views.s`
+  - inventory/equipment now assert a real ego suffix case: `Long Sword (Slay Evil)`
+- `commodore/c64/tests/test_effects.s`
+  - added a remembered-dark-tile `look` regression
+- `commodore/c64/tests/test_monster_ai.s`
+  - added a summon-cast dirty-scene regression
+- `commodore/c64/tests/test_item.s`
+  - added a no-valid-floor regression proving `item_spawn_level` cannot place floor items into a map with no valid floor tiles
+- `commodore/c64/run_tests.sh`
+  - test counts updated for the added coverage
+  - temp file creation hardened for reliable repeated suite runs on macOS
+
+### Validation
+- `make test`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
+### Outcome
+- `BUG-EGO-NAME` is closed.
+- Inventory/equipment ego/slay suffixes now render correctly.
+- `look` and the live renderer now agree about current monster visibility.
+- Monster summon/help casts correctly dirty the scene for redraw.
+- Floor-search failure no longer leaks wall/occupied coordinates into item/trap/teleport placement.
+
+---
+
 ## 2026-03-23 — `BUG-RECALL` Word of Recall transition path ✅ FIXED
 
 ### Scope Closed

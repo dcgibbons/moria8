@@ -165,6 +165,8 @@ monster_process_one:
     jsr monster_can_cast
     bcc !mpo_no_cast+
     jsr monster_pick_spell
+    lda #1
+    sta mat_action_dirty
     jmp !mpo_writeback+         // Casting used the monster's turn
 !mpo_no_cast:
 

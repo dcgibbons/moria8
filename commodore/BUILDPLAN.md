@@ -9,14 +9,14 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `BUG-EGO-NAME` ego/slay item names render as garbage in inventory/equipment views | Medium | Medium | No | Special-prefix item names (for example slaying/special swords) are rendering corrupted suffix/prefix text in the UI instead of a clean item name. |
+| None | None at the moment | — | — | — | — |
 
 ## Open Phases / Display Work
 

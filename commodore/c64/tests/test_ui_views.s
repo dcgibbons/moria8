@@ -392,10 +392,12 @@ test_help_view:
 test_inventory_view:
     jsr reset_shared_state
 
-    lda #15
+    lda #4
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
+    lda #EGO_SLAY_EVIL
+    sta inv_ego + 0
 
     jsr ui_inv_display
 
@@ -437,10 +439,12 @@ test_inventory_view:
 test_equipment_view:
     jsr reset_shared_state
 
-    lda #2
+    lda #4
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
+    lda #EGO_SLAY_EVIL
+    sta inv_ego + EQUIP_WEAPON
 
     jsr ui_equip_display
 
@@ -568,9 +572,9 @@ test_store_view:
     jsr assert_screen_string
     bcc !fail+
 
-    lda #<expected_inventory_line
+    lda #<expected_store_line
     sta zp_ptr0
-    lda #>expected_inventory_line
+    lda #>expected_store_line
     sta zp_ptr0_hi
     lda #3
     ldx #1
@@ -735,9 +739,12 @@ expected_help_actions:
     .text "Actions" ; .byte 0
 expected_inventory_line:
     .byte $01
+    .text ") Long Sword (Slay Evil)" ; .byte 0
+expected_store_line:
+    .byte $01
     .text ") Ration of Food" ; .byte 0
 expected_equip_line:
-    .text "Weapon: Dagger" ; .byte 0
+    .text "Weapon: Long Sword (Slay Evil)" ; .byte 0
 expected_recall_lv:
     .text "LV 1" ; .byte 0
 expected_home_line:

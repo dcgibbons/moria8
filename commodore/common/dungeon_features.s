@@ -82,6 +82,7 @@ place_traps:
 
     // Find a random floor tile
     jsr find_random_floor
+    bcc !pt_finalize+
 
     // Store in trap table
     ldx dg_idx
@@ -99,13 +100,16 @@ place_traps:
     inc dg_idx
     jmp !pt_loop-
 
+!pt_finalize:
+    lda dg_idx
+    sta trap_count
 !pt_done:
     rts
 
 // ============================================================
 // find_random_floor — Find a random walkable floor tile on the map
-// Output: df_target_x, df_target_y = floor tile coordinates
-// Tries up to 200 times, then gives up (returns last attempt).
+// Output: carry set = found (df_target_x/y valid)
+//         carry clear = failed after 200 tries
 // Uses df_found as attempt counter (caller-save).
 // ============================================================
 frf_attempts: .byte 0
@@ -144,13 +148,14 @@ find_random_floor:
     lda zp_temp0
     and #FLAG_OCCUPIED
     bne !frf_next+
-    jmp !frf_found+
+    sec
+    rts
 !frf_next:
 
     dec frf_attempts
     bne !frf_loop-
 
-!frf_found:
+    clc
     rts
 
 // ============================================================

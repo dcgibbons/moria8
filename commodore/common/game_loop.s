@@ -1551,7 +1551,7 @@ tool_ego_prefix_hi:
 // Shared helper to avoid duplicating prefix check logic in $F000.
 // Input: X = inventory slot index
 // For ICAT_DIGGING + ego>0: prints "Gnomish Shovel" (prefix + name)
-// For other + ego>0: prints "Long Sword (Flame)" (name + suffix)
+// For other + ego>0: prints "Long Sword (Flame)" (name + suffix via platform trampoline)
 // For ego=0: prints base name only
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
@@ -1578,7 +1578,7 @@ put_inv_name_with_ego:
     jsr screen_put_string
     ldx pinwe_slot
     lda inv_ego,x
-    jsr banked_ego_put_suffix
+    jsr tramp_ego_put_suffix
     rts
 pinwe_item_id: .byte 0
 pinwe_slot:    .byte 0

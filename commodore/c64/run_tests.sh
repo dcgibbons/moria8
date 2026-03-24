@@ -44,7 +44,8 @@ run_test() {
     fi
 
     # Create monitor script: set breakpoint, continue, dump results, exit.
-    local mon_file="/tmp/test_${name}.mon"
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
     {
         echo "break exec \$${end_addr}"
         echo "g"
@@ -54,7 +55,8 @@ run_test() {
 
     # Run in VICE with an all-in-one monitor script; piping monitor commands
     # can race VICE startup and leave suites hanging.
-    local tty_log="/tmp/test_${name}.ttylog"
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
     script -q "$tty_log" \
         "$VICE" -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
@@ -98,8 +100,10 @@ run_sound_monitor_test() {
     fi
 
     local sym_file="${src%.s}.sym"
-    local mon_file="/tmp/test_${name}.mon"
-    local log_file="/tmp/test_${name}.log"
+    local mon_file
+    local log_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    log_file=$(mktemp -t "test_${name}_log")
 
     lookup_label() {
         local label="$1"
@@ -225,11 +229,11 @@ run_test "turn" "tests/test_turn.s" "0400 0409" 10 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 0409" 10 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0414" 21 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
 run_test "combat" "tests/test_combat.s" "0400 0413" 20 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 0418" 25 1000000000
-run_test "item" "tests/test_item.s" "0400 042a" 43 1000000000
+run_test "effects" "tests/test_effects.s" "0400 0419" 26 1000000000
+run_test "item" "tests/test_item.s" "0400 042b" 44 1000000000
 run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0407" 8 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

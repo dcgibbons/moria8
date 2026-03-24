@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #24
+    ldx #25
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -95,11 +95,12 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
+tlk_expected_n: .text "n"
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -111,6 +112,16 @@ tv_prev_y:  .byte 0
 }
 
 test_input_wait_release:
+    rts
+
+test_get_direction_target_east:
+    lda zp_player_x
+    clc
+    adc #1
+    sta df_target_x
+    lda zp_player_y
+    sta df_target_y
+    sec
     rts
 
 test_start:
@@ -1388,10 +1399,51 @@ test_start:
 
     lda #$01
     sta tc_results + 24
-    jmp !tests_done+
+    jmp !t26+
 !t25_fail:
     lda #$00
     sta tc_results + 24
+
+    // ==========================================
+    // Test 26: look must not reveal monsters on remembered dark tiles
+    // ==========================================
+!t26:
+    jsr tv_setup_dark_room
+    :PatchJump(get_direction_target, test_get_direction_target_east)
+
+    // Mark the second tile east as remembered but still dark.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    :MapRead_ptr0_y()
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+
+    // Spawn a monster on that remembered tile.
+    lda #24
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t26_fail+
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $0408                   // "You see n..." vs "You see a..."
+    cmp tlk_expected_n
+    bne !t26_fail+
+
+    lda #$01
+    sta tc_results + 25
+    jmp !tests_done+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
 
 !tests_done:
     jmp test_finish

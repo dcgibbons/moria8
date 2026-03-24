@@ -121,6 +121,7 @@ eff_light_room:
 // ============================================================
 eff_teleport_self:
     jsr find_random_floor
+    bcc !ets_fail+
 
     // Clear FLAG_OCCUPIED at old position
     ldx zp_player_y
@@ -153,6 +154,7 @@ eff_teleport_self:
     // Trigger full visibility update and redraw
     lda #1
     sta vis_room_revealed
+!ets_fail:
     rts
 
 // ============================================================
@@ -291,6 +293,7 @@ eff_phase_door:
 
 !epd_loop:
     jsr find_random_floor
+    bcc !epd_retry+
 
     // Check Chebyshev distance <= 10
     lda df_target_x
@@ -319,9 +322,11 @@ eff_phase_door:
     cmp #11
     bcc !epd_ok+
 
+!epd_retry:
     dec eff_pd_attempts
     bne !epd_loop-
 
+    rts
 !epd_ok:
     // Move player (df_target_x/y already set by find_random_floor)
     jmp eff_teleport_self

@@ -3,134 +3,89 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Implement `BUG-RECALL` by routing Word of Recall through the shared level-transition helper.
+- [x] Analyze and design `BUG-EGO-NAME`.
 
 ## Plan
-- [x] Inspect the current Word of Recall code path, related state, and existing regression coverage.
-- [x] Compare the recall transition path with the hardened stairs / level-change path.
-- [x] Get parallel second opinions on likely root cause and safest fix shape.
-- [x] Write the recommended `BUG-RECALL` design.
-- [x] Patch recall expiry to invalidate transient tier state and reuse the shared level-change helper.
-- [x] Update regression coverage for the new recall path.
-- [x] Verify with C64/C128 builds and tests.
+- [x] Trace the item-name rendering path for inventory/equipment ego items.
+- [x] Inspect ego suffix storage and platform trampoline paths.
+- [x] Get a consultant second opinion on likely root cause and safest fix shape.
+- [x] Write the recommended implementation/test plan.
 
 ## Review
-`BUG-RECALL` is most likely a transition-path drift bug, not a scroll/timer bug.
+`BUG-EGO-NAME` is most likely a suffix-rendering contract bug, not a base-item-name bug.
 
 Key findings:
-- The scroll-use path in `commodore/common/player_items.s` only arms `zp_eff_word_recall`; nothing looks wrong there.
-- The expiry path in `commodore/common/turn.s` duplicates its own level-change orchestration instead of reusing the hardened shared helper in `commodore/common/game_loop.s`.
-- Recall currently does:
-  - adjust `zp_player_dlvl`
-  - set `level_entry_dir`
-  - maybe restock stores
-  - call `tier_check_transition`
-  - call `level_generate` directly
-  - then run spawn / visibility / redraw directly
-- The stairs path instead uses `level_change_generate_current`, which:
-  - loads `OVL_DUNGEON_GEN`
-  - uses `tramp_level_generate`
-  - restores C128 runtime guards
-  - runs the shared generation / redraw tail in one place
+- Base item names are resolved through `item_get_name_ptr` in [item.s](commodore/common/item.s), and that path already handles identified/unidentified names correctly.
+- Inventory and equipment views call `put_inv_name_with_ego` in [game_loop.s](commodore/common/game_loop.s), which:
+  - prints the base item name with `screen_put_string`
+  - then appends the ego suffix via `banked_ego_put_suffix`
+- `banked_ego_put_suffix` directly reads suffix strings through `ego_get_suffix_ptr`, whose comment in [ego_items.s](commodore/common/ego_items.s) explicitly says the strings live in banked `$F000+` RAM and must be read with KERNAL banked out.
+- On C64 there is already a platform-owned safe helper for exactly this operation: `tramp_ego_put_suffix` in [c64/main.s](commodore/c64/main.s), which:
+  - banks out KERNAL
+  - reads the `$F000` suffix string
+  - writes each character to screen
+  - restores normal banking
 
 Most likely root cause:
-- `level_generate` lives in the dungeon-generation overlay, so the recall path can execute whatever overlay happens to be resident at `$E000` instead of the real generation code.
-- That explains a “does not reliably return to town” report much better than the timer math does, and it also explains why the existing unit tests did not catch it.
+- `put_inv_name_with_ego` is bypassing the platform trampoline and calling `banked_ego_put_suffix` directly.
+- That means UI code is relying on an implicit “KERNAL already banked out” contract that is not safe for inventory/equipment views on C64.
+- Symptom match is strong:
+  - base item name displays fine
+  - appended ego/slay text is garbage
+  - digging tools use a main-RAM prefix path instead of the banked suffix path, so they are much less likely to show the bug
 
-Secondary risk:
-- Recall currently does only `sta current_tier` with `0` before recomputing the transition.
-- The hardened load-resume path already learned that stale tier metadata (`tier_loaded`, name-table pointers, cache-size state) can survive across transitions and produce hybrid runtime state.
-- A safer recall design should use `tier_invalidate_state`, not just clear `current_tier`.
+Secondary possibility:
+- C128 MMU drift could also corrupt suffix reads, but the direct C64 banked-RAM misuse is the cleaner and more probable root cause.
+- The consultant also flagged cursor-state coupling as a lesser risk, but nothing in the current code is as suspicious as the direct `$F000` suffix read.
 
 Test gap:
-- Existing C64 unit tests in `commodore/c64/tests/test_turn.s` and `commodore/c64/tests/test_effects.s` stub out `level_generate` and the rest of the transition tail with counters.
-- That proves timer/orchestration intent, but it cannot catch overlay-residency or stale-tier-state bugs.
-- Current C128 coverage does not appear to exercise a real recall teleport transition end-to-end.
+- `test_ui_views.s` exercises inventory/equipment rendering, but not with a known ego/slay item that forces suffix output.
+- `test_ego.s` covers ego mechanics and persistence of `inv_ego`, not UI rendering of the suffix text.
+- So the current suite can stay green while this visible bug survives.
 
-Consultant / subagent second opinion:
-- Strong agreement that the overlay mismatch is the primary suspect.
-- Recommended design: all level-changing paths should share one transition helper, with recall responsible only for choosing destination and preconditions.
-- Also flagged one design choice to settle explicitly: whether recall destination should be based on live depth when the timer expires, or snapshotted when the scroll is read.
+Consultant second opinion:
+- Agreed that the failure is most likely in the name-composition path rather than `item_get_name_ptr`.
+- Also agreed that the safest fix is to keep base-name resolution alone and harden the suffix-print path plus coverage.
 
-## Recommended `BUG-RECALL` Design
+## Recommended `BUG-EGO-NAME` Design
 
 ### Product Goal
-- Make Word of Recall use the same reliable town/dungeon transition machinery as stairs and Wizard jumps.
-- Eliminate any path-specific generation / overlay / redraw logic from the recall timer expiry branch.
+- Make inventory/equipment item names render ego/slay text correctly and consistently on both C64 and C128.
+- Preserve the existing digging-tool prefix behavior (`Gnomish Shovel`, `Orcish Pick`) while fixing suffix-based ego names (`Long Sword (Slay Evil)`).
 
 ### Core Design
-1. Keep the timer arming logic where it is.
-2. In the expiry path, keep only the recall-specific decision logic:
-   - dungeon -> town
-   - town -> `PL_MAX_DLVL`
-   - fizzle if `PL_MAX_DLVL == 0`
-   - restock stores on town re-entry
-   - set `level_entry_dir`
-3. After that, hand off to the same shared transition helper the stairs path uses:
-   - `level_change_generate_current`
-4. Invalidate transient tier state before recomputing the transition:
-   - use `tier_invalidate_state`
-   - do not rely on only `current_tier = 0`
+1. Keep `item_get_name_ptr` unchanged.
+   - It already owns the base-name contract.
+2. Stop letting `put_inv_name_with_ego` read banked suffix strings directly.
+   - Replace the direct `banked_ego_put_suffix` call with the platform-owned suffix trampoline path.
+   - On C64/C128, that means `tramp_ego_put_suffix` should be the only public path that reads ego suffix text from banked `$F000`.
+3. Narrow `banked_ego_put_suffix` responsibility.
+   - Either remove it entirely if no longer needed, or keep it as an internal helper only where the banking contract is already explicitly owned.
+4. Leave tool-prefix behavior alone.
+   - `put_tool_ego_prefix` lives in main RAM and is not the likely source of the corruption.
 
 ### Why This Is The Right Shape
-- It removes overlay-load drift by making recall load/use `OVL_DUNGEON_GEN` the same way as stairs.
-- It removes duplicated generation/redraw logic.
-- It reuses the path that already carries the C128 runtime-guard and overlay correctness work.
-- It aligns with the earlier `SAV-2` lesson that transient tier metadata must be invalidated on cross-level entry points.
-
-### Open Semantics Decision
-- Current behavior chooses destination from live `zp_player_dlvl` when the timer expires.
-- That may be acceptable if it matches original Moria behavior.
-- If the user wants stronger reliability semantics, a follow-up design could snapshot the intended destination when the scroll is read.
-- Recommendation: keep current live-depth semantics unless original-source review or user expectation says otherwise; fix the transition machinery first.
+- It fixes the actual ownership bug instead of papering over the symptom.
+- It uses the already-existing platform trampolines instead of adding a second suffix-reading contract.
+- It keeps the change small and local:
+  - one shared UI name helper
+  - one focused regression test
 
 ### Test Plan
-1. Strengthen unit tests:
-   - recall dungeon -> town
-   - recall town -> deepest level
-   - recall fizzle in town with `PL_MAX_DLVL = 0`
-   - assert `tier_invalidate_state`-equivalent state reset, not just `current_tier = 0`
-2. Add integration coverage that does **not** stub the generation path:
-   - one real C64 runtime recall transition
-   - one real C128 smoke recall transition
-3. Specifically verify:
-   - town map after recall is actually town
-   - store restock happens on town return
-   - correct arrival message
-   - no stale dungeon-tier creature state/name pointers remain after town return
+1. Extend `commodore/c64/tests/test_ui_views.s` with inventory/equipment cases that use:
+   - a non-tool ego weapon, e.g. `Long Sword` + `EGO_SLAY_EVIL`
+   - optionally a second suffix case like `Defender`
+2. Assert the rendered screen text contains the expected suffix bytes, not just the base item name.
+3. Keep a tool-prefix case if helpful to prove the prefix path still behaves.
+4. Re-run:
+   - `make test`
+   - `make -B -C commodore/c128 build128`
+   - `make test128-fast`
 
 ### Likely Outcome
-- Small code change if implemented elegantly:
-  - mostly deleting duplicated recall-tail code and reusing the shared helper
-- High confidence payoff:
-  - fixes the likely real bug
-  - reduces future drift between stairs, Wizard jumps, and recall
-
-## Implementation Result
-
-### What Changed
-- `commodore/common/turn.s`
-  - recall expiry now keeps only the destination decision logic
-  - actual town/dungeon transition now goes through:
-    - `tier_invalidate_state`
-    - `level_change_generate_current`
-  - the old duplicated generation/redraw tail was deleted
-  - the occupied-bit clear now happens only on real recall teleports, not on town-side recall fizzles
-- `commodore/c64/tests/test_turn.s`
-  - added focused stubs/counters for `tier_invalidate_state` and `level_change_generate_current`
-  - strengthened the dungeon->town and town->deepest assertions to prove the shared helper is used
-  - added a fizzle assertion that the current tile remains occupied when recall does not fire
-
-### Why This Fix
-- It removes recall's private overlay/generation path and reuses the already-hardened stairs transition helper.
-- It fixes the likely real failure mode on C128: direct `level_generate` calls against whichever overlay happened to be resident at `$E000`.
-- It also aligns recall with the learned tier-state invalidation rules from earlier cross-level fixes.
-
-### Verification
-- `make -C commodore/c64 build`
-- `make -B -C commodore/c128 build128`
-- `make test128-fast`
-- Focused C64 runtime `test_turn` verification was attempted separately, but local `x64sc` exited `139` before any monitor dump in this environment, so that result is inconclusive rather than failing.
+- Small implementation.
+- High confidence.
+- Most probable code change is to route inventory/equipment suffix printing through `tramp_ego_put_suffix` and add missing UI regression coverage.
 
 ## Coverage Read
 
@@ -280,3 +235,11 @@ Why low priority:
 - The high-value part is disk swap.
 - The merge-useful part after that is renderer decision logic.
 - Palette work is largely already covered.
+## 2026-03-23 — Invisible blockers / items-in-walls investigation
+
+- Root-cause candidate: `find_random_floor` in `commodore/common/dungeon_features.s` returned the last random tile even after 200 failed attempts, and multiple callers treated that as valid.
+- That contract can place traps, teleports, and spawned floor items onto non-floor or occupied tiles, which matches the “item in wall” reports.
+- Fix shape:
+  - make `find_random_floor` return carry-set on success / carry-clear on failure
+  - update all callers to stop on failure instead of consuming stale coordinates
+  - add a runtime regression proving `item_spawn_level` cannot place floor items when the map has no valid floor tiles

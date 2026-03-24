@@ -563,9 +563,11 @@ do_look:
     :MapRead_ptr0_y()
     sta dl_tile
 
-    // Must be visible (lit or visited)
-    and #(FLAG_LIT | FLAG_VISITED)
-    bne !dl_visible+
+    // Must be currently visible, not just remembered.
+    ldx df_target_x
+    ldy df_target_y
+    jsr los_is_visible
+    bcs !dl_visible+
     jmp !dl_nothing+
 !dl_visible:
 
