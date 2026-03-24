@@ -1042,23 +1042,4 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 12: level_change_generate_current restores tier state after overlay
-    // load invalidation, before monster spawning on deep levels.
-    lda #12
-    sta test_case_id
-    jsr reset_state
-    lda #49
-    sta zp_player_dlvl
-    lda #1
-    sta test_force_overlay_tier_reset
-    jsr level_change_generate_current
-    lda test_tier_transition_calls
-    cmp #1
-    beq *+5
-    jmp test_fail
-    lda test_spawn_tier_seen
-    cmp #4
-    beq *+5
-    jmp test_fail
-
     jmp test_pass

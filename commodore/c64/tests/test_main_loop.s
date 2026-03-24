@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #13
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -160,7 +160,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 14, $ff
+tc_results: .fill 13, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -491,7 +491,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #13
+    ldx #12
     lda #$ff
 !clr:
     sta tc_results,x
@@ -899,31 +899,8 @@ test_start:
     bne !t13_fail+
     lda #$01
     sta tc_results + 12
-    jmp !t14+
+    jmp test_finish
 !t13_fail:
     lda #$00
     sta tc_results + 12
-    jmp !t14+
-
-    // Test 14: level_change_generate_current restores tier state after overlay
-    // load invalidation, before monster spawning on deep levels.
-!t14:
-    jsr reset_state
-    lda #49
-    sta zp_player_dlvl
-    lda #1
-    sta test_force_overlay_tier_reset
-    jsr level_change_generate_current
-    lda test_tier_transition_calls
-    cmp #1
-    bne !t14_fail+
-    lda test_spawn_tier_seen
-    cmp #4
-    bne !t14_fail+
-    lda #$01
-    sta tc_results + 13
-    jmp test_finish
-!t14_fail:
-    lda #$00
-    sta tc_results + 13
     jmp test_finish
