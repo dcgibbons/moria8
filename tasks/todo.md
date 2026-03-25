@@ -3,6 +3,125 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Re-verify the older C128 IRQ/KERNAL-wrapper finding from `commodore/AUDIT.md` against the live tree.
+- [x] Inspect the current wrapper implementation and existing related diagnostics/tests before changing any code.
+- [x] Run a focused verification path for I-flag preservation / runtime IRQ-state restoration across representative wrappers.
+- [x] Record the verified outcome in the audit docs and note whether the old finding remains live, stale, or partially true.
+- [x] Inventory existing audit notes, architecture constraints, and 6502 gotchas relevant to the Commodore tree.
+- [x] Scan `commodore/common/`, `commodore/c64/`, and `commodore/c128/` for repeated helpers, style drift, wasteful instruction patterns, and common 6502 correctness risks.
+- [x] Quantify each actionable audit item with rough code-size and/or cycle savings, scope, risk, and likely shared refactor seam.
+- [x] Write `commodore/CODE_AUDIT.md` as the consolidated audit plan with prioritized findings and suggested verification steps.
+- [x] Review the finished audit against current build/memory/banking constraints and record the review summary here.
+
+## `AUDIT-P1-WRAPPERS` Design
+
+### Goal
+- Execute phase 1 of the revised core audit:
+  - re-verify the older C128 wrapper/IRQ finding from `commodore/AUDIT.md`
+  - determine whether it is still live in the current codebase
+  - update the audit docs based on evidence, not historical memory
+
+### Scope
+- In scope:
+  - `commodore/c128/main.s`
+  - `commodore/c128/memory128.s`
+  - existing C128 tests/diagnostics relevant to wrapper state preservation
+  - targeted verification commands needed to prove the current behavior
+- Out of scope:
+  - broad refactors of the wrappers unless the bug is proven live
+  - unrelated C128 banking changes
+
+### Verification Standard
+1. Confirm the current wrapper code shape in source.
+2. Check whether existing automated tests already cover IRQ-state preservation.
+3. Run a focused verification path for representative wrappers.
+4. Update the audit docs with one of:
+   - still live
+   - stale / already fixed
+   - partially true / needs narrower restatement
+
+### Review
+- Completed.
+- Source review showed the current wrappers no longer match the exact historical phrasing in `commodore/AUDIT.md`, because `php` happens after the KERNAL `jsr`, not immediately after `:EnterKernal()`.
+- A direct monitor jump into the full `moria128.prg` wrapper addresses was too stateful to trust without a fully booted runtime, so the verification path pivoted to an isolated cold-boot test using the current wrapper shape plus `memory128.s`.
+- The focused probe in `commodore/c128/tests/test_wrapper_irq128.s` confirmed the old bug remains live for the common wrapper scaffold:
+  - first failing stage `#$11` = `w_readst` from caller-`CLI`
+  - captured interrupt bit `dbg_ibit = $04`
+  - meaning the wrapper returned with IRQs disabled even though the caller entered with IRQs enabled
+- Result: phase 1 is resolved as `still live`, not stale. `commodore/CODE_AUDIT.md` now promotes this to active item `WRAP-1`.
+
+## `CODE_AUDIT` Review
+
+### Review Pass 1
+- The initial audit missed two live correctness risks that are still present in the tree: melee to-hit overflow handling in `combat.s` and the one-bit-step RNG in `rng.s`.
+- The numeric-format savings were understated because `score.s` has its own 24-bit formatter in addition to the two screen backends and combat formatter.
+- Several smaller refactor items were too optimistic on byte savings; those claims were tightened to realistic ranges.
+
+### Review Pass 2
+- Fixed the placement of the `CA-10` verification notes so the audit reads cleanly end-to-end.
+- Updated the formatter evidence to cite the score formatter as another actual duplicate.
+- Toned down the RNG item so it reads as a quality/design tradeoff rather than a high-priority correctness defect.
+- Final audit state is focused on actionable items with realistic savings or explicit cycle-cost tradeoffs where appropriate.
+
+### Review Pass 3
+- Reframed the audit around perimeter safety and architectural debt rather than cleanup-first prioritization.
+- Added `HEADROOM-1`, `ALIGN-1`, `ZP-1`, `LINT-1`, and `API-1` as governance items ahead of the tactical cleanup backlog.
+- Softened `API-1` to require one caller-visible C128 text contract without prematurely forcing one internal storage choice.
+- Made the immediate execution order explicit: re-verify the old wrapper bug, produce exact memory-margin reporting, then address the arithmetic and contract issues.
+
+## `CODE-AUDIT` Design
+
+### Goal
+- Produce a repo-grounded audit plan for the Commodore codebase focused on:
+  - common 6502 mistakes and fragile idioms
+  - duplicated or near-duplicated code that should be shared
+  - computationally or space-wasteful patterns
+  - structure/style/alignment consistency
+- The expected artifact is `commodore/CODE_AUDIT.md`, not an implementation patch set.
+
+### Scope
+- In scope:
+  - `commodore/common/`
+  - `commodore/c64/`
+  - `commodore/c128/`
+  - current project docs when they constrain or explain the code shape
+- Out of scope:
+  - non-Commodore trees
+  - speculative changes that ignore current segment/banking limits
+  - claiming measured runtime improvements that were not actually benchmarked
+
+### Audit Method
+1. Reuse existing local evidence first:
+   - `commodore/AUDIT.md`
+   - `commodore/DESIGN.md`
+   - `tasks/6502_gotchas.md`
+   - active build-plan backlog items
+2. Inspect representative shared/runtime-heavy files for:
+   - duplicate helpers
+   - branch/flag misuse
+   - repeated save/restore scaffolding
+   - unnecessary loads/stores/compares
+   - inconsistent loop/control-flow shapes
+3. Prefer findings that are concrete enough to estimate:
+   - byte savings
+   - per-call or per-tile cycle savings
+   - maintenance/risk reduction
+4. Present the result as an implementation plan:
+   - item
+   - evidence
+   - proposed cleanup/refactor
+   - expected savings
+   - verification notes / guardrails
+
+### Constraints
+- Do not disturb current memory/banking contracts in the audit recommendations.
+- Any suggested shared helper must respect C64/C128 execution-bank differences.
+- Savings are estimates unless explicitly measured.
+
+### Review
+- Completed. The final audit now leads with governance items for headroom, alignment, zero-page ownership, linting, and the C128 text contract, followed by the tactical cleanup findings and revised execution order.
+
+## Previous Task Notes
 - [x] Audit the shared filtered prompt/display paths in `ui_inventory.s`, `player_items.s`, and related item-selection callers.
 - [x] Review upstream VMS-Moria and Umoria behavior for filtered item prompts and equipment selection.
 - [x] Get consultant input on the safest shared fix shape and regression strategy.
