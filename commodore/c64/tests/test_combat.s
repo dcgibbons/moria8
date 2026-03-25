@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #22
+    ldx #24
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -92,7 +92,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 23, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -880,10 +880,64 @@ test_start:
     bne !t23_fail+
     lda #$01
     sta tc_results + 22
-    jmp !tests_done+
+    jmp !t24+
 !t23_fail:
     lda #$00
     sta tc_results + 22
+    jmp !t24+
+
+    // ==========================================
+    // Test 24: combat_calc_tohit saturates large positive PL_TOHIT
+    // Warrior level 1, TOHIT=100:
+    // 70 + 300 + 4 would exceed 255, so result must cap at 255.
+    // ==========================================
+!t24:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #100
+    sta player_data + PL_TOHIT
+
+    jsr combat_calc_tohit
+
+    lda zp_combat_tohit
+    cmp #255
+    bne !t24_fail+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: combat_calc_tohit floors large negative PL_TOHIT before
+    // the per-level class bonus is added back.
+    // Warrior level 1, TOHIT=-100:
+    // 70 - 300 floors to 0, then +4 level bonus = 4.
+    // ==========================================
+!t25:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #$9c                    // -100 signed
+    sta player_data + PL_TOHIT
+
+    jsr combat_calc_tohit
+
+    lda zp_combat_tohit
+    cmp #4
+    bne !t25_fail+
+    lda #$01
+    sta tc_results + 24
+    jmp !tests_done+
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
 
 !tests_done:
     jmp test_exit_trampoline

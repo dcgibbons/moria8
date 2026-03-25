@@ -63,6 +63,17 @@ Recommended implementation:
 - keep platform-specific assertions where they belong
 - add one shared boundary-spec source and one report/manifest output so both builds speak the same language about remaining margin
 
+Phase 2 result:
+- executed on `2026-03-25`; exact numbers are recorded in `commodore/HEADROOM_REPORT.md`
+- the report was refreshed after phase 3 because the shared combat fix changed the live layout slightly
+- current highest-risk measured margins are:
+  - C128 `RuntimeLowData` to floor items: `0` bytes
+  - C64 runtime banked code to `$FFFA`: `2` bytes
+  - C64 staged banked payload source to `$D000`: `3` bytes
+  - C128 startup overlay to `$F000`: `35` bytes
+  - C64 main image to `MAP_BASE`: `40` bytes
+  - C64 startup overlay to `$F000`: `44` bytes
+
 ### `ALIGN-1` Hot-Path Page Crossing Is Real And Largely Unaudited
 
 Evidence:
@@ -554,6 +565,13 @@ Verification:
 - hit chance tests at low, medium, and extreme positive/negative `PL_TOHIT`
 - confirm the final result still clamps cleanly to `0..255`
 
+Phase 3 result:
+- implemented on `2026-03-25`
+- the shared melee path now saturates `PL_TOHIT * 3` before 8-bit wrap in both sign branches
+- focused verification completed:
+  - `commodore/c64/tests/test_combat.s` passed `25/25`
+  - `commodore/c64/tests/test_throw.s` passed `6/6`
+
 ### `CA-12` RNG Output Is Still A One-Bit Step, Not A Byte-Step
 
 Evidence:
@@ -628,32 +646,30 @@ Expected savings:
 ## Immediate Execution Priority
 
 1. Execute `WRAP-1`; phase 1 re-verification confirmed that the common C128 wrapper shape still returns `I=1` for caller-`CLI`.
-2. Execute `HEADROOM-1` and produce an exact margin report for the constrained C64/C128 regions.
-3. Execute `CA-11` melee to-hit overflow/sign handling.
-4. Scope and draft `API-1` so new C128 UI work stops increasing encoding-contract debt.
-5. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
-6. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
+2. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete.
+3. Scope and draft `API-1` so new C128 UI work stops increasing encoding-contract debt.
+4. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
+5. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
+6. Add `LINT-1` once the higher-risk contract and layout items are in motion.
 
 ## Suggested Execution Order
 
 1. `WRAP-1` C128 KERNAL wrapper IRQ-state fix
-2. `HEADROOM-1` central memory governance report
-3. `CA-11` melee to-hit overflow/sign handling
-4. `API-1` canonical C128 text contract
-5. `CA-12` RNG byte-step quality decision/fix
-6. `ZP-1` automated zero-page ownership scan
-7. `ALIGN-1` hot-path alignment audit
-8. `LINT-1` 6502 anti-pattern linter
-9. `CA-01` shared numeric formatting
-10. `CA-02` filtered inventory visible-slot cache
-11. `CA-03` shared hunger-state helper/constants
-12. `CA-04` modal UI return helper cleanup
-13. `CA-06` message-history destination simplification
-14. `CA-05` item-effect dispatch cleanup
-15. `CA-08` item-field init helper
-16. `CA-07` full-screen clear benchmark and safe-callsite split
-17. `CA-09` C128 KERNAL wrapper refactor
-18. `CA-10` shared contract naming/constants cleanup
+2. `API-1` canonical C128 text contract
+3. `CA-12` RNG byte-step quality decision/fix
+4. `ZP-1` automated zero-page ownership scan
+5. `ALIGN-1` hot-path alignment audit
+6. `LINT-1` 6502 anti-pattern linter
+7. `CA-01` shared numeric formatting
+8. `CA-02` filtered inventory visible-slot cache
+9. `CA-03` shared hunger-state helper/constants
+10. `CA-04` modal UI return helper cleanup
+11. `CA-06` message-history destination simplification
+12. `CA-05` item-effect dispatch cleanup
+13. `CA-08` item-field init helper
+14. `CA-07` full-screen clear benchmark and safe-callsite split
+15. `CA-09` C128 KERNAL wrapper refactor
+16. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -671,4 +687,6 @@ For every item above:
   - cross-platform source duplication that mostly saves maintenance/debug time
 - This revision intentionally shifts the plan from tactical cleanup toward perimeter safety, memory governance, and contract hardening.
 - Phase 1 re-verification is complete: the older C128 wrapper/IRQ bug is still live for the common wrapper shape, so the audit now treats it as an active fix item rather than a historical note.
+- Phase 2 headroom measurement is complete: `commodore/HEADROOM_REPORT.md` is now the concrete baseline for memory-sensitive work.
+- Phase 3 `CA-11` is complete: the shared melee to-hit path now saturates the `PL_TOHIT * 3` contribution before 8-bit wrap, and the focused combat regression coverage passes.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

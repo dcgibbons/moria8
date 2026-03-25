@@ -208,7 +208,7 @@ combat_calc_tohit_common:
     adc zp_combat_tohit
     bcc !cct_race_done+
     lda #255
-    jmp !cct_race_done+
+    bne !cct_race_done+
 !cct_race_neg:
     eor #$ff
     clc
@@ -227,25 +227,27 @@ combat_calc_tohit_common:
     // Check sign — PL_TOHIT can be negative (signed)
     bmi !cct_neg_tohit+
 
-    // Positive: multiply by 3
+    // Positive: if PL_TOHIT >= 86, then PL_TOHIT * 3 already exceeds 255.
+    cmp #86
+    bcs !cct_pos_sat+
     sta zp_temp0
-    asl                         // *2
-    clc
+    asl                         // *2; carry stays clear for values < 86
     adc zp_temp0                // *3
-    clc
     adc zp_combat_tohit
     bcc !cct_tohit_ok+
+!cct_pos_sat:
     lda #255                    // Cap at 255
-    jmp !cct_tohit_ok+
+    bne !cct_tohit_ok+
 
 !cct_neg_tohit:
-    // Negative to-hit: negate, *3, then subtract
+    // Negative to-hit: if abs(PL_TOHIT) >= 86, subtracting *3 always floors to 0.
     eor #$ff
     clc
     adc #1                      // abs(PL_TOHIT)
+    cmp #86
+    bcs !cct_neg_floor+
     sta zp_temp0
-    asl                         // *2
-    clc
+    asl                         // *2; carry stays clear for values < 86
     adc zp_temp0                // *3 (positive value)
     sta zp_temp0
     // Subtract from tohit
@@ -253,6 +255,7 @@ combat_calc_tohit_common:
     sec
     sbc zp_temp0
     bcs !cct_tohit_ok+
+!cct_neg_floor:
     lda #0                      // Floor at 0
 
 !cct_tohit_ok:
@@ -356,19 +359,19 @@ combat_calc_blows:
     cmp #3
     bcs !ccb_br1+
     lda #0
-    jmp !ccb_lookup+
+    beq !ccb_lookup+
 !ccb_br1:
     lda #1
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br2:
     lda #2
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br3:
     lda #3
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br4:
     lda #4
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_unarmed:
     lda #4                      // Weight class 4 (lightest)
 !ccb_lookup:

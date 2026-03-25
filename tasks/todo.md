@@ -3,6 +3,15 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `CA-11` melee to-hit overflow/sign handling.
+- [x] Confirm the live overflow/sign bug in `combat_calc_tohit_common`.
+- [x] Add targeted regression coverage for high positive and high negative `PL_TOHIT`.
+- [x] Run focused verification for shared callers after the fix.
+- [x] Execute `HEADROOM-1` and produce an exact margin report for the constrained C64/C128 regions.
+- [x] Rebuild the live C64 and C128 targets before recording headroom numbers.
+- [x] Compute exact byte margins for C64 main, banked, and overlay regions.
+- [x] Compute exact byte margins for C128 staged-source, banked, overlay, low-runtime, and Bank 1 ownership regions.
+- [x] Record the measured headroom report in the Commodore docs.
 - [x] Re-verify the older C128 IRQ/KERNAL-wrapper finding from `commodore/AUDIT.md` against the live tree.
 - [x] Inspect the current wrapper implementation and existing related diagnostics/tests before changing any code.
 - [x] Run a focused verification path for I-flag preservation / runtime IRQ-state restoration across representative wrappers.
@@ -49,6 +58,74 @@ This file is a temporary working scratchpad.
   - captured interrupt bit `dbg_ibit = $04`
   - meaning the wrapper returned with IRQs disabled even though the caller entered with IRQs enabled
 - Result: phase 1 is resolved as `still live`, not stale. `commodore/CODE_AUDIT.md` now promotes this to active item `WRAP-1`.
+
+## `AUDIT-P2-HEADROOM` Design
+
+### Goal
+- Execute `HEADROOM-1` as a concrete measurement pass instead of leaving it as a planning-only item.
+- Produce one exact headroom report covering:
+  - C64 main image
+  - C64 banked payload source/runtime
+  - C64 overlays
+  - C128 staged source / Bank 0 image
+  - C128 runtime banked payload
+  - C128 overlays
+  - C128 `RuntimeLowData`
+  - C128 Bank 1 ownership gaps
+
+### Scope
+- In scope:
+  - `commodore/c64/main.s`
+  - `commodore/c64/out/main.vs`
+  - `commodore/c128/main.s`
+  - `commodore/c128/memory128.s`
+  - `commodore/c128/out/main.vs`
+- Out of scope:
+  - changing any memory layout in this phase
+  - implementing the future build-time generated summary
+
+### Review
+- Completed.
+- Rebuilt the live C64 and C128 targets and used the emitted symbol files as the source of truth for next-free end labels.
+- Added `commodore/HEADROOM_REPORT.md` with exact byte margins and risk ranking.
+- Most important measured outcomes:
+  - C128 `RuntimeLowData` has `0` bytes before floor-item storage at `$1A00`
+  - C64 runtime banked payload has `2` bytes before `$FFFA`
+  - C64 staged banked payload source has `3` bytes before `$D000`
+  - C128 startup overlay has `35` bytes before `$F000`
+  - C64 main image has `40` bytes before `MAP_BASE`
+  - C64 startup overlay has `44` bytes before `$F000`
+- Updated `commodore/CODE_AUDIT.md` so `HEADROOM-1` now references the completed measurement pass instead of only describing the intended deliverable.
+- Refreshed the report after the `CA-11` fix changed shared-code size; the current live numbers are the ones above and in `commodore/HEADROOM_REPORT.md`.
+
+## `AUDIT-P3-CA11` Design
+
+### Goal
+- Execute `CA-11` by fixing the melee to-hit overflow/sign bug in shared combat logic.
+- Preserve the existing contract:
+  - final to-hit stays clamped to `0..255`
+  - negative penalties can still floor the pre-level value to `0`
+  - per-level class adjustment still applies after the `PL_TOHIT` contribution
+
+### Scope
+- In scope:
+  - `commodore/common/combat.s`
+  - `commodore/c64/tests/test_combat.s`
+  - `commodore/c64/run_tests.sh`
+- Out of scope:
+  - broader RNG or combat-balance changes
+  - monster attack math
+
+### Review
+- Completed.
+- Fixed the shared `PL_TOHIT * 3` path by saturating before the intermediate 8-bit multiply wraps, in both the positive and negative branches.
+- Added two regression cases to `test_combat.s`:
+  - `PL_TOHIT = 100` must cap the final result at `255`
+  - `PL_TOHIT = -100` must floor the pre-level total to `0`, then end at `4` after the Warrior level-1 bonus
+- Updated the combat suite expectations in `run_tests.sh` from `20` to `25`.
+- Focused verification:
+  - `tests/test_combat.s` → all `25/25` checkpoints passed
+  - `tests/test_throw.s` → all `6/6` checkpoints passed
 
 ## `CODE_AUDIT` Review
 
