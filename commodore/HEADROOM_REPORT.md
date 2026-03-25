@@ -21,12 +21,12 @@ Measurement notes:
 ## Executive Summary
 
 Highest-risk regions right now:
-- C64 runtime banked code: `2` bytes below `$FFFA`
-- C64 staged banked payload source: `3` bytes below `$D000`
+- C64 runtime banked code: `4` bytes below `$FFFA`
+- C64 staged banked payload source: `5` bytes below `$D000`
 - C64 main image: `40` bytes below `MAP_BASE`
 - C64 startup overlay: `44` bytes below `$F000`
 - C128 `RuntimeLowData`: `0` bytes below floor-item storage at `$1A00`
-- C128 staged source / program image: `54` bytes below `$E000`
+- C128 staged source / program image: `79` bytes below `$E000`
 - C128 startup overlay: `35` bytes below `$F000`
 
 Interpretation:
@@ -39,17 +39,17 @@ Interpretation:
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
 | Main program image | `$BFD8` | `$C000` | `40` | Critical |
-| Staged banked payload source | `$CFFD` | `$D000` | `3` | Critical |
-| Runtime banked payload | `$FFF8` | `$FFFA` | `2` | Critical |
+| Staged banked payload source | `$CFFB` | `$D000` | `5` | Critical |
+| Runtime banked payload | `$FFF6` | `$FFFA` | `4` | Critical |
 | Startup overlay | `$EFD4` | `$F000` | `44` | High |
-| DungeonGen overlay | `$EBFA` | `$F000` | `1030` | Moderate |
+| DungeonGen overlay | `$EBF6` | `$F000` | `1034` | Moderate |
 | Town overlay | `$EBC8` | `$F000` | `1080` | Moderate |
 | Death overlay | `$E5B5` | `$F000` | `2635` | Low |
 
 Notes:
 - `program_end = $BFD8` means the current build leaves only `40` bytes before the live map at `$C000`
-- the banked payload source region is effectively full; three more bytes reach the I/O hole boundary
-- the runtime banked payload still fits, but only `2` bytes remain before the CPU vectors
+- the banked payload source region is effectively full; five more bytes reach the I/O hole boundary
+- the runtime banked payload still fits, but only `4` bytes remain before the CPU vectors
 
 ## C128 Exact Margins
 
@@ -57,24 +57,24 @@ Notes:
 
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
-| Program image / staged source span | `$DFCA` | `$E000` | `54` | High |
-| Staged banked payload source | `$DFCA` | `$E000` | `54` | High |
+| Program image / staged source span | `$DFB1` | `$E000` | `79` | High |
+| Staged banked payload source | `$DFB1` | `$E000` | `79` | High |
 | Runtime banked payload | `$FB94` | `$FFFA` | `1126` | Low |
 | `RuntimeLowData` below floor items | `$1A00` | `$1A00` | `0` | Critical |
 | Startup overlay | `$EFDD` | `$F000` | `35` | High |
-| UI overlay | `$EEFA` | `$F000` | `262` | Moderate |
-| DungeonGen overlay | `$EE67` | `$F000` | `409` | Moderate |
+| UI overlay | `$EEF8` | `$F000` | `264` | Moderate |
+| DungeonGen overlay | `$EE63` | `$F000` | `413` | Moderate |
 | Town overlay | `$EBE9` | `$F000` | `1047` | Moderate |
 | Death overlay | `$E5B5` | `$F000` | `2635` | Low |
-| Cache state block | `$32FB` | `$E000` | `44293` | Low |
-| Overlay state block inside cache state block | `$32F3` | `$32FB` | `8` | Low |
+| Cache state block | `$32F5` | `$E000` | `44299` | Low |
+| Overlay state block inside cache state block | `$32ED` | `$32F5` | `8` | Low |
 
 Notes:
 - `RuntimeLowData` is exactly flush with `FLOOR_ITEM_BASE = $1A00`; any growth there must move the floor-item table or shrink the low-runtime payload
-- the staged source / program image margin to `$E000` is now down to `54` bytes after phase 6 `CA-12`
+- the staged source / program image margin to `$E000` is now `79` bytes after phase 9 `LINT-1`
 - the startup overlay is the tightest C128 overlay at `35` bytes of remaining space
 - the staged source / program image margin to `$E000` is still finite and should be tracked because it gates boot-time copy safety
-- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, phase 5 `API-1` reduced it again to `73`, and phase 6 `CA-12` reduced it further to `54`
+- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, phase 5 `API-1` reduced it again to `73`, phase 6 `CA-12` reduced it further to `54`, and phase 9 `LINT-1` recovered it to `79`
 
 ### Bank 1 Ownership Manifest
 
@@ -102,15 +102,15 @@ Notes:
 ## Ranking
 
 1. C128 `RuntimeLowData` at `0` bytes slack
-2. C64 runtime banked payload at `2` bytes slack
-3. C64 staged banked payload source at `3` bytes slack
+2. C64 runtime banked payload at `4` bytes slack
+3. C64 staged banked payload source at `5` bytes slack
 4. C128 startup overlay at `35` bytes slack
 5. C64 main program image at `40` bytes slack
 6. C64 startup overlay at `44` bytes slack
-7. C128 staged source / program image at `54` bytes slack
+7. C128 staged source / program image at `79` bytes slack
 8. C128 Bank 1 future-map to DB hole at `244` bytes of unassigned room
-9. C128 UI overlay at `262` bytes slack
-10. C128 DungeonGen overlay at `409` bytes slack
+9. C128 UI overlay at `264` bytes slack
+10. C128 DungeonGen overlay at `413` bytes slack
 
 ## Recommendation
 

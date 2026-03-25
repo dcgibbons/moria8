@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `LINT-1` by adding a reproducible 6502 anti-pattern linter to the repo.
+- [x] Fail on provably redundant zero-compares, but keep branch-then-jump ladders advisory until they are triaged.
+- [x] Clean up the first live redundant-compare hits so the new linter lands green on the current tree.
+- [x] Rebuild and rerun the standard C64/C128 verification after the lint-driven source cleanup.
 - [x] Execute `ALIGN-1` by auditing hot render/combat/input indexed accesses against the live symbol layout.
 - [x] Distinguish page-safe tables from real page-cross candidates in the current C64 and C128 builds.
 - [x] Quantify likely cycle impact only where the current hot-path access pattern justifies it.
@@ -369,6 +373,61 @@ This file is a temporary working scratchpad.
   - `make -C commodore/c64 build` → `PASS`
   - `make -B -C commodore/c128 build128` → `PASS`
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed` on rerun after the known flaky `render` suite
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+
+## `AUDIT-P9-LINT1` Design
+
+### Goal
+- Execute `LINT-1` by moving recurring 6502 instruction-shape nits into a reproducible static check.
+- Start narrow and high-confidence:
+  - fail on provably redundant zero-compares
+  - surface branch-then-immediate-jump ladders as advisory warnings, not hard failures
+
+### Scope
+- In scope:
+  - assembly sources under `commodore/common/`, `commodore/c64/`, and `commodore/c128/`
+  - build plumbing needed to run the new linter consistently
+  - the first small wave of source cleanup required to land the linter green
+  - audit/headroom/task docs affected by the resulting code-size changes
+- Out of scope:
+  - broad ladder rewrites for every branch-range workaround
+  - duplicate-constant linting in this phase
+  - test-tree style assertions that intentionally compare against zero
+
+### Verification Standard
+1. Implement a source-tree linter with internal self-tests.
+2. Restrict the hard-fail rule to cases where:
+   - the compare is `cmp/cpx/cpy #0`
+   - the previous real instruction already set the relevant N/Z flags
+   - the next real instruction branches only on N/Z (`beq/bne/bmi/bpl`)
+3. Run the linter on the live tree and fix the first real hits.
+4. Keep branch-then-jump shapes as warnings only and record the backlog size.
+5. Rebuild C64/C128 and rerun the normal runtime verification before closing the phase.
+
+### Review
+- Completed.
+- Added `tools/check_6502_lint.py` and root `make check-6502-lint`.
+- The initial linter rules are intentionally conservative:
+  - hard-fail on redundant `cmp/cpx/cpy #0` only when the surrounding instructions prove the compare is unnecessary
+  - warn on branch-then-immediate-jump ladders so the repo can track them without forcing a risky mass rewrite
+- Cleaned the first six live redundant-compare hits in shipping source:
+  - `commodore/c128/input128.s`
+  - `commodore/common/dungeon_gen.s`
+  - `commodore/common/ui_character.s`
+- First live lint result after cleanup:
+  - `make check-6502-lint` → `0 error(s), 320 warning(s)`
+  - all warnings are advisory branch-jump ladders; the tool prints only the first batch and suppresses the remainder
+- Refreshed the live layout after the cleanup:
+  - C64 staged banked payload source now ends at `$CFFB`, leaving `5` bytes below `$D000`
+  - C64 runtime banked payload now ends at `$FFF6`, leaving `4` bytes below `$FFFA`
+  - C128 staged source / program image now ends at `$DFB1`, leaving `79` bytes below `$E000`
+- Verification completed:
+  - `python3 tools/check_6502_lint.py --self-test` → `PASS`
+  - `make check-6502-lint` → `PASS`
+  - `make check-zp` → `PASS`
+  - `make -C commodore/c64 build` → `PASS`
+  - `make -B -C commodore/c128 build128` → `PASS`
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
   - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
 
 ## `CODE_AUDIT` Review

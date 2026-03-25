@@ -220,6 +220,26 @@ Required deliverable:
   - raw zero-page literals outside approved files/ranges
   - possibly duplicate local constants already declared in shared headers
 
+Phase 9 result:
+- implemented on `2026-03-25`
+- added `tools/check_6502_lint.py` and root `make check-6502-lint`
+- the first hard-fail rule is intentionally narrow:
+  - only `cmp/cpx/cpy #0`
+  - only when the previous real instruction already set the relevant N/Z flags
+  - only when the next real instruction branches on those same flags (`beq/bne/bmi/bpl`)
+- cleaned the first six live hits in shipping code:
+  - three in `commodore/c128/input128.s`
+  - two in `commodore/common/dungeon_gen.s`
+  - one in `commodore/common/ui_character.s`
+- the branch-then-jump ladder rule currently remains advisory:
+  - live first-pass result is `320` warnings
+  - these are reported as warnings only because many are deliberate branch-range workarounds
+- focused verification completed:
+  - `make check-6502-lint` → `0 error(s), 320 warning(s)`
+  - `make check-zp` → `0 error(s), 0 warning(s)`
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+
 ### `WRAP-1` C128 KERNAL Wrapper IRQ-State Contract Was Live And Is Now Fixed
 
 Evidence:
@@ -727,25 +747,24 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `54` bytes.
-2. Add `LINT-1` now that `ZP-1` has established the pattern for automated contract enforcement and `ALIGN-1` has ruled out most speculative page-cross churn.
-3. Keep any future alignment work tightly targeted to the specific live crossings above; do not spend bytes on blanket padding.
-4. Start tactical deduplication with `CA-01` only after the perimeter items above are underway.
-5. Treat C64 banked payload growth as explicit change-control: `3` bytes remain below `$D000`.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `79` bytes.
+2. Keep any future alignment work tightly targeted to the specific live crossings already identified; do not spend bytes on blanket padding.
+3. Start tactical deduplication with `CA-01` now that `ZP-1`, `ALIGN-1`, and `LINT-1` have established the perimeter/tooling baseline.
+4. Treat C64 banked payload growth as explicit change-control: `5` bytes remain below `$D000`.
+5. Treat the `320` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
 
 ## Suggested Execution Order
 
-1. `LINT-1` 6502 anti-pattern linter
-2. `CA-01` shared numeric formatting
-3. `CA-02` filtered inventory visible-slot cache
-4. `CA-03` shared hunger-state helper/constants
-5. `CA-04` modal UI return helper cleanup
-6. `CA-06` message-history destination simplification
-7. `CA-05` item-effect dispatch cleanup
-8. `CA-08` item-field init helper
-9. `CA-07` full-screen clear benchmark and safe-callsite split
-10. `CA-09` C128 KERNAL wrapper refactor
-11. `CA-10` shared contract naming/constants cleanup
+1. `CA-01` shared numeric formatting
+2. `CA-02` filtered inventory visible-slot cache
+3. `CA-03` shared hunger-state helper/constants
+4. `CA-04` modal UI return helper cleanup
+5. `CA-06` message-history destination simplification
+6. `CA-05` item-effect dispatch cleanup
+7. `CA-08` item-field init helper
+8. `CA-07` full-screen clear benchmark and safe-callsite split
+9. `CA-09` C128 KERNAL wrapper refactor
+10. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -770,4 +789,5 @@ For every item above:
 - Phase 6 `CA-12` is complete: the shared RNG byte path now advances eight LFSR steps per returned byte, the full C64 suite passes, and the explicit-`x128` fast C128 batch still passes.
 - Phase 7 `ZP-1` is complete: raw volatile zero-page accesses are now enforced by `make check-zp`, the shared KERNAL / Screen Editor bytes have names instead of magic literals, and both the full C64 suite and fast C128 batch pass on the updated tree.
 - Phase 8 `ALIGN-1` is complete: the live symbol audit showed that most hot row/tile tables are already page-safe, and the remaining real crossings are narrow enough that the next queue item should be `LINT-1`, not blanket alignment churn.
+- Phase 9 `LINT-1` is complete: the repo now has an automated 6502 anti-pattern check for provably redundant zero-compares, the first six live hits are fixed, and the remaining branch-jump ladders are tracked as advisory warnings instead of blocking the build.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

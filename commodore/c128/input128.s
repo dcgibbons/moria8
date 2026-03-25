@@ -509,8 +509,7 @@ cia_scan_petscii:
 !csp_mask6_done:
     lda csp_row_raw
     eor #$FF            // Active low -> 1=pressed
-    // CPX #6 above corrupted Z; re-test A to get actual key state.
-    cmp #0
+    // EOR refreshed the row state in A after CPX clobbered Z.
     bne !csp_key_found+ // Nonzero: at least one non-shift key in this row
     pla                 // No key: restore drive mask
     sec
@@ -530,7 +529,6 @@ cia_scan_petscii:
     nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
-    cmp #0
     bne !csp_key_row8+
 
     // No key in row 8; scan extended row 9 (line 9).
@@ -542,7 +540,6 @@ cia_scan_petscii:
     nop
     lda CIA1_PORTB
     eor #$FF            // Active low -> 1=pressed
-    cmp #0
     bne !csp_key_row9+
 
     // No key found in any row — restore state and return 0.
