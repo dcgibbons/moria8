@@ -86,6 +86,17 @@ player_tunnel:
     adc dir_dy,x
     sta df_target_y
 !tun_not_confused:
+    jmp player_tunnel_resolved_target
+
+// ============================================================
+// player_tunnel_resolved_target — Execute tunneling against an
+// already-chosen adjacent target in df_target_x/df_target_y.
+// Used by player_tunnel after direction/confusion handling and by
+// bash_command when Shift+D hits tunnelable terrain.
+// Output: carry set = turn consumed, carry clear = cancelled/no turn
+// Clobbers: everything
+// ============================================================
+player_tunnel_resolved_target:
 
     // Read map tile at target
     ldx df_target_y

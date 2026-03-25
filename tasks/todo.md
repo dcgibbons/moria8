@@ -2,6 +2,51 @@
 
 This file is a temporary working scratchpad.
 
+## Current Task
+- [x] Confirm the live `BUG-DIG-SHIFT-D` command path and distinguish command-mapping failure from digging-tool / vein-resolution failure.
+- [x] Decide the smallest safe fix shape for `Shift+D`, `+`, and bash/tunnel discoverability based on active runtime behavior and project docs.
+- [x] Implement the chosen digging-command fix in shared input/help/runtime code with minimal behavior drift.
+- [x] Add focused regression coverage for the reported dig path, including the wrong-command symptom and the corrected path.
+- [x] Run the relevant C64/C128 regression gates and record the review outcome.
+
+## `BUG-DIG-SHIFT-D` Design
+
+### Problem Statement
+- Active backlog entry: `BUG-DIG-SHIFT-D` in `commodore/BUILDPLAN.md`.
+- User report says digging into a vein via `Shift+D` can yield `Nothing interesting happens.` even while carrying or wielding a shovel.
+- The likely failure classes are:
+  - command mapping sends `Shift+D` to the wrong command
+  - help/UI advertises one binding while runtime uses another
+  - digging-tool recognition or vein-resolution is broken after the command reaches `player_tunnel`
+
+### Current Code Facts
+- Live input mapping on both C64 and C128 currently binds:
+  - `Shift+D` -> `CMD_BASH`
+  - `+` -> `CMD_TUNNEL`
+- `bash_command` reports wall/vein targets with the bash-side “nothing happens” path, which matches the reported symptom class.
+- `player_tunnel` is the only runtime path that checks digging ability, digging tools, and vein treasure resolution.
+- Historical docs for R2.5 explicitly describe tunneling as the `+` command, while the active backlog item is framed around `Shift+D`; this needs an explicit project-local decision, not guesswork.
+
+### Fix Constraints
+- Prefer the smallest user-correct fix.
+- Do not silently break the existing bash feature.
+- Keep the actual digging-tool and vein-resolution runtime intact unless the audit proves it is also broken.
+- Add regression coverage before closing the bug.
+
+### Review
+- Chosen fix shape: keep the published bindings intact, but make the `Shift+D` bash path hand off to the tunneling runtime when the chosen target is tunnelable terrain.
+- This preserves:
+  - door bash
+  - monster bash
+  - explicit `+` tunnel
+- It fixes the reported symptom because quartz/magma/wall/rubble targets now reach `player_tunnel` instead of stopping at bash's wall-side "nothing happens" response.
+- User-visible follow-up:
+  - help row updated to `SHIFT+D Bash/Dig`
+- Verification completed:
+  - `./commodore/c64/run_tests.sh bash` — PASS (`33` suites passed, `0` failed)
+  - `make test128-fast` — PASS
+  - `make test128-fast-smoke` — PASS
+
 ## Status Update
 - The oversized Umoria-style interactive `look` rewrite has been backed out from gameplay code.
 - The C64 main program fits again at `$080E-$CFE5`, and `commodore/c64/tests/test_effects.s` fits again at `$0825-$BF1C`.

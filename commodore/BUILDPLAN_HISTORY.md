@@ -6,6 +6,42 @@
 
 ---
 
+## 2026-03-24 — `BUG-DIG-SHIFT-D` Shift+D dig path reaches tunneling again ✅ FIXED
+
+### Scope Closed
+- Fixed the user-reported case where trying to dig into veins/walls via `Shift+D` could stop at bash's wall-side `Nothing interesting happens.` response instead of reaching the digging runtime.
+
+### Root Cause
+- The live command layout intentionally kept `+` as the explicit tunnel key and `Shift+D` as bash.
+- `bash_command` treated tunnelable terrain as a pure bash miss path, so a dig-intent `Shift+D` on quartz/magma/rubble/walls never reached `player_tunnel`, even when the equipped tool and tunnel logic were otherwise correct.
+
+### What Changed
+1. **Bash now hands tunnelable terrain to the digging runtime**
+   - `commodore/common/bash.s`
+   - `bash_command` still handles door bashes and monster bashes directly.
+   - When the selected target is tunnelable terrain, it now jumps into a shared tunnel helper instead of printing the bash wall-side no-op message.
+2. **Tunnel exposes a reusable resolved-target entry point**
+   - `commodore/common/tunnel.s`
+   - Added `player_tunnel_resolved_target` so the bash path can reuse the actual digging/tool/vein logic after direction selection has already happened.
+3. **Help and regression coverage were updated**
+   - `commodore/common/ui_help_data.s`
+   - `commodore/c64/tests/test_bash.s`
+   - `commodore/c64/run_tests.sh`
+   - Help row now advertises `SHIFT+D` as `Bash/Dig`.
+   - The bash suite now verifies:
+     - tunnelable terrain hands off to digging
+     - closed-door bash does not regress
+
+### Validation
+- `./commodore/c64/run_tests.sh bash` (`33` suites passed, `0` failed)
+- `make test128-fast` (passed)
+- `make test128-fast-smoke` (`3` passed, `0` failed)
+
+### Outcome
+- `BUG-DIG-SHIFT-D` is closed.
+- `Shift+D` keeps bash behavior where it matters, but no longer dead-ends on diggable terrain.
+- The explicit `+` tunnel command remains intact.
+
 ## 2026-03-24 — `BUG-GAMEOVER-CLEAR-C64` C64 game-over menu clear ✅ FIXED
 
 ### Scope Closed

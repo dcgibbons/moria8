@@ -3,7 +3,8 @@
 //
 // Bash doors open, stun monsters with shield attacks. Core umoria command.
 // SHIFT+D + direction: bash doors (break open stuck/closed doors),
-// monsters (shield bash + stun check), walls/empty (no effect).
+// monsters (shield bash + stun check). Tunnelable terrain hands off to
+// the digging path so the dig intent reaches player_tunnel.
 // Reference: umoria playerBash() in player.cpp
 
 
@@ -111,27 +112,28 @@ bash_command:
     cmp #TILE_DOOR_CLOSED
     beq bash_door
 
-    // Wall types or secret door? "nothing happens"
+    // Tunnelable terrain? Hand off to the digging path so Shift+D on a
+    // vein/wall/rubble reaches the tunnel logic instead of bash's wall miss.
     cmp #TILE_WALL_H
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_WALL_V
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_SECRET
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_CORNER_TL
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_CORNER_TR
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_CORNER_BL
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_CORNER_BR
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_RUBBLE
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_MAGMA
-    beq !bash_wall+
+    beq !bash_tunnel+
     cmp #TILE_QUARTZ
-    beq !bash_wall+
+    beq !bash_tunnel+
 
     // Empty space (floor, open door, stairs, etc.)
     ldx #HSTR_BASH_EMPTY
@@ -139,11 +141,8 @@ bash_command:
     sec                         // Turn consumed
     rts
 
-!bash_wall:
-    ldx #HSTR_BASH_NOTHING
-    jsr huff_print_msg
-    sec                         // Turn consumed
-    rts
+!bash_tunnel:
+    jmp player_tunnel_resolved_target
 
 // ============================================================
 // bash_door — Bash a closed door

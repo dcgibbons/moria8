@@ -290,7 +290,7 @@ help_lines:
     .byte $fe
     .text "SHIFT+D"
     .byte $ff
-    .text " Bash "
+    .text " Bash/Dig "
     .byte $fe
     .text "+"
     .byte $ff
