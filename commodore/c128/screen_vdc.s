@@ -1,10 +1,10 @@
 #importonce
 // screen_vdc.s — Screen output routines (80-column VDC)
 //
-// All output uses VDC register-indirect writes. Screen codes are written
-// directly (no translation needed — C128 KERNAL initializes VDC char RAM
-// with the same ordering as VIC-II). Colors are translated from VIC-II
-// palette to RGBI via vic_to_vdc_color table.
+// All output uses VDC register-indirect writes. Public text entry points take
+// PETSCII and translate to VDC Set 1 screen codes inside this backend so the
+// shared UI layer does not carry a separate VDC-only text contract. Colors are
+// translated from VIC-II palette to RGBI via vic_to_vdc_color table.
 //
 // Screen layout (80-col):
 //   Rows 0–1:    Message area (2 lines)
@@ -335,11 +335,13 @@ screen_put_char:
     rts
 spc_save_x: .byte 0
 
-// screen_put_string — Write a null-terminated string of screen codes via VDC
-// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (screen codes, $00 terminated)
+// screen_put_string — Write a null-terminated string via VDC
+// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (PETSCII, $00 terminated)
 //         zp_cursor_row = row
 //         zp_cursor_col = starting column
 //         zp_text_color = color
+// Notes:  direct VDC/control bytes already used by packed UI data still pass
+//         through unchanged; only PETSCII lowercase is translated.
 // Preserves: nothing
 screen_put_string:
     // Lock IRQs before any cursor/address setup so zp_ptr0 can't be
@@ -368,6 +370,7 @@ screen_put_string:
 !char_loop:
     lda (zp_ptr0),y
     beq !chars_done+
+    jsr screen_translate_petscii
     jsr vdc_wait            // WAIT before every data write
     sta VDC_DATA_REG        // Stream directly to port
     iny
@@ -617,151 +620,9 @@ sfa_save_attr: .byte 0
 sfa_flash_attr: .byte VDC_WHITE
 
 // ============================================================
-// Numeric display functions — call screen_put_char internally
-// (Identical logic to c64/screen.s, just using VDC screen_put_char)
+// Shared numeric display functions — call backend screen_put_char internally
 // ============================================================
-
-// screen_put_hex — Write a byte as 2-digit hex at cursor
-screen_put_hex:
-    pha
-    lsr
-    lsr
-    lsr
-    lsr
-    jsr !hex_digit+
-    jsr screen_put_char
-    pla
-    and #$0f
-    jsr !hex_digit+
-    jmp screen_put_char
-!hex_digit:
-    cmp #$0a
-    bcc !digit+
-    sbc #$09
-    rts
-!digit:
-    ora #$30
-    rts
-
-// screen_put_decimal — Write an 8-bit value as decimal at cursor
-screen_put_decimal:
-    sta zp_temp4
-    lda #0
-    sta zp_temp2            // Leading zero suppression flag
-
-    ldx #0
-    lda zp_temp4
-!hundreds:
-    cmp #100
-    bcc !tens+
-    sbc #100
-    inx
-    bne !hundreds-
-!tens:
-    sta zp_temp4
-    txa
-    beq !skip_h+
-    ora #$30
-    jsr screen_put_char
-    inc zp_temp2
-    jmp !do_tens+
-!skip_h:
-    lda zp_temp2
-    bne !print_zero_h+
-    jmp !do_tens+
-!print_zero_h:
-    lda #$30
-    jsr screen_put_char
-!do_tens:
-    ldx #0
-    lda zp_temp4
-!tens_loop:
-    cmp #10
-    bcc !ones+
-    sbc #10
-    inx
-    bne !tens_loop-
-!ones:
-    sta zp_temp4
-    txa
-    beq !skip_t+
-    ora #$30
-    jsr screen_put_char
-    inc zp_temp2
-    jmp !do_ones+
-!skip_t:
-    lda zp_temp2
-    beq !do_ones+
-    lda #$30
-    jsr screen_put_char
-!do_ones:
-    lda zp_temp4
-    ora #$30
-    jmp screen_put_char
-
-// screen_put_decimal_rj2 — Print 8-bit value right-justified in 2-char field
-screen_put_decimal_rj2:
-    cmp #10
-    bcs screen_put_decimal
-    pha
-    lda #$20
-    jsr screen_put_char
-    pla
-    jmp screen_put_decimal
-
-// screen_put_decimal_lz2 — Print 8-bit value with leading zero in 2-char field
-screen_put_decimal_lz2:
-    cmp #10
-    bcs screen_put_decimal
-    pha
-    lda #$30
-    jsr screen_put_char
-    pla
-    jmp screen_put_decimal
-
-// screen_put_decimal_16 — Write a 16-bit value as decimal at cursor
-screen_put_decimal_16:
-    lda #0
-    sta zp_temp2            // Leading zero flag
-    ldx #4                  // 5 digits (10000s..1s), index 4..0
-!digit_loop:
-    lda #0
-    sta zp_temp3            // Digit counter
-!sub_loop:
-    lda zp_temp0
-    sec
-    sbc decimal_powers_lo,x
-    tay
-    lda zp_temp1
-    sbc decimal_powers_hi,x
-    bcc !digit_done+
-    sta zp_temp1
-    sty zp_temp0
-    inc zp_temp3
-    jmp !sub_loop-
-!digit_done:
-    lda zp_temp3
-    bne !print_digit+
-    lda zp_temp2
-    beq !next_digit+
-!print_digit:
-    lda #1
-    sta zp_temp2
-    lda zp_temp3
-    ora #$30
-    jsr screen_put_char
-!next_digit:
-    dex
-    bne !digit_loop-
-    // Always print ones digit
-    lda zp_temp0
-    ora #$30
-    jmp screen_put_char
-
-decimal_powers_lo:
-    .byte <1, <10, <100, <1000, <10000
-decimal_powers_hi:
-    .byte >1, >10, >100, >1000, >10000
+#import "../common/numeric_format.s"
 
 // ============================================================
 // Compile-time validation

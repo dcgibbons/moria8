@@ -173,9 +173,16 @@ player_recalc_equipment:
     rts
 
 overlay_load:
+    sta current_overlay
+    inc test_overlay_load_calls
     lda test_force_overlay_tier_reset
     beq !done+
+    lda test_overlay_load_calls
+    cmp #1
+    bne !done+
     jsr tier_invalidate_state
+    lda #0
+    sta current_overlay
 !done:
     clc
     rts
@@ -183,6 +190,8 @@ overlay_load:
 monster_spawn_level:
     lda current_tier
     sta test_spawn_tier_seen
+    lda current_overlay
+    sta test_spawn_overlay_seen
     rts
 
 item_spawn_level:
@@ -525,7 +534,9 @@ test_cast_ok: .byte 0
 test_scene_dirty: .byte 0
 test_tier_transition_calls: .byte 0
 test_force_overlay_tier_reset: .byte 0
+test_overlay_load_calls: .byte 0
 test_spawn_tier_seen: .byte 0
+test_spawn_overlay_seen: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -576,7 +587,10 @@ reset_state:
     sta test_scene_dirty
     sta test_tier_transition_calls
     sta test_force_overlay_tier_reset
+    sta test_overlay_load_calls
     sta test_spawn_tier_seen
+    sta test_spawn_overlay_seen
+    sta current_overlay
     sta zp_game_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
@@ -1039,6 +1053,33 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_turn_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 12: level_change_generate_current reloads the dungeon overlay after
+    // tier activation clobbers $E000, before monster spawning on deep levels.
+    lda #12
+    sta test_case_id
+    jsr reset_state
+    lda #49
+    sta zp_player_dlvl
+    lda #1
+    sta test_force_overlay_tier_reset
+    jsr level_change_generate_current
+    lda test_tier_transition_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_overlay_load_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_spawn_tier_seen
+    cmp #4
+    beq *+5
+    jmp test_fail
+    lda test_spawn_overlay_seen
+    cmp #OVL_DUNGEON_GEN
     beq *+5
     jmp test_fail
 

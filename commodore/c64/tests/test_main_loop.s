@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #12
+    ldx #14
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -42,18 +42,6 @@ game_over_prompt:
     rts
 
 tramp_level_generate:
-    rts
-
-generation_busy_begin:
-    inc test_busy_begin_calls
-    rts
-
-generation_busy_tick:
-    inc test_busy_tick_calls
-    rts
-
-generation_busy_end:
-    inc test_busy_end_calls
     rts
 
 tramp_game_over:
@@ -155,12 +143,13 @@ tramp_dig_ability:
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
+#import "../../common/generation_busy.s"
 #import "../../common/game_loop.s"
 
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 13, $ff
+tc_results: .fill 15, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -177,6 +166,9 @@ test_msg_clear_calls: .byte 0
 test_do_look_calls: .byte 0
 test_update_visibility_calls: .byte 0
 test_screen_clear_calls: .byte 0
+test_screen_blank_calls: .byte 0
+test_screen_unblank_calls: .byte 0
+test_screen_put_string_calls: .byte 0
 test_player_try_move_calls: .byte 0
 test_last_move_cmd: .byte 0
 test_get_dir_calls: .byte 0
@@ -191,6 +183,11 @@ test_busy_end_calls: .byte 0
 test_tier_transition_calls: .byte 0
 test_force_overlay_tier_reset: .byte 0
 test_spawn_tier_seen: .byte 0
+test_ui_step_count: .byte 0
+test_ui_step_0: .byte 0
+test_ui_step_1: .byte 0
+test_ui_step_2: .byte 0
+test_ui_step_3: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -211,9 +208,9 @@ test_stairs_tile: .byte 0
 }
 
 install_jump_patch:
-    :PatchJump(generation_busy_begin_api, generation_busy_begin)
-    :PatchJump(generation_busy_tick_api, generation_busy_tick)
-    :PatchJump(generation_busy_end_api, generation_busy_end)
+    :PatchJump(generation_busy_begin_api, test_generation_busy_begin_api)
+    :PatchJump(generation_busy_tick_api, test_generation_busy_tick_api)
+    :PatchJump(generation_busy_end_api, test_generation_busy_end_api)
     :PatchJump(input_get_command, test_input_get_command)
     :PatchJump(msg_clear, test_msg_clear)
     :PatchJump(turn_post_action, test_turn_post_action)
@@ -232,8 +229,11 @@ install_jump_patch:
     :PatchJump(get_direction_target, test_get_direction_target)
     :PatchJump(door_try_open, test_door_try_open)
     :PatchJump(item_pickup, test_item_pickup)
+    :PatchJump(screen_blank, test_screen_blank)
     :PatchJump(screen_clear, test_screen_clear)
     :PatchJump(screen_clear_row, test_screen_clear_row)
+    :PatchJump(screen_unblank, test_screen_unblank)
+    :PatchJump(screen_put_string, test_screen_put_string)
     :PatchJump(overlay_load, test_overlay_load)
     :PatchJump(tier_check_transition, test_tier_check_transition)
     :PatchJump(monster_spawn_level, test_monster_spawn_level)
@@ -254,6 +254,9 @@ reset_state:
     sta test_do_look_calls
     sta test_update_visibility_calls
     sta test_screen_clear_calls
+    sta test_screen_blank_calls
+    sta test_screen_unblank_calls
+    sta test_screen_put_string_calls
     sta test_player_try_move_calls
     sta test_last_move_cmd
     sta test_get_dir_calls
@@ -268,6 +271,11 @@ reset_state:
     sta test_tier_transition_calls
     sta test_force_overlay_tier_reset
     sta test_spawn_tier_seen
+    sta test_ui_step_count
+    sta test_ui_step_0
+    sta test_ui_step_1
+    sta test_ui_step_2
+    sta test_ui_step_3
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -429,11 +437,52 @@ test_player_cast_spell:
     clc
     rts
 
+test_generation_busy_begin_api:
+    inc test_busy_begin_calls
+    jmp generation_busy_begin
+
+test_generation_busy_tick_api:
+    inc test_busy_tick_calls
+    jmp generation_busy_tick
+
+test_generation_busy_end_api:
+    inc test_busy_end_calls
+    jmp generation_busy_end
+
+test_record_ui_step:
+    ldx test_ui_step_count
+    cpx #4
+    bcs !done+
+    sta test_ui_step_0,x
+    inc test_ui_step_count
+!done:
+    rts
+
+test_screen_blank:
+    inc test_screen_blank_calls
+    lda #1
+    jsr test_record_ui_step
+    rts
+
 test_screen_clear:
     inc test_screen_clear_calls
+    lda #2
+    jsr test_record_ui_step
     rts
 
 test_screen_clear_row:
+    rts
+
+test_screen_unblank:
+    inc test_screen_unblank_calls
+    lda #4
+    jsr test_record_ui_step
+    rts
+
+test_screen_put_string:
+    inc test_screen_put_string_calls
+    lda #3
+    jsr test_record_ui_step
     rts
 
 test_overlay_load:
@@ -491,7 +540,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #12
+    ldx #14
     lda #$ff
 !clr:
     sta tc_results,x
@@ -899,8 +948,81 @@ test_start:
     bne !t13_fail+
     lda #$01
     sta tc_results + 12
-    jmp test_finish
+    jmp !t14+
 !t13_fail:
     lda #$00
     sta tc_results + 12
+    jmp !t14+
+
+    // Test 14: level_change_generate_current restores tier state after overlay
+    // load invalidation, before monster spawning on deep levels.
+!t14:
+    jsr reset_state
+    lda #49
+    sta zp_player_dlvl
+    lda #1
+    sta test_force_overlay_tier_reset
+    jsr level_change_generate_current
+    lda test_tier_transition_calls
+    cmp #1
+    bne !t14_fail+
+    lda test_spawn_tier_seen
+    cmp #4
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+    jmp !t15+
+
+    // Test 15: generation busy UI blanks before clear/draw and only
+    // unblanks after the frame is fully prepared.
+!t15:
+    jsr reset_state
+    lda #14
+    sta test_case_idx
+    lda #COL_RED
+    sta zp_text_color
+    jsr generation_busy_begin
+    lda test_screen_blank_calls
+    cmp #1
+    bne !t15_fail+
+    lda test_screen_clear_calls
+    cmp #1
+    bne !t15_fail+
+    lda test_screen_put_string_calls
+    cmp #1
+    bne !t15_fail+
+    lda test_screen_unblank_calls
+    cmp #1
+    bne !t15_fail+
+    lda test_ui_step_0
+    cmp #1
+    bne !t15_fail+
+    lda test_ui_step_1
+    cmp #2
+    bne !t15_fail+
+    lda test_ui_step_2
+    cmp #3
+    bne !t15_fail+
+    lda test_ui_step_3
+    cmp #4
+    bne !t15_fail+
+    lda generation_busy_active_api
+    cmp #1
+    bne !t15_fail+
+    jsr generation_busy_end
+    lda generation_busy_active_api
+    bne !t15_fail+
+    lda zp_text_color
+    cmp #COL_RED
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp test_finish
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
     jmp test_finish

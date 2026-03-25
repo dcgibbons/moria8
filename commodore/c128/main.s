@@ -319,7 +319,7 @@ entry_real:
     lda $dd0d               // Clear CIA2 ICR
 
     lda #$ff
-    sta $d8                 // Screen Editor: 80-col mode
+    sta zp_screen_editor_mode  // Screen Editor: 80-col mode
 
     // Enable 2MHz mode on the C128 (set D030 bit0 while preserving other flags)
     lda $d030
@@ -452,210 +452,75 @@ entry_real:
 // ============================================================
 // KERNAL calls now use the Official Jump Table ($FF81-$FFF5) safely in Bank 15.
 
-// READST
+c128_wrapper_saved_a: .byte 0
+c128_wrapper_saved_p: .byte 0
+
+.macro C128KernalJumpTableWrapper(target) {
+    php
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr target
+    php
+    pha
+    :ExitKernal()
+    jmp c128_wrapper_finish
+}
+
+// c128_wrapper_finish — restore KERNAL result flags while preserving caller I-bit
+// Stack on entry (top-first): result A, KERNAL P, caller P
+c128_wrapper_finish:
+    pla
+    sta c128_wrapper_saved_a
+    pla
+    sta c128_wrapper_saved_p
+    pla
+    and #$04
+    pha
+    lda c128_wrapper_saved_p
+    and #$fb
+    sta c128_wrapper_saved_p
+    pla
+    ora c128_wrapper_saved_p
+    pha
+    lda c128_wrapper_saved_a
+    plp
+    rts
+
+// READST / SETLFS / SETNAM / OPEN / CLOSE / CHKIN / CHKOUT / CLRCHN / CHRIN / CHROUT
 w_readst:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffb7
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// SETLFS
+    :C128KernalJumpTableWrapper($ffb7)
 w_setlfs:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffba
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// SETNAM
+    :C128KernalJumpTableWrapper($ffba)
 w_setnam:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffbd
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// OPEN
+    :C128KernalJumpTableWrapper($ffbd)
 w_open:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc0
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CLOSE
+    :C128KernalJumpTableWrapper($ffc0)
 w_close:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc3
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHKIN
+    :C128KernalJumpTableWrapper($ffc3)
 w_chkin:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc6
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHKOUT
+    :C128KernalJumpTableWrapper($ffc6)
 w_chkout:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc9
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CLRCHN
+    :C128KernalJumpTableWrapper($ffc9)
 w_clrchn:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffcc
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHRIN
+    :C128KernalJumpTableWrapper($ffcc)
 w_chrin:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffcf
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
-// CHROUT
+    :C128KernalJumpTableWrapper($ffcf)
 w_chrout:
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffd2
-    php
-    pha
-    :ExitKernal()
-    pla
-    plp
-    rts
+    :C128KernalJumpTableWrapper($ffd2)
 // LOAD
 w_load:
     stx c128_load_arg_x
     sty c128_load_arg_y
+    php
     pha
 #if C128_REAL_BOOT_DIAG
     ldx #$51
@@ -680,6 +545,19 @@ w_load:
     pha
     :ExitKernal()
     pla
+    sta c128_wrapper_saved_a
+    pla
+    sta c128_wrapper_saved_p
+    pla
+    and #$04
+    pha
+    lda c128_wrapper_saved_p
+    and #$fb
+    sta c128_wrapper_saved_p
+    pla
+    ora c128_wrapper_saved_p
+    pha
+    lda c128_wrapper_saved_a
     plp
 #if C128_REAL_BOOT_DIAG
     ldx #$54
@@ -695,6 +573,7 @@ w_load:
 // kernal_load_safe — KERNAL LOAD wrapper for C128
 // Reinstalls keyboard stub on exit. Callers manage MMU.
 kernal_load_safe:
+    php
     :EnterKernal()
     jsr $ffd5
     php
@@ -704,9 +583,7 @@ kernal_load_safe:
     sta $0302
     lda #>chrin_keyboard_stub
     sta $0303
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 
 chrin_keyboard_stub:
     lda #0
@@ -738,7 +615,7 @@ c128_restore_runtime_state_core:
     lda #>chrin_keyboard_stub
     sta $0303
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     rts
 
 c128_restore_runtime_vectors:
@@ -777,6 +654,7 @@ c128_return_to_runtime_after_kernal:
 // $FF68 is in the banked code range ($F000-$FFB6) so it can't be
 // patched via the JMP table — call this routine directly instead.
 safe_setbnk:
+    php
     pha
     txa
     pha
@@ -792,9 +670,7 @@ safe_setbnk:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 
 // init_copy_banked — Copy banked code payload to $F000
 // Uses $3F (NOIO) instead of $3E because source data crosses the I/O
@@ -952,7 +828,7 @@ tramp_game_over:
     php
     sei
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     lda #$0e                    // MMU_NORMAL
     sta $ff00
     lda #$37                    // BANK_ALL_ROM
@@ -973,7 +849,7 @@ tramp_game_over:
     php
     sei
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     lda #$0e                    // MMU_NORMAL
     sta $ff00
     lda #$37                    // BANK_ALL_ROM
@@ -1892,7 +1768,7 @@ restart_entry:
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero.
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
     lda #<mmu_common_irq
     sta $0314
@@ -1900,7 +1776,7 @@ restart_entry:
     sta $0315
 
     lda #$ff
-    sta $d8                     // Screen Editor: 80-col mode
+    sta zp_screen_editor_mode   // Screen Editor: 80-col mode
 
     cli
 
@@ -2119,7 +1995,7 @@ c128_load_runtime_low_prg:
     ora #%00000011
     sta $dd00
     lda #0
-    sta $90
+    sta zp_kernal_status
 !done:
     rts
 

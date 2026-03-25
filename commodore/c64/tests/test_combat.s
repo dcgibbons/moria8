@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #19
+    ldx #26
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -92,7 +92,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 20, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -372,6 +372,10 @@ test_start:
     bne !t9_fail+
     lda player_data + PL_XP_2
     bne !t9_fail+               // Should be 0
+    lda player_data + PL_XP_FRAC_LO
+    bne !t9_fail+
+    lda player_data + PL_XP_FRAC_HI
+    bne !t9_fail+
     lda #$01
     sta tc_results + 8
     jmp !t10+
@@ -758,10 +762,264 @@ test_start:
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
-    jmp !tests_done+
+    jmp !t21+
 !t20_fail:
     lda #$00
     sta tc_results + 19
+
+    // ==========================================
+    // Test 21: combat_compute_level_threshold uses full 24-bit late table
+    // Level 30 threshold should be 100000 at expfact 100.
+    // ==========================================
+!t21:
+    lda #30
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #100
+    sta player_data + PL_EXPFACT
+
+    jsr combat_compute_level_threshold
+
+    lda ccl_adj_0
+    cmp #$a0
+    bne !t21_fail+
+    lda ccl_adj_1
+    cmp #$86
+    bne !t21_fail+
+    lda ccl_adj_2
+    cmp #$01
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+
+    // ==========================================
+    // Test 22: non-100 expfact scales late threshold correctly
+    // Level 30 threshold 100000 * 150 / 100 = 150000 = $0249F0.
+    // ==========================================
+!t22:
+    lda #30
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #150
+    sta player_data + PL_EXPFACT
+
+    jsr combat_compute_level_threshold
+
+    lda ccl_adj_0
+    cmp #$f0
+    bne !t22_fail+
+    lda ccl_adj_1
+    cmp #$49
+    bne !t22_fail+
+    lda ccl_adj_2
+    cmp #$02
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
+
+    // ==========================================
+    // Test 23: combat_check_levelup applies Umoria's excess-halving loop
+    // across repeated gains.
+    // Level 1, XP=100, expfact=100:
+    //   threshold 10 -> level 2, XP becomes 55
+    //   threshold 25 -> level 3, XP becomes 40
+    //   threshold 45 -> stop
+    // Final: level 3 with XP retained at 40.
+    // ==========================================
+!t23:
+    // Pre-stuff keyboard buffer for repeated levelup messages
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #100
+    sta player_data + PL_EXPFACT
+    lda #12
+    sta player_data + PL_STR_CUR
+    sta player_data + PL_DEX_CUR
+    sta player_data + PL_CON_CUR
+    lda #100
+    sta player_data + PL_XP_0
+    lda #0
+    sta player_data + PL_XP_1
+    sta player_data + PL_XP_2
+    sta player_data + PL_XP_FRAC_LO
+    sta player_data + PL_XP_FRAC_HI
+
+    jsr combat_check_levelup
+
+    lda zp_player_lvl
+    cmp #3
+    bne !t23_fail+
+    lda player_data + PL_XP_0
+    cmp #40
+    bne !t23_fail+
+    lda player_data + PL_XP_1
+    bne !t23_fail+
+    lda player_data + PL_XP_2
+    bne !t23_fail+
+    lda player_data + PL_XP_FRAC_LO
+    bne !t23_fail+
+    lda player_data + PL_XP_FRAC_HI
+    bne !t23_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp !t24+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
+    jmp !t24+
+
+    // ==========================================
+    // Test 24: combat_calc_tohit saturates large positive PL_TOHIT
+    // Warrior level 1, TOHIT=100:
+    // 70 + 300 + 4 would exceed 255, so result must cap at 255.
+    // ==========================================
+!t24:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #100
+    sta player_data + PL_TOHIT
+
+    jsr combat_calc_tohit
+
+    lda zp_combat_tohit
+    cmp #255
+    bne !t24_fail+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: combat_calc_tohit floors large negative PL_TOHIT before
+    // the per-level class bonus is added back.
+    // Warrior level 1, TOHIT=-100:
+    // 70 - 300 floors to 0, then +4 level bonus = 4.
+    // ==========================================
+!t25:
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #$9c                    // -100 signed
+    sta player_data + PL_TOHIT
+
+    jsr combat_calc_tohit
+
+    lda zp_combat_tohit
+    cmp #4
+    bne !t25_fail+
+    lda #$01
+    sta tc_results + 24
+    jmp !t26+
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
+
+    // ==========================================
+    // Test 26: combat_append_decimal preserves embedded zero digits
+    // Value 105 should append "105" and advance the buffer index to 3.
+    // ==========================================
+!t26:
+    lda #0
+    sta cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 0
+    sta combat_msg_buf + 1
+    sta combat_msg_buf + 2
+    lda #105
+    jsr combat_append_decimal
+
+    lda cmb_buf_idx
+    cmp #3
+    bne !t26_fail+
+    lda combat_msg_buf + 0
+    cmp #$31
+    bne !t26_fail+
+    lda combat_msg_buf + 1
+    cmp #$30
+    bne !t26_fail+
+    lda combat_msg_buf + 2
+    cmp #$35
+    bne !t26_fail+
+    lda #$01
+    sta tc_results + 25
+    jmp !t27+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
+
+    // ==========================================
+    // Test 27: combat_append_decimal_16 preserves interior zeros
+    // Value 10005 ($2715) should append "10005" and advance to 5.
+    // ==========================================
+!t27:
+    lda #0
+    sta cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 0
+    sta combat_msg_buf + 1
+    sta combat_msg_buf + 2
+    sta combat_msg_buf + 3
+    sta combat_msg_buf + 4
+    lda #$15
+    sta zp_temp0
+    lda #$27
+    sta zp_temp1
+    jsr combat_append_decimal_16
+
+    lda cmb_buf_idx
+    cmp #5
+    bne !t27_fail+
+    lda combat_msg_buf + 0
+    cmp #$31
+    bne !t27_fail+
+    lda combat_msg_buf + 1
+    cmp #$30
+    bne !t27_fail+
+    lda combat_msg_buf + 2
+    cmp #$30
+    bne !t27_fail+
+    lda combat_msg_buf + 3
+    cmp #$30
+    bne !t27_fail+
+    lda combat_msg_buf + 4
+    cmp #$35
+    bne !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !tests_done+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
 
 !tests_done:
     jmp test_exit_trampoline

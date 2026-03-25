@@ -1,6 +1,8 @@
 #importonce
 // ui_wizard.s — C128 Wizard Mode menu and command handlers
 
+#import "ui_restore.s"
+
 #if C128
 .const UWIZ_TITLE_COL  = (SCREEN_COLS - 6) / 2
 .const UWIZ_MENU_COL   = (SCREEN_COLS - 20) / 2
@@ -261,6 +263,10 @@ ui_wizard_cmd_gain_level:
     jmp ui_wizard_restore_gameplay_with_message
 !wiz_gain_ok:
     jsr combat_compute_level_threshold
+    lda player_data + PL_XP_2
+    cmp ccl_adj_2
+    bcc !wiz_set_xp+
+    bne !wiz_do_level+
     lda player_data + PL_XP_1
     cmp ccl_adj_1
     bcc !wiz_set_xp+
@@ -273,8 +279,9 @@ ui_wizard_cmd_gain_level:
     sta player_data + PL_XP_0
     lda ccl_adj_1
     sta player_data + PL_XP_1
-    lda #0
+    lda ccl_adj_2
     sta player_data + PL_XP_2
+    lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
 !wiz_do_level:
@@ -337,10 +344,7 @@ ui_wizard_cmd_generate_item:
     sta fi_add_y
     lda wizard_prompt_value
     sta fi_add_id
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
     jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp ui_wizard_fail_message
@@ -491,10 +495,7 @@ ui_wizard_restore_gameplay_with_message:
     sta ui_wizard_msg_lo
     lda zp_ptr0_hi
     sta ui_wizard_msg_hi
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     lda ui_wizard_msg_lo
     sta zp_ptr0
     lda ui_wizard_msg_hi
@@ -503,10 +504,7 @@ ui_wizard_restore_gameplay_with_message:
     rts
 
 ui_wizard_restore_gameplay_view:
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     rts
 
 wiz_title_str:

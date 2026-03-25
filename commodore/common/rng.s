@@ -57,12 +57,17 @@ rng_seed:
 !ok:
     rts
 
-// rng_next — Advance LFSR one step, return random byte in A
-// Output: A = pseudo-random byte (zp_rng_0)
-// Preserves: X, Y
-// Cycles: ~35
+// rng_next — Advance LFSR eight steps, return random byte in A
+// Output: A = pseudo-random byte (zp_rng_0 after one full byte step)
+// Preserves: Y
+// Clobbers: X
+// Cycles: ~145
 rng_next:
-    // Galois LFSR shift right, XOR polynomial on carry
+    ldx #8
+    // Galois LFSR shift right, XOR polynomial on carry.
+    // Public byte consumers use eight bit-steps per returned byte to
+    // avoid adjacent-call byte-shift correlation.
+!step_loop:
     lsr zp_rng_3
     ror zp_rng_2
     ror zp_rng_1
@@ -73,6 +78,8 @@ rng_next:
     eor #LFSR_POLY
     sta zp_rng_3
 !no_xor:
+    dex
+    bne !step_loop-
     lda zp_rng_0
     rts
 
@@ -129,10 +136,10 @@ rng_range_word:
     lda zp_temp0
     sec
     sbc #1
-    sta rrw_mask_lo
+    sta zp_temp2
     lda zp_temp1
     sbc #0
-    sta rrw_mask_hi         // mask = N-1
+    sta zp_temp3           // mask = N-1
 
     // Spread bits right: shifts of 1, 2, 4, 8
     ldx #1
@@ -147,43 +154,44 @@ rng_range_word:
 !rrw_retry:
     // Generate 16-bit masked random
     jsr rng_next
-    and rrw_mask_lo
-    sta zp_temp2
+    and zp_temp2
+    sta rrw_tmp
     jsr rng_next
-    and rrw_mask_hi
-    sta zp_temp3
+    and zp_temp3
+    tay
 
     // 16-bit compare: result >= N? If so, reject
-    lda zp_temp3
-    cmp zp_temp1
+    cpy zp_temp1
     bcc !rrw_ok+            // hi < N_hi → accept
     bne !rrw_retry-         // hi > N_hi → reject
-    lda zp_temp2
+    lda rrw_tmp
     cmp zp_temp0            // hi equal, compare lo
     bcs !rrw_retry-         // lo >= N_lo → reject
 !rrw_ok:
+    lda rrw_tmp
+    sta zp_temp2
+    tya
+    sta zp_temp3
     rts
 
 // rrw_spread — OR mask with itself shifted right by X positions
 // Input: X = shift count, rrw_mask_lo/hi
 // Output: rrw_mask_lo/hi updated
 rrw_spread:
-    lda rrw_mask_lo
+    lda zp_temp2
     sta rrw_tmp
-    lda rrw_mask_hi
+    lda zp_temp3
 !rrw_sloop:
     lsr                     // Shift hi
     ror rrw_tmp             // Shift lo (carry from hi)
     dex
     bne !rrw_sloop-
     // OR shifted copy into mask
-    ora rrw_mask_hi
-    sta rrw_mask_hi
+    ora zp_temp3
+    sta zp_temp3
     lda rrw_tmp
-    ora rrw_mask_lo
-    sta rrw_mask_lo
+    ora zp_temp2
+    sta zp_temp2
     rts
 
-rrw_mask_lo: .byte 0
-rrw_mask_hi: .byte 0
 rrw_tmp:     .byte 0

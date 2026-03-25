@@ -6,6 +6,390 @@
 
 ---
 
+## 2026-03-24 — `BUG-PROMPT-FILTER` filtered inventory prompts/selectors now stay in sync ✅ FIXED
+
+### Scope Closed
+- Fixed the prompt/UI/parser mismatch where filtered item commands still advertised full-pack letters, accepted absolute slot letters, and could expose hidden sparse slots that were not valid for the action.
+
+### Root Cause
+- The shared inventory overlay and the prompted item-selection callers were not using the same selection contract.
+- Filtered overlays hid unrelated items but kept absolute sparse-slot letters.
+- Prompted handlers still parsed `A-V` / `A-H` as physical slot letters first and only rejected category mismatches afterward.
+- Local sparse inventory layout made direct upstream range-copying invalid; Moria8 needed ordinal mapping over visible matches, not storage compaction.
+
+### What Changed
+1. **Filtered inventory/equipment selection now uses one shared ordinal-mapping path**
+   - `commodore/common/player_items.s`
+   - Added shared helpers for:
+     - filtered carried-slot matching/counting/picking
+     - contiguous non-empty equipment picking
+     - dynamic prompt range printing
+   - `item_wear`, `item_quaff`, `item_read_scroll`, `item_aim_wand`, `item_use_staff`, `item_gain_spell`, and `item_takeoff` now all use that shared path.
+2. **Filtered overlays now match what the parser accepts**
+   - `commodore/common/ui_inventory.s`
+   - Filtered pack overlays relabel visible sparse matches contiguously from `A`.
+   - Equipment overlays keep slot-label rows but add contiguous letters only for non-empty entries.
+   - Flask of Oil is excluded from the wearable filtered set at the shared-helper layer, so the overlay and parser agree on the real `wear` target set.
+3. **Regression fixtures and resident string assets were updated**
+   - `data/huffman_strings.txt`
+   - `commodore/common/huffman_data.s`
+   - `commodore/c64/tests/test_item.s`
+   - `commodore/c64/tests/test_wands_staves.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - `commodore/c64/tests/test_subsystems.s`
+   - `commodore/c64/run_tests.sh`
+   - Removed dead filtered-selection error strings that were no longer reachable once the selector stopped exposing invalid choices.
+   - Regenerated the resident Huffman table and refreshed the embedded subsystem string-bank fixture against the new tree.
+   - Added coverage for sparse filtered-selection mapping, takeoff reindexing, filtered overlay lettering, and dynamic prompt ranges.
+
+### Validation
+- `java -jar ../../tools/kickass/KickAss.jar main.s -showmem -vicesymbols -o out/moria8.prg` (`72` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33` suites passed, `0` failed)
+
+### Outcome
+- `BUG-PROMPT-FILTER` is closed.
+- Filtered inventory prompts, `?` overlays, and accepted input now describe the same visible choice set.
+- Sparse pack layout stays unchanged; the fix is entirely at the prompt/UI-selection layer.
+
+## 2026-03-24 — `BUG-DIG-SHIFT-D` Shift+D dig path reaches tunneling again ✅ FIXED
+
+### Scope Closed
+- Fixed the user-reported case where trying to dig into veins/walls via `Shift+D` could stop at bash's wall-side `Nothing interesting happens.` response instead of reaching the digging runtime.
+
+### Root Cause
+- The live command layout intentionally kept `+` as the explicit tunnel key and `Shift+D` as bash.
+- `bash_command` treated tunnelable terrain as a pure bash miss path, so a dig-intent `Shift+D` on quartz/magma/rubble/walls never reached `player_tunnel`, even when the equipped tool and tunnel logic were otherwise correct.
+
+### What Changed
+1. **Bash now hands tunnelable terrain to the digging runtime**
+   - `commodore/common/bash.s`
+   - `bash_command` still handles door bashes and monster bashes directly.
+   - When the selected target is tunnelable terrain, it now jumps into a shared tunnel helper instead of printing the bash wall-side no-op message.
+2. **Tunnel exposes a reusable resolved-target entry point**
+   - `commodore/common/tunnel.s`
+   - Added `player_tunnel_resolved_target` so the bash path can reuse the actual digging/tool/vein logic after direction selection has already happened.
+3. **Help and regression coverage were updated**
+   - `commodore/common/ui_help_data.s`
+   - `commodore/c64/tests/test_bash.s`
+   - `commodore/c64/run_tests.sh`
+   - Help row now advertises `SHIFT+D` as `Bash/Dig`.
+   - The bash suite now verifies:
+     - tunnelable terrain hands off to digging
+     - closed-door bash does not regress
+
+### Validation
+- `./commodore/c64/run_tests.sh bash` (`33` suites passed, `0` failed)
+- `make test128-fast` (passed)
+- `make test128-fast-smoke` (`3` passed, `0` failed)
+
+### Outcome
+- `BUG-DIG-SHIFT-D` is closed.
+- `Shift+D` keeps bash behavior where it matters, but no longer dead-ends on diggable terrain.
+- The explicit `+` tunnel command remains intact.
+
+## 2026-03-24 — `BUG-GAMEOVER-CLEAR-C64` C64 game-over menu clear ✅ FIXED
+
+### Scope Closed
+- Fixed the C64 UI bug where the `Reboot / Restart / Quit` menu could still show stale gameplay status rows at the bottom of the screen after save-and-quit or death flow reached the prompt.
+
+### Root Cause
+- `game_over_prompt` in `commodore/c64/main.s` was preparing the full-screen menu with the wrong clear strategy for this path.
+- A simple blank/unblank ordering fix was not sufficient; the final visible frame still retained the bottom status rows.
+- The working fix was to use the safer row-by-row full-screen clear helper already used by other sensitive C64 UI screens.
+
+### What Changed
+1. **Game-over prompt now uses the safer full-screen clear helper**
+   - `commodore/c64/main.s`
+   - `game_over_prompt` now:
+     - `screen_blank`
+     - sets black clear color
+     - `ui_help_clear_all`
+     - restores white text
+     - draws `R)EBOOT  S)TART  Q)UIT`
+     - `screen_unblank`
+   - This ensures the final prompt frame is built on a fully cleared screen rather than relying on the generic bulk clear for this path.
+2. **Task notes and lessons were updated**
+   - `tasks/todo.md`
+   - `tasks/lessons.md`
+   - Recorded that this bug looked similar to the generation-screen issue but required a different local fix: the prompt needed the row-by-row clear helper, not just presentation reordering.
+
+### Validation
+- `make test` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+- Manual C64 confirmation from the user that the game-over / save-and-quit menu now clears correctly
+
+### Outcome
+- `BUG-GAMEOVER-CLEAR-C64` is closed.
+- The C64 game-over menu now renders on a fully cleared screen.
+- The remaining nearby UI issue is separate backlog work:
+  - `BUG-TITLE-DUALDISK-FRAME`
+
+## 2026-03-24 — `BUG-GEN-CLEAR-C64` C64 generation busy-screen clear ✅ FIXED
+
+### Scope Closed
+- Fixed the C64 UI bug where the full-screen `GENERATING...` transition could appear over stale gameplay/title contents instead of a clean cleared screen.
+- Added focused regression coverage for the busy-screen presentation order.
+
+### Root Cause
+- `generation_busy_begin` in `commodore/common/generation_busy.s` made the display visible before the busy UI was fully prepared.
+- The old sequence was:
+  - `screen_unblank`
+  - `screen_clear`
+  - draw `GENERATING...`
+- That let the player briefly see the previous frame while the clear/draw work was still in progress.
+
+### What Changed
+1. **Busy-screen presentation now hides the old frame first**
+   - `commodore/common/generation_busy.s`
+   - `generation_busy_begin` now:
+     - `screen_blank`
+     - `screen_clear`
+     - draw `GENERATING...`
+     - `screen_unblank`
+   - This keeps the stale gameplay/title frame hidden until the busy screen is fully established.
+2. **The C64 host test now exercises the real busy UI path**
+   - `commodore/c64/tests/test_main_loop.s`
+   - Replaced the old no-op busy stubs with wrappers around the real busy UI entry points.
+   - Added a focused regression that records the presentation order and asserts:
+     - blank
+     - clear
+     - draw
+     - unblank
+   - Also verifies that `generation_busy_end` restores the prior text color and clears the active flag.
+3. **The test runner now enforces the new regression**
+   - `commodore/c64/run_tests.sh`
+   - Updated the `main_loop` suite result range/count from `13` to `15`, so the new busy-order checks are part of normal C64 verification.
+
+### Validation
+- `make test` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+- Manual C64 gameplay confirmation from the user that the `GENERATING...` transition now looks correct
+
+### Outcome
+- `BUG-GEN-CLEAR-C64` is closed.
+- The C64 generation busy screen now hides the previous frame until the cleared `GENERATING...` view is ready.
+- The regression is now enforced in the regular C64 host test path rather than relying only on manual repro.
+
+## 2026-03-23 — `BUG-XP-PACE` XP threshold / level-up parity ✅ FIXED
+
+### Scope Closed
+- Fixed the remaining XP pacing drift that made characters level faster than stock Umoria in longer runs.
+- Added focused regression coverage for late thresholds, non-100 experience factors, retained fractional XP, and repeated level gains from one award.
+
+### Root Cause
+1. **Late-game XP thresholds were truncated**
+   - `commodore/common/tables.s` stored only 16-bit threshold values and saturated level `29+` progression at `65535`.
+   - Original Umoria continues the curve through `75000`, `100000`, `150000`, `200000`, `300000`, `400000`, `500000`, `750000`, `1500000`, `2500000`, and `5000000` for current levels `29-39`.
+2. **Level gains were hard-capped to one level per award**
+   - `combat_check_levelup` stopped after a single gain even if retained XP still exceeded the next threshold.
+   - Original Umoria keeps checking until the post-halving retained XP falls below the next threshold.
+
+### What Changed
+1. **Threshold computation now matches the original late-game curve**
+   - `commodore/common/tables.s`
+   - Kept the compact early 16-bit threshold table for levels `1-28`.
+   - Added exact late `threshold / 100` data for levels `29-39`, which is sufficient for the real level-transition path and avoids the old `65535` saturation bug.
+2. **Threshold scaling now produces a real 24-bit gate**
+   - `commodore/common/combat.s`
+   - Reworked `combat_compute_level_threshold` to use `math_mul_16x8` and produce a full 24-bit adjusted threshold.
+   - Early levels still divide by `100` at runtime; late levels use the exact pre-divided values because the original thresholds are clean multiples of `100`.
+3. **Level-up checks now follow Umoria's repeated-gain behavior**
+   - `commodore/common/combat.s`
+   - `combat_check_levelup` now compares full 24-bit whole XP against the full adjusted threshold and loops until the retained post-halving XP no longer qualifies for another gain.
+4. **Wizard gain-level helpers now respect 24-bit thresholds**
+   - `commodore/common/wizard.s`
+   - `commodore/common/ui_wizard.s`
+   - Wizard level promotion now seeds and compares the full 24-bit threshold instead of silently truncating the high byte.
+5. **Added regression coverage for the fixed parity points**
+   - `commodore/c64/tests/test_combat.s`
+   - Added late-threshold checks for level `30` at `100%` and `150%` experience factors.
+   - Added a repeated-gain case proving a single award can advance from level `1` to level `4` with retained XP `52`.
+   - Tightened the existing fractional-XP award case so hidden fractional state must stay zero when the whole award divides cleanly.
+
+### Validation
+- Direct C64 KickAssembler build with local jar override
+- Direct C128 KickAssembler build with local jar override
+- `./commodore/c64/run_tests.sh` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+
+### Outcome
+- `BUG-XP-PACE` is closed.
+- Late-game level thresholds now match the original source curve instead of flattening at `65535`.
+- Excess XP now follows the original repeated level-gain contract after each halving step.
+- Shared C64/C128 combat verification remained green after the change.
+
+## 2026-03-23 — `BUG-DEEP-SPAWN` deep-level monster fallback ✅ FIXED
+
+### Scope Closed
+- Fixed the deep-level spawn bug where dungeon levels around `45-50` could degenerate into implausible repeated fallback monsters.
+- Added focused runtime coverage for the empty-band deep selector case.
+
+### Root Cause
+- `pick_creature_type` in `commodore/common/monster.s` preferred a narrow level band:
+  - `max(1, dlvl - 2)` through `dlvl + 3`
+- If the loaded roster had no creature in that band, the routine fell through to hardcoded creature index `0`.
+- That made deep-level failure collapse to the first loaded creature slot instead of a plausible deep monster.
+
+### What Changed
+1. **Deep fallback no longer collapses to slot 0**
+   - `commodore/common/monster.s`
+   - Kept the existing narrow-band fast path.
+   - Replaced the bad fallback with a scan that chooses the highest loaded creature level `<= current dungeon depth`.
+2. **Added an empty-band regression**
+   - `commodore/c64/tests/test_monster.s`
+   - Added a synthetic deep-roster case proving `dlvl 45` with an empty preferred band resolves to the highest valid loaded creature instead of `0`.
+3. **Recovered C64 layout headroom**
+   - `commodore/common/title_sysinfo_banked.s`
+   - `commodore/common/ui_home.s`
+   - Trimmed a few low-value banked UI bytes so the C64 banked payload remained below `$D000` after the fix.
+
+### Validation
+- `make test`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
+### Outcome
+- `BUG-DEEP-SPAWN` is closed.
+- Deep empty-band selection now resolves to a plausible loaded deep creature instead of collapsing to the first roster slot.
+- C64/C128 authoritative verification remained green after the fix.
+
+## 2026-03-23 — `BUG-EGO-NAME` and dungeon visibility/render follow-ups ✅ FIXED
+
+### Scope Closed
+- Fixed the active UI bug where ego/slay item names rendered corrupted suffix text in inventory/equipment views.
+- Fixed two related live-map visibility/render drift bugs found during manual gameplay:
+  - `look` could identify monsters on remembered dark tiles that were not actually visible
+  - monster spellcasts that summoned visible blockers did not always force a full scene redraw
+- Fixed a floor-search contract bug that could hand non-floor coordinates to item/trap/teleport callers after repeated search failure.
+
+### Root Causes
+1. **Ego suffix rendering bypassed the safe platform contract**
+   - `put_inv_name_with_ego` printed base names in shared code, then called `banked_ego_put_suffix` directly.
+   - Ego suffix strings live in banked `$F000` RAM and must be read through the platform-owned trampoline path.
+2. **`look` used remembered visibility instead of current visibility**
+   - `do_look` treated `FLAG_VISITED` as enough to describe a tile, even when the live renderer correctly hid monsters/items outside the current light bubble.
+3. **Monster spellcasts did not mark the scene dirty**
+   - Summon/help casts could change the visible scene without forcing the shared full-render path, leaving real occupied monsters present in gameplay state but missing from the live map until a later redraw.
+4. **`find_random_floor` had a bad failure contract**
+   - After 200 failed attempts it returned the last random coordinates as if they were valid.
+   - Callers could then place traps, items, or teleports onto non-floor or occupied tiles.
+
+### What Changed
+1. **Ego item rendering now uses the safe platform suffix path**
+   - `commodore/common/game_loop.s` now routes inventory/equipment suffix printing through `tramp_ego_put_suffix`.
+   - Test stubs were updated on C64/C128 to match that shared helper contract.
+2. **`look` now matches live visibility**
+   - `commodore/common/player_move.s` now uses `los_is_visible` instead of `FLAG_VISITED` when deciding whether `look` can describe a tile.
+3. **Monster spellcasts now force a scene redraw**
+   - `commodore/common/monster_ai.s` marks spellcasting turns as `mat_action_dirty`, so summon/help casts take the shared full-render path.
+4. **Random-floor search now reports failure correctly**
+   - `commodore/common/dungeon_features.s` now returns carry-set only on success and carry-clear on failure.
+   - `commodore/common/item.s` and `commodore/common/spell_effects.s` now honor that contract instead of consuming stale coordinates.
+
+### Regression Coverage
+- `commodore/c64/tests/test_ui_views.s`
+  - inventory/equipment now assert a real ego suffix case: `Long Sword (Slay Evil)`
+- `commodore/c64/tests/test_effects.s`
+  - added a remembered-dark-tile `look` regression
+- `commodore/c64/tests/test_monster_ai.s`
+  - added a summon-cast dirty-scene regression
+- `commodore/c64/tests/test_item.s`
+  - added a no-valid-floor regression proving `item_spawn_level` cannot place floor items into a map with no valid floor tiles
+- `commodore/c64/run_tests.sh`
+  - test counts updated for the added coverage
+  - temp file creation hardened for reliable repeated suite runs on macOS
+
+### Validation
+- `make test`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+
+### Outcome
+- `BUG-EGO-NAME` is closed.
+- Inventory/equipment ego/slay suffixes now render correctly.
+- `look` and the live renderer now agree about current monster visibility.
+- Monster summon/help casts correctly dirty the scene for redraw.
+- Floor-search failure no longer leaks wall/occupied coordinates into item/trap/teleport placement.
+
+---
+
+## 2026-03-23 — `BUG-RECALL` Word of Recall transition path ✅ FIXED
+
+### Scope Closed
+- Fixed the active gameplay bug where Word of Recall could fail to complete a reliable town/dungeon transition.
+- Replaced recall's private level-generation tail with the same shared helper already used by stairs and Wizard jumps.
+
+### Root Cause
+- Recall expiry in `commodore/common/turn.s` had drifted into its own custom transition path.
+- That code:
+  - adjusted depth/direction
+  - directly called `tier_check_transition`
+  - directly called `level_generate`
+  - then ran spawn / visibility / redraw steps inline
+- The hardened stairs path already used `level_change_generate_current`, which:
+  - loads the correct generation overlay
+  - runs the shared generation/spawn/redraw tail
+  - carries the C128 overlay/runtime residency fixes
+- So recall could execute generation against whichever overlay happened to be resident at `$E000`, which explains the intermittent “does not reliably return to town” behavior.
+
+### What Changed
+1. **Recall now reuses the shared transition helper**
+   - `commodore/common/turn.s` now keeps only the recall-specific destination logic:
+     - dungeon -> town
+     - town -> `PL_MAX_DLVL`
+     - town-side fizzle if `PL_MAX_DLVL == 0`
+     - store restock on town return
+     - `level_entry_dir` selection
+   - After that it now calls:
+     - `tier_invalidate_state`
+     - `level_change_generate_current`
+2. **Fizzle behavior was hardened**
+   - The old code cleared `FLAG_OCCUPIED` before it even knew whether recall would actually fire.
+   - The fix moves the occupied-bit clear behind the real teleport path, so a town-side recall fizzle leaves the player tile intact.
+3. **Regression coverage was updated**
+   - `commodore/c64/tests/test_turn.s` now asserts:
+     - recall dungeon -> town uses the shared level-change helper
+     - recall town -> deepest level uses the shared level-change helper
+     - recall fizzle does not invoke the helper and does not clear the occupied bit
+
+### Validation
+- `make -C commodore/c64 build`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- Focused C64 runtime `test_turn` verification was attempted separately, but local `x64sc` exited `139` before producing a monitor dump in this environment, so that runtime result remained inconclusive rather than failing.
+
+### Outcome
+- `BUG-RECALL` is closed.
+- Recall now follows the same reliable level-transition machinery as stairs and Wizard jumps.
+- The active backlog keeps only the remaining gameplay bug:
+  - `BUG-EGO-NAME`
+
+---
+
+## 2026-03-23 — `BUG-LIGHT-RANGE` carried-light audit ✅ CONFIRMED NON-BUG
+
+### Scope Closed
+- Audited the carried-light visibility model against original `umoria` and `vms-moria` source trees.
+- Verified that the current Commodore port’s local carried-light radius is already consistent with the original game.
+
+### What Was Verified
+- Original `umoria` uses a boolean carried-light state and lights a 3x3 block around the player:
+  - `src/dungeon.cpp` `sub1MoveLight()`
+  - `src/dungeon.cpp` `dungeonMoveCharacterLight()`
+- Original `vms-moria` shows the same behavior:
+  - `source/include/moria.inc` `sub1_move_light`
+  - `source/include/misc.inc` `test_light`
+- In both original trees, torch and brass lantern differ by fuel capacity/refueling behavior, not by a larger visibility radius.
+
+### Outcome
+- `BUG-LIGHT-RANGE` is closed as a source-confirmed non-bug.
+- The current port’s `zp_light_radius = 1` / local 3x3 carried-light bubble is correct.
+- Any future work here is cleanup only:
+  - centralize the carried-light contract in one helper/table
+  - add focused equip/deplete/visibility tests
+
+---
+
 ## 2026-03-23 — `FEAT-WIZ` Wizard Mode ✅ COMPLETE
 
 ### Scope Closed
@@ -67,8 +451,7 @@
 ### Outcome
 - `FEAT-WIZ` is closed.
 - Wizard Mode now exists as a practical debug/test tool instead of just a backlog design.
-- Three newly discovered gameplay bugs remain tracked separately in the active backlog:
-  - `BUG-LIGHT-RANGE`
+- Two newly discovered gameplay bugs remain tracked separately in the active backlog:
   - `BUG-RECALL`
   - `BUG-EGO-NAME`
 
@@ -6285,3 +6668,29 @@ cancels on keypress.
 - `make -C commodore/c64 build`
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
+
+## C128 Dungeon-Entry Overlay/Tier Ownership Fix ✅ COMPLETE (2026-03-24)
+
+**Problem**
+- Entering dungeon level 1 on C128 could crash with a CPU `JAM` at `$E18C` after a fresh `make clean128; make disk128` build.
+- The monitor bytes at the crash site matched tier payload data, not the built `OVL.GEN` overlay image.
+
+**Root Cause**
+- [level_change_generate_current](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/game_loop.s) loaded `OVL_DUNGEON_GEN` and ran dungeon generation, then called `tier_check_transition`.
+- On C128, [tier_load](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/tier_manager.s) intentionally invalidates the active overlay and reuses `$E000` for tier data.
+- The shared descent path then continued straight into `monster_spawn_level` and `item_spawn_level`, which still call special-room helpers living in the dungeon-generation overlay.
+- That let valid trampolines jump into tier bytes occupying `$E000`, producing the `JAM`.
+
+**Fix**
+- Added a C128-only `c128_restore_generation_overlay` step in [commodore/common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/common/game_loop.s) immediately after `tier_check_transition`.
+- The helper reloads `OVL_DUNGEON_GEN` only when tier activation displaced it, then restores the C128 runtime guards before post-generation spawning continues.
+- Added focused C128 regression coverage in [commodore/c128/tests/test_main_loop128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work2/commodore/c128/tests/test_main_loop128.s) proving the overlay is reloaded before monster spawning sees the post-tier state.
+
+**Architectural note**
+- This is the correct tactical fix for the current ownership model because it restores the explicit runtime contract at the point it was violated.
+- The cleaner future refactor is to stop relying on implicit overlay residency across the tier-load boundary: either move the post-tier special-room helpers out of the overlay, or split dungeon entry into overlay-only and resident post-tier phases.
+
+**Verification**
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `TEST_FILTER='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`

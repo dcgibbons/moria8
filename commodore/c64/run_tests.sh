@@ -75,16 +75,6 @@ run_test() {
     local pass_count
     pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
 
-    # test_render can flake under VICE startup timing even when the isolated
-    # suite passes immediately on rerun. Give it one clean retry before
-    # reporting a failure.
-    if [ "$name" = "render" ] && [ "$pass_count" -lt "$expected_count" ]; then
-        tty_log=$(mktemp -t "test_${name}_ttylog_retry")
-        run_vice_once "$tty_log"
-        result=$(grep "^>C:0" "$tty_log")
-        pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
-    fi
-
     if [ "$pass_count" -ge "$expected_count" ]; then
         echo "PASS ($pass_count/$expected_count tests)"
         PASS=$((PASS + 1))
@@ -235,26 +225,26 @@ TOTAL=$((TOTAL + 1))
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
 run_test "math"   "tests/test_math.s"   "0400 040f" 16
-run_test "rng"    "tests/test_rng.s"    "0400 0408" 9
+run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 0409" 10
-run_test "main_loop" "tests/test_main_loop.s" "0400 040c" 13 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 040e" 15 500000000
 run_test "turn" "tests/test_turn.s" "0400 0409" 10 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 040b" 12 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
-run_test "combat" "tests/test_combat.s" "0400 0413" 20 500000000
+run_test "combat" "tests/test_combat.s" "0400 041a" 27 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
 run_test "effects" "tests/test_effects.s" "0400 0419" 26 1000000000
-run_test "item" "tests/test_item.s" "0400 042b" 44 1000000000
+run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
 run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0407" 8 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 040c" 13 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
-run_test "score" "tests/test_score.s" "0400 0409" 10 500000000
+run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
 run_test "tier" "tests/test_tier.s" "0400 040a" 11 500000000
@@ -263,7 +253,7 @@ run_test "render" "tests/test_render.s" "0400 0403" 4 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
 run_test "throw" "tests/test_throw.s" "0400 0405" 6 500000000
-run_test "bash" "tests/test_bash.s" "0400 0405" 6 500000000
+run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 

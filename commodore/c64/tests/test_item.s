@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #43
+    ldx #46
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -94,14 +94,14 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 44, $ff
+tc_results: .fill 47, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #43
+    ldx #46
     lda #$ff
 !clr:
     sta tc_results,x
@@ -923,6 +923,11 @@ test_start:
     bne !t18_fail+
     lda zp_player_food_hi
     cmp #>1600
+    bne !t18_fail+
+
+    // Shared hunger-state recompute should now classify the player as full.
+    lda zp_hunger_state
+    cmp #HUNGER_FULL
     bne !t18_fail+
 
     // Check slot 0 is empty (food consumed)
@@ -2038,6 +2043,183 @@ test_start:
 !t44_pass:
     lda #$01
     sta tc_results + 43
+    jmp !t45+
+
+    // ==========================================
+    // Test 45: item_quaff maps filtered letters over sparse slots
+    // ==========================================
+!t45:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #50
+    sta zp_player_hp_lo
+    lda #0
+    sta zp_player_hp_hi
+    lda #200
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    // Junk in slot 0 should be hidden by the potion filter.
+    lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    // First visible potion.
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    // Second visible potion.
+    lda #25
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+    lda #0
+    sta inv_p1 + 4
+    sta inv_flags + 4
+
+    lda #1
+    sta $c6
+    lda #$41                    // 'A' => first visible potion (slot 1)
+    sta $0277
+
+    jsr item_quaff
+    bcc !t45_fail+
+
+    lda inv_item_id + 1
+    cmp #FI_EMPTY
+    bne !t45_fail+
+    lda inv_item_id + 4
+    cmp #25
+    bne !t45_fail+
+    lda inv_item_id + 0
+    cmp #4
+    bne !t45_fail+
+
+    lda #$01
+    sta tc_results + 44
+    jmp !t46+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
+
+    // ==========================================
+    // Test 46: item_takeoff maps contiguous letters over equipped items
+    // ==========================================
+!t46:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    sta inv_flags + EQUIP_WEAPON
+
+    lda #14
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+    lda #20
+    sta inv_p1 + EQUIP_LIGHT
+    lda #0
+    sta inv_flags + EQUIP_LIGHT
+
+    lda #2
+    sta $c6
+    lda #$42                    // 'B' => second visible equipped item (light)
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_takeoff
+    bcc !t46_fail+
+
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #4
+    bne !t46_fail+
+    lda inv_item_id + EQUIP_LIGHT
+    cmp #FI_EMPTY
+    bne !t46_fail+
+    lda inv_item_id + 0
+    cmp #14
+    bne !t46_fail+
+
+    lda #$01
+    sta tc_results + 45
+    jmp !t47+
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
+
+    // ==========================================
+    // Test 47: item_wear hides Flask of Oil from wearable selection
+    // ==========================================
+!t47:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #ITEM_FLASK_OIL
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #20
+    sta inv_p1 + 0
+    lda #0
+    sta inv_flags + 0
+
+    lda #2
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+    lda #0
+    sta inv_p1 + 4
+    sta inv_flags + 4
+
+    lda #2
+    sta $c6
+    lda #$41                    // 'A' => first visible wearable item (slot 4 dagger)
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_wear
+    bcc !t47_fail+
+
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #2
+    bne !t47_fail+
+    lda inv_item_id + 4
+    cmp #FI_EMPTY
+    bne !t47_fail+
+    lda inv_item_id + 0
+    cmp #ITEM_FLASK_OIL
+    bne !t47_fail+
+
+    lda #$01
+    sta tc_results + 46
+    jmp !tests_done+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

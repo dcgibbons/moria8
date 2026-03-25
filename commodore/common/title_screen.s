@@ -77,7 +77,7 @@ title_load_and_draw:
     // Clear KERNAL status byte — LOAD leaves EOI (bit 6) set from the last file byte.
     // Without this, READST in any subsequent file read returns stale status → false errors.
     lda #0
-    sta $90
+    sta zp_kernal_status
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
     jsr screen_clear

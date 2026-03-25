@@ -1,6 +1,8 @@
 #importonce
 // wizard.s — Wizard Mode activation, session flags, and C64 implementation
 
+#import "ui_restore.s"
+
 .const WIZARD_MAX_DLVL  = 99
 .const WIZARD_MAX_ITEM  = ITEM_TYPE_COUNT - 1
 
@@ -109,11 +111,7 @@ wizard_generate_item_execute:
     lda #100
 !wiz_gold_qty:
     sta fi_add_qty
-    lda #0
-    sta fi_add_qty_hi
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
 
 !wiz_try_floor:
     jsr floor_item_add
@@ -296,6 +294,10 @@ wizard_cmd_gain_level:
     jmp wizard_restore_gameplay_with_message
 !wiz_gain_ok:
     jsr combat_compute_level_threshold
+    lda player_data + PL_XP_2
+    cmp ccl_adj_2
+    bcc !wiz_set_xp+
+    bne !wiz_do_level+
     lda player_data + PL_XP_1
     cmp ccl_adj_1
     bcc !wiz_set_xp+
@@ -308,8 +310,9 @@ wizard_cmd_gain_level:
     sta player_data + PL_XP_0
     lda ccl_adj_1
     sta player_data + PL_XP_1
-    lda #0
+    lda ccl_adj_2
     sta player_data + PL_XP_2
+    lda #0
     sta player_data + PL_XP_FRAC_LO
     sta player_data + PL_XP_FRAC_HI
 !wiz_do_level:
@@ -348,6 +351,7 @@ wizard_cmd_summon:
     bcs !wiz_adj_ok+
     jmp wizard_fail_message
 !wiz_adj_ok:
+    jsr tier_check_transition
     jsr pick_creature_type
     jsr monster_spawn_one
     bcs !wiz_summon_ok+
@@ -371,10 +375,7 @@ wizard_cmd_generate_item:
     sta fi_add_y
     lda wizard_prompt_value
     sta fi_add_id
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
     jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp wizard_fail_message
@@ -519,10 +520,7 @@ wizard_restore_gameplay_with_message:
     sta wizard_num_buf0
     lda zp_ptr0_hi
     sta wizard_num_buf1
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     lda wizard_num_buf0
     sta zp_ptr0
     lda wizard_num_buf1
@@ -531,10 +529,7 @@ wizard_restore_gameplay_with_message:
     jmp main_loop
 
 wizard_restore_gameplay_view:
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     rts
 
 wizard_c64_menu_display:

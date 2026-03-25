@@ -1552,7 +1552,21 @@ test_start:
     lda (zp_ptr0),y
     bne !t20_fail+
 
+    // Clear occupied flag at the actual first-tick destination before
+    // teleporting the monster back for the deterministic second tick.
+    ldx tai_save_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy tai_save_x
+    lda (zp_ptr0),y
+    and #($ff - FLAG_OCCUPIED)
+    sta (zp_ptr0),y
+
     // Re-place monster at (20,15) for clean second tick
+    ldx #0
+    jsr monster_get_ptr
     ldy #MX_X
     lda #20
     sta (zp_ptr0),y

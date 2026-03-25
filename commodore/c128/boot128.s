@@ -19,6 +19,9 @@
 .const COL_RED    = 2
 .const COL_CYAN   = 3
 .const COL_BLUE   = 6
+.const SCREEN_EDITOR_MODE = $D8
+.const COPY_PTR_LO = $60
+.const COPY_PTR_HI = $61
 
 // ============================================================
 // BASIC stub at $1C01 — SYS 7182 ($1C0E)
@@ -81,7 +84,7 @@ loader_start:
     sta $d020
     
     lda #$ff
-    sta $d8                 // 80-column mode defense
+    sta SCREEN_EDITOR_MODE  // 80-column mode defense
     cli                     // Enable interrupts for Disk Driver
 
     // Blank screen / Clear VDC
@@ -181,16 +184,16 @@ stub_start:
     // Clear Overlay $B000-$BFFF
     lda #0
     ldx #$b0
-    sta $60
-    stx $61
+    sta COPY_PTR_LO
+    stx COPY_PTR_HI
     ldx #$10
 !clr:
     ldy #0
 !pg:
-    sta ($60),y
+    sta (COPY_PTR_LO),y
     iny
     bne !pg-
-    inc $61
+    inc COPY_PTR_HI
     dex
     bne !clr-
 
@@ -200,9 +203,9 @@ stub_start:
     // so the staged program image is reclaimed during boot.
     // MUST use _NOIO variants ($7F/$3F) to hide I/O at $D000-$DFFF.
     lda #$00
-    sta $60
+    sta COPY_PTR_LO
     lda #$1c
-    sta $61
+    sta COPY_PTR_HI
     ldx #$e3                // Copy $E3 pages ($1C00 to $FEFF) -> stops exactly at $FF00
 
 #if BOOT_DIAG
@@ -221,7 +224,7 @@ copy_loop:
     sta $ff00
     ldy #0
 !read_pg:
-    lda ($60),y
+    lda (COPY_PTR_LO),y
     sta $0c00,y
     iny
     bne !read_pg-
@@ -230,7 +233,7 @@ copy_loop:
     lda #0
     ldy #0
 !clear_pg:
-    sta ($60),y
+    sta (COPY_PTR_LO),y
     iny
     bne !clear_pg-
 
@@ -240,11 +243,11 @@ copy_loop:
     ldy #0
 !write_pg:
     lda $0c00,y
-    sta ($60),y
+    sta (COPY_PTR_LO),y
     iny
     bne !write_pg-
 
-    inc $61
+    inc COPY_PTR_HI
     dex
     bne copy_loop
 

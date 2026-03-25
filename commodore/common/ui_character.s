@@ -344,7 +344,6 @@ ui_char_draw_stats:
     txa
 !calc_col:
     // Column: 0=col 1, 1=col 14, 2=col 27
-    cmp #0
     bne !not_0+
     lda #UCHAR_STAT_COL0
     jmp !set_col+

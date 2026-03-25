@@ -354,6 +354,7 @@ assert_rendered_tile:
     cmp test_expect_char
     bne !fail+
     lda (zp_color_lo),y
+    and #$0f                 // C64 color RAM only guarantees the low nibble
     cmp test_expect_color
     bne !fail+
     clc

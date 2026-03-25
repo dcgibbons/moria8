@@ -1,5 +1,54 @@
 # Lessons Learned
 
+## 2026-03-25 — Do not label a regression “flaky” without proof
+
+- **Issue:** I saw `test_render.s` fail after the CA-03 hunger refactor and immediately described it as the project’s “known flaky render suite.”
+- **Root Cause:** I leaned on an old narrative in the runner instead of treating the new failure as a real regression from my current changes. In this project, that assumption is dangerous because layout shifts and memory corruption are common failure modes and must be proven absent, not hand-waved away.
+- **Resolution:** Treat every fresh test failure as caused by the current diff until the failure is reproduced as pre-existing on the same tree state. Do not use “flaky” as an explanation without direct evidence.
+- **Rule:** **When a suite fails after my change, assume I broke it. Do not call it flaky unless I can prove the same failure exists independently of the current diff.**
+
+## 2026-03-25 — Test timeouts in this repo mean hang, not patience
+
+- **Issue:** I let C64 test runs continue far past the project’s stated timeout limits while trying to distinguish a slow suite from a failing one.
+- **Root Cause:** I treated missing output as an observability problem instead of honoring the repo’s explicit rule that tests here do not legitimately run that long. In this codebase, a long-running test is itself diagnostic evidence of a hang, usually from memory overwrite/corruption in the assembly.
+- **Resolution:** Treat `>30s` as presumptive hang/failure and `>60s` as absolute failure. Stop extending waits, stop rationalizing elapsed time, and pivot immediately to runtime corruption / overwrite diagnosis.
+- **Rule:** **For this repo, no test should ever be allowed to run past 60 seconds, and anything past 30 seconds should already be treated as a likely hang. Long runtime is failure evidence, not a reason to wait longer.**
+
+## 2026-03-24 — Similar full-screen C64 UI bugs may need different local fixes
+
+- **Issue:** I treated the C64 game-over / save-and-quit menu clear bug as if it had the same root cause as the recently fixed `GENERATING...` screen bug and applied only the same blank/unblank ordering fix.
+- **Root Cause:** I matched on symptom shape too quickly. The generation bug was a visible preparation-order problem, but the game-over menu still leaked the bottom status rows in the final frame, which points to the prompt's actual clear path rather than only its visibility timing.
+- **Resolution:** For C64 full-screen UI residue bugs, do not stop at “same symptom, same fix.” Verify the final displayed frame and be ready to switch that specific path to the safer row-by-row clear helper when the bulk clear is insufficient.
+- **Rule:** **When a C64 full-screen prompt still shows stale rows after a blank/clear/draw/unblank fix, treat that as evidence the local clear primitive is wrong for that path. Move the prompt to the safer row-by-row clear helper instead of assuming all similar bugs share the same root cause.**
+
+## 2026-03-24 — Escalate as soon as the memory map proves a feature does not fit
+
+- **Issue:** I kept trying to optimize the oversized `look` rewrite locally instead of surfacing the memory-map failure as soon as the build proved it.
+- **Root Cause:** I stayed in fix-it-first mode and treated the overage as something to clean up before reporting, even after the C64 main image had already crossed `MAP_BASE`.
+- **Resolution:** When a feature trips a hard segment boundary, state the exact addresses and overage immediately and get direction before doing more speculative cleanup.
+- **Rule:** **If the memory map or `.assert` output shows a feature no longer fits, stop spinning and escalate with the exact segment addresses before doing more local optimization.**
+
+## 2026-03-24 — Split Umoria-only behavior from VMS baseline before porting a large gameplay feature
+
+- **Issue:** I treated `look` as if only the all-directions `5` mode differed between Umoria and VMS-Moria, then built a large interactive cone/recall implementation around that assumption.
+- **Root Cause:** I checked one visible feature delta, but I did not finish the side-by-side comparison of the whole command contract before writing the port. Local VMS-Moria's `look` is much smaller than Umoria's: straight-ray, non-interactive, and no recall handoff.
+- **Resolution:** Re-anchor the task on the local primary sources and separate the shared baseline from Umoria-only enhancements before committing to an implementation shape.
+- **Rule:** **When porting a large gameplay/UI command, compare the full local Umoria and VMS-Moria implementations first. Lock the shared baseline separately from Umoria-only enhancements before spending memory budget on the richer path.**
+
+## 2026-03-24 — Check the known local third-party source tree before reaching for network access
+
+- **Issue:** I started to request a network fetch of upstream Umoria even though this workspace already has a local upstream checkout at `~/Projects/thirdparty/umoria`.
+- **Root Cause:** I anchored on the earlier web/manual lookup and did not verify whether the repo's known local third-party mirror was already available before escalating.
+- **Resolution:** For source-parity work against upstream projects, check the existing local third-party trees first and treat them as the primary source when present.
+- **Rule:** **Before requesting network access for upstream source code, search the local `~/Projects/thirdparty/` mirrors and any project-documented vendor paths.**
+
+## 2026-03-24 — Full-screen clears must invalidate the status cache
+
+- **Issue:** On C64, returning from the character sheet left the status rows blank until a later gameplay update happened to redraw them.
+- **Root Cause:** `screen_clear` wiped the status rows, but `status_draw` saw unchanged cached values and skipped repainting because no force-redraw flag was set.
+- **Resolution:** Any full-screen clear that can erase the status area must set the status force-redraw bit so the next `status_draw` repaints even when player values are unchanged.
+- **Rule:** **When a UI path uses `screen_clear` and then returns to gameplay, invalidate or force the status redraw explicitly. Do not rely on cached-value changes to redraw erased rows.**
+
 ## VDC Hardware Fill (C128)
 
 - **Issue:** Using VDC hardware fill (Reg 30) for `screen_clear` and `screen_clear_row` caused a fatal CPU crash (JAM) during character creation (after pressing 'N' on the title screen).
@@ -347,3 +396,66 @@
 - **Root Cause:** I generalized from the current port implementation and broad manual language about lamps/torches instead of checking whether the original game actually specified the radius or differentiated torch vs lantern reach.
 - **Resolution:** When the user asks for original-game parity, either verify the exact behavior in primary Umoria sources or say explicitly that the precise rule is still unverified and needs research.
 - **Rule:** **For historical-faithfulness questions, do not infer a specific gameplay parameter from the current port. Verify it in primary sources or turn the gap into explicit backlog research.**
+
+## 2026-03-23 — When shared gameplay code gains a new helper dependency, update the shared C64 test stubs immediately
+
+- **Issue:** The BUG-RECALL refactor made `turn.s` call `level_change_generate_current`, and a large set of C64 unit suites started failing at assembly with `Unknown symbol 'level_change_generate_current'`.
+- **Root Cause:** I updated the focused recall test, but I did not audit the broader C64 test harness pattern where many suites import `turn.s` plus `ui_trampoline_stubs.s` and rely on that file as the common stub surface for game-only helpers.
+- **Resolution:** Add a shared no-op `level_change_generate_current` stub to `commodore/common/ui_trampoline_stubs.s` so the non-transition tests assemble again, while keeping focused tests free to override it locally.
+- **Rule:** **Whenever a shared gameplay file gains a new call into main-loop/overlay transition helpers, audit the common C64 test stub surface (`ui_trampoline_stubs.s`) in the same change. Do not assume only the focused test needs updating.**
+
+## 2026-03-23 — Test doubles must preserve the real helper contract, not just compile
+
+- **Issue:** `test_main_loop` kept failing after the recall refactor even though the gameplay stairs path was fine.
+- **Root Cause:** The test stub for `check_stairs_at_player` returned the raw tile byte (`$90`) while the real helper returns the extracted tile-type nibble (`9`). That made the harness report “no stairs” even though the real game contract was unchanged.
+- **Resolution:** Make the stub mirror the real helper semantics by shifting the tile byte down before returning it, then re-run the suite under VICE to prove the failure disappears.
+- **Rule:** **When patching in a test helper, copy the behavior contract as well as the symbol name. A stub that returns the wrong representation creates fake regressions and wastes debugging time.**
+
+## 2026-03-23 — The authoritative affected-platform suite is the gate, not partial evidence
+
+- **Issue:** I made shared-code changes, saw partial/focused test evidence, and continued working even after the user's local authoritative suite was failing.
+- **Root Cause:** I treated narrower checks, partial platform coverage, and environment-specific debugging evidence as sufficient to keep moving. That violated the real contract: the repository's authoritative suite for the affected platform is the release gate.
+- **Resolution:** If a change affects C64 behavior, require a clean local `make test` before calling the work done, ready, verified, or committable. If a change affects C128 behavior, require `make test128-fast`, and require `make test128` for high-risk banking/layout work. If my environment disagrees with the user's local failing run, treat the user's failing run as authoritative and keep working until that exact suite is green again.
+- **Rule:** **Do not claim completion, readiness, verification, or commit-worthiness for affected-platform work until the authoritative suite for that platform passes. When the user's local run fails, that failing run is authoritative until I make the same suite pass.**
+
+## 2026-03-23 — C64 runtime suites must keep the final BRK at the end of the "Test Code" segment
+
+- **Issue:** `test_render.s` failed as `0/4` even though the test logic itself was fine.
+- **Root Cause:** The whole suite body lived inside the `"Test Code"` segment, so `run_tests.sh` extracted the wrong breakpoint address and stopped on a helper return instead of the final BRK after copying `tc_results` to `$0400`.
+- **Resolution:** Use the standard C64 bootstrap/exit-trampoline pattern: a small `"Test Code"` segment with the startup jump and exit copy loop, and keep the final BRK at the end of that segment.
+- **Rule:** **If a C64 suite is run by `run_tests.sh`, the `"Test Code"` segment must end at the exit BRK that copies results to `$0400`. Do not leave the whole suite body inside `"Test Code"`.**
+
+## 2026-03-23 — Large C64 suites that touch the dungeon map must assert they stay below MAP_BASE
+
+- **Issue:** `test_effects.s` timed out because it silently overwrote itself.
+- **Root Cause:** The suite grew into the `$C000` map region. Later dark-room/map-fill tests wrote through the dungeon map helpers and corrupted live test code/data.
+- **Resolution:** Move large scratch buffers into a separate segment and add an explicit assert proving the executable test body stays below `MAP_BASE`.
+- **Rule:** **For C64 suites that import map-generation/render code and also carry bulky local buffers, keep the executable test body below `MAP_BASE` and assert that contract directly.**
+
+## 2026-03-23 — For bad-merge backlog questions, compare the merged branch against the named source branch first
+
+- **Issue:** I started proving the stale build-plan bugs from local history/code evidence before checking the exact branch the user identified as the pre-merge source of truth.
+- **Root Cause:** I anchored on the merged result first instead of diffing the bad target branch against the known-good source branch immediately. That risks catching stale reopenings while missing legitimate backlog items that were dropped by the merge.
+- **Resolution:** When the user names the source branch of a bad merge, compare that branch against the merged target first and use that diff to decide both directions of the repair: what must be removed and what must be restored.
+- **Rule:** **For merge-fallout doc repairs, do not patch from memory or partial history. Diff the merged branch against the user-named source branch first so stale reopenings and dropped backlog items are handled together.**
+
+## 2026-03-24 — Before claiming a fix is ready, inspect the whole workspace and remove stray side-track edits
+
+- **Issue:** I reported a good two-file C128 JAM fix while the workspace still contained unrelated uncommitted `main.s` / test-runner changes and a half-finished `special_rooms_banked.s`, which made the user's next local build fail.
+- **Root Cause:** I validated the targeted fix but did not re-check `git status` and reconcile unrelated in-flight edits before telling the user the tree was ready to test.
+- **Resolution:** Before saying a fix is ready, inspect the full working tree, build from that exact tree, and either revert or explicitly call out any unrelated uncommitted edits that could affect the user's build.
+- **Rule:** **Do not present an uncommitted fix as ready until the actual workspace is clean except for intentional files, and the build/test results come from that same exact tree state.**
+
+## 2026-03-24 — Reproduce C128 runtime bugs from the user's exact disk-image path before blaming stale artifacts
+
+- **Issue:** I initially leaned on a "current disk image looks fine" theory even after the user was reproducing the JAM from `make clean128; make disk128`.
+- **Root Cause:** I checked assembled overlay bytes and prior smokes before grounding the investigation in the exact build-and-run path the user was actually using.
+- **Resolution:** For C128 boot/runtime crashes, first rebuild with the user's exact target sequence and treat that D64 path as the primary truth before narrowing the fault to runtime ownership or control flow.
+- **Rule:** **When a user reports a C128 crash from a specific `make ...` disk path, reproduce from that exact path first. Do not spend time on stale-build theories until that path is ruled out.**
+
+## 2026-03-24 — Treat `$E000` ownership as invalid after tier activation unless the overlay is explicitly restored
+
+- **Issue:** Entering dungeon level 1 on C128 could JAM in `spawn_special_room_monsters` even though the dungeon-generation overlay had loaded correctly.
+- **Root Cause:** `tier_check_transition` reused `$E000` for tier payloads and invalidated the overlay, but `level_change_generate_current` still called post-generation special-room helpers that lived in the dungeon-generation overlay window.
+- **Resolution:** After any C128 tier transition that can reclaim `$E000`, explicitly reload the required overlay before calling helpers that still execute from that window, and add a regression that proves the helper runs after the restore.
+- **Rule:** **On C128, once a step like `tier_load` reuses `$E000`, assume overlay-resident helpers are dead until the overlay is explicitly reloaded.**

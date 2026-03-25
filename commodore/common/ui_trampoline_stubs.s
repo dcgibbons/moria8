@@ -25,6 +25,12 @@ wizard_wall_walk_active:
 cmd_wizard_entry:
     rts
 
+// Shared level-transition helper used by stairs/recall/wizard in the real build.
+// Most C64 unit suites that import turn.s do not exercise full level transitions,
+// so a no-op stub is sufficient unless a test overrides it explicitly.
+level_change_generate_current:
+    rts
+
 // $E000 store overlay trampolines
 .label tramp_store_init_all = store_init_all
 .label tramp_store_restock_all = store_restock_all

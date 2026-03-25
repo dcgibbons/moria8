@@ -115,7 +115,7 @@ zp_save_buf: .fill ZP_SAVE_SIZE, 0
 save_zp:
     ldx #0
 !loop:
-    lda $02,x
+    lda zp_temp0,x
     sta zp_save_buf,x
     inx
     cpx #ZP_SAVE_SIZE
@@ -128,7 +128,7 @@ restore_zp:
     ldx #0
 !loop:
     lda zp_save_buf,x
-    sta $02,x
+    sta zp_temp0,x
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-

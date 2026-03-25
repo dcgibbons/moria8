@@ -7,6 +7,8 @@
 // item_eat: eat food from inventory
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
+#import "ui_restore.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -20,11 +22,6 @@
 .const ITEM_RATION     = 15    // Type ID for ration of food
 .const ITEM_SLIME_MOLD = 16   // Type ID for slime mold
 
-// Hunger thresholds (duplicated from turn.s — must stay in sync)
-.const PIW_FOOD_HUNGRY_AT = 150
-.const PIW_FOOD_WEAK_AT   = 50
-.const PIW_FOOD_FAINT_AT  = 10
-
 // ============================================================
 // Scratch variables
 // ============================================================
@@ -35,6 +32,9 @@ piw_qty:      .byte 0          // Item qty being processed
 piw_p1:       .byte 0          // Item p1 being processed
 piw_flags:    .byte 0          // Item flags being processed
 piw_ego:      .byte 0          // Item ego type being processed
+piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
+piw_visible_count: .byte 0     // Number of cached visible slots
+piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
 
 // ============================================================
 // Category -> equipment slot mapping table
@@ -77,12 +77,7 @@ show_inv_and_restore:
 #else
     jsr input_get_key
 #endif
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_restore_modal_overlay
     rts
 
 // show_equip_and_restore — Show equipment overlay, wait for key, restore screen
@@ -97,22 +92,244 @@ show_equip_and_restore:
 #else
     jsr input_get_key
 #endif
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_restore_modal_overlay
     rts
+
+// piw_inv_slot_matches_filter — check whether a carried slot is visible
+// Input: X = carried slot index, piw_filter = active filter
+// Output: carry set if slot is occupied and visible under this filter
+// Preserves: X
+piw_inv_slot_matches_filter:
+    txa
+    pha
+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !piw_inv_fail+
+    sta piw_item_id
+
+    ldy piw_filter
+    cpy #$ff
+    beq !piw_inv_match+
+
+    tax
+    lda it_category,x
+    cpy #$fe
+    beq !piw_inv_wearable+
+    cmp piw_filter
+    bne !piw_inv_fail+
+    beq !piw_inv_match+
+
+!piw_inv_wearable:
+    tax
+    lda piw_item_id
+    cmp #ITEM_FLASK_OIL
+    beq !piw_inv_fail+
+    lda equip_slot_for_cat,x
+    cmp #$ff
+    bne !piw_inv_match+
+
+!piw_inv_fail:
+    clc
+    pla
+    tax
+    rts
+
+!piw_inv_match:
+    sec
+    pla
+    tax
+    rts
+
+// piw_build_visible_inv_cache — cache visible carried slots for a filter
+// Input: A = filter value
+// Output: A = visible count
+// Clobbers: X, Y
+piw_build_visible_inv_cache:
+    sta piw_filter
+    ldy #0
+    ldx #0
+!piw_count_inv_loop:
+    tya
+    pha
+    jsr piw_inv_slot_matches_filter
+    pla
+    tay
+    bcc !piw_count_inv_next+
+    txa
+    sta piw_visible_slots,y
+    iny
+!piw_count_inv_next:
+    inx
+    cpx #MAX_INV_SLOTS
+    bcc !piw_count_inv_loop-
+    sty piw_visible_count
+    tya
+    rts
+
+// piw_count_filtered_inv — count visible carried items for a filter
+// Input: A = filter value
+// Output: A = visible count
+// Clobbers: X, Y
+piw_count_filtered_inv:
+    jmp piw_build_visible_inv_cache
+
+// piw_prompt_filtered_inv — print a filtered inventory prompt or "nothing there"
+// Input: A = filter value, X = Huffman prompt string id
+// Output: carry set if the prompt was printed, carry clear if no visible items
+piw_prompt_filtered_inv:
+    sta piw_filter
+    txa
+    pha
+    lda piw_filter
+    jsr piw_build_visible_inv_cache
+    bne !piw_prompt_inv_have_choices+
+    pla
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_print_msg
+    clc
+    rts
+!piw_prompt_inv_have_choices:
+    sta piw_qty
+    pla
+    tax
+    lda piw_qty
+    jsr piw_print_prompt_with_count
+    sec
+    rts
+
+// piw_pick_filtered_inv_key — map a filtered prompt letter to a carried slot
+// Input: A = PETSCII key, piw_filter = active filter
+// Output: carry set on success, X = carried slot, A = item type ID
+//         carry clear if key is outside the visible filtered range
+piw_pick_filtered_inv_key:
+    sec
+    sbc #$41
+    bcc !piw_pick_inv_fail+
+    tay
+    cpy piw_visible_count
+    bcs !piw_pick_inv_fail+
+    lda piw_visible_slots,y
+    tax
+    lda inv_item_id,x
+    sec
+    rts
+
+!piw_pick_inv_fail:
+    clc
+    rts
+
+// piw_build_visible_equip_cache — cache non-empty equipment slots
+// Output: A = non-empty equipment count
+// Clobbers: X, Y
+piw_build_visible_equip_cache:
+    ldy #0
+    ldx #EQUIP_WEAPON
+!piw_count_eq_loop:
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !piw_count_eq_next+
+    txa
+    sta piw_visible_slots,y
+    iny
+!piw_count_eq_next:
+    inx
+    cpx #EQUIP_RING + 1
+    bcc !piw_count_eq_loop-
+    sty piw_visible_count
+    tya
+    rts
+
+// piw_count_visible_equip — count equipped items for takeoff prompt mapping
+// Output: A = non-empty equipment count
+// Clobbers: X, Y
+piw_count_visible_equip:
+    jmp piw_build_visible_equip_cache
+
+// piw_pick_visible_equip_key — map a contiguous equipment letter to a slot
+// Input: A = PETSCII key
+// Output: carry set on success, X = absolute equipment slot, A = item type ID
+//         carry clear if key is outside the visible equipped-item range
+piw_pick_visible_equip_key:
+    sec
+    sbc #$41
+    bcc !piw_pick_eq_fail+
+    tay
+    cpy piw_visible_count
+    bcs !piw_pick_eq_fail+
+    lda piw_visible_slots,y
+    tax
+    lda inv_item_id,x
+    sec
+    rts
+
+!piw_pick_eq_fail:
+    clc
+    rts
+
+// piw_print_prompt_with_count — decode, patch, and print a visible range prompt
+// Input: A = visible count (> 0), X = Huffman prompt string id
+// Output: message printed via the message-line path
+piw_print_prompt_with_count:
+    sta piw_p1
+#if C128
+    php
+    sei
+#endif
+    jsr huff_decode_string
+
+    lda piw_p1
+    sec
+    sbc #1
+    clc
+    adc #$01                    // Screen code 'A'
+    sta piw_qty
+
+    ldy #0
+!piw_prompt_patch_loop:
+    lda hd_decode_buf,y
+    beq !piw_prompt_print+
+    cmp #$28                    // '('
+    bne !piw_prompt_not_open+
+    lda #$01                    // Screen code 'A'
+    sta hd_decode_buf + 1,y
+    jmp !piw_prompt_next+
+!piw_prompt_not_open:
+    cmp #$2d                    // '-'
+    bne !piw_prompt_next+
+    lda piw_qty
+    sta hd_decode_buf + 1,y
+!piw_prompt_next:
+    iny
+    cpy #41
+    bcc !piw_prompt_patch_loop-
+
+!piw_prompt_print:
+#if C128
+    lda zp_ptr0
+    sta msg_src_lo
+    lda zp_ptr0_hi
+    sta msg_src_hi
+    plp
+    jsr msg_print_cached
+    rts
+#else
+    jsr msg_print
+    rts
+#endif
 
 // item_wear — Wear/wield an item from carried inventory
 // Prompts "WEAR WHICH ITEM (A-V)?", waits for keypress.
 // Output: carry set = turn consumed, carry clear = cancelled
 // Clobbers: everything
 item_wear:
-    // Print prompt
+    lda #$fe
     ldx #HSTR_PIW_WEAR_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !iw_have_choices+
+    clc
+    rts
+!iw_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -136,31 +353,13 @@ item_wear:
     cmp #$20
     beq !iw_cancel_tramp+
 
-    // Convert PETSCII letter to slot index
-    // Uppercase A-V = $41-$56 -> slot 0-21
-    sec
-    sbc #$41
-    bcc !iw_cancel_tramp+       // Below 'A'
-    cmp #MAX_INV_SLOTS
-    bcc !iw_in_range+
+    jsr piw_pick_filtered_inv_key
+    bcs !iw_in_range+
 !iw_cancel_tramp:
     jmp !iw_cancel+
 !iw_in_range:
-    sta piw_slot
+    stx piw_slot
 
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !iw_has_item+
-
-    // Empty slot
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!iw_has_item:
     // Save carried item data into scratch (before any swap)
     sta piw_item_id             // A already has inv_item_id[slot]
     ldx piw_slot
@@ -173,25 +372,11 @@ item_wear:
     lda inv_ego,x
     sta piw_ego
 
-    // Look up category -> equipment slot
+    // The filtered picker already excludes non-equippable categories and oil.
     ldx piw_item_id
     lda it_category,x
-    cmp #16                     // Out of range check
-    bcc !iw_cat_ok+
-    jmp !iw_cant_wear+
-!iw_cat_ok:
     tax
     lda equip_slot_for_cat,x
-    cmp #$ff
-    bne !iw_equip_ok+
-    jmp !iw_cant_wear+
-!iw_equip_ok:
-    // Reject Flask of Oil — ICAT_LIGHT but not equippable
-    ldx piw_item_id
-    cpx #ITEM_FLASK_OIL
-    bne !iw_not_flask+
-    jmp !iw_cant_wear+
-!iw_not_flask:
     sta piw_equip
 
     // Check if equip slot already occupied -> swap
@@ -277,12 +462,6 @@ item_wear:
     sec                         // Turn consumed
     rts
 
-!iw_cant_wear:
-    ldx #HSTR_PIW_CANT_WEAR
-    jsr huff_print_msg
-    clc
-    rts
-
 !iw_cancel:
     ldx #HSTR_PIW_NEVERMIND
     jsr huff_print_msg
@@ -294,9 +473,15 @@ item_wear:
 // Output: carry set = turn consumed, carry clear = cancelled
 // Clobbers: everything
 item_takeoff:
-    // Print prompt
-    ldx #HSTR_PIW_TAKEOFF_PROMPT
+    jsr piw_count_visible_equip
+    bne !ito_have_choices+
+    ldx #HSTR_PIW_NOTHING
     jsr huff_print_msg
+    clc
+    rts
+!ito_have_choices:
+    ldx #HSTR_PIW_TAKEOFF_PROMPT
+    jsr piw_print_prompt_with_count
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -320,32 +505,12 @@ item_takeoff:
     cmp #$20
     beq !ito_cancel_tramp+
 
-    // Convert PETSCII letter to equip index
-    // A-H = $41-$48 -> equip slot 22-29
-    sec
-    sbc #$41
-    bcc !ito_cancel_tramp+
-    cmp #MAX_EQUIP_SLOTS
-    bcc !ito_in_range+
+    jsr piw_pick_visible_equip_key
+    bcs !ito_in_range+
 !ito_cancel_tramp:
     jmp !ito_cancel+
 !ito_in_range:
-    clc
-    adc #EQUIP_WEAPON           // Map 0-7 -> 22-29
-    sta piw_equip
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !ito_has_item+
-
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!ito_has_item:
+    stx piw_equip
     sta piw_item_id
 
     // Check cursed flag
@@ -522,30 +687,9 @@ item_eat:
     lda zp_player_food_hi
     sta player_data + PL_FOOD_HI
 
-    // Update hunger state
-    lda zp_player_food_hi
-    bne !ie_full+
-    lda zp_player_food
-    cmp #PIW_FOOD_HUNGRY_AT
-    bcs !ie_full+
-    cmp #PIW_FOOD_WEAK_AT
-    bcs !ie_hungry+
-    cmp #PIW_FOOD_FAINT_AT
-    bcs !ie_weak+
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_weak:
-    lda #HUNGER_WEAK
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_hungry:
-    lda #HUNGER_HUNGRY
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_full:
-    lda #HUNGER_FULL
-    sta zp_hunger_state
+    // Reuse the shared hunger-state classifier; starvation damage remains
+    // turn-owned because eating can only increase the food counter.
+    jsr player_update_hunger_state
 
 !ie_remove:
     // Remove food from inventory
@@ -634,9 +778,13 @@ player_recalc_equipment:
 // Clobbers: everything
 // ============================================================
 item_quaff:
-    // Print prompt
+    lda #ICAT_POTION
     ldx #HSTR_PIQ_QUAFF_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !iq_have_choices+
+    clc
+    rts
+!iq_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -660,43 +808,13 @@ item_quaff:
     cmp #$20
     beq !iq_cancel_tramp+
 
-    // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
-    sec
-    sbc #$41
-    bcc !iq_cancel_tramp+
-    cmp #MAX_INV_SLOTS
-    bcc !iq_in_range+
+    jsr piw_pick_filtered_inv_key
+    bcs !iq_in_range+
 !iq_cancel_tramp:
-    jmp !iq_cancel+
+    jmp iq_cancel
 !iq_in_range:
-    sta piw_slot
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !iq_has_item+
-
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!iq_has_item:
+    stx piw_slot
     sta piw_item_id
-
-    // Check it's a potion
-    tax
-    lda it_category,x
-    cmp #ICAT_POTION
-    beq !iq_is_potion+
-
-    ldx #HSTR_PIQ_NOT_POTION
-    jsr huff_print_msg
-    clc
-    rts
-
-!iq_is_potion:
     // Identify this potion type
     ldx piw_item_id
     lda #1
@@ -706,45 +824,35 @@ item_quaff:
     ldx piw_slot
     jsr inv_remove_item
 
-    // Apply effect based on item type
+    // Apply effect based on item type.
     lda piw_item_id
-    cmp #17                         // Cure Light Wounds
-    beq !iq_cure+
-    cmp #18                         // Speed
-    beq !iq_speed+
-    cmp #19                         // Poison
-    beq !iq_poison+
-    cmp #25                         // Cure Serious Wounds
-    bne !iq_not_csw+
-    jmp !iq_csw+
-!iq_not_csw:
-    cmp #26                         // Restore Mana
-    bne !iq_not_rmana+
-    jmp !iq_restore_mana+
-!iq_not_rmana:
-    cmp #27                         // Heroism
-    bne !iq_not_hero+
-    jmp !iq_heroism+
-!iq_not_hero:
-    cmp #28                         // Blindness
-    bne !iq_not_blind+
-    jmp !iq_blindness+
-!iq_not_blind:
-    cmp #29                         // Confusion
-    bne !iq_not_confuse+
-    jmp !iq_confusion+
-!iq_not_confuse:
-    cmp #30                         // Detect Monsters
-    bne !iq_not_detmon+
-    jmp !iq_detect_mon+
-!iq_not_detmon:
-    cmp #31                         // Infravision
-    bne !iq_not_infra+
-    jmp !iq_infravision+
-!iq_not_infra:
-    jmp !iq_generic_msg+
+    cmp #17
+    bcc !iq_dispatch_generic+
+    cmp #32
+    bcs !iq_dispatch_generic+
+    sec
+    sbc #17
+    tax
+    lda iq_dispatch_lo,x
+    sta zp_ptr1
+    lda iq_dispatch_hi,x
+    sta zp_ptr1_hi
+    jmp (zp_ptr1)
+!iq_dispatch_generic:
+    jmp iq_effect_generic
 
-!iq_cure:
+iq_dispatch_lo:
+    .byte <iq_effect_cure, <iq_effect_speed, <iq_effect_poison
+    .byte <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic
+    .byte <iq_effect_csw, <iq_effect_restore_mana, <iq_effect_heroism, <iq_effect_blindness
+    .byte <iq_effect_confusion, <iq_effect_detect_mon, <iq_effect_infravision
+iq_dispatch_hi:
+    .byte >iq_effect_cure, >iq_effect_speed, >iq_effect_poison
+    .byte >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic
+    .byte >iq_effect_csw, >iq_effect_restore_mana, >iq_effect_heroism, >iq_effect_blindness
+    .byte >iq_effect_confusion, >iq_effect_detect_mon, >iq_effect_infravision
+
+iq_effect_cure:
     // Heal rng(8) + 4 HP
     lda #8
     jsr rng_range                   // [0, 7]
@@ -762,7 +870,7 @@ item_quaff:
     sec
     rts
 
-!iq_speed:
+iq_effect_speed:
     // Set speed effect timer: rng(20) + 10
     lda #20
     jsr rng_range                   // [0, 19]
@@ -782,7 +890,7 @@ item_quaff:
     sec
     rts
 
-!iq_poison:
+iq_effect_poison:
     // Deal rng(6) + 3 damage
     lda #6
     jsr rng_range                   // [0, 5]
@@ -839,7 +947,7 @@ item_quaff:
     sec
     rts
 
-!iq_csw:
+iq_effect_csw:
     // Cure Serious Wounds: heal 5d8+5 = [10, 45]
     lda #5                          // N = 5 dice
     ldx #8                          // S = 8 sides
@@ -853,7 +961,7 @@ item_quaff:
     sec
     rts
 
-!iq_restore_mana:
+iq_effect_restore_mana:
     // Restore Mana: set MP = max MP
     lda zp_player_mmp
     sta zp_player_mp
@@ -864,7 +972,7 @@ item_quaff:
     sec
     rts
 
-!iq_heroism:
+iq_effect_heroism:
     // Set zp_eff_hero timer (rng(25)+25), stacks
     // NOTE: Timer is infrastructure only — gameplay effects (to-hit/HP bonus)
     // will be integrated when effect consumption is added in a later phase.
@@ -884,7 +992,7 @@ item_quaff:
     sec
     rts
 
-!iq_blindness:
+iq_effect_blindness:
     // Set zp_eff_blind timer (rng(100)+100)
     lda #100
     jsr rng_range                   // [0, 99]
@@ -902,7 +1010,7 @@ item_quaff:
     sec
     rts
 
-!iq_confusion:
+iq_effect_confusion:
     // Set zp_eff_confuse timer (rng(15)+10)
     lda #15
     jsr rng_range                   // [0, 14]
@@ -920,7 +1028,7 @@ item_quaff:
     sec
     rts
 
-!iq_detect_mon:
+iq_effect_detect_mon:
     jsr eff_detect_monsters
 
     ldx #HSTR_PIQ_SENSE
@@ -928,7 +1036,7 @@ item_quaff:
     sec
     rts
 
-!iq_infravision:
+iq_effect_infravision:
     // Set zp_eff_infra timer (rng(50)+50)
     // NOTE: Timer is infrastructure only — monster reveal effect will be
     // integrated when effect consumption is added in a later phase.
@@ -948,13 +1056,13 @@ item_quaff:
     sec
     rts
 
-!iq_generic_msg:
+iq_effect_generic:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     sec
     rts
 
-!iq_cancel:
+iq_cancel:
     ldx #HSTR_PIW_NEVERMIND
     jsr huff_print_msg
     clc
@@ -975,9 +1083,13 @@ item_read_scroll:
     clc
     rts
 !irs_can_see:
-    // Print prompt
+    lda #ICAT_SCROLL
     ldx #HSTR_PIQ_READ_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !irs_have_choices+
+    clc
+    rts
+!irs_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -1001,43 +1113,13 @@ item_read_scroll:
     cmp #$20
     beq !irs_cancel_tramp+
 
-    // Convert PETSCII letter to slot index
-    sec
-    sbc #$41
-    bcc !irs_cancel_tramp+
-    cmp #MAX_INV_SLOTS
-    bcc !irs_in_range+
+    jsr piw_pick_filtered_inv_key
+    bcs !irs_in_range+
 !irs_cancel_tramp:
-    jmp !irs_cancel+
+    jmp irs_cancel
 !irs_in_range:
-    sta piw_slot
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !irs_has_item+
-
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!irs_has_item:
+    stx piw_slot
     sta piw_item_id
-
-    // Check it's a scroll
-    tax
-    lda it_category,x
-    cmp #ICAT_SCROLL
-    beq !irs_is_scroll+
-
-    ldx #HSTR_PIQ_NOT_SCROLL
-    jsr huff_print_msg
-    clc
-    rts
-
-!irs_is_scroll:
     // Identify this scroll type
     ldx piw_item_id
     lda #1
@@ -1047,49 +1129,37 @@ item_read_scroll:
     ldx piw_slot
     jsr inv_remove_item
 
-    // Apply effect based on item type
+    // Apply effect based on item type.
     lda piw_item_id
-    cmp #20                         // Light
-    beq !irs_light+
-    cmp #21                         // Identify
-    bne !irs_not_identify+
-    jmp !irs_identify+
-!irs_not_identify:
-    cmp #22                         // Teleportation
-    bne !irs_not_teleport+
-    jmp !irs_teleport+
-!irs_not_teleport:
-    cmp #32                         // Word of Recall
-    bne !irs_not_wor+
-    jmp !irs_wor+
-!irs_not_wor:
-    cmp #33                         // Remove Curse
-    bne !irs_not_remcurse+
-    jmp !irs_remove_curse+
-!irs_not_remcurse:
-    cmp #34                         // Enchant Weapon
-    bne !irs_not_enchw+
-    jmp !irs_enchant_weapon+
-!irs_not_enchw:
-    cmp #35                         // Enchant Armor
-    bne !irs_not_encha+
-    jmp !irs_enchant_armor+
-!irs_not_encha:
-    cmp #36                         // Monster Confusion
-    bne !irs_not_monconf+
-    jmp !irs_mon_confuse+
-!irs_not_monconf:
-    cmp #37                         // Aggravate
-    bne !irs_not_aggrav+
-    jmp !irs_aggravate+
-!irs_not_aggrav:
-    cmp #38                         // Protect from Evil
-    bne !irs_not_protect+
-    jmp !irs_protect+
-!irs_not_protect:
-    jmp !irs_generic_msg+
+    cmp #20
+    bcc !irs_dispatch_generic+
+    cmp #39
+    bcs !irs_dispatch_generic+
+    sec
+    sbc #20
+    tax
+    lda irs_dispatch_lo,x
+    sta zp_ptr1
+    lda irs_dispatch_hi,x
+    sta zp_ptr1_hi
+    jmp (zp_ptr1)
+!irs_dispatch_generic:
+    jmp irs_effect_generic
 
-!irs_light:
+irs_dispatch_lo:
+    .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
+    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
+    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
+    .byte <irs_effect_wor, <irs_effect_remove_curse, <irs_effect_enchant_weapon, <irs_effect_enchant_armor
+    .byte <irs_effect_mon_confuse, <irs_effect_aggravate, <irs_effect_protect
+irs_dispatch_hi:
+    .byte >irs_effect_light, >irs_effect_identify, >irs_effect_teleport
+    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
+    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
+    .byte >irs_effect_wor, >irs_effect_remove_curse, >irs_effect_enchant_weapon, >irs_effect_enchant_armor
+    .byte >irs_effect_mon_confuse, >irs_effect_aggravate, >irs_effect_protect
+
+irs_effect_light:
     // Light the room the player is in (shared subroutine)
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
@@ -1098,13 +1168,13 @@ item_read_scroll:
     sec
     rts
 
-!irs_identify:
+irs_effect_identify:
     // Interactive item identification (shared subroutine)
     jsr eff_identify_prompt
     sec
     rts
 
-!irs_teleport:
+irs_effect_teleport:
     // Teleport player to random floor tile (shared subroutine)
     jsr eff_teleport_self
 
@@ -1114,7 +1184,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_wor:
+irs_effect_wor:
     // Word of Recall: set timer rng(15)+15 (overwrites, not stacks — matches umoria)
     lda #15
     jsr rng_range                   // [0, 14]
@@ -1127,7 +1197,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_remove_curse:
+irs_effect_remove_curse:
     jsr eff_remove_curse
 
     ldx #HSTR_PIQ_CLEANSED
@@ -1135,7 +1205,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_enchant_weapon:
+irs_effect_enchant_weapon:
     // Find weapon in EQUIP_WEAPON slot
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
@@ -1185,7 +1255,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_enchant_armor:
+irs_effect_enchant_armor:
     // Find armor in EQUIP_BODY slot
     ldx #EQUIP_BODY
     lda inv_item_id,x
@@ -1235,7 +1305,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_mon_confuse:
+irs_effect_mon_confuse:
     // Set confuse-on-melee flag
     lda #1
     sta zp_confuse_melee
@@ -1245,7 +1315,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_aggravate:
+irs_effect_aggravate:
     jsr eff_aggravate
 
     ldx #HSTR_PIQ_HUMMING
@@ -1253,7 +1323,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_protect:
+irs_effect_protect:
     // Protect from Evil: timer rng(25)+25
     // NOTE: Timer is infrastructure only — damage reduction from evil monsters
     // will be integrated when effect consumption is added in a later phase.
@@ -1273,13 +1343,13 @@ item_read_scroll:
     sec
     rts
 
-!irs_generic_msg:
+irs_effect_generic:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     sec
     rts
 
-!irs_cancel:
+irs_cancel:
     ldx #HSTR_PIW_NEVERMIND
     jsr huff_print_msg
     clc
@@ -1292,9 +1362,13 @@ item_read_scroll:
 // Clobbers: everything
 // ============================================================
 item_aim_wand:
-    // Print prompt
+    lda #ICAT_WAND
     ldx #HSTR_PIW_AIM_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !iaw_have_choices+
+    clc
+    rts
+!iaw_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -1318,43 +1392,13 @@ item_aim_wand:
     cmp #$20
     beq !iaw_cancel_tramp+
 
-    // Convert PETSCII letter to slot index
-    sec
-    sbc #$41
-    bcc !iaw_cancel_tramp+
-    cmp #MAX_INV_SLOTS
-    bcc !iaw_in_range+
+    jsr piw_pick_filtered_inv_key
+    bcs !iaw_in_range+
 !iaw_cancel_tramp:
     jmp !iaw_cancel+
 !iaw_in_range:
-    sta piw_slot
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !iaw_has_item+
-
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!iaw_has_item:
+    stx piw_slot
     sta piw_item_id
-
-    // Check it's a wand
-    tax
-    lda it_category,x
-    cmp #ICAT_WAND
-    beq !iaw_is_wand+
-
-    ldx #HSTR_PIW_NOT_WAND
-    jsr huff_print_msg
-    clc
-    rts
-
-!iaw_is_wand:
     // Check charges > 0
     ldx piw_slot
     lda inv_p1,x
@@ -1447,9 +1491,13 @@ item_aim_wand:
 // Clobbers: everything
 // ============================================================
 item_use_staff:
-    // Print prompt
+    lda #ICAT_STAFF
     ldx #HSTR_PIW_USE_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !ius_have_choices+
+    clc
+    rts
+!ius_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -1473,43 +1521,13 @@ item_use_staff:
     cmp #$20
     beq !ius_cancel_tramp+
 
-    // Convert PETSCII letter to slot index
-    sec
-    sbc #$41
-    bcc !ius_cancel_tramp+
-    cmp #MAX_INV_SLOTS
-    bcc !ius_in_range+
+    jsr piw_pick_filtered_inv_key
+    bcs !ius_in_range+
 !ius_cancel_tramp:
     jmp !ius_cancel+
 !ius_in_range:
-    sta piw_slot
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !ius_has_item+
-
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!ius_has_item:
+    stx piw_slot
     sta piw_item_id
-
-    // Check it's a staff
-    tax
-    lda it_category,x
-    cmp #ICAT_STAFF
-    beq !ius_is_staff+
-
-    ldx #HSTR_PIW_NOT_STAFF
-    jsr huff_print_msg
-    clc
-    rts
-
-!ius_is_staff:
     // Check charges > 0
     ldx piw_slot
     lda inv_p1,x
@@ -1605,8 +1623,13 @@ item_gain_spell:
     rts
 
 !igs_can_cast:
+    lda #ICAT_BOOK
     ldx #HSTR_IGS_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !igs_have_choices+
+    clc
+    rts
+!igs_have_choices:
 
     // C128: require a fresh selection key after the command key.
 #if C128
@@ -1629,42 +1652,14 @@ item_gain_spell:
     cmp #$1b
     beq !igs_cancel_early+
 
-    // Convert PETSCII to slot index (A=0, V=21)
-    sec
-    sbc #$41
-    bcc !igs_cancel_early+
-    cmp #MAX_INV_SLOTS
-    bcc !igs_slot_ok+
+    jsr piw_pick_filtered_inv_key
+    bcs !igs_slot_ok+
 !igs_cancel_early:
     clc
     rts
 !igs_slot_ok:
-    sta piw_slot
-
-    // Check if slot has an item
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !igs_have_item+
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
-
-!igs_have_item:
-    // Check if it's a book (ICAT_BOOK)
-    tax
-    lda it_category,x
-    cmp #ICAT_BOOK
-    beq !igs_is_book+
-    ldx #HSTR_IGS_NOT_BOOK
-    jsr huff_print_msg
-    clc
-    rts
-
-!igs_is_book:
+    stx piw_slot
     // Look up book metadata: spell range and class
-    txa                         // A = item type ID
     jsr book_get_info           // A = spell_start, X = spell_class, C=0
     bcc !igs_book_ok+
     jmp !igs_cancel+            // Safety: not in book table

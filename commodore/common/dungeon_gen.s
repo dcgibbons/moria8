@@ -1548,7 +1548,6 @@ carve_streamer:
     jsr rng_byte
     and #3                      // 0=top, 1=bottom, 2=left, 3=right
 
-    cmp #0
     bne !cs_not_top+
     // Top edge: x = random, y = 1
     lda #78
@@ -1704,7 +1703,6 @@ carve_streamer:
     // 25% jitter: randomly shift x or y by 1
     jsr rng_byte
     and #3
-    cmp #0
     bne !cs_no_jitter+
     // Jitter x by +/-1
     jsr rng_byte

@@ -1,4 +1,5 @@
 #importonce
+#import "numeric_format.s"
 // combat.s — Player melee combat
 //
 // Bump-to-attack: to-hit rolls, damage, monster death, XP awards, level-up.
@@ -208,7 +209,7 @@ combat_calc_tohit_common:
     adc zp_combat_tohit
     bcc !cct_race_done+
     lda #255
-    jmp !cct_race_done+
+    bne !cct_race_done+
 !cct_race_neg:
     eor #$ff
     clc
@@ -227,25 +228,27 @@ combat_calc_tohit_common:
     // Check sign — PL_TOHIT can be negative (signed)
     bmi !cct_neg_tohit+
 
-    // Positive: multiply by 3
+    // Positive: if PL_TOHIT >= 86, then PL_TOHIT * 3 already exceeds 255.
+    cmp #86
+    bcs !cct_pos_sat+
     sta zp_temp0
-    asl                         // *2
-    clc
+    asl                         // *2; carry stays clear for values < 86
     adc zp_temp0                // *3
-    clc
     adc zp_combat_tohit
     bcc !cct_tohit_ok+
+!cct_pos_sat:
     lda #255                    // Cap at 255
-    jmp !cct_tohit_ok+
+    bne !cct_tohit_ok+
 
 !cct_neg_tohit:
-    // Negative to-hit: negate, *3, then subtract
+    // Negative to-hit: if abs(PL_TOHIT) >= 86, subtracting *3 always floors to 0.
     eor #$ff
     clc
     adc #1                      // abs(PL_TOHIT)
+    cmp #86
+    bcs !cct_neg_floor+
     sta zp_temp0
-    asl                         // *2
-    clc
+    asl                         // *2; carry stays clear for values < 86
     adc zp_temp0                // *3 (positive value)
     sta zp_temp0
     // Subtract from tohit
@@ -253,6 +256,7 @@ combat_calc_tohit_common:
     sec
     sbc zp_temp0
     bcs !cct_tohit_ok+
+!cct_neg_floor:
     lda #0                      // Floor at 0
 
 !cct_tohit_ok:
@@ -356,19 +360,19 @@ combat_calc_blows:
     cmp #3
     bcs !ccb_br1+
     lda #0
-    jmp !ccb_lookup+
+    beq !ccb_lookup+
 !ccb_br1:
     lda #1
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br2:
     lda #2
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br3:
     lda #3
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_br4:
     lda #4
-    jmp !ccb_lookup+
+    bne !ccb_lookup+
 !ccb_unarmed:
     lda #4                      // Weight class 4 (lightest)
 !ccb_lookup:
@@ -745,30 +749,13 @@ combat_award_xp:
     lda cr_xp_hi,x
     sta zp_temp1
     lda cr_level,x
-    sta zp_temp2
-
-    // 16×8→24: (xp_hi:xp_lo) × level
-    // Step 1: xp_lo × level
-    lda zp_temp0
-    ldx zp_temp2
-    jsr math_multiply           // zp_math_a/b = lo product
-    lda zp_math_a
+    tax
+    jsr math_mul_16x8
+    lda mul_result_0
     sta ccl_adj_0
-    lda zp_math_b
+    lda mul_result_1
     sta ccl_adj_1
-    lda #0
-    sta ccl_adj_2
-
-    // Step 2: xp_hi × level, add shifted left 8
-    lda zp_temp1
-    ldx zp_temp2
-    jsr math_multiply
-    lda ccl_adj_1
-    clc
-    adc zp_math_a
-    sta ccl_adj_1
-    lda ccl_adj_2
-    adc zp_math_b
+    lda mul_result_2
     sta ccl_adj_2
 
     // Divide 24-bit product by player_level
@@ -827,11 +814,13 @@ cax_frac_done:
     rts
 
 // combat_compute_level_threshold — Compute adjusted threshold for current level
-// Output: ccl_adj_0/1 = 16-bit adjusted threshold
+// Output: ccl_adj_0/1/2 = 24-bit adjusted threshold
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_compute_level_threshold:
-    // Get base threshold for current level
     lda zp_player_lvl
+    cmp #29
+    bcs !ccl_late+
+
     sec
     sbc #1                      // Index = level - 1
     tax
@@ -839,58 +828,61 @@ combat_compute_level_threshold:
     sta zp_temp0
     lda xp_level_hi,x
     sta zp_temp1
-
-    // Multiply threshold by expfact: 16×8 → 24-bit
-    // Step 1: threshold_lo * expfact
-    lda zp_temp0
     ldx player_data + PL_EXPFACT
-    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
-    lda zp_math_a
+    jsr math_mul_16x8
+    lda mul_result_0
     sta ccl_adj_0
-    lda zp_math_b
+    lda mul_result_1
     sta ccl_adj_1
-    lda #0
+    lda mul_result_2
     sta ccl_adj_2
-
-    // Step 2: threshold_hi * expfact, add shifted left 8
-    lda zp_temp1
-    ldx player_data + PL_EXPFACT
-    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
-    lda ccl_adj_1
-    clc
-    adc zp_math_a
-    sta ccl_adj_1
-    lda ccl_adj_2
-    adc zp_math_b
-    sta ccl_adj_2
-
-    // Divide 24-bit product by 100 → adjusted threshold
     lda #100
     sta ccl_divisor
     jsr ccl_div_24x8
+    rts
 
-    // Result in ccl_adj_0/1 (16-bit). Cap at $FFFF if overflow.
-    lda ccl_adj_2
-    beq !ccl_no_cap+
-    lda #$ff
+!ccl_late:
+    sec
+    sbc #29                     // Levels 29-39 use threshold/100 tables
+    tax
+    lda xp_level_late_div100_lo,x
+    sta zp_temp0
+    lda xp_level_late_div100_hi,x
+    sta zp_temp1
+    ldx player_data + PL_EXPFACT
+    jsr math_mul_16x8
+    lda mul_result_0
     sta ccl_adj_0
+    lda mul_result_1
     sta ccl_adj_1
-!ccl_no_cap:
+    lda mul_result_2
+    sta ccl_adj_2
     rts
 
 // combat_check_levelup — Check if XP exceeds adjusted level threshold
 // Adjusted threshold = base_threshold * PL_EXPFACT / 100
-// Compares 16-bit PL_XP against adjusted threshold.
-// Levels up once if exceeded; caps at 1 level per kill (excess XP halved and retained).
+// Compares 24-bit PL_XP against adjusted threshold and mirrors Umoria's
+// repeated level-gain loop with excess halving after each gain.
 // Clobbers: A, X, Y, zp_math_a/b, zp_temp0-4
 combat_check_levelup:
+!ccl_loop:
+    lda zp_player_lvl
+    cmp #40
+    bcc !ccl_can_gain+
+    jmp ccl_no
+!ccl_can_gain:
+
     jsr combat_compute_level_threshold
 
-    // Compare 16-bit: PL_XP >= adjusted threshold?
-    lda player_data + PL_XP_1
-    cmp ccl_adj_1
+    // Compare 24-bit: PL_XP >= adjusted threshold?
+    lda player_data + PL_XP_2
+    cmp ccl_adj_2
     bcc ccl_no_short            // XP_hi < threshold_hi → no
     bne !ccl_yes+               // XP_hi > threshold_hi → yes
+    lda player_data + PL_XP_1
+    cmp ccl_adj_1
+    bcc ccl_no_short            // XP_mid < threshold_mid → no
+    bne !ccl_yes+               // XP_mid > threshold_mid → yes
     lda player_data + PL_XP_0
     cmp ccl_adj_0
     bcc ccl_no_short           // XP_lo < threshold_lo → no
@@ -913,7 +905,7 @@ ccl_no_short:
     sbc ccl_adj_1
     sta zp_temp1                    // excess_mid
     lda player_data + PL_XP_2
-    sbc #0
+    sbc ccl_adj_2
     sta zp_temp2                    // excess_hi
     lda player_data + PL_XP_FRAC_LO
     sta zp_temp3                    // excess fraction lo
@@ -942,15 +934,14 @@ ccl_no_short:
     adc ccl_adj_1
     sta player_data + PL_XP_1
     lda zp_temp2
-    adc #0
+    adc ccl_adj_2
     sta player_data + PL_XP_2
     lda zp_temp3
     sta player_data + PL_XP_FRAC_LO
     lda zp_temp4
     sta player_data + PL_XP_FRAC_HI
 
-    // Cap at 1 level per kill — excess XP retained (halved above)
-    rts
+    jmp !ccl_loop-
 
 ccl_no:
     rts
@@ -1010,7 +1001,6 @@ ccl_adj_0: .byte 0             // 24-bit product / result (lo)
 ccl_adj_1: .byte 0             // (mid)
 ccl_adj_2: .byte 0             // (hi)
 ccl_divisor: .byte 0           // Divisor for ccl_div_24x8
-
 // ccl_div_24x8 — Divide ccl_adj_0/1/2 by ccl_divisor
 // Uses shift-subtract algorithm (24 iterations)
 // Input: ccl_divisor = divisor
@@ -1174,107 +1164,25 @@ combat_append_monster_name:
 // Input: A = value (0-255)
 // Clobbers: A, X
 combat_append_decimal:
-    sta zp_temp0                // Save value
-    ldx cmb_buf_idx
-    lda #0
-    sta zp_temp1                // Leading zero flag
-
-    // Hundreds
-    lda zp_temp0
-    ldy #0
-!cad_hundreds:
-    cmp #100
-    bcc !cad_tens+
-    sbc #100
-    iny
-    jmp !cad_hundreds-
-!cad_tens:
-    sta zp_temp0                // Remainder
-    tya
-    beq !cad_skip_h+
-    ora #$30                    // Digit screen code
-    sta combat_msg_buf,x
-    inx
-    lda #1
-    sta zp_temp1                // Printed a digit
-!cad_skip_h:
-
-    // Tens
-    lda zp_temp0
-    ldy #0
-!cad_tens_loop:
-    cmp #10
-    bcc !cad_ones+
-    sbc #10
-    iny
-    jmp !cad_tens_loop-
-!cad_ones:
-    sta zp_temp0                // Remainder (ones)
-    tya
-    bne !cad_print_t+
-    // Check if we need a leading zero for tens
-    ldy zp_temp1
-    beq !cad_skip_t+
-!cad_print_t:
-    ora #$30
-    sta combat_msg_buf,x
-    inx
-!cad_skip_t:
-
-    // Ones (always printed)
-    lda zp_temp0
-    ora #$30
-    sta combat_msg_buf,x
-    inx
-
-    stx cmb_buf_idx
-    rts
+    jsr numeric_format_u8
+    jmp combat_append_digits
 
 // combat_append_decimal_16 — Append 16-bit decimal number to buffer
 // Input: zp_temp0 = lo, zp_temp1 = hi
 // Clobbers: A, X, Y, zp_temp0-3
 combat_append_decimal_16:
+    jsr numeric_format_u16
+    // Fall through to the shared buffer emitter.
+combat_append_digits:
     ldx cmb_buf_idx
-    lda #0
-    sta zp_temp2                // Leading zero flag
-    ldy #4                      // 5 digits: index 4..0
-!cad16_digit:
-    lda #0
-    sta zp_temp3                // Digit counter
-!cad16_sub:
-    lda zp_temp0
-    sec
-    sbc decimal_powers_lo,y
-    pha
-    lda zp_temp1
-    sbc decimal_powers_hi,y
-    bcc !cad16_done+            // Underflow — done with this digit
-    sta zp_temp1
-    pla
-    sta zp_temp0
-    inc zp_temp3
-    jmp !cad16_sub-
-!cad16_done:
-    pla                         // Discard underflowed lo
-    lda zp_temp3
-    bne !cad16_print+
-    lda zp_temp2
-    beq !cad16_next+            // Still leading zeros, skip
-!cad16_print:
-    lda #1
-    sta zp_temp2                // No more leading zeros
-    lda zp_temp3
-    ora #$30                    // Digit → screen code
+    ldy #0
+!cad_emit:
+    lda nf_digit_buf,y
     sta combat_msg_buf,x
     inx
-!cad16_next:
-    dey
-    bne !cad16_digit-
-    // Always print ones digit
-    lda zp_temp0
-    ora #$30
-    sta combat_msg_buf,x
-    inx
+    iny
+    cpy zp_temp2
+    bne !cad_emit-
     stx cmb_buf_idx
     rts
 

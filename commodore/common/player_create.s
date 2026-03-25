@@ -86,18 +86,11 @@ player_create_epilogue:
 // Race selection
 // ============================================================
 create_select_race:
-    // Full row-by-row clear (avoids screen_clear absolute-indexed residue issue)
+    // Use the platform-safe full-screen clear helper:
+    // C64 keeps row-by-row, C128 takes the bulk-clear fast path.
     lda #COL_BLACK
     sta zp_text_color
-    lda #0
-!csr_clear:
-    pha
-    jsr screen_clear_row
-    pla
-    clc
-    adc #1
-    cmp #25
-    bcc !csr_clear-
+    jsr ui_clear_full_screen_safe
 
     lda #COL_WHITE
     sta zp_text_color
@@ -851,18 +844,11 @@ create_gender_f:
 // Gender selection
 // ============================================================
 create_select_gender:
-    // Match the safer row-by-row clear used by the other creation screens.
+    // Use the same platform-safe full-screen clear helper as the other
+    // creation screens.
     lda #COL_BLACK
     sta zp_text_color
-    lda #0
-!csg_clear:
-    pha
-    jsr screen_clear_row
-    pla
-    clc
-    adc #1
-    cmp #25
-    bcc !csg_clear-
+    jsr ui_clear_full_screen_safe
 
     lda #COL_WHITE
     sta zp_text_color

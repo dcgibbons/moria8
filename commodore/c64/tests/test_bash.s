@@ -1,9 +1,10 @@
 // test_bash.s — Runtime tests for bash.s
 //
 // Tests: bash_door (success/fail), bash_monster (hit + HP decrease),
-//        bash_stun_check (stun applied), bash_off_balance (paralyze set/safe).
+//        bash_stun_check (stun applied), bash_off_balance (paralyze set/safe),
+//        and Shift+D dig handoff for tunnelable terrain.
 //
-// Results at $0400-$0405: $01 = pass, $00 = fail per test (6 tests)
+// Results at $0400-$0407: $01 = pass, $00 = fail per test (8 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -15,7 +16,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #5
+    ldx #7
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -89,14 +90,39 @@ test_exit_trampoline:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+player_tunnel_resolved_target:
+    inc tc_tunnel_calls
+    sec
+    rts
+
+test_get_direction_target:
+    lda #11
+    sta df_target_x
+    lda #10
+    sta df_target_y
+    sec
+    rts
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 6, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 8, $ff      // Result buffer (copied to $0400 at end)
 tc_saved_hp_lo: .byte 0
 tc_saved_hp_hi: .byte 0
+tc_tunnel_calls: .byte 0
 
 test_start:
+    :PatchJump(get_direction_target, test_get_direction_target)
+
     // Seed RNG deterministically
     lda #$42
     sta zp_rng_0
@@ -515,6 +541,84 @@ test_start:
 !t6_done:
     lda tc_ok
     sta tc_results + 5
+
+    // ==========================================
+    // Test 7: bash_command on tunnelable terrain hands off to the
+    // tunneling path instead of stopping at the bash wall path.
+    // ==========================================
+!t7:
+    jsr monster_init_table
+    lda #0
+    sta zp_mon_count
+    sta tc_tunnel_calls
+    sta eff_fear_timer
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #11
+    lda #TILE_QUARTZ
+    sta (zp_ptr0),y
+
+    jsr bash_command
+
+    lda tc_tunnel_calls
+    cmp #1
+    beq !t7_pass+
+    lda #$00
+    sta tc_results + 6
+    jmp !t8+
+!t7_pass:
+    lda #$01
+    sta tc_results + 6
+
+    // ==========================================
+    // Test 8: bash_command on a closed door stays on the bash path
+    // and does not hand off to tunneling.
+    // ==========================================
+!t8:
+    jsr monster_init_table
+    lda #0
+    sta zp_mon_count
+    sta tc_tunnel_calls
+    sta eff_fear_timer
+    sta zp_eff_confuse
+    sta zp_eff_paralyze
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+    lda #18
+    sta zp_player_str
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #11
+    lda #TILE_DOOR_CLOSED
+    sta (zp_ptr0),y
+
+    lda #8
+    sta $c6
+
+    jsr bash_command
+
+    lda tc_tunnel_calls
+    beq !t8_pass+
+    lda #$00
+    sta tc_results + 7
+    jmp !tests_done+
+!t8_pass:
+    lda #$01
+    sta tc_results + 7
 
 !tests_done:
     jmp test_exit_trampoline

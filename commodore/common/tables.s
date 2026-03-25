@@ -133,9 +133,9 @@ class_level_adj:
     .byte     3,   3,   3,   2,   3   // Paladin
 
 // ============================================================
-// XP level thresholds (16-bit, 40 levels)
-// Base XP values — multiply by (race_xp% + class_xp%) / 100
-// Values >65535 stored as hi=255 sentinel (level 30+, handled specially)
+// XP thresholds to reach the next level
+// Levels 1-28 use raw 16-bit thresholds and divide by 100 at runtime.
+// Levels 29-39 are exact multiples of 100, so store threshold/100 directly.
 // ============================================================
 xp_level_lo:
     .byte <10, <25, <45, <70, <100
@@ -143,9 +143,7 @@ xp_level_lo:
     .byte <650, <850, <1100, <1400, <1800
     .byte <2300, <2900, <3600, <4400, <5400
     .byte <6800, <8400, <10200, <12500, <17500
-    .byte <25000, <35000, <50000, <65535, <65535
-    .byte <65535, <65535, <65535, <65535, <65535
-    .byte <65535, <65535, <65535, <65535, <65535
+    .byte <25000, <35000, <50000
 
 xp_level_hi:
     .byte >10, >25, >45, >70, >100
@@ -153,9 +151,15 @@ xp_level_hi:
     .byte >650, >850, >1100, >1400, >1800
     .byte >2300, >2900, >3600, >4400, >5400
     .byte >6800, >8400, >10200, >12500, >17500
-    .byte >25000, >35000, >50000, >65535, >65535
-    .byte >65535, >65535, >65535, >65535, >65535
-    .byte >65535, >65535, >65535, >65535, >65535
+    .byte >25000, >35000, >50000
+
+xp_level_late_div100_lo:
+    .byte <750, <1000, <1500, <2000, <3000, <4000, <5000, <7500
+    .byte <15000, <25000, <50000
+
+xp_level_late_div100_hi:
+    .byte >750, >1000, >1500, >2000, >3000, >4000, >5000, >7500
+    .byte >15000, >25000, >50000
 
 // ============================================================
 // Stat bonus tables (indexed by stat value 3–18)

@@ -24,7 +24,6 @@ Sorry, what was that again?
 @MAT_ACID  spits acid on you.
 @MAT_FEAR  frightens you.
 @MAT_SHRIEK You hear a horrible shriek!
-@MAT_DEAD You have been slain.
 
 # ===== Monster magic strings (Pattern B) =====
 @MM_BOLT  casts a bolt!
@@ -119,7 +118,6 @@ Sorry, what was that again?
 @PIW_WEAR_PROMPT Wear which item (a-v)?
 @PIW_TAKEOFF_PROMPT Take off which item (a-h)?
 @PIW_NOTHING You have nothing there.
-@PIW_CANT_WEAR You cannot wear that.
 @PIW_NEVERMIND Never mind.
 @PIW_CURSED You cannot remove it, it is cursed!
 @PIW_NO_FOOD You have no food.
@@ -131,8 +129,6 @@ Sorry, what was that again?
 @PIW_YUCK . Yuck!
 @PIQ_QUAFF_PROMPT Quaff which potion (a-v)?
 @PIQ_READ_PROMPT Read which scroll (a-v)?
-@PIQ_NOT_POTION That is not a potion.
-@PIQ_NOT_SCROLL That is not a scroll.
 @PIQ_FEEL_BETTER You feel better.
 @PIQ_SPEED You feel yourself moving faster.
 @PIQ_TERRIBLE That tasted terrible!
@@ -158,8 +154,6 @@ Sorry, what was that again?
 @PIQ_VIBRATION You feel a strange vibration.
 @PIW_AIM_PROMPT Aim which wand (a-v)?
 @PIW_USE_PROMPT Use which staff (a-v)?
-@PIW_NOT_WAND That is not a wand.
-@PIW_NOT_STAFF That is not a staff.
 @PIW_NO_CHARGES No charges left.
 @PIW_STAFF_EMPTY The staff is empty.
 @PIW_WAND_BOLT A bolt of lightning shoots forth!
@@ -169,7 +163,6 @@ Sorry, what was that again?
 @PIQ_CANT_READ You can't see to read!
 @IGS_PROMPT Study which book (a-v)?
 @IGS_NO_MAGIC You cannot use magic.
-@IGS_NOT_BOOK That is not a book.
 @IGS_WRONG_TYPE You cannot read that book.
 @IGS_SUCCESS You learn from the book!
 @IGS_NO_NEW No new spells to learn.
@@ -248,7 +241,6 @@ Sorry, what was that again?
 @BASH_CRASH The door crashes open!
 @BASH_HOLDS The door holds firm.
 @BASH_OFFBAL You are off balance.
-@BASH_NOTHING Nothing interesting happens.
 @BASH_EMPTY You bash at empty space.
 @BASH_STUNNED  appears stunned!
 @BASH_IGNORES  ignores your bash!
