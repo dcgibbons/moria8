@@ -118,6 +118,42 @@ test_start:
     jmp test_fail
 !:
 
+    // Shared decimal formatting must also write the expected VDC digit codes.
+    lda #0
+    sta zp_cursor_row
+    lda #10
+    sta zp_cursor_col
+    lda #$15
+    sta zp_temp0
+    lda #$27
+    sta zp_temp1
+    jsr screen_put_decimal_16
+
+    lda #0
+    sta zp_cursor_row
+    lda #10
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$31
+    bne test_fail
+    jsr vdc_read_reg
+    cmp #$30
+    bne test_fail
+    jsr vdc_read_reg
+    cmp #$30
+    bne test_fail
+    jsr vdc_read_reg
+    cmp #$30
+    bne test_fail
+    jsr vdc_read_reg
+    cmp #$35
+    bne test_fail
+
     // Read attribute byte at row 0, col 0.
     lda #0
     sta zp_cursor_row

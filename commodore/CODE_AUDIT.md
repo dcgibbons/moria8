@@ -292,7 +292,7 @@ These items remain valid unless noted as already completed, and they now sit ben
 | `WRAP-1` | Critical | restore caller IRQ-state across C128 KERNAL wrappers | completed in phase 4; small byte/cycle cost, high correctness win |
 | `CA-11` | High | fix melee to-hit overflow / sign handling | no meaningful byte win; small cycle cost increase, large correctness win |
 | `CA-12` | Medium | advance RNG by a real byte step instead of one-bit output | completed in phase 6; cycle cost increase, meaningful quality win |
-| `CA-01` | High | unify numeric formatting kernels/tables | roughly `140-260` bytes per build, plus reduced drift |
+| `CA-01` | High | unify numeric formatting kernels/tables | completed in phase 10; recovered `101` bytes on the tight C64/C128 staged margins, plus reduced drift |
 | `CA-02` | High | stop rescanning filtered inventory/equipment views | roughly `200-600` cycles per filtered prompt path; code size small positive or neutral |
 | `CA-03` | Medium | unify hunger-state thresholds and recompute logic | roughly `20-40` bytes per build, plus removes sync risk |
 | `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | roughly `20-50` bytes per build, plus more consistent return behavior |
@@ -307,11 +307,14 @@ These items remain valid unless noted as already completed, and they now sit ben
 
 ### `CA-01` Shared Numeric Formatting Is Duplicated Four Ways
 
+Status:
+- completed in phase 10 for the 8-bit / 16-bit shared formatter paths
+- residual intentional split remains for `score.s` 24-bit output, which still has different value width and call pattern
+
 Evidence:
-- `commodore/c64/screen.s:272-430`
-- `commodore/c128/screen_vdc.s:625-764`
+- `commodore/common/numeric_format.s:1-181`
+- `commodore/common/combat.s:1163-1184`
 - `commodore/common/score.s:96-169`
-- `commodore/common/combat.s:1159-1262`
 
 What is happening:
 - both screen backends contain nearly identical `screen_put_hex`, `screen_put_decimal`, `screen_put_decimal_rj2`, `screen_put_decimal_lz2`, and `screen_put_decimal_16`
@@ -331,10 +334,13 @@ Recommended refactor:
   - combat-buffer adapter for `combat_msg_buf`
 - explicitly move the power-of-10 tables out of the screen backends so combat stops importing formatting data indirectly
 
-Expected savings:
-- code size: roughly `140-260` bytes per build if the shared conversion core replaces the duplicated backend-local, score-local, and combat-local loops cleanly
-- maintenance: high; one formatter bug fix instead of four
-- correctness risk reduced: removes screen/backend ownership confusion around decimal tables
+Measured outcome:
+- code size / layout:
+  - C64 `program_end` margin improved from `40` to `141` bytes below `$C000`
+  - C64 staged banked payload margin improved from `5` to `106` bytes below `$D000`
+  - C128 staged/program-image margin improved from `79` to `180` bytes below `$E000`
+- maintenance: one shared 8-bit / 16-bit formatter core now serves screen output and combat buffer appenders
+- correctness risk reduced: combat no longer depends on backend-local decimal tables
 
 Verification:
 - unit-check decimal output at `0`, `9`, `10`, `99`, `100`, `255`, `9999`, `10000`, `65535`
@@ -747,24 +753,23 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `79` bytes.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `180` bytes.
 2. Keep any future alignment work tightly targeted to the specific live crossings already identified; do not spend bytes on blanket padding.
-3. Start tactical deduplication with `CA-01` now that `ZP-1`, `ALIGN-1`, and `LINT-1` have established the perimeter/tooling baseline.
-4. Treat C64 banked payload growth as explicit change-control: `5` bytes remain below `$D000`.
-5. Treat the `320` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
+3. Move to `CA-02`; the numeric-format pass recovered `101` bytes on the tight staged/source margins, but C64 runtime banked code is still the hard boundary.
+4. Treat C64 runtime banked growth as explicit change-control: only `4` bytes remain below `$FFFA`.
+5. Treat the `318` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
 
 ## Suggested Execution Order
 
-1. `CA-01` shared numeric formatting
-2. `CA-02` filtered inventory visible-slot cache
-3. `CA-03` shared hunger-state helper/constants
-4. `CA-04` modal UI return helper cleanup
-5. `CA-06` message-history destination simplification
-6. `CA-05` item-effect dispatch cleanup
-7. `CA-08` item-field init helper
-8. `CA-07` full-screen clear benchmark and safe-callsite split
-9. `CA-09` C128 KERNAL wrapper refactor
-10. `CA-10` shared contract naming/constants cleanup
+1. `CA-02` filtered inventory visible-slot cache
+2. `CA-03` shared hunger-state helper/constants
+3. `CA-04` modal UI return helper cleanup
+4. `CA-06` message-history destination simplification
+5. `CA-05` item-effect dispatch cleanup
+6. `CA-08` item-field init helper
+7. `CA-07` full-screen clear benchmark and safe-callsite split
+8. `CA-09` C128 KERNAL wrapper refactor
+9. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -790,4 +795,5 @@ For every item above:
 - Phase 7 `ZP-1` is complete: raw volatile zero-page accesses are now enforced by `make check-zp`, the shared KERNAL / Screen Editor bytes have names instead of magic literals, and both the full C64 suite and fast C128 batch pass on the updated tree.
 - Phase 8 `ALIGN-1` is complete: the live symbol audit showed that most hot row/tile tables are already page-safe, and the remaining real crossings are narrow enough that the next queue item should be `LINT-1`, not blanket alignment churn.
 - Phase 9 `LINT-1` is complete: the repo now has an automated 6502 anti-pattern check for provably redundant zero-compares, the first six live hits are fixed, and the remaining branch-jump ladders are tracked as advisory warnings instead of blocking the build.
+- Phase 10 `CA-01` is complete: `commodore/common/numeric_format.s` now owns the shared 8-bit / 16-bit formatter core, combat no longer depends on backend-local decimal tables, the new direct screen/combat/VDC formatter tests pass, and the tight C64/C128 staged margins each recovered `101` bytes.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

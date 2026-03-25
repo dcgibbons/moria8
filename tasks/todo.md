@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `CA-01` by unifying the shared numeric formatting core used by screen output and combat messages.
+- [x] Remove the cross-module `decimal_powers_*` dependency on the screen backend so combat formatting owns only common numeric data.
+- [x] Add focused runtime coverage for direct screen decimal output and combat decimal-buffer output after the refactor.
+- [x] Rebuild and rerun the standard C64/C128 verification, then refresh the audit/headroom/task docs with the live post-change layout.
 - [x] Execute `LINT-1` by adding a reproducible 6502 anti-pattern linter to the repo.
 - [x] Fail on provably redundant zero-compares, but keep branch-then-jump ladders advisory until they are triaged.
 - [x] Clean up the first live redundant-compare hits so the new linter lands green on the current tree.
@@ -418,17 +422,69 @@ This file is a temporary working scratchpad.
   - `make check-6502-lint` → `0 error(s), 320 warning(s)`
   - all warnings are advisory branch-jump ladders; the tool prints only the first batch and suppresses the remainder
 - Refreshed the live layout after the cleanup:
-  - C64 staged banked payload source now ends at `$CFFB`, leaving `5` bytes below `$D000`
-  - C64 runtime banked payload now ends at `$FFF6`, leaving `4` bytes below `$FFFA`
-  - C128 staged source / program image now ends at `$DFB1`, leaving `79` bytes below `$E000`
+## `AUDIT-P10-CA01` Design
+
+### Goal
+- Execute `CA-01` with a size-positive shared numeric core, not just a source-only move.
+- Remove the duplicated decimal decomposition logic that currently exists separately in:
+  - screen decimal output
+  - combat message decimal appenders
+- Keep the public entry points unchanged:
+  - `screen_put_decimal`
+  - `screen_put_decimal_rj2`
+  - `screen_put_decimal_lz2`
+  - `screen_put_decimal_16`
+  - `combat_append_decimal`
+  - `combat_append_decimal_16`
+
+### Scope
+- In scope:
+  - `commodore/common/combat.s`
+  - `commodore/common/numeric_format.s` (new shared module)
+  - `commodore/c64/screen.s`
+  - `commodore/c128/screen_vdc.s`
+  - focused runtime tests that directly validate numeric output
+  - audit/headroom/task docs affected by the layout change
+- Out of scope:
+  - changing the 24-bit score formatter in this phase
+  - changing caller-facing screen or combat APIs
+  - broad text/UI refactors unrelated to numeric formatting
+
+### Verification Standard
+1. Replace the duplicated 8-bit and 16-bit decimal decomposition with one shared implementation per build.
+2. Move the 16-bit power-of-10 tables into common code so combat no longer depends on backend-local screen data.
+3. Preserve exact visible output for:
+   - screen decimal print paths
+   - combat message decimal appenders
+4. Add direct runtime coverage for the refactored screen and combat formatter paths.
+5. Rebuild C64/C128, rerun the standard verification, and record the real headroom delta.
+
+### Review
+- Completed.
+- Added `commodore/common/numeric_format.s` as the shared 8-bit / 16-bit formatter core for:
+  - `screen_put_decimal`
+  - `screen_put_decimal_rj2`
+  - `screen_put_decimal_lz2`
+  - `screen_put_decimal_16`
+  - `combat_append_decimal`
+  - `combat_append_decimal_16`
+- Removed the old cross-module `decimal_powers_*` dependency from `combat.s`; combat now formats through common numeric data instead of backend-local screen tables.
+- Added direct runtime coverage for the refactor:
+  - `commodore/c64/tests/test_score.s` now checks `screen_put_decimal_lz2` and `screen_put_decimal_16`
+  - `commodore/c64/tests/test_combat.s` now checks `combat_append_decimal` and `combat_append_decimal_16`
+  - `commodore/c128/tests/test_vdc_attr128.s` now checks VDC `screen_put_decimal_16`
+- Live headroom improved materially in the constrained staged/source regions:
+  - C64 main image margin moved from `40` to `141` bytes below `$C000`
+  - C64 staged banked payload source moved from `5` to `106` bytes below `$D000`
+  - C128 staged source / program image moved from `79` to `180` bytes below `$E000`
 - Verification completed:
-  - `python3 tools/check_6502_lint.py --self-test` → `PASS`
-  - `make check-6502-lint` → `PASS`
   - `make check-zp` → `PASS`
-  - `make -C commodore/c64 build` → `PASS`
+  - `make check-6502-lint` → `PASS` with `318` advisory warnings
+  - `java -jar ../../tools/kickass/KickAss.jar main.s -showmem -vicesymbols -o out/moria8.prg` in `commodore/c64` → `PASS`
   - `make -B -C commodore/c128 build128` → `PASS`
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
-  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+  - `make test128-fast` → `PASS`
+- Next unresolved audit phase: `CA-02`.
 
 ## `CODE_AUDIT` Review
 

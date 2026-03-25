@@ -1,4 +1,5 @@
 #importonce
+#import "numeric_format.s"
 // combat.s — Player melee combat
 //
 // Bump-to-attack: to-hit rolls, damage, monster death, XP awards, level-up.
@@ -1163,107 +1164,25 @@ combat_append_monster_name:
 // Input: A = value (0-255)
 // Clobbers: A, X
 combat_append_decimal:
-    sta zp_temp0                // Save value
-    ldx cmb_buf_idx
-    lda #0
-    sta zp_temp1                // Leading zero flag
-
-    // Hundreds
-    lda zp_temp0
-    ldy #0
-!cad_hundreds:
-    cmp #100
-    bcc !cad_tens+
-    sbc #100
-    iny
-    jmp !cad_hundreds-
-!cad_tens:
-    sta zp_temp0                // Remainder
-    tya
-    beq !cad_skip_h+
-    ora #$30                    // Digit screen code
-    sta combat_msg_buf,x
-    inx
-    lda #1
-    sta zp_temp1                // Printed a digit
-!cad_skip_h:
-
-    // Tens
-    lda zp_temp0
-    ldy #0
-!cad_tens_loop:
-    cmp #10
-    bcc !cad_ones+
-    sbc #10
-    iny
-    jmp !cad_tens_loop-
-!cad_ones:
-    sta zp_temp0                // Remainder (ones)
-    tya
-    bne !cad_print_t+
-    // Check if we need a leading zero for tens
-    ldy zp_temp1
-    beq !cad_skip_t+
-!cad_print_t:
-    ora #$30
-    sta combat_msg_buf,x
-    inx
-!cad_skip_t:
-
-    // Ones (always printed)
-    lda zp_temp0
-    ora #$30
-    sta combat_msg_buf,x
-    inx
-
-    stx cmb_buf_idx
-    rts
+    jsr numeric_format_u8
+    jmp combat_append_digits
 
 // combat_append_decimal_16 — Append 16-bit decimal number to buffer
 // Input: zp_temp0 = lo, zp_temp1 = hi
 // Clobbers: A, X, Y, zp_temp0-3
 combat_append_decimal_16:
+    jsr numeric_format_u16
+    // Fall through to the shared buffer emitter.
+combat_append_digits:
     ldx cmb_buf_idx
-    lda #0
-    sta zp_temp2                // Leading zero flag
-    ldy #4                      // 5 digits: index 4..0
-!cad16_digit:
-    lda #0
-    sta zp_temp3                // Digit counter
-!cad16_sub:
-    lda zp_temp0
-    sec
-    sbc decimal_powers_lo,y
-    pha
-    lda zp_temp1
-    sbc decimal_powers_hi,y
-    bcc !cad16_done+            // Underflow — done with this digit
-    sta zp_temp1
-    pla
-    sta zp_temp0
-    inc zp_temp3
-    jmp !cad16_sub-
-!cad16_done:
-    pla                         // Discard underflowed lo
-    lda zp_temp3
-    bne !cad16_print+
-    lda zp_temp2
-    beq !cad16_next+            // Still leading zeros, skip
-!cad16_print:
-    lda #1
-    sta zp_temp2                // No more leading zeros
-    lda zp_temp3
-    ora #$30                    // Digit → screen code
+    ldy #0
+!cad_emit:
+    lda nf_digit_buf,y
     sta combat_msg_buf,x
     inx
-!cad16_next:
-    dey
-    bne !cad16_digit-
-    // Always print ones digit
-    lda zp_temp0
-    ora #$30
-    sta combat_msg_buf,x
-    inx
+    iny
+    cpy zp_temp2
+    bne !cad_emit-
     stx cmb_buf_idx
     rts
 
