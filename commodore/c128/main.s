@@ -319,7 +319,7 @@ entry_real:
     lda $dd0d               // Clear CIA2 ICR
 
     lda #$ff
-    sta $d8                 // Screen Editor: 80-col mode
+    sta zp_screen_editor_mode  // Screen Editor: 80-col mode
 
     // Enable 2MHz mode on the C128 (set D030 bit0 while preserving other flags)
     lda $d030
@@ -764,7 +764,7 @@ c128_restore_runtime_state_core:
     lda #>chrin_keyboard_stub
     sta $0303
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     rts
 
 c128_restore_runtime_vectors:
@@ -977,7 +977,7 @@ tramp_game_over:
     php
     sei
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     lda #$0e                    // MMU_NORMAL
     sta $ff00
     lda #$37                    // BANK_ALL_ROM
@@ -998,7 +998,7 @@ tramp_game_over:
     php
     sei
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     lda #$0e                    // MMU_NORMAL
     sta $ff00
     lda #$37                    // BANK_ALL_ROM
@@ -1917,7 +1917,7 @@ restart_entry:
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero.
     lda #$ff
-    sta $cc
+    sta zp_screen_editor_state
     // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
     lda #<mmu_common_irq
     sta $0314
@@ -1925,7 +1925,7 @@ restart_entry:
     sta $0315
 
     lda #$ff
-    sta $d8                     // Screen Editor: 80-col mode
+    sta zp_screen_editor_mode   // Screen Editor: 80-col mode
 
     cli
 
@@ -2144,7 +2144,7 @@ c128_load_runtime_low_prg:
     ora #%00000011
     sta $dd00
     lda #0
-    sta $90
+    sta zp_kernal_status
 !done:
     rts
 

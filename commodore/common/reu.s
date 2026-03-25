@@ -363,7 +363,7 @@ c128_preload_asset_load:
     sta c128_preload_status
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_preload_diag_status
-    lda $90
+    lda zp_kernal_status
     sta c128_preload_diag_readst
     lda $01
     sta c128_preload_diag_port1

@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `ZP-1` by adding an automated scan for raw zero-page ownership violations.
+- [x] Flag raw `$90-$FF` zero-page memory operands outside explicitly blessed KERNAL/MMU helper cases.
+- [x] Keep the scan focused on real assembly operands rather than `.byte` data, comments, or immediates.
+- [x] Wire the scan into a reproducible project check path and record the first live results in the audit docs.
 - [x] Execute `CA-12` by replacing the public one-bit RNG byte path with a real byte-step generator.
 - [x] Keep the final implementation inside the C64 banked-payload budget while improving byte-quality output.
 - [x] Add focused runtime coverage that proves `rng_next` advances exactly eight reference one-bit steps.
@@ -254,6 +258,57 @@ This file is a temporary working scratchpad.
   - `commodore/c64/tests/test_combat.s` test 20 now falls through to tests 21-25, and test 23 now matches the actual excess-halving level-up behavior
 - Verification completed:
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+
+## `AUDIT-P7-ZP1` Design
+
+### Goal
+- Execute `ZP-1` by turning the declared zero-page ownership contract into an automated check.
+- Catch the high-risk drift:
+  - raw `$90-$FF` zero-page memory operands outside explicitly blessed cases
+  - raw literal zero-page operands where the code should normally be using named labels
+
+### Scope
+- In scope:
+  - `commodore/common/zeropage.s`
+  - assembly sources under `commodore/common/`, `commodore/c64/`, and `commodore/c128/`
+  - build plumbing needed to run the scan consistently
+  - audit/task docs updated from the first live scan results
+- Out of scope:
+  - broad renaming of existing zero-page labels
+  - changing the zero-page map itself in this phase
+  - data-byte style cleanup unrelated to real memory operands
+
+### Verification Standard
+1. Confirm the live zero-page contract from `zeropage.s`.
+2. Implement a scanner that inspects assembly operands after stripping comments.
+3. Prove the scanner ignores false-positive classes such as `#$ff`, `.byte $ff`, and comment text.
+4. Run the scanner against the live tree and classify each hit as:
+   - real violation to fix
+   - explicitly blessed raw usage
+   - scanner gap to tighten
+5. Update the audit docs with the completed scan result and remaining follow-up, if any.
+
+### Review
+- Completed.
+- Added `tools/check_zp_usage.py` and root `make check-zp` so the zero-page contract is now enforced by a reproducible project command instead of comments alone.
+- Tightened the scanner after the first run so it ignores immediate-expression false positives like `#~FLAG & $ff`, `.byte $ff`, and comment text.
+- The first real scan found intentional but undocumented raw accesses to KERNAL / Screen Editor bytes:
+  - `$90` status / `READST`
+  - `$C6` keyboard buffer count
+  - `$CC` Screen Editor cursor/keyboard state
+  - `$D8` C128 Screen Editor 80-column mode byte
+- Converted those call sites to named symbols in `commodore/common/zeropage.s`, and replaced the remaining raw low-ZP scratch loops with symbolic operands in:
+  - `commodore/c64/main.s`
+  - `commodore/c64/memory.s`
+  - `commodore/c128/boot128.s`
+  - `commodore/c128/memory128.s`
+- Verification completed:
+  - `python3 tools/check_zp_usage.py --self-test` → `PASS`
+  - `make check-zp` → `0 error(s), 0 warning(s)`
+  - `make -C commodore/c64 build` → `PASS`
+  - `make -B -C commodore/c128 build128` → `PASS`
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed` on rerun after the known flaky `render` suite
   - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
 
 ## `CODE_AUDIT` Review

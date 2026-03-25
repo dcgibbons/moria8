@@ -125,7 +125,7 @@ tier_init:
     beq !ti_done+
 
     lda #1
-    sta $cc                     // Suppress cursor blink during loading
+    sta zp_screen_editor_state  // Suppress cursor blink during loading
     lda #COL_LGREY
     sta zp_text_color
     jsr screen_clear
@@ -153,7 +153,7 @@ tier_init:
 
     // Clear screen and show loading progress
     lda #1
-    sta $cc                     // Suppress cursor blink during loading
+    sta zp_screen_editor_state  // Suppress cursor blink during loading
     lda #COL_LGREY
     sta zp_text_color
     jsr screen_clear

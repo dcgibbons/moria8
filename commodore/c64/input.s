@@ -201,7 +201,7 @@ input_get_key:
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
     inc zp_entropy
-    lda $c6                 // Keyboard buffer count (filled by IRQ handler)
+    lda KBDBUF_COUNT        // Keyboard buffer count (filled by IRQ handler)
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
     sta igk_key
@@ -253,7 +253,7 @@ input_wait_release:
 input_get_command:
     // Flush keyboard buffer to discard keys pressed during rendering
     lda #0
-    sta $c6                 // KERNAL keyboard buffer count
+    sta KBDBUF_COUNT        // KERNAL keyboard buffer count
 
     lda #1
     sta zp_input_count      // Default repeat count = 1

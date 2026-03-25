@@ -101,15 +101,18 @@ Required deliverable:
 Guardrail:
 - do not claim percentage wins unless they are measured on this codebase
 
-### `ZP-1` Zero-Page Governance Exists, But Ownership Enforcement Is Not Automated
+### `ZP-1` Zero-Page Governance Was Commented, And Is Now Enforced
 
 Evidence:
 - `commodore/common/zeropage.s:1-98`
 - `commodore/common/zeropage.s:225-228`
+- `tools/check_zp_usage.py`
+- `Makefile`
 
 What is happening:
 - the project has a declared ZP contract and boundary assertions
-- what it lacks is an automated scan for raw zero-page address use outside that declared map
+- phase 7 adds an opcode-aware scanner plus a reproducible `make check-zp` entry point
+- the scanner now fails on raw `$90-$FF` zero-page memory operands and warns on raw `$02-$8F` operands where named labels should normally be used
 
 Why this matters:
 - manual discipline alone is brittle
@@ -118,6 +121,24 @@ Why this matters:
 Required deliverable:
 - a scan that flags raw `$90-$FF` zero-page usage except for explicitly blessed cases such as MMU/KERNAL helper scratch
 - ideally also flag raw literal ZP use when a named label should have been used instead
+
+Phase 7 result:
+- implemented on `2026-03-25`
+- added `tools/check_zp_usage.py` with self-test coverage for:
+  - raw volatile operands
+  - raw safe-zone operands
+  - immediate-expression false positives such as `#$ff` and `#... & $ff`
+  - `.byte` data and comment text
+- the first live run exposed intentional but previously unnamed raw accesses to:
+  - `$90` KERNAL status / `READST`
+  - `$C6` KERNAL keyboard buffer count
+  - `$CC` Screen Editor state
+  - `$D8` C128 Screen Editor 80-column mode byte
+- phase 7 resolved those hits by naming them in `commodore/common/zeropage.s` and converting the live call sites to symbolic operands
+- focused verification completed:
+  - `make check-zp` → `0 error(s), 0 warning(s)`
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
 
 ### `API-1` The C128 Text Contract Needs One External Rule
 
@@ -678,26 +699,25 @@ Expected savings:
 ## Immediate Execution Priority
 
 1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `54` bytes.
-2. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
-3. Add `LINT-1` once the higher-risk contract and layout items are in motion.
+2. Run `ALIGN-1` to harden the remaining hot-path performance perimeter before further cleanup.
+3. Add `LINT-1` now that `ZP-1` has established the pattern for automated contract enforcement.
 4. Start tactical deduplication with `CA-01` only after the perimeter items above are underway.
 5. Treat C64 banked payload growth as explicit change-control: `3` bytes remain below `$D000`.
 
 ## Suggested Execution Order
 
-1. `ZP-1` automated zero-page ownership scan
-2. `ALIGN-1` hot-path alignment audit
-3. `LINT-1` 6502 anti-pattern linter
-4. `CA-01` shared numeric formatting
-5. `CA-02` filtered inventory visible-slot cache
-6. `CA-03` shared hunger-state helper/constants
-7. `CA-04` modal UI return helper cleanup
-8. `CA-06` message-history destination simplification
-9. `CA-05` item-effect dispatch cleanup
-10. `CA-08` item-field init helper
-11. `CA-07` full-screen clear benchmark and safe-callsite split
-12. `CA-09` C128 KERNAL wrapper refactor
-13. `CA-10` shared contract naming/constants cleanup
+1. `ALIGN-1` hot-path alignment audit
+2. `LINT-1` 6502 anti-pattern linter
+3. `CA-01` shared numeric formatting
+4. `CA-02` filtered inventory visible-slot cache
+5. `CA-03` shared hunger-state helper/constants
+6. `CA-04` modal UI return helper cleanup
+7. `CA-06` message-history destination simplification
+8. `CA-05` item-effect dispatch cleanup
+9. `CA-08` item-field init helper
+10. `CA-07` full-screen clear benchmark and safe-callsite split
+11. `CA-09` C128 KERNAL wrapper refactor
+12. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -720,4 +740,5 @@ For every item above:
 - Phase 4 `WRAP-1` is complete: the common C128 KERNAL wrapper contract now preserves caller IRQ state, the focused cold-boot probe passes, and the fast C128 unit batch passes.
 - Phase 5 `API-1` is complete: the public C128 VDC string/char paths now share one PETSCII-facing contract, and the focused VDC regression plus the explicit-`x128` fast batch both pass.
 - Phase 6 `CA-12` is complete: the shared RNG byte path now advances eight LFSR steps per returned byte, the full C64 suite passes, and the explicit-`x128` fast C128 batch still passes.
+- Phase 7 `ZP-1` is complete: raw volatile zero-page accesses are now enforced by `make check-zp`, the shared KERNAL / Screen Editor bytes have names instead of magic literals, and both the full C64 suite and fast C128 batch pass on the updated tree.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

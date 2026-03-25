@@ -297,7 +297,7 @@ EnterKernal_sub:
     sta MMU_SAVE_FF00
     jsr save_kernal_zp      // Protect game state in kernal_zp_save_buf
     lda #$ff
-    sta $cc                 // Force default keyboard row
+    sta zp_screen_editor_state // Force default keyboard row
     
     // Bridge to KERNAL: Top Common MUST be OFF ($05) to expose ROM jump table
     lda #$05
@@ -487,7 +487,7 @@ mmu_copy_map_row:
 save_kernal_zp:
     ldx #0
 !loop:
-    lda $02,x
+    lda zp_temp0,x
     sta kernal_zp_save_buf,x
     inx
     cpx #ZP_SAVE_SIZE
@@ -499,7 +499,7 @@ restore_kernal_zp:
     ldx #0
 !loop:
     lda kernal_zp_save_buf,x
-    sta $02,x
+    sta zp_temp0,x
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-
@@ -509,7 +509,7 @@ restore_kernal_zp:
 save_zp:
     ldx #0
 !loop:
-    lda $02,x
+    lda zp_temp0,x
     sta zp_save_buf,x
     inx
     cpx #ZP_SAVE_SIZE
@@ -521,7 +521,7 @@ restore_zp:
     ldx #0
 !loop:
     lda zp_save_buf,x
-    sta $02,x
+    sta zp_temp0,x
     inx
     cpx #ZP_SAVE_SIZE
     bne !loop-

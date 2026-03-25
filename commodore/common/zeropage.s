@@ -94,6 +94,10 @@
 .label zp_vol_10       = $2a   // KERNAL: serial scratch
 
 // --- C128 MMU Save state (KERNAL-Volatile) ---
+.label zp_kernal_status = $90 // KERNAL status / READST byte (EOI, timeout, device status)
+.label zp_screen_editor_state = $cc // Screen Editor cursor/keyboard scan state
+.label zp_kbdbuf_count = $c6 // KERNAL keyboard buffer count (C64)
+.label zp_screen_editor_mode = $d8 // C128 Screen Editor 80-column mode byte
 .label zp_temp_ptr     = $fe   // KERNAL-Volatile ($90-$FF)
 .label zp_temp_ptr_hi  = $ff
 

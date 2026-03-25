@@ -329,7 +329,7 @@ irq_no_blink:
     cld
 irq_no_blink_after_cld:
     lda #1
-    sta $cc                 // Force non-zero (inc wraps $FF→$00, re-enabling blink)
+    sta zp_screen_editor_state // Force non-zero (inc wraps $FF→$00, re-enabling blink)
     jmp $ea31               // Continue to standard KERNAL IRQ handler
 
 // ============================================================
@@ -753,7 +753,7 @@ game_over_prompt:
     jsr screen_put_string
     jsr screen_unblank
     lda #0
-    sta $c6                     // Flush keyboard buffer
+    sta zp_kbdbuf_count         // Flush keyboard buffer
 !gop_loop:
     jsr input_get_key
     cmp #$52                    // 'R' — reboot (reload from disk)
@@ -785,9 +785,9 @@ game_restart:
     lda #0
     ldx #0
 !clr_zp:
-    sta $2b,x
+    sta zp_player_x,x
     inx
-    cpx #($8f - $2b + 1)        // 101 bytes
+    cpx #(zp_entropy - zp_player_x + 1) // 101 bytes
     bne !clr_zp-
 
     // Clear static game-state variables in data segments
