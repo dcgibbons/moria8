@@ -34,7 +34,7 @@ piw_flags:    .byte 0          // Item flags being processed
 piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
-.label piw_visible_slots = combat_msg_buf  // Safe until the post-selection item message is built
+piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
 
 // ============================================================
 // Category -> equipment slot mapping table
@@ -141,25 +141,38 @@ piw_inv_slot_matches_filter:
     tax
     rts
 
-// piw_count_filtered_inv — count visible carried items for a filter
+// piw_build_visible_inv_cache — cache visible carried slots for a filter
 // Input: A = filter value
 // Output: A = visible count
-// Clobbers: X
-piw_count_filtered_inv:
+// Clobbers: X, Y
+piw_build_visible_inv_cache:
     sta piw_filter
-    lda #0
-    sta piw_p1
+    ldy #0
     ldx #0
 !piw_count_inv_loop:
+    tya
+    pha
     jsr piw_inv_slot_matches_filter
+    pla
+    tay
     bcc !piw_count_inv_next+
-    inc piw_p1
+    txa
+    sta piw_visible_slots,y
+    iny
 !piw_count_inv_next:
     inx
     cpx #MAX_INV_SLOTS
     bcc !piw_count_inv_loop-
-    lda piw_p1
+    sty piw_visible_count
+    tya
     rts
+
+// piw_count_filtered_inv — count visible carried items for a filter
+// Input: A = filter value
+// Output: A = visible count
+// Clobbers: X, Y
+piw_count_filtered_inv:
+    jmp piw_build_visible_inv_cache
 
 // piw_prompt_filtered_inv — print a filtered inventory prompt or "nothing there"
 // Input: A = filter value, X = Huffman prompt string id
@@ -169,7 +182,7 @@ piw_prompt_filtered_inv:
     txa
     pha
     lda piw_filter
-    jsr piw_count_filtered_inv
+    jsr piw_build_visible_inv_cache
     bne !piw_prompt_inv_have_choices+
     pla
     ldx #HSTR_PIW_NOTHING
@@ -193,23 +206,11 @@ piw_pick_filtered_inv_key:
     sec
     sbc #$41
     bcc !piw_pick_inv_fail+
-    sta piw_slot
-
-    ldx #0
-!piw_pick_inv_loop:
-    jsr piw_inv_slot_matches_filter
-    bcc !piw_pick_inv_next+
-    lda piw_slot
-    beq !piw_pick_inv_found+
-    dec piw_slot
-!piw_pick_inv_next:
-    inx
-    cpx #MAX_INV_SLOTS
-    bcc !piw_pick_inv_loop-
-    clc
-    rts
-
-!piw_pick_inv_found:
+    tay
+    cpy piw_visible_count
+    bcs !piw_pick_inv_fail+
+    lda piw_visible_slots,y
+    tax
     lda inv_item_id,x
     sec
     rts

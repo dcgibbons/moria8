@@ -293,7 +293,7 @@ These items remain valid unless noted as already completed, and they now sit ben
 | `CA-11` | High | fix melee to-hit overflow / sign handling | no meaningful byte win; small cycle cost increase, large correctness win |
 | `CA-12` | Medium | advance RNG by a real byte step instead of one-bit output | completed in phase 6; cycle cost increase, meaningful quality win |
 | `CA-01` | High | unify numeric formatting kernels/tables | completed in phase 10; recovered `101` bytes on the tight C64/C128 staged margins, plus reduced drift |
-| `CA-02` | High | stop rescanning filtered inventory/equipment views | roughly `200-600` cycles per filtered prompt path; code size small positive or neutral |
+| `CA-02` | High | stop rescanning filtered inventory/equipment views | completed in phase 20; both carried-item and equipment filtered pickers now reuse visible-slot caches with no measurable layout cost |
 | `CA-03` | Medium | unify hunger-state thresholds and recompute logic | completed in phase 12; small byte win plus removes sync risk |
 | `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | completed in phase 13; modest byte cleanup plus more consistent return behavior |
 | `CA-06` | Medium | remove message-history offset recomputation | completed in phase 14; removes the per-save offset math and simplifies the hot path |
@@ -397,6 +397,21 @@ Verification:
 - sparse inventory prompt/filter regression tests
 - takeoff prompt with non-adjacent occupied equipment slots
 - zero-match behavior
+
+Phase 20 result:
+- completed on `2026-03-25`
+- the carried-item half of `CA-02` now uses a dedicated `piw_visible_slots` buffer in `commodore/common/player_items.s`
+- filtered carried-item prompts now build the visible-slot list once and reuse it for:
+  - prompt range
+  - key-to-slot mapping
+- the earlier hang came from an unsafe storage choice; the final implementation avoids that by keeping the cache local to `player_items.s` instead of aliasing shared message buffers
+- measured outcome on the live tree:
+  - equipment-selection rescans remain removed
+  - carried-item count-scan + pick-scan redundancy is now removed too
+  - no measurable program-end / overlay-end delta versus phase 19
+- verification completed:
+  - `bash commodore/c64/run_tests.sh` passed `33/33`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` passed
 
 ### `CA-03` Hunger Thresholds And Hunger-State Recompute Are Duplicated
 
@@ -839,13 +854,13 @@ Expected savings:
 
 1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `271` bytes.
 2. Keep any future alignment work tightly targeted to the specific live crossings already identified; do not spend bytes on blanket padding.
-3. Revisit the carried-item half of `CA-02` only if a cache/storage contract can be proven without reintroducing the earlier `test_item` hang.
+3. Treat the core audit execution queue as complete; any further changes should be feature-driven and must keep the same headroom and guardrail discipline.
 4. Treat C64 runtime banked growth as explicit change-control: only `4` bytes remain below `$FFFA`.
 5. Treat the `318` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
 
 ## Suggested Execution Order
 
-1. revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract
+1. core audit execution queue complete
 
 ## Verification Strategy
 
@@ -876,4 +891,5 @@ For every item above:
 - Phase 17 `CA-07` is complete: full-screen modal clears now use an explicit platform split, keeping the proven row-by-row path on C64 while moving the broad C128 full-screen helper traffic to `screen_clear`.
 - Phase 18 `CA-09` is complete: the repetitive C128 KERNAL jump-table wrappers now share one macro scaffold, while `w_load` remains explicit for its special diagnostics and side effects.
 - Phase 19 `CA-10` is complete: the shared input command contract and run-cancel state machine now live in common files, while the platform keyboard scan implementations remain local.
+- Phase 20 `CA-02` is complete: the filtered carried-item picker now uses the same visible-slot-cache strategy as takeoff, closing the last intentionally paused audit item without spending additional headroom.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

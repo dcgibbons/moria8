@@ -3,8 +3,9 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [ ] Revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract.
-- [ ] Keep the current reduced equipment-cache implementation as the only live cache path until the carried-item contract is proven safe.
+- [x] Complete the carried-item half of `CA-02` with a dedicated visible-slot cache that does not alias shared message buffers.
+- [x] Keep the final cache storage local to `player_items.s` so filtered prompts cannot recreate the earlier `test_item` hang.
+- [x] Rebuild and rerun the standard C64/C128 verification on the completed `CA-02` implementation.
 - [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
 - [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
 - [x] Rebuild and rerun the standard C64/C128 verification on the reduced safe implementation.
@@ -536,6 +537,21 @@ This file is a temporary working scratchpad.
 - Outcome:
   - `CA-02` is narrowed, not closed
   - the remaining open work is the filtered-inventory cache, and it must be treated as a memory/corruption problem inside `commodore/common/player_items.s`, not a timing problem
+
+### `AUDIT-P20-CA02` Review
+
+- Completed.
+- Finished the carried-item half of `CA-02` in `commodore/common/player_items.s` by replacing the filtered prompt count-scan + key-pick rescan pair with one dedicated visible-slot cache.
+- Kept the cache storage local to `player_items.s` instead of reusing `combat_msg_buf`; that was the critical safety constraint that prevented the earlier hang from returning.
+- Caught and fixed one follow-up bug during verification:
+  - the first cache draft failed to preserve the visible-count index across `piw_inv_slot_matches_filter`, which wrote slot numbers at the wrong offsets and broke the late filtered-item tests
+- Final measured outcome:
+  - filtered carried-item rescans are removed
+  - equipment-selection rescans remain removed from the earlier phase-11 reduction
+  - no measurable headroom delta versus the phase-19 tree
+- Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`: `PASS`
 
 ## `CODE_AUDIT` Review
 
