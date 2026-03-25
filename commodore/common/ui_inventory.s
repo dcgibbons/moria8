@@ -57,37 +57,18 @@ ui_inv_display:
     sta uinv_row
     lda #0
     sta uinv_any                // Track if any items shown
+    sta uinv_visible            // Visible ordinal for filtered relabeling
+    lda uinv_filter
+    sta piw_filter
 
 !uinv_loop:
     lda uinv_slot
     cmp #MAX_INV_SLOTS
     bcs !uinv_loop_done+
 
-    // Check if slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !uinv_next+
-
-    // Apply category filter
-    ldy uinv_filter
-    cpy #$ff
-    beq !uinv_show+             // $FF = no filter, show all
-    // A still = item type ID from inv_item_id,x
-    tax
-    lda it_category,x           // A = category of this item
-    cpy #$fe
-    beq !uinv_wearable+
-    // Exact category match
-    cmp uinv_filter
-    beq !uinv_show+
-    jmp !uinv_next+
-!uinv_wearable:
-    tax
-    lda equip_slot_for_cat,x
-    cmp #$ff
-    bne !uinv_show+
-    jmp !uinv_next+
+    ldx uinv_slot
+    jsr piw_inv_slot_matches_filter
+    bcc !uinv_next+
 !uinv_show:
 
     // Print letter and item name
@@ -96,11 +77,23 @@ ui_inv_display:
     lda #1
     sta zp_cursor_col
 
-    // Letter: 'A' + slot_index (screen code for 'A' = $01)
+    // Unfiltered inventory keeps absolute slot letters; filtered views are
+    // relabeled contiguously so prompt/parser/overlay stay aligned.
+    lda uinv_filter
+    cmp #$ff
+    bne !uinv_filtered_letter+
     lda uinv_slot
     clc
     adc #$01                    // Screen code 'A'
     jsr screen_put_char
+    jmp !uinv_letter_done+
+!uinv_filtered_letter:
+    lda uinv_visible
+    clc
+    adc #$01                    // Screen code 'A'
+    jsr screen_put_char
+    inc uinv_visible
+!uinv_letter_done:
 
     // ") "
     lda #$29                    // Screen code ')'
@@ -183,6 +176,7 @@ ui_equip_display:
     // Iterate 8 equipment slots
     lda #0
     sta uinv_slot               // 0-7 (maps to inv slot 22-29)
+    sta uinv_visible            // Visible ordinal for non-empty selection rows
 
 !ueq_loop:
     lda uinv_slot
@@ -198,6 +192,33 @@ ui_equip_display:
     lda #1
     sta zp_cursor_col
 
+    lda uinv_slot
+    clc
+    adc #EQUIP_WEAPON           // Map 0-7 → 22-29
+    sta uinv_equip_idx
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !ueq_empty_prefix+
+
+    lda #COL_LGREY
+    sta zp_text_color
+    lda uinv_visible
+    clc
+    adc #$01                    // Screen code 'A'
+    jsr screen_put_char
+    lda #$29                    // ')'
+    jsr screen_put_char
+    lda #$20                    // space
+    jsr screen_put_char
+    inc uinv_visible
+    jmp !ueq_prefix_done+
+
+!ueq_empty_prefix:
+    lda #4
+    sta zp_cursor_col
+
+!ueq_prefix_done:
     // Print slot label
     lda #COL_LGREY
     sta zp_text_color
@@ -209,16 +230,12 @@ ui_equip_display:
     jsr screen_put_string
 
     // Check if slot has an item
-    lda uinv_slot
-    clc
-    adc #EQUIP_WEAPON           // Map 0-7 → 22-29
-    tax
+    ldx uinv_equip_idx
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !ueq_none+
 
     // Print item name with ego prefix/suffix (R14)
-    stx uinv_equip_idx              // Save absolute slot index
     lda #COL_WHITE
     sta zp_text_color
     jsr put_inv_name_with_ego
@@ -291,6 +308,7 @@ uinv_slot:      .byte 0
 uinv_row:       .byte 0
 uinv_any:       .byte 0
 uinv_equip_idx: .byte 0
+uinv_visible:   .byte 0
 uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 
 // ============================================================

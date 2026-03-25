@@ -113,28 +113,28 @@ test_start:
 
 test_huff_integrity:
     lda huff_str_index + (HSTR_DF_DIRECTION * 2)
-    cmp #<$02d4
+    cmp #<$02c8
     bne !fail+
     lda huff_str_index + (HSTR_DF_DIRECTION * 2) + 1
-    cmp #>$02d4
+    cmp #>$02c8
     bne !fail+
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2)
-    cmp #<$045c
+    cmp #<$044f
     bne !fail+
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2) + 1
-    cmp #>$045c
+    cmp #>$044f
     bne !fail+
-    lda huff_str_data + $02d4
-    cmp #$8c
+    lda huff_str_data + $02c8
+    cmp #$8e
     bne !fail+
-    lda huff_str_data + $02d5
-    cmp #$77
+    lda huff_str_data + $02c9
+    cmp #$75
     bne !fail+
-    lda huff_str_data + $045c
-    cmp #$4c
+    lda huff_str_data + $044f
+    cmp #$0a
     bne !fail+
-    lda huff_str_data + $045d
-    cmp #$e8
+    lda huff_str_data + $0450
+    cmp #$c8
     bne !fail+
     lda #$01
     bne !store+
@@ -453,6 +453,6 @@ test_bank_image:
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $8c, $77, $fe, $98, $f7, $9a, $42, $a0
-    .byte $4c, $e8, $3a, $e0, $01, $45, $96, $e6, $95, $d9, $f2, $56, $71, $da, $a5, $3a, $85, $40
+    .byte $8e, $75, $fe, $d8, $f5, $93, $44, $a0
+    .byte $0a, $c8, $7a, $e6, $fb, $d0, $e5, $ad, $a5, $74, $7c, $ed, $00, $cf, $52, $02, $89, $40
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

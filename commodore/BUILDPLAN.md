@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -20,7 +20,6 @@
 | High | `BUG-HAGGLE-UI` store haggling input / reactions do not behave correctly | Medium | High | No | User-reported store-haggling regression. Audit buy/sell haggle prompts, offer parsing, reaction text, convergence, and insult/kick behavior against expected classic flow. |
 | Medium | `BUG-SEARCH-VERIFY` verify whether searching is actually available and working end-to-end, then implement/fix if not | Medium | Medium | No | The codebase already contains a `do_search` path, so this is not yet proven to be an unimplemented feature. Confirm command mapping and user-visible behavior in real play before deciding whether this is missing, broken, or merely undiscoverable. |
 | Medium | `BUG-HELP-PAGING` multi-page help is not implemented | Medium | Medium | No | Extend the help UI so longer help content can paginate cleanly instead of truncating to a single screen. |
-| Medium | `BUG-PROMPT-FILTER` inventory-selection prompts should only list relevant item letters, not the entire inventory | Medium | Medium | No | Any prompt that offers an inventory subset should filter the displayed letters/items to the ones valid for that action, instead of showing unrelated slots. |
 | Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
 
 ## Open Phases / Display Work
@@ -53,45 +52,3 @@
 | Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
 | Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |
-
-## C128 -> `main` Merge Checklist
-
-### Must
-
-- Keep C128 verification green:
-  - `make test128-fast`
-  - `make test128-fast-smoke`
-  - `make test128`
-- Reconfirm real-play stability on C128:
-  - boot and title flow
-  - new game
-  - town
-  - descend / ascend
-  - save / load resume
-  - death / game-over flow
-- Reconfirm no shared-code regressions on C64 from the merged gameplay changes.
-- Keep the C128 memory/layout contract intact:
-  - main segment below `$C000`
-  - banked payload below `$FFFA`
-  - staged `banked_payload` source below `$E000`
-  - overlays fit their windows
-  - low-RAM runtime loader contract remains valid
-  - no callable code executes from the I/O hole
-
-### Strongly Preferred
-
-- Keep the new isolated disk-swap and renderer tests in the regular pre-merge verification path.
-
-### Not Required
-
-- `UI-80` refinement
-- `FEAT-DISK`
-- `FEAT-DEPTH`
-- `FEAT1`
-- `FEAT-AUD`
-- cleanup/refactor backlog items that do not affect merge safety
-
-## Merge Notes
-
-- This file should contain actual open work only.
-- Ongoing engineering guardrails belong in `AGENTS.md`, `tasks/lessons.md`, asserts, and test coverage, not in the backlog table.

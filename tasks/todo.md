@@ -3,6 +3,178 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Audit the shared filtered prompt/display paths in `ui_inventory.s`, `player_items.s`, and related item-selection callers.
+- [x] Review upstream VMS-Moria and Umoria behavior for filtered item prompts and equipment selection.
+- [x] Get consultant input on the safest shared fix shape and regression strategy.
+- [x] Lock the local `BUG-PROMPT-FILTER` user-visible contract and implementation seam.
+- [x] Write the implementation checklist and focused verification matrix before coding.
+
+## `BUG-PROMPT-FILTER` Design
+
+### Problem Statement
+- Active backlog entry: `BUG-PROMPT-FILTER` in `commodore/BUILDPLAN.md`.
+- Current filtered item-selection commands still behave like full absolute-slot pickers:
+  - prompts advertise the whole range (`a-v` / `a-h`)
+  - `?` overlays hide unrelated items but keep absolute slot letters
+  - input handlers still parse absolute letters directly and only then reject mismatched categories
+- Result: the UI can show a filtered subset while still exposing misleading letters and whole-pack prompt ranges.
+
+### Current Code Facts
+- Shared inventory overlay in `commodore/common/ui_inventory.s` already filters rows via `uinv_filter`, but labels filtered entries with absolute slot letters (`A + slot`) instead of contiguous visible letters.
+- Shared selection handlers in `commodore/common/player_items.s` still do direct `sbc #$41` absolute-slot parsing for:
+  - `item_wear`
+  - `item_takeoff`
+  - `item_quaff`
+  - `item_read_scroll`
+  - `item_aim_wand`
+  - `item_use_staff`
+  - `item_gain_spell`
+- `show_inv_and_restore` uses `uinv_filter` only for overlay display, not as a shared source of truth for selection mapping.
+- `item_wear` has an extra local eligibility rule beyond category filtering:
+  - `ICAT_LIGHT` includes Flask of Oil, but Flask of Oil is not wearable
+- Local pack storage is sparse, not compact:
+  - `inv_add_item` writes to the first empty carried slot
+  - `inv_remove_item` clears a slot and does not compact the pack
+- Important scope boundary:
+  - `item_drop` and identify-style all-item pickers are unfiltered and do not need this bug’s relabeling
+  - `item_eat` auto-selects the first food item and is not a prompted filtered picker today
+
+### Upstream Findings
+- **VMS-Moria**
+  - `find_range()` in `source/include/moria.inc` discovers the first/last relevant inventory range for a requested object set.
+  - `get_item()` then prompts only that filtered range: `(Items a-b, * for inventory list, ^Z to exit) ...`
+  - `show_inven()` prints letters from compacted inventory positions within that filtered range.
+  - `show_equip()` labels only non-empty equipment entries contiguously (`a`, `b`, `c`, ...).
+- **Umoria**
+  - `inventoryGetInputForItemId()` in `src/ui_inventory.cpp` is the shared selection gateway for filtered pack/equipment prompts.
+  - It prints only the active filtered span (`Items a-b ...`) and keeps the prompt and selection parser in the same shared path.
+  - `displayEquipment()` labels only non-empty equipment rows contiguously.
+- **Meaning for Moria8**
+  - The upstream contract worth preserving is:
+    - filtered prompts expose only valid choices
+    - visible letters are contiguous
+    - `?` overlay letters and accepted input must match
+  - The upstream storage assumption is **not** worth copying in this bug:
+    - both upstream trees rely on compacted/sorted inventory layouts that Moria8 does not currently have
+
+### Locked User-Visible Contract
+1. Any filtered item-selection command must present only valid choices for that command.
+2. The `?` overlay for that command must show exactly the same selectable set that the prompt parser accepts.
+3. Filtered visible letters must be contiguous from `A` upward with no gaps from hidden sparse slots.
+4. Selecting `B` in a filtered prompt must pick the second visible matching item, not the physical slot whose absolute letter is `B`.
+5. Prompt text must advertise only the valid visible range, not the whole pack/equipment span.
+6. Equipment takeoff selection must use contiguous letters for non-empty equipment rows.
+7. Full unfiltered inventory behavior remains unchanged in this bug unless a command is explicitly in the filtered-prompt list.
+
+### Scope Decision
+- **In scope for implementation**
+  - filtered pack commands:
+    - `item_wear`
+    - `item_quaff`
+    - `item_read_scroll`
+    - `item_aim_wand`
+    - `item_use_staff`
+    - `item_gain_spell`
+  - filtered equipment command:
+    - `item_takeoff`
+- **Out of scope for this bug**
+  - pack sorting/compaction
+  - global inventory letter redesign for unfiltered views
+  - changing storage layout or `inv_add_item` / `inv_remove_item`
+  - unrelated all-item pickers such as `item_drop`
+
+### Preferred Design Shape
+- Implement this entirely at the prompt/UI-selection layer.
+- Do **not** change real inventory/equipment storage order.
+- Add one shared mode-aware helper layer in `commodore/common/` for prompted item selection.
+- Preferred helper seam:
+  - `inv_slot_matches_mode(slot, mode)`:
+    - true only if the physical slot is a valid target for the active prompt mode
+    - must support command-specific rules such as excluding Flask of Oil from `wear`
+  - `inv_count_matches_mode(mode)`:
+    - counts visible filtered candidates for dynamic prompt suffixes and zero-match handling
+  - `inv_pick_nth_match(letter_index, mode)`:
+    - maps visible ordinal `A/B/C...` to the physical sparse pack slot
+  - `equip_pick_nth_nonempty(letter_index)`:
+    - maps visible ordinal `A/B/C...` to the nth non-empty equipment row
+- Use the same helper path from both:
+  - overlay rendering (`?`)
+  - prompt input parsing
+- Keep `uinv_filter` as a rendering hint only if needed for the overlay, but do not let it remain the sole semantic filter source for command selection.
+
+### UI / Prompt Decisions
+- Filtered pack overlays should relabel matching items contiguously (`A)`, `B)`, `C)`), not with absolute sparse-slot letters.
+- `item_takeoff` should not be redesigned into a different equipment screen.
+- Safer equipment approach:
+  - keep the existing slot-label rows (`Weapon:`, `Body:`, etc.)
+  - add contiguous selection letters only for non-empty rows
+  - map `A/B/C...` to the nth occupied equipment row
+- Dynamic prompt text should show the actual visible span for the current command:
+  - examples: `(A-A)`, `(A-B)`, `(A-C)`
+- If there are zero valid items:
+  - do not print a misleading `A-V` / `A-H` prompt
+  - short-circuit with the appropriate no-valid-item message path before reading input
+
+### Risks / Edge Cases
+- Biggest risk: duplicated filter logic between overlay and parser.
+  - If the display and parser drift, the bug is still present in a worse form.
+- `item_wear` is the main semantic trap.
+  - “wearable” is not just category-based because Flask of Oil must stay excluded.
+- `item_takeoff` cursed items should remain selectable.
+  - They are meaningful targets because selection should still produce the existing cursed rejection.
+- Sparse local pack layout means direct upstream range-copying is unsafe.
+  - Moria8 must emulate contiguous selection with ordinal mapping, not storage changes.
+- Shifted/unshifted letter acceptance should remain compatible with current command behavior.
+
+### Focused Verification Plan
+1. **Filtered pack display**
+   - Put valid items in non-contiguous slots and verify the `?` overlay shows contiguous letters with no gaps.
+2. **Filtered pack selection mapping**
+   - Selecting the second visible letter must choose the second matching sparse slot.
+3. **Filtered pack rejection**
+   - A hidden non-matching absolute slot letter must not select that hidden item.
+4. **Wear special case**
+   - Flask of Oil must not appear as a wearable candidate.
+5. **Equipment sparse selection**
+   - Non-adjacent occupied equipment slots must display/select as `A)`, `B)`, etc.
+6. **Equipment cursed selection**
+   - A cursed equipped item must remain selectable and still produce the existing cursed message.
+7. **Zero-match behavior**
+   - Each filtered command must avoid a misleading full-range prompt when no valid items exist.
+8. **Prompt / overlay parity**
+   - The highest prompt letter must equal the number of visible overlay entries.
+9. **Regression boundary**
+   - Unfiltered inventory/drop behavior remains unchanged.
+
+### Suggested Test Homes
+- Extend `commodore/c64/tests/test_item.s` for:
+  - wear
+  - takeoff
+  - quaff
+  - read / identify follow-on
+  - gain spell if it already has supporting setup nearby
+- Extend `commodore/c64/tests/test_wands_staves.s` for:
+  - aim wand
+  - use staff
+- Add focused C128 fast/unit coverage once the shared helper layer exists, because the bug lives in shared prompt/input code.
+
+### Consultant Review
+- Consultant consensus:
+  - preserve upstream parity at the prompt/UI layer, not the storage layer
+  - use one shared ordinal-mapping helper path for both overlays and selection parsing
+  - reindex filtered pack prompts and non-empty equipment selection contiguously
+  - keep pack sorting/compaction out of this bug
+
+### Review
+- Implemented the shared filtered-inventory helper path in `commodore/common/player_items.s` and moved the prompt/selection contract onto that one source of truth.
+- Filtered prompts now patch their advertised range dynamically, filtered pack overlays relabel sparse matches contiguously, and equipment overlays show contiguous letters for non-empty rows only.
+- `item_wear` now excludes Flask of Oil from both the visible wearable set and the accepted filtered input path, so the overlay/parser contract matches the real equippable set.
+- Resident/string-bank Huffman assets were regenerated after removing now-dead filtered-selection error strings and refreshing the subsystem test bank fixture to the current tree.
+- Verification completed:
+  - `java -jar ../../tools/kickass/KickAss.jar main.s -showmem -vicesymbols -o out/moria8.prg` — PASS (`72` asserts, `0` failed)
+  - `bash commodore/c64/run_tests.sh` — PASS (`33` suites passed, `0` failed)
+
+## Current Task
 - [x] Confirm the live `BUG-DIG-SHIFT-D` command path and distinguish command-mapping failure from digging-tool / vein-resolution failure.
 - [x] Decide the smallest safe fix shape for `Shift+D`, `+`, and bash/tunnel discoverability based on active runtime behavior and project docs.
 - [x] Implement the chosen digging-command fix in shared input/help/runtime code with minimal behavior drift.

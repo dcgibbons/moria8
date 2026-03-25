@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #8
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -126,7 +126,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 9, $ff
+tc_results: .fill 12, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -148,7 +148,7 @@ test_start:
     lda #>help_lines
     sta help_lines_src_hi
 
-    ldx #7
+    ldx #11
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -166,6 +166,9 @@ test_start:
     jsr test_home_view
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
+    jsr test_filtered_inventory_view
+    jsr test_filtered_equipment_view
+    jsr test_filtered_prompt_range
 
     jmp test_exit_trampoline
 
@@ -733,6 +736,120 @@ test_screen_clear_forces_status_redraw:
     sta tc_results + 8
     rts
 
+test_filtered_inventory_view:
+    jsr reset_shared_state
+
+    lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+
+    lda #25
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+
+    lda #ICAT_POTION
+    sta uinv_filter
+    jsr ui_inv_display
+
+    lda #<expected_filtered_inv_line_a
+    sta zp_ptr0
+    lda #>expected_filtered_inv_line_a
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_filtered_inv_line_b
+    sta zp_ptr0
+    lda #>expected_filtered_inv_line_b
+    sta zp_ptr0_hi
+    lda #3
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 9
+    rts
+
+test_filtered_equipment_view:
+    jsr reset_shared_state
+
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+
+    lda #14
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+
+    jsr ui_equip_display
+
+    lda #<expected_filtered_eq_weapon
+    sta zp_ptr0
+    lda #>expected_filtered_eq_weapon
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_filtered_eq_light
+    sta zp_ptr0
+    lda #>expected_filtered_eq_light
+    sta zp_ptr0_hi
+    lda #8
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 10
+    rts
+
+test_filtered_prompt_range:
+    jsr reset_shared_state
+    jsr msg_init
+
+    lda #2
+    ldx #HSTR_PIQ_QUAFF_PROMPT
+    jsr piw_print_prompt_with_count
+
+    lda #<expected_quaff_prompt_ab
+    sta zp_ptr0
+    lda #>expected_quaff_prompt_ab
+    sta zp_ptr0_hi
+    lda #0
+    ldx #0
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 11
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -785,11 +902,26 @@ expected_help_actions:
 expected_inventory_line:
     .byte $01
     .text ") Long Sword (Slay Evil)" ; .byte 0
+expected_filtered_inv_line_a:
+    .byte $01
+    .text ") " ; .byte 0
+expected_filtered_inv_line_b:
+    .byte $02
+    .text ") " ; .byte 0
 expected_store_line:
     .byte $01
     .text ") Ration of Food" ; .byte 0
+expected_filtered_eq_weapon:
+    .byte $01
+    .text ") Weapon: " ; .byte 0
+expected_filtered_eq_light:
+    .byte $02
+    .text ") Light: " ; .byte 0
+expected_quaff_prompt_ab:
+    .text "Quaff which potion (a-b)?" ; .byte 0
 expected_equip_line:
-    .text "Weapon: Long Sword (Slay Evil)" ; .byte 0
+    .byte $01
+    .text ") Weapon: Long Sword (Slay Evil)" ; .byte 0
 expected_recall_lv:
     .text "LV 1" ; .byte 0
 expected_home_line:

@@ -6,6 +6,51 @@
 
 ---
 
+## 2026-03-24 — `BUG-PROMPT-FILTER` filtered inventory prompts/selectors now stay in sync ✅ FIXED
+
+### Scope Closed
+- Fixed the prompt/UI/parser mismatch where filtered item commands still advertised full-pack letters, accepted absolute slot letters, and could expose hidden sparse slots that were not valid for the action.
+
+### Root Cause
+- The shared inventory overlay and the prompted item-selection callers were not using the same selection contract.
+- Filtered overlays hid unrelated items but kept absolute sparse-slot letters.
+- Prompted handlers still parsed `A-V` / `A-H` as physical slot letters first and only rejected category mismatches afterward.
+- Local sparse inventory layout made direct upstream range-copying invalid; Moria8 needed ordinal mapping over visible matches, not storage compaction.
+
+### What Changed
+1. **Filtered inventory/equipment selection now uses one shared ordinal-mapping path**
+   - `commodore/common/player_items.s`
+   - Added shared helpers for:
+     - filtered carried-slot matching/counting/picking
+     - contiguous non-empty equipment picking
+     - dynamic prompt range printing
+   - `item_wear`, `item_quaff`, `item_read_scroll`, `item_aim_wand`, `item_use_staff`, `item_gain_spell`, and `item_takeoff` now all use that shared path.
+2. **Filtered overlays now match what the parser accepts**
+   - `commodore/common/ui_inventory.s`
+   - Filtered pack overlays relabel visible sparse matches contiguously from `A`.
+   - Equipment overlays keep slot-label rows but add contiguous letters only for non-empty entries.
+   - Flask of Oil is excluded from the wearable filtered set at the shared-helper layer, so the overlay and parser agree on the real `wear` target set.
+3. **Regression fixtures and resident string assets were updated**
+   - `data/huffman_strings.txt`
+   - `commodore/common/huffman_data.s`
+   - `commodore/c64/tests/test_item.s`
+   - `commodore/c64/tests/test_wands_staves.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - `commodore/c64/tests/test_subsystems.s`
+   - `commodore/c64/run_tests.sh`
+   - Removed dead filtered-selection error strings that were no longer reachable once the selector stopped exposing invalid choices.
+   - Regenerated the resident Huffman table and refreshed the embedded subsystem string-bank fixture against the new tree.
+   - Added coverage for sparse filtered-selection mapping, takeoff reindexing, filtered overlay lettering, and dynamic prompt ranges.
+
+### Validation
+- `java -jar ../../tools/kickass/KickAss.jar main.s -showmem -vicesymbols -o out/moria8.prg` (`72` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33` suites passed, `0` failed)
+
+### Outcome
+- `BUG-PROMPT-FILTER` is closed.
+- Filtered inventory prompts, `?` overlays, and accepted input now describe the same visible choice set.
+- Sparse pack layout stays unchanged; the fix is entirely at the prompt/UI-selection layer.
+
 ## 2026-03-24 — `BUG-DIG-SHIFT-D` Shift+D dig path reaches tunneling again ✅ FIXED
 
 ### Scope Closed
