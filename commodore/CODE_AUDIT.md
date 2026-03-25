@@ -381,6 +381,18 @@ Expected savings:
 - code size: probably neutral to slightly positive; a small slot-list buffer may trade a few bytes of RAM for less code duplication
 - maintainability: better parity between prompt, overlay, and parser because they consume the same cached list
 
+Phase 11 result:
+- partially implemented on `2026-03-25`
+- safe reduced change:
+  - `item_takeoff` now uses a cached contiguous equipment-slot list for prompt count and key-to-slot mapping
+- reverted / still open:
+  - filtered carried-item cache attempts inside `commodore/common/player_items.s` caused `commodore/c64/tests/test_item.s` to hang, which in this repo is treated as an immediate failure and likely memory/corruption symptom
+  - the filtered inventory picker therefore remains on the original count-scan + pick-scan path until a safer cache/storage contract is proven
+- measured outcome so far:
+  - equipment-selection rescans are removed
+  - filtered inventory rescans are not yet removed
+  - code-size/layout impact of the reduced implementation is negligible
+
 Verification:
 - sparse inventory prompt/filter regression tests
 - takeoff prompt with non-adjacent occupied equipment slots

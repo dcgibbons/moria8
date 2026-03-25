@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] Complete the filtered-inventory half of `CA-02` without reintroducing the `test_item` hang from the first `player_items.s` cache attempts.
+- [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
+- [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
+- [x] Rebuild and rerun the standard C64/C128 verification on the reduced safe implementation.
 - [x] Execute `CA-01` by unifying the shared numeric formatting core used by screen output and combat messages.
 - [x] Remove the cross-module `decimal_powers_*` dependency on the screen backend so combat formatting owns only common numeric data.
 - [x] Add focused runtime coverage for direct screen decimal output and combat decimal-buffer output after the refactor.
@@ -485,6 +489,52 @@ This file is a temporary working scratchpad.
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
   - `make test128-fast` → `PASS`
 - Next unresolved audit phase: `CA-02`.
+
+## `AUDIT-P11-CA02` Design
+
+### Goal
+- Execute `CA-02` by building the filtered inventory/equipment visible-slot list once and reusing it across:
+  - prompt range generation
+  - overlay letters/order
+  - key-to-slot mapping
+- Preserve the user-visible contracts:
+  - filtered prompts still relabel contiguously from `A`
+  - full inventory/drop/throw paths still use absolute slot letters
+  - zero-match behavior and cancellation stay unchanged
+
+### Scope
+- In scope:
+  - `commodore/common/player_items.s`
+  - `commodore/common/ui_inventory.s`
+  - focused runtime coverage that already exercises sparse filtered selection / takeoff mapping / filtered overlays
+  - audit/headroom/task docs affected by any layout change
+- Out of scope:
+  - broad inventory UI redesign
+  - changing the all-inventory/drop/throw absolute-letter contract
+  - unrelated item/equipment logic
+
+### Verification Standard
+1. Build one shared visible-slot cache for filtered carried-item prompts.
+2. Build one shared visible-slot cache for contiguous equipped-item selection.
+3. Make filtered overlays consume the cache instead of rescanning when applicable.
+4. Keep full inventory display and absolute-slot pickers unchanged.
+5. Rebuild C64/C128, rerun the standard runtime checks, and record the real headroom delta.
+
+### Review
+- Partially completed.
+- The first full `player_items.s` cache rewrites were not safe:
+  - filtered-inventory cache attempts caused `commodore/c64/tests/test_item.s` to hang instead of return within the project timeout rules
+  - the hang disappeared immediately when `player_items.s` was restored to the last known-good filtered selection path
+- A reduced implementation is now verified:
+  - `item_takeoff` uses a cached contiguous equipment-slot list for prompt count + key-to-slot mapping
+  - filtered carried-item prompts remain on the original count-scan + pick-scan path for now
+- Verification completed on the reduced implementation:
+  - direct `tests/test_item.s` monitor run returned in `~6.4s` with `47/47` passes
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
+  - `make test128-fast` → `PASS`
+- Outcome:
+  - `CA-02` is narrowed, not closed
+  - the remaining open work is the filtered-inventory cache, and it must be treated as a memory/corruption problem inside `commodore/common/player_items.s`, not a timing problem
 
 ## `CODE_AUDIT` Review
 

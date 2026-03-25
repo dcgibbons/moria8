@@ -36,6 +36,8 @@ piw_p1:       .byte 0          // Item p1 being processed
 piw_flags:    .byte 0          // Item flags being processed
 piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
+piw_visible_count: .byte 0     // Number of cached visible slots
+.label piw_visible_slots = combat_msg_buf  // Safe until the post-selection item message is built
 
 // ============================================================
 // Category -> equipment slot mapping table
@@ -229,24 +231,32 @@ piw_pick_filtered_inv_key:
     clc
     rts
 
-// piw_count_visible_equip — count equipped items for takeoff prompt mapping
+// piw_build_visible_equip_cache — cache non-empty equipment slots
 // Output: A = non-empty equipment count
-// Clobbers: X
-piw_count_visible_equip:
-    lda #0
-    sta piw_p1
+// Clobbers: X, Y
+piw_build_visible_equip_cache:
+    ldy #0
     ldx #EQUIP_WEAPON
 !piw_count_eq_loop:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !piw_count_eq_next+
-    inc piw_p1
+    txa
+    sta piw_visible_slots,y
+    iny
 !piw_count_eq_next:
     inx
     cpx #EQUIP_RING + 1
     bcc !piw_count_eq_loop-
-    lda piw_p1
+    sty piw_visible_count
+    tya
     rts
+
+// piw_count_visible_equip — count equipped items for takeoff prompt mapping
+// Output: A = non-empty equipment count
+// Clobbers: X, Y
+piw_count_visible_equip:
+    jmp piw_build_visible_equip_cache
 
 // piw_pick_visible_equip_key — map a contiguous equipment letter to a slot
 // Input: A = PETSCII key
@@ -256,24 +266,11 @@ piw_pick_visible_equip_key:
     sec
     sbc #$41
     bcc !piw_pick_eq_fail+
-    sta piw_slot
-
-    ldx #EQUIP_WEAPON
-!piw_pick_eq_loop:
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !piw_pick_eq_next+
-    lda piw_slot
-    beq !piw_pick_eq_found+
-    dec piw_slot
-!piw_pick_eq_next:
-    inx
-    cpx #EQUIP_RING + 1
-    bcc !piw_pick_eq_loop-
-    clc
-    rts
-
-!piw_pick_eq_found:
+    tay
+    cpy piw_visible_count
+    bcs !piw_pick_eq_fail+
+    lda piw_visible_slots,y
+    tax
     lda inv_item_id,x
     sec
     rts

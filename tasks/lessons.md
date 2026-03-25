@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-25 — Test timeouts in this repo mean hang, not patience
+
+- **Issue:** I let C64 test runs continue far past the project’s stated timeout limits while trying to distinguish a slow suite from a failing one.
+- **Root Cause:** I treated missing output as an observability problem instead of honoring the repo’s explicit rule that tests here do not legitimately run that long. In this codebase, a long-running test is itself diagnostic evidence of a hang, usually from memory overwrite/corruption in the assembly.
+- **Resolution:** Treat `>30s` as presumptive hang/failure and `>60s` as absolute failure. Stop extending waits, stop rationalizing elapsed time, and pivot immediately to runtime corruption / overwrite diagnosis.
+- **Rule:** **For this repo, no test should ever be allowed to run past 60 seconds, and anything past 30 seconds should already be treated as a likely hang. Long runtime is failure evidence, not a reason to wait longer.**
+
 ## 2026-03-24 — Similar full-screen C64 UI bugs may need different local fixes
 
 - **Issue:** I treated the C64 game-over / save-and-quit menu clear bug as if it had the same root cause as the recently fixed `GENERATING...` screen bug and applied only the same blank/unblank ordering fix.
