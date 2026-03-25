@@ -9,6 +9,98 @@ This file is a temporary working scratchpad.
 - Deferred note: closing the remaining VMS/Umoria parity gap for `look` will require significant engineering because the feature is behaviorally complex and the C64 memory budget is already tight.
 
 ## Current Task
+- [x] Reproduce the C64 `GENERATING...` dirty-screen transition and note which rows/cells survive the clear.
+- [x] Trace whether the residue comes from `generation_busy_begin`, the C64 `screen_clear` primitive, or a later transition draw path.
+- [x] Implement the smallest safe C64 fix without perturbing the shared dungeon-generation flow.
+- [x] Add focused regression coverage for the chosen clear contract.
+- [x] Run the relevant C64/C128 regression gates before closing the bug.
+
+## `BUG-GEN-CLEAR-C64` Design
+
+### Problem Statement
+- On C64, entering a dungeon can show the full-screen `GENERATING...` busy message over stale gameplay/title contents instead of a cleanly cleared screen.
+- This is a UI bug in the visible generation transition, not a dungeon-generation correctness bug.
+- The fix should preserve the existing shared generation flow and avoid introducing new generator-time UI calls inside unsafe inner loops.
+
+### Current Code Facts
+- Shared busy UI lives in `commodore/common/generation_busy.s`.
+- `generation_busy_begin` currently:
+  - unblanks the screen
+  - switches to white text
+  - calls `screen_clear`
+  - draws centered `GENERATING...`
+- Shared dungeon transition flow in `commodore/common/game_loop.s` calls:
+  - `generation_busy_begin_if_dungeon_api`
+  - overlay load / generation / spawn / visibility work
+  - `generation_busy_end_if_dungeon_api`
+  - `screen_clear` and the normal gameplay redraw tail
+- The visible bug is therefore in the pre-generation busy-screen setup, not in the post-generation gameplay restore.
+- Elsewhere in the codebase, several full-screen UI paths deliberately use row-by-row clearing via `screen_clear_row` instead of `screen_clear`.
+- Existing project lessons already warn that full-screen clears are sensitive and that generation UI must stay at coarse safe boundaries.
+
+### Root-Cause Hypotheses
+- Most likely: `generation_busy_begin` exposes the busy screen too early by calling `screen_unblank` before the clear and centered text draw complete, so the user can briefly see residual pre-transition contents.
+- Next most likely: even with corrected visibility sequencing, the C64 busy UI is using the wrong clear primitive for this path, and a row-by-row clear is more reliable for removing all visible residue before the centered message is drawn.
+- Less likely: some later setup path is repainting stale cells after `generation_busy_begin` runs but before the user perceives the busy screen.
+- Design rule: prove the residue source first, but bias toward the smallest fix at the busy-screen entry point unless reproduction shows a later writer.
+
+### Preferred Fix Shape
+- First fix the busy-screen sequencing in `commodore/common/generation_busy.s`:
+  - keep the screen hidden while the busy UI sets color, clears, and draws `GENERATING...`
+  - only unblank after the busy frame is fully established
+- If C64 still shows residue after that, add a dedicated busy-screen full clear helper in `commodore/common/generation_busy.s`.
+- On C64, have that helper clear all 25 rows via `screen_clear_row` before drawing `GENERATING...`.
+- On C128, keep the current bulk `screen_clear` path unless reproduction shows the problem is shared.
+- Keep the change local to the busy UI entry path:
+  - do not alter `level_change_generate_current`
+  - do not add extra UI calls inside generation phases
+  - do not refactor the general screen driver unless the helper proves insufficient
+
+### Why This Is Preferred
+- It targets the exact user-visible bug surface.
+- It fixes the most suspicious display-ordering bug before widening the clear strategy.
+- It avoids touching shared generation sequencing, overlay ownership, and generator scratch safety.
+- It matches existing repo practice for other sensitive full-screen UI clears.
+- It keeps any extra cost limited to a transition screen that is already explicitly a blocking/busy UI.
+
+### Verification Plan
+1. Reproduce on C64 and identify whether the visible residue is consistent with `generation_busy_begin` unblanking too early.
+2. Implement the local busy-screen sequencing fix and verify manually that `GENERATING...` appears only after the clear/draw work is complete.
+3. If residue remains on C64, add the C64-only busy clear helper and re-verify manually.
+3. Add focused unit coverage for the chosen contract:
+   - preferred: extend `commodore/c64/tests/test_main_loop.s`, which already owns the busy-UI shims and dungeon-transition harness
+   - assert the busy path establishes its presentation state before generation continues
+   - if a dedicated helper is added, assert the C64 busy path uses that helper
+4. Run relevant regression gates:
+   - focused C64 test for the busy UI helper
+   - `make test`
+   - `make test128-fast` to prove the shared/common change did not drift on C128
+
+### Verification Status
+- Implemented the local busy-screen sequencing fix in `generation_busy_begin`:
+  - blank
+  - clear
+  - draw `GENERATING...`
+  - unblank
+- Added focused C64 host coverage in `commodore/c64/tests/test_main_loop.s` and updated `commodore/c64/run_tests.sh` so the suite now enforces `main_loop` `15/15` instead of `13/13`.
+- Automated verification completed:
+  - `make test` — PASS
+  - `make test128-fast` — PASS
+- Manual C64 confirmation:
+  - user reports the generation busy-screen transition looks correct in real play
+
+### Open Question For Reproduction
+- Whether the stale content is pure character residue, color-RAM residue, or a later repaint after the busy screen begins. That determines whether the helper needs only row clearing or an additional guard against a later writer.
+
+### Consultant Review
+- Consultant verdict: treat this as a `generation_busy.s` presentation bug first, not a dungeon-generation bug.
+- Consultant-recommended order:
+  - fix busy-screen visibility sequencing locally in `generation_busy_begin`
+  - only if needed, fall back to a C64-only row-by-row clear for the busy UI
+  - keep `level_change_generate_current` unchanged unless reproduction proves a later writer
+  - prefer `commodore/c64/tests/test_main_loop.s` for focused regression coverage rather than creating a new test image
+
+## Current Task
 - [x] Lock the reduced directed `look` contract from local primary sources/runtime and record intentional feature deltas.
 - [x] Write the `BUG-LOOK-HILITE` parity test matrix before implementation.
 - [ ] Move directed `look` coverage into a host test image that still fits C64 test memory limits.

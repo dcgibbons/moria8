@@ -5,17 +5,23 @@
 
 ---
 
-## Current State (2026-03-23)
+## Current State (2026-03-24)
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
+| Medium | `BUG-GAMEOVER-CLEAR-C64` C64 game-over / save-and-quit menu does not fully clear the prior gameplay status rows | Low | Medium | No | User-reported C64 UI bug: after saving and reaching the `Reboot / Restart / Quit` menu, the screen is not fully cleared and stale player status remains visible at the bottom. |
+| High | `BUG-HAGGLE-UI` store haggling input / reactions do not behave correctly | Medium | High | No | User-reported store-haggling regression. Audit buy/sell haggle prompts, offer parsing, reaction text, convergence, and insult/kick behavior against expected classic flow. |
+| Medium | `BUG-SEARCH-VERIFY` verify whether searching is actually available and working end-to-end, then implement/fix if not | Medium | Medium | No | The codebase already contains a `do_search` path, so this is not yet proven to be an unimplemented feature. Confirm command mapping and user-visible behavior in real play before deciding whether this is missing, broken, or merely undiscoverable. |
+| Medium | `BUG-HELP-PAGING` multi-page help is not implemented | Medium | Medium | No | Extend the help UI so longer help content can paginate cleanly instead of truncating to a single screen. |
+| High | `BUG-DIG-SHIFT-D` digging via `Shift+D` / digging tools is not behaving correctly | Medium | High | No | User report: digging into a vein can yield `Nothing interesting happens.` even while carrying or wielding a shovel. Audit command mapping, digging-tool recognition, and vein resolution on the active runtime path. |
+| Medium | `BUG-PROMPT-FILTER` inventory-selection prompts should only list relevant item letters, not the entire inventory | Medium | Medium | No | Any prompt that offers an inventory subset should filter the displayed letters/items to the ones valid for that action, instead of showing unrelated slots. |
 | Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
 
 ## Open Phases / Display Work
@@ -45,6 +51,7 @@
 |---|---|---|---|---|---|
 | Medium | `FEAT-DISK` separate persistence media from the program disk | High | High | No | Probe available save drives, let the player pick a save target, reject the program disk for save/load/high-score persistence, and validate before destructive scratch/delete actions. |
 | Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
+| Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
 | Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |
 

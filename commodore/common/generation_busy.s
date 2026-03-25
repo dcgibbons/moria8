@@ -19,11 +19,14 @@ generation_busy_begin:
     sta gen_busy_saved_color
     lda #1
     sta generation_busy_active_api
-    jsr screen_unblank
+    // Hide the current gameplay/title frame before preparing the busy UI so
+    // the player never sees partially cleared stale contents.
+    jsr screen_blank
     lda #COL_WHITE
     sta zp_text_color
     jsr screen_clear
     jsr generation_busy_draw_frame
+    jsr screen_unblank
     ldx #GEN_BUSY_BEGIN_HOLD
     jmp generation_busy_hold
 

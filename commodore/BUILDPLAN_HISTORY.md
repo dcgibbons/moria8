@@ -6,6 +6,52 @@
 
 ---
 
+## 2026-03-24 — `BUG-GEN-CLEAR-C64` C64 generation busy-screen clear ✅ FIXED
+
+### Scope Closed
+- Fixed the C64 UI bug where the full-screen `GENERATING...` transition could appear over stale gameplay/title contents instead of a clean cleared screen.
+- Added focused regression coverage for the busy-screen presentation order.
+
+### Root Cause
+- `generation_busy_begin` in `commodore/common/generation_busy.s` made the display visible before the busy UI was fully prepared.
+- The old sequence was:
+  - `screen_unblank`
+  - `screen_clear`
+  - draw `GENERATING...`
+- That let the player briefly see the previous frame while the clear/draw work was still in progress.
+
+### What Changed
+1. **Busy-screen presentation now hides the old frame first**
+   - `commodore/common/generation_busy.s`
+   - `generation_busy_begin` now:
+     - `screen_blank`
+     - `screen_clear`
+     - draw `GENERATING...`
+     - `screen_unblank`
+   - This keeps the stale gameplay/title frame hidden until the busy screen is fully established.
+2. **The C64 host test now exercises the real busy UI path**
+   - `commodore/c64/tests/test_main_loop.s`
+   - Replaced the old no-op busy stubs with wrappers around the real busy UI entry points.
+   - Added a focused regression that records the presentation order and asserts:
+     - blank
+     - clear
+     - draw
+     - unblank
+   - Also verifies that `generation_busy_end` restores the prior text color and clears the active flag.
+3. **The test runner now enforces the new regression**
+   - `commodore/c64/run_tests.sh`
+   - Updated the `main_loop` suite result range/count from `13` to `15`, so the new busy-order checks are part of normal C64 verification.
+
+### Validation
+- `make test` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+- Manual C64 gameplay confirmation from the user that the `GENERATING...` transition now looks correct
+
+### Outcome
+- `BUG-GEN-CLEAR-C64` is closed.
+- The C64 generation busy screen now hides the previous frame until the cleared `GENERATING...` view is ready.
+- The regression is now enforced in the regular C64 host test path rather than relying only on manual repro.
+
 ## 2026-03-23 — `BUG-XP-PACE` XP threshold / level-up parity ✅ FIXED
 
 ### Scope Closed
