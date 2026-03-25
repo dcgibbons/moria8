@@ -2,6 +2,227 @@
 
 This file is a temporary working scratchpad.
 
+## Status Update
+- The oversized Umoria-style interactive `look` rewrite has been backed out from gameplay code.
+- The C64 main program fits again at `$080E-$CFE5`, and `commodore/c64/tests/test_effects.s` fits again at `$0825-$BF1C`.
+- Current gameplay code is back on the compact directed scan path while the project decides whether to keep that VMS-style baseline or spend budget on selected richer `look` behavior later.
+- Deferred note: closing the remaining VMS/Umoria parity gap for `look` will require significant engineering because the feature is behaviorally complex and the C64 memory budget is already tight.
+
+## Current Task
+- [x] Lock the reduced directed `look` contract from local primary sources/runtime and record intentional feature deltas.
+- [x] Write the `BUG-LOOK-HILITE` parity test matrix before implementation.
+- [ ] Move directed `look` coverage into a host test image that still fits C64 test memory limits.
+- [x] Reuse shared directed-input handling instead of keeping a bespoke `look` prompt reader.
+- [x] Back out the oversized interactive `look` rewrite so the C64 main segment fits again.
+- [ ] Decide whether to keep the compact VMS-style baseline or fund a larger parity push later.
+- [ ] Add platform-owned target highlight/flash behavior for C64 and C128.
+- [ ] Add C128 unit/smoke coverage for the shared `look` changes.
+- [ ] Run full regression gates before asking for human playtesting.
+
+## `BUG-LOOK-HILITE` Design And Verification Plan
+
+### Problem Statement
+- The current port's `look` command is not end-user equivalent to Umoria.
+- Today it uses a straight-ray, single-result scan with no visible target cue.
+- Umoria documents different behavior:
+  - directional cone search
+  - a creature on an object should describe both
+  - monster memory is reachable from `look`
+- Local VMS-Moria does not implement all-directions `look`; its `look` command is directed-only.
+- Local VMS-Moria also keeps `look` materially smaller than Umoria:
+  - straight-ray scan
+  - non-interactive flow
+  - no recall handoff
+  - no per-target pause/highlight
+- Project decision: drop the Umoria-only all-directions/null-direction feature and keep the rest of the `look` work scoped to directed `look`.
+- Open decision after source review: whether Moria8 should keep chasing Umoria-only interactive `look` semantics, or pivot to the smaller VMS-style directed contract that better matches current C64 memory limits.
+
+### Non-Negotiable Requirements
+1. End-user directed `look` behavior must match the reduced project contract, with all-directions `look` intentionally excluded.
+2. Highlight/flash presentation may be adapted for C64/C128 hardware constraints.
+3. No regressions in any other behavior.
+4. Everything must be unit-testable before human testing.
+
+### Current Code Facts
+- Shared `look` implementation lives in `commodore/common/player_move.s` as `do_look`.
+- `do_look` currently depends on `get_direction_target` from `commodore/common/dungeon_features.s`.
+- `get_direction_target` still uses the generic `Direction?` prompt rather than VMS-Moria's `Look which direction?`.
+- `do_look` currently prints one description and exits.
+- There is no current `look`-specific target cue.
+- Cross-platform flash primitives already exist:
+  - `commodore/c64/screen.s` → `screen_flash_at`
+  - `commodore/c128/screen_vdc.s` → `screen_flash_at`
+- Existing regression coverage only proves remembered dark tiles do not get revealed by `look`.
+- Existing monster recall UI already exists and should be reused rather than reimplemented.
+- `FEATURES.md` records the intentional version split: Umoria has all-directions `look`; VMS-Moria and Moria8 do not.
+
+### Architecture Decision
+- Keep generic adjacent-action direction handling unchanged.
+- Do not treat Umoria-only interactive `look` behavior as settled until the project chooses between Umoria-style and VMS-style directed `look`.
+- If the project stays on Umoria-style directed `look`, keep highlight platform-owned and split target selection from target presentation / recall handoff.
+- If the project pivots to VMS-style directed `look`, prefer the simpler straight-ray/message path and delete the interactive `look` framework instead of optimizing it piecemeal.
+
+### Behavior Contract To Lock Before Coding
+- Shared facts locked from local upstream source trees `~/Projects/thirdparty/umoria` and `~/Projects/thirdparty/vms-moria`:
+  - `look` is a free move.
+  - blindness check happens before prompting.
+  - directed empty look ends with `You see nothing of interest in that direction.`
+- Umoria-only directed `look` behavior currently implemented in `~/Projects/thirdparty/umoria/src/dungeon_los.cpp`:
+  - panel-bounded cone search
+  - interactive, multi-target flow
+  - player tile inspected first
+  - optional recall handoff
+  - layered monster/object/feature messaging with pause/abort between shown targets
+  - directed end-of-scan prints `That's all you see in that direction.`
+- VMS-Moria directed `look` behavior currently implemented in `~/Projects/thirdparty/vms-moria/source/include/moria.inc`:
+  - straight-ray scan along one direction
+  - no per-target pause
+  - no recall prompt/return flow
+  - repeated `msg_print` output as interesting tiles are encountered
+  - stops on blocked tile or sight limit
+- Intentionally excluded from Moria8 already:
+  - null direction `5`
+  - `.` all-directions `look`
+  - all-directions completion/empty messages
+- Still awaiting explicit project choice:
+  - Umoria-only interactive cone/reveal/recall behavior beyond the shared directed `look` baseline
+
+### Known Port-vs-Upstream Gaps
+- Current port `do_look` is single-result, straight-ray, and non-interactive.
+- Local VMS-Moria keeps scanning down the ray and can emit multiple messages for successive interesting tiles; current Moria8 returns after the first interesting result.
+- Local VMS-Moria can describe multiple things on one tile in sequence; current Moria8 picks a single highest-priority result and exits.
+- Current Moria8 reports generic doors, stairs, traps, rubble, and wall hits; local VMS-Moria `look` is narrower and mainly reports monsters, items, and rock/mineral features.
+- Local VMS-Moria explicitly prints the blindness failure message; current Moria8 does not have a `do_look`-local blind-message branch.
+- Current port reports walls directly, which does not match upstream default seam behavior.
+- Current port has no look-time recall prompt or return-to-look flow.
+- Current port has no per-target cursor/highlight step.
+
+### Candidate Selection Strategy
+- Preferred implementation shape:
+  - reproduce the upstream two-pass `lookSee` / `lookRay` behavior closely enough that target order and prompts match the observed Umoria flow
+  - preserve panel bounds and pause-per-target interaction
+- Important rule:
+  - implementation does not define behavior
+  - if a simpler scan cannot reproduce upstream target order and interaction semantics, replace it with a closer source-matched traversal
+
+### Shared-Code Safety Rules
+- Do not add null-direction/all-directions `look`.
+- Do not modify global `rest` semantics.
+- Reuse shared directed-input handling, but do not force `look` through `get_direction_target` if it still needs direction identity rather than an adjacent tile.
+- Do not refactor the main renderer as part of this bug.
+- Do not touch player-facing strings for memory relief.
+- Do not merge unrelated input or recall cleanup into this task.
+
+### Step-By-Step Implementation Plan
+1. Verify the reduced directed-only `look` contract against local Umoria and VMS-Moria sources.
+2. Write targeted parity tests that fail under the current implementation.
+3. Reuse directed input handling where possible; only add `look`-specific input code if directed `look` still needs it.
+4. Introduce a shared `look` state record:
+   - active direction
+   - current pass (`objects` / `rocks`)
+   - current descriptive prefix (`You see`, `It is on`, `It is in`)
+   - current query/abort key
+   - current target coordinates / target kind
+5. Replace the inline straight-ray logic in `do_look` with an interactive target iterator.
+6. Implement upstream-style pause-per-target behavior and `ESCAPE` abort.
+7. Implement the Umoria-correct text flow:
+   - monster first with `[(r)ecall]`
+   - item second if present
+   - feature third if present / enabled
+8. Hook look-time monster recall into the existing recall UI path, then restore gameplay view and continue the active look flow using the key returned from recall dismissal.
+9. Add a shared highlight call that moves attention to the current target tile before waiting for input.
+10. Adapt the C64/C128 flash primitive behavior if the existing `*` flash is not the best platform-appropriate representation.
+11. Run full regression gates and only then hand off for manual verification.
+
+### Test Matrix
+
+#### Input Contract
+- [ ] `look` accepts all 8 directions.
+- [ ] Invalid `look` direction input exits cleanly without consuming a turn.
+
+#### Visibility Contract
+- [ ] `look` does not describe remembered-but-not-currently-visible monsters.
+- [ ] `look` does not describe remembered-but-not-currently-visible items.
+- [ ] `look` respects the 20-tile range limit.
+- [ ] `look` rejects tiles outside the selected directional cone.
+
+#### Panel / Screen Contract
+- [x] Upstream is panel-bounded.
+- [ ] Visible off-panel targets do not participate in `look`.
+- [ ] Selected target coordinates are converted to correct screen row/column for both C64 and C128.
+- [ ] `look` highlights each shown target before waiting for input.
+
+#### Target Priority Contract
+- [ ] Target visitation order matches the chosen directed traversal for representative straight and diagonal cases.
+- [ ] Monsters are shown before objects/features on the same tile.
+- [ ] Objects/features are only shown when their lighting/mark rules match upstream behavior.
+- [ ] Town behavior is covered in all directions, not just dungeon rooms/corridors.
+
+#### Description Contract
+- [ ] Feature-only tiles print the correct feature description.
+- [ ] Monster-only tiles print the correct monster description.
+- [ ] Item-only tiles print the correct item description.
+- [ ] Monster-on-object tiles produce the correct upstream sequence:
+  - monster line first
+  - object line next using `It is on ...`
+- [ ] Object-in-wall / seam cases produce the correct upstream `It is in ...` / wall text sequence.
+- [ ] Directed empty look prints `You see nothing of interest in that direction.`
+- [ ] Directed end-of-scan prints `That's all you see in that direction.`
+
+#### Recall Contract
+- [ ] Monster prompt includes `[(r)ecall]`.
+- [ ] Pressing `r` from look enters recall for the shown monster.
+- [ ] Recall returns cleanly to the active look flow.
+- [ ] `ESCAPE` from recall aborts the whole look, matching upstream returned-key behavior.
+- [ ] Existing non-`look` recall command behavior does not regress.
+
+#### Highlight Contract
+- [ ] Highlight/flash marks the same target that the text description selected.
+- [ ] Flash restores the underlying tile cleanly.
+- [ ] C64 flash path does not corrupt screen/color RAM state.
+- [ ] C128 flash path does not corrupt VDC state or IRQ-sensitive screen state.
+
+#### Regression Contract
+- [ ] Existing `look` remembered-dark regression still passes.
+- [ ] Existing input mapping tests still pass.
+- [ ] Existing recall UI tests still pass.
+- [ ] Existing C64 gameplay regression suites still pass.
+- [ ] Existing C128 fast unit suite still passes.
+- [ ] Existing C128 smoke coverage still passes.
+
+### Current Size Findings
+- Dropping all-directions `look` saved only `0xD9` bytes in the C64 main image.
+- Reusing the shared directed-input seam saved only about 12 more bytes.
+- The remaining main-image overage is concentrated in:
+  - traversal setup / coordinate transform
+  - `look_process_tile`
+  - the custom `look` row-0 print/pause helpers
+- Reverting to the compact directed scan path immediately restored the C64 layout:
+  - main program fits again at `$080E-$CFE5`
+  - `test_effects` fits again at `$0825-$BF1C`
+- `commodore/c64/tests/test_look.s` is structurally too large in its current standalone form and should not be revived as-is.
+- `commodore/c64/tests/test_effects.s` also tips over its own body-size assert with the current `player_move.s` import, so the next host candidate should be a lighter existing image such as `test_main_loop.s` or a purpose-built minimal harness.
+
+### Verification Gates Before Human Testing
+1. New C64 unit tests fail on the current behavior and pass on the new behavior.
+2. Existing C64 test suite remains green.
+3. New C128 input/unit coverage passes.
+4. `make test128-fast` passes.
+5. Relevant C128 smoke path passes.
+6. Only after those gates are green should manual gameplay verification begin.
+
+### Consultant Review
+- Consultant verdict: architecture is sound.
+- Consultant recommendations adopted:
+  - keep `look` separate from generic direction helpers
+  - keep highlight platform-owned
+  - use test-first parity work
+  - treat cone semantics, dual-description behavior, and recall interaction as parity obligations
+  - do not let a clean implementation redefine the visible game behavior
+- Updated consultant conclusion after the memory-map recheck:
+  - the C64-safe path is to pivot toward the smaller VMS-style directed contract
+  - the interactive Umoria-style machinery is the bulk of the overage, not the input seam
+
 ## Current Task
 - [x] Reproduce the C128 dungeon-entry JAM from the user's `make clean128; make disk128` path.
 - [x] Trace the reported `$E18C` crash against the C128 tier/overlay ownership contract.

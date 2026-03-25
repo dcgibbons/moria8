@@ -1,5 +1,26 @@
 # Lessons Learned
 
+## 2026-03-24 — Escalate as soon as the memory map proves a feature does not fit
+
+- **Issue:** I kept trying to optimize the oversized `look` rewrite locally instead of surfacing the memory-map failure as soon as the build proved it.
+- **Root Cause:** I stayed in fix-it-first mode and treated the overage as something to clean up before reporting, even after the C64 main image had already crossed `MAP_BASE`.
+- **Resolution:** When a feature trips a hard segment boundary, state the exact addresses and overage immediately and get direction before doing more speculative cleanup.
+- **Rule:** **If the memory map or `.assert` output shows a feature no longer fits, stop spinning and escalate with the exact segment addresses before doing more local optimization.**
+
+## 2026-03-24 — Split Umoria-only behavior from VMS baseline before porting a large gameplay feature
+
+- **Issue:** I treated `look` as if only the all-directions `5` mode differed between Umoria and VMS-Moria, then built a large interactive cone/recall implementation around that assumption.
+- **Root Cause:** I checked one visible feature delta, but I did not finish the side-by-side comparison of the whole command contract before writing the port. Local VMS-Moria's `look` is much smaller than Umoria's: straight-ray, non-interactive, and no recall handoff.
+- **Resolution:** Re-anchor the task on the local primary sources and separate the shared baseline from Umoria-only enhancements before committing to an implementation shape.
+- **Rule:** **When porting a large gameplay/UI command, compare the full local Umoria and VMS-Moria implementations first. Lock the shared baseline separately from Umoria-only enhancements before spending memory budget on the richer path.**
+
+## 2026-03-24 — Check the known local third-party source tree before reaching for network access
+
+- **Issue:** I started to request a network fetch of upstream Umoria even though this workspace already has a local upstream checkout at `~/Projects/thirdparty/umoria`.
+- **Root Cause:** I anchored on the earlier web/manual lookup and did not verify whether the repo's known local third-party mirror was already available before escalating.
+- **Resolution:** For source-parity work against upstream projects, check the existing local third-party trees first and treat them as the primary source when present.
+- **Rule:** **Before requesting network access for upstream source code, search the local `~/Projects/thirdparty/` mirrors and any project-documented vendor paths.**
+
 ## 2026-03-24 — Full-screen clears must invalidate the status cache
 
 - **Issue:** On C64, returning from the character sheet left the status rows blank until a later gameplay update happened to redraw them.
