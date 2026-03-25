@@ -3,8 +3,8 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [ ] Execute `CA-08` by factoring repeated `fi_add_*` field zeroing into one helper.
-- [ ] Keep `CA-02` parked at the safe reduced equipment-cache implementation until a proven-safe carried-item cache contract exists.
+- [ ] Revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract.
+- [ ] Keep the current reduced equipment-cache implementation as the only live cache path until the carried-item contract is proven safe.
 - [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
 - [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
 - [x] Rebuild and rerun the standard C64/C128 verification on the reduced safe implementation.
@@ -1351,6 +1351,57 @@ This file is a temporary working scratchpad.
   - `commodore/c64/tests/test_item.s`: `47/47` passed
   - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
   - `make test128-fast`: `PASS`
+
+### `AUDIT-P16-CA08` Review
+
+- Completed.
+- Added `fi_add_clear_plain_meta` in `commodore/common/item.s` to clear `fi_add_qty_hi`, `fi_add_p1`, `fi_add_flags`, and `fi_add_ego` for fresh plain generated-item setup.
+- Retargeted the matching plain-item / gold producers in:
+  - `commodore/common/item.s`
+  - `commodore/common/wizard.s`
+  - `commodore/common/ui_wizard.s`
+  - `commodore/common/special_rooms.s`
+- This also hardens the nest-gold path in `special_rooms.s`, which previously cleared only part of the metadata set and could inherit stale `fi_add_ego` / `fi_add_qty_hi`.
+- Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
+
+### `AUDIT-P17-CA07` Review
+
+- Completed.
+- Added `ui_clear_full_screen_safe` in `commodore/common/ui_help_clear.s` and made the platform split explicit:
+  - C64 keeps the known-safe row-by-row full-screen clear
+  - C128 uses `screen_clear` for the full-screen modal/helper path
+- The existing `ui_help_clear_all` callers now inherit that split automatically, so help, inventory, character, store, wizard, recall, and home screens stop paying the full 25-row clear cost on C128.
+- Replaced the remaining direct full-screen row loops in `commodore/common/player_create.s` and `commodore/common/score.s` with the same shared helper.
+- Measured layout impact on the live tree:
+  - C64 main image margin improved from `141` to `191` bytes below `$C000`
+  - C64 staged banked source margin improved from `106` to `156` bytes below `$D000`
+  - C128 staged/program image margin improved from `180` to `208` bytes below `$E000`
+- Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
+
+### `AUDIT-P18-CA09` Review
+
+- Completed.
+- Added `C128KernalJumpTableWrapper` in `commodore/c128/main.s` and moved the ten simple KERNAL jump-table wrappers (`w_readst` through `w_chrout`) to that shared scaffold.
+- Kept `w_load` and `kernal_load_safe` explicit because they still carry load-specific diagnostics / side effects that do not fit the simple wrapper template cleanly.
+- Measured layout impact on the live tree:
+  - C128 staged/program image margin improved from `208` to `271` bytes below `$E000`
+- Verification:
+  - `make -B -C commodore/c128 build128`: passed, `197` asserts, `0` failed
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`: `PASS`
+
+### `AUDIT-P19-CA10` Review
+
+- Completed.
+- Added `commodore/common/input_contract.s` for the shared input command IDs and direction tables used by both platforms.
+- Added `commodore/common/input_run_cancel.s` for the shared debounced run-cancel state machine.
+- Retargeted `commodore/c64/input.s` and `commodore/c128/input128.s` to those shared contract files while keeping the hardware scan / PETSCII decode logic platform-local.
+- Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`: `PASS`
 
 ### C128 dungeon-entry JAM follow-up
 

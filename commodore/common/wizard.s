@@ -111,11 +111,7 @@ wizard_generate_item_execute:
     lda #100
 !wiz_gold_qty:
     sta fi_add_qty
-    lda #0
-    sta fi_add_qty_hi
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
 
 !wiz_try_floor:
     jsr floor_item_add
@@ -379,10 +375,7 @@ wizard_cmd_generate_item:
     sta fi_add_y
     lda wizard_prompt_value
     sta fi_add_id
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
     jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp wizard_fail_message

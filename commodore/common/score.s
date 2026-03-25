@@ -174,18 +174,11 @@ dec24_pow10_2:
 // Clobbers: everything
 // ============================================================
 score_death_screen:
-    // Full row-by-row clear (avoids screen_clear absolute-indexed residue issue)
+    // Use the platform-safe full-screen clear helper:
+    // C64 keeps row-by-row, C128 takes the bulk-clear fast path.
     lda #COL_BLACK
     sta zp_text_color
-    lda #0
-!sds_clear:
-    pha
-    jsr screen_clear_row
-    pla
-    clc
-    adc #1
-    cmp #25
-    bcc !sds_clear-
+    jsr ui_clear_full_screen_safe
 
     // Row 1: "* YOU HAVE DIED *"
     lda #1

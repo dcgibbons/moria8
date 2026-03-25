@@ -402,8 +402,7 @@ spawn_nest_gold:
     // Gold type 0, qty = rng(dlvl*10) + 5 (same formula as Phase 1)
     lda #0
     sta fi_add_id
-    sta fi_add_p1
-    sta fi_add_flags
+    jsr fi_add_clear_plain_meta
 
     // dlvl * 10 = dlvl*8 + dlvl*2
     lda zp_player_dlvl

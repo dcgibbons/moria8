@@ -23,23 +23,23 @@ Measurement notes:
 Highest-risk regions right now:
 - C64 runtime banked code: `4` bytes below `$FFFA`
 - C128 `RuntimeLowData`: `0` bytes below floor-item storage at `$1A00`
-- C128 startup overlay: `35` bytes below `$F000`
+- C128 startup overlay: `57` bytes below `$F000`
 - C64 startup overlay: `44` bytes below `$F000`
-- C64 staged banked payload source: `106` bytes below `$D000`
-- C64 main image: `141` bytes below `MAP_BASE`
-- C128 staged source / program image: `180` bytes below `$E000`
+- C64 staged banked payload source: `156` bytes below `$D000`
+- C64 main image: `191` bytes below `MAP_BASE`
+- C128 staged source / program image: `271` bytes below `$E000`
 
 Interpretation:
-- C64 runtime banked code is still the hard ceiling, but the phase 10 numeric-format consolidation materially eased the main/staged-source squeeze
-- C128 Bank 0 is generally healthier, but a few low-memory and overlay boundaries are already effectively hard ceilings
+- C64 runtime banked code is still the hard ceiling, but phases 16-17 bought back another small block of main/staged-source margin without changing the runtime payload ceiling
+- C128 Bank 0 is healthier after phases 18-19, but `RuntimeLowData` and a few overlays are still effectively hard ceilings
 - most C128 Bank 1 transitions are deliberate zero-gap ownership boundaries, not spare capacity
 
 ## C64 Exact Margins
 
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
-| Main program image | `$BF73` | `$C000` | `141` | High |
-| Staged banked payload source | `$CF96` | `$D000` | `106` | High |
+| Main program image | `$BF41` | `$C000` | `191` | High |
+| Staged banked payload source | `$CF64` | `$D000` | `156` | High |
 | Runtime banked payload | `$FFF6` | `$FFFA` | `4` | Critical |
 | Startup overlay | `$EFD4` | `$F000` | `44` | High |
 | DungeonGen overlay | `$EBF6` | `$F000` | `1034` | Moderate |
@@ -47,8 +47,8 @@ Interpretation:
 | Death overlay | `$E5B5` | `$F000` | `2635` | Low |
 
 Notes:
-- `program_end = $BF73` means phase 10 recovered `101` bytes of main-image margin; C64 still remains tight, but it is no longer within one tiny cleanup of stalling
-- the banked payload source region gained the same `101` bytes and is now `106` bytes below the I/O hole
+- `program_end = $BF41` means phases 16-17 recovered another `50` bytes of C64 main-image margin after the larger phase 10 win
+- the staged banked payload source likewise gained another `50` bytes and now sits `156` bytes below the I/O hole
 - the runtime banked payload still fits, but only `4` bytes remain before the CPU vectors
 
 ## C128 Exact Margins
@@ -57,24 +57,24 @@ Notes:
 
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
-| Program image / staged source span | `$DF4C` | `$E000` | `180` | Moderate |
-| Staged banked payload source | `$DF4C` | `$E000` | `180` | Moderate |
+| Program image / staged source span | `$DEF1` | `$E000` | `271` | Moderate |
+| Staged banked payload source | `$DEF1` | `$E000` | `271` | Moderate |
 | Runtime banked payload | `$FB94` | `$FFFA` | `1126` | Low |
 | `RuntimeLowData` below floor items | `$1A00` | `$1A00` | `0` | Critical |
-| Startup overlay | `$EFDD` | `$F000` | `35` | High |
-| UI overlay | `$EEF8` | `$F000` | `264` | Moderate |
-| DungeonGen overlay | `$EE63` | `$F000` | `413` | Moderate |
+| Startup overlay | `$EFC7` | `$F000` | `57` | High |
+| UI overlay | `$EEDE` | `$F000` | `290` | Moderate |
+| DungeonGen overlay | `$EE60` | `$F000` | `416` | Moderate |
 | Town overlay | `$EBE9` | `$F000` | `1047` | Moderate |
-| Death overlay | `$E5B5` | `$F000` | `2635` | Low |
+| Death overlay | `$E5AA` | `$F000` | `2646` | Low |
 | Cache state block | `$330A` | `$E000` | `44278` | Low |
 | Overlay state block inside cache state block | `$3302` | `$330A` | `8` | Low |
 
 Notes:
 - `RuntimeLowData` is exactly flush with `FLOOR_ITEM_BASE = $1A00`; any growth there must move the floor-item table or shrink the low-runtime payload
-- the staged source / program image margin to `$E000` is now `180` bytes after phase 10 `CA-01`
-- the startup overlay is the tightest C128 overlay at `35` bytes of remaining space
+- the staged source / program image margin to `$E000` is now `271` bytes after the phase 18-19 cleanup pair
+- the startup overlay is still the tightest C128 overlay, but it has improved to `57` bytes of remaining space
 - the staged source / program image margin to `$E000` is still finite and should be tracked because it gates boot-time copy safety
-- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, phase 5 `API-1` reduced it again to `73`, phase 6 `CA-12` reduced it further to `54`, phase 9 `LINT-1` recovered it to `79`, and phase 10 `CA-01` expanded it to `180`
+- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, phase 5 `API-1` reduced it again to `73`, phase 6 `CA-12` reduced it further to `54`, phase 9 `LINT-1` recovered it to `79`, phase 10 `CA-01` expanded it to `180`, phases 16-17 expanded it again to `208`, and phases 18-19 expanded it further to `271`
 
 ### Bank 1 Ownership Manifest
 
@@ -103,14 +103,14 @@ Notes:
 
 1. C128 `RuntimeLowData` at `0` bytes slack
 2. C64 runtime banked payload at `4` bytes slack
-3. C128 startup overlay at `35` bytes slack
-4. C64 startup overlay at `44` bytes slack
-5. C64 staged banked payload source at `106` bytes slack
-6. C64 main program image at `141` bytes slack
-7. C128 staged source / program image at `180` bytes slack
-8. C128 Bank 1 future-map to DB hole at `244` bytes of unassigned room
-9. C128 UI overlay at `264` bytes slack
-10. C128 DungeonGen overlay at `413` bytes slack
+3. C64 startup overlay at `44` bytes slack
+4. C128 startup overlay at `57` bytes slack
+5. C64 staged banked payload source at `156` bytes slack
+6. C64 main program image at `191` bytes slack
+7. C128 Bank 1 future-map to DB hole at `244` bytes of unassigned room
+8. C128 staged source / program image at `271` bytes slack
+9. C128 UI overlay at `290` bytes slack
+10. C128 DungeonGen overlay at `416` bytes slack
 
 ## Recommendation
 

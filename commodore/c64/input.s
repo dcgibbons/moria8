@@ -5,6 +5,9 @@
 // Supports vi-keys (HJKLYUBN) for 8-direction movement
 // Numeric repeat prefixes are intentionally unimplemented.
 // `zp_input_count` is currently fixed to 1 for all commands.
+
+#import "../common/input_contract.s"
+#import "../common/input_run_cancel.s"
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
 // via a lookup table. The KERNAL IRQ handler must remain active
@@ -19,68 +22,6 @@
 .const CIA1_PORTB   = $dc01
 .const CIA1_DDRA    = $dc02
 .const CIA1_DDRB    = $dc03
-
-// ============================================================
-// Command IDs — internal constants, not key codes
-// ============================================================
-.const CMD_NONE      = $00  // No command / unknown key
-.const CMD_MOVE_N    = $01  // Move north (up)
-.const CMD_MOVE_S    = $02  // Move south (down)
-.const CMD_MOVE_W    = $03  // Move west (left)
-.const CMD_MOVE_E    = $04  // Move east (right)
-.const CMD_MOVE_NW   = $05  // Move northwest
-.const CMD_MOVE_NE   = $06  // Move northeast
-.const CMD_MOVE_SW   = $07  // Move southwest
-.const CMD_MOVE_SE   = $08  // Move southeast
-.const CMD_STAIRS_DN = $09  // Go down stairs (>)
-.const CMD_STAIRS_UP = $0a  // Go up stairs (<)
-.const CMD_REST      = $0b  // Rest one turn (.)
-.const CMD_SEARCH    = $0c  // Search for secrets (s)
-.const CMD_OPEN      = $0d  // Open door (o)
-.const CMD_CLOSE     = $0e  // Close door (c)
-.const CMD_PICKUP    = $0f  // Pick up item (g or ,)
-.const CMD_DROP      = $10  // Drop item (d)
-.const CMD_INVENTORY = $11  // Show inventory (i)
-.const CMD_EQUIPMENT = $12  // Show equipment (e)
-.const CMD_WEAR      = $13  // Wear/wield (w)
-.const CMD_TAKEOFF   = $14  // Take off (t)
-.const CMD_EAT       = $15  // Eat (E)
-.const CMD_QUAFF     = $16  // Quaff potion (q)
-.const CMD_READ      = $17  // Read scroll (r)
-.const CMD_AIM       = $18  // Aim wand (a)
-.const CMD_USE       = $19  // Use staff (u)
-.const CMD_CAST      = $1a  // Cast spell (m)
-.const CMD_PRAY      = $1b  // Pray (p)
-.const CMD_CHAR_INFO = $1c  // Character info (C)
-.const CMD_MAP       = $1d  // Full map view (M)
-.const CMD_RECALL    = $1e  // Monster recall (/)
-.const CMD_LOOK      = $1f  // Look around (l or x)
-.const CMD_RUN       = $20  // Run (shift+direction or R)
-.const CMD_SAVE      = $21  // Save and quit (S)
-.const CMD_QUIT      = $22  // Quit without saving (Q)
-.const CMD_HELP      = $23  // Help (?)
-.const CMD_VERSION   = $24  // Version (V)
-.const CMD_RUN_N     = $25  // Run north
-.const CMD_RUN_S     = $26  // Run south
-.const CMD_RUN_W     = $27  // Run west
-.const CMD_RUN_E     = $28  // Run east
-.const CMD_RUN_NW    = $29  // Run northwest
-.const CMD_RUN_NE    = $2a  // Run northeast
-.const CMD_RUN_SW    = $2b  // Run southwest
-.const CMD_RUN_SE    = $2c  // Run southeast
-.const CMD_GAIN      = $2d  // Gain spell from book (f)
-.const CMD_FIRE      = $2e  // Fire ranged weapon (SHIFT+F)
-.const CMD_THROW     = $2f  // Throw item (SHIFT+T)
-.const CMD_REFUEL    = $30  // Refuel lamp (SHIFT+R)
-.const CMD_BASH      = $31  // Bash (SHIFT+D)
-.const CMD_TUNNEL    = $32  // Tunnel (+)
-.const CMD_WIZARD    = $33  // Wizard mode (CTRL+W)
-
-// Direction offsets: dx, dy for each movement command
-// Index = CMD_MOVE_x - CMD_MOVE_N
-dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1  // N S W E NW NE SW SE
-dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
-dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4  // N↔S, W↔E, NW↔SE, NE↔SW
 
 // ============================================================
 // Subroutines
@@ -155,41 +96,9 @@ input_run_cancel_check:
     jsr input_run_key_held
     jmp input_run_process_sample
 
-// input_run_cancel_reset — Reset run-cancel state
-input_run_cancel_reset:
-    lda #0
-    sta irk_last_sample
-    sta irk_stable
-    rts
-
-// input_run_process_sample — Debounced edge/state machine for running cancel
-// Input: A = sampled held-state (0 = no key, nonzero = key held)
-// Output: A = 1 on a newly-stable key-down edge, 0 otherwise
-input_run_process_sample:
-    beq !irps_norm_done+
-    lda #1
-!irps_norm_done:
-    cmp irk_last_sample
-    beq !irps_confirm+
-    sta irk_last_sample
-    lda #0
-    rts
-
-!irps_confirm:
-    cmp irk_stable
-    beq !irps_none+
-    sta irk_stable
-    beq !irps_none+
-    rts
-!irps_none:
-    lda #0
-    rts
-
 irk_save_pra:  .byte 0
 irk_save_ddra: .byte 0
 irk_save_ddrb: .byte 0
-irk_last_sample: .byte 0
-irk_stable: .byte 0
 irk_result: .byte 0
 
 input_get_key:

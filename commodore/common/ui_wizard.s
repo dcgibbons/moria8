@@ -344,10 +344,7 @@ ui_wizard_cmd_generate_item:
     sta fi_add_y
     lda wizard_prompt_value
     sta fi_add_id
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
+    jsr fi_add_clear_plain_meta
     jsr wizard_generate_item_execute
     bcs !wiz_item_ok+
     jmp ui_wizard_fail_message

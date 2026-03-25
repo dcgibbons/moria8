@@ -3,6 +3,9 @@
 //
 // Reads CIA1 keyboard matrix directly — bypasses Screen Editor entirely.
 // Does NOT call SCNKEY ($FF9F) or GETIN ($FFE4).
+
+#import "../common/input_contract.s"
+#import "../common/input_run_cancel.s"
 //
 // Problem: SCNKEY invokes the Screen Editor, which reinitializes
 // $0314/$0315 to its own IRQ handler on every call. The Screen Editor's
@@ -49,67 +52,6 @@
 
 // C128 runtime MMU mode used by game loop (all RAM, I/O visible)
 .const INPUT_MMU_ALL_RAM  = $3e
-
-// ============================================================
-// Command IDs — internal constants, not key codes
-// ============================================================
-.const CMD_NONE      = $00
-.const CMD_MOVE_N    = $01
-.const CMD_MOVE_S    = $02
-.const CMD_MOVE_W    = $03
-.const CMD_MOVE_E    = $04
-.const CMD_MOVE_NW   = $05
-.const CMD_MOVE_NE   = $06
-.const CMD_MOVE_SW   = $07
-.const CMD_MOVE_SE   = $08
-.const CMD_STAIRS_DN = $09
-.const CMD_STAIRS_UP = $0a
-.const CMD_REST      = $0b
-.const CMD_SEARCH    = $0c
-.const CMD_OPEN      = $0d
-.const CMD_CLOSE     = $0e
-.const CMD_PICKUP    = $0f
-.const CMD_DROP      = $10
-.const CMD_INVENTORY = $11
-.const CMD_EQUIPMENT = $12
-.const CMD_WEAR      = $13
-.const CMD_TAKEOFF   = $14
-.const CMD_EAT       = $15
-.const CMD_QUAFF     = $16
-.const CMD_READ      = $17
-.const CMD_AIM       = $18
-.const CMD_USE       = $19
-.const CMD_CAST      = $1a
-.const CMD_PRAY      = $1b
-.const CMD_CHAR_INFO = $1c
-.const CMD_MAP       = $1d
-.const CMD_RECALL    = $1e
-.const CMD_LOOK      = $1f
-.const CMD_RUN       = $20
-.const CMD_SAVE      = $21
-.const CMD_QUIT      = $22
-.const CMD_HELP      = $23
-.const CMD_VERSION   = $24
-.const CMD_RUN_N     = $25
-.const CMD_RUN_S     = $26
-.const CMD_RUN_W     = $27
-.const CMD_RUN_E     = $28
-.const CMD_RUN_NW    = $29
-.const CMD_RUN_NE    = $2a
-.const CMD_RUN_SW    = $2b
-.const CMD_RUN_SE    = $2c
-.const CMD_GAIN      = $2d
-.const CMD_FIRE      = $2e
-.const CMD_THROW     = $2f
-.const CMD_REFUEL    = $30
-.const CMD_BASH      = $31
-.const CMD_TUNNEL    = $32
-.const CMD_WIZARD    = $33
-
-// Direction offsets: dx, dy for each movement command
-dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1  // N S W E NW NE SW SE
-dir_dy: .byte -1,  1,  0, 0, -1,-1,  1, 1
-dir_opposite: .byte 1, 0, 3, 2, 7, 6, 5, 4
 
 // ============================================================
 // Subroutines
@@ -195,14 +137,6 @@ input_run_key_held:
 input_run_key_check:
     jmp input_run_key_held
 
-// input_run_cancel_reset — Reset the run-cancel edge detector
-// Used when entering/exiting running so stale scan state cannot cancel a new run.
-input_run_cancel_reset:
-    lda #0
-    sta irk_last_sample
-    sta irk_stable
-    rts
-
 // input_run_cancel_check — Non-blocking: returns nonzero only on a new key-down edge
 // after running cancel has been armed. This avoids cancelling on lingering held state.
 // Output: A = 1 on new key-down edge, 0 otherwise
@@ -215,29 +149,6 @@ input_run_cancel_check:
     jsr input_run_scan_held_raw
     // Fall through into shared run-cancel state machine for testability.
 #endif
-
-// input_run_process_sample — Debounced edge/state machine for running cancel
-// Input: A = sampled PETSCII/held-state (0 = no key, nonzero = key held)
-// Output: A = 1 on a newly-stable key-down edge, 0 otherwise
-input_run_process_sample:
-    beq !irps_norm_done+
-    lda #1
-!irps_norm_done:
-    cmp irk_last_sample
-    beq !irps_confirm+
-    sta irk_last_sample
-    lda #0
-    rts
-
-!irps_confirm:
-    cmp irk_stable
-    beq !irps_none+
-    sta irk_stable
-    beq !irps_none+
-    rts
-!irps_none:
-    lda #0
-    rts
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
@@ -294,8 +205,6 @@ input_get_key:
 igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
-irk_last_sample: .byte 0
-irk_stable: .byte 0
 irk_result: .byte 0
 irk_ext_save: .byte 0
 

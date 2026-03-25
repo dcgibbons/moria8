@@ -297,11 +297,11 @@ These items remain valid unless noted as already completed, and they now sit ben
 | `CA-03` | Medium | unify hunger-state thresholds and recompute logic | completed in phase 12; small byte win plus removes sync risk |
 | `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | completed in phase 13; modest byte cleanup plus more consistent return behavior |
 | `CA-06` | Medium | remove message-history offset recomputation | completed in phase 14; removes the per-save offset math and simplifies the hot path |
-| `CA-07` | Medium | benchmark/replace full-screen row-by-row clears where safe | time-only win on every safe full-screen clear; larger on C128 |
+| `CA-07` | Medium | benchmark/replace full-screen row-by-row clears where safe | completed in phase 17; C64 stays on the proven row-clear path while C128 now takes the safe bulk-clear path for full-screen modal helpers |
 | `CA-05` | Low | reduce item-effect compare ladders with table/range dispatch | completed in phase 15; removes the branch maze and cuts worst-case dispatch branches |
-| `CA-08` | Low | factor repeated `fi_add_*` field zeroing | roughly `15-35` bytes per build, plus less partial-init risk |
-| `CA-09` | Low | macro-generate repetitive C128 KERNAL wrappers | byte savings likely `0-30` bytes, maintenance gain high |
-| `CA-10` | Low | normalize screen/input contracts and shared tables | runtime savings mostly none; correctness/style gain high |
+| `CA-08` | Low | factor repeated `fi_add_*` field zeroing | completed in phase 16; modest byte cleanup plus less stale metadata risk |
+| `CA-09` | Low | macro-generate repetitive C128 KERNAL wrappers | completed in phase 18; simplified the live wrapper scaffold and recovered `63` bytes of staged C128 margin |
+| `CA-10` | Low | normalize screen/input contracts and shared tables | completed in phase 19; shared command IDs, direction tables, and run-cancel state now live in common files |
 
 ## Findings
 
@@ -576,6 +576,18 @@ Verification:
 - visual regression pass for help, character, inventory, wizard, title-adjacent screens
 - status rows must still redraw correctly after the return path
 
+Phase 17 result:
+- implemented on `2026-03-25`
+- added `ui_clear_full_screen_safe` in `commodore/common/ui_help_clear.s`
+- the helper now makes the platform split explicit:
+  - C64 keeps the known-safe row-by-row clear
+  - C128 uses `screen_clear` for full-screen modal clears
+- the existing `ui_help_clear_all` call sites now inherit the C128 fast path automatically
+- the remaining direct full-screen row-loop call sites in `player_create.s` and `score.s` now use the shared helper instead of open-coding their own loops
+- broader verification completed:
+  - `bash commodore/c64/run_tests.sh` passed `33/33`
+  - `make test128-fast` passed
+
 ### `CA-08` `fi_add_*` Metadata Zeroing Is Repeated In Several Producers
 
 Evidence:
@@ -610,6 +622,19 @@ Expected savings:
 Verification:
 - floor gold, wizard item spawn, special-room gold, and wizard prompt item creation
 
+Phase 16 result:
+- implemented on `2026-03-25`
+- added `fi_add_clear_plain_meta` in `commodore/common/item.s`
+- retargeted the matching plain-item / gold setup paths in:
+  - `commodore/common/item.s`
+  - `commodore/common/wizard.s`
+  - `commodore/common/ui_wizard.s`
+  - `commodore/common/special_rooms.s`
+- the special-room nest-gold path no longer depends on implicit stale values in `fi_add_qty_hi` / `fi_add_ego`
+- verification completed later on the live phase-17 tree:
+  - `bash commodore/c64/run_tests.sh` passed `33/33`
+  - `make test128-fast` passed
+
 ### `CA-09` C128 KERNAL Wrappers Are Mechanically Repetitive
 
 Evidence:
@@ -635,6 +660,17 @@ Verification:
 - C128 preload/overlay/tier load tests
 - any wrapper change must preserve flags, register restoration, and runtime-vector restore assumptions
 - `CA-09` should only be attempted after `WRAP-1` is fixed and re-verified
+
+Phase 18 result:
+- implemented on `2026-03-25`
+- added `C128KernalJumpTableWrapper` in `commodore/c128/main.s`
+- converted the ten simple jump-table wrappers (`w_readst` through `w_chrout`) to the shared scaffold
+- intentionally left `w_load` and `kernal_load_safe` explicit because they still carry load-specific diagnostics / side effects
+- measured outcome on the live tree:
+  - C128 staged/program margin improved from `208` to `271` bytes below `$E000`
+- verification completed:
+  - `make -B -C commodore/c128 build128` passed (`197` asserts, `0` failed)
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` passed
 
 ### `CA-10` Shared Contracts Are Present But Not Named Consistently Enough
 
@@ -673,6 +709,15 @@ Expected savings:
 Verification:
 - C64 and C128 input command-mapping tests
 - C128 lowercase/runtime string rendering tests
+
+Phase 19 result:
+- implemented on `2026-03-25`
+- extracted the shared input command contract into `commodore/common/input_contract.s`
+- extracted the shared run-cancel debounce state machine into `commodore/common/input_run_cancel.s`
+- kept the actual keyboard scan / PETSCII decode logic platform-local in `commodore/c64/input.s` and `commodore/c128/input128.s`
+- broader verification completed:
+  - `bash commodore/c64/run_tests.sh` passed `33/33`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` passed
 
 ### `CA-11` Melee To-Hit Still Risks 8-Bit Overflow And Sign Drift
 
@@ -792,19 +837,15 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `180` bytes.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `271` bytes.
 2. Keep any future alignment work tightly targeted to the specific live crossings already identified; do not spend bytes on blanket padding.
-3. Move to `CA-08`; `CA-05` and `CA-06` are complete, while the remaining half of `CA-02` is paused until a safer cache/storage contract is proven.
+3. Revisit the carried-item half of `CA-02` only if a cache/storage contract can be proven without reintroducing the earlier `test_item` hang.
 4. Treat C64 runtime banked growth as explicit change-control: only `4` bytes remain below `$FFFA`.
 5. Treat the `318` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
 
 ## Suggested Execution Order
 
-1. `CA-08` item-field init helper
-2. `CA-07` full-screen clear benchmark and safe-callsite split
-3. revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract
-4. `CA-09` C128 KERNAL wrapper refactor
-5. `CA-10` shared contract naming/constants cleanup
+1. revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract
 
 ## Verification Strategy
 
@@ -831,4 +872,8 @@ For every item above:
 - Phase 8 `ALIGN-1` is complete: the live symbol audit showed that most hot row/tile tables are already page-safe, and the remaining real crossings are narrow enough that the next queue item should be `LINT-1`, not blanket alignment churn.
 - Phase 9 `LINT-1` is complete: the repo now has an automated 6502 anti-pattern check for provably redundant zero-compares, the first six live hits are fixed, and the remaining branch-jump ladders are tracked as advisory warnings instead of blocking the build.
 - Phase 10 `CA-01` is complete: `commodore/common/numeric_format.s` now owns the shared 8-bit / 16-bit formatter core, combat no longer depends on backend-local decimal tables, the new direct screen/combat/VDC formatter tests pass, and the tight C64/C128 staged margins each recovered `101` bytes.
+- Phase 16 `CA-08` is complete: plain generated-item metadata setup now flows through one helper, which removed repeated zeroing and closed the stale `fi_add_ego` / `fi_add_qty_hi` carryover risk in the nest-gold path.
+- Phase 17 `CA-07` is complete: full-screen modal clears now use an explicit platform split, keeping the proven row-by-row path on C64 while moving the broad C128 full-screen helper traffic to `screen_clear`.
+- Phase 18 `CA-09` is complete: the repetitive C128 KERNAL jump-table wrappers now share one macro scaffold, while `w_load` remains explicit for its special diagnostics and side effects.
+- Phase 19 `CA-10` is complete: the shared input command contract and run-cancel state machine now live in common files, while the platform keyboard scan implementations remain local.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

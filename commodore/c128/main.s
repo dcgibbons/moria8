@@ -455,6 +455,26 @@ entry_real:
 c128_wrapper_saved_a: .byte 0
 c128_wrapper_saved_p: .byte 0
 
+.macro C128KernalJumpTableWrapper(target) {
+    php
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
+    jsr target
+    php
+    pha
+    :ExitKernal()
+    jmp c128_wrapper_finish
+}
+
 // c128_wrapper_finish — restore KERNAL result flags while preserving caller I-bit
 // Stack on entry (top-first): result A, KERNAL P, caller P
 c128_wrapper_finish:
@@ -475,196 +495,27 @@ c128_wrapper_finish:
     plp
     rts
 
-// READST
+// READST / SETLFS / SETNAM / OPEN / CLOSE / CHKIN / CHKOUT / CLRCHN / CHRIN / CHROUT
 w_readst:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffb7
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// SETLFS
+    :C128KernalJumpTableWrapper($ffb7)
 w_setlfs:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffba
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// SETNAM
+    :C128KernalJumpTableWrapper($ffba)
 w_setnam:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffbd
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// OPEN
+    :C128KernalJumpTableWrapper($ffbd)
 w_open:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc0
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CLOSE
+    :C128KernalJumpTableWrapper($ffc0)
 w_close:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc3
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CHKIN
+    :C128KernalJumpTableWrapper($ffc3)
 w_chkin:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc6
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CHKOUT
+    :C128KernalJumpTableWrapper($ffc6)
 w_chkout:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffc9
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CLRCHN
+    :C128KernalJumpTableWrapper($ffc9)
 w_clrchn:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffcc
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CHRIN
+    :C128KernalJumpTableWrapper($ffcc)
 w_chrin:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffcf
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
-// CHROUT
+    :C128KernalJumpTableWrapper($ffcf)
 w_chrout:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    :EnterKernal()
-    pla
-    tay
-    pla
-    tax
-    pla
-    jsr $ffd2
-    php
-    pha
-    :ExitKernal()
-    jmp c128_wrapper_finish
+    :C128KernalJumpTableWrapper($ffd2)
 // LOAD
 w_load:
     stx c128_load_arg_x

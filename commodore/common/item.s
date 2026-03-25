@@ -494,6 +494,18 @@ ici_count:  .byte 0       // inv_count_items scratch counter (RP14-7)
 // Subroutines
 // ============================================================
 
+// fi_add_clear_plain_meta — clear metadata for plain/generated items
+// Clears qty_hi plus non-quantity metadata so fresh generated items do not
+// inherit stale state from prior item-generation flows.
+// Preserves: nothing
+fi_add_clear_plain_meta:
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    rts
+
 // item_init_floor — Clear all 32 floor item slots
 // Sets all fi_item_id to $FF, zp_item_count = 0
 // Clobbers: A, X
@@ -804,6 +816,7 @@ item_spawn_level:
     lda #2
     jsr rng_range
     sta fi_add_id
+    jsr fi_add_clear_plain_meta
 
     // Gold qty: rng_range_word(dlvl * 10) + 5 (16-bit)
     lda zp_player_dlvl
@@ -822,11 +835,6 @@ item_spawn_level:
     lda zp_temp3
     adc #0
     sta fi_add_qty_hi
-
-    lda #0
-    sta fi_add_p1               // No enchantment for gold
-    sta fi_add_flags            // No flags for gold
-    sta fi_add_ego              // No ego for gold
 
     jsr floor_item_add
     // Ignore failure (table full)
@@ -1324,6 +1332,7 @@ tunnel_spawn_gold:
     lda #2
     jsr rng_range
     sta fi_add_id
+    jsr fi_add_clear_plain_meta
 
     // Gold amount: (5 + dlvl*3) base, rng(base)*2 + 1
     // Gives ~6-60 GP on DL1, ~15-170 GP on DL10
@@ -1339,11 +1348,6 @@ tunnel_spawn_gold:
     clc
     adc #1                      // At least 1 GP
     sta fi_add_qty
-    lda #0
-    sta fi_add_qty_hi
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
 
     jsr floor_item_add
     // Ignore failure (table full)
