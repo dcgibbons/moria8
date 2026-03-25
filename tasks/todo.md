@@ -490,7 +490,7 @@ This file is a temporary working scratchpad.
   - `make -B -C commodore/c128 build128` → `PASS`
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
   - `make test128-fast` → `PASS`
-- Next unresolved audit phase: `CA-02`.
+- At that checkpoint, the next unresolved audit phase was `CA-02` (now completed in `AUDIT-P20-CA02`).
 
 ## `AUDIT-P11-CA02` Design
 
