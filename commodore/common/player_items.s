@@ -810,7 +810,7 @@ item_quaff:
     jsr piw_pick_filtered_inv_key
     bcs !iq_in_range+
 !iq_cancel_tramp:
-    jmp !iq_cancel+
+    jmp iq_cancel
 !iq_in_range:
     stx piw_slot
     sta piw_item_id
@@ -823,45 +823,35 @@ item_quaff:
     ldx piw_slot
     jsr inv_remove_item
 
-    // Apply effect based on item type
+    // Apply effect based on item type.
     lda piw_item_id
-    cmp #17                         // Cure Light Wounds
-    beq !iq_cure+
-    cmp #18                         // Speed
-    beq !iq_speed+
-    cmp #19                         // Poison
-    beq !iq_poison+
-    cmp #25                         // Cure Serious Wounds
-    bne !iq_not_csw+
-    jmp !iq_csw+
-!iq_not_csw:
-    cmp #26                         // Restore Mana
-    bne !iq_not_rmana+
-    jmp !iq_restore_mana+
-!iq_not_rmana:
-    cmp #27                         // Heroism
-    bne !iq_not_hero+
-    jmp !iq_heroism+
-!iq_not_hero:
-    cmp #28                         // Blindness
-    bne !iq_not_blind+
-    jmp !iq_blindness+
-!iq_not_blind:
-    cmp #29                         // Confusion
-    bne !iq_not_confuse+
-    jmp !iq_confusion+
-!iq_not_confuse:
-    cmp #30                         // Detect Monsters
-    bne !iq_not_detmon+
-    jmp !iq_detect_mon+
-!iq_not_detmon:
-    cmp #31                         // Infravision
-    bne !iq_not_infra+
-    jmp !iq_infravision+
-!iq_not_infra:
-    jmp !iq_generic_msg+
+    cmp #17
+    bcc !iq_dispatch_generic+
+    cmp #32
+    bcs !iq_dispatch_generic+
+    sec
+    sbc #17
+    tax
+    lda iq_dispatch_lo,x
+    sta zp_ptr1
+    lda iq_dispatch_hi,x
+    sta zp_ptr1_hi
+    jmp (zp_ptr1)
+!iq_dispatch_generic:
+    jmp iq_effect_generic
 
-!iq_cure:
+iq_dispatch_lo:
+    .byte <iq_effect_cure, <iq_effect_speed, <iq_effect_poison
+    .byte <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic, <iq_effect_generic
+    .byte <iq_effect_csw, <iq_effect_restore_mana, <iq_effect_heroism, <iq_effect_blindness
+    .byte <iq_effect_confusion, <iq_effect_detect_mon, <iq_effect_infravision
+iq_dispatch_hi:
+    .byte >iq_effect_cure, >iq_effect_speed, >iq_effect_poison
+    .byte >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic, >iq_effect_generic
+    .byte >iq_effect_csw, >iq_effect_restore_mana, >iq_effect_heroism, >iq_effect_blindness
+    .byte >iq_effect_confusion, >iq_effect_detect_mon, >iq_effect_infravision
+
+iq_effect_cure:
     // Heal rng(8) + 4 HP
     lda #8
     jsr rng_range                   // [0, 7]
@@ -879,7 +869,7 @@ item_quaff:
     sec
     rts
 
-!iq_speed:
+iq_effect_speed:
     // Set speed effect timer: rng(20) + 10
     lda #20
     jsr rng_range                   // [0, 19]
@@ -899,7 +889,7 @@ item_quaff:
     sec
     rts
 
-!iq_poison:
+iq_effect_poison:
     // Deal rng(6) + 3 damage
     lda #6
     jsr rng_range                   // [0, 5]
@@ -956,7 +946,7 @@ item_quaff:
     sec
     rts
 
-!iq_csw:
+iq_effect_csw:
     // Cure Serious Wounds: heal 5d8+5 = [10, 45]
     lda #5                          // N = 5 dice
     ldx #8                          // S = 8 sides
@@ -970,7 +960,7 @@ item_quaff:
     sec
     rts
 
-!iq_restore_mana:
+iq_effect_restore_mana:
     // Restore Mana: set MP = max MP
     lda zp_player_mmp
     sta zp_player_mp
@@ -981,7 +971,7 @@ item_quaff:
     sec
     rts
 
-!iq_heroism:
+iq_effect_heroism:
     // Set zp_eff_hero timer (rng(25)+25), stacks
     // NOTE: Timer is infrastructure only — gameplay effects (to-hit/HP bonus)
     // will be integrated when effect consumption is added in a later phase.
@@ -1001,7 +991,7 @@ item_quaff:
     sec
     rts
 
-!iq_blindness:
+iq_effect_blindness:
     // Set zp_eff_blind timer (rng(100)+100)
     lda #100
     jsr rng_range                   // [0, 99]
@@ -1019,7 +1009,7 @@ item_quaff:
     sec
     rts
 
-!iq_confusion:
+iq_effect_confusion:
     // Set zp_eff_confuse timer (rng(15)+10)
     lda #15
     jsr rng_range                   // [0, 14]
@@ -1037,7 +1027,7 @@ item_quaff:
     sec
     rts
 
-!iq_detect_mon:
+iq_effect_detect_mon:
     jsr eff_detect_monsters
 
     ldx #HSTR_PIQ_SENSE
@@ -1045,7 +1035,7 @@ item_quaff:
     sec
     rts
 
-!iq_infravision:
+iq_effect_infravision:
     // Set zp_eff_infra timer (rng(50)+50)
     // NOTE: Timer is infrastructure only — monster reveal effect will be
     // integrated when effect consumption is added in a later phase.
@@ -1065,13 +1055,13 @@ item_quaff:
     sec
     rts
 
-!iq_generic_msg:
+iq_effect_generic:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     sec
     rts
 
-!iq_cancel:
+iq_cancel:
     ldx #HSTR_PIW_NEVERMIND
     jsr huff_print_msg
     clc
@@ -1125,7 +1115,7 @@ item_read_scroll:
     jsr piw_pick_filtered_inv_key
     bcs !irs_in_range+
 !irs_cancel_tramp:
-    jmp !irs_cancel+
+    jmp irs_cancel
 !irs_in_range:
     stx piw_slot
     sta piw_item_id
@@ -1138,49 +1128,37 @@ item_read_scroll:
     ldx piw_slot
     jsr inv_remove_item
 
-    // Apply effect based on item type
+    // Apply effect based on item type.
     lda piw_item_id
-    cmp #20                         // Light
-    beq !irs_light+
-    cmp #21                         // Identify
-    bne !irs_not_identify+
-    jmp !irs_identify+
-!irs_not_identify:
-    cmp #22                         // Teleportation
-    bne !irs_not_teleport+
-    jmp !irs_teleport+
-!irs_not_teleport:
-    cmp #32                         // Word of Recall
-    bne !irs_not_wor+
-    jmp !irs_wor+
-!irs_not_wor:
-    cmp #33                         // Remove Curse
-    bne !irs_not_remcurse+
-    jmp !irs_remove_curse+
-!irs_not_remcurse:
-    cmp #34                         // Enchant Weapon
-    bne !irs_not_enchw+
-    jmp !irs_enchant_weapon+
-!irs_not_enchw:
-    cmp #35                         // Enchant Armor
-    bne !irs_not_encha+
-    jmp !irs_enchant_armor+
-!irs_not_encha:
-    cmp #36                         // Monster Confusion
-    bne !irs_not_monconf+
-    jmp !irs_mon_confuse+
-!irs_not_monconf:
-    cmp #37                         // Aggravate
-    bne !irs_not_aggrav+
-    jmp !irs_aggravate+
-!irs_not_aggrav:
-    cmp #38                         // Protect from Evil
-    bne !irs_not_protect+
-    jmp !irs_protect+
-!irs_not_protect:
-    jmp !irs_generic_msg+
+    cmp #20
+    bcc !irs_dispatch_generic+
+    cmp #39
+    bcs !irs_dispatch_generic+
+    sec
+    sbc #20
+    tax
+    lda irs_dispatch_lo,x
+    sta zp_ptr1
+    lda irs_dispatch_hi,x
+    sta zp_ptr1_hi
+    jmp (zp_ptr1)
+!irs_dispatch_generic:
+    jmp irs_effect_generic
 
-!irs_light:
+irs_dispatch_lo:
+    .byte <irs_effect_light, <irs_effect_identify, <irs_effect_teleport
+    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
+    .byte <irs_effect_generic, <irs_effect_generic, <irs_effect_generic, <irs_effect_generic
+    .byte <irs_effect_wor, <irs_effect_remove_curse, <irs_effect_enchant_weapon, <irs_effect_enchant_armor
+    .byte <irs_effect_mon_confuse, <irs_effect_aggravate, <irs_effect_protect
+irs_dispatch_hi:
+    .byte >irs_effect_light, >irs_effect_identify, >irs_effect_teleport
+    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
+    .byte >irs_effect_generic, >irs_effect_generic, >irs_effect_generic, >irs_effect_generic
+    .byte >irs_effect_wor, >irs_effect_remove_curse, >irs_effect_enchant_weapon, >irs_effect_enchant_armor
+    .byte >irs_effect_mon_confuse, >irs_effect_aggravate, >irs_effect_protect
+
+irs_effect_light:
     // Light the room the player is in (shared subroutine)
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
@@ -1189,13 +1167,13 @@ item_read_scroll:
     sec
     rts
 
-!irs_identify:
+irs_effect_identify:
     // Interactive item identification (shared subroutine)
     jsr eff_identify_prompt
     sec
     rts
 
-!irs_teleport:
+irs_effect_teleport:
     // Teleport player to random floor tile (shared subroutine)
     jsr eff_teleport_self
 
@@ -1205,7 +1183,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_wor:
+irs_effect_wor:
     // Word of Recall: set timer rng(15)+15 (overwrites, not stacks — matches umoria)
     lda #15
     jsr rng_range                   // [0, 14]
@@ -1218,7 +1196,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_remove_curse:
+irs_effect_remove_curse:
     jsr eff_remove_curse
 
     ldx #HSTR_PIQ_CLEANSED
@@ -1226,7 +1204,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_enchant_weapon:
+irs_effect_enchant_weapon:
     // Find weapon in EQUIP_WEAPON slot
     ldx #EQUIP_WEAPON
     lda inv_item_id,x
@@ -1276,7 +1254,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_enchant_armor:
+irs_effect_enchant_armor:
     // Find armor in EQUIP_BODY slot
     ldx #EQUIP_BODY
     lda inv_item_id,x
@@ -1326,7 +1304,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_mon_confuse:
+irs_effect_mon_confuse:
     // Set confuse-on-melee flag
     lda #1
     sta zp_confuse_melee
@@ -1336,7 +1314,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_aggravate:
+irs_effect_aggravate:
     jsr eff_aggravate
 
     ldx #HSTR_PIQ_HUMMING
@@ -1344,7 +1322,7 @@ item_read_scroll:
     sec
     rts
 
-!irs_protect:
+irs_effect_protect:
     // Protect from Evil: timer rng(25)+25
     // NOTE: Timer is infrastructure only — damage reduction from evil monsters
     // will be integrated when effect consumption is added in a later phase.
@@ -1364,13 +1342,13 @@ item_read_scroll:
     sec
     rts
 
-!irs_generic_msg:
+irs_effect_generic:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     sec
     rts
 
-!irs_cancel:
+irs_cancel:
     ldx #HSTR_PIW_NEVERMIND
     jsr huff_print_msg
     clc

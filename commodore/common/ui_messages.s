@@ -24,6 +24,10 @@ msg_history:
     .fill MSG_HIST_COUNT * MSG_HIST_LEN, 0
 msg_hist_idx:
     .byte 0                 // Current write index (0–7, wraps)
+msg_hist_ptr_lo:
+    .byte <msg_history      // Current write pointer (lo)
+msg_hist_ptr_hi:
+    .byte >msg_history      // Current write pointer (hi)
 msg_row1_col:
     .byte 0                 // Cursor column after printing on row 1
 msg_src_lo:
@@ -41,6 +45,10 @@ msg_init:
     sta zp_msg_flags
     sta msg_hist_idx
     sta msg_row1_col
+    lda #<msg_history
+    sta msg_hist_ptr_lo
+    lda #>msg_history
+    sta msg_hist_ptr_hi
     lda #$20                // Space (screen code)
     sta zp_temp2
     lda #<msg_history
@@ -263,61 +271,9 @@ msg_save_history:
     php
     sei
 #endif
-    // Calculate destination: msg_history + (msg_hist_idx * MSG_HIST_LEN)
-    lda msg_hist_idx
-#if C128
-    // x80 = x64 + x16
-    asl
-    asl
-    asl
-    asl
-    sta zp_temp0     // x16 (lo)
-    lda #0
-    sta zp_temp1     // x16 (hi)
-
-    lda zp_temp0
-    asl
-    rol zp_temp1     // x32
-    asl
-    rol zp_temp1     // x64
-
-    clc
-    adc zp_temp0     // x64 + x16 = x80 (lo)
+    lda msg_hist_ptr_lo
     sta zp_ptr1
-    lda zp_temp1
-    adc #0
-    sta zp_ptr1_hi
-#else
-    // x40 = x32 + x8
-    asl
-    asl
-    asl
-    sta zp_temp0     // x8 (lo)
-    clc
-    lda #0
-    adc #0
-    sta zp_temp1     // x8 (hi)
-
-    lda zp_temp0
-    asl
-    rol zp_temp1     // x16
-    asl
-    rol zp_temp1     // x32
-
-    clc
-    adc zp_temp0
-    sta zp_ptr1      // lo: x32 + x8 = x40
-    lda zp_temp1
-    adc #0
-    sta zp_ptr1_hi
-#endif
-
-    clc
-    lda zp_ptr1
-    adc #<msg_history
-    sta zp_ptr1
-    lda zp_ptr1_hi
-    adc #>msg_history
+    lda msg_hist_ptr_hi
     sta zp_ptr1_hi
 
     // Copy up to 39 chars from source to history
@@ -340,6 +296,23 @@ msg_save_history:
     adc #1
     and #MSG_HIST_COUNT - 1 // Wrap (8 = power of 2)
     sta msg_hist_idx
+    beq !wrap_ptr+
+
+    lda msg_hist_ptr_lo
+    clc
+    adc #<MSG_HIST_LEN
+    sta msg_hist_ptr_lo
+    lda msg_hist_ptr_hi
+    adc #>MSG_HIST_LEN
+    sta msg_hist_ptr_hi
+    bne !done_ptr+
+
+!wrap_ptr:
+    lda #<msg_history
+    sta msg_hist_ptr_lo
+    lda #>msg_history
+    sta msg_hist_ptr_hi
+!done_ptr:
 
 #if C128
     plp

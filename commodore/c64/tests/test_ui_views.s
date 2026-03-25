@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -126,7 +126,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -148,7 +148,7 @@ test_start:
     lda #>help_lines
     sta help_lines_src_hi
 
-    ldx #11
+    ldx #12
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -169,6 +169,7 @@ test_start:
     jsr test_filtered_inventory_view
     jsr test_filtered_equipment_view
     jsr test_filtered_prompt_range
+    jsr test_message_history_ring
 
     jmp test_exit_trampoline
 
@@ -850,6 +851,89 @@ test_filtered_prompt_range:
     sta tc_results + 11
     rts
 
+test_message_history_ring:
+    jsr reset_shared_state
+    jsr msg_init
+
+    lda #<hist_msg_a
+    sta zp_ptr0
+    lda #>hist_msg_a
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_b
+    sta zp_ptr0
+    lda #>hist_msg_b
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_c
+    sta zp_ptr0
+    lda #>hist_msg_c
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_d
+    sta zp_ptr0
+    lda #>hist_msg_d
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_e
+    sta zp_ptr0
+    lda #>hist_msg_e
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_f
+    sta zp_ptr0
+    lda #>hist_msg_f
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_g
+    sta zp_ptr0
+    lda #>hist_msg_g
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_h
+    sta zp_ptr0
+    lda #>hist_msg_h
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda #<hist_msg_i
+    sta zp_ptr0
+    lda #>hist_msg_i
+    sta zp_ptr0_hi
+    jsr msg_save_history
+
+    lda msg_hist_idx
+    cmp #1
+    bne !fail+
+
+    lda msg_history
+    cmp #'I'
+    bne !fail+
+    lda msg_history + 1
+    bne !fail+
+
+    lda msg_history + MSG_HIST_LEN
+    cmp #'B'
+    bne !fail+
+    lda msg_history + (MSG_HIST_LEN * 7)
+    cmp #'H'
+    bne !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 12
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -868,6 +952,16 @@ assert_screen_string:
 !bad:
     clc
     rts
+
+hist_msg_a: .text "A" ; .byte 0
+hist_msg_b: .text "B" ; .byte 0
+hist_msg_c: .text "C" ; .byte 0
+hist_msg_d: .text "D" ; .byte 0
+hist_msg_e: .text "E" ; .byte 0
+hist_msg_f: .text "F" ; .byte 0
+hist_msg_g: .text "G" ; .byte 0
+hist_msg_h: .text "H" ; .byte 0
+hist_msg_i: .text "I" ; .byte 0
 !ok:
     sec
     rts

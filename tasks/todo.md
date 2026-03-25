@@ -3,7 +3,7 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [ ] Execute `CA-06` by removing repeated message-history destination offset recomputation.
+- [ ] Execute `CA-08` by factoring repeated `fi_add_*` field zeroing into one helper.
 - [ ] Keep `CA-02` parked at the safe reduced equipment-cache implementation until a proven-safe carried-item cache contract exists.
 - [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
 - [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
@@ -1322,6 +1322,33 @@ This file is a temporary working scratchpad.
   - `ui_view_redraw_gameplay_view` for full-screen wizard/menu returns
 - Switched the matching call sites in `commodore/common/player_items.s`, `commodore/common/player_magic.s`, `commodore/common/game_loop_helpers.s`, `commodore/common/wizard.s`, and `commodore/common/ui_wizard.s` to those helpers.
 - Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
+
+### `AUDIT-P14-CA06` Review
+
+- Completed.
+- Replaced the per-save `msg_hist_idx * SCREEN_COLS` offset recomputation in `commodore/common/ui_messages.s` with a rolling destination pointer (`msg_hist_ptr_lo/hi`).
+- Kept the existing ring-buffer contract:
+  - `msg_hist_idx` still wraps mod 8
+  - the history buffer still stores null-terminated screen-code strings in fixed-size slots
+  - C128 still keeps the history copy atomic under `SEI`
+- Added a focused regression in `commodore/c64/tests/test_ui_views.s` that drives `msg_save_history` directly, proves the ring wraps after eight writes, and proves the ninth message overwrites slot 0 while later slots retain their expected contents.
+- Updated the `ui_views` suite expectation in `commodore/c64/run_tests.sh` from `12` to `13`.
+- Verification:
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
+
+### `AUDIT-P15-CA05` Review
+
+- Completed.
+- Replaced the potion and scroll compare/jump ladders in `commodore/common/player_items.s` with compact indexed dispatch tables plus generic fallback entries for the sparse item-ID holes.
+- Kept the existing effect handlers and user-visible behavior intact; the refactor only changed how the handler target is selected.
+- Fixed two follow-up issues during verification:
+  - converted overlong forward branches into local trampolines plus absolute `jmp`
+  - corrected the scroll-table hole count so IDs `32-38` map to the intended handlers
+- Verification:
+  - `commodore/c64/tests/test_item.s`: `47/47` passed
   - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
   - `make test128-fast`: `PASS`
 
