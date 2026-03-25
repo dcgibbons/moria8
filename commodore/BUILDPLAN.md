@@ -9,14 +9,14 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `BUG-GAMEOVER-CLEAR-C64` C64 game-over / save-and-quit menu does not fully clear the prior gameplay status rows | Low | Medium | No | User-reported C64 UI bug: after saving and reaching the `Reboot / Restart / Quit` menu, the screen is not fully cleared and stale player status remains visible at the bottom. |
+| Low | `BUG-TITLE-DUALDISK-FRAME` dual-disk drive selection/status indicator erases the bottom portion of the C64 title frame | Low | Low | No | Minor C64 title-screen polish bug: the dual-drive UI path that shows the drive number/status partially wipes the lower title border/frame instead of preserving the title layout cleanly. |
 | High | `BUG-HAGGLE-UI` store haggling input / reactions do not behave correctly | Medium | High | No | User-reported store-haggling regression. Audit buy/sell haggle prompts, offer parsing, reaction text, convergence, and insult/kick behavior against expected classic flow. |
 | Medium | `BUG-SEARCH-VERIFY` verify whether searching is actually available and working end-to-end, then implement/fix if not | Medium | Medium | No | The codebase already contains a `do_search` path, so this is not yet proven to be an unimplemented feature. Confirm command mapping and user-visible behavior in real play before deciding whether this is missing, broken, or merely undiscoverable. |
 | Medium | `BUG-HELP-PAGING` multi-page help is not implemented | Medium | Medium | No | Extend the help UI so longer help content can paginate cleanly instead of truncating to a single screen. |

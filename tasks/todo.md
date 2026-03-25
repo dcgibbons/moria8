@@ -9,6 +9,44 @@ This file is a temporary working scratchpad.
 - Deferred note: closing the remaining VMS/Umoria parity gap for `look` will require significant engineering because the feature is behaviorally complex and the C64 memory budget is already tight.
 
 ## Current Task
+- [x] Trace the C64 game-over / save-and-quit menu path and compare it to the recently fixed `GENERATING...` presentation bug.
+- [x] Implement the smallest prompt-local clear fix in `game_over_prompt`.
+- [x] Run the relevant regression gates for the shared screen/prompt change.
+- [x] Get manual C64 confirmation that the `Reboot / Restart / Quit` menu now appears on a fully cleared screen.
+
+## `BUG-GAMEOVER-CLEAR-C64` Design
+
+### Problem Statement
+- On C64, after save-and-quit or death reaches the `Reboot / Restart / Quit` menu, the prompt can appear without fully clearing the prior gameplay/death status rows.
+- This is a prompt-presentation bug on a full-screen transition path.
+
+### Current Code Facts
+- `game_over_prompt` lives in `commodore/c64/main.s`.
+- Before this fix shape, it prepared the menu on a still-visible screen:
+  - `screen_clear`
+  - centered prompt draw
+  - wait for key
+- There is no later writer in this path that should repaint the bottom status rows after the prompt is drawn.
+- The recently fixed `BUG-GEN-CLEAR-C64` had the same visible symptom class: a full-screen transition was being prepared live on a visible C64 frame.
+
+### Preferred Fix Shape
+- Keep the change local to `game_over_prompt`.
+- Blank the screen first, then clear and draw the centered menu, then unblank once the prompt is fully established.
+- Do not broaden this into a shared screen-driver refactor unless the local fix fails in real play.
+
+### Verification Status
+- Implemented the prompt-local presentation fix in `commodore/c64/main.s`:
+  - blank
+  - clear
+  - draw `Reboot / Restart / Quit`
+  - unblank
+- Automated verification completed:
+  - `make test` — PASS
+  - `make test128-fast` — PASS
+- Manual C64 confirmation:
+  - user reports the `Reboot / Restart / Quit` menu now clears correctly
+
+## Current Task
 - [x] Reproduce the C64 `GENERATING...` dirty-screen transition and note which rows/cells survive the clear.
 - [x] Trace whether the residue comes from `generation_busy_begin`, the C64 `screen_clear` primitive, or a later transition draw path.
 - [x] Implement the smallest safe C64 fix without perturbing the shared dungeon-generation flow.

@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-24 — Similar full-screen C64 UI bugs may need different local fixes
+
+- **Issue:** I treated the C64 game-over / save-and-quit menu clear bug as if it had the same root cause as the recently fixed `GENERATING...` screen bug and applied only the same blank/unblank ordering fix.
+- **Root Cause:** I matched on symptom shape too quickly. The generation bug was a visible preparation-order problem, but the game-over menu still leaked the bottom status rows in the final frame, which points to the prompt's actual clear path rather than only its visibility timing.
+- **Resolution:** For C64 full-screen UI residue bugs, do not stop at “same symptom, same fix.” Verify the final displayed frame and be ready to switch that specific path to the safer row-by-row clear helper when the bulk clear is insufficient.
+- **Rule:** **When a C64 full-screen prompt still shows stale rows after a blank/clear/draw/unblank fix, treat that as evidence the local clear primitive is wrong for that path. Move the prompt to the safer row-by-row clear helper instead of assuming all similar bugs share the same root cause.**
+
 ## 2026-03-24 — Escalate as soon as the memory map proves a feature does not fit
 
 - **Issue:** I kept trying to optimize the oversized `look` rewrite locally instead of surfacing the memory-map failure as soon as the build proved it.

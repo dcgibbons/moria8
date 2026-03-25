@@ -6,6 +6,43 @@
 
 ---
 
+## 2026-03-24 — `BUG-GAMEOVER-CLEAR-C64` C64 game-over menu clear ✅ FIXED
+
+### Scope Closed
+- Fixed the C64 UI bug where the `Reboot / Restart / Quit` menu could still show stale gameplay status rows at the bottom of the screen after save-and-quit or death flow reached the prompt.
+
+### Root Cause
+- `game_over_prompt` in `commodore/c64/main.s` was preparing the full-screen menu with the wrong clear strategy for this path.
+- A simple blank/unblank ordering fix was not sufficient; the final visible frame still retained the bottom status rows.
+- The working fix was to use the safer row-by-row full-screen clear helper already used by other sensitive C64 UI screens.
+
+### What Changed
+1. **Game-over prompt now uses the safer full-screen clear helper**
+   - `commodore/c64/main.s`
+   - `game_over_prompt` now:
+     - `screen_blank`
+     - sets black clear color
+     - `ui_help_clear_all`
+     - restores white text
+     - draws `R)EBOOT  S)TART  Q)UIT`
+     - `screen_unblank`
+   - This ensures the final prompt frame is built on a fully cleared screen rather than relying on the generic bulk clear for this path.
+2. **Task notes and lessons were updated**
+   - `tasks/todo.md`
+   - `tasks/lessons.md`
+   - Recorded that this bug looked similar to the generation-screen issue but required a different local fix: the prompt needed the row-by-row clear helper, not just presentation reordering.
+
+### Validation
+- `make test` (`33` passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+- Manual C64 confirmation from the user that the game-over / save-and-quit menu now clears correctly
+
+### Outcome
+- `BUG-GAMEOVER-CLEAR-C64` is closed.
+- The C64 game-over menu now renders on a fully cleared screen.
+- The remaining nearby UI issue is separate backlog work:
+  - `BUG-TITLE-DUALDISK-FRAME`
+
 ## 2026-03-24 — `BUG-GEN-CLEAR-C64` C64 generation busy-screen clear ✅ FIXED
 
 ### Scope Closed

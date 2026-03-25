@@ -734,7 +734,12 @@ tramp_game_over:
 // Q falls through; R and S branch internally.
 // ============================================================
 game_over_prompt:
-    jsr screen_clear
+    // Hide the previous gameplay/death frame before preparing the full-screen
+    // quit/restart prompt so stale status rows do not remain visible.
+    jsr screen_blank
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
     lda #COL_WHITE
     sta zp_text_color
     lda #12                     // Row 12 (center)
@@ -746,6 +751,7 @@ game_over_prompt:
     lda #>game_over_str
     sta zp_ptr0_hi
     jsr screen_put_string
+    jsr screen_unblank
     lda #0
     sta $c6                     // Flush keyboard buffer
 !gop_loop:
