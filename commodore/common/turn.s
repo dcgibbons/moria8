@@ -14,6 +14,37 @@
 .const FOOD_WEAK_AT     = 50    // Below this = weak
 .const FOOD_FAINT_AT    = 10    // Below this = faint
 
+// player_update_hunger_state — classify hunger from the current food counter
+// Output: zp_hunger_state updated to FULL / HUNGRY / WEAK / FAINT
+// Preserves: nothing
+player_update_hunger_state:
+    lda zp_player_food_hi
+    bne !full+              // Hi byte > 0 means plenty of food
+
+    lda zp_player_food
+    cmp #FOOD_FAINT_AT
+    bcc !faint+
+    cmp #FOOD_WEAK_AT
+    bcc !weak+
+    cmp #FOOD_HUNGRY_AT
+    bcc !hungry+
+!full:
+    lda #HUNGER_FULL
+    sta zp_hunger_state
+    rts
+!hungry:
+    lda #HUNGER_HUNGRY
+    sta zp_hunger_state
+    rts
+!weak:
+    lda #HUNGER_WEAK
+    sta zp_hunger_state
+    rts
+!faint:
+    lda #HUNGER_FAINT
+    sta zp_hunger_state
+    rts
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -197,39 +228,11 @@ turn_tick_hunger:
 !no_borrow:
     dec zp_player_food
 
-    // Update hunger state based on food counter
-    // Compare 16-bit food counter to thresholds
-    lda zp_player_food_hi
-    bne !full+              // Hi byte > 0 means plenty of food
-
-    // Hi byte is 0, check lo byte against thresholds
-    lda zp_player_food
-    cmp #FOOD_FAINT_AT
-    bcc !faint+
-    cmp #FOOD_WEAK_AT
-    bcc !weak+
-    cmp #FOOD_HUNGRY_AT
-    bcc !hungry+
-!full:
-    lda #HUNGER_FULL
-    sta zp_hunger_state
-    rts
-!hungry:
-    lda #HUNGER_HUNGRY
-    sta zp_hunger_state
-    rts
-!weak:
-    lda #HUNGER_WEAK
-    sta zp_hunger_state
-    rts
-!faint:
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
+    jsr player_update_hunger_state
     rts
 !starving:
     // Food is 0 — player takes damage each turn
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
+    jsr player_update_hunger_state
 
     // Starvation: 1 HP damage per turn, clamped at 0.
     jsr turn_apply_one_damage

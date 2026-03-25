@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-25 — Do not label a regression “flaky” without proof
+
+- **Issue:** I saw `test_render.s` fail after the CA-03 hunger refactor and immediately described it as the project’s “known flaky render suite.”
+- **Root Cause:** I leaned on an old narrative in the runner instead of treating the new failure as a real regression from my current changes. In this project, that assumption is dangerous because layout shifts and memory corruption are common failure modes and must be proven absent, not hand-waved away.
+- **Resolution:** Treat every fresh test failure as caused by the current diff until the failure is reproduced as pre-existing on the same tree state. Do not use “flaky” as an explanation without direct evidence.
+- **Rule:** **When a suite fails after my change, assume I broke it. Do not call it flaky unless I can prove the same failure exists independently of the current diff.**
+
 ## 2026-03-25 — Test timeouts in this repo mean hang, not patience
 
 - **Issue:** I let C64 test runs continue far past the project’s stated timeout limits while trying to distinguish a slow suite from a failing one.

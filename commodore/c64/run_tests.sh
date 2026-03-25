@@ -75,16 +75,6 @@ run_test() {
     local pass_count
     pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
 
-    # test_render can flake under VICE startup timing even when the isolated
-    # suite passes immediately on rerun. Give it one clean retry before
-    # reporting a failure.
-    if [ "$name" = "render" ] && [ "$pass_count" -lt "$expected_count" ]; then
-        tty_log=$(mktemp -t "test_${name}_ttylog_retry")
-        run_vice_once "$tty_log"
-        result=$(grep "^>C:0" "$tty_log")
-        pass_count=$(echo "$result" | grep -o " 01" | wc -l | tr -d ' ')
-    fi
-
     if [ "$pass_count" -ge "$expected_count" ]; then
         echo "PASS ($pass_count/$expected_count tests)"
         PASS=$((PASS + 1))

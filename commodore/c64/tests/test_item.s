@@ -925,6 +925,11 @@ test_start:
     cmp #>1600
     bne !t18_fail+
 
+    // Shared hunger-state recompute should now classify the player as full.
+    lda zp_hunger_state
+    cmp #HUNGER_FULL
+    bne !t18_fail+
+
     // Check slot 0 is empty (food consumed)
     lda inv_item_id
     cmp #FI_EMPTY

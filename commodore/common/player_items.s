@@ -20,11 +20,6 @@
 .const ITEM_RATION     = 15    // Type ID for ration of food
 .const ITEM_SLIME_MOLD = 16   // Type ID for slime mold
 
-// Hunger thresholds (duplicated from turn.s — must stay in sync)
-.const PIW_FOOD_HUNGRY_AT = 150
-.const PIW_FOOD_WEAK_AT   = 50
-.const PIW_FOOD_FAINT_AT  = 10
-
 // ============================================================
 // Scratch variables
 // ============================================================
@@ -699,30 +694,9 @@ item_eat:
     lda zp_player_food_hi
     sta player_data + PL_FOOD_HI
 
-    // Update hunger state
-    lda zp_player_food_hi
-    bne !ie_full+
-    lda zp_player_food
-    cmp #PIW_FOOD_HUNGRY_AT
-    bcs !ie_full+
-    cmp #PIW_FOOD_WEAK_AT
-    bcs !ie_hungry+
-    cmp #PIW_FOOD_FAINT_AT
-    bcs !ie_weak+
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_weak:
-    lda #HUNGER_WEAK
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_hungry:
-    lda #HUNGER_HUNGRY
-    sta zp_hunger_state
-    jmp !ie_remove+
-!ie_full:
-    lda #HUNGER_FULL
-    sta zp_hunger_state
+    // Reuse the shared hunger-state classifier; starvation damage remains
+    // turn-owned because eating can only increase the food counter.
+    jsr player_update_hunger_state
 
 !ie_remove:
     // Remove food from inventory

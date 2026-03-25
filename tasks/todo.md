@@ -3,7 +3,8 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [ ] Complete the filtered-inventory half of `CA-02` without reintroducing the `test_item` hang from the first `player_items.s` cache attempts.
+- [ ] Execute `CA-04` by collapsing repeated modal UI return/dismiss logic into one shared restore path.
+- [ ] Keep `CA-02` parked at the safe reduced equipment-cache implementation until a proven-safe carried-item cache contract exists.
 - [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
 - [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
 - [x] Rebuild and rerun the standard C64/C128 verification on the reduced safe implementation.
@@ -1299,6 +1300,18 @@ This file is a temporary working scratchpad.
 - That is the highest-confidence fix, the lowest-risk change, and the one most clearly proven wrong by the current code.
 
 ## Review
+
+### `AUDIT-P12-CA03` Review
+
+- Completed.
+- Added shared helper `player_update_hunger_state` in `commodore/common/turn.s` and switched both the turn-time hunger tick and `item_eat` in `commodore/common/player_items.s` to use it.
+- Kept starvation damage turn-owned; the shared helper only classifies `FULL/HUNGRY/WEAK/FAINT` from the current food counter.
+- Added focused runtime coverage in `commodore/c64/tests/test_item.s` to prove eating from low food immediately restores `zp_hunger_state` to `HUNGER_FULL`.
+- While verifying, `commodore/c64/tests/test_render.s` exposed a separate harness defect: it compared the full byte read from C64 color RAM even though only the low nibble is stable. Fixed the test by masking with `$0f` and removed the old render-specific retry from `commodore/c64/run_tests.sh` so future regressions fail directly.
+- Verification:
+  - direct `test_render.s` loop: `6/6` clean runs
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
 
 ### C128 dungeon-entry JAM follow-up
 
