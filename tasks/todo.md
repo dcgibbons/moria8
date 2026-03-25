@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `ALIGN-1` by auditing hot render/combat/input indexed accesses against the live symbol layout.
+- [x] Distinguish page-safe tables from real page-cross candidates in the current C64 and C128 builds.
+- [x] Quantify likely cycle impact only where the current hot-path access pattern justifies it.
+- [x] Update the audit plan with concrete alignment findings and move the queue to the next unresolved phase.
 - [x] Execute `ZP-1` by adding an automated scan for raw zero-page ownership violations.
 - [x] Flag raw `$90-$FF` zero-page memory operands outside explicitly blessed KERNAL/MMU helper cases.
 - [x] Keep the scan focused on real assembly operands rather than `.byte` data, comments, or immediates.
@@ -306,6 +310,62 @@ This file is a temporary working scratchpad.
 - Verification completed:
   - `python3 tools/check_zp_usage.py --self-test` → `PASS`
   - `make check-zp` → `0 error(s), 0 warning(s)`
+  - `make -C commodore/c64 build` → `PASS`
+  - `make -B -C commodore/c128 build128` → `PASS`
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed` on rerun after the known flaky `render` suite
+- `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+
+## `AUDIT-P8-ALIGN1` Design
+
+### Goal
+- Execute `ALIGN-1` by checking the live build, not just source layout comments, for page-cross penalties in hot render, combat, and input paths.
+- Separate:
+  - already-safe hot tables that do not need churn
+  - real page-cross candidates that are worth future action
+  - cold crossings that should not be sold as high-ROI optimization
+
+### Scope
+- In scope:
+  - `commodore/c64/dungeon_render.s`
+  - `commodore/c128/dungeon_render_vdc.s`
+  - `commodore/common/combat.s`
+  - `commodore/c64/input.s`
+  - `commodore/c128/input128.s`
+  - `commodore/c128/screen_vdc.s`
+  - current C64/C128 symbol outputs used to locate the live table addresses
+- Out of scope:
+  - speculative percentage speedup claims
+  - broad data-layout rewrites in this phase
+  - padding/alignment changes that spend headroom without evidence
+
+### Verification Standard
+1. Identify the actual indexed tables used in the hot render/combat/input loops.
+2. Check their current addresses in the live C64 and C128 symbol maps.
+3. Mark each case as:
+   - page-safe in the full indexed range
+   - crossing, but cold enough to ignore for now
+   - crossing in a genuinely hot path
+4. Estimate cycle impact only from the real access count and current thresholds.
+5. Update the audit docs with the completed findings and the next execution item.
+
+### Review
+- Completed.
+- Most of the true hot-path row/tile tables are already well placed in the live builds:
+  - C64 `map_row_*`, `screen_row_*`, `color_row_*`, `tile_screen_codes`, and `tile_colors` stay within page for their full indexed ranges
+  - C128 `map_row_*`, `screen_row_*`, `color_row_*`, `tile_screen_codes`, `tile_vdc_colors`, `cia_scancode_table`, `key_map_petscii`, `key_map_cmd`, and `vic_to_vdc_color` are also page-safe across the indexed ranges actually used
+- The highest-value live crossing is the C64 input search table:
+  - `key_map_petscii` starts at `$10E6`, so the linear `cmp key_map_petscii,x` loop crosses page once `x >= 26`
+  - worst case is `27` extra cycles per full-table search
+  - movement keys and common early table hits avoid the penalty, so this is real but not top-tier
+- The remaining crossings found in this phase are narrower:
+  - C64 `cr_color` at `$35E0` crosses for monster types `>= 32`
+  - C128 `cr_display` at `$5EF3` crosses for monster types `>= 13`
+  - C128 `cr_level` at `$5FF7` crosses for monster types `>= 9`
+- Those creature-table crossings are real, but their savings are modest:
+  - roughly `+1` cycle per crossed lookup
+  - on C128 the VDC I/O cost dominates total render time, so table realignment here is lower priority than the current audit queue
+- A few non-hot/cold crossings still exist, such as C64 `xp_level_lo`, but they do not justify promotion into the hot-path alignment backlog.
+- Verification completed:
   - `make -C commodore/c64 build` → `PASS`
   - `make -B -C commodore/c128 build128` → `PASS`
   - `commodore/c64/run_tests.sh` → `33 passed, 0 failed` on rerun after the known flaky `render` suite
