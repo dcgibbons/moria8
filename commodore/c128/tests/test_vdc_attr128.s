@@ -37,7 +37,9 @@ test_start:
     ldx #31
     jsr vdc_read_reg
     cmp #SC_SPACE
-    bne test_fail
+    beq !+
+    jmp test_fail
+!:
 
     // Printing a string with an embedded space must also map to VDC space.
     lda #0
@@ -60,7 +62,61 @@ test_start:
     ldx #31
     jsr vdc_read_reg
     cmp #SC_SPACE
-    bne test_fail
+    beq !+
+    jmp test_fail
+!:
+
+    // Lowercase PETSCII in the string path must translate to VDC Set 1.
+    lda #0
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<test_lower_str
+    sta zp_ptr0
+    lda #>test_lower_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #0
+    sta zp_cursor_row
+    lda #5
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$02                // PETSCII 'b' -> VDC Set 1 lowercase 'b'
+    beq !+
+    jmp test_fail
+!:
+
+    // Embedded direct VDC bytes used by packed UI data must still pass through.
+    lda #0
+    sta zp_cursor_row
+    lda #8
+    sta zp_cursor_col
+    lda #<test_direct_vdc_str
+    sta zp_ptr0
+    lda #>test_direct_vdc_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #0
+    sta zp_cursor_row
+    lda #8
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldx #31
+    jsr vdc_read_reg
+    cmp #$03
+    beq !+
+    jmp test_fail
+!:
 
     // Read attribute byte at row 0, col 0.
     lda #0
@@ -78,21 +134,29 @@ test_start:
     ldx #COL_WHITE
     lda vic_to_vdc_color,x
     cmp attr_byte
-    bne test_fail
+    beq !+
+    jmp test_fail
+!:
 
     // Grey and light grey must not collapse on C128 VDC.
     ldx #COL_GREY
     lda vic_to_vdc_color,x
     cmp #VDC_DGREY
-    bne test_fail
+    beq !+
+    jmp test_fail
+!:
     sta grey_attr
 
     ldx #COL_LGREY
     lda vic_to_vdc_color,x
     cmp #VDC_LGREY
-    bne test_fail
+    beq !+
+    jmp test_fail
+!:
     cmp grey_attr
-    beq test_fail
+    bne !+
+    jmp test_fail
+!:
 
     jmp test_pass
 
@@ -103,5 +167,7 @@ test_pass:
     jmp test_pass
 
 test_space_str: .text "A B" ; .byte 0
+test_lower_str: .text "Ab" ; .byte 0
+test_direct_vdc_str: .byte $03, 0
 attr_byte: .byte 0
 grey_attr: .byte 0

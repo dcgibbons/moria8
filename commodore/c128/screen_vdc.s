@@ -1,10 +1,10 @@
 #importonce
 // screen_vdc.s — Screen output routines (80-column VDC)
 //
-// All output uses VDC register-indirect writes. Screen codes are written
-// directly (no translation needed — C128 KERNAL initializes VDC char RAM
-// with the same ordering as VIC-II). Colors are translated from VIC-II
-// palette to RGBI via vic_to_vdc_color table.
+// All output uses VDC register-indirect writes. Public text entry points take
+// PETSCII and translate to VDC Set 1 screen codes inside this backend so the
+// shared UI layer does not carry a separate VDC-only text contract. Colors are
+// translated from VIC-II palette to RGBI via vic_to_vdc_color table.
 //
 // Screen layout (80-col):
 //   Rows 0–1:    Message area (2 lines)
@@ -335,11 +335,13 @@ screen_put_char:
     rts
 spc_save_x: .byte 0
 
-// screen_put_string — Write a null-terminated string of screen codes via VDC
-// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (screen codes, $00 terminated)
+// screen_put_string — Write a null-terminated string via VDC
+// Input:  zp_ptr0/zp_ptr0_hi = pointer to string (PETSCII, $00 terminated)
 //         zp_cursor_row = row
 //         zp_cursor_col = starting column
 //         zp_text_color = color
+// Notes:  direct VDC/control bytes already used by packed UI data still pass
+//         through unchanged; only PETSCII lowercase is translated.
 // Preserves: nothing
 screen_put_string:
     // Lock IRQs before any cursor/address setup so zp_ptr0 can't be
@@ -368,6 +370,7 @@ screen_put_string:
 !char_loop:
     lda (zp_ptr0),y
     beq !chars_done+
+    jsr screen_translate_petscii
     jsr vdc_wait            // WAIT before every data write
     sta VDC_DATA_REG        // Stream directly to port
     iny

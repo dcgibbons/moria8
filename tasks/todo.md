@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `API-1` by enforcing one caller-visible C128 text contract at the VDC screen layer.
+- [x] Make `screen_put_string` accept PETSCII like `screen_put_char` while preserving compatibility for embedded direct VDC/control bytes.
+- [x] Add a focused C128 regression that proves lowercase PETSCII strings and direct VDC byte passthrough both survive the new contract.
+- [x] Rebuild the C128 target, rerun focused and fast C128 verification, and refresh the audit/headroom docs with the live post-change layout.
 - [x] Execute `WRAP-1` by fixing the C128 KERNAL-wrapper IRQ-state contract.
 - [x] Preserve the caller `I` bit while still returning the KERNAL carry/flag result.
 - [x] Update the focused cold-boot wrapper probe to match the fixed scaffold and the real C128 `$01` low-bit contract.
@@ -162,6 +166,50 @@ This file is a temporary working scratchpad.
 - Refreshed the headroom baseline after the wrapper fix:
   - C128 staged source / program image is now `76` bytes below `$E000`
   - C128 cache-state block now ends at `$32F8`
+
+## `AUDIT-P5-API1` Design
+
+### Goal
+- Execute `API-1` by giving the C128 screen layer one caller-visible text rule.
+- Make the public VDC text entry points behave like the rest of the shared UI code expects:
+  - PETSCII in
+  - backend-native screen codes out
+- Preserve the existing tolerance for embedded direct VDC/control bytes that already exist in packed UI/title data.
+
+### Scope
+- In scope:
+  - `commodore/c128/screen_vdc.s`
+  - focused C128 text/output regression coverage
+  - audit/headroom/task docs affected by the layout change
+- Out of scope:
+  - broad callsite rewrites across shared UI code
+  - changes to the VIC-II backend contract
+
+### Verification Standard
+1. Confirm the mixed contract in the current VDC backend source.
+2. Change the public string path so PETSCII strings and PETSCII chars share the same translation rule.
+3. Prove lowercase PETSCII survives the string path on VDC.
+4. Prove embedded direct VDC bytes still pass through unchanged.
+5. Rebuild C128, rerun the fast C128 suite, and refresh the live headroom/audit docs.
+
+### Review
+- Completed.
+- Updated `commodore/c128/screen_vdc.s` so the public VDC text contract is now consistent:
+  - `screen_put_char` and `screen_put_string` both accept PETSCII
+  - embedded direct VDC/control bytes still pass through because the backend translator only remaps PETSCII lowercase
+- Added focused regression coverage in `commodore/c128/tests/test_vdc_attr128.s` for:
+  - lowercase PETSCII string translation (`"Ab"` writes lowercase `b` as VDC Set 1 code `$02`)
+  - direct VDC byte passthrough (`$03` remains `$03`)
+- Rebuilt the C128 target and refreshed the post-change layout:
+  - C128 staged source / program image is now `73` bytes below `$E000`
+  - C128 cache-state block now ends at `$32FB`
+  - C128 overlay-state block now ends at `$32F3`
+- Verification completed:
+  - `commodore/c128/tests/test_vdc_attr128.s` → `PASS`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
+- Environment note:
+  - `make test128-fast` remained PATH-sensitive in this shell and repeatedly reset the monitor connection while using bare `x128`
+  - the equivalent explicit-binary batch command above completed cleanly and is the verification result for this phase
 
 ## `CODE_AUDIT` Review
 

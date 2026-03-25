@@ -73,7 +73,7 @@ Phase 2 result:
   - C128 startup overlay to `$F000`: `35` bytes
   - C64 main image to `MAP_BASE`: `40` bytes
   - C64 startup overlay to `$F000`: `44` bytes
-  - C128 staged source / program image to `$E000`: `76` bytes
+  - C128 staged source / program image to `$E000`: `73` bytes
 
 ### `ALIGN-1` Hot-Path Page Crossing Is Real And Largely Unaudited
 
@@ -126,9 +126,10 @@ Evidence:
 - `commodore/c128/screen_vdc.s:338-372`
 
 What is happening:
-- the VDC backend currently exposes a mixed contract:
-  - `screen_put_char` translates PETSCII
-  - `screen_put_string` expects screen-code strings
+- the VDC backend used to expose a mixed contract:
+  - `screen_put_char` translated PETSCII
+  - `screen_put_string` expected screen-code strings
+- phase 5 normalizes the public string path so both public text entry points accept PETSCII while still tolerating embedded direct VDC/control bytes already used by packed UI data
 
 Why this matters:
 - this is survivable today, but it is architectural debt
@@ -141,6 +142,14 @@ Required deliverable:
 Guardrail:
 - do not hardwire the audit to “PETSCII everywhere” until implementation work proves that is the cleanest shape
 - the contract requirement is external consistency, not a premature internal storage decision
+
+Phase 5 result:
+- implemented on `2026-03-25`
+- updated `commodore/c128/screen_vdc.s` so `screen_put_string` now applies the same PETSCII-to-VDC Set 1 translation rule as `screen_put_char`
+- preserved compatibility for existing embedded direct VDC/control bytes by keeping the translator pass-through behavior outside PETSCII lowercase
+- focused verification completed:
+  - `commodore/c128/tests/test_vdc_attr128.s` passed with new coverage for lowercase PETSCII string translation and direct VDC-byte passthrough
+  - the fast C128 batch passed via `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12`
 
 ### `LINT-1` Repeated 6502 Nits Should Move Into Tooling
 
@@ -657,29 +666,28 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete and the C128 staged-source margin is now `76` bytes.
-2. Scope and draft `API-1` so new C128 UI work stops increasing encoding-contract debt.
-3. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
-4. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
-5. Add `LINT-1` once the higher-risk contract and layout items are in motion.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete and the C128 staged-source margin is now `73` bytes.
+2. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
+3. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
+4. Add `LINT-1` once the higher-risk contract and layout items are in motion.
+5. Start tactical deduplication with `CA-01` only after the perimeter items above are underway.
 
 ## Suggested Execution Order
 
-1. `API-1` canonical C128 text contract
-2. `CA-12` RNG byte-step quality decision/fix
-3. `ZP-1` automated zero-page ownership scan
-4. `ALIGN-1` hot-path alignment audit
-5. `LINT-1` 6502 anti-pattern linter
-6. `CA-01` shared numeric formatting
-7. `CA-02` filtered inventory visible-slot cache
-8. `CA-03` shared hunger-state helper/constants
-9. `CA-04` modal UI return helper cleanup
-10. `CA-06` message-history destination simplification
-11. `CA-05` item-effect dispatch cleanup
-12. `CA-08` item-field init helper
-13. `CA-07` full-screen clear benchmark and safe-callsite split
-14. `CA-09` C128 KERNAL wrapper refactor
-15. `CA-10` shared contract naming/constants cleanup
+1. `CA-12` RNG byte-step quality decision/fix
+2. `ZP-1` automated zero-page ownership scan
+3. `ALIGN-1` hot-path alignment audit
+4. `LINT-1` 6502 anti-pattern linter
+5. `CA-01` shared numeric formatting
+6. `CA-02` filtered inventory visible-slot cache
+7. `CA-03` shared hunger-state helper/constants
+8. `CA-04` modal UI return helper cleanup
+9. `CA-06` message-history destination simplification
+10. `CA-05` item-effect dispatch cleanup
+11. `CA-08` item-field init helper
+12. `CA-07` full-screen clear benchmark and safe-callsite split
+13. `CA-09` C128 KERNAL wrapper refactor
+14. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -700,4 +708,5 @@ For every item above:
 - Phase 2 headroom measurement is complete: `commodore/HEADROOM_REPORT.md` is now the concrete baseline for memory-sensitive work.
 - Phase 3 `CA-11` is complete: the shared melee to-hit path now saturates the `PL_TOHIT * 3` contribution before 8-bit wrap, and the focused combat regression coverage passes.
 - Phase 4 `WRAP-1` is complete: the common C128 KERNAL wrapper contract now preserves caller IRQ state, the focused cold-boot probe passes, and the fast C128 unit batch passes.
+- Phase 5 `API-1` is complete: the public C128 VDC string/char paths now share one PETSCII-facing contract, and the focused VDC regression plus the explicit-`x128` fast batch both pass.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.
