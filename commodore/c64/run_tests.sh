@@ -235,7 +235,7 @@ TOTAL=$((TOTAL + 1))
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
 run_test "math"   "tests/test_math.s"   "0400 040f" 16
-run_test "rng"    "tests/test_rng.s"    "0400 0408" 9
+run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 0409" 10

@@ -65,7 +65,7 @@ Recommended implementation:
 
 Phase 2 result:
 - executed on `2026-03-25`; exact numbers are recorded in `commodore/HEADROOM_REPORT.md`
-- the report was refreshed after phases 3 and 4 because the live layout changed
+- the report was refreshed after phases 3 through 6 because the live layout changed
 - current highest-risk measured margins are:
   - C128 `RuntimeLowData` to floor items: `0` bytes
   - C64 runtime banked code to `$FFFA`: `2` bytes
@@ -73,7 +73,7 @@ Phase 2 result:
   - C128 startup overlay to `$F000`: `35` bytes
   - C64 main image to `MAP_BASE`: `40` bytes
   - C64 startup overlay to `$F000`: `44` bytes
-  - C128 staged source / program image to `$E000`: `73` bytes
+  - C128 staged source / program image to `$E000`: `54` bytes
 
 ### `ALIGN-1` Hot-Path Page Crossing Is Real And Largely Unaudited
 
@@ -221,9 +221,9 @@ These items remain valid unless noted as already completed, and they now sit ben
 |---|---|---|---|
 | `WRAP-1` | Critical | restore caller IRQ-state across C128 KERNAL wrappers | completed in phase 4; small byte/cycle cost, high correctness win |
 | `CA-11` | High | fix melee to-hit overflow / sign handling | no meaningful byte win; small cycle cost increase, large correctness win |
+| `CA-12` | Medium | advance RNG by a real byte step instead of one-bit output | completed in phase 6; cycle cost increase, meaningful quality win |
 | `CA-01` | High | unify numeric formatting kernels/tables | roughly `140-260` bytes per build, plus reduced drift |
 | `CA-02` | High | stop rescanning filtered inventory/equipment views | roughly `200-600` cycles per filtered prompt path; code size small positive or neutral |
-| `CA-12` | Medium | advance RNG by a real byte step instead of one-bit output | no byte win; large cycle cost increase per RNG byte, large quality win |
 | `CA-03` | Medium | unify hunger-state thresholds and recompute logic | roughly `20-40` bytes per build, plus removes sync risk |
 | `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | roughly `20-50` bytes per build, plus more consistent return behavior |
 | `CA-06` | Medium | remove message-history offset recomputation | roughly `15-25` cycles per message save and a small byte win |
@@ -593,15 +593,15 @@ Phase 3 result:
   - `commodore/c64/tests/test_combat.s` passed `25/25`
   - `commodore/c64/tests/test_throw.s` passed `6/6`
 
-### `CA-12` RNG Output Is Still A One-Bit Step, Not A Byte-Step
+### `CA-12` RNG Byte Output Was A One-Bit Step And Is Now A Real Byte-Step
 
 Evidence:
 - `commodore/common/rng.s:60-77`
 
 What is happening:
-- `rng_next` advances the 32-bit Galois LFSR by one shift, then returns the low byte
-- successive calls are therefore highly correlated byte-shifts of the same state
-- both `rng_range` and `rng_range_word` inherit that correlation
+- the old `rng_next` advanced the 32-bit Galois LFSR by one shift, then returned the low byte
+- successive calls were therefore highly correlated byte-shifts of the same state
+- both `rng_range` and `rng_range_word` inherited that correlation
 
 Why this matters:
 - this is a quality and design tradeoff, not a functional correctness bug
@@ -619,6 +619,17 @@ Expected savings / cost:
 Verification:
 - compare distribution quality in `rng_range` and `rng_range_word`
 - re-check any gameplay systems that depend on tightly coupled random bytes
+
+Phase 6 result:
+- implemented on `2026-03-25`
+- updated `commodore/common/rng.s` so `rng_next` / `rng_byte` now advance the LFSR eight times before returning a byte
+- the final implementation intentionally stayed byte-budget aware:
+  - an earlier split-API draft overflowed the C64 banked payload past `$D000`
+  - the final version recovered C64 headroom while keeping the byte-step quality fix
+- added focused runtime coverage in `commodore/c64/tests/test_rng.s` proving `rng_next` matches eight reference one-bit steps
+- broader verification completed:
+  - `commodore/c64/run_tests.sh` passed `33/33`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` passed
 
 ## Style And 6502 Idiom Sweep
 
@@ -666,28 +677,27 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete and the C128 staged-source margin is now `73` bytes.
-2. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
-3. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
-4. Add `LINT-1` once the higher-risk contract and layout items are in motion.
-5. Start tactical deduplication with `CA-01` only after the perimeter items above are underway.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `54` bytes.
+2. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
+3. Add `LINT-1` once the higher-risk contract and layout items are in motion.
+4. Start tactical deduplication with `CA-01` only after the perimeter items above are underway.
+5. Treat C64 banked payload growth as explicit change-control: `3` bytes remain below `$D000`.
 
 ## Suggested Execution Order
 
-1. `CA-12` RNG byte-step quality decision/fix
-2. `ZP-1` automated zero-page ownership scan
-3. `ALIGN-1` hot-path alignment audit
-4. `LINT-1` 6502 anti-pattern linter
-5. `CA-01` shared numeric formatting
-6. `CA-02` filtered inventory visible-slot cache
-7. `CA-03` shared hunger-state helper/constants
-8. `CA-04` modal UI return helper cleanup
-9. `CA-06` message-history destination simplification
-10. `CA-05` item-effect dispatch cleanup
-11. `CA-08` item-field init helper
-12. `CA-07` full-screen clear benchmark and safe-callsite split
-13. `CA-09` C128 KERNAL wrapper refactor
-14. `CA-10` shared contract naming/constants cleanup
+1. `ZP-1` automated zero-page ownership scan
+2. `ALIGN-1` hot-path alignment audit
+3. `LINT-1` 6502 anti-pattern linter
+4. `CA-01` shared numeric formatting
+5. `CA-02` filtered inventory visible-slot cache
+6. `CA-03` shared hunger-state helper/constants
+7. `CA-04` modal UI return helper cleanup
+8. `CA-06` message-history destination simplification
+9. `CA-05` item-effect dispatch cleanup
+10. `CA-08` item-field init helper
+11. `CA-07` full-screen clear benchmark and safe-callsite split
+12. `CA-09` C128 KERNAL wrapper refactor
+13. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -709,4 +719,5 @@ For every item above:
 - Phase 3 `CA-11` is complete: the shared melee to-hit path now saturates the `PL_TOHIT * 3` contribution before 8-bit wrap, and the focused combat regression coverage passes.
 - Phase 4 `WRAP-1` is complete: the common C128 KERNAL wrapper contract now preserves caller IRQ state, the focused cold-boot probe passes, and the fast C128 unit batch passes.
 - Phase 5 `API-1` is complete: the public C128 VDC string/char paths now share one PETSCII-facing contract, and the focused VDC regression plus the explicit-`x128` fast batch both pass.
+- Phase 6 `CA-12` is complete: the shared RNG byte path now advances eight LFSR steps per returned byte, the full C64 suite passes, and the explicit-`x128` fast C128 batch still passes.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

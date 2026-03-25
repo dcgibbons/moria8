@@ -26,8 +26,8 @@ Highest-risk regions right now:
 - C64 main image: `40` bytes below `MAP_BASE`
 - C64 startup overlay: `44` bytes below `$F000`
 - C128 `RuntimeLowData`: `0` bytes below floor-item storage at `$1A00`
+- C128 staged source / program image: `54` bytes below `$E000`
 - C128 startup overlay: `35` bytes below `$F000`
-- C128 staged source / program image: `73` bytes below `$E000`
 
 Interpretation:
 - C64 is past “tight” and into active budget management
@@ -57,8 +57,8 @@ Notes:
 
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
-| Program image / staged source span | `$DFB7` | `$E000` | `73` | High |
-| Staged banked payload source | `$DFB7` | `$E000` | `73` | High |
+| Program image / staged source span | `$DFCA` | `$E000` | `54` | High |
+| Staged banked payload source | `$DFCA` | `$E000` | `54` | High |
 | Runtime banked payload | `$FB94` | `$FFFA` | `1126` | Low |
 | `RuntimeLowData` below floor items | `$1A00` | `$1A00` | `0` | Critical |
 | Startup overlay | `$EFDD` | `$F000` | `35` | High |
@@ -71,9 +71,10 @@ Notes:
 
 Notes:
 - `RuntimeLowData` is exactly flush with `FLOOR_ITEM_BASE = $1A00`; any growth there must move the floor-item table or shrink the low-runtime payload
+- the staged source / program image margin to `$E000` is now down to `54` bytes after phase 6 `CA-12`
 - the startup overlay is the tightest C128 overlay at `35` bytes of remaining space
 - the staged source / program image margin to `$E000` is still finite and should be tracked because it gates boot-time copy safety
-- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, and phase 5 `API-1` reduced it again to `73`
+- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, phase 5 `API-1` reduced it again to `73`, and phase 6 `CA-12` reduced it further to `54`
 
 ### Bank 1 Ownership Manifest
 
@@ -106,7 +107,7 @@ Notes:
 4. C128 startup overlay at `35` bytes slack
 5. C64 main program image at `40` bytes slack
 6. C64 startup overlay at `44` bytes slack
-7. C128 staged source / program image at `73` bytes slack
+7. C128 staged source / program image at `54` bytes slack
 8. C128 Bank 1 future-map to DB hole at `244` bytes of unassigned room
 9. C128 UI overlay at `262` bytes slack
 10. C128 DungeonGen overlay at `409` bytes slack

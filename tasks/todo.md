@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `CA-12` by replacing the public one-bit RNG byte path with a real byte-step generator.
+- [x] Keep the final implementation inside the C64 banked-payload budget while improving byte-quality output.
+- [x] Add focused runtime coverage that proves `rng_next` advances exactly eight reference one-bit steps.
+- [x] Run shared RNG verification plus broader regression coverage for common consumers, then refresh the audit/headroom/task docs with the live post-change layout.
 - [x] Execute `API-1` by enforcing one caller-visible C128 text contract at the VDC screen layer.
 - [x] Make `screen_put_string` accept PETSCII like `screen_put_char` while preserving compatibility for embedded direct VDC/control bytes.
 - [x] Add a focused C128 regression that proves lowercase PETSCII strings and direct VDC byte passthrough both survive the new contract.
@@ -208,8 +212,49 @@ This file is a temporary working scratchpad.
   - `commodore/c128/tests/test_vdc_attr128.s` → `PASS`
   - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
 - Environment note:
-  - `make test128-fast` remained PATH-sensitive in this shell and repeatedly reset the monitor connection while using bare `x128`
-  - the equivalent explicit-binary batch command above completed cleanly and is the verification result for this phase
+- `make test128-fast` remained PATH-sensitive in this shell and repeatedly reset the monitor connection while using bare `x128`
+- the equivalent explicit-binary batch command above completed cleanly and is the verification result for this phase
+
+## `AUDIT-P6-CA12` Design
+
+### Goal
+- Execute `CA-12` by making the public RNG byte API match its name:
+  - `rng_next` / `rng_byte` should yield a fresh byte step, not a one-bit shift artifact
+- Keep the implementation small enough to stay inside the current C64 banked-payload ceiling.
+
+### Scope
+- In scope:
+  - `commodore/common/rng.s`
+  - `commodore/c64/tests/test_rng.s`
+  - `commodore/c64/run_tests.sh`
+  - audit/headroom/task docs affected by the layout change
+- Out of scope:
+  - changing the RNG polynomial or seed source
+  - game-balance tuning on top of the better byte-quality distribution
+
+### Verification Standard
+1. Prove the current live `rng_next` is still only advancing one bit.
+2. Change the public byte path so one call advances eight LFSR steps.
+3. Keep the final implementation inside the live C64 memory budget.
+4. Add a runtime test that compares the new byte-step path against a local reference-step implementation.
+5. Run focused RNG verification and broader shared-gameplay regression coverage before updating the docs.
+
+### Review
+- Completed.
+- Updated `commodore/common/rng.s` so the public byte API now advances the 32-bit LFSR eight times per call before returning `zp_rng_0`.
+- Deliberately did **not** keep a public `rng_step_bit` entry in the final patch:
+  - the first split-API draft pushed the C64 banked payload past `$D000`
+  - the final implementation kept the byte-step quality fix while recovering the lost headroom
+- Tightened `rng_range_word` scratch usage so the final shared patch fits the live C64 banked boundary again:
+  - C64 staged banked payload source remains at `$CFFD`, with `3` bytes below `$D000`
+  - C128 staged source / program image moved to `$DFCA`, leaving `54` bytes below `$E000`
+- Added focused regression coverage in `commodore/c64/tests/test_rng.s` proving `rng_next` matches eight reference one-bit steps.
+- Fixed two latent test-harness issues that were uncovered by the broader rerun:
+  - `commodore/c64/tests/test_monster_ai.s` test 20 now reloads the monster pointer after clearing the old occupied tile
+  - `commodore/c64/tests/test_combat.s` test 20 now falls through to tests 21-25, and test 23 now matches the actual excess-halving level-up behavior
+- Verification completed:
+  - `commodore/c64/run_tests.sh` → `33 passed, 0 failed`
+  - `python3 -u commodore/c128/harness128_batch.py --mode compare --snapshot-path commodore/c128/out/ready.vsf --vice /opt/homebrew/bin/x128 --connect-timeout 12` → `PASS`
 
 ## `CODE_AUDIT` Review
 

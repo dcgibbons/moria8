@@ -10,6 +10,7 @@
 // 7. rng_range_word(100) returns [0, 99]
 // 8. rng_range_word(500) returns [0, 499]
 // 9. rng_range_word(1) always returns 0
+// 10. rng_next matches eight reference one-bit steps
 //
 // Results at $0400: $01 = pass per test, $02 = overall
 
@@ -22,6 +23,39 @@
 #import "../memory.s"
 #import "../../common/rng.s"
 #import "../../common/math.s"
+
+seed_test_state_a:
+    lda #$12
+    sta zp_rng_0
+    sta ref_rng_0
+    lda #$34
+    sta zp_rng_1
+    sta ref_rng_1
+    lda #$56
+    sta zp_rng_2
+    sta ref_rng_2
+    lda #$78
+    sta zp_rng_3
+    sta ref_rng_3
+    rts
+
+ref_rng_step_bit:
+    lsr ref_rng_3
+    ror ref_rng_2
+    ror ref_rng_1
+    ror ref_rng_0
+    bcc !done+
+    lda ref_rng_3
+    eor #LFSR_POLY
+    sta ref_rng_3
+!done:
+    lda ref_rng_0
+    rts
+
+ref_rng_0: .byte 0
+ref_rng_1: .byte 0
+ref_rng_2: .byte 0
+ref_rng_3: .byte 0
 
 test_start:
     // Init results
@@ -123,10 +157,11 @@ test_start:
     // ==========================================
     // Test 4: After 256 iterations, state is not all-zero
     // ==========================================
-    ldx #0                  // 256 iterations (wraps)
+    lda #0
+    sta zp_temp4            // 256 iterations (wraps)
 !t4_loop:
     jsr rng_next
-    inx
+    inc zp_temp4
     bne !t4_loop-
     // Check state
     lda zp_rng_0
@@ -293,5 +328,40 @@ test_start:
     sta $0408
     sta $02
 !t9_done:
+
+    // ==========================================
+    // Test 10: rng_next must match eight reference one-bit steps
+    // ==========================================
+    jsr seed_test_state_a
+    jsr rng_next
+    sta zp_temp0
+    ldx #8
+!t10_ref_loop:
+    jsr ref_rng_step_bit
+    dex
+    bne !t10_ref_loop-
+    lda zp_rng_0
+    cmp ref_rng_0
+    bne !t10_fail+
+    lda zp_rng_1
+    cmp ref_rng_1
+    bne !t10_fail+
+    lda zp_rng_2
+    cmp ref_rng_2
+    bne !t10_fail+
+    lda zp_rng_3
+    cmp ref_rng_3
+    bne !t10_fail+
+    lda zp_temp0
+    cmp ref_rng_0
+    bne !t10_fail+
+    lda #$01
+    sta $0409
+    jmp !t10_done+
+!t10_fail:
+    lda #$00
+    sta $0409
+    sta $02
+!t10_done:
 
     brk

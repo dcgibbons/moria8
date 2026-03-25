@@ -762,7 +762,7 @@ test_start:
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
-    jmp !tests_done+
+    jmp !t21+
 !t20_fail:
     lda #$00
     sta tc_results + 19
@@ -826,8 +826,13 @@ test_start:
     sta tc_results + 21
 
     // ==========================================
-    // Test 23: combat_check_levelup can gain multiple levels from one award
-    // Level 1, XP=100, expfact=100 should end at level 4 with XP retained at 52.
+    // Test 23: combat_check_levelup applies Umoria's excess-halving loop
+    // across repeated gains.
+    // Level 1, XP=100, expfact=100:
+    //   threshold 10 -> level 2, XP becomes 55
+    //   threshold 25 -> level 3, XP becomes 40
+    //   threshold 45 -> stop
+    // Final: level 3 with XP retained at 40.
     // ==========================================
 !t23:
     // Pre-stuff keyboard buffer for repeated levelup messages
@@ -865,10 +870,10 @@ test_start:
     jsr combat_check_levelup
 
     lda zp_player_lvl
-    cmp #4
+    cmp #3
     bne !t23_fail+
     lda player_data + PL_XP_0
-    cmp #52
+    cmp #40
     bne !t23_fail+
     lda player_data + PL_XP_1
     bne !t23_fail+
