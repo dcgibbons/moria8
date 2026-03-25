@@ -452,8 +452,32 @@ entry_real:
 // ============================================================
 // KERNAL calls now use the Official Jump Table ($FF81-$FFF5) safely in Bank 15.
 
+c128_wrapper_saved_a: .byte 0
+c128_wrapper_saved_p: .byte 0
+
+// c128_wrapper_finish — restore KERNAL result flags while preserving caller I-bit
+// Stack on entry (top-first): result A, KERNAL P, caller P
+c128_wrapper_finish:
+    pla
+    sta c128_wrapper_saved_a
+    pla
+    sta c128_wrapper_saved_p
+    pla
+    and #$04
+    pha
+    lda c128_wrapper_saved_p
+    and #$fb
+    sta c128_wrapper_saved_p
+    pla
+    ora c128_wrapper_saved_p
+    pha
+    lda c128_wrapper_saved_a
+    plp
+    rts
+
 // READST
 w_readst:
+    php
     pha
     txa
     pha
@@ -469,11 +493,10 @@ w_readst:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // SETLFS
 w_setlfs:
+    php
     pha
     txa
     pha
@@ -489,11 +512,10 @@ w_setlfs:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // SETNAM
 w_setnam:
+    php
     pha
     txa
     pha
@@ -509,11 +531,10 @@ w_setnam:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // OPEN
 w_open:
+    php
     pha
     txa
     pha
@@ -529,11 +550,10 @@ w_open:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CLOSE
 w_close:
+    php
     pha
     txa
     pha
@@ -549,11 +569,10 @@ w_close:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CHKIN
 w_chkin:
+    php
     pha
     txa
     pha
@@ -569,11 +588,10 @@ w_chkin:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CHKOUT
 w_chkout:
+    php
     pha
     txa
     pha
@@ -589,11 +607,10 @@ w_chkout:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CLRCHN
 w_clrchn:
+    php
     pha
     txa
     pha
@@ -609,11 +626,10 @@ w_clrchn:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CHRIN
 w_chrin:
+    php
     pha
     txa
     pha
@@ -629,11 +645,10 @@ w_chrin:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // CHROUT
 w_chrout:
+    php
     pha
     txa
     pha
@@ -649,13 +664,12 @@ w_chrout:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 // LOAD
 w_load:
     stx c128_load_arg_x
     sty c128_load_arg_y
+    php
     pha
 #if C128_REAL_BOOT_DIAG
     ldx #$51
@@ -680,6 +694,19 @@ w_load:
     pha
     :ExitKernal()
     pla
+    sta c128_wrapper_saved_a
+    pla
+    sta c128_wrapper_saved_p
+    pla
+    and #$04
+    pha
+    lda c128_wrapper_saved_p
+    and #$fb
+    sta c128_wrapper_saved_p
+    pla
+    ora c128_wrapper_saved_p
+    pha
+    lda c128_wrapper_saved_a
     plp
 #if C128_REAL_BOOT_DIAG
     ldx #$54
@@ -695,6 +722,7 @@ w_load:
 // kernal_load_safe — KERNAL LOAD wrapper for C128
 // Reinstalls keyboard stub on exit. Callers manage MMU.
 kernal_load_safe:
+    php
     :EnterKernal()
     jsr $ffd5
     php
@@ -704,9 +732,7 @@ kernal_load_safe:
     sta $0302
     lda #>chrin_keyboard_stub
     sta $0303
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 
 chrin_keyboard_stub:
     lda #0
@@ -777,6 +803,7 @@ c128_return_to_runtime_after_kernal:
 // $FF68 is in the banked code range ($F000-$FFB6) so it can't be
 // patched via the JMP table — call this routine directly instead.
 safe_setbnk:
+    php
     pha
     txa
     pha
@@ -792,9 +819,7 @@ safe_setbnk:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp c128_wrapper_finish
 
 // init_copy_banked — Copy banked code payload to $F000
 // Uses $3F (NOIO) instead of $3E because source data crosses the I/O

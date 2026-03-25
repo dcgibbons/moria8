@@ -65,7 +65,7 @@ Recommended implementation:
 
 Phase 2 result:
 - executed on `2026-03-25`; exact numbers are recorded in `commodore/HEADROOM_REPORT.md`
-- the report was refreshed after phase 3 because the shared combat fix changed the live layout slightly
+- the report was refreshed after phases 3 and 4 because the live layout changed
 - current highest-risk measured margins are:
   - C128 `RuntimeLowData` to floor items: `0` bytes
   - C64 runtime banked code to `$FFFA`: `2` bytes
@@ -73,6 +73,7 @@ Phase 2 result:
   - C128 startup overlay to `$F000`: `35` bytes
   - C64 main image to `MAP_BASE`: `40` bytes
   - C64 startup overlay to `$F000`: `44` bytes
+  - C128 staged source / program image to `$E000`: `76` bytes
 
 ### `ALIGN-1` Hot-Path Page Crossing Is Real And Largely Unaudited
 
@@ -160,7 +161,7 @@ Required deliverable:
   - raw zero-page literals outside approved files/ranges
   - possibly duplicate local constants already declared in shared headers
 
-### `WRAP-1` C128 KERNAL Wrappers Still Restore `I=1` For CLI Callers
+### `WRAP-1` C128 KERNAL Wrapper IRQ-State Contract Was Live And Is Now Fixed
 
 Evidence:
 - historical finding:
@@ -171,16 +172,16 @@ Evidence:
   - `commodore/c128/tests/test_wrapper_irq128.s`
 
 What is happening:
-- the current wrappers still capture processor flags only after the KERNAL call has already run inside the `EnterKernal` / `ExitKernal` regime
-- a focused cold-boot test of the current wrapper shape fails on the first `CLI` case:
+- the old wrapper scaffold captured processor flags only after the KERNAL call had already run inside the `EnterKernal` / `ExitKernal` regime
+- phase 1 confirmed the live failure on the first `CLI` case:
   - stage `#$11` (`w_readst` from caller-`CLI`)
   - captured interrupt bit `#$04`
-- in other words, the wrapper returns with IRQs disabled even though the caller entered with IRQs enabled
+- phase 4 replaces that contract with a wrapper epilogue that restores the KERNAL return flags while splicing back the caller's original `I` bit
 
 Why this matters:
 - this is not a cosmetic flag issue; it breaks the caller-visible interrupt contract
 - any path that expects IRQs to remain enabled after a wrapper call can silently lose STOP-key checks or other IRQ-driven runtime behavior
-- `CA-09` macro-generation work should not proceed until this correctness bug is fixed
+- `CA-09` macro-generation work was correctly blocked until this correctness bug was fixed
 
 Required deliverable:
 - fix the wrapper contract first, then refactor the repetition
@@ -192,13 +193,24 @@ Expected savings / cost if fixed:
 - runtime: likely neutral to a very small cycle cost increase
 - correctness/stability: high
 
+Phase 4 result:
+- implemented on `2026-03-25`
+- updated the shared wrapper scaffold in `commodore/c128/main.s` so the wrappers:
+  - save caller status before `:EnterKernal()`
+  - preserve KERNAL return flags
+  - restore the caller's original `I` bit on exit
+- covered the common scaffold plus `w_load`, `kernal_load_safe`, and `safe_setbnk`
+- focused verification completed:
+  - `commodore/c128/tests/test_wrapper_irq128.s` passed
+  - `make test128-fast` passed
+
 ## Tactical Cleanup Summary
 
-These items remain valid, but they now sit beneath the governance layer above.
+These items remain valid unless noted as already completed, and they now sit beneath the governance layer above.
 
 | ID | Priority | Theme | Expected savings / cost if fixed |
 |---|---|---|---|
-| `WRAP-1` | Critical | restore caller IRQ-state across C128 KERNAL wrappers | byte win likely none; correctness/system-stability win is high |
+| `WRAP-1` | Critical | restore caller IRQ-state across C128 KERNAL wrappers | completed in phase 4; small byte/cycle cost, high correctness win |
 | `CA-11` | High | fix melee to-hit overflow / sign handling | no meaningful byte win; small cycle cost increase, large correctness win |
 | `CA-01` | High | unify numeric formatting kernels/tables | roughly `140-260` bytes per build, plus reduced drift |
 | `CA-02` | High | stop rescanning filtered inventory/equipment views | roughly `200-600` cycles per filtered prompt path; code size small positive or neutral |
@@ -645,31 +657,29 @@ Expected savings:
 
 ## Immediate Execution Priority
 
-1. Execute `WRAP-1`; phase 1 re-verification confirmed that the common C128 wrapper shape still returns `I=1` for caller-`CLI`.
-2. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete.
-3. Scope and draft `API-1` so new C128 UI work stops increasing encoding-contract debt.
-4. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
-5. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
-6. Add `LINT-1` once the higher-risk contract and layout items are in motion.
+1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the measurement pass is complete and the C128 staged-source margin is now `76` bytes.
+2. Scope and draft `API-1` so new C128 UI work stops increasing encoding-contract debt.
+3. Execute `CA-12` only after the cycle-cost tradeoff is explicit and acceptable.
+4. Run `ZP-1` and `ALIGN-1` to harden the perimeter before further cleanup.
+5. Add `LINT-1` once the higher-risk contract and layout items are in motion.
 
 ## Suggested Execution Order
 
-1. `WRAP-1` C128 KERNAL wrapper IRQ-state fix
-2. `API-1` canonical C128 text contract
-3. `CA-12` RNG byte-step quality decision/fix
-4. `ZP-1` automated zero-page ownership scan
-5. `ALIGN-1` hot-path alignment audit
-6. `LINT-1` 6502 anti-pattern linter
-7. `CA-01` shared numeric formatting
-8. `CA-02` filtered inventory visible-slot cache
-9. `CA-03` shared hunger-state helper/constants
-10. `CA-04` modal UI return helper cleanup
-11. `CA-06` message-history destination simplification
-12. `CA-05` item-effect dispatch cleanup
-13. `CA-08` item-field init helper
-14. `CA-07` full-screen clear benchmark and safe-callsite split
-15. `CA-09` C128 KERNAL wrapper refactor
-16. `CA-10` shared contract naming/constants cleanup
+1. `API-1` canonical C128 text contract
+2. `CA-12` RNG byte-step quality decision/fix
+3. `ZP-1` automated zero-page ownership scan
+4. `ALIGN-1` hot-path alignment audit
+5. `LINT-1` 6502 anti-pattern linter
+6. `CA-01` shared numeric formatting
+7. `CA-02` filtered inventory visible-slot cache
+8. `CA-03` shared hunger-state helper/constants
+9. `CA-04` modal UI return helper cleanup
+10. `CA-06` message-history destination simplification
+11. `CA-05` item-effect dispatch cleanup
+12. `CA-08` item-field init helper
+13. `CA-07` full-screen clear benchmark and safe-callsite split
+14. `CA-09` C128 KERNAL wrapper refactor
+15. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
@@ -686,7 +696,8 @@ For every item above:
   - same-build redundancies that can actually save bytes or cycles
   - cross-platform source duplication that mostly saves maintenance/debug time
 - This revision intentionally shifts the plan from tactical cleanup toward perimeter safety, memory governance, and contract hardening.
-- Phase 1 re-verification is complete: the older C128 wrapper/IRQ bug is still live for the common wrapper shape, so the audit now treats it as an active fix item rather than a historical note.
+- Phase 1 re-verification proved the older C128 wrapper/IRQ bug was still live for the common wrapper shape, which is why the audit promoted it from historical note to active fix item.
 - Phase 2 headroom measurement is complete: `commodore/HEADROOM_REPORT.md` is now the concrete baseline for memory-sensitive work.
 - Phase 3 `CA-11` is complete: the shared melee to-hit path now saturates the `PL_TOHIT * 3` contribution before 8-bit wrap, and the focused combat regression coverage passes.
+- Phase 4 `WRAP-1` is complete: the common C128 KERNAL wrapper contract now preserves caller IRQ state, the focused cold-boot probe passes, and the fast C128 unit batch passes.
 - Several older audit ideas in `commodore/AUDIT.md` are still useful context, but this document is specifically focused on current code-shape, reuse opportunities, and 6502 idiom cleanup rather than broad bug hunting.

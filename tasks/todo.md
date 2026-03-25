@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Execute `WRAP-1` by fixing the C128 KERNAL-wrapper IRQ-state contract.
+- [x] Preserve the caller `I` bit while still returning the KERNAL carry/flag result.
+- [x] Update the focused cold-boot wrapper probe to match the fixed scaffold and the real C128 `$01` low-bit contract.
+- [x] Run focused wrapper verification and a broader C128 regression pass on the final patch.
 - [x] Execute `CA-11` melee to-hit overflow/sign handling.
 - [x] Confirm the live overflow/sign bug in `combat_calc_tohit_common`.
 - [x] Add targeted regression coverage for high positive and high negative `PL_TOHIT`.
@@ -126,6 +130,38 @@ This file is a temporary working scratchpad.
 - Focused verification:
   - `tests/test_combat.s` → all `25/25` checkpoints passed
   - `tests/test_throw.s` → all `6/6` checkpoints passed
+
+## `AUDIT-P4-WRAP1` Design
+
+### Goal
+- Execute `WRAP-1` by repairing the caller-visible IRQ-state contract for the shared C128 KERNAL wrappers.
+- Preserve both of these together:
+  - the caller's original `I` bit
+  - the KERNAL call's returned Carry/flag result
+
+### Scope
+- In scope:
+  - `commodore/c128/main.s`
+  - `commodore/c128/tests/test_wrapper_irq128.s`
+  - focused C128 verification for the wrapper scaffold and affected runtime state
+- Out of scope:
+  - broader wrapper deduplication / macro-generation (`CA-09`)
+  - unrelated C128 banking or overlay refactors
+
+### Review
+- Completed.
+- Fixed the shared wrapper scaffold by saving caller status before `:EnterKernal()` and restoring the KERNAL return flags with the caller's original `I` bit spliced back in after `:ExitKernal()`.
+- Applied the same contract repair to the special-case paths:
+  - `w_load`
+  - `kernal_load_safe`
+  - `safe_setbnk`
+- Updated the focused probe in `test_wrapper_irq128.s` to match the repaired scaffold and to validate the real C128 `$01` contract by masking to the low three banking bits.
+- Focused verification:
+  - `commodore/c128/tests/test_wrapper_irq128.s` → `PASS`
+  - `make test128-fast` → `PASS`
+- Refreshed the headroom baseline after the wrapper fix:
+  - C128 staged source / program image is now `76` bytes below `$E000`
+  - C128 cache-state block now ends at `$32F8`
 
 ## `CODE_AUDIT` Review
 

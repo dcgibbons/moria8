@@ -27,7 +27,7 @@ Highest-risk regions right now:
 - C64 startup overlay: `44` bytes below `$F000`
 - C128 `RuntimeLowData`: `0` bytes below floor-item storage at `$1A00`
 - C128 startup overlay: `35` bytes below `$F000`
-- C128 staged source / program image: `148` bytes below `$E000`
+- C128 staged source / program image: `76` bytes below `$E000`
 
 Interpretation:
 - C64 is past “tight” and into active budget management
@@ -57,8 +57,8 @@ Notes:
 
 | Region | Measured end | Limit | Slack bytes | Risk |
 |---|---:|---:|---:|---|
-| Program image / staged source span | `$DF6C` | `$E000` | `148` | High |
-| Staged banked payload source | `$DF6C` | `$E000` | `148` | High |
+| Program image / staged source span | `$DFB4` | `$E000` | `76` | High |
+| Staged banked payload source | `$DFB4` | `$E000` | `76` | High |
 | Runtime banked payload | `$FB94` | `$FFFA` | `1126` | Low |
 | `RuntimeLowData` below floor items | `$1A00` | `$1A00` | `0` | Critical |
 | Startup overlay | `$EFDD` | `$F000` | `35` | High |
@@ -66,13 +66,14 @@ Notes:
 | DungeonGen overlay | `$EE67` | `$F000` | `409` | Moderate |
 | Town overlay | `$EBE9` | `$F000` | `1047` | Moderate |
 | Death overlay | `$E5B5` | `$F000` | `2635` | Low |
-| Cache state block | `$32B0` | `$E000` | `44368` | Low |
-| Overlay state block inside cache state block | `$32A8` | `$32B0` | `8` | Low |
+| Cache state block | `$32F8` | `$E000` | `44296` | Low |
+| Overlay state block inside cache state block | `$32F0` | `$32F8` | `8` | Low |
 
 Notes:
 - `RuntimeLowData` is exactly flush with `FLOOR_ITEM_BASE = $1A00`; any growth there must move the floor-item table or shrink the low-runtime payload
 - the startup overlay is the tightest C128 overlay at `35` bytes of remaining space
 - the staged source / program image margin to `$E000` is still finite and should be tracked because it gates boot-time copy safety
+- the phase-4 wrapper fix reduced the C128 staged-source / program-image margin from `148` bytes to `76`, so Bank 0 headroom is materially tighter than the earlier phase-3 snapshot
 
 ### Bank 1 Ownership Manifest
 
@@ -105,7 +106,7 @@ Notes:
 4. C128 startup overlay at `35` bytes slack
 5. C64 main program image at `40` bytes slack
 6. C64 startup overlay at `44` bytes slack
-7. C128 staged source / program image at `148` bytes slack
+7. C128 staged source / program image at `76` bytes slack
 8. C128 Bank 1 future-map to DB hole at `244` bytes of unassigned room
 9. C128 UI overlay at `262` bytes slack
 10. C128 DungeonGen overlay at `409` bytes slack

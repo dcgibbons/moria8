@@ -21,8 +21,29 @@ dbg_ff00:    .byte 0
 dbg_d506:    .byte 0
 dbg_port00:  .byte 0
 dbg_port01:  .byte 0
+wrapper_saved_a: .byte 0
+wrapper_saved_p: .byte 0
+
+wrapper_finish:
+    pla
+    sta wrapper_saved_a
+    pla
+    sta wrapper_saved_p
+    pla
+    and #$04
+    pha
+    lda wrapper_saved_p
+    and #$fb
+    sta wrapper_saved_p
+    pla
+    ora wrapper_saved_p
+    pha
+    lda wrapper_saved_a
+    plp
+    rts
 
 w_readst_test:
+    php
     pha
     txa
     pha
@@ -38,11 +59,10 @@ w_readst_test:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp wrapper_finish
 
 w_setlfs_test:
+    php
     pha
     txa
     pha
@@ -58,9 +78,7 @@ w_setlfs_test:
     php
     pha
     :ExitKernal()
-    pla
-    plp
-    rts
+    jmp wrapper_finish
 
 test_start:
     sei
@@ -194,7 +212,8 @@ assert_runtime_restored:
 !port00_ok:
     lda $01
     sta dbg_port01
-    cmp #BANK_NO_BASIC
+    and #$07
+    cmp #(BANK_NO_BASIC & $07)
     beq !port01_ok+
     jmp test_fail
 !port01_ok:
