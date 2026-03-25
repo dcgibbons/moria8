@@ -11,6 +11,8 @@
 //
 // Returns: carry SET = turn consumed, carry CLEAR = cancelled/no turn
 
+#import "ui_restore.s"
+
 .encoding "screencode_mixed"
 
 
@@ -141,12 +143,7 @@ pm_do_cast:
     sta pm_spell_idx
 
     // Restore dungeon screen before executing spell (BUG-27)
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_restore_modal_overlay
 
     // Confused? Random spell instead of player's choice
     lda zp_eff_confuse

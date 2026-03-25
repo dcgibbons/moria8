@@ -1,6 +1,8 @@
 #importonce
 // wizard.s — Wizard Mode activation, session flags, and C64 implementation
 
+#import "ui_restore.s"
+
 .const WIZARD_MAX_DLVL  = 99
 .const WIZARD_MAX_ITEM  = ITEM_TYPE_COUNT - 1
 
@@ -525,10 +527,7 @@ wizard_restore_gameplay_with_message:
     sta wizard_num_buf0
     lda zp_ptr0_hi
     sta wizard_num_buf1
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     lda wizard_num_buf0
     sta zp_ptr0
     lda wizard_num_buf1
@@ -537,10 +536,7 @@ wizard_restore_gameplay_with_message:
     jmp main_loop
 
 wizard_restore_gameplay_view:
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     rts
 
 wizard_c64_menu_display:

@@ -1279,6 +1279,7 @@ player_died:
 exit:
     jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
 
+#import "ui_restore.s"
 #import "game_loop_helpers.s"
 
 // ============================================================

@@ -1,6 +1,8 @@
 #importonce
 // ui_wizard.s — C128 Wizard Mode menu and command handlers
 
+#import "ui_restore.s"
+
 #if C128
 .const UWIZ_TITLE_COL  = (SCREEN_COLS - 6) / 2
 .const UWIZ_MENU_COL   = (SCREEN_COLS - 20) / 2
@@ -496,10 +498,7 @@ ui_wizard_restore_gameplay_with_message:
     sta ui_wizard_msg_lo
     lda zp_ptr0_hi
     sta ui_wizard_msg_hi
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     lda ui_wizard_msg_lo
     sta zp_ptr0
     lda ui_wizard_msg_hi
@@ -508,10 +507,7 @@ ui_wizard_restore_gameplay_with_message:
     rts
 
 ui_wizard_restore_gameplay_view:
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_redraw_gameplay_view
     rts
 
 wiz_title_str:

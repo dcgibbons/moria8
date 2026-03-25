@@ -229,10 +229,10 @@ post_turn_update_visibility_or_die:
     jmp main_loop
 
 ui_view_return_to_gameplay_view:
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jmp vp_render_status_loop
+    jsr ui_view_restore_modal_overlay
+    lda #INPUT_ROW
+    jsr screen_clear_row
+    jmp main_loop
 
 // ============================================================
 // Shared tail — viewport update + render + status + main loop

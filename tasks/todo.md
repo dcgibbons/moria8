@@ -3,7 +3,7 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [ ] Execute `CA-04` by collapsing repeated modal UI return/dismiss logic into one shared restore path.
+- [ ] Execute `CA-06` by removing repeated message-history destination offset recomputation.
 - [ ] Keep `CA-02` parked at the safe reduced equipment-cache implementation until a proven-safe carried-item cache contract exists.
 - [x] Add a shared visible-slot cache for contiguous equipment selection in `item_takeoff`.
 - [x] Keep the plain all-inventory command on its existing absolute-slot behavior.
@@ -1310,6 +1310,18 @@ This file is a temporary working scratchpad.
 - While verifying, `commodore/c64/tests/test_render.s` exposed a separate harness defect: it compared the full byte read from C64 color RAM even though only the low nibble is stable. Fixed the test by masking with `$0f` and removed the old render-specific retry from `commodore/c64/run_tests.sh` so future regressions fail directly.
 - Verification:
   - direct `test_render.s` loop: `6/6` clean runs
+  - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
+  - `make test128-fast`: `PASS`
+
+### `AUDIT-P13-CA04` Review
+
+- Completed.
+- Added `commodore/common/ui_restore.s` as the shared seam for gameplay-view restoration after modal UI flows.
+- Centralized the two real restore behaviors:
+  - `ui_view_restore_modal_overlay` for read-only overlay dismissal
+  - `ui_view_redraw_gameplay_view` for full-screen wizard/menu returns
+- Switched the matching call sites in `commodore/common/player_items.s`, `commodore/common/player_magic.s`, `commodore/common/game_loop_helpers.s`, `commodore/common/wizard.s`, and `commodore/common/ui_wizard.s` to those helpers.
+- Verification:
   - `bash commodore/c64/run_tests.sh`: `33 passed, 0 failed`
   - `make test128-fast`: `PASS`
 

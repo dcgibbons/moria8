@@ -7,6 +7,8 @@
 // item_eat: eat food from inventory
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
+#import "ui_restore.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -75,12 +77,7 @@ show_inv_and_restore:
 #else
     jsr input_get_key
 #endif
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_restore_modal_overlay
     rts
 
 // show_equip_and_restore — Show equipment overlay, wait for key, restore screen
@@ -95,12 +92,7 @@ show_equip_and_restore:
 #else
     jsr input_get_key
 #endif
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+    jsr ui_view_restore_modal_overlay
     rts
 
 // piw_inv_slot_matches_filter — check whether a carried slot is visible

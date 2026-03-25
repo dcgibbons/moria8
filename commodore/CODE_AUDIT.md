@@ -295,7 +295,7 @@ These items remain valid unless noted as already completed, and they now sit ben
 | `CA-01` | High | unify numeric formatting kernels/tables | completed in phase 10; recovered `101` bytes on the tight C64/C128 staged margins, plus reduced drift |
 | `CA-02` | High | stop rescanning filtered inventory/equipment views | roughly `200-600` cycles per filtered prompt path; code size small positive or neutral |
 | `CA-03` | Medium | unify hunger-state thresholds and recompute logic | completed in phase 12; small byte win plus removes sync risk |
-| `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | roughly `20-50` bytes per build, plus more consistent return behavior |
+| `CA-04` | Medium | collapse repeated modal UI restore/dismiss paths | completed in phase 13; modest byte cleanup plus more consistent return behavior |
 | `CA-06` | Medium | remove message-history offset recomputation | roughly `15-25` cycles per message save and a small byte win |
 | `CA-07` | Medium | benchmark/replace full-screen row-by-row clears where safe | time-only win on every safe full-screen clear; larger on C128 |
 | `CA-05` | Low | reduce item-effect compare ladders with table/range dispatch | likely `10-30` bytes and fewer worst-case branches in affected commands |
@@ -439,6 +439,10 @@ Verification:
 
 ### `CA-04` Modal UI Return/Dismiss Logic Is Repeated Across Shared Code
 
+Status:
+- completed in phase 13
+- shared restore helpers now own the repeated overlay-dismiss and full-screen gameplay redraw paths
+
 Evidence:
 - `commodore/common/player_items.s:71-107`
 - `commodore/common/game_loop_helpers.s:18-50`
@@ -469,6 +473,8 @@ Expected savings:
 Verification:
 - inventory/equipment/help/character/wizard modal round-trips on both C64 and C128
 - confirm stale keypresses still do not auto-dismiss the next prompt
+- `bash commodore/c64/run_tests.sh` passes
+- `make test128-fast` passes
 
 ### `CA-05` Potion And Scroll Effect Dispatch Uses Long Compare/Jump Ladders
 
@@ -774,20 +780,19 @@ Expected savings:
 
 1. Use `commodore/HEADROOM_REPORT.md` as the baseline for any layout-sensitive change; the C128 staged-source margin is now `180` bytes.
 2. Keep any future alignment work tightly targeted to the specific live crossings already identified; do not spend bytes on blanket padding.
-3. Move to `CA-04`; `CA-03` is complete, while the remaining half of `CA-02` is paused until a safer cache/storage contract is proven.
+3. Move to `CA-06`; `CA-04` is complete, while the remaining half of `CA-02` is paused until a safer cache/storage contract is proven.
 4. Treat C64 runtime banked growth as explicit change-control: only `4` bytes remain below `$FFFA`.
 5. Treat the `318` advisory branch-jump warnings from `LINT-1` as a cleanup backlog, not as immediate correctness bugs.
 
 ## Suggested Execution Order
 
-1. `CA-04` modal UI return helper cleanup
-2. `CA-06` message-history destination simplification
-3. `CA-05` item-effect dispatch cleanup
-4. `CA-08` item-field init helper
-5. `CA-07` full-screen clear benchmark and safe-callsite split
-6. revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract
-7. `CA-09` C128 KERNAL wrapper refactor
-8. `CA-10` shared contract naming/constants cleanup
+1. `CA-06` message-history destination simplification
+2. `CA-05` item-effect dispatch cleanup
+3. `CA-08` item-field init helper
+4. `CA-07` full-screen clear benchmark and safe-callsite split
+5. revisit the carried-item half of `CA-02` only after proving a safe cache/storage contract
+6. `CA-09` C128 KERNAL wrapper refactor
+7. `CA-10` shared contract naming/constants cleanup
 
 ## Verification Strategy
 
