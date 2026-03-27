@@ -3,6 +3,38 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Audit live formatter ownership for `REF-NUMFMT` and determine whether the backlog item still represents real work.
+- [x] Record the `REF-NUMFMT` design/review outcome here before changing the planning docs.
+- [x] Reconcile the build-plan docs if the audit proves `REF-NUMFMT` is already complete/stale.
+
+## `REF-NUMFMT` Design
+
+### Goal
+- Determine whether `REF-NUMFMT` still requires an implementation pass or whether the live tree already satisfies the intended shared numeric-formatting design.
+- If the work is already done, close the item through plan/history cleanup instead of reopening a solved refactor.
+
+### Findings
+- The active build plan still lists `REF-NUMFMT` as future work to move duplicated screen numeric helpers into shared code.
+- The live source already has that shared owner:
+  - `commodore/common/numeric_format.s` owns `screen_put_hex`, `screen_put_decimal`, `screen_put_decimal_rj2`, `screen_put_decimal_lz2`, `screen_put_decimal_16`, the shared digit buffer, and the 16-bit power-of-10 tables.
+  - `commodore/c64/screen.s` imports `../common/numeric_format.s`.
+  - `commodore/c128/screen_vdc.s` imports `../common/numeric_format.s`.
+- The broader formatter cleanup was already completed as audit item `CA-01`:
+  - `commodore/common/combat.s` now reuses `numeric_format_u8` / `numeric_format_u16` for combat-buffer decimal output.
+  - `commodore/CODE_AUDIT.md` and the earlier `AUDIT-P10-CA01` section in this file both record the shared-core implementation and verification.
+- The only remaining separate formatter path is the intentional 24-bit score formatter in `commodore/common/score.s`, which is outside the stated `REF-NUMFMT` scope.
+
+### Decision
+- Treat `REF-NUMFMT` as stale backlog wording already satisfied by the completed `CA-01` shared numeric-formatting pass.
+- Do not reopen code changes for this item.
+- Close it by reconciling `commodore/BUILDPLAN.md` with the recorded completed work in the audit/task history.
+
+### Review
+- Completed.
+- Verified the current tree already meets the requested design boundary: shared formatter logic is centralized in `commodore/common/numeric_format.s`, while each platform screen backend remains separate and only supplies its own `screen_put_char`.
+- Verified the refactor went beyond the original backlog wording in a safe direction by also removing combat's dependency on backend-local decimal tables.
+- Outcome: `REF-NUMFMT` should be retired from the active backlog as already completed/stale, with no runtime code changes required.
+
 - [x] Implement `BUG-HAGGLE-UI` Phase A in `commodore/common/ui_store.s` using one-visit VMS-style haggle flow with integer counter math.
 - [x] Keep Phase A inside the current thin store data model; do not add persistent bargaining-memory or owner-schema work.
 - [x] Add focused runtime coverage in `commodore/c64/tests/test_store.s` for parser behavior, buy/sell haggle flow, insult handling, and no-haggle bypasses.

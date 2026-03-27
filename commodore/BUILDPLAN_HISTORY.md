@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-03-27 — `REF-NUMFMT` backlog closure audit ✅ COMPLETE
+
+### Scope Closed
+- Audited the live numeric-formatting surface to determine whether the still-open `REF-NUMFMT` build-plan item represented real remaining work or stale backlog wording.
+- Closed the item through plan/history reconciliation after confirming the shared formatter refactor had already shipped.
+
+### Root Cause
+- `commodore/BUILDPLAN.md` still described `REF-NUMFMT` as future work to unify duplicated VIC-II and VDC screen numeric helpers.
+- The live tree already contains the shared owner added during the completed `CA-01` audit pass:
+  - `commodore/common/numeric_format.s`
+  - imported by both `commodore/c64/screen.s` and `commodore/c128/screen_vdc.s`
+- The completed work also went slightly beyond the original backlog note by moving combat decimal formatting onto the same common numeric core and removing the old backend-local table dependency.
+- That left the build-plan entry stale rather than unfinished.
+
+### What Was Verified
+1. **One shared module now owns the screen numeric helpers**
+   - `screen_put_hex`
+   - `screen_put_decimal`
+   - `screen_put_decimal_rj2`
+   - `screen_put_decimal_lz2`
+   - `screen_put_decimal_16`
+2. **Both screen backends already consume that shared owner**
+   - `commodore/c64/screen.s`
+   - `commodore/c128/screen_vdc.s`
+3. **The shared numeric core also serves the combat appenders**
+   - `commodore/common/combat.s` now calls `numeric_format_u8` / `numeric_format_u16`
+   - shared `decimal_powers_*` data now lives in `commodore/common/numeric_format.s`
+4. **The only intentionally separate formatter remains outside this backlog item**
+   - `commodore/common/score.s` still owns the 24-bit score formatter, which has different width and call-shape requirements and is already documented as an intentional residual split in `commodore/CODE_AUDIT.md`
+
+### Outcome
+- `REF-NUMFMT` is closed as stale backlog wording already satisfied by the completed `CA-01` shared numeric-formatting work.
+- No code changes were required.
+- The active build plan no longer lists the item as open.
+
 ## 2026-03-27 — `REF-CONSTS` shared neutral constant ownership cleanup ✅ COMPLETE
 
 ### Scope Closed
