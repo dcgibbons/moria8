@@ -82,10 +82,19 @@ test_finish:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+store_init_all:
+    rts
+
+store_restock_all:
+    rts
+
+store_enter:
+    rts
+
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    rts
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -1648,9 +1657,9 @@ tv_compare_viewport:
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below MAP_BASE", effects_test_body_end <= MAP_BASE, true
+.assert "effects test body stays below scratch buffers", effects_test_body_end < $b200, true
 
-.segmentdef TestEffectsBuffers [start=$a000]
+.segmentdef TestEffectsBuffers [start=$b200]
 .segment TestEffectsBuffers
 tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
 tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0

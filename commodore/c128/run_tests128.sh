@@ -680,15 +680,28 @@ run_main_assembly_check() {
 
     local build_log
     build_log="$(test128_tmp_file test128_main_build.log)"
+    local force_base_rebuild=0
     local make_kickass
     make_kickass="$(test128_tmp_file moria128-kickass.jar)"
     local kickass_abs
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
 
+    if ! c128_active_variant_is "base"; then
+        force_base_rebuild=1
+    fi
+
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
-    if ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    if [ "$force_base_rebuild" -eq 1 ]; then
+        if ! make -s -W main.s -W boot128.s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+            echo "FAIL"
+            grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    elif ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL"
         grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -703,6 +716,7 @@ run_main_assembly_check() {
     else
         echo "PASS"
     fi
+    c128_set_active_variant "base"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
@@ -1113,50 +1127,66 @@ if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1
     print(f"screen_put_string must start with php; sei, found: {first2!r}")
     raise SystemExit(1)
 
-if not has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg"):
-    print("item_takeoff prompt is not using Huffman print path")
+if not (
+    has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg")
+    or has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr piw_print_prompt_with_count")
+):
+    print("item_takeoff prompt is not using Huffman-backed prompt path")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "piw_print_prompt_with_count:",
+    "php",
+    "sei",
+    "jsr huff_decode_string",
+], window=8) or not has_ordered_chain(items, [
+    "!piw_prompt_print:",
+    "plp",
+    "jsr msg_print_cached",
+], window=8):
+    print("piw_print_prompt_with_count is not preserving IRQ state around cached Huffman prompt rendering")
     raise SystemExit(1)
 
 required_chains = [
     ("item_wear", items, [
         "ldx #HSTR_PIW_WEAR_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_takeoff", items, [
         "ldx #HSTR_PIW_TAKEOFF_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_print_prompt_with_count",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_quaff", items, [
         "ldx #HSTR_PIQ_QUAFF_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_read_scroll", items, [
         "ldx #HSTR_PIQ_READ_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_aim_wand", items, [
         "ldx #HSTR_PIW_AIM_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_use_staff", items, [
         "ldx #HSTR_PIW_USE_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_gain_spell", items, [
         "ldx #HSTR_IGS_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
@@ -2070,6 +2100,7 @@ run_test_internal() {
         echo "load \"${abs_prg}\" 0"
         echo "r pc=${start_addr}"
         echo "until \$${pass_addr}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col \
@@ -2397,6 +2428,43 @@ PY
 boot_log_has_crash() {
     local log_file="$1"
     grep -qi "JAM\\|Invalid opcode" "$log_file"
+}
+
+boot_stop_vice_process() {
+    local vice_pid="$1"
+    if kill -0 "$vice_pid" 2>/dev/null; then
+        kill "$vice_pid" 2>/dev/null || true
+        wait "$vice_pid" 2>/dev/null || true
+    fi
+}
+
+boot_wait_for_until_or_crash() {
+    local vice_pid="$1"
+    local target_addr="$2"
+    local log_file="$3"
+    local deadline=$((SECONDS + 25))
+
+    while :; do
+        if grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"; then
+            boot_stop_vice_process "$vice_pid"
+            return 0
+        fi
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_stop_vice_process "$vice_pid"
+            return 1
+        fi
+        if ! kill -0 "$vice_pid" 2>/dev/null; then
+            wait "$vice_pid" 2>/dev/null || true
+            break
+        fi
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            boot_stop_vice_process "$vice_pid"
+            return 1
+        fi
+        sleep 0.1
+    done
+
+    grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"
 }
 
 boot_log_has_stop_at() {
@@ -2907,9 +2975,7 @@ run_town_overlay_female_smoke() {
 
     {
         echo "break \$d000 \$dfff"
-        echo "break \$${store_enter}"
-        echo "g"
-        echo "g"
+        echo "until \$${store_enter}"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -2919,7 +2985,7 @@ run_town_overlay_female_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "C:\$${store_enter}" "$log_file"; then
+    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
         boot_log_report_failure "did not reach store_enter via female town overlay flow" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -2971,9 +3037,7 @@ run_town_overlay_state_smoke() {
 
     {
         echo "break \$d000 \$dfff"
-        echo "break \$${store_enter}"
-        echo "g"
-        echo "g"
+        echo "until \$${store_enter}"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -2983,7 +3047,7 @@ run_town_overlay_state_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "C:\$${store_enter}" "$log_file"; then
+    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
         boot_log_report_failure "did not reach store_enter with corrupted overlay state" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3132,42 +3196,45 @@ run_real_input_town_move_diag() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local last_stage="boot"
-
-    for idx in "${!stage_names[@]}"; do
-        local mon_file
-        mon_file="$(test128_tmp_file "test128_${name}_${idx}.mon")"
-        local log_file
-        log_file="$(test128_tmp_file "test128_${name}_${idx}.log")"
-        : > "$log_file"
-        {
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    : > "$log_file"
+    {
+        for idx in "${!stage_addrs[@]}"; do
             echo "break \$${stage_addrs[$idx]}"
+        done
+        for idx in "${!stage_addrs[@]}"; do
             echo "g"
-        } > "$mon_file"
+        done
+        echo "quit"
+    } > "$mon_file"
 
-        "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-            -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
-            -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-            -limitcycles 320000000 +sound -sounddev dummy \
-            +remotemonitor +binarymonitor >/dev/null 2>&1
-        local vice_rc=$?
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
 
-        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-            echo "FAIL (jam before stage: ${stage_names[$idx]}; last reached: $last_stage)"
-            tail -20 "$log_file" | sed 's/^/    /'
-            FAIL=$((FAIL + 1))
-            TOTAL=$((TOTAL + 1))
-            return
-        fi
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        echo "FAIL (jam during real-input town move diag)"
+        tail -20 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
 
-        if ! grep -qi "C:\$${stage_addrs[$idx]}" "$log_file"; then
+    local last_stage="boot"
+    for idx in "${!stage_names[@]}"; do
+        if ! grep -qi "^BREAK: .*C:\$${stage_addrs[$idx]}" "$log_file"; then
             echo "FAIL (did not reach stage: ${stage_names[$idx]}; last reached: $last_stage; vice_rc=$vice_rc)"
             tail -20 "$log_file" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
         fi
-
         last_stage="${stage_names[$idx]}"
     done
 

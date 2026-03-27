@@ -239,7 +239,7 @@ run_test "combat" "tests/test_combat.s" "0400 041a" 27 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
 run_test "effects" "tests/test_effects.s" "0400 0419" 26 1000000000
 run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
-run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
+run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 040c" 13 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test

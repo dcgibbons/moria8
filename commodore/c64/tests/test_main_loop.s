@@ -74,10 +74,20 @@ delete_savefile:
 .label tramp_ui_inv_display = ui_inv_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
-.label tramp_store_init_all = store_init_all
-.label tramp_store_restock_all = store_restock_all
-.label tramp_store_enter = store_enter
 .label tramp_player_create = player_create
+
+tramp_store_init_all:
+    rts
+
+tramp_store_restock_all:
+    rts
+
+tramp_store_enter:
+    rts
+
+check_player_on_store_door:
+    clc
+    rts
 
 tramp_ui_recall:
     rts
@@ -139,9 +149,6 @@ tramp_dig_ability:
 #import "../../common/tunnel.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
 #import "../../common/generation_busy.s"
 #import "../../common/game_loop.s"

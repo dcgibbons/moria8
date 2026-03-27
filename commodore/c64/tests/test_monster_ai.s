@@ -82,10 +82,19 @@ test_finish:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+store_init_all:
+    rts
+
+store_restock_all:
+    rts
+
+store_enter:
+    rts
+
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    rts
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -1756,3 +1765,7 @@ test_start:
 
 !tests_done:
     jmp test_finish
+
+test_end:
+
+.assert "Monster AI test body must stay below MAP_BASE", test_end < MAP_BASE, true

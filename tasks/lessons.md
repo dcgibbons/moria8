@@ -1,5 +1,40 @@
 # Lessons Learned
 
+## 2026-03-25 — Rebuild the exact C128 target before trusting artifact-budget regressions
+
+- **Issue:** I treated one `c128_artifact_budget` failure as proof that the haggle change had pushed callable code into the `$D000-$DFFF` I/O hole.
+- **Root Cause:** I read the guard output before forcing a fresh rebuild of the exact C128 target, and I missed that the authoritative runner could be reusing stale variant outputs in `out/moria128.prg` / `out/main.vs`.
+- **Resolution:** When a C128 layout or artifact-budget guard trips, rebuild the exact base target first and then re-read the emitted addresses before deciding whether the current code change actually caused the drift.
+- **Rule:** **Do not diagnose a C128 layout regression from stale outputs. Force a fresh `build128`/`test128` build of the current tree before trusting the reported symbol addresses.**
+
+## 2026-03-25 — Use the repo's Makefiles to provision KickAss instead of reaching into sibling workspaces
+
+- **Issue:** I tried to assemble against a `KickAss.jar` from a sibling checkout after the local test runner failed to find `tools/kickass/KickAss.jar`.
+- **Root Cause:** I optimized for a quick local workaround instead of following the repository's documented toolchain path, which already knows how to bootstrap KickAss correctly for this workspace.
+- **Resolution:** When this repo needs KickAss and `tools/kickass/` is missing, use the Makefile-driven build/test path first and let it provision the assembler. Only look for alternate jars if the user explicitly asks for that or the Makefile path is proven broken.
+- **Rule:** **In this repo, do not bypass missing KickAss by borrowing jars from sibling checkouts before trying the Makefile path that auto-downloads/provisions it.**
+
+## 2026-03-25 — Any unit test past 30 seconds is a breakage signal, not a slow pass
+
+- **Issue:** I let the broader C64 regression keep running after it stopped producing progress for well over 30 seconds.
+- **Root Cause:** I treated a stalled suite like a potentially slow runtime path instead of applying the repository rule that unit tests do not legitimately hang here.
+- **Resolution:** If any unit test or unit-suite stage exceeds 30 seconds, stop waiting, treat it as broken immediately, and isolate the specific test/layout issue.
+- **Rule:** **In this repo, a unit test taking more than 30 seconds means something is broken, likely memory/layout related; stop the run and debug the breakage instead of waiting it out.**
+
+## 2026-03-25 — Do not leave VICE/x128 processes running after an interrupted or stalled test attempt
+
+- **Issue:** I stacked repeated C128 test attempts and left multiple `x128` processes running long enough for the user to have to kill them manually.
+- **Root Cause:** I focused on isolating the next failure but did not clean up the previous emulator processes before rerunning adjacent test commands.
+- **Resolution:** After any aborted, stalled, or user-stopped VICE/C128 test run, explicitly terminate the existing emulator/test-runner processes before launching another attempt.
+- **Rule:** **Never launch another C64/C128 emulator-backed test while a prior VICE process from my own run may still be alive; clean up first.**
+
+## 2026-03-25 — `make test128` timeout after my change is my regression until proven otherwise
+
+- **Issue:** After the haggle change, `make test128-fast-smoke` and `make test128-fast` were green but `make test128` timed out, and I drifted into treating that as mainly a harness/debugging problem instead of the default assumption that my change had introduced a memory/layout regression.
+- **Root Cause:** I did not apply the repo's existing timeout lessons strictly enough at the suite level. In this repo, a `make test128` timeout is failure evidence and should be treated as a regression from the current diff until isolated away.
+- **Resolution:** When the authoritative suite times out after my change, keep the burden of proof on my diff. Use narrower repros only to isolate the regression, not to downgrade the timeout into a tooling issue.
+- **Rule:** **If `make test128` times out after my change, treat it as my memory/layout regression until I can prove a narrower unrelated harness bug with evidence. Do not call the work verified before that suite is green or the regression is explicitly isolated.**
+
 ## 2026-03-25 — Do not label a regression “flaky” without proof
 
 - **Issue:** I saw `test_render.s` fail after the CA-03 hunger refactor and immediately described it as the project’s “known flaky render suite.”

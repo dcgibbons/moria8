@@ -3,6 +3,108 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Implement `BUG-HAGGLE-UI` Phase A in `commodore/common/ui_store.s` using one-visit VMS-style haggle flow with integer counter math.
+- [x] Keep Phase A inside the current thin store data model; do not add persistent bargaining-memory or owner-schema work.
+- [x] Add focused runtime coverage in `commodore/c64/tests/test_store.s` for parser behavior, buy/sell haggle flow, insult handling, and no-haggle bypasses.
+- [x] Run the relevant C64 store/runtime tests and broader C64/C128 regression coverage.
+- [x] Record the implementation review outcome here after verification.
+
+- [x] Analyze the live `BUG-HAGGLE-UI` implementation in `commodore/common/ui_store.s` and identify the current buy/sell haggle contract.
+- [x] Compare the port's haggle flow against local upstream references in `~/Projects/thirdparty/vms-moria` and `~/Projects/thirdparty/umoria`.
+- [x] Draft a bounded design plan that restores one-visit haggle correctness before any larger store-system upgrades.
+- [x] Get consultant review on the draft plan and fold that feedback into the final phase split and verification list.
+- [x] Record the final planning scope here before presenting it to the user.
+
+### `BUG-HAGGLE-UI` Design
+
+#### Goal
+- Restore store haggling to correct one-visit behavior for the current Commodore data model.
+- Use VMS-Moria as the semantic baseline for user-visible haggle flow.
+- Use Umoria as the implementation reference for integer bargain progression where the original VMS code relies on real-valued ratios.
+
+#### Findings
+- The current port uses a simplified fixed-step haggle loop in `commodore/common/ui_store.s`:
+  - buy haggling always marches toward the floor by `gap / 4`
+  - sell haggling always marches up from `max / 2` by `gap / 4`
+  - insult thresholds are hard-coded as `< min / 2` and `> 2 * max`
+  - kick happens after `3` insults
+  - final phase is a generic Y/N confirmation after `4` rounds
+  - accepted price is always the current ask/counter price
+- The current store data model is intentionally thin:
+  - per-visit `hg_insults`
+  - per-store `hg_kicked`
+  - no owner-specific haggle parameters
+  - no persistent bargaining skill memory
+  - no temporary store lockout timer
+- Upstream VMS/Umoria haggle behavior is materially richer than the current port:
+  - backwards offers are rejected and can count as insults
+  - counter progression depends on offer ratio, not a fixed quarter-gap step
+  - overshoot/undershoot gets explicit retry reactions
+  - final-offer exhaustion has distinct behavior
+  - successful business reduces the accumulated insult state
+
+#### Phase A
+- Treat this as a parity/regression fix, not a full store-system rewrite.
+- Restore one-visit haggle behavior to VMS semantics using Umoria's integer bargaining model, without adding new persistent shop state.
+- Cover these behaviors explicitly:
+  - offer parser correctness
+  - backwards-offer rejection
+  - overshoot/undershoot retry behavior
+  - integer ratio-based counter-offer progression
+  - final-offer exhaustion behavior
+  - correct accept-price semantics
+  - insult accumulation, kick threshold, and post-deal insult decay
+  - cheap-item / Black Market no-haggle bypass behavior
+- Keep buy and sell implementations readable even if they share small helpers; do not force an abstract shared haggle core during the parity pass.
+
+#### Phase B
+- Leave these as follow-up work unless Phase A proves they are required by the live bug:
+  - owner-specific haggle parameters
+  - temporary store closure / reopen timing
+  - bargaining-memory / no-need-to-bargain state
+  - incremental `+/-` haggle input
+  - richer speech/comment tables
+
+#### Verification
+- Add focused runtime haggle tests for:
+  - buy exact-match, over-ask, under-ask, backwards second offer, repeated insulting offers, first-prompt cancel, later cancel, final-offer reject
+  - sell exact-match, below-offer, above-offer, backwards second ask, repeated insulting asks, store-full after accepted deal, worthless/cursed/non-buyable exits
+  - parser paths: leading spaces, empty input, delete/backspace, 5-digit limit, overflow-ignore, cancel keys
+  - state paths: `hg_insults` reset on entry, decremented after a successful deal, `hg_kicked` persistence until its intended reset point
+  - bypass paths: cheap-item no-haggle and Black Market no-haggle
+- Run the standard C64 store/runtime coverage plus the usual broader C64/C128 regression pass after the fix lands.
+
+#### Review
+- Consultant review confirmed the correct boundary is one-visit haggle correctness first, not a full persistent-store refactor.
+- The main correction from review was to avoid claiming a direct VMS arithmetic port; VMS should drive behavior, while Umoria should drive the integer implementation shape.
+- The plan also now treats parser behavior and post-deal insult decay as first-class Phase A work instead of optional polish.
+- Stage A landed in the existing thin store model with new `hg_last_*`, denominator scratch, and concession-percent state only; no persistent bargaining-memory or owner-schema work was added.
+- `haggle_buy` and `haggle_sell` now reject backwards offers, retry overshoot/undershoot neutrally, use integer concession ratios for counter-offers, accept at the player's agreed number when appropriate, and decay `hg_insults` after successful no-haggle or haggled transactions.
+- Focused store verification passed at `37/37` tests after adding parser, buy/sell flow, insult/kick, and no-haggle bypass coverage.
+- Broader regression passed after fixing four C64 test-harness layout regressions that Stage A code growth exposed:
+  - `test_main_loop.s`, `test_dungeon.s`, and `test_monster_ai.s` were linking unnecessary store/help payload and crossed reserved boundaries.
+  - `test_effects.s` also overlapped its own `$A000` scratch-buffer segment; its buffer was moved above the linked body and the assert was tightened to the real boundary.
+- Final verification:
+  - `bash commodore/c64/run_tests.sh` -> `33 passed, 0 failed`
+  - `make test128-fast` -> passed via tester agent
+  - C128 authoritative runner repair:
+    - `run_test_internal_worker.sh` now runs unit tests with `-autostart` plus a pass breakpoint and shell-side VICE supervision, so `minimal128` and the rest of the unit batch no longer hang waiting at the monitor.
+    - `run_tests128.sh` prompt guard now matches the live Huffman-backed prompt helpers in `player_items.s`.
+    - `run_tests128.sh` town overlay smokes now use `until $store_enter`, and `real_input_town_move_diag` now runs all stage breakpoints in one boot instead of 15 separate boots.
+    - `run_tests128.sh` `main128_asm` now forces a base rebuild when the active C128 variant is not `base`, so later variant compiles cannot leave `out/moria128.prg` / `out/main.vs` contaminated for the next `c128_artifact_budget` run.
+  - Focused C128 verification:
+    - `TEST_FILTER='prompt_irq_guard' TEST_FAIL_FAST=1 ./run_tests128.sh` -> `PASS`
+    - `TEST_FILTER='minimal128' TEST_FAIL_FAST=1 ./run_tests128.sh` -> `PASS`
+    - `TEST_FILTER='town_overlay_female_smoke' TEST_FAIL_FAST=1 ./run_tests128.sh` -> `PASS`
+    - `TEST_FILTER='town_overlay_state_smoke' TEST_FAIL_FAST=1 ./run_tests128.sh` -> `PASS`
+    - `TEST_FILTER='real_input_town_move_diag' TEST_FAIL_FAST=1 ./run_tests128.sh` -> `PASS`
+    - `TEST_FAIL_FAST=1 TEST_FILTER='c128_artifact_budget|main128_layout' ./run_tests128.sh` -> `PASS`
+    - Deliberately contaminate `out/moria128.prg` with `C128_TEST_SCRIPTED_INPUT`, then rerun `TEST_FAIL_FAST=1 TEST_FILTER='main128_asm|c128_artifact_budget' ./run_tests128.sh` -> `2 passed, 0 failed`
+    - `TEST_FAIL_FAST=1 ./run_tests128.sh` -> `41 passed, 0 failed`
+  - Closeout:
+    - `BUG-HAGGLE-UI` moved from `commodore/BUILDPLAN.md` to `commodore/BUILDPLAN_HISTORY.md`
+    - final diagnosis: Stage A haggle gameplay fix was valid; the last C128 fallout was stale variant artifact reuse plus a runner-footer bug
+
 - [x] Complete the carried-item half of `CA-02` with a dedicated visible-slot cache that does not alias shared message buffers.
 - [x] Keep the final cache storage local to `player_items.s` so filtered prompts cannot recreate the earlier `test_item` hang.
 - [x] Rebuild and rerun the standard C64/C128 verification on the completed `CA-02` implementation.

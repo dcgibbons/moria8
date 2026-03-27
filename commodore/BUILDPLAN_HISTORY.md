@@ -6,6 +6,45 @@
 
 ---
 
+## 2026-03-26 — `BUG-HAGGLE-UI` one-visit haggle parity plus C128 runner fallout ✅ FIXED
+
+### Scope Closed
+- Restored the store haggle loop to correct one-visit behavior for the current Commodore store model without expanding into persistent owner memory or temporary lockout work.
+- Closed the C128 verification fallout that initially obscured the gameplay fix: stale base/variant artifact reuse and a broken shell-runner footer.
+
+### Root Cause
+- The live store code had drifted to a simplified fixed-step bargain loop with hard-coded insult thresholds and a generic final Y/N stage, which no longer matched classic VMS/Umoria haggle behavior.
+- The first C128 verification failures after the gameplay patch were not all gameplay regressions:
+  - one failure was a stale prompt guard relative to the already-landed Huffman-backed prompt helper path
+  - several hangs were stale monitor/runner contracts in the authoritative shell harness
+  - one apparent I/O-hole regression was stale variant output reuse in `out/moria128.prg` / `out/main.vs`, not the live base build
+  - the last visible failure was a runner footer syntax break after the suite body had already passed
+
+### What Changed
+1. **Haggle behavior now matches the intended bounded Stage A parity target**
+   - `commodore/common/ui_store.s`
+   - `commodore/common/store.s`
+   - Buy/sell haggling now rejects backwards offers, handles overshoot/undershoot retries, uses integer concession math, accepts at the correct agreed player price, preserves no-haggle bypasses, and decays insult state after successful business.
+2. **Focused store/runtime coverage now proves the repaired haggle contract**
+   - `commodore/c64/tests/test_store.s`
+   - `commodore/c64/run_tests.sh`
+   - Added parser, buy/sell flow, insult/kick, and no-haggle bypass coverage, plus the C64 harness layout fixes needed after the shared-code growth.
+3. **The authoritative C128 shell runner no longer reuses stale variant artifacts or dies at the summary footer**
+   - `commodore/c128/run_tests128.sh`
+   - `main128_asm` now forces a base rebuild when the active variant is not `base`, so `c128_artifact_budget` reads the real base build instead of stale scripted/diagnostic outputs.
+   - The prompt IRQ guard now matches the live prompt helper contract.
+   - The final summary/footer path is repaired, so a green suite now exits cleanly.
+
+### Validation
+- `bash commodore/c64/run_tests.sh` (`33` passed, `0` failed)
+- `make test128-fast` (passed)
+- `TEST_FAIL_FAST=1 ./run_tests128.sh` (`41` passed, `0` failed)
+
+### Outcome
+- `BUG-HAGGLE-UI` is closed.
+- One-visit store haggling now behaves correctly within the current thin store model.
+- The final verified C128 issue was runner artifact/footer drift, not a lingering haggle gameplay regression.
+
 ## 2026-03-24 — `BUG-PROMPT-FILTER` filtered inventory prompts/selectors now stay in sync ✅ FIXED
 
 ### Scope Closed

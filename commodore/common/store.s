@@ -57,8 +57,13 @@ hg_ask_lo:     .byte 0     // Shopkeeper's current price (16-bit)
 hg_ask_hi:     .byte 0
 hg_min_lo:     .byte 0     // Floor (buy) or ceiling (sell) price
 hg_min_hi:     .byte 0
+hg_last_lo:    .byte 0     // Player's last valid offer/ask
+hg_last_hi:    .byte 0
 hg_input_lo:   .byte 0     // Player's typed number (16-bit)
 hg_input_hi:   .byte 0
+hg_den_lo:     .byte 0     // Ratio denominator scratch
+hg_den_hi:     .byte 0
+hg_pct:        .byte 0     // Derived concession percentage (8-bit)
 hg_round:      .byte 0     // Round counter (0-3)
 hg_insults:    .byte 0     // Insult counter per visit
 hg_kicked:     .fill 8, 0  // Per-store kicked flag (resets on town re-entry)
