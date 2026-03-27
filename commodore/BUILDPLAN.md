@@ -17,7 +17,6 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Low | `BUG-TITLE-DUALDISK-FRAME` dual-disk drive selection/status indicator erases the bottom portion of the C64 title frame | Low | Low | No | Minor C64 title-screen polish bug: the dual-drive UI path that shows the drive number/status partially wipes the lower title border/frame instead of preserving the title layout cleanly. |
-| Medium | `BUG-SEARCH-VERIFY` verify whether searching is actually available and working end-to-end, then implement/fix if not | Medium | Medium | No | The codebase already contains a `do_search` path, so this is not yet proven to be an unimplemented feature. Confirm command mapping and user-visible behavior in real play before deciding whether this is missing, broken, or merely undiscoverable. |
 | Medium | `BUG-HELP-PAGING` multi-page help is not implemented | Medium | Medium | No | Extend the help UI so longer help content can paginate cleanly instead of truncating to a single screen. |
 | Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
 
@@ -46,6 +45,7 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `FEAT-DISK` separate persistence media from the program disk | High | High | No | Probe available save drives, let the player pick a save target, reject the program disk for save/load/high-score persistence, and validate before destructive scratch/delete actions. |
+| Medium | `FEAT-SEARCH-MODE` restore original search-mode and passive auto-search behavior | Medium | Medium | No | Keep the existing one-turn search command, but add the original persistent search toggle plus the `fos`-style passive auto-search frequency stat so searching works like VMS-Moria/Umoria instead of only as a manual single-turn action. |
 | Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
 | Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
