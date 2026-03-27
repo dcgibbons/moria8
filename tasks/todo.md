@@ -1562,3 +1562,167 @@ This file is a temporary working scratchpad.
 
 ### Result
 - `BUG-XP-PACE` is fixed and can be closed from the active build plan.
+
+## Current Task
+- [x] Review the current C128 residency / I/O-hole contract across `commodore/c128/main.s`, `commodore/c128/memory128.s`, `commodore/c128/run_tests128.sh`, and the C128 architecture docs.
+- [x] Define the scope boundary for `AUDIT-IO-C128` so it audits callable execution surfaces rather than trying to classify every C128 symbol.
+- [x] Get consultant review on the draft audit boundary, deliverables, and sequencing.
+- [x] Fold consultant corrections into the final plan.
+- [x] Record the final `AUDIT-IO-C128` design here before implementation starts.
+
+## `AUDIT-IO-C128` Design
+
+### Goal
+- Execute a full C128 callable-code audit that proves every important runtime entrypoint executes from a valid residency domain instead of silently drifting into the `$D000-$DFFF` I/O hole or the wrong bank.
+- Turn the current hand-maintained placement guards into one explicit, reviewable callable-surface contract that future C128 layout work can keep green.
+- Keep this phase focused on auditability and guard coverage, not on refactoring the trampoline/platform architecture.
+
+### Scope Boundary
+- In scope:
+  - all C128 callable entrypoints whose correctness depends on residency, banking, overlay ownership, or copied/runtime-loaded placement
+  - the compile-time and runner-time guard model that proves those entrypoints stay legal
+  - the runtime verification paths that catch I/O-hole execution during representative boot / overlay / town / generation flows
+- Callable surfaces to inventory explicitly:
+  - resident Bank 0 gameplay entrypoints that must stay below `$D000`
+  - low-runtime Bank 0 routines loaded to `$1000-$3FFF`
+  - overlay entrypoints that must execute only from `$E000-$EFFF`
+  - reloadable banked payload entrypoints that must execute only from `$F000-$FFFA`
+  - trampolines / common-RAM bridges that are allowed to call across those regions
+  - loader entrypoints whose PRG header, destination bank, and callsite execution bank form part of the runtime contract
+- Out of scope:
+  - a general whole-program `jsr` / `jmp` graph extractor
+  - refactoring shared gameplay code behind `REF-HAL`
+  - macro-generating trampoline boilerplate under `REF-C128-TRAMP`
+  - non-callable strings/data unless their placement is part of a callable path contract
+
+### Why This Boundary
+- The live regressions in this repo came from cross-region callable paths:
+  - trampolines below `$D000` calling callees that had drifted into the I/O hole
+  - low-RAM runtime code being loaded into the wrong bank for the callsite
+  - banked payload recopies sourcing from bytes later clobbered by overlay loads
+- A symbol-exhaustive audit would be expensive, noisy, and hard to maintain.
+- A curated callable-surface contract is narrower, reviewable, and directly tied to the failure modes the project has already paid for.
+
+### Deliverables
+- One authoritative C128 callable-surface inventory, grouped by residency domain:
+  - resident `< $D000`
+  - low-runtime Bank 0
+  - overlay `$E000-$EFFF`
+  - reloadable banked `$F000-$FFFA`
+  - trampolines / bridges / loaders
+- One explicit allowed-residency contract for each inventoried entrypoint:
+  - `below_io_hole`
+  - `overlay_window`
+  - `banked_window`
+  - `runtime_low_bank0`
+  - `bridge_only` / `trampoline`
+- One source-of-truth guard definition that can drive both:
+  - compile-time `.assert` coverage
+  - runner-time symbol-placement checks
+- Additional guards for paths that currently prove only the trampoline and not the callee.
+- A short audit note in the Commodore docs recording:
+  - what was inventoried
+  - which symbols were newly guarded
+  - which paths still rely on runtime smoke coverage rather than static placement alone
+
+### Guard Model Gaps To Close
+- The current runner parses placement asserts only from `commodore/c128/main.s`; that is workable today but brittle if contracts move into shared files or helper includes.
+- The current model is symbol-placement heavy but contract-light:
+  - it proves many labels are out of the I/O hole
+  - it does not yet express one normalized residency class for every audited callable surface
+- The current runner has hand-picked `must_have_asserts` and grouped symbol lists; those are useful, but they can drift separately from the actual callable inventory.
+- Some live guards still protect only one side of a call path:
+  - trampoline placement is asserted
+  - callee placement or runtime-load residency may still rely on scattered one-off checks
+- The five-point runtime-loaded-code checklist is documented, but not yet represented as one auditable artifact for low-runtime and copied/banked paths:
+  - symbol address
+  - PRG header
+  - load destination bank
+  - execution bank
+  - source-span safety
+
+### Implementation Shape To Prefer
+- Prefer a curated manifest or macro-backed contract list over heuristic source scraping.
+- Keep the contract close to the C128 runtime layout source so a reviewer can inspect symbol, residency intent, and guard together.
+- Reuse the existing runner philosophy:
+  - source declares the rule
+  - runner proves the emitted symbols still satisfy it
+- Add narrow runtime smokes only where static placement cannot prove the live execution context by itself.
+- Avoid trying to infer legality from “low address” alone; low-runtime and bridge code need explicit bank/execution ownership in the inventory.
+
+### Verification Strategy
+1. Rebuild the exact C128 target and read the emitted memory map / `.print` output.
+2. Verify the audited symbol set against `main.sym` / `out/main.vs`.
+3. Verify runtime-loaded paths against the five-point checklist:
+   - symbol address
+   - PRG header
+   - load bank
+   - execution bank
+   - source-span safety
+4. Extend the runner so every audited contract is enforced from one inventory, not partly from ad hoc symbol groups.
+5. Keep or add runtime I/O-hole tripwire smokes for representative flows where live execution matters:
+   - boot to town
+   - overlay transitions
+   - generation / special-room / ego-item paths
+   - low-runtime callsites
+6. Before closing implementation, run:
+   - `make -B -C commodore/c128 build128`
+   - `make test128-fast`
+   - `make test128-fast-smoke`
+   - `make test128`
+
+### Sequencing Relative To Other Open Work
+- `AUDIT-IO-C128` should happen before `REF-C128-TRAMP`.
+- Reason:
+  - the audit needs the current callable surface pinned down first
+  - macro-generating trampolines before that would hide the surface area while the rules are still being defined
+- `AUDIT-IO-C128` can proceed before `REF-HAL`, but it should not expand into doing `REF-HAL`.
+- Reason:
+  - `REF-HAL` is a structural cleanup of shared platform hooks
+  - this audit is a safety/specification pass on the existing callable surface
+  - the resulting inventory should become an input to `REF-HAL`, not a blocker waiting on it
+- If `REF-HAL` later moves or consolidates entrypoints, the `AUDIT-IO-C128` inventory should be updated as the acceptance gate for that refactor.
+
+### Success Criteria
+- Every inventoried C128 callable surface has one declared residency contract.
+- The compile-time guards and the runner read from the same logical inventory.
+- No audited callable path can regress into `$D000-$DFFF` without either a failed `.assert`, a failed runner guard, or a failed runtime smoke.
+- The final design remains small enough that future C128 work will maintain it instead of bypassing it.
+
+### Review
+- Completed.
+- Consultant review agreed that the audit should inventory callable execution surfaces, not every emitted symbol in the C128 build.
+- The main correction was to make the deliverable one authoritative residency-contract inventory that can feed both compile-time asserts and runner checks, instead of adding more hand-maintained symbol lists in parallel.
+- The review also confirmed the right sequencing:
+  - do `AUDIT-IO-C128` before `REF-C128-TRAMP`
+  - do not block on `REF-HAL`, but keep this audit narrowly scoped so its inventory can become an input to `REF-HAL` later
+- Final design choice:
+  - keep the audit focused on safety/specification of the current callable surface
+  - leave broader trampoline/platform refactors explicitly out of scope for this phase
+
+### Implementation Review
+- Completed.
+- Added `commodore/c128/io_contracts.s` as the source-of-truth callable residency manifest for:
+  - resident `< $D000` entrypoints
+  - runtime-low Bank 0 entrypoints
+  - startup / town / death / UI / dungeon overlay entrypoints
+  - reloadable banked-payload entrypoints
+  - out-of-I/O-hole call surfaces that may legally live low or banked
+- `commodore/c128/main.s` now emits compile-time `AUDIT-IO-C128` placement asserts from that manifest instead of maintaining a long hand-written callable assert list inline.
+- `commodore/c128/run_tests128.sh` now parses `io_contracts.s` directly, verifies the emitted symbol placement against the declared residency class, and also checks that `out/runtime.low.prg` still carries the `$1000` load header.
+- The new audit inventory also closed real callee-side gaps that were previously only protected at the trampoline side:
+  - overlay callees such as `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
+  - runtime-low callees such as `viewport_update`, `render_viewport_scroll_delta`, `render_local_area`, and `monster_get_threat_color`
+  - banked/out-of-hole callees such as `player_tunnel`, `player_cast_spell`, `player_pray`, and `spell_list_display`
+- Live verification:
+  - `make -B -C commodore/c128 build128` → `230` asserts, `0` failed
+  - `TEST_FILTER='c128_artifact_budget|c128_symbol_placement' TEST_FAIL_FAST=1 ./run_tests128.sh` → `2 passed, 0 failed`
+  - tester: `make test128-fast` → passed
+  - tester: `make test128-fast-smoke` → passed
+  - tester: sandboxed / parallel `make test128` hit VICE `Segmentation fault: 11` in `run_test_internal_worker.sh` while launching unit workers
+  - isolated repro:
+    - sandboxed `TEST_FILTER='minimal128' TEST_FAIL_FAST=1 TEST_JOBS=1 ./run_tests128.sh` reproduces the launch failure
+    - outside the sandbox, the same `minimal128` authoritative path passes
+    - outside the sandbox, `TEST_FILTER='memory128|main_loop128' TEST_FAIL_FAST=1 TEST_JOBS=1 ./run_tests128.sh` passes
+  - authoritative closure:
+    - tester: `TEST_JOBS=1 ./run_tests128.sh` outside the sandbox → `=== Results: 41 passed, 0 failed (of 41 suites) ===`

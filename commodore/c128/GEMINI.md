@@ -42,6 +42,7 @@ Failure to check all five caused three separate regressions in this repo:
 - dungeon descent `JAM` from a trampoline calling ego-item code that had drifted into `$D000-$DFFF`
 
 Also: asserting the trampoline address is not sufficient. Assert the callee placement too.
+The callable residency inventory for those checks now lives in `commodore/c128/io_contracts.s`; update that manifest when a C128 callable surface moves.
 
 ## 3. Implementation and Verification
 - **No Defensive Traps:** Remove `c128_diag_fail_stage_XX` once a root cause is confirmed. Do not add more labels to debug a crash; instead, fix the atomicity and context-switching logic.

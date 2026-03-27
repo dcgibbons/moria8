@@ -6,6 +6,7 @@ than the C64 build:
 - `$E000-$EFFF` is the live overlay execution window
 - `$F000-$FFFA` is the reloadable banked payload window
 - persistent overlay metadata/state lives in resident Bank 0 RAM
+- callable residency contracts are declared in `io_contracts.s` and enforced by both `main.s` asserts and `run_tests128.sh`
 
 That separation is mandatory. The original `New Game` CPU `JAM` failures were
 caused by violating it.
@@ -24,6 +25,7 @@ targeted failure analysis, but they are not architectural truth by themselves.
 - Keep debug-only guards that enforce memory ownership or snapshot a preload transaction
 - Prefer lightweight diagnostics that preserve `A/X/Y/P`
 - Treat heavy exploratory runners as transient tools, not permanent design
+- When a C128 callable path moves between resident, overlay, runtime-low, or banked regions, update `io_contracts.s` alongside the code change
 
 ## Regression Checklist
 

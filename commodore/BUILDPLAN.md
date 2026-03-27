@@ -9,7 +9,7 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, OPT-1, OPT-2, REF-1, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, and `FEAT-WIZ` Wizard Mode.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Bugs
@@ -31,7 +31,6 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `AUDIT-IO-C128` full audit of C128 callable code vs I/O-hole / residency contracts | Medium | High | Prefer | Inventory every callable C128 routine path, confirm final execution residency (`< $D000`, `OVL.*`, or resident `$F000`), add missing asserts for both trampolines and callees, and catch future `$D000-$DFFF` regressions before manual play does. |
 | Medium | `REF-HAL` formalize platform service hooks so shared gameplay code stops accumulating `#if C128` branches | High | Medium | No | Introduce a thin platform-services layer for shared gameplay entry points such as pre-turn hooks, platform guard restore, and other runtime quirks. Treat this as the main structural refactor; it should precede further trampoline cleanups. |
 | Low | `REF-INPUT-TABLES` centralize shared command/input tables and direction constants in `commodore/common/` | Medium | Medium | No | Move truly shared `CMD_*` command codes, direction tables, and PETSCII-to-command lookup tables into common data. Do not try to unify the C64/C128 keyscan or modifier-chord implementations themselves. |
 | Low | `REF-CONSTS` consolidate shared `CMD_*`, `SC_*`, and `COL_*` constants into common headers | Low | Medium | No | Cleanup for constants that are genuinely platform-neutral. Keep platform-specific screen-code or scan-code quirks local. |

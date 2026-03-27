@@ -6,6 +6,59 @@
 
 ---
 
+## 2026-03-26 — `AUDIT-IO-C128` callable residency audit and guard unification ✅ FIXED
+
+### Scope Closed
+- Audited the C128 callable execution surfaces whose correctness depends on residency, overlay ownership, banked/runtime-low placement, or copied-code load headers.
+- Replaced the old hand-maintained callable placement list with one explicit contract manifest shared by compile-time asserts and the C128 runner.
+
+### Root Cause
+- The tree already had many important C128 placement asserts, but they were selective and hand-curated in `commodore/c128/main.s`.
+- The runner then kept a second hand-picked symbol list in `commodore/c128/run_tests128.sh`.
+- That split left real drift risk:
+  - trampoline-side guards could exist without matching callee-side guards
+  - new callable surfaces could be protected in source but not enforced by the runner, or vice versa
+  - runtime-low / overlay / banked contracts were not represented as one auditable callable inventory
+
+### What Changed
+1. **One C128 callable residency manifest now declares the audited contract**
+   - `commodore/c128/io_contracts.s`
+   - Added one source-of-truth inventory for:
+     - resident `< $D000` entrypoints
+     - runtime-low Bank 0 entrypoints
+     - startup / town / death / UI / dungeon overlay entrypoints
+     - reloadable banked payload entrypoints
+     - out-of-I/O-hole call surfaces that may legally live low or banked
+2. **Compile-time C128 placement asserts now come from that manifest**
+   - `commodore/c128/main.s`
+   - Added macro-backed `AUDIT-IO-C128` asserts and removed the long inline callable-placement list.
+   - Kept unrelated data/layout asserts separate, such as message-history sizing and prompt-string placement.
+3. **The C128 runner now validates the same manifest**
+   - `commodore/c128/run_tests128.sh`
+   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/runtime.low.prg` still carries the `$1000` load header.
+4. **Callee-side gaps are now guarded, not just trampoline addresses**
+   - Newly enforced overlay/runtime-low/banked callees include:
+     - `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
+     - `viewport_update`, `render_viewport_scroll_delta`, `render_local_area`, `monster_get_threat_color`, and ego helpers in `runtime.low`
+     - `player_tunnel`, `player_cast_spell`, `player_pray`, and `spell_list_display`
+
+### Validation
+- `make -B -C commodore/c128 build128` (`230` asserts, `0` failed)
+- `TEST_FILTER='c128_artifact_budget|c128_symbol_placement' TEST_FAIL_FAST=1 ./run_tests128.sh` (`2` passed, `0` failed)
+- tester: `make test128-fast` (passed)
+- tester: `make test128-fast-smoke` (passed)
+- tester + local isolation:
+  - sandboxed / parallel `make test128` hit VICE `Segmentation fault: 11` in `run_test_internal_worker.sh`
+  - the failure reproduced on sandboxed `minimal128`
+  - outside the sandbox, the same authoritative launch path passed
+  - outside the sandbox, `TEST_FILTER='memory128|main_loop128' TEST_FAIL_FAST=1 TEST_JOBS=1 ./run_tests128.sh` passed
+  - tester: `TEST_JOBS=1 ./run_tests128.sh` outside the sandbox → `41 passed, 0 failed`
+
+### Outcome
+- `AUDIT-IO-C128` is closed.
+- The C128 callable residency contract is now explicit, auditable, and enforced from one manifest instead of two drifting symbol lists.
+- Future C128 layout work now has callee-side guard coverage for the overlay, runtime-low, and banked paths that previously relied on partial/manual enforcement.
+
 ## 2026-03-26 — `BUG-HAGGLE-UI` one-visit haggle parity plus C128 runner fallout ✅ FIXED
 
 ### Scope Closed

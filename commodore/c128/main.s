@@ -3008,8 +3008,6 @@ banked_payload_end:
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
 .assert "Banked payload staged source ends below overlay window", banked_payload_end <= $E000, true
-.assert "Title sysinfo stays out of I/O hole", title_show_sysinfo_banked < $D000 || title_show_sysinfo_banked >= $E000, true
-.assert "REU status stays out of I/O hole", reu_show_status_banked < $D000 || reu_show_status_banked >= $E000, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
@@ -3032,88 +3030,48 @@ program_end:
 .assert "Overlay state block ends before overlay window", overlay_state_block_end < $e000, true
 .assert "Overlay state block stays inside cache-state ownership", overlay_state_block_end <= c128_cache_state_end, true
 #endif
-.assert "UI trampolines stay below I/O hole", tramp_ui_recall < $D000, true
-.assert "UI enter trampoline stays below I/O hole", tramp_ui_enter < $D000, true
-.assert "UI exit trampoline stays below I/O hole", tramp_ui_exit < $D000, true
-.assert "UI help display trampoline stays below I/O hole", tramp_ui_help_display < $D000, true
-.assert "UI char display trampoline stays below I/O hole", tramp_ui_char_display < $D000, true
-.assert "UI inventory display trampoline stays below I/O hole", tramp_ui_inv_display < $D000, true
-.assert "UI equip display trampoline stays below I/O hole", tramp_ui_equip_display < $D000, true
-.assert "UI wizard display trampoline stays below I/O hole", tramp_ui_wizard_display < $D000, true
-.assert "Store trampoline init stays below I/O hole", tramp_store_init_all < $D000, true
-.assert "Store trampoline restock stays below I/O hole", tramp_store_restock_all < $D000, true
-.assert "Store trampoline enter stays below I/O hole", tramp_store_enter < $D000, true
-.assert "Player-create trampoline stays below I/O hole", tramp_player_create < $D000, true
-.assert "Game-over trampoline stays below I/O hole", tramp_game_over < $D000, true
-.assert "Ego damage trampoline stays below I/O hole", tramp_ego_apply_damage < $D000, true
-.assert "Ego AC trampoline stays below I/O hole", tramp_ego_get_ac_bonus < $D000, true
-.assert "Level-generate trampoline stays below I/O hole", tramp_level_generate < $D000, true
-.assert "Assign-special-room trampoline stays below I/O hole", tramp_assign_special_room < $D000, true
-.assert "Vault-seal-entrance trampoline stays below I/O hole", tramp_vault_seal_entrance < $D000, true
-.assert "Spawn-special-room-monsters trampoline stays below I/O hole", tramp_spawn_special_room_monsters < $D000, true
-.assert "Spawn-nest-gold trampoline stays below I/O hole", tramp_spawn_nest_gold < $D000, true
-.assert "Find-special-room trampoline stays below I/O hole", tramp_find_special_room < $D000, true
-.assert "Special-room epilogue trampoline stays below I/O hole", tramp_sr_epilogue < $D000, true
-.assert "Dig-ability trampoline stays below I/O hole", tramp_dig_ability < $D000, true
-.assert "Roll-ego-type trampoline stays below I/O hole", tramp_roll_ego_type < $D000, true
-.assert "Ego-append-suffix trampoline stays below I/O hole", tramp_ego_append_suffix < $D000, true
-.assert "Ego-put-suffix trampoline stays below I/O hole", tramp_ego_put_suffix < $D000, true
-.assert "Player-tunnel trampoline stays below I/O hole", tramp_player_tunnel < $D000, true
-.assert "Magic-recalc trampoline stays below I/O hole", tramp_magic_recalc_mana < $D000, true
-.assert "Title sysinfo trampoline stays below I/O hole", title_show_sysinfo < $D000, true
-.assert "REU status trampoline stays below I/O hole", tramp_reu_show_status < $D000, true
-.assert "Character sheet overlay renderer stays inside overlay window", ui_char_display >= $E000 && ui_char_display < $F000, true
+.macro C128AuditBelowIo(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays below the I/O hole", symbol < $D000, true
+}
+
+.macro C128AuditOutOfIo(name, symbol, window_start) {
+    .assert "AUDIT-IO-C128 " + name + " stays out of the I/O hole", symbol < $D000 || symbol >= window_start, true
+}
+
+.macro C128AuditRuntimeLow(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in runtime.low Bank 0 RAM", symbol >= runtime_low_data_start && symbol < runtime_low_data_end, true
+}
+
+.macro C128AuditStartupOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the startup overlay", symbol >= $E000 && symbol < ovl_start_end, true
+}
+
+.macro C128AuditTownOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the town overlay", symbol >= $E000 && symbol < ovl_town_end, true
+}
+
+.macro C128AuditDeathOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the death overlay", symbol >= $E000 && symbol < ovl_death_end, true
+}
+
+.macro C128AuditUiOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the UI overlay", symbol >= $E000 && symbol < ovl_ui_end, true
+}
+
+.macro C128AuditDungeonOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the dungeon overlay", symbol >= $E000 && symbol < ovl_gen_end, true
+}
+
+.macro C128AuditBanked(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the reloadable banked window", symbol >= $F000 && symbol < banked_code_end, true
+}
+
+#import "io_contracts.s"
+
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
 .assert "Drive prompt stays below I/O hole", de_prompt_str < $D000, true
-.assert "Save entry stays below I/O hole", save_game < $D000, true
-.assert "Load entry stays below I/O hole", load_game < $D000, true
-.assert "Load byte reader stays below I/O hole", load_read_byte < $D000, true
-.assert "Load block reader stays below I/O hole", load_read_block < $D000, true
-#if C128
-.assert "Load map reader stays below I/O hole", load_read_map_c128 < $D000, true
-#endif
-.assert "Delete-save helper stays below I/O hole", delete_savefile < $D000, true
-.assert "Load-resume entry stays below I/O hole", load_resume_game < $D000, true
-.assert "Main loop stays below I/O hole", main_loop < $D000, true
-.assert "Viewport/status tail stays below I/O hole", vp_render_status_loop < $D000, true
-.assert "Visibility update stays below I/O hole", update_visibility < $D000, true
-.assert "Room reveal stays below I/O hole", reveal_room < $D000, true
-.assert "Viewport renderer stays below I/O hole", render_viewport < $D000, true
-.assert "Player move stays below I/O hole", player_try_move < $D000, true
-.assert "Melee attack entry stays below I/O hole", player_attack_monster < $D000, true
-.assert "Combat hit-roll stays below I/O hole", combat_roll_tohit < $D000, true
-.assert "Combat damage apply stays below I/O hole", combat_apply_damage < $D000, true
-.assert "Combat message build stays below I/O hole", msg_build_action < $D000, true
-.assert "Combat message print stays below I/O hole", cmb_print_buf < $D000, true
-.assert "Monster melee entry stays below I/O hole", monster_attack_player < $D000, true
-.assert "Monster hit-roll calc stays below I/O hole", mon_atk_calc_tohit < $D000, true
-.assert "Monster hit-roll stays below I/O hole", mon_atk_roll_tohit < $D000, true
-.assert "Monster damage apply stays below I/O hole", mon_atk_apply_damage < $D000, true
-.assert "Find-doors effect stays below I/O hole", eff_find_doors < $D000, true
-.assert "Adjacent iterator stays below I/O hole", for_each_adjacent < $D000, true
-.assert "Sleep-adjacent effect stays below I/O hole", eff_sleep_adjacent < $D000, true
-.assert "Aim-wand handler stays out of I/O hole", item_aim_wand < $D000 || item_aim_wand >= $F000, true
-.assert "Use-staff handler stays out of I/O hole", item_use_staff < $D000 || item_use_staff >= $F000, true
-#if !C128_TEST_STACK_SLOT_DIAG && !C128_TEST_STACK_BOTTOM_DIAG
-.assert "Study-spell handler stays out of I/O hole", item_gain_spell < $D000 || item_gain_spell >= $F000, true
-#endif
-.assert "Cast-spell handler stays out of I/O hole", player_cast_spell < $D000 || player_cast_spell >= $F000, true
-.assert "Pray handler stays out of I/O hole", player_pray < $D000 || player_pray >= $F000, true
-.assert "Spell list renderer stays out of I/O hole", spell_list_display < $D000 || spell_list_display >= $F000, true
-.assert "Mana-recalc helper stays out of I/O hole", magic_recalc_mana < $D000 || magic_recalc_mana >= $F000, true
-.assert "Learn-new-spells helper stays inside UI overlay", magic_check_new_spells >= $E000 && magic_check_new_spells < ovl_ui_end, true
-.assert "Mage effect dispatch stays out of I/O hole", mage_effect_dispatch < $D000 || mage_effect_dispatch >= $F000, true
-.assert "Priest effect dispatch stays out of I/O hole", priest_effect_dispatch < $D000 || priest_effect_dispatch >= $F000, true
-.assert "Ranged-fire handler stays out of I/O hole", ranged_fire < $D000 || ranged_fire >= $F000, true
-.assert "Throw-item handler stays out of I/O hole", throw_item < $D000 || throw_item >= $F000, true
-.assert "Bash handler stays out of I/O hole", bash_command < $D000 || bash_command >= $F000, true
-.assert "Recall renderer stays in reloadable banked window", ui_recall_display >= $F000 && ui_recall_display < banked_code_end, true
-.assert "UI help overlay renderer stays inside overlay window", ui_help_display >= $E000 && ui_help_display < $F000, true
-.assert "UI inventory overlay renderer stays inside overlay window", ui_inv_display >= $E000 && ui_inv_display < $F000, true
-.assert "UI equip overlay renderer stays inside overlay window", ui_equip_display >= $E000 && ui_equip_display < $F000, true
-.assert "Game-over prompt stays below I/O hole", game_over_prompt < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true

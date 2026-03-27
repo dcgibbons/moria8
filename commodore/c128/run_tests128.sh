@@ -822,7 +822,7 @@ from pathlib import Path
 import re
 sym = Path("main.sym").read_text().splitlines()
 main_text = Path("main.s").read_text()
-main_source = main_text.splitlines()
+contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
 for line in sym:
     m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
@@ -830,96 +830,138 @@ for line in sym:
         continue
     labels[m.group(1)] = int(m.group(2), 16)
 
-assert_guards = set()
-out_of_hole_guards = {}
-for line in main_source:
-    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\s*\|\|\s*\1\s*>=\s*\$(\w+)\b", line)
-    if m:
-        out_of_hole_guards[m.group(1)] = int(m.group(2), 16)
-        continue
-    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\b", line)
-    if m:
-        assert_guards.add(m.group(1))
+contract_patterns = {
+    "below_io_hole": re.compile(r':C128AuditBelowIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "out_of_io_hole": re.compile(r':C128AuditOutOfIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*\$(\w+)\s*\)'),
+    "runtime_low_bank0": re.compile(r':C128AuditRuntimeLow\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "startup_overlay": re.compile(r':C128AuditStartupOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "town_overlay": re.compile(r':C128AuditTownOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+}
 
-required = [
-    "game_over_prompt",
-    "game_over_prompt_end",
-    "game_over_str",
-    "game_over_str_end",
-    "title_show_sysinfo",
-    "tramp_reu_show_status",
-    "tramp_ui_equip_display",
-    "tramp_ui_recall",
-    "tramp_store_init_all",
-    "tramp_store_restock_all",
-    "tramp_store_enter",
-    "tramp_player_create",
-    "tramp_game_over",
+contracts = []
+for raw in contract_source:
+    line = raw.strip()
+    if not line or line.startswith("//") or line.startswith("#"):
+        continue
+    for kind, pattern in contract_patterns.items():
+        m = pattern.match(line)
+        if not m:
+            continue
+        display = m.group(1)
+        symbol = m.group(2)
+        arg = int(m.group(3), 16) if kind == "out_of_io_hole" else None
+        contracts.append((kind, display, symbol, arg))
+        break
+
+if not contracts:
+    print("io_contracts.s: no parsed residency contracts")
+    raise SystemExit(1)
+
+required_labels = [
+    "banked_code_end",
+    "runtime_low_data_start",
+    "runtime_low_data_end",
+    "ovl_start_end",
+    "ovl_town_end",
+    "ovl_death_end",
+    "ovl_ui_end",
+    "ovl_gen_end",
 ]
 
-# These are the concrete regression-prone runtime symbols that must stay out
-# of the C128 $D000-$DFFF I/O hole. Each one should also be protected by a
-# source-level placement assert in main.s.
-must_have_asserts = [
+below_io_data = [
     "title_menu_str",
     "ds_menu_str",
     "ds_dual_str",
     "de_prompt_str",
-    "save_game",
-    "load_game",
-    "load_read_byte",
-    "load_read_block",
-    "load_read_map_c128",
-    "delete_savefile",
-    "update_visibility",
-    "reveal_room",
-    "player_try_move",
-    "player_attack_monster",
-    "combat_roll_tohit",
-    "combat_apply_damage",
-    "msg_build_action",
-    "cmb_print_buf",
-    "monster_attack_player",
-    "mon_atk_calc_tohit",
-    "mon_atk_roll_tohit",
-    "mon_atk_apply_damage",
+    "game_over_prompt_end",
+    "game_over_str",
+    "game_over_str_end",
 ]
+
 bad = []
 missing = []
-missing_asserts = []
-for name in required:
+
+for name in required_labels:
+    if name not in labels:
+        missing.append(name)
+
+for name in below_io_data:
     if name not in labels:
         missing.append(name)
         continue
     if labels[name] >= 0xD000:
-        bad.append((name, labels[name]))
+        bad.append((name, labels[name], "below_io_hole"))
 
 if "msg_history" not in labels or "msg_hist_idx" not in labels:
     missing.append("msg_history/msg_hist_idx")
 else:
     if labels["msg_hist_idx"] - labels["msg_history"] != (8 * 80):
-        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"]))
+        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"], "width"))
 
 for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
         continue
     if labels[name] < 0xE000 or labels[name] >= 0xF000:
-        bad.append((name, labels[name]))
+        bad.append((name, labels[name], "overlay_window"))
 
-for name in ("ui_help_display", "ui_char_display", "ui_inv_display", "ui_equip_display"):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if labels[name] < 0xE000 or labels[name] >= 0xF000:
-        bad.append((name, labels[name]))
+runtime_low_prg = Path("out/runtime.low.prg")
+if not runtime_low_prg.exists():
+    missing.append("out/runtime.low.prg")
+else:
+    data = runtime_low_prg.read_bytes()
+    if len(data) < 2:
+        bad.append(("runtime.low.prg", len(data), "short"))
+    else:
+        load = data[0] | (data[1] << 8)
+        if load != 0x1000:
+            bad.append(("runtime.low.prg header", load, "load_header"))
 
-for name in ("ui_recall_display",):
-    if name not in labels:
-        missing.append(name)
+if "runtime_low_data_start" in labels and labels["runtime_low_data_start"] != 0x1000:
+    bad.append(("runtime_low_data_start", labels["runtime_low_data_start"], "runtime_low_base"))
+
+overlay_limits = {
+    "startup_overlay": labels.get("ovl_start_end"),
+    "town_overlay": labels.get("ovl_town_end"),
+    "death_overlay": labels.get("ovl_death_end"),
+    "ui_overlay": labels.get("ovl_ui_end"),
+    "dungeon_overlay": labels.get("ovl_gen_end"),
+}
+
+for kind, _display, symbol, arg in contracts:
+    if symbol not in labels:
+        missing.append(symbol)
         continue
-    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
-        bad.append((name, labels[name]))
+    addr = labels[symbol]
+    if kind == "below_io_hole":
+        if addr >= 0xD000:
+            bad.append((symbol, addr, kind))
+    elif kind == "out_of_io_hole":
+        if 0xD000 <= addr < arg:
+            bad.append((symbol, addr, kind))
+    elif kind == "runtime_low_bank0":
+        start = labels.get("runtime_low_data_start")
+        end = labels.get("runtime_low_data_end")
+        if start is None or end is None:
+            missing.extend(name for name in ("runtime_low_data_start", "runtime_low_data_end") if name not in labels)
+        elif not (start <= addr < end):
+            bad.append((symbol, addr, kind))
+    elif kind == "banked_window":
+        end = labels.get("banked_code_end")
+        if end is None:
+            missing.append("banked_code_end")
+        elif not (0xF000 <= addr < end):
+            bad.append((symbol, addr, kind))
+    else:
+        end = overlay_limits.get(kind)
+        if end is None:
+            missing.append(kind)
+        elif not (0xE000 <= addr < end):
+            bad.append((symbol, addr, kind))
 
 for label in (
     "tramp_ui_help_display",
@@ -939,34 +981,14 @@ if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         
     print("vdc_attr_base_init: expected reg21/reg20 init sequence with lda #8 for reg20")
     raise SystemExit(1)
 
-# Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
-for name in must_have_asserts:
-    if name not in assert_guards and name not in out_of_hole_guards:
-        missing_asserts.append(name)
-
-# Every source-level <$D000 guard must be enforced by the runner.
-for name in sorted(assert_guards):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if labels[name] >= 0xD000:
-        bad.append((name, labels[name]))
-
-# Every source-level "out of I/O hole" guard must be enforced by the runner.
-for name, low_ok in sorted(out_of_hole_guards.items()):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if 0xD000 <= labels[name] < low_ok:
-        bad.append((name, labels[name]))
-
-if missing or bad or missing_asserts:
+if missing or bad:
     if missing:
         print("missing:" + ",".join(missing))
-    if missing_asserts:
-        print("missing_asserts:" + ",".join(sorted(missing_asserts)))
-    for name, addr in bad:
-        print(f"high:{name}=${addr:04X}")
+    for name, addr, kind in bad:
+        if isinstance(addr, int):
+            print(f"bad:{kind}:{name}=${addr:04X}")
+        else:
+            print(f"bad:{kind}:{name}={addr}")
     raise SystemExit(1)
 
 print("ok")
