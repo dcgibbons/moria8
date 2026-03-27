@@ -6,6 +6,53 @@
 
 ---
 
+## 2026-03-27 — `REF-CONSTS` shared neutral constant ownership cleanup ✅ COMPLETE
+
+### Scope Closed
+- Finished the remaining low-risk constant-ownership cleanup for the live tree without reopening layout, MMU, or bootstrap policy.
+- Centralized the small set of genuinely shared neutral aliases and closed the corresponding backlog item.
+
+### Root Cause
+- Several important constant families were already centralized:
+  - `CMD_*` and direction tables
+  - semantic gameplay/UI color aliases
+  - disk/KERNAL I/O constants
+- The real remaining duplication was narrower:
+  - raw VIC palette indices were still defined in more than one runtime owner
+  - shared `$01` processor-port banking aliases were still defined in both C64 and C128 memory layers
+- The open backlog wording was broader than the real cleanup left to do.
+
+### What Changed
+1. **Raw VIC palette indices now have one shared owner**
+   - Added `commodore/common/vic_palette_consts.s`.
+   - Retargeted:
+     - `commodore/common/color.s`
+     - `commodore/c64/screen.s`
+     - `commodore/c128/memory128.s`
+2. **Shared `$01` banking aliases now have one shared owner**
+   - Added `commodore/common/bank_port_consts.s`.
+   - Retargeted:
+     - `commodore/c64/memory.s`
+     - `commodore/c128/memory128.s`
+3. **The implementation stayed inside the intended boundary**
+   - Left `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW` local.
+   - Left `MMU_*` local.
+   - Left VDC-only translated color aliases local.
+   - Left bootstrap-local aliases in `commodore/c128/boot128.s` explicit.
+   - Chose not to fold `SC_SPACE` into this pass so the change remained tightly scoped.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -B -C commodore/c128 build128` (`232` asserts, `0` failed)
+- `make test128-fast` (passed)
+- `make test128-fast-smoke` (`3 passed, 0 failed`)
+
+### Outcome
+- `REF-CONSTS` is complete.
+- Raw neutral constant families now have one shared owner.
+- The active build plan no longer lists the item as open.
+
 ## 2026-03-27 — `REF-C128-TRAMP` backlog closure audit ✅ COMPLETE
 
 ### Scope Closed

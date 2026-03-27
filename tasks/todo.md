@@ -2266,3 +2266,143 @@ This file is a temporary working scratchpad.
   - source audit only
   - no code changes
   - no test rerun required for the closure-doc update
+
+## Current Task
+- [x] Inspect the current ownership of shared versus platform-local constants across common/C64/C128 headers and backends.
+- [x] Get a consultant review on the safest scope and sequencing for `REF-CONSTS`.
+- [x] Record the final `REF-CONSTS` design before implementation starts.
+
+## `REF-CONSTS` Design
+
+### Goal
+- Finish centralizing the small set of genuinely platform-neutral constants that still have multiple owners.
+- Keep this as a header-ownership cleanup, not a semantic refactor of screen layout, MMU policy, or bootstrap behavior.
+- Make the common-vs-platform boundary easier to review by moving only constants that are already behaviorally shared.
+
+### Current Code Facts
+- Several constant families are already centralized:
+  - `CMD_*` and direction tables in `commodore/common/input_contract.s`
+  - semantic gameplay/UI colors and shared screen-code aliases in `commodore/common/color.s`
+  - disk/KERNAL I/O constants in `commodore/common/io_kernal_consts.s`
+- The real remaining duplication is smaller than the backlog wording implies:
+  - raw VIC palette indices `COL_BLACK` through `COL_LGREY` are defined in both `commodore/c64/screen.s` and `commodore/c128/memory128.s`
+  - the same raw VIC palette family is partially repeated in `commodore/c128/boot128.s`
+  - shared `$01` processor-port banking aliases `BANK_ALL_RAM` through `BANK_NO_ROMS` are defined in both `commodore/c64/memory.s` and `commodore/c128/memory128.s`
+  - `SC_SPACE = $20` is duplicated in both screen backends
+- Several equal-looking constants should still remain local:
+  - `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW`
+  - `MMU_*`
+  - VDC-only translated color aliases such as `VDC_WHITE`
+- Even when some of those local constants happen to share the same numeric value today, they encode backend/layout policy rather than a cross-platform neutral contract.
+
+### Scope Boundary
+- In scope:
+  - one common owner for raw VIC palette indices
+  - one common owner for shared `$01` banking aliases used by both C64 and C128 runtime code
+  - optionally one tiny shared owner for `SC_SPACE` if that remains trivial and does not drag in layout policy
+- Out of scope:
+  - screen geometry/layout constants
+  - MMU constants
+  - VDC-only constants and VDC-translated color aliases
+  - broad test cleanup for local helper constants
+  - any attempt to deduplicate every numerically equal `.const` in the tree
+
+### Preferred Implementation Shape
+1. Add one new common header for raw VIC palette indices.
+2. Add one new common header for shared `$01` banking aliases.
+3. Retarget the current owners to consume those headers:
+   - `commodore/common/color.s`
+   - `commodore/c64/screen.s`
+   - `commodore/c128/memory128.s`
+4. Only pull `SC_SPACE` into common if it stays a single neutral alias and does not force screen-layout constants to move with it.
+5. Leave `commodore/c128/boot128.s` explicit unless importing the shared header is clearly harmless for bootstrap ownership and build order.
+
+### Why This Shape
+- It captures the real remaining duplication without pretending the tree still needs a broad constants sweep.
+- It follows the same pattern as `REF-INPUT-TABLES`:
+  - centralize the truly shared contract
+  - leave platform-specific machinery and policy local
+- It avoids the common failure mode of over-centralizing constants that only happen to match numerically today.
+
+### What Should Stay Local
+- `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW`
+  - These are backend/layout policy, not neutral shared aliases.
+- `MMU_*`
+  - C128-only and tightly tied to `memory128.s` / bootstrap/runtime ownership.
+- VDC-only constants
+  - `VDC_*`, translated RGBI aliases, and register constants belong with the VDC backend.
+- Bootstrap-only convenience aliases in `boot128.s`
+  - only share them if doing so does not blur bootstrap ownership or complicate build assumptions.
+
+### Sequencing Relative To Other Open Work
+- `REF-CONSTS` should stay separate from `REF-HAL`.
+- Reason:
+  - this is a constant-ownership cleanup
+  - `REF-HAL` is a structural platform-service refactor
+- `REF-CONSTS` naturally follows the already-completed `REF-INPUT-TABLES`.
+- Reason:
+  - both are narrow “centralize the truly shared contract” cleanups
+  - both benefit from resisting the temptation to over-abstract platform-specific behavior
+
+### Key Risks
+- Over-centralizing screen-layout constants that are only accidentally equal today.
+- Pulling bootstrap- or C128-specific constants into shared headers that blur ownership boundaries.
+- Turning a low-risk duplication cleanup into a broad semantic refactor of screen or memory policy.
+- Changing include structure in a way that perturbs segment placement more than necessary.
+
+### Verification Strategy
+1. Rebuild both targets and inspect the emitted memory/assert output.
+2. Prove one shared owner now defines the raw VIC palette indices.
+3. Prove one shared owner now defines the shared `$01` banking aliases.
+4. Prove `MMU_*` and screen-geometry/layout constants remain local.
+5. Run the standard C64 suite and C128 fast suite after the change.
+6. Add `make test128-fast-smoke` if the implementation touches shared screen headers or anything used during boot/title/UI bring-up.
+
+### Smallest High-Value Acceptance Gates
+- `make -C commodore/c64 build`
+- `bash commodore/c64/run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `make test128-fast`
+- `make test128-fast-smoke` if shared screen-header ownership changes touch boot/title/UI-adjacent code
+
+### Consultant Review
+- Consultant verdict: `REF-CONSTS` should be a narrow header-ownership cleanup, not a sweep of every `.const` in the tree.
+- Strongest recommendation:
+  - centralize raw neutral aliases already shared by behavior
+  - leave geometry and MMU constants local
+- Consultant-confirmed best first-pass targets:
+  - raw VIC palette indices `COL_BLACK` through `COL_LGREY`
+  - shared `$01` banking aliases `BANK_ALL_RAM` through `BANK_NO_ROMS`
+  - optionally `SC_SPACE`
+- Consultant-confirmed items to keep local:
+  - `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW`
+  - `MMU_*`
+  - VDC-only constants and translated VDC color aliases
+  - bootstrap-only aliases unless importing shared headers is clearly harmless
+
+### Implementation Review
+- Completed.
+- Added two small shared headers for the genuinely platform-neutral constant families still duplicated in the live tree:
+  - `commodore/common/vic_palette_consts.s`
+  - `commodore/common/bank_port_consts.s`
+- Retargeted the current owners to consume those shared headers:
+  - `commodore/common/color.s`
+  - `commodore/c64/screen.s`
+  - `commodore/c64/memory.s`
+  - `commodore/c128/memory128.s`
+- Deliberately left these local, matching the design boundary:
+  - `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW`
+  - `MMU_*`
+  - VDC-only translated color aliases
+  - bootstrap-local aliases in `commodore/c128/boot128.s`
+- Also left `SC_SPACE` local to the screen backends to keep this pass tightly scoped to the highest-value duplicate families.
+- Result:
+  - raw VIC palette indices now have one shared owner
+  - shared `$01` banking aliases now have one shared owner
+  - no broader layout/MMU refactor was folded into the change
+- Verification:
+  - `make -C commodore/c64 build` passed with `74` asserts and `0` failures
+  - `bash commodore/c64/run_tests.sh` passed with `33 passed, 0 failed (of 33 suites)`
+  - `make -B -C commodore/c128 build128` passed with `232` asserts and `0` failures
+  - `make test128-fast` passed
+  - `make test128-fast-smoke` passed with `3 passed, 0 failed`

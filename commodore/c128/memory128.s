@@ -35,6 +35,9 @@
 //     IRQ/NMI vectors at $FFFE/$FFFF will read from RAM when
 //     KERNAL is banked out.
 
+#import "../common/bank_port_consts.s"
+#import "../common/vic_palette_consts.s"
+
 // ============================================================
 // MMU Constants (C128-specific)
 // ============================================================
@@ -58,32 +61,7 @@
 // Processor port constants — same values as C64 (used by $01)
 // Common code (reu.s, overlay.s, etc.) uses these directly.
 // ============================================================
-.const BANK_ALL_RAM     = $30  // All RAM, I/O visible (not usually needed)
-.const BANK_ALL_ROM     = $37  // Default: BASIC + KERNAL + I/O
-.const BANK_NO_BASIC    = $36  // KERNAL + I/O, RAM at $A000–$BFFF
-.const BANK_NO_KERNAL   = $35  // I/O + RAM everywhere ($A000, $D000=I/O, $E000)
-.const BANK_NO_ROMS     = $34  // I/O only, RAM at $A000 and $E000
 .const CPU_PORT_DDR_DEFAULT = $2F  // Standard 8502 DDR for banking bits as outputs
-
-// ============================================================
-// VIC-II Color Palette Constants (Standard indices)
-// ============================================================
-.const COL_BLACK    = $00
-.const COL_WHITE    = $01
-.const COL_RED      = $02
-.const COL_CYAN     = $03
-.const COL_PURPLE   = $04
-.const COL_GREEN    = $05
-.const COL_BLUE     = $06
-.const COL_YELLOW   = $07
-.const COL_ORANGE   = $08
-.const COL_BROWN    = $09
-.const COL_LRED     = $0a
-.const COL_DGREY    = $0b
-.const COL_GREY     = $0c
-.const COL_LGREEN   = $0d
-.const COL_LBLUE    = $0e
-.const COL_LGREY    = $0f
 
 // ============================================================
 // C128 ownership manifest (single source of truth)

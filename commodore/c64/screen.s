@@ -13,6 +13,8 @@
 //   Row  24:     Input prompt line / spare
 //   Cols 0, 39:  Border columns (unused/clear)
 
+#import "../common/vic_palette_consts.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -25,24 +27,6 @@
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
 .const INPUT_ROW   = 24     // Input prompt row (row 23 now used by status bar)
-
-// Colors
-.const COL_BLACK    = $00
-.const COL_WHITE    = $01
-.const COL_RED      = $02
-.const COL_CYAN     = $03
-.const COL_PURPLE   = $04
-.const COL_GREEN    = $05
-.const COL_BLUE     = $06
-.const COL_YELLOW   = $07
-.const COL_ORANGE   = $08
-.const COL_BROWN    = $09
-.const COL_LRED     = $0a
-.const COL_DGREY    = $0b
-.const COL_GREY     = $0c
-.const COL_LGREEN   = $0d
-.const COL_LBLUE    = $0e
-.const COL_LGREY    = $0f
 
 // Screen code for space (clear)
 .const SC_SPACE     = $20
