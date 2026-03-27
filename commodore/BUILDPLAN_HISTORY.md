@@ -6,6 +6,48 @@
 
 ---
 
+## 2026-03-27 — `BUG-HELP-PAGING` multi-page help flow and overlay split ✅ FIXED
+
+### Scope Closed
+- Completed the multi-page `?` help flow on both C64 and C128 without reopening the broader "browser-style help system" scope.
+- Moved the feature out of the active backlog and closed the remaining tracker drift between the implementation record and the active build plan.
+
+### Root Cause
+- The active backlog still listed `BUG-HELP-PAGING` as open even though the implementation and verification had already landed.
+- The underlying help bug was the original single-page assumption:
+  - longer quick-reference help could not paginate cleanly
+  - the first shared follow-up design was too brittle across the C64/C128 overlay and key-handling contracts
+
+### What Changed
+1. **Help is now a real multi-page modal flow**
+   - The resident help pager advances on `SPACE` / `RETURN` and exits on `Q` / `ESC`.
+   - The first page keeps the quick-reference role; later pages carry the overflow content.
+2. **Help data/layout is now platform-correct**
+   - C64 uses a compact multi-page help overlay.
+   - C128 uses a dedicated 80-column help layout in `commodore/c128/ui_help_data_80.s`.
+   - The final C128 path restores a true two-page help flow instead of collapsing back to one page.
+3. **Overlay ownership was cleaned up so help no longer distorts the UI overlay budget**
+   - Help now lives in dedicated `OVL.HELP` overlays instead of bloating `OVL.UI`.
+   - C128 help is preloaded into its own Bank 1 cache slot so the runtime path does not disk-load on each open.
+4. **The runtime/keypath regressions from the first landing were closed**
+   - The paging loop lives in resident common code.
+   - Platform-specific escape handling and redraw/return behavior were corrected.
+   - Page tails and footer prompts now match the fixed 23-row renderer contract and the actual accepted keys.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -C commodore/c64 disk` (writes `OVL.HELP`)
+- `make -C commodore/c128 build128` (`232` asserts, `0` failed)
+- `make test128-fast` (passed)
+- `make -C commodore/c128 disk128` (writes preloaded `OVL.HELP`)
+- authoritative C128 verification outside the sandbox: `TEST_JOBS=1 ./run_tests128.sh` (`41 passed, 0 failed`)
+
+### Outcome
+- `BUG-HELP-PAGING` is closed.
+- The active backlog no longer lists it as open.
+- Multi-page quick-reference help is now implemented and verified on both platforms.
+
 ## 2026-03-26 — `AUDIT-IO-C128` callable residency audit and guard unification ✅ FIXED
 
 ### Scope Closed
