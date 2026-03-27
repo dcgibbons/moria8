@@ -7,6 +7,7 @@
 // `zp_input_count` is currently fixed to 1 for all commands.
 
 #import "../common/input_contract.s"
+#import "../common/input_tables.s"
 #import "../common/input_run_cancel.s"
 //
 // Note: GETIN returns PETSCII codes. We convert to command IDs
@@ -207,126 +208,10 @@ petscii_to_command:
 // ============================================================
 
 key_map_petscii:
-    // Vi-keys (movement) — uppercase PETSCII
-    .byte $4b   // K — north
-    .byte $4a   // J — south
-    .byte $48   // H — west
-    .byte $4c   // L — east
-    .byte $59   // Y — northwest
-    .byte $55   // U — northeast
-    .byte $42   // B — southwest
-    .byte $4e   // N — southeast
-    // Cursor keys (C64 PETSCII codes)
-    .byte $91   // Cursor up — north
-    .byte $11   // Cursor down — south
-    .byte $9d   // Cursor left — west
-    .byte $1d   // Cursor right — east
-    // Game commands
-    .byte $3e   // > — stairs down
-    .byte $3c   // < — stairs up
-    .byte $2e   // . — rest
-    .byte $53   // S — search
-    .byte $4f   // O — open
-    .byte $43   // C — close
-    .byte $47   // G — pick up (get)
-    .byte $2c   // , — pick up (alt)
-    .byte $44   // D — drop
-    .byte $49   // I — inventory
-    .byte $45   // E — equipment / eat
-    .byte $57   // W — wear/wield
-    .byte $54   // T — take off
-    .byte $51   // Q — quaff
-    .byte $52   // R — read scroll
-    .byte $41   // A — aim wand
-    .byte $5a   // Z — use staff (u is taken by NE movement)
-    .byte $4d   // M — cast spell (magic)
-    .byte $50   // P — pray
-    .byte $3f   // ? — help
-    // Special
-    .byte $58   // X — look / examine
-    .byte $46   // F — gain spell from book
-    // Shifted keys (C64 unshifted mode: SHIFT+letter = PETSCII $C1-$DA)
-    .byte $c3   // SHIFT+C — character info
-    .byte $d1   // SHIFT+Q — quit
-    .byte $c5   // SHIFT+E — eat
-    .byte $d3   // SHIFT+S — save and quit
-    .byte $c6   // SHIFT+F — fire ranged weapon
-    .byte $d4   // SHIFT+T — throw item
-    .byte $d2   // SHIFT+R — refuel lamp
-    .byte $c4   // SHIFT+D — bash
-    .byte $2b   // + — tunnel
-    .byte $2f   // / — monster recall
-    .byte $17   // CTRL+W — wizard mode
-    // Shifted vi-keys (running)
-    .byte $cb   // SHIFT+K — run north
-    .byte $ca   // SHIFT+J — run south
-    .byte $c8   // SHIFT+H — run west
-    .byte $cc   // SHIFT+L — run east
-    .byte $d9   // SHIFT+Y — run northwest
-    .byte $d5   // SHIFT+U — run northeast
-    .byte $c2   // SHIFT+B — run southwest
-    .byte $ce   // SHIFT+N — run southeast
+    :EmitBasePetsciiKeyMap()
 
 key_map_cmd:
-    // Movement
-    .byte CMD_MOVE_N
-    .byte CMD_MOVE_S
-    .byte CMD_MOVE_W
-    .byte CMD_MOVE_E
-    .byte CMD_MOVE_NW
-    .byte CMD_MOVE_NE
-    .byte CMD_MOVE_SW
-    .byte CMD_MOVE_SE
-    // Cursor keys
-    .byte CMD_MOVE_N
-    .byte CMD_MOVE_S
-    .byte CMD_MOVE_W
-    .byte CMD_MOVE_E
-    // Game commands
-    .byte CMD_STAIRS_DN
-    .byte CMD_STAIRS_UP
-    .byte CMD_REST
-    .byte CMD_SEARCH
-    .byte CMD_OPEN
-    .byte CMD_CLOSE
-    .byte CMD_PICKUP
-    .byte CMD_PICKUP
-    .byte CMD_DROP
-    .byte CMD_INVENTORY
-    .byte CMD_EQUIPMENT
-    .byte CMD_WEAR
-    .byte CMD_TAKEOFF
-    .byte CMD_QUAFF
-    .byte CMD_READ
-    .byte CMD_AIM
-    .byte CMD_USE
-    .byte CMD_CAST
-    .byte CMD_PRAY
-    .byte CMD_HELP
-    // Special
-    .byte CMD_LOOK
-    .byte CMD_GAIN
-    // Shifted keys
-    .byte CMD_CHAR_INFO
-    .byte CMD_QUIT
-    .byte CMD_EAT
-    .byte CMD_SAVE
-    .byte CMD_FIRE
-    .byte CMD_THROW
-    .byte CMD_REFUEL
-    .byte CMD_BASH
-    .byte CMD_TUNNEL
-    .byte CMD_RECALL
-    .byte CMD_WIZARD
-    // Shifted vi-keys (running)
-    .byte CMD_RUN_N
-    .byte CMD_RUN_S
-    .byte CMD_RUN_W
-    .byte CMD_RUN_E
-    .byte CMD_RUN_NW
-    .byte CMD_RUN_NE
-    .byte CMD_RUN_SW
-    .byte CMD_RUN_SE
+    :EmitBaseCommandKeyMap()
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

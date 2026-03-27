@@ -1959,3 +1959,131 @@ This file is a temporary working scratchpad.
 - Follow-up harness correction:
   - `commodore/c128/tests/test_main_loop128.s` still treated the second help-page draw as a failure
   - the runtime contract is two draws for a two-page help flow, so the harness threshold was raised to allow the second draw and fail only on an unexpected third call
+
+## Current Task
+- [x] Audit the current ownership of shared versus platform-local input tables across C64/C128 input code.
+- [x] Get a consultant-style second opinion on the safest scope and sequencing for `REF-INPUT-TABLES`.
+- [x] Record the final `REF-INPUT-TABLES` design before implementation starts.
+
+## `REF-INPUT-TABLES` Design
+
+### Goal
+- Finish centralizing genuinely shared input lookup data without reopening the platform-specific keyboard pipelines.
+- Remove the duplicated base PETSCII-to-command mapping data from `commodore/c64/input.s` and `commodore/c128/input128.s`.
+- Keep C128-only keypad / extended-key behavior explicitly local.
+
+### Current Code Facts
+- `commodore/common/input_contract.s` already centralizes:
+  - `CMD_*` command IDs
+  - `dir_dx`
+  - `dir_dy`
+  - `dir_opposite`
+- `commodore/common/input_run_cancel.s` already centralizes the debounced run-cancel state machine used by both platforms.
+- The remaining duplication is narrower than the backlog wording now suggests:
+  - `commodore/c64/input.s` and `commodore/c128/input128.s` each carry the same base PETSCII key map for vi-keys, cursor keys, main commands, and run commands
+  - both files also carry the same linear `petscii_to_command` scan body
+- `commodore/c128/input128.s` still has real platform-specific additions that must stay local:
+  - virtual keypad directions
+  - keypad `5` rest
+  - keypad `+` tunnel
+  - `KEY_ESC` quit shortcut
+- The scan/normalization front half is intentionally different by platform:
+  - C64 uses KERNAL `GETIN`
+  - C128 uses direct CIA scan, virtual keypad codes, and Ctrl-chord rescue
+
+### Scope Boundary
+- In scope:
+  - one shared source of truth for the base PETSCII-to-`CMD_*` map used by both platforms
+  - optionally one shared generic lookup body if it can be adopted without pointer plumbing or new scratch-state requirements
+  - keeping the C128 extension tail local and obvious
+- Out of scope:
+  - `input_get_key`, `input_get_key_fast`, CIA scan, `GETIN`, shift handling, or Ctrl-chord normalization
+  - run-cancel behavior, which is already shared
+  - a broader `REF-CONSTS` sweep
+  - `REF-HAL` platform-service cleanup
+
+### Preferred Implementation Shape
+1. Add a new common include such as `commodore/common/input_tables.s` rather than further bloating `input_contract.s`.
+2. Make that file the single owner of the shared base key-map entries.
+3. Prefer one pair-driven or macro-driven key-map definition over manually duplicated parallel tables:
+   - avoid maintaining the same PETSCII/command rows in two platform files
+   - keep the emitted order deterministic so the existing linear scan still works
+4. Keep platform file ownership simple:
+   - C64 emits only the shared base entries
+   - C128 emits the shared base entries plus a short local extension tail for keypad / `ESC`
+5. Only share the `petscii_to_command` routine if it stays trivial:
+   - no pointer-based generic search
+   - no extra zero-page contract
+   - no indirection that makes the runtime path harder to inspect than the current straight-line scan
+
+### Why This Shape
+- Most of `REF-INPUT-TABLES` is already done by the existing `input_contract.s` / `input_run_cancel.s` split.
+- The remaining maintainability win is in removing the duplicated base mapping data, not in re-architecting platform input.
+- A table-first cleanup captures almost all of the value with very low behavior risk.
+- A more generic lookup abstraction would add complexity, scratch-state pressure, and another failure surface without solving a real current problem.
+
+### Sequencing Relative To Other Open Work
+- `REF-INPUT-TABLES` should not block on `REF-HAL`.
+- Reason:
+  - `REF-HAL` is about shared platform service hooks and runtime call surfaces
+  - this item is just ownership cleanup for input lookup data
+- `REF-INPUT-TABLES` should also stay separate from `REF-CONSTS`.
+- Reason:
+  - `CMD_*` input constants are already centralized
+  - the remaining `REF-CONSTS` work is broader (`SC_*`, `COL_*`, and other neutral constants)
+  - folding this item into `REF-CONSTS` would blur a now-small, self-contained cleanup
+- If desired, `REF-INPUT-TABLES` can land before `REF-CONSTS` as a narrow follow-up to `AUDIT-P19`, or be folded into the first `REF-CONSTS` patch only if the implementation remains strictly table-only.
+
+### Key Risks
+- Changing table order or alignment would silently remap commands.
+- Moving shared data between files can still change segment sizes, so both C64 and C128 builds need fresh boundary verification.
+- Over-generalizing the lookup helper could force extra indirection or scratch-state for no meaningful gain.
+- Hiding the C128 keypad / `ESC` tail inside a too-generic shared layer would make platform-specific behavior harder to review and easier to regress.
+
+### Verification Strategy
+1. Rebuild both targets and inspect the emitted segment/assert output.
+2. Prove one common source now owns the shared base PETSCII-to-command entries.
+3. Prove C64 no longer carries a local copy of that base map.
+4. Prove C128 keeps only the platform-specific extension tail locally.
+5. Run the existing C64 suite so shared letter/cursor/command mappings stay green.
+6. Run focused C128 input coverage plus the fast unit suite so keypad / `ESC` behavior stays correct.
+
+### Smallest High-Value Acceptance Gates
+- `make -C commodore/c64 build`
+- `bash commodore/c64/run_tests.sh`
+- `make -B -C commodore/c128 build128`
+- `TEST_FILTER='input128' bash commodore/c128/run_tests128.sh`
+- `make test128-fast`
+
+### Consultant Review
+- Consultant verdict: treat `REF-INPUT-TABLES` as a narrow table-ownership cleanup, not a second input-architecture rewrite.
+- Strongest recommendation:
+  - keep the hardware scan and modifier normalization fully platform-local
+  - centralize only the shared base PETSCII mapping data and, at most, the trivial lookup body
+- The consultant also recommended keeping this independent from the two neighboring backlog items:
+  - do not expand it into `REF-HAL`
+  - do not absorb it into the broader `REF-CONSTS` sweep unless the implementation remains a tiny table-only change
+- Preferred acceptance bar:
+  - one shared base key map
+  - C128 keypad / `ESC` tail still local
+  - existing C64 and focused C128 input tests still green
+
+### Implementation Review
+- Completed.
+- Added `commodore/common/input_tables.s` as the single owner of the shared base PETSCII-to-command map entries.
+- Retargeted both `commodore/c64/input.s` and `commodore/c128/input128.s` to import that shared file instead of carrying duplicate base tables locally.
+- Kept the C128-only extension tail explicitly local in `commodore/c128/input128.s`:
+  - keypad directions
+  - keypad `5` rest
+  - keypad `+` tunnel
+  - `KEY_ESC` quit shortcut
+- Kept the platform-specific scan and normalization logic unchanged:
+  - C64 still uses the KERNAL `GETIN` path
+  - C128 still uses CIA scanning, keypad virtual codes, and Ctrl-chord rescue
+- Left the trivial linear `petscii_to_command` lookup body in place on each platform, matching the design choice to avoid over-generalizing the runtime path for a small data-only cleanup.
+- Verification:
+  - `make -C commodore/c64 build` passed with `74` asserts and `0` failures
+  - `bash commodore/c64/run_tests.sh` passed with `33 passed, 0 failed (of 33 suites)`
+  - `make -B -C commodore/c128 build128` passed with `232` asserts and `0` failures
+  - focused C128 input gate outside the sandbox: `TEST_FILTER='input128' TEST_JOBS=1 bash commodore/c128/run_tests128.sh` passed with `1 passed, 0 failed`
+  - `make test128-fast` passed

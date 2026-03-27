@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-03-27 — `REF-INPUT-TABLES` shared base PETSCII map ownership cleanup ✅ COMPLETE
+
+### Scope Closed
+- Finished the remaining shared input-table cleanup without reopening the platform-specific keyboard architecture.
+- Closed the backlog item by centralizing the duplicated base PETSCII-to-command map while leaving C128-only keypad and escape behavior explicit and local.
+
+### Root Cause
+- `commodore/common/input_contract.s` and `commodore/common/input_run_cancel.s` had already centralized the command IDs, direction tables, and run-cancel state machine.
+- The remaining drift was narrower:
+  - `commodore/c64/input.s` and `commodore/c128/input128.s` still each carried the same base PETSCII map for vi keys, cursor keys, main commands, and run commands
+  - only the C128 keypad / extended-key tail was truly platform-specific
+
+### What Changed
+1. **One shared file now owns the base PETSCII map**
+   - Added `commodore/common/input_tables.s`.
+   - It emits the shared base PETSCII entries and matching `CMD_*` entries used by both platforms.
+2. **Both platform input files now consume that shared base map**
+   - `commodore/c64/input.s`
+   - `commodore/c128/input128.s`
+   - The duplicated local base tables were removed in favor of the shared macro-backed definitions.
+3. **C128-only extension behavior stayed local and reviewable**
+   - `commodore/c128/input128.s`
+   - Keypad directions, keypad rest/tunnel shortcuts, and `KEY_ESC` quit remain in the platform file as the extension tail.
+4. **The input architecture boundary did not expand**
+   - The KERNAL `GETIN` path on C64 is unchanged.
+   - The CIA scan, keypad virtual-code path, and Ctrl-chord rescue on C128 are unchanged.
+   - The trivial `petscii_to_command` lookup body stayed local, avoiding extra pointer plumbing for a small table-ownership cleanup.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -B -C commodore/c128 build128` (`232` asserts, `0` failed)
+- focused C128 input gate outside the sandbox: `TEST_FILTER='input128' TEST_JOBS=1 bash commodore/c128/run_tests128.sh` (`1 passed, 0 failed`)
+- `make test128-fast` (passed)
+
+### Outcome
+- `REF-INPUT-TABLES` is complete.
+- The shared base input map now has one owner.
+- C128 keypad and `ESC` behavior remain platform-local and fully covered by the focused C128 input gate.
+
 ## 2026-03-27 — `BUG-HELP-PAGING` multi-page help flow and overlay split ✅ FIXED
 
 ### Scope Closed

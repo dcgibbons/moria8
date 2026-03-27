@@ -550,3 +550,10 @@
 - **Root Cause:** I stopped once the data was correct and the tests passed, without judging whether the spacing actually read well as a composed 80-column page.
 - **Resolution:** For visible UI copy/layout work, review the actual rendered balance: spacing between columns, whitespace around legends, and whether grouped elements read as intentional blocks.
 - **Rule:** **For text-mode UI layout changes, do not stop at “correct data.” Check that the rendered spacing and grouping look deliberate on the target screen.**
+
+## 2026-03-27 — When closing a backlog item, update the active plan and the history archive in the same pass
+
+- **Issue:** I closed `BUG-HELP-PAGING` in the implementation record but left `commodore/BUILDPLAN.md` showing it as open, which made the active backlog inaccurate.
+- **Root Cause:** I treated the task log as sufficient proof of closure and did not reconcile the project-facing backlog docs that are supposed to reflect current state.
+- **Resolution:** Whenever a build-plan item is finished, update both `commodore/BUILDPLAN.md` and `commodore/BUILDPLAN_HISTORY.md` together before declaring the work closed.
+- **Rule:** **A completed backlog item is not actually closed until the active plan removes it and the history archive records it in the same pass.**
