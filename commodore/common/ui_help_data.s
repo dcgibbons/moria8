@@ -1,8 +1,10 @@
 #importonce
 // ui_help_data.s — Help screen string data (main RAM)
 //
-// Packed format: [type_byte] [string_data...] [$00] per line, 23 lines.
-// The banked renderer walks this data sequentially.
+// Packed page format:
+//   help_pages = [page_count] [page_ptr_lo/hi]...
+//   each page  = [type_byte] [string_data...] [$00] repeated for 23 lines.
+// The banked renderer walks the selected page sequentially.
 // Border strings are drawn procedurally by ui_help.s.
 //
 // Type bytes: 0=CONTENT 1=HEADER 2=BLANK

@@ -1726,3 +1726,236 @@ This file is a temporary working scratchpad.
     - outside the sandbox, `TEST_FILTER='memory128|main_loop128' TEST_FAIL_FAST=1 TEST_JOBS=1 ./run_tests128.sh` passes
   - authoritative closure:
     - tester: `TEST_JOBS=1 ./run_tests128.sh` outside the sandbox → `=== Results: 41 passed, 0 failed (of 41 suites) ===`
+
+## Current Task
+- [x] Inspect the live help command path, packed help data layout, and current C64/C128 test coverage.
+- [x] Compare the port's current `?` help behavior against local VMS-Moria and Umoria help behavior.
+- [x] Draft the bounded `BUG-HELP-PAGING` design and verification plan.
+- [x] Get consultant review on the design and fold feedback into the final phase split and risk list.
+- [x] Record the final planning scope here before any implementation starts.
+
+## `BUG-HELP-PAGING` Design
+
+### Goal
+- Extend the current Commodore `?` help screen so it can paginate cleanly without regressing the existing fast modal-help flow.
+- Preserve the current direct in-game quick-reference intent for `?`, but stop treating one 23-line screen as the hard maximum.
+- Keep the design compatible with the existing C64 main-image budget and the C128 `OVL.UI` overlay contract.
+
+### Upstream Findings
+- Local VMS-Moria keeps `?` as a one-page quick reference and uses separate `h` / `moria_help` flows for deeper topic help.
+- Local Umoria routes `?` to a paged text-help file viewer that shows 23 lines at a time and advances on keypress.
+- The current Moria8 `?` behavior is closer in spirit to the VMS quick-reference panel than to Umoria's file-driven help browser.
+- Therefore `BUG-HELP-PAGING` should be treated as "multi-page quick reference inside the current modal help UI," not as a requirement to recreate Umoria's disk-backed general help subsystem.
+
+### Current Port Findings
+- `cmd_show_help_view` in `commodore/common/game_loop_helpers.s` enters the help overlay, waits for a dismiss key, and restores gameplay view.
+- `ui_help_display` in `commodore/common/ui_help.s` renders exactly one fixed page:
+  - top frame + title
+  - 23 packed content rows from `help_lines`
+  - bottom frame + `Press any key`
+- The help content is a single sequential packed table in `commodore/common/ui_help_data.s`.
+- On C64, help data lives in the main image and `help_lines_src_lo/hi` points at it during startup.
+- On C128, the same help data is imported into `OVL.UI` and explicitly asserted to stay inside `$E000-$EFFF`.
+- Existing automated coverage proves:
+  - the help view renders expected title/body/footer text on C64
+  - the help command remains a no-turn modal UI flow and redraws correctly on C128
+  - the current dismiss path depends on keyboard-buffer clearing / key-release gating and must not regress
+
+### Design Boundary
+- Keep `?` as the single help entry point for now.
+- Do not add disk-backed external help files in this phase.
+- Do not add topic search, scrolling within a page, or a new VMS-style `h` command in this phase.
+- Do not change the current bank/overlay ownership model for help.
+- Prefer a data-driven page table over duplicating multiple bespoke help renderers.
+
+### Proposed Phase A
+- Refactor the help data format from "one fixed 23-line table" to "N pages of 23-line tables" while preserving the existing per-line packed encoding.
+- Add page metadata in `ui_help_data.s`:
+  - page count
+  - page title pointer or page-local title string
+  - compact page-offset / page-pointer table for each page
+- Keep `help_draw_line` and border rendering mostly unchanged; only the page selection should change.
+- Update `ui_help_display` to render the currently selected page from the metadata table instead of assuming one hard-coded `help_lines` block.
+- Keep page content resident where it already lives on each platform:
+  - C64: main image data
+  - C128: `OVL.UI` data
+
+### Paging Interaction Contract
+- First page should preserve the current quick-reference role and existing visible strings as much as practical.
+- If only one page exists, behavior stays effectively unchanged.
+- If multiple pages exist:
+  - non-final pages show a footer/prompt that indicates continuation, e.g. `SPACE next  ESC quit`
+  - final page shows an exit prompt, e.g. `ESC/SPACE done`
+- `SPACE`, `RETURN`, and likely `?` should advance to the next help page.
+- `ESCAPE`, `Q`, and platform cancel keys should dismiss help immediately from any page.
+- After the final page, advancing should exit help and restore gameplay view exactly once.
+- C128 key-release gating and the C64 keyboard-buffer clear need to happen in a way that does not auto-skip pages from the original `?` keypress.
+- Do not add backward paging or wraparound in Phase A unless the implementation proves essentially free; the minimum viable contract is forward paging plus explicit dismiss.
+
+### Preferred Implementation Split
+1. Keep `ui_help_display` as a pure "draw one selected page" routine.
+2. Add a small help pager driver in common code that:
+   - initializes page index to 0
+   - draws a page
+   - waits for an allowed paging/dismiss key
+   - loops until dismiss or end-of-pages
+3. Let `cmd_show_help_view` call that pager driver instead of assuming one draw + one key + exit.
+
+### Why This Split
+- It preserves the existing testable seam where help drawing is separate from gameplay restore.
+- It avoids reloading the overlay between pages on C128.
+- It keeps the paging policy local to the help command instead of infecting generic modal-return helpers.
+- It allows focused rendering tests to keep calling a one-page draw entry point if that remains useful.
+
+### Data/Layout Guidance
+- Reuse the current packed line encoding (`HTYPE_*`, `CT`, `CH`, `CK`, `CD`) so new pages only add small pointer/count metadata.
+- Keep all pages at 23 content rows to preserve the current frame and viewport assumptions on both 40-column backends.
+- Reserve the first page for the current "command reference" overview.
+- Put overflow content onto later pages instead of trying to shrink the existing command labels aggressively.
+- If later pages need different titles, add per-page title pointers; if not, reuse `Command Reference`.
+
+### Risks
+- C64 main-image growth: extra help pages add resident bytes and could pressure `MAP_BASE` headroom. Live slack is only `191` bytes.
+- C128 UI overlay growth: extra help pages consume `OVL.UI` space and must stay within the existing `$E000-$EFFF` assertion. Live slack is only `290` bytes.
+- Dismiss semantics: naive paging can accidentally consume the original `?` keypress and skip page 1, or consume the advance key twice on C128.
+- Test fragility: existing tests that assume a single footer string or single dismiss key may need controlled expansion rather than blanket rewrites.
+- Scope drift: a disk-backed/browser-style help system would pull in loader/state complexity far beyond the memory budget and should be deferred to a separate feature if ever needed.
+
+### Verification
+- Add explicit byte-budget gates for this feature before landing implementation:
+  - C64 main image must remain below `MAP_BASE`
+  - C128 `OVL.UI` must remain below `$F000`
+- Add focused C64 help-view coverage for:
+  - page 1 title/body/footer strings
+  - page 2 body/footer strings
+  - page count boundary: advancing from final page exits
+  - dismiss keys exit immediately from page 1 and page N
+- Add focused command-flow coverage for:
+  - initial `?` does not auto-skip page 1
+  - `SPACE`/`RETURN` advances exactly one page
+  - `ESCAPE` exits without consuming a turn
+  - gameplay view restore still occurs exactly once on exit
+- Extend C128 modal-help coverage for:
+  - page advance path
+  - final-page exit path
+  - preserved `input_wait_release` / redraw behavior
+- Rebuild and inspect the emitted memory map / symbol placement for help code and help data on both targets after the change.
+- Rebuild and run the standard C64 suite plus at least fast C128 coverage after the implementation.
+
+### Consultant Review
+- Completed.
+- Consultant review agreed that the parity target should remain a VMS-style paged quick-reference panel, not an Umoria-style file-backed help browser.
+- The strongest correction was to treat memory as the primary constraint:
+  - C64 main-image slack is only `191` bytes
+  - C128 `OVL.UI` slack is only `290` bytes
+- The review recommended a compact page-offset/pointer table rather than duplicated fixed-size page blocks.
+- The review also tightened the behavioral boundary:
+  - keep `ui_help_display` as a draw-one-page primitive
+  - keep pager state local to a tiny help-specific driver
+  - avoid adding backward paging, wraparound, or browser-style state unless the minimal forward-paging version proves essentially free
+
+### Final Planning Scope
+- Phase A will implement only forward multi-page quick-reference help within the existing modal overlay flow.
+- It will not implement disk-backed help files, topic browsing, search, scrollback, or a new dedicated help command.
+- Acceptance requires both behavior proof and memory proof:
+  - paging/dismiss/restore behavior verified on C64 and C128
+  - C64 main image still below `MAP_BASE`
+  - C128 `OVL.UI` still below `$F000`
+
+### Implementation Review
+- The original shared paged-help follow-up was still too cramped and brittle:
+  - C128 page 2 was using a 40-column-style layout inside an 80-column screen
+  - the shared footer degraded to a useless bare `Press`
+  - C64 page 2 could fall through into trailing table bytes when the fixed 23-row contract was underfilled
+- Final follow-up architecture:
+  - help is now a dedicated `OVL.HELP` overlay on both targets
+  - the generic pager remains resident in common code
+  - C64 keeps a compact multi-page help flow inside `OVL.HELP`
+  - C128 now uses a dedicated 80-column help page in `commodore/c128/ui_help_data_80.s`
+  - `OVL.UI` is back to inventory/equipment/character/wizard only
+- Final overlay outcome:
+  - C64:
+    - `Help overlay: 1387 bytes at $E000-$E56B`
+    - `UI overlay: 1 byte at $E000-$E001` (reserved placeholder to preserve shared overlay numbering)
+  - C128:
+    - `Help overlay: 1320 bytes at $E000-$E528`
+    - `UI overlay: 2756 bytes at $E000-$EAC4`
+    - `Program image: $1C01-$DF99`
+- Behavioral cleanup included:
+  - the page-2 blank tail now emits the full 14 blank rows required by the fixed 23-line renderer contract
+  - help footers now state the actual keys instead of a truncated `Press`
+  - the help pager now advances on `SPACE` / `RETURN` and exits on `Q` / `ESC`, matching the displayed footer contract
+- Verification completed:
+  - `make -C commodore/c64 build` passed with `74` asserts and `0` failures
+  - `bash commodore/c64/run_tests.sh` passed with `33 passed, 0 failed (of 33 suites)`
+  - `make -C commodore/c64 disk` passed and writes `OVL.HELP`
+  - `make -B -C commodore/c128 build128` passed with `231` asserts and `0` failures
+  - `make test128-fast` passed
+  - authoritative C128 verification outside the sandbox: `TEST_JOBS=1 ./run_tests128.sh` passed with `41 passed, 0 failed (of 41 suites)`
+- Final C128 follow-up after user review:
+  - the first 80-column pass was still wrong because it collapsed help to one page, allowed several right-column notes to wrap badly, and skipped help-overlay preload/caching
+  - the final correction restored a true two-page C128 help flow in `commodore/c128/ui_help_data_80.s`
+  - C128 help now uses a dedicated Bank 1 cache slot at `$2000-$2FFF`, so `OVL.HELP` is preloaded alongside the other overlays instead of disk-loading each time
+  - final C128 memory outcome after that correction:
+    - `Help overlay: 1322 bytes at $E000-$E52A`
+    - `UI overlay: 2756 bytes at $E000-$EAC4`
+    - `Program image: $1C01-$DF95`
+  - final verification repeated after the cache/layout correction:
+    - `make -C commodore/c128 build128` passed with `232` asserts and `0` failures
+    - `make test128-fast` passed
+    - `make -C commodore/c128 disk128` passed and writes preloaded `OVL.HELP`
+    - authoritative C128 verification outside the sandbox again passed: `TEST_JOBS=1 ./run_tests128.sh` → `41 passed, 0 failed (of 41 suites)`
+- Latest C128 page-2 polish:
+  - page 2 now uses a graphical movement-key diagram patterned after classic Moria help, with both keypad directions and letter directions shown side by side
+  - the notes/prompts copy was tightened so the diagram fits cleanly in the 80-column layout without relying on wraps
+  - the first attempt to preserve diagonal connectors with punctuation still looked wrong at runtime, so the final version now uses a clean glyph-independent 3x3 key grid instead of diagonal art
+  - after live screenshot review, the first grid pass was still too cramped, so the final C128 layout widens the 3x3 blocks and inserts breathing room between the key grid, the `stay` row, and the diagonal legend
+  - final C128 memory outcome after the graphical page-2 pass:
+    - `Help overlay: 1508 bytes at $E000-$E5E4`
+    - `UI overlay: 2756 bytes at $E000-$EAC4`
+    - `Program image: $1C01-$DF95`
+  - verification repeated after the graphical page-2 pass:
+    - `make -C commodore/c128 build128` passed with `232` asserts and `0` failures
+    - `make test128-fast` passed
+    - authoritative C128 verification outside the sandbox again passed: `TEST_JOBS=1 ./run_tests128.sh` → `41 passed, 0 failed (of 41 suites)`
+    - `bash commodore/c64/run_tests.sh` still passed with `33 passed, 0 failed (of 33 suites)`
+- Latest C64 page-2 polish:
+  - C64 page 2 now uses the same graphical movement-key treatment in a 40-column-safe form, with the roguelike letter directions shown as a compact diagram
+  - the C64 version intentionally omits the numeric keypad for now and keeps the prompt/selection copy in the lower half of the page
+  - the first punctuation-only diagonal fallback still looked wrong at runtime, so the final C64 page uses a compact glyph-independent 3x3 letters grid plus explicit diagonal labels
+  - final C64 memory outcome after the letters-diagram pass:
+    - `Help overlay: 1490 bytes at $E000-$E5D2`
+    - `Program: $080E-$CBAA`
+  - verification repeated after the C64 page-2 update:
+    - `make -C commodore/c64 build` passed with `74` asserts and `0` failures
+    - `bash commodore/c64/run_tests.sh` passed with `33 passed, 0 failed (of 33 suites)`
+    - `make -C commodore/c128 build128` passed with `232` asserts and `0` failures
+    - `make test128-fast` passed
+    - authoritative C128 verification outside the sandbox still passed: `TEST_JOBS=1 ./run_tests128.sh` → `41 passed, 0 failed (of 41 suites)`
+- The first landing was not correct at runtime:
+  - C64 could enter help and JAM instead of drawing text
+  - C128 could draw a junk second page and ignored `ESC`
+  - the original test coverage was too renderer-focused and missed the real platform trampolines / key contracts
+- Final implementation shape after the correction:
+  - `ui_help_display` stays draw-only inside `OVL.UI`
+  - the paging loop moved back to resident common code in `cmd_show_help_view`
+  - target trampolines now load `OVL.UI`, seed a resident `help_pages_src_lo/hi`, draw one page, and return
+  - both help pages live inside `OVL.UI` on both targets
+  - `ESC` handling now uses the platform keycode contract (`KEY_ESC` on C128, `$1B` on C64)
+- Why this shape held up:
+  - it avoids waiting for input while still inside the C64 overlay execution context
+  - it keeps C128 page data out of the I/O hole by ensuring page pointers always resolve inside the loaded UI overlay
+  - it preserves the original design goal that the renderer and pager remain separate seams
+- Final memory / build outcome:
+  - C64 shell suite passes with the paged help path in place
+  - C128 main program stays below the map region
+  - C128 `OVL.UI` now exactly fits the 4 KB slot:
+    - `UI overlay: 4096 bytes at $E000-$F000`
+    - `Program image: $1C01-$DF69`
+- Verification completed:
+  - `make -B -C commodore/c128 build128` passed with `230` asserts and `0` failures
+  - `make test128-fast` passed, including `main_loop128`
+  - `bash commodore/c64/run_tests.sh` passed with `33 passed, 0 failed (of 33 suites)`
+- Follow-up harness correction:
+  - `commodore/c128/tests/test_main_loop128.s` still treated the second help-page draw as a failure
+  - the runtime contract is two draws for a two-page help flow, so the harness threshold was raised to allow the second draw and fail only on an unexpected third call

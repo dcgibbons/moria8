@@ -140,6 +140,13 @@ delete_savefile:
 
 tramp_ui_help_display:
     inc test_help_calls
+    inc test_help_clear_calls
+    lda #2
+    sta help_page_count
+    lda test_help_calls
+    cmp #3
+    bcc *+5
+    jmp test_fail
     rts
 
 tramp_ui_inv_display:
@@ -372,6 +379,8 @@ turn_post_action:
 
 ui_help_clear_all:
     jmp test_ui_help_clear_all
+help_page_idx: .byte 0
+help_page_count: .byte 1
 
 tramp_ui_recall:
     inc test_recall_calls
@@ -439,7 +448,7 @@ c128_cache_test_skip_overlay: .byte 0
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000
 .const SFX_PICKUP = 0
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
@@ -456,13 +465,13 @@ ovl_ready_mask:
 .const PL_SPELL_TYPE = 60
 .const PL_TODMG = 41
 current_overlay: .byte 0
-ovl_fn_addr_lo: .byte 0, 0, 0, 0
-ovl_fn_addr_hi: .byte 0, 0, 0, 0
-ovl_fn_len:     .byte 0, 0, 0, 0
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
+ovl_fn_addr_lo: .byte 0, 0, 0, 0, 0, 0
+ovl_fn_addr_hi: .byte 0, 0, 0, 0, 0, 0
+ovl_fn_len:     .byte 0, 0, 0, 0, 0, 0
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 // Local test map stub: keep the synthetic map below $C000 so it stays in plain RAM
 // even with C128 I/O visible. Width/height must match live MAP_COLS/MAP_ROWS.
@@ -537,6 +546,9 @@ test_force_overlay_tier_reset: .byte 0
 test_overlay_load_calls: .byte 0
 test_spawn_tier_seen: .byte 0
 test_spawn_overlay_seen: .byte 0
+test_key_script: .fill 4, 0
+test_key_len: .byte 0
+test_key_idx: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -590,6 +602,8 @@ reset_state:
     sta test_overlay_load_calls
     sta test_spawn_tier_seen
     sta test_spawn_overlay_seen
+    sta test_key_len
+    sta test_key_idx
     sta current_overlay
     sta zp_game_flags
     sta zp_eff_confuse
@@ -704,6 +718,14 @@ test_input_wait_release:
 
 test_input_get_key:
     inc test_get_key_calls
+    ldx test_key_idx
+    cpx test_key_len
+    bcs !default+
+    lda test_key_script,x
+    inx
+    stx test_key_idx
+    rts
+!default:
     lda #$20
     rts
 
@@ -861,21 +883,26 @@ test_entry:
     sta test_cmd_script
     lda #1
     sta test_cmd_len
+    lda #2
+    sta test_key_len
+    lda #$20
+    sta test_key_script + 0
+    sta test_key_script + 1
     jsr run_case
     lda test_help_calls
-    cmp #1
+    cmp #2
     beq *+5
     jmp test_fail
     lda test_wait_release_calls
-    cmp #1
+    cmp #2
     beq *+5
     jmp test_fail
     lda test_get_key_calls
-    cmp #1
+    cmp #2
     beq *+5
     jmp test_fail
     lda test_help_clear_calls
-    cmp #1
+    cmp #3
     beq *+5
     jmp test_fail
     lda test_status_calls

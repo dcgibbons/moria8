@@ -13,6 +13,8 @@
 .segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
+.segmentdef HelpOverlay       [outPrg="out/ovl.help",  start=$e000, min=$e000, max=$efff]
+.segmentdef UiOverlay         [outPrg="out/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 
 .pc = $0801 "BASIC Stub"
@@ -184,11 +186,6 @@ restart_entry:
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
-
-    lda #<help_lines
-    sta help_lines_src_lo
-    lda #>help_lines
-    sta help_lines_src_hi
 
     // Clear screen now so stale status bar (rows 21–23) from any prior session
     // is gone before KERNAL LOAD starts printing "SEARCHING...".
@@ -577,9 +574,18 @@ tramp_reu_show_status:
 #import "../common/ui_help_clear.s"
 
 // ============================================================
-// UI screen trampolines — SEI + bank out KERNAL, call $F000+
+// UI screen trampolines — help loads from $E000 overlay, others call $F000+
 // ============================================================
 tramp_ui_help_display:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcc !loaded+
+    jmp tramp_sr_epilogue
+!loaded:
+    lda #<help_pages
+    sta help_pages_src_lo
+    lda #>help_pages
+    sta help_pages_src_hi
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
@@ -724,9 +730,6 @@ tramp_game_over:
     sta $01
     cli
     rts
-
-// Help screen string data — in main RAM (too large for $F000 banked region)
-#import "../common/ui_help_data.s"
 
 // ============================================================
 // game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
@@ -878,7 +881,6 @@ banked_payload:
     #import "../common/ego_items.s"
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
-    #import "../common/ui_help.s"
     #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
@@ -929,6 +931,27 @@ ovl_start_end:
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
+
+// ============================================================
+// Help overlay — dedicated help modal screen at $E000
+// ============================================================
+.segment HelpOverlay
+    #import "../common/ui_help_data.s"
+    #import "../common/ui_help_page2_data.s"
+    #import "../common/ui_help.s"
+ovl_help_end:
+.print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
+.assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
+
+// ============================================================
+// UI overlay — reserved placeholder on C64 for shared overlay numbering
+// ============================================================
+.segment UiOverlay
+ovl_ui_stub:
+    rts
+ovl_ui_end:
+.print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
+.assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true
 
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000

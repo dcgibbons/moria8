@@ -837,6 +837,7 @@ contract_patterns = {
     "startup_overlay": re.compile(r':C128AuditStartupOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "town_overlay": re.compile(r':C128AuditTownOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "help_overlay": re.compile(r':C128AuditHelpOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
@@ -868,6 +869,7 @@ required_labels = [
     "ovl_start_end",
     "ovl_town_end",
     "ovl_death_end",
+    "ovl_help_end",
     "ovl_ui_end",
     "ovl_gen_end",
 ]
@@ -928,6 +930,7 @@ overlay_limits = {
     "startup_overlay": labels.get("ovl_start_end"),
     "town_overlay": labels.get("ovl_town_end"),
     "death_overlay": labels.get("ovl_death_end"),
+    "help_overlay": labels.get("ovl_help_end"),
     "ui_overlay": labels.get("ovl_ui_end"),
     "dungeon_overlay": labels.get("ovl_gen_end"),
 }

@@ -91,6 +91,7 @@ store_restock_all:
 store_enter:
     rts
 
+ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:

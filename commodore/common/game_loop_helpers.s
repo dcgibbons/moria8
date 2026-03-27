@@ -3,6 +3,15 @@
 // Imported in-place from game_loop.s to preserve segment placement while
 // narrowing the main loop file to orchestration and command bodies.
 
+.const HELP_KEY_Q = $51
+.const HELP_KEY_SPACE = $20
+.const HELP_KEY_RETURN = $0d
+#if C128
+.const HELP_KEY_ESC = KEY_ESC
+#else
+.const HELP_KEY_ESC = $1b
+#endif
+
 // ============================================================
 // Shared UI-only command flows
 // ============================================================
@@ -16,13 +25,37 @@ cmd_show_character_view:
     jmp vp_render_status_loop
 
 cmd_show_help_view:
-    jsr tramp_ui_help_display
     lda #0
-    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
+    sta help_page_idx
+!help_page_loop:
+    jsr tramp_ui_help_display
+!help_key_loop:
 #if C128
+    jsr input_wait_release
+#else
+    lda #0
+    sta KBDBUF_COUNT
     jsr input_wait_release
 #endif
     jsr input_get_key
+    cmp #HELP_KEY_Q
+    beq !help_done+
+    cmp #HELP_KEY_ESC
+    beq !help_done+
+    cmp #HELP_KEY_SPACE
+    beq !help_advance+
+    cmp #HELP_KEY_RETURN
+    beq !help_advance+
+    jmp !help_key_loop-
+!help_advance:
+    lda help_page_idx
+    clc
+    adc #1
+    cmp help_page_count
+    bcs !help_done+
+    inc help_page_idx
+    jmp !help_page_loop-
+!help_done:
     jmp ui_view_return_to_gameplay_view
 
 cmd_show_inventory_view:

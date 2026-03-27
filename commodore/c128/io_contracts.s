@@ -93,7 +93,7 @@
 :C128AuditTownOverlay("store_enter", store_enter)
 :C128AuditDeathOverlay("score_calculate", score_calculate)
 :C128AuditDeathOverlay("score_death_screen", score_death_screen)
-:C128AuditUiOverlay("ui_help_display", ui_help_display)
+:C128AuditHelpOverlay("ui_help_display", ui_help_display)
 :C128AuditUiOverlay("ui_char_display", ui_char_display)
 :C128AuditUiOverlay("ui_inv_display", ui_inv_display)
 :C128AuditUiOverlay("ui_equip_display", ui_equip_display)

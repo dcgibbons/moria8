@@ -1,5 +1,40 @@
 # Lessons Learned
 
+## 2026-03-27 — Platform-specific UI expansions must preserve the original modal contract, not just fit the screen
+
+- **Issue:** My first C128-specific help rewrite used the 80-column width, but it still failed the actual product contract: it wrapped badly, removed the second page entirely, and disk-loaded help each time instead of preloading it with the overlay cache.
+- **Root Cause:** I optimized for “fit more text now” and treated the help overlay as low-frequency enough to skip cache ownership, instead of preserving the existing pager behavior and looking for a real Bank 1 slot for the new overlay class.
+- **Resolution:** When widening a shared modal UI for C128, keep the behavioral contract intact first: if help was paged, keep it paged; if overlays are supposed to preload/cache, give the new overlay a real cache slot and verify the boot/preload path after the layout change.
+- **Rule:** **Do not treat a platform-specific wider layout as permission to change paging or preload behavior opportunistically. Preserve the modal contract, then use actual owned memory to support the new overlay.**
+
+## 2026-03-27 — Fixed-row UI page data should be generated to the declared line count, not hand-counted
+
+- **Issue:** C128 page 2 showed junk and the renderer could walk into adjacent table bytes because the help page claimed to be a fixed 23-line page but the data file stopped early.
+- **Root Cause:** The page-2 data hand-counted its blank tail and emitted only 8 blank rows while the renderer always consumes 23 rows. That let the reader fall through into the following metadata table and display garbage.
+- **Resolution:** For fixed-row UI page formats, generate the blank tail programmatically or otherwise assert the exact row count. Do not trust manual counting when the renderer consumes a hard-coded number of rows.
+- **Rule:** **If a modal UI renderer consumes a fixed number of rows, the data producer must emit that exact count mechanically or prove it with an assertion. Hand-counted filler rows are not reliable enough.**
+
+## 2026-03-26 — Shared modal-UI changes are not verified until the real platform trampolines and key contracts are exercised
+
+- **Issue:** I initially reported the paged-help work as fixed even though the live C64 help path could still JAM, the C128 second page could still render junk, and C128 `ESC` still did not dismiss help.
+- **Root Cause:** The coverage I leaned on was too renderer-focused and did not prove the real target-specific runtime contract: overlay load, bank visibility, resident-vs-overlay page pointers, and platform-specific keycodes (`KEY_ESC` on C128, `$1B` on C64).
+- **Resolution:** Keep the pager in resident common code, keep the overlay draw-only, seed overlay-local page tables explicitly through the target trampolines, and verify modal-help behavior through affected-platform command-flow tests and full platform suites before claiming the feature works.
+- **Rule:** **For shared modal UI work, do not treat direct renderer tests as sufficient. Prove the real platform trampoline path, the live keycode contract, and the authoritative affected-platform suites before saying the fix is done.**
+
+## 2026-03-26 — Shared C64/C128 UI changes are not verified until both target builds pass
+
+- **Issue:** I closed the help-paging work after the C64 fix and targeted C128 tests, but I had not re-run the authoritative C128 build after changing shared help data and overlay composition.
+- **Root Cause:** I treated the change like a mostly C64 memory problem after the resident overflow pivot, and I let the earlier C128 fast-suite result stand in for a fresh post-change layout check. That missed the fact that `OVL.UI` had grown to `4532` bytes and no longer fit the C128 `$E000-$EFFF` slot.
+- **Resolution:** After any shared UI/data change that affects overlay contents, rebuild both live targets and re-read the memory-map output before calling the work verified. Runtime tests are not a substitute for a fresh overlay-size check.
+- **Rule:** **For shared C64/C128 UI or overlay changes, do not stop at one target or at pre-change test results. Rebuild C64 and C128, check the live overlay sizes, and only then trust the test suite results.**
+
+## 2026-03-26 — Shared UI growth can break large C64 test images even when the main game still fits
+
+- **Issue:** After the help-paging change, I treated the later C64 suite stall as an open verification gap instead of immediately proving whether one of the large test images had crossed a hard segment boundary.
+- **Root Cause:** I verified the main game and several changed suites, but I did not re-check the largest downstream unit images that import broad common-module sets. `commodore/c64/tests/test_score.s` pulled in the full new help renderer even though help is not under test there, which pushed its resident test body to `$D00A` and into the I/O hole.
+- **Resolution:** When a shared UI/common module grows, inspect any large C64 test image memory maps, especially suites like `test_score.s` that import many subsystems. If a suite does not exercise the new UI path, stub it locally instead of linking the full renderer.
+- **Rule:** **After shared C64 UI growth, verify not only the main image but also the largest unit-test images for `$D000`/`$A000` boundary drift. Do not keep unused full-screen UI modules linked into tests that never call them.**
+
 ## 2026-03-25 — Rebuild the exact C128 target before trusting artifact-budget regressions
 
 - **Issue:** I treated one `c128_artifact_budget` failure as proof that the haggle change had pushed callable code into the `$D000-$DFFF` I/O hole.
@@ -494,3 +529,24 @@
 - **Root Cause:** `tier_check_transition` reused `$E000` for tier payloads and invalidated the overlay, but `level_change_generate_current` still called post-generation special-room helpers that lived in the dungeon-generation overlay window.
 - **Resolution:** After any C128 tier transition that can reclaim `$E000`, explicitly reload the required overlay before calling helpers that still execute from that window, and add a regression that proves the helper runs after the restore.
 - **Rule:** **On C128, once a step like `tier_load` reuses `$E000`, assume overlay-resident helpers are dead until the overlay is explicitly reloaded.**
+
+## 2026-03-27 — In Commodore text UIs, verify glyphs in the active screen-code charset instead of assuming ASCII punctuation survives
+
+- **Issue:** I used source-level `\` characters in the new C64/C128 help diagrams assuming they would render as clean diagonals.
+- **Root Cause:** The UI renderer writes screen codes, not PETSCII, and the active Commodore upper/graphics-style charset does not show a plain ASCII backslash for those codes.
+- **Resolution:** For pseudo-ASCII UI art, validate each punctuation glyph against the active screen-code charset and prefer screen-code-safe alternatives over “looks right in source” characters.
+- **Rule:** **On C64/C128 text screens, do not trust ASCII punctuation by inspection alone. If a glyph matters visually, verify it in the active screen-code charset before shipping it.**
+
+## 2026-03-27 — If the charset makes ASCII-art fragile, switch to a glyph-independent layout instead of stacking more punctuation hacks
+
+- **Issue:** After removing `\`, I still tried to preserve the diagonal look with alternate punctuation, and the result was visibly wrong on the real help screen.
+- **Root Cause:** I optimized for “keep the original line art” instead of stepping back and choosing a layout that does not depend on uncertain diagonal glyphs at all.
+- **Resolution:** When the active charset makes pseudo-ASCII art unreliable, prefer a clean grid or labeled layout that communicates the same information without fragile connector glyphs.
+- **Rule:** **On Commodore text UIs, if a diagram depends on ambiguous punctuation, redesign the diagram around stable glyphs instead of iterating through punctuation substitutes.**
+
+## 2026-03-27 — For UI layout changes, logical correctness is not enough; review the visual spacing as a composition
+
+- **Issue:** The first glyph-independent keypad layout was technically correct but still looked cramped and awkward on the live C128 help screen.
+- **Root Cause:** I stopped once the data was correct and the tests passed, without judging whether the spacing actually read well as a composed 80-column page.
+- **Resolution:** For visible UI copy/layout work, review the actual rendered balance: spacing between columns, whitespace around legends, and whether grouped elements read as intentional blocks.
+- **Rule:** **For text-mode UI layout changes, do not stop at “correct data.” Check that the rendered spacing and grouping look deliberate on the target screen.**

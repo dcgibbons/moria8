@@ -72,6 +72,7 @@ test_exit_trampoline:
 #import "../../common/ui_store.s"
 #import "../../common/ui_home.s"
 #import "../../common/ui_help_data.s"
+#import "../../common/ui_help_page2_data.s"
 #import "../../common/ui_help.s"
 #import "../../common/ui_trampoline_stubs.s"
 
@@ -143,10 +144,10 @@ test_start:
     ldx #$ff
     txs
 
-    lda #<help_lines
-    sta help_lines_src_lo
-    lda #>help_lines
-    sta help_lines_src_hi
+    lda #<help_pages
+    sta help_pages_src_lo
+    lda #>help_pages
+    sta help_pages_src_hi
 
     ldx #12
     lda #$ff
@@ -179,6 +180,10 @@ reset_shared_state:
     jsr screen_clear
 
     lda #0
+    sta help_page_idx
+    sta test_key_idx
+    sta test_key_len
+
     sta zp_cursor_row
     sta zp_cursor_col
     sta zp_store_idx
@@ -350,9 +355,9 @@ test_help_view:
     jsr reset_shared_state
     jsr ui_help_display
 
-    lda #<uh_title_str
+    lda #<help_title_str
     sta zp_ptr0
-    lda #>uh_title_str
+    lda #>help_title_str
     sta zp_ptr0_hi
     lda #0
     ldx #11
@@ -377,12 +382,43 @@ test_help_view:
     jsr assert_screen_string
     bcc !fail+
 
+    lda #<uh_next_key_str
+    sta zp_ptr0
+    lda #>uh_next_key_str
+    sta zp_ptr0_hi
+    lda #24
+    ldx #5
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #1
+    sta help_page_idx
+    jsr ui_help_display
+
+    lda #<expected_help_more_keys
+    sta zp_ptr0
+    lda #>expected_help_more_keys
+    sta zp_ptr0_hi
+    lda #1
+    ldx #2
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_help_notes
+    sta zp_ptr0
+    lda #>expected_help_notes
+    sta zp_ptr0_hi
+    lda #1
+    ldx #20
+    jsr assert_screen_string
+    bcc !fail+
+
     lda #<uh_press_key_str
     sta zp_ptr0
     lda #>uh_press_key_str
     sta zp_ptr0_hi
     lda #24
-    ldx #13
+    ldx #8
     jsr assert_screen_string
     bcc !fail+
 
@@ -979,8 +1015,20 @@ copy_string_zp:
     rts
 
 test_input_get_key:
+    ldx test_key_idx
+    cpx test_key_len
+    bcs !default+
+    lda test_key_script,x
+    inx
+    stx test_key_idx
+    rts
+!default:
     lda #$51
     rts
+
+test_key_script: .fill 4, 0
+test_key_len:    .byte 0
+test_key_idx:    .byte 0
 
 test_ui_help_clear_all:
     rts
@@ -993,6 +1041,10 @@ expected_help_movement:
     .text "Movement" ; .byte 0
 expected_help_actions:
     .text "Actions" ; .byte 0
+expected_help_more_keys:
+    .text "More Keys" ; .byte 0
+expected_help_notes:
+    .text "Notes" ; .byte 0
 expected_inventory_line:
     .byte $01
     .text ") Long Sword (Slay Evil)" ; .byte 0

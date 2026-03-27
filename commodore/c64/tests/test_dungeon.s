@@ -99,6 +99,7 @@ store_enter:
     rts
 // ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
 // Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
+ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
