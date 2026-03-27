@@ -2087,3 +2087,182 @@ This file is a temporary working scratchpad.
   - `make -B -C commodore/c128 build128` passed with `232` asserts and `0` failures
   - focused C128 input gate outside the sandbox: `TEST_FILTER='input128' TEST_JOBS=1 bash commodore/c128/run_tests128.sh` passed with `1 passed, 0 failed`
   - `make test128-fast` passed
+
+## Current Task
+- [x] Inspect the current C128 trampoline surface in `commodore/c128/main.s` against the active backlog wording.
+- [x] Compare that surface against the older completed trampoline-consolidation history and the post-`AUDIT-IO-C128` callable contract.
+- [x] Get a consultant review on whether `REF-C128-TRAMP` still represents real remaining work or a stale backlog item.
+- [x] Record the final `REF-C128-TRAMP` design before any further implementation.
+
+## `REF-C128-TRAMP` Design
+
+### Goal
+- Re-scope `REF-C128-TRAMP` to match the live tree instead of repeating already-completed trampoline consolidation work.
+- Decide whether any exact-match trampoline family still remains unnormalized after `REF-1` and `AUDIT-IO-C128`.
+- If real work remains, keep it narrow, reviewable, and fully subordinate to the current callable-residency contract.
+
+### Current Code Facts
+- `commodore/BUILDPLAN.md` still describes `REF-C128-TRAMP` as macro-generating repetitive C128 trampoline boilerplate in `commodore/c128/main.s`.
+- The current tree already contains substantial macro consolidation in `commodore/c128/main.s`:
+  - `C128KernalJumpTableWrapper`
+  - `C128UIBankedDisplayTrampoline`
+  - `C128UIOverlayDisplayTrampoline`
+  - `C128BankedComputeTrampoline`
+  - `C128BankedPreserveATrampoline`
+  - `C128BankedPreserveAReturnTrampoline`
+  - `C128BankedStatusTrampoline`
+  - `C128BankedPreserveFlagsTrampoline`
+  - `C128BankedSharedEpilogueTrampoline`
+- `commodore/BUILDPLAN_HISTORY.md` already records `REF-1 — C128 Trampoline-Sprawl Consolidation` as complete on `2026-03-20`, with exactly those family-level consolidations called out.
+- `commodore/c128/io_contracts.s` now pins the C128 callable surface and residency contract after `AUDIT-IO-C128`.
+- That means the old open backlog wording is broader than the real remaining work.
+
+### What Still Looks Custom
+- The remaining explicit wrappers in `commodore/c128/main.s` are not generic boilerplate; they carry real bespoke sequencing or side effects:
+  - `tramp_player_create`
+  - `tramp_game_over`
+  - `tramp_ui_help_display`
+  - `tramp_magic_check_new_spells`
+  - `tramp_level_generate`
+  - `tramp_ego_append_suffix`
+  - `tramp_ego_put_suffix`
+  - `w_load`
+  - `kernal_load_safe`
+  - `safe_setbnk`
+- These differ materially in one or more of:
+  - overlay-load policy
+  - help-page pointer seeding
+  - score/save side effects
+  - diagnostic hooks
+  - postprocessing of suffix/text data
+  - caller-visible register/flag behavior
+
+### Design Decision
+- Treat `REF-C128-TRAMP` as a stale or at least overstated backlog item.
+- Preferred next step is not another broad abstraction pass.
+- Preferred next step is a closure audit:
+  - verify whether any exact-match trampoline family still exists outside the current macro families
+  - if none do, close the item from the backlog without code changes
+  - if a tiny exact-match family remains, scope the implementation only to that family
+
+### Scope Boundary
+- In scope:
+  - auditing for any genuinely repetitive, exact-match trampoline family still left unconsolidated
+  - a tiny follow-up macroization only if the wrappers have identical entry/exit contract and residency expectations
+  - backlog/documentation cleanup if the item proves stale
+- Out of scope:
+  - generic trampoline dispatchers
+  - table-driven wrapper generation that obscures call contracts
+  - merging overlay-call, banked-call, and KERNAL-visible wrappers behind one abstraction
+  - any change to `io_contracts.s` residency classes unless the callable surface itself truly changes
+  - broader `REF-HAL` platform-service work
+
+### Non-Negotiable Safety Rules
+1. Preserve every public `tramp_*` symbol name and call surface.
+2. Keep `commodore/c128/io_contracts.s` as the source of truth for callable residency.
+3. Do not make a reviewer infer legality indirectly from a dispatcher table or pointer indirection.
+4. Do not merge wrappers that preserve different caller-visible state, even if they look superficially similar.
+5. Do not accept any refactor that makes the low-memory callable surface harder to inspect than the current local wrapper shapes.
+
+### Preferred Implementation Shape If Work Remains
+1. Start with a symbol-by-symbol audit of the wrappers not already emitted through the existing family macros.
+2. Partition them by exact behavioral contract, not by vague similarity:
+   - preserved registers
+   - preserved flags
+   - `$01` / MMU restore path
+   - overlay-load behavior
+   - custom side effects before or after the call
+3. Only macroize wrappers that match on all of those axes.
+4. Leave bespoke wrappers explicit, even if that means the final code diff is very small.
+5. If the audit finds no remaining exact-match family, close the item as stale backlog drift and record that `REF-1` plus `AUDIT-IO-C128` already covered the real work.
+
+### Why This Shape
+- The historical consolidation work is already present in the live tree.
+- `AUDIT-IO-C128` deliberately made the callable surface explicit and reviewable.
+- A fresh “more generic trampoline” pass would risk undoing that clarity for very little gain.
+- The remaining wrappers are mostly explicit because they carry genuinely different runtime contracts, not because the codebase missed an obvious macro cleanup.
+
+### Sequencing Relative To Other Open Work
+- `REF-C128-TRAMP` should remain after `AUDIT-IO-C128`, exactly as the earlier audit plan required.
+- It should not block on `REF-HAL`, but it also should not expand into `REF-HAL`.
+- If the closure audit concludes the item is stale, it should be removed from `commodore/BUILDPLAN.md` and recorded in `commodore/BUILDPLAN_HISTORY.md` before any new trampoline work is attempted.
+
+### Key Risks
+- Collapsing wrappers that preserve different registers or flags.
+- Hiding overlay/banked/KERNAL-visible distinctions behind a too-generic helper.
+- Accidentally shifting low trampolines upward toward the `$D000` I/O hole.
+- Reopening exactly the reviewability problem that `AUDIT-IO-C128` was meant to solve.
+
+### Verification Strategy
+1. Re-read the existing trampoline families in `commodore/c128/main.s`.
+2. Compare the remaining explicit wrappers against the completed `REF-1` history entry.
+3. Confirm that any proposed consolidation preserves the same public labels and the same `io_contracts.s` residency coverage.
+4. If no new code is needed, close the backlog item through documentation only.
+5. If a small code change is needed, rebuild and rerun the C128 gates appropriate to the size of the refactor.
+
+### Smallest High-Value Acceptance Gates
+- If the item proves stale and closes without code changes:
+  - update `commodore/BUILDPLAN.md`
+  - add the closure note to `commodore/BUILDPLAN_HISTORY.md`
+- If a tiny exact-match family is still consolidated:
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test128` if the change touches multiple callable families or materially changes low-memory placement
+
+### Consultant Review
+- Consultant verdict: `REF-C128-TRAMP` is mostly stale and should be rescoped before anyone writes code.
+- Strongest recommendation:
+  - treat the current task as a rescope-or-close audit, not another broad macro-generation pass
+  - preserve every public trampoline label and the post-`AUDIT-IO-C128` residency contract
+  - do not introduce a table-driven or pointer-driven generic trampoline dispatcher
+- Consultant-confirmed already-consolidated families:
+  - KERNAL jump-table wrappers
+  - UI display wrappers
+  - banked compute wrappers
+  - preserve-A wrappers
+  - preserve-A-return wrappers
+  - preserve-flags wrappers
+  - shared-epilogue wrappers
+  - banked status wrappers
+- Consultant-confirmed wrappers that should mostly remain explicit:
+  - `tramp_player_create`
+  - `tramp_game_over`
+  - `tramp_ui_help_display`
+  - `tramp_magic_check_new_spells`
+  - `tramp_level_generate`
+  - `tramp_ego_append_suffix`
+  - `tramp_ego_put_suffix`
+  - `w_load`
+  - `kernal_load_safe`
+  - `safe_setbnk`
+
+### Implementation Review
+- Completed.
+- Performed a source audit of the live C128 trampoline surface in `commodore/c128/main.s` against:
+  - the active backlog wording for `REF-C128-TRAMP`
+  - the older `REF-1` completion record in `commodore/BUILDPLAN_HISTORY.md`
+  - the post-`AUDIT-IO-C128` callable contract in `commodore/c128/io_contracts.s`
+- Confirmed the exact-match repetitive families are already consolidated in the live tree:
+  - KERNAL jump-table wrappers
+  - UI display wrappers
+  - banked compute wrappers
+  - preserve-A wrappers
+  - preserve-A-return wrappers
+  - preserve-flags wrappers
+  - shared-epilogue wrappers
+  - banked status wrappers
+- Confirmed the remaining explicit wrappers are bespoke and should remain explicit because they carry custom sequencing or side effects:
+  - overlay-load policy
+  - help-page source seeding
+  - score/save side effects
+  - diagnostic hooks
+  - suffix/text postprocessing
+  - custom caller-visible register/flag behavior
+- Result:
+  - no new exact-match trampoline family remained to consolidate
+  - `REF-C128-TRAMP` was closed as stale backlog wording already satisfied by `REF-1`, with the later `AUDIT-IO-C128` work reinforcing the need to keep the remaining custom wrappers explicit and reviewable
+- Verification:
+  - source audit only
+  - no code changes
+  - no test rerun required for the closure-doc update

@@ -6,6 +6,48 @@
 
 ---
 
+## 2026-03-27 — `REF-C128-TRAMP` backlog closure audit ✅ COMPLETE
+
+### Scope Closed
+- Audited the live C128 trampoline surface to determine whether the still-open `REF-C128-TRAMP` backlog item represented real remaining code work or stale backlog wording.
+- Closed the item through backlog/history reconciliation after confirming the substantive trampoline-family consolidation was already complete.
+
+### Root Cause
+- `commodore/BUILDPLAN.md` still described `REF-C128-TRAMP` as future macro-generation work.
+- The live tree already contained the real consolidation from the older `REF-1` pass, and the later `AUDIT-IO-C128` work intentionally favored explicit, reviewable callable contracts over more generic abstraction.
+- That left the backlog item stale: it was still open even though the exact-match repetitive families had already been normalized.
+
+### What Was Verified
+1. **The main exact-match trampoline families are already consolidated in `commodore/c128/main.s`**
+   - KERNAL jump-table wrappers
+   - UI display wrappers
+   - banked compute wrappers
+   - preserve-A wrappers
+   - preserve-A-return wrappers
+   - preserve-flags wrappers
+   - shared-epilogue wrappers
+   - banked status wrappers
+2. **The remaining explicit wrappers are bespoke and should stay explicit**
+   - `tramp_player_create`
+   - `tramp_game_over`
+   - `tramp_ui_help_display`
+   - `tramp_magic_check_new_spells`
+   - `tramp_level_generate`
+   - `tramp_ego_append_suffix`
+   - `tramp_ego_put_suffix`
+   - `w_load`
+   - `kernal_load_safe`
+   - `safe_setbnk`
+   - These wrappers carry overlay-load policy, help-page pointer seeding, score/save side effects, diagnostic hooks, suffix/text postprocessing, or distinct caller-visible register/flag contracts.
+3. **The post-`AUDIT-IO-C128` contract argues against a broader generic dispatcher**
+   - `commodore/c128/io_contracts.s` now pins the callable surface and residency classes.
+   - Another broad “generic trampoline” pass would reduce reviewability without removing real remaining duplication.
+
+### Outcome
+- `REF-C128-TRAMP` is closed as stale backlog wording already satisfied by `REF-1`, with the remaining explicit wrappers intentionally left explicit.
+- No code changes were required.
+- The active build plan no longer lists the item as open.
+
 ## 2026-03-27 — `REF-INPUT-TABLES` shared base PETSCII map ownership cleanup ✅ COMPLETE
 
 ### Scope Closed
