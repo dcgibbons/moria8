@@ -48,6 +48,365 @@ This file is a temporary working scratchpad.
 - [ ] Backlog note: C64 first descent from town can leave garbage on the top row after level generation.
 - [ ] Backlog note: C64 loading is currently broken outside this feature scope.
 
+## `BUG-LOAD-C64` Design
+
+### Current Task
+- [x] Inspect the current C64 title-menu, save/load, and runtime-resume seams in `commodore/c64/main.s`, `commodore/common/save.s`, and `commodore/common/game_loop.s`.
+- [x] Review the historical save/load regressions and fixes (`BUG-42`, `BUG-44`, R15/R16, C128 save JAM) for recurring failure patterns instead of treating this as a fresh isolated bug.
+- [x] Audit the current C64 test coverage and compare it with the stronger C128 title-load smoke coverage.
+- [x] Get a consultant review focused on ownership boundaries, recurrence risk, and missing verification gates.
+- [x] Write a durable design that makes the load path explicit, testable, and hard to regress.
+- [ ] Implement the ownership split, transaction contract, and new C64 integration gates.
+- [ ] Make the new C64 title-load smoke the verification gate for this bug until it is green.
+
+### Problem Statement
+- `BUG-LOAD-C64` is not just "the load command is broken."
+- The recurring failure is architectural:
+  - title-menu orchestration owns part of the flow
+  - `save.s` owns file I/O and too much transaction cleanup
+  - `load_resume_game` owns runtime re-entry
+  - the C64 test suite does not currently exercise the real title `L` path end to end
+- That combination lets regressions reappear in different forms:
+  - wrong error message
+  - wrong recovery path
+  - corrupt or partial in-memory state after failed load
+  - broken carry/status return
+  - disk swap / save-device drift
+  - a resume path that is locally unit-tested but not actually reachable through the title menu on real disk media
+
+### Current Code Facts
+- The C64 title menu still inlines the load flow in `commodore/c64/main.s`:
+  - `disk_prompt_save`
+  - `load_game`
+  - `disk_prompt_game`
+  - `load_resume_game`
+- C128 already promotes this to a named `title_load_game` entrypoint, which is easier to test and reason about.
+- `load_game` in `commodore/common/save.s` currently owns all of the following:
+  - open/read/verify the file
+  - message display
+  - channel cleanup
+  - `$DD00` VIC-bank restore
+  - `player_sync_to_zp`
+  - monster/item recounts
+  - savefile deletion for permadeath
+- `load_resume_game` in `commodore/common/game_loop.s` currently owns runtime re-entry:
+  - `wizard_reset_session_state`
+  - `player_search_clear_transient_state`
+  - `tier_invalidate_state`
+  - `tier_check_transition`
+  - derived-stat rebuild
+  - run-state reset
+  - sound re-init
+  - screen redraw and `WELCOME BACK`
+- `commodore/c64/tests/test_main_loop.s` only verifies one narrow post-load fact today:
+  - `load_resume_game` clears transient search state
+- `commodore/c64/tests/test_save.s` is not a real load integration suite:
+  - it tests RLE helper leftovers, checksum helpers, and recount logic
+  - it does not drive the title `L` path or a real disk image
+- C128 already has the integration test shape C64 is missing:
+  - a seeded-disk `boot_title_load_resume_smoke`
+  - explicit boot/title/load monitor gates
+- `commodore/c64/debug_load.mon` still documents a rich load-diagnostic marker scheme, but the active code no longer emits those markers. The diagnostic contract has drifted out of sync with reality.
+
+### Why This Keeps Coming Back
+
+#### 1. The load return-status contract on C64 is structurally unsafe
+- On C64, `EnterKernal` / `ExitKernal` are only:
+  - `php`
+  - `plp`
+- `load_game` currently sets `sec` / `clc` and then executes `:ExitKernal()`.
+- That means the advertised carry result from `load_game` is overwritten by the caller's saved processor flags before `rts`.
+- The title path branches on that carry anyway.
+- This is exactly the class of bug already captured in `tasks/lessons.md`: `plp` after `clc`/`sec` destroys carry-return contracts.
+- As long as the load path relies on that fragile convention, this bug can reappear any time the surrounding callers happen to leave carry in a different state.
+
+#### 2. The load is not transactional
+- `load_game` deserializes directly into live RAM while the file is being read.
+- If the file is truncated, corrupt, or otherwise fails after the first few blocks, the code returns to the title menu after mutating live gameplay state.
+- There is no explicit "failed load leaves no live session behind" contract.
+- This makes future regressions harder to diagnose because the visible failure can happen on the next title action, not at the failing read itself.
+
+#### 3. The persistence schema is hand-maintained twice
+- Save block order is written once in the save half and again in the load half.
+- That duplication is survivable when the format is stable, but it is a long-term regression trap whenever new saved arrays, transient-mask rules, or layout changes land.
+- The save-version byte exists, but the field manifest itself is not single-sourced.
+
+#### 4. Disk-I/O cleanup is repeated rather than owned
+- The C64 path currently depends on repeated local cleanup rules:
+  - close file handles
+  - restore channels
+  - restore `$DD00` VIC bank 0
+  - clear stale KERNAL status when appropriate
+  - preserve any required caller status
+- History already shows this seam breaking in multiple ways:
+  - stale file table entries after KERNAL LOAD
+  - wrong `READST` state after title art load
+  - nested KERNAL-context transitions in save/delete helpers
+- Repetition here is not harmless. It is how correctness contracts drift.
+
+#### 5. The C64 suite lacks the one test that would have caught most of these regressions
+- There is no C64 equivalent of C128's real-disk title-load-resume smoke.
+- The current suite proves helper behavior, not the actual player-visible flow:
+  - boot game
+  - arrive at title
+  - press `L`
+  - read `THE.GAME`
+  - branch to success or failure
+  - resume cleanly or return to title cleanly
+- That missing gate is the core reason this bug keeps escaping.
+
+### Non-Negotiable Requirements
+- The C64 load path must have a named, testable entrypoint rather than remaining an inline title-branch fragment.
+- The persistence layer must return an explicit status code that survives any KERNAL-entry/exit mechanics.
+- Failed loads must not leave partially loaded session state live when control returns to the title screen.
+- `load_resume_game` must remain pure runtime re-entry:
+  - no disk prompts
+  - no KERNAL file I/O
+  - no savefile deletion
+  - no title-menu policy
+- All C64 serial-I/O helpers used by title/load/save must return with the same postcondition:
+  - default channels restored
+  - required file numbers closed
+  - `$DD00` back in the expected VIC bank
+  - interrupt state restored to the expected title/runtime contract
+  - any special KERNAL status reset performed by the owner that needs it
+- Any failure-recovery path after a partial load must treat Zero Page and runtime scratch as contaminated until proven otherwise.
+- The title recovery owner must explicitly reinitialize every title-critical ZP/UI variable it depends on rather than assuming a redraw alone is sufficient.
+- Save-format evolution must be single-sourced enough that adding/removing a serialized block cannot silently change one half of the transaction but not the other.
+- `BUG-LOAD-C64` is not closed until the real title `L` flow is green under a disk-backed smoke harness, not just under unit tests.
+
+### Recommended Architecture
+
+#### A. Promote the C64 title load flow to a named owner
+- Mirror the C128 structure and add a C64 `title_load_game` entrypoint.
+- `title_menu_loop` should only dispatch to that named routine.
+- Ownership of `title_load_game`:
+  - play acknowledgment sound
+  - `msg_init`
+  - prompt for save disk if needed
+  - call the persistence transaction
+  - prompt back to game disk if needed
+  - branch cleanly to either:
+    - `load_resume_game`
+    - title re-entry / title menu recovery
+- Reason:
+  - this creates a single callable seam for testing and for any future C64 load-specific fixes
+  - it removes hidden control flow from the middle of the title input loop
+
+#### B. Replace carry-only load success/failure with an explicit transaction result
+- Do not rely on carry as the authoritative `load_game` result on C64.
+- Recommended shape:
+  - add a small `load_result` byte with symbolic result codes:
+    - `LOAD_RESULT_OK`
+    - `LOAD_RESULT_NOTFOUND`
+    - `LOAD_RESULT_CORRUPT`
+    - `LOAD_RESULT_IOERR`
+  - the caller branches on `load_result`
+  - carry may still be set for convenience, but it must not be the only contract
+- Reason:
+  - the repo already has a real lesson showing how easy it is for `plp` to clobber carry returns
+  - this path is too important to keep depending on a fragile flag-only convention
+
+#### C. Make `load_game` a true persistence transaction owner
+- `load_game` should own:
+  - file open / read / checksum verify / close
+  - savefile deletion on success
+  - transaction result code
+  - only serialization-local postprocessing that is inseparable from the on-disk transaction
+    - allowed:
+      - checksum state finalization
+      - file/channel/VIC-bank cleanup
+      - savefile scratch on successful committed load
+      - copying loaded serialized bytes into their owned in-memory homes
+    - not allowed:
+      - title/menu branching
+      - runtime transient clearing
+      - tier invalidation or tier reload
+      - stat/HP recompute
+      - redraw / visibility / status work
+      - any "resume gameplay" policy
+- `load_game` should stop owning policy that belongs elsewhere:
+  - title recovery behavior
+  - disk-swap UI decisions
+  - "what screen do we show next?"
+- Design rule:
+  - `save.s` may produce loaded bytes and transaction status
+  - it should not decide whether the user returns to title or resumes gameplay
+
+#### D. Make failed-load recovery explicit and title-safe
+- A full shadow copy of the save image is not realistic on C64 and is not the recommended fix.
+- Instead, define the failure contract explicitly:
+  - if `load_game` fails after mutating live RAM, the session is abandoned
+  - the code must re-enter a known-safe title state before accepting further title input
+  - Zero Page and transient runtime state must be treated as hostile after a mid-stream failure
+- Recommended shape:
+  - add a dedicated title owner such as `title_enter_menu` and use it for:
+    - initial title entry
+    - post-load failure recovery
+  - `title_load_game` should never jump back into the middle of the old inline title loop after a failed transaction
+  - this helper should:
+    - explicitly reinitialize every title-critical ZP byte and UI control byte it depends on
+    - restore title-safe UI state
+    - redraw title/menu from scratch
+    - clear any transient title/disk prompt state needed before the next key read
+    - avoid continuing the old title loop with potentially stale gameplay/session memory assumptions
+- The design goal is not "preserve half-loaded runtime state."
+- The goal is "failure returns to a clean title world every time."
+
+#### D.1. Keep the KERNAL-context rule explicit
+- The prior C128 save `JAM` proved this rule is not optional:
+  - helpers that assume active KERNAL context, such as `delete_savefile_core`, must only be called from code that already owns that context
+  - external wrappers may enter/exit KERNAL context
+  - internal transaction helpers must not nest it
+- Apply the same rule to the C64 load/save refactor even if the current C64 macros are lighter-weight.
+- Design consequence:
+  - `title_load_game` and `load_resume_game` must not call nested KERNAL-entry wrappers once inside the persistence transaction
+  - the persistence owner must expose clear internal-vs-external helper boundaries
+
+#### D.2. Treat interrupt and banking cleanup as part of recovery, not polish
+- C64 failure recovery must restore:
+  - `sei` / `cli` state to the expected post-transaction contract
+  - `$DD00` VIC bank ownership
+  - any IRQ vector assumptions that disk/KERNAL paths can disturb
+- Do not assume the happy-path cleanup is enough.
+- If a failed load can exit through a different branch, that branch must prove the same hardware postcondition as the success path before title rendering resumes.
+- The design target is:
+  - no recovery path can expose the title/menu loop to partially-restored IRQ or VIC-bank state
+
+#### E. Formalize `load_resume_game` as the only runtime re-entry seam
+- Keep runtime normalization centralized in `load_resume_game`.
+- Add an explicit comment contract that any new transient runtime field introduced later must be normalized here, not in ad-hoc title or persistence code.
+- Current examples that belong here:
+  - search-mode transients
+  - running state
+  - tier metadata validity
+  - derived stats and HP
+  - sound/video redraw state
+- Reason:
+  - this keeps all post-load gameplay reconstruction in one auditable place
+  - it prevents future features from smearing their "resume fixups" across unrelated codepaths
+
+#### F. Single-source the save schema manifest
+- The durable design is to stop hand-maintaining the save block order twice.
+- Recommended implementation shape:
+  - move the ordered save-block manifest into one include/macro list
+  - expand it once for save, once for load
+  - keep the save-version byte next to that manifest
+  - add a computed total-byte constant for the serialized payload
+- Constraint:
+  - keep the manifest mechanically simple and monitor-readable
+  - do not turn this into clever macro metaprogramming that obscures exact block order, byte counts, or where a failure occurred
+- Secondary benefit:
+  - the Python seeded-save generator used by C128 can then be mirrored or parameterized for C64 against one authoritative block list instead of another hand-copied format description
+
+#### G. Reintroduce owned diagnostics instead of stale tribal debugging
+- `commodore/c64/debug_load.mon` proves the load path has historically needed stage-level tracing.
+- The current half-state is bad:
+  - the monitor script documents step markers
+  - the code no longer guarantees them
+- Recommended direction:
+  - restore a gated `C64_LOAD_DIAG` marker stream or equivalent label-based probes
+  - keep the monitor script and emitted markers in sync
+  - add a lightweight verification script or test check that fails if the expected diagnostic labels/markers disappear or drift
+- Diagnostics are not optional folklore for this bug family.
+- If they exist, they must be maintained as part of the contract.
+
+### Specific Findings To Preserve
+- The current C64 code already contains a likely live root-cause candidate:
+  - `load_game` advertises carry-set success / carry-clear failure
+  - `ExitKernal` is `plp`
+  - therefore the result flag is not stable on return
+- This is not just a debugging note.
+- It changes the design:
+  - carry-only status must be retired as the authoritative contract for this bug
+- Another critical finding:
+  - the C64 suite has no real-disk title-load smoke, while C128 already does
+  - any "fix" that does not add that gate is likely to regress again
+
+### Rejected Alternatives
+
+#### Option A — Patch the current title branch again without changing ownership
+- Reject.
+- This has already failed multiple times in different forms.
+- A local branch fix would not address:
+  - carry-contract fragility
+  - failure atomicity
+  - missing real-disk coverage
+
+#### Option B — Keep carry-only status and just save/restore it more carefully
+- Reject as the primary contract.
+- Even if carry preservation is repaired locally, the design still encourages future regressions through another `php`/`plp` edit.
+- Use an explicit result byte as the stable public contract.
+
+#### Option C — Add a full second copy buffer for the entire loaded session
+- Reject for first-pass repair.
+- It is too memory-expensive on C64 relative to the actual need.
+- The simpler durable contract is:
+  - failed transaction abandons the session
+  - title state is rebuilt cleanly
+
+#### Option D — Treat existing unit tests as sufficient once the branch works again
+- Reject.
+- The missing failure is specifically in the real title/menu/disk path.
+- The fix is not trustworthy until the suite exercises that path.
+
+### Verification Strategy
+
+#### Required New C64 Smokes
+1. `boot_title_load_resume_smoke`
+   - Build a real C64 disk image containing a valid `THE.GAME`.
+   - Boot from title, inject `L`, and prove the machine reaches `load_resume_game` or the first resumed gameplay-loop marker without `JAM`.
+2. `boot_title_load_missing_save_smoke`
+   - Boot a disk image with no `THE.GAME`.
+   - Press `L`.
+   - Prove the game returns to the title menu rather than falling into character creation or a partial session.
+3. `boot_title_load_corrupt_save_smoke`
+   - Boot with a truncated or checksum-bad `THE.GAME`.
+   - Prove the game shows corrupt-file recovery and returns to the title menu cleanly.
+4. `boot_title_load_delete_smoke`
+   - Successful load must scratch the save exactly once.
+   - Prove this by either:
+     - checking the directory after success, or
+     - reattempting `L` and observing the correct not-found path on the next attempt.
+5. `boot_title_load_resume_dualdisk_smoke`
+   - At least one swap-mode or custom-device path must be covered, because save-device routing is a historical seam, not an optional afterthought.
+
+#### Required Unit / Host Tests
+- Keep and extend the current `load_resume_game` transient-state coverage in `test_main_loop.s`.
+- Add focused persistence-transaction tests for:
+  - explicit `load_result` values
+  - cleanup postconditions on failure
+  - title-safe recovery helper behavior
+  - schema manifest byte-count expectations
+- `test_save.s` should stop being treated as if it proves end-to-end load correctness.
+- It is only a helper-logic suite unless it grows real transaction coverage.
+
+#### Provisional Verification Gate
+- Once implementation begins, the active gate for `BUG-LOAD-C64` should be the new real-disk C64 smoke target, not just `make test`.
+- Until the user provides a more specific failing command, the recommended gate is:
+  - the exact new C64 title-load smoke for success
+  - plus the missing-save and corrupt-save recovery smokes
+  - plus `make test` afterward for broader regression coverage
+
+### Consultant Review Summary
+- Consultant recommendation aligned with the local findings:
+  - keep `save.s` as persistence owner, not runtime-policy owner
+  - keep `load_resume_game` as the one runtime re-entry seam
+  - promote the C64 title-load path to a named entrypoint like C128
+  - add real title-path smokes rather than leaning on unit tests
+- One deliberate strengthening beyond the consultant baseline:
+  - do not just preserve carry more carefully
+  - promote an explicit `load_result` byte as the durable public contract for C64
+
+### Implementation Order
+1. Extract the C64 title `L` flow into a named `title_load_game` owner.
+2. Replace carry-only `load_game` status with an explicit result code.
+3. Centralize load transaction cleanup and title-safe failure recovery.
+4. Add the real-disk C64 load smokes and make them authoritative.
+5. Reassert `load_resume_game` as the only runtime re-entry owner.
+6. Only after the smoke gate is green, single-source the save schema manifest.
+7. Tighten any remaining user-facing recovery details or messages without weakening the new gate.
+
 ## `FEAT-SEARCH-MODE` Design
 
 ### Goal

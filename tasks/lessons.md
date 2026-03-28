@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-28 — A failed C64 load must be treated as hostile partial corruption, not as a polite branch back to the title loop
+
+- **Issue:** I initially designed `BUG-LOAD-C64` around abandoning the bad session and redrawing the title, but I had not made the Zero Page, IRQ, and VIC-bank contamination risk explicit enough.
+- **Root Cause:** I was reasoning at the transaction/UI level and under-specified the machine-state fallout of a mid-stream C64 load failure. On this platform, a failed read can leave title-critical ZP bytes, interrupt state, and `$DD00` banking assumptions in garbage states even if the visible next step is just "go back to the title screen."
+- **Resolution:** Treat any partial C64 load failure as hostile state corruption. Recovery must explicitly reinitialize all title-critical ZP/UI state, re-establish IRQ and VIC-bank postconditions, and prove those invariants under a real disk-backed title-load smoke rather than assuming a redraw alone is enough.
+- **Rule:** **On C64, never model failed load recovery as "show the title again." Model it as "rebuild a known-good title machine state from scratch," including Zero Page, IRQ, and `$DD00` ownership.**
+
 ## 2026-03-27 — C128 hook refactors need residency checks for every newly exposed callable path, not just the hot paths covered by fast units
 
 - **Issue:** After the `REF-HAL` phase-1 refactor, the C128 Home-store path could `JAM` because `home_enter` had drifted into `$D000-$DFFF`, and the initial verification still missed a real cursor-key town-input regression the user hit interactively.
