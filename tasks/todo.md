@@ -325,6 +325,10 @@ This file is a temporary working scratchpad.
 - Follow-up boundary hardening after the attempted post-phase generation-overlay move was backed out:
   - re-audit plus consultant review reconfirmed there is no clean next HAL runtime slice past the committed phase-1 boundary
   - added a focused C128 harness guard, `c128_ref_hal_guard`, to fail if shared code regresses beyond the documented exclusions in `game_loop.s` and `reu.s` or if raw shared `KBDBUF_COUNT` usage reappears outside `input_ui_helpers.s`
+- Phase-2 viability audit result:
+  - the only remaining candidate from the original design, the optional `PERF_P1` session-hook cleanup, does not justify a new HAL phase in the live tree
+  - `PERF_P1` is compile-time C128 instrumentation in `game_loop.s` plus `perf_p1.s`, not a runtime platform-repair seam
+  - keep `PERF_P1` explicit and keep any future `c128_restore_generation_overlay` ownership cleanup tracked as a separate non-HAL slice
 - Follow-up CIA2/VIC-bank restore cleanup:
   - audited the active `overlay.s` / `tier_manager.s` backlog note and confirmed `overlay.s` was already correctly platformized while `tier_manager.s` still carried a stale shared `$DD00` restore on the C128 path
   - limited the fix to `tier_manager.s` so only the C64 disk-load path restores VIC-II bank 0 after serial I/O; C128 now leaves that ownership with the platform loader wrapper that already restores `$DD00`

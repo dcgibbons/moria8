@@ -149,6 +149,10 @@
 - The completion boundary is now mechanically enforced in the C128 harness:
   - only the documented shared exclusions in `commodore/common/game_loop.s` and `commodore/common/reu.s` may retain direct runtime-repair references
   - raw shared `KBDBUF_COUNT` handling remains confined to `commodore/common/input_ui_helpers.s`
+- Later phase-2 viability audit result:
+  - no additional HAL phase was opened
+  - the deferred `PERF_P1` cleanup stayed explicit because it is compile-time C128 instrumentation, not a runtime platform-service leak
+  - any future `c128_restore_generation_overlay` ownership cleanup remains a separate non-HAL slice
 
 ## 2026-03-27 — CIA2 / VIC-bank restore cleanup in `overlay.s` / `tier_manager.s` ✅ COMPLETE
 
