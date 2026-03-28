@@ -138,12 +138,17 @@
 - Focused C128 acceptance passed:
   - `make test128-fast`
   - `make test128-fast-smoke`
+- Follow-up boundary guard passed after the later HAL re-audit:
+  - `TEST_FILTER='c128_ref_hal_guard' bash commodore/c128/run_tests128.sh`
 - Important verification note:
   - the full `bash commodore/c64/run_tests.sh` runner hung in this environment during the long `effects` suite, so the close-out record relies on the focused C128 acceptance set plus prior broader regression runs already captured in `tasks/todo.md`.
 
 ### Outcome
 - `REF-HAL` is removed from the active build plan as completed phase-1 work.
 - Shared gameplay code now depends on named platform/runtime/input services instead of directly accumulating C128 repair calls and raw keyboard-buffer policy.
+- The completion boundary is now mechanically enforced in the C128 harness:
+  - only the documented shared exclusions in `commodore/common/game_loop.s` and `commodore/common/reu.s` may retain direct runtime-repair references
+  - raw shared `KBDBUF_COUNT` handling remains confined to `commodore/common/input_ui_helpers.s`
 
 ## 2026-03-27 — CIA2 / VIC-bank restore cleanup in `overlay.s` / `tier_manager.s` ✅ COMPLETE
 

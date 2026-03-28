@@ -505,7 +505,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
@@ -543,7 +543,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -1309,6 +1309,99 @@ if not has_ordered_chain(help_mod, [
     "sta (zp_screen_lo),y",
 ]):
     print("ui_help_draw_line must use screen_put_char on C128 and keep direct RAM path only for C64")
+    raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_ref_hal_guard_check() {
+    echo -n "  ref_hal_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+import re
+
+root = Path("..").resolve()
+common = root / "common"
+helper = common / "input_ui_helpers.s"
+
+runtime_exclusions = {
+    "game_loop.s": {"c128_restore_runtime_guards": 1},
+    "reu.s": {"c128_restore_runtime_vectors": 1},
+}
+runtime_counts = {
+    "game_loop.s": {"c128_restore_runtime_guards": 0},
+    "reu.s": {"c128_restore_runtime_vectors": 0},
+}
+runtime_leaks: list[str] = []
+kbdbuf_leaks: list[str] = []
+helper_raw_kbdbuf = 0
+
+
+def code_lines(path: Path):
+    for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
+        code = raw.split("//", 1)[0].strip()
+        if code:
+            yield lineno, code
+
+
+for path in sorted(common.glob("*.s")):
+    for lineno, code in code_lines(path):
+        for token in ("c128_restore_runtime_guards", "c128_restore_runtime_vectors"):
+            if token not in code:
+                continue
+            allowed = runtime_exclusions.get(path.name, {})
+            if token in allowed:
+                runtime_counts[path.name][token] += code.count(token)
+            else:
+                runtime_leaks.append(f"{path.name}:{lineno}: {token}")
+
+        if re.search(r"\bKBDBUF_COUNT\b", code):
+            if path.name == helper.name:
+                helper_raw_kbdbuf += len(re.findall(r"\bKBDBUF_COUNT\b", code))
+            else:
+                kbdbuf_leaks.append(f"{path.name}:{lineno}: KBDBUF_COUNT")
+
+if runtime_leaks:
+    print("unexpected shared runtime-repair references:")
+    for hit in runtime_leaks:
+        print(f"  {hit}")
+    raise SystemExit(1)
+
+for path_name, token_counts in runtime_counts.items():
+    for token, count in token_counts.items():
+        expected = runtime_exclusions[path_name][token]
+        if count != expected:
+            print(f"{path_name} must contain exactly {expected} live {token} reference(s), found {count}")
+            raise SystemExit(1)
+
+if kbdbuf_leaks:
+    print("unexpected raw KBDBUF_COUNT references in shared code:")
+    for hit in kbdbuf_leaks:
+        print(f"  {hit}")
+    raise SystemExit(1)
+
+if helper_raw_kbdbuf != 0:
+    print(f"{helper.name} must keep KBDBUF_COUNT wrapped behind INPUT_UI_HELPER_KBDBUF_COUNT, found {helper_raw_kbdbuf} raw use(s)")
+    raise SystemExit(1)
+
+helper_text = helper.read_text()
+if "INPUT_UI_HELPER_KBDBUF_COUNT" not in helper_text:
+    print("input_ui_helpers.s must own the wrapped keyboard-buffer alias")
     raise SystemExit(1)
 
 print("ok")
@@ -3878,6 +3971,7 @@ run_selected_suites() {
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
     run_parallel_unit_tests || return 1

@@ -93,7 +93,8 @@ test_start:
     // ==========================================
     // The monster count should decrease
     lda zp_mon_count
-    bne !fail+
+    beq *+5
+    jmp !fail+
 
     lda map_row_lo+5
     sta zp_ptr0
@@ -103,7 +104,8 @@ test_start:
     :MapRead_ptr0_y()
     
     cmp #$08
-    bne !fail+
+    beq *+5
+    jmp !fail+
 
     // ==========================================
     // C128 creature_get_name Bank1 tier path

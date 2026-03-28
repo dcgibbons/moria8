@@ -14,7 +14,9 @@
 
 ## Open Bugs
 
-None currently.
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Low | `BUG-TOWN-KILL-DRAW` town monster glyph can persist on-screen after an in-place kill until a later redraw | Low | Medium | No | Observed on C128 during town combat. Likely shared turn/render-state ownership rather than HAL work; keep separate from `REF-HAL`. |
 
 ## Open Phases / Display Work
 
