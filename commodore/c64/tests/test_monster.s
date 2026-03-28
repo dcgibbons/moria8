@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #11
+    ldx #12
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -91,7 +91,7 @@ t7_count:  .byte 0
 t7_ok:     .byte 0
 t9_count:  .byte 0
 t9_mask:   .byte 0
-tc_results: .fill 12, $ff       // Test results buffer (copied to $0400 by trampoline)
+tc_results: .fill 13, $ff       // Test results buffer (copied to $0400 by trampoline)
 test_force_deep_tier_spawn: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -121,7 +121,7 @@ test_tier_check_transition:
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #11
+    ldx #12
     lda #$ff
 !clr:
     sta tc_results,x
@@ -600,6 +600,68 @@ test_start:
     sta cr_level+1
     pla
     sta cr_level+0
+    jmp !t12+
+
+    // ==========================================
+    // Test 13: eff_kill_monster marks a pending redraw when it removes a monster.
+    // ==========================================
+!t12:
+    jsr monster_init_table
+    lda #0
+    sta turn_scene_dirty
+    sta turn_action_redraw_pending
+    lda #$60
+    sta combat_award_xp
+    sta combat_check_levelup
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #TOWN_CREATURE_BASE
+    jsr monster_spawn_one
+    bcc !t12_fail+
+
+    jsr eff_kill_monster
+
+    lda turn_action_redraw_pending
+    cmp #1
+    bne !t12_fail+
+    lda turn_scene_dirty
+    bne !t12_fail+
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t12_fail+
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !t12_fail+
+
+    lda #$01
+    sta tc_results+12
+    jmp !tests_done+
+!t12_fail:
+    lda #$00
+    sta tc_results+12
 
 !tests_done:
     jmp test_exit_trampoline

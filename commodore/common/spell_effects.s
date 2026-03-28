@@ -849,8 +849,6 @@ ewtm_save_tile: .byte 0
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4, zp_math_a/b
 // ============================================================
 eff_kill_monster:
-    stx zp_temp2                    // Save slot
-
     // Get monster type for XP award
     jsr monster_get_ptr
     ldy #MX_TYPE
@@ -858,8 +856,8 @@ eff_kill_monster:
     sta cmb_type                    // Set cmb_type for combat_award_xp
 
     // Remove monster from active list (clears FLAG_OCCUPIED + slot)
-    ldx zp_temp2
     jsr monster_remove
+    inc zp_dirty_count              // consumed by turn_post_action
 
     // Award XP using existing combat function
     jsr combat_award_xp

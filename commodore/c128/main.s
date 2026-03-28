@@ -3014,7 +3014,6 @@ runtime_low_data_end:
 
 // Imported late so shared-data dependencies are already defined.
 #import "../common/string_bank_banked.s"
-#import "../common/player_magic_display_data.s"
 
 // ============================================================
 // Banked code payload — stored inline here, copied to $F000

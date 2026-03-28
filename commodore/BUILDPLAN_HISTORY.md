@@ -6,6 +6,44 @@
 
 ---
 
+## 2026-03-27 — `BUG-TOWN-KILL-DRAW` shared post-turn redraw fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the stale town-monster glyph bug for stationary remote kills without turning it into a platform-renderer or HAL problem.
+
+### Root Cause
+- Shared stationary action paths can remove a visible monster through `commodore/common/spell_effects.s` `eff_kill_monster`, but the post-turn redraw decision still lives in the common turn tail.
+- `commodore/common/turn.s` clears `turn_scene_dirty` at the start of `turn_post_action`, so any action path that tried to request a redraw by setting that flag before the turn tail would lose the request.
+- That left a specific hole where a remote visible kill could clear map/monster state correctly yet still fall through to `render_local_area`, which does not cover every visible remote tile.
+
+### What Changed
+1. **Shared pending redraw ownership now survives `turn_post_action`**
+   - `commodore/common/turn_render_state.s` now aliases `turn_action_redraw_pending` onto the dormant `zp_dirty_count` scratch byte
+   - this preserves a durable action-owned redraw request without growing the resident image
+2. **The shared remote-kill helper now produces the redraw request**
+   - `commodore/common/spell_effects.s` `eff_kill_monster` now increments the pending redraw latch immediately after `monster_remove`
+3. **The turn tail now promotes and clears the pending latch**
+   - `commodore/common/turn.s` now ORs the pending latch into the `monster_ai_tick` redraw result, stores the combined value into `turn_scene_dirty`, and clears the latch for the next turn
+4. **C128 residency stayed within bounds**
+   - to keep the implementation byte-neutral in the main resident image, `commodore/c128/main.s` no longer imports `player_magic_display_data.s` into `RuntimeLowData`
+   - `commodore/c128/memory128.s` now hosts that shared display data in the MMU common helper blob instead
+5. **Focused regression coverage now pins both sides of the contract**
+   - `commodore/c64/tests/test_turn.s` proves the pending redraw request promotes into `turn_scene_dirty` once and then clears
+   - `commodore/c64/tests/test_monster.s` proves `eff_kill_monster` sets the pending redraw latch while still clearing the monster slot and map occupancy bit
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- Focused C64 runtime tests passed:
+  - `turn` = `11/11`
+  - `monster` = `13/13`
+  - `effects` = `26/26`
+- `make -B -C commodore/c128 build128` passed with `Made 238 asserts, 0 failed`.
+- `make test128-fast` passed.
+
+### Outcome
+- `BUG-TOWN-KILL-DRAW` is removed from the active build plan.
+- Shared stationary remote kills now have a durable redraw contract that upgrades the post-turn path to a full scene redraw when local redraw is insufficient.
+
 ## 2026-03-27 — `BUG-LOOK-HILITE` directed-look target flash fix ✅ COMPLETE
 
 ### Scope Closed

@@ -358,10 +358,10 @@ turn_post_action:
     jsr turn_tick_light
     jsr turn_tick_pseudo_id
     jsr monster_ai_tick
-    bcc !tpa_no_scene_change+
-    lda #1
+    ora zp_dirty_count              // pending non-local redraw request
     sta turn_scene_dirty
-!tpa_no_scene_change:
+    lda #0
+    sta zp_dirty_count
 
     // Increment turn counter
     inc zp_turn_lo

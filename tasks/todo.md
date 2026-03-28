@@ -3,10 +3,171 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Audit the C64 dual-disk title-menu and custom-drive UI path to find why it erases the lower title frame.
-- [x] Move the transient title-screen disk UI onto the reserved bottom status rows instead of clearing over the title art.
-- [x] Extend focused `disk_swap` coverage to pin the new prompt/indicator row contract.
-- [x] Rebuild C64/C128, run focused verification, and retire `BUG-TITLE-DUALDISK-FRAME` from the active build plan.
+- [x] Inspect the active `BUG-TOWN-KILL-DRAW` note plus the shared town combat, turn, and redraw ownership.
+- [x] Trace the stationary-attack post-turn render contract through `combat.s`, `spell_effects.s`, `turn.s`, `game_loop.s`, and the C64/C128 renderers.
+- [x] Compare design options for where a stale-kill redraw fix should live, including failure modes around `turn_scene_dirty`.
+- [x] Capture a recommended design, consultant-style review, and verification strategy for `BUG-TOWN-KILL-DRAW`.
+- [x] Implement the shared pending-redraw fix in the turn/effect seam without growing the C128 resident image past its layout constraints.
+- [x] Add focused regression coverage for the producer and consumer halves of the redraw contract, then rerun the required C64/C128 verification.
+
+## `BUG-TOWN-KILL-DRAW` Design
+
+### Goal
+- Fix the stale town-monster glyph bug without turning it into a platform/HAL problem.
+- Preserve the existing fast local redraw path for ordinary movement and nearby melee.
+- Make the redraw contract explicit for stationary actions that can kill a visible monster away from the player.
+
+### Working Diagnosis
+- The shared post-turn redraw policy is the real owner of the bug.
+- Stationary action commands such as `CMD_FIRE`, `CMD_THROW`, `CMD_CAST`, and `CMD_PRAY` all funnel into `command_result_main_or_update_visibility` or `command_result_restore_view_or_update_visibility`.
+- Those helpers call `post_turn_update_visibility_or_die`, which currently does:
+  - `turn_post_action`
+  - `update_visibility`
+  - `viewport_update`
+  - local redraw only if there was no scroll, no `vis_room_revealed`, and no `turn_scene_dirty`
+- `render_local_area` only redraws a player-centered bounding box using `old_player_*` and current player position.
+- A stationary remote kill can clear the monster from map/state via `eff_kill_monster` / `monster_remove`, but still leave the dead glyph visible if the killed tile lies outside that local redraw box.
+- The bug shows up in town on C128 because town sight lines make long stationary attacks easy to observe, not because the VDC renderer or HAL owns a different semantic contract.
+
+### Critical Constraint
+- A naive fix that sets `turn_scene_dirty` during the action path will not survive.
+- `turn_post_action` starts by clearing `turn_scene_dirty`, then only re-sets it from monster AI movement.
+- Any design that marks the existing flag before `turn_post_action` will silently lose the redraw request.
+
+### Ownership Boundary
+- Shared owner:
+  - `commodore/common/turn_render_state.s`
+  - `commodore/common/turn.s`
+  - shared command/effect owners that know they changed a non-local visible tile
+- Not the owner:
+  - `commodore/c64/dungeon_render.s`
+  - `commodore/c128/dungeon_render_vdc.s`
+  - `REF-HAL` platform hook layer
+- Data modules like `monster.s` should stay focused on monster-table/map ownership, not screen-policy decisions.
+
+### Recommended Design
+- Add a new shared pending redraw request in `turn_render_state.s`, separate from `turn_scene_dirty`.
+- Treat it as an action-owned request that survives until `turn_post_action` folds it into the per-turn redraw decision.
+- Shape:
+  - `turn_scene_dirty`
+    - stays the post-turn "scene changed this turn" flag consumed by main-loop redraw logic
+  - new pending flag, e.g. `turn_action_redraw_pending`
+    - set by stationary action/effect paths that mutate a visible tile outside the normal player-local redraw contract
+    - consumed and cleared by `turn_post_action`
+- `turn_post_action` should OR the pending action redraw request into `turn_scene_dirty` after its normal reset / AI bookkeeping so the existing main-loop redraw branches keep working.
+- First-pass producer should be the shared kill helper surface, not the platform renderers:
+  - prefer `eff_kill_monster` as the main producer because it already centralizes ranged/throw/spell/dispel kill removal without pulling ordinary melee through the same path
+  - if later evidence shows another stationary non-local visual mutation has the same bug class, add that producer explicitly rather than broadening ownership prematurely
+
+### Why This Is The Best First Cut
+- It fixes the actual contract bug:
+  - the render decision lacks a durable way for the action path to say "local redraw is not enough"
+- It preserves the current local redraw fast path for ordinary movement and adjacent melee.
+- It avoids teaching `monster_remove` about screen policy.
+- It reuses the existing redraw branching in `game_loop.s` and `game_loop_helpers.s` instead of inventing a second render-dispatch system.
+
+### Design Options
+
+#### Option A — Pending action redraw flag folded into `turn_scene_dirty` at `turn_post_action`
+- Pros:
+  - minimal shared change
+  - preserves current main-loop/renderer structure
+  - keeps ownership in the shared turn/render-state seam
+  - easiest to cover in `test_main_loop` / `test_main_loop128`
+- Cons:
+  - tends to force a full viewport redraw for affected stationary kills, even if a tighter dirty region would suffice
+  - requires careful producer selection so nearby melee does not lose the local redraw win unnecessarily
+- Verdict:
+  - recommended
+
+#### Option B — Track a remote dirty tile or tile list and union it with `render_local_area`
+- Pros:
+  - more precise than a forced full redraw
+  - scales to future targeted redraw improvements
+- Cons:
+  - materially more state and more control-flow complexity
+  - harder to prove correct across spell/effect families and both renderers
+  - easy to under-specify multi-kill cases such as `eff_dispel_undead`
+- Verdict:
+  - elegant later optimization, not the right first bug fix
+
+#### Option C — Mark redraw inside `monster_remove` or make all post-turn stationary actions redraw fully
+- Pros:
+  - simple to describe
+- Cons:
+  - wrong ownership if done in `monster_remove`
+  - over-broad performance regression if all stationary actions force full redraw
+  - still wrong if it relies on setting the current `turn_scene_dirty` before `turn_post_action`
+- Verdict:
+  - reject
+
+### Consultant Feedback
+- Consultant-style second-opinion conclusion:
+  - keep this in shared turn/render-state ownership, not in platform code
+  - do not patch the VDC renderer just because the bug was observed on C128
+  - avoid expanding `REF-HAL` with a redraw hook for a bug whose semantics are identical on C64 and C128
+- Specific cautions:
+  - the biggest trap is forgetting that `turn_post_action` clears `turn_scene_dirty`
+  - the second trap is pushing redraw policy down into `monster_remove`, which would blur data ownership and still miss non-removal remote mutations later
+  - if the first producer is too broad, performance regresses; if it is too narrow, the stale glyph survives in another stationary kill path
+
+### Scope For First Implementation
+- In scope:
+  - add pending redraw state in `turn_render_state.s`
+  - fold it into `turn_post_action`
+  - set it from the shared remote-kill helper surface used by ranged/throw/spell-style stationary kills
+  - verify that post-turn helper paths upgrade from local redraw to full redraw when the pending request is present
+- Out of scope:
+  - renderer-specific redraw hacks
+  - HAL/service-layer work
+  - redesigning local dirty-rectangle rendering
+  - speculative support for every future non-local mutation in the first patch
+
+### Verification Plan
+- Extend shared main-loop dispatch tests:
+  - `commodore/c64/tests/test_main_loop.s`
+  - `commodore/c128/tests/test_main_loop128.s`
+- Add focused assertions for a stationary action path that consumes a turn and sets the new pending redraw request:
+  - no viewport scroll
+  - no `vis_room_revealed`
+  - post-turn path still chooses full redraw, not `render_local_area`
+- Add focused helper/effect coverage for the producer contract:
+  - a remote-kill helper sets the pending redraw request
+  - `turn_post_action` promotes and clears it correctly
+  - the old flag-clearing behavior does not erase the request
+- Regression checks:
+  - ordinary movement without remote changes still uses local redraw
+  - adjacent/melee paths that never needed a full redraw do not accidentally start forcing one unless intentionally widened
+
+### Review
+- Recommendation:
+  - implement Option A with `eff_kill_monster` as the first producer and a new pending redraw flag consumed by `turn_post_action`
+- Reason:
+  - it is the smallest change that fixes the shared semantic gap without distorting platform boundaries or paying the complexity cost of remote dirty-rectangle tracking
+
+### Implementation Result (2026-03-27)
+- Closed the bug in the shared turn/effect seam rather than adding renderer or HAL-specific redraw behavior.
+- Root cause confirmed:
+  - `eff_kill_monster` could clear a remote visible monster tile, but the only durable full-redraw trigger in the shared post-turn path was `turn_scene_dirty`
+  - `turn_post_action` clears `turn_scene_dirty` before the action tail reaches `post_turn_update_visibility_or_die`, so a naive pre-turn write would be lost
+- What shipped:
+  - `commodore/common/turn_render_state.s` now aliases `turn_action_redraw_pending` onto the dormant `zp_dirty_count` scratch byte so the action-owned redraw request survives `turn_post_action` without costing another resident byte
+  - `commodore/common/spell_effects.s` `eff_kill_monster` now increments that pending latch immediately after `monster_remove`
+  - `commodore/common/turn.s` now ORs the pending latch into the `monster_ai_tick` redraw result, stores the combined value into `turn_scene_dirty`, and clears the latch for the next turn
+  - the final implementation stayed in shared ownership and preserved the local redraw fast path for ordinary movement / nearby melee
+- C128 layout follow-up:
+  - keeping the fix resident-byte neutral mattered, because the first cut pushed on C128 residency limits
+  - `commodore/c128/main.s` stopped importing `player_magic_display_data.s` into `RuntimeLowData`
+  - `commodore/c128/memory128.s` now imports that shared display data into the MMU common helper blob instead, which keeps the strings bank-safe without consuming runtime-low budget
+- Test coverage added:
+  - `commodore/c64/tests/test_turn.s` now proves the pending redraw latch promotes into `turn_scene_dirty` exactly once and then clears
+  - `commodore/c64/tests/test_monster.s` now proves `eff_kill_monster` sets the pending redraw latch while still clearing the monster slot and map occupancy bit
+  - the new `monster` test stubs XP side effects locally so it can isolate kill-removal redraw ownership without depending on unrelated combat progression setup
+- Verification:
+  - `make -C commodore/c64 build`
+  - focused C64 runtime tests: `turn` `PASS (11/11)`, `monster` `PASS (13/13)`, `effects` `PASS (26/26)`
+  - `make -B -C commodore/c128 build128` with `Made 238 asserts, 0 failed`
+  - `make test128-fast` with all snapshot checks green
 
 ## `BUG-TITLE-DUALDISK-FRAME` Review
 
