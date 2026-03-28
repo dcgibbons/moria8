@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #9
+    ldx #10
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -72,7 +72,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 10, $ff
+tc_results: .fill 11, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -111,6 +111,8 @@ test_player_death_calls: .byte 0
 
 monster_ai_tick:
     inc test_monster_ai_calls
+    lda #0
+    clc
     rts
 
 status_mark_dirty:
@@ -247,6 +249,8 @@ reset_state:
     sta test_player_death_calls
     sta zp_turn_lo
     sta zp_turn_hi
+    sta turn_scene_dirty
+    sta turn_action_redraw_pending
     sta zp_eff_poison
     sta zp_eff_blind
     sta zp_eff_confuse
@@ -328,7 +332,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #9
+    ldx #10
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -700,8 +704,32 @@ test_start:
     bne !t1_fail+
     lda #$01
     sta tc_results + 0
-    jmp test_finish
+    jmp !t11+
 !t1_fail:
     lda #$00
     sta tc_results + 0
+    jmp test_finish
+
+!t11:
+    // Test 11: pending redraw promotes to scene-dirty once, then clears.
+    jsr reset_state
+    lda #1
+    sta turn_action_redraw_pending
+    jsr turn_post_action
+    lda turn_scene_dirty
+    cmp #1
+    bne !t11_fail+
+    lda turn_action_redraw_pending
+    bne !t11_fail+
+    jsr turn_post_action
+    lda turn_scene_dirty
+    bne !t11_fail+
+    lda turn_action_redraw_pending
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp test_finish
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
     jmp test_finish

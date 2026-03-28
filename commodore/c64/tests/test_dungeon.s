@@ -89,18 +89,22 @@ recall_clear: rts
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
+store_init_all:
+    rts
+
+store_restock_all:
+    rts
+
+store_enter:
+    rts
 // ui_help stubs — saves ~900 bytes; these are never called during dungeon tests.
 // Full ui_help.s + ui_help_data.s adds ~900 bytes of help screen strings/code.
+ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
     rts
 #import "../../common/ui_trampoline_stubs.s"
-
-.assert "Test code must not cross MAP_BASE", * < MAP_BASE, true
 
 // Strings referenced by imported modules but defined in main.s
 press_key_str:
@@ -2166,3 +2170,7 @@ test_start:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
+
+test_end:
+
+.assert "Dungeon test main must stay below MAP_BASE", test_end < MAP_BASE, true

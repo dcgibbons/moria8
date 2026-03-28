@@ -52,6 +52,8 @@ mat_total_dmg:    .byte 0   // Total damage accumulated this round
 // Uses ZP $70-$7F (monster AI scratch) which is still valid.
 // Clobbers: everything
 monster_attack_player:
+    jsr player_search_mode_off
+
     lda zp_mon_idx
     sta mat_slot2
     lda zp_mon_type

@@ -9,6 +9,8 @@
 // 6. Background generation (social class + flavor text)
 // 7. Initialize starting HP, mana, gold, food, position
 
+#import "platform_services_api.s"
+
 // Starting values
 .const START_FOOD_LO  = <2000  // 2000 turns of food (lo = $D0)
 .const START_FOOD_HI  = >2000  // (hi = $07)
@@ -49,7 +51,7 @@ player_create:
     jsr create_select_gender
     .if (C128_CHARGEN_CUTPOINT == 5) { rts }
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     .if (C128_CHARGEN_CUTPOINT == 6) { rts }
     jsr create_gen_background
@@ -57,7 +59,7 @@ player_create:
     :C128StackSlotGuardCheck($89)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     .if (C128_CHARGEN_CUTPOINT == 7) { rts }
     jsr create_init_character
@@ -68,7 +70,7 @@ player_create:
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($92)
 #endif
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($93)
 #endif

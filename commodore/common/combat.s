@@ -38,6 +38,10 @@ cmb_period:      .byte $2e, 0   // "."
 // Output: always returns with carry SET (turn consumed)
 // Clobbers: everything
 player_attack_monster:
+    pha
+    jsr player_search_mode_off
+    pla
+
     // Find the monster at this position
     jsr monster_find_at         // A=x, Y=y → carry set, X=slot
     bcs !pam_found+

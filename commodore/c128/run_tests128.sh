@@ -505,7 +505,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
@@ -543,7 +543,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -680,15 +680,28 @@ run_main_assembly_check() {
 
     local build_log
     build_log="$(test128_tmp_file test128_main_build.log)"
+    local force_base_rebuild=0
     local make_kickass
     make_kickass="$(test128_tmp_file moria128-kickass.jar)"
     local kickass_abs
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
 
+    if ! c128_active_variant_is "base"; then
+        force_base_rebuild=1
+    fi
+
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
-    if ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    if [ "$force_base_rebuild" -eq 1 ]; then
+        if ! make -s -W main.s -W boot128.s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+            echo "FAIL"
+            grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    elif ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL"
         grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -703,6 +716,7 @@ run_main_assembly_check() {
     else
         echo "PASS"
     fi
+    c128_set_active_variant "base"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
@@ -808,7 +822,7 @@ from pathlib import Path
 import re
 sym = Path("main.sym").read_text().splitlines()
 main_text = Path("main.s").read_text()
-main_source = main_text.splitlines()
+contract_source = Path("io_contracts.s").read_text().splitlines()
 labels = {}
 for line in sym:
     m = re.match(r"\.label\s+([A-Za-z0-9_]+)=\$(\w+)", line)
@@ -816,96 +830,141 @@ for line in sym:
         continue
     labels[m.group(1)] = int(m.group(2), 16)
 
-assert_guards = set()
-out_of_hole_guards = {}
-for line in main_source:
-    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\s*\|\|\s*\1\s*>=\s*\$(\w+)\b", line)
-    if m:
-        out_of_hole_guards[m.group(1)] = int(m.group(2), 16)
-        continue
-    m = re.search(r"\.assert\s+\"[^\"]*\"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*<\s*\$D000\b", line)
-    if m:
-        assert_guards.add(m.group(1))
+contract_patterns = {
+    "below_io_hole": re.compile(r':C128AuditBelowIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "out_of_io_hole": re.compile(r':C128AuditOutOfIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*\$(\w+)\s*\)'),
+    "runtime_low_bank0": re.compile(r':C128AuditRuntimeLow\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "startup_overlay": re.compile(r':C128AuditStartupOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "town_overlay": re.compile(r':C128AuditTownOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "help_overlay": re.compile(r':C128AuditHelpOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "ui_overlay": re.compile(r':C128AuditUiOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "dungeon_overlay": re.compile(r':C128AuditDungeonOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "banked_window": re.compile(r':C128AuditBanked\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+}
 
-required = [
-    "game_over_prompt",
-    "game_over_prompt_end",
-    "game_over_str",
-    "game_over_str_end",
-    "title_show_sysinfo",
-    "tramp_reu_show_status",
-    "tramp_ui_equip_display",
-    "tramp_ui_recall",
-    "tramp_store_init_all",
-    "tramp_store_restock_all",
-    "tramp_store_enter",
-    "tramp_player_create",
-    "tramp_game_over",
+contracts = []
+for raw in contract_source:
+    line = raw.strip()
+    if not line or line.startswith("//") or line.startswith("#"):
+        continue
+    for kind, pattern in contract_patterns.items():
+        m = pattern.match(line)
+        if not m:
+            continue
+        display = m.group(1)
+        symbol = m.group(2)
+        arg = int(m.group(3), 16) if kind == "out_of_io_hole" else None
+        contracts.append((kind, display, symbol, arg))
+        break
+
+if not contracts:
+    print("io_contracts.s: no parsed residency contracts")
+    raise SystemExit(1)
+
+required_labels = [
+    "banked_code_end",
+    "runtime_low_data_start",
+    "runtime_low_data_end",
+    "ovl_start_end",
+    "ovl_town_end",
+    "ovl_death_end",
+    "ovl_help_end",
+    "ovl_ui_end",
+    "ovl_gen_end",
 ]
 
-# These are the concrete regression-prone runtime symbols that must stay out
-# of the C128 $D000-$DFFF I/O hole. Each one should also be protected by a
-# source-level placement assert in main.s.
-must_have_asserts = [
+below_io_data = [
     "title_menu_str",
     "ds_menu_str",
     "ds_dual_str",
     "de_prompt_str",
-    "save_game",
-    "load_game",
-    "load_read_byte",
-    "load_read_block",
-    "load_read_map_c128",
-    "delete_savefile",
-    "update_visibility",
-    "reveal_room",
-    "player_try_move",
-    "player_attack_monster",
-    "combat_roll_tohit",
-    "combat_apply_damage",
-    "msg_build_action",
-    "cmb_print_buf",
-    "monster_attack_player",
-    "mon_atk_calc_tohit",
-    "mon_atk_roll_tohit",
-    "mon_atk_apply_damage",
+    "game_over_prompt_end",
+    "game_over_str",
+    "game_over_str_end",
 ]
+
 bad = []
 missing = []
-missing_asserts = []
-for name in required:
+
+for name in required_labels:
+    if name not in labels:
+        missing.append(name)
+
+for name in below_io_data:
     if name not in labels:
         missing.append(name)
         continue
     if labels[name] >= 0xD000:
-        bad.append((name, labels[name]))
+        bad.append((name, labels[name], "below_io_hole"))
 
 if "msg_history" not in labels or "msg_hist_idx" not in labels:
     missing.append("msg_history/msg_hist_idx")
 else:
     if labels["msg_hist_idx"] - labels["msg_history"] != (8 * 80):
-        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"]))
+        bad.append(("msg_history_span", labels["msg_hist_idx"] - labels["msg_history"], "width"))
 
 for name in ("help_title_str", "help_lines"):
     if name not in labels:
         missing.append(name)
         continue
     if labels[name] < 0xE000 or labels[name] >= 0xF000:
-        bad.append((name, labels[name]))
+        bad.append((name, labels[name], "overlay_window"))
 
-for name in ("ui_help_display", "ui_char_display", "ui_inv_display", "ui_equip_display"):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if labels[name] < 0xE000 or labels[name] >= 0xF000:
-        bad.append((name, labels[name]))
+runtime_low_prg = Path("out/runtime.low.prg")
+if not runtime_low_prg.exists():
+    missing.append("out/runtime.low.prg")
+else:
+    data = runtime_low_prg.read_bytes()
+    if len(data) < 2:
+        bad.append(("runtime.low.prg", len(data), "short"))
+    else:
+        load = data[0] | (data[1] << 8)
+        if load != 0x1000:
+            bad.append(("runtime.low.prg header", load, "load_header"))
 
-for name in ("ui_recall_display",):
-    if name not in labels:
-        missing.append(name)
+if "runtime_low_data_start" in labels and labels["runtime_low_data_start"] != 0x1000:
+    bad.append(("runtime_low_data_start", labels["runtime_low_data_start"], "runtime_low_base"))
+
+overlay_limits = {
+    "startup_overlay": labels.get("ovl_start_end"),
+    "town_overlay": labels.get("ovl_town_end"),
+    "death_overlay": labels.get("ovl_death_end"),
+    "help_overlay": labels.get("ovl_help_end"),
+    "ui_overlay": labels.get("ovl_ui_end"),
+    "dungeon_overlay": labels.get("ovl_gen_end"),
+}
+
+for kind, _display, symbol, arg in contracts:
+    if symbol not in labels:
+        missing.append(symbol)
         continue
-    if labels[name] < 0xF000 or labels[name] >= labels["banked_code_end"]:
-        bad.append((name, labels[name]))
+    addr = labels[symbol]
+    if kind == "below_io_hole":
+        if addr >= 0xD000:
+            bad.append((symbol, addr, kind))
+    elif kind == "out_of_io_hole":
+        if 0xD000 <= addr < arg:
+            bad.append((symbol, addr, kind))
+    elif kind == "runtime_low_bank0":
+        start = labels.get("runtime_low_data_start")
+        end = labels.get("runtime_low_data_end")
+        if start is None or end is None:
+            missing.extend(name for name in ("runtime_low_data_start", "runtime_low_data_end") if name not in labels)
+        elif not (start <= addr < end):
+            bad.append((symbol, addr, kind))
+    elif kind == "banked_window":
+        end = labels.get("banked_code_end")
+        if end is None:
+            missing.append("banked_code_end")
+        elif not (0xF000 <= addr < end):
+            bad.append((symbol, addr, kind))
+    else:
+        end = overlay_limits.get(kind)
+        if end is None:
+            missing.append(kind)
+        elif not (0xE000 <= addr < end):
+            bad.append((symbol, addr, kind))
 
 for label in (
     "tramp_ui_help_display",
@@ -925,34 +984,14 @@ if "ldx #21\n    jsr vdc_write_reg\n    lda #8\n    dex                         
     print("vdc_attr_base_init: expected reg21/reg20 init sequence with lda #8 for reg20")
     raise SystemExit(1)
 
-# Hard rule: no critical entrypoint may execute from the $D000-$DFFF I/O hole.
-for name in must_have_asserts:
-    if name not in assert_guards and name not in out_of_hole_guards:
-        missing_asserts.append(name)
-
-# Every source-level <$D000 guard must be enforced by the runner.
-for name in sorted(assert_guards):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if labels[name] >= 0xD000:
-        bad.append((name, labels[name]))
-
-# Every source-level "out of I/O hole" guard must be enforced by the runner.
-for name, low_ok in sorted(out_of_hole_guards.items()):
-    if name not in labels:
-        missing.append(name)
-        continue
-    if 0xD000 <= labels[name] < low_ok:
-        bad.append((name, labels[name]))
-
-if missing or bad or missing_asserts:
+if missing or bad:
     if missing:
         print("missing:" + ",".join(missing))
-    if missing_asserts:
-        print("missing_asserts:" + ",".join(sorted(missing_asserts)))
-    for name, addr in bad:
-        print(f"high:{name}=${addr:04X}")
+    for name, addr, kind in bad:
+        if isinstance(addr, int):
+            print(f"bad:{kind}:{name}=${addr:04X}")
+        else:
+            print(f"bad:{kind}:{name}={addr}")
     raise SystemExit(1)
 
 print("ok")
@@ -1113,50 +1152,66 @@ if len(first2) < 2 or (not first2[0].lower().startswith("php")) or (not first2[1
     print(f"screen_put_string must start with php; sei, found: {first2!r}")
     raise SystemExit(1)
 
-if not has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg"):
-    print("item_takeoff prompt is not using Huffman print path")
+if not (
+    has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr huff_print_msg")
+    or has_pair(items, "ldx #HSTR_PIW_TAKEOFF_PROMPT", "jsr piw_print_prompt_with_count")
+):
+    print("item_takeoff prompt is not using Huffman-backed prompt path")
+    raise SystemExit(1)
+
+if not has_ordered_chain(items, [
+    "piw_print_prompt_with_count:",
+    "php",
+    "sei",
+    "jsr huff_decode_string",
+], window=8) or not has_ordered_chain(items, [
+    "!piw_prompt_print:",
+    "plp",
+    "jsr msg_print_cached",
+], window=8):
+    print("piw_print_prompt_with_count is not preserving IRQ state around cached Huffman prompt rendering")
     raise SystemExit(1)
 
 required_chains = [
     ("item_wear", items, [
         "ldx #HSTR_PIW_WEAR_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_takeoff", items, [
         "ldx #HSTR_PIW_TAKEOFF_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_print_prompt_with_count",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_quaff", items, [
         "ldx #HSTR_PIQ_QUAFF_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_read_scroll", items, [
         "ldx #HSTR_PIQ_READ_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_aim_wand", items, [
         "ldx #HSTR_PIW_AIM_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_use_staff", items, [
         "ldx #HSTR_PIW_USE_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
     ("item_gain_spell", items, [
         "ldx #HSTR_IGS_PROMPT",
-        "jsr huff_print_msg",
+        "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
@@ -1254,6 +1309,99 @@ if not has_ordered_chain(help_mod, [
     "sta (zp_screen_lo),y",
 ]):
     print("ui_help_draw_line must use screen_put_char on C128 and keep direct RAM path only for C64")
+    raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_ref_hal_guard_check() {
+    echo -n "  ref_hal_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+import re
+
+root = Path("..").resolve()
+common = root / "common"
+helper = common / "input_ui_helpers.s"
+
+runtime_exclusions = {
+    "game_loop.s": {"c128_restore_runtime_guards": 1},
+    "reu.s": {"c128_restore_runtime_vectors": 1},
+}
+runtime_counts = {
+    "game_loop.s": {"c128_restore_runtime_guards": 0},
+    "reu.s": {"c128_restore_runtime_vectors": 0},
+}
+runtime_leaks: list[str] = []
+kbdbuf_leaks: list[str] = []
+helper_raw_kbdbuf = 0
+
+
+def code_lines(path: Path):
+    for lineno, raw in enumerate(path.read_text().splitlines(), start=1):
+        code = raw.split("//", 1)[0].strip()
+        if code:
+            yield lineno, code
+
+
+for path in sorted(common.glob("*.s")):
+    for lineno, code in code_lines(path):
+        for token in ("c128_restore_runtime_guards", "c128_restore_runtime_vectors"):
+            if token not in code:
+                continue
+            allowed = runtime_exclusions.get(path.name, {})
+            if token in allowed:
+                runtime_counts[path.name][token] += code.count(token)
+            else:
+                runtime_leaks.append(f"{path.name}:{lineno}: {token}")
+
+        if re.search(r"\bKBDBUF_COUNT\b", code):
+            if path.name == helper.name:
+                helper_raw_kbdbuf += len(re.findall(r"\bKBDBUF_COUNT\b", code))
+            else:
+                kbdbuf_leaks.append(f"{path.name}:{lineno}: KBDBUF_COUNT")
+
+if runtime_leaks:
+    print("unexpected shared runtime-repair references:")
+    for hit in runtime_leaks:
+        print(f"  {hit}")
+    raise SystemExit(1)
+
+for path_name, token_counts in runtime_counts.items():
+    for token, count in token_counts.items():
+        expected = runtime_exclusions[path_name][token]
+        if count != expected:
+            print(f"{path_name} must contain exactly {expected} live {token} reference(s), found {count}")
+            raise SystemExit(1)
+
+if kbdbuf_leaks:
+    print("unexpected raw KBDBUF_COUNT references in shared code:")
+    for hit in kbdbuf_leaks:
+        print(f"  {hit}")
+    raise SystemExit(1)
+
+if helper_raw_kbdbuf != 0:
+    print(f"{helper.name} must keep KBDBUF_COUNT wrapped behind INPUT_UI_HELPER_KBDBUF_COUNT, found {helper_raw_kbdbuf} raw use(s)")
+    raise SystemExit(1)
+
+helper_text = helper.read_text()
+if "INPUT_UI_HELPER_KBDBUF_COUNT" not in helper_text:
+    print("input_ui_helpers.s must own the wrapped keyboard-buffer alias")
     raise SystemExit(1)
 
 print("ok")
@@ -2070,6 +2218,7 @@ run_test_internal() {
         echo "load \"${abs_prg}\" 0"
         echo "r pc=${start_addr}"
         echo "until \$${pass_addr}"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col \
@@ -2397,6 +2546,43 @@ PY
 boot_log_has_crash() {
     local log_file="$1"
     grep -qi "JAM\\|Invalid opcode" "$log_file"
+}
+
+boot_stop_vice_process() {
+    local vice_pid="$1"
+    if kill -0 "$vice_pid" 2>/dev/null; then
+        kill "$vice_pid" 2>/dev/null || true
+        wait "$vice_pid" 2>/dev/null || true
+    fi
+}
+
+boot_wait_for_until_or_crash() {
+    local vice_pid="$1"
+    local target_addr="$2"
+    local log_file="$3"
+    local deadline=$((SECONDS + 25))
+
+    while :; do
+        if grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"; then
+            boot_stop_vice_process "$vice_pid"
+            return 0
+        fi
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_stop_vice_process "$vice_pid"
+            return 1
+        fi
+        if ! kill -0 "$vice_pid" 2>/dev/null; then
+            wait "$vice_pid" 2>/dev/null || true
+            break
+        fi
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            boot_stop_vice_process "$vice_pid"
+            return 1
+        fi
+        sleep 0.1
+    done
+
+    grep -qi "^UNTIL: .*C:\$${target_addr}" "$log_file"
 }
 
 boot_log_has_stop_at() {
@@ -2907,9 +3093,7 @@ run_town_overlay_female_smoke() {
 
     {
         echo "break \$d000 \$dfff"
-        echo "break \$${store_enter}"
-        echo "g"
-        echo "g"
+        echo "until \$${store_enter}"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -2919,7 +3103,7 @@ run_town_overlay_female_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "C:\$${store_enter}" "$log_file"; then
+    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
         boot_log_report_failure "did not reach store_enter via female town overlay flow" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -2971,9 +3155,7 @@ run_town_overlay_state_smoke() {
 
     {
         echo "break \$d000 \$dfff"
-        echo "break \$${store_enter}"
-        echo "g"
-        echo "g"
+        echo "until \$${store_enter}"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -2983,7 +3165,7 @@ run_town_overlay_state_smoke() {
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
 
-    if ! grep -qi "C:\$${store_enter}" "$log_file"; then
+    if ! grep -qi "^UNTIL: .*C:\$${store_enter}" "$log_file"; then
         boot_log_report_failure "did not reach store_enter with corrupted overlay state" "$log_file" "store_enter" "$store_enter" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3132,42 +3314,45 @@ run_real_input_town_move_diag() {
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128.d64"
-    local last_stage="boot"
-
-    for idx in "${!stage_names[@]}"; do
-        local mon_file
-        mon_file="$(test128_tmp_file "test128_${name}_${idx}.mon")"
-        local log_file
-        log_file="$(test128_tmp_file "test128_${name}_${idx}.log")"
-        : > "$log_file"
-        {
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    : > "$log_file"
+    {
+        for idx in "${!stage_addrs[@]}"; do
             echo "break \$${stage_addrs[$idx]}"
+        done
+        for idx in "${!stage_addrs[@]}"; do
             echo "g"
-        } > "$mon_file"
+        done
+        echo "quit"
+    } > "$mon_file"
 
-        "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
-            -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
-            -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-            -limitcycles 320000000 +sound -sounddev dummy \
-            +remotemonitor +binarymonitor >/dev/null 2>&1
-        local vice_rc=$?
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -keybuf $'NAA\rA\rA L' -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 320000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
 
-        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
-            echo "FAIL (jam before stage: ${stage_names[$idx]}; last reached: $last_stage)"
-            tail -20 "$log_file" | sed 's/^/    /'
-            FAIL=$((FAIL + 1))
-            TOTAL=$((TOTAL + 1))
-            return
-        fi
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        echo "FAIL (jam during real-input town move diag)"
+        tail -20 "$log_file" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
 
-        if ! grep -qi "C:\$${stage_addrs[$idx]}" "$log_file"; then
+    local last_stage="boot"
+    for idx in "${!stage_names[@]}"; do
+        if ! grep -qi "^BREAK: .*C:\$${stage_addrs[$idx]}" "$log_file"; then
             echo "FAIL (did not reach stage: ${stage_names[$idx]}; last reached: $last_stage; vice_rc=$vice_rc)"
             tail -20 "$log_file" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
         fi
-
         last_stage="${stage_names[$idx]}"
     done
 
@@ -3786,6 +3971,7 @@ run_selected_suites() {
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
     run_parallel_unit_tests || return 1

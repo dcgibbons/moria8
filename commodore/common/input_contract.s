@@ -56,6 +56,7 @@
 .const CMD_BASH      = $31
 .const CMD_TUNNEL    = $32
 .const CMD_WIZARD    = $33
+.const CMD_SEARCH_MODE = $34
 
 // Index = CMD_MOVE_x - CMD_MOVE_N
 dir_dx: .byte  0,  0, -1, 1, -1, 1, -1, 1

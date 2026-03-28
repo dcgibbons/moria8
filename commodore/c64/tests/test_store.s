@@ -1,9 +1,9 @@
 // test_store.s — Runtime tests for store data, pricing, gold, UI helpers
 //
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
-// gold operations, store door detection, find empty slot.
+// gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$041C: $01 = pass, $00 = fail per test (29 tests)
+// Results at $0400-$0424: $01 = pass, $00 = fail per test (37 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #28
+    ldx #36
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -85,17 +85,28 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 29, $ff
+tc_results: .fill 37, $ff
 tc_count: .byte 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #27
+    ldx #36
     lda #$ff
 !clr:
     sta tc_results,x
     dex
     bpl !clr-
+
+    :PatchJump(input_get_key, test_input_get_key)
 
     // Seed RNG deterministically
     lda #$42
@@ -846,4 +857,378 @@ test_start:
 !t29_store:
     sta tc_results + 28
 
+    // ============================================================
+    // Test 30: input_read_number supports delete and ignores extra digits
+    // Script: 1 2 DEL 3 4 5 6 7 RET => 13456
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #<script_num_edit
+    ldy #>script_num_edit
+    jsr set_test_input_script
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #0
+    sta zp_cursor_row
+    sta zp_cursor_col
+    jsr input_read_number
+    bcc !t30_fail+
+    lda hg_input_lo
+    cmp #<13456
+    bne !t30_fail+
+    lda hg_input_hi
+    cmp #>13456
+    bne !t30_fail+
+    lda #$01
+    jmp !t30_store+
+!t30_fail:
+    lda #$00
+!t30_store:
+    sta tc_results + 29
+
+    // ============================================================
+    // Test 31: haggle_buy retries overshoot, then accepts exact ask
+    // Script: 20 RET, ack, 12 RET
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    sta sb_abs_slot
+    lda #2
+    sta si_item_id + 0
+    lda #0
+    sta si_p1 + 0
+    sta sb_price_hi
+    lda #12
+    sta sb_price_lo
+    lda #<script_buy_retry
+    ldy #>script_buy_retry
+    jsr set_test_input_script
+    jsr haggle_buy
+    bcc !t31_fail+
+    lda sb_price_lo
+    cmp #12
+    bne !t31_fail+
+    lda sb_price_hi
+    bne !t31_fail+
+    lda hg_insults
+    bne !t31_fail+
+    lda #$01
+    jmp !t31_store+
+!t31_fail:
+    lda #$00
+!t31_store:
+    sta tc_results + 30
+
+    // ============================================================
+    // Test 32: haggle_buy insults backwards second offer, then cancels
+    // Script: 6 RET, ack, 5 RET, ack, Q
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    sta sb_abs_slot
+    lda #2
+    sta si_item_id + 0
+    lda #0
+    sta si_p1 + 0
+    sta sb_price_hi
+    lda #12
+    sta sb_price_lo
+    lda #<script_buy_backwards
+    ldy #>script_buy_backwards
+    jsr set_test_input_script
+    jsr haggle_buy
+    bcs !t32_fail+
+    lda hg_insults
+    cmp #1
+    bne !t32_fail+
+    lda hg_kicked + 0
+    bne !t32_fail+
+    lda #$01
+    jmp !t32_store+
+!t32_fail:
+    lda #$00
+!t32_store:
+    sta tc_results + 31
+
+    // ============================================================
+    // Test 33: haggle_sell retries undershoot, then accepts exact offer
+    // Script: 4 RET, ack, 5 RET
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    lda #10
+    sta sb_price_lo
+    lda #0
+    sta sb_price_hi
+    lda #<script_sell_retry
+    ldy #>script_sell_retry
+    jsr set_test_input_script
+    jsr haggle_sell
+    bcc !t33_fail+
+    lda sb_price_lo
+    cmp #5
+    bne !t33_fail+
+    lda sb_price_hi
+    bne !t33_fail+
+    lda hg_insults
+    bne !t33_fail+
+    lda #$01
+    jmp !t33_store+
+!t33_fail:
+    lda #$00
+!t33_store:
+    sta tc_results + 32
+
+    // ============================================================
+    // Test 34: haggle_sell insults backwards second ask, then cancels
+    // Script: 9 RET, ack, 10 RET, ack, Q
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    lda #10
+    sta sb_price_lo
+    lda #0
+    sta sb_price_hi
+    lda #<script_sell_backwards
+    ldy #>script_sell_backwards
+    jsr set_test_input_script
+    jsr haggle_sell
+    bcs !t34_fail+
+    lda hg_insults
+    cmp #1
+    bne !t34_fail+
+    lda hg_kicked + 0
+    bne !t34_fail+
+    lda #$01
+    jmp !t34_store+
+!t34_fail:
+    lda #$00
+!t34_store:
+    sta tc_results + 33
+
+    // ============================================================
+    // Test 35: BM buy path bypasses haggling and cools insults
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #STORE_BM
+    sta zp_store_idx
+    lda #2
+    sta hg_insults
+    lda #50
+    sta player_data + PL_GOLD_0
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda #2
+    sta si_item_id,x
+    lda #1
+    sta si_qty,x
+    lda #<script_buy_yes
+    ldy #>script_buy_yes
+    jsr set_test_input_script
+    jsr store_buy
+    lda inv_item_id + 0
+    cmp #2
+    bne !t35_fail+
+    lda hg_insults
+    cmp #1
+    bne !t35_fail+
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda si_item_id,x
+    cmp #FI_EMPTY
+    bne !t35_fail+
+    lda #$01
+    jmp !t35_store+
+!t35_fail:
+    lda #$00
+!t35_store:
+    sta tc_results + 34
+
+    // ============================================================
+    // Test 36: cheap normal-store buy bypasses haggling and cools insults
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    lda #2
+    sta hg_insults
+    lda #50
+    sta player_data + PL_GOLD_0
+    lda #2
+    sta si_item_id + 0
+    lda #1
+    sta si_qty + 0
+    lda #<script_buy_yes
+    ldy #>script_buy_yes
+    jsr set_test_input_script
+    jsr store_buy
+    lda inv_item_id + 0
+    cmp #2
+    bne !t36_fail+
+    lda hg_insults
+    cmp #1
+    bne !t36_fail+
+    lda si_item_id + 0
+    cmp #FI_EMPTY
+    bne !t36_fail+
+    lda #$01
+    jmp !t36_store+
+!t36_fail:
+    lda #$00
+!t36_store:
+    sta tc_results + 35
+
+    // ============================================================
+    // Test 37: repeated insulting buy offers kick the player out
+    // Script: 4 RET, ack, 4 RET, ack, 4 RET, ack
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    sta sb_abs_slot
+    lda #2
+    sta si_item_id + 0
+    lda #0
+    sta si_p1 + 0
+    sta sb_price_hi
+    lda #12
+    sta sb_price_lo
+    lda #<script_buy_kick
+    ldy #>script_buy_kick
+    jsr set_test_input_script
+    jsr haggle_buy
+    bcs !t37_fail+
+    lda hg_kicked + 0
+    cmp #1
+    bne !t37_fail+
+    lda hg_insults
+    cmp #3
+    bne !t37_fail+
+    lda #$01
+    jmp !t37_store+
+!t37_fail:
+    lda #$00
+!t37_store:
+    sta tc_results + 36
+
     jmp test_exit_trampoline
+
+reset_haggle_fixture:
+    jsr screen_clear
+
+    lda #18
+    sta player_data + PL_CHR_CUR
+
+    lda #0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    lda #200
+    sta player_data + PL_GOLD_0
+
+    ldx #7
+    lda #0
+!clr_kick:
+    sta hg_kicked,x
+    dex
+    bpl !clr_kick-
+
+    lda #0
+    sta hg_ask_lo
+    sta hg_ask_hi
+    sta hg_min_lo
+    sta hg_min_hi
+    sta hg_last_lo
+    sta hg_last_hi
+    sta hg_input_lo
+    sta hg_input_hi
+    sta hg_den_lo
+    sta hg_den_hi
+    sta hg_pct
+    sta hg_round
+    sta hg_insults
+    sta hg_tmp0
+    sta hg_tmp1
+    sta hg_digit_cnt
+    sta sb_price_lo
+    sta sb_price_hi
+    sta sb_abs_slot
+    sta ss_inv_slot
+    sta ss_item_id
+    sta sb_item_p1
+    sta sb_item_ego
+    sta zp_store_idx
+
+    ldx #STORE_TOTAL_SLOTS - 1
+    lda #FI_EMPTY
+!clr_store_id:
+    sta si_item_id,x
+    dex
+    bpl !clr_store_id-
+
+    ldx #STORE_TOTAL_SLOTS - 1
+    lda #0
+!clr_store_rest:
+    sta si_qty,x
+    sta si_p1,x
+    sta si_flags,x
+    sta si_ego,x
+    dex
+    bpl !clr_store_rest-
+
+    ldx #MAX_INV_SLOTS - 1
+    lda #FI_EMPTY
+!clr_inv_id:
+    sta inv_item_id,x
+    dex
+    bpl !clr_inv_id-
+
+    ldx #MAX_INV_SLOTS - 1
+    lda #0
+!clr_inv_rest:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_flags,x
+    sta inv_ego,x
+    dex
+    bpl !clr_inv_rest-
+    rts
+
+set_test_input_script:
+    sta zp_ptr2
+    sty zp_ptr2_hi
+    lda #0
+    sta test_input_idx
+    rts
+
+test_input_get_key:
+    ldy test_input_idx
+    lda (zp_ptr2),y
+    beq !default+
+    iny
+    sty test_input_idx
+    rts
+!default:
+    lda #PETSCII_Q
+    rts
+
+test_input_idx:    .byte 0
+
+script_num_edit:
+    .byte '1', '2', $14, '3', '4', '5', '6', '7', $0d, 0
+script_buy_retry:
+    .byte '2', '0', $0d, 'X', '1', '2', $0d, 0
+script_buy_backwards:
+    .byte '6', $0d, 'X', '5', $0d, 'X', PETSCII_Q, 0
+script_sell_retry:
+    .byte '4', $0d, 'X', '5', $0d, 0
+script_sell_backwards:
+    .byte '9', $0d, 'X', '1', '0', $0d, 'X', PETSCII_Q, 0
+script_buy_yes:
+    .byte PETSCII_A, PETSCII_Y, 0
+script_buy_kick:
+    .byte '4', $0d, 'X', '4', $0d, 'X', '4', $0d, 'X', 0

@@ -5,6 +5,8 @@
 // Hot fields are mirrored in ZP (zeropage.s) for fast access.
 // This module provides the full struct and sync routines between
 // ZP and the main struct.
+
+#import "platform_services_api.s"
 //
 // Total struct size: ~128 bytes
 
@@ -82,6 +84,7 @@
 .const PLF_SLOW_DIG = $08
 .const PLF_SEARCHING = $10
 .const PLF_RESTING  = $20
+.const PLAYER_SEARCH_FLAG_LIT = $08
 
 // ============================================================
 // Player struct storage
@@ -602,6 +605,155 @@ player_get_stat_bonus:
     rts
 
 // ============================================================
+// Search mode and derived search/perception helpers
+// ============================================================
+
+// player_search_mode_on — Enable persistent search mode
+// Preserves: nothing
+player_search_mode_on:
+    lda player_data + PL_FLAGS
+    ora #PLF_SEARCHING
+    cmp player_data + PL_FLAGS
+    beq !done+
+    sta player_data + PL_FLAGS
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+!done:
+    rts
+
+// player_search_mode_off — Disable persistent search mode
+// Preserves: nothing
+player_search_mode_off:
+    lda player_data + PL_FLAGS
+    and #($ff - PLF_SEARCHING)
+    cmp player_data + PL_FLAGS
+    beq !done+
+    sta player_data + PL_FLAGS
+    lda zp_ui_dirty
+    ora #$01
+    sta zp_ui_dirty
+!done:
+    rts
+
+// player_search_clear_transient_state — Reset non-persistent search runtime state
+player_search_clear_transient_state:
+    jsr player_search_mode_off
+    lda #0
+    sta zp_search_count
+    rts
+
+// player_search_has_light — Returns carry set when the player has no local light
+// source and is not standing on a lit tile.
+player_search_has_no_light:
+    lda zp_light_radius
+    bne !has_light+
+
+    ldx zp_player_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_player_x
+    :MapRead_ptr0_y()
+    and #PLAYER_SEARCH_FLAG_LIT
+    beq !no_light+
+!has_light:
+    clc
+    rts
+!no_light:
+    sec
+    rts
+
+// player_search_get_base_chance — Race/class-derived active search chance
+// Output: A = base search chance
+player_search_get_base_chance:
+    // Class search is unsigned at offset 8.
+    lda player_data + PL_CLASS
+    ldx #CLASS_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #8
+    tax
+    lda class_properties,x
+    sta zp_temp0
+
+    // Race search adjustment is signed at offset 4; the shipped tables keep
+    // the combined total in the positive range, so 8-bit add is sufficient.
+    lda player_data + PL_RACE
+    ldx #RACE_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #4
+    tax
+    lda race_properties,x
+    clc
+    adc zp_temp0
+    rts
+
+// player_search_get_fos — Race/class-derived passive auto-search frequency
+// Output: A = fos (<=1 means always search on movement)
+player_search_get_fos:
+    // Class fos is unsigned at offset 9.
+    lda player_data + PL_CLASS
+    ldx #CLASS_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #9
+    tax
+    lda class_properties,x
+    sta zp_temp0
+
+    lda player_data + PL_RACE
+    ldx #RACE_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #6
+    tax
+    lda race_properties,x
+    clc
+    adc zp_temp0
+    rts
+
+// player_search_get_effective_chance — Apply live status/light penalties
+// Output: A = effective chance used by active and passive search scans
+player_search_get_effective_chance:
+    jsr player_search_get_base_chance
+    sta player_search_work
+
+    lda zp_eff_confuse
+    beq !not_confused+
+    lda player_search_work
+    jsr player_search_divide_by_10
+    sta player_search_work
+!not_confused:
+
+    lda zp_eff_blind
+    bne !dim_penalty+
+    jsr player_search_has_no_light
+    bcc !done+
+!dim_penalty:
+    lda player_search_work
+    jsr player_search_divide_by_10
+    sta player_search_work
+!done:
+    lda player_search_work
+    rts
+
+// player_search_divide_by_10 — Floor(A / 10)
+// Output: A = quotient
+player_search_divide_by_10:
+    sta zp_math_a
+    lda #0
+    sta zp_math_b
+    ldx #10
+    jsr math_div_16x8
+    lda zp_math_a
+    rts
+
+player_search_work: .byte 0
+
+// ============================================================
 // ui_char_draw_background — Draw sex, social class, background on char sheet
 // Called from ui_char_display ($F000). Main RAM so no banking issues.
 // Renders rows 12-16 of the character sheet.
@@ -615,7 +767,7 @@ player_get_stat_bonus:
 
 ui_char_draw_background:
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     // --- Sex / Social Class (row 12) ---
     lda #12

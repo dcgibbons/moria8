@@ -31,4 +31,18 @@ ui_clear_full_screen_safe:
 ui_help_clear_all:
     jmp ui_clear_full_screen_safe
 
+uh_title_str: .text "Command Reference" ; .byte 0
 help_line_idx: .byte 0
+help_page_idx: .byte 0
+help_page_count: .byte 1
+help_pages_src_lo: .byte <uh_help_pages_fallback
+help_pages_src_hi: .byte >uh_help_pages_fallback
+
+uh_help_lines_fallback:
+    .for (var i = 0; i < 23; i++) {
+        .byte 2, $00
+    }
+
+uh_help_pages_fallback:
+    .byte 1
+    .word uh_help_lines_fallback

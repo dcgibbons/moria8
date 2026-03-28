@@ -3,6 +3,8 @@
 //
 // Shows full character info on screen. Called from character
 // creation and via the 'C' command during gameplay.
+
+#import "platform_services_api.s"
 //
 // Layout (40 columns):
 //   Row 0:  CHARACTER INFO
@@ -48,13 +50,15 @@
 // Preserves: nothing
 ui_char_display:
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #if C128_TEST_SCRIPTED_INPUT
     lda #1
     sta c128_test_summary_seen
+    inc c128_test_summary_count
 #elif C128_TEST_CACHE_SURVIVAL
     lda #1
     sta c128_test_summary_seen
+    inc c128_test_summary_count
 #endif
 #endif
     lda #COL_WHITE

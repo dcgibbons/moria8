@@ -2,6 +2,7 @@
 // ui_wizard.s — C128 Wizard Mode menu and command handlers
 
 #import "ui_restore.s"
+#import "input_ui_helpers.s"
 
 #if C128
 .const UWIZ_TITLE_COL  = (SCREEN_COLS - 6) / 2
@@ -21,7 +22,7 @@ ui_wizard_display:
     lda #>wiz_confirm_str
     sta zp_ptr0_hi
     jsr msg_print
-    jsr input_wait_release
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #$59                    // Y
     beq !wiz_enable+
@@ -40,7 +41,7 @@ ui_wizard_display:
     rts
 !wiz_menu:
     jsr ui_wizard_draw_menu
-    jsr input_wait_release
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #$51                    // Q
     beq !wiz_cancel+
@@ -379,7 +380,7 @@ ui_wizard_prompt_two_digit:
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
-    jsr input_wait_release
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #$0d
     bne !wiz_num_not_ret+

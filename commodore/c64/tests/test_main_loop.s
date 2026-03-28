@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #14
+    ldx #19
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -74,10 +74,20 @@ delete_savefile:
 .label tramp_ui_inv_display = ui_inv_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
-.label tramp_store_init_all = store_init_all
-.label tramp_store_restock_all = store_restock_all
-.label tramp_store_enter = store_enter
 .label tramp_player_create = player_create
+
+tramp_store_init_all:
+    rts
+
+tramp_store_restock_all:
+    rts
+
+tramp_store_enter:
+    rts
+
+check_player_on_store_door:
+    clc
+    rts
 
 tramp_ui_recall:
     rts
@@ -139,9 +149,6 @@ tramp_dig_ability:
 #import "../../common/tunnel.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
 #import "../../common/generation_busy.s"
 #import "../../common/game_loop.s"
@@ -149,7 +156,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 15, $ff
+tc_results: .fill 20, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -176,6 +183,7 @@ test_door_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
 test_item_pickup_calls: .byte 0
+test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
@@ -195,6 +203,8 @@ test_open_ok: .byte 0
 test_read_ok: .byte 0
 test_cast_ok: .byte 0
 test_pickup_ok: .byte 0
+test_move_relocated: .byte 0
+test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
 test_stairs_tile: .byte 0
 
@@ -223,6 +233,7 @@ install_jump_patch:
     :PatchJump(item_read_scroll, test_item_read_scroll)
     :PatchJump(player_cast_spell, test_player_cast_spell)
     :PatchJump(trap_check_at_player, test_trap_check)
+    :PatchJump(search_scan_effective_silent, test_search_scan_effective_silent)
     :PatchJump(check_player_on_store_door, test_check_store_door)
     :PatchJump(check_stairs_at_player, test_check_stairs_at_player)
     :PatchJump(do_look, test_do_look)
@@ -264,6 +275,7 @@ reset_state:
     sta test_read_scroll_calls
     sta test_cast_spell_calls
     sta test_item_pickup_calls
+    sta test_search_scan_calls
     sta test_wizard_calls
     sta test_busy_begin_calls
     sta test_busy_tick_calls
@@ -282,14 +294,22 @@ reset_state:
     sta test_read_ok
     sta test_cast_ok
     sta test_pickup_ok
+    sta test_move_relocated
+    sta test_move_disturbs_search
     sta test_scene_dirty
     sta test_stairs_tile
     sta zp_game_flags
+    sta zp_msg_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta vis_room_revealed
+    sta msg_row1_col
     lda #$ff
     sta zp_run_dir
+    lda #0
+    sta player_move_relocated
+    sta zp_search_count
+    sta player_data + PL_FLAGS
     lda #10
     sta zp_player_x
     sta zp_player_y
@@ -359,8 +379,19 @@ test_render_viewport:
 test_player_try_move:
     sta test_last_move_cmd
     inc test_player_try_move_calls
+    lda #0
+    sta player_move_relocated
     lda test_move_ok
     beq !blocked+
+    lda test_move_relocated
+    beq !no_relocate+
+    lda #1
+    sta player_move_relocated
+!no_relocate:
+    lda test_move_disturbs_search
+    beq !ok+
+    jsr player_search_mode_off
+!ok:
     sec
     rts
 !blocked:
@@ -374,6 +405,11 @@ test_item_pickup:
     sec
     rts
 !fail:
+    clc
+    rts
+
+test_search_scan_effective_silent:
+    inc test_search_scan_calls
     clc
     rts
 
@@ -540,7 +576,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #14
+    ldx #15
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1021,8 +1057,173 @@ test_start:
     bne !t15_fail+
     lda #$01
     sta tc_results + 14
-    jmp test_finish
+    jmp !t16+
 !t15_fail:
     lda #$00
     sta tc_results + 14
+    jmp !t16+
+
+    // Test 16: search-mode toggle sets the mode bit, redraws status, and
+    // consumes no turn.
+!t16:
+    jsr reset_state
+    lda #15
+    sta test_case_idx
+    lda #CMD_SEARCH_MODE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !t16_fail+
+    lda test_turn_calls
+    bne !t16_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t17+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+    jmp !t17+
+
+    // Test 17: successful movement in search mode consumes the normal turn
+    // plus the extra search turn, and runs one search scan.
+!t17:
+    jsr reset_state
+    lda #16
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_MOVE_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
+    bne !t17_fail+
+    lda test_search_scan_calls
+    cmp #1
+    bne !t17_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    cmp #PLF_SEARCHING
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !t18+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+    jmp !t18+
+
+    // Test 18: attack-only movement disturbance clears search mode and skips
+    // the extra search turn.
+!t18:
+    jsr reset_state
+    lda #17
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_move_disturbs_search
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_MOVE_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t18_fail+
+    lda test_search_scan_calls
+    bne !t18_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t18_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !t19+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+    jmp !t19+
+
+    // Test 19: running in search mode keeps the mode active and applies the
+    // same extra search-turn behavior on a one-step stop.
+!t19:
+    jsr reset_state
+    lda #18
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #TILE_STAIRS_DN
+    sta test_stairs_tile
+    lda #CMD_RUN_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_player_try_move_calls
+    cmp #1
+    bne !t19_fail+
+    lda test_last_move_cmd
+    cmp #CMD_MOVE_E
+    bne !t19_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t19_fail+
+    lda test_search_scan_calls
+    cmp #1
+    bne !t19_fail+
+    lda zp_run_dir
+    cmp #$ff
+    bne !t19_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    cmp #PLF_SEARCHING
+    bne !t19_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp !t20+
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+
+    // Test 20: load_resume_game clears transient search mode state.
+!t20:
+    jsr reset_state
+    lda #19
+    sta test_case_idx
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #7
+    sta zp_search_count
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    jsr load_resume_game
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t20_fail+
+    lda zp_search_count
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp test_finish
+!t20_fail:
+    lda #$00
+    sta tc_results + 19
     jmp test_finish

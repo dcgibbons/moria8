@@ -3,49 +3,64 @@
 // Imported in-place from game_loop.s to preserve segment placement while
 // narrowing the main loop file to orchestration and command bodies.
 
+#import "input_ui_helpers.s"
+
+.const HELP_KEY_Q = $51
+.const HELP_KEY_SPACE = $20
+.const HELP_KEY_RETURN = $0d
+#if C128
+.const HELP_KEY_ESC = KEY_ESC
+#else
+.const HELP_KEY_ESC = $1b
+#endif
+
 // ============================================================
 // Shared UI-only command flows
 // ============================================================
 cmd_show_character_view:
     jsr tramp_ui_char_display
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     jsr screen_clear
     jmp vp_render_status_loop
 
 cmd_show_help_view:
-    jsr tramp_ui_help_display
     lda #0
-    sta KBDBUF_COUNT            // Clear keyboard buffer (prevent key repeat from dismissing)
-#if C128
-    jsr input_wait_release
-#endif
+    sta help_page_idx
+!help_page_loop:
+    jsr tramp_ui_help_display
+!help_key_loop:
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
+    cmp #HELP_KEY_Q
+    beq !help_done+
+    cmp #HELP_KEY_ESC
+    beq !help_done+
+    cmp #HELP_KEY_SPACE
+    beq !help_advance+
+    cmp #HELP_KEY_RETURN
+    beq !help_advance+
+    jmp !help_key_loop-
+!help_advance:
+    lda help_page_idx
+    clc
+    adc #1
+    cmp help_page_count
+    bcs !help_done+
+    inc help_page_idx
+    jmp !help_page_loop-
+!help_done:
     jmp ui_view_return_to_gameplay_view
 
 cmd_show_inventory_view:
     jsr tramp_ui_inv_display
-#if C128
-    jsr input_wait_release
-#else
-    lda #0
-    sta KBDBUF_COUNT
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     jmp ui_view_return_to_gameplay_view
 
 cmd_show_equipment_view:
     jsr tramp_ui_equip_display
-#if C128
-    jsr input_wait_release
-#else
-    lda #0
-    sta KBDBUF_COUNT
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     jmp ui_view_return_to_gameplay_view
 
@@ -59,9 +74,7 @@ cmd_recall_view:
     lda #>recall_prompt_str
     sta zp_ptr0_hi
     jsr screen_put_string
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     jsr recall_key_to_screen_code
     bcc !recall_done+
@@ -139,11 +152,7 @@ recall_show_matching_entry:
     stx recall_last_idx
     jsr creature_get_name
     jsr tramp_ui_recall
-    lda #0
-    sta KBDBUF_COUNT
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     rts
 
@@ -178,50 +187,75 @@ command_result_restore_view_or_update_visibility:
 // ============================================================
 // Shared post-turn tails and gameplay-view restore
 // ============================================================
-post_turn_redraw_full_or_die:
+turn_post_action_searchable_or_die:
     jsr turn_post_action
     lda zp_game_flags
     and #$01
-    beq !ptfd_alive+
+    bne !dead+
+
+    lda turn_scene_dirty
+    sta ghl_saved_scene_dirty
+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !alive+
+
+    jsr search_scan_effective_silent
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    bne !dead+
+
+    lda turn_scene_dirty
+    ora ghl_saved_scene_dirty
+    sta turn_scene_dirty
+!alive:
+    clc
+    rts
+!dead:
+    sec
+    rts
+
+post_turn_redraw_full_or_die:
+    jsr turn_post_action_searchable_or_die
+    bcc !ptfds_alive+
     jmp player_died
-!ptfd_alive:
+!ptfds_alive:
     jmp vp_render_status_loop
 
 post_turn_status_only_or_die:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !ptso_alive+
+    jsr turn_post_action_searchable_or_die
+    bcc !ptsos_alive+
     jmp player_died
-!ptso_alive:
+!ptsos_alive:
     lda turn_scene_dirty
-    bne vp_render_status_loop
+    beq !ptsos_status_only+
+    jmp vp_render_status_loop
+!ptsos_status_only:
     jsr status_draw
     jmp main_loop
 
 post_turn_update_visibility_or_die:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !ptuv_alive+
+    jsr turn_post_action_searchable_or_die
+    bcc !ptuvs_alive+
     jmp player_died
-!ptuv_alive:
+!ptuvs_alive:
     jsr update_visibility
     jsr viewport_update
     lda zp_view_x
     cmp old_view_x
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda zp_view_y
     cmp old_view_y
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda vis_room_revealed
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda turn_scene_dirty
-    bne !ptuv_full+
+    bne !ptuvs_full+
     jsr render_local_area
     jsr status_draw
     jmp main_loop
-!ptuv_full:
+!ptuvs_full:
     lda #INPUT_ROW
     jsr screen_clear_row
     jsr render_viewport
@@ -244,3 +278,5 @@ vp_render_status_loop:
     jsr render_viewport
     jsr status_draw
     jmp main_loop
+
+ghl_saved_scene_dirty: .byte 0

@@ -11,9 +11,10 @@
 //   OVL_TOWN        = 2  Stores
 //   OVL_DEATH       = 3  Score + high scores
 //   OVL_DUNGEON_GEN = 4  Town + dungeon generation
-//   OVL_UI          = 5  Help + inventory/equipment/character/wizard modal UI
+//   OVL_HELP        = 5  Dedicated help screen overlay
+//   OVL_UI          = 6  Inventory/equipment/character/wizard modal UI
 //
-// Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN, OVL.UI
+// Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN, OVL.HELP, OVL.UI
 // REU: stashed alongside creature tiers at startup
 
 // ============================================================
@@ -24,8 +25,9 @@
 .const OVL_TOWN        = 2
 .const OVL_DEATH       = 3
 .const OVL_DUNGEON_GEN = 4
-.const OVL_UI          = 5
-.const OVL_COUNT       = 5
+.const OVL_HELP        = 5
+.const OVL_UI          = 6
+.const OVL_COUNT       = 6
 
 // ============================================================
 // State
@@ -190,10 +192,11 @@ ovl_fn_guard_expected:
     .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e
     .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48
     .byte $4f,$56,$4c,$2e,$47,$45,$4e
+    .byte $4f,$56,$4c,$2e,$48,$45,$4c,$50
     .byte $4f,$56,$4c,$2e,$55,$49
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_ui
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_ui
-    .byte 9, 8, 9, 7, 6
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
+    .byte 9, 8, 9, 7, 8, 6
 ovl_fn_guard_expected_end:
 #if !C128
 c128_overlay_fn_guard_stage:   .byte 0
@@ -370,24 +373,25 @@ ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
 ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
 ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
 ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
+ovl_fn_help:  .byte $4f,$56,$4c,$2e,$48,$45,$4c,$50      // "OVL.HELP"
 ovl_fn_ui:    .byte $4f,$56,$4c,$2e,$55,$49              // "OVL.UI"
 
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_ui
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_ui
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
 ovl_fn_len:
-    .byte 9, 8, 9, 7, 6     // "OVL.UI"=6
+    .byte 9, 8, 9, 7, 8, 6
 
 
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
 // ============================================================
-// Index 0 unused (OVL_NONE), indices 1-4 = overlay IDs
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0
+// Index 0 unused; indices 1-6 = overlay IDs
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0
@@ -453,7 +457,7 @@ c128_preload_all_overlays:
 cpao_next:
     ldx ol_target
     inx
-    cpx #6
+    cpx #(OVL_COUNT + 1)
     bne !cpao_loop-
 
     lda #1

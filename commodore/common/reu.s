@@ -701,7 +701,7 @@ reu_stash_overlays:
 
     ldx reu_ovl_idx
     inx
-    cpx #6                      // Overlays 1-5
+    cpx #7                      // Overlays 1-6
     bne !rso_loop-
 
     // Set overlay sizes (all 4KB = $1000) and activate REU path
@@ -712,7 +712,7 @@ reu_stash_overlays:
     lda #$10
     sta ovl_reu_size_hi,x
     inx
-    cpx #6
+    cpx #7
     bne !rso_sizes-
 
     lda #1
@@ -759,13 +759,14 @@ reu_fn_o1: .text "OVL.START" ; .byte 0
 reu_fn_o2: .text "OVL.TOWN" ; .byte 0
 reu_fn_o3: .text "OVL.DEATH" ; .byte 0
 reu_fn_o4: .text "OVL.GEN" ; .byte 0
-reu_fn_o5: .text "OVL.UI" ; .byte 0
+reu_fn_o5: .text "OVL.HELP" ; .byte 0
+reu_fn_o6: .text "OVL.UI" ; .byte 0
 
 // Pointer tables (0-based index)
 reu_fn_tier_lo: .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4
 reu_fn_tier_hi: .byte >reu_fn_t1, >reu_fn_t2, >reu_fn_t3, >reu_fn_t4
-reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3, <reu_fn_o4, <reu_fn_o5
-reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3, >reu_fn_o4, >reu_fn_o5
+reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3, <reu_fn_o4, <reu_fn_o5, <reu_fn_o6
+reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3, >reu_fn_o4, >reu_fn_o5, >reu_fn_o6
 
 // Header string (displayed by tier_init)
 reu_loading_hdr: .text "Loading into REU:" ; .byte 0

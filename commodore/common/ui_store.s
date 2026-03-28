@@ -4,6 +4,8 @@
 // The store is a separate mode with its own input loop.
 // Player enters by stepping on a store door tile in town.
 
+#import "input_ui_helpers.s"
+
 // ============================================================
 // PETSCII key constants for store UI
 // ============================================================
@@ -15,6 +17,8 @@
 .const PETSCII_ESC    = $1b   // RUN/STOP mapped as ESC
 .const PETSCII_SPACE  = $20
 .const PETSCII_A      = $41
+.const HG_MIN_CONCESSION = 5
+.const HG_MAX_CONCESSION = 15
 
 #if C128
 .const USTORE_PRICE_COL = SCREEN_COLS - 12
@@ -57,7 +61,7 @@ store_enter:
     lda zp_store_idx
     cmp #STORE_HOME
     bne !se_not_home+
-    jmp home_enter              // $F000 banked code, same $01=$35
+    jmp home_enter              // Shared Home UI entry; valid in the town runtime state
 !se_not_home:
     lda #0
     sta hg_insults              // Reset insult counter for this visit
@@ -317,9 +321,7 @@ store_buy:
     jsr show_msg
 
     // Get key
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -378,9 +380,7 @@ store_buy:
 !sb_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr sbuy_show_price
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #PETSCII_Y
     beq sbuy_execute
@@ -414,6 +414,7 @@ sbuy_execute:
     bcc !sb_has_room+
     jmp sbuy_full
 !sb_has_room:
+    jsr hg_decrease_insults
 
     // --- Execute purchase ---
     jsr gold_subtract_price
@@ -574,9 +575,7 @@ store_sell:
     jsr show_msg
 
     // Get key
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -662,9 +661,7 @@ store_sell:
 !ssell_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr ssell_show_offer
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #PETSCII_Y
     beq ssell_execute
@@ -695,6 +692,8 @@ ssell_execute:
 
 !ssell_has_slot:
     // X = empty absolute slot
+    jsr hg_decrease_insults
+
     // Transfer item from inventory to store
     stx sb_abs_slot
     ldx ss_inv_slot
@@ -834,9 +833,7 @@ input_read_number:
     sta hg_digit_cnt
 
 !irn_loop:
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // RETURN ($0D) = accept (if at least 1 digit)
@@ -937,102 +934,278 @@ input_read_number:
     rts
 
 // ============================================================
-// Haggle buy (R6.1)
+// Haggle helpers / buy / sell (R6.1)
 // ============================================================
+
+// hg_decrease_insults — Successful business cools the visit down.
+hg_decrease_insults:
+    lda hg_insults
+    beq !done+
+    dec hg_insults
+!done:
+    rts
+
+// hg_increment_insults — Add one insult, return carry set if that kicks.
+hg_increment_insults:
+    inc hg_insults
+    lda hg_insults
+    cmp #3
+    bcs !kicked+
+    clc
+    rts
+!kicked:
+    sec
+    rts
+
+// hg_wait_for_ack — Wait for an acknowledgement key.
+hg_wait_for_ack:
+    jsr input_prepare_followup_key
+    jmp input_get_key
+
+// hg_div_mul_result_24x8 — Divide mul_result_0/1/2 by X, quotient in-place.
+hg_div_mul_result_24x8:
+    stx hg_den_lo
+    lda #0
+    sta zp_temp4
+    ldx #24
+!loop:
+    asl mul_result_0
+    rol mul_result_1
+    rol mul_result_2
+    rol zp_temp4
+    lda zp_temp4
+    cmp hg_den_lo
+    bcc !skip+
+    sbc hg_den_lo
+    sta zp_temp4
+    inc mul_result_0
+!skip:
+    dex
+    bne !loop-
+    rts
+
+// hg_calc_percent_from_tmp_den — Convert tmp/den concession ratio into percent.
+// Input: hg_tmp0/1 = numerator, hg_den_lo/hi = denominator
+// Output: A = percentage (0-255, saturated)
+hg_calc_percent_from_tmp_den:
+!scale:
+    lda hg_den_hi
+    beq !scaled+
+    lsr hg_den_hi
+    ror hg_den_lo
+    lsr hg_tmp1
+    ror hg_tmp0
+    jmp !scale-
+!scaled:
+    ldx hg_den_lo
+    bne !do+
+    lda #$ff
+    rts
+!do:
+    lda hg_tmp0
+    sta zp_temp0
+    lda hg_tmp1
+    sta zp_temp1
+    ldx #100
+    jsr math_mul_16x8
+    ldx hg_den_lo
+    jsr hg_div_mul_result_24x8
+    lda mul_result_2
+    bne !overflow+
+    lda mul_result_1
+    bne !overflow+
+    lda mul_result_0
+    rts
+!overflow:
+    lda #$ff
+    rts
+
+// hg_show_retry_msg — Display a neutral retry reaction for overshoot/undershoot.
+hg_show_retry_msg:
+    jsr store_clear_msg_area
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #23
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    lda #<hg_retry_str
+    sta zp_ptr0
+    lda #>hg_retry_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    jsr hg_wait_for_ack
+    rts
+
+// hg_show_final_prompt — Display final offer line plus numeric input prompt.
+// Input: A = prompt message index (MSG_YOUR_OFFER / MSG_YOUR_PRICE)
+hg_show_final_prompt:
+    pha
+    jsr store_clear_msg_area
+    ldx #MSG_FINAL
+    jsr show_msg
+
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda hg_ask_lo
+    sta zp_temp0
+    lda hg_ask_hi
+    sta zp_temp1
+    jsr screen_put_decimal_16
+
+    lda #COL_WHITE
+    sta zp_text_color
+    ldx #HSTR_HG_GP
+    jsr huff_decode_string
+    jsr screen_put_string
+
+    pla
+    tax
+    jsr show_msg
+
+    lda #COL_YELLOW
+    sta zp_text_color
+    lda #22
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    rts
 
 // haggle_buy — Multi-round buy haggling
 // Input: sb_price_lo/hi = CHR-adjusted asking price, sb_abs_slot = store slot
 // Output: carry set = deal (sb_price_lo/hi = agreed price), carry clear = no deal
 // Clobbers: everything
 haggle_buy:
-    // Save asking price as initial ask
     lda sb_price_lo
     sta hg_ask_lo
     lda sb_price_hi
     sta hg_ask_hi
 
-    // Calculate minimum acceptable price (base + p1, no CHR markup)
     ldx sb_abs_slot
     lda si_p1,x
     sta sb_item_p1
     lda si_item_id,x
-    jsr calc_buy_min_price      // sb_price_lo/hi = min price
+    jsr calc_buy_min_price
     lda sb_price_lo
     sta hg_min_lo
     lda sb_price_hi
     sta hg_min_hi
 
+    lda hg_min_hi
+    lsr
+    sta hg_last_hi
+    lda hg_min_lo
+    ror
+    sta hg_last_lo
+    lda hg_last_lo
+    ora hg_last_hi
+    bne !hb_last_ok+
+    lda #1
+    sta hg_last_lo
+!hb_last_ok:
     lda #0
     sta hg_round
 
 !hb_loop:
-    // Display "ASKS [hg_ask] GP."
+    lda hg_round
+    beq !hb_normal_prompt+
+    lda #MSG_YOUR_OFFER
+    jsr hg_show_final_prompt
+    jmp !hb_read+
+!hb_normal_prompt:
     jsr hg_show_ask
-
-    // Get player's offer
+!hb_read:
     jsr input_read_number
     bcs !hb_got_offer+
-    clc                         // Cancelled
+    clc
     rts
 
 !hb_got_offer:
-    // Insult check: offer < min / 2
-    lda hg_min_lo
-    sta zp_math_a
-    lda hg_min_hi
-    sta zp_math_b
-    // Divide min by 2 (shift right)
-    lsr zp_math_b
-    ror zp_math_a
-
-    // Compare: hg_input < min/2?
+    // Backwards or insultingly low offer: input < last offer.
     lda hg_input_hi
-    cmp zp_math_b
-    bcc !hb_insult_relay+       // input_hi < min/2 hi
-    bne !hb_no_insult+          // input_hi > min/2 hi
-    lda hg_input_lo
-    cmp zp_math_a
-    bcc !hb_insult_relay+       // input_lo < min/2 lo
-    jmp !hb_no_insult+
-!hb_insult_relay:
+    cmp hg_last_hi
+    bcs !hb_hi_ok+
     jmp !hb_insult+
-!hb_no_insult:
+!hb_hi_ok:
+    bne !hb_check_retry+
+    lda hg_input_lo
+    cmp hg_last_lo
+    bcs !hb_check_retry+
+    jmp !hb_insult+
 
-    // Accept check: input >= ask?
-    lda hg_ask_hi
-    cmp hg_input_hi
-    bcc !hb_accept_relay+       // ask_hi < input_hi → accept
-    bne !hb_counter+            // ask_hi > input_hi → counter
-    lda hg_ask_lo
-    cmp hg_input_lo
-    bcc !hb_accept_relay+       // ask_lo < input_lo → accept
-    beq !hb_accept_relay+       // ask = input → accept
-    jmp !hb_counter+
-!hb_accept_relay:
-    jmp !hb_accept+
+!hb_check_retry:
+    // Overshoot: input > current ask.
+    lda hg_input_hi
+    cmp hg_ask_hi
+    bcc !hb_counter+
+    bne !hb_retry+
+    lda hg_input_lo
+    cmp hg_ask_lo
+    bcc !hb_counter+
+    bne !hb_retry+
+    jmp !hb_accept_input+
+!hb_retry:
+    jsr hg_show_retry_msg
+    jmp !hb_loop-
 
 !hb_counter:
-    // gap = ask - min
-    lda hg_ask_lo
+    // concession = input - last
+    lda hg_input_lo
     sec
-    sbc hg_min_lo
+    sbc hg_last_lo
     sta hg_tmp0
-    lda hg_ask_hi
-    sbc hg_min_hi
+    lda hg_input_hi
+    sbc hg_last_hi
     sta hg_tmp1
 
-    // step = gap / 4 (shift right twice), min 1
-    lsr hg_tmp1
-    ror hg_tmp0
-    lsr hg_tmp1
-    ror hg_tmp0
-    // Ensure step >= 1
-    lda hg_tmp0
-    ora hg_tmp1
-    bne !hb_step_ok+
-    lda #1
+    // span = ask - last
+    lda hg_ask_lo
+    sec
+    sbc hg_last_lo
+    sta hg_den_lo
+    lda hg_ask_hi
+    sbc hg_last_hi
+    sta hg_den_hi
+
+    jsr hg_calc_percent_from_tmp_den
+    cmp #HG_MIN_CONCESSION
+    bcs !hb_pct_floor_ok+
+    jmp !hb_insult+
+!hb_pct_floor_ok:
+    cmp #HG_MAX_CONCESSION + 1
+    bcc !hb_pct_ok+
+    sta hg_pct
+    lsr
+    lsr
     sta hg_tmp0
-!hb_step_ok:
+    lda hg_pct
+    sec
+    sbc hg_tmp0
+    cmp #HG_MAX_CONCESSION
+    bcs !hb_pct_ok+
+    lda #HG_MAX_CONCESSION
+!hb_pct_ok:
+    sta hg_pct
+
+    // step = ((ask - input) * pct) / 100 + 1
+    lda hg_ask_lo
+    sec
+    sbc hg_input_lo
+    sta zp_temp0
+    lda hg_ask_hi
+    sbc hg_input_hi
+    sta zp_temp1
+    ldx hg_pct
+    jsr math_mul_16x8
+    ldx #100
+    jsr hg_div_mul_result_24x8
+    lda mul_result_0
+    clc
+    adc #1
+    sta hg_tmp0
+    lda mul_result_1
+    adc #0
+    sta hg_tmp1
 
     // ask -= step
     lda hg_ask_lo
@@ -1043,89 +1216,78 @@ haggle_buy:
     sbc hg_tmp1
     sta hg_ask_hi
 
-    // Clamp ask to min (if ask < min, ask = min)
+    // Clamp to final offer. Reaching final offer does not auto-accept.
     lda hg_ask_hi
     cmp hg_min_hi
     bcc !hb_clamp+
-    bne !hb_no_clamp+
+    bne !hb_post_counter_accept+
     lda hg_ask_lo
     cmp hg_min_lo
-    bcs !hb_no_clamp+
+    bcs !hb_post_counter_accept+
 !hb_clamp:
     lda hg_min_lo
     sta hg_ask_lo
     lda hg_min_hi
     sta hg_ask_hi
-!hb_no_clamp:
-
     inc hg_round
     lda hg_round
     cmp #4
-    bcs !hb_final+
-
-    // Display "HOW ABOUT [ask] GP?"
-    jsr hg_show_counter
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key           // Wait for key before next round
-    jmp !hb_loop-
-
-!hb_final:
-    // Final offer
-    jsr hg_show_final
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    cmp #PETSCII_Y
-    beq !hb_accept+
+    bcc !hb_store_last+
+    jsr hg_increment_insults
+    bcs !hb_kick+
     clc
     rts
 
+!hb_post_counter_accept:
+    // If the store moved past the player's offer, take the player's price.
+    lda hg_input_hi
+    cmp hg_ask_hi
+    bcc !hb_store_last+
+    bne !hb_accept_input+
+    lda hg_input_lo
+    cmp hg_ask_lo
+    bcc !hb_store_last+
+!hb_accept_input:
+    lda hg_input_lo
+    sta hg_ask_lo
+    lda hg_input_hi
+    sta hg_ask_hi
+    jmp hg_do_accept
+
+!hb_store_last:
+    lda hg_input_lo
+    sta hg_last_lo
+    lda hg_input_hi
+    sta hg_last_hi
+    jsr hg_show_counter
+    jsr hg_wait_for_ack
+    jmp !hb_loop-
+
 !hb_insult:
-    inc hg_insults
-    lda hg_insults
-    cmp #3
+    jsr hg_increment_insults
     bcs !hb_kick+
     jsr hg_show_insult_msg
     jmp !hb_loop-
-
 !hb_kick:
     jmp hg_do_kick
-
-!hb_accept:
-    jmp hg_do_accept
-
-// ============================================================
-// Haggle sell (R6.1)
-// ============================================================
 
 // haggle_sell — Multi-round sell haggling
 // Input: sb_price_lo/hi = CHR-adjusted sell price (max shopkeeper will pay)
 // Output: carry set = deal (sb_price_lo/hi = agreed price), carry clear = no deal
 // Clobbers: everything
 haggle_sell:
-    // Max = CHR-adjusted sell price
-    lda sb_price_lo
-    sta hg_min_lo               // "min" = max shopkeeper will pay (ceiling)
-    lda sb_price_hi
-    sta hg_min_hi
-
-    // Starting offer = max / 2 (min 1)
-    lsr hg_min_hi               // Temp use — restore after
-    lda hg_min_lo
-    ror
-    sta hg_ask_lo
-    lda hg_min_hi
-    sta hg_ask_hi
-    // Restore min from original price
     lda sb_price_lo
     sta hg_min_lo
     lda sb_price_hi
     sta hg_min_hi
 
-    // Ensure starting offer >= 1
+    // Starting offer = max / 2 (minimum 1 GP).
+    lda hg_min_hi
+    lsr
+    sta hg_ask_hi
+    lda hg_min_lo
+    ror
+    sta hg_ask_lo
     lda hg_ask_lo
     ora hg_ask_hi
     bne !hs_init_ok+
@@ -1133,76 +1295,123 @@ haggle_sell:
     sta hg_ask_lo
 !hs_init_ok:
 
+    // First acceptable player ask anchor = 2 * max, saturated.
+    lda hg_min_lo
+    asl
+    sta hg_last_lo
+    lda hg_min_hi
+    rol
+    sta hg_last_hi
+    bcc !hs_last_ok+
+    lda #$ff
+    sta hg_last_lo
+    sta hg_last_hi
+!hs_last_ok:
     lda #0
     sta hg_round
 
 !hs_loop:
-    // Display "OFFERS [hg_ask] GP."
+    lda hg_round
+    beq !hs_normal_prompt+
+    lda #MSG_YOUR_PRICE
+    jsr hg_show_final_prompt
+    jmp !hs_read+
+!hs_normal_prompt:
     jsr hg_show_offer
-
-    // Get player's asking price
+!hs_read:
     jsr input_read_number
     bcs !hs_got_price+
     clc
     rts
 
 !hs_got_price:
-    // Insult check: player asking > 2 × max
-    // Calculate 2 × max
-    lda hg_min_lo
-    asl
-    sta hg_tmp0
-    lda hg_min_hi
-    rol
-    sta hg_tmp1
-
-    // Compare: input > 2×max?
-    lda hg_tmp1
-    cmp hg_input_hi
-    bcc !hs_insult_relay+       // 2×max hi < input hi
-    bne !hs_no_insult+
-    lda hg_tmp0
-    cmp hg_input_lo
-    bcc !hs_insult_relay+       // 2×max lo < input lo
-    jmp !hs_no_insult+
-!hs_insult_relay:
+    // Backwards or insultingly high ask: input > last ask.
+    lda hg_input_hi
+    cmp hg_last_hi
+    bcc !hs_check_retry+
+    beq !hs_hi_equal+
     jmp !hs_insult+
-!hs_no_insult:
+!hs_hi_equal:
+    lda hg_input_lo
+    cmp hg_last_lo
+    bcc !hs_check_retry+
+    beq !hs_check_retry+
+    jmp !hs_insult+
 
-    // Accept check: input <= ask? (player accepts shopkeeper's offer)
+!hs_check_retry:
+    // Undershoot: input < current offer.
     lda hg_input_hi
     cmp hg_ask_hi
-    bcc !hs_accept_relay+       // input_hi < ask_hi → accept
-    bne !hs_counter+            // input_hi > ask_hi → counter
+    bcs !hs_hi_retry_ok+
+    jmp !hs_retry+
+!hs_hi_retry_ok:
+    bne !hs_counter+
     lda hg_input_lo
     cmp hg_ask_lo
-    bcc !hs_accept_relay+       // input_lo < ask_lo → accept
-    beq !hs_accept_relay+       // equal → accept
-    jmp !hs_counter+
-!hs_accept_relay:
-    jmp !hs_accept+
+    bcs !hs_lo_retry_ok+
+    jmp !hs_retry+
+!hs_lo_retry_ok:
+    bne !hs_counter+
+    jmp !hs_accept_input+
 
 !hs_counter:
-    // gap = max - ask
-    lda hg_min_lo
+    // concession = last - input
+    lda hg_last_lo
     sec
-    sbc hg_ask_lo
+    sbc hg_input_lo
     sta hg_tmp0
-    lda hg_min_hi
-    sbc hg_ask_hi
+    lda hg_last_hi
+    sbc hg_input_hi
     sta hg_tmp1
 
-    // step = gap / 4, min 1
-    lsr hg_tmp1
-    ror hg_tmp0
-    lsr hg_tmp1
-    ror hg_tmp0
-    lda hg_tmp0
-    ora hg_tmp1
-    bne !hs_step_ok+
-    lda #1
+    // span = last - ask
+    lda hg_last_lo
+    sec
+    sbc hg_ask_lo
+    sta hg_den_lo
+    lda hg_last_hi
+    sbc hg_ask_hi
+    sta hg_den_hi
+
+    jsr hg_calc_percent_from_tmp_den
+    cmp #HG_MIN_CONCESSION
+    bcs !hs_pct_floor_ok+
+    jmp !hs_insult+
+!hs_pct_floor_ok:
+    cmp #HG_MAX_CONCESSION + 1
+    bcc !hs_pct_ok+
+    sta hg_pct
+    lsr
+    lsr
     sta hg_tmp0
-!hs_step_ok:
+    lda hg_pct
+    sec
+    sbc hg_tmp0
+    cmp #HG_MAX_CONCESSION
+    bcs !hs_pct_ok+
+    lda #HG_MAX_CONCESSION
+!hs_pct_ok:
+    sta hg_pct
+
+    // step = ((input - ask) * pct) / 100 + 1
+    lda hg_input_lo
+    sec
+    sbc hg_ask_lo
+    sta zp_temp0
+    lda hg_input_hi
+    sbc hg_ask_hi
+    sta zp_temp1
+    ldx hg_pct
+    jsr math_mul_16x8
+    ldx #100
+    jsr hg_div_mul_result_24x8
+    lda mul_result_0
+    clc
+    adc #1
+    sta hg_tmp0
+    lda mul_result_1
+    adc #0
+    sta hg_tmp1
 
     // ask += step
     lda hg_ask_lo
@@ -1213,57 +1422,67 @@ haggle_sell:
     adc hg_tmp1
     sta hg_ask_hi
 
-    // Clamp ask to max (if ask > max, ask = max)
+    // Clamp to final offer. Reaching final offer does not auto-accept.
     lda hg_min_hi
     cmp hg_ask_hi
     bcc !hs_clamp+
-    bne !hs_no_clamp+
+    bne !hs_post_counter_accept+
     lda hg_min_lo
     cmp hg_ask_lo
-    bcs !hs_no_clamp+
+    bcs !hs_post_counter_accept+
 !hs_clamp:
     lda hg_min_lo
     sta hg_ask_lo
     lda hg_min_hi
     sta hg_ask_hi
-!hs_no_clamp:
-
     inc hg_round
     lda hg_round
     cmp #4
-    bcs !hs_final+
-
-    jsr hg_show_counter
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    jmp !hs_loop-
-
-!hs_final:
-    jsr hg_show_final
-#if C128
-    jsr input_wait_release
-#endif
-    jsr input_get_key
-    cmp #PETSCII_Y
-    beq !hs_accept+
+    bcc !hs_store_last+
+    jsr hg_increment_insults
+    bcs !hs_kick+
     clc
     rts
 
+!hs_post_counter_accept:
+    // If the store moved up to the player's price, take the player's ask.
+    lda hg_input_hi
+    cmp hg_ask_hi
+    bcc !hs_accept_input+
+    bne !hs_store_last+
+    lda hg_input_lo
+    cmp hg_ask_lo
+    bcc !hs_accept_input+
+    beq !hs_accept_input+
+    jmp !hs_store_last+
+
+!hs_retry:
+    jsr hg_show_retry_msg
+    jmp !hs_loop-
+
+!hs_accept_input:
+    lda hg_input_lo
+    sta hg_ask_lo
+    lda hg_input_hi
+    sta hg_ask_hi
+    jmp hg_do_accept
+
+!hs_store_last:
+    lda hg_input_lo
+    sta hg_last_lo
+    lda hg_input_hi
+    sta hg_last_hi
+    jsr hg_show_counter
+    jsr hg_wait_for_ack
+    jmp !hs_loop-
+
 !hs_insult:
-    inc hg_insults
-    lda hg_insults
-    cmp #3
+    jsr hg_increment_insults
     bcs !hs_kick+
     jsr hg_show_insult_msg
     jmp !hs_loop-
-
 !hs_kick:
     jmp hg_do_kick
-
-!hs_accept:
-    jmp hg_do_accept
 
 // ============================================================
 // Shared haggle handlers
@@ -1278,9 +1497,7 @@ hg_do_kick:
     jsr store_clear_msg_area
     ldx #MSG_KICKED
     jsr show_msg
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     clc
     rts
@@ -1313,9 +1530,7 @@ hg_show_insult_msg:
     tax
     jsr huff_decode_string
     jsr screen_put_string
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jmp input_get_key           // Tail call
 
 // ============================================================
@@ -1431,6 +1646,9 @@ hg_show_final:
     // Row 21: "TAKE IT? (Y/N)"
     ldx #MSG_TAKE
     jmp show_msg
+
+hg_retry_str:
+    .text "WHAT WAS THAT?" ; .byte 0
 
 // ============================================================
 // Message display tables (indexed by MSG_* constants)

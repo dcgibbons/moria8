@@ -337,4 +337,19 @@ test_start:
     sta $0409
 !t10_done:
 
+    // ==========================================
+    // Test 11: # maps to search-mode toggle
+    // ==========================================
+    lda #$23               // #
+    jsr petscii_to_command
+    cmp #CMD_SEARCH_MODE
+    bne !t11_fail+
+    lda #$01
+    sta $040a
+    jmp !t11_done+
+!t11_fail:
+    lda #$00
+    sta $040a
+!t11_done:
+
     brk

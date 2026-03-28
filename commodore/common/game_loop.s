@@ -8,6 +8,8 @@
 
 #import "turn_render_state.s"
 #import "generation_busy_api.s"
+#import "platform_services_api.s"
+#import "input_ui_helpers.s"
 
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
@@ -68,8 +70,15 @@ game_new_start:
     :C128StackSlotGuardCheck($86)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
+
+    // Show the post-chargen summary sheet and wait for a fresh dismiss key.
+    // The modal helper flushes the gender-selection key on C64 and waits for
+    // key release on C128 so the summary is not dismissed immediately.
+    jsr tramp_ui_char_display
+    jsr input_get_modal_dismiss_key
+    jsr screen_clear
 
     // --- Starting equipment ---
     // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
@@ -144,7 +153,7 @@ game_new_start:
     :C128StackSlotGuardCheck($87)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
 
     // --- Main game loop ---
@@ -173,7 +182,7 @@ game_new_start:
     :C128StackSlotGuardCheck($88)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
 #if C128_REAL_BOOT_DIAG
     ldx #$23
@@ -226,6 +235,11 @@ game_new_start:
     bne !gns_script_pass+
     jmp c128_test_town_fail_sym
 !gns_script_pass:
+    lda c128_test_summary_count
+    cmp #1
+    beq !gns_summary_count_ok+
+    jmp c128_test_town_fail_sym
+!gns_summary_count_ok:
 #if C128_TEST_CACHE_SURVIVAL
     jsr c128_test_verify_cache_survival
     bcc !gns_cache_pass+
@@ -240,6 +254,11 @@ game_new_start:
     bne !gns_script_pass+
     jmp c128_test_town_fail_sym
 !gns_script_pass:
+    lda c128_test_summary_count
+    cmp #1
+    beq !gns_cache_summary_count_ok+
+    jmp c128_test_town_fail_sym
+!gns_cache_summary_count_ok:
     jsr c128_test_verify_cache_survival
     bcc !gns_cache_pass+
     jmp c128_test_cache_survival_fail_sym
@@ -254,6 +273,7 @@ game_new_start:
 // ============================================================
 load_resume_game:
     jsr wizard_reset_session_state
+    jsr player_search_clear_transient_state
 
     // Reset transient tier metadata from any prior runtime state, then
     // load the correct tier for the resumed dungeon level.
@@ -295,7 +315,7 @@ load_resume_game:
 main_loop:
 #if C128
 c128_town_move_diag_loop_top:
-    jsr c128_restore_runtime_vectors
+    jsr platform_main_loop_begin_api
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
@@ -352,8 +372,7 @@ c128_town_move_diag_loop_top:
     jmp run_step
 
 !run_cancel:
-    lda #0
-    sta KBDBUF_COUNT            // Flush keyboard buffer (C64 only; harmless on C128)
+    jsr input_flush_run_cancel_buffer
     lda #$ff
     sta zp_run_dir
     lda #0
@@ -436,6 +455,11 @@ c128_town_move_diag_after_input_get_command:
     bne !not_wizard+
     jmp cmd_wizard_entry
 !not_wizard:
+
+    cmp #CMD_SEARCH_MODE
+    bne !not_search_mode+
+    jmp cmd_search_mode
+!not_search_mode:
 
 #if C128
 #if PERF_P1
@@ -524,7 +548,10 @@ c128_town_move_diag_after_trap_check:
     lda #$17
     jsr c128_town_dump_log
 #endif
-    jsr turn_post_action
+    bcs !move_trap_fired+
+    jsr player_move_maybe_passive_search
+!move_trap_fired:
+    jsr turn_post_action_searchable_or_die
 #if C128
 c128_town_move_diag_after_turn_post_action:
 #endif
@@ -532,9 +559,7 @@ c128_town_move_diag_after_turn_post_action:
     lda #$18
     jsr c128_town_dump_log
 #endif
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
+    bcc !not_dead+
     jmp !player_died+
 !not_dead:
 #if C128_TEST_TOWN_SELF_DUMP
@@ -877,6 +902,7 @@ cmd_stairs_up:
 // Restores gameplay view and returns.
 level_change_generate_current:
     jsr generation_busy_begin_if_dungeon_api
+    jsr player_search_mode_off
     lda #$ff
     sta zp_run_dir
     lda #OVL_DUNGEON_GEN
@@ -886,7 +912,7 @@ level_change_generate_current:
     jmp entry_main
 !lcgc_ovl_ok:
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
@@ -963,6 +989,28 @@ cmd_search:
     jsr do_search
     // Always consumes a turn
     jmp post_turn_redraw_full_or_die
+
+cmd_search_mode:
+    jsr msg_clear
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !toggle_on+
+    jsr player_search_mode_off
+    lda #<search_mode_off_str
+    sta zp_ptr0
+    lda #>search_mode_off_str
+    sta zp_ptr0_hi
+    jmp !toggle_print+
+!toggle_on:
+    jsr player_search_mode_on
+    lda #<search_mode_on_str
+    sta zp_ptr0
+    lda #>search_mode_on_str
+    sta zp_ptr0_hi
+!toggle_print:
+    jsr msg_print
+    jsr status_draw
+    jmp main_loop
 
 cmd_rest:
     jsr msg_clear
@@ -1042,7 +1090,11 @@ cmd_pray:
 
 cmd_gain:
     jsr msg_clear
+#if C128
+    jsr tramp_item_gain_spell
+#else
     jsr item_gain_spell
+#endif
     jmp command_result_main_or_status_only
 
 cmd_fire:
@@ -1144,10 +1196,9 @@ run_step:
     bcs !run_stop_move+         // Should stop → final move
 
     // Continue running — run AI before render (BUG-17 fix)
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
+    jsr player_move_maybe_passive_search
+    jsr turn_post_action_searchable_or_die
+    bcc !not_dead+
     jmp !player_died+
 !not_dead:
     jsr update_visibility
@@ -1188,10 +1239,8 @@ run_step:
 !run_trap_stop:
     lda #$ff
     sta zp_run_dir
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
+    jsr turn_post_action_searchable_or_die
+    bcc !not_dead+
     jmp !player_died+
 !not_dead:
     jsr update_visibility
@@ -1200,10 +1249,9 @@ run_step:
 !run_stop_move:
     lda #$ff
     sta zp_run_dir
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !not_dead+
+    jsr player_move_maybe_passive_search
+    jsr turn_post_action_searchable_or_die
+    bcc !not_dead+
     jmp !player_died+
 !not_dead:
     jsr update_visibility
@@ -1268,8 +1316,7 @@ player_died:
     sta zp_death_source
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
     jsr disk_prompt_game        // Swap back to game disk if dual
-    jsr input_wait_release
-    jsr input_get_key
+    jsr input_get_modal_dismiss_key
     jmp !quit+
 
 !quit:
@@ -1291,6 +1338,12 @@ press_key_str:
 
 welcome_str:
     .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
+
+search_mode_on_str:
+    .text "Search mode on." ; .byte 0
+
+search_mode_off_str:
+    .text "Search mode off." ; .byte 0
 
 descend_str:
     .text "You descend the staircase." ; .byte 0

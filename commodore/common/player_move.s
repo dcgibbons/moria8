@@ -4,6 +4,10 @@
 // Handles 8-direction movement, tile walkability checks,
 // and player position updates.
 
+#if !C128
+#import "look_flash_target.s"
+#endif
+
 // ============================================================
 // Walkable tile table
 // Indexed by tile type (0-15). 1 = walkable, 0 = blocked.
@@ -47,6 +51,9 @@ tile_is_walkable:
 // Output: carry set = move succeeded, carry clear = blocked
 // Preserves: nothing
 player_try_move:
+    ldx #0
+    stx player_move_relocated
+
     // Convert command to direction index (0-7)
     sec
     sbc #CMD_MOVE_N         // Now A = 0 for N, 1 for S, etc.
@@ -161,6 +168,9 @@ c128_town_move_diag_move_success:
     sta zp_player_y
     sta player_data + PL_MAP_Y
 
+    lda #1
+    sta player_move_relocated
+
     sec                     // Carry set = success
     rts
 
@@ -177,6 +187,30 @@ c128_town_move_diag_move_blocked:
 !no_bump:
     clc                     // Carry clear = blocked
     rts
+
+// player_move_maybe_passive_search — Movement-owned passive auto-search.
+// Only runs after an ordinary successful relocation, never on melee-only turns.
+player_move_maybe_passive_search:
+    lda player_move_relocated
+    beq !done+
+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !done+
+
+    jsr player_search_get_fos
+    cmp #2
+    bcc !search+
+    jsr rng_range
+    bne !done+
+
+!search:
+    jsr search_scan_effective_silent
+!done:
+    rts
+
+// 1 when the most recent player_try_move changed the player's map position.
+player_move_relocated: .byte 0
 
 // check_stairs_at_player — Check if player is standing on stairs
 // Output: A = tile type if stairs (9 = down, 10 = up), or 0 if not stairs
@@ -648,34 +682,12 @@ do_look:
 !dl_not_rubble:
     // Wall (any type) — report it
     ldx #HSTR_DL_WALL
-    jmp dl_print_tile
-
-!dl_step:
-    // Step to next tile along scan direction
-    lda df_target_x
-    clc
-    adc dl_dx
-    sta df_target_x
-    lda df_target_y
-    clc
-    adc dl_dy
-    sta df_target_y
-    jmp !dl_scan-
-
-!dl_nothing:
-    ldx #HSTR_DL_NOTHING
-    jmp dl_print_tile
-
-// dl_print_tile — Print a tile description message
-// Input: X = Huffman string ID (HSTR_*)
-dl_print_tile:
-    jsr huff_print_msg
-    clc
-    rts
+    // Fall through into dl_print_tile.
 
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
+    jsr look_flash_target
 #if C128
     php
     sei
@@ -701,6 +713,31 @@ dl_print_you_see:
     plp
 #endif
     rts
+
+// dl_print_tile — Print a tile description message
+// Input: X = Huffman string ID (HSTR_*)
+dl_print_tile:
+    jsr look_flash_target
+dl_print_tile_no_flash:
+    jsr huff_print_msg
+    clc
+    rts
+
+!dl_step:
+    // Step to next tile along scan direction
+    lda df_target_x
+    clc
+    adc dl_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc dl_dy
+    sta df_target_y
+    jmp !dl_scan-
+
+!dl_nothing:
+    ldx #HSTR_DL_NOTHING
+    jmp dl_print_tile_no_flash
 
 // Look command scratch
 dl_tile:     .byte 0

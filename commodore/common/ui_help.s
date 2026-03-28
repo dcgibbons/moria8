@@ -1,17 +1,17 @@
 #importonce
-// ui_help.s — Help screen rendering code (banked at $F000)
+// ui_help.s — Help screen rendering code
 //
 // Displays all available key bindings on a full screen with
 // PETSCII box-drawing borders and color-coded text.
 //
-// String data lives in main RAM (ui_help_data.s) in packed format:
+// String data lives alongside the overlay in packed format:
 //   [type_byte] [string_data...] [$00] repeated for 23 lines.
 // The banked code walks this data sequentially.
 //
 // Layout (SCREEN_COLS columns, 25 rows):
 //   Row 0:     Top border with "COMMAND REFERENCE" title
 //   Rows 1-23: Content area with left/right borders
-//   Row 24:    Bottom border with "PRESS ANY KEY" footer
+//   Row 24:    Bottom border with page-aware footer
 //
 // Colors: borders GREY, title/footer WHITE, headers CYAN,
 //         keys WHITE, descriptions LGREY
@@ -24,7 +24,11 @@
 .const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
 .const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
 .const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
-.const HELP_FOOTER_COL = (SCREEN_COLS - 13) / 2
+.const HELP_FOOTER_LEN = 23
+.const HELP_FOOTER_MORE_LEN = 29
+.const HELP_FOOTER_COL = (SCREEN_COLS - HELP_FOOTER_LEN) / 2
+.const HELP_FOOTER_MORE_COL = (SCREEN_COLS - HELP_FOOTER_MORE_LEN) / 2
+.const HELP_PAGE_ENTRY_SIZE = 2
 
 // Inline control codes for help_draw_line
 .const CT = $fc     // Tab-to-column (next byte = target column)
@@ -52,6 +56,8 @@
 // ui_help_display — Show help screen with borders and colors
 // Preserves: nothing
 ui_help_display:
+    jsr help_select_page
+
     // 1. Clear screen (black background)
     lda #COL_BLACK
     sta zp_text_color
@@ -97,31 +103,38 @@ ui_help_display:
     lda #24
     jsr help_draw_hborder
 
-    // Footer text "Press any key" centered on row 24.
+    // Footer text depends on whether this is the final page.
     lda #COL_WHITE
     sta zp_text_color
     lda #24
     sta zp_cursor_row
+    lda help_page_idx
+    clc
+    adc #1
+    cmp help_page_count
+    bcc !footer_more+
     lda #HELP_FOOTER_COL
     sta zp_cursor_col
     lda #<uh_press_key_str
     sta zp_ptr0
     lda #>uh_press_key_str
     sta zp_ptr0_hi
+    jmp !footer_draw+
+!footer_more:
+    lda #HELP_FOOTER_MORE_COL
+    sta zp_cursor_col
+    lda #<uh_next_key_str
+    sta zp_ptr0
+    lda #>uh_next_key_str
+    sta zp_ptr0_hi
+!footer_draw:
     jsr screen_put_string
 
-    // 5. Draw content lines — sequential walk through packed help data.
-#if C128
-    lda #<help_lines
+    // 5. Draw content lines for the selected page.
+    lda zp_ptr1
     sta zp_ptr0
-    lda #>help_lines
+    lda zp_ptr1_hi
     sta zp_ptr0_hi
-#else
-    lda help_lines_src_lo
-    sta zp_ptr0
-    lda help_lines_src_hi
-    sta zp_ptr0_hi
-#endif
     lda #1
     sta help_line_idx           // row counter (rows 1-23)
 
@@ -167,6 +180,41 @@ ui_help_display:
     jmp !content_loop-
 
 !content_done:
+    rts
+
+// help_select_page — resolve current page pointer and clamp page index
+help_select_page:
+    lda help_pages_src_lo
+    sta zp_ptr0
+    lda help_pages_src_hi
+    sta zp_ptr0_hi
+
+    ldy #0
+    lda (zp_ptr0),y
+    sta help_page_count
+
+    lda help_page_idx
+    cmp help_page_count
+    bcc !page_ok+
+    lda #0
+    sta help_page_idx
+!page_ok:
+    lda help_page_idx
+    asl
+    clc
+    adc #1
+    clc
+    adc zp_ptr0
+    sta zp_ptr0
+    bcc !+
+    inc zp_ptr0_hi
+!:
+    ldy #0
+    lda (zp_ptr0),y
+    sta zp_ptr1
+    iny
+    lda (zp_ptr0),y
+    sta zp_ptr1_hi
     rts
 
 // help_draw_line — Draw a string with inline color toggle markers
@@ -267,16 +315,8 @@ help_draw_hborder:
     lda #BOX_TR                     // + (corner)
     jmp screen_put_char             // tail call
 
-// Local title/footer strings keep ui_help.s linkable in isolated unit tests.
-uh_title_str: .text "Command Reference" ; .byte 0
-uh_press_key_str: .text "Press any key" ; .byte 0
+// Local footer strings remain in the overlay.
+uh_press_key_str: .text "SPACE/RETURN/Q/ESC done" ; .byte 0
+uh_next_key_str: .text "SPACE/RETURN next  Q/ESC quit" ; .byte 0
 
-// Bindable help-line source pointer. Main programs set this to help_lines.
-// Fallback keeps isolated unit assemblies linkable even without ui_help_data.s.
-help_lines_src_lo: .byte <uh_help_lines_fallback
-help_lines_src_hi: .byte >uh_help_lines_fallback
-
-uh_help_lines_fallback:
-    .for (var i = 0; i < HELP_LINE_COUNT; i++) {
-        .byte HTYPE_BLANK, $00
-    }
+.label ui_help_show_paged = ui_help_display

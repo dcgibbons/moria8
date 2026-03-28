@@ -47,6 +47,43 @@ test128_tmp_file() {
     printf '%s/%s\n' "$TEST128_TMP_DIR" "$name"
 }
 
+stop_vice_process() {
+    local vice_pid="$1"
+    if kill -0 "$vice_pid" 2>/dev/null; then
+        kill "$vice_pid" 2>/dev/null || true
+        wait "$vice_pid" 2>/dev/null || true
+    fi
+}
+
+wait_for_monlog_result() {
+    local vice_pid="$1"
+    local pass_addr="$2"
+    local log_file="$3"
+    local deadline=$((SECONDS + 25))
+
+    while :; do
+        if grep -qi "^BREAK: .*C:\$${pass_addr}" "$log_file"; then
+            stop_vice_process "$vice_pid"
+            return 0
+        fi
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            stop_vice_process "$vice_pid"
+            return 1
+        fi
+        if ! kill -0 "$vice_pid" 2>/dev/null; then
+            wait "$vice_pid" 2>/dev/null || true
+            break
+        fi
+        if [ "$SECONDS" -ge "$deadline" ]; then
+            stop_vice_process "$vice_pid"
+            return 1
+        fi
+        sleep 0.1
+    done
+
+    grep -qi "^BREAK: .*C:\$${pass_addr}" "$log_file"
+}
+
 start_ms="$(test128_now_ms)"
 
 prg_file="${SRC%.s}.prg"
@@ -66,15 +103,13 @@ if [ ! -f "$vs_file" ]; then
     exit 0
 fi
 
-start_addr=$(awk '/\.test_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
 pass_addr=$(awk '/\.test_pass$/  { split($2,a,":"); print toupper(a[2]); exit }' "$vs_file")
 
-if [ -z "${start_addr:-}" ] || [ -z "${pass_addr:-}" ]; then
-    printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "missing test_start/test_pass labels" >> "$RESULT_FILE"
+if [ -z "${pass_addr:-}" ]; then
+    printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "missing test_pass label" >> "$RESULT_FILE"
     exit 0
 fi
 
-start_addr="$(normalize_monitor_addr "$start_addr")"
 pass_addr="$(normalize_monitor_addr "$pass_addr")"
 
 mon_file="$(test128_tmp_file "test128_${NAME}.mon")"
@@ -82,17 +117,17 @@ log_file="$(test128_tmp_file "test128_${NAME}.log")"
 : > "$log_file"
 
 {
-    echo "load \"${abs_prg}\" 0"
-    echo "r pc=${start_addr}"
-    echo "until \$${pass_addr}"
+    echo "break \$${pass_addr}"
+    echo "g"
 } > "$mon_file"
 
-"$VICE" -console -nativemonitor -warp -80col \
+"$VICE" -console -nativemonitor -warp -80col -autostart "$abs_prg" \
     -moncommands "$mon_file" -monlog -monlogname "$log_file" \
     -limitcycles "$CYCLES" +sound -sounddev dummy \
-    +remotemonitor +binarymonitor >/dev/null 2>&1
+    +remotemonitor +binarymonitor >/dev/null 2>&1 &
+vice_pid=$!
 
-if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+if wait_for_monlog_result "$vice_pid" "$pass_addr" "$log_file"; then
     printf 'PASS\t%s\t%s\t\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" >> "$RESULT_FILE"
 else
     printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "execution failed" >> "$RESULT_FILE"

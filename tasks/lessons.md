@@ -1,5 +1,89 @@
 # Lessons Learned
 
+## 2026-03-27 — C128 hook refactors need residency checks for every newly exposed callable path, not just the hot paths covered by fast units
+
+- **Issue:** After the `REF-HAL` phase-1 refactor, the C128 Home-store path could `JAM` because `home_enter` had drifted into `$D000-$DFFF`, and the initial verification still missed a real cursor-key town-input regression the user hit interactively.
+- **Root Cause:** I leaned too heavily on `test128-fast` plus the standard town overlay smoke, which reaches ordinary `store_enter` via scripted eastward movement but does not prove Home-store residency or real cursor-key behavior. I also failed to extend the C128 callable-residency manifest when the layout shifted.
+- **Resolution:** For C128 shared-hook/layout changes, verify every affected callable surface against `io_contracts.s`, especially Home/banked entrypoints, and include at least one runtime check that matches the real input family the user is likely to use, not just vi-key/keybuf scripts.
+- **Rule:** **When a C128 refactor adds or moves shared runtime/input seams, do not stop at fast units or one happy-path town smoke. Audit every affected callable in `io_contracts.s` and verify the real interactive path class the change touches.**
+
+## 2026-03-27 — On C128, residency checks must cover the whole callable module, not just the entry label
+
+- **Issue:** The spell list could `JAM` at `$D023` even though `spell_list_display` itself still linked below `$D000`.
+- **Root Cause:** I only audited the top-level spell entrypoints. The rest of `player_magic.s` had grown past `$D000`, so later code and even spell-list string data were executing or being read from the I/O hole while the entry label still looked safe.
+- **Resolution:** When a C128 callable surface is intended to stay resident or banked, keep the whole module inside one valid residency window or split it explicitly. Entry-label checks alone are not enough if the body can spill into `$D000-$DFFF`.
+- **Rule:** **For C128 callable modules, never treat “the entrypoint is out of the I/O hole” as sufficient. Verify the full module body and data stay inside the intended residency region, or move the whole surface into a banked/overlay owner.**
+
+## 2026-03-27 — Platform-specific UI expansions must preserve the original modal contract, not just fit the screen
+
+- **Issue:** My first C128-specific help rewrite used the 80-column width, but it still failed the actual product contract: it wrapped badly, removed the second page entirely, and disk-loaded help each time instead of preloading it with the overlay cache.
+- **Root Cause:** I optimized for “fit more text now” and treated the help overlay as low-frequency enough to skip cache ownership, instead of preserving the existing pager behavior and looking for a real Bank 1 slot for the new overlay class.
+- **Resolution:** When widening a shared modal UI for C128, keep the behavioral contract intact first: if help was paged, keep it paged; if overlays are supposed to preload/cache, give the new overlay a real cache slot and verify the boot/preload path after the layout change.
+- **Rule:** **Do not treat a platform-specific wider layout as permission to change paging or preload behavior opportunistically. Preserve the modal contract, then use actual owned memory to support the new overlay.**
+
+## 2026-03-27 — Fixed-row UI page data should be generated to the declared line count, not hand-counted
+
+- **Issue:** C128 page 2 showed junk and the renderer could walk into adjacent table bytes because the help page claimed to be a fixed 23-line page but the data file stopped early.
+- **Root Cause:** The page-2 data hand-counted its blank tail and emitted only 8 blank rows while the renderer always consumes 23 rows. That let the reader fall through into the following metadata table and display garbage.
+- **Resolution:** For fixed-row UI page formats, generate the blank tail programmatically or otherwise assert the exact row count. Do not trust manual counting when the renderer consumes a hard-coded number of rows.
+- **Rule:** **If a modal UI renderer consumes a fixed number of rows, the data producer must emit that exact count mechanically or prove it with an assertion. Hand-counted filler rows are not reliable enough.**
+
+## 2026-03-26 — Shared modal-UI changes are not verified until the real platform trampolines and key contracts are exercised
+
+- **Issue:** I initially reported the paged-help work as fixed even though the live C64 help path could still JAM, the C128 second page could still render junk, and C128 `ESC` still did not dismiss help.
+- **Root Cause:** The coverage I leaned on was too renderer-focused and did not prove the real target-specific runtime contract: overlay load, bank visibility, resident-vs-overlay page pointers, and platform-specific keycodes (`KEY_ESC` on C128, `$1B` on C64).
+- **Resolution:** Keep the pager in resident common code, keep the overlay draw-only, seed overlay-local page tables explicitly through the target trampolines, and verify modal-help behavior through affected-platform command-flow tests and full platform suites before claiming the feature works.
+- **Rule:** **For shared modal UI work, do not treat direct renderer tests as sufficient. Prove the real platform trampoline path, the live keycode contract, and the authoritative affected-platform suites before saying the fix is done.**
+
+## 2026-03-26 — Shared C64/C128 UI changes are not verified until both target builds pass
+
+- **Issue:** I closed the help-paging work after the C64 fix and targeted C128 tests, but I had not re-run the authoritative C128 build after changing shared help data and overlay composition.
+- **Root Cause:** I treated the change like a mostly C64 memory problem after the resident overflow pivot, and I let the earlier C128 fast-suite result stand in for a fresh post-change layout check. That missed the fact that `OVL.UI` had grown to `4532` bytes and no longer fit the C128 `$E000-$EFFF` slot.
+- **Resolution:** After any shared UI/data change that affects overlay contents, rebuild both live targets and re-read the memory-map output before calling the work verified. Runtime tests are not a substitute for a fresh overlay-size check.
+- **Rule:** **For shared C64/C128 UI or overlay changes, do not stop at one target or at pre-change test results. Rebuild C64 and C128, check the live overlay sizes, and only then trust the test suite results.**
+
+## 2026-03-26 — Shared UI growth can break large C64 test images even when the main game still fits
+
+- **Issue:** After the help-paging change, I treated the later C64 suite stall as an open verification gap instead of immediately proving whether one of the large test images had crossed a hard segment boundary.
+- **Root Cause:** I verified the main game and several changed suites, but I did not re-check the largest downstream unit images that import broad common-module sets. `commodore/c64/tests/test_score.s` pulled in the full new help renderer even though help is not under test there, which pushed its resident test body to `$D00A` and into the I/O hole.
+- **Resolution:** When a shared UI/common module grows, inspect any large C64 test image memory maps, especially suites like `test_score.s` that import many subsystems. If a suite does not exercise the new UI path, stub it locally instead of linking the full renderer.
+- **Rule:** **After shared C64 UI growth, verify not only the main image but also the largest unit-test images for `$D000`/`$A000` boundary drift. Do not keep unused full-screen UI modules linked into tests that never call them.**
+
+## 2026-03-25 — Rebuild the exact C128 target before trusting artifact-budget regressions
+
+- **Issue:** I treated one `c128_artifact_budget` failure as proof that the haggle change had pushed callable code into the `$D000-$DFFF` I/O hole.
+- **Root Cause:** I read the guard output before forcing a fresh rebuild of the exact C128 target, and I missed that the authoritative runner could be reusing stale variant outputs in `out/moria128.prg` / `out/main.vs`.
+- **Resolution:** When a C128 layout or artifact-budget guard trips, rebuild the exact base target first and then re-read the emitted addresses before deciding whether the current code change actually caused the drift.
+- **Rule:** **Do not diagnose a C128 layout regression from stale outputs. Force a fresh `build128`/`test128` build of the current tree before trusting the reported symbol addresses.**
+
+## 2026-03-25 — Use the repo's Makefiles to provision KickAss instead of reaching into sibling workspaces
+
+- **Issue:** I tried to assemble against a `KickAss.jar` from a sibling checkout after the local test runner failed to find `tools/kickass/KickAss.jar`.
+- **Root Cause:** I optimized for a quick local workaround instead of following the repository's documented toolchain path, which already knows how to bootstrap KickAss correctly for this workspace.
+- **Resolution:** When this repo needs KickAss and `tools/kickass/` is missing, use the Makefile-driven build/test path first and let it provision the assembler. Only look for alternate jars if the user explicitly asks for that or the Makefile path is proven broken.
+- **Rule:** **In this repo, do not bypass missing KickAss by borrowing jars from sibling checkouts before trying the Makefile path that auto-downloads/provisions it.**
+
+## 2026-03-25 — Any unit test past 30 seconds is a breakage signal, not a slow pass
+
+- **Issue:** I let the broader C64 regression keep running after it stopped producing progress for well over 30 seconds.
+- **Root Cause:** I treated a stalled suite like a potentially slow runtime path instead of applying the repository rule that unit tests do not legitimately hang here.
+- **Resolution:** If any unit test or unit-suite stage exceeds 30 seconds, stop waiting, treat it as broken immediately, and isolate the specific test/layout issue.
+- **Rule:** **In this repo, a unit test taking more than 30 seconds means something is broken, likely memory/layout related; stop the run and debug the breakage instead of waiting it out.**
+
+## 2026-03-25 — Do not leave VICE/x128 processes running after an interrupted or stalled test attempt
+
+- **Issue:** I stacked repeated C128 test attempts and left multiple `x128` processes running long enough for the user to have to kill them manually.
+- **Root Cause:** I focused on isolating the next failure but did not clean up the previous emulator processes before rerunning adjacent test commands.
+- **Resolution:** After any aborted, stalled, or user-stopped VICE/C128 test run, explicitly terminate the existing emulator/test-runner processes before launching another attempt.
+- **Rule:** **Never launch another C64/C128 emulator-backed test while a prior VICE process from my own run may still be alive; clean up first.**
+
+## 2026-03-25 — `make test128` timeout after my change is my regression until proven otherwise
+
+- **Issue:** After the haggle change, `make test128-fast-smoke` and `make test128-fast` were green but `make test128` timed out, and I drifted into treating that as mainly a harness/debugging problem instead of the default assumption that my change had introduced a memory/layout regression.
+- **Root Cause:** I did not apply the repo's existing timeout lessons strictly enough at the suite level. In this repo, a `make test128` timeout is failure evidence and should be treated as a regression from the current diff until isolated away.
+- **Resolution:** When the authoritative suite times out after my change, keep the burden of proof on my diff. Use narrower repros only to isolate the regression, not to downgrade the timeout into a tooling issue.
+- **Rule:** **If `make test128` times out after my change, treat it as my memory/layout regression until I can prove a narrower unrelated harness bug with evidence. Do not call the work verified before that suite is green or the regression is explicitly isolated.**
+
 ## 2026-03-25 — Do not label a regression “flaky” without proof
 
 - **Issue:** I saw `test_render.s` fail after the CA-03 hunger refactor and immediately described it as the project’s “known flaky render suite.”
@@ -459,3 +543,66 @@
 - **Root Cause:** `tier_check_transition` reused `$E000` for tier payloads and invalidated the overlay, but `level_change_generate_current` still called post-generation special-room helpers that lived in the dungeon-generation overlay window.
 - **Resolution:** After any C128 tier transition that can reclaim `$E000`, explicitly reload the required overlay before calling helpers that still execute from that window, and add a regression that proves the helper runs after the restore.
 - **Rule:** **On C128, once a step like `tier_load` reuses `$E000`, assume overlay-resident helpers are dead until the overlay is explicitly reloaded.**
+
+## 2026-03-27 — In Commodore text UIs, verify glyphs in the active screen-code charset instead of assuming ASCII punctuation survives
+
+- **Issue:** I used source-level `\` characters in the new C64/C128 help diagrams assuming they would render as clean diagonals.
+- **Root Cause:** The UI renderer writes screen codes, not PETSCII, and the active Commodore upper/graphics-style charset does not show a plain ASCII backslash for those codes.
+- **Resolution:** For pseudo-ASCII UI art, validate each punctuation glyph against the active screen-code charset and prefer screen-code-safe alternatives over “looks right in source” characters.
+- **Rule:** **On C64/C128 text screens, do not trust ASCII punctuation by inspection alone. If a glyph matters visually, verify it in the active screen-code charset before shipping it.**
+
+## 2026-03-27 — If the charset makes ASCII-art fragile, switch to a glyph-independent layout instead of stacking more punctuation hacks
+
+- **Issue:** After removing `\`, I still tried to preserve the diagonal look with alternate punctuation, and the result was visibly wrong on the real help screen.
+- **Root Cause:** I optimized for “keep the original line art” instead of stepping back and choosing a layout that does not depend on uncertain diagonal glyphs at all.
+- **Resolution:** When the active charset makes pseudo-ASCII art unreliable, prefer a clean grid or labeled layout that communicates the same information without fragile connector glyphs.
+- **Rule:** **On Commodore text UIs, if a diagram depends on ambiguous punctuation, redesign the diagram around stable glyphs instead of iterating through punctuation substitutes.**
+
+## 2026-03-27 — For UI layout changes, logical correctness is not enough; review the visual spacing as a composition
+
+- **Issue:** The first glyph-independent keypad layout was technically correct but still looked cramped and awkward on the live C128 help screen.
+- **Root Cause:** I stopped once the data was correct and the tests passed, without judging whether the spacing actually read well as a composed 80-column page.
+- **Resolution:** For visible UI copy/layout work, review the actual rendered balance: spacing between columns, whitespace around legends, and whether grouped elements read as intentional blocks.
+- **Rule:** **For text-mode UI layout changes, do not stop at “correct data.” Check that the rendered spacing and grouping look deliberate on the target screen.**
+
+## 2026-03-27 — When closing a backlog item, update the active plan and the history archive in the same pass
+
+- **Issue:** I closed `BUG-HELP-PAGING` in the implementation record but left `commodore/BUILDPLAN.md` showing it as open, which made the active backlog inaccurate.
+- **Root Cause:** I treated the task log as sufficient proof of closure and did not reconcile the project-facing backlog docs that are supposed to reflect current state.
+- **Resolution:** Whenever a build-plan item is finished, update both `commodore/BUILDPLAN.md` and `commodore/BUILDPLAN_HISTORY.md` together before declaring the work closed.
+- **Rule:** **A completed backlog item is not actually closed until the active plan removes it and the history archive records it in the same pass.**
+
+## 2026-03-28 — When the user chooses the authenticity tier, stop framing it as an optional later enhancement
+
+- **Issue:** I presented variable search odds as a scope fork even after the user made it clear they wanted the more authentic behavior.
+- **Root Cause:** I kept the design framed around minimum-risk phasing instead of immediately collapsing the open branch once the user picked the authenticity side of the tradeoff.
+- **Resolution:** When a user explicitly chooses the higher-authenticity path, update the active design and recommendation immediately so the chosen tier becomes the baseline rather than a deferred option.
+- **Rule:** **Once the user selects the authenticity-focused variant, do not keep the lower-fidelity variant as the implicit default in planning docs or recommendations.**
+
+## 2026-03-28 — When original-game UI behavior is confirmed, elevate it into the feature contract immediately
+
+- **Issue:** After confirming that `umoria` shows a persistent `Searching` status-line indicator, I still framed message-only feedback as acceptable for the feature.
+- **Root Cause:** I separated gameplay authenticity from UI authenticity too aggressively, even after the upstream UI contract was verified.
+- **Resolution:** Once upstream UI behavior is confirmed and the user wants authentic behavior, move that UI element into the required scope instead of leaving it as a possible follow-up.
+- **Rule:** **For authenticity-driven features, verified upstream UI indicators are part of the contract unless the user explicitly agrees to defer them.**
+
+## 2026-03-28 — Preserve the incoming command register across state-clearing helpers in command decode
+
+- **Issue:** After the search-mode work landed, `Shift+direction` running stopped working on C64 even though ordinary movement still worked.
+- **Root Cause:** `cmd_run` called `player_search_mode_off` before decoding `CMD_RUN_*`, but the helper clobbered `A`, so the subsequent `sbc #CMD_RUN_N` computed the wrong run direction.
+- **Resolution:** Preserve the command byte across helper calls in decode paths, and add a regression that asserts `CMD_RUN_E` still reaches `CMD_MOVE_E` while search mode is cleared.
+- **Rule:** **If a command handler needs the original command byte after calling a helper, preserve `A` explicitly; do not assume state-clearing helpers leave decode registers intact.**
+
+## 2026-03-28 — For authenticity-driven interaction rules, verify the specific upstream behavior before freezing the contract
+
+- **Issue:** I wrote the search-mode design and implementation to clear searching on run entry, but `umoria` does not appear to do that and its manual explicitly discusses running while search mode is on.
+- **Root Cause:** I verified the broad search-mode behavior but did not verify the narrower run/search interaction before turning it into a design rule and shipped behavior.
+- **Resolution:** Recheck the exact upstream interaction before finalizing disturbance rules, then align both the docs and the shared run path with that verified behavior.
+- **Rule:** **When a feature is being implemented for authenticity, do not infer sub-behaviors like run/search interactions from the current port or from convenience; verify them directly in upstream sources before locking the contract.**
+
+## 2026-03-28 — When an alternate harness disagrees with the user's exact failing suite, the exact suite is the only truth that matters
+
+- **Issue:** After the user reported `make -C commodore/c128 test128-fast` failing, I talked about a direct `harness128.py` timeout as if it might explain the problem instead of first making the user's exact suite pass.
+- **Root Cause:** I treated a secondary harness discrepancy as meaningful diagnostic framing before closing the loop on the authoritative command the user actually ran.
+- **Resolution:** Reproduce and fix the exact failing command first, and only discuss alternate harness behavior after the authoritative suite is green and clearly separated from the real issue.
+- **Rule:** **Do not describe a failure as “just a harness issue” when the user's exact suite is red. The exact failing command remains authoritative until it passes.**

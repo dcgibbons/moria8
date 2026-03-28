@@ -4,6 +4,8 @@
 // Phase 4.2: Explicit open/close door commands, stuck door mechanics,
 // hidden trap placement and triggering, secret doors found by searching.
 
+#import "input_ui_helpers.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -34,6 +36,7 @@ df_target_x: .byte 0   // Target tile X for door commands
 df_target_y: .byte 0   // Target tile Y for door commands
 df_dir_idx:  .byte 0   // Direction index from get_direction_target
 df_found:    .byte 0   // Search found-something flag
+df_search_chance: .byte 0
 
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
@@ -351,6 +354,7 @@ trap_check_at_player:
 // Input: X = trap table index (trap_type[X] has the type)
 // ============================================================
 trap_trigger:
+    jsr player_search_mode_off
     lda trap_type,x
 
     cmp #TRAP_OPEN_PIT
@@ -513,6 +517,7 @@ trap_apply_damage:
 // trap_teleport — Move player to a random floor tile
 // ============================================================
 trap_teleport:
+    jsr player_search_mode_off
     // Find a random floor tile using simple scan
     lda #100                // Max attempts
     sta df_found
@@ -569,11 +574,9 @@ get_direction_target:
     ldx #HSTR_DF_DIRECTION
     jsr huff_print_msg
 
-    // C128: ensure the command key that triggered the action is released so
-    // the direction prompt consumes a fresh follow-up keypress.
-#if C128
-    jsr input_wait_release
-#endif
+    // Ensure the command key that triggered the action is released so the
+    // direction prompt consumes a fresh follow-up keypress.
+    jsr input_prepare_followup_key
 
     // Wait for a keypress
     jsr input_get_key
@@ -745,15 +748,20 @@ door_try_close:
     rts
 
 // ============================================================
-// do_search — Search adjacent tiles for secrets and traps
-// Scans all 8 adjacent tiles. For each:
-//   - If TILE_SECRET: 1-in-6 chance to reveal as TILE_DOOR_CLOSED
-//   - Check trap table for hidden traps: 1-in-6 chance to reveal
-// Always consumes a turn.
-// ============================================================
-do_search:
+// search_scan_effective_silent — Shared search scan using the live player chance
+// Output: carry set = something found, carry clear = nothing found
+search_scan_effective_silent:
+    jsr player_search_get_effective_chance
+    // Fall through into search_scan_adjacent_silent
+
+// search_scan_adjacent_silent — Search adjacent tiles without printing a
+// "nothing found" message. Found-object messages still print.
+// Input: A = per-tile search chance in percent
+// Output: carry set = something found, carry clear = nothing found
+search_scan_adjacent_silent:
+    sta df_search_chance
     lda #0
-    sta df_found            // Track if we found anything
+    sta df_found
 
     // Loop through 8 directions (indices 0-7)
     lda #0
@@ -800,12 +808,14 @@ do_search:
     cmp #TILE_SECRET
     bne !ds_check_trap+
 
-    // Secret door found — 1-in-6 chance to reveal
-    lda #6
-    jsr rng_range           // [0, 5]
-    cmp #0
-    bne !ds_check_trap+
+    lda df_search_chance
+    beq !ds_check_trap+
+    lda #100
+    jsr rng_range
+    cmp df_search_chance
+    bcs !ds_check_trap+
 
+!ds_secret_found:
     // Reveal: change to TILE_DOOR_CLOSED
     ldy df_target_x
     :MapRead_ptr0_y()
@@ -813,7 +823,6 @@ do_search:
     ora #TILE_DOOR_CLOSED
     :MapWrite_ptr0_y()
 
-    // Print message
     ldx #HSTR_DF_FOUND_SECRET
     jsr huff_print_msg
     lda #1
@@ -834,20 +843,21 @@ do_search:
     cmp df_target_y
     bne !ds_trap_next+
 
-    // Hidden trap found — 1-in-6 chance to reveal
     txa
     pha                     // Save trap index on stack
 
-    lda #6
-    jsr rng_range           // [0, 5]
-    cmp #0
-    bne !ds_trap_not_found+
+    lda df_search_chance
+    beq !ds_trap_not_found+
+    lda #100
+    jsr rng_range
+    cmp df_search_chance
+    bcs !ds_trap_not_found+
 
+!ds_trap_found:
     // Reveal trap: change map tile to TILE_TRAP | flags
     pla                     // Restore trap index
     tax
 
-    // Set map tile
     ldy trap_y,x
     lda map_row_lo,y
     sta zp_ptr0
@@ -860,7 +870,6 @@ do_search:
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
 
-    // Remove from trap table
     dec trap_count
     ldy trap_count
     lda trap_x,y
@@ -870,16 +879,14 @@ do_search:
     lda trap_type,y
     sta trap_type,x
 
-    // Print message
     ldx #HSTR_DF_FOUND_TRAP
     jsr huff_print_msg
     lda #1
     sta df_found
-    jmp !ds_next+           // Move to next direction
+    jmp !ds_next+
 
 !ds_trap_not_found:
     pla                     // Discard saved trap index
-    // Fall through to next trap in table scan
 
 !ds_trap_next:
     inx
@@ -893,9 +900,20 @@ do_search:
     jmp !ds_loop-
 
 !ds_done:
-    // If nothing was found, print "YOU FOUND NOTHING."
     lda df_found
-    bne !ds_exit+
+    beq !ds_none+
+    sec
+    rts
+!ds_none:
+    clc
+    rts
+
+// do_search — Search adjacent tiles for secrets and traps
+// Always consumes a turn; if nothing was found, prints the standard message.
+// ============================================================
+do_search:
+    jsr search_scan_effective_silent
+    bcs !ds_exit+
     ldx #HSTR_DF_FOUND_NOTHING
     jsr huff_print_msg
 !ds_exit:

@@ -6,6 +6,559 @@
 
 ---
 
+## 2026-03-28 — `FEAT-SEARCH-MODE` authentic search-mode restoration ✅ COMPLETE
+
+### Scope Closed
+- Restored original-style persistent search mode and passive auto-search behavior across C64 and C128 without rewriting the full player-speed scheduler.
+
+### What Shipped
+1. **Authentic search-mode state and derived search math**
+   - added the persistent runtime toggle on `PLF_SEARCHING`
+   - restored derived active-search and `fos` behavior from the existing race/class data instead of the old flat reveal chance
+   - kept search state transient across save/load
+2. **Shared turn integration without a scheduler rewrite**
+   - ordinary movement now owns passive auto-search
+   - the shared post-turn helper applies the extra search turn when search mode is active
+   - running now preserves search mode and reuses the same passive-search / extra-turn behavior, matching `umoria`
+3. **Persistent player-facing UI restored**
+   - added the status-area `Searching` indicator instead of relying on message-only feedback
+   - wired the `#` search-mode toggle and the supporting input/help updates on both targets
+4. **Layout and residency constraints stayed green**
+   - kept the C64 main segment below `$C000`
+   - kept the C128 resident / overlay / callable-residency asserts green, including the earlier UI-overlay relocation needed to absorb feature growth
+5. **Follow-up regressions found during landing were fixed before closure**
+   - C64 running decode stopped clobbering the `CMD_RUN_*` byte
+   - C64 bump-to-attack stopped clobbering the target X coordinate when clearing search mode
+   - C128 chargen summary duplication was removed by deleting the stale C128-local summary display and tightening the summary-to-town smoke to require exactly one summary screen
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Search-mode-focused coverage passed:
+  - `commodore/c64/tests/test_input.s` = `11/11`
+  - `commodore/c64/tests/test_main_loop.s` = `20/20`
+  - `make -C commodore/c128 test128-fast` = `PASS`
+- Follow-up flow coverage passed:
+  - `TEST_FILTER='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` = `PASS`
+  - `make -C commodore/c128 test128-fast-smoke` = `PASS`
+
+### Outcome
+- `FEAT-SEARCH-MODE` is removed from the active build plan.
+- The port now has authentic persistent searching behavior with the intended status UI and turn semantics, while unrelated post-landing regressions remain tracked separately as bugs rather than as unfinished feature scope.
+
+## 2026-03-27 — `BUG-TOWN-KILL-DRAW` shared post-turn redraw fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the stale town-monster glyph bug for stationary remote kills without turning it into a platform-renderer or HAL problem.
+
+### Root Cause
+- Shared stationary action paths can remove a visible monster through `commodore/common/spell_effects.s` `eff_kill_monster`, but the post-turn redraw decision still lives in the common turn tail.
+- `commodore/common/turn.s` clears `turn_scene_dirty` at the start of `turn_post_action`, so any action path that tried to request a redraw by setting that flag before the turn tail would lose the request.
+- That left a specific hole where a remote visible kill could clear map/monster state correctly yet still fall through to `render_local_area`, which does not cover every visible remote tile.
+
+### What Changed
+1. **Shared pending redraw ownership now survives `turn_post_action`**
+   - `commodore/common/turn_render_state.s` now aliases `turn_action_redraw_pending` onto the dormant `zp_dirty_count` scratch byte
+   - this preserves a durable action-owned redraw request without growing the resident image
+2. **The shared remote-kill helper now produces the redraw request**
+   - `commodore/common/spell_effects.s` `eff_kill_monster` now increments the pending redraw latch immediately after `monster_remove`
+3. **The turn tail now promotes and clears the pending latch**
+   - `commodore/common/turn.s` now ORs the pending latch into the `monster_ai_tick` redraw result, stores the combined value into `turn_scene_dirty`, and clears the latch for the next turn
+4. **C128 residency stayed within bounds**
+   - to keep the implementation byte-neutral in the main resident image, `commodore/c128/main.s` no longer imports `player_magic_display_data.s` into `RuntimeLowData`
+   - `commodore/c128/memory128.s` now hosts that shared display data in the MMU common helper blob instead
+5. **Focused regression coverage now pins both sides of the contract**
+   - `commodore/c64/tests/test_turn.s` proves the pending redraw request promotes into `turn_scene_dirty` once and then clears
+   - `commodore/c64/tests/test_monster.s` proves `eff_kill_monster` sets the pending redraw latch while still clearing the monster slot and map occupancy bit
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- Focused C64 runtime tests passed:
+  - `turn` = `11/11`
+  - `monster` = `13/13`
+  - `effects` = `26/26`
+- `make -B -C commodore/c128 build128` passed with `Made 238 asserts, 0 failed`.
+- `make test128-fast` passed.
+
+### Outcome
+- `BUG-TOWN-KILL-DRAW` is removed from the active build plan.
+- Shared stationary remote kills now have a durable redraw contract that upgrades the post-turn path to a full scene redraw when local redraw is insufficient.
+
+## 2026-03-27 — `BUG-LOOK-HILITE` directed-look target flash fix ✅ COMPLETE
+
+### Scope Closed
+- Restored the missing visual cue for the current reduced directed `look` contract without reopening the larger interactive-`look` parity project.
+
+### Root Cause
+- `commodore/common/player_move.s` already chose a concrete target tile for directed `look`, but the shared path never passed that chosen target through a platform-owned highlight/flash primitive.
+- The first C128 placement of the helper also showed that even a tiny shared routine still has to land in the correct residency bucket; otherwise a harmless UI fix can become a layout risk.
+
+### What Changed
+1. **Shared directed `look` now flashes the same target it describes**
+   - added `commodore/common/look_flash_target.s`
+   - converts `df_target_x/y` into viewport-relative row/column coordinates and calls the existing `screen_flash_at` backend on both C64 and C128
+   - wired both the tile-description and item/monster description paths through that helper
+2. **C128 residency is now explicit and audited**
+   - placed `look_flash_target` in the resident/default C128 segment instead of the runtime-low block
+   - added a C128 I/O-boundary audit so the symbol stays below `$D000`
+3. **Focused regression coverage now lives in a host image that still fits**
+   - extended `commodore/c64/tests/test_effects.s` with:
+     - a positive directed-`look` flash assertion
+     - the remembered-dark no-flash regression
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- Direct `commodore/c64/tests/test_effects.s` monitor run passed with `PASS_COUNT=27`.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- `make test128-fast` passed.
+
+### Outcome
+- `BUG-LOOK-HILITE` is removed from the active build plan.
+- The current directed `look` flow now provides a visible target cue while preserving the deliberately smaller VMS-style baseline.
+
+## 2026-03-27 — `BUG-TITLE-DUALDISK-FRAME` C64 title-frame preservation fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C64 title-screen bug where the dual-disk status UI and custom-drive prompt erased the lower title frame.
+
+### Root Cause
+- The transient disk UI used rows `18-20`, which overlap the lower title art.
+- Normal row clears for the submenu, `[Save Disk]`, `[Drive N]`, and absent-device error therefore wiped part of the frame.
+
+### What Changed
+1. **Title-menu disk UI moved into the reserved bottom status area**
+   - `commodore/c64/main.s` now renders the disk submenu and `[Save Disk]` indicator using the already-cleared bottom status rows
+2. **Shared custom-drive prompt/error path follows the same row contract**
+   - `commodore/common/disk_swap.s` now renders:
+     - the save-drive prompt
+     - the absent-device error
+     - the `[Drive N]` indicator
+     in the same reserved status-area rows
+3. **Focused regression coverage now pins the row behavior**
+   - `commodore/c64/tests/test_disk_swap.s` records the prompt/indicator rows and asserts the new status-area contract
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- `commodore/c64/tests/test_disk_swap.s` passed with `PASS_COUNT=11`.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+
+### Outcome
+- `BUG-TITLE-DUALDISK-FRAME` is removed from the active build plan.
+- The C64 title art remains intact while the dual-disk UI updates.
+
+## 2026-03-27 — `A6` split `item.s` into ownership-focused modules ✅ COMPLETE
+
+### Scope Closed
+- Reduced the large shared item module into smaller ownership-based files without changing runtime behavior or the existing public import surface.
+
+### What Shipped
+1. **Immutable item-definition data moved into a dedicated owner**
+   - added `commodore/common/item_tables.s`
+   - now owns base item metadata, ranged missile metadata/helper, and canonical real-name tables/strings
+2. **Mutable identification state moved into a dedicated owner**
+   - added `commodore/common/item_identification.s`
+   - now owns `id_known`, shuffle tables, unknown-item descriptor tables, and the name/color resolver routines
+3. **`item.s` stayed the runtime behavior owner**
+   - floor/inventory state plus spawn/pickup/drop/name-append/runtime behavior remain in `commodore/common/item.s`
+   - existing import sites still include `item.s`, so the refactor did not ripple through callers
+
+### Why This Boundary
+- The immutable base table block and the identification subsystem were already distinct seams inside the old file.
+- Save/load already treats identification state as one logical unit, so grouping that mutable state and its resolvers together improves ownership clarity.
+- This was the smallest useful `A6` cut that materially shrank the main file without reopening behavior or platform design.
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Focused C64 item-adjacent suites passed:
+  - `item` = `47/47`
+  - `store` = `37/37`
+  - `wands_staves` = `7/7`
+  - `ranged` = `8/8`
+- `make test128-fast` passed.
+
+### Outcome
+- `A6` is removed from the active build plan as completed maintainability work.
+- Shared item ownership is clearer while preserving behavior and the existing module entry surface.
+
+## 2026-03-27 — `REF-HAL` phase-1 platform-service cleanup ✅ COMPLETE
+
+### Scope Closed
+- Introduced the shared platform-service seam and sibling input-policy helpers that remove the main C128 runtime-repair and raw keyboard-policy leaks from shared gameplay/orchestration code.
+- Closed the build-plan item at the phase-1 boundary after consultant review confirmed the remaining direct runtime-repair references are intentional exclusions rather than unfinished HAL work.
+
+### What Shipped
+1. **Required runtime-service shim installed on both platforms**
+   - `commodore/common/platform_services_api.s`
+   - startup patch/install in both `commodore/c64/main.s` and `commodore/c128/main.s`
+2. **Shared input-policy helpers now own the raw keyboard-policy split**
+   - `commodore/common/input_ui_helpers.s`
+   - shared follow-up key, modal dismiss, and run-cancel buffer policy moved behind named helpers
+3. **Shared gameplay/message callsites migrated off direct C128 repair helpers**
+   - shared code now uses `platform_main_loop_begin_api`, `platform_vector_reassert_api`, and `platform_runtime_resync_api`
+   - targeted modal flows now use the input helper layer instead of open-coded `KBDBUF_COUNT` handling
+4. **C128 regressions found during rollout were corrected and folded into the final boundary**
+   - Home/store residency moved back out of the I/O hole
+   - C128 cursor-key repeat regression fixed
+   - spell-list residency split so the callable spell surface no longer spills into `$D000-$DFFF`
+   - post-death dismiss path now uses the modal helper while chargen gender selection intentionally stays on its explicit release wait
+
+### Final Boundary
+- `REF-HAL` phase 1 is complete as:
+  - a narrow installed runtime-service seam for shared orchestration leaks
+  - a sibling input-policy cleanup for shared key-handling leaks
+- The remaining direct runtime-repair references in `commodore/common/` are intentional exclusions:
+  - `commodore/common/reu.s` preload/bank-restore ownership
+  - the one-off `c128_restore_generation_overlay` helper in `commodore/common/game_loop.s`
+- Consultant review recommended not expanding HAL further for those one-off/platform-boundary cases; any future generation-overlay cleanup should be tracked as a separate slice, not as more HAL work.
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts after the final narrowed prompt-policy cleanup.
+- Focused C128 acceptance passed:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Follow-up boundary guard passed after the later HAL re-audit:
+  - `TEST_FILTER='c128_ref_hal_guard' bash commodore/c128/run_tests128.sh`
+- Important verification note:
+  - the full `bash commodore/c64/run_tests.sh` runner hung in this environment during the long `effects` suite, so the close-out record relies on the focused C128 acceptance set plus prior broader regression runs already captured in `tasks/todo.md`.
+
+### Outcome
+- `REF-HAL` is removed from the active build plan as completed phase-1 work.
+- Shared gameplay code now depends on named platform/runtime/input services instead of directly accumulating C128 repair calls and raw keyboard-buffer policy.
+- The completion boundary is now mechanically enforced in the C128 harness:
+  - only the documented shared exclusions in `commodore/common/game_loop.s` and `commodore/common/reu.s` may retain direct runtime-repair references
+  - raw shared `KBDBUF_COUNT` handling remains confined to `commodore/common/input_ui_helpers.s`
+- Later phase-2 viability audit result:
+  - no additional HAL phase was opened
+  - the deferred `PERF_P1` cleanup stayed explicit because it is compile-time C128 instrumentation, not a runtime platform-service leak
+  - any future `c128_restore_generation_overlay` ownership cleanup remains a separate non-HAL slice
+
+## 2026-03-27 — CIA2 / VIC-bank restore cleanup in `overlay.s` / `tier_manager.s` ✅ COMPLETE
+
+### Scope Closed
+- Audited the active cleanup item around shared CIA2/VIC-bank restore assumptions in overlay and tier loading.
+- Closed it after confirming `overlay.s` was already correctly split and fixing the last stale shared `$DD00` restore in `tier_manager.s`.
+
+### What Was Verified
+1. **`overlay.s` already kept the C128 path platform-owned**
+   - the C128 overlay load path delegates to `c128_preload_asset_load`
+   - the direct `$DD00` restore exists only in the `!C128` disk-load path
+2. **`tier_manager.s` still carried one stale shared C64-era assumption**
+   - after `AssetLoad`, `CLOSE`, and `CLRCHN`, it restored `$DD00` unconditionally
+   - on C128 that ownership already belongs to the platform loader wrapper
+3. **The fix reduced the shared assumption instead of adding new abstraction**
+   - `tier_manager.s` now restores VIC-II bank 0 only on `!C128`
+   - no new HAL/API layer was introduced
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Focused C64 tier coverage still passed:
+  - `commodore/c64/tests/test_tier.s` = `11/11`
+- Focused C128 regression coverage passed:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+
+### Outcome
+- The active build-plan item is removed as completed.
+- CIA2/VIC-bank restore ownership now sits in the correct platform boundary for both overlay and tier loading paths.
+
+## 2026-03-27 — `REF-NUMFMT` backlog closure audit ✅ COMPLETE
+
+### Scope Closed
+- Audited the live numeric-formatting surface to determine whether the still-open `REF-NUMFMT` build-plan item represented real remaining work or stale backlog wording.
+- Closed the item through plan/history reconciliation after confirming the shared formatter refactor had already shipped.
+
+### Root Cause
+- `commodore/BUILDPLAN.md` still described `REF-NUMFMT` as future work to unify duplicated VIC-II and VDC screen numeric helpers.
+- The live tree already contains the shared owner added during the completed `CA-01` audit pass:
+  - `commodore/common/numeric_format.s`
+  - imported by both `commodore/c64/screen.s` and `commodore/c128/screen_vdc.s`
+- The completed work also went slightly beyond the original backlog note by moving combat decimal formatting onto the same common numeric core and removing the old backend-local table dependency.
+- That left the build-plan entry stale rather than unfinished.
+
+### What Was Verified
+1. **One shared module now owns the screen numeric helpers**
+   - `screen_put_hex`
+   - `screen_put_decimal`
+   - `screen_put_decimal_rj2`
+   - `screen_put_decimal_lz2`
+   - `screen_put_decimal_16`
+2. **Both screen backends already consume that shared owner**
+   - `commodore/c64/screen.s`
+   - `commodore/c128/screen_vdc.s`
+3. **The shared numeric core also serves the combat appenders**
+   - `commodore/common/combat.s` now calls `numeric_format_u8` / `numeric_format_u16`
+   - shared `decimal_powers_*` data now lives in `commodore/common/numeric_format.s`
+4. **The only intentionally separate formatter remains outside this backlog item**
+   - `commodore/common/score.s` still owns the 24-bit score formatter, which has different width and call-shape requirements and is already documented as an intentional residual split in `commodore/CODE_AUDIT.md`
+
+### Outcome
+- `REF-NUMFMT` is closed as stale backlog wording already satisfied by the completed `CA-01` shared numeric-formatting work.
+- No code changes were required.
+- The active build plan no longer lists the item as open.
+
+## 2026-03-27 — `REF-CONSTS` shared neutral constant ownership cleanup ✅ COMPLETE
+
+### Scope Closed
+- Finished the remaining low-risk constant-ownership cleanup for the live tree without reopening layout, MMU, or bootstrap policy.
+- Centralized the small set of genuinely shared neutral aliases and closed the corresponding backlog item.
+
+### Root Cause
+- Several important constant families were already centralized:
+  - `CMD_*` and direction tables
+  - semantic gameplay/UI color aliases
+  - disk/KERNAL I/O constants
+- The real remaining duplication was narrower:
+  - raw VIC palette indices were still defined in more than one runtime owner
+  - shared `$01` processor-port banking aliases were still defined in both C64 and C128 memory layers
+- The open backlog wording was broader than the real cleanup left to do.
+
+### What Changed
+1. **Raw VIC palette indices now have one shared owner**
+   - Added `commodore/common/vic_palette_consts.s`.
+   - Retargeted:
+     - `commodore/common/color.s`
+     - `commodore/c64/screen.s`
+     - `commodore/c128/memory128.s`
+2. **Shared `$01` banking aliases now have one shared owner**
+   - Added `commodore/common/bank_port_consts.s`.
+   - Retargeted:
+     - `commodore/c64/memory.s`
+     - `commodore/c128/memory128.s`
+3. **The implementation stayed inside the intended boundary**
+   - Left `SCREEN_COLS`, `SCREEN_ROWS`, `VIEWPORT_*`, `MSG_ROW`, `STATUS_ROW`, `INPUT_ROW` local.
+   - Left `MMU_*` local.
+   - Left VDC-only translated color aliases local.
+   - Left bootstrap-local aliases in `commodore/c128/boot128.s` explicit.
+   - Chose not to fold `SC_SPACE` into this pass so the change remained tightly scoped.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -B -C commodore/c128 build128` (`232` asserts, `0` failed)
+- `make test128-fast` (passed)
+- `make test128-fast-smoke` (`3 passed, 0 failed`)
+
+### Outcome
+- `REF-CONSTS` is complete.
+- Raw neutral constant families now have one shared owner.
+- The active build plan no longer lists the item as open.
+
+## 2026-03-27 — `REF-C128-TRAMP` backlog closure audit ✅ COMPLETE
+
+### Scope Closed
+- Audited the live C128 trampoline surface to determine whether the still-open `REF-C128-TRAMP` backlog item represented real remaining code work or stale backlog wording.
+- Closed the item through backlog/history reconciliation after confirming the substantive trampoline-family consolidation was already complete.
+
+### Root Cause
+- `commodore/BUILDPLAN.md` still described `REF-C128-TRAMP` as future macro-generation work.
+- The live tree already contained the real consolidation from the older `REF-1` pass, and the later `AUDIT-IO-C128` work intentionally favored explicit, reviewable callable contracts over more generic abstraction.
+- That left the backlog item stale: it was still open even though the exact-match repetitive families had already been normalized.
+
+### What Was Verified
+1. **The main exact-match trampoline families are already consolidated in `commodore/c128/main.s`**
+   - KERNAL jump-table wrappers
+   - UI display wrappers
+   - banked compute wrappers
+   - preserve-A wrappers
+   - preserve-A-return wrappers
+   - preserve-flags wrappers
+   - shared-epilogue wrappers
+   - banked status wrappers
+2. **The remaining explicit wrappers are bespoke and should stay explicit**
+   - `tramp_player_create`
+   - `tramp_game_over`
+   - `tramp_ui_help_display`
+   - `tramp_magic_check_new_spells`
+   - `tramp_level_generate`
+   - `tramp_ego_append_suffix`
+   - `tramp_ego_put_suffix`
+   - `w_load`
+   - `kernal_load_safe`
+   - `safe_setbnk`
+   - These wrappers carry overlay-load policy, help-page pointer seeding, score/save side effects, diagnostic hooks, suffix/text postprocessing, or distinct caller-visible register/flag contracts.
+3. **The post-`AUDIT-IO-C128` contract argues against a broader generic dispatcher**
+   - `commodore/c128/io_contracts.s` now pins the callable surface and residency classes.
+   - Another broad “generic trampoline” pass would reduce reviewability without removing real remaining duplication.
+
+### Outcome
+- `REF-C128-TRAMP` is closed as stale backlog wording already satisfied by `REF-1`, with the remaining explicit wrappers intentionally left explicit.
+- No code changes were required.
+- The active build plan no longer lists the item as open.
+
+## 2026-03-27 — `REF-INPUT-TABLES` shared base PETSCII map ownership cleanup ✅ COMPLETE
+
+### Scope Closed
+- Finished the remaining shared input-table cleanup without reopening the platform-specific keyboard architecture.
+- Closed the backlog item by centralizing the duplicated base PETSCII-to-command map while leaving C128-only keypad and escape behavior explicit and local.
+
+### Root Cause
+- `commodore/common/input_contract.s` and `commodore/common/input_run_cancel.s` had already centralized the command IDs, direction tables, and run-cancel state machine.
+- The remaining drift was narrower:
+  - `commodore/c64/input.s` and `commodore/c128/input128.s` still each carried the same base PETSCII map for vi keys, cursor keys, main commands, and run commands
+  - only the C128 keypad / extended-key tail was truly platform-specific
+
+### What Changed
+1. **One shared file now owns the base PETSCII map**
+   - Added `commodore/common/input_tables.s`.
+   - It emits the shared base PETSCII entries and matching `CMD_*` entries used by both platforms.
+2. **Both platform input files now consume that shared base map**
+   - `commodore/c64/input.s`
+   - `commodore/c128/input128.s`
+   - The duplicated local base tables were removed in favor of the shared macro-backed definitions.
+3. **C128-only extension behavior stayed local and reviewable**
+   - `commodore/c128/input128.s`
+   - Keypad directions, keypad rest/tunnel shortcuts, and `KEY_ESC` quit remain in the platform file as the extension tail.
+4. **The input architecture boundary did not expand**
+   - The KERNAL `GETIN` path on C64 is unchanged.
+   - The CIA scan, keypad virtual-code path, and Ctrl-chord rescue on C128 are unchanged.
+   - The trivial `petscii_to_command` lookup body stayed local, avoiding extra pointer plumbing for a small table-ownership cleanup.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -B -C commodore/c128 build128` (`232` asserts, `0` failed)
+- focused C128 input gate outside the sandbox: `TEST_FILTER='input128' TEST_JOBS=1 bash commodore/c128/run_tests128.sh` (`1 passed, 0 failed`)
+- `make test128-fast` (passed)
+
+### Outcome
+- `REF-INPUT-TABLES` is complete.
+- The shared base input map now has one owner.
+- C128 keypad and `ESC` behavior remain platform-local and fully covered by the focused C128 input gate.
+
+## 2026-03-27 — `BUG-HELP-PAGING` multi-page help flow and overlay split ✅ FIXED
+
+### Scope Closed
+- Completed the multi-page `?` help flow on both C64 and C128 without reopening the broader "browser-style help system" scope.
+- Moved the feature out of the active backlog and closed the remaining tracker drift between the implementation record and the active build plan.
+
+### Root Cause
+- The active backlog still listed `BUG-HELP-PAGING` as open even though the implementation and verification had already landed.
+- The underlying help bug was the original single-page assumption:
+  - longer quick-reference help could not paginate cleanly
+  - the first shared follow-up design was too brittle across the C64/C128 overlay and key-handling contracts
+
+### What Changed
+1. **Help is now a real multi-page modal flow**
+   - The resident help pager advances on `SPACE` / `RETURN` and exits on `Q` / `ESC`.
+   - The first page keeps the quick-reference role; later pages carry the overflow content.
+2. **Help data/layout is now platform-correct**
+   - C64 uses a compact multi-page help overlay.
+   - C128 uses a dedicated 80-column help layout in `commodore/c128/ui_help_data_80.s`.
+   - The final C128 path restores a true two-page help flow instead of collapsing back to one page.
+3. **Overlay ownership was cleaned up so help no longer distorts the UI overlay budget**
+   - Help now lives in dedicated `OVL.HELP` overlays instead of bloating `OVL.UI`.
+   - C128 help is preloaded into its own Bank 1 cache slot so the runtime path does not disk-load on each open.
+4. **The runtime/keypath regressions from the first landing were closed**
+   - The paging loop lives in resident common code.
+   - Platform-specific escape handling and redraw/return behavior were corrected.
+   - Page tails and footer prompts now match the fixed 23-row renderer contract and the actual accepted keys.
+
+### Validation
+- `make -C commodore/c64 build` (`74` asserts, `0` failed)
+- `bash commodore/c64/run_tests.sh` (`33 passed, 0 failed`)
+- `make -C commodore/c64 disk` (writes `OVL.HELP`)
+- `make -C commodore/c128 build128` (`232` asserts, `0` failed)
+- `make test128-fast` (passed)
+- `make -C commodore/c128 disk128` (writes preloaded `OVL.HELP`)
+- authoritative C128 verification outside the sandbox: `TEST_JOBS=1 ./run_tests128.sh` (`41 passed, 0 failed`)
+
+### Outcome
+- `BUG-HELP-PAGING` is closed.
+- The active backlog no longer lists it as open.
+- Multi-page quick-reference help is now implemented and verified on both platforms.
+
+## 2026-03-26 — `AUDIT-IO-C128` callable residency audit and guard unification ✅ FIXED
+
+### Scope Closed
+- Audited the C128 callable execution surfaces whose correctness depends on residency, overlay ownership, banked/runtime-low placement, or copied-code load headers.
+- Replaced the old hand-maintained callable placement list with one explicit contract manifest shared by compile-time asserts and the C128 runner.
+
+### Root Cause
+- The tree already had many important C128 placement asserts, but they were selective and hand-curated in `commodore/c128/main.s`.
+- The runner then kept a second hand-picked symbol list in `commodore/c128/run_tests128.sh`.
+- That split left real drift risk:
+  - trampoline-side guards could exist without matching callee-side guards
+  - new callable surfaces could be protected in source but not enforced by the runner, or vice versa
+  - runtime-low / overlay / banked contracts were not represented as one auditable callable inventory
+
+### What Changed
+1. **One C128 callable residency manifest now declares the audited contract**
+   - `commodore/c128/io_contracts.s`
+   - Added one source-of-truth inventory for:
+     - resident `< $D000` entrypoints
+     - runtime-low Bank 0 entrypoints
+     - startup / town / death / UI / dungeon overlay entrypoints
+     - reloadable banked payload entrypoints
+     - out-of-I/O-hole call surfaces that may legally live low or banked
+2. **Compile-time C128 placement asserts now come from that manifest**
+   - `commodore/c128/main.s`
+   - Added macro-backed `AUDIT-IO-C128` asserts and removed the long inline callable-placement list.
+   - Kept unrelated data/layout asserts separate, such as message-history sizing and prompt-string placement.
+3. **The C128 runner now validates the same manifest**
+   - `commodore/c128/run_tests128.sh`
+   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/runtime.low.prg` still carries the `$1000` load header.
+4. **Callee-side gaps are now guarded, not just trampoline addresses**
+   - Newly enforced overlay/runtime-low/banked callees include:
+     - `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
+     - `viewport_update`, `render_viewport_scroll_delta`, `render_local_area`, `monster_get_threat_color`, and ego helpers in `runtime.low`
+     - `player_tunnel`, `player_cast_spell`, `player_pray`, and `spell_list_display`
+
+### Validation
+- `make -B -C commodore/c128 build128` (`230` asserts, `0` failed)
+- `TEST_FILTER='c128_artifact_budget|c128_symbol_placement' TEST_FAIL_FAST=1 ./run_tests128.sh` (`2` passed, `0` failed)
+- tester: `make test128-fast` (passed)
+- tester: `make test128-fast-smoke` (passed)
+- tester + local isolation:
+  - sandboxed / parallel `make test128` hit VICE `Segmentation fault: 11` in `run_test_internal_worker.sh`
+  - the failure reproduced on sandboxed `minimal128`
+  - outside the sandbox, the same authoritative launch path passed
+  - outside the sandbox, `TEST_FILTER='memory128|main_loop128' TEST_FAIL_FAST=1 TEST_JOBS=1 ./run_tests128.sh` passed
+  - tester: `TEST_JOBS=1 ./run_tests128.sh` outside the sandbox → `41 passed, 0 failed`
+
+### Outcome
+- `AUDIT-IO-C128` is closed.
+- The C128 callable residency contract is now explicit, auditable, and enforced from one manifest instead of two drifting symbol lists.
+- Future C128 layout work now has callee-side guard coverage for the overlay, runtime-low, and banked paths that previously relied on partial/manual enforcement.
+
+## 2026-03-26 — `BUG-HAGGLE-UI` one-visit haggle parity plus C128 runner fallout ✅ FIXED
+
+### Scope Closed
+- Restored the store haggle loop to correct one-visit behavior for the current Commodore store model without expanding into persistent owner memory or temporary lockout work.
+- Closed the C128 verification fallout that initially obscured the gameplay fix: stale base/variant artifact reuse and a broken shell-runner footer.
+
+### Root Cause
+- The live store code had drifted to a simplified fixed-step bargain loop with hard-coded insult thresholds and a generic final Y/N stage, which no longer matched classic VMS/Umoria haggle behavior.
+- The first C128 verification failures after the gameplay patch were not all gameplay regressions:
+  - one failure was a stale prompt guard relative to the already-landed Huffman-backed prompt helper path
+  - several hangs were stale monitor/runner contracts in the authoritative shell harness
+  - one apparent I/O-hole regression was stale variant output reuse in `out/moria128.prg` / `out/main.vs`, not the live base build
+  - the last visible failure was a runner footer syntax break after the suite body had already passed
+
+### What Changed
+1. **Haggle behavior now matches the intended bounded Stage A parity target**
+   - `commodore/common/ui_store.s`
+   - `commodore/common/store.s`
+   - Buy/sell haggling now rejects backwards offers, handles overshoot/undershoot retries, uses integer concession math, accepts at the correct agreed player price, preserves no-haggle bypasses, and decays insult state after successful business.
+2. **Focused store/runtime coverage now proves the repaired haggle contract**
+   - `commodore/c64/tests/test_store.s`
+   - `commodore/c64/run_tests.sh`
+   - Added parser, buy/sell flow, insult/kick, and no-haggle bypass coverage, plus the C64 harness layout fixes needed after the shared-code growth.
+3. **The authoritative C128 shell runner no longer reuses stale variant artifacts or dies at the summary footer**
+   - `commodore/c128/run_tests128.sh`
+   - `main128_asm` now forces a base rebuild when the active variant is not `base`, so `c128_artifact_budget` reads the real base build instead of stale scripted/diagnostic outputs.
+   - The prompt IRQ guard now matches the live prompt helper contract.
+   - The final summary/footer path is repaired, so a green suite now exits cleanly.
+
+### Validation
+- `bash commodore/c64/run_tests.sh` (`33` passed, `0` failed)
+- `make test128-fast` (passed)
+- `TEST_FAIL_FAST=1 ./run_tests128.sh` (`41` passed, `0` failed)
+
+### Outcome
+- `BUG-HAGGLE-UI` is closed.
+- One-visit store haggling now behaves correctly within the current thin store model.
+- The final verified C128 issue was runner artifact/footer drift, not a lingering haggle gameplay regression.
+
 ## 2026-03-24 — `BUG-PROMPT-FILTER` filtered inventory prompts/selectors now stay in sync ✅ FIXED
 
 ### Scope Closed
@@ -6694,3 +7247,54 @@ cancels on keypress.
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `TEST_FILTER='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`
+
+## `REF-MON-SOA` Review — Not Worth Pursuing Under Current Constraints ✅ COMPLETE (2026-03-27)
+
+**Question**
+- Should the active monster instance table be converted from its current 32-slot AoS record layout to a live SoA layout for performance?
+
+**What was reviewed**
+- Backlog note in `commodore/BUILDPLAN.md`
+- Live monster layout and helpers in `commodore/common/monster.s`
+- Hot-path consumers in AI, combat, effects, rendering, and save/load
+- Existing C128 perf instrumentation and render architecture
+- Consultant second opinion focused on risk and payoff
+
+**Findings**
+- Creature definitions are already SoA, but the live monster instance table remains an AoS block:
+  - `MAX_MONSTERS = 32`
+  - `MONSTER_ENTRY_SIZE = 12`
+  - raw layout owner: `monster_table` in `commodore/common/monster.s`
+- The blast radius is high:
+  - 38 production `monster_get_ptr` callsites across 17 non-test files
+  - 233 monster-layout references across 11 test suites
+  - save/load currently persists the live monster state as one raw 384-byte block in `commodore/common/save.s`
+- The hottest gameplay loop already amortizes part of the AoS cost:
+  - `monster_ai_tick` pulls `type/x/y/flags` into zeropage scratch early, so branch-heavy decision logic is not repeatedly chasing every field through the record
+- The clearest remaining layout-sensitive win is on C64 render lookup, not on C128:
+  - C64 still does `FLAG_OCCUPIED -> monster_find_at -> monster_get_ptr`
+  - C128 already pre-scans row occupancy and remains dominated by VDC register-port write cost
+
+**Profiling conclusion**
+- No dedicated monster-table benchmark exists in the tree today.
+- Static cycle inspection suggests a full AoS -> SoA live-table conversion would save a few thousand cycles on monster-dense turns, roughly low-single-digit milliseconds on a 1 MHz path.
+- That is real, but it does not currently look like a top-tier bottleneck relative to render, visibility, map work, and broader gameplay flow.
+
+**Decision**
+- `REF-MON-SOA` is closed as **not worth pursuing under the current game/runtime constraints**.
+- This is not a correctness rejection of SoA as a design; it is a cost/benefit rejection of this full refactor in the live tree.
+- A future revisit only makes sense if one of these becomes true:
+  - a dedicated benchmark proves monster-table access is a dominant cost
+  - active-monster counts grow materially beyond 32
+  - monster state becomes significantly richer
+  - save-format churn is already being paid for some other feature
+
+**Preferred alternatives**
+- Benchmark `monster_ai_tick`, `monster_find_at`, and the C64 render lookup path first.
+- If monster access does become a measured bottleneck, prefer a narrower optimization first:
+  - a tile/row occupancy index
+  - or a partial hot-field split for the most frequently read monster fields
+
+**Verification**
+- `make -B -C commodore/c128 build128`
+  - passed with `238 asserts, 0 failed`

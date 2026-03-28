@@ -32,6 +32,8 @@ OVL_TOWN    = $(OUT)/ovl.town
 OVL_START   = $(OUT)/ovl.start
 OVL_DEATH   = $(OUT)/ovl.death
 OVL_GEN     = $(OUT)/ovl.gen
+OVL_HELP    = $(OUT)/ovl.help
+OVL_UI      = $(OUT)/ovl.ui
 DISK_IMAGE  = $(OUT)/moria8.d64
 DISK_NAME   = "moria8,m8"
 DISKART     = ../../tools/diskart.py
@@ -72,6 +74,8 @@ $(OVL_TOWN): $(MAIN_PRG)
 $(OVL_START): $(MAIN_PRG)
 $(OVL_DEATH): $(MAIN_PRG)
 $(OVL_GEN): $(MAIN_PRG)
+$(OVL_HELP): $(MAIN_PRG)
+$(OVL_UI): $(MAIN_PRG)
 
 # Title screen art — standalone PRG loaded from disk at runtime
 $(TITLE_PRG): $(TITLE_SRC) | $(OUT)
@@ -112,7 +116,7 @@ test: $(MAIN_PRG)
 	./run_tests.sh
 
 # Create a 1541 .d64 disk image with PETSCII directory art
-disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) | $(OUT)
+disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START) $(OVL_DEATH) $(OVL_GEN) $(OVL_HELP) $(OVL_UI) | $(OUT)
 	printf '\x01\x08' > $(OUT)/empty.prg
 	$(C1541) -format $(DISK_NAME) d64 $(DISK_IMAGE) \
 	         -attach $(DISK_IMAGE) \
@@ -131,7 +135,9 @@ disk: $(MAIN_PRG) $(BOOT_PRG) $(TITLE_PRG) $(TIER_PRGS) $(OVL_TOWN) $(OVL_START)
 	         -write $(OVL_TOWN) "ovl.town" \
 	         -write $(OVL_START) "ovl.start" \
 	         -write $(OVL_DEATH) "ovl.death" \
-	         -write $(OVL_GEN) "ovl.gen"
+	         -write $(OVL_GEN) "ovl.gen" \
+	         -write $(OVL_HELP) "ovl.help" \
+	         -write $(OVL_UI) "ovl.ui"
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(OUT)/empty.prg
 

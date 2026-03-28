@@ -228,18 +228,18 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
-run_test "input"  "tests/test_input.s"  "0400 0409" 10
-run_test "main_loop" "tests/test_main_loop.s" "0400 040e" 15 500000000
-run_test "turn" "tests/test_turn.s" "0400 0409" 10 500000000
+run_test "input"  "tests/test_input.s"  "0400 040a" 11
+run_test "main_loop" "tests/test_main_loop.s" "0400 0413" 20 500000000
+run_test "turn" "tests/test_turn.s" "0400 040a" 11 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
-run_test "monster" "tests/test_monster.s" "0400 040b" 12 500000000
+run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
-run_test "combat" "tests/test_combat.s" "0400 041a" 27 500000000
+run_test "combat" "tests/test_combat.s" "0400 041b" 28 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 0419" 26 1000000000
+run_test "effects" "tests/test_effects.s" "0400 041b" 28 1000000000
 run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
-run_test "store" "tests/test_store.s" "0400 041c" 29 1000000000
+run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 040c" 13 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
