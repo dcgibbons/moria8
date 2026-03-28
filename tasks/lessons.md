@@ -571,3 +571,17 @@
 - **Root Cause:** I treated the task log as sufficient proof of closure and did not reconcile the project-facing backlog docs that are supposed to reflect current state.
 - **Resolution:** Whenever a build-plan item is finished, update both `commodore/BUILDPLAN.md` and `commodore/BUILDPLAN_HISTORY.md` together before declaring the work closed.
 - **Rule:** **A completed backlog item is not actually closed until the active plan removes it and the history archive records it in the same pass.**
+
+## 2026-03-28 — When the user chooses the authenticity tier, stop framing it as an optional later enhancement
+
+- **Issue:** I presented variable search odds as a scope fork even after the user made it clear they wanted the more authentic behavior.
+- **Root Cause:** I kept the design framed around minimum-risk phasing instead of immediately collapsing the open branch once the user picked the authenticity side of the tradeoff.
+- **Resolution:** When a user explicitly chooses the higher-authenticity path, update the active design and recommendation immediately so the chosen tier becomes the baseline rather than a deferred option.
+- **Rule:** **Once the user selects the authenticity-focused variant, do not keep the lower-fidelity variant as the implicit default in planning docs or recommendations.**
+
+## 2026-03-28 — When original-game UI behavior is confirmed, elevate it into the feature contract immediately
+
+- **Issue:** After confirming that `umoria` shows a persistent `Searching` status-line indicator, I still framed message-only feedback as acceptable for the feature.
+- **Root Cause:** I separated gameplay authenticity from UI authenticity too aggressively, even after the upstream UI contract was verified.
+- **Resolution:** Once upstream UI behavior is confirmed and the user wants authentic behavior, move that UI element into the required scope instead of leaving it as a possible follow-up.
+- **Rule:** **For authenticity-driven features, verified upstream UI indicators are part of the contract unless the user explicitly agrees to defer them.**

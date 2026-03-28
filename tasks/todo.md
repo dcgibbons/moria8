@@ -3,6 +3,13 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Inspect the live FEAT-SEARCH-MODE owner modules and target memory-layout definitions for C64/C128.
+- [x] Identify likely code/data growth hotspots and any segments at meaningful risk from the planned feature.
+- [x] Write a concise findings-first memory/layout/code-bloat review with required verification gates.
+- [x] Inspect the active `FEAT-SEARCH-MODE` backlog note, current one-turn search flow, and the shared turn/input/save seams it would have to touch.
+- [x] Verify the original search-mode and passive auto-search contract from the local `umoria` / `vms-moria` mirrors instead of inferring from the current port.
+- [x] Get a consultant-style design review focused on ownership, turn-model fit, key-binding risk, and verification scope for `FEAT-SEARCH-MODE`.
+- [x] Capture a recommended design, rejected alternatives, and open questions for `FEAT-SEARCH-MODE`.
 - [x] Review the current `REF-MON-SOA` backlog note, monster-table architecture, and hot-path ownership in the codebase.
 - [x] Get a consultant-style design review focused on correctness risk, memory/layout impact, and likely performance upside of converting the active monster table from AoS to SoA.
 - [x] Gather local profiling evidence or the closest available proxy from the existing test/harness/tooling to estimate whether `REF-MON-SOA` is worth doing.
@@ -13,6 +20,285 @@ This file is a temporary working scratchpad.
 - [x] Capture a recommended design, consultant-style review, and verification strategy for `BUG-TOWN-KILL-DRAW`.
 - [x] Implement the shared pending-redraw fix in the turn/effect seam without growing the C128 resident image past its layout constraints.
 - [x] Add focused regression coverage for the producer and consumer halves of the redraw contract, then rerun the required C64/C128 verification.
+
+## `FEAT-SEARCH-MODE` Design
+
+### Goal
+- Restore original-style persistent search mode and passive auto-search behavior without refactoring the whole player-turn scheduler.
+- Keep the existing one-turn `S` search command.
+- Add the original `fos`-style passive search frequency behavior on ordinary movement.
+- Preserve platform parity across C64 and C128 without turning this into a renderer or HAL problem.
+
+### Upstream Contract Confirmed Locally
+- Upstream `umoria` / `vms-moria` keeps one-turn search and a separate persistent search-mode toggle.
+- Passive auto-search runs on ordinary movement when either:
+  - search mode is on, or
+  - `fos <= 1`, or
+  - the `1-in-fos` roll hits.
+- Search mode effectively makes the player spend an extra search turn alongside ordinary command execution.
+- Search mode is disturbed off by major interruptions such as attacks and other forced state changes.
+
+### Local Constraints
+- The port does not have a general player-speed/status scheduler comparable to upstream.
+- Turn ownership is explicit:
+  - command tails call `turn_post_action`
+  - movement owns its own `turn_post_action`
+  - running owns its own `turn_post_action`
+- `PLF_SEARCHING` already exists in `player.s` but is unused.
+- `search` and `fos` columns already exist in `tables.s`, but there is no live derived search/perception state today.
+- `do_search` in `dungeon_features.s` already behaves like a pure scan; the turn is consumed by its callers.
+- `#` is the cleanest semantic toggle key, but C128 raw keyboard scanning does not currently synthesize that shifted symbol automatically.
+- The status bar currently has no spare movement-state field, so restoring the upstream persistent `Searching` indicator requires deliberate status-UI work rather than a message-only shortcut.
+
+### Recommended Architecture
+- Model search mode as a persistent runtime flag plus an extra consumed search turn, not as a new global speed system.
+- Keep the persistent runtime bit in `player_data + PL_FLAGS` using existing `PLF_SEARCHING`.
+- Add shared player-owned helpers in `commodore/common/player.s`:
+  - `player_search_mode_on`
+  - `player_search_mode_off`
+  - `player_search_mode_toggle`
+  - `player_search_mode_disturb`
+  - derived-stat helpers for `fos` and any future active-search chance
+- Keep the actual map/trap/secret scan in `commodore/common/dungeon_features.s`, but split the scan from the command wrapper so movement and search-mode follow-up can reuse it without duplicating turn logic.
+- Apply passive auto-search from `commodore/common/player_move.s` after a successful ordinary move, not from `turn.s`.
+- Apply the search-mode extra search turn from the shared post-command seam:
+  - after a command or movement step consumes its normal turn and resolves the immediate gameplay mutation
+  - run one search scan
+  - then run one extra `turn_post_action`
+  - then fall into the existing visibility / redraw decision path
+- Keep the feature in shared gameplay ownership:
+  - `player.s` for mode state and derived-search helpers
+  - `dungeon_features.s` for scan logic
+  - `game_loop.s` and `game_loop_helpers.s` for extra-turn orchestration
+  - `player_move.s` for passive auto-search on movement
+  - input/help modules for the new binding and docs
+
+### Why This Fits The Port Best
+- It preserves the current explicit turn model instead of inventing a second scheduler.
+- It keeps search semantics in shared gameplay code rather than platform-specific render/input glue.
+- It lets the port match the original behavioral shape closely enough without forcing a risky rewrite of hunger, AI cadence, or run timing.
+- It keeps the first pass small enough to verify with the existing input and main-loop unit tests.
+
+### Command And State Contract
+- Keep `S` as one-turn search.
+- Add a new dedicated toggle command for search mode.
+- Recommended semantic binding:
+  - `#` on both platforms
+  - implementation note: C128 needs explicit shifted-symbol normalization in `input128.s` for this to be real, because the direct CIA scan path does not currently yield `#` automatically
+- Preserve search mode across ordinary commands by default.
+- Force-clear search mode on major disturbances:
+  - explicit toggle-off
+  - entering run mode
+  - melee engagement / monster attack disturbance
+  - trap / teleport / forced relocation
+  - dungeon-level transitions
+- Do not clear it for read-only UI views:
+  - help
+  - inventory / equipment
+  - look
+  - character / recall
+
+### Save / Load Recommendation
+- Treat search mode as transient runtime state even though the bit lives in `PL_FLAGS`.
+- Do not rely on save-file persistence for this mode.
+- Preferred behavior:
+  - clear search mode before save serialization, or mask transient mode bits before writing `player_data`
+  - clear or mask any search-mode-related transient counters/state that live in the serialized ZP block
+  - ensure resume/load starts with search mode off
+- Reason:
+  - upstream save behavior disturbs search/rest state before writing
+  - restoring directly into an active extra-turn mode is surprising and makes save/load semantics harder to reason about
+
+### Derived Search Stats
+- Selected scope:
+  - medium-high authenticity
+  - restore variable search odds rather than keeping the current flat `1-in-6` reveal rule
+- First pass should still derive stats on demand rather than adding new saved live fields.
+- Required authentic behavior to restore:
+  - derive active search chance from existing race/class `search` data
+  - derive passive auto-search frequency from existing race/class `fos` data
+  - apply upstream-style penalties for at least:
+    - confusion
+    - blindness
+    - no light
+  - if feasible in the same pass, also apply the hallucination/image penalty from upstream
+- Item-modifier follow-up inside the same feature slice:
+  - audit whether the port already exposes any search/perception ego or item bonuses
+  - if those bonuses exist in shipped item data or are expected for authenticity, fold them into the derived search stat path instead of hard-coding race/class only
+- Implementation shape:
+  - add a shared helper that computes effective search chance for the current player state
+  - use that helper for both one-turn search and search-mode/passive search scans
+  - stop using the current fixed `1-in-6` reveal logic in `dungeon_features.s`
+- Cost:
+  - higher than the toggle/passive-only variant because this touches gameplay math, not just turn/input flow
+  - still materially cheaper than a full scheduler rewrite because it stays inside search-stat derivation and scan resolution
+
+### UI Recommendation
+- Required for this feature:
+  - a persistent status-area indicator while search mode is active, matching upstream `Searching` behavior
+  - explicit toggle feedback messages such as `Search mode on.` / `Search mode off.`
+  - updated help text on both C64 and C128
+- Implementation note:
+  - this likely wants a compact shared movement-state field that can represent at least `Searching` and `Resting`, rather than a one-off search-only hack
+- Constraint:
+  - do not treat message-only feedback as sufficient for the authentic feature target
+
+### Rejected Alternatives
+
+#### Option A — Full player-speed / status-scheduler refactor
+- Pros:
+  - closer to the original implementation model
+- Cons:
+  - too invasive for the current explicit turn engine
+  - high risk around hunger, AI cadence, and repeated command timing
+  - unnecessary for the behavioral goal of this feature
+- Verdict:
+  - reject
+
+#### Option B — Store new saved live search/fos fields in player or ZP state
+- Pros:
+  - can be fast at runtime
+- Cons:
+  - save/load churn for little first-pass value
+  - easy to create stale derived-state bugs
+  - `ZP_STATE_START..ZP_STATE_END` already serialize wholesale, so parking persistent mode in scratch ZP is a trap
+- Verdict:
+  - reject
+
+#### Option C — Make passive search a generic end-of-turn hook in `turn.s`
+- Pros:
+  - one central place
+- Cons:
+  - wrong semantics because passive auto-search is movement-owned, not every-turn-owned
+  - easy to accidentally search during rest, inventory, spell, or other non-movement turns
+- Verdict:
+  - reject
+
+### Consultant Feedback
+- The consultant agreed with the core architecture:
+  - do not add a new global speed system
+  - reuse `PLF_SEARCHING`
+  - keep scan ownership in `dungeon_features.s`
+  - keep passive auto-search in `player_move.s`
+  - prefer `#` semantics for the toggle
+- One deliberate adjustment from the consultant recommendation:
+  - the consultant was willing to persist `PLF_SEARCHING` through save/load because `PL_FLAGS` already serializes
+  - this design keeps the same storage location but recommends clearing it on save/load to stay closer to upstream disturbance semantics
+
+### Risks
+- Turn ownership is duplicated across movement, run, and shared command-result tails.
+- If the extra search turn is only wired into one path, food and monster AI cadence will silently diverge by action type.
+- Search reveal timing must happen before the final redraw/visibility choice for the turn, or revealed doors/traps can miss the render pass.
+- Disturbance semantics are not centralized today, so there is real regression risk if mode clearing gets scattered inconsistently.
+- `#` is not a free C128 binding today; the raw scan path needs an explicit symbol-normalization addition.
+- `player_try_move` currently treats both actual relocation and melee-turn consumption as success, so passive search must not key only off the existing carry result.
+- The persistent `Searching` indicator will go stale unless it joins the status-cache compare/update contract or forces a redraw on every mode transition.
+
+### Memory / Layout Risk Review
+- Overall risk:
+  - low-to-moderate
+  - the real pressure is resident shared-image growth, not overlays
+- Most likely resident hotspot:
+  - `commodore/common/ui_status.s`
+  - reason:
+    - the persistent `Searching` indicator must live in resident status rendering
+    - any extra strings, cache bytes, and branching for movement-state display land in common code
+- Next likely hotspot:
+  - `commodore/common/game_loop.s`
+  - `commodore/common/game_loop_helpers.s`
+  - reason:
+    - duplicated turn-tail edits will cost more bytes than the search math itself
+- Lower-risk areas:
+  - `commodore/common/dungeon_features.s`
+  - input mapping code
+  - help data / help overlays
+  - reason:
+    - variable search math and `#` mapping add some bytes, but they are not expected to be the primary pressure point
+- Current segment posture:
+  - C64 appears comfortable enough for this feature if the implementation stays compact
+  - C128 remains layout-sensitive overall, but this feature does not currently look like an automatic overlay or I/O-hole risk by itself
+- Design rule from the memory review:
+  - do not pre-emptively relocate or split modules just for this feature
+  - do centralize new logic so code growth happens once instead of in several duplicated tails
+- Required anti-bloat ownership:
+  - keep search-mode state helpers in `commodore/common/player.s`
+  - keep search scan logic in `commodore/common/dungeon_features.s`
+  - add one shared post-action/search-mode follow-up seam in `commodore/common/game_loop_helpers.s`
+  - avoid patching separate copies of the same search-mode turn logic into movement, run, and command-result tails unless a path truly needs special handling
+- Status/UI caution:
+  - keep the movement-state indicator compact
+  - do not build a larger status framework unless the feature actually requires it
+
+### Pre-Flight Implementation Cautions
+- Save/load transience:
+  - search mode and any search-related transient counters must be explicitly masked or reset during save/write and load/resume paths
+  - do not assume that storing the mode in `PLF_SEARCHING` is safe just because the feature wants runtime persistence
+- Movement ownership:
+  - add one authoritative signal for `player actually relocated`
+  - passive auto-search and search-mode follow-up must key off that signal rather than the current broad `player_try_move` success path
+  - attack-only turns must not trigger movement-owned passive search
+- Trap / teleport / death sequencing:
+  - define the gate for whether the extra search phase still runs after trap resolution
+  - if the player dies, teleports, or is forcibly relocated before the search follow-up point, skip the extra search phase
+- Status cache contract:
+  - the `Searching` indicator must participate in the status cache / dirty-row logic
+  - do not rely on one-shot toggle messages to keep the indicator visually correct
+- Command binding contract:
+  - confirm the final toggle command ID and help-text wording before touching both input paths
+  - keep the distinction between one-turn `S` search and the persistent search-mode toggle explicit in both code and docs
+
+### Verification Plan
+- Input mapping:
+  - extend `commodore/c64/tests/test_input.s`
+  - extend `commodore/c128/tests/test_input128.s`
+  - prove:
+    - `S` still maps to one-turn search
+    - `SHIFT+S` still maps to save
+    - the new toggle binding maps correctly on both targets
+- Main-loop dispatch:
+  - extend `commodore/c64/tests/test_main_loop.s`
+  - extend `commodore/c128/tests/test_main_loop128.s`
+  - prove:
+    - ordinary move without search mode still consumes one turn
+    - move with search mode consumes the normal turn plus the extra search turn
+    - attack-only turns do not count as relocation for passive search
+    - read-only UI commands do not consume the extra search turn
+    - run entry clears search mode
+- Status/UI:
+  - extend focused status/UI coverage to prove the persistent movement-state indicator appears while search mode is active and clears when the mode is disturbed off
+  - prove `Searching` does not leave stale text behind after toggle-off, disturbance, or save/load resume
+- Search behavior:
+  - add focused coverage around the shared search scan helper
+  - prove passive auto-search only happens on ordinary movement
+  - prove search-mode follow-up search runs before the final redraw path
+- Disturbance behavior:
+  - prove the mode clears on at least one melee disturbance path and one forced-relocation path
+- Trap / teleport sequencing:
+  - prove the follow-up search phase is skipped when trap resolution kills, teleports, or otherwise relocates the player before the search-mode extra-turn point
+- Save/load:
+  - prove search mode is not left active after save/resume if we take the transient-state recommendation
+  - prove any serialized search-related transient counters are reset or masked on resume
+- Memory / layout:
+  - rebuild both targets and re-check:
+    - `program_end`
+    - all `ovl_*_end` symbols
+    - `runtime_low_data_end`
+    - `banked_code_end`
+    - `first_banked_function`
+  - keep C128 callable-residency asserts green in `commodore/c128/io_contracts.s`
+  - do not treat one-target success as sufficient, because this feature grows shared resident code
+
+### Review
+- Recommendation:
+  - FEAT-SEARCH-MODE is a real resident-image risk on C128 and only a low-to-moderate one on C64.
+  - The main/default segment is the pressure point, not overlays or `runtime.low`.
+  - `ui_status.s` is the main likely hotspot because the authentic feature wants a persistent movement-state indicator and that code is resident shared UI, not an overlay on C64 and not easily relocatable on C128.
+  - `game_loop.s` / `game_loop_helpers.s` are the next likely bloat sites because the current turn tails are duplicated across movement, run, and discrete-command paths; a naive implementation tends to duplicate extra-search and disturb handling in several branches.
+  - Do not proactively split modules before implementation. Do proactively centralize the feature into tiny shared helpers so added code lands once, not three times.
+  - Mandatory landing gates: rebuild both targets, re-check `program_end`, all overlay end symbols, `runtime_low_data_end`, and the C128 callable-residency asserts in `io_contracts.s`, then rerun the affected C64/C128 input and main-loop tests.
+  - implement `FEAT-SEARCH-MODE` as the authentic shared runtime flag plus extra explicit search-turn design, including variable search odds derived from live player state and a persistent `Searching` status indicator rather than the current flat reveal chance plus message-only feedback
+- Reason:
+  - it restores the gameplay behavior the backlog item actually asks for while respecting the port’s explicit turn ownership and preserving the original class/race search feel instead of shipping a half-authentic hybrid
 
 ## `BUG-TOWN-KILL-DRAW` Design
 
