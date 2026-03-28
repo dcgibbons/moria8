@@ -19,6 +19,10 @@
 #else
 .const SAVE_VERSION    = $0c
 #endif
+.const LOAD_RESULT_OK        = 0
+.const LOAD_RESULT_NOTFOUND  = 1
+.const LOAD_RESULT_CORRUPT   = 2
+.const LOAD_RESULT_IOERR     = 3
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -65,6 +69,7 @@ rle_run_byte:   .byte 0         // Current run byte value
 rle_run_len:    .byte 0         // Current run length
 rle_lit_len:    .byte 0         // Literal buffer length
 save_io_error:  .byte 0         // I/O error flag
+load_result:    .byte LOAD_RESULT_IOERR
 rle_work_lo:    .byte <CREATURE_BASE  // RLE workspace pointer lo (default CREATURE_BASE)
 rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
 
@@ -324,7 +329,8 @@ save_game:
 // load_game — Top-level load routine
 // Opens file, verifies magic, reads all blocks + raw map,
 // verifies checksum, syncs struct→ZP, deletes savefile.
-// Output: carry set = success, carry clear = failure
+// Output: load_result = LOAD_RESULT_* status code.
+//         carry set = success, carry clear = failure where preserved by platform exit path.
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 
@@ -332,6 +338,9 @@ load_game:
 #if !C128
     :EnterKernal()
 #endif
+    lda #LOAD_RESULT_IOERR
+    sta load_result
+
     // Show "LOADING GAME..." message
     lda #<save_load_str
     sta zp_ptr0
@@ -526,6 +535,8 @@ load_game:
     // load_game already runs inside EnterKernal; avoid nested transitions.
     jsr delete_savefile_core
 
+    lda #LOAD_RESULT_OK
+    sta load_result
     sec                     // Success
 #if !C128
     :ExitKernal()
@@ -534,6 +545,8 @@ load_game:
 
 !load_corrupt:
 !load_corrupt_nocl:
+    lda #LOAD_RESULT_CORRUPT
+    sta load_result
     // Close file (may still be open if corruption detected mid-read)
     jsr save_restore_channels
     lda #SAVE_FILE_NUM
@@ -562,6 +575,8 @@ load_game:
     sta $dd00
 !load_notfound:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
+    lda #LOAD_RESULT_NOTFOUND
+    sta load_result
     lda #<save_notfound_str
     sta zp_ptr0
     lda #>save_notfound_str
@@ -574,6 +589,8 @@ load_game:
     rts
 
 !load_fail:
+    lda #LOAD_RESULT_IOERR
+    sta load_result
     lda #<save_ioerr_str
     sta zp_ptr0
     lda #>save_ioerr_str

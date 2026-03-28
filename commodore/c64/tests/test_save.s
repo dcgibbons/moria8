@@ -187,11 +187,12 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — must be past test body end (currently ~$BD9F after imports).
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$CB1E
+// RLE workspace — must stay above the assembled test body while leaving enough
+// room below MAP_BASE for Test 2's mixed-pattern compressed stream.
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$CDDE
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $BE00
+.const RLE_TEST_BUF = $BEC0
 
 test_start:
     // BASIC ROM already banked out by bootstrap above
@@ -783,3 +784,6 @@ t7_set_slot31:
     sta tc_results + 9
 
     jmp test_finish
+
+test_body_end:
+.assert "RLE test buffer starts above test body", test_body_end < RLE_TEST_BUF, true

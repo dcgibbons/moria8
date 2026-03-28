@@ -1,5 +1,19 @@
 # Lessons Learned
 
+## 2026-03-28 — Do not claim a regression is "separate" unless I compare against the user's actual pre-change state
+
+- **Issue:** I claimed the `test_player` failure was separate because it reproduced on `a3470fa`, even after the user explicitly told me the suite was green before my code edits.
+- **Root Cause:** I used the wrong baseline. A repo commit that predates my patch is not automatically the same as the user's actual pre-change working state. In a dirty tree or fast-moving local workflow, that comparison is insufficient to clear my change.
+- **Resolution:** When the user says the gate was green before my edits, I must treat the regression as mine until I prove otherwise against the exact pre-change state they were using, not an approximate historical commit.
+- **Rule:** **Never argue a failure is unrelated based only on an approximate baseline commit. If the user says the suite was green before my change, I own the regression until I verify against the exact pre-change state.**
+
+## 2026-03-28 — When a C64 test hangs after my assembly change, the first hypothesis must be a memory/layout overlap in the code I changed
+
+- **Issue:** I started talking about unrelated suite noise before proving whether the post-change `save` hang was a layout regression caused by my own edits.
+- **Root Cause:** I let the clean `main.s` build and an obviously pre-existing `test_player` assembly failure distract me from the project-specific pattern the user has already called out: on this codebase, C64 test hangs/timeouts after an assembly edit usually mean a segment shift, overlap, or breakpoint/layout contract break in the changed code.
+- **Resolution:** Treat every new post-change C64 test hang as a memory/layout regression until proven otherwise. Compare current vs baseline assembly maps for the affected test, check bootstrap/BRK/boundary assumptions, and only then talk about unrelated failures.
+- **Rule:** **If a C64 test hangs after my patch, first diff the affected test's memory map/layout against baseline and look for overlap in the code I changed. Do not blame the harness first.**
+
 ## 2026-03-28 — A failed C64 load must be treated as hostile partial corruption, not as a polite branch back to the title loop
 
 - **Issue:** I initially designed `BUG-LOAD-C64` around abandoning the bad session and redrawing the title, but I had not made the Zero Page, IRQ, and VIC-bank contamination risk explicit enough.

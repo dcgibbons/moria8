@@ -14,11 +14,13 @@
 #import "../memory.s"
 #import "../screen.s"
 #import "../../common/color.s"
+#import "../config.s"
 #import "../input.s"
 #import "../../common/rng.s"
 #import "../../common/math.s"
 #import "../../common/tables.s"
 #import "../../common/item_defs.s"
+#import "../../common/dungeon_data.s"
 #import "../../common/player.s"
 
 // Stubs for item data arrays referenced by player_calc_combat.

@@ -6,6 +6,43 @@
 
 ---
 
+## 2026-03-28 — `BUG-LOAD-C64` durable C64 load/resume repair ✅ COMPLETE
+
+### Scope Closed
+- Restored working C64 title-screen load/resume flow without relying on the broken carry contract that kept regressing on the C64 path.
+
+### Root Cause
+- On C64, `load_game` lived behind `EnterKernal` / `ExitKernal` wrappers that reduce to `php` / `plp`.
+- The old title branch in `commodore/c64/main.s` still treated carry as the authoritative load success/failure result after `jsr load_game`.
+- That made the C64 title `L` flow structurally unsafe: the saved processor flags could overwrite the intended `sec` / `clc` result before the title branch tested it.
+- While landing the fix, the shared `save.s` growth also exposed two separate C64 test-layout hazards:
+  - `commodore/c64/tests/test_save.s` had a hard-coded RLE workspace that drifted into the resident test body
+  - `commodore/c64/tests/test_score.s` had a resident-body / local-hiscore-buffer layout that became unsafe near the `$D000` overlay boundary
+
+### What Shipped
+1. **Stable C64 load transaction status**
+   - added explicit `LOAD_RESULT_*` result codes plus the shared `load_result` byte in `commodore/common/save.s`
+   - `load_game` now records `OK`, `NOTFOUND`, `CORRUPT`, or `IOERR` directly instead of depending on carry as the only public contract
+2. **Named C64 title-load ownership**
+   - promoted the C64 title `L` flow to `title_load_game` in `commodore/c64/main.s`
+   - failure recovery now re-enters through `title_enter_menu`, rebuilding the title UI/message state instead of dropping back into the stale loop
+   - disk-mode indicator drawing was split into a helper so title re-entry redraws the right title-disk state consistently
+3. **Test-layout regressions fixed and pinned**
+   - `commodore/c64/tests/test_save.s` moved its RLE workspace to a safe address and now asserts that the workspace stays above the assembled body
+   - `commodore/c64/tests/test_player.s` now imports the map/config dependencies that `player.s` actually requires in the current tree
+   - `commodore/c64/tests/test_score.s` now uses local save/disk stubs instead of pulling the full persistence path into the resident body, keeps its local hiscore buffer below `$D000`, and asserts both the body end and buffer boundary
+4. **Repo-level process rule promoted**
+   - `AGENTS.md` now carries an explicit C64 test-hang triage rule: a new post-change C64 hang/time-out must be treated as a layout/overlap regression first, not as harness flakiness
+
+### Verification
+- `make -C commodore/c64 test`
+  - passed with `33 passed, 0 failed (of 33 suites)`
+
+### Outcome
+- `BUG-LOAD-C64` is removed from the active build plan.
+- The C64 title load/resume path is back on a durable explicit-status contract, and the immediate test-layout regressions triggered during landing are now guarded by asserts instead of accidental slack.
+- Dedicated disk-backed C64 title-load smokes remain desirable follow-up hardening, but they are no longer blocking closure of this bug.
+
 ## 2026-03-28 — `FEAT-SEARCH-MODE` authentic search-mode restoration ✅ COMPLETE
 
 ### Scope Closed

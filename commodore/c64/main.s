@@ -173,6 +173,7 @@ restart_entry:
     jsr sound_init
     jsr rng_seed
 
+title_enter_menu:
     // Install IRQ wedge: suppress KERNAL cursor blink permanently.
     // KERNAL routines (CHROUT, LOAD) constantly reset $CC=0 which
     // re-enables cursor blink. Our wedge forces $CC non-zero on every
@@ -207,23 +208,16 @@ restart_entry:
     lda #STATUS_ROW + 2         // row 23
     jsr screen_clear_row
 
+    // Title re-entry must rebuild message/title UI state from scratch after
+    // any failed load attempt, not just branch back into the old loop.
+    jsr msg_init
+
     // Show system info on row 23 (machine type, KERNAL rev, REU)
     jsr title_show_sysinfo
 
-    // --- Show title menu: N)EW  L)OAD  D)UAL DISK ---
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #17
-    sta zp_cursor_row
-    lda #8                  // Center: (40-23)/2 ≈ 8
-    sta zp_cursor_col
-    lda #<title_menu_str
-    sta zp_ptr0
-    lda #>title_menu_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr title_draw_menu
 
-!title_menu_loop:
+title_menu_loop:
     jsr input_get_key
     cmp #$4e                // 'N' — new game
     bne !not_n+
@@ -231,10 +225,10 @@ restart_entry:
 !not_n:
     cmp #$4c                // 'L' — load game
     bne !not_l+
-    jmp !title_load+
+    jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup sub-menu
-    bne !title_menu_loop-
+    bne title_menu_loop
 
 disk_menu_show:
     // Show disk sub-menu in the reserved bottom status area, not over title art.
@@ -273,23 +267,44 @@ disk_menu_show:
     jsr screen_clear_row
     lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
-    jmp !title_menu_loop-
+    jmp title_menu_loop
 
 !disk_swap:
     lda #1
     sta disk_mode
     lda #8
     sta save_device
-    jmp !disk_show_indicator+
+    jsr title_draw_save_disk_indicator
+    jmp title_menu_loop
 
 !disk_drv9:
     jsr disk_enter_device
     bcs !disk_drv9_fail+        // fail — re-show disk sub-menu
-    jmp !title_menu_loop-       // success — device configured
+    jmp title_menu_loop         // success — device configured
 !disk_drv9_fail:
     jmp disk_menu_show
 
-!disk_show_indicator:
+title_draw_menu:
+    // --- Show title menu: N)EW  L)OAD  D)UAL DISK ---
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #17
+    sta zp_cursor_row
+    lda #8                  // Center: (40-23)/2 ≈ 8
+    sta zp_cursor_col
+    lda #<title_menu_str
+    sta zp_ptr0
+    lda #>title_menu_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_mode
+    cmp #1
+    bne !title_menu_done+
+    jsr title_draw_save_disk_indicator
+!title_menu_done:
+    rts
+
+title_draw_save_disk_indicator:
     // Show "[Save Disk]" indicator in the reserved bottom status area.
     lda #DS_TITLE_MENU_ROW
     jsr screen_clear_row
@@ -308,22 +323,25 @@ disk_menu_show:
     jsr screen_put_string
     lda #COL_WHITE
     sta zp_text_color
-    jmp !title_menu_loop-
+    rts
 
-!title_load:
+title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr sound_play
     jsr msg_init
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr load_game
-    bcc !title_load_fail+
+    // C64 callers must branch on load_result, not carry, because the
+    // EnterKernal/ExitKernal wrapper preserves caller flags via php/plp.
+    lda load_result
+    bne !title_load_fail+
     jsr disk_prompt_game        // Swap back for tier loading
     jmp load_resume_game
 !title_load_fail:
     jsr disk_prompt_game        // Swap back even on failure
     jsr input_get_key           // Let user see error message from load_game
-    jmp !title_menu_loop-       // Back to N/L/D menu (not character creation)
+    jmp title_enter_menu
 
 // ============================================================
 // IRQ wedge — suppress KERNAL cursor blink

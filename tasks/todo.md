@@ -56,8 +56,10 @@ This file is a temporary working scratchpad.
 - [x] Audit the current C64 test coverage and compare it with the stronger C128 title-load smoke coverage.
 - [x] Get a consultant review focused on ownership boundaries, recurrence risk, and missing verification gates.
 - [x] Write a durable design that makes the load path explicit, testable, and hard to regress.
-- [ ] Implement the ownership split, transaction contract, and new C64 integration gates.
-- [ ] Make the new C64 title-load smoke the verification gate for this bug until it is green.
+- [x] Implement slice 1: explicit `load_result`, named C64 `title_load_game`, and title-safe `title_enter_menu` recovery instead of branching on carry back into the old loop.
+- [x] Implement the ownership split and transaction contract needed to restore the C64 load/resume path under the existing C64 regression gate.
+- [x] Fix the C64 test-layout regressions exposed while landing the shared save/load changes (`test_save`, `test_player`, `test_score`) and re-green `make -C commodore/c64 test`.
+- [ ] Follow-up hardening: add dedicated disk-backed C64 title-load smokes so future regressions fail closer to the real `L` path.
 
 ### Problem Statement
 - `BUG-LOAD-C64` is not just "the load command is broken."
@@ -406,6 +408,19 @@ This file is a temporary working scratchpad.
 5. Reassert `load_resume_game` as the only runtime re-entry owner.
 6. Only after the smoke gate is green, single-source the save schema manifest.
 7. Tighten any remaining user-facing recovery details or messages without weakening the new gate.
+
+### Review
+- 2026-03-28 implementation moved the C64 title `L` path to a named `title_load_game`, changed the title branch to use `load_result` instead of carry, and routed failed loads back through `title_enter_menu` so title UI/message state is rebuilt instead of resuming the stale title loop.
+- The shared `save.s` growth exposed two layout regressions while landing the bug fix:
+  - `commodore/c64/tests/test_save.s` had a hard-coded RLE workspace overlapping the assembled body
+  - `commodore/c64/tests/test_score.s` had a resident-body / local-buffer layout that became unsafe near the `$D000` overlay boundary
+- `commodore/c64/tests/test_player.s` also needed its real map/config dependencies wired in so the current `player.s` contract assembled under the C64 test harness.
+- Final closure gate:
+  - `make -C commodore/c64 test` = `33 passed, 0 failed`
+- `BUG-LOAD-C64` is resolved under the current C64 regression gate.
+- Follow-up hardening, not closure criteria:
+  - dedicated disk-backed C64 title-load success/failure smokes
+  - later single-source save-schema manifest cleanup
 
 ## `FEAT-SEARCH-MODE` Design
 
