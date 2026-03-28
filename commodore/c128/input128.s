@@ -206,6 +206,7 @@ input_get_key:
 igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
+ips_raw_sample: .byte 0
 irk_result: .byte 0
 irk_ext_save: .byte 0
 
@@ -250,6 +251,8 @@ input_poll_key_event:
 // Input:  A = sampled PETSCII (0 = no key)
 // Output: A = PETSCII on key-down edge, 0 otherwise
 input_process_sample:
+    sta ips_raw_sample
+    jsr input_normalize_fast_edge_sample
     cmp igk_last_sample
     beq !ips_stable+
     sta igk_last_sample
@@ -258,7 +261,7 @@ input_process_sample:
     bne !ips_none+          // key change while another key stable: wait
     lda igk_last_sample
     sta igk_stable          // idle->press: accept immediately
-    lda igk_last_sample
+    lda ips_raw_sample
     rts
 !ips_none:
     lda #0
@@ -269,7 +272,23 @@ input_process_sample:
     beq !ips_none-          // No stable transition
     sta igk_stable
     beq !ips_none-          // Release edge (rearm only)
+    lda ips_raw_sample
     rts                     // New stable key-down edge
+
+// Normalize the two physical cursor-key families for the fast-path edge
+// detector so a held cursor key does not retrigger when shift sampling jitters
+// between shifted and unshifted PETSCII encodings.
+input_normalize_fast_edge_sample:
+    cmp #$91                // Cursor up shares the cursor-down key
+    bne !infes_not_up+
+    lda #$11
+    rts
+!infes_not_up:
+    cmp #$9d                // Cursor left shares the cursor-right key
+    bne !infes_done+
+    lda #$1d
+!infes_done:
+    rts
 
 // input_process_sample_strict — 2-sample stable press/release filter
 // Input:  A = sampled PETSCII (0 = no key)

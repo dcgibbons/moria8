@@ -1,5 +1,19 @@
 # Lessons Learned
 
+## 2026-03-27 — C128 hook refactors need residency checks for every newly exposed callable path, not just the hot paths covered by fast units
+
+- **Issue:** After the `REF-HAL` phase-1 refactor, the C128 Home-store path could `JAM` because `home_enter` had drifted into `$D000-$DFFF`, and the initial verification still missed a real cursor-key town-input regression the user hit interactively.
+- **Root Cause:** I leaned too heavily on `test128-fast` plus the standard town overlay smoke, which reaches ordinary `store_enter` via scripted eastward movement but does not prove Home-store residency or real cursor-key behavior. I also failed to extend the C128 callable-residency manifest when the layout shifted.
+- **Resolution:** For C128 shared-hook/layout changes, verify every affected callable surface against `io_contracts.s`, especially Home/banked entrypoints, and include at least one runtime check that matches the real input family the user is likely to use, not just vi-key/keybuf scripts.
+- **Rule:** **When a C128 refactor adds or moves shared runtime/input seams, do not stop at fast units or one happy-path town smoke. Audit every affected callable in `io_contracts.s` and verify the real interactive path class the change touches.**
+
+## 2026-03-27 — On C128, residency checks must cover the whole callable module, not just the entry label
+
+- **Issue:** The spell list could `JAM` at `$D023` even though `spell_list_display` itself still linked below `$D000`.
+- **Root Cause:** I only audited the top-level spell entrypoints. The rest of `player_magic.s` had grown past `$D000`, so later code and even spell-list string data were executing or being read from the I/O hole while the entry label still looked safe.
+- **Resolution:** When a C128 callable surface is intended to stay resident or banked, keep the whole module inside one valid residency window or split it explicitly. Entry-label checks alone are not enough if the body can spill into `$D000-$DFFF`.
+- **Rule:** **For C128 callable modules, never treat “the entrypoint is out of the I/O hole” as sufficient. Verify the full module body and data stay inside the intended residency region, or move the whole surface into a banked/overlay owner.**
+
 ## 2026-03-27 — Platform-specific UI expansions must preserve the original modal contract, not just fit the screen
 
 - **Issue:** My first C128-specific help rewrite used the 80-column width, but it still failed the actual product contract: it wrapped badly, removed the second page entirely, and disk-loaded help each time instead of preloading it with the overlay cache.

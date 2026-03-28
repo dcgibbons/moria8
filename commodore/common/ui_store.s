@@ -4,6 +4,8 @@
 // The store is a separate mode with its own input loop.
 // Player enters by stepping on a store door tile in town.
 
+#import "input_ui_helpers.s"
+
 // ============================================================
 // PETSCII key constants for store UI
 // ============================================================
@@ -59,7 +61,7 @@ store_enter:
     lda zp_store_idx
     cmp #STORE_HOME
     bne !se_not_home+
-    jmp home_enter              // $F000 banked code, same $01=$35
+    jmp home_enter              // Shared Home UI entry; valid in the town runtime state
 !se_not_home:
     lda #0
     sta hg_insults              // Reset insult counter for this visit
@@ -319,9 +321,7 @@ store_buy:
     jsr show_msg
 
     // Get key
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -380,9 +380,7 @@ store_buy:
 !sb_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr sbuy_show_price
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #PETSCII_Y
     beq sbuy_execute
@@ -577,9 +575,7 @@ store_sell:
     jsr show_msg
 
     // Get key
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // Q/ESC/space = cancel
@@ -665,9 +661,7 @@ store_sell:
 !ssell_yn_confirm:
     // --- Y/N confirm (cheap item or BM) ---
     jsr ssell_show_offer
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     cmp #PETSCII_Y
     beq ssell_execute
@@ -839,9 +833,7 @@ input_read_number:
     sta hg_digit_cnt
 
 !irn_loop:
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
 
     // RETURN ($0D) = accept (if at least 1 digit)
@@ -967,9 +959,7 @@ hg_increment_insults:
 
 // hg_wait_for_ack — Wait for an acknowledgement key.
 hg_wait_for_ack:
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jmp input_get_key
 
 // hg_div_mul_result_24x8 — Divide mul_result_0/1/2 by X, quotient in-place.
@@ -1507,9 +1497,7 @@ hg_do_kick:
     jsr store_clear_msg_area
     ldx #MSG_KICKED
     jsr show_msg
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     clc
     rts
@@ -1542,9 +1530,7 @@ hg_show_insult_msg:
     tax
     jsr huff_decode_string
     jsr screen_put_string
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jmp input_get_key           // Tail call
 
 // ============================================================

@@ -7,6 +7,8 @@
 // Reuses melee combat subroutines for to-hit and damage application.
 // Reference: umoria player_throw.cpp
 
+#import "input_ui_helpers.s"
+
 
 // ============================================================
 // Scratch variables
@@ -31,10 +33,7 @@ throw_item:
     ldx #HSTR_TW_PROMPT
     jsr huff_print_msg
 
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     jsr input_get_key
 

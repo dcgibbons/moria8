@@ -8,6 +8,7 @@
 // player_recalc_equipment: recalculate AC/combat after equip changes
 
 #import "ui_restore.s"
+#import "input_ui_helpers.s"
 
 // ============================================================
 // Constants
@@ -70,13 +71,7 @@ equip_slot_for_cat:
 show_inv_and_restore:
     sta uinv_filter
     jsr tramp_ui_inv_display
-    // C128: require a fresh dismiss key after opening the overlay.
-#if C128
-    jsr input_wait_release
-    jsr input_get_key_fast
-#else
-    jsr input_get_key
-#endif
+    jsr input_get_modal_dismiss_key
     jsr ui_view_restore_modal_overlay
     rts
 
@@ -85,13 +80,7 @@ show_inv_and_restore:
 // Preserves: nothing
 show_equip_and_restore:
     jsr tramp_ui_equip_display
-    // C128: require a fresh dismiss key after opening the overlay.
-#if C128
-    jsr input_wait_release
-    jsr input_get_key_fast
-#else
-    jsr input_get_key
-#endif
+    jsr input_get_modal_dismiss_key
     jsr ui_view_restore_modal_overlay
     rts
 
@@ -330,11 +319,7 @@ item_wear:
     clc
     rts
 !iw_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -482,11 +467,7 @@ item_takeoff:
 !ito_have_choices:
     ldx #HSTR_PIW_TAKEOFF_PROMPT
     jsr piw_print_prompt_with_count
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -785,11 +766,7 @@ item_quaff:
     clc
     rts
 !iq_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -1090,11 +1067,7 @@ item_read_scroll:
     clc
     rts
 !irs_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -1369,11 +1342,7 @@ item_aim_wand:
     clc
     rts
 !iaw_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -1498,11 +1467,7 @@ item_use_staff:
     clc
     rts
 !ius_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     // Wait for keypress
     jsr input_get_key
@@ -1630,11 +1595,7 @@ item_gain_spell:
     clc
     rts
 !igs_have_choices:
-
-    // C128: require a fresh selection key after the command key.
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
 
     jsr input_get_key
 

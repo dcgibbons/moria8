@@ -3,6 +3,8 @@
 // Imported in-place from game_loop.s to preserve segment placement while
 // narrowing the main loop file to orchestration and command bodies.
 
+#import "input_ui_helpers.s"
+
 .const HELP_KEY_Q = $51
 .const HELP_KEY_SPACE = $20
 .const HELP_KEY_RETURN = $0d
@@ -17,9 +19,7 @@
 // ============================================================
 cmd_show_character_view:
     jsr tramp_ui_char_display
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     jsr screen_clear
     jmp vp_render_status_loop
@@ -30,13 +30,7 @@ cmd_show_help_view:
 !help_page_loop:
     jsr tramp_ui_help_display
 !help_key_loop:
-#if C128
-    jsr input_wait_release
-#else
-    lda #0
-    sta KBDBUF_COUNT
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     cmp #HELP_KEY_Q
     beq !help_done+
@@ -60,25 +54,13 @@ cmd_show_help_view:
 
 cmd_show_inventory_view:
     jsr tramp_ui_inv_display
-#if C128
-    jsr input_wait_release
-#else
-    lda #0
-    sta KBDBUF_COUNT
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     jmp ui_view_return_to_gameplay_view
 
 cmd_show_equipment_view:
     jsr tramp_ui_equip_display
-#if C128
-    jsr input_wait_release
-#else
-    lda #0
-    sta KBDBUF_COUNT
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     jmp ui_view_return_to_gameplay_view
 
@@ -92,9 +74,7 @@ cmd_recall_view:
     lda #>recall_prompt_str
     sta zp_ptr0_hi
     jsr screen_put_string
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_followup_key
     jsr input_get_key
     jsr recall_key_to_screen_code
     bcc !recall_done+
@@ -172,11 +152,7 @@ recall_show_matching_entry:
     stx recall_last_idx
     jsr creature_get_name
     jsr tramp_ui_recall
-    lda #0
-    sta KBDBUF_COUNT
-#if C128
-    jsr input_wait_release
-#endif
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     rts
 

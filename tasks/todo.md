@@ -3,6 +3,253 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Audit shared `#if C128` usage for `REF-HAL` and separate true platform-service leaks from intentional platform-specific ownership.
+- [x] Define the `REF-HAL` architecture, service families, exclusions, and phased migration plan before any implementation work.
+- [x] Record the `REF-HAL` design and review guidance here so later implementation can follow a bounded contract.
+- [x] Install the phase-1 `REF-HAL` platform-service API and input-policy helpers without changing platform ownership boundaries.
+- [x] Migrate the targeted shared runtime-repair and input-policy callsites onto the new semantic hooks.
+- [x] Extend focused C128 coverage for the new shared hooks and run the required C64/C128 regression suites.
+- [x] Migrate the remaining shared spell and wizard follow-up prompt waits onto `input_ui_helpers.s`.
+- [x] Re-run focused verification for the spell/wizard prompt slice and record the outcome here.
+- [x] Repair the C128 spell-list residency regression by restoring a valid residency boundary for the full `player_magic.s` callable surface.
+- [x] Re-run focused C128 spell-list coverage plus the required regression suites after the residency fix.
+- [x] Re-audit the remaining shared prompt-release policy callsites and keep only the semantically correct helper migrations in scope.
+- [x] Re-run focused verification for the narrowed prompt-policy cleanup and record the outcome here.
+
+## `REF-HAL` Design
+
+### Goal
+- Reduce the accumulation of runtime `#if C128` branches in shared gameplay/orchestration code by introducing a thin platform-services layer for semantic runtime hooks.
+- Keep the C64/C128 platform split explicit where it owns real hardware/banking policy; do not blur low-level loader/MMU contracts behind a generic dispatcher.
+- Make future shared gameplay changes depend on named services such as "main-loop begin", "restore runtime state", and "prepare fresh key input" instead of direct references to C128 repair routines or raw C64 keyboard-buffer details.
+
+### Findings
+- The current tree already has two successful boundary patterns that `REF-HAL` should copy rather than invent around:
+  - backend-owned vector tables such as `screen_vectors`
+  - startup-installable common shims such as `commodore/common/generation_busy_api.s`
+- The live `#if C128` surface in `commodore/common/` falls into three different buckets:
+  - **Intentional platform/layout ownership**:
+    - status/inventory/store/help layout constants in files like `ui_status.s`, `ui_inventory.s`, and `ui_store.s`
+    - proven-safe platform helper splits like `ui_clear_full_screen_safe` in `ui_help_clear.s`
+  - **Platform-boundary modules that are already the right owner**:
+    - `overlay.s`, `tier_manager.s`, `title_screen.s`, `save.s`, and similar code that directly owns KERNAL/MMU/bank/cache policy
+  - **True service leaks in shared gameplay/orchestration code**:
+    - common files directly call C128 runtime repair routines such as `c128_restore_runtime_guards` and `c128_restore_runtime_vectors`
+    - common files directly manipulate raw input-policy details such as `KBDBUF_COUNT`
+    - common level-generation flow owns a C128-only overlay reattach helper inline
+- The highest-value leak sites are concentrated rather than uniform:
+  - `commodore/common/game_loop.s`
+  - `commodore/common/game_loop_helpers.s`
+  - `commodore/common/player_create.s`
+  - `commodore/common/ui_messages.s`
+  - a small number of modal/input flows that still branch on C128 for fresh-key behavior
+- Specific examples of the leak shape:
+  - `game_loop.s` calls `c128_restore_runtime_guards` after shared trampoline/overlay returns and `c128_restore_runtime_vectors` at the top of the shared main loop
+  - `level_change_generate_current` in `game_loop.s` owns the C128-only "restore dungeon-gen overlay after tier load" rule inline
+  - `game_loop_helpers.s` embeds both the C128 release-wait path and the C64 `KBDBUF_COUNT` flush path directly in shared modal flows
+  - `ui_messages.s` reasserts C128 runtime vectors from the shared hot-path message renderer
+- The existing tree also shows where the boundary is already healthy and should stay that way:
+  - `input_wait_release` already hides platform-specific keyboard mechanics behind one public routine
+  - `ui_clear_full_screen_safe` already hides the safe clear primitive behind one public helper
+  - C128 trampoline ownership in `commodore/c128/main.s` is explicit and reviewable after `REF-1` / `REF-C128-TRAMP`
+
+### Design Boundary
+- In scope:
+  - shared gameplay/orchestration code in `commodore/common/` that currently knows about:
+    - C128 runtime guard/vector repair
+    - session-start / resume quirks that are semantic hooks rather than core gameplay rules
+  - adjacent cleanup for shared input-policy leaks only where it helps remove raw platform details from common gameplay code, but this should stay in the input-helper layer rather than expand HAL itself
+- Out of scope:
+  - screen geometry/layout compile-time differences
+  - title/save/overlay/tier low-level banking and loader internals
+  - test/diag-only `C128_*` instrumentation branches
+  - replacing explicit C128 trampolines in `commodore/c128/main.s` with a generic dispatcher
+  - removing every `#if C128` from `commodore/common/`; some are the correct owner and should remain
+  - phase-1 HAL treatment of the current one-off dungeon-generation overlay reattach helper unless a second consumer appears
+
+### Proposed Architecture
+- Add a new shared shim file, tentatively `commodore/common/platform_services_api.s`.
+- Model it after `generation_busy_api.s`:
+  - each public service entry point is a `JMP` slot with a safe default implementation
+  - defaults are no-op or minimal common-safe behavior only for genuinely optional hooks
+  - platform startup installs the active targets by patching the jump slots to C64 or C128 service implementations
+- Treat correctness-critical hooks differently from optional hooks:
+  - non-optional runtime services must have an explicit install guard
+  - startup must trap, assert, or otherwise fail loudly if a shipping build reaches gameplay without those hooks installed
+  - silent no-op fallback is acceptable for optional services like the visible generation spinner, but not for vector/MMU/runtime repair
+- Keep the service surface semantic and narrow. The first-pass hook families should be:
+  - `platform_main_loop_begin_api`
+    - called at the top of `main_loop`
+    - C64: no-op
+    - C128: restore runtime vectors / any required per-loop runtime state
+  - `platform_vector_reassert_api`
+    - called from shared hot paths that only need the RAM-side vectors/stubs reasserted
+    - C64: no-op
+    - C128: wraps the current vector restore path only
+  - `platform_runtime_resync_api`
+    - called after shared code returns from platform trampolines, overlay calls, or other runtime transitions that can leave broader C128 runtime state dirty
+    - C64: no-op
+    - C128: wraps `c128_restore_runtime_guards` and only the coupled restore state that truly belongs with that contract
+  - optional phase-2 hooks only if they still pay their rent after phase 1:
+    - `platform_session_start_api`
+    - `platform_session_resume_api`
+    - these would absorb the current C128 `PERF_P1` reset branches in shared session flow
+- Keep the current one-off generation overlay repair explicit for now:
+  - `c128_restore_generation_overlay` remains platform-owned generation glue, not a phase-1 HAL service
+  - revisit only if another shared generation/tier path needs the same contract
+- Treat input-policy cleanup as a sibling refactor, not a core HAL service family:
+  - add small shared input helpers layered on the existing input abstraction where needed
+  - move raw `KBDBUF_COUNT` handling out of shared gameplay code through the input layer, not through the HAL jump table
+- Keep service implementations platform-owned:
+  - C64 implementations can live in a small `platform_services64.s` or remain near `c64/main.s` initially
+  - C128 implementations can live in `platform_services128.s` or near `c128/main.s`, but must continue to call the existing authoritative runtime helpers rather than re-implementing banking logic ad hoc
+
+### Migration Plan
+- Phase A: install the HAL skeleton without behavior change
+  - add `platform_services_api.s`
+  - install service targets during C64/C128 startup
+  - add explicit install guards for all non-optional runtime services
+  - keep only optional services on safe no-op defaults for unit tests and partial module imports
+- Phase B: move the shared orchestration/runtime leaks first
+  - replace direct `c128_restore_runtime_vectors` calls in shared gameplay/message flow with `platform_main_loop_begin_api` or `platform_vector_reassert_api`, depending on the callsite contract
+  - replace direct `c128_restore_runtime_guards` calls in shared files with `platform_runtime_resync_api`
+- Phase C: move the shared input-policy leaks
+  - replace the mixed C64/C128 modal key gating in `game_loop_helpers.s` with input-layer helpers rather than new HAL hooks
+  - replace direct `KBDBUF_COUNT` manipulation in shared gameplay with input-layer helpers
+  - reuse the same input helpers in any remaining shared command flows that still branch on C128 just to wait for a fresh key
+- Phase D: decide whether session-level hooks are still worth it
+  - only pull `PERF_P1` reset branches behind HAL if that materially reduces shared conditional noise after phases B/C
+  - do not add speculative hooks with only one callsite unless they close a real repeated pattern
+
+### Design Rules
+- Prefer named semantic services over mechanism-shaped helpers.
+  - Good: `platform_vector_reassert_api`
+  - Bad: `platform_do_c128_fixups_api`
+- Keep the hook count small.
+  - If a candidate service has one callsite and no clear second consumer, it probably does not belong in phase 1.
+- Do not route ordinary gameplay calls through a generic function-pointer table.
+  - The goal is to hide platform quirks, not to virtualize the whole program.
+- Keep low-level banking/overlay/KERNAL transactions in the modules that already own them.
+  - `REF-HAL` is about shared orchestration seams, not about hiding MMU policy from every file.
+- Preserve unit-test friendliness.
+  - New APIs must default to safe no-op/minimal behavior so focused tests do not need the full platform bootstrap unless the behavior truly requires it.
+
+### Verification
+- Static verification:
+  - confirm the targeted shared files no longer contain direct runtime `#if C128` branches for the migrated service families
+  - confirm shared gameplay files no longer write `KBDBUF_COUNT` directly
+  - confirm new service defaults remain link-safe for focused unit tests
+  - confirm non-optional runtime services cannot silently remain uninstalled in a shipping build
+- Mandatory layout/banking verification for the eventual implementation:
+  - rebuild and read the C64/C128 memory-map output after any new shim file or owner move
+  - confirm default/main-segment, banked payload, overlay, and test-image boundaries still satisfy the repo asserts and documented hard limits
+  - confirm the emitted symbol addresses for moved service helpers and any touched callsites
+  - if any runtime-loaded or trampolined C128 path is touched, confirm the linked address, PRG header, load destination bank, visible execution bank, and recopy-source safety still agree
+- Runtime verification for the eventual implementation:
+  - C64:
+    - `bash commodore/c64/run_tests.sh`
+    - focused main-loop / item-selection / wizard / help modal tests if any new helpers are isolated there
+  - C128:
+    - `make -B -C commodore/c128 build128`
+    - `make test128-fast`
+    - focused main-loop / overlay / prompt-gating / modal UI regressions that exercise:
+      - overlay return to gameplay
+      - help/inventory/equipment modal dismiss
+      - store/item direction prompts
+      - level transition / tier transition / generation overlay restore
+- Suggested additional guard once implementation starts:
+  - add a narrow grep-based harness check for forbidden direct shared-runtime calls in `commodore/common/`:
+    - `c128_restore_runtime_guards`
+    - `c128_restore_runtime_vectors`
+    - raw `KBDBUF_COUNT` writes
+  - keep this guard scoped to the migrated files/families so it does not accidentally ban legitimate platform-boundary owners
+
+### Review
+- Completed as a design pass only; no implementation started.
+- Main conclusion: `REF-HAL` should not try to erase all compile-time platform split from `commodore/common/`.
+- The right target is the smaller set of shared orchestration leaks where gameplay code currently knows about:
+  - C128 runtime repair entry points
+  - and, separately, a small amount of raw C64 keyboard-buffer behavior that should likely move into the input-helper layer rather than HAL itself
+- Consultant review tightened the original draft in four important ways:
+  - required runtime hooks now need an explicit install guard instead of silent no-op defaults
+  - vector-only repair is now split from broader runtime resync
+  - the one-off generation-overlay reattach helper is deferred from phase-1 HAL
+  - verification now includes the repo’s mandatory C128 layout/banking checks, not just test runs
+- The revised safest implementation model is:
+  - a startup-installed semantic runtime-service API for the real shared runtime leaks
+  - small input-helper cleanup for the keyboard-policy leaks
+  - explicit trampolines and low-level banking code left in their current platform owners
+
+### Implementation Review
+- Completed for the bounded phase-1 runtime-service and input-helper migration.
+- Added `commodore/common/platform_services_api.s` as the required runtime-service shim surface with:
+  - install-state tracking
+  - a loud `BRK` default for uninstalled required hooks
+  - semantic entrypoints for main-loop begin, vector reassert, and runtime resync
+- Added `commodore/common/input_ui_helpers.s` as the sibling input-policy layer with:
+  - fresh follow-up key preparation
+  - modal dismiss-key preparation/reads
+  - the C64-only run-cancel keyboard-buffer flush hidden behind one helper
+- Installed the platform-service hooks during startup on both platforms:
+  - `commodore/c64/main.s` patches the required API slots to explicit no-op C64 handlers and asserts installation
+  - `commodore/c128/main.s` patches the same slots to `c128_restore_runtime_vectors` / `c128_restore_runtime_guards` and asserts installation
+- Migrated the targeted shared service leaks:
+  - shared gameplay/message flow now calls `platform_main_loop_begin_api`, `platform_vector_reassert_api`, or `platform_runtime_resync_api` instead of directly naming the C128 repair helpers
+  - shared modal/prompt/item/store flows now use `input_ui_helpers.s` instead of open-coded `input_wait_release` / `KBDBUF_COUNT` policy
+- Kept the intended exclusions explicit:
+  - the one-off `c128_restore_generation_overlay` helper remains outside phase-1 HAL
+  - platform-boundary owners such as `commodore/common/reu.s` still own their direct runtime repair calls
+- Focused C128 harnesses were updated to patch the new hook entrypoints so isolated tests remain link-safe and deterministic.
+- Static verification:
+  - targeted shared gameplay files no longer directly call `c128_restore_runtime_vectors`
+  - targeted shared gameplay files no longer directly call `c128_restore_runtime_guards`
+  - targeted shared gameplay files no longer write `KBDBUF_COUNT` directly for the migrated prompt/run-cancel flows
+  - remaining direct runtime-repair owners are limited to intentional platform-boundary code
+- Mandatory layout/banking verification completed:
+  - `make -C commodore/c64 build` passed with all asserts and the program end still below the documented boundary
+  - `make -B -C commodore/c128 build128` passed with all asserts and the default/banked/overlay segment limits still satisfied
+- Runtime verification completed:
+  - `bash commodore/c64/run_tests.sh` passed (`33 passed, 0 failed`)
+  - `make test128-fast` passed, including `main_loop128` and `msg_prompt128`
+- Follow-up C128 regression correction after real interactive validation:
+  - moved `ui_home.s` back into the reloadable banked payload and added explicit `io_contracts.s` audits for `home_enter`, `home_retrieve`, and `home_deposit`
+  - hardened the C128 fast command-edge path so cursor-key PETSCII family jitter does not retrigger a held cursor key as repeated town movement
+  - re-ran `make -B -C commodore/c128 build128` plus focused C128 town/runtime coverage:
+    - `TEST_FILTER='town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|real_input_town_move_diag' ./run_tests128.sh`
+  - note: the standalone `input128` unit runner was intermittently crashing VICE in this environment instead of producing a normal pass/fail result, so the verification record for the cursor-path fix relies on the focused runtime town coverage rather than claiming a clean `input128` unit result
+- Follow-up prompt-helper cleanup:
+  - migrated the remaining shared spell-selection and wizard prompt callsites from direct `input_wait_release` to `input_prepare_followup_key`
+  - touched shared `player_magic.s` plus the C128 wizard UI owner without expanding the HAL hook surface
+  - verification:
+    - `bash commodore/c64/run_tests.sh` passed (`33 passed, 0 failed`)
+    - `make test128-fast` passed
+- Follow-up prompt-policy narrowing after consultant review:
+  - reviewed the last three shared `input_wait_release` callsites and kept only the true modal-dismiss case in scope
+  - updated the post-death screen flow in `game_loop.s` to use `input_get_modal_dismiss_key`
+  - left `player_create.s` gender selection on its explicit release wait because it does not hand off directly into a secondary key prompt and should not overload the follow-up-key helper contract
+  - focused verification:
+    - `make -B -C commodore/c128 build128` passed with all asserts
+    - `make test128-fast` passed
+    - `make test128-fast-smoke` passed (`3 passed, 0 failed`)
+  - limitation:
+    - the full `bash commodore/c64/run_tests.sh` runner still hung in this environment during the long `effects` suite, so this narrowed slice is recorded against the focused C128 acceptance set instead of claiming a fresh full-C64 pass
+- Follow-up C128 spell-list residency correction after interactive `JAM` at `$D023`:
+  - split the spell-list header literal into `player_magic_display_data.s` so the C128 spell-display tail no longer wastes banked space on resident-only data
+  - kept `spell_list_display` and `calc_spell_failure` in the reloadable banked payload while leaving `player_cast_spell`, `player_pray`, and `pm_header_str` outside the I/O hole in resident space
+  - tightened the spell-display code path enough to recover additional banked bytes instead of relocating another callable surface
+  - extended the C128 residency contract with explicit audits for `player_cast_spell`, `player_pray`, and `pm_header_str`
+  - focused verification:
+    - `make -B -C commodore/c128 build128` passed with all asserts; banked payload now fits at `4078` bytes with the staged source at `$cffb-$dfe9`
+    - required regression suites were rerun after the fix and passed
+- Outcome:
+  - `REF-HAL` phase 1 now exists as a narrow installed runtime-service seam plus an input-policy helper layer
+  - shared orchestration code is less coupled to C128 repair mechanics and raw C64 keyboard-buffer details
+  - low-level banking, overlay, and one-off generation ownership remain in their existing explicit platform owners
+  - after the final prompt-policy audit, the only remaining direct runtime-repair references in `commodore/common/` are the intentional exclusions:
+    - `reu.s` preload/bank-restore ownership
+    - the one-off `c128_restore_generation_overlay` helper in `game_loop.s`
+  - consultant review recommends treating `REF-HAL` phase 1 as complete at that boundary and handling any future generation-overlay cleanup as a separate slice, not as more HAL expansion
+
 - [x] Audit live formatter ownership for `REF-NUMFMT` and determine whether the backlog item still represents real work.
 - [x] Record the `REF-NUMFMT` design/review outcome here before changing the planning docs.
 - [x] Reconcile the build-plan docs if the audit proves `REF-NUMFMT` is already complete/stale.

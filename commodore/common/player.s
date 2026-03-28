@@ -5,6 +5,8 @@
 // Hot fields are mirrored in ZP (zeropage.s) for fast access.
 // This module provides the full struct and sync routines between
 // ZP and the main struct.
+
+#import "platform_services_api.s"
 //
 // Total struct size: ~128 bytes
 
@@ -615,7 +617,7 @@ player_get_stat_bonus:
 
 ui_char_draw_background:
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     // --- Sex / Social Class (row 12) ---
     lda #12

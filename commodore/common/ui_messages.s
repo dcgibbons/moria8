@@ -9,6 +9,8 @@
 //
 // Messages are screen-code strings, null-terminated.
 
+#import "platform_services_api.s"
+
 // Message flags (zp_msg_flags)
 .const MSG_PENDING   = $01  // Row 0 has an unread message
 .const MSG_FULL      = $02  // Row 1 also has an unread message (both rows occupied)
@@ -111,7 +113,7 @@ msg_print_cached:
     // Message rendering is hit constantly during live gameplay; reassert
     // the RAM-side vectors/stubs here so leaked KERNAL state can't persist
     // into the screen write path between overlay transitions.
-    jsr c128_restore_runtime_vectors
+    jsr platform_vector_reassert_api
 #endif
 
     lda zp_msg_flags

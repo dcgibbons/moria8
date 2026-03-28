@@ -149,6 +149,8 @@ entry_main:
     sta reu_show_status + 2
 
     jsr generation_busy_install
+    jsr platform_services_install64
+    jsr platform_services_assert_installed
 
     // Select lowercase/uppercase character set (52 letter symbols)
     // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase
@@ -570,6 +572,34 @@ tramp_reu_show_status:
     sta $01
     cli
     rts
+
+platform_main_loop_begin_c64:
+platform_vector_reassert_c64:
+platform_runtime_resync_c64:
+    rts
+
+platform_services_install64:
+    lda #$4c
+    sta platform_main_loop_begin_api
+    sta platform_vector_reassert_api
+    sta platform_runtime_resync_api
+
+    lda #<platform_main_loop_begin_c64
+    sta platform_main_loop_begin_api + 1
+    lda #>platform_main_loop_begin_c64
+    sta platform_main_loop_begin_api + 2
+
+    lda #<platform_vector_reassert_c64
+    sta platform_vector_reassert_api + 1
+    lda #>platform_vector_reassert_c64
+    sta platform_vector_reassert_api + 2
+
+    lda #<platform_runtime_resync_c64
+    sta platform_runtime_resync_api + 1
+    lda #>platform_runtime_resync_c64
+    sta platform_runtime_resync_api + 2
+
+    jmp platform_services_mark_installed
 
 #import "../common/ui_help_clear.s"
 

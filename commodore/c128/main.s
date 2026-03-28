@@ -650,6 +650,29 @@ c128_return_to_runtime_after_kernal:
     pla
     rts
 
+platform_services_install128:
+    lda #$4c
+    sta platform_main_loop_begin_api
+    sta platform_vector_reassert_api
+    sta platform_runtime_resync_api
+
+    lda #<c128_restore_runtime_vectors
+    sta platform_main_loop_begin_api + 1
+    lda #>c128_restore_runtime_vectors
+    sta platform_main_loop_begin_api + 2
+
+    lda #<c128_restore_runtime_vectors
+    sta platform_vector_reassert_api + 1
+    lda #>c128_restore_runtime_vectors
+    sta platform_vector_reassert_api + 2
+
+    lda #<c128_restore_runtime_guards
+    sta platform_runtime_resync_api + 1
+    lda #>c128_restore_runtime_guards
+    sta platform_runtime_resync_api + 2
+
+    jmp platform_services_mark_installed
+
 // safe_setbnk — SETBNK ($FF68) wrapper for C128
 // Temporarily enables KERNAL ROM, calls real SETBNK, restores MMU.
 // $FF68 is in the banked code range ($F000-$FFB6) so it can't be
@@ -1741,6 +1764,8 @@ entry_main:
     sta kernal_irq_vec_hi
     jsr init_common_mmu_helpers
     jsr generation_busy_install
+    jsr platform_services_install128
+    jsr platform_services_assert_installed
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -2986,10 +3011,9 @@ runtime_low_data_end:
 .segment Default
 
 
-// Moved out of the C128 banked payload to free room for command handlers,
-// but imported late so their shared-data dependencies are already defined.
+// Imported late so shared-data dependencies are already defined.
 #import "../common/string_bank_banked.s"
-#import "../common/ui_home.s"
+#import "../common/player_magic_display_data.s"
 
 // ============================================================
 // Banked code payload — stored inline here, copied to $F000
@@ -3006,6 +3030,8 @@ banked_payload:
 .pseudopc $F000 {
 first_banked_function:
     #import "../common/ui_recall.s"
+    #import "../common/ui_home.s"
+    #import "../common/player_magic_display.s"
     #import "../common/player_magic_tail.s"
     #import "../common/projectile.s"
     #import "../common/ranged_fire.s"

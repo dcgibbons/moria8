@@ -108,6 +108,11 @@
 
 // Reloadable banked payload entrypoints.
 :C128AuditBanked("ui_recall_display", ui_recall_display)
+:C128AuditBanked("calc_spell_failure", calc_spell_failure)
+:C128AuditBanked("spell_list_display", spell_list_display)
+:C128AuditBanked("home_enter", home_enter)
+:C128AuditBanked("home_retrieve", home_retrieve)
+:C128AuditBanked("home_deposit", home_deposit)
 :C128AuditBanked("magic_recalc_mana", magic_recalc_mana)
 :C128AuditBanked("mage_effect_dispatch", mage_effect_dispatch)
 :C128AuditBanked("priest_effect_dispatch", priest_effect_dispatch)
@@ -122,9 +127,11 @@
 :C128AuditOutOfIo("reu_show_status_banked", reu_show_status_banked, $E000)
 :C128AuditOutOfIo("player_cast_spell", player_cast_spell, $F000)
 :C128AuditOutOfIo("player_pray", player_pray, $F000)
-:C128AuditOutOfIo("spell_list_display", spell_list_display, $F000)
 :C128AuditOutOfIo("item_aim_wand", item_aim_wand, $F000)
 :C128AuditOutOfIo("item_use_staff", item_use_staff, $F000)
 #if !C128_TEST_STACK_SLOT_DIAG && !C128_TEST_STACK_BOTTOM_DIAG
 :C128AuditOutOfIo("item_gain_spell", item_gain_spell, $F000)
 #endif
+
+// Display literals that must remain readable with I/O visible.
+.assert "AUDIT-IO-C128 pm_header_str stays below the I/O hole", pm_header_str < $D000, true

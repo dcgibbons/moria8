@@ -6,6 +6,49 @@
 
 ---
 
+## 2026-03-27 — `REF-HAL` phase-1 platform-service cleanup ✅ COMPLETE
+
+### Scope Closed
+- Introduced the shared platform-service seam and sibling input-policy helpers that remove the main C128 runtime-repair and raw keyboard-policy leaks from shared gameplay/orchestration code.
+- Closed the build-plan item at the phase-1 boundary after consultant review confirmed the remaining direct runtime-repair references are intentional exclusions rather than unfinished HAL work.
+
+### What Shipped
+1. **Required runtime-service shim installed on both platforms**
+   - `commodore/common/platform_services_api.s`
+   - startup patch/install in both `commodore/c64/main.s` and `commodore/c128/main.s`
+2. **Shared input-policy helpers now own the raw keyboard-policy split**
+   - `commodore/common/input_ui_helpers.s`
+   - shared follow-up key, modal dismiss, and run-cancel buffer policy moved behind named helpers
+3. **Shared gameplay/message callsites migrated off direct C128 repair helpers**
+   - shared code now uses `platform_main_loop_begin_api`, `platform_vector_reassert_api`, and `platform_runtime_resync_api`
+   - targeted modal flows now use the input helper layer instead of open-coded `KBDBUF_COUNT` handling
+4. **C128 regressions found during rollout were corrected and folded into the final boundary**
+   - Home/store residency moved back out of the I/O hole
+   - C128 cursor-key repeat regression fixed
+   - spell-list residency split so the callable spell surface no longer spills into `$D000-$DFFF`
+   - post-death dismiss path now uses the modal helper while chargen gender selection intentionally stays on its explicit release wait
+
+### Final Boundary
+- `REF-HAL` phase 1 is complete as:
+  - a narrow installed runtime-service seam for shared orchestration leaks
+  - a sibling input-policy cleanup for shared key-handling leaks
+- The remaining direct runtime-repair references in `commodore/common/` are intentional exclusions:
+  - `commodore/common/reu.s` preload/bank-restore ownership
+  - the one-off `c128_restore_generation_overlay` helper in `commodore/common/game_loop.s`
+- Consultant review recommended not expanding HAL further for those one-off/platform-boundary cases; any future generation-overlay cleanup should be tracked as a separate slice, not as more HAL work.
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts after the final narrowed prompt-policy cleanup.
+- Focused C128 acceptance passed:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+- Important verification note:
+  - the full `bash commodore/c64/run_tests.sh` runner hung in this environment during the long `effects` suite, so the close-out record relies on the focused C128 acceptance set plus prior broader regression runs already captured in `tasks/todo.md`.
+
+### Outcome
+- `REF-HAL` is removed from the active build plan as completed phase-1 work.
+- Shared gameplay code now depends on named platform/runtime/input services instead of directly accumulating C128 repair calls and raw keyboard-buffer policy.
+
 ## 2026-03-27 — `REF-NUMFMT` backlog closure audit ✅ COMPLETE
 
 ### Scope Closed

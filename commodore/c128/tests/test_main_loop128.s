@@ -560,6 +560,8 @@ test_key_idx: .byte 0
 }
 
 install_jump_patch:
+    :PatchJump(platform_main_loop_begin_api, test_platform_main_loop_begin_api)
+    :PatchJump(platform_runtime_resync_api, test_platform_runtime_resync_api)
     :PatchJump(input_get_command, test_input_get_command)
     :PatchJump(input_wait_release, test_input_wait_release)
     :PatchJump(input_get_key, test_input_get_key)
@@ -642,6 +644,12 @@ test_input_get_command:
     inx
     stx test_cmd_idx
     sta zp_input_cmd
+    rts
+
+test_platform_main_loop_begin_api:
+    rts
+
+test_platform_runtime_resync_api:
     rts
 
 test_turn_post_action:

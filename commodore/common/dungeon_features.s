@@ -4,6 +4,8 @@
 // Phase 4.2: Explicit open/close door commands, stuck door mechanics,
 // hidden trap placement and triggering, secret doors found by searching.
 
+#import "input_ui_helpers.s"
+
 // ============================================================
 // Constants
 // ============================================================
@@ -569,11 +571,9 @@ get_direction_target:
     ldx #HSTR_DF_DIRECTION
     jsr huff_print_msg
 
-    // C128: ensure the command key that triggered the action is released so
-    // the direction prompt consumes a fresh follow-up keypress.
-#if C128
-    jsr input_wait_release
-#endif
+    // Ensure the command key that triggered the action is released so the
+    // direction prompt consumes a fresh follow-up keypress.
+    jsr input_prepare_followup_key
 
     // Wait for a keypress
     jsr input_get_key

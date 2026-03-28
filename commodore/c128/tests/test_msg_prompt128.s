@@ -13,6 +13,15 @@
 .const COL_LGREY = 15
 .const COL_MSG_TEXT = COL_LGREY
 
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
 // Stubbed dependency from ui_messages.s C128 guard path
 c128_restore_runtime_vectors:
     rts
@@ -42,6 +51,8 @@ test_start:
     cld
     ldx #$ff
     txs
+
+    :PatchJump(platform_vector_reassert_api, test_platform_vector_reassert_api)
 
     lda #MACHINE_C128
     sta zp_machine_type
@@ -419,3 +430,6 @@ compound_delay:
 
 test_pass:
     jmp test_pass
+
+test_platform_vector_reassert_api:
+    rts

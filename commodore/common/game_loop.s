@@ -8,6 +8,8 @@
 
 #import "turn_render_state.s"
 #import "generation_busy_api.s"
+#import "platform_services_api.s"
+#import "input_ui_helpers.s"
 
 #if C128_TEST_FORCE_DEATH
 c128_test_force_death_pending: .byte 1
@@ -68,7 +70,7 @@ game_new_start:
     :C128StackSlotGuardCheck($86)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
 
     // --- Starting equipment ---
@@ -144,7 +146,7 @@ game_new_start:
     :C128StackSlotGuardCheck($87)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
 
     // --- Main game loop ---
@@ -173,7 +175,7 @@ game_new_start:
     :C128StackSlotGuardCheck($88)
 #endif
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
 #if C128_REAL_BOOT_DIAG
     ldx #$23
@@ -295,7 +297,7 @@ load_resume_game:
 main_loop:
 #if C128
 c128_town_move_diag_loop_top:
-    jsr c128_restore_runtime_vectors
+    jsr platform_main_loop_begin_api
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
@@ -352,8 +354,7 @@ c128_town_move_diag_loop_top:
     jmp run_step
 
 !run_cancel:
-    lda #0
-    sta KBDBUF_COUNT            // Flush keyboard buffer (C64 only; harmless on C128)
+    jsr input_flush_run_cancel_buffer
     lda #$ff
     sta zp_run_dir
     lda #0
@@ -886,7 +887,7 @@ level_change_generate_current:
     jmp entry_main
 !lcgc_ovl_ok:
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 #endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
@@ -1268,8 +1269,7 @@ player_died:
     sta zp_death_source
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
     jsr disk_prompt_game        // Swap back to game disk if dual
-    jsr input_wait_release
-    jsr input_get_key
+    jsr input_get_modal_dismiss_key
     jmp !quit+
 
 !quit:
