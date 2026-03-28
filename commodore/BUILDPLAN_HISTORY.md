@@ -49,6 +49,35 @@
 - `REF-HAL` is removed from the active build plan as completed phase-1 work.
 - Shared gameplay code now depends on named platform/runtime/input services instead of directly accumulating C128 repair calls and raw keyboard-buffer policy.
 
+## 2026-03-27 — CIA2 / VIC-bank restore cleanup in `overlay.s` / `tier_manager.s` ✅ COMPLETE
+
+### Scope Closed
+- Audited the active cleanup item around shared CIA2/VIC-bank restore assumptions in overlay and tier loading.
+- Closed it after confirming `overlay.s` was already correctly split and fixing the last stale shared `$DD00` restore in `tier_manager.s`.
+
+### What Was Verified
+1. **`overlay.s` already kept the C128 path platform-owned**
+   - the C128 overlay load path delegates to `c128_preload_asset_load`
+   - the direct `$DD00` restore exists only in the `!C128` disk-load path
+2. **`tier_manager.s` still carried one stale shared C64-era assumption**
+   - after `AssetLoad`, `CLOSE`, and `CLRCHN`, it restored `$DD00` unconditionally
+   - on C128 that ownership already belongs to the platform loader wrapper
+3. **The fix reduced the shared assumption instead of adding new abstraction**
+   - `tier_manager.s` now restores VIC-II bank 0 only on `!C128`
+   - no new HAL/API layer was introduced
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Focused C64 tier coverage still passed:
+  - `commodore/c64/tests/test_tier.s` = `11/11`
+- Focused C128 regression coverage passed:
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+
+### Outcome
+- The active build-plan item is removed as completed.
+- CIA2/VIC-bank restore ownership now sits in the correct platform boundary for both overlay and tier loading paths.
+
 ## 2026-03-27 — `REF-NUMFMT` backlog closure audit ✅ COMPLETE
 
 ### Scope Closed

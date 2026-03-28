@@ -547,9 +547,11 @@ tier_load_disk:
     lda #2
     jsr $ffc3                   // KERNAL CLOSE — release file #2
     jsr $ffcc                   // KERNAL CLRCHN — restore default I/O
+#if !C128
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
+#endif
     plp                         // Restore carry
 #if !C128
     :ExitKernal()

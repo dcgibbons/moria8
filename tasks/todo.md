@@ -15,6 +15,8 @@ This file is a temporary working scratchpad.
 - [x] Re-run focused C128 spell-list coverage plus the required regression suites after the residency fix.
 - [x] Re-audit the remaining shared prompt-release policy callsites and keep only the semantically correct helper migrations in scope.
 - [x] Re-run focused verification for the narrowed prompt-policy cleanup and record the outcome here.
+- [x] Audit the active `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore cleanup item and confirm whether both files still carry live cross-platform assumptions.
+- [x] Implement the smallest fix that leaves CIA2/VIC-bank restore ownership in the correct platform boundary and verify the touched overlay/tier paths.
 
 ## `REF-HAL` Design
 
@@ -249,6 +251,14 @@ This file is a temporary working scratchpad.
     - `reu.s` preload/bank-restore ownership
     - the one-off `c128_restore_generation_overlay` helper in `game_loop.s`
   - consultant review recommends treating `REF-HAL` phase 1 as complete at that boundary and handling any future generation-overlay cleanup as a separate slice, not as more HAL expansion
+- Follow-up CIA2/VIC-bank restore cleanup:
+  - audited the active `overlay.s` / `tier_manager.s` backlog note and confirmed `overlay.s` was already correctly platformized while `tier_manager.s` still carried a stale shared `$DD00` restore on the C128 path
+  - limited the fix to `tier_manager.s` so only the C64 disk-load path restores VIC-II bank 0 after serial I/O; C128 now leaves that ownership with the platform loader wrapper that already restores `$DD00`
+  - focused verification:
+    - `make -B -C commodore/c128 build128` passed with all asserts
+    - focused C64 `tests/test_tier.s` still passed (`11/11`)
+    - `make test128-fast` passed
+    - `make test128-fast-smoke` passed (`3 passed, 0 failed`)
 
 - [x] Audit live formatter ownership for `REF-NUMFMT` and determine whether the backlog item still represents real work.
 - [x] Record the `REF-NUMFMT` design/review outcome here before changing the planning docs.
