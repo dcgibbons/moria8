@@ -23,6 +23,7 @@
 #import "../../common/zeropage.s"
 
 .const SCREEN_COLS = 40
+.const STATUS_ROW = 21
 .const COL_WHITE = $01
 .const COL_CYAN  = $03
 .const COL_LRED  = $0a
@@ -41,9 +42,13 @@ screen_clear_row_calls:  .byte 0
 screen_put_decimal_calls:.byte 0
 input_get_key_calls:     .byte 0
 save_prompt_count:       .byte 0
+device_prompt_count:     .byte 0
 press_prompt_count:      .byte 0
 nodev_prompt_count:      .byte 0
 drive_ind_count:         .byte 0
+device_prompt_row:       .byte 0
+nodev_prompt_row:        .byte 0
+drive_ind_row:           .byte 0
 last_decimal_value:      .byte 0
 last_char_value:         .byte 0
 kernal_setnam_calls:     .byte 0
@@ -120,15 +125,30 @@ screen_put_string:
     cmp #>de_nodev_str
     bne !check_drive+
     inc nodev_prompt_count
+    lda zp_cursor_row
+    sta nodev_prompt_row
     rts
 !check_drive:
     lda zp_ptr0
     cmp #<de_ind_pfx
-    bne !done+
+    bne !check_device_prompt+
     lda zp_ptr0_hi
     cmp #>de_ind_pfx
-    bne !done+
+    bne !check_device_prompt+
     inc drive_ind_count
+    lda zp_cursor_row
+    sta drive_ind_row
+    rts
+!check_device_prompt:
+    lda zp_ptr0
+    cmp #<de_prompt_str
+    bne !done+
+    lda zp_ptr0_hi
+    cmp #>de_prompt_str
+    bne !done+
+    inc device_prompt_count
+    lda zp_cursor_row
+    sta device_prompt_row
 !done:
     rts
 
@@ -390,6 +410,12 @@ test_start:
     lda drive_ind_count
     cmp #1
     bne !t8_fail+
+    lda device_prompt_row
+    cmp #STATUS_ROW + 1
+    bne !t8_fail+
+    lda drive_ind_row
+    cmp #STATUS_ROW
+    bne !t8_fail+
     lda screen_put_decimal_calls
     cmp #1
     bne !t8_fail+
@@ -478,6 +504,12 @@ test_start:
     bcc !t11_fail+
     lda nodev_prompt_count
     cmp #1
+    bne !t11_fail+
+    lda device_prompt_row
+    cmp #STATUS_ROW + 1
+    bne !t11_fail+
+    lda nodev_prompt_row
+    cmp #STATUS_ROW + 1
     bne !t11_fail+
     lda input_get_key_calls
     cmp #3

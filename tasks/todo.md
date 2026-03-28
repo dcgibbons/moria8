@@ -3,12 +3,41 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Audit `A6` and confirm the cleanest first split boundary inside `commodore/common/item.s`.
-- [x] Extract immutable base item metadata and real-name tables into `commodore/common/item_tables.s`.
-- [x] Extract mutable identification state plus randomized unknown-item descriptors into `commodore/common/item_identification.s`.
-- [x] Keep `commodore/common/item.s` as the runtime-behavior owner for floor/inventory/spawn/pickup/drop logic.
-- [x] Rebuild C128 and run focused C64/C128 regression coverage for the split.
-- [x] Record the review outcome and retire `A6` from the active build plan.
+- [x] Audit the C64 dual-disk title-menu and custom-drive UI path to find why it erases the lower title frame.
+- [x] Move the transient title-screen disk UI onto the reserved bottom status rows instead of clearing over the title art.
+- [x] Extend focused `disk_swap` coverage to pin the new prompt/indicator row contract.
+- [x] Rebuild C64/C128, run focused verification, and retire `BUG-TITLE-DUALDISK-FRAME` from the active build plan.
+
+## `BUG-TITLE-DUALDISK-FRAME` Review
+
+### Root Cause
+- The C64 title-screen disk submenu, dual-disk indicator, and custom save-drive prompt/error flows were hard-coded onto rows `18-20`.
+- Those rows overlap the lower portion of the loaded title art, so normal `screen_clear_row` calls for the disk UI were erasing the bottom frame.
+
+### Fix
+- Reserved the already-cleared title-screen status area for the transient disk UI:
+  - menu/indicator row = `STATUS_ROW`
+  - prompt/error row = `STATUS_ROW + 1`
+- Updated:
+  - `commodore/c64/main.s` title disk submenu and `[Save Disk]` indicator path
+  - `commodore/common/disk_swap.s` custom-drive prompt, absent-device error, and `[Drive N]` indicator path
+- The fix is deliberately narrow:
+  - no title art redraw logic changed
+  - no disk mode semantics changed
+  - only the transient UI rows moved
+
+### Test Coverage
+- Extended `commodore/c64/tests/test_disk_swap.s` to pin the row contract for:
+  - custom drive prompt
+  - absent-device error
+  - success indicator
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- `commodore/c64/tests/test_disk_swap.s` passed with `PASS_COUNT=11`.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Result:
+  - `BUG-TITLE-DUALDISK-FRAME` is closed as a C64 title-screen UI cleanup.
 
 ## `A6` Review
 

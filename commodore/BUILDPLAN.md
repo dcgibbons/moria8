@@ -16,7 +16,6 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Low | `BUG-TITLE-DUALDISK-FRAME` dual-disk drive selection/status indicator erases the bottom portion of the C64 title frame | Low | Low | No | Minor C64 title-screen polish bug: the dual-drive UI path that shows the drive number/status partially wipes the lower title border/frame instead of preserving the title layout cleanly. |
 | Low | `BUG-LOOK-HILITE` look command does not move/highlight the found target like original Umoria | Medium | Low | No | Original Umoria moves the cursor to the found monster/item/feature during `look`; the current port reports the target in text only. Treat as a fidelity/UI bug rather than a gameplay blocker. |
 
 ## Open Phases / Display Work

@@ -28,6 +28,10 @@ disk_init_cmd:  .byte $49, $30
 .const DS_ENTER_DIGIT_COL = DS_ENTER_PROMPT_COL + 19
 .const DS_NODEV_COL = (SCREEN_COLS - 16) / 2
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
+// Title-screen disk UI lives in the already-cleared status area so transient
+// drive prompts/indicators do not erase the title art frame.
+.const DS_TITLE_MENU_ROW = STATUS_ROW
+.const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
 
 // ============================================================
 // disk_prompt_save — Prompt to insert save disk
@@ -149,21 +153,21 @@ probe_device:
 
 // ============================================================
 // disk_enter_device — Prompt for IEC device number and probe it
-// Displays "Save drive (8-30): " on row 19; reads 1–2 digit keys.
+// Displays "Save drive (8-30): " in the title-screen status area; reads 1–2 digit keys.
 // Validates range 8–30, probes the device, configures save_device.
 // Returns: carry clear = success (disk_mode=2, save_device set)
 //          carry set   = device not found (error shown, key waited)
 // Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
 // ============================================================
 disk_enter_device:
-    lda #19
+    lda #DS_TITLE_MENU_ROW
     jsr screen_clear_row
-    lda #20
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
-    // Print prompt on row 19
+    // Print prompt in the title-screen status area below the menu row.
     lda #COL_WHITE
     sta zp_text_color
-    lda #19
+    lda #DS_TITLE_PROMPT_ROW
     sta zp_cursor_row
     lda #DS_ENTER_PROMPT_COL
     sta zp_cursor_col
@@ -187,7 +191,7 @@ disk_enter_device:
     clc
     adc #DS_ENTER_DIGIT_COL
     sta zp_cursor_col
-    lda #19
+    lda #DS_TITLE_PROMPT_ROW
     sta zp_cursor_row
     lda #$20                    // space screen code
     jsr screen_put_char
@@ -214,7 +218,7 @@ disk_enter_device:
     clc
     adc #DS_ENTER_DIGIT_COL
     sta zp_cursor_col
-    lda #19
+    lda #DS_TITLE_PROMPT_ROW
     sta zp_cursor_row
     pla                         // restore digit ($30–$39 = same screen code)
     jsr screen_put_char
@@ -258,10 +262,10 @@ disk_enter_device:
     tax                         // X = device number
     jsr probe_device            // stashes X in de_temp; C=0 if present
     bcc !de_found+
-    // Device not found — show error on row 20, wait for key, return C=1
+    // Device not found — show error in the title-screen status area, wait for key, return C=1
     lda #COL_LRED
     sta zp_text_color
-    lda #20
+    lda #DS_TITLE_PROMPT_ROW
     sta zp_cursor_row
     lda #DS_NODEV_COL
     sta zp_cursor_col
@@ -274,9 +278,9 @@ disk_enter_device:
     sta zp_text_color
     jsr input_get_key
     // Clean up rows before returning to disk menu
-    lda #19
+    lda #DS_TITLE_MENU_ROW
     jsr screen_clear_row
-    lda #20
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
     sec
     rts
@@ -290,12 +294,14 @@ disk_enter_device:
     sta disk_mode
     lda de_temp
     sta save_device
-    // Show "[Drive N]" indicator on row 18
-    lda #18
+    // Show "[Drive N]" indicator in the title-screen status area.
+    lda #DS_TITLE_MENU_ROW
+    jsr screen_clear_row
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
     lda #COL_CYAN
     sta zp_text_color
-    lda #18
+    lda #DS_TITLE_MENU_ROW
     sta zp_cursor_row
     lda #DS_DRIVE_IND_COL
     sta zp_cursor_col
@@ -310,8 +316,5 @@ disk_enter_device:
     jsr screen_put_char
     lda #COL_WHITE
     sta zp_text_color
-    // Clear input rows
-    lda #19
-    jsr screen_clear_row
     clc
     rts

@@ -237,12 +237,14 @@ restart_entry:
     bne !title_menu_loop-
 
 disk_menu_show:
-    // Show disk sub-menu on row 18
-    lda #18
+    // Show disk sub-menu in the reserved bottom status area, not over title art.
+    lda #DS_TITLE_MENU_ROW
+    jsr screen_clear_row
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
     lda #COL_WHITE
     sta zp_text_color
-    lda #18
+    lda #DS_TITLE_MENU_ROW
     sta zp_cursor_row
     lda #9                  // Center: (40-22)/2 = 9
     sta zp_cursor_col
@@ -267,7 +269,9 @@ disk_menu_show:
     sta disk_mode
     lda #8
     sta save_device
-    lda #18
+    lda #DS_TITLE_MENU_ROW
+    jsr screen_clear_row
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
     jmp !title_menu_loop-
 
@@ -286,12 +290,14 @@ disk_menu_show:
     jmp disk_menu_show
 
 !disk_show_indicator:
-    // Show "[Save Disk]" indicator on row 18
-    lda #18
+    // Show "[Save Disk]" indicator in the reserved bottom status area.
+    lda #DS_TITLE_MENU_ROW
+    jsr screen_clear_row
+    lda #DS_TITLE_PROMPT_ROW
     jsr screen_clear_row
     lda #COL_CYAN
     sta zp_text_color
-    lda #18
+    lda #DS_TITLE_MENU_ROW
     sta zp_cursor_row
     lda #14                 // Center: (40-11)/2 ≈ 14
     sta zp_cursor_col

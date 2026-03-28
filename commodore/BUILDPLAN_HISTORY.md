@@ -6,6 +6,36 @@
 
 ---
 
+## 2026-03-27 — `BUG-TITLE-DUALDISK-FRAME` C64 title-frame preservation fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C64 title-screen bug where the dual-disk status UI and custom-drive prompt erased the lower title frame.
+
+### Root Cause
+- The transient disk UI used rows `18-20`, which overlap the lower title art.
+- Normal row clears for the submenu, `[Save Disk]`, `[Drive N]`, and absent-device error therefore wiped part of the frame.
+
+### What Changed
+1. **Title-menu disk UI moved into the reserved bottom status area**
+   - `commodore/c64/main.s` now renders the disk submenu and `[Save Disk]` indicator using the already-cleared bottom status rows
+2. **Shared custom-drive prompt/error path follows the same row contract**
+   - `commodore/common/disk_swap.s` now renders:
+     - the save-drive prompt
+     - the absent-device error
+     - the `[Drive N]` indicator
+     in the same reserved status-area rows
+3. **Focused regression coverage now pins the row behavior**
+   - `commodore/c64/tests/test_disk_swap.s` records the prompt/indicator rows and asserts the new status-area contract
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- `commodore/c64/tests/test_disk_swap.s` passed with `PASS_COUNT=11`.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+
+### Outcome
+- `BUG-TITLE-DUALDISK-FRAME` is removed from the active build plan.
+- The C64 title art remains intact while the dual-disk UI updates.
+
 ## 2026-03-27 — `A6` split `item.s` into ownership-focused modules ✅ COMPLETE
 
 ### Scope Closed
