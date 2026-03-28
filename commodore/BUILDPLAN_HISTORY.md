@@ -7207,3 +7207,54 @@ cancels on keypress.
 - `make -B -C commodore/c128 build128`
 - `make test128-fast`
 - `TEST_FILTER='real_boot_crash_harness' bash commodore/c128/run_tests128.sh`
+
+## `REF-MON-SOA` Review — Not Worth Pursuing Under Current Constraints ✅ COMPLETE (2026-03-27)
+
+**Question**
+- Should the active monster instance table be converted from its current 32-slot AoS record layout to a live SoA layout for performance?
+
+**What was reviewed**
+- Backlog note in `commodore/BUILDPLAN.md`
+- Live monster layout and helpers in `commodore/common/monster.s`
+- Hot-path consumers in AI, combat, effects, rendering, and save/load
+- Existing C128 perf instrumentation and render architecture
+- Consultant second opinion focused on risk and payoff
+
+**Findings**
+- Creature definitions are already SoA, but the live monster instance table remains an AoS block:
+  - `MAX_MONSTERS = 32`
+  - `MONSTER_ENTRY_SIZE = 12`
+  - raw layout owner: `monster_table` in `commodore/common/monster.s`
+- The blast radius is high:
+  - 38 production `monster_get_ptr` callsites across 17 non-test files
+  - 233 monster-layout references across 11 test suites
+  - save/load currently persists the live monster state as one raw 384-byte block in `commodore/common/save.s`
+- The hottest gameplay loop already amortizes part of the AoS cost:
+  - `monster_ai_tick` pulls `type/x/y/flags` into zeropage scratch early, so branch-heavy decision logic is not repeatedly chasing every field through the record
+- The clearest remaining layout-sensitive win is on C64 render lookup, not on C128:
+  - C64 still does `FLAG_OCCUPIED -> monster_find_at -> monster_get_ptr`
+  - C128 already pre-scans row occupancy and remains dominated by VDC register-port write cost
+
+**Profiling conclusion**
+- No dedicated monster-table benchmark exists in the tree today.
+- Static cycle inspection suggests a full AoS -> SoA live-table conversion would save a few thousand cycles on monster-dense turns, roughly low-single-digit milliseconds on a 1 MHz path.
+- That is real, but it does not currently look like a top-tier bottleneck relative to render, visibility, map work, and broader gameplay flow.
+
+**Decision**
+- `REF-MON-SOA` is closed as **not worth pursuing under the current game/runtime constraints**.
+- This is not a correctness rejection of SoA as a design; it is a cost/benefit rejection of this full refactor in the live tree.
+- A future revisit only makes sense if one of these becomes true:
+  - a dedicated benchmark proves monster-table access is a dominant cost
+  - active-monster counts grow materially beyond 32
+  - monster state becomes significantly richer
+  - save-format churn is already being paid for some other feature
+
+**Preferred alternatives**
+- Benchmark `monster_ai_tick`, `monster_find_at`, and the C64 render lookup path first.
+- If monster access does become a measured bottleneck, prefer a narrower optimization first:
+  - a tile/row occupancy index
+  - or a partial hot-field split for the most frequently read monster fields
+
+**Verification**
+- `make -B -C commodore/c128 build128`
+  - passed with `238 asserts, 0 failed`

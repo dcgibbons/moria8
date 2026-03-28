@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] Review the current `REF-MON-SOA` backlog note, monster-table architecture, and hot-path ownership in the codebase.
+- [x] Get a consultant-style design review focused on correctness risk, memory/layout impact, and likely performance upside of converting the active monster table from AoS to SoA.
+- [x] Gather local profiling evidence or the closest available proxy from the existing test/harness/tooling to estimate whether `REF-MON-SOA` is worth doing.
+- [x] Write a recommendation with findings, open questions, and a go/no-go call for `REF-MON-SOA`.
 - [x] Inspect the active `BUG-TOWN-KILL-DRAW` note plus the shared town combat, turn, and redraw ownership.
 - [x] Trace the stationary-attack post-turn render contract through `combat.s`, `spell_effects.s`, `turn.s`, `game_loop.s`, and the C64/C128 renderers.
 - [x] Compare design options for where a stale-kill redraw fix should live, including failure modes around `turn_scene_dirty`.
@@ -2952,3 +2956,43 @@ This file is a temporary working scratchpad.
   - `make -B -C commodore/c128 build128` passed with `232` asserts and `0` failures
   - `make test128-fast` passed
   - `make test128-fast-smoke` passed with `3 passed, 0 failed`
+
+## `REF-MON-SOA` Review
+
+### Scope Reviewed
+- Backlog note in `commodore/BUILDPLAN.md`
+- Live monster instance layout in `commodore/common/monster.s`
+- Hot-path consumers in shared AI/combat/effects/render/save code
+- Existing C128 perf instrumentation and render architecture notes
+- Consultant second opinion focused on architecture and payoff
+
+### Key Findings
+- The live monster instance table is still a 32-slot AoS record block (`monster_table`, `MONSTER_ENTRY_SIZE=12`) even though creature definitions are already SoA.
+- The refactor blast radius is large:
+  - 38 production `jsr monster_get_ptr` callsites across 17 non-test files
+  - 233 monster-layout references across 11 test suites
+  - raw save/load persistence currently serializes the entire 384-byte AoS block directly
+- The current AI loop already hides part of the AoS cost:
+  - `monster_ai_tick` loads `type/x/y/flags` into ZP scratch early, so decision branches are not repeatedly chasing every field through the record
+- The strongest remaining monster-layout-sensitive hot path is C64 rendering, not C128:
+  - C64 render paths still do `FLAG_OCCUPIED -> monster_find_at -> monster_get_ptr`
+  - C128 full-row rendering already pre-scans row occupancy and remains dominated by VDC write cost
+
+### Profiling / Payoff Read
+- No dedicated monster-table benchmark exists in the tree today.
+- Existing measured perf emphasis is on render-path responsiveness (`PERF_P1`) and VDC redraw cost, not monster-instance layout.
+- Static cycle estimate:
+  - replacing `monster_get_ptr` + indirect field reads with direct indexed SoA loads likely saves a few thousand cycles on monster-dense turns, roughly low-single-digit milliseconds on a 1 MHz path
+  - that is real, but it does not currently look like a top-tier bottleneck relative to render, visibility, map work, and broader gameplay flow
+
+### Recommendation
+- `REF-MON-SOA` should stay backlog-only for now.
+- Go/no-go:
+  - `NO-GO` for a full active-monster AoS -> SoA conversion until a dedicated benchmark proves monster-table access is a dominant cost
+- Better first cuts if performance work is needed here:
+  - benchmark `monster_ai_tick`, `monster_find_at`, and C64 render lookup paths
+  - prefer narrower optimizations such as a tile/row occupancy index or a partial hot-field split before rewriting the entire live monster representation
+
+### Verification
+- `make -B -C commodore/c128 build128`
+  - passed with `238 asserts, 0 failed`
