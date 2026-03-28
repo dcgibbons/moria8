@@ -1442,11 +1442,11 @@ This file is a temporary working scratchpad.
 ## Current Task
 - [x] Lock the reduced directed `look` contract from local primary sources/runtime and record intentional feature deltas.
 - [x] Write the `BUG-LOOK-HILITE` parity test matrix before implementation.
-- [ ] Move directed `look` coverage into a host test image that still fits C64 test memory limits.
+- [x] Move directed `look` coverage into a host test image that still fits C64 test memory limits.
 - [x] Reuse shared directed-input handling instead of keeping a bespoke `look` prompt reader.
 - [x] Back out the oversized interactive `look` rewrite so the C64 main segment fits again.
 - [ ] Decide whether to keep the compact VMS-style baseline or fund a larger parity push later.
-- [ ] Add platform-owned target highlight/flash behavior for C64 and C128.
+- [x] Add platform-owned target highlight/flash behavior for C64 and C128.
 - [ ] Add C128 unit/smoke coverage for the shared `look` changes.
 - [ ] Run full regression gates before asking for human playtesting.
 
@@ -1653,6 +1653,24 @@ This file is a temporary working scratchpad.
 - Updated consultant conclusion after the memory-map recheck:
   - the C64-safe path is to pivot toward the smaller VMS-style directed contract
   - the interactive Umoria-style machinery is the bulk of the overage, not the input seam
+
+### Implementation Result (2026-03-27)
+- Closed the bounded `BUG-LOOK-HILITE` scope without reopening the larger interactive-`look` parity project.
+- Root cause:
+  - the shared directed `look` path in `commodore/common/player_move.s` selected and described a target, but never handed that same target to a platform-owned visual cue
+  - the first C128 import placement also proved that even a tiny helper can drift into the wrong residency bucket, so the final fix had to satisfy both behavior and memory-map ownership
+- What shipped:
+  - added `commodore/common/look_flash_target.s`, a tiny shared helper that converts `df_target_x/y` into viewport-relative screen coordinates and then calls the existing per-platform `screen_flash_at`
+  - wired both item/monster and tile-description `look` paths through that helper so the flashed cell is the same target the text path already chose
+  - kept the helper out of the C128 runtime-low block and added a C128 I/O-boundary audit so the new symbol stays resident below `$D000`
+  - moved the regression into `commodore/c64/tests/test_effects.s`, which still fits the C64 test image while proving both the positive flash case and the remembered-dark no-flash case
+- Verification:
+  - `make -C commodore/c64 build`
+  - direct `commodore/c64/tests/test_effects.s` monitor run: `PASS_COUNT=27`
+  - `make -B -C commodore/c128 build128`
+  - `make test128-fast`
+- Remaining intentional open question:
+  - whether to fund a larger VMS-vs-Umoria `look` parity decision later; this fix only restores the missing visual target cue for the current reduced directed contract
 
 ## Current Task
 - [x] Reproduce the C128 dungeon-entry JAM from the user's `make clean128; make disk128` path.

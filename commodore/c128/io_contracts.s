@@ -73,6 +73,7 @@
 :C128AuditBelowIo("for_each_adjacent", for_each_adjacent)
 :C128AuditBelowIo("eff_sleep_adjacent", eff_sleep_adjacent)
 :C128AuditBelowIo("calc_dig_ability", calc_dig_ability)
+:C128AuditBelowIo("look_flash_target", look_flash_target)
 :C128AuditBelowIo("game_over_prompt", game_over_prompt)
 
 // Runtime-low Bank 0 call surfaces loaded from runtime.low.prg.

@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-03-27 — `BUG-LOOK-HILITE` directed-look target flash fix ✅ COMPLETE
+
+### Scope Closed
+- Restored the missing visual cue for the current reduced directed `look` contract without reopening the larger interactive-`look` parity project.
+
+### Root Cause
+- `commodore/common/player_move.s` already chose a concrete target tile for directed `look`, but the shared path never passed that chosen target through a platform-owned highlight/flash primitive.
+- The first C128 placement of the helper also showed that even a tiny shared routine still has to land in the correct residency bucket; otherwise a harmless UI fix can become a layout risk.
+
+### What Changed
+1. **Shared directed `look` now flashes the same target it describes**
+   - added `commodore/common/look_flash_target.s`
+   - converts `df_target_x/y` into viewport-relative row/column coordinates and calls the existing `screen_flash_at` backend on both C64 and C128
+   - wired both the tile-description and item/monster description paths through that helper
+2. **C128 residency is now explicit and audited**
+   - placed `look_flash_target` in the resident/default C128 segment instead of the runtime-low block
+   - added a C128 I/O-boundary audit so the symbol stays below `$D000`
+3. **Focused regression coverage now lives in a host image that still fits**
+   - extended `commodore/c64/tests/test_effects.s` with:
+     - a positive directed-`look` flash assertion
+     - the remembered-dark no-flash regression
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- Direct `commodore/c64/tests/test_effects.s` monitor run passed with `PASS_COUNT=27`.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- `make test128-fast` passed.
+
+### Outcome
+- `BUG-LOOK-HILITE` is removed from the active build plan.
+- The current directed `look` flow now provides a visible target cue while preserving the deliberately smaller VMS-style baseline.
+
 ## 2026-03-27 — `BUG-TITLE-DUALDISK-FRAME` C64 title-frame preservation fix ✅ COMPLETE
 
 ### Scope Closed

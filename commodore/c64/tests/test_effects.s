@@ -3,7 +3,7 @@
 // Tests: turn_tick_regen, confused movement, starvation damage,
 //        poison expiration, blindness visibility skip.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400+$: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #25
+    ldx #26
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -105,12 +105,15 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
 tlk_expected_n: .text "n"
+tlk_flash_calls: .byte 0
+tlk_flash_row:   .byte 0
+tlk_flash_col:   .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -132,6 +135,12 @@ test_get_direction_target_east:
     lda zp_player_y
     sta df_target_y
     sec
+    rts
+
+test_screen_flash_at:
+    stx tlk_flash_row
+    sty tlk_flash_col
+    inc tlk_flash_calls
     rts
 
 test_start:
@@ -1415,11 +1424,60 @@ test_start:
     sta tc_results + 24
 
     // ==========================================
-    // Test 26: look must not reveal monsters on remembered dark tiles
+    // Test 26: look should flash the found visible target cell once
     // ==========================================
 !t26:
     jsr tv_setup_dark_room
     :PatchJump(get_direction_target, test_get_direction_target_east)
+    :PatchJump(screen_flash_at, test_screen_flash_at)
+
+    lda #0
+    sta tlk_flash_calls
+
+    // Place a visible item one tile east of the player.
+    lda #23
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #17                     // Cure Light Wounds potion
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t26_fail+
+
+    jsr msg_clear
+    jsr do_look
+
+    lda tlk_flash_calls
+    cmp #1
+    bne !t26_fail+
+    lda tlk_flash_row
+    cmp #11
+    bne !t26_fail+
+    lda tlk_flash_col
+    cmp #21
+    bne !t26_fail+
+
+    lda #$01
+    sta tc_results + 25
+    jmp !t27+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
+
+    // ==========================================
+    // Test 27: look must not reveal monsters on remembered dark tiles
+    // ==========================================
+!t27:
+    jsr tv_setup_dark_room
+    lda #0
+    sta tlk_flash_calls
 
     // Mark the second tile east as remembered but still dark.
     ldx #12
@@ -1439,21 +1497,23 @@ test_start:
     sta ms_spawn_y
     lda #1
     jsr monster_spawn_one
-    bcc !t26_fail+
+    bcc !t27_fail+
 
     jsr msg_clear
     jsr do_look
 
     lda $0408                   // "You see n..." vs "You see a..."
     cmp tlk_expected_n
-    bne !t26_fail+
+    bne !t27_fail+
+    lda tlk_flash_calls
+    bne !t27_fail+
 
     lda #$01
-    sta tc_results + 25
+    sta tc_results + 26
     jmp !tests_done+
-!t26_fail:
+!t27_fail:
     lda #$00
-    sta tc_results + 25
+    sta tc_results + 26
 
 !tests_done:
     jmp test_finish

@@ -2691,6 +2691,7 @@ c128_cache_state_end:
 #import "../common/monster_attack.s"
 #import "../common/combat.s"
 #import "../common/player_move.s"
+#import "../common/look_flash_target.s"
 #import "../common/ui_help_clear.s"
 #import "../common/wizard.s"
 #import "../common/game_loop.s"

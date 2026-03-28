@@ -4,6 +4,10 @@
 // Handles 8-direction movement, tile walkability checks,
 // and player position updates.
 
+#if !C128
+#import "look_flash_target.s"
+#endif
+
 // ============================================================
 // Walkable tile table
 // Indexed by tile type (0-15). 1 = walkable, 0 = blocked.
@@ -648,34 +652,12 @@ do_look:
 !dl_not_rubble:
     // Wall (any type) — report it
     ldx #HSTR_DL_WALL
-    jmp dl_print_tile
-
-!dl_step:
-    // Step to next tile along scan direction
-    lda df_target_x
-    clc
-    adc dl_dx
-    sta df_target_x
-    lda df_target_y
-    clc
-    adc dl_dy
-    sta df_target_y
-    jmp !dl_scan-
-
-!dl_nothing:
-    ldx #HSTR_DL_NOTHING
-    jmp dl_print_tile
-
-// dl_print_tile — Print a tile description message
-// Input: X = Huffman string ID (HSTR_*)
-dl_print_tile:
-    jsr huff_print_msg
-    clc
-    rts
+    // Fall through into dl_print_tile.
 
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
+    jsr look_flash_target
 #if C128
     php
     sei
@@ -701,6 +683,31 @@ dl_print_you_see:
     plp
 #endif
     rts
+
+// dl_print_tile — Print a tile description message
+// Input: X = Huffman string ID (HSTR_*)
+dl_print_tile:
+    jsr look_flash_target
+dl_print_tile_no_flash:
+    jsr huff_print_msg
+    clc
+    rts
+
+!dl_step:
+    // Step to next tile along scan direction
+    lda df_target_x
+    clc
+    adc dl_dx
+    sta df_target_x
+    lda df_target_y
+    clc
+    adc dl_dy
+    sta df_target_y
+    jmp !dl_scan-
+
+!dl_nothing:
+    ldx #HSTR_DL_NOTHING
+    jmp dl_print_tile_no_flash
 
 // Look command scratch
 dl_tile:     .byte 0
