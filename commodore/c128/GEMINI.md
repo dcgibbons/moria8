@@ -54,3 +54,6 @@ The callable residency inventory for those checks now lives in `commodore/c128/i
 - For fast unit-level iteration, prefer `make test128-fast`.
 - For fast runtime regression checks, prefer `make test128-fast-smoke`.
 - `make test128` remains the authoritative full C128 suite and must be used before closing high-risk MMU/layout/overlay work.
+- If a user reports `make test128-fast` or `make test128` failing, that exact make target is the active gate until it passes.
+- Direct `harness128.py` runs, monitor traces, and narrower smokes are diagnostic only in that situation. They cannot be used as closure or as explanation for the failure until the reported make target is green.
+- Before trusting the rerun of a reported C128 gate after runtime/layout work, force a fresh build of the named target and avoid stale VICE state.

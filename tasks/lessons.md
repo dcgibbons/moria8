@@ -585,3 +585,24 @@
 - **Root Cause:** I separated gameplay authenticity from UI authenticity too aggressively, even after the upstream UI contract was verified.
 - **Resolution:** Once upstream UI behavior is confirmed and the user wants authentic behavior, move that UI element into the required scope instead of leaving it as a possible follow-up.
 - **Rule:** **For authenticity-driven features, verified upstream UI indicators are part of the contract unless the user explicitly agrees to defer them.**
+
+## 2026-03-28 — Preserve the incoming command register across state-clearing helpers in command decode
+
+- **Issue:** After the search-mode work landed, `Shift+direction` running stopped working on C64 even though ordinary movement still worked.
+- **Root Cause:** `cmd_run` called `player_search_mode_off` before decoding `CMD_RUN_*`, but the helper clobbered `A`, so the subsequent `sbc #CMD_RUN_N` computed the wrong run direction.
+- **Resolution:** Preserve the command byte across helper calls in decode paths, and add a regression that asserts `CMD_RUN_E` still reaches `CMD_MOVE_E` while search mode is cleared.
+- **Rule:** **If a command handler needs the original command byte after calling a helper, preserve `A` explicitly; do not assume state-clearing helpers leave decode registers intact.**
+
+## 2026-03-28 — For authenticity-driven interaction rules, verify the specific upstream behavior before freezing the contract
+
+- **Issue:** I wrote the search-mode design and implementation to clear searching on run entry, but `umoria` does not appear to do that and its manual explicitly discusses running while search mode is on.
+- **Root Cause:** I verified the broad search-mode behavior but did not verify the narrower run/search interaction before turning it into a design rule and shipped behavior.
+- **Resolution:** Recheck the exact upstream interaction before finalizing disturbance rules, then align both the docs and the shared run path with that verified behavior.
+- **Rule:** **When a feature is being implemented for authenticity, do not infer sub-behaviors like run/search interactions from the current port or from convenience; verify them directly in upstream sources before locking the contract.**
+
+## 2026-03-28 — When an alternate harness disagrees with the user's exact failing suite, the exact suite is the only truth that matters
+
+- **Issue:** After the user reported `make -C commodore/c128 test128-fast` failing, I talked about a direct `harness128.py` timeout as if it might explain the problem instead of first making the user's exact suite pass.
+- **Root Cause:** I treated a secondary harness discrepancy as meaningful diagnostic framing before closing the loop on the authoritative command the user actually ran.
+- **Resolution:** Reproduce and fix the exact failing command first, and only discuss alternate harness behavior after the authoritative suite is green and clearly separated from the real issue.
+- **Rule:** **Do not describe a failure as “just a harness issue” when the user's exact suite is red. The exact failing command remains authoritative until it passes.**

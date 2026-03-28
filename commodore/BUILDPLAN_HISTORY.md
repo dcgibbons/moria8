@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-03-28 — `FEAT-SEARCH-MODE` authentic search-mode restoration ✅ COMPLETE
+
+### Scope Closed
+- Restored original-style persistent search mode and passive auto-search behavior across C64 and C128 without rewriting the full player-speed scheduler.
+
+### What Shipped
+1. **Authentic search-mode state and derived search math**
+   - added the persistent runtime toggle on `PLF_SEARCHING`
+   - restored derived active-search and `fos` behavior from the existing race/class data instead of the old flat reveal chance
+   - kept search state transient across save/load
+2. **Shared turn integration without a scheduler rewrite**
+   - ordinary movement now owns passive auto-search
+   - the shared post-turn helper applies the extra search turn when search mode is active
+   - running now preserves search mode and reuses the same passive-search / extra-turn behavior, matching `umoria`
+3. **Persistent player-facing UI restored**
+   - added the status-area `Searching` indicator instead of relying on message-only feedback
+   - wired the `#` search-mode toggle and the supporting input/help updates on both targets
+4. **Layout and residency constraints stayed green**
+   - kept the C64 main segment below `$C000`
+   - kept the C128 resident / overlay / callable-residency asserts green, including the earlier UI-overlay relocation needed to absorb feature growth
+5. **Follow-up regressions found during landing were fixed before closure**
+   - C64 running decode stopped clobbering the `CMD_RUN_*` byte
+   - C64 bump-to-attack stopped clobbering the target X coordinate when clearing search mode
+   - C128 chargen summary duplication was removed by deleting the stale C128-local summary display and tightening the summary-to-town smoke to require exactly one summary screen
+
+### Verification
+- `make -C commodore/c64 build` passed.
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Search-mode-focused coverage passed:
+  - `commodore/c64/tests/test_input.s` = `11/11`
+  - `commodore/c64/tests/test_main_loop.s` = `20/20`
+  - `make -C commodore/c128 test128-fast` = `PASS`
+- Follow-up flow coverage passed:
+  - `TEST_FILTER='scripted_summary_to_town_smoke' bash commodore/c128/run_tests128.sh` = `PASS`
+  - `make -C commodore/c128 test128-fast-smoke` = `PASS`
+
+### Outcome
+- `FEAT-SEARCH-MODE` is removed from the active build plan.
+- The port now has authentic persistent searching behavior with the intended status UI and turn semantics, while unrelated post-landing regressions remain tracked separately as bugs rather than as unfinished feature scope.
+
 ## 2026-03-27 — `BUG-TOWN-KILL-DRAW` shared post-turn redraw fix ✅ COMPLETE
 
 ### Scope Closed

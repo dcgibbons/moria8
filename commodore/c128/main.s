@@ -808,20 +808,6 @@ tramp_player_create_return_site:
     :C128StackSlotGuardCheck($86)
 #endif
 #endif
-#if !C128_TEST_SKIP_PLAYER_SUMMARY
-    jsr tramp_ui_char_display
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($8b)
-#endif
-    jsr input_wait_release
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($8c)
-#endif
-    jsr input_get_key
-#if C128_TEST_STACK_SLOT_DIAG
-    :C128StackSlotGuardCheck($8d)
-#endif
-#endif
     jsr c128_restore_runtime_guards
     rts
 
@@ -1538,6 +1524,18 @@ tramp_ui_wizard_display:
 tramp_ui_recall:
     :C128UIBankedDisplayTrampoline(ui_recall_display)
 
+tramp_item_gain_spell:
+    :C128UIOverlayDisplayTrampoline(item_gain_spell)
+
+tramp_title_load_and_draw:
+    lda #C128_UI_OVERLAY_ID
+    jsr overlay_load
+    bcs !ttld_fail+
+    jsr c128_restore_runtime_guards
+    jmp title_load_and_draw
+!ttld_fail:
+    jmp entry_main
+
 .macro C128BankedComputeTrampoline(target) {
     sei
     :BankOutKernal()
@@ -1841,7 +1839,7 @@ restart_entry:
     ldx #$27
     jsr c128_stack_guard_begin
 #endif
-    jsr title_load_and_draw
+    jsr tramp_title_load_and_draw
 #if C128_REAL_BOOT_DIAG
     ldx #$28
     jsr c128_stack_guard_check
@@ -2671,7 +2669,6 @@ c128_cache_state_end:
 #import "../common/runtime_ui_strings.s"
 #import "../common/io_kernal_consts.s"
 #import "../common/score_io.s"
-#import "../common/title_screen.s"
 
 #import "../common/dungeon_data.s"
 #import "../common/dungeon_features.s"
@@ -2698,7 +2695,6 @@ c128_cache_state_end:
 #import "../common/turn.s"
 #import "../common/player_items.s"
 #import "../common/player_magic.s"
-#import "../common/string_bank.s"
 #import "../common/perf_p1.s"
 
 // Init-only strings — kept in main RAM
@@ -2773,8 +2769,12 @@ title_key_trap_base:
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_summary_seen:
     .byte 0
+c128_test_summary_count:
+    .byte 0
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_summary_seen:
+    .byte 0
+c128_test_summary_count:
     .byte 0
 #endif
 #if C128_TEST_CACHE_SURVIVAL
@@ -3012,9 +3012,6 @@ runtime_low_data_end:
 .segment Default
 
 
-// Imported late so shared-data dependencies are already defined.
-#import "../common/string_bank_banked.s"
-
 // ============================================================
 // Banked code payload — stored inline here, copied to $F000
 // at startup by init_copy_banked. Runs in Bank 0 at $F000-$FFFA.
@@ -3174,6 +3171,8 @@ ovl_help_end:
     #import "../common/ui_character.s"
     #import "../common/player_magic_levelup.s"
     #import "../common/ui_wizard.s"
+    #import "../common/player_gain_spell.s"
+    #import "../common/title_screen.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true

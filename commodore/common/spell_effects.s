@@ -120,6 +120,7 @@ eff_light_room:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_teleport_self:
+    jsr player_search_mode_off
     jsr find_random_floor
     bcc !ets_fail+
 

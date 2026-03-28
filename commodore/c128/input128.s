@@ -539,8 +539,13 @@ cia_scan_petscii:
     bne !csp_return+
 !csp_shift_not_comma:
     cmp #$2F            // unshifted / → shifted ? ($3F)
-    bne !csp_shift_default+
+    bne !csp_shift_not_hash+
     lda #$3F
+    bne !csp_return+
+!csp_shift_not_hash:
+    cmp #$33            // unshifted 3 → shifted # ($23)
+    bne !csp_shift_default+
+    lda #$23
     bne !csp_return+
 !csp_shift_default:
     ora #$80            // Letters ($41–$5A) + cursor keys ($11,$1D): add $80
@@ -681,6 +686,37 @@ input_normalize_ctrl_chords_with_state:
 !inct_ctrl_w:
     lda #$17
 !inct_done:
+    rts
+
+// input_normalize_shifted_symbols_with_state — Pure helper for the test suite
+// to cover C128 shifted-symbol normalization without a live CIA scan.
+// Input: A = unshifted PETSCII, Y = 0 if unshifted, nonzero if shifted
+// Output: A = normalized PETSCII
+input_normalize_shifted_symbols_with_state:
+    cpy #0
+    beq !inss_done+
+    cmp #$2E
+    bne !inss_not_dot+
+    lda #$3E
+    rts
+!inss_not_dot:
+    cmp #$2C
+    bne !inss_not_comma+
+    lda #$3C
+    rts
+!inss_not_comma:
+    cmp #$2F
+    bne !inss_not_three+
+    lda #$3F
+    rts
+!inss_not_three:
+    cmp #$33
+    bne !inss_default+
+    lda #$23
+    rts
+!inss_default:
+    ora #$80
+!inss_done:
     rts
 #endif
 

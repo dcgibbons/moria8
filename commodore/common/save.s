@@ -144,6 +144,7 @@ save_game:
 
     // Sync ZP fields back to player struct
     jsr player_sync_from_zp
+    jsr player_search_clear_transient_state
 
     // Reset checksum
     lda #0
@@ -514,6 +515,7 @@ load_game:
     sta $dd00
 
     // Sync struct → ZP
+    jsr player_search_clear_transient_state
     jsr player_sync_to_zp
 
     // Recount active entities from loaded tables

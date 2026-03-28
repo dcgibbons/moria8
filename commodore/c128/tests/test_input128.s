@@ -18,69 +18,87 @@ test_start:
     cld
     ldx #$ff
     txs
+    jmp !test0_start+
+
+test_fail0:
+    jmp test_fail_loop
+
+!test0_start:
 
     // Keypad directional movement mappings
     lda #KEY_KP8
     jsr petscii_to_command
     cmp #CMD_MOVE_N
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP2
     jsr petscii_to_command
     cmp #CMD_MOVE_S
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP4
     jsr petscii_to_command
     cmp #CMD_MOVE_W
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP6
     jsr petscii_to_command
     cmp #CMD_MOVE_E
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP7
     jsr petscii_to_command
     cmp #CMD_MOVE_NW
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP9
     jsr petscii_to_command
     cmp #CMD_MOVE_NE
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP1
     jsr petscii_to_command
     cmp #CMD_MOVE_SW
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP3
     jsr petscii_to_command
     cmp #CMD_MOVE_SE
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP5
     jsr petscii_to_command
     cmp #CMD_REST
-    bne test_fail
+    bne test_fail0
 
     lda #KEY_KP_PLUS
     jsr petscii_to_command
     cmp #CMD_TUNNEL
-    bne test_fail
+    bne test_fail0
     
     // Ctrl+W normalization helper should rescue fast-path chord races.
     lda #$57               // W
     ldy #1                 // Ctrl held
     jsr input_normalize_ctrl_chords_with_state
     cmp #$17
-    bne test_fail
+    bne test_fail0
 
     lda #$d7               // SHIFT+W fallback
     ldy #1
     jsr input_normalize_ctrl_chords_with_state
     cmp #$17
+    bne test_fail
+
+    lda #$33               // Shifted 3 should normalize to #
+    ldy #1
+    jsr input_normalize_shifted_symbols_with_state
+    cmp #$23
+    bne test_fail
+
+    lda #$33
+    ldy #0                 // Unshifted 3 stays 3
+    jsr input_normalize_shifted_symbols_with_state
+    cmp #$33
     bne test_fail
 
     lda #$57
@@ -126,6 +144,11 @@ test_continue:
     lda #$d1               // SHIFT+Q
     jsr petscii_to_command
     cmp #CMD_QUIT
+    bne test_fail
+
+    lda #$23               // #
+    jsr petscii_to_command
+    cmp #CMD_SEARCH_MODE
     bne test_fail
 
     // Shifted vi-keys map to running commands.

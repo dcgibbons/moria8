@@ -250,18 +250,20 @@ help_lines:
     .text " This Help"
     .byte 0
 
-// Row 20: Use staff + Other header
+// Row 20: Use staff + Pray
     .byte 0
     .byte $fe
     .text "Z"
     .byte $ff
     .text " Use Staff"
     .byte $fc, 20
-    .byte $fd
-    .text "Other"
+    .byte $fe
+    .text "P"
+    .byte $ff
+    .text " Pray"
     .byte 0
 
-// Row 21: Cast spell + Pray
+// Row 21: Cast spell + Search mode
     .byte 0
     .byte $fe
     .text "M"
@@ -269,9 +271,9 @@ help_lines:
     .text " Cast Spell"
     .byte $fc, 20
     .byte $fe
-    .text "P"
+    .text "#"
     .byte $ff
-    .text " Pray"
+    .text " Search"
     .byte 0
 
 // Row 22: Study book + Save

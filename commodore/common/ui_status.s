@@ -23,8 +23,10 @@
 .const STS_ROW23_AC_COL = 31
 .const STS_ROW23_AU_COL = 44
 .const STS_ROW23_HUNGER_COL = 63
+.const STS_ROW23_STATE_COL = 70
 #else
 .const STS_ROW21_NAME_COL = 0
+.const STS_ROW21_STATE_COL = 19
 .const STS_ROW21_LV_COL = 28
 .const STS_ROW21_DL_COL = 34
 .const STS_ROW22_ST_COL = 0
@@ -149,6 +151,10 @@ status_draw:
     lda zp_hunger_state
     cmp status_prev_hunger
     bne !sd_row23_dirty+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    cmp status_prev_searching
+    bne !sd_row23_dirty+
     jmp !sd_dirty_ready+
 !sd_row23_dirty:
     lda status_dirty_rows
@@ -232,6 +238,22 @@ status_draw:
     lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
     jsr screen_put_string
+
+#if !C128
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !sd_row21_state_done+
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #STS_ROW21_STATE_COL
+    sta zp_cursor_col
+    lda #<status_searching_str
+    sta zp_ptr0
+    lda #>status_searching_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!sd_row21_state_done:
+#endif
 
     lda #STS_ROW21_LV_COL
     sta zp_cursor_col
@@ -489,6 +511,22 @@ status_draw:
     sta zp_ptr0_hi
     jsr screen_put_string
 
+#if C128
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !sd_row23_state_done+
+    lda #COL_STATUS
+    sta zp_text_color
+    lda #STS_ROW23_STATE_COL
+    sta zp_cursor_col
+    lda #<status_searching_str
+    sta zp_ptr0
+    lda #>status_searching_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!sd_row23_state_done:
+#endif
+
 !sd_update_cache:
     // Update status cache after successful redraw.
     lda zp_player_lvl
@@ -532,6 +570,9 @@ status_draw:
 
     lda zp_hunger_state
     sta status_prev_hunger
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    sta status_prev_searching
     lda #1
     sta status_cache_valid
 
@@ -665,6 +706,8 @@ status_au_str:
     .text "AU:" ; .byte $00
 status_exp_str:
     .text "EXP:" ; .byte $00
+status_searching_str:
+    .text "Searching" ; .byte $00
 
 // ============================================================
 // Status cache (skip redraw when visible values are unchanged)
@@ -688,4 +731,5 @@ status_prev_ac:     .byte 0
 status_prev_gold_lo:.byte 0
 status_prev_gold_hi:.byte 0
 status_prev_hunger: .byte 0
+status_prev_searching: .byte 0
 status_dirty_rows:  .byte 0

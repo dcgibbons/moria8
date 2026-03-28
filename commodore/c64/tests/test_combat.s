@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #26
+    ldx #27
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -92,7 +92,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 28, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1016,10 +1016,70 @@ test_start:
     bne !t27_fail+
     lda #$01
     sta tc_results + 26
-    jmp !tests_done+
+    jmp !t28+
 !t27_fail:
     lda #$00
     sta tc_results + 26
+
+    // ==========================================
+    // Test 28: player_attack_monster preserves target coordinates while
+    // clearing search mode, so bump-to-attack still finds the monster.
+    // ==========================================
+!t28:
+    jsr monster_init_table
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #$ff
+    sta zp_run_dir
+    lda #0
+    sta eff_fear_timer
+
+    // Place a floor tile with an occupied monster at (20,15).
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    :MapWrite_ptr0_y()
+
+    // Populate slot 0 at the same coordinates with clear flags.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #4
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    lda #20
+    ldy #15
+    jsr player_attack_monster
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #MF_AWAKE | MF_PROVOKED
+    cmp #MF_AWAKE | MF_PROVOKED
+    bne !t28_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !tests_done+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
 
 !tests_done:
     jmp test_exit_trampoline

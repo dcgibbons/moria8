@@ -24,6 +24,7 @@
 :C128AuditBelowIo("tramp_ui_equip_display", tramp_ui_equip_display)
 :C128AuditBelowIo("tramp_ui_wizard_display", tramp_ui_wizard_display)
 :C128AuditBelowIo("tramp_ui_recall", tramp_ui_recall)
+:C128AuditBelowIo("tramp_item_gain_spell", tramp_item_gain_spell)
 :C128AuditBelowIo("tramp_player_cast_spell", tramp_player_cast_spell)
 :C128AuditBelowIo("tramp_player_pray", tramp_player_pray)
 :C128AuditBelowIo("tramp_spell_list_display", tramp_spell_list_display)
@@ -99,6 +100,7 @@
 :C128AuditUiOverlay("ui_inv_display", ui_inv_display)
 :C128AuditUiOverlay("ui_equip_display", ui_equip_display)
 :C128AuditUiOverlay("ui_wizard_display", ui_wizard_display)
+:C128AuditUiOverlay("item_gain_spell", item_gain_spell)
 :C128AuditUiOverlay("magic_check_new_spells", magic_check_new_spells)
 :C128AuditDungeonOverlay("level_generate", level_generate)
 :C128AuditDungeonOverlay("assign_special_room", assign_special_room)
@@ -130,9 +132,5 @@
 :C128AuditOutOfIo("player_pray", player_pray, $F000)
 :C128AuditOutOfIo("item_aim_wand", item_aim_wand, $F000)
 :C128AuditOutOfIo("item_use_staff", item_use_staff, $F000)
-#if !C128_TEST_STACK_SLOT_DIAG && !C128_TEST_STACK_BOTTOM_DIAG
-:C128AuditOutOfIo("item_gain_spell", item_gain_spell, $F000)
-#endif
-
 // Display literals that must remain readable with I/O visible.
 .assert "AUDIT-IO-C128 pm_header_str stays below the I/O hole", pm_header_str < $D000, true

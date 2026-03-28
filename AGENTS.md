@@ -23,6 +23,10 @@ This file provides foundational mandates and technical guidance for AI agents (G
 - Diff behavior between main and your changes when relevant
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness
+- If the user reports a failing command, that exact command becomes the active verification gate until it passes
+- Do not substitute alternate harnesses, direct runners, monitor repros, or partial suites for the reported command; those are diagnostics only unless the user named them as the failure
+- Do not describe a failure as a harness/environment issue while the reported command is still red
+- Re-run the exact reported command after each candidate fix before changing your conclusion about status
 ### 5. Demand Elegance (Balanced)
 - For non-trivial changes: pause and ask "is there a more elegant way?"
 - If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
@@ -36,6 +40,7 @@ This file provides foundational mandates and technical guidance for AI agents (G
 - Go fix failing CI tests without being told how
 ## Task Management
 1. **Plan First**: Write plan to "tasks/todo.md" with checkable items
+1a. **Capture The Gate**: If the user reports a failing command, copy that exact command into the `Reported Failure Gate` block in `tasks/todo.md` before implementation
 2. **Verify Plan**: Check in before starting implementation
 3. **Track Progress**: Mark items complete as you go
 4. **Explain Changes**: High-level summary at each step
@@ -73,6 +78,9 @@ test speed.
 - For **fast iteration on C128 unit-level changes**, prefer `make test128-fast`.
 - For **fast runtime regression checks on C128 boot/chargen/town paths**, prefer `make test128-fast-smoke`.
 - Before declaring a broad C128 refactor or high-risk memory/banking change complete, run the authoritative suite with `make test128`.
+- If the user reports `make test128-fast`, `make test128-fast-smoke`, or `make test128` failing, that exact make target is the active gate until it passes.
+- For reported C128 test failures, direct `harness128.py` runs, monitor traces, and narrower smokes are diagnostic only. They cannot be used as closure or as explanation for the failure until the reported make target is green.
+- Before trusting a C128 rerun of the reported gate after layout/banking/runtime changes, force a fresh build of the named target and ensure stale VICE state is not being reused.
 
 ## Planning Docs (Commodore port)
 
@@ -154,6 +162,9 @@ that are failing or stuck.
 - When a feature is implemented, the **tester** agent must run tests.
 - Use the `monitor` tool for suites taking longer than 30 seconds.
 - The **writer** cannot finalize a task until the **tester** reports 'ALL TESTS PASSED'.
+- For bug work triggered by a failing user command, tester signoff must name that exact command explicitly:
+  - `Exact reported command: PASS/FAIL`
+  - `Broader regression suites: PASS/FAIL`
 
 ## Environment
 - Python: Use the local `.venv` (run commands via `source .venv/bin/activate && ...`)

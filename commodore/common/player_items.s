@@ -1577,7 +1577,7 @@ item_use_staff:
 // Output: carry set = turn consumed, carry clear = cancelled
 // Clobbers: everything
 // ============================================================
-
+#if !C128
 item_gain_spell:
     // Check if player has a spell type at all
     lda player_data + PL_SPELL_TYPE
@@ -1735,6 +1735,7 @@ igs_spell_idx:      .byte 0
 igs_spell_start:    .byte 0
 igs_spell_class:    .byte 0
 igs_learned_count:  .byte 0
+#endif
 
 // Gain spell strings migrated to Huffman (HSTR_IGS_* in huffman_data.s)
 

@@ -49,6 +49,7 @@
     .byte $d4   // SHIFT+T — throw item
     .byte $d2   // SHIFT+R — refuel lamp
     .byte $c4   // SHIFT+D — bash
+    .byte $23   // # — toggle search mode
     .byte $2b   // + — tunnel
     .byte $2f   // / — monster recall
     .byte $17   // CTRL+W — wizard mode
@@ -75,6 +76,7 @@
     .byte CMD_LOOK, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_BASH
+    .byte CMD_SEARCH_MODE
     .byte CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
     .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
     .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE

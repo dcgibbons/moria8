@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #26
+    ldx #27
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -105,7 +105,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 27, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 28, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -1510,10 +1510,63 @@ test_start:
 
     lda #$01
     sta tc_results + 26
-    jmp !tests_done+
+    jmp !t28+
 !t27_fail:
     lda #$00
     sta tc_results + 26
+    jmp !t28+
+
+    // ==========================================
+    // Test 28: Non-confused movement obeys the command direction
+    // Regresses player_try_move entry bookkeeping.
+    // ==========================================
+!t28:
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #17
+!t28_fill_y:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #17
+!t28_fill_x:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #24
+    bcc !t28_fill_x-
+    inx
+    cpx #24
+    bcc !t28_fill_y-
+
+    lda #0
+    sta zp_eff_confuse
+    lda #$ff
+    sta zp_run_dir
+
+    lda #CMD_MOVE_E
+    jsr player_try_move
+    bcc !t28_fail+
+    lda zp_player_x
+    cmp #21
+    bne !t28_fail+
+    lda zp_player_y
+    cmp #20
+    bne !t28_fail+
+    lda player_move_relocated
+    cmp #1
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !tests_done+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
 
 !tests_done:
     jmp test_finish

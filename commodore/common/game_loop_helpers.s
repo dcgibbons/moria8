@@ -187,50 +187,75 @@ command_result_restore_view_or_update_visibility:
 // ============================================================
 // Shared post-turn tails and gameplay-view restore
 // ============================================================
-post_turn_redraw_full_or_die:
+turn_post_action_searchable_or_die:
     jsr turn_post_action
     lda zp_game_flags
     and #$01
-    beq !ptfd_alive+
+    bne !dead+
+
+    lda turn_scene_dirty
+    sta ghl_saved_scene_dirty
+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq !alive+
+
+    jsr search_scan_effective_silent
+    jsr turn_post_action
+    lda zp_game_flags
+    and #$01
+    bne !dead+
+
+    lda turn_scene_dirty
+    ora ghl_saved_scene_dirty
+    sta turn_scene_dirty
+!alive:
+    clc
+    rts
+!dead:
+    sec
+    rts
+
+post_turn_redraw_full_or_die:
+    jsr turn_post_action_searchable_or_die
+    bcc !ptfds_alive+
     jmp player_died
-!ptfd_alive:
+!ptfds_alive:
     jmp vp_render_status_loop
 
 post_turn_status_only_or_die:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !ptso_alive+
+    jsr turn_post_action_searchable_or_die
+    bcc !ptsos_alive+
     jmp player_died
-!ptso_alive:
+!ptsos_alive:
     lda turn_scene_dirty
-    bne vp_render_status_loop
+    beq !ptsos_status_only+
+    jmp vp_render_status_loop
+!ptsos_status_only:
     jsr status_draw
     jmp main_loop
 
 post_turn_update_visibility_or_die:
-    jsr turn_post_action
-    lda zp_game_flags
-    and #$01
-    beq !ptuv_alive+
+    jsr turn_post_action_searchable_or_die
+    bcc !ptuvs_alive+
     jmp player_died
-!ptuv_alive:
+!ptuvs_alive:
     jsr update_visibility
     jsr viewport_update
     lda zp_view_x
     cmp old_view_x
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda zp_view_y
     cmp old_view_y
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda vis_room_revealed
-    bne !ptuv_full+
+    bne !ptuvs_full+
     lda turn_scene_dirty
-    bne !ptuv_full+
+    bne !ptuvs_full+
     jsr render_local_area
     jsr status_draw
     jmp main_loop
-!ptuv_full:
+!ptuvs_full:
     lda #INPUT_ROW
     jsr screen_clear_row
     jsr render_viewport
@@ -253,3 +278,5 @@ vp_render_status_loop:
     jsr render_viewport
     jsr status_draw
     jmp main_loop
+
+ghl_saved_scene_dirty: .byte 0

@@ -2,7 +2,30 @@
 
 This file is a temporary working scratchpad.
 
+## Reported Failure Gate
+- Exact user-reported command: C64 gameplay regression: moving into a monster no longer performs bump-to-attack.
+- Last reproduced result: reproduced in code and focused C64 runtime tests; `player_attack_monster` cleared search mode before `monster_find_at`, clobbering the incoming target X coordinate in `A` and causing bump-to-attack to miss the target monster.
+- Closure command: C64 bumping into an adjacent monster attacks correctly again instead of failing or acting blocked.
+- Non-gating diagnostics allowed: focused C64 combat/movement/runtime tests, local inspection of `player_move.s` / `combat.s` / shared turn path, targeted smoke reproduction.
+- Do not mark fixed until closure command passes: yes
+
+### Verification Order
+1. Reproduce the exact reported command.
+2. Use narrower diagnostics only to isolate.
+3. Re-run the exact reported command after each candidate fix.
+4. Run broader platform suites only after the exact reported command is green.
+
 ## Current Task
+- [x] Fix the C64 bump-to-attack regression so moving into a monster attacks correctly again.
+- [x] Fix the C128 chargen summary flow so the character summary appears exactly once before town entry.
+- [x] Correct `FEAT-SEARCH-MODE` running behavior so search mode remains active during running, matching `umoria`.
+- [x] Fix the C64 `CMD_RUN_*` regression introduced during `FEAT-SEARCH-MODE` command-path changes.
+- [x] Implement `FEAT-SEARCH-MODE` player-owned runtime helpers and transient save/load masking.
+- [x] Implement authentic derived search/fos math and shared search-scan helpers.
+- [x] Wire movement, discrete post-turn tails, and run/disturb/relocation seams without duplicating extra-turn logic.
+- [x] Add the persistent status-area `Searching` indicator and `#` input/help updates on both targets.
+- [x] Add focused C64/C128 regressions for input, status cache, save/load transience, and search-mode turn behavior.
+- [x] Rebuild and verify C64/C128 layout boundaries plus the required test suites.
 - [x] Inspect the live FEAT-SEARCH-MODE owner modules and target memory-layout definitions for C64/C128.
 - [x] Identify likely code/data growth hotspots and any segments at meaningful risk from the planned feature.
 - [x] Write a concise findings-first memory/layout/code-bloat review with required verification gates.
@@ -20,6 +43,10 @@ This file is a temporary working scratchpad.
 - [x] Capture a recommended design, consultant-style review, and verification strategy for `BUG-TOWN-KILL-DRAW`.
 - [x] Implement the shared pending-redraw fix in the turn/effect seam without growing the C128 resident image past its layout constraints.
 - [x] Add focused regression coverage for the producer and consumer halves of the redraw contract, then rerun the required C64/C128 verification.
+- [ ] Backlog note: C64 inventory return blanks the character-stats line after returning to the main screen.
+- [ ] Backlog note: C64 level-1 `Generating` transition leaves stale town rows on screen.
+- [ ] Backlog note: C64 first descent from town can leave garbage on the top row after level generation.
+- [ ] Backlog note: C64 loading is currently broken outside this feature scope.
 
 ## `FEAT-SEARCH-MODE` Design
 
@@ -88,7 +115,6 @@ This file is a temporary working scratchpad.
 - Preserve search mode across ordinary commands by default.
 - Force-clear search mode on major disturbances:
   - explicit toggle-off
-  - entering run mode
   - melee engagement / monster attack disturbance
   - trap / teleport / forced relocation
   - dungeon-level transitions
@@ -299,6 +325,28 @@ This file is a temporary working scratchpad.
   - implement `FEAT-SEARCH-MODE` as the authentic shared runtime flag plus extra explicit search-turn design, including variable search odds derived from live player state and a persistent `Searching` status indicator rather than the current flat reveal chance plus message-only feedback
 - Reason:
   - it restores the gameplay behavior the backlog item actually asks for while respecting the port’s explicit turn ownership and preserving the original class/race search feel instead of shipping a half-authentic hybrid
+- Implementation outcome:
+  - landed the shared search-mode runtime flag, authentic variable search/fos math, shared search-scan reuse, movement-owned passive search, extra-turn search-mode follow-up, transient save/load clearing, persistent `Searching` status UI, and `#` toggle wiring on both targets
+  - also moved the C128 title screen and `item_gain_spell` call path into the UI overlay so the resident image still satisfies the banked-payload and callable-residency asserts after the feature growth
+  - corrected the run interaction so entering run no longer clears search mode, and running now reuses the same passive-search and extra-turn helper behavior as ordinary movement when search mode is active
+- Verification:
+  - C64 main program rebuild passed with `Program fits below MAP_BASE=true`
+  - C128 rebuild passed with zero asserts failed, including the staged-source / callable-residency checks in `commodore/c128/io_contracts.s`
+  - targeted search-mode regressions passed:
+    - `commodore/c64/tests/test_input.s` = 11/11
+    - `commodore/c64/tests/test_main_loop.s` = 20/20
+    - `commodore/c128/harness128_batch.py --mode compare --tests input128` = pass
+    - `commodore/c128/harness128_batch.py --mode compare --tests main_loop128` = pass in both cold and snapshot modes
+  - post-landing C64/C128 run-path regression fix:
+    - `TEST_FILTER='main_loop' bash commodore/c64/run_tests.sh` reached `main_loop: PASS (20/20 tests)`
+    - `TEST_FILTER='main_loop128' bash commodore/c128/run_tests128.sh` = `PASS`
+  - authenticity correction for running/search interaction:
+    - `make -C commodore/c64 build` = pass
+    - `make -B -C commodore/c128 build128` = pass
+    - `TEST_FILTER='main_loop' bash commodore/c64/run_tests.sh` still reached `main_loop: PASS (20/20 tests)`
+    - `TEST_FILTER='main_loop128' bash commodore/c128/run_tests128.sh` = `PASS`
+    - exact user path `make -C commodore/c128 test128-fast` = `PASS`
+  - broader C64 umbrella run finished at `30 passed, 3 failed (of 33 suites)`; that run is not clean overall, but the search-mode-specific suites above are green
 
 ## `BUG-TOWN-KILL-DRAW` Design
 

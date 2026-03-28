@@ -227,7 +227,7 @@ help_more_lines:
     .byte 0
     .text "/ Recall then letter"
     .byte $fc, HELP80_COL2
-    .text "Search is the one-turn S command"
+    .text "S searches, # toggles Search mode"
     .byte 0
 
     .for (var i = 0; i < 5; i++) {

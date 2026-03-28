@@ -19,6 +19,8 @@ test_pass:
 
 .encoding "screencode_mixed"
 
+.const TILE_STAIRS_DN = $90
+
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0
 }
@@ -233,6 +235,11 @@ check_player_on_store_door:
     jmp test_check_store_door
 
 check_stairs_at_player:
+    lda test_stairs_tile
+    lsr
+    lsr
+    lsr
+    lsr
     rts
 
 door_try_close:
@@ -281,6 +288,11 @@ do_look:
     jmp test_do_look
 
 run_check_stop:
+    lda test_run_should_stop
+    beq !continue+
+    sec
+    rts
+!continue:
     clc
     rts
 
@@ -386,6 +398,9 @@ tramp_ui_recall:
     inc test_recall_calls
     rts
 
+tramp_item_gain_spell:
+    rts
+
 creature_get_name:
     rts
 
@@ -411,6 +426,32 @@ tramp_throw_item:
     rts
 
 tramp_bash_command:
+    rts
+
+player_search_mode_off:
+    lda player_data + 54
+    and #$ef
+    sta player_data + 54
+    rts
+
+player_search_mode_on:
+    lda player_data + 54
+    ora #$10
+    sta player_data + 54
+    rts
+
+player_search_clear_transient_state:
+    jsr player_search_mode_off
+    lda #0
+    sta zp_search_count
+    rts
+
+player_move_maybe_passive_search:
+    rts
+
+search_scan_effective_silent:
+    inc test_search_scan_calls
+    clc
     rts
 
 c128_preload_fn_len: .byte 0
@@ -459,11 +500,13 @@ ovl_ready_mask:
 .const INPUT_ROW = 24
 .const FLAG_LIT = $08
 .const MAX_CREATURES = 65
+.const PL_FLAGS = 54
 .const PL_DLEVEL = 20
 .const PL_MAX_DLVL = 56
 .const PL_LIGHT_RAD = 55
 .const PL_SPELL_TYPE = 60
 .const PL_TODMG = 41
+.const PLF_SEARCHING = $10
 current_overlay: .byte 0
 ovl_fn_addr_lo: .byte 0, 0, 0, 0, 0, 0
 ovl_fn_addr_hi: .byte 0, 0, 0, 0, 0, 0
@@ -480,6 +523,7 @@ ol_target:        .byte 0
 map_row_lo: .fill TEST_MAP_ROWS, <($8000 + i * TEST_MAP_COLS)
 map_row_hi: .fill TEST_MAP_ROWS, >($8000 + i * TEST_MAP_COLS)
 player_data: .fill 80, 0
+player_move_relocated: .byte 0
 it_category: .fill 256, 0
 inv_item_id: .fill 30, 0
 inv_ego: .fill 30, 0
@@ -538,9 +582,14 @@ test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
 test_case_id: .byte 0
 test_cast_spell_calls: .byte 0
+test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_cast_ok: .byte 0
+test_move_relocated: .byte 0
+test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_stairs_tile: .byte 0
+test_run_should_stop: .byte 0
 test_tier_transition_calls: .byte 0
 test_force_overlay_tier_reset: .byte 0
 test_overlay_load_calls: .byte 0
@@ -596,9 +645,14 @@ reset_state:
     sta test_game_over_prompt_calls
     sta test_exit_calls
     sta test_cast_spell_calls
+    sta test_search_scan_calls
     sta test_wizard_calls
     sta test_cast_ok
+    sta test_move_relocated
+    sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_stairs_tile
+    sta test_run_should_stop
     sta test_tier_transition_calls
     sta test_force_overlay_tier_reset
     sta test_overlay_load_calls
@@ -607,7 +661,11 @@ reset_state:
     sta test_key_len
     sta test_key_idx
     sta current_overlay
+    sta player_move_relocated
+    sta zp_search_count
+    sta player_data + PL_FLAGS
     sta zp_game_flags
+    sta zp_msg_flags
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta vis_room_revealed
@@ -680,8 +738,19 @@ test_render_viewport:
 test_player_try_move:
     sta test_last_move_cmd
     inc test_player_try_move_calls
+    lda #0
+    sta player_move_relocated
     lda test_move_ok
     beq !blocked+
+    lda test_move_relocated
+    beq !no_relocate+
+    lda #1
+    sta player_move_relocated
+!no_relocate:
+    lda test_move_disturbs_search
+    beq !ok+
+    jsr player_search_mode_off
+!ok:
     sec
     rts
 !blocked:
@@ -1115,6 +1184,141 @@ test_entry:
     jmp test_fail
     lda test_spawn_overlay_seen
     cmp #OVL_DUNGEON_GEN
+    beq *+5
+    jmp test_fail
+
+    // Test 13: search-mode toggle sets the mode bit and consumes no turn.
+    lda #13
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_SEARCH_MODE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne *+5
+    jmp test_fail
+    lda test_turn_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 14: successful movement in search mode consumes two turns and one search scan.
+    lda #14
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_MOVE_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_search_scan_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 15: attack-only movement disturbance clears search mode and skips extra search.
+    lda #15
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_move_disturbs_search
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_MOVE_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_search_scan_calls
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq *+5
+    jmp test_fail
+
+    // Test 16: running in search mode keeps the mode active and applies the
+    // same extra search-turn behavior on a one-step stop.
+    lda #16
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #1
+    sta test_run_should_stop
+    lda #CMD_RUN_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_player_try_move_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_last_move_cmd
+    cmp #CMD_MOVE_E
+    beq *+5
+    jmp test_fail
+    lda test_turn_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_search_scan_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda zp_run_dir
+    cmp #$ff
+    beq *+5
+    jmp test_fail
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    cmp #PLF_SEARCHING
+    beq *+5
+    jmp test_fail
+
+    // Test 17: load_resume_game clears transient search mode state.
+    lda #17
+    sta test_case_id
+    jsr reset_state
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #5
+    sta zp_search_count
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
+    jsr load_resume_game
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    beq *+5
+    jmp test_fail
+    lda zp_search_count
     beq *+5
     jmp test_fail
 
