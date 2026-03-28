@@ -3,20 +3,62 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] Audit shared `#if C128` usage for `REF-HAL` and separate true platform-service leaks from intentional platform-specific ownership.
-- [x] Define the `REF-HAL` architecture, service families, exclusions, and phased migration plan before any implementation work.
-- [x] Record the `REF-HAL` design and review guidance here so later implementation can follow a bounded contract.
-- [x] Install the phase-1 `REF-HAL` platform-service API and input-policy helpers without changing platform ownership boundaries.
-- [x] Migrate the targeted shared runtime-repair and input-policy callsites onto the new semantic hooks.
-- [x] Extend focused C128 coverage for the new shared hooks and run the required C64/C128 regression suites.
-- [x] Migrate the remaining shared spell and wizard follow-up prompt waits onto `input_ui_helpers.s`.
-- [x] Re-run focused verification for the spell/wizard prompt slice and record the outcome here.
-- [x] Repair the C128 spell-list residency regression by restoring a valid residency boundary for the full `player_magic.s` callable surface.
-- [x] Re-run focused C128 spell-list coverage plus the required regression suites after the residency fix.
-- [x] Re-audit the remaining shared prompt-release policy callsites and keep only the semantically correct helper migrations in scope.
-- [x] Re-run focused verification for the narrowed prompt-policy cleanup and record the outcome here.
-- [x] Audit the active `overlay.s` / `tier_manager.s` CIA2 VIC-bank restore cleanup item and confirm whether both files still carry live cross-platform assumptions.
-- [x] Implement the smallest fix that leaves CIA2/VIC-bank restore ownership in the correct platform boundary and verify the touched overlay/tier paths.
+- [x] Audit `A6` and confirm the cleanest first split boundary inside `commodore/common/item.s`.
+- [x] Extract immutable base item metadata and real-name tables into `commodore/common/item_tables.s`.
+- [x] Extract mutable identification state plus randomized unknown-item descriptors into `commodore/common/item_identification.s`.
+- [x] Keep `commodore/common/item.s` as the runtime-behavior owner for floor/inventory/spawn/pickup/drop logic.
+- [x] Rebuild C128 and run focused C64/C128 regression coverage for the split.
+- [x] Record the review outcome and retire `A6` from the active build plan.
+
+## `A6` Review
+
+### Goal
+- Split the oversized `commodore/common/item.s` into smaller ownership-focused files without changing behavior, callsites, or platform boundaries.
+
+### Boundary Chosen
+- `commodore/common/item_tables.s`
+  - immutable base item metadata
+  - ranged missile metadata/helper
+  - canonical real-name pointer tables and strings
+- `commodore/common/item_identification.s`
+  - mutable `id_known` state
+  - shuffle tables and category-local lookup tables
+  - randomized unidentified descriptor strings/colors
+  - identification init and name/color resolver routines
+- `commodore/common/item.s`
+  - floor item table and inventory state
+  - spawn/pickup/drop/runtime behavior
+  - item naming/append flows that are part of the runtime owner
+
+### Why This Cut
+- The immutable table block and the identification subsystem were already large, internally coherent seams.
+- Save/load already treats identification state as a unit, so keeping that mutable state together improves ownership clarity.
+- The split preserves the existing public surface because all import sites still consume `item.s`; no caller churn or build-order redesign was needed.
+
+### Consultant Review
+- Consultant verdict: this is the safest useful `A6` cut.
+- Key rule confirmed:
+  - keep all immutable base item definition data together
+  - keep all mutable identification state and unknown-item descriptor logic together
+- Consultant explicitly recommended against mixing unidentified descriptor tables into the immutable base table file.
+
+### Implementation Review
+- Completed with a structural-only split:
+  - added `commodore/common/item_tables.s`
+  - added `commodore/common/item_identification.s`
+  - reduced `commodore/common/item.s` to the runtime-owned item behavior layer plus imports of the extracted subsystems
+- No gameplay logic, call signatures, or platform ownership rules changed.
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Focused C64 runtime suites passed:
+  - `item` = `47/47`
+  - `store` = `37/37`
+  - `wands_staves` = `7/7`
+  - `ranged` = `8/8`
+- `make test128-fast` passed.
+- Result:
+  - `A6` is complete as an opportunistic maintainability split with no behavior change.
 
 ## `REF-HAL` Design
 

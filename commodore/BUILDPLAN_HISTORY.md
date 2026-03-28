@@ -6,6 +6,40 @@
 
 ---
 
+## 2026-03-27 — `A6` split `item.s` into ownership-focused modules ✅ COMPLETE
+
+### Scope Closed
+- Reduced the large shared item module into smaller ownership-based files without changing runtime behavior or the existing public import surface.
+
+### What Shipped
+1. **Immutable item-definition data moved into a dedicated owner**
+   - added `commodore/common/item_tables.s`
+   - now owns base item metadata, ranged missile metadata/helper, and canonical real-name tables/strings
+2. **Mutable identification state moved into a dedicated owner**
+   - added `commodore/common/item_identification.s`
+   - now owns `id_known`, shuffle tables, unknown-item descriptor tables, and the name/color resolver routines
+3. **`item.s` stayed the runtime behavior owner**
+   - floor/inventory state plus spawn/pickup/drop/name-append/runtime behavior remain in `commodore/common/item.s`
+   - existing import sites still include `item.s`, so the refactor did not ripple through callers
+
+### Why This Boundary
+- The immutable base table block and the identification subsystem were already distinct seams inside the old file.
+- Save/load already treats identification state as one logical unit, so grouping that mutable state and its resolvers together improves ownership clarity.
+- This was the smallest useful `A6` cut that materially shrank the main file without reopening behavior or platform design.
+
+### Verification
+- `make -B -C commodore/c128 build128` passed with all asserts.
+- Focused C64 item-adjacent suites passed:
+  - `item` = `47/47`
+  - `store` = `37/37`
+  - `wands_staves` = `7/7`
+  - `ranged` = `8/8`
+- `make test128-fast` passed.
+
+### Outcome
+- `A6` is removed from the active build plan as completed maintainability work.
+- Shared item ownership is clearer while preserving behavior and the existing module entry surface.
+
 ## 2026-03-27 — `REF-HAL` phase-1 platform-service cleanup ✅ COMPLETE
 
 ### Scope Closed
