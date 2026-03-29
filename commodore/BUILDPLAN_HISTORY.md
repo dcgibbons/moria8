@@ -7027,6 +7027,21 @@ commodore/
 
 ---
 
+## BUG-DESCENT-TOPROW-C64 Closure (2026-03-29)
+
+- Closed `BUG-DESCENT-TOPROW-C64`, which turned out not to be a descent-specific row-0 cleanup bug.
+- The live failure was on C128 80-column town entry: the first ordinary south move could take the scroll-delta path even when `turn_scene_dirty` said remote scene elements had changed that turn.
+- In town, that let stale remote glyphs get copied forward by `render_viewport_scroll_delta`, which matched the observed dragged `P`/town-artifact behavior.
+- Fixed the shared gameplay owner in `commodore/common/game_loop.s` so ordinary movement falls back to a full viewport redraw when the scene is dirty before attempting the C128 delta-scroll path.
+- Added focused C128 coverage in `commodore/c128/tests/test_main_loop128.s` to prove scroll plus remote scene dirtiness bypasses the delta path and takes the full redraw.
+- Verified with:
+  - `make test128-fast-smoke`
+  - `make test128-fast`
+  - `make -C commodore/c64 test`
+- User also rechecked the live in-game repro and reported that the artifact appears to be gone.
+
+---
+
 ## C128 Input Bug Fixes — C1, M1, Run-Cancel (2026-02-27)
 
 ### Issues Resolved

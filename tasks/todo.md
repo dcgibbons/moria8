@@ -2,6 +2,14 @@
 
 This file is a temporary working scratchpad.
 
+## Latest Resolved
+- `BUG-DESCENT-TOPROW-C64` is resolved in the current worktree.
+- Actual root cause: the shared ordinary-movement path could still use the C128 scroll-delta renderer when `turn_scene_dirty` required a full redraw, so stale remote town glyphs were copied forward on the first south move after town entry.
+- Current verification for this fix:
+  - `make test128-fast-smoke`
+  - `make test128-fast`
+  - `make -C commodore/c64 test`
+
 ## Reported Failure Gate
 - Exact user-reported command: C64 gameplay regression: moving into a monster no longer performs bump-to-attack.
 - Last reproduced result: reproduced in code and focused C64 runtime tests; `player_attack_monster` cleared search mode before `monster_find_at`, clobbering the incoming target X coordinate in `A` and causing bump-to-attack to miss the target monster.

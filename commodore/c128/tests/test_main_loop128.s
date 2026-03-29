@@ -329,6 +329,13 @@ render_viewport:
     jmp test_render_viewport
 
 render_viewport_scroll_delta:
+    inc test_render_scroll_delta_calls
+    lda test_scroll_delta_success
+    beq !fail+
+    sec
+    rts
+!fail:
+    clc
     rts
 
 screen_unblank:
@@ -560,6 +567,7 @@ test_status_calls: .byte 0
 test_render_local_calls: .byte 0
 test_render_full_calls: .byte 0
 test_viewport_calls: .byte 0
+test_render_scroll_delta_calls: .byte 0
 test_do_look_calls: .byte 0
 test_player_try_move_calls: .byte 0
 test_last_move_cmd: .byte 0
@@ -588,6 +596,8 @@ test_cast_ok: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_scroll_delta_success: .byte 0
+test_force_view_scroll_y: .byte 0
 test_stairs_tile: .byte 0
 test_run_should_stop: .byte 0
 test_tier_transition_calls: .byte 0
@@ -625,6 +635,7 @@ reset_state:
     sta test_render_local_calls
     sta test_render_full_calls
     sta test_viewport_calls
+    sta test_render_scroll_delta_calls
     sta test_do_look_calls
     sta test_player_try_move_calls
     sta test_last_move_cmd
@@ -651,6 +662,8 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_scroll_delta_success
+    sta test_force_view_scroll_y
     sta test_stairs_tile
     sta test_run_should_stop
     sta test_tier_transition_calls
@@ -722,6 +735,10 @@ test_status_draw:
 
 test_viewport_update:
     inc test_viewport_calls
+    lda test_force_view_scroll_y
+    beq !done+
+    inc zp_view_y
+!done:
     rts
 
 test_update_visibility:
@@ -1319,6 +1336,39 @@ test_entry:
     beq *+5
     jmp test_fail
     lda zp_search_count
+    beq *+5
+    jmp test_fail
+
+    // Test 18: scroll + remote scene dirtiness must bypass the C128 delta path.
+    lda #18
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_move_ok
+    sta test_scene_dirty
+    sta test_scroll_delta_success
+    sta test_force_view_scroll_y
+    lda #CMD_MOVE_S
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_render_scroll_delta_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
     beq *+5
     jmp test_fail
 
