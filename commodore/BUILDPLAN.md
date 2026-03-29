@@ -9,14 +9,13 @@
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ` Wizard Mode, and `FEAT-SEARCH-MODE`.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ` Wizard Mode, and `FEAT-SEARCH-MODE`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Regression Bugs
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `BUG-INV-STATLINE-C64` returning from inventory blanks the character-stats line | Medium | Medium | No | Residual C64 screen-restore regression on return to the main dungeon/town view. |
 | Medium | `BUG-GEN-STALE-TOWN-C64` level-1 `GENERATING...` transition leaves stale town rows on screen | Medium | Medium | No | Distinct from the already closed busy-screen sequencing fix; this is a remaining town-row residue case. |
 
 ## Open Phases / Display Work

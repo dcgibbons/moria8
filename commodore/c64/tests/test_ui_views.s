@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #12
+    ldx #13
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -127,7 +127,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 13, $ff
+tc_results: .fill 14, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -149,7 +149,7 @@ test_start:
     lda #>help_pages
     sta help_pages_src_hi
 
-    ldx #12
+    ldx #13
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -164,6 +164,7 @@ test_start:
     jsr test_equipment_view
     jsr test_recall_view
     jsr test_store_view
+    jsr test_ui_help_clear_forces_status_redraw
     jsr test_home_view
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
@@ -630,6 +631,50 @@ test_store_view:
     sta tc_results + 5
     rts
 
+test_ui_help_clear_forces_status_redraw:
+    jsr reset_shared_state
+
+    lda #0
+    sta status_cache_valid
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    sta player_data + PL_HP_HI
+    sta player_data + PL_MHP_HI
+    sta zp_player_mp
+    sta zp_player_mmp
+    sta zp_player_ac
+    sta zp_hunger_state
+    lda #1
+    sta zp_player_dlvl
+
+    lda #21
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #34
+    sta zp_player_mhp_lo
+    sta player_data + PL_MHP_LO
+    jsr status_draw
+
+    jsr ui_help_clear_all
+    jsr status_draw
+
+    lda #<expected_status_hp_after_modal_clear
+    sta zp_ptr0
+    lda #>expected_status_hp_after_modal_clear
+    sta zp_ptr0_hi
+    lda #23
+    ldx #0
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 6
+    rts
+
 test_home_view:
     jsr reset_shared_state
     jsr screen_clear
@@ -678,7 +723,7 @@ test_home_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 6
+    sta tc_results + 7
     rts
 
 test_status_redraw_shrinks_numbers:
@@ -726,7 +771,7 @@ test_status_redraw_shrinks_numbers:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 7
+    sta tc_results + 8
     rts
 
 test_screen_clear_forces_status_redraw:
@@ -770,7 +815,7 @@ test_screen_clear_forces_status_redraw:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 8
+    sta tc_results + 9
     rts
 
 test_filtered_inventory_view:
@@ -818,7 +863,7 @@ test_filtered_inventory_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 9
+    sta tc_results + 10
     rts
 
 test_filtered_equipment_view:
@@ -859,7 +904,7 @@ test_filtered_equipment_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 10
+    sta tc_results + 11
     rts
 
 test_filtered_prompt_range:
@@ -884,7 +929,7 @@ test_filtered_prompt_range:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 11
+    sta tc_results + 12
     rts
 
 test_message_history_ring:
@@ -967,7 +1012,7 @@ test_message_history_ring:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 12
+    sta tc_results + 13
     rts
 
 assert_screen_string:
@@ -1076,4 +1121,6 @@ expected_home_line:
 expected_status_hp_shrunk:
     .text "HP:5/21   " ; .byte 0
 expected_status_hp_after_clear:
+    .text "HP:21/34" ; .byte 0
+expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0

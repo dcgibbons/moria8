@@ -51,10 +51,45 @@ This file is a temporary working scratchpad.
 - [x] Capture a recommended design, consultant-style review, and verification strategy for `BUG-TOWN-KILL-DRAW`.
 - [x] Implement the shared pending-redraw fix in the turn/effect seam without growing the C128 resident image past its layout constraints.
 - [x] Add focused regression coverage for the producer and consumer halves of the redraw contract, then rerun the required C64/C128 verification.
-- [ ] Backlog note: C64 inventory return blanks the character-stats line after returning to the main screen.
+- [x] Backlog note: C64 inventory return blanks the character-stats line after returning to the main screen.
 - [ ] Backlog note: C64 level-1 `Generating` transition leaves stale town rows on screen.
 - [ ] Backlog note: C64 first descent from town can leave garbage on the top row after level generation.
 - [ ] Backlog note: C64 loading is currently broken outside this feature scope.
+
+## `BUG-INV-STATLINE-C64` Design
+
+### Current Task
+- [x] Inspect the C64 inventory return path, shared modal restore helper, and status redraw/cache contract.
+- [x] Get a consultant review focused on ownership boundaries and the minimal durable fix.
+- [x] Make the C64 row-by-row full-screen clear helper preserve the same forced-status-redraw contract as `screen_clear`.
+- [x] Add a focused C64 regression proving an unchanged cached status bar repaints after the modal full-screen clear path used by inventory/help-style overlays.
+- [x] Re-run the focused C64 UI test image plus the broader C64/C128 regression gates.
+
+### Problem Statement
+- `BUG-INV-STATLINE-C64` is a C64 gameplay-view restore bug, not an inventory-data bug.
+- The likely failure seam is the C64 modal overlay clear/restore contract:
+  - inventory/help-style overlays clear the whole screen through `ui_help_clear_all`
+  - the C64 implementation clears row by row instead of calling `screen_clear`
+  - unlike `screen_clear`, that path does not currently force the next `status_draw`
+  - if the status cache still matches live player values, `status_draw` can skip repainting and leave rows 21-23 blank on return
+
+### Recommended Fix Boundary
+- Prefer fixing the C64 path in `commodore/common/ui_help_clear.s`, not only in the inventory return caller.
+- Reason:
+  - that helper owns the C64 full-screen modal clear contract
+  - it should match the existing `screen_clear` postcondition for status redraw
+  - this covers inventory plus any other help/inventory-style full-screen modal return path without duplicating one-off invalidation calls
+
+### Verification Status
+- Implemented the C64 fix in `commodore/common/ui_help_clear.s` so the row-by-row full-screen modal clear now forces the next `status_draw`.
+- Added focused coverage in `commodore/c64/tests/test_ui_views.s` proving the unchanged cached HP line repaints after `ui_help_clear_all`.
+- Follow-on test-layout repair:
+  - moved the `commodore/c64/tests/test_save.s` RLE workspace upward to stay above the enlarged assembled test body without changing the test's round-trip behavior
+- Automated verification completed:
+  - focused `test_ui_views` monitor run = `PASS_COUNT=14`
+  - focused `test_save` monitor run = `PASS_COUNT=10`
+  - `make -C commodore/c64 test` — PASS (`33 passed, 0 failed`)
+  - `make test128-fast` — PASS
 
 ## `BUG-LOAD-C64` Design
 

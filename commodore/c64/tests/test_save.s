@@ -189,10 +189,10 @@ tc_count: .byte 0
 
 // RLE workspace — must stay above the assembled test body while leaving enough
 // room below MAP_BASE for Test 2's mixed-pattern compressed stream.
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$CDDE
+// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$CDE6
 // BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
 // at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $BEC0
+.const RLE_TEST_BUF = $BEC8
 
 test_start:
     // BASIC ROM already banked out by bootstrap above

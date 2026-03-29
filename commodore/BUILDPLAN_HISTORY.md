@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-03-29 — `BUG-INV-STATLINE-C64` modal status restore fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C64 regression where returning from the inventory view could leave the character-stats rows blank on the main gameplay screen.
+
+### Root Cause
+- The C64 modal-overlay path clears the full screen through `commodore/common/ui_help_clear.s` `ui_help_clear_all`, which uses a row-by-row clear on C64.
+- That helper wiped rows 21-23 but did not preserve the same forced-status-redraw contract as `screen_clear`.
+- On return from inventory/help-style overlays, `status_draw` could then see an unchanged cache and skip repainting, leaving the status rows blank even though live values were still correct.
+
+### What Changed
+1. **C64 modal full-screen clear now forces the next status redraw**
+   - `commodore/common/ui_help_clear.s` now ORs the same status-dirty / force-redraw bits into `zp_ui_dirty` after the C64 row-by-row full-screen clear.
+   - This fixes the inventory return path at the actual owner seam and also hardens other help/inventory-style modal restores that use the same helper.
+2. **Focused C64 regression coverage now pins the contract**
+   - `commodore/c64/tests/test_ui_views.s` now verifies that `ui_help_clear_all` followed by an unchanged `status_draw` still repaints the HP line.
+   - The `ui_views` image grew by one result byte, so the harness expectation was updated accordingly inside the test image.
+3. **Follow-on C64 suite layout fallout was repaired in the affected test only**
+   - The shared helper growth pushed `commodore/c64/tests/test_save.s` past its tight RLE-workspace boundary.
+   - The test-only `RLE_TEST_BUF` workspace moved upward just enough to stay above the assembled body while preserving the overlap behavior that the runtime round-trip cases depend on.
+
+### Verification
+- Focused C64 modal-restore gate:
+  - `commodore/c64/tests/test_ui_views.s` monitor run = `PASS_COUNT=14`
+- Broader regression suites:
+  - `make -C commodore/c64 test` = `33 passed, 0 failed (of 33 suites)`
+  - `make test128-fast` = `PASS`
+
+### Outcome
+- `BUG-INV-STATLINE-C64` is removed from the active build plan.
+- C64 inventory/help-style modal returns now repaint the status rows correctly even when the cached values have not changed.
+
 ## 2026-03-28 — `BUG-LOAD-C64` durable C64 load/resume repair ✅ COMPLETE
 
 ### Scope Closed
