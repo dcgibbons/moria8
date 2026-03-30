@@ -1,4 +1,4 @@
-// boot.s — Chain-loading bootloader for Moria8 C64/C128
+// boot.s — Chain-loading bootloader for Moria8 C64
 //
 // Standalone assembly unit. Displays "LOADING MORIA8..." and
 // chain-loads the game binary (MORIA64) from disk.

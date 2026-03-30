@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- Reverted the experimental expanded directory-instructions block; the disk header is back to the original 5-line MORIA title card pending a better presentation design.
+- Removed the unsupported native-C128 courtesy path from the C64 `MORIA8` loader; the supported contract remains:
+  - C64: directory-entry `MORIA8`
+  - native C128: boot sector / `BOOT`
 - `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is complete in the current worktree.
 - Final shipped shape:
   - unified shipping disk at `commodore/out/moria8.d64`

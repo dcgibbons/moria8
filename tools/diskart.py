@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """diskart.py -- Patch PETSCII directory art into a d64 disk image.
 
-Replaces the first 5 placeholder directory entries (created by c1541
-as dummy PRG files) with zero-block DEL entries whose filenames use
+Replaces the first placeholder directory entries (created by c1541 as
+dummy PRG files) with zero-block DEL entries whose filenames use
 PETSCII graphic characters to create a title card in the directory
 listing.
 
@@ -30,15 +30,36 @@ DIR_OFF = sector_offset(18, 1)
 # $60 = horizontal bar in unshifted charset
 HLINE = bytes([0x60] * 16)
 
+def art_line(text):
+    return text.upper().encode("ascii").ljust(16, b" ")
+
+
+def directory_entry_offset(data, index):
+    """Byte offset of directory entry `index`, following the sector chain.
+
+    Returns the legacy base used by this script: two bytes before the
+    actual 32-byte entry, so the existing +2/+3/+5 field offsets stay
+    aligned across directory sectors.
+    """
+    track = 18
+    sector = 1
+    remaining = index
+
+    while remaining >= 8:
+        sec_off = sector_offset(track, sector)
+        track = data[sec_off]
+        sector = data[sec_off + 1]
+        if track == 0:
+            raise RuntimeError(f"Directory too short for art entry {index}")
+        remaining -= 8
+
+    return sector_offset(track, sector) + remaining * 32
+
 ART = [
     HLINE,
-    bytes([0x20,0x20, 0x44,0x55,0x4E,0x47,0x45,0x4F,0x4E,0x53,
-           0x20,0x20, 0x4F,0x46, 0x20,0x20]),              # "  DUNGEONS  OF  "
-    bytes([0x20,0x20,0x20,0x20,0x20,
-           0x4D,0x4F,0x52,0x49,0x41,
-           0x20,0x20,0x20,0x20,0x20,0x20]),                 # "     MORIA      "
-    bytes([0x20, 0x43,0x36,0x34,0x2F,0x43,0x31,0x32,0x38,
-           0x20,0x20, 0x56,0x31,0x2E,0x30, 0x20]),          # " C64/C128  V1.0 "
+    art_line("  dungeons  of  "),
+    art_line("     moria      "),
+    art_line(" c64/c128  v1.0 "),
     HLINE,
 ]
 
@@ -52,7 +73,7 @@ def main():
         data = bytearray(f.read())
 
     for i, name in enumerate(ART):
-        off = DIR_OFF + i * 32
+        off = directory_entry_offset(data, i)
 
         # Free the data block in BAM (c1541 allocated 1 block per dummy file)
         trk = data[off + 3]

@@ -1,5 +1,33 @@
 # Lessons Learned
 
+## 2026-03-30 — If a cosmetic direction is not landing, back it out cleanly instead of forcing incremental polish
+
+- **Issue:** I expanded the directory art to include usage instructions, but the result was visually worse than the original title card and the user immediately wanted the extra lines removed.
+- **Root Cause:** I kept iterating on a presentation direction before the visual premise was actually validated.
+- **Resolution:** For cosmetic/UI copy changes, if the first presentation misses the mark, revert to the known-good baseline quickly and wait for a fresh design direction instead of defending or slowly sanding the wrong concept.
+- **Rule:** **When an aesthetic change clearly is not working, revert to the stable baseline first. Do not keep the wrong visual direction in the tree while searching for a better one.**
+
+## 2026-03-30 — Do not leave speculative unsupported UX paths in a shipping bootloader
+
+- **Issue:** I added native-C128 detection and courtesy messaging to the C64 `MORIA8` loader even after the user’s real C128 manual-load command had already shown the entry contract was wrong for that path.
+- **Root Cause:** I kept a speculative “nice to have” branch in a critical boot path instead of removing it once the user proved it was not a supported contract.
+- **Resolution:** When the user proves a boot path is unsupported, remove any speculative helper logic for that path from the shipping bootloader instead of letting dead-end fallback behavior linger.
+- **Rule:** **Do not keep unsupported courtesy branches in boot code. If a manual path is not part of the supported contract, document that and keep the bootloader simple.**
+
+## 2026-03-30 — When the user asks to add UX guidance, preserve the existing presentation unless they asked to replace it
+
+- **Issue:** I replaced the existing `MORIA` directory title card with instruction lines when the user wanted the instructions added as a second block beneath the existing header.
+- **Root Cause:** I optimized for the new information and ignored the existing presentation value, even though the user had only asked for an add-on.
+- **Resolution:** Preserve the current title/art block by default and append the new guidance separately unless the user explicitly asks for a replacement.
+- **Rule:** **If the user asks to add instructions or guidance to an existing UI/header/art treatment, extend it first; do not replace the original presentation without explicit approval.**
+
+## 2026-03-30 — Do not assume a C128 manual-load shortcut exercises the same contract as plain BASIC `LOAD ...,8` plus `RUN`
+
+- **Issue:** I treated the new native-C128 courtesy path in `MORIA8` as if it covered the real user-facing manual-load case, but the user's `/*` JiffyDOS test still hung.
+- **Root Cause:** I assumed the manual shortcut was equivalent to the plain BASIC-load semantics I had in mind, instead of treating the user's actual command as the contract to verify. On this repo, exact-address, autostart-like, and shortcut-driven entry paths are not interchangeable.
+- **Resolution:** Treat native C128 `BOOT` / autoboot as the supported contract, and only describe any `MORIA8` courtesy behavior as best-effort unless the exact manual command the user cares about has been proven.
+- **Rule:** **Do not generalize a Commodore manual-load UX claim from one load mode to another. If the user names a shortcut like `/*`, that exact command is the gate.**
+
 ## 2026-03-30 — When a visual regression reappears after a seam-specific fix, check sibling render paths before assuming the original fix was lost
 
 - **Issue:** After the dual-entry disk work, the user showed the same town-top garbage artifact on C128 and asked whether the earlier fix had been dropped.
