@@ -622,17 +622,17 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 
 !scene_dirty_redraw:
-    jsr render_viewport
 #if C128
-#if PERF_P1
-    jsr perf_p1_mark_full
-    jsr perf_p1_move_end
-#endif
-#endif
+    jmp !full_draw_fallback+
+#else
+    jsr render_viewport
     jmp !post_move+
+#endif
 
 !full_redraw:
 #if C128
+    lda turn_scene_dirty
+    bne !full_draw_fallback+
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1b
     jsr c128_town_dump_log
@@ -662,7 +662,6 @@ c128_town_move_diag_after_turn_post_action:
 #if C128
 #if PERF_P1
     jsr perf_p1_mark_scroll_fallback
-    jsr perf_p1_mark_full
     jsr perf_p1_move_end
 #endif
 #endif

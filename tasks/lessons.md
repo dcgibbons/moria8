@@ -1,5 +1,47 @@
 # Lessons Learned
 
+## 2026-03-29 — Before inventing a new owner seam for a C64 full-screen residue bug, check whether the path is still using raw `screen_clear`
+
+- **Issue:** I spent time on restore-tail and generation-I/O theories for the remaining `GENERATING...` residue bug before checking whether the busy screen was still using the repo's known-safe C64 full-screen clear helper.
+- **Root Cause:** I treated the symptom as a new orchestration problem instead of first comparing the affected path against the existing residue-safe pattern in `ui_clear_full_screen_safe`.
+- **Resolution:** For C64 full-screen transition residue bugs, inspect the clear primitive first. If the path still uses raw `screen_clear`, prefer the existing row-by-row safe helper before widening the fix into game-loop or I/O ownership changes.
+- **Rule:** **On C64, if a full-screen transition bug survives blank/clear/draw/unblank ordering, audit the clear primitive itself first. Check `ui_clear_full_screen_safe` before designing a larger shared-flow fix.**
+
+## 2026-03-29 — When the user widens the repro beyond the first visible trigger, redesign around the shared owner instead of the narrow symptom label
+
+- **Issue:** I was at risk of treating `BUG-GEN-STALE-TOWN-C64` like another town-exit-only busy-screen bug even after the user clarified it also happens on other level-generation transitions.
+- **Root Cause:** I anchored on the backlog label and the earlier `BUG-GEN-CLEAR-C64` fix instead of re-checking which shared seam actually owns the broader transition.
+- **Resolution:** When the user says a repro is broader than the first named path, re-scope the bug immediately around the shared owner and keep the design generic enough to cover every caller of that seam.
+- **Rule:** **Do not design to the first visible trigger if the user broadens the repro. Re-anchor on the shared owner and write the fix/test plan against that generic seam.**
+
+## 2026-03-29 — A passing host-order test does not close a visual transition bug if the user’s real screenshot still shows the symptom
+
+- **Issue:** I closed `BUG-GEN-STALE-TOWN-C64` after a restore-side host test passed, but the user immediately showed a live screenshot with stale rows still visible during `GENERATING...`.
+- **Root Cause:** I over-trusted the narrow synthetic order test and did not keep the bug anchored on the user-visible symptom. The test proved one hypothesis, not the actual bug closure.
+- **Resolution:** For visual transition bugs, treat the user’s real screenshot or repro as the source of truth. A host test can pin one contract, but it cannot by itself prove the symptom is gone if the live display still shows it.
+- **Rule:** **Do not close a visual bug on host-call-order evidence alone when the user can still reproduce it on the real transition. Reopen immediately and re-anchor on the live frame evidence.**
+
+## 2026-03-28 — Do not claim a regression is "separate" unless I compare against the user's actual pre-change state
+
+- **Issue:** I claimed the `test_player` failure was separate because it reproduced on `a3470fa`, even after the user explicitly told me the suite was green before my code edits.
+- **Root Cause:** I used the wrong baseline. A repo commit that predates my patch is not automatically the same as the user's actual pre-change working state. In a dirty tree or fast-moving local workflow, that comparison is insufficient to clear my change.
+- **Resolution:** When the user says the gate was green before my edits, I must treat the regression as mine until I prove otherwise against the exact pre-change state they were using, not an approximate historical commit.
+- **Rule:** **Never argue a failure is unrelated based only on an approximate baseline commit. If the user says the suite was green before my change, I own the regression until I verify against the exact pre-change state.**
+
+## 2026-03-28 — When a C64 test hangs after my assembly change, the first hypothesis must be a memory/layout overlap in the code I changed
+
+- **Issue:** I started talking about unrelated suite noise before proving whether the post-change `save` hang was a layout regression caused by my own edits.
+- **Root Cause:** I let the clean `main.s` build and an obviously pre-existing `test_player` assembly failure distract me from the project-specific pattern the user has already called out: on this codebase, C64 test hangs/timeouts after an assembly edit usually mean a segment shift, overlap, or breakpoint/layout contract break in the changed code.
+- **Resolution:** Treat every new post-change C64 test hang as a memory/layout regression until proven otherwise. Compare current vs baseline assembly maps for the affected test, check bootstrap/BRK/boundary assumptions, and only then talk about unrelated failures.
+- **Rule:** **If a C64 test hangs after my patch, first diff the affected test's memory map/layout against baseline and look for overlap in the code I changed. Do not blame the harness first.**
+
+## 2026-03-28 — A failed C64 load must be treated as hostile partial corruption, not as a polite branch back to the title loop
+
+- **Issue:** I initially designed `BUG-LOAD-C64` around abandoning the bad session and redrawing the title, but I had not made the Zero Page, IRQ, and VIC-bank contamination risk explicit enough.
+- **Root Cause:** I was reasoning at the transaction/UI level and under-specified the machine-state fallout of a mid-stream C64 load failure. On this platform, a failed read can leave title-critical ZP bytes, interrupt state, and `$DD00` banking assumptions in garbage states even if the visible next step is just "go back to the title screen."
+- **Resolution:** Treat any partial C64 load failure as hostile state corruption. Recovery must explicitly reinitialize all title-critical ZP/UI state, re-establish IRQ and VIC-bank postconditions, and prove those invariants under a real disk-backed title-load smoke rather than assuming a redraw alone is enough.
+- **Rule:** **On C64, never model failed load recovery as "show the title again." Model it as "rebuild a known-good title machine state from scratch," including Zero Page, IRQ, and `$DD00` ownership.**
+
 ## 2026-03-27 — C128 hook refactors need residency checks for every newly exposed callable path, not just the hot paths covered by fast units
 
 - **Issue:** After the `REF-HAL` phase-1 refactor, the C128 Home-store path could `JAM` because `home_enter` had drifted into `$D000-$DFFF`, and the initial verification still missed a real cursor-key town-input regression the user hit interactively.

@@ -5,6 +5,7 @@
 // Intended for long-running dungeon generation on both C64 and C128.
 
 #import "generation_busy_api.s"
+#import "ui_help_clear.s"
 
 .encoding "screencode_mixed"
 
@@ -24,7 +25,7 @@ generation_busy_begin:
     jsr screen_blank
     lda #COL_WHITE
     sta zp_text_color
-    jsr screen_clear
+    jsr ui_clear_full_screen_safe
     jsr generation_busy_draw_frame
     jsr screen_unblank
     ldx #GEN_BUSY_BEGIN_HOLD

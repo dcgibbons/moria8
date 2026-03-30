@@ -6,6 +6,75 @@
 
 ---
 
+## 2026-03-29 — `BUG-INV-STATLINE-C64` modal status restore fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C64 regression where returning from the inventory view could leave the character-stats rows blank on the main gameplay screen.
+
+### Root Cause
+- The C64 modal-overlay path clears the full screen through `commodore/common/ui_help_clear.s` `ui_help_clear_all`, which uses a row-by-row clear on C64.
+- That helper wiped rows 21-23 but did not preserve the same forced-status-redraw contract as `screen_clear`.
+- On return from inventory/help-style overlays, `status_draw` could then see an unchanged cache and skip repainting, leaving the status rows blank even though live values were still correct.
+
+### What Changed
+1. **C64 modal full-screen clear now forces the next status redraw**
+   - `commodore/common/ui_help_clear.s` now ORs the same status-dirty / force-redraw bits into `zp_ui_dirty` after the C64 row-by-row full-screen clear.
+   - This fixes the inventory return path at the actual owner seam and also hardens other help/inventory-style modal restores that use the same helper.
+2. **Focused C64 regression coverage now pins the contract**
+   - `commodore/c64/tests/test_ui_views.s` now verifies that `ui_help_clear_all` followed by an unchanged `status_draw` still repaints the HP line.
+   - The `ui_views` image grew by one result byte, so the harness expectation was updated accordingly inside the test image.
+3. **Follow-on C64 suite layout fallout was repaired in the affected test only**
+   - The shared helper growth pushed `commodore/c64/tests/test_save.s` past its tight RLE-workspace boundary.
+   - The test-only `RLE_TEST_BUF` workspace moved upward just enough to stay above the assembled body while preserving the overlap behavior that the runtime round-trip cases depend on.
+
+### Verification
+- Focused C64 modal-restore gate:
+  - `commodore/c64/tests/test_ui_views.s` monitor run = `PASS_COUNT=14`
+- Broader regression suites:
+  - `make -C commodore/c64 test` = `33 passed, 0 failed (of 33 suites)`
+  - `make test128-fast` = `PASS`
+
+### Outcome
+- `BUG-INV-STATLINE-C64` is removed from the active build plan.
+- C64 inventory/help-style modal returns now repaint the status rows correctly even when the cached values have not changed.
+
+## 2026-03-28 — `BUG-LOAD-C64` durable C64 load/resume repair ✅ COMPLETE
+
+### Scope Closed
+- Restored working C64 title-screen load/resume flow without relying on the broken carry contract that kept regressing on the C64 path.
+
+### Root Cause
+- On C64, `load_game` lived behind `EnterKernal` / `ExitKernal` wrappers that reduce to `php` / `plp`.
+- The old title branch in `commodore/c64/main.s` still treated carry as the authoritative load success/failure result after `jsr load_game`.
+- That made the C64 title `L` flow structurally unsafe: the saved processor flags could overwrite the intended `sec` / `clc` result before the title branch tested it.
+- While landing the fix, the shared `save.s` growth also exposed two separate C64 test-layout hazards:
+  - `commodore/c64/tests/test_save.s` had a hard-coded RLE workspace that drifted into the resident test body
+  - `commodore/c64/tests/test_score.s` had a resident-body / local-hiscore-buffer layout that became unsafe near the `$D000` overlay boundary
+
+### What Shipped
+1. **Stable C64 load transaction status**
+   - added explicit `LOAD_RESULT_*` result codes plus the shared `load_result` byte in `commodore/common/save.s`
+   - `load_game` now records `OK`, `NOTFOUND`, `CORRUPT`, or `IOERR` directly instead of depending on carry as the only public contract
+2. **Named C64 title-load ownership**
+   - promoted the C64 title `L` flow to `title_load_game` in `commodore/c64/main.s`
+   - failure recovery now re-enters through `title_enter_menu`, rebuilding the title UI/message state instead of dropping back into the stale loop
+   - disk-mode indicator drawing was split into a helper so title re-entry redraws the right title-disk state consistently
+3. **Test-layout regressions fixed and pinned**
+   - `commodore/c64/tests/test_save.s` moved its RLE workspace to a safe address and now asserts that the workspace stays above the assembled body
+   - `commodore/c64/tests/test_player.s` now imports the map/config dependencies that `player.s` actually requires in the current tree
+   - `commodore/c64/tests/test_score.s` now uses local save/disk stubs instead of pulling the full persistence path into the resident body, keeps its local hiscore buffer below `$D000`, and asserts both the body end and buffer boundary
+4. **Repo-level process rule promoted**
+   - `AGENTS.md` now carries an explicit C64 test-hang triage rule: a new post-change C64 hang/time-out must be treated as a layout/overlap regression first, not as harness flakiness
+
+### Verification
+- `make -C commodore/c64 test`
+  - passed with `33 passed, 0 failed (of 33 suites)`
+
+### Outcome
+- `BUG-LOAD-C64` is removed from the active build plan.
+- The C64 title load/resume path is back on a durable explicit-status contract, and the immediate test-layout regressions triggered during landing are now guarded by asserts instead of accidental slack.
+- Dedicated disk-backed C64 title-load smokes remain desirable follow-up hardening, but they are no longer blocking closure of this bug.
+
 ## 2026-03-28 — `FEAT-SEARCH-MODE` authentic search-mode restoration ✅ COMPLETE
 
 ### Scope Closed
@@ -722,6 +791,46 @@
 - `BUG-GEN-CLEAR-C64` is closed.
 - The C64 generation busy screen now hides the previous frame until the cleared `GENERATING...` view is ready.
 - The regression is now enforced in the regular C64 host test path rather than relying only on manual repro.
+
+## 2026-03-29 — `BUG-GEN-STALE-TOWN-C64` residual C64 generation residue ✅ FIXED
+
+### Scope Closed
+- Fixed the remaining C64 `GENERATING...` presentation bug where lower rows from the prior frame could still survive after the earlier ordering repair.
+- Removed the wrong restore-tail and generation-I/O detours so the shipped fix stays local to the real busy-screen owner.
+
+### Root Cause
+- This was not another `game_loop.s` restore-order problem.
+- It also was not a generation-time disk/I/O visibility problem.
+- The real issue was that `generation_busy_begin` in [`commodore/common/generation_busy.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/generation_busy.s) still used raw `screen_clear` on a C64 full-screen transition path that needed the existing safe helper.
+- The repo already had that safer primitive in [`commodore/common/ui_help_clear.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/ui_help_clear.s): `ui_clear_full_screen_safe`, which clears row by row on C64 while preserving the status-redraw contract.
+
+### What Changed
+1. **The generation busy screen now uses the C64-safe clear helper**
+   - [`commodore/common/generation_busy.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/generation_busy.s)
+   - `generation_busy_begin` now does:
+     - `screen_blank`
+     - `ui_clear_full_screen_safe`
+     - draw `GENERATING...`
+     - `screen_unblank`
+2. **Focused C64 coverage now proves the real contract**
+   - [`commodore/c64/tests/test_main_loop.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/c64/tests/test_main_loop.s)
+   - The busy-screen regression now asserts that:
+     - blank happens first
+     - `ui_clear_full_screen_safe` is called exactly once
+     - centered text draw still happens once
+     - unblank happens last
+     - raw `screen_clear` is not used on this C64 path
+3. **Speculative non-fixes were removed**
+   - Reverted the temporary generation-I/O blanking shims and the restore-tail detour.
+
+### Validation
+- Manual C64 confirmation from the user that the updated `GENERATING...` transition is fully clean in live play
+- `make test` (`33` suites passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+
+### Outcome
+- `BUG-GEN-STALE-TOWN-C64` is closed.
+- The remaining C64 generation busy-screen path now uses the same safe full-screen clear contract already relied on by other residue-sensitive C64 full-screen UIs.
 
 ## 2026-03-23 — `BUG-XP-PACE` XP threshold / level-up parity ✅ FIXED
 
@@ -6987,6 +7096,21 @@ commodore/
 - `make clean && make build` — assembles without errors, all 71 compile-time asserts pass
 - `make test` — all 24 suites (321 runtime tests) pass
 - `git diff --stat` — confirms only file moves + import path changes
+
+---
+
+## BUG-DESCENT-TOPROW-C64 Closure (2026-03-29)
+
+- Closed `BUG-DESCENT-TOPROW-C64`, which turned out not to be a descent-specific row-0 cleanup bug.
+- The live failure was on C128 80-column town entry: the first ordinary south move could take the scroll-delta path even when `turn_scene_dirty` said remote scene elements had changed that turn.
+- In town, that let stale remote glyphs get copied forward by `render_viewport_scroll_delta`, which matched the observed dragged `P`/town-artifact behavior.
+- Fixed the shared gameplay owner in `commodore/common/game_loop.s` so ordinary movement falls back to a full viewport redraw when the scene is dirty before attempting the C128 delta-scroll path.
+- Added focused C128 coverage in `commodore/c128/tests/test_main_loop128.s` to prove scroll plus remote scene dirtiness bypasses the delta path and takes the full redraw.
+- Verified with:
+  - `make test128-fast-smoke`
+  - `make test128-fast`
+  - `make -C commodore/c64 test`
+- User also rechecked the live in-game repro and reported that the artifact appears to be gone.
 
 ---
 

@@ -103,6 +103,21 @@ Moving code or data between segments (e.g., pulling an `#import` out of a `.pseu
 
 After ANY `#import` reordering: rebuild, check the Memory Map output, confirm Default segment ends below $C000. **NEVER delete boundary-checking `.assert` statements** — if an assert fails, fix your change, not the assert.
 
+### C64 Test-Hang Triage Rule
+
+On this repo, if a C64 runtime test starts hanging or timing out after your assembly/layout change, treat that as a **memory/layout overlap bug in your change first** until you prove otherwise.
+
+- Typical causes:
+  - resident test body grew into a hard-coded scratch/data buffer
+  - a scratch/data buffer grew into `MAP_BASE` or the `$D000` overlay boundary
+  - `#import` growth moved `test_start`, `BRK`, or the breakpoint extraction contract
+  - a test-local alias/buffer that was "barely safe" is no longer safe after code growth
+- Required response:
+  - compare the affected test's Memory Map against the last known-good state
+  - inspect hard-coded test buffer addresses before blaming VICE or the harness
+  - add or tighten `.assert` guards for test-body end, scratch buffers, overlay boundaries, and bootstrap assumptions when you fix it
+- Do **not** default to calling the harness flaky. A new hang after your change is presumptively a layout regression.
+
 ## C128 Runtime-Loaded Code Contract (NEW — MUST VERIFY)
 
 Several multi-week C128 regressions came from treating “the symbol exists” as if that meant “the CPU can execute it.” That assumption is false on C128.

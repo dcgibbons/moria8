@@ -90,8 +90,6 @@ test_finish:
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/io_kernal_consts.s"
-#import "../../common/save.s"
-#import "../../common/disk_swap.s"
 
 // Help rendering is not under test here. Keep a tiny stub so the score suite
 // does not pull the full paged-help UI into its resident test image.
@@ -99,13 +97,26 @@ ui_help_display:
 ui_help_show_paged:
     rts
 
+// Test-local save/disk stubs. The score suite does not exercise persistence or
+// disk UI, and importing the full save path needlessly bloats the resident body.
+save_game:
+load_game:
+delete_savefile:
+disk_prompt_save:
+disk_prompt_game:
+    rts
+
+disk_mode:   .byte 0
+save_device: .byte 8
+
 // --- Test-local hiscore definitions (replaces score_io.s) ---
 // score_io.s aliases hiscore_table to CREATURE_BASE ($C020) which
-// overlaps the tail of test code. Define a safe buffer instead.
+// overlaps the tail of test code. Park the buffer above MAP_BASE and below
+// the $D000 overlay boundary so test-body growth cannot collide with it.
 .const HISCORE_ENTRY_SIZE = 23
 .const HISCORE_MAX_ENTRIES = 10
-test_hiscore_buf: .fill HISCORE_MAX_ENTRIES * HISCORE_ENTRY_SIZE, 0
-.label hiscore_table = test_hiscore_buf
+.const TEST_HISCORE_BUF = $CF00
+.label hiscore_table = TEST_HISCORE_BUF
 hiscore_count:  .byte 0
 // Stub I/O functions (not under test)
 hiscore_load:
@@ -632,3 +643,7 @@ test_start:
     sta tc_results + 11
 
     jmp test_finish
+
+test_body_end:
+.assert "Score test body stays below overlay boundary", test_body_end < $d000, true
+.assert "Hiscore test buffer stays below overlay boundary", TEST_HISCORE_BUF + (HISCORE_ENTRY_SIZE * HISCORE_MAX_ENTRIES) <= $d000, true

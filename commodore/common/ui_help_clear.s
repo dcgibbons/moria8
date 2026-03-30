@@ -24,6 +24,11 @@ ui_clear_full_screen_safe:
     lda help_line_idx
     cmp #SCREEN_ROWS
     bcc !hca_loop-
+    // Full-screen modal clears wipe the status rows on C64 too, so preserve
+    // the same redraw contract as screen_clear for the next status_draw.
+    lda zp_ui_dirty
+    ora #%10000001
+    sta zp_ui_dirty
     rts
 #endif
 
