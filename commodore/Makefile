@@ -44,6 +44,8 @@ endif
 # ── Source roots ──────────────────────────────────────────
 C64_MAIN_SRC       = c64/main.s
 C64_BOOT_SRC       = c64/boot.s
+C64_BOOTART_PPM    = $(OUT64)/bootart64.ppm
+C64_BOOTART_TOOL   = ../tools/ppm_to_c64_bootart.py
 C128_MAIN_SRC      = c128/main.s
 C128_BOOT_SRC      = c128/boot128.s
 C128_BOOTSECT_SRC  = c128/bootsect128.s
@@ -56,6 +58,7 @@ C128_SOURCES       := $(shell find c128 common c64 -type f -name '*.s')
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg
 C64_BOOT_PRG       = $(OUT64)/boot.prg
+C64_BOOTART_PRG    = $(OUT64)/bootart64.prg
 C64_TITLE_PRG      = $(OUT64)/title
 C64_TIER_PRGS      = $(OUT64)/monster.db.1 $(OUT64)/monster.db.2 $(OUT64)/monster.db.3 $(OUT64)/monster.db.4
 C64_OVL_START      = $(OUT64)/ovl.start
@@ -85,7 +88,7 @@ DISK_IMAGE         = $(OUT)/moria8.d64
 EMPTY_PRG          = $(OUT)/empty.prg
 
 # ── Aggregate groups ──────────────────────────────────────
-C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
+C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
 	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
@@ -161,6 +164,12 @@ $(C64_OVL_UI): $(C64_MAIN_PRG)
 $(C64_BOOT_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
 
+$(C64_BOOTART_PPM): ../Gemini_Generated_Image_1e65z31e65z31e65-2.jpg | $(OUT64)
+	ffmpeg -y -i ../Gemini_Generated_Image_1e65z31e65z31e65-2.jpg -vf "scale=160:198,pad=160:200:0:1:black" -frames:v 1 -update 1 $@
+
+$(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
+	python3 $(C64_BOOTART_TOOL) $(C64_BOOTART_PPM) $(C64_BOOTART_PRG)
+
 $(C64_TITLE_PRG): $(TITLE_SRC) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(C64_TITLE_PRG)
 
@@ -235,6 +244,7 @@ $(DISK_IMAGE): $(C64_BUILD_ARTIFACTS) $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_
 		-write $(EMPTY_PRG) "art5" \
 		-write $(C64_BOOT_PRG) "moria8" \
 		-write $(C64_BOOT_PRG) "boot64" \
+		-write $(C64_BOOTART_PRG) "bootart64" \
 		-write $(C64_MAIN_PRG) "moria64" \
 		-write $(C128_BOOT_CHAIN_PRG) "boot128" \
 		-write $(C128_MAIN_PRG) "moria128" \

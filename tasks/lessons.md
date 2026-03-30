@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## 2026-03-30 — When the user changes the product target, freeze the old architecture and keep new implementation spikes scoped
+
+- **Issue:** After landing the unified dual-boot disk, I was still at risk of treating that mixed-image architecture as the default vehicle for the next boot-art feature even after the user explicitly changed the requirement to separate platform images.
+- **Root Cause:** I had already invested heavily in the mixed-disk path, so it was easy to let that finished architecture keep driving implementation decisions for the next feature.
+- **Resolution:** Once the user changes the product target, record the new target immediately in the planning docs and scope any interim spikes explicitly. If a current spike still uses the old build path for expediency, label it as temporary validation only and do not let that silently redefine the shipping goal.
+- **Rule:** **When the user changes the product target, stop optimizing the old architecture by inertia. Capture the new target in docs immediately and keep any interim spike on the old path explicitly temporary.**
+
 ## 2026-03-30 — If a cosmetic direction is not landing, back it out cleanly instead of forcing incremental polish
 
 - **Issue:** I expanded the directory art to include usage instructions, but the result was visually worse than the original title card and the user immediately wanted the extra lines removed.

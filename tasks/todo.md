@@ -3,6 +3,24 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- The C64 static boot-art spike is now manually proven and polished:
+  - manual C64 boot renders the bitmap correctly and keeps it visible through the main-program load
+  - the C64 asset format now carries bitmap + per-cell screen/color planes instead of one fixed global color fill, improving gold/silver separation and overall poster fidelity
+- `FEAT-BOOT-ART` now has a new disk-layout requirement:
+  - stop targeting one mixed-platform image for this feature
+  - target separate platform images instead:
+    - `moria8-c64.d64`
+    - `moria8-c128.d71`
+  - this resolves the earlier mixed-image UX tension and removes the need to force boot-art behavior through the shared dual-entry disk structure
+- Boot-art feature requirements are now locked for design:
+  - real bitmap art, not character art
+  - C64 multicolor bitmap
+  - native C128 80-column path, with a technically different but visually matching bitmap-style interpretation allowed
+  - centered poster with black margins acceptable
+  - same source composition on both: human/dwarf/elf, centered dwarf, crossed axe+sword, retained `MORIA8` wordmark, retained Art Deco frame
+  - static art first, gold-glint animation later
+  - boot order remains boot code → art → main program
+  - title/menu screen remains after the boot-art phase
 - Reverted the experimental expanded directory-instructions block; the disk header is back to the original 5-line MORIA title card pending a better presentation design.
 - Removed the unsupported native-C128 courtesy path from the C64 `MORIA8` loader; the supported contract remains:
   - C64: directory-entry `MORIA8`
@@ -26,11 +44,23 @@ This file is a temporary working scratchpad.
 ## Reported Failure Gate
 - No active reported failure gate.
 - Last closed gate:
+  - C64 manual boot of `commodore/out/moria8.d64` via the normal `LOAD"*",8,1` then `RUN` contract
+  - first failure: boot hang before showing art due to IRQs firing while the boot-art path had KERNAL/IRQ vectors banked out
+  - second failure: gross bitmap scramble due to emitting the art asset in the wrong VIC bitmap byte order
+  - current status: manual C64 boot now renders the boot art correctly and survives the later main-program load
   - `make run128`
   - first resolved by restoring the wrapper to the known-good `x128 out/moria128.d64` debug-disk launch shape
   - then promoted to the real dual-boot contract: `run128` now boots the unified shipping disk under `x128`
 
 ## Current Task
+- [ ] FEAT-BOOT-ART: add rich bitmap loading artwork to the C64 and C128 boot paths without regressing the proven dual-entry boot architecture.
+- [ ] Active spike gate for `FEAT-BOOT-ART`:
+  - [x] build a separate C64 boot-art asset from the Gemini source image
+  - [x] show that bitmap from `commodore/c64/boot.s`
+  - [x] keep the art visible while `MORIA64` loads at the code-path level by staging the asset at `$A000`, copying it into a VIC-safe hidden-RAM layout, and restoring text mode only in the post-load chain stub
+  - [x] get a real emulator/manual confirmation that the new C64 bitmap boot path renders and survives the main-program load
+  - [x] run a first C64 polish pass so the asset carries per-cell screen/color planes instead of one fixed global screen/color fill
+  - defer the split-image build-output refactor (`moria8-c64.d64` / `moria8-c128.d71`) until after the C64 art path is proven
 - [x] FEAT-UNIFIED-DISK / BUILD-UNIFY: create a single shipping `D64` with both platform payloads, explicit platform-specific runtime asset names, a dual-entry boot design, and a single `commodore/Makefile`.
 - [x] Reject the invalid “one identical first-loaded `MORIA8.PRG` BASIC boot file” approach after repeated C64/C128 gate failures and the confirmed `$0801` vs `$1C01` BASIC-entry mismatch.
 - [x] Replace the universal-PRG milestone with a dual-entry single-disk architecture:
@@ -76,6 +106,97 @@ This file is a temporary working scratchpad.
 - [x] Rebuild both C64/C128 disk targets and verify the resulting boot artifacts assemble cleanly.
 - [x] Run the most relevant C64 and C128 boot/disk probes for this phase.
 - [x] Record a critical evaluation of the source, what worked, and what remains unsafe before any phase-2 single-disk unification.
+
+## `FEAT-BOOT-ART` Design Plan
+
+### Locked Intent
+- Replace the current `LOADING MORIA8...` boot text with real bitmap artwork.
+- For this feature, stop targeting one mixed-platform shipping image.
+- New image targets:
+  - `moria8-c64.d64`
+  - `moria8-c128.d71`
+- The boot-art work may diverge per platform without preserving the mixed dual-entry disk as the shipping contract.
+- Keep the title screen and main menu after boot art; boot art is a pre-title loading presentation, not a replacement for the title screen.
+- Use the current Gemini poster as the initial source image, but do not hardwire the system to that exact file forever.
+- Preserve the shared artistic identity on both platforms:
+  - human / dwarf / elf trio
+  - dwarf centered
+  - crossed axe and sword
+  - `MORIA8` wordmark
+  - Art Deco frame
+- Phase 1 is static art only.
+- Gold glint animation is explicitly deferred to a later phase.
+
+### Consultant Guidance
+- Do not force real bitmap decode/render logic into the bootloaders themselves if it can be avoided.
+- Keep the bootloader code focused on mode setup, prebuilt asset load/show, and handoff.
+- Share the visual composition between platforms, not necessarily the runtime representation.
+- Prefer separate prebuilt boot-art assets over embedding large bitmap blobs directly into `boot.s` / `boot128.s`.
+
+### Recommended Architecture
+- Add platform-local boot-art asset files to the platform-local disk images.
+- Generate both from one shared source-art workflow, but allow platform-specific conversion/touch-up.
+- Boot flow becomes:
+  - initialize boot code
+  - load/show platform boot-art asset
+  - keep art visible
+  - load main program
+  - hand off to the normal title/menu flow
+
+### Platform Strategy
+- C64:
+  - use multicolor bitmap
+  - centered poster with black margins is acceptable
+  - target a faithful adaptation of the Gemini image’s composition and gold/black style
+- C128:
+  - stay on the native 80-column path
+  - investigate true VDC bitmap first
+  - if VDC bitmap fidelity/complexity is unacceptable, allow a technically different but visually matching 80-column boot-art implementation
+- Shared rule:
+  - same composition and artistic identity
+  - platform-local representation is allowed
+
+### Asset / Build Strategy
+- Treat the current Gemini image as the phase-1 master source.
+- Keep the pipeline replaceable so later regenerated or hand-tuned source art can be dropped in without redesigning the boot system.
+- Extend the Commodore build to produce and package boot-art assets into:
+  - `moria8-c64.d64`
+  - `moria8-c128.d71`
+- Keep the boot-art data outside the core bootloader binaries where practical.
+
+### Phase Plan
+- [x] Phase 0 — Feasibility / format spike
+  - findings:
+    - C64 side is straightforward technically: a multicolor bitmap boot asset is viable and can stay visible during the main-program load if it lives in a VIC bank above the current `MORIA64` load ceiling rather than in the usual `$2000` area that the main program would overwrite.
+    - C128 side is the real constraint. Official C128 docs treat 80-column VDC as text-oriented, but explicitly note that custom machine-language programs can drive bitmap-style graphics there. So the feature is viable in principle, but it is not a normal built-in “multicolor bitmap mode” like the VIC side.
+    - The old mixed-image disk budget is no longer the governing constraint for this feature because the user has now chosen separate platform disk images.
+    - Conclusion: the richer boot-art feature remains viable, and the split-image requirement meaningfully reduces the disk-budget pressure that the unified-image design created.
+  - continue under these assumptions:
+    - separate boot-art assets are preferred over embedding full bitmaps into the boot binaries
+    - C64 and C128 may use different runtime representations while preserving the same composition and style
+    - boot-art implementation must preserve the platform boot contracts and title-screen handoff, but no longer needs to preserve one mixed-platform shipping disk
+- [x] Phase 1 — Static boot art on C64
+  - separate C64 boot-art asset file added
+  - displayed from the C64 boot path
+  - current loading text removed
+  - image kept visible through main-program load
+  - first quality pass complete: per-cell screen/color data now ships with the asset instead of one fixed screen/color fill across the whole poster
+- [ ] Phase 2 — Static boot art on C128
+  - add a separate C128 boot-art asset file
+  - display it from the native C128 boot path in 80-column mode
+  - keep the image visible through main-program load
+- [ ] Phase 3 — Shared art pipeline cleanup
+  - formalize the shared source-art → C64/C128 asset conversion workflow
+  - allow touch-up / regeneration without changing bootloader architecture
+- [ ] Phase 4 — Glint animation
+  - add subtle gold-highlight glint effect
+  - do not begin animation work until both static boot-art paths are proven stable
+
+### Explicit Rejections
+- Do not replace the title/menu screen with the boot-art screen.
+- Do not force the C128 side to use the exact same technical representation as C64 if a visually matching 80-column solution is better.
+- Do not start with animation before the static asset path is stable.
+- Do not collapse this back into the invalid “single universal `MORIA8.PRG`” idea.
 - [x] Fix the C64 bump-to-attack regression so moving into a monster attacks correctly again.
 - [x] Fix the C128 chargen summary flow so the character summary appears exactly once before town entry.
 - [x] Correct `FEAT-SEARCH-MODE` running behavior so search mode remains active during running, matching `umoria`.
