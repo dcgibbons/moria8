@@ -792,6 +792,46 @@
 - The C64 generation busy screen now hides the previous frame until the cleared `GENERATING...` view is ready.
 - The regression is now enforced in the regular C64 host test path rather than relying only on manual repro.
 
+## 2026-03-29 — `BUG-GEN-STALE-TOWN-C64` residual C64 generation residue ✅ FIXED
+
+### Scope Closed
+- Fixed the remaining C64 `GENERATING...` presentation bug where lower rows from the prior frame could still survive after the earlier ordering repair.
+- Removed the wrong restore-tail and generation-I/O detours so the shipped fix stays local to the real busy-screen owner.
+
+### Root Cause
+- This was not another `game_loop.s` restore-order problem.
+- It also was not a generation-time disk/I/O visibility problem.
+- The real issue was that `generation_busy_begin` in [`commodore/common/generation_busy.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/generation_busy.s) still used raw `screen_clear` on a C64 full-screen transition path that needed the existing safe helper.
+- The repo already had that safer primitive in [`commodore/common/ui_help_clear.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/ui_help_clear.s): `ui_clear_full_screen_safe`, which clears row by row on C64 while preserving the status-redraw contract.
+
+### What Changed
+1. **The generation busy screen now uses the C64-safe clear helper**
+   - [`commodore/common/generation_busy.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/generation_busy.s)
+   - `generation_busy_begin` now does:
+     - `screen_blank`
+     - `ui_clear_full_screen_safe`
+     - draw `GENERATING...`
+     - `screen_unblank`
+2. **Focused C64 coverage now proves the real contract**
+   - [`commodore/c64/tests/test_main_loop.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/c64/tests/test_main_loop.s)
+   - The busy-screen regression now asserts that:
+     - blank happens first
+     - `ui_clear_full_screen_safe` is called exactly once
+     - centered text draw still happens once
+     - unblank happens last
+     - raw `screen_clear` is not used on this C64 path
+3. **Speculative non-fixes were removed**
+   - Reverted the temporary generation-I/O blanking shims and the restore-tail detour.
+
+### Validation
+- Manual C64 confirmation from the user that the updated `GENERATING...` transition is fully clean in live play
+- `make test` (`33` suites passed, `0` failed)
+- `make test128-fast` (passed; batch green)
+
+### Outcome
+- `BUG-GEN-STALE-TOWN-C64` is closed.
+- The remaining C64 generation busy-screen path now uses the same safe full-screen clear contract already relied on by other residue-sensitive C64 full-screen UIs.
+
 ## 2026-03-23 — `BUG-XP-PACE` XP threshold / level-up parity ✅ FIXED
 
 ### Scope Closed

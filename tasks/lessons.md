@@ -1,5 +1,26 @@
 # Lessons Learned
 
+## 2026-03-29 — Before inventing a new owner seam for a C64 full-screen residue bug, check whether the path is still using raw `screen_clear`
+
+- **Issue:** I spent time on restore-tail and generation-I/O theories for the remaining `GENERATING...` residue bug before checking whether the busy screen was still using the repo's known-safe C64 full-screen clear helper.
+- **Root Cause:** I treated the symptom as a new orchestration problem instead of first comparing the affected path against the existing residue-safe pattern in `ui_clear_full_screen_safe`.
+- **Resolution:** For C64 full-screen transition residue bugs, inspect the clear primitive first. If the path still uses raw `screen_clear`, prefer the existing row-by-row safe helper before widening the fix into game-loop or I/O ownership changes.
+- **Rule:** **On C64, if a full-screen transition bug survives blank/clear/draw/unblank ordering, audit the clear primitive itself first. Check `ui_clear_full_screen_safe` before designing a larger shared-flow fix.**
+
+## 2026-03-29 — When the user widens the repro beyond the first visible trigger, redesign around the shared owner instead of the narrow symptom label
+
+- **Issue:** I was at risk of treating `BUG-GEN-STALE-TOWN-C64` like another town-exit-only busy-screen bug even after the user clarified it also happens on other level-generation transitions.
+- **Root Cause:** I anchored on the backlog label and the earlier `BUG-GEN-CLEAR-C64` fix instead of re-checking which shared seam actually owns the broader transition.
+- **Resolution:** When the user says a repro is broader than the first named path, re-scope the bug immediately around the shared owner and keep the design generic enough to cover every caller of that seam.
+- **Rule:** **Do not design to the first visible trigger if the user broadens the repro. Re-anchor on the shared owner and write the fix/test plan against that generic seam.**
+
+## 2026-03-29 — A passing host-order test does not close a visual transition bug if the user’s real screenshot still shows the symptom
+
+- **Issue:** I closed `BUG-GEN-STALE-TOWN-C64` after a restore-side host test passed, but the user immediately showed a live screenshot with stale rows still visible during `GENERATING...`.
+- **Root Cause:** I over-trusted the narrow synthetic order test and did not keep the bug anchored on the user-visible symptom. The test proved one hypothesis, not the actual bug closure.
+- **Resolution:** For visual transition bugs, treat the user’s real screenshot or repro as the source of truth. A host test can pin one contract, but it cannot by itself prove the symptom is gone if the live display still shows it.
+- **Rule:** **Do not close a visual bug on host-call-order evidence alone when the user can still reproduce it on the real transition. Reopen immediately and re-anchor on the live frame evidence.**
+
 ## 2026-03-28 — Do not claim a regression is "separate" unless I compare against the user's actual pre-change state
 
 - **Issue:** I claimed the `test_player` failure was separate because it reproduced on `a3470fa`, even after the user explicitly told me the suite was green before my code edits.

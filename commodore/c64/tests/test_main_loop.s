@@ -176,6 +176,7 @@ test_screen_clear_calls: .byte 0
 test_screen_blank_calls: .byte 0
 test_screen_unblank_calls: .byte 0
 test_screen_put_string_calls: .byte 0
+test_ui_safe_clear_calls: .byte 0
 test_player_try_move_calls: .byte 0
 test_last_move_cmd: .byte 0
 test_get_dir_calls: .byte 0
@@ -245,6 +246,7 @@ install_jump_patch:
     :PatchJump(screen_clear_row, test_screen_clear_row)
     :PatchJump(screen_unblank, test_screen_unblank)
     :PatchJump(screen_put_string, test_screen_put_string)
+    :PatchJump(ui_clear_full_screen_safe, test_ui_clear_full_screen_safe)
     :PatchJump(overlay_load, test_overlay_load)
     :PatchJump(tier_check_transition, test_tier_check_transition)
     :PatchJump(monster_spawn_level, test_monster_spawn_level)
@@ -268,6 +270,7 @@ reset_state:
     sta test_screen_blank_calls
     sta test_screen_unblank_calls
     sta test_screen_put_string_calls
+    sta test_ui_safe_clear_calls
     sta test_player_try_move_calls
     sta test_last_move_cmd
     sta test_get_dir_calls
@@ -518,6 +521,12 @@ test_screen_unblank:
 test_screen_put_string:
     inc test_screen_put_string_calls
     lda #3
+    jsr test_record_ui_step
+    rts
+
+test_ui_clear_full_screen_safe:
+    inc test_ui_safe_clear_calls
+    lda #2
     jsr test_record_ui_step
     rts
 
@@ -1024,27 +1033,45 @@ test_start:
     jsr generation_busy_begin
     lda test_screen_blank_calls
     cmp #1
-    bne !t15_fail+
-    lda test_screen_clear_calls
+    beq !t15_chk_clear+
+    jmp !t15_fail+
+!t15_chk_clear:
+    lda test_ui_safe_clear_calls
     cmp #1
-    bne !t15_fail+
+    beq !t15_chk_put+
+    jmp !t15_fail+
+!t15_chk_put:
     lda test_screen_put_string_calls
     cmp #1
-    bne !t15_fail+
+    beq !t15_chk_unblank+
+    jmp !t15_fail+
+!t15_chk_unblank:
     lda test_screen_unblank_calls
     cmp #1
-    bne !t15_fail+
+    beq !t15_chk_step0+
+    jmp !t15_fail+
+!t15_chk_step0:
     lda test_ui_step_0
     cmp #1
-    bne !t15_fail+
+    beq !t15_chk_step1+
+    jmp !t15_fail+
+!t15_chk_step1:
     lda test_ui_step_1
     cmp #2
-    bne !t15_fail+
+    beq !t15_chk_step2+
+    jmp !t15_fail+
+!t15_chk_step2:
     lda test_ui_step_2
     cmp #3
-    bne !t15_fail+
+    beq !t15_chk_step3+
+    jmp !t15_fail+
+!t15_chk_step3:
     lda test_ui_step_3
     cmp #4
+    beq !t15_chk_active+
+    jmp !t15_fail+
+!t15_chk_active:
+    lda test_screen_clear_calls
     bne !t15_fail+
     lda generation_busy_active_api
     cmp #1

@@ -107,7 +107,8 @@ press_key_str:
 
 // Workspace-based RLE decompressor for test use only.
 // The game uses rle_decompress_from_file (streaming from disk) instead.
-// Tests set rle_work_lo/hi to $B0A0 so there's no workspace/MAP_BASE overlap.
+// Tests point rle_work_lo/hi at low screen RAM so compressed source stays
+// below MAP_BASE during round-trip checks that clear the map before decode.
 rle_decompress_map:
     lda rle_work_lo
     sta zp_ptr0
@@ -187,12 +188,10 @@ tc_count: .byte 0
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
-// RLE workspace — must stay above the assembled test body while leaving enough
-// room below MAP_BASE for Test 2's mixed-pattern compressed stream.
-// Worst case: 3840 alternating bytes → 3870 compressed → extends to ~$CDE6
-// BASIC ROM is banked out, so $A000-$BFFF is RAM. Overlap with map area
-// at $C000+ is fine since map is being compressed from it during test.
-.const RLE_TEST_BUF = $BEC8
+// RLE workspace for the round-trip tests.
+// $0500-$07ff is free in this test image and gives 768 bytes, which is enough
+// for the mixed-pattern streams used here while staying below MAP_BASE.
+.const RLE_TEST_BUF = $0500
 
 test_start:
     // BASIC ROM already banked out by bootstrap above
@@ -786,4 +785,4 @@ t7_set_slot31:
     jmp test_finish
 
 test_body_end:
-.assert "RLE test buffer starts above test body", test_body_end < RLE_TEST_BUF, true
+.assert "RLE test buffer stays below test code", RLE_TEST_BUF + $0300 <= $0800, true

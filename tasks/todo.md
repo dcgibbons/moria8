@@ -52,9 +52,42 @@ This file is a temporary working scratchpad.
 - [x] Implement the shared pending-redraw fix in the turn/effect seam without growing the C128 resident image past its layout constraints.
 - [x] Add focused regression coverage for the producer and consumer halves of the redraw contract, then rerun the required C64/C128 verification.
 - [x] Backlog note: C64 inventory return blanks the character-stats line after returning to the main screen.
-- [ ] Backlog note: C64 level-1 `Generating` transition leaves stale town rows on screen.
+- [x] Backlog note: C64 `GENERATING...` level-change transition can leave stale prior-frame rows on screen; this is not town-exit-specific.
 - [ ] Backlog note: C64 first descent from town can leave garbage on the top row after level generation.
 - [ ] Backlog note: C64 loading is currently broken outside this feature scope.
+
+## `BUG-GEN-STALE-TOWN-C64` Review
+
+### Final Diagnosis
+- The remaining `GENERATING...` residue bug was still local to `generation_busy_begin`, not `game_loop.s` restore flow and not generation-time disk I/O.
+- The busy screen already had the right blank/unblank ordering.
+- The real failure was the clear primitive: raw `screen_clear` was still being used on a C64 full-screen transition path that needed the existing safe helper.
+
+### Final Fix
+- [`commodore/common/generation_busy.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/common/generation_busy.s)
+- `generation_busy_begin` now calls `ui_clear_full_screen_safe` instead of `screen_clear`.
+- The busy-screen contract stays:
+  - `screen_blank`
+  - safe full-screen clear
+  - draw `GENERATING...`
+  - `screen_unblank`
+
+### Focused Test Coverage
+- [`commodore/c64/tests/test_main_loop.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work4/commodore/c64/tests/test_main_loop.s)
+- The busy-screen regression now asserts:
+  - blank happens first
+  - `ui_clear_full_screen_safe` is called exactly once
+  - centered text draw still happens once
+  - unblank happens last
+  - raw `screen_clear` is not used on this C64 path
+  - `generation_busy_end` still restores the saved text color and active flag
+
+### Validation Status
+- Manual C64 confirmation from the user: fixed in live play
+- Automated cleanup verification:
+  - focused C64 `test_main_loop.s` gate — PASS (`20/20`)
+  - `make test` — PASS (`33` suites passed, `0` failed)
+  - `make test128-fast` — PASS
 
 ## `BUG-INV-STATLINE-C64` Design
 
