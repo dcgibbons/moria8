@@ -58,8 +58,9 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 ## Build and Test
 
 - **Build:** `make` (or `make build`) — build both Commodore payload trees under `commodore/out/c64` and `commodore/out/c128`
-- **Run:** `make run` — build and launch the unified dual-entry shipping disk in VICE
-- **Debug runs:** `make run64`, `make run128` — launch the platform-specific debug disks
+- **Run:** `make run` — build and launch the unified dual-entry shipping disk in C64 VICE
+- **C128 run:** `make run128` — build and launch the unified dual-entry shipping disk in C128 VICE
+- **Debug run:** `make run64` — launch the C64 debug disk
 - **Test:** `make test` — run the default regression mix (`test64`, `test128-fast`, `test128-fast-smoke`)
 - **C128 fast units:** `make test128-fast` — Python Gate C compare harness for the stable C128 unit batch
 - **C128 fast smokes:** `make test128-fast-smoke` — small high-value C128 smoke subset (`boot_title_idle_smoke`, `scripted_summary_to_town_smoke`, `town_overlay_smoke`)

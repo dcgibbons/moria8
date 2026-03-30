@@ -746,3 +746,10 @@
 - **Root Cause:** I treated the emulator launch syntax as interchangeable and started changing disk boot artifacts before first aligning the target with the exact known-good command shape.
 - **Resolution:** When a disk image works by direct manual launch, make the wrapper target mirror that exact invocation first; only revisit the artifact if the mirrored command still fails.
 - **Rule:** **If the user has a known-good emulator command, make the wrapper target match it byte-for-byte in spirit before diagnosing the disk image itself.**
+
+## 2026-03-30 — Default run targets must track the real shipping artifact after a build-system refactor
+
+- **Issue:** After the dual-entry shipping disk was finished, I left `run128` pointing at the standalone C128 debug disk instead of the unified shipping disk.
+- **Root Cause:** I fixed the immediate wrapper behavior but failed to re-audit which artifact the target should launch after the product contract changed.
+- **Resolution:** Once the shipping artifact changes, immediately review `run`, `run64`, `run128`, and similar wrapper targets to ensure the default ones exercise the real product path.
+- **Rule:** **If a feature changes what “shipping” means, default run targets must follow the shipping artifact. Debug images should only stay on explicitly named debug targets.**

@@ -23,7 +23,8 @@ This file is a temporary working scratchpad.
 - No active reported failure gate.
 - Last closed gate:
   - `make run128`
-  - resolved by restoring the wrapper to the known-good `x128 out/moria128.d64` launch shape
+  - first resolved by restoring the wrapper to the known-good `x128 out/moria128.d64` debug-disk launch shape
+  - then promoted to the real dual-boot contract: `run128` now boots the unified shipping disk under `x128`
 
 ## Current Task
 - [x] FEAT-UNIFIED-DISK / BUILD-UNIFY: create a single shipping `D64` with both platform payloads, explicit platform-specific runtime asset names, a dual-entry boot design, and a single `commodore/Makefile`.
@@ -199,7 +200,7 @@ This file is a temporary working scratchpad.
 - [x] Real manual validation:
   - [x] C64 boots from the unified disk through the directory-file path to the C64 runtime.
   - [x] native C128 boots from the unified disk through the C128 boot sector to the C128 runtime.
-- [x] `make run128` again matches the known-good debug-disk launch contract after the wrapper repair.
+- [x] `make run128` now exercises the unified shipping disk on native C128 instead of the standalone debug disk.
 - Broader post-refactor emulator suites were intentionally not rerun during this closeout because the user chose manual validation for the boot work:
   - `make test64`
   - `make test128-fast`

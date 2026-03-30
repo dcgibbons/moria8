@@ -4,6 +4,7 @@
 #   make build              Build both platform payloads into out/c64 and out/c128
 #   make disk               Build the unified dual-entry shipping disk at out/moria8.d64
 #   make run                Launch the unified shipping disk in C64 VICE
+#   make run128             Launch the unified shipping disk in C128 VICE
 #   make test               Run the default regression mix (C64 + fast C128 coverage)
 #   make test64             Run the C64 suite
 #   make test128            Run the full C128 suite
@@ -14,7 +15,7 @@
 # Debug targets:
 #   make build64 build128
 #   make disk64 disk128
-#   make run64 run128
+#   make run64
 
 # ── Tool paths ────────────────────────────────────────────
 KICKASS_DIR ?= ../tools/kickass
@@ -122,8 +123,8 @@ run: $(DISK_IMAGE)
 run64: $(DISK64_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
 
-run128: $(DISK128_IMAGE)
-	$(VICE128) $(RUN_FLAGS128) $(DISK128_IMAGE)
+run128: $(DISK_IMAGE)
+	$(VICE128) $(RUN_FLAGS128) $(DISK_IMAGE)
 
 test: test64 test128-fast test128-fast-smoke
 
