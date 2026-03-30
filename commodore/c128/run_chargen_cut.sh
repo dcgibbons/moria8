@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+COMMODORE_MAKE=(make -s -C "$SCRIPT_DIR/..")
 
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="${VICE128:-x128}"
@@ -18,7 +19,7 @@ skip_call="${SKIP_CALL:-0}"
 skip_guards="${SKIP_GUARDS:-0}"
 final_return_diag="${FINAL_RETURN_DIAG:-0}"
 
-if ! make -s build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "chargen_cut build128/disk128 failed"
     tail -20 "$build_log"
     exit 1

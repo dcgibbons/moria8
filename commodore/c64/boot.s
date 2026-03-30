@@ -3,8 +3,9 @@
 // Standalone assembly unit. Displays "LOADING MORIA8..." and
 // chain-loads the game binary (MORIA64) from disk.
 //
-// Disk layout:
-//   "moria8"  = this bootloader (autostart)
+// Disk layout in the current dual-entry disk:
+//   "moria8"  = this directory-entry bootloader on C64
+//   "boot64"  = debug/explicit child entry alias to this same bootloader
 //   "moria64" = game binary (loaded by this bootloader)
 //
 // The game binary is also independently loadable via VICE -autostart
@@ -19,6 +20,10 @@
 // ============================================================
 // Bootloader entry
 // ============================================================
+.const BOOT_MSG_ROW = 12
+.const BOOT_MSG_COL = 12
+.const CHROUT_WHITE = $05
+
 .pc = $080e "Boot"
 boot_entry:
     // Clear screen
@@ -31,10 +36,14 @@ boot_entry:
     sta $d021
 
     // Position cursor at row 12, col 12
-    ldx #12                 // row
-    ldy #12                 // column
+    ldx #BOOT_MSG_ROW       // row
+    ldy #BOOT_MSG_COL       // column
     clc
     jsr $fff0               // KERNAL PLOT (clc = set position)
+
+    // Match the C128 boot screen text color explicitly.
+    lda #CHROUT_WHITE
+    jsr $ffd2
 
     // Print "LOADING MORIA..."
     ldx #0

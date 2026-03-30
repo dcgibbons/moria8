@@ -3,6 +3,15 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is complete in the current worktree.
+- Final shipped shape:
+  - unified shipping disk at `commodore/out/moria8.d64`
+  - C64 boots from the first directory file
+  - native C128 boots from the patched Track 1 / Sector 0 boot sector
+  - Commodore builds/tests now route through `commodore/Makefile`
+- Final polish shipped for this closure:
+  - C64 and C128 loading text now uses matching white text
+  - C128 loading text is explicitly centered in 80-column mode
 - `BUG-DESCENT-TOPROW-C64` is resolved in the current worktree.
 - Actual root cause: the shared ordinary-movement path could still use the C128 scroll-delta renderer when `turn_scene_dirty` required a full redraw, so stale remote town glyphs were copied forward on the first south move after town entry.
 - Current verification for this fix:
@@ -11,22 +20,204 @@ This file is a temporary working scratchpad.
   - `make -C commodore/c64 test`
 
 ## Reported Failure Gate
-- Exact user-reported command: C64 gameplay regression: moving into a monster no longer performs bump-to-attack.
-- Last reproduced result: reproduced in code and focused C64 runtime tests; `player_attack_monster` cleared search mode before `monster_find_at`, clobbering the incoming target X coordinate in `A` and causing bump-to-attack to miss the target monster.
-- Closure command: C64 bumping into an adjacent monster attacks correctly again instead of failing or acting blocked.
-- Non-gating diagnostics allowed: focused C64 combat/movement/runtime tests, local inspection of `player_move.s` / `combat.s` / shared turn path, targeted smoke reproduction.
-- Do not mark fixed until closure command passes: yes
-
-### Verification Order
-1. Reproduce the exact reported command.
-2. Use narrower diagnostics only to isolate.
-3. Re-run the exact reported command after each candidate fix.
-4. Run broader platform suites only after the exact reported command is green.
+- No active reported failure gate.
+- Last closed gate:
+  - `make run128`
+  - resolved by restoring the wrapper to the known-good `x128 out/moria128.d64` launch shape
 
 ## Current Task
+- [x] FEAT-UNIFIED-DISK / BUILD-UNIFY: create a single shipping `D64` with both platform payloads, explicit platform-specific runtime asset names, a dual-entry boot design, and a single `commodore/Makefile`.
+- [x] Reject the invalid “one identical first-loaded `MORIA8.PRG` BASIC boot file” approach after repeated C64/C128 gate failures and the confirmed `$0801` vs `$1C01` BASIC-entry mismatch.
+- [x] Replace the universal-PRG milestone with a dual-entry single-disk architecture:
+  - C64 boots from the first directory file via the normal file-loader path
+  - native C128 boots from a C128-native boot sector on the same `D64`
+- [x] Add an explicit proof-of-concept gate before the broader refactor:
+  - build a minimal `D64`
+  - patch a tiny native C128 boot sector into Track 1 / Sector 0
+  - prove native C128 boot reaches a trivial success path
+  - prove the same disk still boots on C64 through the first directory file
+- [x] Replace the proof-of-concept payloads with real entry stages:
+  - [x] C64 directory file now enters the real C64 boot path (`MORIA8` = proven C64 `boot.s`)
+  - [x] C128 boot sector now hands off to the real `BOOT128` path (machine-entry `boot128.s` variant via `BOOT"BOOT128",U8`)
+- [x] Build the first real dual-entry mixed-platform disk before filename refactors:
+  - [x] C64 entry file
+  - [x] `BOOT64`
+  - [x] `BOOT128`
+  - [x] `MORIA64`
+  - [x] `MORIA128`
+- [x] Preserve unchanged child bootloaders as much as possible:
+  - [x] C64 path stays on the proven `boot.s` codepath
+  - [x] C128 path stays on the proven `boot128.s` codepath (machine-entry child variant for the boot-sector `BOOT` command)
+- [x] Add a build step that patches native C128 boot code into Track 1 / Sector 0 of the shipping `D64`.
+- [x] Define and preserve the user-visible boot contract explicitly:
+  - C64: `LOAD"*",8,1` then `RUN`
+  - native C128: power-on autoboot or `BOOT`
+- [x] Update the final mixed-disk plan and Makefile work to target the dual-entry disk, not a universal BASIC `MORIA8`.
+- [x] Phase 0 checkpoint: confirm the unified payload still fits on a hard 35-track `D64` after renames, directory art, and bootloader changes; if it does not, stop and abandon the branch in favor of separate disks.
+- [x] Add `commodore/Makefile` as the only real Commodore build/test entrypoint, with the repo-root `Makefile` kept only as a thin wrapper.
+- [x] Migrate shipping/debug build outputs to `commodore/out` and plan later cleanup of transitional legacy `commodore/c64/out` and `commodore/c128/out` used by existing test runners.
+- [x] Re-establish compatibility local `c64/out` and `c128/out` mirrors from the unified build outputs so existing harnesses keep working during the transition.
+- [x] Replace the current split shipping disks with one unified shipping target and keep explicit debug-only single-platform disk targets.
+- [x] Inspect the shared `moria8boot.s` C128 handoff against the actual `boot128` bank/load contract instead of relying on indirect smoke evidence.
+- [x] Get a consultant review focused on why the experimental C128 masterboot path can BREAK before the child loader takes over.
+- [x] Identify the concrete C128 masterboot bug: `SETBNK` was clobbering the pending `SETNAM` filename registers before the child `LOAD`.
+- [x] Patch the shared C128 loader so Bank-0 `SETBNK` happens before staging the child filename registers for `SETNAM`.
+- [x] Patch the shared C128 loader so the `$0B00` chain stub explicitly lives in 4KB bottom common RAM and reasserts a known post-`LOAD` Bank-0 execution view before jumping to `boot128`.
+- [x] Replace the brittle hand-rolled C128 child-chain path in `moria8boot.s` with the proven native `boot128` implementation via the shared source, instead of continuing to raw-load and jump into `boot128`.
+- [x] Retire the old `disk128-masterboot` validation path as obsolete once the dual-entry `D64` architecture replaces the universal-BASIC-loader experiment.
+- [x] Phase 1: evaluate the candidate unified autostart bootloader in `commodore/common/moria8boot.s`.
+- [x] Get a consultant review focused on correctness risks, filename/entrypoint contracts, and platform-detection validity.
+- [x] Wire the candidate bootloader into both C64 and C128 disk-image builds as the shared autostart path while keeping the existing child bootloaders and runtime payload names.
+- [x] Rebuild both C64/C128 disk targets and verify the resulting boot artifacts assemble cleanly.
+- [x] Run the most relevant C64 and C128 boot/disk probes for this phase.
+- [x] Record a critical evaluation of the source, what worked, and what remains unsafe before any phase-2 single-disk unification.
 - [x] Fix the C64 bump-to-attack regression so moving into a monster attacks correctly again.
 - [x] Fix the C128 chargen summary flow so the character summary appears exactly once before town entry.
 - [x] Correct `FEAT-SEARCH-MODE` running behavior so search mode remains active during running, matching `umoria`.
+
+## `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` Plan
+
+### Locked Intent
+- Ship one hard-`D64` disk image as the primary artifact.
+- Keep the current C64 `DEL` directory-art header at the top of the unified disk.
+- Do not require one identical first-loaded BASIC `MORIA8.PRG`.
+- Require one unified disk that boots correctly on both platforms via platform-appropriate entry paths.
+- Permit platform-specific support filenames everywhere else.
+- Consolidate Commodore build/test orchestration into one [commodore/Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile), with the repo-root [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/Makefile) left as a thin wrapper.
+- Use `commodore/out` as the unified output tree.
+- Replace the current command surface with cleaned-up primary targets:
+  - `make build`
+  - `make disk`
+  - `make run`
+  - `make test`
+  - `make test64`
+  - `make test128`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make clean`
+- Keep explicit debug-only single-platform disk targets.
+- Remove legacy target aliases rather than preserving them indefinitely.
+- Do not proceed with broader unified-disk validation until the disk-entry architecture is settled as:
+  - C64 directory-file entry
+  - native C128 boot-sector entry
+
+### Working Assumptions
+- Proposed shipping/debug disk targets:
+  - `make disk` → unified shipping disk
+  - `make disk64` → explicit C64-only debug disk
+  - `make disk128` → explicit C128-only debug disk
+- Proposed default run target:
+  - `make run` → launch the unified shipping disk
+- Working on-disk filename policy (compressed to stay under the C128 staged-image ceiling):
+  - C64 directory boot file: `MORIA8`
+  - child boots: `BOOT64`, `BOOT128`
+  - main programs: `MORIA64`, `MORIA128`
+  - title art: `T64`, `T128`
+  - overlays: `64.START`, `128.START`, `64.TOWN`, `128.TOWN`, `64.DEATH`, `128.DEATH`, `64.GEN`, `128.GEN`, `64.HELP`, `128.HELP`, `64.UI`, `128.UI`
+  - shared tier data: `MONSTER.DB.1` through `MONSTER.DB.4`
+  - C128-only low runtime: `RUNTIME.LOW.PRG`
+- Native C128 boot should come from the disk boot sector, not by trying to run the C64 BASIC-entry file in native C128 mode.
+
+### Capacity Check
+- Current rough block budget says the unified `D64` is plausible:
+  - current C64 disk uses `286` blocks
+  - current C128 masterboot disk uses `315` blocks
+  - `MONSTER.DB.1-4` are byte-identical between platforms, so one shared copy saves `24` duplicated blocks
+  - preliminary unified estimate: `577` blocks used, about `87` blocks free on a standard `D64`
+- This is only a planning estimate.
+- Phase 0 must re-measure after filename changes, directory art, and the real universal bootloader land.
+
+### Phase A — Dual-Entry Disk Architecture
+- [x] Prove the “one identical first-loaded BASIC PRG” idea is the wrong target for this feature.
+- [x] Build a minimal dual-entry proof-of-concept disk before touching the final mixed payload.
+- [x] Patch a tiny native C128 boot sector into Track 1 / Sector 0 of that proof-of-concept disk.
+- [x] Prove the native C128 boot sector reaches a trivial known-good success path.
+- [x] Prove the same proof-of-concept disk still boots on C64 via the first directory file path.
+- [x] Define and implement the dual-entry disk contract:
+  - [x] C64 loads the first directory file (`MORIA8`) via the normal file-loader path
+  - [x] native C128 boots from a native boot sector on the same `D64`
+- [x] Keep the proven per-platform child bootloaders as the correctness baseline:
+  - [x] `BOOT64`
+  - [x] `BOOT128`
+- [x] Add a tiny native C128 boot-sector stage that loads or transfers control into `BOOT128`.
+- [x] Re-green the real manual boot gate under the new architecture:
+  - [x] C64 boots through the directory entry path
+  - [x] native C128 boots through the native boot-sector path
+
+### Phase 0 — Disk Budget And Collision Audit
+- [x] Create a unified artifact inventory with final planned disk filenames and source-path owners.
+- [x] Confirm which runtime-loaded assets are shared versus platform-specific.
+- [x] Recompute exact `D64` block usage with the final filename map and C64 `DEL` art included.
+- [x] Stop/go checkpoint:
+  - if the unified payload no longer fits on a hard `D64`, stop the effort and do not merge this branch.
+
+### Phase 1 — Build System Consolidation
+- [x] Create [commodore/Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) as the only real Commodore build entrypoint.
+- [x] Move C64 and C128 build logic out of the deleted platform Makefiles into the unified Makefile.
+- [x] Update the repo-root [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/Makefile) to delegate only to `commodore/Makefile`.
+- [x] Move build outputs to `commodore/out`.
+- [x] Leave legacy `commodore/c64/out` and `commodore/c128/out` cleanup for a later slice while existing test runners still materialize transitional local `out/` trees.
+- [x] Normalize the command surface around the new primary targets and drop legacy aliases from the main UX.
+
+### Phase 2 — Unified Disk Filename Refactor
+- [x] Introduce explicit platform-specific runtime asset filenames for title and overlays.
+- [x] Update all runtime filename tables and loaders to use the new platform-specific asset names:
+  - [commodore/common/title_screen.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/title_screen.s)
+  - [commodore/common/overlay.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/overlay.s)
+  - any C128 runtime-low loader references in [commodore/c128/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/main.s)
+- [x] Update disk-image build recipes so the unified disk contains:
+  - one shared copy of `MONSTER.DB.1-4`
+  - both platform title assets
+  - both platform overlay families
+  - both platform main programs
+  - both platform child bootloaders
+  - the C64 directory-entry loader file
+  - the C128 native boot sector
+  - C128-only `RUNTIME.LOW.PRG`
+  - C64 `DEL` directory art
+
+### Phase 3 — Unified Disk Integration
+- [x] Make the unified disk build correctly through both platform-specific entry paths on the same disk image.
+- [x] Do not regress the user-visible contract:
+  - [x] C64 file boot still works from the directory
+  - [x] native C128 boot still works in C128 mode
+
+### Phase 4 — Single-Platform Debug Disks
+- [x] Keep explicit debug-only disk targets for C64-only and C128-only payloads.
+- [x] Make sure those targets share the unified build graph and `commodore/out` artifact tree rather than reintroducing split Makefiles.
+
+### Phase 5 — Test And Tooling Consolidation
+- [x] Point the unified Makefile targets at the existing test runners first.
+- [x] Normalize internal test/build target names only where it materially simplifies the new command surface.
+  - deeper internal harness renames deferred; the public `make` surface is now the normalized contract
+- [x] Keep C128-specific fast/full distinctions available under the unified Makefile.
+
+### Verification Gates
+- [x] `make build` produces both platform program artifacts plus the C64 directory-entry loader and C128 boot-sector assets under `commodore/out`.
+- [x] Minimal proof-of-concept `D64` boots on both targets before the full mixed-payload refactor proceeds.
+- [x] `make disk` now produces the real mixed-platform `D64` at [commodore/out/moria8.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8.d64) with the C64 `DEL` art header, both platform payloads, and the patched C128 boot sector.
+- [x] Real manual validation:
+  - [x] C64 boots from the unified disk through the directory-file path to the C64 runtime.
+  - [x] native C128 boots from the unified disk through the C128 boot sector to the C128 runtime.
+- [x] `make run128` again matches the known-good debug-disk launch contract after the wrapper repair.
+- Broader post-refactor emulator suites were intentionally not rerun during this closeout because the user chose manual validation for the boot work:
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test128`
+
+### Risks To Watch
+- Native C128 boot-sector integration is now the riskiest part; it must work on a `D64` and hand off cleanly into the existing C128 loader/runtime.
+- Overlay/title filename refactors touch runtime loader tables and can easily create silent wrong-file regressions.
+- Moving to `commodore/out` will ripple through shell scripts, test harnesses, and disk-build assumptions.
+- `D64` headroom is real but not huge; directory art, renamed files, and any loader growth must be watched continuously.
+- Current non-emulator verification for the unified build cutover:
+  - `make -C commodore clean && make -C commodore build && make -C commodore disk && make -C commodore disk64 && make -C commodore disk128`
+  - `make build` (repo root wrapper) → routes cleanly to `commodore/Makefile`
+  - `find commodore/out -maxdepth 2 -type f | sort` → unified artifact tree under `commodore/out/{c64,c128}`
+  - `c1541 -attach commodore/out/moria8.d64 -list` → 91 blocks free
+  - `find commodore/c128/out -maxdepth 1 -type f | sort` and `find commodore/c64/out -maxdepth 1 -type f | sort` → compatibility mirror trees populated for legacy harnesses
+  - Track 1 / Sector 0 begins with `CBM` and contains `BOOT"BOOT128",U8`
 - [x] Fix the C64 `CMD_RUN_*` regression introduced during `FEAT-SEARCH-MODE` command-path changes.
 - [x] Implement `FEAT-SEARCH-MODE` player-owned runtime helpers and transient save/load masking.
 - [x] Implement authentic derived search/fos math and shared search-scan helpers.

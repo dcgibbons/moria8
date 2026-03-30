@@ -1,7 +1,7 @@
 #importonce
 // title_screen.s — Title screen loader and renderer
 //
-// Loads title art from disk ("TITLE" file) into MAP_BASE,
+// Loads title art from disk into MAP_BASE,
 // renders to screen RAM, then returns. MAP_BASE region is naturally
 // recycled when dungeon_generate is called.
 //
@@ -12,6 +12,7 @@
 #if C128
 .const TITLE_ART_COL_OFFSET = (SCREEN_COLS - 40) / 2
 #endif
+.const TITLE_FILENAME_LEN = title_filename_end - title_filename
 
 // ============================================================
 // title_load_and_draw — Load and render the title screen
@@ -28,8 +29,8 @@ title_load_and_draw:
     ldx #0
     jsr safe_setbnk         // SETBNK (handles Enter/Exit internally)
 #endif
-    // SETNAM: filename "TITLE" (5 chars)
-    lda #5
+    // SETNAM: platform-specific title asset filename
+    lda #TITLE_FILENAME_LEN
     ldx #<title_filename
     ldy #>title_filename
     jsr KERNAL_SETNAM
@@ -256,4 +257,9 @@ tbc_save_x: .byte 0
 // Filename for KERNAL LOAD (PETSCII, NOT null-terminated — KERNAL uses length)
 // Must use explicit PETSCII bytes — .text produces screen codes under screencode_upper
 title_filename:
-    .byte $54, $49, $54, $4c, $45   // "TITLE" in PETSCII
+#if C128
+    .byte $54, $31, $32, $38                       // "T128"
+#else
+    .byte $54, $36, $34                             // "T64"
+#endif
+title_filename_end:

@@ -6,6 +6,7 @@ set -u
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
+COMMODORE_MAKE=(make -s -C "$REPO_ROOT/commodore")
 
 KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
 if [ -n "${VICE128:-}" ]; then
@@ -694,14 +695,14 @@ run_main_assembly_check() {
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! make -s -W main.s -W boot128.s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL"
             grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
         fi
-    elif ! make -s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL"
         grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1431,10 +1432,10 @@ build_boot_assets() {
     fi
 
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            out/boot128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/runtime.low.prg out/main.vs -- \
-            main.s boot128.s Makefile; then
+            main.s boot128.s bootsect128.s Makefile; then
         BOOT_ASSETS_BUILT=1
         return
     fi
@@ -1447,14 +1448,14 @@ build_boot_assets() {
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! make -s -W main.s -W boot128.s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL (build128/disk128 failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return 1
         fi
-    elif ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))

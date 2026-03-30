@@ -755,12 +755,21 @@ reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
 reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
 reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
 reu_fn_t4: .text "MONSTER.DB.4" ; .byte 0
-reu_fn_o1: .text "OVL.START" ; .byte 0
-reu_fn_o2: .text "OVL.TOWN" ; .byte 0
-reu_fn_o3: .text "OVL.DEATH" ; .byte 0
-reu_fn_o4: .text "OVL.GEN" ; .byte 0
-reu_fn_o5: .text "OVL.HELP" ; .byte 0
-reu_fn_o6: .text "OVL.UI" ; .byte 0
+#if C128
+reu_fn_o1: .text "128.START" ; .byte 0
+reu_fn_o2: .text "128.TOWN" ; .byte 0
+reu_fn_o3: .text "128.DEATH" ; .byte 0
+reu_fn_o4: .text "128.GEN" ; .byte 0
+reu_fn_o5: .text "128.HELP" ; .byte 0
+reu_fn_o6: .text "128.UI" ; .byte 0
+#else
+reu_fn_o1: .text "64.START" ; .byte 0
+reu_fn_o2: .text "64.TOWN" ; .byte 0
+reu_fn_o3: .text "64.DEATH" ; .byte 0
+reu_fn_o4: .text "64.GEN" ; .byte 0
+reu_fn_o5: .text "64.HELP" ; .byte 0
+reu_fn_o6: .text "64.UI" ; .byte 0
+#endif
 
 // Pointer tables (0-based index)
 reu_fn_tier_lo: .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4

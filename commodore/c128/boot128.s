@@ -1,5 +1,5 @@
 #importonce
-// boot128.s — Bootloader for Moria8 C128 (Standard Model Refined)
+// boot128.s — Child bootloader for Moria8 C128 (Standard Model Refined)
 //
 // Relocates 4 pages to $2000. Filenames at $2300.
 // Preserves KERNAL workspace by staying clear of $0200-$03FF.
@@ -19,17 +19,25 @@
 .const COL_RED    = 2
 .const COL_CYAN   = 3
 .const COL_BLUE   = 6
+.const CHROUT_WHITE = $05
 .const SCREEN_EDITOR_MODE = $D8
 .const COPY_PTR_LO = $60
 .const COPY_PTR_HI = $61
+.const BOOT_MSG_ROW = 12
+.const BOOT_MSG_COL = 32
 
 // ============================================================
-// BASIC stub at $1C01 — SYS 7182 ($1C0E)
+// Entry wrapper
+// - default build: native C128 BASIC stub at $1C01 → SYS 7182 ($1C0E)
+// - BOOT128_CHAIN: machine-entry child loaded directly at $1C0E by the
+//   universal `MORIA8` stage-0 loader
 // ============================================================
 .const BOOT_DIAG_SIG_BASE = $0bf0
 
+#if !BOOT128_CHAIN
 .pc = $1C01 "BASIC Stub"
     .byte $0b, $1c, $0a, $00, $9e, $37, $31, $38, $32, $00, $00, $00
+#endif
 
 // ============================================================
 // Bootstrap at $1C0E — Relocate 1KB (4 pages) to $2000
@@ -92,6 +100,15 @@ loader_start:
     sta $d011
     sta $0a26
     lda #$93
+    jsr $ffd2
+
+    // Center the loading text in 80-column mode and use the same
+    // explicit text color as the C64 boot screen.
+    ldx #BOOT_MSG_ROW
+    ldy #BOOT_MSG_COL
+    clc
+    jsr $fff0
+    lda #CHROUT_WHITE
     jsr $ffd2
 
     // Print "LOADING MORIA8..."

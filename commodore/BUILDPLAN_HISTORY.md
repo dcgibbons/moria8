@@ -6,6 +6,74 @@
 
 ---
 
+## 2026-03-30 — `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` dual-entry shipping disk and unified Commodore build ✅ COMPLETE
+
+### Scope Closed
+- Shipped one mixed-platform `D64` at [out/moria8.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8.d64) that boots correctly on both platforms through platform-appropriate entry paths.
+- Consolidated the Commodore build/test surface under [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) with the repo-root [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/Makefile) reduced to a thin wrapper.
+- Moved canonical Commodore outputs under [out](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out) while keeping temporary `c64/out` and `c128/out` mirrors for legacy harnesses.
+
+### Design Decision
+- The earlier “one identical first-loaded `MORIA8.PRG`” design was rejected as the wrong target.
+- C64 and native C128 do not share a sane BASIC-entry contract for this use case, so the shipped architecture is now:
+  - C64 boot: first directory file `MORIA8` via the normal file-loader path
+  - native C128 boot: Track 1 / Sector 0 native boot sector that hands off to `BOOT128`
+- The important product goal is one shipping disk, not one impossible universal BASIC stub.
+
+### What Shipped
+1. **Unified dual-entry disk**
+   - The mixed disk now contains:
+     - C64 directory-entry loader `MORIA8`
+     - `BOOT64`, `BOOT128`
+     - `MORIA64`, `MORIA128`
+     - shared `MONSTER.DB.1-4`
+     - platform-specific title and overlay payloads
+     - C128-only `RUNTIME.LOW.PRG`
+     - the existing C64 `DEL` directory-art header
+   - A new native C128 boot sector in [c128/bootsect128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootsect128.s) is patched into Track 1 / Sector 0 during disk creation.
+2. **Unified build orchestration**
+   - Deleted the old platform-local `c64/Makefile` and `c128/Makefile` entrypoints.
+   - Added the single real Commodore build entrypoint at [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile).
+   - Standardized the primary command surface around:
+     - `make build`
+     - `make disk`
+     - `make run`
+     - `make test`
+     - `make test64`
+     - `make test128`
+     - `make test128-fast`
+     - `make test128-fast-smoke`
+3. **Runtime filename coexistence**
+   - Title and overlay filenames were split so both platform payloads can live on one disk:
+     - `T64`, `T128`
+     - `64.START`, `128.START`
+     - `64.TOWN`, `128.TOWN`
+     - `64.DEATH`, `128.DEATH`
+     - `64.GEN`, `128.GEN`
+     - `64.HELP`, `128.HELP`
+     - `64.UI`, `128.UI`
+   - The runtime loader tables were updated so C64 and C128 resolve the correct platform-specific assets while sharing the common disk.
+4. **Polish and wrapper cleanup**
+   - `make run128` was corrected to match the known-good direct `x128 out/moria128.d64` launch shape instead of an incorrect autostart/drive-flag path.
+   - C64 and C128 boot screens now use matched white loading text, with the C128 loading message explicitly centered in 80-column mode.
+
+### Verification
+- Non-emulator build/package checks:
+  - `make -C commodore clean && make -C commodore build && make -C commodore disk`
+  - `make -C commodore disk64`
+  - `make -C commodore disk128`
+  - `c1541 -attach commodore/out/moria8.d64 -list` showed the mixed-platform payload with `91 blocks free`
+  - Track 1 / Sector 0 was verified to begin with `CBM` and hold the patched native boot-sector handoff
+- Manual validation on the real user gates:
+  - C64 `LOAD"*",8,1` then `RUN` on `commodore/out/moria8.d64` booted into the C64 runtime
+  - native C128 autoboot / `BOOT` on the same `commodore/out/moria8.d64` booted into the C128 runtime
+  - `make run128` was rechecked after wrapper repair and matched the known-good debug-disk launch behavior
+
+### Outcome
+- `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is removed from active planning.
+- The dual-boot disk architecture is now the shipped Commodore disk design.
+- Loading-art/boot-screen graphics remain a separate follow-up, not part of this closure.
+
 ## 2026-03-29 — `BUG-INV-STATLINE-C64` modal status restore fix ✅ COMPLETE
 
 ### Scope Closed

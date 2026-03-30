@@ -1,5 +1,96 @@
 # Lessons Learned
 
+## 2026-03-30 — When a visual regression reappears after a seam-specific fix, check sibling render paths before assuming the original fix was lost
+
+- **Issue:** After the dual-entry disk work, the user showed the same town-top garbage artifact on C128 and asked whether the earlier fix had been dropped.
+- **Root Cause:** I initially framed the earlier closure as if it had solved the whole symptom class, but the actual March 29 fix only guarded the ordinary-movement C128 scroll-delta path. Shared gameplay code still has sibling scroll-delta entry points, and a visually identical regression can return through one of those paths even when the original fix remains intact.
+- **Resolution:** When a previously fixed visual symptom reappears, verify whether the original guarded seam is still present, then audit sibling entry points that call the same renderer under slightly different command tails before concluding the fix was lost.
+- **Rule:** **If a rendering artifact returns after a seam-specific fix, do not assume the patched code regressed. First check whether another path still reaches the same renderer without the same guard.**
+
+## 2026-03-29 — Do not conflate `LOAD ...,8` with `LOAD ...,8,1` for Commodore BASIC program portability
+
+- **Issue:** I told the user that a BASIC program saved on one machine would not auto-relocate and therefore could not load cross-platform as a universal BASIC front-end.
+- **Root Cause:** I collapsed two different KERNAL/BASIC load modes into one mental model. `LOAD ...,8,1` uses the file header address directly, but ordinary BASIC load via `LOAD ...,8` is different and can place the BASIC program into the current machine's BASIC area.
+- **Resolution:** When evaluating universal Commodore boot options, treat `LOAD ...,8` and `LOAD ...,8,1` as different entry contracts. A universal BASIC loader may be viable for ordinary BASIC load+`RUN`, even if it is not viable for exact-address `,8,1` machine-language load.
+- **Rule:** **Never reason about Commodore BASIC portability without first separating `LOAD ...,8` from `LOAD ...,8,1`. They are not interchangeable.**
+
+## 2026-03-29 — An identical BASIC PRG is not automatically a valid cross-platform boot artifact when the platforms use different BASIC text origins
+
+- **Issue:** I kept trying to make one identical `MORIA8` PRG autostart on both C64 and native C128 by tweaking loader internals, even though the user’s observed behavior never materially changed.
+- **Root Cause:** I was fighting loader symptoms before re-checking the platform entry contract itself. This repo already documents that native C128 BASIC-entry programs live at `$1C01`, while `BasicUpstart2` hardcodes a C64-style BASIC stub at `$0801`. An identical BASIC PRG built around `$0801` is therefore structurally suspect as a native C128 boot artifact before any loader logic even runs.
+- **Resolution:** Before spending more time on “universal bootloader” internals, verify that the requested artifact shape is valid on both platforms. If the platforms require different BASIC entry origins, either use a non-BASIC machine-entry boot mechanism or relax the “one identical PRG” assumption.
+- **Rule:** **Do not keep patching bootloader logic when the platform entry contract itself may be impossible. Check whether the requested artifact shape is valid on each machine before debugging deeper.**
+
+## 2026-03-29 — For boot artifacts, the first executable byte after the BASIC stub is part of the autostart contract
+
+- **Issue:** I rearranged the universal `MORIA8` source so the intended `boot_entry` label existed, but I still let a raw `chain_stub` occupy `$080E`, the first executable byte after the BASIC stub. The result matched the user’s failures: autostart could land in the raw loader stub before the setup code ever ran.
+- **Root Cause:** I focused on the BASIC `SYS` target label and forgot that emulator/autostart flows can machine-enter at the first post-stub code address as a separate contract. In a bootloader, source order and emitted address order both matter.
+- **Resolution:** For any autostart PRG, make the real setup entrypoint the very first emitted code after the BASIC stub. Do not place copied stubs, helper routines, or data ahead of the true entry code unless that address is also safe as a direct machine-entry path.
+- **Rule:** **On bootloaders, verify both the BASIC `SYS` target and the first emitted code byte after the stub. If autostart can land at `$080E`, `$080E` must be the real entrypoint.**
+
+## 2026-03-29 — A universal stage-0 bootloader should stay silent and hand off cleanly; do not duplicate child-loader UI or leak its KERNAL file handle
+
+- **Issue:** I made the shared `MORIA8` stage-0 do its own clear-screen / cursor / status message work and then jump straight into child loaders after `LOAD`, which produced C128 startup breaks and an invalid two-stage handoff contract.
+- **Root Cause:** I treated stage-0 like a user-facing bootloader instead of what it really is: a tiny dispatcher that must preserve platform-native startup assumptions for the real child bootloaders. I also let stage-0 keep file `#2` open across the handoff even though `LOAD` does not remove it from the file table.
+- **Resolution:** Keep the universal stage-0 minimal and silent. Let `BOOT64` / `BOOT128` own platform-specific screen setup and messages. After stage-0 `LOAD`s the child, explicitly `CLOSE` the file before the jump, and use the platform-appropriate surviving chain-stub location rather than forcing one address on both machines.
+- **Rule:** **For chained bootloaders, stage-0 should only detect platform, load the child, close its file handle, and jump. Do not add user-facing screen/UI work or reuse one survivor-stub address across machines without proving it is safe on both.**
+
+## 2026-03-29 — A “universal” C128 stage-0 loader cannot bypass the repo’s known-safe KERNAL/MMU wrapper contract just because it is tiny
+
+- **Issue:** I treated the identical `$0801` `MORIA8` stage-0 as simple enough to call raw C128 KERNAL entry points directly, outside the repo’s established wrapper discipline.
+- **Root Cause:** I optimized for byte-identical artifact shape and ignored the local design rule that C128 `SETNAM`/`SETLFS`/`SETBNK`/`LOAD` transactions must use the known-good KERNAL/MMU entry contract rather than a second custom path.
+- **Resolution:** For universal bootloader work, artifact identity is not a license to bypass the C128 wrapper model. If a shared stage-0 needs C128 file I/O, either enter the proven wrapper contract correctly or keep the universal stage-0 thin enough to hand off to a proven child without recreating raw KERNAL transaction logic.
+- **Rule:** **Do not create a second custom C128 KERNAL/MMU transaction in a universal bootloader when the repo already has a proven wrapper-based contract.**
+
+## 2026-03-29 — Byte-identical artifacts do not close a universal bootloader milestone if the real autostart paths still fail
+
+- **Issue:** I treated matching `moria8boot.prg` hashes as if that nearly closed the universal `MORIA8` requirement, but the user’s real disk boots immediately disproved that: C64 fell back to BASIC and native C128 hit `BREAK $0831`.
+- **Root Cause:** I over-valued artifact identity relative to the real behavioral gate. One identical file is necessary, but it is not sufficient if the machine-specific autostart contract is still wrong.
+- **Resolution:** For universal bootloader work, require both conditions together before claiming success: identical emitted artifact and passing real autostart behavior on each target machine.
+- **Rule:** **Do not call a universal bootloader “working” just because the binaries match. The real autostart paths on every target platform must also pass.**
+
+## 2026-03-29 — Shared source is not the same thing as one valid universal bootloader artifact
+
+- **Issue:** I treated the shared `moria8boot.s` source as if it had already satisfied the universal `MORIA8` requirement, even though the emitted C64 and C128 binaries were still different files.
+- **Root Cause:** I blurred “shared implementation source” with “one identical on-disk program.” For a bootloader feature whose whole point is one `MORIA8`, artifact identity matters, not just code sharing.
+- **Resolution:** For any “single bootloader” milestone, compare the emitted binaries directly and refuse to count platform-specific outputs from shared source as closure.
+- **Rule:** **If the requirement is one universal program, verify the emitted artifacts are byte-identical. Shared source alone does not satisfy the requirement.**
+
+## 2026-03-29 — When the same C128 boot symptom survives multiple contract patches, replace the handoff with the proven loader instead of continuing to nibble at the seam
+
+- **Issue:** The experimental shared C128 masterboot kept reproducing the same immediate `BREAK` / `JAM` even after multiple local fixes to the raw child-chain path.
+- **Root Cause:** I kept treating the bootloader like a sequence of independent small contract bugs, but the path itself was too brittle: a hand-rolled C128 `LOAD` and jump into `boot128` was not the repo’s proven startup shape.
+- **Resolution:** After repeated identical failures, stop stacking micro-fixes on the same raw C128 handoff. Replace it with the known-good `boot128` implementation or its exact transaction model.
+- **Rule:** **If a C128 boot handoff still shows the same `BREAK` / `JAM` after several contract fixes, stop patching around it and switch to the proven loader path.**
+
+## 2026-03-29 — A C128 post-`LOAD` chain stub is not safe just because its address is low; prove common-RAM ownership and post-load MMU state
+
+- **Issue:** The shared C128 masterboot still failed after fixing the filename-register clobber around `SETNAM`.
+- **Root Cause:** I treated `$0B00` as inherently safe for a surviving post-`LOAD` stub because `boot128` uses that address, but `boot128` only uses it after explicitly claiming 4KB bottom common RAM and later restoring a known execution MMU view. The shared loader had neither guarantee.
+- **Resolution:** For any C128 stub meant to survive a KERNAL `LOAD` and then jump into a child program, establish bottom-common ownership before copying the stub there and reassert the intended execution MMU/bank state before the final jump.
+- **Rule:** **On C128, do not use a low-RAM chain stub unless you explicitly make that region common and restore the child’s expected MMU/bank view after `LOAD`.**
+
+## 2026-03-29 — In C128 boot code, never insert `SETBNK` between staging `A/X/Y` for `SETNAM` and the `SETNAM` call
+
+- **Issue:** The experimental shared C128 masterboot path still BREAKed after a first-pass Bank-0 `SETBNK` change.
+- **Root Cause:** I put `SETBNK` in the middle of the filename setup sequence, so the loader staged `A/X/Y` for `SETNAM`, clobbered those registers with `SETBNK`, and then called `SETNAM` with garbage arguments.
+- **Resolution:** In C128 loader paths, perform bank-selection setup before loading `A/X/Y` with the filename, or explicitly save and restore those registers around any prep call.
+- **Rule:** **On C128, treat `SETNAM` inputs as fragile. Do not put `SETBNK` or any other register-clobbering setup between filename register staging and the `SETNAM` call.**
+
+## 2026-03-29 — On C128 boot/load failures, audit `SETBNK` and visible execution bank before blaming stub addresses
+
+- **Issue:** I chased the shared masterboot BREAK as if the surviving chain stub location were the main culprit, but the stronger risk in `moria8boot.s` was that the child loader transaction never claimed the C128 KERNAL load bank at all.
+- **Root Cause:** I focused on where the copied stub survived instead of the full C128 runtime-loaded-code contract: PRG header, load destination bank, visible execution bank, and the jump target all have to agree together.
+- **Resolution:** For any C128 boot chain that raw-loads another PRG, check `SETBNK` first and prove the child is loaded into the same bank the chain stub will execute from before changing relocation addresses.
+- **Rule:** **When a C128 bootloader `LOAD`s a child PRG and then jumps to a fixed address, verify the child load bank and execution bank match before treating low-RAM stub placement as the root cause.**
+
+## 2026-03-29 — Do not claim a bootloader fix is verified until I reproduce the user’s exact boot entry path, not just a monitor-based title breakpoint
+
+- **Issue:** I concluded the shared C128 master bootloader was working based on smoke tests and monitor breakpoints, but the user immediately reproduced the same live BREAK / `JAM $1000A` behavior on the actual autoload and direct `moria8.128` paths.
+- **Root Cause:** I over-trusted indirect boot evidence. Reaching a later symbol under a harness or monitor script did not prove the exact user-visible entry path was healthy, especially for boot code that depends on KERNAL/autostart behavior and startup machine state.
+- **Resolution:** For bootloader work, treat the user’s real boot entry path as the authoritative gate. Reproduce the actual autoload and direct-load paths, and do not close the work until those exact entry methods are green.
+- **Rule:** **Never mark bootloader work verified on breakpoint/harness evidence alone when the user’s real autoload or direct-load path is still failing. Reproduce the exact boot entry path before claiming success.**
+
 ## 2026-03-29 — Before inventing a new owner seam for a C64 full-screen residue bug, check whether the path is still using raw `screen_clear`
 
 - **Issue:** I spent time on restore-tail and generation-I/O theories for the remaining `GENERATING...` residue bug before checking whether the busy screen was still using the repo's known-safe C64 full-screen clear helper.
@@ -648,3 +739,10 @@
 - **Root Cause:** I treated a secondary harness discrepancy as meaningful diagnostic framing before closing the loop on the authoritative command the user actually ran.
 - **Resolution:** Reproduce and fix the exact failing command first, and only discuss alternate harness behavior after the authoritative suite is green and clearly separated from the real issue.
 - **Rule:** **Do not describe a failure as “just a harness issue” when the user's exact suite is red. The exact failing command remains authoritative until it passes.**
+
+## 2026-03-30 — For launcher targets, match the user’s known-good invocation before changing the artifact
+
+- **Issue:** I changed the `run128` recipe based on what I thought VICE’s drive flags should do, even though the user had already demonstrated that launching `x128` directly against the disk image worked.
+- **Root Cause:** I treated the emulator launch syntax as interchangeable and started changing disk boot artifacts before first aligning the target with the exact known-good command shape.
+- **Resolution:** When a disk image works by direct manual launch, make the wrapper target mirror that exact invocation first; only revisit the artifact if the mirrored command still fails.
+- **Rule:** **If the user has a known-good emulator command, make the wrapper target match it byte-for-byte in spirit before diagnosing the disk image itself.**
