@@ -14,7 +14,10 @@
 
 ## Open Regression Bugs
 
-- None currently.
+| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
+|---|---|---|---|---|---|
+| Medium | `BUG-LOOK-TRAP-DOOR` looking at traps or doors reports `You will have to do better than that.` | Medium | Medium | No | Directed look should describe or identify these terrain/feature targets instead of falling through to the generic failure message. |
+| Medium | `BUG-LOOK-WALL-GOLD` looking at walls reports that it sees Gold | Medium | Medium | No | Directed look is misclassifying wall tiles as treasure-bearing targets instead of reporting wall terrain correctly. |
 
 ## Open Phases / Display Work
 
