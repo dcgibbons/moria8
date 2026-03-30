@@ -105,8 +105,8 @@ This file is a temporary working scratchpad.
 ### Working Assumptions
 - Proposed shipping/debug disk targets:
   - `make disk` → unified shipping disk
-  - `make disk64` → explicit C64-only debug disk
-  - `make disk128` → explicit C128-only debug disk
+  - `make disk64` → compatibility alias for the same unified shipping disk
+  - `make disk128` → compatibility alias for the same unified shipping disk
 - Proposed default run target:
   - `make run` → launch the unified shipping disk
 - Working on-disk filename policy (compressed to stay under the C128 staged-image ceiling):
@@ -116,7 +116,7 @@ This file is a temporary working scratchpad.
   - title art: `T64`, `T128`
   - overlays: `64.START`, `128.START`, `64.TOWN`, `128.TOWN`, `64.DEATH`, `128.DEATH`, `64.GEN`, `128.GEN`, `64.HELP`, `128.HELP`, `64.UI`, `128.UI`
   - shared tier data: `MONSTER.DB.1` through `MONSTER.DB.4`
-  - C128-only low runtime: `RUNTIME.LOW.PRG`
+  - C128-only low runtime: `128.RUNTIME`
 - Native C128 boot should come from the disk boot sector, not by trying to run the C64 BASIC-entry file in native C128 mode.
 
 ### Capacity Check
@@ -174,7 +174,7 @@ This file is a temporary working scratchpad.
   - both platform child bootloaders
   - the C64 directory-entry loader file
   - the C128 native boot sector
-  - C128-only `RUNTIME.LOW.PRG`
+  - C128-only `128.RUNTIME`
   - C64 `DEL` directory art
 
 ### Phase 3 — Unified Disk Integration
@@ -183,9 +183,9 @@ This file is a temporary working scratchpad.
   - [x] C64 file boot still works from the directory
   - [x] native C128 boot still works in C128 mode
 
-### Phase 4 — Single-Platform Debug Disks
-- [x] Keep explicit debug-only disk targets for C64-only and C128-only payloads.
-- [x] Make sure those targets share the unified build graph and `commodore/out` artifact tree rather than reintroducing split Makefiles.
+### Phase 4 — Compatibility Target Cleanup
+- [x] Retire standalone `moria64.d64` / `moria128.d64` outputs so the unified shipping disk remains the only disk image.
+- [x] Keep `disk64`, `disk128`, and `run64` only as compatibility aliases that point at the unified shipping artifact.
 
 ### Phase 5 — Test And Tooling Consolidation
 - [x] Point the unified Makefile targets at the existing test runners first.
@@ -197,6 +197,7 @@ This file is a temporary working scratchpad.
 - [x] `make build` produces both platform program artifacts plus the C64 directory-entry loader and C128 boot-sector assets under `commodore/out`.
 - [x] Minimal proof-of-concept `D64` boots on both targets before the full mixed-payload refactor proceeds.
 - [x] `make disk` now produces the real mixed-platform `D64` at [commodore/out/moria8.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8.d64) with the C64 `DEL` art header, both platform payloads, and the patched C128 boot sector.
+- [x] `commodore/out/moria64.d64` and `commodore/out/moria128.d64` are no longer produced; the unified shipping disk is the only disk artifact.
 - [x] Real manual validation:
   - [x] C64 boots from the unified disk through the directory-file path to the C64 runtime.
   - [x] native C128 boots from the unified disk through the C128 boot sector to the C128 runtime.
@@ -3235,7 +3236,7 @@ This file is a temporary working scratchpad.
   - reloadable banked-payload entrypoints
   - out-of-I/O-hole call surfaces that may legally live low or banked
 - `commodore/c128/main.s` now emits compile-time `AUDIT-IO-C128` placement asserts from that manifest instead of maintaining a long hand-written callable assert list inline.
-- `commodore/c128/run_tests128.sh` now parses `io_contracts.s` directly, verifies the emitted symbol placement against the declared residency class, and also checks that `out/runtime.low.prg` still carries the `$1000` load header.
+- `commodore/c128/run_tests128.sh` now parses `io_contracts.s` directly, verifies the emitted symbol placement against the declared residency class, and also checks that `out/128.runtime.prg` still carries the `$1000` load header.
 - The new audit inventory also closed real callee-side gaps that were previously only protected at the trampoline side:
   - overlay callees such as `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
   - runtime-low callees such as `viewport_update`, `render_viewport_scroll_delta`, `render_local_area`, and `monster_get_threat_color`

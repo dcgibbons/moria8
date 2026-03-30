@@ -28,7 +28,7 @@
      - `MORIA64`, `MORIA128`
      - shared `MONSTER.DB.1-4`
      - platform-specific title and overlay payloads
-     - C128-only `RUNTIME.LOW.PRG`
+     - C128-only `128.RUNTIME`
      - the existing C64 `DEL` directory-art header
    - A new native C128 boot sector in [c128/bootsect128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootsect128.s) is patched into Track 1 / Sector 0 during disk creation.
 2. **Unified build orchestration**
@@ -56,6 +56,7 @@
 4. **Polish and wrapper cleanup**
    - `make run128` was corrected to match the known-good direct `x128 out/moria128.d64` launch shape instead of an incorrect autostart/drive-flag path.
    - C64 and C128 boot screens now use matched white loading text, with the C128 loading message explicitly centered in 80-column mode.
+   - Follow-up cleanup retired standalone `moria64.d64` / `moria128.d64` outputs so `out/moria8.d64` is the only disk image artifact; `disk64`, `disk128`, and `run64` now remain only as compatibility aliases to the unified disk.
 
 ### Verification
 - Non-emulator build/package checks:
@@ -633,7 +634,7 @@
    - Kept unrelated data/layout asserts separate, such as message-history sizing and prompt-string placement.
 3. **The C128 runner now validates the same manifest**
    - `commodore/c128/run_tests128.sh`
-   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/runtime.low.prg` still carries the `$1000` load header.
+   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/128.runtime.prg` still carries the `$1000` load header.
 4. **Callee-side gaps are now guarded, not just trampoline addresses**
    - Newly enforced overlay/runtime-low/banked callees include:
      - `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
@@ -1939,7 +1940,7 @@
 
 ### Implemented
 1. **Moved ego runtime into loaded low RAM**
-   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`runtime.low.prg`, runtime `$1000+` in Bank 0).
+   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`128.runtime.prg`, runtime `$1000+` in Bank 0).
    - Removed the late Default-segment import that allowed ego generation logic to spill into the `$D000-$DFFF` region.
 2. **Added placement asserts for the full call surface**
    - `roll_ego_type`
@@ -2009,20 +2010,20 @@
 
 ### Root Causes Addressed
 1. **Missing Stage 2 loader contract**
-   - `runtime.low.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
+   - `128.runtime.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
 2. **Incorrect PRG load address**
    - The segment was linked for runtime execution at `$1000`, but the emitted PRG still carried an `$E000` load header.
 3. **Wrong bank assumption for direct low-RAM calls**
-   - The first repair attempt loaded `runtime.low.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
+   - The first repair attempt loaded `128.runtime.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
    - `$1000-$3FFF` is not bottom common RAM, so Bank 1 residency does not satisfy a Bank 0 callsite.
 4. **Prompt handoff release sensitivity**
    - After the loader repair, the summary dismiss path still needed a safer release handoff between gender selection and the summary prompt in normal-speed runs.
 
 ### Implemented
 1. **Loader/header alignment**
-   - Changed `RuntimeLowData` to emit `runtime.low.prg` with a `$1000` load header matching its callable runtime symbols.
+   - Changed `RuntimeLowData` to emit `128.runtime.prg` with a `$1000` load header matching its callable runtime symbols.
 2. **Startup low-RAM loader**
-   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `RUNTIME.LOW.PRG` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
+   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `128.RUNTIME` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
 3. **Placement guard**
    - Added a compile-time assert to keep the low-RAM callable runtime block below `FLOOR_ITEM_BASE`, making future overlap mistakes visible at build time.
 4. **Summary prompt release hardening**

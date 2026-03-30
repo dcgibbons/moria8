@@ -42,7 +42,7 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write out/ovl.start "ovl.start" \
         -write out/ovl.death "ovl.death" \
         -write out/ovl.gen "ovl.gen" \
-        -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+        -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
     echo "Phase 1 real-diag disk build failed"
     tail -20 "$build_log"
     exit 1

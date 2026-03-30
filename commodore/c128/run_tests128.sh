@@ -912,17 +912,17 @@ for name in ("help_title_str", "help_lines"):
     if labels[name] < 0xE000 or labels[name] >= 0xF000:
         bad.append((name, labels[name], "overlay_window"))
 
-runtime_low_prg = Path("out/runtime.low.prg")
+runtime_low_prg = Path("out/128.runtime.prg")
 if not runtime_low_prg.exists():
-    missing.append("out/runtime.low.prg")
+    missing.append("out/128.runtime.prg")
 else:
     data = runtime_low_prg.read_bytes()
     if len(data) < 2:
-        bad.append(("runtime.low.prg", len(data), "short"))
+        bad.append(("128.runtime.prg", len(data), "short"))
     else:
         load = data[0] | (data[1] << 8)
         if load != 0x1000:
-            bad.append(("runtime.low.prg header", load, "load_header"))
+            bad.append(("128.runtime.prg header", load, "load_header"))
 
 if "runtime_low_data_start" in labels and labels["runtime_low_data_start"] != 0x1000:
     bad.append(("runtime_low_data_start", labels["runtime_low_data_start"], "runtime_low_base"))
@@ -1434,7 +1434,7 @@ build_boot_assets() {
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg out/main.vs -- \
+            out/ovl.gen out/128.runtime.prg out/main.vs -- \
             main.s boot128.s bootsect128.s Makefile; then
         BOOT_ASSETS_BUILT=1
         return
@@ -1513,7 +1513,7 @@ run_vic40_clean_boot_smoke() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1591,7 +1591,7 @@ build_real_boot_diag_assets() {
             out/moria128.realdiag.prg out/moria128_realdiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         REAL_BOOT_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -1625,7 +1625,7 @@ build_real_boot_diag_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1649,7 +1649,7 @@ build_overlay_transition_diag_assets() {
             out/moria128.overlaydiag.prg out/moria128_overlaydiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -1683,7 +1683,7 @@ build_overlay_transition_diag_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1707,7 +1707,7 @@ build_title_art_boot_assets() {
             out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -1741,7 +1741,7 @@ build_title_art_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1765,7 +1765,7 @@ build_partial_failure_boot_assets() {
             out/moria128.skip1.prg out/moria128_skip1.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -1797,7 +1797,7 @@ build_partial_failure_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (partial-failure disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1821,7 +1821,7 @@ build_overlay_partial_failure_boot_assets() {
             out/moria128.skipovl2.prg out/moria128_skipovl2.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -1853,7 +1853,7 @@ build_overlay_partial_failure_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1877,7 +1877,7 @@ build_death_overlay_boot_assets() {
             out/moria128.death.prg out/moria128_death.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         DEATH_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -1909,7 +1909,7 @@ build_death_overlay_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1933,7 +1933,7 @@ build_overlay_state_boot_assets() {
             out/moria128.overlaystate.prg out/moria128_overlaystate.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         OVERLAY_STATE_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -1965,7 +1965,7 @@ build_overlay_state_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1989,7 +1989,7 @@ build_scripted_input_boot_assets() {
             out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2022,7 +2022,7 @@ build_scripted_input_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-input disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2050,7 +2050,7 @@ build_cache_survival_boot_assets() {
             out/moria128.prg out/moria128_cache_survival.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/runtime.low.prg; then
+            out/ovl.gen out/128.runtime.prg; then
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2081,7 +2081,7 @@ build_cache_survival_boot_assets() {
             -write "$target_out/ovl.start" "ovl.start" \
             -write "$target_out/ovl.death" "ovl.death" \
             -write "$target_out/ovl.gen" "ovl.gen" \
-            -write "$target_out/runtime.low.prg" "runtime.low.prg" >>"$build_log" 2>&1; then
+            -write "$target_out/128.runtime.prg" "128.runtime" >>"$build_log" 2>&1; then
         echo "FAIL (cache-survival disk build failed for $target_out)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2108,7 +2108,7 @@ build_load_resume_boot_assets() {
             out/THE.GAME out/moria128_loadresume.d64 -- \
             tests/make_load_resume_save.py out/boot128.prg out/moria128.prg out/title \
             out/monster.db.1 out/monster.db.2 out/monster.db.3 out/monster.db.4 \
-            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen out/runtime.low.prg; then
+            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen out/128.runtime.prg; then
         LOAD_RESUME_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2140,7 +2140,7 @@ build_load_resume_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/runtime.low.prg "runtime.low.prg" \
+            -write out/128.runtime.prg "128.runtime" \
             -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'

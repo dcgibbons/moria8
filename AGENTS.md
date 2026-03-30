@@ -60,13 +60,13 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 - **Build:** `make` (or `make build`) — build both Commodore payload trees under `commodore/out/c64` and `commodore/out/c128`
 - **Run:** `make run` — build and launch the unified dual-entry shipping disk in C64 VICE
 - **C128 run:** `make run128` — build and launch the unified dual-entry shipping disk in C128 VICE
-- **Debug run:** `make run64` — launch the C64 debug disk
+- **Compatibility run alias:** `make run64` — same unified shipping disk under C64 VICE
 - **Test:** `make test` — run the default regression mix (`test64`, `test128-fast`, `test128-fast-smoke`)
 - **C128 fast units:** `make test128-fast` — Python Gate C compare harness for the stable C128 unit batch
 - **C128 fast smokes:** `make test128-fast-smoke` — small high-value C128 smoke subset (`boot_title_idle_smoke`, `scripted_summary_to_town_smoke`, `town_overlay_smoke`)
 - **C128 full suite:** `make test128` — authoritative full C128 shell harness
 - **Disk image:** `make disk` — create the unified dual-entry `.d64` at `commodore/out/moria8.d64`
-- **Debug disks:** `make disk64`, `make disk128` — explicit single-platform debug images at `commodore/out/moria64.d64` and `commodore/out/moria128.d64`
+- **Compatibility disk aliases:** `make disk64`, `make disk128` — aliases that build the same unified `commodore/out/moria8.d64`
 - **Clean:** `make clean` — remove build artifacts
 - **Assembler:** Kick Assembler — auto-downloaded on first `make` into `tools/kickass/` (override: `make KICKASS=/path/to/KickAss.jar`)
 - **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests

@@ -330,7 +330,7 @@
 
 - **Issue:** I renamed the low-RAM runtime payload to `runtime_low.prg`, but the C128 directory display rendered `_` as a shifted graphic, not a readable underscore.
 - **Root Cause:** I optimized for source readability instead of the actual PETSCII on-screen filename that users see in the disk directory and preload list.
-- **Resolution:** For user-visible C64/C128 disk asset names, prefer characters that render cleanly in PETSCII directory listings. In this case, `runtime.low.prg` is the correct name and the on-disk filename bytes must match the displayed string exactly.
+- **Resolution:** For user-visible C64/C128 disk asset names, prefer characters that render cleanly in PETSCII directory listings. In this case, the host artifact can remain `128.runtime.prg`, but the on-disk Commodore filename should be the bare dotted stem `128.runtime` with PRG type.
 - **Rule:** **When renaming a Commodore disk file, verify the actual PETSCII directory rendering, not just the source string or host filename.**
 
 ## Corrections From the 2026-03-18 Inventory-Help Regression
@@ -753,3 +753,10 @@
 - **Root Cause:** I fixed the immediate wrapper behavior but failed to re-audit which artifact the target should launch after the product contract changed.
 - **Resolution:** Once the shipping artifact changes, immediately review `run`, `run64`, `run128`, and similar wrapper targets to ensure the default ones exercise the real product path.
 - **Rule:** **If a feature changes what “shipping” means, default run targets must follow the shipping artifact. Debug images should only stay on explicitly named debug targets.**
+
+## 2026-03-30 — Compatibility aliases must not keep producing deprecated artifacts
+
+- **Issue:** Even after the unified disk shipped, the build still emitted standalone `moria64.d64` and `moria128.d64` files.
+- **Root Cause:** I preserved old target behavior instead of converting the old target names into aliases of the new shipping artifact.
+- **Resolution:** When an artifact is retired, remove its build rule entirely. If old target names must survive for compatibility, point them at the new canonical artifact rather than producing deprecated files.
+- **Rule:** **A compatibility alias may preserve a target name, but it must not preserve a retired artifact.**

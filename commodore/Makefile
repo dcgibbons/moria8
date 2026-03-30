@@ -14,8 +14,6 @@
 #
 # Debug targets:
 #   make build64 build128
-#   make disk64 disk128
-#   make run64
 
 # ── Tool paths ────────────────────────────────────────────
 KICKASS_DIR ?= ../tools/kickass
@@ -79,13 +77,11 @@ C128_OVL_DEATH     = $(OUT128)/ovl.death
 C128_OVL_GEN       = $(OUT128)/ovl.gen
 C128_OVL_HELP      = $(OUT128)/ovl.help
 C128_OVL_UI        = $(OUT128)/ovl.ui
-C128_RUNTIME_LOW   = $(OUT128)/runtime.low.prg
+C128_RUNTIME_LOW   = $(OUT128)/128.runtime.prg
 C128_BOOTSECT_PRG  = $(OUT128)/bootsect128.prg
 
 # ── Disk artifacts ────────────────────────────────────────
 DISK_IMAGE         = $(OUT)/moria8.d64
-DISK64_IMAGE       = $(OUT)/moria64.d64
-DISK128_IMAGE      = $(OUT)/moria128.d64
 EMPTY_PRG          = $(OUT)/empty.prg
 
 # ── Aggregate groups ──────────────────────────────────────
@@ -113,15 +109,14 @@ build128: $(C128_BUILD_ARTIFACTS)
 
 disk: $(DISK_IMAGE)
 
-disk64: $(DISK64_IMAGE)
+disk64: disk
 
-disk128: $(DISK128_IMAGE)
+disk128: disk
 
 run: $(DISK_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK_IMAGE)
 
-run64: $(DISK64_IMAGE)
-	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
+run64: run
 
 run128: $(DISK_IMAGE)
 	$(VICE128) $(RUN_FLAGS128) $(DISK_IMAGE)
@@ -190,7 +185,7 @@ $(C128_MAIN_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
 	mv -f c128/out/ovl.gen $(C128_OVL_GEN)
 	mv -f c128/out/ovl.help $(C128_OVL_HELP)
 	mv -f c128/out/ovl.ui $(C128_OVL_UI)
-	mv -f c128/out/runtime.low.prg $(C128_RUNTIME_LOW)
+	mv -f c128/out/128.runtime.prg $(C128_RUNTIME_LOW)
 
 $(C128_OVL_START): $(C128_MAIN_PRG)
 $(C128_OVL_TOWN): $(C128_MAIN_PRG)
@@ -260,54 +255,10 @@ $(DISK_IMAGE): $(C64_BUILD_ARTIFACTS) $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_
 		-write $(C128_OVL_GEN) "128.gen" \
 		-write $(C128_OVL_HELP) "128.help" \
 		-write $(C128_OVL_UI) "128.ui" \
-		-write $(C128_RUNTIME_LOW) "runtime.low.prg"
+		-write $(C128_RUNTIME_LOW) "128.runtime"
 	python3 $(PATCH_D64) $(DISK_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
 	python3 $(DISKART) $(DISK_IMAGE)
 	rm -f $(EMPTY_PRG)
-
-$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) | $(OUT)
-	$(MAKE) $(EMPTY_PRG)
-	$(C1541) -format "moria64,m8" d64 $(DISK64_IMAGE) \
-		-attach $(DISK64_IMAGE) \
-		-write $(EMPTY_PRG) "art1" \
-		-write $(EMPTY_PRG) "art2" \
-		-write $(EMPTY_PRG) "art3" \
-		-write $(EMPTY_PRG) "art4" \
-		-write $(EMPTY_PRG) "art5" \
-		-write $(C64_BOOT_PRG) "moria8" \
-		-write $(C64_BOOT_PRG) "boot64" \
-		-write $(C64_MAIN_PRG) "moria64" \
-		-write $(C64_TITLE_PRG) "t64" \
-		-write $(OUT64)/monster.db.1 "monster.db.1" \
-		-write $(OUT64)/monster.db.2 "monster.db.2" \
-		-write $(OUT64)/monster.db.3 "monster.db.3" \
-		-write $(OUT64)/monster.db.4 "monster.db.4" \
-		-write $(C64_OVL_START) "64.start" \
-		-write $(C64_OVL_TOWN) "64.town" \
-		-write $(C64_OVL_DEATH) "64.death" \
-		-write $(C64_OVL_GEN) "64.gen" \
-		-write $(C64_OVL_HELP) "64.help" \
-		-write $(C64_OVL_UI) "64.ui"
-	python3 $(DISKART) $(DISK64_IMAGE)
-	rm -f $(EMPTY_PRG)
-
-$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) | $(OUT)
-	$(C1541) -format "moria128,m8" d64 $(DISK128_IMAGE) \
-		-attach $(DISK128_IMAGE) \
-		-write $(C128_BOOT_PRG) "moria8.128" \
-		-write $(C128_MAIN_PRG) "moria128" \
-		-write $(C128_TITLE_PRG) "t128" \
-		-write $(OUT128)/monster.db.1 "monster.db.1" \
-		-write $(OUT128)/monster.db.2 "monster.db.2" \
-		-write $(OUT128)/monster.db.3 "monster.db.3" \
-		-write $(OUT128)/monster.db.4 "monster.db.4" \
-		-write $(C128_OVL_START) "128.start" \
-		-write $(C128_OVL_TOWN) "128.town" \
-		-write $(C128_OVL_DEATH) "128.death" \
-		-write $(C128_OVL_GEN) "128.gen" \
-		-write $(C128_OVL_HELP) "128.help" \
-		-write $(C128_OVL_UI) "128.ui" \
-		-write $(C128_RUNTIME_LOW) "runtime.low.prg"
 
 # ── Tool bootstrap / directories ──────────────────────────
 $(KICKASS):
