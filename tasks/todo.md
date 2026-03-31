@@ -3,125 +3,46 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
-- The C64 static boot-art spike is now manually proven and polished:
-  - manual C64 boot renders the bitmap correctly and keeps it visible through the main-program load
-  - the C64 asset format now carries bitmap + per-cell screen/color planes instead of one fixed global color fill, improving gold/silver separation and overall poster fidelity
-- `FEAT-BOOT-ART` now has a new disk-layout requirement:
-  - stop targeting one mixed-platform image for this feature
-  - target separate platform images instead:
-    - `moria8-c64.d64`
-    - `moria8-c128.d71`
-  - this resolves the earlier mixed-image UX tension and removes the need to force boot-art behavior through the shared dual-entry disk structure
-- Boot-art feature requirements are now locked for design:
-  - real bitmap art, not character art
-  - C64 multicolor bitmap
-  - native C128 80-column path, with a technically different but visually matching bitmap-style interpretation allowed
-  - centered poster with black margins acceptable
-  - same source composition on both: human/dwarf/elf, centered dwarf, crossed axe+sword, retained `MORIA8` wordmark, retained Art Deco frame
-  - static art first, gold-glint animation later
-  - boot order remains boot code → art → main program
-  - title/menu screen remains after the boot-art phase
-- Reverted the experimental expanded directory-instructions block; the disk header is back to the original 5-line MORIA title card pending a better presentation design.
-- Removed the unsupported native-C128 courtesy path from the C64 `MORIA8` loader; the supported contract remains:
-  - C64: directory-entry `MORIA8`
-  - native C128: boot sector / `BOOT`
-- `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is complete in the current worktree.
-- Final shipped shape:
-  - unified shipping disk at `commodore/out/moria8.d64`
-  - C64 boots from the first directory file
-  - native C128 boots from the patched Track 1 / Sector 0 boot sector
-  - Commodore builds/tests now route through `commodore/Makefile`
-- Final polish shipped for this closure:
-  - C64 and C128 loading text now uses matching white text
-  - C128 loading text is explicitly centered in 80-column mode
-- `BUG-DESCENT-TOPROW-C64` is resolved in the current worktree.
-- Actual root cause: the shared ordinary-movement path could still use the C128 scroll-delta renderer when `turn_scene_dirty` required a full redraw, so stale remote town glyphs were copied forward on the first south move after town entry.
-- Current verification for this fix:
-  - `make test128-fast-smoke`
-  - `make test128-fast`
-  - `make -C commodore/c64 test`
+- Shipping disk outputs are now split by platform:
+  - `commodore/out/moria8-c64.d64`
+  - `commodore/out/moria8-c128.d71`
+- The late native-C128 `128.RUNTIME` hang is fixed by reserving Track 1 / Sector 0 before patching the boot sector.
+- The current shipped boot-art baseline is the simple shared art-deco `MORIA8` fallback logo:
+  - C64: generated multicolor bitmap asset path
+  - C128: generated native 80-column VDC custom-charset poster helper path
+- The C128 boot-art handoff now blanks the VDC screen before restoring the normal charset, preventing the preload/title garbage-font flash.
+- The disk directory card and title-screen version line are now sourced from `version.json`.
 
 ## Reported Failure Gate
 - No active reported failure gate.
-- Last closed gate:
-  - C64 manual boot of `commodore/out/moria8.d64` via the normal `LOAD"*",8,1` then `RUN` contract
-  - first failure: boot hang before showing art due to IRQs firing while the boot-art path had KERNAL/IRQ vectors banked out
-  - second failure: gross bitmap scramble due to emitting the art asset in the wrong VIC bitmap byte order
-  - current status: manual C64 boot now renders the boot art correctly and survives the later main-program load
+- Most recent closed gate:
+  - `make clean`
   - `make run128`
-  - first resolved by restoring the wrapper to the known-good `x128 out/moria128.d64` debug-disk launch shape
-  - then promoted to the real dual-boot contract: `run128` now boots the unified shipping disk under `x128`
+  - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
-- [ ] FEAT-BOOT-ART: add rich bitmap loading artwork to the C64 and C128 boot paths without regressing the proven dual-entry boot architecture.
-- [ ] Active spike gate for `FEAT-BOOT-ART`:
-  - [x] build a separate C64 boot-art asset from the Gemini source image
-  - [x] show that bitmap from `commodore/c64/boot.s`
-  - [x] keep the art visible while `MORIA64` loads at the code-path level by staging the asset at `$A000`, copying it into a VIC-safe hidden-RAM layout, and restoring text mode only in the post-load chain stub
-  - [x] get a real emulator/manual confirmation that the new C64 bitmap boot path renders and survives the main-program load
-  - [x] run a first C64 polish pass so the asset carries per-cell screen/color planes instead of one fixed global screen/color fill
-  - defer the split-image build-output refactor (`moria8-c64.d64` / `moria8-c128.d71`) until after the C64 art path is proven
-- [x] FEAT-UNIFIED-DISK / BUILD-UNIFY: create a single shipping `D64` with both platform payloads, explicit platform-specific runtime asset names, a dual-entry boot design, and a single `commodore/Makefile`.
-- [x] Reject the invalid “one identical first-loaded `MORIA8.PRG` BASIC boot file” approach after repeated C64/C128 gate failures and the confirmed `$0801` vs `$1C01` BASIC-entry mismatch.
-- [x] Replace the universal-PRG milestone with a dual-entry single-disk architecture:
-  - C64 boots from the first directory file via the normal file-loader path
-  - native C128 boots from a C128-native boot sector on the same `D64`
-- [x] Add an explicit proof-of-concept gate before the broader refactor:
-  - build a minimal `D64`
-  - patch a tiny native C128 boot sector into Track 1 / Sector 0
-  - prove native C128 boot reaches a trivial success path
-  - prove the same disk still boots on C64 through the first directory file
-- [x] Replace the proof-of-concept payloads with real entry stages:
-  - [x] C64 directory file now enters the real C64 boot path (`MORIA8` = proven C64 `boot.s`)
-  - [x] C128 boot sector now hands off to the real `BOOT128` path (machine-entry `boot128.s` variant via `BOOT"BOOT128",U8`)
-- [x] Build the first real dual-entry mixed-platform disk before filename refactors:
-  - [x] C64 entry file
-  - [x] `BOOT64`
-  - [x] `BOOT128`
-  - [x] `MORIA64`
-  - [x] `MORIA128`
-- [x] Preserve unchanged child bootloaders as much as possible:
-  - [x] C64 path stays on the proven `boot.s` codepath
-  - [x] C128 path stays on the proven `boot128.s` codepath (machine-entry child variant for the boot-sector `BOOT` command)
-- [x] Add a build step that patches native C128 boot code into Track 1 / Sector 0 of the shipping `D64`.
-- [x] Define and preserve the user-visible boot contract explicitly:
-  - C64: `LOAD"*",8,1` then `RUN`
-  - native C128: power-on autoboot or `BOOT`
-- [x] Update the final mixed-disk plan and Makefile work to target the dual-entry disk, not a universal BASIC `MORIA8`.
-- [x] Phase 0 checkpoint: confirm the unified payload still fits on a hard 35-track `D64` after renames, directory art, and bootloader changes; if it does not, stop and abandon the branch in favor of separate disks.
-- [x] Add `commodore/Makefile` as the only real Commodore build/test entrypoint, with the repo-root `Makefile` kept only as a thin wrapper.
-- [x] Migrate shipping/debug build outputs to `commodore/out` and plan later cleanup of transitional legacy `commodore/c64/out` and `commodore/c128/out` used by existing test runners.
-- [x] Re-establish compatibility local `c64/out` and `c128/out` mirrors from the unified build outputs so existing harnesses keep working during the transition.
-- [x] Replace the current split shipping disks with one unified shipping target and keep explicit debug-only single-platform disk targets.
-- [x] Inspect the shared `moria8boot.s` C128 handoff against the actual `boot128` bank/load contract instead of relying on indirect smoke evidence.
-- [x] Get a consultant review focused on why the experimental C128 masterboot path can BREAK before the child loader takes over.
-- [x] Identify the concrete C128 masterboot bug: `SETBNK` was clobbering the pending `SETNAM` filename registers before the child `LOAD`.
-- [x] Patch the shared C128 loader so Bank-0 `SETBNK` happens before staging the child filename registers for `SETNAM`.
-- [x] Patch the shared C128 loader so the `$0B00` chain stub explicitly lives in 4KB bottom common RAM and reasserts a known post-`LOAD` Bank-0 execution view before jumping to `boot128`.
-- [x] Replace the brittle hand-rolled C128 child-chain path in `moria8boot.s` with the proven native `boot128` implementation via the shared source, instead of continuing to raw-load and jump into `boot128`.
-- [x] Retire the old `disk128-masterboot` validation path as obsolete once the dual-entry `D64` architecture replaces the universal-BASIC-loader experiment.
-- [x] Phase 1: evaluate the candidate unified autostart bootloader in `commodore/common/moria8boot.s`.
-- [x] Get a consultant review focused on correctness risks, filename/entrypoint contracts, and platform-detection validity.
-- [x] Wire the candidate bootloader into both C64 and C128 disk-image builds as the shared autostart path while keeping the existing child bootloaders and runtime payload names.
-- [x] Rebuild both C64/C128 disk targets and verify the resulting boot artifacts assemble cleanly.
-- [x] Run the most relevant C64 and C128 boot/disk probes for this phase.
-- [x] Record a critical evaluation of the source, what worked, and what remains unsafe before any phase-2 single-disk unification.
+- [x] FEAT-BOOT-ART shipping fallback
+  - [x] C64 boot path loads and displays the generated logo bitmap during the main-program load
+  - [x] C128 boot path loads and displays the generated logo poster helper during the main-program load
+  - [x] C128 handoff restores the normal charset contract cleanly before title flow
+  - [x] title screen now shows the per-platform version from `version.json`
+- [x] FEAT-DISK-LAYOUT shipping split
+  - [x] C64 shipping image emits as `moria8-c64.d64`
+  - [x] C128 shipping image emits as `moria8-c128.d71`
+  - [x] C128 Track 1 / Sector 0 is reserved before the native boot sector is patched
+- [x] FEAT-VERSION-MANIFEST
+  - [x] add per-platform user-facing version source at `version.json`
+  - [x] wire disk directory card text to the manifest
+  - [x] wire title-screen version text to the manifest
+- [ ] No active implementation work for this feature branch.
+- Historical branch notes for the earlier unified-disk and proof/demo phases remain below for reference only.
 
 ## `FEAT-BOOT-ART` Design Plan
 
 ### Locked Intent
-- Replace the current `LOADING MORIA8...` boot text with real bitmap artwork.
-- For this feature, stop targeting one mixed-platform shipping image.
-- New image targets:
-  - `moria8-c64.d64`
-  - `moria8-c128.d71`
-- The boot-art work may diverge per platform without preserving the mixed dual-entry disk as the shipping contract.
+- Replace the plain `LOADING MORIA8...` boot text with real boot presentation artwork.
 - Keep the title screen and main menu after boot art; boot art is a pre-title loading presentation, not a replacement for the title screen.
-- Use the current Gemini poster as the initial source image, but do not hardwire the system to that exact file forever.
 - Preserve the shared artistic identity on both platforms:
-  - human / dwarf / elf trio
-  - dwarf centered
-  - crossed axe and sword
   - `MORIA8` wordmark
   - Art Deco frame
 - Phase 1 is static art only.
@@ -146,22 +67,18 @@ This file is a temporary working scratchpad.
 ### Platform Strategy
 - C64:
   - use multicolor bitmap
-  - centered poster with black margins is acceptable
-  - target a faithful adaptation of the Gemini image’s composition and gold/black style
+  - centered composition with black margins is acceptable
 - C128:
   - stay on the native 80-column path
-  - investigate true VDC bitmap first
-  - if VDC bitmap fidelity/complexity is unacceptable, allow a technically different but visually matching 80-column boot-art implementation
+  - shipping path is now a VDC custom-charset poster, not a true VDC bitmap
+  - keep the failed true-bitmap experiment stashed as separate R&D, not the product plan
+  - preserve the same composition and styling through a technically different 80-column tile/attribute representation
 - Shared rule:
   - same composition and artistic identity
   - platform-local representation is allowed
 
 ### Asset / Build Strategy
-- Treat the current Gemini image as the phase-1 master source.
-- Keep the pipeline replaceable so later regenerated or hand-tuned source art can be dropped in without redesigning the boot system.
-- Extend the Commodore build to produce and package boot-art assets into:
-  - `moria8-c64.d64`
-  - `moria8-c128.d71`
+- Keep the pipeline replaceable so later commissioned or hand-tuned source art can be dropped in without redesigning the boot system.
 - Keep the boot-art data outside the core bootloader binaries where practical.
 
 ### Phase Plan
@@ -181,14 +98,20 @@ This file is a temporary working scratchpad.
   - current loading text removed
   - image kept visible through main-program load
   - first quality pass complete: per-cell screen/color data now ships with the asset instead of one fixed screen/color fill across the whole poster
-- [ ] Phase 2 — Static boot art on C128
-  - add a separate C128 boot-art asset file
-  - display it from the native C128 boot path in 80-column mode
-  - keep the image visible through main-program load
-- [ ] Phase 3 — Shared art pipeline cleanup
-  - formalize the shared source-art → C64/C128 asset conversion workflow
-  - allow touch-up / regeneration without changing bootloader architecture
-- [ ] Phase 4 — Glint animation
+- [x] Phase 2 — Static boot art on C128
+  - [x] add a separate C128 boot-art helper file
+  - [x] replace the diagnostic helper payload with a generated custom-charset poster asset package
+  - [x] display the generated poster from the native C128 boot path in 80-column mode
+  - [x] keep the image visible through main-program load
+  - [x] re-run the exact `make test128-fast-smoke` gate after the generated asset path lands
+  - use the custom-charset poster pipeline below rather than true VDC bitmap mode
+- [x] Phase 3 — Shared art pipeline cleanup
+  - `tools/make_logo.py` now provides the shared fallback source for both platforms
+  - the fallback is intentionally simple and replaceable without changing bootloader architecture
+- [ ] Phase 4 — Better final art
+  - commission or create stronger source art
+  - keep the current boot plumbing and replace only the asset/conversion content
+- [ ] Phase 5 — Glint animation
   - add subtle gold-highlight glint effect
   - do not begin animation work until both static boot-art paths are proven stable
 
@@ -201,7 +124,75 @@ This file is a temporary working scratchpad.
 - [x] Fix the C128 chargen summary flow so the character summary appears exactly once before town entry.
 - [x] Correct `FEAT-SEARCH-MODE` running behavior so search mode remains active during running, matching `umoria`.
 
-## `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` Plan
+### C128 Boot-Art Design (2026-03-30)
+- Runtime representation:
+  - stay in the proven native `80x25` VDC text path instead of true VDC bitmap mode
+  - treat the poster as a custom tile set in VDC character memory plus a screen map and attribute map
+  - reuse the existing VDC screen/attribute bases already used by the game backend:
+    - screen map at `$0000`
+    - attribute map at `$0800`
+  - keep VDC attribute bit 7 set so the poster uses the alternate character set path already assumed by [`commodore/c128/screen_vdc.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/screen_vdc.s)
+- Offline asset pipeline:
+  - start from one shared high-resolution source composition for both platforms
+  - prepare a C128 working image on an `80x25` cell grid (`640x200` conceptual layout, `8x8` cells)
+  - slice into `8x8` monochrome tile patterns
+  - deduplicate into at most `256` unique tiles for one VDC character set bank
+  - emit three files:
+    - charset payload: `256 * 8 = 2048` bytes
+    - screen map: `80 * 25 = 2000` bytes
+    - attribute map: `80 * 25 = 2000` bytes
+  - if the first pass exceeds `256` unique tiles, reduce complexity in the converter/art pass rather than complicating the runtime
+- Boot/runtime flow:
+  - `boot128.s` enters the normal 80-column VDC mode and clears the screen
+  - load the C128 boot-art asset package from disk
+  - upload charset bytes into VDC character memory
+  - stream the screen map into `$0000`
+  - stream the attribute map into `$0800`
+  - leave the poster visible while `MORIA128` loads
+  - before handing off to the main/title flow, restore the normal gameplay/title charset contract if the boot-art tiles displaced it
+- Verification gates before integration:
+  - standalone proof: custom VDC charset upload plus a nontrivial poster fragment rendered from screen/attribute maps
+  - boot proof: poster remains visible through the later `MORIA128` load
+  - regression proof: existing C128 VDC text/attribute tests still pass unchanged
+- Why this path:
+  - it is native to the proven VDC text backend already in the tree
+  - it preserves the desired 80-column C128 identity
+  - it is far easier to reason about and verify than the stalled attribute-enabled VDC bitmap experiment
+
+### Review
+- Current conclusion: the native C128 custom-charset poster path is proven enough to ship as the fallback boot-art implementation.
+- The generated C128 boot-art path now exists via [`tools/ppm_to_c128_bootart.py`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c128_bootart.py) plus [`commodore/c128/bootart128.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s).
+- The generator now targets the full VDC Set 1-safe alternate charset budget (`127` custom tiles plus blank at `$20`) and emits:
+  - `out/c128/bootart128_charset.bin`
+  - `out/c128/bootart128_screen.bin`
+  - `out/c128/bootart128_attr.bin`
+  - `out/c128/bootart128_preview.ppm`
+- A shared geometric fallback boot-art path now exists via [`tools/make_logo.py`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_logo.py), and both [`commodore/Makefile`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) boot-art rules now consume that generator instead of external JPG inputs.
+- The fallback art is intentionally simple: a shared black/gold/white `MORIA8` art-deco block logo that survives both the C64 multicolor converter and the C128 charset poster converter.
+- The C128 centering bug was caused by a stale poster-era wordmark override in [`tools/ppm_to_c128_bootart.py`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c128_bootart.py); the fallback path now uses the plain converted geometry with a centered plaque from [`tools/make_logo.py`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_logo.py).
+- `x128 -80col -limitcycles 12000000 -exitscreenshot /tmp/moria8_fallback_c128.png commodore/out/moria8-c128.d71` captured the live C128 fallback logo boot screen during development.
+- `x128 -80col -limitcycles 12000000 -exitscreenshot /tmp/moria8_fallback_c128_centered.png commodore/out/moria8-c128.d71` captured the updated centered C128 fallback logo during development.
+- The generated C64 multicolor asset also decodes cleanly from [`commodore/out/c64/bootart64.prg`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c64/bootart64.prg) to `/tmp/moria8_fallback_c64_preview.png`; direct live `x64sc` screenshot capture is currently blocked in this environment by a GUI initialization failure.
+- The updated centered-plaque C64 fallback asset decodes cleanly to `/tmp/moria8_fallback_c64_centered.png`.
+- The simpler fallback composition is better than the plaque version: [`tools/make_logo.py`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_logo.py) now emits a border-only art-deco frame with a centered `MORIA8` wordmark and no inner plaque.
+- The attempted C128 runtime title overlay in [`commodore/c128/bootart128.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) was removed; the fallback boot path is back on the already-proven generated charset/screen/attr asset path.
+- The C128 boot handoff now blanks the 80-column VDC screen inside [`commodore/c128/bootart128.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) via direct VDC writes before restoring the normal alternate charset. This avoids the garbage-glyph flash without reintroducing the branch-local regression caused by a KERNAL `CHROUT $93` clear in [`commodore/c128/boot128.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/boot128.s).
+- Current preview baselines:
+  - C128 generated preview: `/tmp/moria8_c128_preview_simple.png`
+  - C64 source preview: `/tmp/moria8_c64_source_simple.png`
+- The fallback wordmark is now explicitly condensed for the `160x200` source path so the C64 title fits inside the border with real side margins, while the C128 path keeps the broader centered treatment.
+- Updated preview baselines:
+  - C128 generated preview: `/tmp/moria8_c128_preview_narrow2.png`
+  - C64 source preview: `/tmp/moria8_c64_source_narrow2.png`
+- The better fix is to reuse the same main `MORIA8` glyph family on both platforms and simply scale it down for the C64 source path; the ad hoc condensed small-font experiment is gone.
+- Current matching-style preview baselines:
+  - C128 generated preview: `/tmp/moria8_c128_preview_match.png`
+  - C64 source preview: `/tmp/moria8_c64_source_match.png`
+- `make test128-fast-smoke` passes again after the generated poster integration (`3 passed, 0 failed`).
+
+## Historical Note — `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`
+
+The section below is retained only as historical context for the earlier dual-entry-disk phase. It does not reflect the current shipping repo state after the 2026-03-31 split-image change.
 
 ### Locked Intent
 - Ship one hard-`D64` disk image as the primary artifact.

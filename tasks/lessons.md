@@ -1,5 +1,26 @@
 # Lessons Learned
 
+## 2026-03-31 — If a disk-image boot sector is patched into a filesystem sector, reserve that sector before writing files
+
+- **Issue:** After adding the C128 boot-art helper file, the native C128 build started hanging after `128.RUNTIME` even though the runtime loader code itself had not meaningfully changed.
+- **Root Cause:** The earlier mixed-image design patched the native C128 boot sector into Track 1 / Sector 0 without reserving that sector in the filesystem first. Adding one more file shifted allocation enough that `128.RUNTIME` could land on `1/0`, and the boot-sector patch then corrupted it.
+- **Resolution:** Treat patched boot sectors as owned media, not just “bytes written later.” Reserve the sector before file allocation or move the boot sector to a deliberately non-filesystem-owned location.
+- **Rule:** **Do not patch CBM boot code into a live filesystem sector unless that sector is reserved before any file writes.**
+
+## 2026-03-31 — Center text against the visible interior, not the full row, when a bordered title card defines the real layout
+
+- **Issue:** I added the title-screen version line and centered it against the nominal 40-column row, which left it visibly one column off inside the bordered card on both C64 and C128.
+- **Root Cause:** I centered against the full screen width instead of the actual 36-column bordered interior that the eye reads as the layout container.
+- **Resolution:** When a title card or border creates the real visual frame, compute centering against that interior width and offset, not the raw row width.
+- **Rule:** **For boxed title cards, center content inside the interior frame, not the full line width.**
+
+## 2026-03-30 — When a build input disappears after stashing WIP, check the stash’s untracked payload before treating it as missing from the repo
+
+- **Issue:** I treated a missing stashed build input as an external blocker even though the user had already stashed the experiment that carried the file.
+- **Root Cause:** I checked only the normal stash diff surface first, which hid the untracked stash payload where the file actually lived.
+- **Resolution:** When a recently stashed branch seems to have “lost” a build input, inspect the stash with untracked files included (`git stash show -u`, `stash@{n}^3`) before concluding the file is absent.
+- **Rule:** **After stashing WIP, do not call a missing build input “gone” until you have checked the stash’s untracked tree as well as the tracked diff.**
+
 ## 2026-03-30 — When the user changes the product target, freeze the old architecture and keep new implementation spikes scoped
 
 - **Issue:** After landing the unified dual-boot disk, I was still at risk of treating that mixed-image architecture as the default vehicle for the next boot-art feature even after the user explicitly changed the requirement to separate platform images.
@@ -795,3 +816,31 @@
 - **Root Cause:** I preserved old target behavior instead of converting the old target names into aliases of the new shipping artifact.
 - **Resolution:** When an artifact is retired, remove its build rule entirely. If old target names must survive for compatibility, point them at the new canonical artifact rather than producing deprecated files.
 - **Rule:** **A compatibility alias may preserve a target name, but it must not preserve a retired artifact.**
+
+## 2026-03-31 — For shared fallback boot art, simplify the composition before inventing platform-specific title hacks
+
+- **Issue:** When the plaque-based fallback logo still looked awkward, I started layering a C128-only runtime title overlay on top of it instead of first fixing the shared composition.
+- **Root Cause:** I treated the platform-specific rendering artifact as the primary problem even though the user was pointing at a broader composition issue: too much plaque structure, too much empty space, and the title not owning the center.
+- **Resolution:** For cross-platform fallback art, first simplify the shared source design to the strongest readable shapes, then only add platform-specific rendering logic if the simpler composition still fails.
+- **Rule:** **If a fallback logo looks awkward on both platforms, fix the shared composition first. Do not reach for platform-specific overlay tricks until the source design is already clean.**
+
+## 2026-03-31 — For shared logos, the C64 width budget must drive the wordmark before the C128 scale
+
+- **Issue:** After simplifying the fallback logo, I still left the `MORIA8` wordmark too wide for the C64 frame because I was judging the shape from the larger C128-friendly version.
+- **Root Cause:** I reused a broad block-glyph treatment on the `160x200` source instead of treating the C64 version as the tightest width budget that the shared design has to satisfy.
+- **Resolution:** For shared cross-platform logo art, size and condense the title against the smallest target first, then confirm the larger platform still looks balanced.
+- **Rule:** **When one shared logo feeds both C64 and C128, the C64 width budget is authoritative for the wordmark. If it nearly touches the frame on C64, it is too wide.**
+
+## 2026-03-31 — Matching style across platforms means reusing the same glyph family before inventing a new small-font look
+
+- **Issue:** My first attempt to fix the C64 width problem used a separate condensed font, which solved the width but made the wordmark look like a different design from the C128 version.
+- **Root Cause:** I optimized for fit first and style second, instead of asking whether the smaller target could simply use the same base glyph family at a smaller scale.
+- **Resolution:** When a shared logo needs to fit a smaller retro target, try the same glyph family at a reduced scale before designing a second font. Only diverge if the shared glyphs truly do not survive.
+- **Rule:** **For shared logo work, preserve the glyph family across platforms whenever possible. Scale first; invent a second font only as a last resort.**
+
+## 2026-03-31 — When a new boot regression appears in a branch-local feature delta, isolate that delta before rewriting older loader code
+
+- **Issue:** After the C128 boot-art handoff started hanging after `128.RUNTIME`, I started patching the older `c128_load_runtime_low_prg` path instead of first isolating the branch-local handoff change that introduced the regression.
+- **Root Cause:** I let the monitor trace pull me into the deeper loader stack and ignored the stronger fact that this path had already worked earlier in the same branch before the recent handoff tweak.
+- **Resolution:** Treat a fresh regression in an in-progress feature branch as a delta-isolation problem first: compare the current branch-local changes against the last known-good branch state, revert speculative loader surgery, and fix the smallest handoff change that actually regressed behavior.
+- **Rule:** **If a path worked earlier in the branch and breaks after a small feature tweak, isolate the feature delta first. Do not rewrite older shared loader code until the branch-local regression has been ruled out.**

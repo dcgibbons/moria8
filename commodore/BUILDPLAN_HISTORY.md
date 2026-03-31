@@ -6,6 +6,67 @@
 
 ---
 
+## 2026-03-31 — `FEAT-BOOT-ART` fallback shipping path, split shipping disks, and shared version manifest ✅ COMPLETE
+
+### Scope Closed
+- Replaced the temporary unified-shipping-disk boot-art target with the current split shipping artifacts:
+  - C64: [out/moria8-c64.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8-c64.d64)
+  - C128: [out/moria8-c128.d71](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8-c128.d71)
+- Shipped the simple cross-platform fallback `MORIA8` boot logo on both machines.
+- Added a shared per-platform version manifest at [../version.json](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/version.json) and wired it into both the disk directory card and the title screen.
+
+### Root Cause Of The Late C128 Regression
+- The post-preload C128 hang after `128.RUNTIME` was not a runtime-loader bug.
+- The real failure was disk-image corruption in the earlier mixed-image layout:
+  - native C128 boot code was patched into Track 1 / Sector 0
+  - that sector was not reserved before file allocation
+  - adding the C128 boot-art helper shifted file placement so `128.RUNTIME` could be allocated on `1/0`
+  - the later boot-sector patch then overwrote the first block of `128.RUNTIME`
+- The durable fix was architectural, not loader surgery:
+  - split the shipping images
+  - make the C128 image a `1571`/`.d71`
+  - reserve Track 1 / Sector 0 before file writes
+
+### What Shipped
+1. **Split shipping images**
+   - [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) now builds:
+     - `out/moria8-c64.d64`
+     - `out/moria8-c128.d71`
+   - `make run` launches the C64 image under `x64sc`.
+   - `make run128` launches the C128 image under `x128` with `1571` drive type.
+   - The native C128 image reserves Track 1 / Sector 0 before file allocation and patches the boot sector there safely.
+2. **Fallback boot-art shipping path**
+   - C64 boot art is now generated from [tools/make_logo.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_logo.py) into the C64 multicolor bitmap converter path.
+   - C128 boot art is generated from the same source design through [tools/ppm_to_c128_bootart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c128_bootart.py) plus [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s).
+   - The shipped visual baseline is the simple shared art-deco `MORIA8` logo rather than the rejected AI-image-derived poster conversion.
+3. **Clean C128 handoff**
+   - [c128/boot128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/boot128.s) now loads and shows `BOOTART128`, suppresses KERNAL chatter during the main-program load, and restores the normal charset contract before title flow.
+   - [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) clears the VDC screen before restoring the overwritten alternate charset so the preload/title handoff does not flash garbage glyphs.
+4. **Version manifest integration**
+   - `version.json` is now the user-facing per-platform version source.
+   - [tools/diskart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/diskart.py) reads it for the disk directory card.
+   - [tools/make_version_include.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_version_include.py) generates the title-screen version include used by [common/title_data.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/title_data.s).
+
+### Verification
+- Exact reported command:
+  - `make clean`
+  - `make run128`
+  - user-confirmed fixed after the split-disk / reserved-sector repair
+- Broader regression suites:
+  - `make -C commodore test128-fast-smoke` = `3 passed, 0 failed`
+- Packaging / output checks:
+  - `make -C commodore out/moria8-c64.d64 out/moria8-c128.d71`
+  - `c1541 commodore/out/moria8-c64.d64 -list`
+  - `c1541 commodore/out/moria8-c128.d71 -list`
+
+### Outcome
+- The earlier unified `out/moria8.d64` shipping architecture is now historical, not current.
+- The repo’s present shipping baseline is:
+  - separate platform disks
+  - simple shared fallback boot art
+  - version text sourced from `version.json`
+- Higher-fidelity art remains future feature work, not an active blocker.
+
 ## 2026-03-30 — `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` dual-entry shipping disk and unified Commodore build ✅ COMPLETE
 
 ### Scope Closed
@@ -72,7 +133,7 @@
 
 ### Outcome
 - `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is removed from active planning.
-- The dual-boot disk architecture is now the shipped Commodore disk design.
+- The dual-boot disk architecture was the shipped design at that checkpoint, but was later superseded by split platform images on 2026-03-31.
 - Loading-art/boot-screen graphics remain a separate follow-up, not part of this closure.
 
 ## 2026-03-29 — `BUG-INV-STATLINE-C64` modal status restore fix ✅ COMPLETE
