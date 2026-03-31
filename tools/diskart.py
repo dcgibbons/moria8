@@ -9,7 +9,9 @@ listing.
 Usage: python3 tools/diskart.py <disk-file> <platform>
 """
 
+import json
 import sys
+from pathlib import Path
 
 # D64 track geometry: sectors per track (index 0 unused)
 SECTORS_PER_TRACK = [0] + [21]*17 + [19]*7 + [18]*6 + [17]*5
@@ -26,12 +28,39 @@ def sector_offset(track, sector):
 BAM_OFF = sector_offset(18, 0)
 DIR_OFF = sector_offset(18, 1)
 
-# PETSCII art filenames (16 bytes each)
-# $60 = horizontal bar in unshifted charset
 HLINE = bytes([0x60] * 16)
+VERSION_FILE = Path(__file__).resolve().parents[1] / "version.json"
 
 def art_line(text):
     return text.upper().encode("ascii").ljust(16, b" ")
+
+
+def centered_art_line(text):
+    return art_line(text.center(16))
+
+
+def load_versions():
+    raw = json.loads(VERSION_FILE.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("version.json must be a JSON object")
+    versions = {}
+    for platform in ("c64", "c128"):
+        value = raw.get(platform)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"version.json missing string version for {platform}")
+        versions[platform] = value.strip()
+    return versions
+
+
+def build_art(platform, version):
+    display_version = version if version.lower().startswith("v") else f"v{version}"
+    return [
+        HLINE,
+        centered_art_line("dungeons of"),
+        centered_art_line(f"moria {platform}"),
+        centered_art_line(display_version),
+        HLINE,
+    ]
 
 
 def directory_entry_offset(data, index):
@@ -55,38 +84,22 @@ def directory_entry_offset(data, index):
 
     return sector_offset(track, sector) + remaining * 32
 
-ART_BY_PLATFORM = {
-    "c64": [
-        HLINE,
-        art_line("  dungeons of   "),
-        art_line("   moria c64    "),
-        art_line("      v1.0      "),
-        HLINE,
-    ],
-    "c128": [
-        HLINE,
-        art_line("  dungeons of   "),
-        art_line("   moria c128   "),
-        art_line("      v1.0      "),
-        HLINE,
-    ],
-}
-
-
 def main():
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <disk-file> <platform>")
         sys.exit(1)
 
     platform = sys.argv[2].lower()
-    if platform not in ART_BY_PLATFORM:
+    if platform not in ("c64", "c128"):
         print(f"Unknown platform '{platform}' (expected c64 or c128)")
         sys.exit(1)
+
+    versions = load_versions()
 
     with open(sys.argv[1], "r+b") as f:
         data = bytearray(f.read())
 
-    art = ART_BY_PLATFORM[platform]
+    art = build_art(platform, versions[platform])
 
     for i, name in enumerate(art):
         off = directory_entry_offset(data, i)
