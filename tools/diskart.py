@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""diskart.py -- Patch PETSCII directory art into a d64 disk image.
+"""diskart.py -- Patch PETSCII directory art into a CBM disk image.
 
 Replaces the first placeholder directory entries (created by c1541 as
 dummy PRG files) with zero-block DEL entries whose filenames use
 PETSCII graphic characters to create a title card in the directory
 listing.
 
-Usage: python3 tools/diskart.py <d64-file>
+Usage: python3 tools/diskart.py <disk-file> <platform>
 """
 
 import sys
@@ -55,24 +55,40 @@ def directory_entry_offset(data, index):
 
     return sector_offset(track, sector) + remaining * 32
 
-ART = [
-    HLINE,
-    art_line("  dungeons  of  "),
-    art_line("     moria      "),
-    art_line(" c64/c128  v1.0 "),
-    HLINE,
-]
+ART_BY_PLATFORM = {
+    "c64": [
+        HLINE,
+        art_line("  dungeons of   "),
+        art_line("   moria c64    "),
+        art_line("      v1.0      "),
+        HLINE,
+    ],
+    "c128": [
+        HLINE,
+        art_line("  dungeons of   "),
+        art_line("   moria c128   "),
+        art_line("      v1.0      "),
+        HLINE,
+    ],
+}
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <d64-file>")
+    if len(sys.argv) != 3:
+        print(f"Usage: {sys.argv[0]} <disk-file> <platform>")
+        sys.exit(1)
+
+    platform = sys.argv[2].lower()
+    if platform not in ART_BY_PLATFORM:
+        print(f"Unknown platform '{platform}' (expected c64 or c128)")
         sys.exit(1)
 
     with open(sys.argv[1], "r+b") as f:
         data = bytearray(f.read())
 
-    for i, name in enumerate(ART):
+    art = ART_BY_PLATFORM[platform]
+
+    for i, name in enumerate(art):
         off = directory_entry_offset(data, i)
 
         # Free the data block in BAM (c1541 allocated 1 block per dummy file)
@@ -94,7 +110,7 @@ def main():
     with open(sys.argv[1], "wb") as f:
         f.write(data)
 
-    print(f"Directory art: patched {len(ART)} entries in {sys.argv[1]}")
+    print(f"Directory art: patched {len(art)} entries for {platform} in {sys.argv[1]}")
 
 
 if __name__ == "__main__":

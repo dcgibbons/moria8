@@ -25,6 +25,15 @@
 .const COPY_PTR_HI = $61
 .const BOOT_MSG_ROW = 12
 .const BOOT_MSG_COL = 32
+.const KERNAL_SETMSG = $ff90
+.const KERNAL_SETNAM = $ffbd
+.const KERNAL_SETLFS = $ffba
+.const KERNAL_LOAD   = $ffd5
+.const KERNAL_CLOSE  = $ffc3
+.const KERNAL_CLRCHN = $ffcc
+.const BOOTART_SHOW_ENTRY = $2800
+.const BOOTART_RESTORE_ENTRY = $2803
+.const KMSG_NONE = $00
 
 // ============================================================
 // Entry wrapper
@@ -102,24 +111,12 @@ loader_start:
     lda #$93
     jsr $ffd2
 
-    // Center the loading text in 80-column mode and use the same
-    // explicit text color as the C64 boot screen.
-    ldx #BOOT_MSG_ROW
-    ldy #BOOT_MSG_COL
-    clc
-    jsr $fff0
-    lda #CHROUT_WHITE
-    jsr $ffd2
+    // Suppress SEARCHING/LOADING chatter so KERNAL LOAD does not scribble
+    // over the diagnostic poster during the boot-art proof.
+    lda #KMSG_NONE
+    jsr KERNAL_SETMSG
 
-    // Print "LOADING MORIA8..."
-    ldx #0
-!loop:
-    lda loading_msg,x
-    beq !done+
-    jsr $ffd2               // KERNAL CHROUT
-    inx
-    bne !loop-
-!done:
+    jsr bootart_try_show
 
     // 5. SETBNK (Bank 1 data, Bank 0 filenames)
     // Filenames are at $2300 (Bank 0 RAM, visible to Bank 15)
@@ -131,18 +128,21 @@ loader_start:
     lda #game_filename_end - game_filename
     ldx #<game_filename
     ldy #>game_filename
-    jsr $ffbd
+    jsr KERNAL_SETNAM
     
     lda #2
     ldx #8
     ldy #1
-    jsr $ffba
+    jsr KERNAL_SETLFS
 
     lda #COL_BLUE
     sta $d020
     lda #0
-    jsr $ffd5
+    jsr KERNAL_LOAD
     bcs load_err
+    lda #2
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
 
 #if BOOT_DIAG
     lda #$c2
@@ -157,6 +157,7 @@ loader_start:
     lda #COL_BLACK
     sta $d020
     sei
+    jsr bootart_try_restore
     
     ldx #stub_end - stub_start
 !reloc:
@@ -171,6 +172,62 @@ load_err:
     inc $d020               // Flashing Red Scream
     jmp load_err
 
+bootart_try_show:
+    lda #0
+    sta bootart_active
+    lda #0
+    ldx #0
+    jsr $ff68
+
+    lda #bootart_filename_end - bootart_filename
+    ldx #<bootart_filename
+    ldy #>bootart_filename
+    jsr KERNAL_SETNAM
+
+    lda #2
+    ldx #8
+    ldy #1
+    jsr KERNAL_SETLFS
+
+    lda #0
+    ldx #0
+    ldy #0
+    jsr KERNAL_LOAD
+    bcs !fallback+
+    lda #2
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
+    jsr BOOTART_SHOW_ENTRY
+    lda #1
+    sta bootart_active
+    rts
+!fallback:
+    lda #2
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
+    ldx #BOOT_MSG_ROW
+    ldy #BOOT_MSG_COL
+    clc
+    jsr $fff0
+    lda #CHROUT_WHITE
+    jsr $ffd2
+    ldx #0
+!msg_loop:
+    lda loading_msg,x
+    beq !done+
+    jsr $ffd2
+    inx
+    bne !msg_loop-
+!done:
+    rts
+
+bootart_try_restore:
+    lda bootart_active
+    beq !done+
+    jsr BOOTART_RESTORE_ENTRY
+!done:
+    rts
+
 loading_msg:
     .text "LOADING MORIA8..."
     .byte $0d, 0            // CR, null
@@ -180,6 +237,11 @@ loading_msg:
 game_filename:
     .byte $4d, $4f, $52, $49, $41, $31, $32, $38   // "MORIA128"
 game_filename_end:
+bootart_filename:
+    .byte $42, $4f, $4f, $54, $41, $52, $54, $31, $32, $38 // "BOOTART128"
+bootart_filename_end:
+bootart_active:
+    .byte 0
 
 .label stub_reloc_src_relocated = *
 }

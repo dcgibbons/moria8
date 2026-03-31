@@ -1432,10 +1432,10 @@ build_boot_assets() {
     fi
 
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/128.runtime.prg out/main.vs -- \
-            main.s boot128.s bootsect128.s Makefile; then
+            main.s boot128.s bootart128.s bootsect128.s Makefile ../tools/ppm_to_c128_bootart.py ../tools/make_logo.py; then
         BOOT_ASSETS_BUILT=1
         return
     fi
@@ -2635,7 +2635,7 @@ run_boot_d64_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -2680,7 +2680,7 @@ run_boot_title_newgame_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -2737,7 +2737,7 @@ run_new_key_stability_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -2915,7 +2915,7 @@ run_boot_title_idle_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -2976,7 +2976,7 @@ run_boot_tier_transition_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -3031,7 +3031,7 @@ run_town_overlay_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -3085,7 +3085,7 @@ run_town_overlay_female_smoke() {
     fi
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
@@ -3314,7 +3314,7 @@ run_real_input_town_move_diag() {
     done
 
     local abs_d64
-    abs_d64="$(cd out && pwd)/moria128.d64"
+    abs_d64="$(cd out && pwd)/moria128.d71"
     local mon_file
     mon_file="$(test128_tmp_file "test128_${name}.mon")"
     local log_file
