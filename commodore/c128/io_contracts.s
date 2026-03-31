@@ -77,7 +77,7 @@
 :C128AuditBelowIo("look_flash_target", look_flash_target)
 :C128AuditBelowIo("game_over_prompt", game_over_prompt)
 
-// Runtime-low Bank 0 call surfaces loaded from runtime.low.prg.
+// Runtime-low Bank 0 call surfaces loaded from 128.runtime.prg.
 :C128AuditRuntimeLow("monster_get_threat_color", monster_get_threat_color)
 :C128AuditRuntimeLow("viewport_update", viewport_update)
 :C128AuditRuntimeLow("render_viewport", render_viewport)

@@ -17,6 +17,12 @@
 #endif
 .encoding "screencode_mixed"
 
+#import "../out/version_strings.inc"
+
+.const TITLE_BORDER_COL = 1
+.const TITLE_INNER_COL = TITLE_BORDER_COL + 1
+.const TITLE_INNER_WIDTH = 36
+
 // Color constants (must match screen.s — standalone file)
 .const TC_BLACK  = $00
 .const TC_WHITE  = $01
@@ -202,6 +208,9 @@
 // ── Row 13: empty with borders ──
 .byte 13, 1, TC_LGREY
 .byte $21
+.byte $00
+.byte 13, TITLE_INNER_COL + ((TITLE_INNER_WIDTH - TITLE_VERSION_LEN) / 2), TC_DGREY
+:EmitTitleVersion()
 .byte $00
 .byte 13, 38, TC_LGREY
 .byte $21

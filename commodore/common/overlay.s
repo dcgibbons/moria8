@@ -14,7 +14,9 @@
 //   OVL_HELP        = 5  Dedicated help screen overlay
 //   OVL_UI          = 6  Inventory/equipment/character/wizard modal UI
 //
-// Disk filenames: OVL.START, OVL.TOWN, OVL.DEATH, OVL.GEN, OVL.HELP, OVL.UI
+// Disk filenames:
+//   C64  -> 64.START, 64.TOWN, 64.DEATH, 64.GEN, 64.HELP, 64.UI
+//   C128 -> 128.START, 128.TOWN, 128.DEATH, 128.GEN, 128.HELP, 128.UI
 // REU: stashed alongside creature tiers at startup
 
 // ============================================================
@@ -188,15 +190,24 @@ c128_overlay_fn_guard_check:
     rts
 
 ovl_fn_guard_expected:
-    .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54
-    .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e
-    .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48
-    .byte $4f,$56,$4c,$2e,$47,$45,$4e
-    .byte $4f,$56,$4c,$2e,$48,$45,$4c,$50
-    .byte $4f,$56,$4c,$2e,$55,$49
+#if C128
+    .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54
+    .byte $31,$32,$38,$2e,$54,$4f,$57,$4e
+    .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48
+    .byte $31,$32,$38,$2e,$47,$45,$4e
+    .byte $31,$32,$38,$2e,$48,$45,$4c,$50
+    .byte $31,$32,$38,$2e,$55,$49
+#else
+    .byte $36,$34,$2e,$53,$54,$41,$52,$54
+    .byte $36,$34,$2e,$54,$4f,$57,$4e
+    .byte $36,$34,$2e,$44,$45,$41,$54,$48
+    .byte $36,$34,$2e,$47,$45,$4e
+    .byte $36,$34,$2e,$48,$45,$4c,$50
+    .byte $36,$34,$2e,$55,$49
+#endif
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
     .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
-    .byte 9, 8, 9, 7, 8, 6
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui
 ovl_fn_guard_expected_end:
 #if !C128
 c128_overlay_fn_guard_stage:   .byte 0
@@ -369,19 +380,25 @@ overlay_fetch_reu:
 // Overlay filename data (PETSCII for KERNAL — NOT screen codes)
 // ============================================================
 #if !C128
-ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
-ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
-ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
-ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
-ovl_fn_help:  .byte $4f,$56,$4c,$2e,$48,$45,$4c,$50      // "OVL.HELP"
-ovl_fn_ui:    .byte $4f,$56,$4c,$2e,$55,$49              // "OVL.UI"
+ovl_fn_start: .byte $36,$34,$2e,$53,$54,$41,$52,$54              // "64.START"
+ovl_fn_start_end:
+ovl_fn_town:  .byte $36,$34,$2e,$54,$4f,$57,$4e                  // "64.TOWN"
+ovl_fn_town_end:
+ovl_fn_death: .byte $36,$34,$2e,$44,$45,$41,$54,$48              // "64.DEATH"
+ovl_fn_death_end:
+ovl_fn_gen:   .byte $36,$34,$2e,$47,$45,$4e                      // "64.GEN"
+ovl_fn_gen_end:
+ovl_fn_help:  .byte $36,$34,$2e,$48,$45,$4c,$50                  // "64.HELP"
+ovl_fn_help_end:
+ovl_fn_ui:    .byte $36,$34,$2e,$55,$49                          // "64.UI"
+ovl_fn_ui_end:
 
 ovl_fn_addr_lo:
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
 ovl_fn_addr_hi:
     .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
 ovl_fn_len:
-    .byte 9, 8, 9, 7, 8, 6
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui
 
 
 // ============================================================

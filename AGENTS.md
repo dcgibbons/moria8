@@ -57,19 +57,22 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 
 ## Build and Test
 
-- **Build:** `make` (or `make build`) — assembles `main.s` → `out/moria8.prg`
-- **Run:** `make run` — build and launch in VICE
-- **Test:** `make test` — assemble + run all tests in VICE headless
+- **Build:** `make` (or `make build`) — build both Commodore payload trees under `commodore/out/c64` and `commodore/out/c128`
+- **Run:** `make run` — build and launch the unified dual-entry shipping disk in C64 VICE
+- **C128 run:** `make run128` — build and launch the unified dual-entry shipping disk in C128 VICE
+- **Compatibility run alias:** `make run64` — same unified shipping disk under C64 VICE
+- **Test:** `make test` — run the default regression mix (`test64`, `test128-fast`, `test128-fast-smoke`)
 - **C128 fast units:** `make test128-fast` — Python Gate C compare harness for the stable C128 unit batch
 - **C128 fast smokes:** `make test128-fast-smoke` — small high-value C128 smoke subset (`boot_title_idle_smoke`, `scripted_summary_to_town_smoke`, `town_overlay_smoke`)
 - **C128 full suite:** `make test128` — authoritative full C128 shell harness
-- **Disk image:** `make disk` — create a .d64 disk image
+- **Disk image:** `make disk` — create the unified dual-entry `.d64` at `commodore/out/moria8.d64`
+- **Compatibility disk aliases:** `make disk64`, `make disk128` — aliases that build the same unified `commodore/out/moria8.d64`
 - **Clean:** `make clean` — remove build artifacts
 - **Assembler:** Kick Assembler — auto-downloaded on first `make` into `tools/kickass/` (override: `make KICKASS=/path/to/KickAss.jar`)
 - **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests
-- **Entry point:** `commodore/c64/main.s`
+- **Entry points:** `commodore/c64/main.s`, `commodore/c128/main.s`
 
-The root Makefile delegates to `commodore/c64/Makefile`. All make targets work from the project root.
+The root Makefile delegates to `commodore/Makefile`. All make targets work from the project root.
 
 When running VICE headless for testing, be sure to use -warp mode to improve
 test speed.

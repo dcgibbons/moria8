@@ -1,5 +1,152 @@
 # Lessons Learned
 
+## 2026-03-31 — If a disk-image boot sector is patched into a filesystem sector, reserve that sector before writing files
+
+- **Issue:** After adding the C128 boot-art helper file, the native C128 build started hanging after `128.RUNTIME` even though the runtime loader code itself had not meaningfully changed.
+- **Root Cause:** The earlier mixed-image design patched the native C128 boot sector into Track 1 / Sector 0 without reserving that sector in the filesystem first. Adding one more file shifted allocation enough that `128.RUNTIME` could land on `1/0`, and the boot-sector patch then corrupted it.
+- **Resolution:** Treat patched boot sectors as owned media, not just “bytes written later.” Reserve the sector before file allocation or move the boot sector to a deliberately non-filesystem-owned location.
+- **Rule:** **Do not patch CBM boot code into a live filesystem sector unless that sector is reserved before any file writes.**
+
+## 2026-03-31 — Center text against the visible interior, not the full row, when a bordered title card defines the real layout
+
+- **Issue:** I added the title-screen version line and centered it against the nominal 40-column row, which left it visibly one column off inside the bordered card on both C64 and C128.
+- **Root Cause:** I centered against the full screen width instead of the actual 36-column bordered interior that the eye reads as the layout container.
+- **Resolution:** When a title card or border creates the real visual frame, compute centering against that interior width and offset, not the raw row width.
+- **Rule:** **For boxed title cards, center content inside the interior frame, not the full line width.**
+
+## 2026-03-30 — When a build input disappears after stashing WIP, check the stash’s untracked payload before treating it as missing from the repo
+
+- **Issue:** I treated a missing stashed build input as an external blocker even though the user had already stashed the experiment that carried the file.
+- **Root Cause:** I checked only the normal stash diff surface first, which hid the untracked stash payload where the file actually lived.
+- **Resolution:** When a recently stashed branch seems to have “lost” a build input, inspect the stash with untracked files included (`git stash show -u`, `stash@{n}^3`) before concluding the file is absent.
+- **Rule:** **After stashing WIP, do not call a missing build input “gone” until you have checked the stash’s untracked tree as well as the tracked diff.**
+
+## 2026-03-30 — When the user changes the product target, freeze the old architecture and keep new implementation spikes scoped
+
+- **Issue:** After landing the unified dual-boot disk, I was still at risk of treating that mixed-image architecture as the default vehicle for the next boot-art feature even after the user explicitly changed the requirement to separate platform images.
+- **Root Cause:** I had already invested heavily in the mixed-disk path, so it was easy to let that finished architecture keep driving implementation decisions for the next feature.
+- **Resolution:** Once the user changes the product target, record the new target immediately in the planning docs and scope any interim spikes explicitly. If a current spike still uses the old build path for expediency, label it as temporary validation only and do not let that silently redefine the shipping goal.
+- **Rule:** **When the user changes the product target, stop optimizing the old architecture by inertia. Capture the new target in docs immediately and keep any interim spike on the old path explicitly temporary.**
+
+## 2026-03-30 — If a cosmetic direction is not landing, back it out cleanly instead of forcing incremental polish
+
+- **Issue:** I expanded the directory art to include usage instructions, but the result was visually worse than the original title card and the user immediately wanted the extra lines removed.
+- **Root Cause:** I kept iterating on a presentation direction before the visual premise was actually validated.
+- **Resolution:** For cosmetic/UI copy changes, if the first presentation misses the mark, revert to the known-good baseline quickly and wait for a fresh design direction instead of defending or slowly sanding the wrong concept.
+- **Rule:** **When an aesthetic change clearly is not working, revert to the stable baseline first. Do not keep the wrong visual direction in the tree while searching for a better one.**
+
+## 2026-03-30 — Do not leave speculative unsupported UX paths in a shipping bootloader
+
+- **Issue:** I added native-C128 detection and courtesy messaging to the C64 `MORIA8` loader even after the user’s real C128 manual-load command had already shown the entry contract was wrong for that path.
+- **Root Cause:** I kept a speculative “nice to have” branch in a critical boot path instead of removing it once the user proved it was not a supported contract.
+- **Resolution:** When the user proves a boot path is unsupported, remove any speculative helper logic for that path from the shipping bootloader instead of letting dead-end fallback behavior linger.
+- **Rule:** **Do not keep unsupported courtesy branches in boot code. If a manual path is not part of the supported contract, document that and keep the bootloader simple.**
+
+## 2026-03-30 — When the user asks to add UX guidance, preserve the existing presentation unless they asked to replace it
+
+- **Issue:** I replaced the existing `MORIA` directory title card with instruction lines when the user wanted the instructions added as a second block beneath the existing header.
+- **Root Cause:** I optimized for the new information and ignored the existing presentation value, even though the user had only asked for an add-on.
+- **Resolution:** Preserve the current title/art block by default and append the new guidance separately unless the user explicitly asks for a replacement.
+- **Rule:** **If the user asks to add instructions or guidance to an existing UI/header/art treatment, extend it first; do not replace the original presentation without explicit approval.**
+
+## 2026-03-30 — Do not assume a C128 manual-load shortcut exercises the same contract as plain BASIC `LOAD ...,8` plus `RUN`
+
+- **Issue:** I treated the new native-C128 courtesy path in `MORIA8` as if it covered the real user-facing manual-load case, but the user's `/*` JiffyDOS test still hung.
+- **Root Cause:** I assumed the manual shortcut was equivalent to the plain BASIC-load semantics I had in mind, instead of treating the user's actual command as the contract to verify. On this repo, exact-address, autostart-like, and shortcut-driven entry paths are not interchangeable.
+- **Resolution:** Treat native C128 `BOOT` / autoboot as the supported contract, and only describe any `MORIA8` courtesy behavior as best-effort unless the exact manual command the user cares about has been proven.
+- **Rule:** **Do not generalize a Commodore manual-load UX claim from one load mode to another. If the user names a shortcut like `/*`, that exact command is the gate.**
+
+## 2026-03-30 — When a visual regression reappears after a seam-specific fix, check sibling render paths before assuming the original fix was lost
+
+- **Issue:** After the dual-entry disk work, the user showed the same town-top garbage artifact on C128 and asked whether the earlier fix had been dropped.
+- **Root Cause:** I initially framed the earlier closure as if it had solved the whole symptom class, but the actual March 29 fix only guarded the ordinary-movement C128 scroll-delta path. Shared gameplay code still has sibling scroll-delta entry points, and a visually identical regression can return through one of those paths even when the original fix remains intact.
+- **Resolution:** When a previously fixed visual symptom reappears, verify whether the original guarded seam is still present, then audit sibling entry points that call the same renderer under slightly different command tails before concluding the fix was lost.
+- **Rule:** **If a rendering artifact returns after a seam-specific fix, do not assume the patched code regressed. First check whether another path still reaches the same renderer without the same guard.**
+
+## 2026-03-29 — Do not conflate `LOAD ...,8` with `LOAD ...,8,1` for Commodore BASIC program portability
+
+- **Issue:** I told the user that a BASIC program saved on one machine would not auto-relocate and therefore could not load cross-platform as a universal BASIC front-end.
+- **Root Cause:** I collapsed two different KERNAL/BASIC load modes into one mental model. `LOAD ...,8,1` uses the file header address directly, but ordinary BASIC load via `LOAD ...,8` is different and can place the BASIC program into the current machine's BASIC area.
+- **Resolution:** When evaluating universal Commodore boot options, treat `LOAD ...,8` and `LOAD ...,8,1` as different entry contracts. A universal BASIC loader may be viable for ordinary BASIC load+`RUN`, even if it is not viable for exact-address `,8,1` machine-language load.
+- **Rule:** **Never reason about Commodore BASIC portability without first separating `LOAD ...,8` from `LOAD ...,8,1`. They are not interchangeable.**
+
+## 2026-03-29 — An identical BASIC PRG is not automatically a valid cross-platform boot artifact when the platforms use different BASIC text origins
+
+- **Issue:** I kept trying to make one identical `MORIA8` PRG autostart on both C64 and native C128 by tweaking loader internals, even though the user’s observed behavior never materially changed.
+- **Root Cause:** I was fighting loader symptoms before re-checking the platform entry contract itself. This repo already documents that native C128 BASIC-entry programs live at `$1C01`, while `BasicUpstart2` hardcodes a C64-style BASIC stub at `$0801`. An identical BASIC PRG built around `$0801` is therefore structurally suspect as a native C128 boot artifact before any loader logic even runs.
+- **Resolution:** Before spending more time on “universal bootloader” internals, verify that the requested artifact shape is valid on both platforms. If the platforms require different BASIC entry origins, either use a non-BASIC machine-entry boot mechanism or relax the “one identical PRG” assumption.
+- **Rule:** **Do not keep patching bootloader logic when the platform entry contract itself may be impossible. Check whether the requested artifact shape is valid on each machine before debugging deeper.**
+
+## 2026-03-29 — For boot artifacts, the first executable byte after the BASIC stub is part of the autostart contract
+
+- **Issue:** I rearranged the universal `MORIA8` source so the intended `boot_entry` label existed, but I still let a raw `chain_stub` occupy `$080E`, the first executable byte after the BASIC stub. The result matched the user’s failures: autostart could land in the raw loader stub before the setup code ever ran.
+- **Root Cause:** I focused on the BASIC `SYS` target label and forgot that emulator/autostart flows can machine-enter at the first post-stub code address as a separate contract. In a bootloader, source order and emitted address order both matter.
+- **Resolution:** For any autostart PRG, make the real setup entrypoint the very first emitted code after the BASIC stub. Do not place copied stubs, helper routines, or data ahead of the true entry code unless that address is also safe as a direct machine-entry path.
+- **Rule:** **On bootloaders, verify both the BASIC `SYS` target and the first emitted code byte after the stub. If autostart can land at `$080E`, `$080E` must be the real entrypoint.**
+
+## 2026-03-29 — A universal stage-0 bootloader should stay silent and hand off cleanly; do not duplicate child-loader UI or leak its KERNAL file handle
+
+- **Issue:** I made the shared `MORIA8` stage-0 do its own clear-screen / cursor / status message work and then jump straight into child loaders after `LOAD`, which produced C128 startup breaks and an invalid two-stage handoff contract.
+- **Root Cause:** I treated stage-0 like a user-facing bootloader instead of what it really is: a tiny dispatcher that must preserve platform-native startup assumptions for the real child bootloaders. I also let stage-0 keep file `#2` open across the handoff even though `LOAD` does not remove it from the file table.
+- **Resolution:** Keep the universal stage-0 minimal and silent. Let `BOOT64` / `BOOT128` own platform-specific screen setup and messages. After stage-0 `LOAD`s the child, explicitly `CLOSE` the file before the jump, and use the platform-appropriate surviving chain-stub location rather than forcing one address on both machines.
+- **Rule:** **For chained bootloaders, stage-0 should only detect platform, load the child, close its file handle, and jump. Do not add user-facing screen/UI work or reuse one survivor-stub address across machines without proving it is safe on both.**
+
+## 2026-03-29 — A “universal” C128 stage-0 loader cannot bypass the repo’s known-safe KERNAL/MMU wrapper contract just because it is tiny
+
+- **Issue:** I treated the identical `$0801` `MORIA8` stage-0 as simple enough to call raw C128 KERNAL entry points directly, outside the repo’s established wrapper discipline.
+- **Root Cause:** I optimized for byte-identical artifact shape and ignored the local design rule that C128 `SETNAM`/`SETLFS`/`SETBNK`/`LOAD` transactions must use the known-good KERNAL/MMU entry contract rather than a second custom path.
+- **Resolution:** For universal bootloader work, artifact identity is not a license to bypass the C128 wrapper model. If a shared stage-0 needs C128 file I/O, either enter the proven wrapper contract correctly or keep the universal stage-0 thin enough to hand off to a proven child without recreating raw KERNAL transaction logic.
+- **Rule:** **Do not create a second custom C128 KERNAL/MMU transaction in a universal bootloader when the repo already has a proven wrapper-based contract.**
+
+## 2026-03-29 — Byte-identical artifacts do not close a universal bootloader milestone if the real autostart paths still fail
+
+- **Issue:** I treated matching `moria8boot.prg` hashes as if that nearly closed the universal `MORIA8` requirement, but the user’s real disk boots immediately disproved that: C64 fell back to BASIC and native C128 hit `BREAK $0831`.
+- **Root Cause:** I over-valued artifact identity relative to the real behavioral gate. One identical file is necessary, but it is not sufficient if the machine-specific autostart contract is still wrong.
+- **Resolution:** For universal bootloader work, require both conditions together before claiming success: identical emitted artifact and passing real autostart behavior on each target machine.
+- **Rule:** **Do not call a universal bootloader “working” just because the binaries match. The real autostart paths on every target platform must also pass.**
+
+## 2026-03-29 — Shared source is not the same thing as one valid universal bootloader artifact
+
+- **Issue:** I treated the shared `moria8boot.s` source as if it had already satisfied the universal `MORIA8` requirement, even though the emitted C64 and C128 binaries were still different files.
+- **Root Cause:** I blurred “shared implementation source” with “one identical on-disk program.” For a bootloader feature whose whole point is one `MORIA8`, artifact identity matters, not just code sharing.
+- **Resolution:** For any “single bootloader” milestone, compare the emitted binaries directly and refuse to count platform-specific outputs from shared source as closure.
+- **Rule:** **If the requirement is one universal program, verify the emitted artifacts are byte-identical. Shared source alone does not satisfy the requirement.**
+
+## 2026-03-29 — When the same C128 boot symptom survives multiple contract patches, replace the handoff with the proven loader instead of continuing to nibble at the seam
+
+- **Issue:** The experimental shared C128 masterboot kept reproducing the same immediate `BREAK` / `JAM` even after multiple local fixes to the raw child-chain path.
+- **Root Cause:** I kept treating the bootloader like a sequence of independent small contract bugs, but the path itself was too brittle: a hand-rolled C128 `LOAD` and jump into `boot128` was not the repo’s proven startup shape.
+- **Resolution:** After repeated identical failures, stop stacking micro-fixes on the same raw C128 handoff. Replace it with the known-good `boot128` implementation or its exact transaction model.
+- **Rule:** **If a C128 boot handoff still shows the same `BREAK` / `JAM` after several contract fixes, stop patching around it and switch to the proven loader path.**
+
+## 2026-03-29 — A C128 post-`LOAD` chain stub is not safe just because its address is low; prove common-RAM ownership and post-load MMU state
+
+- **Issue:** The shared C128 masterboot still failed after fixing the filename-register clobber around `SETNAM`.
+- **Root Cause:** I treated `$0B00` as inherently safe for a surviving post-`LOAD` stub because `boot128` uses that address, but `boot128` only uses it after explicitly claiming 4KB bottom common RAM and later restoring a known execution MMU view. The shared loader had neither guarantee.
+- **Resolution:** For any C128 stub meant to survive a KERNAL `LOAD` and then jump into a child program, establish bottom-common ownership before copying the stub there and reassert the intended execution MMU/bank state before the final jump.
+- **Rule:** **On C128, do not use a low-RAM chain stub unless you explicitly make that region common and restore the child’s expected MMU/bank view after `LOAD`.**
+
+## 2026-03-29 — In C128 boot code, never insert `SETBNK` between staging `A/X/Y` for `SETNAM` and the `SETNAM` call
+
+- **Issue:** The experimental shared C128 masterboot path still BREAKed after a first-pass Bank-0 `SETBNK` change.
+- **Root Cause:** I put `SETBNK` in the middle of the filename setup sequence, so the loader staged `A/X/Y` for `SETNAM`, clobbered those registers with `SETBNK`, and then called `SETNAM` with garbage arguments.
+- **Resolution:** In C128 loader paths, perform bank-selection setup before loading `A/X/Y` with the filename, or explicitly save and restore those registers around any prep call.
+- **Rule:** **On C128, treat `SETNAM` inputs as fragile. Do not put `SETBNK` or any other register-clobbering setup between filename register staging and the `SETNAM` call.**
+
+## 2026-03-29 — On C128 boot/load failures, audit `SETBNK` and visible execution bank before blaming stub addresses
+
+- **Issue:** I chased the shared masterboot BREAK as if the surviving chain stub location were the main culprit, but the stronger risk in `moria8boot.s` was that the child loader transaction never claimed the C128 KERNAL load bank at all.
+- **Root Cause:** I focused on where the copied stub survived instead of the full C128 runtime-loaded-code contract: PRG header, load destination bank, visible execution bank, and the jump target all have to agree together.
+- **Resolution:** For any C128 boot chain that raw-loads another PRG, check `SETBNK` first and prove the child is loaded into the same bank the chain stub will execute from before changing relocation addresses.
+- **Rule:** **When a C128 bootloader `LOAD`s a child PRG and then jumps to a fixed address, verify the child load bank and execution bank match before treating low-RAM stub placement as the root cause.**
+
+## 2026-03-29 — Do not claim a bootloader fix is verified until I reproduce the user’s exact boot entry path, not just a monitor-based title breakpoint
+
+- **Issue:** I concluded the shared C128 master bootloader was working based on smoke tests and monitor breakpoints, but the user immediately reproduced the same live BREAK / `JAM $1000A` behavior on the actual autoload and direct `moria8.128` paths.
+- **Root Cause:** I over-trusted indirect boot evidence. Reaching a later symbol under a harness or monitor script did not prove the exact user-visible entry path was healthy, especially for boot code that depends on KERNAL/autostart behavior and startup machine state.
+- **Resolution:** For bootloader work, treat the user’s real boot entry path as the authoritative gate. Reproduce the actual autoload and direct-load paths, and do not close the work until those exact entry methods are green.
+- **Rule:** **Never mark bootloader work verified on breakpoint/harness evidence alone when the user’s real autoload or direct-load path is still failing. Reproduce the exact boot entry path before claiming success.**
+
 ## 2026-03-29 — Before inventing a new owner seam for a C64 full-screen residue bug, check whether the path is still using raw `screen_clear`
 
 - **Issue:** I spent time on restore-tail and generation-I/O theories for the remaining `GENERATING...` residue bug before checking whether the busy screen was still using the repo's known-safe C64 full-screen clear helper.
@@ -239,7 +386,7 @@
 
 - **Issue:** I renamed the low-RAM runtime payload to `runtime_low.prg`, but the C128 directory display rendered `_` as a shifted graphic, not a readable underscore.
 - **Root Cause:** I optimized for source readability instead of the actual PETSCII on-screen filename that users see in the disk directory and preload list.
-- **Resolution:** For user-visible C64/C128 disk asset names, prefer characters that render cleanly in PETSCII directory listings. In this case, `runtime.low.prg` is the correct name and the on-disk filename bytes must match the displayed string exactly.
+- **Resolution:** For user-visible C64/C128 disk asset names, prefer characters that render cleanly in PETSCII directory listings. In this case, the host artifact can remain `128.runtime.prg`, but the on-disk Commodore filename should be the bare dotted stem `128.runtime` with PRG type.
 - **Rule:** **When renaming a Commodore disk file, verify the actual PETSCII directory rendering, not just the source string or host filename.**
 
 ## Corrections From the 2026-03-18 Inventory-Help Regression
@@ -648,3 +795,52 @@
 - **Root Cause:** I treated a secondary harness discrepancy as meaningful diagnostic framing before closing the loop on the authoritative command the user actually ran.
 - **Resolution:** Reproduce and fix the exact failing command first, and only discuss alternate harness behavior after the authoritative suite is green and clearly separated from the real issue.
 - **Rule:** **Do not describe a failure as “just a harness issue” when the user's exact suite is red. The exact failing command remains authoritative until it passes.**
+
+## 2026-03-30 — For launcher targets, match the user’s known-good invocation before changing the artifact
+
+- **Issue:** I changed the `run128` recipe based on what I thought VICE’s drive flags should do, even though the user had already demonstrated that launching `x128` directly against the disk image worked.
+- **Root Cause:** I treated the emulator launch syntax as interchangeable and started changing disk boot artifacts before first aligning the target with the exact known-good command shape.
+- **Resolution:** When a disk image works by direct manual launch, make the wrapper target mirror that exact invocation first; only revisit the artifact if the mirrored command still fails.
+- **Rule:** **If the user has a known-good emulator command, make the wrapper target match it byte-for-byte in spirit before diagnosing the disk image itself.**
+
+## 2026-03-30 — Default run targets must track the real shipping artifact after a build-system refactor
+
+- **Issue:** After the dual-entry shipping disk was finished, I left `run128` pointing at the standalone C128 debug disk instead of the unified shipping disk.
+- **Root Cause:** I fixed the immediate wrapper behavior but failed to re-audit which artifact the target should launch after the product contract changed.
+- **Resolution:** Once the shipping artifact changes, immediately review `run`, `run64`, `run128`, and similar wrapper targets to ensure the default ones exercise the real product path.
+- **Rule:** **If a feature changes what “shipping” means, default run targets must follow the shipping artifact. Debug images should only stay on explicitly named debug targets.**
+
+## 2026-03-30 — Compatibility aliases must not keep producing deprecated artifacts
+
+- **Issue:** Even after the unified disk shipped, the build still emitted standalone `moria64.d64` and `moria128.d64` files.
+- **Root Cause:** I preserved old target behavior instead of converting the old target names into aliases of the new shipping artifact.
+- **Resolution:** When an artifact is retired, remove its build rule entirely. If old target names must survive for compatibility, point them at the new canonical artifact rather than producing deprecated files.
+- **Rule:** **A compatibility alias may preserve a target name, but it must not preserve a retired artifact.**
+
+## 2026-03-31 — For shared fallback boot art, simplify the composition before inventing platform-specific title hacks
+
+- **Issue:** When the plaque-based fallback logo still looked awkward, I started layering a C128-only runtime title overlay on top of it instead of first fixing the shared composition.
+- **Root Cause:** I treated the platform-specific rendering artifact as the primary problem even though the user was pointing at a broader composition issue: too much plaque structure, too much empty space, and the title not owning the center.
+- **Resolution:** For cross-platform fallback art, first simplify the shared source design to the strongest readable shapes, then only add platform-specific rendering logic if the simpler composition still fails.
+- **Rule:** **If a fallback logo looks awkward on both platforms, fix the shared composition first. Do not reach for platform-specific overlay tricks until the source design is already clean.**
+
+## 2026-03-31 — For shared logos, the C64 width budget must drive the wordmark before the C128 scale
+
+- **Issue:** After simplifying the fallback logo, I still left the `MORIA8` wordmark too wide for the C64 frame because I was judging the shape from the larger C128-friendly version.
+- **Root Cause:** I reused a broad block-glyph treatment on the `160x200` source instead of treating the C64 version as the tightest width budget that the shared design has to satisfy.
+- **Resolution:** For shared cross-platform logo art, size and condense the title against the smallest target first, then confirm the larger platform still looks balanced.
+- **Rule:** **When one shared logo feeds both C64 and C128, the C64 width budget is authoritative for the wordmark. If it nearly touches the frame on C64, it is too wide.**
+
+## 2026-03-31 — Matching style across platforms means reusing the same glyph family before inventing a new small-font look
+
+- **Issue:** My first attempt to fix the C64 width problem used a separate condensed font, which solved the width but made the wordmark look like a different design from the C128 version.
+- **Root Cause:** I optimized for fit first and style second, instead of asking whether the smaller target could simply use the same base glyph family at a smaller scale.
+- **Resolution:** When a shared logo needs to fit a smaller retro target, try the same glyph family at a reduced scale before designing a second font. Only diverge if the shared glyphs truly do not survive.
+- **Rule:** **For shared logo work, preserve the glyph family across platforms whenever possible. Scale first; invent a second font only as a last resort.**
+
+## 2026-03-31 — When a new boot regression appears in a branch-local feature delta, isolate that delta before rewriting older loader code
+
+- **Issue:** After the C128 boot-art handoff started hanging after `128.RUNTIME`, I started patching the older `c128_load_runtime_low_prg` path instead of first isolating the branch-local handoff change that introduced the regression.
+- **Root Cause:** I let the monitor trace pull me into the deeper loader stack and ignored the stronger fact that this path had already worked earlier in the same branch before the recent handoff tweak.
+- **Resolution:** Treat a fresh regression in an in-progress feature branch as a delta-isolation problem first: compare the current branch-local changes against the last known-good branch state, revert speculative loader surgery, and fix the smallest handoff change that actually regressed behavior.
+- **Rule:** **If a path worked earlier in the branch and breaks after a small feature tweak, isolate the feature delta first. Do not rewrite older shared loader code until the branch-local regression has been ruled out.**

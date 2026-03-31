@@ -32,7 +32,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
-.segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/runtime.low.prg", start=$1000, min=$1000, max=$3fff]
+.segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_REAL_BOOT_DIAG = 1
@@ -1989,10 +1989,10 @@ title_load_game:
 // ============================================================
 .const RUNTIME_LOW_FILE_NUM = 2
 runtime_low_filename:
-    .byte $52, $55, $4e, $54, $49, $4d, $45, $2e, $4c, $4f, $57, $2e, $50, $52, $47 // "RUNTIME.LOW.PRG"
+    .byte $31, $32, $38, $2e, $52, $55, $4e, $54, $49, $4d, $45 // "128.RUNTIME"
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
-    .text "RUNTIME.LOW.PRG" ; .byte 0
+    .text "128.RUNTIME" ; .byte 0
 
 c128_load_runtime_low_prg:
     lda #0
@@ -2188,18 +2188,24 @@ c128_startup_overlay_executing: .byte 0
 // to overlay code, which was getting trampled before startup overlay loads.
 overlay_state_block_start:
 current_overlay: .byte 0
-ovl_fn_start: .byte $4f,$56,$4c,$2e,$53,$54,$41,$52,$54  // "OVL.START"
-ovl_fn_town:  .byte $4f,$56,$4c,$2e,$54,$4f,$57,$4e      // "OVL.TOWN"
-ovl_fn_death: .byte $4f,$56,$4c,$2e,$44,$45,$41,$54,$48  // "OVL.DEATH"
-ovl_fn_gen:   .byte $4f,$56,$4c,$2e,$47,$45,$4e          // "OVL.GEN"
-ovl_fn_help:  .byte $4f,$56,$4c,$2e,$48,$45,$4c,$50      // "OVL.HELP"
-ovl_fn_ui:    .byte $4f,$56,$4c,$2e,$55,$49              // "OVL.UI"
+ovl_fn_start: .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54              // "128.START"
+ovl_fn_start_end:
+ovl_fn_town:  .byte $31,$32,$38,$2e,$54,$4f,$57,$4e                  // "128.TOWN"
+ovl_fn_town_end:
+ovl_fn_death: .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48              // "128.DEATH"
+ovl_fn_death_end:
+ovl_fn_gen:   .byte $31,$32,$38,$2e,$47,$45,$4e                      // "128.GEN"
+ovl_fn_gen_end:
+ovl_fn_help:  .byte $31,$32,$38,$2e,$48,$45,$4c,$50                  // "128.HELP"
+ovl_fn_help_end:
+ovl_fn_ui:    .byte $31,$32,$38,$2e,$55,$49                          // "128.UI"
+ovl_fn_ui_end:
 ovl_fn_addr_lo:
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
 ovl_fn_addr_hi:
     .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
 ovl_fn_len:
-    .byte 9, 8, 9, 7, 8, 6
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0

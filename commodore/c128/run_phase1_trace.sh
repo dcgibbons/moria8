@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMMODORE_MAKE=(make -s -C "$SCRIPT_DIR/..")
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="${VICE128:-/Applications/VICE/bin/x128}"
 C1541_BIN="${C1541:-c1541}"
@@ -13,7 +15,7 @@ make_kickass="/tmp/moria128-kickass.jar"
 kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
 ln -sf "$kickass_abs" "$make_kickass"
 
-if ! make -s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+if ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "Phase 1 build128/disk128 failed"
     tail -20 "$build_log"
     exit 1
@@ -40,7 +42,7 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write out/ovl.start "ovl.start" \
         -write out/ovl.death "ovl.death" \
         -write out/ovl.gen "ovl.gen" \
-        -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+        -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
     echo "Phase 1 real-diag disk build failed"
     tail -20 "$build_log"
     exit 1

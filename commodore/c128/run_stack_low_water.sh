@@ -4,6 +4,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+SCRIPT_DIR="$(pwd)"
+COMMODORE_MAKE=(make -s -C "$SCRIPT_DIR/..")
 
 VICE="${VICE128:-x128}"
 C1541_BIN="${C1541:-c1541}"
@@ -20,7 +22,7 @@ build_log="/tmp/moria128_stacklow_build.log"
 
 mkdir -p "$out_dir"
 
-if ! make -s build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "stack_low_water build128/disk128 failed"
     cat "$build_log"
     exit 1
@@ -59,7 +61,7 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write "$out_dir/ovl.start" "ovl.start" \
         -write "$out_dir/ovl.death" "ovl.death" \
         -write "$out_dir/ovl.gen" "ovl.gen" \
-        -write "$out_dir/runtime.low.prg" "runtime.low.prg" >/tmp/moria128_stacklow_c1541.log 2>&1; then
+        -write "$out_dir/128.runtime.prg" "128.runtime" >/tmp/moria128_stacklow_c1541.log 2>&1; then
     echo "stack_low_water d64 creation failed"
     cat /tmp/moria128_stacklow_c1541.log
     exit 1

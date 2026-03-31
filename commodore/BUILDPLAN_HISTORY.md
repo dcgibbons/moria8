@@ -6,6 +6,136 @@
 
 ---
 
+## 2026-03-31 — `FEAT-BOOT-ART` fallback shipping path, split shipping disks, and shared version manifest ✅ COMPLETE
+
+### Scope Closed
+- Replaced the temporary unified-shipping-disk boot-art target with the current split shipping artifacts:
+  - C64: [out/moria8-c64.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8-c64.d64)
+  - C128: [out/moria8-c128.d71](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8-c128.d71)
+- Shipped the simple cross-platform fallback `MORIA8` boot logo on both machines.
+- Added a shared per-platform version manifest at [../version.json](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/version.json) and wired it into both the disk directory card and the title screen.
+
+### Root Cause Of The Late C128 Regression
+- The post-preload C128 hang after `128.RUNTIME` was not a runtime-loader bug.
+- The real failure was disk-image corruption in the earlier mixed-image layout:
+  - native C128 boot code was patched into Track 1 / Sector 0
+  - that sector was not reserved before file allocation
+  - adding the C128 boot-art helper shifted file placement so `128.RUNTIME` could be allocated on `1/0`
+  - the later boot-sector patch then overwrote the first block of `128.RUNTIME`
+- The durable fix was architectural, not loader surgery:
+  - split the shipping images
+  - make the C128 image a `1571`/`.d71`
+  - reserve Track 1 / Sector 0 before file writes
+
+### What Shipped
+1. **Split shipping images**
+   - [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) now builds:
+     - `out/moria8-c64.d64`
+     - `out/moria8-c128.d71`
+   - `make run` launches the C64 image under `x64sc`.
+   - `make run128` launches the C128 image under `x128` with `1571` drive type.
+   - The native C128 image reserves Track 1 / Sector 0 before file allocation and patches the boot sector there safely.
+2. **Fallback boot-art shipping path**
+   - C64 boot art is now generated from [tools/make_logo.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_logo.py) into the C64 multicolor bitmap converter path.
+   - C128 boot art is generated from the same source design through [tools/ppm_to_c128_bootart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c128_bootart.py) plus [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s).
+   - The shipped visual baseline is the simple shared art-deco `MORIA8` logo rather than the rejected AI-image-derived poster conversion.
+3. **Clean C128 handoff**
+   - [c128/boot128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/boot128.s) now loads and shows `BOOTART128`, suppresses KERNAL chatter during the main-program load, and restores the normal charset contract before title flow.
+   - [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) clears the VDC screen before restoring the overwritten alternate charset so the preload/title handoff does not flash garbage glyphs.
+4. **Version manifest integration**
+   - `version.json` is now the user-facing per-platform version source.
+   - [tools/diskart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/diskart.py) reads it for the disk directory card.
+   - [tools/make_version_include.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/make_version_include.py) generates the title-screen version include used by [common/title_data.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/title_data.s).
+
+### Verification
+- Exact reported command:
+  - `make clean`
+  - `make run128`
+  - user-confirmed fixed after the split-disk / reserved-sector repair
+- Broader regression suites:
+  - `make -C commodore test128-fast-smoke` = `3 passed, 0 failed`
+- Packaging / output checks:
+  - `make -C commodore out/moria8-c64.d64 out/moria8-c128.d71`
+  - `c1541 commodore/out/moria8-c64.d64 -list`
+  - `c1541 commodore/out/moria8-c128.d71 -list`
+
+### Outcome
+- The earlier unified `out/moria8.d64` shipping architecture is now historical, not current.
+- The repo’s present shipping baseline is:
+  - separate platform disks
+  - simple shared fallback boot art
+  - version text sourced from `version.json`
+- Higher-fidelity art remains future feature work, not an active blocker.
+
+## 2026-03-30 — `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` dual-entry shipping disk and unified Commodore build ✅ COMPLETE
+
+### Scope Closed
+- Shipped one mixed-platform `D64` at [out/moria8.d64](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/moria8.d64) that boots correctly on both platforms through platform-appropriate entry paths.
+- Consolidated the Commodore build/test surface under [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) with the repo-root [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/Makefile) reduced to a thin wrapper.
+- Moved canonical Commodore outputs under [out](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out) while keeping temporary `c64/out` and `c128/out` mirrors for legacy harnesses.
+
+### Design Decision
+- The earlier “one identical first-loaded `MORIA8.PRG`” design was rejected as the wrong target.
+- C64 and native C128 do not share a sane BASIC-entry contract for this use case, so the shipped architecture is now:
+  - C64 boot: first directory file `MORIA8` via the normal file-loader path
+  - native C128 boot: Track 1 / Sector 0 native boot sector that hands off to `BOOT128`
+- The important product goal is one shipping disk, not one impossible universal BASIC stub.
+
+### What Shipped
+1. **Unified dual-entry disk**
+   - The mixed disk now contains:
+     - C64 directory-entry loader `MORIA8`
+     - `BOOT64`, `BOOT128`
+     - `MORIA64`, `MORIA128`
+     - shared `MONSTER.DB.1-4`
+     - platform-specific title and overlay payloads
+     - C128-only `128.RUNTIME`
+     - the existing C64 `DEL` directory-art header
+   - A new native C128 boot sector in [c128/bootsect128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootsect128.s) is patched into Track 1 / Sector 0 during disk creation.
+2. **Unified build orchestration**
+   - Deleted the old platform-local `c64/Makefile` and `c128/Makefile` entrypoints.
+   - Added the single real Commodore build entrypoint at [Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile).
+   - Standardized the primary command surface around:
+     - `make build`
+     - `make disk`
+     - `make run`
+     - `make test`
+     - `make test64`
+     - `make test128`
+     - `make test128-fast`
+     - `make test128-fast-smoke`
+3. **Runtime filename coexistence**
+   - Title and overlay filenames were split so both platform payloads can live on one disk:
+     - `T64`, `T128`
+     - `64.START`, `128.START`
+     - `64.TOWN`, `128.TOWN`
+     - `64.DEATH`, `128.DEATH`
+     - `64.GEN`, `128.GEN`
+     - `64.HELP`, `128.HELP`
+     - `64.UI`, `128.UI`
+   - The runtime loader tables were updated so C64 and C128 resolve the correct platform-specific assets while sharing the common disk.
+4. **Polish and wrapper cleanup**
+   - `make run128` was corrected to match the known-good direct `x128 out/moria128.d64` launch shape instead of an incorrect autostart/drive-flag path.
+   - C64 and C128 boot screens now use matched white loading text, with the C128 loading message explicitly centered in 80-column mode.
+   - Follow-up cleanup retired standalone `moria64.d64` / `moria128.d64` outputs so `out/moria8.d64` is the only disk image artifact; `disk64`, `disk128`, and `run64` now remain only as compatibility aliases to the unified disk.
+
+### Verification
+- Non-emulator build/package checks:
+  - `make -C commodore clean && make -C commodore build && make -C commodore disk`
+  - `make -C commodore disk64`
+  - `make -C commodore disk128`
+  - `c1541 -attach commodore/out/moria8.d64 -list` showed the mixed-platform payload with `91 blocks free`
+  - Track 1 / Sector 0 was verified to begin with `CBM` and hold the patched native boot-sector handoff
+- Manual validation on the real user gates:
+  - C64 `LOAD"*",8,1` then `RUN` on `commodore/out/moria8.d64` booted into the C64 runtime
+  - native C128 autoboot / `BOOT` on the same `commodore/out/moria8.d64` booted into the C128 runtime
+  - `make run128` was rechecked after wrapper repair and matched the known-good debug-disk launch behavior
+
+### Outcome
+- `FEAT-UNIFIED-DISK` / `BUILD-UNIFY` is removed from active planning.
+- The dual-boot disk architecture was the shipped design at that checkpoint, but was later superseded by split platform images on 2026-03-31.
+- Loading-art/boot-screen graphics remain a separate follow-up, not part of this closure.
+
 ## 2026-03-29 — `BUG-INV-STATLINE-C64` modal status restore fix ✅ COMPLETE
 
 ### Scope Closed
@@ -565,7 +695,7 @@
    - Kept unrelated data/layout asserts separate, such as message-history sizing and prompt-string placement.
 3. **The C128 runner now validates the same manifest**
    - `commodore/c128/run_tests128.sh`
-   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/runtime.low.prg` still carries the `$1000` load header.
+   - `main128_layout` now parses `io_contracts.s` directly, verifies each symbol against its declared residency class, and checks that `out/128.runtime.prg` still carries the `$1000` load header.
 4. **Callee-side gaps are now guarded, not just trampoline addresses**
    - Newly enforced overlay/runtime-low/banked callees include:
      - `player_create`, `store_enter`, `score_death_screen`, `level_generate`, and the special-room helpers
@@ -1871,7 +2001,7 @@
 
 ### Implemented
 1. **Moved ego runtime into loaded low RAM**
-   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`runtime.low.prg`, runtime `$1000+` in Bank 0).
+   - Imported `ego_items.s` into the C128 `RuntimeLowData` runtime block (`128.runtime.prg`, runtime `$1000+` in Bank 0).
    - Removed the late Default-segment import that allowed ego generation logic to spill into the `$D000-$DFFF` region.
 2. **Added placement asserts for the full call surface**
    - `roll_ego_type`
@@ -1941,20 +2071,20 @@
 
 ### Root Causes Addressed
 1. **Missing Stage 2 loader contract**
-   - `runtime.low.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
+   - `128.runtime.prg` was produced and written to disk, but no runtime path actually loaded it before gameplay reached the first `viewport_update`.
 2. **Incorrect PRG load address**
    - The segment was linked for runtime execution at `$1000`, but the emitted PRG still carried an `$E000` load header.
 3. **Wrong bank assumption for direct low-RAM calls**
-   - The first repair attempt loaded `runtime.low.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
+   - The first repair attempt loaded `128.runtime.prg` into Bank 1, but the actual callsites execute under `MMU_ALL_RAM` (`Bank 0`) and use direct `JSR $1000` calls.
    - `$1000-$3FFF` is not bottom common RAM, so Bank 1 residency does not satisfy a Bank 0 callsite.
 4. **Prompt handoff release sensitivity**
    - After the loader repair, the summary dismiss path still needed a safer release handoff between gender selection and the summary prompt in normal-speed runs.
 
 ### Implemented
 1. **Loader/header alignment**
-   - Changed `RuntimeLowData` to emit `runtime.low.prg` with a `$1000` load header matching its callable runtime symbols.
+   - Changed `RuntimeLowData` to emit `128.runtime.prg` with a `$1000` load header matching its callable runtime symbols.
 2. **Startup low-RAM loader**
-   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `RUNTIME.LOW.PRG` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
+   - Added an explicit C128-safe startup loader in `commodore/c128/main.s` that loads `128.RUNTIME` into Bank 0 low RAM before the title screen and any later `viewport_update` / `render_viewport` call path.
 3. **Placement guard**
    - Added a compile-time assert to keep the low-RAM callable runtime block below `FLOOR_ITEM_BASE`, making future overlap mistakes visible at build time.
 4. **Summary prompt release hardening**

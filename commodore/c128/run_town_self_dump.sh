@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMMODORE_MAKE=(make -s -C "$SCRIPT_DIR/..")
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
 VICE="${VICE128:-/Applications/VICE/bin/x128}"
 C1541_BIN="${C1541:-c1541}"
@@ -12,7 +14,7 @@ screenshot_file="/tmp/town_self_dump.png"
 mon_file="/tmp/town_self_dump_go.mon"
 target="${TOWN_DUMP_TARGET:-112}"
 
-if ! make -s build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+if ! "${COMMODORE_MAKE[@]}" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
     echo "town_self_dump build128/disk128 failed"
     tail -20 "$build_log"
     exit 1
@@ -40,7 +42,7 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write out/ovl.start "ovl.start" \
         -write out/ovl.death "ovl.death" \
         -write out/ovl.gen "ovl.gen" \
-        -write out/runtime.low.prg "runtime.low.prg" >>"$build_log" 2>&1; then
+        -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
     echo "town_self_dump disk build failed"
     tail -20 "$build_log"
     exit 1
