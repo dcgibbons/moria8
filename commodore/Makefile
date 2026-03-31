@@ -51,6 +51,8 @@ C64_BOOT_SRC       = c64/boot.s
 C64_BOOTART_PPM    = $(OUT64)/bootart64.ppm
 C64_BOOTART_TOOL   = ../tools/ppm_to_c64_bootart.py
 LOGO_TOOL = ../tools/make_logo.py
+VERSION_INC_TOOL = ../tools/make_version_include.py
+VERSION_INC = $(OUT)/version_strings.inc
 C128_BOOTART_PPM   = $(OUT128)/bootart128.ppm
 C128_BOOTART_TOOL  = ../tools/ppm_to_c128_bootart.py
 C128_MAIN_SRC      = c128/main.s
@@ -168,7 +170,10 @@ check-6502-lint:
 	python3 ../tools/check_6502_lint.py
 
 # ── C64 build rules ───────────────────────────────────────
-$(C64_MAIN_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
+$(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
+	python3 $(VERSION_INC_TOOL) $(VERSION_FILE) $(VERSION_INC)
+
+$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(C64_MAIN_SRC) $(KA_FLAGS64) -o $(C64_MAIN_PRG)
 	mv -f c64/out/ovl.start $(C64_OVL_START)
 	mv -f c64/out/ovl.town $(C64_OVL_TOWN)
@@ -193,7 +198,7 @@ $(C64_BOOTART_PPM): $(LOGO_TOOL) | $(OUT64)
 $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 	python3 $(C64_BOOTART_TOOL) $(C64_BOOTART_PPM) $(C64_BOOTART_PRG)
 
-$(C64_TITLE_PRG): $(TITLE_SRC) $(KICKASS) | $(OUT64)
+$(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(C64_TITLE_PRG)
 
 $(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s $(KICKASS) | $(OUT64)
@@ -209,7 +214,7 @@ $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KIC
 	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier4_prg.s -o $@
 
 # ── C128 build rules ──────────────────────────────────────
-$(C128_MAIN_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
+$(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
 	mv -f c128/out/ovl.start $(C128_OVL_START)
 	mv -f c128/out/ovl.town $(C128_OVL_TOWN)
@@ -245,7 +250,7 @@ $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C12
 $(C128_BOOTART_DIAG_PRG): $(C128_BOOTART_SRC) $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C128_BOOTART_ATTR_BIN) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_BOOTART_SRC) $(KA_FLAGS128) -o $(C128_BOOTART_DIAG_PRG)
 
-$(C128_TITLE_PRG): $(TITLE_SRC) $(KICKASS) | $(OUT128)
+$(C128_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -define C128 -o $(C128_TITLE_PRG)
 
 $(OUT128)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s $(KICKASS) | $(OUT128)

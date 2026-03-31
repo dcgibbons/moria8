@@ -1435,7 +1435,7 @@ build_boot_assets() {
             out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/128.runtime.prg out/main.vs -- \
-            main.s boot128.s bootart128.s bootsect128.s Makefile ../tools/ppm_to_c128_bootart.py ../tools/make_logo.py; then
+            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../tools/make_logo.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py; then
         BOOT_ASSETS_BUILT=1
         return
     fi

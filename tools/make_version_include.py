@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Generate Kick Assembler include data from version.json."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def load_versions(path: Path) -> tuple[str, str]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("version.json must be a JSON object")
+    values: list[str] = []
+    for platform in ("c64", "c128"):
+        value = raw.get(platform)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"version.json missing string version for {platform}")
+        version = value.strip()
+        if not version.lower().startswith("v"):
+            version = f"v{version}"
+        values.append(version)
+    return values[0], values[1]
+
+
+def emit_include(dst: Path, c64_version: str, c128_version: str) -> None:
+    text = f"""// Auto-generated from version.json. Do not edit by hand.
+#if C128
+.const TITLE_VERSION_LEN = {len(c128_version)}
+.macro EmitTitleVersion() {{
+    .text "{c128_version}"
+}}
+#else
+.const TITLE_VERSION_LEN = {len(c64_version)}
+.macro EmitTitleVersion() {{
+    .text "{c64_version}"
+}}
+#endif
+"""
+    dst.write_text(text, encoding="utf-8")
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        print(f"Usage: {sys.argv[0]} <version.json> <out.inc>")
+        return 1
+    version_path = Path(sys.argv[1])
+    out_path = Path(sys.argv[2])
+    c64_version, c128_version = load_versions(version_path)
+    emit_include(out_path, c64_version, c128_version)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
