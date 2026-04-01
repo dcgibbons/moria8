@@ -3,6 +3,7 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- The C128 boot-art helper now writes the poster attribute map before the screen map, eliminating the brief wrong-font flash before the custom poster appears.
 - The shared town layout now uses a fixed `66x22` umoria-sized footprint on both C64 and C128 while retaining the Commodore-only Black Market and Home in a deliberate `4x2` layout.
 - Shipping disk outputs are now split by platform:
   - `commodore/out/moria8-c64.d64`
@@ -23,6 +24,14 @@ This file is a temporary working scratchpad.
   - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
+- [x] BUG-C128-BOOTART-ORDER
+  - [x] make the C128 boot-art poster appear only after the custom-charset attributes are already in place
+  - [x] verify with the relevant C128 smoke gate
+  - review:
+    - root cause: the C128 boot-art helper streamed the screen map before the attribute map, so the new character codes could flash briefly under the previous non-poster attribute/charset state
+    - implementation: `bootart128.s` now writes the generated attribute map before the generated screen map so the visible poster characters only appear once the alternate-charset mode bits are already active
+    - verification passed:
+      - `make test128-fast-smoke`
 - [x] BUG-TOWN-SIZE-DRIFT
   - [x] replace the invented shared `80x48` town with a fixed `66x22` layout on both C64 and C128
   - [x] keep the Commodore-only Black Market and Home in a deliberate `4x2` town layout

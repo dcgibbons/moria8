@@ -134,30 +134,8 @@ restore_original_alt_glyphs:
     rts
 
 render_generated_poster:
-    lda #<bootart_screen_data
-    sta zp_ptr0
-    lda #>bootart_screen_data
-    sta zp_ptr0_hi
-    lda #>VDC_SCREEN_BASE
-    ldy #<VDC_SCREEN_BASE
-    jsr vdc_set_update_addr
-!screen_loop:
-    lda zp_ptr0_hi
-    cmp #>bootart_screen_data_end
-    bne !screen_copy+
-    lda zp_ptr0
-    cmp #<bootart_screen_data_end
-    beq !screen_done+
-!screen_copy:
-    ldy #0
-    lda (zp_ptr0),y
-    jsr vdc_write_data
-    inc zp_ptr0
-    bne !screen_loop-
-    inc zp_ptr0_hi
-    jmp !screen_loop-
-!screen_done:
-
+    // Write attributes first so the poster screen codes never appear under
+    // the previous charset/attribute state during the visible upload.
     lda #<bootart_attr_data
     sta zp_ptr0
     lda #>bootart_attr_data
@@ -181,6 +159,30 @@ render_generated_poster:
     inc zp_ptr0_hi
     jmp !attr_loop-
 !attr_done:
+
+    lda #<bootart_screen_data
+    sta zp_ptr0
+    lda #>bootart_screen_data
+    sta zp_ptr0_hi
+    lda #>VDC_SCREEN_BASE
+    ldy #<VDC_SCREEN_BASE
+    jsr vdc_set_update_addr
+!screen_loop:
+    lda zp_ptr0_hi
+    cmp #>bootart_screen_data_end
+    bne !screen_copy+
+    lda zp_ptr0
+    cmp #<bootart_screen_data_end
+    beq !screen_done+
+!screen_copy:
+    ldy #0
+    lda (zp_ptr0),y
+    jsr vdc_write_data
+    inc zp_ptr0
+    bne !screen_loop-
+    inc zp_ptr0_hi
+    jmp !screen_loop-
+!screen_done:
     rts
 
 clear_bootart_screen:

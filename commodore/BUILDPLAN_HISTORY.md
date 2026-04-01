@@ -6,6 +6,34 @@
 
 ---
 
+## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the native C128 boot-art ordering bug where the generated poster character codes could appear briefly before the custom-font state was active.
+
+### Root Cause
+- The boot-art helper streamed the generated screen map before the generated attribute map.
+- That let the new poster character codes become visible for a moment under the previous attribute/charset state before bit 7 switched them onto the alternate custom charset.
+
+### What Changed
+1. **Poster upload order corrected**
+   - [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) now writes the generated attribute map before the generated screen map.
+   - The visible poster characters now appear only after the alternate-charset mode bits are already in place.
+2. **Task tracking updated**
+   - [tasks/todo.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/todo.md) records the bug and the exact smoke verification used to close it.
+
+### Verification
+- Relevant smoke gate:
+  - `make test128-fast-smoke` = `PASS`
+- Independent tester signoff:
+  - Exact reported command: `No reported command`
+  - Broader regression suites: `PASS`
+  - `make test128-fast-smoke` = `PASS`
+
+### Outcome
+- `BUG-C128-BOOTART-ORDER` is removed from active work.
+- The C128 boot-art presentation now shows the poster in the correct order without the brief wrong-font flash.
+
 ## 2026-04-01 — `BUG-TOWN-SIZE-DRIFT` shared 66x22 town redesign ✅ COMPLETE
 
 ### Scope Closed
