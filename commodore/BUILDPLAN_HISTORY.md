@@ -6,6 +6,42 @@
 
 ---
 
+## 2026-04-01 — `BUG-C128-TOWN-TOPROW-RECUR` VDC first-scroll corruption fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the recurring native C128 town-entry/top-row corruption on the first upward viewport fast-scroll.
+- Closed the regression without changing viewport scroll row counts or falling back to a slower redraw path.
+
+### Root Cause
+- The bug was not in the viewport row math.
+- `commodore/c128/dungeon_render_vdc.s` `rvsd_issue_block_copy` programmed the 8563 VDC block-operation registers in the wrong order:
+  - wrote register 30 first, which triggers the block operation
+  - wrote register 24 second, which selects fill vs copy mode
+- That meant the first fast-scroll block operation after a full redraw could run using stale incoming register-24 state. In the bad case, the first row-char copy executed as a fill, using the residual byte sitting in register 31, which produced the repeated garbage glyph on the top row.
+
+### What Changed
+1. **Correct VDC block-op sequencing**
+   - `rvsd_issue_block_copy` now writes register 24 copy mode before writing register 30 word count / trigger.
+   - The existing wait after the trigger remains in place.
+2. **Focused regression coverage for the hardware-state hazard**
+   - `commodore/c128/tests/test_vdc_scroll_delta128.s` now forces register 24 into fill mode and seeds register 31 before the first upward fast-scroll block op.
+   - The regression asserts that the first destination row still contains the expected copied data, which would fail under the old trigger order.
+3. **Project lesson recorded**
+   - The active lessons now explicitly call out VDC trigger/mode sequencing: for stateful peripherals, prove the hardware contract byte-for-byte instead of assuming a logical operation name matches what the device will execute.
+
+### Verification
+- Focused regression gate:
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+- Broader regression suites:
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `3 passed, 0 failed`
+- Manual validation:
+  - user confirmed the town top-row corruption is gone
+
+### Outcome
+- `BUG-C128-TOWN-TOPROW-RECUR` is removed from the active build plan.
+- The durable lesson is hardware-facing: on the 8563, register sequencing is part of correctness, not just polish. A three-line fix closed a multi-day bug because the real fault was in device trigger semantics, not in the scroll algorithm.
+
 ## 2026-03-31 — `FEAT-BOOT-ART` fallback shipping path, split shipping disks, and shared version manifest ✅ COMPLETE
 
 ### Scope Closed

@@ -28,6 +28,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - For C128 runtime-loaded or banked code, verify together: linked address, PRG load address, destination bank, visible execution bank, and copy-source safety.
 - For C128 callable code, verify the full body and its required data stay out of `$D000-$DFFF`; an entrypoint below the I/O hole is not enough.
 - When a C128 boot or chain path fails repeatedly, stop patching around symptoms and re-anchor on the proven loader and MMU/KERNAL contract.
+- For 8563 VDC block operations, verify the register trigger contract byte-for-byte: mode/select registers must be programmed before the register write that starts the operation, and stale device state should be treated as part of the bug until disproven.
 
 ## Layout And Build Safety
 

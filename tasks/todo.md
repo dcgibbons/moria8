@@ -12,6 +12,7 @@ This file is a temporary working scratchpad.
   - C128: generated native 80-column VDC custom-charset poster helper path
 - The C128 boot-art handoff now blanks the VDC screen before restoring the normal charset, preventing the preload/title garbage-font flash.
 - The disk directory card and title-screen version line are now sourced from `version.json`.
+- The recurring C128 town top-row garbage bug is fixed by programming 8563 VDC block-copy mode before writing the block-op trigger register.
 
 ## Reported Failure Gate
 - No active reported failure gate.
@@ -34,6 +35,17 @@ This file is a temporary working scratchpad.
   - [x] add per-platform user-facing version source at `version.json`
   - [x] wire disk directory card text to the manifest
   - [x] wire title-screen version text to the manifest
+- [x] BUG-C128-TOWN-TOPROW-VDC-BLOCK-ORDER
+  - [x] update `rvsd_issue_block_copy` so VDC reg 24 copy mode is programmed before reg 30 triggers the operation
+  - [x] add a targeted `vdc_scroll_delta128` regression that forces reg 24 fill mode before the first fast-scroll block op
+  - [x] verify with the focused `vdc_scroll_delta128` test plus `make test128-fast` and `make test128-fast-smoke`
+  - review:
+    - root cause confirmed enough to fix: `rvsd_issue_block_copy` was programming reg 30 before reg 24, which is backward for 8563 block operations
+    - regression coverage now forces reg 24 fill mode before the first upward fast-scroll block op so the old ordering would fail deterministically
+    - verification passed:
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
 - [ ] No active implementation work for this feature branch.
 - Historical branch notes for the earlier unified-disk and proof/demo phases remain below for reference only.
 
