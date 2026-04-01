@@ -861,11 +861,13 @@ rvsd_block_copy_attrs:
     rts
 
 rvsd_issue_block_copy:
-    lda rvsd_copy_len
-    ldx #30
-    jsr vdc_write_reg
+    // 8563 block ops sample reg 24 mode when reg 30 is written.
+    // Program copy mode first, then trigger via the word-count write.
     lda #%10000000
     ldx #24
+    jsr vdc_write_reg
+    lda rvsd_copy_len
+    ldx #30
     jsr vdc_write_reg
     jsr vdc_wait
     rts

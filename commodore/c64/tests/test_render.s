@@ -5,6 +5,7 @@
 //  2. Visible item overrides floor glyph/color
 //  3. Visible monster overrides item
 //  4. Player overrides monster and item
+//  5. Town viewport clamps to the fixed 66x22 town bounds
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -16,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #3
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -68,7 +69,7 @@ test_mon_y:         .byte 0
 test_mon_type:      .byte 0
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 4, $ff
+tc_results:         .fill 5, $ff
 
 fi_item_id: .fill 1, 0
 it_display: .fill 2, 0
@@ -129,7 +130,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #3
+    ldx #4
     lda #$ff
 !clr:
     sta tc_results,x
@@ -140,6 +141,7 @@ test_start:
     jsr test_item_override
     jsr test_monster_override
     jsr test_player_override
+    jsr test_town_viewport_clamp
     jmp test_exit_trampoline
 
 setup_scene:
@@ -325,6 +327,28 @@ test_player_override:
 !fail:
     lda #$00
     sta tc_results + 3
+    rts
+
+test_town_viewport_clamp:
+    lda #0
+    sta zp_player_dlvl
+    lda #TOWN_MAP_COLS - 1
+    sta zp_player_x
+    lda #TOWN_MAP_ROWS - 1
+    sta zp_player_y
+    jsr viewport_update
+    lda zp_view_x
+    cmp #TOWN_MAP_COLS - VIEWPORT_W
+    bne !fail+
+    lda zp_view_y
+    cmp #TOWN_MAP_ROWS - VIEWPORT_H
+    bne !fail+
+    lda #$01
+    sta tc_results + 4
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 4
     rts
 
 assert_rendered_tile:

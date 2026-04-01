@@ -16,6 +16,12 @@
 .const C64_MAP_ROWS = 48
 .const C128_MAP_COLS = 198
 .const C128_MAP_ROWS = 66
+.const TOWN_MAP_COLS = 66
+.const TOWN_MAP_ROWS = 22
+.const TOWN_STAIRS_X = 32
+.const TOWN_STAIRS_Y = 18
+.const TOWN_START_X = 31
+.const TOWN_START_Y = 18
 
 #if C128
 .const MAP_COLS     = C128_MAP_COLS
@@ -114,17 +120,17 @@ map_set_tile:
 // ============================================================
 // Store position data
 // ============================================================
-// Store top-left corners (x, y) — 2 rows of 3 stores + BM + Home
+// Store top-left corners (x, y) — fixed 4x2 layout inside the 66x22 town.
 store_pos_x:
-    .byte 5, 20, 55, 5, 20, 55, 37, 42
+    .byte 10, 22, 34, 46, 10, 22, 34, 46
 store_pos_y:
-    .byte 3,  3,  3, 20, 20, 20, 3, 20
+    .byte  2,  2,  2,  2, 12, 12, 12, 12
 
 // Store door positions (center of south wall)
 store_door_x:
-    .byte 10, 25, 60, 10, 25, 60, 42, 47
+    .byte 15, 27, 39, 51, 15, 27, 39, 51
 store_door_y:
-    .byte  7,  7,  7, 24, 24, 24, 7, 24
+    .byte  6,  6,  6,  6, 16, 16, 16, 16
 
 // ============================================================
 // Dungeon room table — parallel arrays (SoA)
@@ -159,5 +165,9 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 #endif
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 8
+.assert "Town map width", TOWN_MAP_COLS, 66
+.assert "Town map height", TOWN_MAP_ROWS, 22
+.assert "Town stairs inside town width", TOWN_STAIRS_X < TOWN_MAP_COLS, true
+.assert "Town stairs inside town height", TOWN_STAIRS_Y < TOWN_MAP_ROWS, true
 
 #import "mmu_macros.s"

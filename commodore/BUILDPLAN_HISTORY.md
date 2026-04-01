@@ -6,6 +6,160 @@
 
 ---
 
+## 2026-04-01 — `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` directed-look repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the shared directed-`look` misreports for traps, doors, wall/gold seams, and stale wall-name reuse.
+- Fixed the C128-only live-runtime visibility failure where `look` could report `You see nothing special.` for clearly visible walls, doors, and monsters because visibility was reading the wrong map bank.
+
+### Root Cause
+- The first shared bug set lived in `do_look`:
+  - `dl_print_tile` relied on `X` surviving `look_flash_target`, but the flash path clobbered it, so trap/door terrain messages could decode as unrelated Huffman strings.
+  - `do_look` checked `floor_item_find_at` before terrain classification, so non-floor tiles sharing coordinates with items could be reported as gold/items instead of terrain.
+  - the wall fallback loaded `HSTR_DL_WALL` but fell through into `dl_print_you_see`, so walls reused stale monster/item name pointers from earlier look results.
+  - stale monster-table entries could also win on blocked tiles unless the live tile still carried `FLAG_OCCUPIED`.
+- The later C128-only bug was lower-level:
+  - `los_is_visible` read the tile with a raw `(zp_ptr1),y` load instead of the MMU-safe map accessor.
+  - On C128, that meant visibility could inspect Bank 0 instead of the live Bank 1 map, so `look` would bail out early with `nothing special` even when the on-screen target was actually visible.
+
+### What Changed
+1. **Shared directed-look classification repaired**
+   - [common/player_move.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/player_move.s) now preserves the terrain Huffman ID across the flash path.
+   - Non-floor terrain is authoritative before floor-item lookup, so wall/item seams report terrain correctly.
+   - Monster lookup is gated on the live tile’s `FLAG_OCCUPIED` bit to avoid stale table lookups on empty tiles.
+   - Wall fallback now jumps into `dl_print_tile` instead of the stale-name path.
+2. **C128 banked-map visibility repaired**
+   - [common/dungeon_los.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/dungeon_los.s) now reads the tile in `los_is_visible` through `:MapRead_ptr1_y()`.
+   - That brings the visibility helper back under the C128 MMU-safe map contract used by the rest of the shared map code.
+3. **Regression coverage expanded**
+   - [c64/tests/test_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_effects.s) now covers closed-door, trap, wall-with-gold, and floor-gold directed-`look` cases.
+   - [c128/tests/test_dungeon128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/tests/test_dungeon128.s) now forces Bank 0 and Bank 1 to disagree at the same map coordinate and asserts that `los_is_visible` honors the lit Bank 1 tile.
+4. **Task tracking updated**
+   - [tasks/todo.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/todo.md) now records the final shared and C128-specific root causes, implementation, and verification.
+   - [tasks/lessons.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/lessons.md) now captures the visibility/ownership lesson for narrowed interaction bugs.
+
+### Verification
+- Shared + C128 regression suites:
+  - `make test64` = `PASS`
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `PASS`
+- Independent tester signoff:
+  - Exact reported command: `N/A`
+  - Broader regression suites: `PASS`
+  - `ALL TESTS PASSED`
+
+### Outcome
+- `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` are removed from active work.
+- Directed `look` now behaves consistently across C64 and C128, while still respecting the intended shared LoS/visibility rule instead of a wrong-bank artifact on C128.
+
+## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the native C128 boot-art ordering bug where the generated poster character codes could appear briefly before the custom-font state was active.
+
+### Root Cause
+- The boot-art helper streamed the generated screen map before the generated attribute map.
+- That let the new poster character codes become visible for a moment under the previous attribute/charset state before bit 7 switched them onto the alternate custom charset.
+
+### What Changed
+1. **Poster upload order corrected**
+   - [c128/bootart128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/bootart128.s) now writes the generated attribute map before the generated screen map.
+   - The visible poster characters now appear only after the alternate-charset mode bits are already in place.
+2. **Task tracking updated**
+   - [tasks/todo.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/todo.md) records the bug and the exact smoke verification used to close it.
+
+### Verification
+- Relevant smoke gate:
+  - `make test128-fast-smoke` = `PASS`
+- Independent tester signoff:
+  - Exact reported command: `No reported command`
+  - Broader regression suites: `PASS`
+  - `make test128-fast-smoke` = `PASS`
+
+### Outcome
+- `BUG-C128-BOOTART-ORDER` is removed from active work.
+- The C128 boot-art presentation now shows the poster in the correct order without the brief wrong-font flash.
+
+## 2026-04-01 — `BUG-TOWN-SIZE-DRIFT` shared 66x22 town redesign ✅ COMPLETE
+
+### Scope Closed
+- Replaced the invented `80x48` town layout with a fixed `66x22` town on both C64 and C128.
+- Kept the Commodore-only Black Market and Home, but moved all 8 buildings into a deliberate shared `4x2` layout instead of the old ad hoc coordinates.
+- Left dungeon dimensions unchanged:
+  - C64 dungeon remains `80x48`
+  - C128 dungeon remains `198x66`
+
+### Root Cause
+- The old town geometry was not sourced from `umoria`.
+- Shared generation code had treated the port’s inherited `80x48` town as if it were canonical and reused live map dimensions inside `town_generate`.
+- That meant the C128 larger-dungeon work dragged town size along with it, even though original `umoria` explicitly shrinks town to a fixed `66x22` footprint.
+
+### What Changed
+1. **Fixed shared town geometry**
+   - Added explicit town constants for `66x22` plus new stairs/start coordinates.
+   - `town_generate` now fills the live map with blocking walls first, then carves only the fixed town rectangle.
+   - Space outside the town no longer inherits lit town wall flags, so larger backing maps do not render fake solid border slabs.
+2. **Deliberate 8-building town layout**
+   - Updated the shared store position and door tables to a stable `4x2` layout that fits inside `66x22`.
+   - Black Market and Home remain stores 6 and 7.
+3. **Regression coverage updated**
+   - C128 soak coverage now asserts fixed town corners, new stairs, representative door tiles, and blocked space outside the town rectangle.
+   - C64 store-door tests now read the shared door tables directly instead of freezing stale coordinates.
+   - C64 render coverage now clamps the town view to the fixed town footprint instead of letting the larger backing map leak into the visible edge rows.
+   - The attempted C128 town re-anchor was reverted after it caused a visible first-move viewport snap on town entry; the shipped C128 fix keeps the original entry framing and relies on non-presentational out-of-town backing tiles instead.
+
+### Verification
+- Focused town coverage:
+  - `TEST_FILTER='render|store' bash commodore/c64/run_tests.sh` = `PASS`
+  - `TEST_FILTER='store' bash commodore/c64/run_tests.sh` = `PASS`
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests soak128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+- Broader regression suites:
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `PASS`
+  - `make test` = `PASS`
+
+### Outcome
+- `BUG-TOWN-SIZE-DRIFT` is removed from the active build plan.
+- The final town behavior now matches the old feel better on C128: returning to town keeps the pre-existing wide stairs-adjacent framing and no longer jumps to a new anchor on the first move.
+- The durable lesson is product-facing: world geometry has to be sourced from the original game design, not inferred from a live map buffer size or previous AI-written port assumptions.
+
+## 2026-04-01 — `BUG-C128-TOWN-TOPROW-RECUR` VDC first-scroll corruption fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the recurring native C128 town-entry/top-row corruption on the first upward viewport fast-scroll.
+- Closed the regression without changing viewport scroll row counts or falling back to a slower redraw path.
+
+### Root Cause
+- The bug was not in the viewport row math.
+- `commodore/c128/dungeon_render_vdc.s` `rvsd_issue_block_copy` programmed the 8563 VDC block-operation registers in the wrong order:
+  - wrote register 30 first, which triggers the block operation
+  - wrote register 24 second, which selects fill vs copy mode
+- That meant the first fast-scroll block operation after a full redraw could run using stale incoming register-24 state. In the bad case, the first row-char copy executed as a fill, using the residual byte sitting in register 31, which produced the repeated garbage glyph on the top row.
+
+### What Changed
+1. **Correct VDC block-op sequencing**
+   - `rvsd_issue_block_copy` now writes register 24 copy mode before writing register 30 word count / trigger.
+   - The existing wait after the trigger remains in place.
+2. **Focused regression coverage for the hardware-state hazard**
+   - `commodore/c128/tests/test_vdc_scroll_delta128.s` now forces register 24 into fill mode and seeds register 31 before the first upward fast-scroll block op.
+   - The regression asserts that the first destination row still contains the expected copied data, which would fail under the old trigger order.
+3. **Project lesson recorded**
+   - The active lessons now explicitly call out VDC trigger/mode sequencing: for stateful peripherals, prove the hardware contract byte-for-byte instead of assuming a logical operation name matches what the device will execute.
+
+### Verification
+- Focused regression gate:
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+- Broader regression suites:
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `3 passed, 0 failed`
+- Manual validation:
+  - user confirmed the town top-row corruption is gone
+
+### Outcome
+- `BUG-C128-TOWN-TOPROW-RECUR` is removed from the active build plan.
+- The durable lesson is hardware-facing: on the 8563, register sequencing is part of correctness, not just polish. A three-line fix closed a multi-day bug because the real fault was in device trigger semantics, not in the scroll algorithm.
+
 ## 2026-03-31 — `FEAT-BOOT-ART` fallback shipping path, split shipping disks, and shared version manifest ✅ COMPLETE
 
 ### Scope Closed

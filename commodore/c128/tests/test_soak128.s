@@ -280,9 +280,27 @@ test_start:
     jmp test_fail
 !ok_tcorner:
 
-    // Town down-stairs at (40,24).
-    ldx #40
-    ldy #24
+    // Top-right town corner must land at the fixed umoria-derived width.
+    ldx #TOWN_MAP_COLS - 1
+    ldy #0
+    jsr map_get_tile
+    cmp #(TILE_CORNER_TR | TOWN_FLAGS)
+    beq !ok_tcorner_tr+
+    jmp test_fail
+!ok_tcorner_tr:
+
+    // Bottom-right town corner must land at the fixed umoria-derived height.
+    ldx #TOWN_MAP_COLS - 1
+    ldy #TOWN_MAP_ROWS - 1
+    jsr map_get_tile
+    cmp #(TILE_CORNER_BR | TOWN_FLAGS)
+    beq !ok_tcorner_br+
+    jmp test_fail
+!ok_tcorner_br:
+
+    // Town down-stairs at the new lower-center position.
+    ldx #TOWN_STAIRS_X
+    ldy #TOWN_STAIRS_Y
     jsr map_get_tile
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
@@ -290,23 +308,33 @@ test_start:
     jmp test_fail
 !ok_tstairs:
 
-    // Sample two known store doors: (10,7) and (60,24) must be open doors.
-    ldx #10
-    ldy #7
+    // Sample two known store doors from the shared 4x2 town layout.
+    ldx #15
+    ldy #6
     jsr map_get_tile
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_OPEN
     beq !ok_tdoor1+
     jmp test_fail
 !ok_tdoor1:
-    ldx #60
-    ldy #24
+    ldx #51
+    ldy #16
     jsr map_get_tile
     and #TILE_TYPE_MASK
     cmp #TILE_DOOR_OPEN
     beq !ok_tdoor2+
     jmp test_fail
 !ok_tdoor2:
+
+    // The larger C128 backing map must remain blocked outside the 66x22 town.
+    ldx #TOWN_MAP_COLS
+    ldy #TOWN_STAIRS_Y
+    jsr map_get_tile
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    beq !ok_toutside+
+    jmp test_fail
+!ok_toutside:
 
     jmp !iter_continue+
 

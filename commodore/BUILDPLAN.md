@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-03-31)
+## Current State (2026-04-01)
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
@@ -15,18 +15,16 @@
   - C128: [out/moria8-c128.d71](out/moria8-c128.d71)
 - C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, and keeps it visible through the later `MORIA64` load.
 - C128 now has a working native 80-column boot-art path that loads a generated VDC custom-charset poster helper, keeps it visible through the later `MORIA128` load, then restores the normal charset contract before the title flow.
+- The C128 boot-art helper now writes the poster attribute map before the screen map, so the custom-font poster does not flash briefly under the old charset state first.
 - The current shipping-art baseline is the simple shared fallback `MORIA8` deco logo. Higher-fidelity art is deferred until better source art exists.
 - The title screen and disk directory cards now show per-platform display versions sourced from [../version.json](../version.json).
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
+- Town now uses a fixed shared `66x22` footprint on both platforms, with the 8-building Commodore layout refit inside that space; C64 clamps town viewport movement to that logical footprint, while C128 preserves the existing wide entry framing and prevents fake border-wall artifacts by keeping out-of-town backing space non-presentational.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Regression Bugs
 
-| Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
-|---|---|---|---|---|---|
-| Medium | `BUG-C128-TOWN-TOPROW-RECUR` the C128 town-entry/top-row garbage artifact has recurred on the native C128 path | Medium | Medium | No | Live repro shows stale garbage at the top of town after entry even though the earlier `BUG-DESCENT-TOPROW-C64` seam fix remains in place. Likely a sibling C128 scroll-delta/render-path hole rather than the original patched ordinary-movement seam being lost. |
-| Medium | `BUG-LOOK-TRAP-DOOR` looking at traps or doors reports `You will have to do better than that.` | Medium | Medium | No | Directed look should describe or identify these terrain/feature targets instead of falling through to the generic failure message. |
-| Medium | `BUG-LOOK-WALL-GOLD` looking at walls reports that it sees Gold | Medium | Medium | No | Directed look is misclassifying wall tiles as treasure-bearing targets instead of reporting wall terrain correctly. |
+- No active regression bugs are currently tracked in the active build plan.
 
 ## Open Phases / Display Work
 

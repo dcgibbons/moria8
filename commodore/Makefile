@@ -216,13 +216,13 @@ $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KIC
 # ── C128 build rules ──────────────────────────────────────
 $(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
-	mv -f c128/out/ovl.start $(C128_OVL_START)
-	mv -f c128/out/ovl.town $(C128_OVL_TOWN)
-	mv -f c128/out/ovl.death $(C128_OVL_DEATH)
-	mv -f c128/out/ovl.gen $(C128_OVL_GEN)
-	mv -f c128/out/ovl.help $(C128_OVL_HELP)
-	mv -f c128/out/ovl.ui $(C128_OVL_UI)
-	mv -f c128/out/128.runtime.prg $(C128_RUNTIME_LOW)
+	mv -f "c128/out/ovl.start" "$(C128_OVL_START)"
+	mv -f "c128/out/ovl.town" "$(C128_OVL_TOWN)"
+	mv -f "c128/out/ovl.death" "$(C128_OVL_DEATH)"
+	mv -f "c128/out/ovl.gen" "$(C128_OVL_GEN)"
+	mv -f "c128/out/ovl.help" "$(C128_OVL_HELP)"
+	mv -f "c128/out/ovl.ui" "$(C128_OVL_UI)"
+	mv -f "c128/out/128.runtime.prg" "$(C128_RUNTIME_LOW)"
 
 $(C128_OVL_START): $(C128_MAIN_PRG)
 $(C128_OVL_TOWN): $(C128_MAIN_PRG)

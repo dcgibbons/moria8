@@ -604,15 +604,19 @@ do_look:
     bcs !dl_visible+
     jmp !dl_nothing+
 !dl_visible:
+    // Only trust monster table coordinates when the live map tile still
+    // carries FLAG_OCCUPIED. This matches renderer ownership and avoids
+    // stale level-transition/cached-table lookups on empty tiles.
+    lda dl_tile
+    and #FLAG_OCCUPIED
+    beq !dl_no_monster+
 
-    // Check for monster (highest priority)
     lda df_target_x
     ldy df_target_y
     jsr monster_find_at
     bcc !dl_no_monster+
 
     // Found a monster — "YOU SEE A <name>."
-    stx dl_scratch
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
@@ -625,64 +629,46 @@ do_look:
     rts
 
 !dl_no_monster:
-    // Check for floor item
-    lda df_target_x
-    ldy df_target_y
-    jsr floor_item_find_at
-    bcc !dl_no_item+
-
-    // Found an item — get its name
-    lda fi_item_id,x
-    jsr item_get_name_ptr
-    lda zp_ptr0
-    sta dl_name_lo
-    lda zp_ptr0_hi
-    sta dl_name_hi
-    jsr dl_print_you_see
-    clc
-    rts
-
-!dl_no_item:
-    // Check tile type — floor tiles continue, everything else stops
+    // Check tile type — non-floor terrain is authoritative for look.
     lda dl_tile
     and #TILE_TYPE_MASK
-
-    cmp #TILE_FLOOR
-    beq !dl_step+               // Empty floor — keep scanning
 
     cmp #TILE_DOOR_OPEN
     bne !dl_not_open+
     ldx #HSTR_DL_OPEN_DOOR
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_open:
     cmp #TILE_DOOR_CLOSED
     bne !dl_not_closed+
     ldx #HSTR_DL_CLOSED_DOOR
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_closed:
     cmp #TILE_STAIRS_DN
     bne !dl_not_sdn+
     ldx #HSTR_DL_STAIRS_DN
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_sdn:
     cmp #TILE_STAIRS_UP
     bne !dl_not_sup+
     ldx #HSTR_DL_STAIRS_UP
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_sup:
     cmp #TILE_TRAP
     bne !dl_not_trap+
     ldx #HSTR_DL_TRAP
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_trap:
     cmp #TILE_RUBBLE
     bne !dl_not_rubble+
     ldx #HSTR_DL_RUBBLE
-    jmp dl_print_tile
+    bne dl_print_tile
 !dl_not_rubble:
-    // Wall (any type) — report it
+    cmp #TILE_FLOOR
+    beq !dl_floor+
+
+    // Wall/secret/mineral seam (any other non-floor tile) — report it.
     ldx #HSTR_DL_WALL
-    // Fall through into dl_print_tile.
+    jmp dl_print_tile
 
 // dl_print_you_see — Print "YOU SEE A <name>."
 // Input: dl_name_lo/hi = name string pointer
@@ -717,9 +703,30 @@ dl_print_you_see:
 // dl_print_tile — Print a tile description message
 // Input: X = Huffman string ID (HSTR_*)
 dl_print_tile:
+    txa
+    pha
     jsr look_flash_target
+    pla
+    tax
 dl_print_tile_no_flash:
     jsr huff_print_msg
+    clc
+    rts
+
+!dl_floor:
+    lda df_target_x
+    ldy df_target_y
+    jsr floor_item_find_at
+    bcc !dl_step+               // Empty floor — keep scanning
+
+    // Found an item on floor — get its name
+    lda fi_item_id,x
+    jsr item_get_name_ptr
+    lda zp_ptr0
+    sta dl_name_lo
+    lda zp_ptr0_hi
+    sta dl_name_hi
+    jsr dl_print_you_see
     clc
     rts
 

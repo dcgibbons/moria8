@@ -148,9 +148,9 @@ test_start:
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
-
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
+    jsr test_v_scroll_up_first_op_uses_copy_mode
     jsr test_v_scroll_up_fast_path
     jsr test_v_scroll_down_fast_path
 
@@ -528,6 +528,49 @@ test_v_scroll_up_fast_path:
     jsr assert_vdc_cell
     rts
 
+test_v_scroll_up_first_op_uses_copy_mode:
+    jsr prepare_pattern_screen
+    lda #10
+    sta zp_view_x
+    sta old_view_x
+    sta old_view_y
+    lda #11
+    sta zp_view_y
+    jsr seed_bottom_strip_tiles
+    jsr force_vdc_fill_mode_and_seed_char
+    jsr render_viewport_scroll_delta
+    bcs !ok+
+    jmp test_fail
+!ok:
+
+    lda #0
+    sta test_row_rel
+    lda #0
+    sta test_col_rel
+    ldx #1
+    ldy #0
+    jsr expect_seed_cell
+    jsr assert_vdc_cell
+
+    lda #0
+    sta test_row_rel
+    lda #33
+    sta test_col_rel
+    ldx #1
+    ldy #33
+    jsr expect_seed_cell
+    jsr assert_vdc_cell
+
+    lda #0
+    sta test_row_rel
+    lda #VIEWPORT_W - 1
+    sta test_col_rel
+    ldx #1
+    ldy #VIEWPORT_W - 1
+    jsr expect_seed_cell
+    jsr assert_vdc_cell
+    rts
+
 test_v_scroll_down_fast_path:
     jsr prepare_pattern_screen
     lda #10
@@ -751,6 +794,18 @@ seed_top_strip_tiles:
     lda test_col_rel
     cmp #VIEWPORT_W
     bne !loop-
+    rts
+
+force_vdc_fill_mode_and_seed_char:
+    lda #$07
+    ldy #$ff
+    jsr vdc_set_update_addr
+    lda #$55
+    ldx #31
+    jsr vdc_write_reg
+    lda #$00
+    ldx #24
+    jsr vdc_write_reg
     rts
 
 expect_seed_cell:

@@ -12,6 +12,38 @@
 // Updates zp_view_x, zp_view_y
 // Preserves: nothing
 viewport_update:
+    lda zp_player_dlvl
+    bne !dungeon_bounds+
+
+    // Town uses a fixed 66x22 logical map even though the backing map is larger.
+    lda zp_player_x
+    sec
+    sbc #VIEWPORT_W / 2     // 19
+    bcs !tvx_not_neg+
+    lda #0
+    jmp !tvx_store+
+!tvx_not_neg:
+    cmp #TOWN_MAP_COLS - VIEWPORT_W
+    bcc !tvx_store+
+    lda #TOWN_MAP_COLS - VIEWPORT_W
+!tvx_store:
+    sta zp_view_x
+
+    lda zp_player_y
+    sec
+    sbc #VIEWPORT_H / 2     // 10
+    bcs !tvy_not_neg+
+    lda #0
+    jmp !tvy_store+
+!tvy_not_neg:
+    cmp #TOWN_MAP_ROWS - VIEWPORT_H
+    bcc !tvy_store+
+    lda #TOWN_MAP_ROWS - VIEWPORT_H
+!tvy_store:
+    sta zp_view_y
+    rts
+
+!dungeon_bounds:
     // view_x = player_x - VIEWPORT_W/2, clamped to [0, MAP_COLS - VIEWPORT_W]
     lda zp_player_x
     sec

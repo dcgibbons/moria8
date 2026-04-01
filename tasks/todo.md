@@ -3,6 +3,9 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- Directed `look` now preserves terrain message IDs across the flash path and treats non-floor terrain as authoritative, fixing trap/door misreports and wall-as-gold lookups.
+- The C128 boot-art helper now writes the poster attribute map before the screen map, eliminating the brief wrong-font flash before the custom poster appears.
+- The shared town layout now uses a fixed `66x22` umoria-sized footprint on both C64 and C128 while retaining the Commodore-only Black Market and Home in a deliberate `4x2` layout.
 - Shipping disk outputs are now split by platform:
   - `commodore/out/moria8-c64.d64`
   - `commodore/out/moria8-c128.d71`
@@ -12,6 +15,7 @@ This file is a temporary working scratchpad.
   - C128: generated native 80-column VDC custom-charset poster helper path
 - The C128 boot-art handoff now blanks the VDC screen before restoring the normal charset, preventing the preload/title garbage-font flash.
 - The disk directory card and title-screen version line are now sourced from `version.json`.
+- The recurring C128 town top-row garbage bug is fixed by programming 8563 VDC block-copy mode before writing the block-op trigger register.
 
 ## Reported Failure Gate
 - No active reported failure gate.
@@ -21,6 +25,59 @@ This file is a temporary working scratchpad.
   - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
+- [x] BUG-C128-LOOK-DOOR-RANGE
+  - [x] reproduce the C128-only report that looking at doors appears to require adjacency while C64 look range is correct
+  - [x] add focused C128 regression coverage around shared visibility lookup on the banked C128 map
+  - [x] verify the relevant C128 gates after the fix
+  - review:
+    - initial source review confirmed shared `do_look` is ray-based, not adjacency-only: it seeds the adjacent tile, computes `dl_dx/dl_dy`, and keeps stepping until it finds a visible non-floor target or visibility fails
+    - root cause: `los_is_visible` in `commodore/common/dungeon_los.s` read the tile with a raw `(zp_ptr1),y` load instead of the MMU-safe map accessor, so on C128 it could inspect Bank 0 instead of the live Bank 1 map
+    - symptom fit: `look` would prematurely report `nothing special` for walls, doors, and monsters whose live Bank 1 tiles were visible on screen but whose Bank 0 mirrors were dark or unrelated; stairs could still appear to work when the wrong-bank byte happened to satisfy the shared visibility rule
+    - implementation: `los_is_visible` now uses `:MapRead_ptr1_y()` so C128 visibility tests read the owned banked map through the same MMU-safe contract as the rest of the shared map code
+    - regression coverage: `test_dungeon128.s` now forces Bank 0 and Bank 1 to disagree at the same map coordinate and asserts that `los_is_visible` honors the lit Bank 1 tile
+    - verification passed:
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+      - `make test64`
+      - independent tester signoff: `ALL TESTS PASSED`
+- [x] BUG-LOOK-TRAP-DOOR / BUG-LOOK-WALL-GOLD
+  - [x] keep the fix inside shared `do_look` rather than reopening the broader directed-look redesign
+  - [x] preserve terrain Huffman IDs across `look_flash_target`
+  - [x] make non-floor terrain authoritative so wall/seam tiles do not fall through to floor-item lookup
+  - [x] add focused C64 regressions for closed door, trap, wall-with-gold seam, and floor gold
+  - review:
+    - root cause 1: `dl_print_tile` relied on `X` surviving `look_flash_target`, but the flash path clobbers `X`, so trap/door terrain messages could decode as unrelated Huffman strings
+    - root cause 2: `do_look` checked `floor_item_find_at` before terrain classification, so non-floor tiles sharing coordinates with injected items could be reported as gold/items instead of terrain
+    - root cause 3: the wall fallback loaded `HSTR_DL_WALL` but accidentally fell through into `dl_print_you_see` instead of `dl_print_tile`, so walls reused stale monster/item name pointers from earlier look results
+    - implementation: shared `do_look` now saves/restores the terrain message ID across the flash call, only consults `floor_item_find_at` after confirming the tile is actual floor, gates monster lookup on the live tile's `FLAG_OCCUPIED` bit to match renderer ownership, and jumps the wall fallback into `dl_print_tile` instead of the stale-name path
+    - verification passed:
+      - `make test64`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+- [x] BUG-C128-BOOTART-ORDER
+  - [x] make the C128 boot-art poster appear only after the custom-charset attributes are already in place
+  - [x] verify with the relevant C128 smoke gate
+  - review:
+    - root cause: the C128 boot-art helper streamed the screen map before the attribute map, so the new character codes could flash briefly under the previous non-poster attribute/charset state
+    - implementation: `bootart128.s` now writes the generated attribute map before the generated screen map so the visible poster characters only appear once the alternate-charset mode bits are already active
+    - verification passed:
+      - `make test128-fast-smoke`
+- [x] BUG-TOWN-SIZE-DRIFT
+  - [x] replace the invented shared `80x48` town with a fixed `66x22` layout on both C64 and C128
+  - [x] keep the Commodore-only Black Market and Home in a deliberate `4x2` town layout
+  - [x] update C64/C128 town tests to the new doors, stairs, and boundary assertions
+  - [x] verify with focused town coverage plus `make test128-fast`, `make test128-fast-smoke`, and `make test`
+  - review:
+    - root cause: the port had treated the AI-invented `80x48` town as if it were source-game geometry, and `town_generate` reused live map dimensions instead of owning a fixed town footprint
+    - implementation: shared town constants now define a fixed `66x22` town, `town_generate` carves that rectangle inside the live map, space outside town stays blocked but no longer carries lit town-wall flags, the C64 viewport clamps to town bounds, and the reverted C128 town re-anchor was removed so town entry keeps the expected framing instead of snapping on the first move
+    - verification passed:
+      - `TEST_FILTER='render|store' bash commodore/c64/run_tests.sh`
+      - `TEST_FILTER='store' bash commodore/c64/run_tests.sh`
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests soak128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+      - `make test`
 - [x] FEAT-BOOT-ART shipping fallback
   - [x] C64 boot path loads and displays the generated logo bitmap during the main-program load
   - [x] C128 boot path loads and displays the generated logo poster helper during the main-program load
@@ -34,7 +91,18 @@ This file is a temporary working scratchpad.
   - [x] add per-platform user-facing version source at `version.json`
   - [x] wire disk directory card text to the manifest
   - [x] wire title-screen version text to the manifest
-- [ ] No active implementation work for this feature branch.
+- [x] BUG-C128-TOWN-TOPROW-VDC-BLOCK-ORDER
+  - [x] update `rvsd_issue_block_copy` so VDC reg 24 copy mode is programmed before reg 30 triggers the operation
+  - [x] add a targeted `vdc_scroll_delta128` regression that forces reg 24 fill mode before the first fast-scroll block op
+  - [x] verify with the focused `vdc_scroll_delta128` test plus `make test128-fast` and `make test128-fast-smoke`
+  - review:
+    - root cause confirmed enough to fix: `rvsd_issue_block_copy` was programming reg 30 before reg 24, which is backward for 8563 block operations
+    - regression coverage now forces reg 24 fill mode before the first upward fast-scroll block op so the old ordering would fail deterministically
+    - verification passed:
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+- [x] No active implementation work for this feature branch.
 - Historical branch notes for the earlier unified-disk and proof/demo phases remain below for reference only.
 
 ## `FEAT-BOOT-ART` Design Plan

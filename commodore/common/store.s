@@ -1,7 +1,7 @@
 #importonce
 // store.s — Store restocking, price calculation, gold ops
 //
-// 6 town stores with persistent inventory (SoA layout, 12 slots each).
+// 8 town stores/buildings with persistent inventory (SoA layout, 12 slots each).
 // Restocking on town re-entry. Buy/sell price adjusted by CHR stat.
 //
 // Inventory arrays and check_player_on_store_door live in store_data.s

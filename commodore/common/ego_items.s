@@ -120,10 +120,6 @@ ego_slay_mask:
     .byte 0, CF_ANIMAL, CF_EVIL, CF_UNDEAD, 0, 0, 0, CF_EVIL|CF_UNDEAD
 ego_slay_mult:
     .byte 0, 2, 2, 3, 0, 0, 0, 2
-ego_bonus_dice:
-    .byte 0, 0, 0, 0, 2, 2, 0, 0
-ego_bonus_sides:
-    .byte 0, 0, 0, 0, 4, 4, 0, 0
 ego_ac_bonus:
     .byte 0, 0, 0, 0, 0, 0, 5, 3
 
@@ -156,7 +152,7 @@ ego_apply_damage:
     and #CF_UNDEAD
     beq !ead_ha_evil+
     lda #3                      // x3 for undead
-    jmp !ead_apply_mult+
+    bne !ead_apply_mult+
 !ead_ha_evil:
     lda #2                      // x2 for evil
 
@@ -169,7 +165,7 @@ ego_apply_damage:
     asl
     bcc !ead_mult_ok+
     lda #255
-    jmp !ead_mult_ok+
+    bne !ead_mult_ok+
 !ead_mult3:
     // x3 = x2 + x1
     lda cmb_damage
@@ -184,14 +180,15 @@ ego_apply_damage:
     sta cmb_damage
 
 !ead_check_bonus:
-    // Bonus dice (Flame Tongue / Frost Brand)
-    ldx ead_ego_type
-    lda ego_bonus_dice,x
-    beq !ead_done+
-    pha                         // Save dice count
-    lda ego_bonus_sides,x
-    tax                         // X = sides
-    pla                         // A = dice count
+    // Flame Tongue and Frost Brand both add 2d4 bonus damage.
+    lda ead_ego_type
+    cmp #EGO_FLAME_TONGUE
+    beq !ead_bonus_roll+
+    cmp #EGO_FROST_BRAND
+    bne !ead_done+
+!ead_bonus_roll:
+    lda #2
+    ldx #4
     ldy #0                      // No static bonus
     jsr math_dice               // Result in zp_math_a
     lda cmb_damage

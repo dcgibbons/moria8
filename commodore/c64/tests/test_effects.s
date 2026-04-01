@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #27
+    ldx #31
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -105,12 +105,16 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 28, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 32, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
 tlk_expected_n: .text "n"
+tlk_expected_c: .text "c"
+tlk_expected_t: .text "t"
+tlk_expected_w: .text "w"
+tlk_expected_g: .text "G"
 tlk_flash_calls: .byte 0
 tlk_flash_row:   .byte 0
 tlk_flash_col:   .byte 0
@@ -1517,10 +1521,165 @@ test_start:
     jmp !t28+
 
     // ==========================================
-    // Test 28: Non-confused movement obeys the command direction
-    // Regresses player_try_move entry bookkeeping.
+    // Test 28: look should preserve closed-door terrain messaging across flash
     // ==========================================
 !t28:
+    jsr tv_setup_dark_room
+    lda #0
+    sta tlk_flash_calls
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+    lda #TILE_DOOR_CLOSED | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $040a                   // "You see a c..."
+    cmp tlk_expected_c
+    bne !t28_fail+
+
+    lda #$01
+    sta tc_results + 27
+    jmp !t29+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
+
+    // ==========================================
+    // Test 29: look should preserve trap terrain messaging across flash
+    // ==========================================
+!t29:
+    jsr tv_setup_dark_room
+    lda #0
+    sta tlk_flash_calls
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+    lda #TILE_TRAP | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $040a                   // "You see a t..."
+    cmp tlk_expected_t
+    bne !t29_fail+
+
+    lda #$01
+    sta tc_results + 28
+    jmp !t30+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // ==========================================
+    // Test 30: look should prefer wall terrain over stale wall occupants/items
+    // ==========================================
+!t30:
+    jsr tv_setup_dark_room
+    lda #0
+    sta tlk_flash_calls
+
+    lda #23
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #57                     // Mean-Looking Mercenary
+    jsr monster_spawn_one
+    bcc !t30_fail+
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #23
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    :MapWrite_ptr0_y()
+
+    lda #23
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #0                      // Gold (small)
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t30_fail+
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $040a                   // "You see a w..."
+    cmp tlk_expected_w
+    bne !t30_fail+
+
+    lda #$01
+    sta tc_results + 29
+    jmp !t31+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
+    // ==========================================
+    // Test 31: look should still report floor gold as an item
+    // ==========================================
+!t31:
+    jsr tv_setup_dark_room
+    lda #0
+    sta tlk_flash_calls
+
+    lda #23
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #0                      // Gold (small)
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t31_fail+
+
+    jsr msg_clear
+    jsr do_look
+
+    lda $040a                   // "You see a G..."
+    cmp tlk_expected_g
+    bne !t31_fail+
+
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
+    // ==========================================
+    // Test 32: Non-confused movement obeys the command direction
+    // Regresses player_try_move entry bookkeeping.
+    // ==========================================
+!t32:
     lda #20
     sta zp_player_x
     sta player_data + PL_MAP_X
@@ -1528,21 +1687,21 @@ test_start:
     sta player_data + PL_MAP_Y
 
     ldx #17
-!t28_fill_y:
+!t32_fill_y:
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy #17
-!t28_fill_x:
+!t32_fill_x:
     lda #TILE_FLOOR | FLAG_LIT
     sta (zp_ptr0),y
     iny
     cpy #24
-    bcc !t28_fill_x-
+    bcc !t32_fill_x-
     inx
     cpx #24
-    bcc !t28_fill_y-
+    bcc !t32_fill_y-
 
     lda #0
     sta zp_eff_confuse
@@ -1551,22 +1710,22 @@ test_start:
 
     lda #CMD_MOVE_E
     jsr player_try_move
-    bcc !t28_fail+
+    bcc !t32_fail+
     lda zp_player_x
     cmp #21
-    bne !t28_fail+
+    bne !t32_fail+
     lda zp_player_y
     cmp #20
-    bne !t28_fail+
+    bne !t32_fail+
     lda player_move_relocated
     cmp #1
-    bne !t28_fail+
+    bne !t32_fail+
     lda #$01
-    sta tc_results + 27
+    sta tc_results + 31
     jmp !tests_done+
-!t28_fail:
+!t32_fail:
     lda #$00
-    sta tc_results + 27
+    sta tc_results + 31
 
 !tests_done:
     jmp test_finish
@@ -1771,9 +1930,9 @@ tv_compare_viewport:
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end < $b200, true
+.assert "effects test body stays below scratch buffers", effects_test_body_end < $b400, true
 
-.segmentdef TestEffectsBuffers [start=$b200]
+.segmentdef TestEffectsBuffers [start=$b400]
 .segment TestEffectsBuffers
 tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
 tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0
