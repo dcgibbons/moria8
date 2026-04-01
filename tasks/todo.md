@@ -3,6 +3,7 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- The shared town layout now uses a fixed `66x22` umoria-sized footprint on both C64 and C128 while retaining the Commodore-only Black Market and Home in a deliberate `4x2` layout.
 - Shipping disk outputs are now split by platform:
   - `commodore/out/moria8-c64.d64`
   - `commodore/out/moria8-c128.d71`
@@ -22,6 +23,22 @@ This file is a temporary working scratchpad.
   - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
+- [x] BUG-TOWN-SIZE-DRIFT
+  - [x] replace the invented shared `80x48` town with a fixed `66x22` layout on both C64 and C128
+  - [x] keep the Commodore-only Black Market and Home in a deliberate `4x2` town layout
+  - [x] update C64/C128 town tests to the new doors, stairs, and boundary assertions
+  - [x] verify with focused town coverage plus `make test128-fast`, `make test128-fast-smoke`, and `make test`
+  - review:
+    - root cause: the port had treated the AI-invented `80x48` town as if it were source-game geometry, and `town_generate` reused live map dimensions instead of owning a fixed town footprint
+    - implementation: shared town constants now define a fixed `66x22` town, `town_generate` carves that rectangle inside the live map, space outside town stays blocked but no longer carries lit town-wall flags, the C64 viewport clamps to town bounds, and the reverted C128 town re-anchor was removed so town entry keeps the expected framing instead of snapping on the first move
+    - verification passed:
+      - `TEST_FILTER='render|store' bash commodore/c64/run_tests.sh`
+      - `TEST_FILTER='store' bash commodore/c64/run_tests.sh`
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests soak128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+      - `make test`
 - [x] FEAT-BOOT-ART shipping fallback
   - [x] C64 boot path loads and displays the generated logo bitmap during the main-program load
   - [x] C128 boot path loads and displays the generated logo poster helper during the main-program load
@@ -46,7 +63,7 @@ This file is a temporary working scratchpad.
       - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
       - `make test128-fast`
       - `make test128-fast-smoke`
-- [ ] No active implementation work for this feature branch.
+- [x] No active implementation work for this feature branch.
 - Historical branch notes for the earlier unified-disk and proof/demo phases remain below for reference only.
 
 ## `FEAT-BOOT-ART` Design Plan

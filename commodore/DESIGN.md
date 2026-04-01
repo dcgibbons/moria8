@@ -216,7 +216,7 @@ game_loop.s               Shared main loop orchestration, movement/running core,
 ├── monster_magic.s       Monster spellcasting (bolts, breath, summon, blind, heal)
 │
 ├── item.s                Item SoA tables (55 types), floor items, identification, stacking
-├── store.s               Store system (6 stores), pricing, restocking, category masks
+├── store.s               Store system (8 stores/buildings), pricing, restocking, category masks
 ├── spell_data.s          Spell/prayer data tables (32 spells, names, costs, levels)
 ├── spell_effects.s       Shared effect subroutines (bolt, heal, teleport, detect, etc.)
 ├── ranged_fire.s         Ranged combat (bow/crossbow/sling fire command, ammo matching)

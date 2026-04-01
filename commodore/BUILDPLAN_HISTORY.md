@@ -6,6 +6,50 @@
 
 ---
 
+## 2026-04-01 — `BUG-TOWN-SIZE-DRIFT` shared 66x22 town redesign ✅ COMPLETE
+
+### Scope Closed
+- Replaced the invented `80x48` town layout with a fixed `66x22` town on both C64 and C128.
+- Kept the Commodore-only Black Market and Home, but moved all 8 buildings into a deliberate shared `4x2` layout instead of the old ad hoc coordinates.
+- Left dungeon dimensions unchanged:
+  - C64 dungeon remains `80x48`
+  - C128 dungeon remains `198x66`
+
+### Root Cause
+- The old town geometry was not sourced from `umoria`.
+- Shared generation code had treated the port’s inherited `80x48` town as if it were canonical and reused live map dimensions inside `town_generate`.
+- That meant the C128 larger-dungeon work dragged town size along with it, even though original `umoria` explicitly shrinks town to a fixed `66x22` footprint.
+
+### What Changed
+1. **Fixed shared town geometry**
+   - Added explicit town constants for `66x22` plus new stairs/start coordinates.
+   - `town_generate` now fills the live map with blocking walls first, then carves only the fixed town rectangle.
+   - Space outside the town no longer inherits lit town wall flags, so larger backing maps do not render fake solid border slabs.
+2. **Deliberate 8-building town layout**
+   - Updated the shared store position and door tables to a stable `4x2` layout that fits inside `66x22`.
+   - Black Market and Home remain stores 6 and 7.
+3. **Regression coverage updated**
+   - C128 soak coverage now asserts fixed town corners, new stairs, representative door tiles, and blocked space outside the town rectangle.
+   - C64 store-door tests now read the shared door tables directly instead of freezing stale coordinates.
+   - C64 render coverage now clamps the town view to the fixed town footprint instead of letting the larger backing map leak into the visible edge rows.
+   - The attempted C128 town re-anchor was reverted after it caused a visible first-move viewport snap on town entry; the shipped C128 fix keeps the original entry framing and relies on non-presentational out-of-town backing tiles instead.
+
+### Verification
+- Focused town coverage:
+  - `TEST_FILTER='render|store' bash commodore/c64/run_tests.sh` = `PASS`
+  - `TEST_FILTER='store' bash commodore/c64/run_tests.sh` = `PASS`
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests soak128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+  - `python3 -u commodore/c128/harness128_batch.py --mode cold --tests vdc_scroll_delta128 --vice /opt/homebrew/bin/x128 --connect-timeout 12` = `PASS`
+- Broader regression suites:
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `PASS`
+  - `make test` = `PASS`
+
+### Outcome
+- `BUG-TOWN-SIZE-DRIFT` is removed from the active build plan.
+- The final town behavior now matches the old feel better on C128: returning to town keeps the pre-existing wide stairs-adjacent framing and no longer jumps to a new anchor on the first move.
+- The durable lesson is product-facing: world geometry has to be sourced from the original game design, not inferred from a live map buffer size or previous AI-written port assumptions.
+
 ## 2026-04-01 — `BUG-C128-TOWN-TOPROW-RECUR` VDC first-scroll corruption fix ✅ COMPLETE
 
 ### Scope Closed

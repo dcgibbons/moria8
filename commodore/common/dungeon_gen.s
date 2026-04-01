@@ -81,8 +81,9 @@ map_bulk_and_mask: .byte 0
 // Subroutines
 // ============================================================
 
-// town_generate — Build the town level map
-// Fills map at MAP_BASE with floor, outer walls, 6 stores, stairs.
+// town_generate — Build the shared 66x22 town inside the live map.
+// Fills the backing map with blocking town walls first, then carves the
+// playable town rectangle, outer walls, 8 stores, and stairs.
 // Sets player start position.
 // Preserves: nothing
 town_generate:
@@ -93,11 +94,32 @@ town_generate:
     // Clear trap table for safety (town has no traps)
     lda #0
     sta trap_count
-    // --- Step 1: Fill entire map with floor + TOWN_FLAGS ---
-    lda #TILE_FLOOR | TOWN_FLAGS    // $0C
+    // --- Step 1: Fill the live map with blocking unseen walls ---
+    // Only the carved town rectangle should be lit/visited. The backing map
+    // outside town must stay hidden so larger platform maps do not leak
+    // visible wall slabs into the viewport.
+    lda #TILE_WALL_H
     jsr map_bulk_fill_all
 
-    // --- Step 2: Draw outer boundary walls ---
+    // --- Step 2: Carve the fixed 66x22 town floor rectangle ---
+    ldx #0
+!town_floor_rows:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #0
+    lda #TILE_FLOOR | TOWN_FLAGS
+!town_floor_cols:
+    :MapWrite_ptr0_y()
+    iny
+    cpy #TOWN_MAP_COLS
+    bne !town_floor_cols-
+    inx
+    cpx #TOWN_MAP_ROWS
+    bne !town_floor_rows-
+
+    // --- Step 3: Draw outer boundary walls ---
     // Top wall (row 0): horizontal walls with corners
     lda map_row_lo + 0
     sta zp_ptr0
@@ -109,7 +131,7 @@ town_generate:
     :MapWrite_ptr0_y()
     // Top-right corner
     lda #TILE_CORNER_TR | TOWN_FLAGS
-    ldy #MAP_COLS - 1
+    ldy #TOWN_MAP_COLS - 1
     :MapWrite_ptr0_y()
     // Horizontal wall between corners
     lda #TILE_WALL_H | TOWN_FLAGS
@@ -117,13 +139,13 @@ town_generate:
 !top_wall:
     :MapWrite_ptr0_y()
     iny
-    cpy #MAP_COLS - 1
+    cpy #TOWN_MAP_COLS - 1
     bne !top_wall-
 
-    // Bottom wall (row 47): horizontal walls with corners
-    lda map_row_lo + MAP_ROWS - 1
+    // Bottom wall: horizontal walls with corners
+    lda map_row_lo + TOWN_MAP_ROWS - 1
     sta zp_ptr0
-    lda map_row_hi + MAP_ROWS - 1
+    lda map_row_hi + TOWN_MAP_ROWS - 1
     sta zp_ptr0_hi
     // Bottom-left corner
     lda #TILE_CORNER_BL | TOWN_FLAGS
@@ -131,7 +153,7 @@ town_generate:
     :MapWrite_ptr0_y()
     // Bottom-right corner
     lda #TILE_CORNER_BR | TOWN_FLAGS
-    ldy #MAP_COLS - 1
+    ldy #TOWN_MAP_COLS - 1
     :MapWrite_ptr0_y()
     // Horizontal wall between corners
     lda #TILE_WALL_H | TOWN_FLAGS
@@ -139,10 +161,10 @@ town_generate:
 !bot_wall:
     :MapWrite_ptr0_y()
     iny
-    cpy #MAP_COLS - 1
+    cpy #TOWN_MAP_COLS - 1
     bne !bot_wall-
 
-    // Left and right walls (rows 1 to 46)
+    // Left and right walls (interior rows)
     ldx #1              // Row index
 !side_walls:
     lda map_row_lo,x
@@ -153,14 +175,14 @@ town_generate:
     lda #TILE_WALL_V | TOWN_FLAGS
     ldy #0
     :MapWrite_ptr0_y()
-    // Right wall (col 79)
-    ldy #MAP_COLS - 1
+    // Right wall (last town column)
+    ldy #TOWN_MAP_COLS - 1
     :MapWrite_ptr0_y()
     inx
-    cpx #MAP_ROWS - 1
+    cpx #TOWN_MAP_ROWS - 1
     bne !side_walls-
 
-    // --- Step 3: Place 6 store buildings ---
+    // --- Step 4: Place 8 store buildings ---
     ldx #0              // Store index
 !store_loop:
     stx zp_temp0        // Save store index
@@ -170,20 +192,20 @@ town_generate:
     cpx #STORE_COUNT
     bne !store_loop-
 
-    // --- Step 4: Place stairs down at (40, 24) ---
-    lda map_row_lo + 24
+    // --- Step 5: Place stairs down near the lower center ---
+    lda map_row_lo + TOWN_STAIRS_Y
     sta zp_ptr0
-    lda map_row_hi + 24
+    lda map_row_hi + TOWN_STAIRS_Y
     sta zp_ptr0_hi
     lda #TILE_STAIRS_DN | TOWN_FLAGS
-    ldy #40
+    ldy #TOWN_STAIRS_X
     :MapWrite_ptr0_y()
 
-    // --- Step 5: Set player start at (39, 24) ---
-    lda #39
+    // --- Step 6: Set player start left of the town stairs ---
+    lda #TOWN_START_X
     sta player_data + PL_MAP_X
     sta zp_player_x
-    lda #24
+    lda #TOWN_START_Y
     sta player_data + PL_MAP_Y
     sta zp_player_y
 

@@ -9,6 +9,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - Do not claim a fix from theory, partial tests, or neighboring evidence while the live gate is still red.
 - For visual, boot, and interaction bugs, the user-visible path outranks synthetic harness evidence.
 - Re-run the exact reported gate after each candidate fix before changing your conclusion about status.
+- Once the fix is in, the relevant targeted gates are green, and independent tester signoff is green, stop; do not churn on redundant broad reruns after a transient harness hiccup unless the user explicitly asks for more proof.
 
 ## Regression Ownership
 
@@ -22,6 +23,8 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - If a symptom returns after a seam-specific fix, check sibling paths into the same subsystem before assuming the original fix was lost.
 - When the user changes the product target, stop optimizing the old architecture by inertia and restate the new target in the plan.
 - When the user asks for a bounded action like “revert” or “build the test,” stop after that action and report the exact state; do not roll straight into debugging the next failure without explicit approval.
+- Verify source-game geometry before extending or porting it; do not infer fixed subregion sizes like town from live dungeon dimensions or from older AI-written port code.
+- When a fixed logical subregion lives inside a larger backing map, fix both halves of the contract: generation must make the out-of-region space non-presentational, and viewport math must clamp to the logical region rather than the backing buffer.
 
 ## C128 Contracts
 

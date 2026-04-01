@@ -148,7 +148,6 @@ test_start:
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
-
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode

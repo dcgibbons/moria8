@@ -460,11 +460,11 @@ test_start:
 
     // ============================================================
     // Test 15: check_player_on_store_door match
-    // Store 0 door is at (10, 7)
+    // Store 0 door uses the shared town door table.
     // ============================================================
-    lda #10
+    lda store_door_x + 0
     sta zp_player_x
-    lda #7
+    lda store_door_y + 0
     sta zp_player_y
     jsr check_player_on_store_door
     bcc !t15_fail+
@@ -703,11 +703,11 @@ test_start:
     sta tc_results + 23
 
     // ============================================================
-    // Test 25: check_player_on_store_door at BM door (42,7) → store 6
+    // Test 25: check_player_on_store_door at BM door → store 6
     // ============================================================
-    lda #42
+    lda store_door_x + 6
     sta zp_player_x
-    lda #7
+    lda store_door_y + 6
     sta zp_player_y
     jsr check_player_on_store_door
     bcc !t25_fail+
@@ -721,11 +721,11 @@ test_start:
     sta tc_results + 24
 
     // ============================================================
-    // Test 26: check_player_on_store_door at Home door (47,24) → store 7
+    // Test 26: check_player_on_store_door at Home door → store 7
     // ============================================================
-    lda #47
+    lda store_door_x + 7
     sta zp_player_x
-    lda #24
+    lda store_door_y + 7
     sta zp_player_y
     jsr check_player_on_store_door
     bcc !t26_fail+
