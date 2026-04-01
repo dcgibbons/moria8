@@ -378,7 +378,7 @@ los_is_visible:
     // Read tile at (X, Y)
     txa
     tay
-    lda (zp_ptr1),y
+    :MapRead_ptr1_y()
 
     // Check FLAG_LIT
     and #FLAG_LIT

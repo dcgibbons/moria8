@@ -3,6 +3,7 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- Directed `look` now preserves terrain message IDs across the flash path and treats non-floor terrain as authoritative, fixing trap/door misreports and wall-as-gold lookups.
 - The C128 boot-art helper now writes the poster attribute map before the screen map, eliminating the brief wrong-font flash before the custom poster appears.
 - The shared town layout now uses a fixed `66x22` umoria-sized footprint on both C64 and C128 while retaining the Commodore-only Black Market and Home in a deliberate `4x2` layout.
 - Shipping disk outputs are now split by platform:
@@ -24,6 +25,35 @@ This file is a temporary working scratchpad.
   - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
+- [x] BUG-C128-LOOK-DOOR-RANGE
+  - [x] reproduce the C128-only report that looking at doors appears to require adjacency while C64 look range is correct
+  - [x] add focused C128 regression coverage around shared visibility lookup on the banked C128 map
+  - [x] verify the relevant C128 gates after the fix
+  - review:
+    - initial source review confirmed shared `do_look` is ray-based, not adjacency-only: it seeds the adjacent tile, computes `dl_dx/dl_dy`, and keeps stepping until it finds a visible non-floor target or visibility fails
+    - root cause: `los_is_visible` in `commodore/common/dungeon_los.s` read the tile with a raw `(zp_ptr1),y` load instead of the MMU-safe map accessor, so on C128 it could inspect Bank 0 instead of the live Bank 1 map
+    - symptom fit: `look` would prematurely report `nothing special` for walls, doors, and monsters whose live Bank 1 tiles were visible on screen but whose Bank 0 mirrors were dark or unrelated; stairs could still appear to work when the wrong-bank byte happened to satisfy the shared visibility rule
+    - implementation: `los_is_visible` now uses `:MapRead_ptr1_y()` so C128 visibility tests read the owned banked map through the same MMU-safe contract as the rest of the shared map code
+    - regression coverage: `test_dungeon128.s` now forces Bank 0 and Bank 1 to disagree at the same map coordinate and asserts that `los_is_visible` honors the lit Bank 1 tile
+    - verification passed:
+      - `make test128-fast`
+      - `make test128-fast-smoke`
+      - `make test64`
+      - independent tester signoff: `ALL TESTS PASSED`
+- [x] BUG-LOOK-TRAP-DOOR / BUG-LOOK-WALL-GOLD
+  - [x] keep the fix inside shared `do_look` rather than reopening the broader directed-look redesign
+  - [x] preserve terrain Huffman IDs across `look_flash_target`
+  - [x] make non-floor terrain authoritative so wall/seam tiles do not fall through to floor-item lookup
+  - [x] add focused C64 regressions for closed door, trap, wall-with-gold seam, and floor gold
+  - review:
+    - root cause 1: `dl_print_tile` relied on `X` surviving `look_flash_target`, but the flash path clobbers `X`, so trap/door terrain messages could decode as unrelated Huffman strings
+    - root cause 2: `do_look` checked `floor_item_find_at` before terrain classification, so non-floor tiles sharing coordinates with injected items could be reported as gold/items instead of terrain
+    - root cause 3: the wall fallback loaded `HSTR_DL_WALL` but accidentally fell through into `dl_print_you_see` instead of `dl_print_tile`, so walls reused stale monster/item name pointers from earlier look results
+    - implementation: shared `do_look` now saves/restores the terrain message ID across the flash call, only consults `floor_item_find_at` after confirming the tile is actual floor, gates monster lookup on the live tile's `FLAG_OCCUPIED` bit to match renderer ownership, and jumps the wall fallback into `dl_print_tile` instead of the stale-name path
+    - verification passed:
+      - `make test64`
+      - `make test128-fast`
+      - `make test128-fast-smoke`
 - [x] BUG-C128-BOOTART-ORDER
   - [x] make the C128 boot-art poster appear only after the custom-charset attributes are already in place
   - [x] verify with the relevant C128 smoke gate

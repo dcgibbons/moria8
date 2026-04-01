@@ -6,6 +6,52 @@
 
 ---
 
+## 2026-04-01 — `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` directed-look repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the shared directed-`look` misreports for traps, doors, wall/gold seams, and stale wall-name reuse.
+- Fixed the C128-only live-runtime visibility failure where `look` could report `You see nothing special.` for clearly visible walls, doors, and monsters because visibility was reading the wrong map bank.
+
+### Root Cause
+- The first shared bug set lived in `do_look`:
+  - `dl_print_tile` relied on `X` surviving `look_flash_target`, but the flash path clobbered it, so trap/door terrain messages could decode as unrelated Huffman strings.
+  - `do_look` checked `floor_item_find_at` before terrain classification, so non-floor tiles sharing coordinates with items could be reported as gold/items instead of terrain.
+  - the wall fallback loaded `HSTR_DL_WALL` but fell through into `dl_print_you_see`, so walls reused stale monster/item name pointers from earlier look results.
+  - stale monster-table entries could also win on blocked tiles unless the live tile still carried `FLAG_OCCUPIED`.
+- The later C128-only bug was lower-level:
+  - `los_is_visible` read the tile with a raw `(zp_ptr1),y` load instead of the MMU-safe map accessor.
+  - On C128, that meant visibility could inspect Bank 0 instead of the live Bank 1 map, so `look` would bail out early with `nothing special` even when the on-screen target was actually visible.
+
+### What Changed
+1. **Shared directed-look classification repaired**
+   - [common/player_move.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/player_move.s) now preserves the terrain Huffman ID across the flash path.
+   - Non-floor terrain is authoritative before floor-item lookup, so wall/item seams report terrain correctly.
+   - Monster lookup is gated on the live tile’s `FLAG_OCCUPIED` bit to avoid stale table lookups on empty tiles.
+   - Wall fallback now jumps into `dl_print_tile` instead of the stale-name path.
+2. **C128 banked-map visibility repaired**
+   - [common/dungeon_los.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/dungeon_los.s) now reads the tile in `los_is_visible` through `:MapRead_ptr1_y()`.
+   - That brings the visibility helper back under the C128 MMU-safe map contract used by the rest of the shared map code.
+3. **Regression coverage expanded**
+   - [c64/tests/test_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_effects.s) now covers closed-door, trap, wall-with-gold, and floor-gold directed-`look` cases.
+   - [c128/tests/test_dungeon128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/tests/test_dungeon128.s) now forces Bank 0 and Bank 1 to disagree at the same map coordinate and asserts that `los_is_visible` honors the lit Bank 1 tile.
+4. **Task tracking updated**
+   - [tasks/todo.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/todo.md) now records the final shared and C128-specific root causes, implementation, and verification.
+   - [tasks/lessons.md](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tasks/lessons.md) now captures the visibility/ownership lesson for narrowed interaction bugs.
+
+### Verification
+- Shared + C128 regression suites:
+  - `make test64` = `PASS`
+  - `make test128-fast` = `PASS`
+  - `make test128-fast-smoke` = `PASS`
+- Independent tester signoff:
+  - Exact reported command: `N/A`
+  - Broader regression suites: `PASS`
+  - `ALL TESTS PASSED`
+
+### Outcome
+- `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` are removed from active work.
+- Directed `look` now behaves consistently across C64 and C128, while still respecting the intended shared LoS/visibility rule instead of a wrong-bank artifact on C128.
+
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 
 ### Scope Closed

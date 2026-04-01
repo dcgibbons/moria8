@@ -20,7 +20,10 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Scope And Design
 
 - When the user broadens a repro, redesign around the shared owner, not the first visible trigger or old bug label.
+- When the user narrows a bug to one platform, stop assuming the shared path is primary; isolate the platform-owned seam with a targeted repro before widening the fix.
+- Before patching a newly narrowed interaction bug, verify whether the shared command intentionally stops on visibility or ownership boundaries; an apparent platform-only failure may be the expected shared stop condition in a different live scene.
 - If a symptom returns after a seam-specific fix, check sibling paths into the same subsystem before assuming the original fix was lost.
+- For scan/classification bugs, verify every sibling data source at the seam before closing it; fixing item lookup alone is insufficient if stale monster lookup can still win on the same blocked tile.
 - When the user changes the product target, stop optimizing the old architecture by inertia and restate the new target in the plan.
 - When the user asks for a bounded action like “revert” or “build the test,” stop after that action and report the exact state; do not roll straight into debugging the next failure without explicit approval.
 - Verify source-game geometry before extending or porting it; do not infer fixed subregion sizes like town from live dungeon dimensions or from older AI-written port code.

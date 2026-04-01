@@ -4,9 +4,11 @@
 #import "../../common/zeropage.s"
 #import "test_helpers128.s"
 #import "../memory128.s"
+#import "../../common/dungeon_data.s"
 #import "../../common/color.s"
 #import "../screen_vdc.s"
 #import "../monster_threat_vdc.s"
+#import "../../common/dungeon_los.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -14,6 +16,42 @@
 .pc = $3000 "Test Code"
 
 c128_restore_runtime_state:
+    rts
+
+mmu_safe_map_read_ptr0:
+    jsr mmu_select_bank1
+    lda (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_write_ptr0:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr0),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_read_ptr1:
+    jsr mmu_select_bank1
+    lda (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
+    rts
+
+mmu_safe_map_write_ptr1:
+    pha
+    jsr mmu_select_bank1
+    pla
+    sta (zp_ptr1),y
+    pha
+    jsr mmu_select_bank0
+    pla
     rts
 
 test_start:
@@ -163,6 +201,37 @@ test_start:
 !fail2:
     jmp test_fail
 !after_fail2:
+
+    // Test 6: los_is_visible must read the live Bank 1 map on C128.
+    // Bank 0 mirror at the same address is deliberately dark, while Bank 1
+    // carries a lit tile; raw pointer reads would see the wrong bank.
+    lda #10
+    sta zp_player_y
+    lda #10
+    sta zp_player_x
+    lda #0
+    sta zp_light_radius
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+
+    ldy #12
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+
+    jsr mmu_select_bank1
+    ldy #12
+    lda #TILE_WALL_H | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+    jsr mmu_select_bank0
+
+    ldx #12
+    ldy #10
+    jsr los_is_visible
+    bcc test_fail
 
     jmp test_pass
 
