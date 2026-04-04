@@ -40,6 +40,12 @@ RUN_FLAGS64  = -autostartprgmode 1 -sound -sounddev coreaudio
 RUN_FLAGS128 = -80col -sound -sounddev coreaudio
 KA_FLAGS     = -showmem -vicesymbols
 KA_FLAGS64   = $(KA_FLAGS) -libdir c64
+DEBUG_FEAT_DISK_TRACE ?= 0
+ifeq ($(DEBUG_FEAT_DISK_TRACE),1)
+KA_FLAGS64   += -define DEBUG_FEAT_DISK_TRACE
+else
+KA_FLAGS64   += -define DEBUG_FEAT_DISK_TRACE=0
+endif
 KA_FLAGS128  = $(KA_FLAGS) -libdir c64 -define C128
 ifeq ($(PERF_P1),1)
 KA_FLAGS128  += -define PERF_P1
@@ -92,6 +98,7 @@ C128_OVL_GEN       = $(OUT128)/ovl.gen
 C128_OVL_HELP      = $(OUT128)/ovl.help
 C128_OVL_UI        = $(OUT128)/ovl.ui
 C128_RUNTIME_LOW   = $(OUT128)/128.runtime.prg
+C128_RUNTIME_COMMON = $(OUT128)/128.fdisk.prg
 C128_BOOTSECT_PRG  = $(OUT128)/bootsect128.prg
 C128_CHARSET_DEMO_PRG = $(OUT128)/vdc_charset_poster_demo.prg
 C128_BOOTART_DIAG_PRG = $(OUT128)/bootart128.prg
@@ -114,7 +121,7 @@ C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
 	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
-	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_RUNTIME_LOW)
+	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON)
 
 .PHONY: all build build64 build128 disk disk64 disk128 run run64 run128 \
 	bootart128-charset-demo \
@@ -216,6 +223,7 @@ $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KIC
 # ── C128 build rules ──────────────────────────────────────
 $(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
+	mkdir -p "$(OUT128)" "c128/out"
 	mv -f "c128/out/ovl.start" "$(C128_OVL_START)"
 	mv -f "c128/out/ovl.town" "$(C128_OVL_TOWN)"
 	mv -f "c128/out/ovl.death" "$(C128_OVL_DEATH)"
@@ -223,6 +231,7 @@ $(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	mv -f "c128/out/ovl.help" "$(C128_OVL_HELP)"
 	mv -f "c128/out/ovl.ui" "$(C128_OVL_UI)"
 	mv -f "c128/out/128.runtime.prg" "$(C128_RUNTIME_LOW)"
+	mv -f "c128/out/128.fdisk.prg" "$(C128_RUNTIME_COMMON)"
 
 $(C128_OVL_START): $(C128_MAIN_PRG)
 $(C128_OVL_TOWN): $(C128_MAIN_PRG)
@@ -231,6 +240,7 @@ $(C128_OVL_GEN): $(C128_MAIN_PRG)
 $(C128_OVL_HELP): $(C128_MAIN_PRG)
 $(C128_OVL_UI): $(C128_MAIN_PRG)
 $(C128_RUNTIME_LOW): $(C128_MAIN_PRG)
+$(C128_RUNTIME_COMMON): $(C128_MAIN_PRG)
 
 $(C128_BOOT_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_BOOT_SRC) -o $(C128_BOOT_PRG)
@@ -327,7 +337,8 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 		-write $(C128_OVL_GEN) "128.gen" \
 		-write $(C128_OVL_HELP) "128.help" \
 		-write $(C128_OVL_UI) "128.ui" \
-		-write $(C128_RUNTIME_LOW) "128.runtime"
+		-write $(C128_RUNTIME_LOW) "128.runtime" \
+		-write $(C128_RUNTIME_COMMON) "128.fdisk"
 	python3 $(PATCH_D64) $(DISK128_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
 	python3 $(DISKART) $(DISK128_IMAGE) c128
 	mkdir -p c128/out

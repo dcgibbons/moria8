@@ -80,6 +80,9 @@ kernal_load:
     sec
     rts
 
+kernal_load_safe:
+    jmp kernal_load
+
 #import "../../common/overlay.s"
 #import "../../common/string_bank.s"
 

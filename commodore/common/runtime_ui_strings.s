@@ -21,12 +21,10 @@ save_ioerr_str:
 save_welcome_str:
     .text "Welcome back to Moria8!" ; .byte 0
 title_menu_str:
-    .text "N)ew  L)oad  D)ual Disk" ; .byte 0
+    .text "N)ew  L)oad  D)isk Setup" ; .byte 0
 
-ds_save_str:    .text "Insert save disk" ; .byte 0
-ds_game_str:    .text "Insert game disk" ; .byte 0
-ds_dual_str:    .text "[Save Disk]" ; .byte 0
-ds_menu_str:    .text "S)ame W)swap #)Drive #" ; .byte 0
-de_prompt_str:  .text "Save drive (8-30): " ; .byte 0
-de_ind_pfx:     .text "[Drive " ; .byte 0
-de_nodev_str:   .text "Drive not found!" ; .byte 0
+ds_save_str:       .text "Insert save disk" ; .byte 0
+ds_game_str:       .text "Insert program disk" ; .byte 0
+ds_ind_pfx:        .text "[Save: " ; .byte 0
+disk_need_save_str:.text "Need Save Disk." ; .byte 0
+disk_bad_save_str: .text "Wrong Save Disk." ; .byte 0

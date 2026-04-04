@@ -13,6 +13,7 @@
 // key when the initiating command key should not leak into a secondary prompt.
 input_prepare_followup_key:
 #if C128
+input_prepare_modal_dismiss_key:
     jmp input_wait_release
 #else
     rts
@@ -21,10 +22,8 @@ input_prepare_followup_key:
 // input_prepare_modal_dismiss_key — Prepare for a read-only overlay/modal
 // dismiss key. C64 needs the explicit keyboard-buffer flush before waiting for
 // release; C128 only needs the release wait.
+#if !C128
 input_prepare_modal_dismiss_key:
-#if C128
-    jmp input_wait_release
-#else
     lda #0
     sta INPUT_UI_HELPER_KBDBUF_COUNT
     jmp input_wait_release

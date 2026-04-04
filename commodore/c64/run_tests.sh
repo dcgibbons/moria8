@@ -5,6 +5,12 @@
 # Requires: Kick Assembler, VICE (x64sc)
 
 KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
+DEBUG_FEAT_DISK_TRACE="${DEBUG_FEAT_DISK_TRACE:-0}"
+if [ "$DEBUG_FEAT_DISK_TRACE" = "1" ]; then
+    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
+else
+    KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
+fi
 VICE="x64sc"
 PASS=0
 FAIL=0
@@ -21,7 +27,7 @@ run_test() {
 
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -o "${src%.s}.prg" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -94,7 +100,7 @@ run_sound_monitor_test() {
     echo -n "  $name: "
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "$src" -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -o "${src%.s}.prg" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -210,7 +216,7 @@ echo ""
 # Build main program first (compile-time asserts)
 echo -n "  main.s assembly: "
 cd "$(dirname "$0")"
-asm_out=$(java -jar "$KICKASS" main.s -o moria.prg 2>&1)
+asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -o moria.prg 2>&1)
 assert_info=$(echo "$asm_out" | grep "asserts")
 if echo "$asm_out" | grep -q "0 failed"; then
     echo "PASS ($assert_info)"
@@ -229,7 +235,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040a" 11
-run_test "main_loop" "tests/test_main_loop.s" "0400 0413" 20 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 0415" 22 500000000
 run_test "turn" "tests/test_turn.s" "0400 040a" 11 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
@@ -248,7 +254,7 @@ run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
 run_test "tier" "tests/test_tier.s" "0400 040a" 11 500000000
-run_test "disk_swap" "tests/test_disk_swap.s" "0400 040a" 11 500000000
+run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
 run_test "render" "tests/test_render.s" "0400 0403" 4 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000

@@ -3,6 +3,8 @@
 This file is a temporary working scratchpad.
 
 ## Latest Resolved
+- FEAT-DISK no longer forces setup on `N)ew`; the setup trigger now moves to real persistence events, C64 Disk Setup uses the proven row-clear modal wipe, and failed `SHIFT+S` saves no longer drop into the quit menu.
+- The C64 REU startup hang while loading `64.UI` is fixed by keeping `UiOverlay` as a valid `$E000` placeholder PRG instead of emitting an empty `$0000` image.
 - Directed `look` now preserves terrain message IDs across the flash path and treats non-floor terrain as authoritative, fixing trap/door misreports and wall-as-gold lookups.
 - The C128 boot-art helper now writes the poster attribute map before the screen map, eliminating the brief wrong-font flash before the custom poster appears.
 - The shared town layout now uses a fixed `66x22` umoria-sized footprint on both C64 and C128 while retaining the Commodore-only Black Market and Home in a deliberate `4x2` layout.
@@ -18,13 +20,267 @@ This file is a temporary working scratchpad.
 - The recurring C128 town top-row garbage bug is fixed by programming 8563 VDC block-copy mode before writing the block-op trigger register.
 
 ## Reported Failure Gate
-- No active reported failure gate.
+- Active:
+  - user live repro: C128 in-game `Shift+S` with an existing `MORIA8.ID` marker on drive `9` still says the marker is missing, and `Y` to initialize hangs with the machine returning into the `$E5xx` help-overlay path while `$01=$76`
+  - exact build gate before each retest:
+    - `make disk128`
+    - `make test128-fast-smoke`
+    - `make test64`
 - Most recent closed gate:
   - `make clean`
   - `make run128`
   - fixed by splitting the shipping images and reserving the native C128 boot sector before file allocation
 
 ## Current Task
+- [x] FEAT-DISK-C128-MODAL-REDESIGN
+  - [x] stop treating `tramp_disk_setup` as a monolithic help-overlay FEAT-DISK session on C128
+  - [x] make `ui_disk_setup.s` prompt/input-only on C128 through `ui_disk_setup_dispatch`
+  - [x] move the C128 FEAT-DISK coordinator out of Default and into a dedicated common-RAM runtime PRG
+  - [x] load the new `128.fdisk` runtime blob before title entry
+  - [x] verify the exact gates after the ownership split:
+    - `make test64`
+    - `make test128-fast-smoke`
+    - `make -C commodore disk128`
+  - review:
+    - consultant diagnosis held:
+      - the real owner bug was still “help overlay owns FEAT-DISK control flow and resumes after disk/KERNAL work”
+    - first direct resident cutover failed for the expected reason:
+      - importing the coordinator into Default overflowed the banked-payload staged-source ceiling above `$E000`
+    - implemented architecture:
+      - `ui_disk_setup.s` on C128 is now action-dispatch only
+      - C128 FEAT-DISK coordinator/title helpers live in `commodore/common/disk_setup_runtime128.s`
+      - that blob is emitted as `out/c128/128.fdisk.prg` and loaded into common RAM at `$0D20-$0EDB`
+      - `tramp_disk_setup` now runs the non-overlay coordinator
+      - each FEAT-DISK prompt reloads `OVL_HELP` fresh through `tramp_disk_setup_ui_action`
+    - exact automated gates are green:
+      - `make test64`
+      - `make test128-fast-smoke`
+      - `make -C commodore disk128`
+    - live C128 gate still needs the user repro on the new image:
+      - existing marker on drive `9` should be recognized
+      - `Shift+S` setup/init should no longer resume the stale `$E5xx` overlay path
+    - consultant follow-up:
+      - the remaining likely owner is the C128 marker-read contract, not overlay caching
+      - `disk_marker_present` still uses `w_setnam -> w_setlfs -> w_open -> w_chkin -> w_chrin` as though the `w_*` family were one persistent KERNAL file-I/O session
+      - that assumption is wrong because each wrapper does its own `EnterKernal -> call -> ExitKernal`
+      - next fix: replace the C128 marker read path with one continuous `EnterKernal/ExitKernal` transaction before any more live retests
+    - latest implementation:
+      - C128 `disk_marker_present` no longer chains `w_setnam -> w_setlfs -> w_open -> w_chkin -> w_chrin`
+      - it now does one continuous `EnterKernal/ExitKernal` transaction with direct `KERNAL_SETNAM/SETLFS/OPEN/CHKIN/CHRIN/CLRCHN/CLOSE`
+      - consultant review immediately caught one remaining local bug in that first pass:
+        - the direct read loop was still trusting `X` across `KERNAL_CHRIN`
+        - the loop now keeps its marker index in `disk_temp` instead
+      - C128 `disk_marker_init` now matches the proven C64 contract:
+        - scratch `MORIA8.ID`
+        - plain-create the marker file instead of relying on `@` replace semantics
+        - only report success if `disk_marker_present` can reread the marker immediately afterward
+    - exact gates after the transaction fix are green:
+      - `make disk128`
+      - `make test128-fast-smoke`
+      - `make test64`
+    - final live outcome:
+      - C128 no longer hangs in the save-disk flow
+      - an existing marker created during the broken earlier path could still fail validation, but freshly initialized media under the fixed build now saves, reboots, and later loads successfully
+      - the remaining issue class is prompt-flow polish, not broken persistence
+- [x] FEAT-DISK-C64-RESIDENT-COORDINATOR
+  - [x] keep `ui_disk_setup.s` display/input-only on C64 and treat each screen as disposable
+  - [x] remove stale C64 FEAT-DISK trace scaffolding
+  - [x] simplify the C64 setup flow to the v1 path:
+    - autosuggest drive `9`
+    - fall back to one-drive on `8`
+    - reject the program disk
+    - offer explicit marker initialization
+  - [x] verify C64 still fits under `MAP_BASE` and the banked payload stays below `$D000`
+  - [x] rerun:
+    - `make test64`
+    - `make test128-fast-smoke`
+  - review:
+    - attempted design: a fully resident C64 FEAT-DISK coordinator in `disk_swap.s` with disposable overlay views
+    - space result: the resident-only coordinator pushed `program_end` to `$C133`, overflowing `MAP_BASE` by `$133`, so the pure consultant-preferred layout does not fit the current C64 image
+    - implemented compromise: `ui_disk_setup.s` stays display/input-only on C64, `tramp_disk_setup_overlay` now owns its own overlay banking, and the FEAT-DISK controller remains in `disk_setup_banked.s` to stay inside the C64 memory ceiling
+    - scope trim: C64 no longer offers the `Other Drive` branch in Disk Setup; the v1 setup path is now `drive 9 if present` or `one drive on 8`
+    - verification passed:
+      - `make test64`
+      - `make test128-fast-smoke`
+- [x] BUG-C64-SHIFT-S-SAVE-HANG
+  - [ ] instrument the exact C64 `L` / Disk Setup / drive-9 path to capture the first illegal execution-context transition before any more behavioral fixes
+  - [ ] verify the new `SHIFT+S` path against the user's live repro and confirm the banking/IRQ seam
+  - [x] harden the save-and-quit path so prompt/input recovery cannot leave C64 running with `$01=$35`
+  - [x] replace the ad hoc title/load banking repairs with a shared C64 UI/runtime resync seam
+  - [x] re-run the focused regression gates and record the outcome below
+  - review:
+    - root cause fit: the live hang signature (`PC=$0002`, `$01=$35`, repeated `IRQ -> $FFFF`) matches a C64 prompt/input seam that returned with KERNAL banked out while interrupts were active
+    - implementation: `disk_prompt` now forces `BANK_NO_BASIC` after the press-key/input + drive-init path on C64, and `game_over_prompt` now normalizes `$01` to `BANK_NO_BASIC` before entering its key loop
+    - implementation: the `CMD_SAVE` path now preserves `save_game` success/failure across `disk_prompt_game` without adding a new resident byte, so save failures return to gameplay and successful saves continue into the quit flow
+    - regression coverage: `commodore/c64/tests/test_disk_swap.s` now includes a resident contract check that starts from `$01=$35`, runs the swap prompt, and asserts the prompt returns with `$01=$36`
+    - verification passed:
+      - `make test64`
+      - `make test128-fast-smoke`
+      - independent tester signoff: `Exact reported command: N/A`, `Broader regression suites: PASS`, `ALL TESTS PASSED yes`
+    - consultant-guided follow-up:
+      - root cause fit: the live partial-clear title hang is a C64 title/UI boundary problem, not a `screen_clear` bug; the title path was still capable of inheriting `$01=$35` from an earlier KERNAL-visible seam
+      - implementation: C64 now has one `platform_runtime_resync_c64` owner for “return to UI-safe state” (`$01=$36`, IRQ wedge vector, VIC bank restore), `title_enter_menu` now starts by calling it, and `title_load_and_draw` now calls the shared runtime-resync API after its title KERNAL transaction instead of relying on scattered local `$01` repairs
+      - verification passed after the contract change:
+        - direct C64 assemble: `Program fits below MAP_BASE=true`
+        - `make test64`
+        - `make test128-fast-smoke`
+    - consultant-guided course correction:
+      - root cause fit: I was fixing where the crash became visible instead of where `$01=$35` was introduced; the fresh-`L` path goes through Disk Setup overlay auto-drive-9 flow before any later title rebuild logic
+      - root cause: `disk_kernal_enter` was trying to carry saved processor state across a `JSR`/`RTS` boundary on the hardware stack, which is invalid 6502 stack discipline and can leak the overlay back to `$01=$35` with IRQs live after disk helper calls
+      - implementation: `disk_kernal_enter/exit` now save and restore processor status through an explicit `disk_saved_status` byte instead of a cross-call `php/plp` stack trick, and the recent wrong-layer title glue was trimmed back to keep C64 resident size in bounds
+      - regression coverage: `commodore/c64/tests/test_disk_swap.s` now directly asserts that the disk KERNAL wrapper round-trips a C64 overlay caller back to `$01=$35` with the I flag still set
+      - verification passed after the wrapper fix:
+        - direct C64 assemble: `Program fits below MAP_BASE=true`
+        - `make test64`
+        - `make test128-fast-smoke`
+    - consultant-guided re-anchor:
+      - root cause fit: the newer `PC=$2020`, `$01=$37`, stack-full-of-`0x20` repro is not another plain IRQ-vector collapse; it points at async corruption during the Disk Setup overlay's post-keypress disk-validation path
+      - root cause: `disk_kernal_enter` was reopening IRQs with `cli` before returning to the caller-controlled C64 overlay path, allowing KERNAL/IRQ activity to interleave with overlay-owned UI state and likely turn later clear/print work into page-1 corruption
+      - implementation: C64 `disk_kernal_enter` no longer does `cli`; the disk wrapper now keeps IRQs masked through the C64 disk window and restores the caller's bank + saved flags only on exit
+      - regression coverage: `commodore/c64/tests/test_disk_swap.s` now asserts the real overlay case, `BANK_NO_ROMS -> BANK_NO_BASIC -> BANK_NO_ROMS`, with the I flag remaining set throughout the disk helper window
+      - verification passed after the IRQ-window fix:
+        - `make test64`
+        - `make test128-fast-smoke`
+    - consultant-guided contract hardening:
+      - root cause fit: the follow-up `JAM $4AFE` trace still points to the Disk Setup validation path, but now with `$01=$36`; that makes low-RAM/page-1 corruption a better fit than another bank-restore failure
+      - implementation: C64 `disk_kernal_enter/exit` now preserve the caller's ZP/UI scratch through `save_zp` / `restore_zp` in addition to bank + flags, so post-disk overlay code does not resume with KERNAL-clobbered pointers before the next clear/print path
+      - regression coverage: `commodore/c64/tests/test_disk_swap.s` now includes a KERNAL-style ZP-clobber test and proves `probe_device` restores `zp_ptr0`, `zp_ptr0_hi`, `zp_cursor_row`, and `zp_text_color` after the wrapper returns
+      - verification passed after the ZP-preservation fix:
+        - `make test64`
+        - `make test128-fast-smoke`
+    - latest live re-anchor:
+      - after the ZP-preservation fix, the title `L` path no longer dies at the save-disk prompt; it can now proceed into the actual save-file load path
+      - the new user-visible regression is a false-success load on C64 when no save file exists, leading to a corrupt gameplay screen and low-RAM crash addresses instead of a clean `No save` result
+      - implementation: C64 `load_read_byte` now marks per-byte READST low-bit I/O errors during sequential file reads, and `title_load_game` now fails closed on `load_game`'s carry result before resuming gameplay
+      - implementation: the `load_game` common return-tail compaction is C64-only so C128 keeps its smaller direct return paths and stays inside the banked-payload staging budget
+      - verification passed after the load-path hardening:
+        - `make test64`
+        - `make test128-fast-smoke`
+    - remaining gate:
+      - manual live C64 `SHIFT+S` repro still needs confirmation because the reported failure is an interactive path, not an automatable command
+      - manual live C64 title `L` repro still needs confirmation after the shared runtime-resync change
+    - latest live re-anchor:
+      - the current failure is no longer the old `$01=$35` / `IRQ -> $FFFF` collapse
+      - current monitor state after the Disk Setup save-disk keypress is `PC=$2020`, `$01=$37`, with return addresses on page `$0100` overwritten by `0x20` bytes, which points at stack or pointer corruption on the post-keypress disk-validation path rather than another plain title IRQ seam
+    - consultant-guided redesign:
+      - root cause fit: the shared owner was the C64 Disk Setup overlay continuing execution after KERNAL disk/editor activity; preserving more state at the wrapper seam kept moving the symptom but not fixing the contract
+      - implementation: C64 Disk Setup is now split across a banked-payload resident controller in `commodore/common/disk_setup_banked.s` and display/input-only overlay entrypoints in `commodore/common/ui_disk_setup.s`; the overlay now only renders screens, collects keys, and returns action results through `disk_ui_action`, `disk_ui_result`, and `disk_ui_value`
+      - implementation: C64 setup-only disk transactions (`program-disk present` and `marker init`) moved out of the live overlay path and into the banked controller, while C128 keeps its existing monolithic overlay flow with those helpers local to the C128 overlay path
+      - implementation: `tramp_disk_setup` is now a small C64 banked trampoline, and `tramp_disk_setup_overlay` is only a fresh-screen dispatcher into the Help overlay instead of a monolithic setup executor
+      - memory fit: after initially overrunning both `MAP_BASE` and the C128 staged-bank ceiling, the C64 controller was moved out of the main segment and the redundant marker scratch pass was removed; current direct C64 assembly reports:
+        - `Program fits below MAP_BASE=true`
+        - `Payload fits below I/O ($D000)=true`
+      - verification passed after the redesign:
+        - `make test64`
+        - `make test128-fast-smoke`
+      - remaining gate:
+        - user live C64 repros still need confirmation on the real emulator path:
+          - title `L` -> accept drive `9` -> insert save disk -> key
+          - in-dungeon `SHIFT+S`
+    - consultant-mandated next step:
+      - root cause fit: the remaining moving failures are one C64 execution-context escape bug, not a sequence of unrelated seam bugs; the path is still leaking between banked controller (`$01=$34`, `SEI`), normal title/game (`$01=$36`), and KERNAL/editor (`$01=$37`) contexts
+      - evidence cluster: the previous `$01=$35` / `IRQ -> $FFFF`, the `$01=$34` / `IRQ -> $0000`, the `PC=$2020` stack-full-of-`0x20`, the `JAM $1A0F`, and the latest `PC=$E5D1`, `$01=$37` all fit the same “first illegal transition” class
+      - course correction: stop changing FEAT-DISK behavior until the first bad transition is observed directly
+      - required instrumentation pass:
+        - trace entry/exit of `tramp_disk_setup`
+        - trace entry/exit of `disk_setup_call_ui`
+        - trace entry/exit of `tramp_disk_setup_overlay`
+        - trace entry/exit of `overlay_load`
+        - trace entry/exit of `ui_disk_setup_dispatch`
+        - trace entry/exit of each Disk Setup helper (`probe_device`, `disk_init_drive`, `disk_program_media_present`, `disk_marker_present`, `disk_marker_init`)
+        - capture `$01`, processor status / I flag, `SP`, `$0314/$0315`, and the current FEAT-DISK phase / overlay identity at each boundary
+      - next live gate after instrumentation:
+        - fresh C64 boot
+        - `L`
+        - accept drive `9`
+        - `Y` to the save-disk prompt
+    - consultant-guided trace-size follow-up:
+      - outcome: the first always-on resident trace pass did not fit the C64 image at all; even after moving trace storage to fixed scratch and gating the work behind a debug-only build flag, the entry-only ring trace still overflowed `MAP_BASE` and the banked-payload/I-O ceiling
+      - consultant direction: under that constraint, replace the ring buffer with two fixed `prev` / `curr` boundary snapshots and scope the trace only to the exact `L -> drive 9 -> Y` path
+      - current status: the default build and regression gates are green again, but even the two-slot snapshot trace still overruns the C64 debug build, so the in-code diagnostic path remains unresolved and needs a smaller next step than the current snapshot tracer
+    - consultant-guided contract proof:
+      - one-off C64 shipping-path contract test for `disk_setup_call_ui` proved the banked FEAT-DISK controller was still invoking generic `overlay_load` from `$34`
+      - direct evidence from the test:
+        - banked UI round-trip itself was sound
+        - resident disk-helper round-trip itself was sound
+        - the failing seam was the generic overlay-load path, which observed `$34`, hit hidden KERNAL stubs, and still tried to load `OVL_HELP`
+      - architectural correction:
+        - `disk_setup_call_ui` no longer calls `overlay_load`
+        - C64 `tramp_disk_setup` now preloads `OVL_HELP` from resident context before entering the banked FEAT-DISK loop
+    - consultant-guided C64 disk-call correction:
+      - follow-up consultant review identified the remaining live owner as direct KERNAL vector returns into FEAT-DISK helper bodies that live in ROM-shadowed regions (`$A000-$BFFF` and `$F000-$FFFF`)
+      - implementation:
+        - C64 FEAT-DISK now uses low-RAM KERNAL-call trampolines for the live load/setup path vectors
+        - `disk_kernal_enter/exit` no longer bank the whole helper body into the wrong ROM visibility on C64
+        - C64 `probe_device` was simplified to use OPEN success directly instead of a redundant READST follow-up
+      - fit follow-up:
+        - the first wrapper pass overflowed both the resident and banked-source ceilings
+        - to make room, the C64 title-only `[Save: N]` indicator was removed as deferred UI scope
+      - verification passed:
+        - direct C64 assemble: `Program fits below MAP_BASE=true`
+        - `make test64`
+        - `make test128-fast-smoke`
+    - consultant-guided menu/input regression fix:
+      - root cause fit: the C64 title/menu started echoing typed characters and only accepted input after Return because FEAT-DISK marker validation leaked KERNAL screen-editor input ownership back into the normal `GETIN` menu path
+      - implementation:
+        - C64 `disk_marker_present` now routes through one low-RAM `c64_disk_marker_present` helper that owns the full `SETNAM -> SETLFS -> OPEN -> CHKIN -> CHRIN loop -> CLRCHN -> CLOSE` transaction end-to-end instead of splitting the read-side channel state across generic wrappers
+        - `tramp_sr_epilogue` now jumps through `platform_runtime_resync_c64`, so FEAT-DISK and other C64 trampoline returns reassert the normal UI/runtime contract without a one-off Disk Setup epilogue
+      - fit/result:
+        - direct C64 assemble now reports `program_end=$BFFE`, back under `MAP_BASE`
+      - verification passed:
+        - `make test64`
+        - `make test128-fast-smoke`
+      - remaining live gate:
+        - user still needs to re-test the actual C64 menu path to confirm key echo / Return-only input are gone before more FEAT-DISK behavior changes
+    - consultant-guided follow-up on remaining title/probe regressions:
+      - root cause fit:
+        - needing to press `L` twice at the title is stale keyboard-buffer ownership on title entry/re-entry
+        - false `drive 9 did not respond` is the wrong C64 probe contract; `probe_device` was sending `I0` on the command channel instead of doing a passive liveness check
+      - implementation:
+        - C64 title now calls `input_wait_release` after drawing the title menu and before entering `title_menu_loop`
+        - `probe_device` now uses a passive empty-filename command-channel open on the target device instead of a side-effecting `I0` initialize command
+      - fit/result:
+        - direct C64 assemble now reports `program_end=$BFFF`, still below `MAP_BASE`
+      - verification passed:
+        - `make test64`
+        - `make test128-fast-smoke`
+      - remaining live gate:
+        - user needs to verify:
+          - fresh boot title accepts `L` on the first keypress
+          - choosing two-drive mode no longer falsely rejects drive `9`
+- [ ] BUG-C64-SHIFT-S-STACK-JAM
+  - [x] re-anchor on the new live crash address `$1A0F`
+  - [x] remove stack-based save-result preservation from `CMD_SAVE`
+  - [x] re-run the focused regression gates and record the outcome below
+  - review:
+    - root cause fit: `$1A0F` is the middle byte of the `JSR $123D` inside `player_search_get_base_chance`, which matches a bad return target / stack seam rather than another overlay or banking fetch bug
+    - implementation: `CMD_SAVE` no longer carries save success on the hardware stack across `disk_prompt_game`; it now snapshots carry into `zp_temp0`, which survives the prompt path without growing resident C128 data
+    - c128 size follow-up: the first stack-free rewrite using a resident byte pushed the staged banked payload to `$E001` and tripped `Banked payload staged source ends below overlay window`; moving the snapshot to `zp_temp0` brought the build back under the `$E000` ceiling
+    - verification passed:
+      - `make test64`
+      - `make test128-fast-smoke`
+    - remaining gate:
+      - manual live C64 `SHIFT+S` repro still needs confirmation
+- [x] FEAT-DISK user-friendly save-disk workflow
+  - [x] replace the old low-level title disk menu with a guided `D)isk Setup` entry and first-use setup gate for `N`/`L`
+  - [x] split FEAT-DISK into a tiny resident state/validation layer plus overlay-driven setup UI on C64/C128
+  - [x] gate save/load/high-score I/O on configured save media and reject the program disk as persistence media
+  - [x] close the focused C64 resident disk-swap/runtime regression
+  - [x] get consultant review on UX shape and memory/code-space fit
+  - [x] record implementation review and verification results below
+  - review:
+    - implementation: the title menu now exposes `D)isk Setup`, `N` and `L` force first-use setup in a fresh session, and the guided setup flow defaults to drive `9`, falls back to one-drive save-disk swap on drive `8`, and keeps expert drive entry as a fallback
+    - implementation: resident FEAT-DISK logic was trimmed down to session state, swap prompts, device probe/init, and save-disk marker validation in `commodore/common/disk_swap.s`; the friendlier setup/init flow now lives in overlay code in `commodore/common/ui_disk_setup.s`
+    - implementation: save, load, delete, and hall-of-fame I/O now all gate on configured save media, and the setup flow blocks using the program disk itself as persistence media
+    - verification passed:
+      - focused C64 runtime check for `tests/test_disk_swap.s`: all `9/9` resident-contract bytes passed under VICE at `$0400-$0408`
+      - `make test64`
+      - `make test128-fast-smoke`
+      - independent tester signoff: `Exact reported command: PASS`, `Broader regression suites: PASS`, `ALL TESTS PASSED yes`
+    - consultant review:
+      - no major blockers; the resident/overlay split is the correct fit for current C64/C128 memory pressure
+      - main memory/code-space risk is future growth in `HelpOverlay`, because the disk-setup UI currently lives there on both platforms and does not yet have a dedicated feature-specific size guard
+      - main UX gap is hall-of-fame behavior when save media is missing or unconfigured: score I/O currently fails closed for correctness but does not surface a friendly recovery prompt the way save/load now do
 - [x] BUG-C128-LOOK-DOOR-RANGE
   - [x] reproduce the C128-only report that looking at doors appears to require adjacency while C64 look range is correct
   - [x] add focused C128 regression coverage around shared visibility lookup on the banked C128 map
@@ -4157,3 +4413,36 @@ The section below is retained only as historical context for the earlier dual-en
 ### Verification
 - `make -B -C commodore/c128 build128`
   - passed with `238 asserts, 0 failed`
+
+## FEAT-DISK C64 Init Follow-up
+
+### Reported Failure Gate
+- Live repro:
+  - fresh C64 boot
+  - `L`
+  - accept drive `9`
+  - continue to the `Initialize` prompt
+  - press `Y`
+
+### Latest Change
+- Replaced the oversized C64 low-helper init attempt with a smaller banked C64 init path that:
+  - creates the marker file on the selected save disk
+  - reads DOS status from channel `15` after `CLOSE`
+  - does not unconditionally format the disk during normal save-disk initialization
+- Fixed a false-failure bug in the C64 DOS-status check:
+  - the init path was storing the first status byte in `X`
+  - then a second `CHRIN` call clobbered `X`
+  - and the code compared that clobbered register instead of the saved first digit
+- Trimmed dead carry checks after the C64 Disk Setup UI trampoline so the banked payload stays below `$D000` again
+- Reworked the C64 marker-init transaction to the consultant-approved DOS flow:
+  - scratch `MORIA8.ID` first via channel `15`
+  - create a plain `0:MORIA8.ID,S,W` file instead of relying on `@` replace semantics
+  - write marker bytes
+  - close and verify by re-reading the marker file
+- Removed the C64-only false program-disk rejection heuristic from setup so save-disk readiness is driven by positive marker validation instead
+
+### Verification
+- `make test64`
+  - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- `make test128-fast-smoke`
+  - passed with `=== Results: 3 passed, 0 failed (of 3 suites) ===`

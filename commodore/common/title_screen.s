@@ -19,9 +19,6 @@
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
 // ============================================================
 title_load_and_draw:
-#if !C128
-    :EnterKernal()
-#endif
 #if C128
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
@@ -51,9 +48,14 @@ title_load_and_draw:
     lda #0
     ldx #<MAP_BASE
     ldy #>MAP_BASE
+#if C128
     jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
+#else
+    jsr kernal_load_safe
+#endif
 
     php                     // Save carry (LOAD success/failure)
+    sei
     lda #2
 #if C128
     jsr w_close             // C128: force ROM mapping around CLOSE
@@ -70,11 +72,6 @@ title_load_and_draw:
     plp                     // Restore carry from LOAD
     bcs title_fallback_render    // Carry set = error
 
-    // Restore VIC-II bank 0 after serial I/O
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-
     // Clear KERNAL status byte — LOAD leaves EOI (bit 6) set from the last file byte.
     // Without this, READST in any subsequent file read returns stale status → false errors.
     lda #0
@@ -85,9 +82,6 @@ title_load_and_draw:
 
     // Render the loaded art data
     jsr title_render_data
-#if !C128
-    :ExitKernal()
-#endif
     rts
 
 title_fallback_render:
@@ -106,9 +100,6 @@ title_fallback_render:
     lda #TITLE_FALLBACK_COL
     sta zp_cursor_col
     jsr screen_put_string
-#if !C128
-    :ExitKernal()
-#endif
     rts
 
 // ============================================================

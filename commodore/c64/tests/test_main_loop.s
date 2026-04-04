@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #19
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -39,6 +39,7 @@ exit_trampoline:
     rts
 
 game_over_prompt:
+    inc test_game_over_prompt_calls
     rts
 
 tramp_level_generate:
@@ -54,17 +55,41 @@ wizard_wall_walk_active:
     lda #0
     rts
 
+disk_setup_done:
+    .byte 0
+
 cmd_wizard_entry:
     inc test_wizard_calls
     rts
 
 save_game:
+    inc test_save_game_calls
+    lda test_save_success
+    beq !save_fail+
+    sec
+    rts
+!save_fail:
+    clc
     rts
 
 disk_prompt_save:
+    inc test_disk_prompt_save_calls
     rts
 
 disk_prompt_game:
+    inc test_disk_prompt_game_calls
+    rts
+
+tramp_disk_setup:
+    inc test_tramp_disk_setup_calls
+    lda test_disk_setup_success
+    beq !tds_fail+
+    lda #1
+    sta disk_setup_done
+    clc
+    rts
+!tds_fail:
+    sec
     rts
 
 delete_savefile:
@@ -156,7 +181,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 20, $ff
+tc_results: .fill 22, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -186,6 +211,11 @@ test_cast_spell_calls: .byte 0
 test_item_pickup_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
+test_save_game_calls: .byte 0
+test_disk_prompt_save_calls: .byte 0
+test_disk_prompt_game_calls: .byte 0
+test_tramp_disk_setup_calls: .byte 0
+test_game_over_prompt_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
 test_busy_end_calls: .byte 0
@@ -208,6 +238,8 @@ test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
 test_stairs_tile: .byte 0
+test_save_success: .byte 0
+test_disk_setup_success: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -280,6 +312,11 @@ reset_state:
     sta test_item_pickup_calls
     sta test_search_scan_calls
     sta test_wizard_calls
+    sta test_save_game_calls
+    sta test_disk_prompt_save_calls
+    sta test_disk_prompt_game_calls
+    sta test_tramp_disk_setup_calls
+    sta test_game_over_prompt_calls
     sta test_busy_begin_calls
     sta test_busy_tick_calls
     sta test_busy_end_calls
@@ -301,6 +338,8 @@ reset_state:
     sta test_move_disturbs_search
     sta test_scene_dirty
     sta test_stairs_tile
+    sta test_save_success
+    sta test_disk_setup_success
     sta zp_game_flags
     sta zp_msg_flags
     sta zp_eff_confuse
@@ -312,6 +351,7 @@ reset_state:
     lda #0
     sta player_move_relocated
     sta zp_search_count
+    sta disk_setup_done
     sta player_data + PL_FLAGS
     lda #10
     sta zp_player_x
@@ -1249,8 +1289,88 @@ test_start:
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
-    jmp test_finish
+    jmp !t21+
 !t20_fail:
     lda #$00
     sta tc_results + 19
+    jmp !t21+
+
+    // Test 21: a single CMD_SAVE performs on-demand Disk Setup and then
+    // continues straight into the actual save-and-quit flow.
+!t21:
+    jsr reset_state
+    lda #20
+    sta test_case_idx
+    lda #1
+    sta test_disk_setup_success
+    sta test_save_success
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    bne !t21_fail+
+    lda test_disk_prompt_save_calls
+    cmp #1
+    bne !t21_fail+
+    lda test_save_game_calls
+    cmp #1
+    bne !t21_fail+
+    lda test_disk_prompt_game_calls
+    cmp #1
+    bne !t21_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t22+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+    jmp !t22+
+
+    // Test 22: a single CMD_SAVE performs on-demand Disk Setup, then a failed
+    // save returns to gameplay instead of dropping into the quit prompt.
+!t22:
+    jsr reset_state
+    lda #21
+    sta test_case_idx
+    lda #1
+    sta test_disk_setup_success
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #CMD_MOVE_N
+    sta test_cmd_script + 1
+    lda #2
+    sta test_cmd_len
+    lda #1
+    sta test_move_ok
+    jsr run_case
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    bne !t22_fail+
+    lda test_save_game_calls
+    cmp #1
+    bne !t22_fail+
+    lda test_disk_prompt_save_calls
+    cmp #1
+    bne !t22_fail+
+    lda test_disk_prompt_game_calls
+    cmp #1
+    bne !t22_fail+
+    lda test_player_try_move_calls
+    cmp #1
+    bne !t22_fail+
+    lda test_game_over_prompt_calls
+    cmp #1
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp test_finish
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
     jmp test_finish

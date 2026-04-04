@@ -98,6 +98,19 @@ test_finish:
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/io_kernal_consts.s"
+.label c64_disk_setnam = KERNAL_SETNAM
+.label c64_disk_setlfs = KERNAL_SETLFS
+.label c64_disk_open   = KERNAL_OPEN
+.label c64_disk_close  = KERNAL_CLOSE
+.label c64_disk_clrchn = KERNAL_CLRCHN
+.label c64_disk_readst = KERNAL_READST
+.label c64_disk_chkin  = KERNAL_CHKIN
+.label c64_disk_chkout = KERNAL_CHKOUT
+.label c64_disk_chrin  = KERNAL_CHRIN
+.label c64_disk_chrout = KERNAL_CHROUT
+c64_disk_marker_present:
+    sec
+    rts
 #import "../../common/save.s"
 #import "../../common/disk_swap.s"
 

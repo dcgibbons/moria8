@@ -82,7 +82,6 @@ rle_lit_buf:    .fill 128, 0
 // Note: KERNAL SETNAM needs PETSCII filenames.
 // Use raw byte values to avoid screencode encoding.
 save_filename:
-    .byte $40               // "@" — replace existing file prefix
     .byte $30, $3a          // "0:"
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
@@ -137,9 +136,29 @@ save_magic:
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 save_game:
+    jsr disk_require_save_media
+    bcc !save_media_ok+
+    lda disk_setup_done
+    bne !save_wrong_media+
+    lda #<disk_need_save_str
+    sta zp_ptr0
+    lda #>disk_need_save_str
+    sta zp_ptr0_hi
+    bne !save_media_fail+
+!save_wrong_media:
+    lda #<disk_bad_save_str
+    sta zp_ptr0
+    lda #>disk_bad_save_str
+    sta zp_ptr0_hi
+!save_media_fail:
+    jsr msg_print
 #if !C128
-    :EnterKernal()
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
+    clc
+    rts
+!save_media_ok:
     // Show "SAVING GAME..." message
     lda #<save_saving_str
     sta zp_ptr0
@@ -303,8 +322,10 @@ save_game:
     sta zp_ptr0_hi
     jsr msg_print
 #if !C128
-    :ExitKernal()
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
+    sec
     rts
 
 !save_error_close:
@@ -321,8 +342,10 @@ save_game:
     sta zp_ptr0_hi
     jsr msg_print
 #if !C128
-    :ExitKernal()
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
+    clc
     rts
 
 // ============================================================
@@ -335,11 +358,31 @@ save_game:
 // ============================================================
 
 load_game:
-#if !C128
-    :EnterKernal()
-#endif
     lda #LOAD_RESULT_IOERR
     sta load_result
+    jsr disk_require_save_media
+    bcc !load_media_ok+
+    lda disk_setup_done
+    bne !load_wrong_media+
+    lda #<disk_need_save_str
+    sta zp_ptr0
+    lda #>disk_need_save_str
+    sta zp_ptr0_hi
+    bne !load_media_fail+
+!load_wrong_media:
+    lda #<disk_bad_save_str
+    sta zp_ptr0
+    lda #>disk_bad_save_str
+    sta zp_ptr0_hi
+!load_media_fail:
+    jsr msg_print
+#if C128
+    clc
+    rts
+#else
+    jmp !load_return_fail+
+#endif
+!load_media_ok:
 
     // Show "LOADING GAME..." message
     lda #<save_load_str
@@ -537,11 +580,12 @@ load_game:
 
     lda #LOAD_RESULT_OK
     sta load_result
-    sec                     // Success
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    sec
     rts
+#else
+    jmp !load_return_ok+
+#endif
 
 !load_corrupt:
 !load_corrupt_nocl:
@@ -559,11 +603,12 @@ load_game:
     lda #>save_corrupt_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+    jmp !load_return_fail+
+#endif
 
 !load_close_notfound:
     // File was opened but returned no data — close before showing message
@@ -582,11 +627,12 @@ load_game:
     lda #>save_notfound_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+    jmp !load_return_fail+
+#endif
 
 !load_fail:
     lda #LOAD_RESULT_IOERR
@@ -596,11 +642,20 @@ load_game:
     lda #>save_ioerr_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+!load_return_fail:
+    clc                     // Failure
+    bcc !load_return_done+
+!load_return_ok:
+    sec                     // Success
+!load_return_done:
+    lda #BANK_NO_BASIC
+    sta $01
+    rts
+#endif
 
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
@@ -733,6 +788,15 @@ load_read_block:
 load_read_byte:
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
+#if !C128
+    jsr SAVE_READST
+    and #$03
+    beq !lrby_status_ok+
+    inc save_io_error
+!lrby_status_ok:
+    pla
+    pha
+#endif
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -823,12 +887,18 @@ load_read_map_c128:
 // Clobbers: A, X, Y
 // ============================================================
 delete_savefile:
+    jsr disk_require_save_media
+    bcc !dsf_valid+
 #if !C128
-    :EnterKernal()              // External entrypoint for non-KERNAL callers
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
+    rts
+!dsf_valid:
     jsr delete_savefile_core
 #if !C128
-    :ExitKernal()
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
     rts
 

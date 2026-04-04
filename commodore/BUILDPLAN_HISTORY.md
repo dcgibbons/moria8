@@ -6,6 +6,55 @@
 
 ---
 
+## 2026-04-03 — `FEAT-DISK` C64/C128 persistence-media recovery ✅ COMPLETE
+
+### Scope Closed
+- Restored working save-disk setup, initialization, save, and load behavior on both Commodore targets.
+- Closed the long-running FEAT-DISK execution/banking regressions on C64 and the later C128 marker/setup/runtime failures.
+- Reframed the remaining work as prompt-flow polish rather than a persistence correctness bug.
+
+### Root Cause
+- The original failure class on both platforms was execution ownership, not just disk commands:
+  - C64 FEAT-DISK was resuming overlay/banked/UI code across incompatible `$01` / IRQ / KERNAL transitions.
+  - C128 FEAT-DISK was originally modeled as a long-lived overlay-owned flow, which is invalid once `EnterKernal()` exposes ROM over `$E000-$FFFF`.
+- The later C128 false “missing marker” failures were then narrowed to two file-I/O contract bugs:
+  - marker reads were split across `w_*` wrappers even though each wrapper does its own `EnterKernal/ExitKernal`
+  - marker init was calling success too early instead of using the same scratch/create/verify contract that worked on C64
+
+### What Changed
+1. **C64 FEAT-DISK ownership repaired**
+   - C64 FEAT-DISK now treats overlay screens as disposable and keeps the real transaction state outside the live overlay frame.
+   - The save-disk marker init path now uses the stable DOS flow:
+     - scratch existing `MORIA8.ID`
+     - plain-create the marker file
+     - write marker bytes
+     - close and verify by rereading the marker
+   - Title `L`, save-disk setup, save, and load now round-trip cleanly without dropping to BASIC or leaving the menu/input contract broken.
+2. **C128 FEAT-DISK moved off the live overlay**
+   - C128 FEAT-DISK coordination now lives in the dedicated common-RAM runtime blob [128.fdisk](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c128/128.fdisk.prg), loaded before title entry.
+   - The help overlay is prompt/input-only again on C128; the coordinator owns the transaction and re-enters the overlay fresh for prompts.
+3. **C128 marker transaction hardened**
+   - [disk_swap.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/disk_swap.s) now reads `MORIA8.ID` through one continuous `EnterKernal/ExitKernal` session instead of split `w_*` calls.
+   - [disk_setup_banked.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/disk_setup_banked.s) now initializes the marker with the same scratch/plain-create/verify contract as C64.
+   - The surviving loop-index lifetime bugs on both C64/C128 marker loops were fixed by storing the index in memory instead of trusting `X` across KERNAL I/O calls.
+4. **Behavioral outcome**
+   - C64: save-disk initialization, save creation, and title `L` load now work end-to-end.
+   - C128: in-game `Shift+S`, drive-9 marker init, save, reboot, and later load now work end-to-end.
+   - A stale marker created during the broken earlier path could still fail validation, but freshly initialized media under the fixed build behaves correctly.
+
+### Verification
+- Exact build/test gates:
+  - `make disk128` = `PASS`
+  - `make test128-fast-smoke` = `=== Results: 3 passed, 0 failed (of 3 suites) ===`
+  - `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- Live user validation:
+  - C64 save-disk init/save/load flow works again.
+  - C128 can initialize a save disk, save, reboot, and later load successfully.
+
+### Outcome
+- `FEAT-DISK` is removed from active feature work.
+- Remaining work, if any, is `FEAT-DISK-POLISH`: prompt/menu pacing and UX cleanup, not core persistence correctness.
+
 ## 2026-04-01 — `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` directed-look repair ✅ COMPLETE
 
 ### Scope Closed

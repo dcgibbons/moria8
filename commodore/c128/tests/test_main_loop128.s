@@ -124,6 +124,9 @@ wizard_wall_walk_active:
     lda #0
     rts
 
+disk_setup_done:
+    .byte 0
+
 cmd_wizard_entry:
     inc test_wizard_calls
     rts

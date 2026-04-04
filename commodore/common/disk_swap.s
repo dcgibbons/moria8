@@ -1,69 +1,148 @@
 #importonce
-// disk_swap.s — Dual-disk mode support
+// disk_swap.s — Save-disk session state and validation helpers
 //
-// Provides disk swap prompts for separate game/save disks.
-// In single-disk mode (disk_mode=0), all prompts are no-ops.
+// Keeps the resident disk contract intentionally small:
+//   - swap prompts for one-drive mode
+//   - device probing / drive init
+//   - save-disk marker validation and initialization
+//   - tiny shared state used by title/setup/save/load/hiscore paths
 //
-// Requires: save.s constants (KERNAL_*, CMD_CHANNEL, SAVE_DEVICE)
-//           main.s labels (press_key_str)
+// The guided setup UI lives in the UI overlay so resident code stays small.
+
+#import "bank_port_consts.s"
 
 // ============================================================
 // Data
 // ============================================================
-disk_mode:      .byte 0                 // 0=single, 1=swap, 2=dual-drive
-save_device:    .byte 8                 // Device# for save/score I/O (8 or 9)
+disk_mode:         .byte 0             // 0=unset, 1=one-drive swap, 2=save drive
+save_device:       .byte 8             // Device# for save/score I/O
+disk_setup_done:   .byte 0             // 0 until the session finishes Disk Setup
+disk_ui_result:    .byte 1             // 0=success, 1=cancel/failure
+disk_ui_action:    .byte 0
+disk_ui_value:     .byte 0
 
-// Device-entry state (transient, no save needed)
-de_digits:      .byte 0, 0    // buffered digit ASCII codes
-de_count:       .byte 0       // number of digits entered
-de_temp:        .byte 0       // scratch / device number
+disk_temp:         .byte 0
+disk_status:       .byte 0
 
-// PETSCII "I0" for drive init (raw bytes — NOT screen codes)
-disk_init_cmd:  .byte $49, $30
+// PETSCII command bytes / marker file contents
+disk_init_cmd:     .byte $49, $30      // "I0"
+disk_marker_magic: .byte $4d, $38, $53, $41, $56, $45  // "M8SAVE"
+.const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
 
-// Centering helpers
-.const DS_PROMPT_COL = (SCREEN_COLS - 16) / 2
+disk_marker_read_fname:
+    .byte $30, $3a                      // "0:"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
+    .byte $2c, $53, $2c, $52            // ",S,R"
+.label disk_marker_read_fname_len = * - disk_marker_read_fname
+
+disk_marker_write_fname:
+    .byte $40                           // "@"
+    .byte $30, $3a                      // "0:"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
+    .byte $2c, $53, $2c, $57            // ",S,W"
+.label disk_marker_write_fname_len = * - disk_marker_write_fname
+
+.const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2
 .const DS_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
-.const DS_ENTER_PROMPT_COL = (SCREEN_COLS - 19) / 2
-.const DS_ENTER_DIGIT_COL = DS_ENTER_PROMPT_COL + 19
-.const DS_NODEV_COL = (SCREEN_COLS - 16) / 2
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
-// Title-screen disk UI lives in the already-cleared status area so transient
-// drive prompts/indicators do not erase the title art frame.
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
+.const DISK_MARKER_FILE_NUM = 6
+.const DISK_MARKER_SEC_RD   = 2       // Match normal sequential file reads
+.const DISK_MARKER_SEC_WR   = 2       // Match normal sequential file writes
+.const DISK_PROGRAM_FILE_NUM = 7
+.const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
+
+#if C128
+.const FEAT_SETNAM = KERNAL_SETNAM
+.const FEAT_SETLFS = KERNAL_SETLFS
+.const FEAT_OPEN   = KERNAL_OPEN
+.const FEAT_CLOSE  = KERNAL_CLOSE
+.const FEAT_CLRCHN = KERNAL_CLRCHN
+.const FEAT_READST = KERNAL_READST
+.const FEAT_CHKIN  = KERNAL_CHKIN
+.const FEAT_CHKOUT = KERNAL_CHKOUT
+.const FEAT_CHRIN  = KERNAL_CHRIN
+.const FEAT_CHROUT = KERNAL_CHROUT
+#else
+.const FEAT_SETNAM = c64_disk_setnam
+.const FEAT_SETLFS = c64_disk_setlfs
+.const FEAT_OPEN   = c64_disk_open
+.const FEAT_CLOSE  = c64_disk_close
+.const FEAT_CLRCHN = c64_disk_clrchn
+.const FEAT_READST = KERNAL_READST
+.const FEAT_CHKIN  = KERNAL_CHKIN
+.const FEAT_CHKOUT = KERNAL_CHKOUT
+.const FEAT_CHRIN  = KERNAL_CHRIN
+.const FEAT_CHROUT = KERNAL_CHROUT
+#endif
+
+.const DISK_UI_ACT_MENU            = 0
+.const DISK_UI_ACT_CONFIRM_DRIVE9  = 1
+.const DISK_UI_ACT_INSERT_DISK     = 2
+.const DISK_UI_ACT_INIT_PROMPT     = 3
+.const DISK_UI_ACT_SHOW_NO_DRIVE9  = 4
+.const DISK_UI_ACT_SHOW_NO_DEVICE  = 5
+.const DISK_UI_ACT_SHOW_PROGRAM    = 6
+.const DISK_UI_ACT_SHOW_INIT_FAIL  = 7
+.const DISK_UI_ACT_ENTER_DEVICE    = 8
+
+.const DISK_UI_RES_OK          = 0
+.const DISK_UI_RES_CANCEL      = 1
+.const DISK_UI_RES_ONE_DRIVE   = 2
+.const DISK_UI_RES_TWO_DRIVE   = 3
+.const DISK_UI_RES_OTHER_DRIVE = 4
+.const DISK_UI_RES_YES         = 5
+.const DISK_UI_RES_NO          = 6
 
 // ============================================================
-// disk_prompt_save — Prompt to insert save disk
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
+// Session helpers
+// ============================================================
+disk_reset_session_state:
+    lda #0
+    sta disk_mode
+    sta disk_setup_done
+    lda #1
+    sta disk_ui_result
+    lda #8
+    sta save_device
+    rts
+
+disk_require_save_media:
+    lda disk_setup_done
+    bne !drsm_check+
+    sec
+    rts
+!drsm_check:
+    lda disk_mode
+    bne !drsm_marker+
+    sec
+    rts
+!drsm_marker:
+    jsr disk_marker_present
+    rts
+
+// ============================================================
+// Swap prompts
 // ============================================================
 disk_prompt_save:
     lda #<ds_save_str
     ldx #>ds_save_str
     jmp disk_prompt
 
-// ============================================================
-// disk_prompt_game — Prompt to insert game disk
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
-// ============================================================
 disk_prompt_game:
     lda #<ds_game_str
     ldx #>ds_game_str
     jmp disk_prompt
 
-// ============================================================
-// disk_prompt — Display swap prompt and wait for keypress
-// Input: A/X = lo/hi of prompt string (screen codes, null-terminated)
-// No-op in mode 0 (single) and mode 2 (dual-drive, no swap needed).
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
-// ============================================================
 disk_prompt:
-    ldy disk_mode
-    beq !dp_done+               // mode 0: no-op
-    cpy #2
-    beq !dp_done+               // mode 2: no-op (separate drive)
     sta zp_ptr0
     stx zp_ptr0_hi
+    lda disk_mode
+    cmp #1
+    beq !dp_show+
+    rts
+!dp_show:
     lda #COL_WHITE
     sta zp_text_color
     lda #10
@@ -72,7 +151,6 @@ disk_prompt:
     sta zp_cursor_col
     jsr screen_put_string
 
-    // "PRESS ANY KEY" on row 11
     lda #11
     sta zp_cursor_row
     lda #DS_PRESS_ANY_KEY_COL
@@ -83,238 +161,200 @@ disk_prompt:
     sta zp_ptr0_hi
     jsr screen_put_string
 
+#if C128
+    jsr input_get_modal_dismiss_key
+#else
     jsr input_get_key
+#endif
     jsr disk_init_drive
 
-    // Clear prompt rows
+#if !C128
+    lda #BANK_NO_BASIC
+    sta $01
+#endif
+
     lda #10
     jsr screen_clear_row
     lda #11
     jsr screen_clear_row
-!dp_done:
+    rts
+
+#if C128
+disk_dir_read_fname:
+    .byte $24                           // "$"
+.label disk_dir_read_fname_len = * - disk_dir_read_fname
+#endif
+
+// ============================================================
+// KERNAL access wrappers
+// ============================================================
+disk_kernal_enter:
+#if C128
+    :EnterKernal()
+#endif
+    rts
+
+disk_kernal_exit:
+#if C128
+    :ExitKernal()
+#else
+    sei
+#endif
     rts
 
 // ============================================================
-// disk_init_drive — Reinitialize drive 8 after disk swap
-// Sends "I0" command via KERNAL command channel.
-// Clobbers: A, X, Y
+// disk_init_drive — Reinitialize current save drive after swap
 // ============================================================
 disk_init_drive:
+#if C128
     lda #2
     ldx #<disk_init_cmd
     ldy #>disk_init_cmd
-    jsr KERNAL_SETNAM
+    jsr w_setnam
     lda #CMD_CHANNEL
     ldx save_device
     ldy #CMD_CHANNEL
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
-    bcs !did_skip+
+    jsr w_setlfs
+    jsr w_open
+    bcs !did_close+
     lda #CMD_CHANNEL
-    jsr KERNAL_CLOSE
-!did_skip:
-    jsr KERNAL_CLRCHN
+    jsr w_close
+!did_close:
+    jsr w_clrchn
     rts
-
-// ============================================================
-// probe_device — Check if an IEC device is present on IEC bus
-// Opens command channel 15 on the given device, sends "I0".
-// Input:  X = device number (8–30)
-// Output: carry clear = present, carry set = absent
-// Clobbers: A, X, Y
-// ============================================================
-probe_device:
-    stx de_temp                 // save device# (SETNAM clobbers X)
+#else
+    jsr disk_kernal_enter
     lda #2
     ldx #<disk_init_cmd
     ldy #>disk_init_cmd
-    jsr KERNAL_SETNAM
+    jsr FEAT_SETNAM
     lda #CMD_CHANNEL
-    ldx de_temp                 // restore device number
+    ldx save_device
     ldy #CMD_CHANNEL
+    jsr FEAT_SETLFS
+    jsr FEAT_OPEN
+    bcs !did_close+
+    lda #CMD_CHANNEL
+    jsr FEAT_CLOSE
+!did_close:
+    jsr FEAT_CLRCHN
+    jsr disk_kernal_exit
+    rts
+#endif
+
+// ============================================================
+// probe_device — Check whether an IEC device responds
+// Input:  X = device number (8-30)
+// Output: carry clear = present, carry set = absent
+// ============================================================
+probe_device:
+#if C128
+    stx disk_temp
+
+    lda #0
+    ldx #0
+    ldy #0
+    jsr w_setnam
+    lda #CMD_CHANNEL
+    ldx disk_temp
+    ldy #CMD_CHANNEL
+    jsr w_setlfs
+    jsr w_open
+    bcs !pd_absent+
+!pd_close:
+    lda #CMD_CHANNEL
+    jsr w_close
+    jsr w_clrchn
+    clc
+    rts
+!pd_absent:
+    jsr w_clrchn
+    sec
+    rts
+#else
+    stx disk_temp
+    jsr disk_kernal_enter
+
+    lda #0
+    ldx #0
+    ldy #0
+    jsr FEAT_SETNAM
+    lda #CMD_CHANNEL
+    ldx disk_temp
+    ldy #CMD_CHANNEL
+    jsr FEAT_SETLFS
+    jsr FEAT_OPEN
+    bcs !pd_absent+
+!pd_close:
+    lda #CMD_CHANNEL
+    jsr FEAT_CLOSE
+    jsr FEAT_CLRCHN
+    jsr disk_kernal_exit
+    clc
+    rts
+!pd_absent:
+    jsr FEAT_CLRCHN
+    jsr disk_kernal_exit
+    sec
+    rts
+#endif
+
+// ============================================================
+// disk_marker_present — Validate the configured save-disk marker file
+// Output: carry clear = valid marker found, carry set = invalid/missing
+// ============================================================
+disk_marker_present:
+#if !C128
+    jsr c64_disk_marker_present
+    rts
+#else
+    lda #1
+    sta disk_status
+    jsr disk_kernal_enter
+
+    lda #disk_marker_read_fname_len
+    ldx #<disk_marker_read_fname
+    ldy #>disk_marker_read_fname
+    jsr KERNAL_SETNAM
+    lda #DISK_MARKER_FILE_NUM
+    ldx save_device
+    ldy #DISK_MARKER_SEC_RD
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
-    bcs !pd_absent+             // OPEN failed → device not present
-    jsr KERNAL_READST
-    and #$83                    // Bits 7,1,0 = timeout/error
-    bne !pd_close_absent+
-    lda #CMD_CHANNEL
-    jsr KERNAL_CLOSE
-    jsr KERNAL_CLRCHN
-    clc
-    rts
-!pd_close_absent:
-    lda #CMD_CHANNEL
-    jsr KERNAL_CLOSE
-!pd_absent:
-    jsr KERNAL_CLRCHN
-    sec
-    rts
+    bcs !dmp_done+
 
-// ============================================================
-// disk_enter_device — Prompt for IEC device number and probe it
-// Displays "Save drive (8-30): " in the title-screen status area; reads 1–2 digit keys.
-// Validates range 8–30, probes the device, configures save_device.
-// Returns: carry clear = success (disk_mode=2, save_device set)
-//          carry set   = device not found (error shown, key waited)
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_cursor_row/col, zp_text_color
-// ============================================================
-disk_enter_device:
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
-    // Print prompt in the title-screen status area below the menu row.
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #DS_TITLE_PROMPT_ROW
-    sta zp_cursor_row
-    lda #DS_ENTER_PROMPT_COL
-    sta zp_cursor_col
-    lda #<de_prompt_str
-    sta zp_ptr0
-    lda #>de_prompt_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    // Reset digit count
+    ldx #DISK_MARKER_FILE_NUM
+    jsr KERNAL_CHKIN
+    bcs !dmp_close+
+
     lda #0
-    sta de_count
-!de_key_loop:
-    jsr input_get_key
-    // DEL ($14) — erase last digit
-    cmp #$14
-    bne !de_not_del+
-    lda de_count
-    beq !de_key_loop-           // nothing to erase
-    dec de_count
-    lda de_count                // new count = digit column offset
-    clc
-    adc #DS_ENTER_DIGIT_COL
-    sta zp_cursor_col
-    lda #DS_TITLE_PROMPT_ROW
-    sta zp_cursor_row
-    lda #$20                    // space screen code
-    jsr screen_put_char
-    jmp !de_key_loop-
-!de_not_del:
-    // RETURN ($0d) — commit entered digits
-    cmp #$0d
-    bne !de_not_ret+
-    lda de_count
-    bne !de_commit+
-    jmp !de_key_loop-           // no digits yet — ignore
-!de_not_ret:
-    // Accept digit $30–$39 if < 2 digits entered
-    cmp #$30
-    bcc !de_key_loop-
-    cmp #$3a
-    bcs !de_key_loop-
-    ldx de_count
-    cpx #2
-    bcs !de_key_loop-           // already 2 digits — wait for RETURN or DEL
-    sta de_digits,x             // store ASCII digit
-    pha                         // save digit for screen_put_char
-    txa
-    clc
-    adc #DS_ENTER_DIGIT_COL
-    sta zp_cursor_col
-    lda #DS_TITLE_PROMPT_ROW
-    sta zp_cursor_row
-    pla                         // restore digit ($30–$39 = same screen code)
-    jsr screen_put_char
-    inc de_count
-    jmp !de_key_loop-
-
-!de_commit:
-    // Convert de_digits[] to binary
-    lda de_count
-    cmp #1
-    beq !de_one_digit+
-    // Two digits: N = (tens*10) + units
-    lda de_digits               // tens ASCII
-    sec
-    sbc #$30                    // 0–9
-    asl                         // ×2
-    sta de_temp
-    asl                         // ×4
-    asl                         // ×8
-    clc
-    adc de_temp                 // ×10
-    sta de_temp
-    lda de_digits+1             // units ASCII
-    sec
-    sbc #$30
-    clc
-    adc de_temp
-    jmp !de_validate+
-!de_one_digit:
-    lda de_digits
-    sec
-    sbc #$30                    // 0–9
-
-!de_validate:
-    // Range check: 8 <= A <= 30
-    cmp #8
-    bcc !de_restart+
-    cmp #31
-    bcs !de_restart+
-    // Valid range — probe the device
-    tax                         // X = device number
-    jsr probe_device            // stashes X in de_temp; C=0 if present
-    bcc !de_found+
-    // Device not found — show error in the title-screen status area, wait for key, return C=1
-    lda #COL_LRED
-    sta zp_text_color
-    lda #DS_TITLE_PROMPT_ROW
-    sta zp_cursor_row
-    lda #DS_NODEV_COL
-    sta zp_cursor_col
-    lda #<de_nodev_str
-    sta zp_ptr0
-    lda #>de_nodev_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr input_get_key
-    // Clean up rows before returning to disk menu
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
+    sta disk_temp
+!dmp_read:
+    jsr KERNAL_CHRIN
+    ldx disk_temp
+    cmp disk_marker_magic,x
+    bne !dmp_fail+
+    inx
+    stx disk_temp
+    cpx #DISK_MARKER_MAGIC_LEN
+    bcc !dmp_read-
+    lda #0
+    sta disk_status
+    jmp !dmp_close+
+!dmp_fail:
+    lda #1
+    sta disk_status
+!dmp_close:
+    jsr KERNAL_CLRCHN
+    lda #DISK_MARKER_FILE_NUM
+    jsr KERNAL_CLOSE
+!dmp_done:
+    jsr disk_kernal_exit
+    lda disk_status
+    beq !dmp_ok+
     sec
     rts
-
-!de_restart:
-    jmp disk_enter_device       // out of range — re-prompt
-
-!de_found:
-    // de_temp holds device# (saved by probe_device's stx de_temp)
-    lda #2
-    sta disk_mode
-    lda de_temp
-    sta save_device
-    // Show "[Drive N]" indicator in the title-screen status area.
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
-    lda #COL_CYAN
-    sta zp_text_color
-    lda #DS_TITLE_MENU_ROW
-    sta zp_cursor_row
-    lda #DS_DRIVE_IND_COL
-    sta zp_cursor_col
-    lda #<de_ind_pfx
-    sta zp_ptr0
-    lda #>de_ind_pfx
-    sta zp_ptr0_hi
-    jsr screen_put_string       // prints "[Drive " (7 chars)
-    lda de_temp
-    jsr screen_put_decimal_rj2  // 2-char right-justified device number
-    lda #$1d                    // screen code for ']'
-    jsr screen_put_char
-    lda #COL_WHITE
-    sta zp_text_color
+!dmp_ok:
     clc
     rts
+#endif
