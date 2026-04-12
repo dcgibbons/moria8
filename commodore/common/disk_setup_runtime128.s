@@ -39,7 +39,11 @@ title_require_disk_setup:
     jsr tramp_disk_setup
     bcs !trds_done+
     lda disk_ui_value
-    beq !trds_done+
+    bne !trds_cancel+
+    inc disk_setup_done
+    clc
+    rts
+!trds_cancel:
     sec
 !trds_done:
     rts

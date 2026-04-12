@@ -20,12 +20,8 @@
 // ============================================================
 title_load_and_draw:
 #if C128
-    // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
-    // SETBNK controls LOAD destination bank; keep filename in Bank 0.
-    lda #1
-    ldx #0
-    jsr safe_setbnk         // SETBNK (handles Enter/Exit internally)
-#endif
+    jmp c128_title_load_and_draw_cached
+#else
     // SETNAM: platform-specific title asset filename
     lda #TITLE_FILENAME_LEN
     ldx #<title_filename
@@ -83,6 +79,7 @@ title_load_and_draw:
     // Render the loaded art data
     jsr title_render_data
     rts
+#endif
 
 title_fallback_render:
     // Simple text title (no disk art available)

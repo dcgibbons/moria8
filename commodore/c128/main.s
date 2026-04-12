@@ -1846,6 +1846,7 @@ title_enter_menu:
     jsr c128_stack_guard_begin
 #endif
     jsr tramp_title_load_and_draw
+title_menu_after_art:
 #if C128_REAL_BOOT_DIAG
     ldx #$28
     jsr c128_stack_guard_check
@@ -1853,8 +1854,9 @@ title_enter_menu:
 #if C128_TEST_TITLE_ART_CONTENT
     jsr c128_test_title_art_assert
 #endif
-    sei
 
+title_menu_draw:
+    sei
     lda #STATUS_ROW
     jsr screen_clear_row
     lda #STATUS_ROW + 1
@@ -1926,7 +1928,7 @@ title_load_game:
 !title_load_fail:
     jsr disk_prompt_game
     jsr input_get_key
-    jmp !title_menu_loop-
+    jmp title_enter_menu
 
 // ============================================================
 // c128_load_runtime_low_prg — Load low-RAM resident runtime code to $1000 in Bank 0
@@ -2989,6 +2991,7 @@ c128_test_verify_cache_survival:
 .pseudopc $0d20 {
 runtime_common_data_start:
     #import "../common/disk_setup_runtime128.s"
+    #import "../common/title_cache_runtime128.s"
 runtime_common_data_end:
 }
 .segment Default

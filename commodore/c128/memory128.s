@@ -111,6 +111,12 @@
 .const BANK1_TIER_CACHE_END  = BANK1_TIER_CACHE_BASE + BANK1_TIER_CACHE_SIZE - 1
 .const BANK1_RESERVED_GAP0_BASE = $94f8
 .const BANK1_RESERVED_GAP0_END  = $9fff
+.const C128_TITLE_CACHE_VALID_MARKER = $a5
+.const BANK1_TITLE_CACHE_MARKER_BASE = BANK1_RESERVED_GAP0_BASE
+.const BANK1_TITLE_CACHE_DATA_BASE   = BANK1_TITLE_CACHE_MARKER_BASE + 1
+.const BANK1_TITLE_CACHE_END         = BANK1_RESERVED_GAP0_END
+.const BANK1_TITLE_CACHE_MAX_LEN     = BANK1_TITLE_CACHE_END - BANK1_TITLE_CACHE_DATA_BASE + 1
+.const C128_TITLE_CACHE_MIN_REQUIRED = 593
 .const BANK1_OVERLAY_STARTUP_BASE = $a000
 .const BANK1_OVERLAY_STARTUP_END  = $afff
 .const BANK1_OVERLAY_TOWN_BASE    = $b000
@@ -808,6 +814,9 @@ copy_to_e000:
 :AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
 :AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)
 :AssertRegionBefore("Reserved gap 0 ends before STARTUP overlay slot", BANK1_RESERVED_GAP0_END, BANK1_OVERLAY_STARTUP_BASE)
+.assert "Title cache marker starts inside reserved gap 0", BANK1_TITLE_CACHE_MARKER_BASE >= BANK1_RESERVED_GAP0_BASE && BANK1_TITLE_CACHE_MARKER_BASE <= BANK1_RESERVED_GAP0_END, true
+.assert "Title cache data ends inside reserved gap 0", BANK1_TITLE_CACHE_DATA_BASE <= BANK1_TITLE_CACHE_END && BANK1_TITLE_CACHE_END <= BANK1_RESERVED_GAP0_END, true
+.assert "Title cache exceeds current title-art minimum", BANK1_TITLE_CACHE_MAX_LEN >= C128_TITLE_CACHE_MIN_REQUIRED, true
 :AssertRegionBefore("STARTUP overlay slot ends before TOWN overlay slot", BANK1_OVERLAY_STARTUP_END, BANK1_OVERLAY_TOWN_BASE)
 :AssertRegionBefore("TOWN overlay slot ends before DEATH overlay slot", BANK1_OVERLAY_TOWN_END, BANK1_OVERLAY_DEATH_BASE)
 :AssertRegionBefore("DEATH overlay slot ends before reserved I/O window", BANK1_OVERLAY_DEATH_END, BANK1_RESERVED_IO_BASE)
