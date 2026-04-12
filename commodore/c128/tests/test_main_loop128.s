@@ -127,6 +127,8 @@ wizard_wall_walk_active:
 
 disk_setup_done:
     .byte 0
+disk_mode:
+    .byte 0
 
 cmd_wizard_entry:
     inc test_wizard_calls
@@ -143,7 +145,14 @@ save_game:
     rts
 
 disk_prompt_save:
+    lda disk_mode
+    cmp #1
+    bne !dps_count+
+    lda disk_setup_done
+    bne !dps_skip+
+!dps_count:
     inc test_disk_prompt_save_calls
+!dps_skip:
     rts
 
 disk_prompt_game:
@@ -716,6 +725,7 @@ reset_state:
     sta player_move_relocated
     sta zp_search_count
     sta disk_setup_done
+    sta disk_mode
     sta player_data + PL_FLAGS
     sta zp_game_flags
     sta zp_msg_flags
@@ -1420,6 +1430,7 @@ test_entry:
     lda #1
     sta test_disk_setup_success
     sta test_save_success
+    sta disk_mode
     lda #CMD_SAVE
     sta test_cmd_script
     lda #1
@@ -1430,7 +1441,6 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_disk_prompt_save_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_save_game_calls
@@ -1454,6 +1464,7 @@ test_entry:
     lda #1
     sta test_disk_setup_success
     sta test_move_ok
+    sta disk_mode
     lda #CMD_SAVE
     sta test_cmd_script
     lda #CMD_MOVE_N
@@ -1470,7 +1481,6 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_disk_prompt_save_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_disk_prompt_game_calls
@@ -1492,11 +1502,11 @@ test_entry:
     jsr reset_state
     lda #1
     sta disk_setup_done
+    sta disk_mode
     lda #7
     sta zp_death_source
     jsr player_died
     lda test_disk_prompt_save_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_tramp_game_over_calls

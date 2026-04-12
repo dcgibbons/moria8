@@ -135,7 +135,19 @@ save_magic:
 // Syncs ZP→struct, writes all blocks + raw map + checksum, closes
 // Clobbers: A, X, Y, all scratch
 // ============================================================
+#if C128
+save_prepare_transition_screen:
+    jsr screen_clear
+    lda #0
+    sta zp_msg_flags
+    sta msg_row1_col
+    rts
+#endif
+
 save_game:
+#if C128
+    jsr save_prepare_transition_screen
+#endif
     jsr disk_require_save_media
     bcc !save_media_ok+
     lda disk_setup_done
@@ -358,6 +370,9 @@ save_game:
 // ============================================================
 
 load_game:
+#if C128
+    jsr save_prepare_transition_screen
+#endif
     lda #LOAD_RESULT_IOERR
     sta load_result
     jsr disk_require_save_media

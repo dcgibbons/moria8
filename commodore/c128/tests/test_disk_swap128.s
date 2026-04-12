@@ -3,8 +3,9 @@
 // Tests:
 //  1. disk_reset_session_state resets defaults
 //  2. disk_prompt_game is a no-op in C128 one-drive mode
-//  3. disk_prompt_save still prompts and re-inits the save drive in one-drive mode
-//  4. disk_prompt_game remains a no-op when disk_mode is unset
+//  3. disk_prompt_save still prompts and re-inits the save drive before setup completes
+//  4. disk_prompt_save becomes a no-op after one-drive setup completes
+//  5. disk_prompt_game remains a no-op when disk_mode is unset
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -210,7 +211,8 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 3: C128 one-drive save prompt still shows UI and re-inits the save drive.
+    // Test 3: before setup completes, C128 one-drive save prompt still shows
+    // UI and re-inits the save drive.
     jsr reset_harness_state
     lda #1
     sta disk_mode
@@ -242,7 +244,23 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 4: unset mode still leaves disk_prompt_game as a no-op.
+    // Test 4: after one-drive setup completes, disk_prompt_save is a no-op.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    jsr disk_prompt_save
+    lda screen_put_string_calls
+    beq *+5
+    jmp test_fail
+    lda input_modal_calls
+    beq *+5
+    jmp test_fail
+    lda w_open_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 5: unset mode still leaves disk_prompt_game as a no-op.
     jsr reset_harness_state
     lda #0
     sta disk_mode
