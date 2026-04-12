@@ -131,6 +131,16 @@ disk_prompt_save:
     jmp disk_prompt
 
 disk_prompt_game:
+#if C128
+    // C128 runtime/overlay assets are already resident after boot, so
+    // one-drive sessions never need to swap back to program media. This
+    // intentionally skips the legacy prompt and its drive re-init side effect.
+    lda disk_mode
+    cmp #1
+    bne !dpg_prompt+
+    rts
+!dpg_prompt:
+#endif
     lda #<ds_game_str
     ldx #>ds_game_str
     jmp disk_prompt

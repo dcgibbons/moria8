@@ -509,7 +509,7 @@ describe_phase_token() {
             printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
-            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
+            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
             ;;
         smokes)
             printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
@@ -549,7 +549,7 @@ suite_matches_phase_token() {
             ;;
         units)
             case "$suite_name" in
-                minimal128|config128|memory128|db128|tier128|input128|main_loop128|msg_prompt128|vdc_attr128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128) return 0 ;;
+                minimal128|config128|memory128|db128|tier128|input128|disk_swap128|main_loop128|msg_prompt128|vdc_attr128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128) return 0 ;;
             esac
             ;;
         smokes)
@@ -2249,6 +2249,7 @@ run_parallel_unit_tests() {
         "db128 tests/test_db128.s 20000000"
         "tier128 tests/test_tier128.s 20000000"
         "input128 tests/test_input128.s 20000000"
+        "disk_swap128 tests/test_disk_swap128.s 20000000"
         "main_loop128 tests/test_main_loop128.s 500000000"
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
@@ -2851,6 +2852,7 @@ run_boot_title_load_resume_smoke() {
 
     local main_vs="out/main.vs"
     local load_resume_game
+    local disk_prompt_game_lc
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${load_resume_game:-}" ]; then
         echo "FAIL (missing load_resume_game in out/main.vs)"
@@ -2858,6 +2860,15 @@ run_boot_title_load_resume_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
+    local disk_prompt_game
+    disk_prompt_game=$(awk '/\.disk_prompt_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${disk_prompt_game:-}" ]; then
+        echo "FAIL (missing disk_prompt_game in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    disk_prompt_game_lc=$(printf '%s' "$disk_prompt_game" | tr '[:upper:]' '[:lower:]')
 
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_loadresume.d64"
@@ -2868,6 +2879,7 @@ run_boot_title_load_resume_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${disk_prompt_game}"
         echo "until \$${load_resume_game}"
         echo "g"
     } > "$mon_file"
@@ -2878,6 +2890,13 @@ run_boot_title_load_resume_smoke() {
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
+
+    if grep -qiE "Stop on  exec ${disk_prompt_game_lc}" "$log_file"; then
+        boot_log_report_failure "unexpected program-disk prompt during C128 title load flow" "$log_file" "disk_prompt_game" "$disk_prompt_game" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
 
     if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
         boot_log_report_failure "did not reach load_resume_game from title load flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"

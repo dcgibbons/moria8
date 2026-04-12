@@ -115,6 +115,7 @@ generation_busy_end:
     rts
 
 tramp_game_over:
+    inc test_tramp_game_over_calls
     rts
 
 wizard_reset_session_state:
@@ -132,12 +133,33 @@ cmd_wizard_entry:
     rts
 
 save_game:
+    inc test_save_game_calls
+    lda test_save_success
+    beq !save_fail+
+    sec
+    rts
+!save_fail:
+    clc
     rts
 
 disk_prompt_save:
+    inc test_disk_prompt_save_calls
     rts
 
 disk_prompt_game:
+    inc test_disk_prompt_game_calls
+    rts
+
+tramp_disk_setup:
+    inc test_tramp_disk_setup_calls
+    lda test_disk_setup_success
+    beq !tds_fail+
+    lda #1
+    sta disk_setup_done
+    clc
+    rts
+!tds_fail:
+    sec
     rts
 
 delete_savefile:
@@ -595,7 +617,14 @@ test_case_id: .byte 0
 test_cast_spell_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
+test_save_game_calls: .byte 0
+test_disk_prompt_save_calls: .byte 0
+test_disk_prompt_game_calls: .byte 0
+test_tramp_disk_setup_calls: .byte 0
+test_tramp_game_over_calls: .byte 0
 test_cast_ok: .byte 0
+test_save_success: .byte 0
+test_disk_setup_success: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
@@ -661,7 +690,14 @@ reset_state:
     sta test_cast_spell_calls
     sta test_search_scan_calls
     sta test_wizard_calls
+    sta test_save_game_calls
+    sta test_disk_prompt_save_calls
+    sta test_disk_prompt_game_calls
+    sta test_tramp_disk_setup_calls
+    sta test_tramp_game_over_calls
     sta test_cast_ok
+    sta test_save_success
+    sta test_disk_setup_success
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
@@ -679,6 +715,7 @@ reset_state:
     sta current_overlay
     sta player_move_relocated
     sta zp_search_count
+    sta disk_setup_done
     sta player_data + PL_FLAGS
     sta zp_game_flags
     sta zp_msg_flags
@@ -1371,6 +1408,106 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 19: a successful CMD_SAVE in C128 one-drive flow still routes
+    // through disk setup, save, and the shared game-return owner.
+    lda #19
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_disk_setup_success
+    sta test_save_success
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_save_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_save_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_game_over_prompt_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 20: a failed CMD_SAVE still routes through the shared game-return
+    // owner before resuming gameplay.
+    lda #20
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_disk_setup_success
+    sta test_move_ok
+    lda #CMD_SAVE
+    sta test_cmd_script
+    lda #CMD_MOVE_N
+    sta test_cmd_script + 1
+    lda #2
+    sta test_cmd_len
+    jsr run_case
+    lda test_tramp_disk_setup_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_save_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_save_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_player_try_move_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_game_over_prompt_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 21: player_died routes through the shared game-return owner after
+    // death-screen disk I/O when disk setup is already complete.
+    lda #21
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta disk_setup_done
+    lda #7
+    sta zp_death_source
+    jsr player_died
+    lda test_disk_prompt_save_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_tramp_game_over_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_exit_calls
     cmp #1
     beq *+5
     jmp test_fail

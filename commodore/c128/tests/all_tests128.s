@@ -30,6 +30,9 @@ test_entry:
 .filenamespace input128
 #import "test_input128.s"
 
+.filenamespace disk_swap128
+#import "test_disk_swap128.s"
+
 .filenamespace main_loop128
 #import "test_main_loop128.s"
 
