@@ -129,20 +129,20 @@ disk_prompt_save:
 #if C128
     // After one-drive setup validates the save disk on C128, keep runtime
     // on that media instead of re-prompting on every save/load transaction.
+    // Preserve the old prompt path's drive re-init side effect.
     lda disk_mode
     cmp #1
     bne !dps_prompt+
     lda disk_setup_done
-    bne !dps_skip+
+    beq !dps_prompt+
+    jsr input_prepare_modal_dismiss_key
+    jsr disk_init_drive
+    rts
 !dps_prompt:
 #endif
     lda #<ds_save_str
     ldx #>ds_save_str
     jmp disk_prompt
-#if C128
-!dps_skip:
-    rts
-#endif
 
 disk_prompt_game:
 #if C128

@@ -65,6 +65,7 @@ LOAD_RESUME_BOOT_ASSETS_BUILT=0
 REAL_BOOT_DIAG_ASSETS_BUILT=0
 TITLE_ART_BOOT_ASSETS_BUILT=0
 TITLE_LOAD_MISSING_SAVE_ASSETS_BUILT=0
+TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT=0
 OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=0
 
 KA_DEFINES=(-define C128 -var OVL_OUT='"out"')
@@ -513,10 +514,10 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
-            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
+            printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
             printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
@@ -555,12 +556,12 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|boot_diag_copy) return 0 ;;
             esac
             ;;
         town)
@@ -1823,6 +1824,93 @@ build_title_load_missing_save_assets() {
     return 0
 }
 
+build_title_load_mounted_save_assets() {
+    if [ "$TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT" -eq 1 ] && [ -f out/moria128_mounted_save.d64 ]; then
+        return 0
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log
+    build_log="$(test128_tmp_file test128_title_mounted_save_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local mounted_save_d64="out/moria128_mounted_save.d64"
+    local marker_blob="out/MORIA8.ID"
+    local save_blob="out/THE.GAME"
+    local dir_type_offset0=$(((357 + 1) * 256 + 2))
+    local dir_type_offset1=$((dir_type_offset0 + 32))
+
+    if ! printf 'M8SAVE' > "$marker_blob"; then
+        echo "FAIL (marker blob generation failed)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! python3 tests/make_load_resume_save.py "$save_blob" >"$build_log" 2>&1; then
+        echo "FAIL (mounted-save save generation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$mounted_save_d64" \
+            -attach "$mounted_save_d64" \
+            -write "$marker_blob" "MORIA8.ID" \
+            -write "$save_blob" "THE.GAME" >"$build_log" 2>&1; then
+        echo "FAIL (mounted-save disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! printf '\201' | dd of="$mounted_save_d64" bs=1 seek="$dir_type_offset0" conv=notrunc status=none 2>>"$build_log"; then
+        echo "FAIL (mounted-save marker directory patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! printf '\201' | dd of="$mounted_save_d64" bs=1 seek="$dir_type_offset1" conv=notrunc status=none 2>>"$build_log"; then
+        echo "FAIL (mounted-save savefile directory patch failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    local dir_list
+    if ! dir_list=$("$c1541_bin" -attach "$mounted_save_d64" -list 2>&1); then
+        echo "FAIL (mounted-save disk listing failed)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ'; then
+        echo "FAIL (mounted-save disk marker is not seq)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! echo "$dir_list" | grep -qi '"THE.GAME".*SEQ'; then
+        echo "FAIL (mounted-save disk THE.GAME is not seq)"
+        echo "$dir_list" | tail -20 | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    TITLE_LOAD_MOUNTED_SAVE_ASSETS_BUILT=1
+    return 0
+}
+
 build_partial_failure_boot_assets() {
     if [ "$PARTIAL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "partial_failure"; then
         return
@@ -2967,6 +3055,65 @@ run_boot_title_load_missing_savefile_smoke() {
     fi
 
     boot_stop_vice_process "$vice_pid"
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_boot_title_load_mounted_save_smoke() {
+    local name="boot_title_load_mounted_save_smoke"
+    echo -n "  $name: "
+
+    build_title_load_mounted_save_assets || return
+
+    local main_vs="out/main.vs"
+    local title_menu_ready load_resume_game
+    title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_menu_ready:-}" ] || [ -z "${load_resume_game:-}" ]; then
+        echo "FAIL (missing mounted-save smoke symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_boot_d64 abs_save_d64
+    abs_boot_d64="$(cd out && pwd)/moria128.d71"
+    abs_save_d64="$(cd out && pwd)/moria128_mounted_save.d64"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+
+    {
+        echo "attach \"${abs_boot_d64}\" 9"
+        echo "until \$${title_menu_ready}"
+        echo "attach \"${abs_save_d64}\" 8"
+        echo "until \$${load_resume_game}"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+        -keybuf "LN1 " -keybuf-delay 8 \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 220000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if boot_log_has_crash "$log_file"; then
+        echo "FAIL (captured stop)"
+        boot_log_report_crash_context "$log_file"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
+        boot_log_report_failure "mounted-save title load did not reach load_resume_game" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
 
     echo "PASS"
     PASS=$((PASS + 1))
@@ -4130,6 +4277,7 @@ run_selected_suites() {
     run_named_suite boot_title_idle_smoke run_boot_title_idle_smoke || return 1
     run_named_suite title_art_smoke run_title_art_smoke || return 1
     run_named_suite boot_title_load_missing_savefile_smoke run_boot_title_load_missing_savefile_smoke || return 1
+    run_named_suite boot_title_load_mounted_save_smoke run_boot_title_load_mounted_save_smoke || return 1
     run_named_suite vic40_clean_boot_smoke run_vic40_clean_boot_smoke || return 1
     run_named_suite new_key_stability_smoke run_new_key_stability_smoke || return 1
     run_named_suite boot_title_newgame_smoke run_boot_title_newgame_smoke || return 1

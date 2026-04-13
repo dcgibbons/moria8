@@ -89,9 +89,9 @@ overlay_load:
 #endif
 
 #if C128
-    lda ol_target
-    cmp #OVL_HELP
-    beq ol_check_disk
+    // C128 preloads all overlays, including the Disk Setup/help UI, into the
+    // Bank 1 overlay cache at boot. Title-time Disk Setup must use that cache
+    // so one-drive users can swap program media out of drive 8 before pressing L.
     lda c128_cache_overlays_ready
     beq ol_check_disk
     ldx ol_target

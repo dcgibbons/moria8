@@ -375,12 +375,6 @@ load_game:
 #endif
     lda #LOAD_RESULT_IOERR
     sta load_result
-#if C128
-    lda disk_setup_done
-    cmp #2
-    beq !load_media_ok+
-!load_check_media:
-#endif
     jsr disk_require_save_media
     bcc !load_media_ok+
     lda disk_setup_done

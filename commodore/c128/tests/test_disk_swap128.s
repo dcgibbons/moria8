@@ -4,7 +4,7 @@
 //  1. disk_reset_session_state resets defaults
 //  2. disk_prompt_game is a no-op in C128 one-drive mode
 //  3. disk_prompt_save still prompts and re-inits the save drive before setup completes
-//  4. disk_prompt_save becomes a no-op after one-drive setup completes
+//  4. disk_prompt_save becomes a silent drive re-init after one-drive setup completes
 //  5. disk_prompt_game remains a no-op when disk_mode is unset
 
 .pc = $0801 "BASIC Stub"
@@ -77,6 +77,9 @@ reset_harness_state:
 input_get_modal_dismiss_key:
     inc input_modal_calls
     lda #$20
+    rts
+
+input_prepare_modal_dismiss_key:
     rts
 
 screen_put_string:
@@ -244,11 +247,14 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 4: after one-drive setup completes, disk_prompt_save is a no-op.
+    // Test 4: after one-drive setup completes, disk_prompt_save skips UI but
+    // still re-inits the current save drive.
     jsr reset_harness_state
     lda #1
     sta disk_mode
     sta disk_setup_done
+    lda #9
+    sta save_device
     jsr disk_prompt_save
     lda screen_put_string_calls
     beq *+5
@@ -257,6 +263,11 @@ test_start:
     beq *+5
     jmp test_fail
     lda w_open_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda w_setlfs_dev_seen
+    cmp #9
     beq *+5
     jmp test_fail
 
