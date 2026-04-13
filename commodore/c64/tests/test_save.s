@@ -34,6 +34,8 @@ test_finish:
 
 .pc = * "Test Body"
 
+#define SAVE_TEST_RLE
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"

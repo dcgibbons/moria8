@@ -63,18 +63,23 @@ save_count_lo:  .byte 0         // Byte count lo
 save_count_hi:  .byte 0         // Byte count hi
 save_cksum_lo:  .byte 0         // Running checksum lo
 save_cksum_hi:  .byte 0         // Running checksum hi
+save_magic_buf: .fill SAVE_MAGIC_SIZE, 0  // Load-time header scratch
+#if SAVE_TEST_RLE
 rle_size_lo:    .byte 0         // Compressed map size lo
 rle_size_hi:    .byte 0         // Compressed map size hi
 rle_run_byte:   .byte 0         // Current run byte value
 rle_run_len:    .byte 0         // Current run length
 rle_lit_len:    .byte 0         // Literal buffer length
+#endif
 save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
+#if SAVE_TEST_RLE
 rle_work_lo:    .byte <CREATURE_BASE  // RLE workspace pointer lo (default CREATURE_BASE)
 rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
 
 // Literal buffer for RLE (max 128 bytes)
 rle_lit_buf:    .fill 128, 0
+#endif
 
 // ============================================================
 // String data (PETSCII for KERNAL I/O — NOT screen codes)
@@ -494,7 +499,7 @@ load_game:
 
     // --- Read and verify magic header ---
     // Read 8 bytes to temp area and compare
-    :load_block(rle_lit_buf, SAVE_MAGIC_SIZE)
+    :load_block(save_magic_buf, SAVE_MAGIC_SIZE)
     // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
     // Any non-zero STATUS this early means the file doesn't exist.
@@ -504,7 +509,7 @@ load_game:
 !load_magic_check:
     ldx #0
 !check_magic:
-    lda rle_lit_buf,x
+    lda save_magic_buf,x
     cmp save_magic,x
     beq !magic_ok+
     jmp !load_corrupt+
@@ -1060,11 +1065,10 @@ recount_floor_items:
     rts
 
 // ============================================================
-// rle_compress_map — Compress MAP_BASE → CREATURE_BASE
-// Output: rle_size_lo/hi = compressed size
-// Workspace: CREATURE_BASE (must be safe to write)
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
+// Test-only map compressor retained for save round-trip coverage.
+// Production save/load writes the map raw.
 // ============================================================
+#if SAVE_TEST_RLE
 rle_compress_map:
     // Source pointer: MAP_BASE
     lda #<MAP_BASE
@@ -1283,3 +1287,4 @@ rle_d_advance_dst:
     inc save_io_error       // Flag overflow — corrupt compressed data
 !rdad_ok:
     rts
+#endif

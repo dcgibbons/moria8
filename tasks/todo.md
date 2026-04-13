@@ -58,6 +58,16 @@ This file is a temporary working scratchpad.
   - control comparison against `HEAD`:
     - `Program fits below MAP_BASE=true`
     - `Banked payload: 3992 bytes at $BFF8-$CF90`
+- C64 resident-byte recovery after restoring the runtime strings:
+  - moved the dead in-memory RLE compressor in `commodore/common/save.s` to test-only ownership behind `SAVE_TEST_RLE`
+  - added a dedicated `save_magic_buf` so production load no longer borrows the compressor literal buffer for header verification
+  - opted `commodore/c64/tests/test_save.s` into the old compressor explicitly so the round-trip unit coverage still assembles
+  - exact direct-assembly result after the recovery:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `Banked payload: 3992 bytes at $BE6C-$CE04`
+    - relative to the restored-string overflow state, that recovered `450` bytes and cleared the original `46`-byte overrun with margin
+  - regression verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 - C64 boot-art asset pipeline update:
   - kept `commodore/c64/boot.s` and `tools/ppm_to_c64_bootart.py` unchanged
   - added `tools/png_to_ppm.py` as a source-image adapter that enforces exact dimensions and writes the existing PPM intermediate
@@ -69,7 +79,8 @@ This file is a temporary working scratchpad.
     - `make -C commodore out/c64/bootart64.ppm out/c64/bootart64.prg` -> PASS
 - C64 parity follow-up after the user's live screenshots:
   - kept the C64 prompt/screen-clear behavior in the product path
-  - recovered the C64 resident-byte budget by shortening the C64-only runtime UI strings instead of backing out the overwrite/prompt fixes
+  - the first bad recovery attempt shortened the C64-only runtime UI strings instead of backing out or restructuring the resident code
+  - that copy regression has now been reversed, and the resident fit is recovered structurally from dead save-side code instead
   - fixed the stale `test_main_loop.s` stub collision by removing the duplicate local `msg_init`
 - Exact verification after the C64 follow-up:
   - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
@@ -78,8 +89,6 @@ This file is a temporary working scratchpad.
   - one-drive C64 Disk Setup now leaves a one-shot fresh-setup state so the immediate save/load transaction does not ask for a second `Press any key`
   - the C64 save path now clears to a dedicated prompt/status screen before save-disk and program-disk prompts, and failed save returns redraw gameplay before re-entering the command loop
   - C64 overwrite handling now probes for an existing `THE.GAME` before writing and prompts `Overwrite? Y/N` instead of falling into a disk error on overwrite attempts
-- C64 size follow-up:
-  - the first parity pass overflowed the C64 resident boundary, so the final version keeps the behavior but trims the C64 resident footprint back under `$C000` / `$D000` by using a compact C64-specific overwrite path and shorter resident runtime strings
 - Verification:
   - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
   - `make test128-fast` -> PASS

@@ -195,6 +195,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Layout And Build Safety
 
 - After assembly or import-order changes, re-check memory-map boundaries and treat new hangs or timeouts as likely layout regressions first.
+- On memory-bound C64 code, remove dead production helpers before planning overlay moves or string compression. If a helper only exists to support a unit test path, gate it to the test build instead of carrying its state and buffers in the shipping resident image.
 - For disk images with patched boot sectors or reserved media, reserve the owned sector before file allocation.
 - When a build or test depends on tool handoff, make fresh-build paths deterministic; do not rely on warm outputs or fragile temp-path behavior.
 

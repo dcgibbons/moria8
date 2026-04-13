@@ -199,6 +199,40 @@
 - The byte budget problem is now quantified precisely.
 - The durable rule is product-facing: recover C64 bytes from code/layout, not by shortening approved user-facing strings without explicit consent.
 
+## 2026-04-13 — C64 resident-byte recovery after runtime-string restore ✅ COMPLETE
+
+### Scope Closed
+- Closed the C64 `MAP_BASE` overrun introduced by restoring the pre-refactor save/load runtime strings.
+- Recovered the needed resident bytes without changing any user-facing copy.
+- Kept the save test coverage for the old map compressor path without carrying that compressor in the shipping resident image.
+
+### Root Cause
+- [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/save.s) still carried the old in-memory `rle_compress_map` helper, its scratch state, and its 128-byte literal buffer even though production save/load now writes the dungeon map raw.
+- That dead resident test helper was enough to push `program_end` from `$BFF8` to `$C02E` once the full runtime strings were restored.
+
+### What Changed
+1. **Dead resident compressor moved to test-only ownership**
+   - [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/save.s) now gates the in-memory RLE compressor state and routines behind `SAVE_TEST_RLE`.
+   - Production save/load keeps the raw-map contract unchanged and retains only a dedicated 8-byte `save_magic_buf` scratch for header verification.
+2. **Save test opted into the helper explicitly**
+   - [c64/tests/test_save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_save.s) now defines `SAVE_TEST_RLE` so the round-trip compressor coverage still assembles in the unit image.
+3. **No overlay move was needed**
+   - The first recovery step solved the resident-pressure problem outright, so `title_screen.s` and `score_io.s` stayed in their existing ownership for now.
+
+### Verification
+- Exact layout gate:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `Banked payload: 3992 bytes at $BE6C-$CE04`
+- Broader regression gate:
+  - `make test64`
+  - `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+### Outcome
+- The restored runtime strings remain intact, including `Welcome back to Moria8!`.
+- The resident-byte recovery came from removing dead production ownership, not from more copy degradation.
+- Relative to the restored-string overflow state, the fix recovered `450` bytes of resident headroom and cleared the original `46`-byte `MAP_BASE` overrun with margin.
+
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 
 ### Scope Closed
