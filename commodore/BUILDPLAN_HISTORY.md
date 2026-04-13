@@ -172,6 +172,33 @@
 - C64 no longer ships the generated fallback logo as its boot-art source.
 - C128 still ships the generated fallback poster path, so future FEAT-BOOT-ART work is now about C128 parity or optional embellishment rather than the C64 asset pipeline.
 
+## 2026-04-13 — C64 save/load runtime-string regression audit
+
+### Scope
+- Audited the post-`save/load refactor (#9)` runtime-string changes after the restored load greeting exposed an unauthorized C64 copy regression.
+- Restored the pre-refactor save/load runtime strings in the working tree before any byte-recovery work.
+- Measured the exact C64 overrun caused by the restored strings so future fixes can target code/layout instead of copy.
+
+### Findings
+- The string-shortening change lived in [common/runtime_ui_strings.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/runtime_ui_strings.s) and was the direct cause of the visible `Welcome.` / `Welcome back.` regression.
+- Restoring the pre-refactor strings adds `54` bytes on C64 and moves `program_end` from `$BFF8` to `$C02E`.
+- The exact illegal region is `$C000-$C02D`, which is `46` bytes past `MAP_BASE`.
+- With the restored strings in place, the staged banked payload then occupies `$C02E-$CFC6`, overlapping the dungeon-map window until the resident footprint is reduced elsewhere.
+
+### Verification
+- Baseline comparison:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `Banked payload: 3992 bytes at $BFF8-$CF90`
+- Restored-string audit:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=false`
+  - `Banked payload: 3992 bytes at $C02E-$CFC6`
+
+### Outcome
+- The byte budget problem is now quantified precisely.
+- The durable rule is product-facing: recover C64 bytes from code/layout, not by shortening approved user-facing strings without explicit consent.
+
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 
 ### Scope Closed

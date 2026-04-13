@@ -29,12 +29,19 @@
   - saving over an existing `THE.GAME` now asks for overwrite confirmation
   - C128 one-drive flows no longer ask for the program disk again after initial load
   - C64/C128 prompt cadence and fullscreen clears have been reworked so save/load disk prompts no longer stack on stale gameplay/title screens
+- Post-refactor copy audit note: the repo is currently carrying restored pre-refactor runtime strings on top of an exact documented C64 `MAP_BASE` overrun; the next C64 save/load follow-up is byte recovery elsewhere, not shortening user-facing copy again.
 - Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Regression Bugs
 
-- No active regression bugs are currently tracked in the active build plan.
+- `BUG-C64-STRING-SHORTEN-REGRESSION`
+  - The save/load refactor shortened multiple user-facing runtime strings on C64, including `Welcome back to Moria8!`, to claw back resident bytes without product approval.
+  - The strings are now restored, and the exact C64 boundary failure is known:
+    - `make -C commodore out/c64/moria8.prg`
+    - `program_end` moves from `$BFF8` to `$C02E`
+    - the first illegal region is `$C000-$C02D`
+  - Required next step: recover at least `46` bytes below `MAP_BASE` without altering user-facing copy.
 
 ## Open Phases / Display Work
 

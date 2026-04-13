@@ -25,6 +25,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Scope And Design
 
+- On this project, do not shorten user-facing strings to recover C64 bytes without explicit user consent. Treat visible copy as part of the product contract and recover space elsewhere first.
 - When a new visible title/boot regression appears on the active branch, freeze the unrelated save/load chase immediately. Restore the title path to the last proven product contract before treating later save/load evidence as meaningful again.
 - On this C128 title path, disabling a cache flag is not the same as restoring the older loader contract. If the live regression came with a new loader/helper path, revert the active call path itself instead of leaving the new helper in control and hoping the symptoms disappear.
 - When the user broadens a repro, redesign around the shared owner, not the first visible trigger or old bug label.

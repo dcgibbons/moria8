@@ -3,6 +3,9 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-C64-STRING-SHORTEN-REGRESSION
+- [x] restore the shortened save/load runtime strings to their pre-refactor user-facing text
+- [x] rebuild the C64 target with the restored strings and capture the exact memory-boundary failure location before making any byte-recovery decisions
 - [x] FEAT-C64-BOOT-ART-ASSET
 - [x] add a dedicated source-image adapter for C64 boot art without changing the runtime bootloader or the existing C64 PRG quantizer
 - [x] switch the C64 boot-art build rule to use `artwork/moria8_loading_art_c64.png` as the canonical source asset
@@ -43,6 +46,18 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- C64 string-shortening regression follow-up:
+  - restored the shortened save/load runtime strings in `commodore/common/runtime_ui_strings.s`, including `Welcome back to Moria8!`
+  - recorded the user-copy rule in `tasks/lessons.md`: do not shorten user-facing strings to recover bytes without explicit consent
+  - exact C64 memory result after restoring the strings:
+    - `make -C commodore out/c64/moria8.prg` still assembles but reports `Program fits below MAP_BASE=false`
+    - the assert owner is [`commodore/c64/main.s:939`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s:939)
+    - `program_end` moves from `$BFF8` on `HEAD` to `$C02E` with the restored strings
+    - that is a `54`-byte growth, and it pushes `program_end` `46` bytes past `MAP_BASE=$C000`
+    - the staged banked payload then occupies `$C02E-$CFC6`, so the init-only payload storage overlaps `4038` bytes of the dungeon-map window
+  - control comparison against `HEAD`:
+    - `Program fits below MAP_BASE=true`
+    - `Banked payload: 3992 bytes at $BFF8-$CF90`
 - C64 boot-art asset pipeline update:
   - kept `commodore/c64/boot.s` and `tools/ppm_to_c64_bootart.py` unchanged
   - added `tools/png_to_ppm.py` as a source-image adapter that enforces exact dimensions and writes the existing PPM intermediate
