@@ -66,9 +66,17 @@ def run_test_via_moncommands(
         commands: list[str] = []
         if snapshot_path is not None:
             commands.append(f'undump "{snapshot_path.resolve()}"')
+        commands.extend(
+            [
+                "f 0000 00FF 00",
+                "> FF00 3E",
+                "> D506 07",
+            ]
+        )
         commands.append(f'load "{prg_path.resolve()}" 0')
         if break_on_fail and symbols.fail_addr is not None:
             commands.append(f"break {symbols.fail_addr}")
+        commands.append("r sp=ff")
         commands.append(f"r pc={symbols.start_addr}")
         commands.append(f"until ${symbols.pass_addr}")
         commands.append("quit")

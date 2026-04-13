@@ -54,7 +54,6 @@
 :C128AuditBelowIo("load_read_byte", load_read_byte)
 :C128AuditBelowIo("load_read_block", load_read_block)
 :C128AuditBelowIo("load_read_map_c128", load_read_map_c128)
-:C128AuditBelowIo("delete_savefile", delete_savefile)
 :C128AuditBelowIo("load_resume_game", load_resume_game)
 :C128AuditBelowIo("main_loop", main_loop)
 :C128AuditBelowIo("vp_render_status_loop", vp_render_status_loop)

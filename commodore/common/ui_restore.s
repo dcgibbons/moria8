@@ -1,6 +1,17 @@
 #importonce
 // ui_restore.s — Shared gameplay-view restore helpers for modal UI flows
 
+#if C128
+// ui_prepare_fullscreen_transition — clear the screen and reset message-row
+// state before a full-screen prompt or status transition.
+ui_prepare_fullscreen_transition:
+    jsr screen_clear
+    lda #0
+    sta zp_msg_flags
+    sta msg_row1_col
+    rts
+#endif
+
 // ui_view_restore_modal_overlay — dismiss a read-only overlay and redraw gameplay
 // Used by help/inventory/spell-pick flows that return to the caller for more UI.
 // Preserves: nothing

@@ -195,7 +195,16 @@ class VICEConnector:
         return self.send_command(f'dump "{Path(snapshot_path).resolve()}"', debug=debug)
 
     def undump_snapshot(self, snapshot_path: str | Path, *, debug: bool = False) -> str:
-        return self.send_command(f'undump "{Path(snapshot_path).resolve()}"', debug=debug)
+        if self.sock is None:
+            raise RuntimeError("VICE connector is not connected")
+        payload = f'undump "{Path(snapshot_path).resolve()}"\n'
+        if debug:
+            print(f">>> {payload.rstrip()}")
+        self.sock.sendall(payload.encode("ascii"))
+        time.sleep(0.1)
+        self.close()
+        self.connect(debug=debug)
+        return ""
 
     def clear_breakpoints(self, *, debug: bool = False) -> str:
         return self.send_command("del", debug=debug)
@@ -262,6 +271,7 @@ def run_test_case(
     connector.break_at(pass_addr, debug=debug)
     if fail_addr is not None:
         connector.break_at(fail_addr, debug=debug)
+    connector.set_register("sp", "ff", debug=debug)
     connector.set_register("pc", start_addr, debug=debug)
     connector.go()
     return connector.wait_for_stop(pass_addr=pass_addr, fail_addr=fail_addr, timeout=timeout)

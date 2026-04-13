@@ -89,6 +89,9 @@ overlay_load:
 #endif
 
 #if C128
+    // C128 preloads all overlays, including the Disk Setup/help UI, into the
+    // Bank 1 overlay cache at boot. Title-time Disk Setup must use that cache
+    // so one-drive users can swap program media out of drive 8 before pressing L.
     lda c128_cache_overlays_ready
     beq ol_check_disk
     ldx ol_target
@@ -339,6 +342,7 @@ overlay_load_disk:
 // Fetches overlay from REU memory to $E000 in C64 RAM.
 // Clobbers: A, X
 overlay_fetch_reu:
+    php
     sei
 #if !C128
     lda $01
@@ -372,7 +376,7 @@ overlay_fetch_reu:
     pla
     sta $01
 #endif
-    cli
+    plp
     rts
 
 

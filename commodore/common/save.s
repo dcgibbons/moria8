@@ -2,7 +2,7 @@
 // save.s — Save/Load game system
 //
 // Writes all game state to a sequential file on 1541 disk via KERNAL I/O.
-// Load restores state and deletes the savefile to enforce permadeath.
+// Load restores state without consuming the savefile.
 // Uses 16-bit additive complement checksum for integrity.
 // Map data is written raw (`MAP_SIZE` bytes). RLE compressor is kept for tests only.
 //
@@ -81,23 +81,19 @@ rle_lit_buf:    .fill 128, 0
 // ============================================================
 // Note: KERNAL SETNAM needs PETSCII filenames.
 // Use raw byte values to avoid screencode encoding.
-save_filename:
-    .byte $40               // "@" — replace existing file prefix
-    .byte $30, $3a          // "0:"
+save_replace_filename:
+    .byte $40, $30, $3a     // "@0:"
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
-.label save_filename_len = * - save_filename
+.label save_replace_filename_len = * - save_replace_filename
+.label save_filename = save_replace_filename + 1
+.label save_filename_len = save_replace_filename_len - 1
 
 load_filename:
     .byte $30, $3a          // "0:"
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
     .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
 .label load_filename_len = * - load_filename
-
-scratch_cmd:
-    .byte $53, $30, $3a     // "S0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-.label scratch_cmd_len = * - scratch_cmd
 
 save_magic:
     .byte $4d, $4f, $52, $49, $41, $30, $31  // "MORIA01"
@@ -136,10 +132,103 @@ save_magic:
 // Syncs ZP→struct, writes all blocks + raw map + checksum, closes
 // Clobbers: A, X, Y, all scratch
 // ============================================================
-save_game:
-#if !C128
-    :EnterKernal()
+#if C128
+save_confirm_overwrite:
+    lda #save_filename_len
+    sta save_count_lo
+    lda #<save_filename
+    sta save_block_lo
+    lda #>save_filename
+    sta save_block_hi
+    jsr save_file_exists
+    bcc !save_confirm_done+
+    lda #<save_overwrite_str
+    sta zp_ptr0
+    lda #>save_overwrite_str
+    sta zp_ptr0_hi
+    jsr msg_print
+#if C128
+    jsr input_prepare_followup_key
 #endif
+!save_confirm_loop:
+    jsr input_get_key
+    cmp #$59                // Y
+    beq !save_confirm_yes+
+    cmp #$4e                // N
+    beq !save_confirm_no+
+    bne !save_confirm_loop-
+!save_confirm_yes:
+    lda #save_replace_filename_len
+    sta save_count_lo
+    lda #<save_replace_filename
+    sta save_block_lo
+    lda #>save_replace_filename
+    sta save_block_hi
+!save_confirm_done:
+    sec
+    rts
+!save_confirm_no:
+    clc
+    rts
+#else
+save_select_output_name_c64:
+    jsr save_file_exists
+    bcc !save_select_ok+
+    lda #<save_overwrite_str
+    sta zp_ptr0
+    lda #>save_overwrite_str
+    sta zp_ptr0_hi
+    jsr msg_print
+!save_select_loop:
+    jsr input_get_key
+    cmp #$59                // Y
+    beq !save_select_ok+
+    cmp #$4e                // N
+    bne !save_select_loop-
+    clc
+    rts
+!save_select_ok:
+    sec
+    rts
+#endif
+
+save_game:
+#if C128
+    jsr ui_prepare_fullscreen_transition
+#endif
+    jsr disk_require_save_media
+    bcc !save_media_ok+
+    lda disk_setup_done
+    bne !save_wrong_media+
+    lda #<disk_need_save_str
+    sta zp_ptr0
+    lda #>disk_need_save_str
+    sta zp_ptr0_hi
+    bne !save_media_fail+
+!save_wrong_media:
+    lda #<disk_bad_save_str
+    sta zp_ptr0
+    lda #>disk_bad_save_str
+    sta zp_ptr0_hi
+!save_media_fail:
+    jsr msg_print
+save_return_fail:
+#if !C128
+    lda #BANK_NO_BASIC
+    sta $01
+#endif
+    clc
+    rts
+!save_media_ok:
+#if C128
+    jsr save_confirm_overwrite
+    bcc save_return_fail
+#else
+    jsr save_select_output_name_c64
+    bcc save_return_fail
+    jsr SAVE_SETNAM
+#endif
+
     // Show "SAVING GAME..." message
     lda #<save_saving_str
     sta zp_ptr0
@@ -157,15 +246,17 @@ save_game:
     sta save_cksum_hi
     sta save_io_error
 
-    // Delete old save file (ignore errors)
-    // save_game already runs inside EnterKernal; avoid nested transitions.
-    jsr delete_savefile_core
-
     // Open file for writing
     // SETNAM
-    lda #save_filename_len
-    ldx #<save_filename
-    ldy #>save_filename
+#if C128
+    lda save_count_lo
+    ldx save_block_lo
+    ldy save_block_hi
+#else
+    lda #save_replace_filename_len
+    ldx #<save_replace_filename
+    ldy #>save_replace_filename
+#endif
     jsr SAVE_SETNAM
     // SETLFS: file#2, device 8/9, secondary 2
     lda #SAVE_FILE_NUM
@@ -303,8 +394,10 @@ save_game:
     sta zp_ptr0_hi
     jsr msg_print
 #if !C128
-    :ExitKernal()
+    lda #BANK_NO_BASIC
+    sta $01
 #endif
+    sec
     rts
 
 !save_error_close:
@@ -320,26 +413,42 @@ save_game:
     lda #>save_ioerr_str
     sta zp_ptr0_hi
     jsr msg_print
-#if !C128
-    :ExitKernal()
-#endif
-    rts
+    jmp save_return_fail
 
 // ============================================================
 // load_game — Top-level load routine
 // Opens file, verifies magic, reads all blocks + raw map,
-// verifies checksum, syncs struct→ZP, deletes savefile.
+// verifies checksum, syncs struct→ZP.
 // Output: load_result = LOAD_RESULT_* status code.
 //         carry set = success, carry clear = failure where preserved by platform exit path.
 // Clobbers: A, X, Y, all scratch
 // ============================================================
 
 load_game:
-#if !C128
-    :EnterKernal()
+#if C128
+    jsr ui_prepare_fullscreen_transition
 #endif
     lda #LOAD_RESULT_IOERR
     sta load_result
+    jsr disk_require_save_media
+    bcc !load_media_ok+
+    lda disk_setup_done
+    bne !load_wrong_media+
+    lda #<disk_need_save_str
+    sta zp_ptr0
+    lda #>disk_need_save_str
+    sta zp_ptr0_hi
+    bne !load_media_fail+
+!load_wrong_media:
+    lda #<disk_bad_save_str
+    sta zp_ptr0
+    lda #>disk_bad_save_str
+    sta zp_ptr0_hi
+!load_media_fail:
+    jsr msg_print
+    clc
+    rts
+!load_media_ok:
 
     // Show "LOADING GAME..." message
     lda #<save_load_str
@@ -531,17 +640,14 @@ load_game:
     jsr recount_monsters
     jsr recount_floor_items
 
-    // Delete savefile (permadeath)
-    // load_game already runs inside EnterKernal; avoid nested transitions.
-    jsr delete_savefile_core
-
     lda #LOAD_RESULT_OK
     sta load_result
-    sec                     // Success
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    sec
     rts
+#else
+    jmp !load_return_ok+
+#endif
 
 !load_corrupt:
 !load_corrupt_nocl:
@@ -559,11 +665,12 @@ load_game:
     lda #>save_corrupt_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+    jmp !load_return_fail+
+#endif
 
 !load_close_notfound:
     // File was opened but returned no data — close before showing message
@@ -582,11 +689,12 @@ load_game:
     lda #>save_notfound_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+    jmp !load_return_fail+
+#endif
 
 !load_fail:
     lda #LOAD_RESULT_IOERR
@@ -596,11 +704,20 @@ load_game:
     lda #>save_ioerr_str
     sta zp_ptr0_hi
     jsr msg_print
-    clc                     // Failure
-#if !C128
-    :ExitKernal()
-#endif
+#if C128
+    clc
     rts
+#else
+!load_return_fail:
+    clc                     // Failure
+    bcc !load_return_done+
+!load_return_ok:
+    sec                     // Success
+!load_return_done:
+    lda #BANK_NO_BASIC
+    sta $01
+    rts
+#endif
 
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
@@ -733,6 +850,15 @@ load_read_block:
 load_read_byte:
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
+#if !C128
+    jsr SAVE_READST
+    and #$03
+    beq !lrby_status_ok+
+    inc save_io_error
+!lrby_status_ok:
+    pla
+    pha
+#endif
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -819,41 +945,60 @@ load_read_map_c128:
 #endif
 
 // ============================================================
-// delete_savefile — Send scratch command via command channel
+// save_file_exists — Probe whether THE.GAME exists on save_device.
+// Output: carry set = file exists, carry clear = file not present
 // Clobbers: A, X, Y
 // ============================================================
-delete_savefile:
-#if !C128
-    :EnterKernal()              // External entrypoint for non-KERNAL callers
-#endif
-    jsr delete_savefile_core
-#if !C128
-    :ExitKernal()
-#endif
-    rts
-
-// delete_savefile_core — Internal helper (assumes EnterKernal context)
-// Clobbers: A, X, Y
-delete_savefile_core:
-    // Open command channel — scratch command executes on OPEN
-    lda #scratch_cmd_len
-    ldx #<scratch_cmd
-    ldy #>scratch_cmd
+save_file_exists:
+    lda #load_filename_len
+    ldx #<load_filename
+    ldy #>load_filename
     jsr SAVE_SETNAM
-    lda #CMD_CHANNEL
+    lda #CHECK_FILE_NUM
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #CHECK_SEC_ADDR
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
-    bcs !dsf_done+          // OPEN failed — nothing to close
-    lda #CMD_CHANNEL
-    jsr SAVE_CLOSE
-!dsf_done:
-    jsr save_restore_channels
-    lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
+#if !C128
+    bcc !sfe_exists+
+    clc
     rts
+!sfe_exists:
+    lda #CHECK_FILE_NUM
+    jsr SAVE_CLOSE
+    sec
+    rts
+#else
+    bcc !sfe_open_ok+
+    clc
+    bcc !sfe_cleanup+
+!sfe_open_ok:
+    ldx #CHECK_FILE_NUM
+    jsr SAVE_CHKIN
+    bcs !sfe_cleanup+
+!sfe_chkin_ok:
+    jsr SAVE_CHRIN
+    jsr SAVE_READST
+    cmp #$42                // LOAD-missing status on 1541 path
+    beq !sfe_missing+
+    sec
+    bcs !sfe_close+
+!sfe_missing:
+    clc
+!sfe_close:
+!sfe_cleanup:
+    php
+    lda #CHECK_FILE_NUM
+    jsr SAVE_CLOSE
+    jsr save_restore_channels
+#if C128
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+#endif
+    plp
+    rts
+#endif
 
 // ============================================================
 // save_restore_channels — restore default KERNAL channels

@@ -5,6 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -146,6 +147,7 @@ def run_one_test(
     vs_path: Path,
     timeout: float,
     snapshot_path: Path | None,
+    reset_environment: bool | None = None,
     verbose: bool,
 ) -> tuple[bool, str, float]:
     symbols = extract_test_symbols(vs_path)
@@ -173,7 +175,7 @@ def run_one_test(
         pass_addr=symbols.pass_addr,
         fail_addr=symbols.fail_addr,
         timeout=timeout,
-        reset_environment=(snapshot_path is None),
+        reset_environment=(snapshot_path is None) if reset_environment is None else reset_environment,
         debug=verbose,
     )
     duration = time.perf_counter() - start_time
@@ -239,26 +241,17 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
     if not snapshot_path.exists():
         create_ready_snapshot(base_args, snapshot_path)
 
-    vice_process = subprocess.Popen(
-        build_vice_command(base_args),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    connector = build_connector(base_args)
-    try:
-        connector.connect(
-            retries=max(1, int(base_args.connect_timeout / base_args.connect_retry_delay)),
-            retry_delay=base_args.connect_retry_delay,
-            debug=base_args.verbose,
-        )
-        results: list[tuple[str, bool, str, float]] = []
-        for test_case in tests:
-            if not test_case.snapshot_ready:
-                results.append((test_case.name, False, "not snapshot-ready", 0.0))
-                continue
-            prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
+    results: list[tuple[str, bool, str, float]] = []
+    for test_case in tests:
+        if not test_case.snapshot_ready:
+            results.append((test_case.name, False, "not snapshot-ready", 0.0))
+            continue
+
+        prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
+        symbols = extract_test_symbols(vs_path)
+        if test_case.force_moncommands or symbols_need_moncommands(symbols):
             passed, reason, duration = run_one_test(
-                connector,
+                None,
                 base_args,
                 force_moncommands=test_case.force_moncommands,
                 break_on_fail=test_case.break_on_fail,
@@ -268,13 +261,55 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
                 vs_path=vs_path,
                 timeout=test_case.timeout,
                 snapshot_path=snapshot_path,
+                reset_environment=False,
                 verbose=base_args.verbose,
             )
             results.append((test_case.name, passed, reason, duration))
-        return results
-    finally:
-        connector.close()
-        terminate_vice(vice_process)
+            continue
+
+        with tempfile.TemporaryDirectory(prefix="harness128_snapshot_") as temp_dir:
+            mon_file = Path(temp_dir) / "restore.mon"
+            mon_file.write_text(f'undump "{snapshot_path.resolve()}"\n', encoding="utf-8")
+            vice_command = build_vice_command(base_args)
+            vice_command.extend(["-moncommands", str(mon_file)])
+            vice_process = subprocess.Popen(
+                vice_command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            connector = build_connector(base_args)
+            try:
+                connector.connect(
+                    retries=max(1, int(base_args.connect_timeout / base_args.connect_retry_delay)),
+                    retry_delay=base_args.connect_retry_delay,
+                    debug=base_args.verbose,
+                )
+                # Startup `undump` via -moncommands can still be settling when the
+                # remote monitor first accepts a socket connection, but some VICE
+                # runs go straight to command-ready without a second prompt burst.
+                try:
+                    connector.read_until_prompt(deadline=time.monotonic() + base_args.connect_timeout)
+                except TimeoutError:
+                    pass
+                passed, reason, duration = run_one_test(
+                    connector,
+                    base_args,
+                    force_moncommands=test_case.force_moncommands,
+                    break_on_fail=test_case.break_on_fail,
+                    limitcycles=test_case.limitcycles,
+                    test_name=test_case.name,
+                    prg_path=prg_path,
+                    vs_path=vs_path,
+                    timeout=test_case.timeout,
+                    snapshot_path=None,
+                    reset_environment=True,
+                    verbose=base_args.verbose,
+                )
+            finally:
+                connector.close()
+                terminate_vice(vice_process)
+        results.append((test_case.name, passed, reason, duration))
+    return results
 
 
 def print_results(mode: str, results: list[tuple[str, bool, str, float]]) -> int:

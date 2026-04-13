@@ -426,10 +426,36 @@ c128_town_move_diag_after_input_get_command:
     // Save and quit?
     cmp #CMD_SAVE
     bne !not_save+
+    lda disk_setup_done
+    bne !save_setup_ready+
+    jsr tramp_disk_setup
+    lda disk_setup_done
+    beq !save_return_view+
+!save_setup_ready:
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr save_game
+    lda #0
+    adc #0
+    sta zp_temp0
     jsr disk_prompt_game        // Swap back to game disk if dual
+    lda zp_temp0
+    beq !save_return_main+
     jmp !quit+
+!save_return_main:
+#if C128
+    jsr platform_runtime_resync_api
+    jsr input_wait_release
+    jmp ui_view_return_to_gameplay_view
+#else
+    jsr ui_view_redraw_gameplay_view
+    jmp main_loop
+#endif
+!save_return_view:
+#if C128
+    jsr platform_runtime_resync_api
+    jsr input_wait_release
+#endif
+    jmp ui_view_return_to_gameplay_view
 !not_save:
 
     // Quit?
@@ -1308,13 +1334,23 @@ player_died:
     jsr input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
+    lda disk_setup_done
+    bne !pd_disk_ready+
+    jsr tramp_disk_setup
+    bcs !pd_skip_disk_io+
+!pd_disk_ready:
     jsr disk_prompt_save        // Swap to save disk if dual
-    jsr delete_savefile
     jsr player_sync_from_zp
     lda death_source_saved
     sta zp_death_source
     jsr tramp_game_over         // Score, hiscore load/insert/save, death screen
     jsr disk_prompt_game        // Swap back to game disk if dual
+    jmp !pd_done+
+!pd_skip_disk_io:
+    lda death_source_saved
+    sta zp_death_source
+    jsr tramp_game_over
+!pd_done:
     jsr input_get_modal_dismiss_key
     jmp !quit+
 

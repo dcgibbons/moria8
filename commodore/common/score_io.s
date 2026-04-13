@@ -27,6 +27,12 @@ hiscore_count:  .byte 0
 // Clobbers: A, X, Y
 // ============================================================
 hiscore_load:
+    jsr disk_require_save_media
+    bcc !hl_ready+
+    lda #0
+    sta hiscore_count
+    rts
+!hl_ready:
     // Clear table (230 bytes; can't use bpl since 230 > 127)
     lda #0
     sta hiscore_count
@@ -124,6 +130,10 @@ hiscore_load:
 // Clobbers: A, X, Y
 // ============================================================
 hiscore_save:
+    jsr disk_require_save_media
+    bcc !hs_ready+
+    rts
+!hs_ready:
     // Scratch existing file (ignore errors)
     lda #hi_scratch_len
     ldx #<hi_scratch_cmd

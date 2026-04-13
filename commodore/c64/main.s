@@ -64,6 +64,132 @@ exit_trampoline:
     jsr $ffd2               // KERNAL CHROUT
     jmp ($a002)             // BASIC warm-start (works for both SYS and chain-load)
 
+#import "../common/zeropage.s"
+
+c64_disk_call_saved_bank: .byte 0
+
+c64_disk_call:
+    pha
+    txa
+    pha
+    tya
+    pha
+    tsx
+    lda $0104,x
+    sta zp_vol_2
+    lda $0105,x
+    sta zp_vol_3
+    clc
+    lda $0104,x
+    adc #2
+    sta $0104,x
+    bcc !cdc_target+
+    inc $0105,x
+!cdc_target:
+    ldy #1
+    lda (zp_vol_2),y
+    sta !cdc_jsr+ + 1
+    iny
+    lda (zp_vol_2),y
+    sta !cdc_jsr+ + 2
+    pla
+    tay
+    pla
+    tax
+    pla
+    lda $01
+    sta c64_disk_call_saved_bank
+    lda #$36
+    sta $01
+    cli
+!cdc_jsr:
+    jsr $ffff
+    pha
+    sei
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    lda c64_disk_call_saved_bank
+    sta $01
+    pla
+    rts
+
+c64_disk_setnam:
+    jsr c64_disk_call
+    .word $ffbd
+    rts
+
+c64_disk_setlfs:
+    jsr c64_disk_call
+    .word $ffba
+    rts
+
+c64_disk_open:
+    jsr c64_disk_call
+    .word $ffc0
+    rts
+
+c64_disk_close:
+    jsr c64_disk_call
+    .word $ffc3
+    rts
+
+c64_disk_clrchn:
+    jsr c64_disk_call
+    .word $ffcc
+    rts
+
+c64_disk_marker_present:
+    .const C64_DISK_MARKER_FILE_NUM = 6
+    .const C64_DISK_MARKER_SEC_RD = 2
+    lda #1
+    sta disk_status
+    php
+    lda $01
+    pha
+    lda #$36
+    sta $01
+    cli
+    lda #disk_marker_read_fname_len
+    ldx #<disk_marker_read_fname
+    ldy #>disk_marker_read_fname
+    jsr $ffbd
+    lda #C64_DISK_MARKER_FILE_NUM
+    ldx save_device
+    ldy #C64_DISK_MARKER_SEC_RD
+    jsr $ffba
+    jsr $ffc0
+    bcs !cdmp_done+
+    ldx #C64_DISK_MARKER_FILE_NUM
+    jsr $ffc6
+    bcs !cdmp_close+
+    jsr $ffcf
+    cmp #$4d
+    bne !cdmp_close+
+    jsr $ffcf
+    cmp #$38
+    bne !cdmp_close+
+    dec disk_status
+!cdmp_close:
+    lda #C64_DISK_MARKER_FILE_NUM
+    jsr $ffc3
+    jsr $ffcc
+!cdmp_done:
+    sei
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    pla
+    sta $01
+    plp
+    lda disk_status
+    beq !cdmp_ok+
+    sec
+    rts
+!cdmp_ok:
+    clc
+    rts
+
 // tramp_dig_ability — pinned low for common tunnel code.
 tramp_dig_ability:
     jmp calc_dig_ability
@@ -133,6 +259,7 @@ tramp_dig_ability:
 entry_main:
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
+    jsr disk_reset_session_state
 
     // BASIC ROM already banked out by bootstrap above
 
@@ -174,18 +301,6 @@ restart_entry:
     jsr rng_seed
 
 title_enter_menu:
-    // Install IRQ wedge: suppress KERNAL cursor blink permanently.
-    // KERNAL routines (CHROUT, LOAD) constantly reset $CC=0 which
-    // re-enables cursor blink. Our wedge forces $CC non-zero on every
-    // IRQ tick BEFORE the KERNAL handler checks it, so the blink code
-    // never executes and never corrupts color RAM.
-    sei
-    lda #<irq_no_blink
-    sta $0314
-    lda #>irq_no_blink
-    sta $0315
-    cli
-
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
@@ -225,121 +340,46 @@ title_menu_loop:
 !not_n:
     cmp #$4c                // 'L' — load game
     bne !not_l+
+    lda disk_setup_done
+    bne !load_now+
+    jsr tramp_disk_setup
+    bcs title_enter_menu
+!load_now:
     jmp title_load_game
 !not_l:
-    cmp #$44                // 'D' — disk setup sub-menu
+    cmp #$44                // 'D' — disk setup
     bne title_menu_loop
-
-disk_menu_show:
-    // Show disk sub-menu in the reserved bottom status area, not over title art.
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #DS_TITLE_MENU_ROW
-    sta zp_cursor_row
-    lda #9                  // Center: (40-22)/2 = 9
-    sta zp_cursor_col
-    lda #<ds_menu_str
-    sta zp_ptr0
-    lda #>ds_menu_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-!disk_menu_loop:
-    jsr input_get_key
-    cmp #$53                // 'S' — same disk (mode 0)
-    beq !disk_same+
-    cmp #$57                // 'W' — swap disks (mode 1)
-    beq !disk_swap+
-    cmp #$23                // '#' — custom drive number (mode 2)
-    beq !disk_drv9+
-    jmp !disk_menu_loop-
-
-!disk_same:
-    lda #0
-    sta disk_mode
-    lda #8
-    sta save_device
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
-    jmp title_menu_loop
-
-!disk_swap:
-    lda #1
-    sta disk_mode
-    lda #8
-    sta save_device
-    jsr title_draw_save_disk_indicator
-    jmp title_menu_loop
-
-!disk_drv9:
-    jsr disk_enter_device
-    bcs !disk_drv9_fail+        // fail — re-show disk sub-menu
-    jmp title_menu_loop         // success — device configured
-!disk_drv9_fail:
-    jmp disk_menu_show
+    jsr tramp_disk_setup
+    jmp title_enter_menu
 
 title_draw_menu:
-    // --- Show title menu: N)EW  L)OAD  D)UAL DISK ---
+    // --- Show title menu: N)EW  L)OAD  D)ISK SETUP ---
     lda #COL_WHITE
     sta zp_text_color
     lda #17
     sta zp_cursor_row
-    lda #8                  // Center: (40-23)/2 ≈ 8
+    lda #7                  // Center: (40-25)/2 ≈ 7
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
     lda #>title_menu_str
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda disk_mode
-    cmp #1
-    bne !title_menu_done+
-    jsr title_draw_save_disk_indicator
-!title_menu_done:
-    rts
-
-title_draw_save_disk_indicator:
-    // Show "[Save Disk]" indicator in the reserved bottom status area.
-    lda #DS_TITLE_MENU_ROW
-    jsr screen_clear_row
-    lda #DS_TITLE_PROMPT_ROW
-    jsr screen_clear_row
-    lda #COL_CYAN
-    sta zp_text_color
-    lda #DS_TITLE_MENU_ROW
-    sta zp_cursor_row
-    lda #14                 // Center: (40-11)/2 ≈ 14
-    sta zp_cursor_col
-    lda #<ds_dual_str
-    sta zp_ptr0
-    lda #>ds_dual_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #COL_WHITE
-    sta zp_text_color
     rts
 
 title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr sound_play
-    jsr msg_init
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr load_game
-    // C64 callers must branch on load_result, not carry, because the
-    // EnterKernal/ExitKernal wrapper preserves caller flags via php/plp.
-    lda load_result
-    bne !title_load_fail+
+    php
     jsr disk_prompt_game        // Swap back for tier loading
+    plp
+    // Fail closed on the explicit load carry result before resuming gameplay.
+    bcc !title_load_fail+
     jmp load_resume_game
 !title_load_fail:
-    jsr disk_prompt_game        // Swap back even on failure
     jsr input_get_key           // Let user see error message from load_game
     jmp title_enter_menu
 
@@ -361,10 +401,7 @@ irq_no_blink_after_cld:
 kernal_load_safe:
     jsr $ffd5               // KERNAL LOAD — carry set on error
     php                     // Preserve carry for caller
-    lda #<irq_no_blink      // Reinstall: KERNAL/JiffyDOS overwrites $0314
-    sta $0314
-    lda #>irq_no_blink
-    sta $0315
+    jsr platform_runtime_resync_c64
     plp
     rts
 
@@ -441,10 +478,7 @@ tramp_find_special_room:
     jmp tramp_sr_epilogue
 
 tramp_sr_epilogue:
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-    rts
+    jmp platform_runtime_resync_c64
 
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
@@ -518,10 +552,9 @@ tramp_ego_put_suffix:
     jsr screen_put_char         // Clobbers Y
     ldy teps_save_y
     iny
-    jmp !teps_loop-
+    bne !teps_loop-
 !teps_end:
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01
     cli
 !teps_done:
     rts
@@ -574,11 +607,9 @@ title_show_sysinfo:
     lda KERNAL_REV              // Read from ROM while KERNAL banked in
     sta tsi_krev_cached
     sei
-    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
-    sta $01
+    dec $01                     // $36 -> $35 — I/O visible for color RAM
     jsr title_show_sysinfo_banked
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01
     cli
     rts
 tsi_krev_cached: .byte 0
@@ -600,6 +631,17 @@ tramp_reu_show_status:
 platform_main_loop_begin_c64:
 platform_vector_reassert_c64:
 platform_runtime_resync_c64:
+    sei
+    lda #<irq_no_blink
+    sta $0314
+    lda #>irq_no_blink
+    sta $0315
+    lda #BANK_NO_BASIC
+    sta $01
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    cli
     rts
 
 platform_services_install64:
@@ -676,6 +718,19 @@ tramp_ui_recall:
     sta $01
     jsr ui_recall_display
     jmp tramp_sr_epilogue
+
+tramp_disk_setup:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs !tds_done+
+    sei
+    lda #BANK_NO_ROMS
+    sta $01
+    jsr disk_setup_run
+    jmp tramp_sr_epilogue
+
+!tds_done:
+    rts
 
 
 
@@ -780,8 +835,7 @@ tramp_game_over:
     lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
     jsr score_death_screen
-    lda #BANK_NO_BASIC
-    sta $01
+    inc $01
     cli
     rts
 
@@ -811,6 +865,8 @@ game_over_prompt:
     jsr screen_unblank
     lda #0
     sta zp_kbdbuf_count         // Flush keyboard buffer
+    lda #BANK_NO_BASIC
+    sta $01
 !gop_loop:
     jsr input_get_key
     cmp #$52                    // 'R' — reboot (reload from disk)
@@ -940,6 +996,7 @@ banked_payload:
     #import "../common/ui_home.s"
     #import "../common/string_bank_banked.s"
     #import "../common/ui_recall.s"
+    #import "../common/disk_setup_banked.s"
 
 banked_code_end:
 }
@@ -993,6 +1050,7 @@ ovl_death_end:
     #import "../common/ui_help_data.s"
     #import "../common/ui_help_page2_data.s"
     #import "../common/ui_help.s"
+    #import "../common/ui_disk_setup.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
@@ -1001,11 +1059,15 @@ ovl_help_end:
 // UI overlay — reserved placeholder on C64 for shared overlay numbering
 // ============================================================
 .segment UiOverlay
-ovl_ui_stub:
+// C64 modal UI lives in the resident banked payload, but startup REU stashing
+// still iterates over the shared overlay id table and loads `64.UI`. Keep this
+// overlay as a valid $E000 PRG so the loader never sees an empty `$0000` image.
+ui_overlay_placeholder:
     rts
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true
+.assert "C64 UI overlay must not be empty", ovl_ui_end > $E000, true
 
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000

@@ -32,6 +32,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
+.segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d20, min=$0d20, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -1652,9 +1653,8 @@ game_over_str:
 game_over_str_end:
 
 .const GAME_OVER_COL = (SCREEN_COLS - 20) / 2
-.const TITLE_MENU_COL = (SCREEN_COLS - 23) / 2
-.const DISK_MENU_COL = (SCREEN_COLS - 22) / 2
-.const SAVE_DISK_IND_COL = (SCREEN_COLS - 11) / 2
+.const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
+.const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
 game_over_prompt:
     jsr screen_clear
@@ -1705,6 +1705,7 @@ entry_main:
     jsr $ff68                   // SETBNK: reset to Bank 0
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
+    jsr disk_reset_session_state
 
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
@@ -1835,11 +1836,17 @@ restart_entry:
     bcc !runtime_low_loaded+
     jmp entry_main
 !runtime_low_loaded:
+    jsr c128_load_runtime_common_prg
+    bcc !runtime_common_loaded+
+    jmp entry_main
+!runtime_common_loaded:
+title_enter_menu:
 #if C128_REAL_BOOT_DIAG
     ldx #$27
     jsr c128_stack_guard_begin
 #endif
     jsr tramp_title_load_and_draw
+title_menu_after_art:
 #if C128_REAL_BOOT_DIAG
     ldx #$28
     jsr c128_stack_guard_check
@@ -1847,8 +1854,9 @@ restart_entry:
 #if C128_TEST_TITLE_ART_CONTENT
     jsr c128_test_title_art_assert
 #endif
-    sei
 
+title_menu_draw:
+    sei
     lda #STATUS_ROW
     jsr screen_clear_row
     lda #STATUS_ROW + 1
@@ -1870,6 +1878,9 @@ restart_entry:
     lda #>title_menu_str
     sta zp_ptr0_hi
     jsr screen_put_string
+    lda disk_setup_done
+    beq title_menu_ready
+    jsr title_draw_save_disk_indicator
 
 title_menu_ready:
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1895,78 +1906,14 @@ title_menu_ready:
 !not_n:
     cmp #$4c                // 'L' — load game
     bne !not_l+
+    jsr title_require_disk_setup
+    bcs title_enter_menu
     jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup
     bne !title_menu_loop-
-
-disk_menu_show:
-    // Show disk sub-menu on row 18
-    lda #18
-    jsr screen_clear_row
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #DISK_MENU_COL
-    sta zp_cursor_col
-    lda #<ds_menu_str
-    sta zp_ptr0
-    lda #>ds_menu_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-!disk_menu_loop:
-    jsr input_get_key
-    cmp #$53                // 'S' — same disk (mode 0)
-    beq !disk_same+
-    cmp #$57                // 'W' — swap disks (mode 1)
-    beq !disk_swap+
-    cmp #$23                // '#' — custom drive number (mode 2)
-    beq !disk_drv9+
-    jmp !disk_menu_loop-
-
-!disk_same:
-    lda #0
-    sta disk_mode
-    lda #8
-    sta save_device
-    lda #18
-    jsr screen_clear_row
-    jmp !title_menu_loop-
-
-!disk_swap:
-    lda #1
-    sta disk_mode
-    lda #8
-    sta save_device
-    jmp !disk_show_indicator+
-
-!disk_drv9:
-    jsr disk_enter_device
-    bcs !disk_drv9_fail+        // fail — re-show disk sub-menu
-    jmp !title_menu_loop-       // success — device configured
-!disk_drv9_fail:
-    jmp disk_menu_show
-
-!disk_show_indicator:
-    // Show "[Save Disk]" indicator on row 18
-    lda #18
-    jsr screen_clear_row
-    lda #COL_CYAN
-    sta zp_text_color
-    lda #18
-    sta zp_cursor_row
-    lda #SAVE_DISK_IND_COL
-    sta zp_cursor_col
-    lda #<ds_dual_str
-    sta zp_ptr0
-    lda #>ds_dual_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #COL_WHITE
-    sta zp_text_color
-    jmp !title_menu_loop-
+    jsr tramp_disk_setup
+    jmp title_enter_menu
 
 title_load_game:
     jsr rng_seed
@@ -1981,7 +1928,7 @@ title_load_game:
 !title_load_fail:
     jsr disk_prompt_game
     jsr input_get_key
-    jmp !title_menu_loop-
+    jmp title_enter_menu
 
 // ============================================================
 // c128_load_runtime_low_prg — Load low-RAM resident runtime code to $1000 in Bank 0
@@ -1993,29 +1940,33 @@ runtime_low_filename:
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
     .text "128.RUNTIME" ; .byte 0
+.const RUNTIME_COMMON_FILE_NUM = 3
+runtime_common_filename:
+    .byte $31, $32, $38, $2e, $46, $44, $49, $53, $4b // "128.FDISK"
+.const RUNTIME_COMMON_FILENAME_LEN = * - runtime_common_filename
 
-c128_load_runtime_low_prg:
+c128_load_runtime_prg:
     lda #0
     ldx #0
     jsr safe_setbnk
 
-    lda #RUNTIME_LOW_FILENAME_LEN
-    ldx #<runtime_low_filename
-    ldy #>runtime_low_filename
+    lda disk_status
+    ldx zp_ptr0
+    ldy zp_ptr0_hi
     jsr $ffbd
 
-    lda #RUNTIME_LOW_FILE_NUM
+    lda disk_temp
     ldx save_device
     ldy #1
     jsr $ffba
 
     lda #0
-    ldx #$00
-    ldy #$10
+    ldx zp_ptr1
+    ldy zp_ptr1_hi
     jsr kernal_load
     php
 
-    lda #RUNTIME_LOW_FILE_NUM
+    lda disk_temp
     jsr $ffc3
     jsr $ffcc
 
@@ -2033,6 +1984,36 @@ c128_load_runtime_low_prg:
     sta zp_kernal_status
 !done:
     rts
+
+c128_load_runtime_low_prg:
+    lda #RUNTIME_LOW_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_LOW_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_low_filename
+    sta zp_ptr0
+    lda #>runtime_low_filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$10
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
+c128_load_runtime_common_prg:
+    lda #RUNTIME_COMMON_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_COMMON_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_common_filename
+    sta zp_ptr0
+    lda #>runtime_common_filename
+    sta zp_ptr0_hi
+    lda #$20
+    sta zp_ptr1
+    lda #$0d
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
 
 
 // ============================================================
@@ -3006,6 +2987,15 @@ c128_test_verify_cache_survival:
     rts
 #endif
 
+.segment RuntimeCommonData
+.pseudopc $0d20 {
+runtime_common_data_start:
+    #import "../common/disk_setup_runtime128.s"
+    #import "../common/title_cache_runtime128.s"
+runtime_common_data_end:
+}
+.segment Default
+
 // RuntimeLowData segment — low-RAM resident code loaded into Bank 0 before title.
 .segment RuntimeLowData
 .pseudopc $1000 {
@@ -3062,6 +3052,7 @@ program_end:
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
@@ -3115,9 +3106,9 @@ program_end:
 #import "io_contracts.s"
 
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
-.assert "Disk menu string stays below I/O hole", ds_menu_str < $D000, true
-.assert "Save-disk indicator stays below I/O hole", ds_dual_str < $D000, true
-.assert "Drive prompt stays below I/O hole", de_prompt_str < $D000, true
+.assert "Save-disk indicator stays below I/O hole", ds_ind_pfx < $D000, true
+.assert "Need-save message stays below I/O hole", disk_need_save_str < $D000, true
+.assert "Wrong-save message stays below I/O hole", disk_bad_save_str < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true
@@ -3165,6 +3156,7 @@ ovl_death_end:
 .segment HelpOverlay
     #import "ui_help_data_80.s"
     #import "../common/ui_help.s"
+    #import "../common/ui_disk_setup.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true

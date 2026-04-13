@@ -235,8 +235,10 @@ input_wait_release:
     jsr input_process_sample
     lda igk_stable
     bne !iwr_wait-
-    lda igk_last_sample
+    ora igk_last_sample
     bne !iwr_wait-
+    sta igk_last_sample
+    sta igk_stable
     rts
 #endif
 
@@ -359,8 +361,6 @@ cia_scan_petscii:
     // Default shift state: unshifted ($80). Updated inline during row scan.
     lda #$80
     sta csp_shift
-    lda #0
-    sta csp_ctrl
 
     // Pre-detect shift state so both LSHIFT (row 1) and RSHIFT (row 6)
     // are known before scanning rows that contain movement letters (HJKL on row 4).
@@ -386,19 +386,6 @@ cia_scan_petscii:
     lda #$00
     sta csp_shift
 !csp_shift_r_done:
-
-    // Detect CTRL before row scan so control-modified command keys can be
-    // normalized to their C64 PETSCII equivalents.
-    lda #$7f            // Row 7 drive mask
-    sta CIA1_PORTA
-    nop
-    nop
-    lda CIA1_PORTB
-    and #$04            // Active low: 0 = CTRL pressed
-    bne !csp_ctrl_done+
-    lda #1
-    sta csp_ctrl
-!csp_ctrl_done:
 
     // --- Scan all 8 rows for a non-shift key ---
     lda #$FE            // Row 0: bit 0 driven low
@@ -436,6 +423,14 @@ cia_scan_petscii:
     ora #$10            // Force RSHIFT bit to unpressed (raw active-low domain)
     sta csp_row_raw
 !csp_mask6_done:
+    // Mask CTRL inline (row 7, bit 2) so a stuck or phantom modifier sample
+    // cannot become the "pressed key" the command loop rescans.
+    cpx #7
+    bne !csp_mask7_done+
+    lda csp_row_raw
+    ora #$04            // Force CTRL bit to unpressed in raw active-low domain
+    sta csp_row_raw
+!csp_mask7_done:
     lda csp_row_raw
     eor #$FF            // Active low -> 1=pressed
     // EOR refreshed the row state in A after CPX clobbered Z.
@@ -525,7 +520,7 @@ cia_scan_petscii:
 
     // Apply shift modifier
     ldy csp_shift
-    bne !csp_ctrl_fix+  // $80 = unshifted → still allow CTRL remap
+    bne !csp_return+    // $80 = unshifted
 
     // Shifted: handle special cases for symbols that don't follow +$80 rule
     cmp #$2E            // unshifted . → shifted > ($3E)
@@ -549,18 +544,11 @@ cia_scan_petscii:
     bne !csp_return+
 !csp_shift_default:
     ora #$80            // Letters ($41–$5A) + cursor keys ($11,$1D): add $80
-!csp_ctrl_fix:
-    ldy csp_ctrl
-    beq !csp_return+
-    cmp #$57            // CTRL+W -> PETSCII $17
-    bne !csp_return+
-    lda #$17
 !csp_return:
     plp
     rts
 
 csp_shift:    .byte $80   // 0=shifted, $80=unshifted (initialized to unshifted)
-csp_ctrl:     .byte 0
 csp_col_bits: .byte 0
 csp_ext_save: .byte 0
 csp_row_raw:  .byte 0
@@ -606,9 +594,6 @@ cia_scancode_table:
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID, zp_input_cmd = same, zp_input_count = 1
 input_get_command:
-    lda #0
-    sta KBDBUF_COUNT        // Zero KERNAL buffer (harmless, not used for scan)
-
     lda #1
     sta zp_input_count      // Default repeat count = 1
 
@@ -641,7 +626,8 @@ input_get_command:
 #endif
     jsr petscii_to_command
     cmp #CMD_NONE
-    beq !get_key-           // Unknown key, try again
+    bne !got_cmd+
+    jmp !get_key-           // Unknown key, try again
 
 !got_cmd:
     sta zp_input_cmd
