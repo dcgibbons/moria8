@@ -142,6 +142,36 @@
 - `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` are removed from active work.
 - Directed `look` now behaves consistently across C64 and C128, while still respecting the intended shared LoS/visibility rule instead of a wrong-bank artifact on C128.
 
+## 2026-04-13 — `FEAT-C64-BOOT-ART-ASSET` artist-supplied C64 boot art ✅ COMPLETE
+
+### Scope Closed
+- Replaced the generated fallback-logo source on C64 with the tracked artist PNG at [../artwork/moria8_loading_art_c64.png](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/artwork/moria8_loading_art_c64.png).
+- Kept the existing C64 bootloader contract and the existing multicolor bitmap packer intact.
+- Documented the new source-art pipeline and verified the real generated C64 boot-art artifacts.
+
+### What Changed
+1. **Canonical C64 source art**
+   - C64 boot art is now sourced from the tracked artist PNG instead of the fallback output of `make_logo.py`.
+   - The art asset now lives in [artwork](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/artwork) as part of the repo.
+2. **Build pipeline only**
+   - [tools/png_to_ppm.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/png_to_ppm.py) converts the PNG into the existing `160x200` PPM intermediate.
+   - [commodore/Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) now feeds that PPM into the unchanged [tools/ppm_to_c64_bootart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c64_bootart.py) stage.
+   - [commodore/c64/boot.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/boot.s) was left unchanged.
+3. **Visible-art safety**
+   - The conversion path accepts the artist PNG's unused indexed-transparency metadata without flattening or editing visible pixels.
+   - The generated output contract is still `bootart64.ppm` -> `bootart64.prg` staged at `$A000` for the existing display/copy path.
+
+### Verification
+- `python3 tools/png_to_ppm.py artwork/moria8_loading_art_c64.png 160 200 /tmp/moria8_work_asset.ppm`
+- `make -C commodore out/c64/bootart64.ppm out/c64/bootart64.prg`
+- Generated artifacts:
+  - [commodore/out/c64/bootart64.ppm](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c64/bootart64.ppm)
+  - [commodore/out/c64/bootart64.prg](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c64/bootart64.prg)
+
+### Outcome
+- C64 no longer ships the generated fallback logo as its boot-art source.
+- C128 still ships the generated fallback poster path, so future FEAT-BOOT-ART work is now about C128 parity or optional embellishment rather than the C64 asset pipeline.
+
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 
 ### Scope Closed

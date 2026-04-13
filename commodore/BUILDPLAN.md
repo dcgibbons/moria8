@@ -13,10 +13,12 @@
 - Shipping disk artifacts are now split by platform:
   - C64: [out/moria8-c64.d64](out/moria8-c64.d64)
   - C128: [out/moria8-c128.d71](out/moria8-c128.d71)
-- C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, and keeps it visible through the later `MORIA64` load.
+- C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, keeps it visible through the later `MORIA64` load, and is now sourced from the tracked artist PNG at `artwork/moria8_loading_art_c64.png`.
 - C128 now has a working native 80-column boot-art path that loads a generated VDC custom-charset poster helper, keeps it visible through the later `MORIA128` load, then restores the normal charset contract before the title flow.
 - The C128 boot-art helper now writes the poster attribute map before the screen map, so the custom-font poster does not flash briefly under the old charset state first.
-- The current shipping-art baseline is the simple shared fallback `MORIA8` deco logo. Higher-fidelity art is deferred until better source art exists.
+- The current shipping-art baseline is split by platform:
+  - C64 uses the shipped artist PNG through the bitmap boot-art pipeline.
+  - C128 still uses the generated fallback `MORIA8` VDC poster helper.
 - The title screen and disk directory cards now show per-platform display versions sourced from [../version.json](../version.json).
 - Town now uses a fixed shared `66x22` footprint on both platforms, with the 8-building Commodore layout refit inside that space; C64 clamps town viewport movement to that logical footprint, while C128 preserves the existing wide entry framing and prevents fake border-wall artifacts by keeping out-of-town backing space non-presentational.
 - FEAT-DISK is now operational on both platforms:
@@ -50,7 +52,7 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `FEAT-BOOT-ART` improve boot presentation beyond the current fallback logo on C64/C128 | High | High | No | The current tree ships a working fallback boot-art baseline on the split platform disks: C64 uses a multicolor bitmap asset and C128 uses a native 80-column VDC custom-charset poster helper. The next art-quality step is better source art plus platform-aware conversion/touch-up, not more low-level boot plumbing. Optional glint animation remains a later embellishment. |
+| Medium | `FEAT-BOOT-ART` improve boot presentation beyond the current shipped boot art | High | High | No | C64 now ships the tracked artist PNG through the existing bitmap asset pipeline, while C128 still uses the generated 80-column fallback poster helper. The next art-quality step is C128 source-art parity and any platform-aware touch-up, not more low-level boot plumbing. Optional glint animation remains a later embellishment. |
 | Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
 | Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |

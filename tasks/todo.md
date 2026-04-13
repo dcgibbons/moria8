@@ -3,6 +3,10 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] FEAT-C64-BOOT-ART-ASSET
+- [x] add a dedicated source-image adapter for C64 boot art without changing the runtime bootloader or the existing C64 PRG quantizer
+- [x] switch the C64 boot-art build rule to use `artwork/moria8_loading_art_c64.png` as the canonical source asset
+- [x] verify the real asset path through the C64 build and boot-art artifact generation gates
 - [x] BUG-HARNESS-C128-1: restore `make test128-fast` by fixing the snapshot compare harness instead of touching more product code
 - [x] move connector-backed snapshot restore to VICE startup via `-moncommands` so batch snapshot runs no longer depend on mid-session remote `undump`
 - [x] align connector snapshot reset/setup with the moncommands test contract
@@ -39,6 +43,15 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- C64 boot-art asset pipeline update:
+  - kept `commodore/c64/boot.s` and `tools/ppm_to_c64_bootart.py` unchanged
+  - added `tools/png_to_ppm.py` as a source-image adapter that enforces exact dimensions and writes the existing PPM intermediate
+  - rewired `commodore/Makefile` so C64 boot art now uses `artwork/moria8_loading_art_c64.png` as the canonical source asset
+  - preserved the existing C64 boot-art PRG staging contract at `$A000`
+  - accepted the artist PNG's unused indexed transparency metadata without altering any visible pixels
+  - verified the real asset path:
+    - `python3 tools/png_to_ppm.py artwork/moria8_loading_art_c64.png 160 200 /tmp/moria8_work_asset.ppm` -> PASS
+    - `make -C commodore out/c64/bootart64.ppm out/c64/bootart64.prg` -> PASS
 - C64 parity follow-up after the user's live screenshots:
   - kept the C64 prompt/screen-clear behavior in the product path
   - recovered the C64 resident-byte budget by shortening the C64-only runtime UI strings instead of backing out the overwrite/prompt fixes

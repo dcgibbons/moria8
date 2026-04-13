@@ -6,6 +6,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Verification
 
 - Treat the user's exact failing command or repro as the primary gate until it passes.
+- When sibling repo checkouts or worktrees exist, verify the exact target repo path before editing, building, or concluding an asset is missing.
 - For live platform/config-specific regressions, build an exact automated repro of that same path before changing product code. If the automation does not go red the same way, do not ask the user to validate speculative fixes.
 - For C128 title `L`, distinguish “save disk already mounted before `L`” from “program disk still mounted, prompt to insert save disk.” A smoke that waits for the old first swap prompt is invalid evidence for the mounted-save-disk user path, and a mounted-save-disk harness must allow direct resume before any swap breakpoint.
 - For VICE native-monitor boot repros, do not trust the monitor log alone for crash detection. `JAM` can be emitted on emulator stdout/stderr, so exact repro harnesses must capture both monitor output and process output before deciding a boot passed.
