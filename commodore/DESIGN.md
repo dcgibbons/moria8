@@ -221,7 +221,7 @@ game_loop.s               Shared main loop orchestration, movement/running core,
 ├── spell_effects.s       Shared effect subroutines (bolt, heal, teleport, detect, etc.)
 ├── ranged_fire.s         Ranged combat (bow/crossbow/sling fire command, ammo matching)
 │
-├── save.s                Save/load game state to disk (RLE map compression, checksum)
+├── save.s                Save/load game state to disk (RLE map compression, checksum, overwrite confirm, saves kept after load/death)
 ├── score.s               Death screen, high score table, 24-bit score calculation
 ├── reu.s                 REU detection, DMA stash/fetch for tier data
 ├── reu_loading_banked.s  REU loading progress display (banked at $F000)

@@ -6,6 +6,47 @@
 
 ---
 
+## 2026-04-13 — `FEAT-DISK-POLISH` / save-load refactor closure ✅ COMPLETE
+
+### Scope Closed
+- Closed the remaining save/load follow-up work on both C64 and C128.
+- Replaced the old “consume the save file” contract with a reusable save-file model.
+- Closed the one-drive prompt and fullscreen-transition regressions that had drifted separately on C64 and C128 after the earlier FEAT-DISK recovery.
+
+### What Changed
+1. **Save-file lifecycle changed**
+   - [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/save.s) no longer deletes `THE.GAME` on successful load.
+   - [common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/game_loop.s) no longer deletes `THE.GAME` on death.
+   - Saving now probes for an existing `THE.GAME` and asks before overwrite instead of unconditionally deleting or replacing the file.
+2. **C128 one-drive save/load flow polished**
+   - [common/disk_swap.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/disk_swap.s) now skips the obsolete return-to-program-disk prompt on C128 one-drive sessions.
+   - C128 title `L` works with a valid save disk already mounted in drive `8`, and failed title-load returns no longer depend on the currently mounted program disk just to redraw title art.
+   - Shared fullscreen transition helpers now clear save/load status screens before prompt/status redraw, preventing stale prompt text from remaining visible through later save/load messages.
+3. **C64 parity and UX cleanup completed**
+   - C64 one-drive setup now uses a one-shot “fresh setup” state so the immediate save/load transaction does not ask for a redundant second keypress.
+   - The C64 save/load prompt path now uses the proven-safe fullscreen modal clear owner, so save/load prompts no longer stack over the status area or previous title/disk-setup text.
+   - The C64 overwrite path now prompts `Overwrite? Y/N` and cleanly resumes gameplay instead of falling into a DOS `63 FILE EXISTS` error.
+4. **C128 test harness restored while refactor landed**
+   - [c128/harness128_batch.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/harness128_batch.py) and [c128/tests/vice_connector.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/tests/vice_connector.py) now use the repaired snapshot restore contract, which restored the exact `make test128-fast` gate while the shared save/load refactor was in flight.
+
+### Verification
+- Exact project gates:
+  - `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+  - `make test128-fast` = `PASS`
+- Live validation:
+  - user confirmed the final C128 save/load behavior and overwrite prompt behavior
+  - user confirmed the final C64 overwrite flow and the final prompt/screen-clear parity fix
+
+### Outcome
+- `FEAT-DISK-POLISH` is removed from active work.
+- Save/load behavior is now aligned across C64 and C128:
+  - save continues gameplay after success
+  - load resumes gameplay without consuming the save
+  - death no longer deletes the save
+  - overwriting a save requires explicit confirmation
+
+---
+
 ## 2026-04-03 — `FEAT-DISK` C64/C128 persistence-media recovery ✅ COMPLETE
 
 ### Scope Closed

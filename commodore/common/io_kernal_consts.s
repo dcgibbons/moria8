@@ -6,7 +6,7 @@
 .const SAVE_DEVICE    = 8       // Device 8 = first disk drive
 .const SAVE_SEC_ADDR  = 2       // Secondary address for write (1541 channel 2)
 .const LOAD_SEC_ADDR  = 2       // Secondary address for read (1541 channel 2) — same as write
-.const CHECK_SEC_ADDR = 6       // Secondary address for existence check (1541 channel 6)
+.const CHECK_SEC_ADDR = LOAD_SEC_ADDR
 .const CMD_CHANNEL    = 15      // Command channel file number
 
 .const KERNAL_SETNAM = $ffbd

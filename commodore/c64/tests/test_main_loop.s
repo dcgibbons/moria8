@@ -73,6 +73,12 @@ save_game:
     rts
 
 disk_prompt_save:
+    lda disk_setup_done
+    cmp #2
+    bne !dps_count+
+    dec disk_setup_done
+    rts
+!dps_count:
     inc test_disk_prompt_save_calls
     rts
 
@@ -84,7 +90,7 @@ tramp_disk_setup:
     inc test_tramp_disk_setup_calls
     lda test_disk_setup_success
     beq !tds_fail+
-    lda #1
+    lda #2
     sta disk_setup_done
     clc
     rts
@@ -93,6 +99,7 @@ tramp_disk_setup:
     rts
 
 delete_savefile:
+    inc test_delete_savefile_calls
     rts
 
 .label tramp_ui_char_display = ui_char_display
@@ -215,6 +222,7 @@ test_save_game_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
+test_delete_savefile_calls: .byte 0
 test_game_over_prompt_calls: .byte 0
 test_busy_begin_calls: .byte 0
 test_busy_tick_calls: .byte 0
@@ -316,6 +324,7 @@ reset_state:
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
+    sta test_delete_savefile_calls
     sta test_game_over_prompt_calls
     sta test_busy_begin_calls
     sta test_busy_tick_calls
@@ -1313,7 +1322,6 @@ test_start:
     cmp #1
     bne !t21_fail+
     lda test_disk_prompt_save_calls
-    cmp #1
     bne !t21_fail+
     lda test_save_game_calls
     cmp #1
@@ -1323,6 +1331,8 @@ test_start:
     bne !t21_fail+
     lda test_game_over_prompt_calls
     cmp #1
+    bne !t21_fail+
+    lda test_delete_savefile_calls
     bne !t21_fail+
     lda #$01
     sta tc_results + 20
@@ -1356,7 +1366,6 @@ test_start:
     cmp #1
     bne !t22_fail+
     lda test_disk_prompt_save_calls
-    cmp #1
     bne !t22_fail+
     lda test_disk_prompt_game_calls
     cmp #1
@@ -1366,6 +1375,8 @@ test_start:
     bne !t22_fail+
     lda test_game_over_prompt_calls
     cmp #1
+    bne !t22_fail+
+    lda test_delete_savefile_calls
     bne !t22_fail+
     lda #$01
     sta tc_results + 21

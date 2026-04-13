@@ -139,6 +139,24 @@ disk_prompt_save:
     jsr disk_init_drive
     rts
 !dps_prompt:
+#else
+    // On C64, the first one-drive save/load transaction after Disk Setup
+    // already has the save disk mounted from the setup UI. Consume that
+    // fresh-setup state once so the player is not asked to press a second key
+    // for the same media swap.
+    lda disk_mode
+    cmp #1
+    bne !dps_prompt+
+    lda disk_setup_done
+    cmp #2
+    bne !dps_prompt+
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
+    dec disk_setup_done
+    rts
+#endif
+#if !C128
+!dps_prompt:
 #endif
     lda #<ds_save_str
     ldx #>ds_save_str
@@ -167,6 +185,10 @@ disk_prompt:
     beq !dp_show+
     rts
 !dp_show:
+#if !C128
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
+#endif
     lda #COL_WHITE
     sta zp_text_color
     lda #10

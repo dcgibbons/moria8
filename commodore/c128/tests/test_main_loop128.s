@@ -9,12 +9,6 @@
 test_start:
     jmp test_entry
 
-test_fail:
-    jmp test_fail
-
-test_pass:
-    jmp test_pass
-
 .pc = $3000 "Test Code"
 
 .encoding "screencode_mixed"
@@ -172,6 +166,7 @@ tramp_disk_setup:
     rts
 
 delete_savefile:
+    inc test_delete_savefile_calls
     rts
 
 tramp_ui_help_display:
@@ -631,6 +626,8 @@ test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
+test_delete_savefile_calls: .byte 0
+msg_row1_col: .byte 0
 test_cast_ok: .byte 0
 test_save_success: .byte 0
 test_disk_setup_success: .byte 0
@@ -665,6 +662,7 @@ install_jump_patch:
     :PatchJump(input_get_command, test_input_get_command)
     :PatchJump(input_wait_release, test_input_wait_release)
     :PatchJump(input_get_key, test_input_get_key)
+    :PatchJump(input_get_key_fast, test_input_get_key)
     rts
 
 reset_state:
@@ -704,6 +702,7 @@ reset_state:
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
     sta test_tramp_game_over_calls
+    sta test_delete_savefile_calls
     sta test_cast_ok
     sta test_save_success
     sta test_disk_setup_success
@@ -729,6 +728,7 @@ reset_state:
     sta player_data + PL_FLAGS
     sta zp_game_flags
     sta zp_msg_flags
+    sta msg_row1_col
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta vis_room_revealed
@@ -1455,6 +1455,9 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
+    lda test_delete_savefile_calls
+    beq *+5
+    jmp test_fail
 
     // Test 20: a failed CMD_SAVE still routes through the shared game-return
     // owner before resuming gameplay.
@@ -1492,6 +1495,10 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_game_over_prompt_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_delete_savefile_calls
     beq *+5
     jmp test_fail
 
@@ -1521,5 +1528,13 @@ test_entry:
     cmp #1
     beq *+5
     jmp test_fail
-
+    lda test_delete_savefile_calls
+    beq *+5
+    jmp test_fail
     jmp test_pass
+
+test_fail:
+    jmp test_fail
+
+test_pass:
+    brk

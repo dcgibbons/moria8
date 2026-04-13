@@ -14,6 +14,7 @@
 // 10. disk_require_save_media fails when setup is incomplete
 // 11. disk_require_save_media succeeds for configured marker media
 // 12. FEAT KERNAL wrappers keep caller-safe ZP intact while using KERNAL-volatiles
+// 13. disk_prompt_save consumes the fresh C64 one-drive setup state once
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -41,6 +42,8 @@
 .const KERNAL_CHROUT = kernal_chrout
 
 screen_put_string_calls: .byte 0
+screen_clear_calls:      .byte 0
+ui_clear_calls:          .byte 0
 screen_clear_row_calls:  .byte 0
 input_get_key_calls:     .byte 0
 save_prompt_count:       .byte 0
@@ -118,7 +121,7 @@ c64_disk_marker_present:
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 
 zp_save_ptr0:       .byte 0
 zp_save_ptr0_hi:    .byte 0
@@ -192,6 +195,17 @@ screen_put_string:
     rts
 
 screen_put_char:
+    rts
+
+msg_init:
+    rts
+
+ui_clear_full_screen_safe:
+    inc ui_clear_calls
+    rts
+
+screen_clear:
+    inc screen_clear_calls
     rts
 
 screen_clear_row:
@@ -379,6 +393,9 @@ test_start:
     lda save_prompt_count
     cmp #1
     bne !t3_fail+
+    lda ui_clear_calls
+    cmp #1
+    bne !t3_fail+
     lda press_prompt_count
     cmp #1
     bne !t3_fail+
@@ -414,6 +431,9 @@ test_start:
     jsr disk_prompt_game
     lda $01
     cmp #BANK_NO_BASIC
+    bne !t4_fail+
+    lda ui_clear_calls
+    cmp #1
     bne !t4_fail+
     lda #1
     bne !t4_store+
@@ -609,8 +629,34 @@ test_start:
 !t12_store:
     sta tc_results + 11
 
+    // Test 13: fresh one-drive setup state suppresses one redundant prompt.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    lda #2
+    sta disk_setup_done
+    jsr disk_prompt_save
+    lda screen_put_string_calls
+    bne !t13_fail+
+    lda input_get_key_calls
+    bne !t13_fail+
+    lda kernal_open_calls
+    bne !t13_fail+
+    lda ui_clear_calls
+    cmp #1
+    bne !t13_fail+
+    lda disk_setup_done
+    cmp #1
+    bne !t13_fail+
+    lda #1
+    bne !t13_store+
+!t13_fail:
+    lda #0
+!t13_store:
+    sta tc_results + 12
+
 test_finish:
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x

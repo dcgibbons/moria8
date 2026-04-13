@@ -164,12 +164,22 @@ disk_setup_call_ui:
 #endif
 
 disk_setup_commit_ready:
+#if C128
     inc disk_setup_done
+#else
+    lda #2
+    sta disk_setup_done
+#endif
     clc
     rts
 
 disk_setup_commit_initialized:
+#if C128
     inc disk_setup_done
+#else
+    lda #2
+    sta disk_setup_done
+#endif
     sec
     rts
 

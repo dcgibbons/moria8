@@ -371,7 +371,6 @@ title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
     jsr sound_play
-    jsr msg_init
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr load_game
     php
