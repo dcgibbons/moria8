@@ -1,6 +1,6 @@
 # Moria8 Cross-Platform Strategy
 
-This document outlines the architectural strategy and necessary steps to transition the Moria8 codebase from a Commodore-specific project to a multi-platform 6502 engine capable of targeting the Commodore 64/128, Commander X16, Apple II (8-bit), Apple IIgs (16-bit), Atari 8-bit (64KB XL/XE), and NES.
+This document outlines the architectural strategy and necessary steps to transition the Moria8 codebase from a Commodore-specific project to a multi-platform 6502 engine capable of targeting the Commodore 64/128, Commodore Plus/4, Commander X16, Apple II (8-bit), Apple IIgs (16-bit), Atari 8-bit (64KB XL/XE), and NES.
 
 ## 1. The Repository Structure
 A true multi-platform project requires strict separation between game rules and hardware execution.
@@ -15,7 +15,8 @@ A true multi-platform project requires strict separation between game rules and 
 │   ├── commodore/         # Legacy MOS-era machines
 │   │   ├── c64/           # VIC-II, SID, D64 Serial Bus
 │   │   ├── c128/          # VDC, MMU, 2MHz mode
-│   │   └── common/        # Shared KERNAL/VIC-II/SID logic
+│   │   ├── plus4/         # TED chip, 64KB RAM
+│   │   └── common/        # Shared KERNAL/VIC-II/SID/TED logic
 │   ├── cx16/              # Commander X16 (65C02, VERA, FAT32/SD)
 │   ├── apple2/            # Apple IIe/IIc (6502, 128K, Soft-switches, ProDOS)
 │   ├── apple2gs/          # Apple IIgs (65C816, Super Hi-Res, GS/OS)
@@ -29,7 +30,7 @@ A true multi-platform project requires strict separation between game rules and 
 ## 2. The Assembler & ISA (Instruction Set Architecture)
 *   **The Assembler:** Migration from KickAssembler to `ca65` is necessary to support platform-specific memory configurations (`.cfg`), segmenting, and the 65C816 instruction set.
 *   **The CPU Split:** 
-    *   **MOS 6502/8502/6502C (C64/C128, Apple IIe, Atari 8-bit):** Standard instruction set. The Atari's "SALLY" CPU is standard 6502 with a HALT pin for DMA.
+    *   **MOS 6502/8502/6502C (C64/C128, Plus/4, Apple IIe, Atari 8-bit):** Standard instruction set. The Atari's "SALLY" CPU is standard 6502 with a HALT pin for DMA.
     *   **WDC 65C02 (CX16, Apple IIc/Enhanced IIe):** Enhanced set (`STZ`, `PHX/PHY`, `BRA`).
     *   **WDC 65C816 (Apple IIgs):** 16-bit registers, 24-bit addressing.
 *   **Strategy:** The `core/` game logic will be written targeting the standard 6502/65C02 (8-bit) to ensure maximum compatibility.
@@ -39,6 +40,7 @@ The HAL must provide zero-overhead interfaces for Video, Audio, and I/O.
 
 ### Video Paradigms
 *   **C128 / CX16 / Apple II (80-col):** These share a text-based, indirect or character-mapped paradigm.
+*   **C64 / Plus/4:** 40-column character-mapped video with custom charset support. The Plus/4 utilizes the TED chip, offering a 121-color palette but following the same fundamental rendering logic as the C64.
 *   **Apple IIgs (SHR):** Super Hi-Res offers a linear 320x200 4-bit framebuffer. 
 *   **Atari 8-bit (ANTIC):** The Atari uses a video coprocessor (ANTIC) driven by a "Display List" in RAM. We will configure ANTIC Mode 2 (40x24 text) to match the C64 layout. The HAL will construct a display list to handle the Viewport/Status UI split without requiring raster interrupts.
 
@@ -50,9 +52,9 @@ The HAL must provide zero-overhead interfaces for Video, Audio, and I/O.
 ## 4. Memory Management & Overlays
 Moria8 uses a **Resource Window** paradigm, typically at `$E000-$EFFF` (4KB).
 
-### The "Disk-Bound" 64KB Targets (C64 & Atari XL/XE)
-*   **Baseline:** The C64 and Atari XL/XE (e.g., 800XL, 65XE) provide a full 64KB by allowing the OS ROM to be banked out.
-*   **48KB Exclusion:** Older 48KB machines (Atari 400/800) are not supported due to the memory constraints of the shared engine.
+### The "Disk-Bound" 64KB Targets (C64, Plus/4, & Atari XL/XE)
+*   **Baseline:** The C64, Plus/4, and Atari XL/XE provide a full 64KB by allowing the OS ROM to be banked out.
+*   **48KB Exclusion:** Older 48KB machines (Atari 400/800) and 32KB PET models are not supported due to the memory constraints of the shared engine.
 *   **Strategy:** Overlays will be loaded on-demand from disk (SIO/IEC), identical to the C64 strategy.
 *   **Future Optimization:** 128KB Atari models (130XE) and those with PORTB banking expansions will be considered later as a "Resident Overlay" target to eliminate load times.
 
@@ -68,4 +70,4 @@ Moria8 is currently well-positioned because:
 **Strategic Phasing:**
 1.  **Decoupling:** Move `monster_ai.s`, `math.s`, and `dungeon_gen.s` from `commodore/common/` to a new top-level `core/` directory.
 2.  **HAL Formalization:** Define `platform_services_api.inc` that all targets must implement.
-3.  **CX16 / Apple II / Atari Prototypes:** Implement basic text-mode renderers in `platforms/cx16/`, `platforms/apple2/`, and `platforms/atari8/` to validate the display and banking abstractions.
+3.  **CX16 / Apple II / Atari / Plus/4 Prototypes:** Implement basic text-mode renderers in `platforms/cx16/`, `platforms/apple2/`, `platforms/atari8/`, and `platforms/commodore/plus4/` to validate the display and banking abstractions.
