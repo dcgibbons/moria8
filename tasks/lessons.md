@@ -195,6 +195,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Layout And Build Safety
 
 - After assembly or import-order changes, re-check memory-map boundaries and treat new hangs or timeouts as likely layout regressions first.
+- On this repo, if a C64 test starts hanging right after shared code growth, treat it as a memory/layout bug first and inspect patch slots, hard-coded test buffers, and breakpoint/bootstrap contracts before blaming feature logic.
 - On memory-bound C64 code, remove dead production helpers before planning overlay moves or string compression. If a helper only exists to support a unit test path, gate it to the test build instead of carrying its state and buffers in the shipping resident image.
 - On C64, if the banked `$F000` payload is tight while `OVL.UI` is empty, move modal UI ownership into the overlay before attempting deeper compression or shared-runtime surgery.
 - On C64, do not move a modal screen into `OVL.UI` unless its live data is independent of the `$E000` overlay window. Monster recall still has to stay banked because it reads creature/tier state that shares that same window.

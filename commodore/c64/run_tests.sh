@@ -121,7 +121,7 @@ run_sound_monitor_test() {
         awk -F'[$=]' "/\\.label ${label}=\\$/{print toupper(\$3); exit}" "$sym_file"
     }
 
-    local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail)
+    local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail hunger_warn hunger_faint)
 
     {
         local stage addr
@@ -167,6 +167,8 @@ expected = [
     ("levelup",   ["00","1C","00","08","41","0C","00"], "0F", "05"),
     ("spell",     ["00","14","00","00","11","08","00"], "0F", "06"),
     ("spell_fail",["00","0C","00","00","81","06","00"], "0F", "07"),
+    ("hunger_warn", ["00","08","00","02","41","27","00"], "0F", "08"),
+    ("hunger_faint",["00","05","00","01","41","3A","00"], "0F", "09"),
 ]
 
 lines = Path(sys.argv[1]).read_text(encoding="latin-1").splitlines()
@@ -236,7 +238,7 @@ run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040a" 11
 run_test "main_loop" "tests/test_main_loop.s" "0400 0417" 24 500000000
-run_test "turn" "tests/test_turn.s" "0400 040a" 11 500000000
+run_test "turn" "tests/test_turn.s" "0400 040e" 15 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000

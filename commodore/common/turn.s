@@ -45,6 +45,26 @@ player_update_hunger_state:
     sta zp_hunger_state
     rts
 
+// turn_maybe_play_hunger_alert — Alert only when hunger gets worse.
+// Input: A = previous hunger state, zp_hunger_state = current state
+turn_maybe_play_hunger_alert:
+    cmp zp_hunger_state
+    bcs !done+              // Same or improved state: no alert
+
+    lda zp_hunger_state
+    cmp #HUNGER_FAINT
+    beq !faint+
+
+    lda #SFX_HUNGER_WARN
+    jsr sound_play
+    rts
+!faint:
+    lda #SFX_HUNGER_FAINT
+    jsr sound_play
+    rts
+!done:
+    rts
+
 // ============================================================
 // Subroutines
 // ============================================================
@@ -219,6 +239,9 @@ turn_tick_effects:
 // turn_tick_hunger — Decrement food counter, update hunger state
 // Preserves: nothing
 turn_tick_hunger:
+    lda zp_hunger_state
+    pha
+
     // Decrement 16-bit food counter
     lda zp_player_food
     bne !no_borrow+
@@ -229,10 +252,14 @@ turn_tick_hunger:
     dec zp_player_food
 
     jsr player_update_hunger_state
+    pla
+    jsr turn_maybe_play_hunger_alert
     rts
 !starving:
     // Food is 0 — player takes damage each turn
     jsr player_update_hunger_state
+    pla
+    jsr turn_maybe_play_hunger_alert
 
     // Starvation: 1 HP damage per turn, clamped at 0.
     jsr turn_apply_one_damage

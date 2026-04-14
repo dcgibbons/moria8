@@ -3,6 +3,14 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] FEAT-AUD
+- [x] add a shared hunger-alert sound that stays distinct from the current combat/UI palette:
+  - `HUNGRY` and `WEAK` use the mild low-pulse warning
+  - `FAINT` uses the harsher low-pulse warning
+- [x] trigger the alert only on worsening hunger-state transitions from `turn_tick_hunger`; keep `player_update_hunger_state` pure and avoid redraw-driven replay
+- [x] add focused shared sound/turn regression coverage and verify:
+  - `make test64`
+  - `make test128-fast`
 - [x] AUDIT-C64-DEAD-CODE
 - [x] audit the current shipping C64 imports for helpers that are only referenced from tests and remove the lowest-risk dead production owner
 - [x] remove the dead shipping `string_bank_banked.s` import after confirming `bank_decode_string` has no production callsites
@@ -73,6 +81,23 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- FEAT-AUD follow-up:
+  - added two new shared sound IDs in `commodore/common/sound.s`:
+    - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
+    - `SFX_HUNGER_FAINT` for entry into `FAINT`
+  - implemented both effects as new low pulse-wave warnings distinct from the existing combat/UI sound palette
+  - kept hunger classification pure in `commodore/common/turn.s`; the new alert only fires from `turn_tick_hunger` when the state gets worse
+  - fixed one real gameplay bug during implementation:
+    - the first helper version tail-jumped into `sound_play`, which would have skipped the starvation damage tail on the `food == 0` path
+  - expanded focused C64 coverage:
+    - `commodore/c64/tests/test_sound_monitor.s` now validates both new SID shapes and keeps the invalid-ID checkpoint truly invalid at `$0A`
+    - `commodore/c64/tests/test_turn.s` now covers entry to `HUNGRY`, `WEAK`, and `FAINT`, plus no-replay behavior for steady/recovery states
+  - fixed two C64 test regressions exposed by the added code growth:
+    - `commodore/c64/tests/test_main_loop.s` had a 2-byte `check_player_on_store_door` stub under a 3-byte jump-patch contract; the patch now uses a 3-byte slot and asserts it
+    - `commodore/c64/tests/test_turn.s` needed its new hunger tests to run before `install_turn_patches`, and its control flow now reaches `test_finish` without looping
+  - verification on the current tree:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS through both `cold` and `snapshot` batches
 - C64 dead-code audit follow-up:
   - audited the current shipping C64 imports looking specifically for helpers still linked into the shipping image but only referenced from tests
   - confirmed the old `bank_load_recall` owner was already test-only and not costing the shipping image anymore

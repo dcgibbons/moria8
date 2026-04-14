@@ -119,7 +119,10 @@ tramp_store_enter:
 
 check_player_on_store_door:
     clc
+    nop
     rts
+
+.assert "check_player_on_store_door patch slot stays 3 bytes wide", tramp_ui_recall - check_player_on_store_door, 3
 
 tramp_ui_recall:
     inc test_recall_ui_calls

@@ -47,7 +47,7 @@ sound_stage_none:
 
     jsr reset_sid_window
     jsr sound_init
-    lda #$08
+    lda #$0a
     jsr sound_play
 sound_stage_invalid:
     nop
@@ -106,4 +106,18 @@ sound_stage_spell:
     lda #SFX_SPELL_FAIL
     jsr sound_play
 sound_stage_spell_fail:
+    nop
+
+    jsr reset_sid_window
+    jsr sound_init
+    lda #SFX_HUNGER_WARN
+    jsr sound_play
+sound_stage_hunger_warn:
+    nop
+
+    jsr reset_sid_window
+    jsr sound_init
+    lda #SFX_HUNGER_FAINT
+    jsr sound_play
+sound_stage_hunger_faint:
     brk

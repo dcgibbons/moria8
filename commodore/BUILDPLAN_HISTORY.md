@@ -44,6 +44,39 @@
   - load resumes gameplay without consuming the save
   - death no longer deletes the save
   - overwriting a save requires explicit confirmation
+- The old `FEAT-PERMADEATH-OPTION` backlog item is retired as well: the project now intentionally preserves saves after load and after death, so permadeath is no longer the planned direction for this port.
+
+---
+
+## 2026-04-13 — `FEAT-AUD` audible hunger warning ✅ COMPLETE
+
+### Scope Closed
+- Added a new hunger warning sound family distinct from the existing combat/UI palette.
+- Kept hunger-state classification pure and fired audio only on worsening hunger transitions.
+- Closed the C64 test regressions exposed by the added shared-code growth.
+
+### What Changed
+1. **New shared hunger warning sounds**
+   - [common/sound.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/sound.s) now defines:
+     - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
+     - `SFX_HUNGER_FAINT` for entry into `FAINT`
+   - Both sounds use new low pulse-wave contours so they do not overlap the existing combat/UI effect palette.
+2. **Turn-path trigger policy**
+   - [common/turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/turn.s) now compares the old and new hunger state inside `turn_tick_hunger` and only plays audio when hunger gets worse.
+   - `player_update_hunger_state` remains a pure classifier and does not play sound during redraws or recovery/eat paths.
+   - The final helper shape preserves the starvation damage tail on the `food == 0` path instead of tail-jumping out through `sound_play`.
+3. **Regression coverage and harness fixes**
+   - [c64/tests/test_sound_monitor.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_sound_monitor.s) now validates both new SID register signatures.
+   - [c64/tests/test_turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_turn.s) now covers entry into `HUNGRY`, `WEAK`, `FAINT`, plus no-replay behavior for steady/recovery states.
+   - [c64/tests/test_main_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_main_loop.s) now keeps `check_player_on_store_door` as a 3-byte patch slot with an assert, fixing the layout-sensitive stub corruption that the added shared bytes exposed.
+
+### Verification
+- `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- `make test128-fast` = `PASS`
+
+### Outcome
+- `FEAT-AUD` is removed from active feature work.
+- The port now warns audibly on worsening hunger without adding redraw spam or changing recovery semantics.
 
 ---
 
