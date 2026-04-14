@@ -233,6 +233,54 @@
 - The resident-byte recovery came from removing dead production ownership, not from more copy degradation.
 - Relative to the restored-string overflow state, the fix recovered `450` bytes of resident headroom and cleared the original `46`-byte `MAP_BASE` overrun with margin.
 
+## 2026-04-13 — C64 `OVL.UI` ownership pass and follow-up corrections ✅ COMPLETE
+
+### Scope Closed
+- Converted the C64 `UiOverlay` from a placeholder into the real owner for the modal UI it can safely and productively own.
+- Removed the now-dead shipping C64 import of [`common/string_bank.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/string_bank.s).
+- Landed the overlay move, then corrected the ownership mistakes exposed by live testing:
+  - recall stayed banked
+  - wizard was moved back to the banked C64 path
+  - inventory was moved back to the banked C64 path
+
+### Root Cause
+- After the earlier `save.s` cleanup, the next real ceiling was no longer resident `MAP_BASE` pressure. It was the banked `$F000` payload, which still had only `98` bytes of headroom below the vector ceiling while the dedicated `UiOverlay` slot was effectively empty.
+- The shipping C64 image also still carried an unreferenced resident import of `string_bank.s`.
+- Live testing then narrowed the safe ownership boundary further:
+  - recall cannot live in `OVL.UI` because it reads live creature/tier state that already occupies the `$E000` overlay window
+  - wizard also cannot live in `OVL.UI` on C64 because wizard entry/restore paths can redraw gameplay and re-check/reload the active tier, which repopulates `$E000` and self-clobbers any still-running overlay code
+  - inventory is technically safe in `OVL.UI`, but product-wise it is a high-frequency command and the measured cost to restore it to the banked path was only `240` bytes
+
+### What Changed
+1. **C64 modal UI ownership rebalanced**
+   - [c64/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s) now uses `OVL_UI` only for the C64 screens that benefit from it without violating the live `$E000` data contract.
+   - Final C64 ownership is:
+     - overlay-backed: [ui_character.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_character.s), [ui_equipment.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_equipment.s)
+     - banked: [ui_inventory.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_inventory.s), [ui_recall.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_recall.s), [wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/wizard.s), [ui_home.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_home.s)
+2. **Recall/tier seam hardened**
+   - [game_loop_helpers.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/game_loop_helpers.s) and [ui_restore.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_restore.s) now explicitly re-check the active tier before C64 gameplay redraw after overlay-backed modals.
+   - The `/` path now reports `Nothing recalled.` instead of silently dropping back to gameplay when no learned recall data exists for the requested symbol.
+3. **Wizard ownership corrected after live regression**
+   - [wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/wizard.s) regained the full C64 wizard menu/command owner after the overlay version proved unsafe live.
+   - [ui_wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_wizard.s) remains the C128 overlay owner.
+4. **Dead shipping import removed**
+   - The C64 main build no longer imports `common/string_bank.s`; the remaining `bank_load_recall` coverage stays in the unit tests that import that file directly.
+
+### Verification
+- Exact layout gate:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `banked payload: 2923 bytes at $BE6E-$C9D9`
+  - `UI overlay: 1081 bytes at $E000-$E439`
+- Broader regression gate:
+  - `make test64`
+  - `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+### Outcome
+- The banked payload is still far healthier than the pre-pass `3992`-byte state, even after restoring inventory and wizard to the banked path where live testing and product feel said they belong.
+- The final C64 tree now uses `UiOverlay` only for the low-frequency modal UI it can safely own and where the disk-load tradeoff makes sense.
+- The durable design rule is stricter than the first pass assumed: on C64, `OVL.UI` is only safe for features that will not trigger gameplay/tier restore while still executing from the overlay window.
+
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 
 ### Scope Closed

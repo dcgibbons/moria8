@@ -3,6 +3,27 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-C64-INVENTORY-OVERLAY-OWNERSHIP
+- [x] move C64 inventory back out of `OVL.UI` so the high-frequency inventory screen no longer incurs an overlay load
+- [x] split `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`, keep inventory in the banked payload, and keep equipment in `OVL.UI`
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
+- [x] BUG-C64-WIZARD-OVERLAY-OWNERSHIP
+- [x] move C64 wizard back out of `OVL.UI` after live testing showed wizard entry could trigger a tier reload while still executing from the `$E000` overlay window
+- [x] restore the pre-overlay C64 wizard menu/command owner in `commodore/common/wizard.s` and route `tramp_ui_wizard_display` back to that banked path
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
+- [ ] FEAT-VMS-RECALL-SEMANTICS
+- [ ] add a backlog feature for VMS-Moria-style `/` behavior:
+  - `/` identifies what a symbol on screen stands for
+  - `look` remains the path for the exact visible creature
+  - leave the current combat-earned recall implementation alone for now
+- [x] BUG-C64-RECALL-OVERLAY-STATE
+- [x] restore C64 active-tier state after overlay-backed modal screens so recall and other tier-dependent gameplay paths do not run after `OVL.UI` invalidates `$E000`
+- [x] re-check the active tier at the start of the shared C64 `/` recall path and the C64 character-view return path before gameplay redraw
+- [x] add focused C64 `main_loop` regression coverage for the tier-restore seams and update the suite result range/count
 - [x] BUG-C64-STRING-SHORTEN-REGRESSION
 - [x] restore the shortened save/load runtime strings to their pre-refactor user-facing text
 - [x] rebuild the C64 target with the restored strings and capture the exact memory-boundary failure location before making any byte-recovery decisions
@@ -46,6 +67,41 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- C64 inventory overlay ownership follow-up:
+  - user feedback on the live build was correct: inventory is frequent enough that paying an overlay load for it was the wrong product tradeoff
+  - split the old shared inventory/equipment owner into `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`
+  - inventory now lives back in the C64 banked payload, while equipment stays in `OVL.UI`
+  - actual measured cost of restoring banked inventory ownership: `240` bytes
+  - current layout after the change:
+    - `Program fits below MAP_BASE=true`
+    - `banked payload: 2923 bytes at $BE6E-$C9D9`
+    - `UI overlay: 1081 bytes at $E000-$E439`
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 wizard overlay ownership follow-up:
+  - live testing found a real regression: entering wizard mode could show `Loading...` and then lock up with an IRQ storm
+  - root cause: moving wizard into `OVL.UI` was unsafe on C64 because wizard entry/restore paths can call gameplay redraw helpers that re-check and reload the active tier, and that tier reload repopulates the same `$E000` window the wizard overlay was executing from
+  - fixed by restoring the old banked C64 wizard owner in `commodore/common/wizard.s`, switching `tramp_ui_wizard_display` back to `wizard_c64_menu_display`, and removing `ui_wizard.s` from the C64 UI overlay segment
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- Recall semantics audit follow-up:
+  - upstream check confirmed the semantic split:
+    - `umoria` uses `/` as monster memory/recall after observation/encounters
+    - `vms-moria` uses `/` as symbol identification, with `look` handling the exact visible creature
+  - user verified the current port behavior still works after killing a monster, so the immediate path is not broken enough to require product changes in this pass
+  - requested future direction is now backlog-only:
+    - move toward VMS-Moria `/` identify semantics
+    - leave the existing combat-earned recall behavior untouched for now
+- C64 recall/tier-state follow-up after the `OVL.UI` ownership move:
+  - C64 overlay-backed modal returns were leaving `current_tier` invalid after `overlay_load` reused the `$E000` window, so later gameplay paths could run with stale tier state
+  - fixed the shared C64 restore seams by re-checking the active tier before gameplay redraw in `ui_restore.s` and in the C64 character-view full-screen return path
+  - added a direct C64 `/` recall tier re-check at the start of `cmd_recall_view`, so recall no longer depends on a previous modal having left tier state valid
+  - expanded `commodore/c64/tests/test_main_loop.s` with two new tier-restore coverage points and updated `commodore/c64/run_tests.sh` to read `24` `main_loop` results instead of truncating at `22`
+  - latest verification on the current tree:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 - C64 string-shortening regression follow-up:
   - restored the shortened save/load runtime strings in `commodore/common/runtime_ui_strings.s`, including `Welcome back to Moria8!`
   - recorded the user-copy rule in `tasks/lessons.md`: do not shorten user-facing strings to recover bytes without explicit consent
@@ -66,6 +122,21 @@ This file is a temporary working scratchpad.
     - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
     - `Banked payload: 3992 bytes at $BE6C-$CE04`
     - relative to the restored-string overflow state, that recovered `450` bytes and cleared the original `46`-byte overrun with margin
+  - regression verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 UI ownership follow-up after the save-side cleanup:
+  - moved the character, inventory, equipment, and wizard modal screens out of the banked `$F000` payload and into `OVL.UI`
+  - tried the same move for recall, then backed it out after the live recall path proved unsafe under the overlay contract
+  - recall now stays in the banked payload on C64 because it reads live creature/tier state that already occupies the `$E000` overlay window
+  - left `ui_home.s` in the banked payload intentionally because it is store-owned and depends on town-overlay helpers
+  - removed the dead shipping C64 import of `commodore/common/string_bank.s`; the only remaining `bank_load_recall` coverage lives in tests that import that file directly
+  - simplified `commodore/common/wizard.s` back to shared state and non-UI helpers, with the UI/menu flow now living in `commodore/common/ui_wizard.s`
+  - exact direct-assembly result after the ownership move:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `program_end = $BA39`
+    - `Banked payload: 2683 bytes at $BA66-$C4E1`
+    - `UI overlay: 2332 bytes at $E000-$E91C`
+    - relative to the pre-change state, that recovered `1309` bytes from the banked payload and increased resident headroom below `MAP_BASE` from `449` bytes to `1479` bytes
   - regression verification:
     - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 - C64 boot-art asset pipeline update:

@@ -78,6 +78,7 @@ test_finish:
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
+#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"

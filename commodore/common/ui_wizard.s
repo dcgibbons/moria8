@@ -1,10 +1,9 @@
 #importonce
-// ui_wizard.s — C128 Wizard Mode menu and command handlers
+// ui_wizard.s — Wizard Mode menu and command handlers in OVL.UI
 
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
 
-#if C128
 .const UWIZ_TITLE_COL  = (SCREEN_COLS - 6) / 2
 .const UWIZ_MENU_COL   = (SCREEN_COLS - 20) / 2
 .const UWIZ_FOOTER_COL = (SCREEN_COLS - 13) / 2
@@ -45,7 +44,11 @@ ui_wizard_display:
     jsr input_get_key
     cmp #$51                    // Q
     beq !wiz_cancel+
+#if C128
     cmp #$ae                    // ESC
+#else
+    cmp #$1b                    // ESC
+#endif
     beq !wiz_cancel+
     cmp #$48                    // H
     beq !wiz_heal+
@@ -91,7 +94,71 @@ ui_wizard_draw_menu:
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all
+#if !C128
+    lda #0
+    sta zp_cursor_row
+    lda #14
+    sta zp_cursor_col
+    lda #<wiz_title_str
+    sta zp_ptr0
+    lda #>wiz_title_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
 
+    lda #COL_LGREY
+    sta zp_text_color
+
+    lda #2
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<wiz_row1_str
+    sta zp_ptr0
+    lda #>wiz_row1_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #3
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<wiz_row2_str
+    sta zp_ptr0
+    lda #>wiz_row2_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #4
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<wiz_row3_str
+    sta zp_ptr0
+    lda #>wiz_row3_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #5
+    sta zp_cursor_row
+    lda #4
+    sta zp_cursor_col
+    lda #<wiz_row4_str
+    sta zp_ptr0
+    lda #>wiz_row4_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+
+    lda #18
+    sta zp_cursor_row
+    lda #14
+    sta zp_cursor_col
+    lda #<wiz_footer_str
+    sta zp_ptr0
+    lda #>wiz_footer_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    rts
+#else
     lda #0
     sta zp_cursor_row
     lda #UWIZ_TITLE_COL
@@ -207,6 +274,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0_hi
     jsr screen_put_string
     rts
+#endif
 
 ui_wizard_cmd_heal_cure:
     lda player_data + PL_MHP_LO
@@ -402,7 +470,11 @@ ui_wizard_prompt_two_digit:
     beq !wiz_num_cancel+
     cmp #$20
     beq !wiz_num_cancel+
+#if C128
     cmp #$ae
+#else
+    cmp #$1b
+#endif
     beq !wiz_num_cancel+
     cmp #$14
     bne !wiz_num_not_del+
@@ -508,6 +580,7 @@ ui_wizard_restore_gameplay_view:
     jsr ui_view_redraw_gameplay_view
     rts
 
+#if C128
 wiz_title_str:
     .text "WIZARD" ; .byte 0
 wiz_l_str:
@@ -530,6 +603,20 @@ wiz_w_str:
     .text "W) Wall walk" ; .byte 0
 wiz_footer_str:
     .text "Q cancels" ; .byte 0
+#else
+wiz_title_str:
+    .text "WIZARD MODE" ; .byte 0
+wiz_row1_str:
+    .text "L jump  A reveal  H heal" ; .byte 0
+wiz_row2_str:
+    .text "I ident X level   G item" ; .byte 0
+wiz_row3_str:
+    .text "S summon T tele   W wall" ; .byte 0
+wiz_row4_str:
+    .text "Q cancel" ; .byte 0
+wiz_footer_str:
+    .text "Key" ; .byte 0
+#endif
 wiz_max_level_str:
     .text "MAX" ; .byte 0
 wiz_confirm_str:
@@ -550,4 +637,3 @@ wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
 wiz_bad_value_str:
     .text "BAD" ; .byte 0
-#endif

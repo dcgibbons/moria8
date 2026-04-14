@@ -1400,6 +1400,7 @@ death_source_saved:
 
 // Recall command variables
 recall_prompt_str: .text "Recall which? " ; .byte 0
+recall_none_str:   .text "Nothing recalled." ; .byte 0
 recall_query_sc:   .byte 0             // Screen code of typed letter
 recall_found_type: .byte 0             // Creature type index found
 recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)

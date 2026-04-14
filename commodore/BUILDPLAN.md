@@ -32,7 +32,12 @@
 - Post-refactor copy audit follow-up is now closed:
   - the restored pre-refactor save/load runtime strings remain in place
   - the C64 resident overrun was fixed by moving the dead save-side RLE compressor to test-only ownership instead of touching user-facing copy
-  - current direct C64 assembly reports `Program fits below MAP_BASE=true` with `banked payload: 3992 bytes at $BE6C-$CE04`
+  - the follow-up C64 UI ownership pass is also now closed:
+    - `UiOverlay` now owns the character and equipment modal screens on C64
+    - inventory is back on the banked C64 path because it is a high-frequency command and the measured cost is only `240` bytes
+    - monster recall and wizard stay on the banked C64 path because both can hit gameplay/tier restore flows that need the live `$E000` tier window
+    - the dead resident `string_bank.s` import is gone from the shipping C64 image
+    - current direct C64 assembly reports `Program fits below MAP_BASE=true` with `banked payload: 2923 bytes at $BE6E-$C9D9`
 - Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
@@ -53,6 +58,7 @@
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
 | Medium | `FEAT-BOOT-ART` improve boot presentation beyond the current shipped boot art | High | High | No | C64 now ships the tracked artist PNG through the existing bitmap asset pipeline, while C128 still uses the generated 80-column fallback poster helper. The next art-quality step is C128 source-art parity and any platform-aware touch-up, not more low-level boot plumbing. Optional glint animation remains a later embellishment. |
+| Medium | `FEAT-VMS-RECALL-SEMANTICS` change `/` to the original VMS-Moria identify behavior and leave detailed monster knowledge to `look`/future recall UX | Medium | Medium | No | Current port behavior is a narrower Umoria-style combat-earned recall subset: `/` works once a monster type has recorded combat memory, but does not seed from mere sight/look. User-verified current behavior: recall still works after killing a monster. Future parity target is VMS-Moria semantics, where `/` identifies what a screen symbol stands for, while `look` handles the specific visible creature. |
 | Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
 | Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |

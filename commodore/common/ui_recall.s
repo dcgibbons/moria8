@@ -1,5 +1,5 @@
 #importonce
-// ui_recall.s — Monster recall display (banked at $F000)
+// ui_recall.s — Monster recall display (banked on C64, resident on C128)
 //
 // Shows creature info for the creature type in recall_found_type.
 // Called from trampoline with KERNAL banked out ($01=$35).

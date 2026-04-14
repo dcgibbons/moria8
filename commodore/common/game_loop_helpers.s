@@ -21,6 +21,11 @@ cmd_show_character_view:
     jsr tramp_ui_char_display
     jsr input_prepare_followup_key
     jsr input_get_key
+#if !C128
+    // C64 character view is overlay-backed and returns through a custom
+    // full-screen redraw path, so it must also re-establish the active tier.
+    jsr tier_check_transition
+#endif
     jsr screen_clear
     jmp vp_render_status_loop
 
@@ -65,6 +70,12 @@ cmd_show_equipment_view:
     jmp ui_view_return_to_gameplay_view
 
 cmd_recall_view:
+#if !C128
+    // C64 modal overlays reuse the $E000 tier window, so make sure the
+    // active tier is re-established before a recall lookup needs live
+    // creature-name state.
+    jsr tier_check_transition
+#endif
     jsr msg_clear
     lda #0
     sta zp_cursor_row
@@ -79,6 +90,14 @@ cmd_recall_view:
     jsr recall_key_to_screen_code
     bcc !recall_done+
     jsr recall_show_matching_entry
+    bcs !recall_done+
+    jsr ui_view_redraw_gameplay_view
+    lda #<recall_none_str
+    sta zp_ptr0
+    lda #>recall_none_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jmp main_loop
 !recall_done:
     jsr screen_clear
     jmp vp_render_status_loop
@@ -144,6 +163,7 @@ recall_show_matching_entry:
     bne !recall_search-
     lda #0
     sta recall_last_sc
+    clc
     rts
 !recall_found:
     stx recall_found_type
@@ -154,6 +174,7 @@ recall_show_matching_entry:
     jsr tramp_ui_recall
     jsr input_prepare_modal_dismiss_key
     jsr input_get_key
+    sec
     rts
 
 // ============================================================

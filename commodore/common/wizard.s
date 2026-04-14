@@ -1,5 +1,5 @@
 #importonce
-// wizard.s — Wizard Mode activation, session flags, and C64 implementation
+// wizard.s — Wizard Mode shared state and non-UI helpers
 
 #import "ui_restore.s"
 
@@ -170,9 +170,9 @@ cmd_wizard_entry:
     and #GAME_FLAG_WIZARD
     bne !wizard_open+
 
-    lda #<wizard_confirm_str
+    lda #<wiz_confirm_str
     sta zp_ptr0
-    lda #>wizard_confirm_str
+    lda #>wiz_confirm_str
     sta zp_ptr0_hi
     jsr msg_print
     jsr input_get_key
@@ -185,9 +185,9 @@ cmd_wizard_entry:
     lda zp_game_flags
     ora #GAME_FLAG_WIZARD
     sta zp_game_flags
-    lda #<wizard_enabled_str
+    lda #<wiz_enabled_str
     sta zp_ptr0
-    lda #>wizard_enabled_str
+    lda #>wiz_enabled_str
     sta zp_ptr0_hi
     jsr msg_print
     jmp main_loop
@@ -287,9 +287,9 @@ wizard_cmd_gain_level:
     lda zp_player_lvl
     cmp #40
     bcc !wiz_gain_ok+
-    lda #<wizard_max_level_str
+    lda #<wiz_max_level_str
     sta zp_ptr0
-    lda #>wizard_max_level_str
+    lda #>wiz_max_level_str
     sta zp_ptr0_hi
     jmp wizard_restore_gameplay_with_message
 !wiz_gain_ok:
@@ -330,15 +330,15 @@ wizard_cmd_wall_walk:
     eor #1
     sta wizard_wall_walk_enabled
     beq !wiz_wall_off+
-    lda #<wizard_wall_on_str
+    lda #<wiz_wall_on_str
     sta zp_ptr0
-    lda #>wizard_wall_on_str
+    lda #>wiz_wall_on_str
     sta zp_ptr0_hi
     jmp wizard_restore_gameplay_with_message
 !wiz_wall_off:
-    lda #<wizard_wall_off_str
+    lda #<wiz_wall_off_str
     sta zp_ptr0
-    lda #>wizard_wall_off_str
+    lda #>wiz_wall_off_str
     sta zp_ptr0_hi
     jmp wizard_restore_gameplay_with_message
 
@@ -360,9 +360,9 @@ wizard_cmd_summon:
     jmp wizard_done_visibility_message
 
 wizard_cmd_generate_item:
-    lda #<wizard_item_prompt_str
+    lda #<wiz_item_prompt_str
     sta zp_ptr0
-    lda #>wizard_item_prompt_str
+    lda #>wiz_item_prompt_str
     sta zp_ptr0_hi
     lda #WIZARD_MAX_ITEM
     jsr wizard_prompt_two_digit
@@ -383,9 +383,9 @@ wizard_cmd_generate_item:
     jmp wizard_done_visibility_message
 
 wizard_cmd_level_jump:
-    lda #<wizard_jump_prompt_str
+    lda #<wiz_jump_prompt_str
     sta zp_ptr0
-    lda #>wizard_jump_prompt_str
+    lda #>wiz_jump_prompt_str
     sta zp_ptr0_hi
     lda #WIZARD_MAX_DLVL
     jsr wizard_prompt_two_digit
@@ -416,9 +416,9 @@ wizard_prompt_two_digit:
     beq !wiz_num_loop-
     jsr wizard_parse_two_digit
     bcs !wiz_num_ok+
-    lda #<wizard_bad_value_str
+    lda #<wiz_bad_value_str
     sta zp_ptr0
-    lda #>wizard_bad_value_str
+    lda #>wiz_bad_value_str
     sta zp_ptr0_hi
     jsr msg_print
     jmp !wiz_num_loop-
@@ -498,21 +498,21 @@ wizard_parse_two_digit:
 wizard_restore_gameplay_with_visibility_message:
     jsr update_visibility
 wizard_done_visibility_message:
-    lda #<wizard_done_str
+    lda #<wiz_done_str
     sta zp_ptr0
-    lda #>wizard_done_str
+    lda #>wiz_done_str
     sta zp_ptr0_hi
     jmp wizard_restore_gameplay_with_visibility_message_core
 wizard_fail_message:
-    lda #<wizard_fail_str
+    lda #<wiz_fail_str
     sta zp_ptr0
-    lda #>wizard_fail_str
+    lda #>wiz_fail_str
     sta zp_ptr0_hi
     jmp wizard_restore_gameplay_with_message
 wizard_done_message:
-    lda #<wizard_done_str
+    lda #<wiz_done_str
     sta zp_ptr0
-    lda #>wizard_done_str
+    lda #>wiz_done_str
     sta zp_ptr0_hi
 wizard_restore_gameplay_with_visibility_message_core:
 wizard_restore_gameplay_with_message:
@@ -540,9 +540,9 @@ wizard_c64_menu_display:
     sta zp_cursor_row
     lda #14
     sta zp_cursor_col
-    lda #<wizard_menu_title_str
+    lda #<wiz_title_str
     sta zp_ptr0
-    lda #>wizard_menu_title_str
+    lda #>wiz_title_str
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #COL_LGREY
@@ -551,83 +551,80 @@ wizard_c64_menu_display:
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
-    lda #<wizard_menu_row1_str
+    lda #<wiz_row1_str
     sta zp_ptr0
-    lda #>wizard_menu_row1_str
+    lda #>wiz_row1_str
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #3
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
-    lda #<wizard_menu_row2_str
+    lda #<wiz_row2_str
     sta zp_ptr0
-    lda #>wizard_menu_row2_str
+    lda #>wiz_row2_str
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #4
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
-    lda #<wizard_menu_row3_str
+    lda #<wiz_row3_str
     sta zp_ptr0
-    lda #>wizard_menu_row3_str
+    lda #>wiz_row3_str
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #5
     sta zp_cursor_row
     lda #4
     sta zp_cursor_col
-    lda #<wizard_menu_row4_str
+    lda #<wiz_row4_str
     sta zp_ptr0
-    lda #>wizard_menu_row4_str
+    lda #>wiz_row4_str
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #18
     sta zp_cursor_row
     lda #14
     sta zp_cursor_col
-    lda #<wizard_menu_footer_str
+    lda #<wiz_footer_str
     sta zp_ptr0
-    lda #>wizard_menu_footer_str
+    lda #>wiz_footer_str
     sta zp_ptr0_hi
     jsr screen_put_string
     rts
-#endif
 
-#if !C128
 .encoding "screencode_mixed"
-wizard_confirm_str:
+wiz_confirm_str:
     .text "WIZARD? (Y/N)" ; .byte 0
-wizard_enabled_str:
+wiz_enabled_str:
     .text "WIZARD ON" ; .byte 0
-wizard_max_level_str:
+wiz_max_level_str:
     .text "MAX" ; .byte 0
-wizard_wall_on_str:
+wiz_wall_on_str:
     .text "WALL ON" ; .byte 0
-wizard_wall_off_str:
+wiz_wall_off_str:
     .text "WALL OFF" ; .byte 0
-wizard_done_str:
+wiz_done_str:
     .text "OK" ; .byte 0
-wizard_fail_str:
+wiz_fail_str:
     .text "FAIL" ; .byte 0
-wizard_item_prompt_str:
+wiz_item_prompt_str:
     .text "ITEM 0-63: " ; .byte 0
-wizard_jump_prompt_str:
+wiz_jump_prompt_str:
     .text "DLVL 0-99: " ; .byte 0
-wizard_bad_value_str:
+wiz_bad_value_str:
     .text "BAD" ; .byte 0
-
-wizard_menu_title_str:
+wiz_title_str:
     .text "WIZARD MODE" ; .byte 0
-wizard_menu_row1_str:
+wiz_row1_str:
     .text "L jump  A reveal  H heal" ; .byte 0
-wizard_menu_row2_str:
+wiz_row2_str:
     .text "I ident X level   G item" ; .byte 0
-wizard_menu_row3_str:
+wiz_row3_str:
     .text "S summon T tele   W wall" ; .byte 0
-wizard_menu_row4_str:
+wiz_row4_str:
     .text "Q cancel" ; .byte 0
-wizard_menu_footer_str:
+wiz_footer_str:
     .text "Key" ; .byte 0
 #endif

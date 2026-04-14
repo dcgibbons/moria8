@@ -16,6 +16,11 @@ ui_prepare_fullscreen_transition:
 // Used by help/inventory/spell-pick flows that return to the caller for more UI.
 // Preserves: nothing
 ui_view_restore_modal_overlay:
+#if !C128
+    // C64 overlays overwrite the live tier window at $E000, so gameplay-view
+    // restore must re-establish the current dungeon tier before redraw.
+    jsr tier_check_transition
+#endif
     lda #COL_BLACK
     sta zp_text_color
     jsr ui_help_clear_all
@@ -28,6 +33,11 @@ ui_view_restore_modal_overlay:
 // Used by wizard/menu-style flows that replace the whole screen.
 // Preserves: nothing
 ui_view_redraw_gameplay_view:
+#if !C128
+    // C64 overlays overwrite the live tier window at $E000, so gameplay-view
+    // restore must re-establish the current dungeon tier before redraw.
+    jsr tier_check_transition
+#endif
     jsr screen_clear
     jsr viewport_update
     jsr render_viewport
