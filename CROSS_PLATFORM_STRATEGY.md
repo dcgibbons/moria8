@@ -1,9 +1,9 @@
 # Moria8 Cross-Platform Strategy
 
-This document outlines the architectural strategy and necessary steps to transition the Moria8 codebase from a Commodore-specific project to a multi-platform 6502 engine, while establishing a parallel track for 16-bit Motorola 68000 targets (Amiga, Atari ST, Sega Genesis, and Macintosh).
+This document outlines the architectural strategy and necessary steps to transition the Moria8 codebase from a Commodore-specific project to a multi-platform engine, establishing parallel tracks for 8-bit (6502), 16-bit (Motorola 68000), and x86 (Intel Real Mode) architectures.
 
 ## 1. The Repository Structure
-A true multi-platform project requires strict separation between game rules and hardware execution. The 16-bit versions will exist as a parallel track with zero code sharing.
+A true multi-platform project requires strict separation between game rules and hardware execution. The non-6502 versions exist as parallel tracks with zero code sharing to ensure native performance and idiomatic hardware utilization.
 
 **Proposed Structure:**
 ```text
@@ -29,6 +29,8 @@ A true multi-platform project requires strict separation between game rules and 
 │   ├── atarist/           # Atari ST/STfm (Interleaved video, GEMDOS)
 │   ├── megadrive/         # Sega Genesis / Mega Drive (Tile-based VDP, ROM-exec)
 │   └── mac68k/            # Classic Macintosh (System 6+, Toolbox, QuickDraw)
+├── x86/                   # Intel 8088/8086 Real Mode native rewrites (LOWEST PRIORITY)
+│   └── msdos/             # IBM PC XT (256KB RAM, CGA/MDA Text Mode, INT 21h)
 ├── data/                  # Game assets, strings, levels (Shared across ALL platforms)
 ├── tools/                 # Build tools (Python scripts, Asset Converters)
 └── docs/                  # Architectural documentation
@@ -36,47 +38,41 @@ A true multi-platform project requires strict separation between game rules and 
 
 ## 2. The Assembler & ISA (Instruction Set Architecture)
 *   **The 8-bit Track (6502):** Migration from KickAssembler to `ca65` supports platform-specific configurations (`.cfg`) and segmenting. The `core/` game logic targets the standard 6502/65C02.
-*   **The 16-bit Track (68000):** The Amiga, Atari ST, Sega Genesis, and Macintosh versions will be **complete rewrites** natively for the Motorola 68000. They will share game design, algorithms, and data assets with the 6502 version, but will not share source code. This ensures they can utilize 32-bit registers and flat memory without being constrained by 8-bit legacy logic.
+*   **The 16-bit Track (68000):** The Amiga, Atari ST, Sega Genesis, and Macintosh versions are **complete rewrites** natively for the Motorola 68000. They share game design and data assets with the 6502 version but utilize native 32-bit registers and flat memory.
+*   **The x86 Track (8088/8086):** A native rewrite for the IBM PC XT ecosystem. By avoiding a standard uMoria C compile (which is notoriously sluggish on 4.77MHz hardware), this custom engine utilizes the Small/Medium memory model and 16-bit registers to provide a premium, fast experience on original 1980s PC hardware.
 
 ## 3. The Hardware Abstraction Layer (HAL)
 The HAL must provide zero-overhead interfaces for Video, Audio, and I/O.
 
 ### Video Paradigms
-*   **8-bit Character Mapping:** Commodore, Atari 8-bit, and Apple II use various character-mapped or indirect character-mapped (VDC/VERA) paradigms.
-*   **16-bit Bitmapped Rendering:**
-    *   **Amiga:** Uses 4-5 planar bitplanes. The engine utilizes the **Blitter** for tile drawing and the **Copper** for hardware-accelerated Viewport/Status UI splits.
-    *   **Atari ST:** Uses interleaved bitplanes (4 words per 16 pixels). Rendering is primarily software-driven.
-    *   **Macintosh:** Uses a 1-bit linear bitmapped display (512x342). Rendering utilizes QuickDraw `CopyBits` or custom 1-bit tile blitters.
-*   **16-bit Tile-Based Rendering:**
-    *   **Sega Genesis:** Uses a hardware VDP with 8x8 tiles. Plane A is used for the dungeon viewport and the **Window Plane** for the Status UI, achieving zero-overhead UI separation.
-*   **Apple IIgs (SHR):** Super Hi-Res offers a linear 320x200 4-bit framebuffer. 
+*   **8-bit Character Mapping:** Character-mapped or indirect character-mapped (VDC/VERA) paradigms.
+*   **16-bit Bitmapped Rendering:** Planar (Amiga), Interleaved (ST), or Linear (Mac) bitmaps.
+*   **16-bit Tile-Based Rendering:** Hardware VDP with 8x8 tiles (Genesis).
+*   **x86 Text Mode:** Direct memory writes to `0xB800` (CGA Color) or `0xB000` (MDA Mono). Utilizes Code Page 437 box-drawing symbols for high-performance dungeon rendering without custom charsets.
 
 ### Storage & OS
-*   **8-bit OS:** Abstraction across KERNAL, ProDOS, Acorn MOS, and TOS.
-*   **16-bit OS:**
-    *   **Bare-Metal/DOS:** Native file I/O via **AmigaDOS** (Amiga), **GEMDOS** (Atari ST), and ROM reads (Genesis).
-    *   **Event-Driven:** **Mac OS Toolbox** (System 6.0.8 recommended). Requires an **Inverted Game Loop** to yield to `WaitNextEvent`.
-*   **Abstraction:** The `io_service` layer abstracts the difference between serial sector reads, block-level file I/O, and ROM-based data access.
+*   **8-bit OS:** KERNAL, ProDOS, Acorn MOS, and TOS.
+*   **16-bit OS:** AmigaDOS, GEMDOS, ROM-reads, and Mac OS Toolbox (System 6.0.8).
+*   **x86 OS:** Standard MS-DOS Interrupts (`INT 21h`).
 
 ## 4. Memory Management & Overlays
-Moria8 uses a **Resource Window** paradigm for machines with limited address space.
+Moria8 uses architectural tiers based on available address space and memory speed.
 
 ### The "Disk-Bound" 64KB Targets (C64, Plus/4, & Atari XL/XE)
-*   Overlays are loaded on-demand from disk (SIO/IEC) into the execution window.
+*   Overlays are loaded on-demand from disk (SIO/IEC) into a small execution window.
 
 ### The "Resident Overlay" Advantage
 *   **128K+ 8-bit (Apple IIe, IIgs, CX16, BBC Master 128):** All game overlays and tier data are pre-loaded into extended/paged memory.
-*   **16-bit 68000 (Amiga, Atari ST, Macintosh):** With 512KB+ of RAM, the "Overlay Window" paradigm is eliminated. All game logic, data, and levels reside in memory simultaneously.
-    *   **Amiga Memory Tiers:** Managed **Chip RAM** (graphics/audio) versus **Fast RAM** (logic/data).
-    *   **Macintosh Heap:** Game logic and assets reside in the Application Heap.
+*   **256KB+ x86 (IBM PC XT):** 256KB is the historical baseline for the XT era. This provides sufficient space to keep the entire engine, monster tables, and the dungeon map **resident in memory**, eliminating intra-level disk access.
+*   **512KB+ 16-bit (Amiga, Atari ST, Macintosh):** The "Overlay Window" paradigm is eliminated. All game logic, data, and levels reside in memory simultaneously.
 
 ### ROM-Based Execution (Sega Genesis)
-*   The Sega Genesis executes logic and reads static data (monster tables, strings) directly from the ROM cartridge. Its 64KB Work RAM is dedicated strictly to dynamic game state (the map and active entities), effectively bypassing the memory constraints of disk-based systems.
+*   Executes logic and reads static data directly from the ROM cartridge, dedicating its 64KB Work RAM strictly to dynamic game state.
 
 ## 5. Current Codebase Assessment & Next Steps
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 
 **Strategic Phasing:**
 1.  **Decoupling:** Move 8-bit logic to the top-level `core/` directory.
-2.  **68k Initialization:** Establish the parallel `m68k/` branch for the native rewrites.
-3.  **Cross-Platform Prototypes:** Implement basic renderers in the `platforms/` (8-bit) and `m68k/` (16-bit) branches to validate the diverse hardware paradigms (Tile-VDP, Bitmapped, Planar, and Windowed).
+2.  **68k & x86 Initialization:** Establish parallel branches for native rewrites.
+3.  **Cross-Platform Prototypes:** Implement basic renderers across all tracks to validate hardware paradigms.
