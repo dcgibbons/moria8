@@ -1000,7 +1000,6 @@ banked_payload:
     #import "../common/reu_loading_banked.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
-    #import "../common/string_bank_banked.s"
     #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
 

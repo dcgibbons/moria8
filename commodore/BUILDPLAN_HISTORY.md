@@ -263,14 +263,15 @@
 3. **Wizard ownership corrected after live regression**
    - [wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/wizard.s) regained the full C64 wizard menu/command owner after the overlay version proved unsafe live.
    - [ui_wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_wizard.s) remains the C128 overlay owner.
-4. **Dead shipping import removed**
+4. **Dead shipping imports removed**
    - The C64 main build no longer imports `common/string_bank.s`; the remaining `bank_load_recall` coverage stays in the unit tests that import that file directly.
+   - The C64 banked payload also no longer imports `common/string_bank_banked.s`; `bank_decode_string` had no production callsites and only remained referenced from the subsystem tests that import that file directly.
 
 ### Verification
 - Exact layout gate:
   - `make -C commodore out/c64/moria8.prg`
   - `Program fits below MAP_BASE=true`
-  - `banked payload: 2923 bytes at $BE6E-$C9D9`
+  - `banked payload: 2898 bytes at $BE6E-$C9C0`
   - `UI overlay: 1081 bytes at $E000-$E439`
 - Broader regression gate:
   - `make test64`
@@ -278,6 +279,7 @@
 
 ### Outcome
 - The banked payload is still far healthier than the pre-pass `3992`-byte state, even after restoring inventory and wizard to the banked path where live testing and product feel said they belong.
+- The dead-code audit recovered an additional `25` bytes by removing the unused shipping `string_bank_banked.s` import.
 - The final C64 tree now uses `UiOverlay` only for the low-frequency modal UI it can safely own and where the disk-load tradeoff makes sense.
 - The durable design rule is stricter than the first pass assumed: on C64, `OVL.UI` is only safe for features that will not trigger gameplay/tier restore while still executing from the overlay window.
 

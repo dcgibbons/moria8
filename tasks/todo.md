@@ -3,6 +3,12 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] AUDIT-C64-DEAD-CODE
+- [x] audit the current shipping C64 imports for helpers that are only referenced from tests and remove the lowest-risk dead production owner
+- [x] remove the dead shipping `string_bank_banked.s` import after confirming `bank_decode_string` has no production callsites
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
 - [x] BUG-C64-INVENTORY-OVERLAY-OWNERSHIP
 - [x] move C64 inventory back out of `OVL.UI` so the high-frequency inventory screen no longer incurs an overlay load
 - [x] split `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`, keep inventory in the banked payload, and keep equipment in `OVL.UI`
@@ -67,6 +73,20 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- C64 dead-code audit follow-up:
+  - audited the current shipping C64 imports looking specifically for helpers still linked into the shipping image but only referenced from tests
+  - confirmed the old `bank_load_recall` owner was already test-only and not costing the shipping image anymore
+  - found one additional shipping-dead banked owner:
+    - `commodore/common/string_bank_banked.s`
+    - only exported symbol `bank_decode_string`
+    - no production callsites; subsystem tests import the file directly
+  - removed that dead banked import from `commodore/c64/main.s`
+  - measured recovery:
+    - banked payload reduced from `2923` bytes to `2898` bytes
+    - exact gain: `25` bytes
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 - C64 inventory overlay ownership follow-up:
   - user feedback on the live build was correct: inventory is frequent enough that paying an overlay load for it was the wrong product tradeoff
   - split the old shared inventory/equipment owner into `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`

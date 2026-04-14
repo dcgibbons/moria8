@@ -200,6 +200,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - On C64, do not move a modal screen into `OVL.UI` unless its live data is independent of the `$E000` overlay window. Monster recall still has to stay banked because it reads creature/tier state that shares that same window.
 - On C64, do not keep a feature in `OVL.UI` if that feature can trigger gameplay or tier restore while still executing from the overlay. Any path that can reload the active tier will repopulate `$E000` and self-clobber the running overlay code; keep those flows banked or return to banked code before restoring gameplay.
 - On C64, if an overlay-backed modal returns to gameplay through a custom redraw path instead of `ui_view_restore_modal_overlay` or `ui_view_redraw_gameplay_view`, it still needs the same tier-state recheck before gameplay resumes. Character view was a separate return seam and broke recall after the `OVL.UI` move until that was fixed explicitly.
+- For dead-code audits on this repo, verify shipping callsites separately from test callsites. A helper that still appears in subsystem tests can still be completely dead in the shipping C64 image and worth removing from the real import graph.
 - For disk images with patched boot sectors or reserved media, reserve the owned sector before file allocation.
 - When a build or test depends on tool handoff, make fresh-build paths deterministic; do not rely on warm outputs or fragile temp-path behavior.
 
