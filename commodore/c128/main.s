@@ -1514,10 +1514,22 @@ tramp_ui_char_display:
     :C128UIOverlayDisplayTrampoline(ui_char_display)
 
 tramp_ui_inv_display:
-    :C128UIOverlayDisplayTrampoline(ui_inv_display)
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr ui_inv_display
+!done:
+    jmp tramp_ui_exit
 
 tramp_ui_equip_display:
-    :C128UIOverlayDisplayTrampoline(ui_equip_display)
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr ui_equip_display
+!done:
+    jmp tramp_ui_exit
 
 tramp_ui_identify:
     :C128UIOverlayDisplayTrampoline(ui_identify_print)
@@ -1560,13 +1572,7 @@ tramp_magic_recalc_mana:
     :C128BankedComputeTrampoline(magic_recalc_mana)
 
 tramp_magic_check_new_spells:
-    jsr tramp_ui_enter
-    lda #C128_UI_OVERLAY_ID
-    jsr overlay_load
-    bcs !tmcns_done+
-    jsr magic_check_new_spells
-!tmcns_done:
-    jmp tramp_ui_exit
+    :C128BankedComputeTrampoline(magic_check_new_spells)
 
 tramp_mage_effect_dispatch:
     :C128BankedComputeTrampoline(mage_effect_dispatch)
@@ -3024,6 +3030,7 @@ banked_payload:
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/player_magic_display.s"
+    #import "../common/player_magic_levelup.s"
     #import "../common/player_magic_tail.s"
     #import "../common/projectile.s"
     #import "../common/ranged_fire.s"
@@ -3156,6 +3163,8 @@ ovl_death_end:
     #import "ui_help_data_80.s"
     #import "../common/ui_help.s"
     #import "../common/ui_disk_setup.s"
+    #import "../common/ui_inventory.s"
+    #import "../common/ui_equipment.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -3164,10 +3173,8 @@ ovl_help_end:
 // UI overlay — modal UI and symbol identify screens at $E000
 // ============================================================
 .segment UiOverlay
-    #import "../common/ui_inventory.s"
     #import "../common/ui_character.s"
     #import "../common/ui_identify.s"
-    #import "../common/player_magic_levelup.s"
     #import "../common/ui_wizard.s"
     #import "../common/player_gain_spell.s"
     #import "../common/title_screen.s"

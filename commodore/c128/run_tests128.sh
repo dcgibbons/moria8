@@ -3200,10 +3200,12 @@ run_boot_title_idle_smoke() {
     build_boot_assets || return
 
     local main_vs="out/main.vs"
-    local title_show_sysinfo
+    local title_show_sysinfo title_menu_ready game_over_prompt
     title_show_sysinfo=$(awk '/\.title_show_sysinfo$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${title_show_sysinfo:-}" ]; then
-        echo "FAIL (missing title_show_sysinfo in out/main.vs)"
+    title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    game_over_prompt=$(awk '/\.game_over_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_show_sysinfo:-}" ] || [ -z "${title_menu_ready:-}" ] || [ -z "${game_over_prompt:-}" ]; then
+        echo "FAIL (missing title boot probe symbols in out/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3218,7 +3220,9 @@ run_boot_title_idle_smoke() {
     : > "$log_file"
 
     {
+        echo "break \$${game_over_prompt}"
         echo "until \$${title_show_sysinfo}"
+        echo "until \$${title_menu_ready}"
         echo "g"
     } > "$mon_file"
 
@@ -3235,8 +3239,27 @@ run_boot_title_idle_smoke() {
         return
     fi
 
+    if ! grep -qi "^UNTIL: .*C:\$${title_menu_ready}" "$log_file"; then
+        boot_log_report_failure "did not reach title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if boot_log_has_stop_at "$log_file" "$game_over_prompt"; then
+        boot_log_report_failure "hit game_over_prompt instead of staying on the title menu" "$log_file" "game_over_prompt" "$game_over_prompt" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
     : > "$log_file"
+    {
+        echo "break \$${game_over_prompt}"
+        echo "g"
+    } > "$mon_file"
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" \
         -monlog -monlogname "$log_file" \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -3244,6 +3267,13 @@ run_boot_title_idle_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam during idle title soak" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if boot_log_has_stop_at "$log_file" "$game_over_prompt"; then
+        boot_log_report_failure "entered game_over_prompt during idle title soak" "$log_file" "game_over_prompt" "$game_over_prompt" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return

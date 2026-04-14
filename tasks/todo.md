@@ -3,6 +3,21 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-C128-TITLE-BOOT-QUIT-PROMPT
+- [x] Reported Failure Gate:
+  - boot to C128 title after `128.runtime` load and do not fall into `R)EBOOT S)TART Q)UIT`
+- [x] restore the C128 title boot path so it reaches and stays on the main menu after runtime preload
+- [x] tighten the idle title smoke so it fails on `game_over_prompt`, not just `title_show_sysinfo`
+- [x] verify the exact repro proxy:
+  - `make build128`
+  - `TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh`
+- [x] BUG-C128-BUILD-GATE
+- [x] Reported Failure Gate:
+  - `make build128`
+- [x] restore the broken C128 build introduced by the UI ownership refactor
+- [x] re-fit `UiOverlay` within `$E000-$EFFF` without regressing the symbol/audit contracts
+- [x] verify the exact reported gate:
+  - `make build128`
 - [x] FEAT-AUD
 - [x] add a shared hunger-alert sound that stays distinct from the current combat/UI palette:
   - `HUNGRY` and `WEAK` use the mild low-pulse warning
@@ -81,6 +96,42 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- BUG-C128-TITLE-BOOT-QUIT-PROMPT follow-up:
+  - root cause was the earlier C128 layout fix moving `title_screen.s` into the banked `$F000` payload
+  - that move violated the live C128 bank/visibility contract:
+    - `c128_title_load_and_draw_cached` in low RAM still jumps directly to `title_render_data` and `title_fallback_render`
+    - those helpers were no longer resident/overlay code, so the title path could reach the wrong bytes while KERNAL-visible state was active
+  - repaired by:
+    - moving `title_screen.s` back into `UiOverlay`
+    - restoring the original C128 title trampoline pattern that loads `OVL.UI` and tail-jumps into `title_load_and_draw`
+    - keeping the safe ownership savings that were not part of the regression:
+      - `player_magic_levelup.s` stays banked
+      - `ui_inventory.s` and `ui_equipment.s` stay in `HelpOverlay`
+      - `magic_check_new_spells` stays banked
+  - strengthened the boot smoke:
+    - `boot_title_idle_smoke` now requires both `title_show_sysinfo` and `title_menu_ready`
+    - it now fails if `game_over_prompt` is hit during initial boot or idle title soak
+  - verification:
+    - `make build128` -> PASS
+    - `TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh` -> PASS
+- BUG-C128-BUILD-GATE follow-up:
+  - root cause was real and two-layered:
+    - `ui_equip_display` had been split into `commodore/common/ui_equipment.s`, but C128 never imported that owner
+    - after restoring that symbol, `UiOverlay` was still oversized, so the branch had shipped with a second latent C128 layout failure
+  - restored C128 ownership by:
+    - moving `ui_equip_display` and `ui_inv_display` into `HelpOverlay`
+    - moving `magic_check_new_spells` and `title_screen.s` into the banked payload
+    - switching `tramp_magic_check_new_spells` to the banked compute trampoline
+    - switching `tramp_title_load_and_draw` to banked execution with the existing UI enter/exit contract
+    - updating `commodore/c128/io_contracts.s` to match the new overlay/banked residency
+  - final green C128 layout:
+    - `UiOverlay`: `3908` bytes at `$E000-$EF44`
+    - `HelpOverlay`: `3899` bytes at `$E000-$EF3B`
+    - `Banked payload`: `3998` bytes, staged source ending at `$DE92`
+  - verification:
+    - exact reported gate: `make build128` -> PASS
+    - sibling platform safety check: `make build64` -> PASS
+    - tester signoff: `ALL TESTS PASSED`
 - FEAT-AUD follow-up:
   - added two new shared sound IDs in `commodore/common/sound.s`:
     - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
