@@ -6,6 +6,39 @@
 
 ---
 
+## 2026-04-13 — `FEAT-VMS-RECALL-SEMANTICS` `/` symbol identify ✅ COMPLETE
+
+### Scope Closed
+- Replaced the old combat-earned monster-recall `/` flow with a VMS-style symbol identification command.
+- Kept the feature scoped to `/` only; detailed visible-creature inspection remains future `look` work.
+- Closed the C64 memory-fit issue by moving the glossary into `OVL.UI` instead of resident main RAM.
+
+### What Changed
+1. **`/` now identifies symbols instead of opening the recall modal**
+   - [common/game_loop_helpers.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/game_loop_helpers.s) now prompts with `Enter character to be identified :`, normalizes the typed symbol, and dispatches to a new identify trampoline instead of searching learned recall state.
+   - `CMD_RECALL` remains the internal command id for compatibility, but the user-facing behavior is now symbol identification.
+2. **Glossary ownership moved into `OVL.UI`**
+   - [common/ui_identify.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_identify.s) owns the symbol lookup table and printable descriptions.
+   - [c64/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s) and [c128/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/main.s) now expose `tramp_ui_identify` and import the new owner into `UiOverlay`.
+   - The dead shipping `ui_recall.s` import and its shipping trampoline were removed from the platform builds; the legacy recall UI remains in test coverage only.
+3. **Help/UI text updated to match the new command**
+   - The shared 40-column and C128 80-column help data now describe `/` as `Identify` / `Identify then symbol`.
+   - The identify glossary uses current Moria8 symbol ownership where the port differs from stock VMS glyph assignments, including Commodore-specific store digits `7` and `8`.
+4. **Post-ship symbol-table alignment bug fixed**
+   - A follow-up user repro caught `p` resolving to the `q` entry.
+   - Root cause: the backslash entry in the identify key table was emitted as a two-byte escaped string, which shifted every later symbol lookup by one slot.
+   - [common/ui_identify.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_identify.s) now uses an explicit `$5c` byte for the backslash key, and the focused `/` main-loop regression now covers the reported `p` case directly.
+
+### Verification
+- `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- `make test128-fast` = `PASS`
+
+### Outcome
+- `/` now matches the intended VMS-style command split: symbol help lives on `/`, while richer monster inspection is no longer tied to combat-earned recall from this command.
+- The feature is removed from active work.
+
+---
+
 ## 2026-04-13 — `FEAT-DISK-POLISH` / save-load refactor closure ✅ COMPLETE
 
 ### Scope Closed

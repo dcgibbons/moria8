@@ -135,10 +135,14 @@ This file is a temporary working scratchpad.
   - upstream check confirmed the semantic split:
     - `umoria` uses `/` as monster memory/recall after observation/encounters
     - `vms-moria` uses `/` as symbol identification, with `look` handling the exact visible creature
-  - user verified the current port behavior still works after killing a monster, so the immediate path is not broken enough to require product changes in this pass
-  - requested future direction is now backlog-only:
-    - move toward VMS-Moria `/` identify semantics
-    - leave the existing combat-earned recall behavior untouched for now
+  - implemented follow-up:
+    - `/` now uses VMS-style symbol identification instead of the old combat-earned recall modal
+    - the large glossary moved into `OVL.UI` so the C64 resident image still fits below `MAP_BASE`
+    - detailed monster knowledge is now intentionally future `look`/UX work, not `/`
+    - post-fix user repro found a shifted lowercase lookup (`p` reported `q`); the backslash table entry was emitting two bytes, so the lookup now uses an explicit `$5c` byte and the focused regression covers `p`
+  - current verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> `PASS`
 - C64 recall/tier-state follow-up after the `OVL.UI` ownership move:
   - C64 overlay-backed modal returns were leaving `current_tier` invalid after `overlay_load` reused the `$E000` window, so later gameplay paths could run with stale tier state
   - fixed the shared C64 restore seams by re-checking the active tier before gameplay redraw in `ui_restore.s` and in the C64 character-view full-screen return path

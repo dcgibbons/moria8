@@ -430,6 +430,10 @@ ui_help_clear_all:
 help_page_idx: .byte 0
 help_page_count: .byte 1
 
+tramp_ui_identify:
+    inc test_recall_calls
+    rts
+
 tramp_ui_recall:
     inc test_recall_calls
     rts

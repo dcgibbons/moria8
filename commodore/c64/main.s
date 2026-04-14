@@ -716,15 +716,20 @@ tramp_ui_equip_display:
 !done:
     jmp tramp_sr_epilogue
 
-tramp_ui_wizard_display:
-    jmp wizard_c64_menu_display
-
-tramp_ui_recall:
+tramp_ui_identify:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
-    jsr ui_recall_display
+    jsr ui_identify_print
+    jsr tier_check_transition
+!done:
     jmp tramp_sr_epilogue
+
+tramp_ui_wizard_display:
+    jmp wizard_c64_menu_display
 
 tramp_disk_setup:
     lda #OVL_HELP
@@ -1000,7 +1005,6 @@ banked_payload:
     #import "../common/reu_loading_banked.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
-    #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
 
 banked_code_end:
@@ -1061,11 +1065,12 @@ ovl_help_end:
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
 
 // ============================================================
-// UI overlay — inventory/equipment/character/wizard/recall modal screens
+// UI overlay — low-frequency modal UI and symbol identify screens
 // ============================================================
 .segment UiOverlay
     #import "../common/ui_equipment.s"
     #import "../common/ui_character.s"
+    #import "../common/ui_identify.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true

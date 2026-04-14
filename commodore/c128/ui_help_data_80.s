@@ -58,7 +58,7 @@ help_lines:
     .byte 0
     .byte $fe ; .text "B" ; .byte $ff ; .text " SW"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "/" ; .byte $ff ; .text " Recall"
+    .byte $fe ; .text "/" ; .byte $ff ; .text " Identify"
     .byte 0
 
     .byte 0
@@ -225,7 +225,7 @@ help_more_lines:
     .byte 0
 
     .byte 0
-    .text "/ Recall then letter"
+    .text "/ Identify then symbol"
     .byte $fc, HELP80_COL2
     .text "S searches, # toggles Search mode"
     .byte 0

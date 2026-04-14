@@ -122,10 +122,15 @@ check_player_on_store_door:
     nop
     rts
 
-.assert "check_player_on_store_door patch slot stays 3 bytes wide", tramp_ui_recall - check_player_on_store_door, 3
+.assert "check_player_on_store_door patch slot stays 3 bytes wide", tramp_ui_identify - check_player_on_store_door, 3
 
-tramp_ui_recall:
+tramp_ui_identify:
     inc test_recall_ui_calls
+    jsr ui_identify_print
+    lda test_last_string_lo
+    sta test_identify_string_lo
+    lda test_last_string_hi
+    sta test_identify_string_hi
     rts
 
 tramp_dig_ability:
@@ -175,7 +180,7 @@ tramp_dig_ability:
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
-#import "../../common/ui_recall.s"
+#import "../../common/ui_identify.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -244,6 +249,10 @@ test_recall_ui_calls: .byte 0
 test_key_idx: .byte 0
 test_key_len: .byte 0
 test_key_script: .fill 4, 0
+test_last_string_lo: .byte 0
+test_last_string_hi: .byte 0
+test_identify_string_lo: .byte 0
+test_identify_string_hi: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -351,6 +360,10 @@ reset_state:
     sta test_recall_ui_calls
     sta test_key_idx
     sta test_key_len
+    sta test_last_string_lo
+    sta test_last_string_hi
+    sta test_identify_string_lo
+    sta test_identify_string_hi
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -599,6 +612,10 @@ test_screen_unblank:
 
 test_screen_put_string:
     inc test_screen_put_string_calls
+    lda zp_ptr0
+    sta test_last_string_lo
+    lda zp_ptr0_hi
+    sta test_last_string_hi
     lda #3
     jsr test_record_ui_step
     rts
@@ -1467,8 +1484,8 @@ test_start:
     lda #$00
     sta tc_results + 22
 
-    // Test 24: recall re-establishes the current tier before showing the
-    // matching entry, so stale C64 tier state does not suppress the modal.
+    // Test 24: `/` identifies a symbol without recall data, tier reloads,
+    // or the legacy modal recall UI.
 !t24:
     jsr reset_state
     lda #23
@@ -1479,14 +1496,8 @@ test_start:
     lda #10
     sta zp_player_dlvl
     lda #$50
-    sta cr_display + TOWN_CREATURE_BASE
-    lda #1
-    sta recall_kills + TOWN_CREATURE_BASE
-    lda #$d0
     sta test_key_script + 0
-    lda #$20
-    sta test_key_script + 1
-    lda #2
+    lda #1
     sta test_key_len
     lda #CMD_RECALL
     sta test_cmd_script
@@ -1494,17 +1505,37 @@ test_start:
     sta test_cmd_len
     jsr run_case
     lda test_tier_transition_calls
+    beq !t24_tier_ok+
+    lda #$02
+    sta tc_results + 23
+    jmp test_finish
+!t24_tier_ok:
+    lda test_recall_ui_calls
     cmp #1
-    bne !t24_fail+
-    lda current_tier
-    cmp #2
-    bne !t24_fail+
+    beq !t24_ui_ok+
+    lda #$03
+    sta tc_results + 23
+    jmp test_finish
+!t24_ui_ok:
     lda test_msg_clear_calls
-    cmp #1
-    bne !t24_fail+
-    lda test_screen_clear_calls
-    cmp #1
-    bne !t24_fail+
+    cmp #2
+    beq !t24_clear_ok+
+    lda #$04
+    sta tc_results + 23
+    jmp test_finish
+!t24_clear_ok:
+    lda test_identify_string_lo
+    cmp #<identify_p_str
+    bne !t24_fail_lo+
+!t24_lo_ok:
+    lda test_identify_string_hi
+    cmp #>identify_p_str
+    beq !t24_pass+
+!t24_fail_lo:
+    lda #$05
+    sta tc_results + 23
+    jmp test_finish
+!t24_pass:
     lda #$01
     sta tc_results + 23
     jmp test_finish

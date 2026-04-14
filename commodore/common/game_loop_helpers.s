@@ -70,111 +70,63 @@ cmd_show_equipment_view:
     jmp ui_view_return_to_gameplay_view
 
 cmd_recall_view:
-#if !C128
-    // C64 modal overlays reuse the $E000 tier window, so make sure the
-    // active tier is re-established before a recall lookup needs live
-    // creature-name state.
-    jsr tier_check_transition
-#endif
     jsr msg_clear
     lda #0
     sta zp_cursor_row
     sta zp_cursor_col
-    lda #<recall_prompt_str
+    lda #<identify_prompt_str
     sta zp_ptr0
-    lda #>recall_prompt_str
+    lda #>identify_prompt_str
     sta zp_ptr0_hi
     jsr screen_put_string
     jsr input_prepare_followup_key
     jsr input_get_key
-    jsr recall_key_to_screen_code
-    bcc !recall_done+
-    jsr recall_show_matching_entry
-    bcs !recall_done+
-    jsr ui_view_redraw_gameplay_view
-    lda #<recall_none_str
-    sta zp_ptr0
-    lda #>recall_none_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr identify_key_to_screen_code
+    bcc !identify_done+
+    jsr tramp_ui_identify
     jmp main_loop
-!recall_done:
-    jsr screen_clear
-    jmp vp_render_status_loop
+!identify_done:
+    jsr msg_clear
+    jmp main_loop
 
-recall_key_to_screen_code:
+identify_key_to_screen_code:
+    cmp #$03
+    beq !cancel+
+    cmp #HELP_KEY_ESC
+    beq !cancel+
+    cmp #$40
+    bne !identify_try_lower+
+    lda #0
+    sta recall_query_sc
+    sec
+    rts
+!identify_try_lower:
     cmp #$41
-    bcc !recall_try_shifted+
+    bcc !identify_try_shifted+
     cmp #$5b
-    bcs !recall_try_shifted+
+    bcs !identify_try_shifted+
     sec
     sbc #$40
     sta recall_query_sc
     sec
     rts
-!recall_try_shifted:
+!identify_try_shifted:
     cmp #$c1
-    bcc !invalid+
+    bcc !identify_other+
     cmp #$db
-    bcs !invalid+
+    bcs !identify_other+
     and #$3f
     clc
     adc #$40
     sta recall_query_sc
     sec
     rts
-!invalid:
-    clc
-    rts
-
-recall_show_matching_entry:
-    lda recall_query_sc
-    cmp recall_last_sc
-    bne !recall_new_char+
-    lda recall_last_idx
-    clc
-    adc #1
-    cmp #MAX_CREATURES
-    bcc !recall_set_start+
-    lda #0
-    jmp !recall_set_start+
-!recall_new_char:
-    lda #0
-!recall_set_start:
-    tax
-    lda #MAX_CREATURES
-    sta zp_temp1
-!recall_search:
-    lda cr_display,x
-    cmp recall_query_sc
-    bne !recall_next+
-    lda recall_kills,x
-    ora recall_deaths,x
-    ora recall_attacks,x
-    ora recall_spells,x
-    bne !recall_found+
-!recall_next:
-    inx
-    cpx #MAX_CREATURES
-    bcc !recall_no_wrap+
-    ldx #0
-!recall_no_wrap:
-    dec zp_temp1
-    bne !recall_search-
-    lda #0
-    sta recall_last_sc
-    clc
-    rts
-!recall_found:
-    stx recall_found_type
-    lda recall_query_sc
-    sta recall_last_sc
-    stx recall_last_idx
-    jsr creature_get_name
-    jsr tramp_ui_recall
-    jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+!identify_other:
+    sta recall_query_sc
     sec
+    rts
+!cancel:
+    clc
     rts
 
 // ============================================================
