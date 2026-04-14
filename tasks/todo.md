@@ -3,6 +3,26 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-C128-RECALL-GLYPH-CORRUPTION
+- [x] Reported Failure Gate:
+  - C128 recall screen shows corrupted attack / hit-dice glyphs (`D` separator and attack mnemonic bytes)
+- [x] make the shared recall renderer emit cross-platform-safe bytes for hit-dice separators and attack abbreviations
+- [x] fix the shared attack-abbreviation printer to stop losing letters when `screen_put_char` clobbers `Y`
+- [x] add a regression that checks the rendered recall HP / ATK bytes instead of only the title/name line
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+- [x] BUG-RECALL-RESTORE-UMORIA
+- [x] restore the active `/` command from symbol glossary mode back to the old killed-monster recall flow
+- [x] rewire production C64/C128 recall ownership so `ui_recall_display` is reachable again
+- [x] update shared/runtime tests to expect monster recall instead of symbol identify
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
 - [x] BUG-C128-TITLE-BOOT-QUIT-PROMPT
 - [x] Reported Failure Gate:
   - boot to C128 title after `128.runtime` load and do not fall into `R)EBOOT S)TART Q)UIT`
@@ -96,6 +116,47 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- BUG-C128-RECALL-GLYPH-CORRUPTION follow-up:
+  - root cause was in the shared recall renderer, not a C128-only overlay/load issue
+  - fixed four shared-renderer bugs in `commodore/common/ui_recall.s`:
+    - the HP / damage-dice separator used raw screen-code `$04` for `D`, which displays as lowercase `d` on the C128 VDC backend
+    - the attack abbreviation printer indexed `rcl_atk_3` through `Y`, but `screen_put_char` clobbers `Y`, so only the first attack letter survived and the rest came from the wrong table bytes
+    - the inter-attack separator reused one loaded space byte across two `screen_put_char` calls, but `screen_put_char` does not preserve `A`, so the second separator cell could render garbage
+    - placeholder creature attack slots with `type=HIT` but `dice/sides=0` were rendered literally as `HIT 0D0` instead of being treated as unknown / absent data
+  - repaired by:
+    - switching the explicit `D` writes to PETSCII-safe uppercase `$44`
+    - storing attack abbreviations as PETSCII-safe uppercase bytes
+    - iterating the abbreviation bytes through `X`, which both screen backends preserve
+    - reloading the literal space before each separator write
+    - only rendering an attack slot when `type`, `dice`, and `sides` are all nonzero, with `Atk: None` as the fallback when no real attack data is known
+  - strengthened regression coverage in `commodore/c64/tests/test_ui_views.s`:
+    - seed the recall test creature with a real attack
+    - assert the rendered `HP` bytes contain `1D8`
+    - assert the rendered attack bytes contain `HIT 2D6`
+    - assert the zero-damage placeholder case renders `None` instead of `0D0`
+  - verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
+- BUG-RECALL-RESTORE-UMORIA follow-up:
+  - restored `/` to the old monster-memory recall behavior in `commodore/common/game_loop_helpers.s`
+  - the shared command now:
+    - prompts `Recall which?`
+    - normalizes the typed creature symbol
+    - searches creature types with matching display glyphs
+    - only opens recall for creatures with known memory (`kills/deaths/attacks/spells`)
+    - cycles through additional matching creature types on repeated input
+  - restored production recall owners:
+    - C64: `tramp_ui_recall` plus banked `ui_recall.s`
+    - C128: `tramp_ui_recall` plus `ui_recall.s` in `UiOverlay`
+  - intentionally displaced the now-unused C128 symbol-identify owner from the product build to keep the C128 memory layout safe
+  - updated the C64 `main_loop` recall test so it seeds recall knowledge and asserts the recall UI path instead of the old identify-string behavior
+  - verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
 - BUG-C128-TITLE-BOOT-QUIT-PROMPT follow-up:
   - root cause was the earlier C128 layout fix moving `title_screen.s` into the banked `$F000` payload
   - that move violated the live C128 bank/visibility contract:

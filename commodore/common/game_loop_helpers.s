@@ -74,59 +74,91 @@ cmd_recall_view:
     lda #0
     sta zp_cursor_row
     sta zp_cursor_col
-    lda #<identify_prompt_str
+    lda #<recall_prompt_str
     sta zp_ptr0
-    lda #>identify_prompt_str
+    lda #>recall_prompt_str
     sta zp_ptr0_hi
     jsr screen_put_string
     jsr input_prepare_followup_key
     jsr input_get_key
-    jsr identify_key_to_screen_code
-    bcc !identify_done+
-    jsr tramp_ui_identify
-    jmp main_loop
-!identify_done:
-    jsr msg_clear
-    jmp main_loop
+    jsr recall_key_to_screen_code
+    bcc !recall_done+
+    jsr recall_show_matching_entry
+!recall_done:
+    jsr screen_clear
+    jmp vp_render_status_loop
 
-identify_key_to_screen_code:
-    cmp #$03
-    beq !cancel+
-    cmp #HELP_KEY_ESC
-    beq !cancel+
-    cmp #$40
-    bne !identify_try_lower+
-    lda #0
-    sta recall_query_sc
-    sec
-    rts
-!identify_try_lower:
+recall_key_to_screen_code:
     cmp #$41
-    bcc !identify_try_shifted+
+    bcc !recall_try_shifted+
     cmp #$5b
-    bcs !identify_try_shifted+
+    bcs !recall_try_shifted+
     sec
     sbc #$40
     sta recall_query_sc
     sec
     rts
-!identify_try_shifted:
+!recall_try_shifted:
     cmp #$c1
-    bcc !identify_other+
+    bcc !invalid+
     cmp #$db
-    bcs !identify_other+
+    bcs !invalid+
     and #$3f
     clc
     adc #$40
     sta recall_query_sc
     sec
     rts
-!identify_other:
-    sta recall_query_sc
-    sec
-    rts
-!cancel:
+!invalid:
     clc
+    rts
+
+recall_show_matching_entry:
+    lda recall_query_sc
+    cmp recall_last_sc
+    bne !recall_new_char+
+    lda recall_last_idx
+    clc
+    adc #1
+    cmp #MAX_CREATURES
+    bcc !recall_set_start+
+    lda #0
+    jmp !recall_set_start+
+!recall_new_char:
+    lda #0
+!recall_set_start:
+    tax
+    lda #MAX_CREATURES
+    sta zp_temp1
+!recall_search:
+    lda cr_display,x
+    cmp recall_query_sc
+    bne !recall_next+
+    lda recall_kills,x
+    ora recall_deaths,x
+    ora recall_attacks,x
+    ora recall_spells,x
+    bne !recall_found+
+!recall_next:
+    inx
+    cpx #MAX_CREATURES
+    bcc !recall_no_wrap+
+    ldx #0
+!recall_no_wrap:
+    dec zp_temp1
+    bne !recall_search-
+    lda #0
+    sta recall_last_sc
+    rts
+!recall_found:
+    stx recall_found_type
+    lda recall_query_sc
+    sta recall_last_sc
+    stx recall_last_idx
+    jsr creature_get_name
+    jsr tramp_ui_recall
+    jsr input_prepare_modal_dismiss_key
+    jsr input_get_key
     rts
 
 // ============================================================

@@ -133,6 +133,10 @@ tramp_ui_identify:
     sta test_identify_string_hi
     rts
 
+tramp_ui_recall:
+    inc test_recall_ui_calls
+    rts
+
 tramp_dig_ability:
     rts
 
@@ -1499,6 +1503,18 @@ test_start:
     sta test_key_script + 0
     lda #1
     sta test_key_len
+    ldx #MAX_CREATURES - 1
+!t24_seed_recall:
+    lda cr_display,x
+    cmp #$10
+    bne !t24_seed_next+
+    lda #1
+    sta recall_kills,x
+    jmp !t24_seed_done+
+!t24_seed_next:
+    dex
+    bpl !t24_seed_recall-
+!t24_seed_done:
     lda #CMD_RECALL
     sta test_cmd_script
     lda #1
@@ -1518,23 +1534,12 @@ test_start:
     jmp test_finish
 !t24_ui_ok:
     lda test_msg_clear_calls
-    cmp #2
+    cmp #1
     beq !t24_clear_ok+
     lda #$04
     sta tc_results + 23
     jmp test_finish
 !t24_clear_ok:
-    lda test_identify_string_lo
-    cmp #<identify_p_str
-    bne !t24_fail_lo+
-!t24_lo_ok:
-    lda test_identify_string_hi
-    cmp #>identify_p_str
-    beq !t24_pass+
-!t24_fail_lo:
-    lda #$05
-    sta tc_results + 23
-    jmp test_finish
 !t24_pass:
     lda #$01
     sta tc_results + 23

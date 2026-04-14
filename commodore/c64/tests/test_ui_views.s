@@ -544,6 +544,12 @@ test_recall_view:
     lda #8
     sta cr_hd_sides
     lda #1
+    sta cr_atk0_type
+    lda #2
+    sta cr_atk0_dice
+    lda #6
+    sta cr_atk0_sides
+    lda #1
     sta recall_spells
     lda #3
     sta recall_kills
@@ -574,6 +580,47 @@ test_recall_view:
     sta zp_ptr0_hi
     lda #4
     ldx #2
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_recall_hp
+    sta zp_ptr0
+    lda #>expected_recall_hp
+    sta zp_ptr0_hi
+    lda #4
+    ldx #21
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_recall_atk
+    sta zp_ptr0
+    lda #>expected_recall_atk
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
+    jsr assert_screen_string
+    bcc !fail+
+
+    // Zero-damage placeholder attacks should be suppressed.
+    jsr reset_shared_state
+    lda #0
+    sta recall_found_type
+    lda #1
+    sta cr_atk0_type
+    sta cr_atk1_type
+    lda #0
+    sta cr_atk0_dice
+    sta cr_atk0_sides
+    sta cr_atk1_dice
+    sta cr_atk1_sides
+    jsr ui_recall_display
+
+    lda #<rcl_s_none
+    sta zp_ptr0
+    lda #>rcl_s_none
+    sta zp_ptr0_hi
+    lda #6
+    ldx #7
     jsr assert_screen_string
     bcc !fail+
 
@@ -1116,6 +1163,10 @@ expected_equip_line:
     .text ") Weapon: Long Sword (Slay Evil)" ; .byte 0
 expected_recall_lv:
     .text "LV 1" ; .byte 0
+expected_recall_hp:
+    .byte $31, $44, $38, 0
+expected_recall_atk:
+    .byte $48, $49, $54, $20, $32, $44, $36, 0
 expected_home_line:
     .byte $01
     .text ") Dagger" ; .byte 0

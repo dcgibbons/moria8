@@ -716,6 +716,13 @@ tramp_ui_equip_display:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_ui_recall:
+    sei
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
+    sta $01
+    jsr ui_recall_display
+    jmp tramp_sr_epilogue
+
 tramp_ui_identify:
     lda #OVL_UI
     jsr overlay_load
@@ -1005,6 +1012,7 @@ banked_payload:
     #import "../common/reu_loading_banked.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
+    #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
 
 banked_code_end:

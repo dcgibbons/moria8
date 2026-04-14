@@ -1531,8 +1531,8 @@ tramp_ui_equip_display:
 !done:
     jmp tramp_ui_exit
 
-tramp_ui_identify:
-    :C128UIOverlayDisplayTrampoline(ui_identify_print)
+tramp_ui_recall:
+    :C128UIOverlayDisplayTrampoline(ui_recall_display)
 
 tramp_ui_wizard_display:
     :C128UIOverlayDisplayTrampoline(ui_wizard_display)
@@ -3174,7 +3174,7 @@ ovl_help_end:
 // ============================================================
 .segment UiOverlay
     #import "../common/ui_character.s"
-    #import "../common/ui_identify.s"
+    #import "../common/ui_recall.s"
     #import "../common/ui_wizard.s"
     #import "../common/player_gain_spell.s"
     #import "../common/title_screen.s"
