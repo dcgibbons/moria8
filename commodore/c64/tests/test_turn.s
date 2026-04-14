@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #10
+    ldx #14
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -59,6 +59,8 @@ eff_detect_timer:    .byte 0
 
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
+.const SFX_HUNGER_WARN  = $08
+.const SFX_HUNGER_FAINT = $09
 
 player_data:         .fill 80, 0
 inv_item_id:         .fill TOTAL_INV_SLOTS, FI_EMPTY
@@ -72,7 +74,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 11, $ff
+tc_results: .fill 15, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -99,6 +101,8 @@ test_level_change_calls: .byte 0
 test_inv_remove_calls: .byte 0
 test_monster_ai_calls: .byte 0
 test_player_death_calls: .byte 0
+test_sound_calls: .byte 0
+test_last_sound: .byte $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -193,6 +197,11 @@ player_death_check:
     inc test_player_death_calls
     rts
 
+sound_play:
+    inc test_sound_calls
+    sta test_last_sound
+    rts
+
 inv_remove_item:
     inc test_inv_remove_calls
     lda #FI_EMPTY
@@ -247,6 +256,7 @@ reset_state:
     sta test_inv_remove_calls
     sta test_monster_ai_calls
     sta test_player_death_calls
+    sta test_sound_calls
     sta zp_turn_lo
     sta zp_turn_hi
     sta turn_scene_dirty
@@ -277,6 +287,8 @@ reset_state:
     sta vis_room_revealed
     sta light_tick_counter
     sta zp_death_source
+    lda #$ff
+    sta test_last_sound
     lda #$ff
     sta zp_run_dir
     lda #FI_EMPTY
@@ -332,7 +344,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #10
+    ldx #14
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -658,7 +670,7 @@ test_start:
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp !t1_seq+
+    jmp !t12+
 !t10_fail:
     lda #$00
     sta tc_results + 9
@@ -733,3 +745,120 @@ test_start:
     lda #$00
     sta tc_results + 10
     jmp test_finish
+
+!t12:
+    // Test 12: entering HUNGRY plays the mild hunger alert once.
+    jsr reset_state
+    lda #HUNGER_FULL
+    sta zp_hunger_state
+    lda #149
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_hunger_state
+    cmp #HUNGER_HUNGRY
+    bne !t12_fail+
+    lda test_sound_calls
+    cmp #1
+    bne !t12_fail+
+    lda test_last_sound
+    cmp #SFX_HUNGER_WARN
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+!t13:
+    // Test 13: entering WEAK plays the mild hunger alert once.
+    jsr reset_state
+    lda #HUNGER_HUNGRY
+    sta zp_hunger_state
+    lda #49
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_hunger_state
+    cmp #HUNGER_WEAK
+    bne !t13_fail+
+    lda test_sound_calls
+    cmp #1
+    bne !t13_fail+
+    lda test_last_sound
+    cmp #SFX_HUNGER_WARN
+    bne !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !t14+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+    jmp !t14+
+
+!t14:
+    // Test 14: entering FAINT plays the severe hunger alert once.
+    jsr reset_state
+    lda #HUNGER_WEAK
+    sta zp_hunger_state
+    lda #9
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_hunger_state
+    cmp #HUNGER_FAINT
+    bne !t14_fail+
+    lda test_sound_calls
+    cmp #1
+    bne !t14_fail+
+    lda test_last_sound
+    cmp #SFX_HUNGER_FAINT
+    bne !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+    jmp !t15+
+
+!t15:
+    // Test 15: steady faint and recovery recompute do not replay alerts.
+    jsr reset_state
+    lda #HUNGER_FAINT
+    sta zp_hunger_state
+    lda #9
+    sta zp_player_food
+    lda #0
+    sta zp_player_food_hi
+    jsr turn_tick_hunger
+    lda zp_hunger_state
+    cmp #HUNGER_FAINT
+    bne !t15_fail+
+    lda test_sound_calls
+    bne !t15_fail+
+
+    lda #HUNGER_WEAK
+    sta zp_hunger_state
+    lda #200
+    sta zp_player_food
+    jsr player_update_hunger_state
+    lda zp_hunger_state
+    cmp #HUNGER_FULL
+    bne !t15_fail+
+    lda test_sound_calls
+    bne !t15_fail+
+    lda test_last_sound
+    cmp #$ff
+    bne !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t1_seq-
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+    jmp !t1_seq-

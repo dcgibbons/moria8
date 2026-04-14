@@ -58,15 +58,15 @@ Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6
 ## Build and Test
 
 - **Build:** `make` (or `make build`) — build both Commodore payload trees under `commodore/out/c64` and `commodore/out/c128`
-- **Run:** `make run` — build and launch the unified dual-entry shipping disk in C64 VICE
-- **C128 run:** `make run128` — build and launch the unified dual-entry shipping disk in C128 VICE
-- **Compatibility run alias:** `make run64` — same unified shipping disk under C64 VICE
+- **Run:** `make run` — build and launch the C64 shipping disk in C64 VICE
+- **C128 run:** `make run128` — build and launch the C128 shipping disk in C128 VICE
+- **Compatibility run alias:** `make run64` — same C64 shipping disk under C64 VICE
 - **Test:** `make test` — run the default regression mix (`test64`, `test128-fast`, `test128-fast-smoke`)
 - **C128 fast units:** `make test128-fast` — Python Gate C compare harness for the stable C128 unit batch
 - **C128 fast smokes:** `make test128-fast-smoke` — small high-value C128 smoke subset (`boot_title_idle_smoke`, `scripted_summary_to_town_smoke`, `town_overlay_smoke`)
 - **C128 full suite:** `make test128` — authoritative full C128 shell harness
-- **Disk image:** `make disk` — create the unified dual-entry `.d64` at `commodore/out/moria8.d64`
-- **Compatibility disk aliases:** `make disk64`, `make disk128` — aliases that build the same unified `commodore/out/moria8.d64`
+- **Disk image:** `make disk` — create both shipping images: `commodore/out/moria8-c64.d64` and `commodore/out/moria8-c128.d71`
+- **Compatibility disk aliases:** `make disk64`, `make disk128` — build the C64 `.d64` and C128 `.d71` respectively
 - **Clean:** `make clean` — remove build artifacts
 - **Assembler:** Kick Assembler — auto-downloaded on first `make` into `tools/kickass/` (override: `make KICKASS=/path/to/KickAss.jar`)
 - **Testing:** Kick Assembler `.assert` directives (assembly-time) + VICE headless runtime tests
@@ -150,7 +150,7 @@ If any one of those is wrong, the bug will usually present as a “random” `JA
 
 ## Architecture
 
-- **Display:** 40-column on C64; 40 or 80-column selectable on C128. PETSCII characters only (no bitmap graphics).
+- **Display:** 40-column on C64; 40 or 80-column selectable on C128. Gameplay is PETSCII-character based; pre-title boot art may use platform-specific bitmap/custom-charset assets.
 - **Loading:** BASIC stub loader runs the ML program. Cartridge version also supported. Minimize disk access after initial load — organize data so each dungeon level has what it needs in memory (e.g., higher-level monsters only loaded for deeper levels).
 - **KERNAL/BASIC:** Use C64/C128 KERNAL routines freely. Do NOT use BASIC routines after the initial loader. Since BASIC is not active, its zero page space is available for program use.
 - **Memory:** Use C64 memory banking to access RAM behind BASIC ROM for extra program space. Program should be able to exit cleanly back to BASIC.

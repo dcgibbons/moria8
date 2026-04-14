@@ -118,7 +118,7 @@ help_lines:
     .text " Go Up Stairs"
     .byte 0
 
-// Row 8: Running instruction + Recall
+// Row 8: Running instruction + Identify
     .byte 0
     .byte $fe
     .text "SHIFT+DIRECTION"
@@ -127,7 +127,7 @@ help_lines:
     .byte $fe
     .text "/"
     .byte $ff
-    .text " Recall"
+    .text " Identify"
     .byte 0
 
 // Row 9: blank

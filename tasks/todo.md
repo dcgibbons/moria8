@@ -3,6 +3,48 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] FEAT-AUD
+- [x] add a shared hunger-alert sound that stays distinct from the current combat/UI palette:
+  - `HUNGRY` and `WEAK` use the mild low-pulse warning
+  - `FAINT` uses the harsher low-pulse warning
+- [x] trigger the alert only on worsening hunger-state transitions from `turn_tick_hunger`; keep `player_update_hunger_state` pure and avoid redraw-driven replay
+- [x] add focused shared sound/turn regression coverage and verify:
+  - `make test64`
+  - `make test128-fast`
+- [x] AUDIT-C64-DEAD-CODE
+- [x] audit the current shipping C64 imports for helpers that are only referenced from tests and remove the lowest-risk dead production owner
+- [x] remove the dead shipping `string_bank_banked.s` import after confirming `bank_decode_string` has no production callsites
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
+- [x] BUG-C64-INVENTORY-OVERLAY-OWNERSHIP
+- [x] move C64 inventory back out of `OVL.UI` so the high-frequency inventory screen no longer incurs an overlay load
+- [x] split `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`, keep inventory in the banked payload, and keep equipment in `OVL.UI`
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
+- [x] BUG-C64-WIZARD-OVERLAY-OWNERSHIP
+- [x] move C64 wizard back out of `OVL.UI` after live testing showed wizard entry could trigger a tier reload while still executing from the `$E000` overlay window
+- [x] restore the pre-overlay C64 wizard menu/command owner in `commodore/common/wizard.s` and route `tramp_ui_wizard_display` back to that banked path
+- [x] verify the exact C64 gates:
+  - `make -C commodore out/c64/moria8.prg`
+  - `make test64`
+- [ ] FEAT-VMS-RECALL-SEMANTICS
+- [ ] add a backlog feature for VMS-Moria-style `/` behavior:
+  - `/` identifies what a symbol on screen stands for
+  - `look` remains the path for the exact visible creature
+  - leave the current combat-earned recall implementation alone for now
+- [x] BUG-C64-RECALL-OVERLAY-STATE
+- [x] restore C64 active-tier state after overlay-backed modal screens so recall and other tier-dependent gameplay paths do not run after `OVL.UI` invalidates `$E000`
+- [x] re-check the active tier at the start of the shared C64 `/` recall path and the C64 character-view return path before gameplay redraw
+- [x] add focused C64 `main_loop` regression coverage for the tier-restore seams and update the suite result range/count
+- [x] BUG-C64-STRING-SHORTEN-REGRESSION
+- [x] restore the shortened save/load runtime strings to their pre-refactor user-facing text
+- [x] rebuild the C64 target with the restored strings and capture the exact memory-boundary failure location before making any byte-recovery decisions
+- [x] FEAT-C64-BOOT-ART-ASSET
+- [x] add a dedicated source-image adapter for C64 boot art without changing the runtime bootloader or the existing C64 PRG quantizer
+- [x] switch the C64 boot-art build rule to use `artwork/moria8_loading_art_c64.png` as the canonical source asset
+- [x] verify the real asset path through the C64 build and boot-art artifact generation gates
 - [x] BUG-HARNESS-C128-1: restore `make test128-fast` by fixing the snapshot compare harness instead of touching more product code
 - [x] move connector-backed snapshot restore to VICE startup via `-moncommands` so batch snapshot runs no longer depend on mid-session remote `undump`
 - [x] align connector snapshot reset/setup with the moncommands test contract
@@ -39,9 +81,126 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- FEAT-AUD follow-up:
+  - added two new shared sound IDs in `commodore/common/sound.s`:
+    - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
+    - `SFX_HUNGER_FAINT` for entry into `FAINT`
+  - implemented both effects as new low pulse-wave warnings distinct from the existing combat/UI sound palette
+  - kept hunger classification pure in `commodore/common/turn.s`; the new alert only fires from `turn_tick_hunger` when the state gets worse
+  - fixed one real gameplay bug during implementation:
+    - the first helper version tail-jumped into `sound_play`, which would have skipped the starvation damage tail on the `food == 0` path
+  - expanded focused C64 coverage:
+    - `commodore/c64/tests/test_sound_monitor.s` now validates both new SID shapes and keeps the invalid-ID checkpoint truly invalid at `$0A`
+    - `commodore/c64/tests/test_turn.s` now covers entry to `HUNGRY`, `WEAK`, and `FAINT`, plus no-replay behavior for steady/recovery states
+  - fixed two C64 test regressions exposed by the added code growth:
+    - `commodore/c64/tests/test_main_loop.s` had a 2-byte `check_player_on_store_door` stub under a 3-byte jump-patch contract; the patch now uses a 3-byte slot and asserts it
+    - `commodore/c64/tests/test_turn.s` needed its new hunger tests to run before `install_turn_patches`, and its control flow now reaches `test_finish` without looping
+  - verification on the current tree:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS through both `cold` and `snapshot` batches
+- C64 dead-code audit follow-up:
+  - audited the current shipping C64 imports looking specifically for helpers still linked into the shipping image but only referenced from tests
+  - confirmed the old `bank_load_recall` owner was already test-only and not costing the shipping image anymore
+  - found one additional shipping-dead banked owner:
+    - `commodore/common/string_bank_banked.s`
+    - only exported symbol `bank_decode_string`
+    - no production callsites; subsystem tests import the file directly
+  - removed that dead banked import from `commodore/c64/main.s`
+  - measured recovery:
+    - banked payload reduced from `2923` bytes to `2898` bytes
+    - exact gain: `25` bytes
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 inventory overlay ownership follow-up:
+  - user feedback on the live build was correct: inventory is frequent enough that paying an overlay load for it was the wrong product tradeoff
+  - split the old shared inventory/equipment owner into `commodore/common/ui_inventory.s` and `commodore/common/ui_equipment.s`
+  - inventory now lives back in the C64 banked payload, while equipment stays in `OVL.UI`
+  - actual measured cost of restoring banked inventory ownership: `240` bytes
+  - current layout after the change:
+    - `Program fits below MAP_BASE=true`
+    - `banked payload: 2923 bytes at $BE6E-$C9D9`
+    - `UI overlay: 1081 bytes at $E000-$E439`
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 wizard overlay ownership follow-up:
+  - live testing found a real regression: entering wizard mode could show `Loading...` and then lock up with an IRQ storm
+  - root cause: moving wizard into `OVL.UI` was unsafe on C64 because wizard entry/restore paths can call gameplay redraw helpers that re-check and reload the active tier, and that tier reload repopulates the same `$E000` window the wizard overlay was executing from
+  - fixed by restoring the old banked C64 wizard owner in `commodore/common/wizard.s`, switching `tramp_ui_wizard_display` back to `wizard_c64_menu_display`, and removing `ui_wizard.s` from the C64 UI overlay segment
+  - current verification:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- Recall semantics audit follow-up:
+  - upstream check confirmed the semantic split:
+    - `umoria` uses `/` as monster memory/recall after observation/encounters
+    - `vms-moria` uses `/` as symbol identification, with `look` handling the exact visible creature
+  - implemented follow-up:
+    - `/` now uses VMS-style symbol identification instead of the old combat-earned recall modal
+    - the large glossary moved into `OVL.UI` so the C64 resident image still fits below `MAP_BASE`
+    - detailed monster knowledge is now intentionally future `look`/UX work, not `/`
+    - post-fix user repro found a shifted lowercase lookup (`p` reported `q`); the backslash table entry was emitting two bytes, so the lookup now uses an explicit `$5c` byte and the focused regression covers `p`
+  - current verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> `PASS`
+- C64 recall/tier-state follow-up after the `OVL.UI` ownership move:
+  - C64 overlay-backed modal returns were leaving `current_tier` invalid after `overlay_load` reused the `$E000` window, so later gameplay paths could run with stale tier state
+  - fixed the shared C64 restore seams by re-checking the active tier before gameplay redraw in `ui_restore.s` and in the C64 character-view full-screen return path
+  - added a direct C64 `/` recall tier re-check at the start of `cmd_recall_view`, so recall no longer depends on a previous modal having left tier state valid
+  - expanded `commodore/c64/tests/test_main_loop.s` with two new tier-restore coverage points and updated `commodore/c64/run_tests.sh` to read `24` `main_loop` results instead of truncating at `22`
+  - latest verification on the current tree:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 string-shortening regression follow-up:
+  - restored the shortened save/load runtime strings in `commodore/common/runtime_ui_strings.s`, including `Welcome back to Moria8!`
+  - recorded the user-copy rule in `tasks/lessons.md`: do not shorten user-facing strings to recover bytes without explicit consent
+  - exact C64 memory result after restoring the strings:
+    - `make -C commodore out/c64/moria8.prg` still assembles but reports `Program fits below MAP_BASE=false`
+    - the assert owner is [`commodore/c64/main.s:939`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s:939)
+    - `program_end` moves from `$BFF8` on `HEAD` to `$C02E` with the restored strings
+    - that is a `54`-byte growth, and it pushes `program_end` `46` bytes past `MAP_BASE=$C000`
+    - the staged banked payload then occupies `$C02E-$CFC6`, so the init-only payload storage overlaps `4038` bytes of the dungeon-map window
+  - control comparison against `HEAD`:
+    - `Program fits below MAP_BASE=true`
+    - `Banked payload: 3992 bytes at $BFF8-$CF90`
+- C64 resident-byte recovery after restoring the runtime strings:
+  - moved the dead in-memory RLE compressor in `commodore/common/save.s` to test-only ownership behind `SAVE_TEST_RLE`
+  - added a dedicated `save_magic_buf` so production load no longer borrows the compressor literal buffer for header verification
+  - opted `commodore/c64/tests/test_save.s` into the old compressor explicitly so the round-trip unit coverage still assembles
+  - exact direct-assembly result after the recovery:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `Banked payload: 3992 bytes at $BE6C-$CE04`
+    - relative to the restored-string overflow state, that recovered `450` bytes and cleared the original `46`-byte overrun with margin
+  - regression verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 UI ownership follow-up after the save-side cleanup:
+  - moved the character, inventory, equipment, and wizard modal screens out of the banked `$F000` payload and into `OVL.UI`
+  - tried the same move for recall, then backed it out after the live recall path proved unsafe under the overlay contract
+  - recall now stays in the banked payload on C64 because it reads live creature/tier state that already occupies the `$E000` overlay window
+  - left `ui_home.s` in the banked payload intentionally because it is store-owned and depends on town-overlay helpers
+  - removed the dead shipping C64 import of `commodore/common/string_bank.s`; the only remaining `bank_load_recall` coverage lives in tests that import that file directly
+  - simplified `commodore/common/wizard.s` back to shared state and non-UI helpers, with the UI/menu flow now living in `commodore/common/ui_wizard.s`
+  - exact direct-assembly result after the ownership move:
+    - `make -C commodore out/c64/moria8.prg` -> `Program fits below MAP_BASE=true`
+    - `program_end = $BA39`
+    - `Banked payload: 2683 bytes at $BA66-$C4E1`
+    - `UI overlay: 2332 bytes at $E000-$E91C`
+    - relative to the pre-change state, that recovered `1309` bytes from the banked payload and increased resident headroom below `MAP_BASE` from `449` bytes to `1479` bytes
+  - regression verification:
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- C64 boot-art asset pipeline update:
+  - kept `commodore/c64/boot.s` and `tools/ppm_to_c64_bootart.py` unchanged
+  - added `tools/png_to_ppm.py` as a source-image adapter that enforces exact dimensions and writes the existing PPM intermediate
+  - rewired `commodore/Makefile` so C64 boot art now uses `artwork/moria8_loading_art_c64.png` as the canonical source asset
+  - preserved the existing C64 boot-art PRG staging contract at `$A000`
+  - accepted the artist PNG's unused indexed transparency metadata without altering any visible pixels
+  - verified the real asset path:
+    - `python3 tools/png_to_ppm.py artwork/moria8_loading_art_c64.png 160 200 /tmp/moria8_work_asset.ppm` -> PASS
+    - `make -C commodore out/c64/bootart64.ppm out/c64/bootart64.prg` -> PASS
 - C64 parity follow-up after the user's live screenshots:
   - kept the C64 prompt/screen-clear behavior in the product path
-  - recovered the C64 resident-byte budget by shortening the C64-only runtime UI strings instead of backing out the overwrite/prompt fixes
+  - the first bad recovery attempt shortened the C64-only runtime UI strings instead of backing out or restructuring the resident code
+  - that copy regression has now been reversed, and the resident fit is recovered structurally from dead save-side code instead
   - fixed the stale `test_main_loop.s` stub collision by removing the duplicate local `msg_init`
 - Exact verification after the C64 follow-up:
   - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
@@ -50,8 +209,6 @@ This file is a temporary working scratchpad.
   - one-drive C64 Disk Setup now leaves a one-shot fresh-setup state so the immediate save/load transaction does not ask for a second `Press any key`
   - the C64 save path now clears to a dedicated prompt/status screen before save-disk and program-disk prompts, and failed save returns redraw gameplay before re-entering the command loop
   - C64 overwrite handling now probes for an existing `THE.GAME` before writing and prompts `Overwrite? Y/N` instead of falling into a disk error on overwrite attempts
-- C64 size follow-up:
-  - the first parity pass overflowed the C64 resident boundary, so the final version keeps the behavior but trims the C64 resident footprint back under `$C000` / `$D000` by using a compact C64-specific overwrite path and shorter resident runtime strings
 - Verification:
   - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
   - `make test128-fast` -> PASS

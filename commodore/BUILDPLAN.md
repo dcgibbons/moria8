@@ -13,10 +13,12 @@
 - Shipping disk artifacts are now split by platform:
   - C64: [out/moria8-c64.d64](out/moria8-c64.d64)
   - C128: [out/moria8-c128.d71](out/moria8-c128.d71)
-- C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, and keeps it visible through the later `MORIA64` load.
+- C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, keeps it visible through the later `MORIA64` load, and is now sourced from the tracked artist PNG at `artwork/moria8_loading_art_c64.png`.
 - C128 now has a working native 80-column boot-art path that loads a generated VDC custom-charset poster helper, keeps it visible through the later `MORIA128` load, then restores the normal charset contract before the title flow.
 - The C128 boot-art helper now writes the poster attribute map before the screen map, so the custom-font poster does not flash briefly under the old charset state first.
-- The current shipping-art baseline is the simple shared fallback `MORIA8` deco logo. Higher-fidelity art is deferred until better source art exists.
+- The current shipping-art baseline is split by platform:
+  - C64 uses the shipped artist PNG through the bitmap boot-art pipeline.
+  - C128 still uses the generated fallback `MORIA8` VDC poster helper.
 - The title screen and disk directory cards now show per-platform display versions sourced from [../version.json](../version.json).
 - Town now uses a fixed shared `66x22` footprint on both platforms, with the 8-building Commodore layout refit inside that space; C64 clamps town viewport movement to that logical footprint, while C128 preserves the existing wide entry framing and prevents fake border-wall artifacts by keeping out-of-town backing space non-presentational.
 - FEAT-DISK is now operational on both platforms:
@@ -27,12 +29,21 @@
   - saving over an existing `THE.GAME` now asks for overwrite confirmation
   - C128 one-drive flows no longer ask for the program disk again after initial load
   - C64/C128 prompt cadence and fullscreen clears have been reworked so save/load disk prompts no longer stack on stale gameplay/title screens
+- Post-refactor copy audit follow-up is now closed:
+  - the restored pre-refactor save/load runtime strings remain in place
+  - the C64 resident overrun was fixed by moving the dead save-side RLE compressor to test-only ownership instead of touching user-facing copy
+  - the follow-up C64 UI ownership pass is also now closed:
+    - `UiOverlay` now owns the character and equipment modal screens on C64
+    - inventory is back on the banked C64 path because it is a high-frequency command and the measured cost is only `240` bytes
+    - monster recall and wizard stay on the banked C64 path because both can hit gameplay/tier restore flows that need the live `$E000` tier window
+    - the dead resident `string_bank.s` import and dead banked `string_bank_banked.s` import are both gone from the shipping C64 image
+    - current direct C64 assembly reports `Program fits below MAP_BASE=true` with `banked payload: 2898 bytes at $BE6E-$C9C0`
+- `FEAT-VMS-RECALL-SEMANTICS` is now closed:
+  - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
+  - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow
+  - detailed monster knowledge remains a future `look`/UX follow-up rather than a `/` responsibility
 - Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
-
-## Open Regression Bugs
-
-- No active regression bugs are currently tracked in the active build plan.
 
 ## Open Phases / Display Work
 
@@ -50,8 +61,7 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| Medium | `FEAT-BOOT-ART` improve boot presentation beyond the current fallback logo on C64/C128 | High | High | No | The current tree ships a working fallback boot-art baseline on the split platform disks: C64 uses a multicolor bitmap asset and C128 uses a native 80-column VDC custom-charset poster helper. The next art-quality step is better source art plus platform-aware conversion/touch-up, not more low-level boot plumbing. Optional glint animation remains a later embellishment. |
+| Medium | `FEAT-BOOT-ART` improve boot presentation beyond the current shipped boot art | High | High | No | C64 now ships the tracked artist PNG through the existing bitmap asset pipeline, while C128 still uses the generated 80-column fallback poster helper. The next art-quality step is C128 source-art parity and any platform-aware touch-up, not more low-level boot plumbing. Optional glint animation remains a later embellishment. |
+| Medium | `FEAT-VMS-LOOK-SEMANTICS` move `look` to the VMS-Moria directed ray contract | High | Medium | No | Replace the current drifted `look` behavior with the simpler VMS-style directed ray scan and message flow. Treat this as a redesign, not an incremental bug fix: `look` has already produced repeated regressions in the current port, so the next pass should re-anchor on upstream VMS semantics (directed rays, repeated messages along the ray, no interactive recall handoff) before changing code. |
 | Medium | `FEAT-DEPTH` restore original Moria depth semantics (`0-1200` feet in `50`-foot increments) | High | Medium | No | The original games use dungeon depth in feet rather than a hard `0-99` floor abstraction. Rework UI, save/load, recall/wizard depth entry, generation/state contracts, and any tier/deep-spawn assumptions so the port can represent original-style depth values faithfully. |
-| Medium | `FEAT-PERMADEATH-OPTION` make permadeath a player-selectable creation-time option, potentially via a broader difficulty choice | Medium | Medium | No | Add a character-creation choice that lets the player opt into permadeath rules instead of hardwiring one death policy. Final UI shape is open: standalone permadeath toggle or folded into a difficulty selection. |
 | Low | `FEAT1` expand mage/priest spells from 16 to 31 each | High | Medium | No | Requires UI pagination and likely extra overlay pressure. |
-| Low | `FEAT-AUD` audible hunger warning (buzz/beep) | Low | Medium | No | Add sound cue for Weak/Faint/Starve states to prevent surprise deaths. |

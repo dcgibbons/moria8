@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #21
+    ldx #23
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -119,9 +119,18 @@ tramp_store_enter:
 
 check_player_on_store_door:
     clc
+    nop
     rts
 
-tramp_ui_recall:
+.assert "check_player_on_store_door patch slot stays 3 bytes wide", tramp_ui_identify - check_player_on_store_door, 3
+
+tramp_ui_identify:
+    inc test_recall_ui_calls
+    jsr ui_identify_print
+    lda test_last_string_lo
+    sta test_identify_string_lo
+    lda test_last_string_hi
+    sta test_identify_string_hi
     rts
 
 tramp_dig_ability:
@@ -170,7 +179,8 @@ tramp_dig_ability:
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
-#import "../../common/ui_recall.s"
+#import "../../common/ui_equipment.s"
+#import "../../common/ui_identify.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -188,7 +198,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 22, $ff
+tc_results: .fill 24, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -235,6 +245,14 @@ test_ui_step_0: .byte 0
 test_ui_step_1: .byte 0
 test_ui_step_2: .byte 0
 test_ui_step_3: .byte 0
+test_recall_ui_calls: .byte 0
+test_key_idx: .byte 0
+test_key_len: .byte 0
+test_key_script: .fill 4, 0
+test_last_string_lo: .byte 0
+test_last_string_hi: .byte 0
+test_identify_string_lo: .byte 0
+test_identify_string_hi: .byte 0
 
 test_move_ok: .byte 0
 test_dir_ok: .byte 0
@@ -263,6 +281,7 @@ install_jump_patch:
     :PatchJump(generation_busy_tick_api, test_generation_busy_tick_api)
     :PatchJump(generation_busy_end_api, test_generation_busy_end_api)
     :PatchJump(input_get_command, test_input_get_command)
+    :PatchJump(input_get_key, test_input_get_key)
     :PatchJump(msg_clear, test_msg_clear)
     :PatchJump(turn_post_action, test_turn_post_action)
     :PatchJump(status_draw, test_status_draw)
@@ -289,6 +308,7 @@ install_jump_patch:
     :PatchJump(ui_clear_full_screen_safe, test_ui_clear_full_screen_safe)
     :PatchJump(overlay_load, test_overlay_load)
     :PatchJump(tier_check_transition, test_tier_check_transition)
+    :PatchJump(creature_get_name, test_creature_get_name)
     :PatchJump(monster_spawn_level, test_monster_spawn_level)
     :PatchJump(item_spawn_level, test_item_spawn_level)
     rts
@@ -337,6 +357,13 @@ reset_state:
     sta test_ui_step_1
     sta test_ui_step_2
     sta test_ui_step_3
+    sta test_recall_ui_calls
+    sta test_key_idx
+    sta test_key_len
+    sta test_last_string_lo
+    sta test_last_string_hi
+    sta test_identify_string_lo
+    sta test_identify_string_hi
     sta test_move_ok
     sta test_dir_ok
     sta test_open_ok
@@ -355,6 +382,10 @@ reset_state:
     sta zp_eff_paralyze
     sta vis_room_revealed
     sta msg_row1_col
+    sta recall_query_sc
+    sta recall_found_type
+    sta recall_last_sc
+    sta recall_last_idx
     lda #$ff
     sta zp_run_dir
     lda #0
@@ -396,6 +427,18 @@ test_input_get_command:
     inx
     stx test_cmd_idx
     sta zp_input_cmd
+    rts
+
+test_input_get_key:
+    ldx test_key_idx
+    cpx test_key_len
+    bcc !script_ok+
+    lda #$20
+    rts
+!script_ok:
+    lda test_key_script,x
+    inx
+    stx test_key_idx
     rts
 
 test_msg_clear:
@@ -569,6 +612,10 @@ test_screen_unblank:
 
 test_screen_put_string:
     inc test_screen_put_string_calls
+    lda zp_ptr0
+    sta test_last_string_lo
+    lda zp_ptr0_hi
+    sta test_last_string_hi
     lda #3
     jsr test_record_ui_step
     rts
@@ -620,6 +667,15 @@ test_tier_check_transition:
     sta tier_loaded
     rts
 
+test_creature_get_name:
+    lda #$18
+    sta creature_name_buf + 0
+    lda #0
+    sta creature_name_buf + 1
+    lda #<creature_name_buf
+    ldy #>creature_name_buf
+    rts
+
 test_monster_spawn_level:
     lda current_tier
     sta test_spawn_tier_seen
@@ -634,7 +690,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #15
+    ldx #23
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1380,8 +1436,110 @@ test_start:
     bne !t22_fail+
     lda #$01
     sta tc_results + 21
-    jmp test_finish
+    jmp !t23+
 !t22_fail:
     lda #$00
     sta tc_results + 21
+    jmp !t23+
+
+    // Test 23: returning from a modal gameplay view restores the active tier
+    // before redrawing on C64.
+!t23:
+    jsr reset_state
+    lda #22
+    sta test_case_idx
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    lda #10
+    sta zp_player_dlvl
+    lda #$20
+    sta test_key_script + 0
+    lda #1
+    sta test_key_len
+    lda #CMD_CHAR_INFO
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_tier_transition_calls
+    cmp #1
+    bne !t23_fail+
+    lda current_tier
+    cmp #2
+    bne !t23_fail+
+    lda test_viewport_calls
+    cmp #1
+    bne !t23_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t23_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t23_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp !t24+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
+
+    // Test 24: `/` identifies a symbol without recall data, tier reloads,
+    // or the legacy modal recall UI.
+!t24:
+    jsr reset_state
+    lda #23
+    sta test_case_idx
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    lda #10
+    sta zp_player_dlvl
+    lda #$50
+    sta test_key_script + 0
+    lda #1
+    sta test_key_len
+    lda #CMD_RECALL
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_tier_transition_calls
+    beq !t24_tier_ok+
+    lda #$02
+    sta tc_results + 23
+    jmp test_finish
+!t24_tier_ok:
+    lda test_recall_ui_calls
+    cmp #1
+    beq !t24_ui_ok+
+    lda #$03
+    sta tc_results + 23
+    jmp test_finish
+!t24_ui_ok:
+    lda test_msg_clear_calls
+    cmp #2
+    beq !t24_clear_ok+
+    lda #$04
+    sta tc_results + 23
+    jmp test_finish
+!t24_clear_ok:
+    lda test_identify_string_lo
+    cmp #<identify_p_str
+    bne !t24_fail_lo+
+!t24_lo_ok:
+    lda test_identify_string_hi
+    cmp #>identify_p_str
+    beq !t24_pass+
+!t24_fail_lo:
+    lda #$05
+    sta tc_results + 23
+    jmp test_finish
+!t24_pass:
+    lda #$01
+    sta tc_results + 23
+    jmp test_finish
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
     jmp test_finish

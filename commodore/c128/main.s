@@ -1519,11 +1519,11 @@ tramp_ui_inv_display:
 tramp_ui_equip_display:
     :C128UIOverlayDisplayTrampoline(ui_equip_display)
 
+tramp_ui_identify:
+    :C128UIOverlayDisplayTrampoline(ui_identify_print)
+
 tramp_ui_wizard_display:
     :C128UIOverlayDisplayTrampoline(ui_wizard_display)
-
-tramp_ui_recall:
-    :C128UIBankedDisplayTrampoline(ui_recall_display)
 
 tramp_item_gain_spell:
     :C128UIOverlayDisplayTrampoline(item_gain_spell)
@@ -3022,7 +3022,6 @@ runtime_low_data_end:
 banked_payload:
 .pseudopc $F000 {
 first_banked_function:
-    #import "../common/ui_recall.s"
     #import "../common/ui_home.s"
     #import "../common/player_magic_display.s"
     #import "../common/player_magic_tail.s"
@@ -3162,11 +3161,12 @@ ovl_help_end:
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
 
 // ============================================================
-// UI overlay — inventory/equipment/character/wizard modal screens at $E000
+// UI overlay — modal UI and symbol identify screens at $E000
 // ============================================================
 .segment UiOverlay
     #import "../common/ui_inventory.s"
     #import "../common/ui_character.s"
+    #import "../common/ui_identify.s"
     #import "../common/player_magic_levelup.s"
     #import "../common/ui_wizard.s"
     #import "../common/player_gain_spell.s"

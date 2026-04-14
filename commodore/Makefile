@@ -54,7 +54,9 @@ endif
 # ── Source roots ──────────────────────────────────────────
 C64_MAIN_SRC       = c64/main.s
 C64_BOOT_SRC       = c64/boot.s
+C64_BOOTART_PNG    = ../artwork/moria8_loading_art_c64.png
 C64_BOOTART_PPM    = $(OUT64)/bootart64.ppm
+C64_BOOTART_SRC_TOOL = ../tools/png_to_ppm.py
 C64_BOOTART_TOOL   = ../tools/ppm_to_c64_bootart.py
 LOGO_TOOL = ../tools/make_logo.py
 VERSION_INC_TOOL = ../tools/make_version_include.py
@@ -199,8 +201,12 @@ $(C64_OVL_UI): $(C64_MAIN_PRG)
 $(C64_BOOT_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
 
-$(C64_BOOTART_PPM): $(LOGO_TOOL) | $(OUT64)
-	python3 $(LOGO_TOOL) 160 200 $@
+$(C64_BOOTART_PNG):
+	@echo "Missing source art: $@"
+	@false
+
+$(C64_BOOTART_PPM): $(C64_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUT64)
+	python3 $(C64_BOOTART_SRC_TOOL) $(C64_BOOTART_PNG) 160 200 $@
 
 $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 	python3 $(C64_BOOTART_TOOL) $(C64_BOOTART_PPM) $(C64_BOOTART_PRG)

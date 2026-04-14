@@ -243,7 +243,6 @@ tramp_dig_ability:
 #import "../common/monster_attack.s"
 #import "../common/turn.s"
 #import "../common/store_data.s"
-#import "../common/string_bank.s"
 #import "../common/runtime_ui_strings.s"
 #import "../common/io_kernal_consts.s"
 #import "../common/save.s"
@@ -670,7 +669,7 @@ platform_services_install64:
 #import "../common/ui_help_clear.s"
 
 // ============================================================
-// UI screen trampolines — help loads from $E000 overlay, others call $F000+
+// UI screen trampolines — help and modal UI load from $E000 overlays
 // ============================================================
 tramp_ui_help_display:
     lda #OVL_HELP
@@ -689,10 +688,14 @@ tramp_ui_help_display:
     jmp tramp_sr_epilogue
 
 tramp_ui_char_display:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_char_display
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_display:
@@ -703,21 +706,30 @@ tramp_ui_inv_display:
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_display:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_equip_display
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_ui_identify:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
+    sta $01
+    jsr ui_identify_print
+    jsr tier_check_transition
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_wizard_display:
     jmp wizard_c64_menu_display
-
-tramp_ui_recall:
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
-    jsr ui_recall_display
-    jmp tramp_sr_epilogue
 
 tramp_disk_setup:
     lda #OVL_HELP
@@ -991,11 +1003,8 @@ banked_payload:
     #import "../common/ego_items.s"
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
-    #import "../common/ui_character.s"
     #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
-    #import "../common/string_bank_banked.s"
-    #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
 
 banked_code_end:
@@ -1056,18 +1065,15 @@ ovl_help_end:
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $F000, true
 
 // ============================================================
-// UI overlay — reserved placeholder on C64 for shared overlay numbering
+// UI overlay — low-frequency modal UI and symbol identify screens
 // ============================================================
 .segment UiOverlay
-// C64 modal UI lives in the resident banked payload, but startup REU stashing
-// still iterates over the shared overlay id table and loads `64.UI`. Keep this
-// overlay as a valid $E000 PRG so the loader never sees an empty `$0000` image.
-ui_overlay_placeholder:
-    rts
+    #import "../common/ui_equipment.s"
+    #import "../common/ui_character.s"
+    #import "../common/ui_identify.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true
-.assert "C64 UI overlay must not be empty", ovl_ui_end > $E000, true
 
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000

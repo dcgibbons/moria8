@@ -48,7 +48,7 @@ help_more_lines:
     .byte $fe
     .text "/"
     .byte $ff
-    .text " Recall"
+    .text " Identify"
     .byte $fc, 20
     .byte $fe
     .text "CTRL+W"
@@ -128,9 +128,9 @@ help_more_lines:
     .byte $fe
     .text "/"
     .byte $ff
-    .text " Recall"
+    .text " Identify"
     .byte $fc, 20
-    .text "then letter"
+    .text "then symbol"
     .byte 0
 
 // Rows 19-23: reserved blank lines to keep the frame layout fixed

@@ -51,7 +51,7 @@
     .byte $c4   // SHIFT+D — bash
     .byte $23   // # — toggle search mode
     .byte $2b   // + — tunnel
-    .byte $2f   // / — monster recall
+    .byte $2f   // / — identify a symbol
     .byte $17   // CTRL+W — wizard mode
     // Shifted vi-keys (running)
     .byte $cb   // SHIFT+K — run north

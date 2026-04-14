@@ -22,8 +22,8 @@
 :C128AuditBelowIo("tramp_ui_char_display", tramp_ui_char_display)
 :C128AuditBelowIo("tramp_ui_inv_display", tramp_ui_inv_display)
 :C128AuditBelowIo("tramp_ui_equip_display", tramp_ui_equip_display)
+:C128AuditBelowIo("tramp_ui_identify", tramp_ui_identify)
 :C128AuditBelowIo("tramp_ui_wizard_display", tramp_ui_wizard_display)
-:C128AuditBelowIo("tramp_ui_recall", tramp_ui_recall)
 :C128AuditBelowIo("tramp_item_gain_spell", tramp_item_gain_spell)
 :C128AuditBelowIo("tramp_player_cast_spell", tramp_player_cast_spell)
 :C128AuditBelowIo("tramp_player_pray", tramp_player_pray)
@@ -109,7 +109,6 @@
 :C128AuditDungeonOverlay("find_special_room", find_special_room)
 
 // Reloadable banked payload entrypoints.
-:C128AuditBanked("ui_recall_display", ui_recall_display)
 :C128AuditBanked("calc_spell_failure", calc_spell_failure)
 :C128AuditBanked("spell_list_display", spell_list_display)
 :C128AuditBanked("home_enter", home_enter)

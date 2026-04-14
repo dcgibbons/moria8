@@ -755,7 +755,8 @@ player_search_work: .byte 0
 
 // ============================================================
 // ui_char_draw_background — Draw sex, social class, background on char sheet
-// Called from ui_char_display ($F000). Main RAM so no banking issues.
+// Called from ui_char_display in OVL.UI on C64 and C128.
+// Main RAM so no banking issues.
 // Renders rows 12-16 of the character sheet.
 // Preserves: nothing
 // ============================================================

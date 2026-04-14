@@ -14,8 +14,9 @@ The program utilizes a BASIC stub program that runs the machine code that
 follows it directly to ensure easy loading from disk. A cartridge version of the
 program is also available.
 
-The game utilizies PETSCI characters only (for this version) and no bitmap
-graphics; bitmap graphics may be an option in a future version.
+Gameplay uses PETSCII character display only. The shipped boot/loading art uses
+platform-specific pre-title assets: a bitmap boot-art image on C64 and a custom-
+charset poster helper on C128.
 
 This game is based upon the umoria version of the Moria game (which was
 originally written in PASCAL for the VAX/VMS plataform). The source code for the
@@ -26,4 +27,3 @@ https://github.com/dungeons-of-moria/vms-moria
 Unlike the original Moria / umoria implementation, the C64 only has a 40 column
 display so the game will target that screen resolution. On the C128, the game
 can run in either 40 column or 80 column mode and it should be selectable.
-

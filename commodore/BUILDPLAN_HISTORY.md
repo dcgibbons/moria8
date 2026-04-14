@@ -6,6 +6,39 @@
 
 ---
 
+## 2026-04-13 — `FEAT-VMS-RECALL-SEMANTICS` `/` symbol identify ✅ COMPLETE
+
+### Scope Closed
+- Replaced the old combat-earned monster-recall `/` flow with a VMS-style symbol identification command.
+- Kept the feature scoped to `/` only; detailed visible-creature inspection remains future `look` work.
+- Closed the C64 memory-fit issue by moving the glossary into `OVL.UI` instead of resident main RAM.
+
+### What Changed
+1. **`/` now identifies symbols instead of opening the recall modal**
+   - [common/game_loop_helpers.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/game_loop_helpers.s) now prompts with `Enter character to be identified :`, normalizes the typed symbol, and dispatches to a new identify trampoline instead of searching learned recall state.
+   - `CMD_RECALL` remains the internal command id for compatibility, but the user-facing behavior is now symbol identification.
+2. **Glossary ownership moved into `OVL.UI`**
+   - [common/ui_identify.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_identify.s) owns the symbol lookup table and printable descriptions.
+   - [c64/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s) and [c128/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c128/main.s) now expose `tramp_ui_identify` and import the new owner into `UiOverlay`.
+   - The dead shipping `ui_recall.s` import and its shipping trampoline were removed from the platform builds; the legacy recall UI remains in test coverage only.
+3. **Help/UI text updated to match the new command**
+   - The shared 40-column and C128 80-column help data now describe `/` as `Identify` / `Identify then symbol`.
+   - The identify glossary uses current Moria8 symbol ownership where the port differs from stock VMS glyph assignments, including Commodore-specific store digits `7` and `8`.
+4. **Post-ship symbol-table alignment bug fixed**
+   - A follow-up user repro caught `p` resolving to the `q` entry.
+   - Root cause: the backslash entry in the identify key table was emitted as a two-byte escaped string, which shifted every later symbol lookup by one slot.
+   - [common/ui_identify.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_identify.s) now uses an explicit `$5c` byte for the backslash key, and the focused `/` main-loop regression now covers the reported `p` case directly.
+
+### Verification
+- `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- `make test128-fast` = `PASS`
+
+### Outcome
+- `/` now matches the intended VMS-style command split: symbol help lives on `/`, while richer monster inspection is no longer tied to combat-earned recall from this command.
+- The feature is removed from active work.
+
+---
+
 ## 2026-04-13 — `FEAT-DISK-POLISH` / save-load refactor closure ✅ COMPLETE
 
 ### Scope Closed
@@ -44,6 +77,39 @@
   - load resumes gameplay without consuming the save
   - death no longer deletes the save
   - overwriting a save requires explicit confirmation
+- The old `FEAT-PERMADEATH-OPTION` backlog item is retired as well: the project now intentionally preserves saves after load and after death, so permadeath is no longer the planned direction for this port.
+
+---
+
+## 2026-04-13 — `FEAT-AUD` audible hunger warning ✅ COMPLETE
+
+### Scope Closed
+- Added a new hunger warning sound family distinct from the existing combat/UI palette.
+- Kept hunger-state classification pure and fired audio only on worsening hunger transitions.
+- Closed the C64 test regressions exposed by the added shared-code growth.
+
+### What Changed
+1. **New shared hunger warning sounds**
+   - [common/sound.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/sound.s) now defines:
+     - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
+     - `SFX_HUNGER_FAINT` for entry into `FAINT`
+   - Both sounds use new low pulse-wave contours so they do not overlap the existing combat/UI effect palette.
+2. **Turn-path trigger policy**
+   - [common/turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/turn.s) now compares the old and new hunger state inside `turn_tick_hunger` and only plays audio when hunger gets worse.
+   - `player_update_hunger_state` remains a pure classifier and does not play sound during redraws or recovery/eat paths.
+   - The final helper shape preserves the starvation damage tail on the `food == 0` path instead of tail-jumping out through `sound_play`.
+3. **Regression coverage and harness fixes**
+   - [c64/tests/test_sound_monitor.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_sound_monitor.s) now validates both new SID register signatures.
+   - [c64/tests/test_turn.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_turn.s) now covers entry into `HUNGRY`, `WEAK`, `FAINT`, plus no-replay behavior for steady/recovery states.
+   - [c64/tests/test_main_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_main_loop.s) now keeps `check_player_on_store_door` as a 3-byte patch slot with an assert, fixing the layout-sensitive stub corruption that the added shared bytes exposed.
+
+### Verification
+- `make test64` = `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+- `make test128-fast` = `PASS`
+
+### Outcome
+- `FEAT-AUD` is removed from active feature work.
+- The port now warns audibly on worsening hunger without adding redraw spam or changing recovery semantics.
 
 ---
 
@@ -141,6 +207,147 @@
 ### Outcome
 - `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, and `BUG-C128-LOOK-DOOR-RANGE` are removed from active work.
 - Directed `look` now behaves consistently across C64 and C128, while still respecting the intended shared LoS/visibility rule instead of a wrong-bank artifact on C128.
+
+## 2026-04-13 — `FEAT-C64-BOOT-ART-ASSET` artist-supplied C64 boot art ✅ COMPLETE
+
+### Scope Closed
+- Replaced the generated fallback-logo source on C64 with the tracked artist PNG at [../artwork/moria8_loading_art_c64.png](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/artwork/moria8_loading_art_c64.png).
+- Kept the existing C64 bootloader contract and the existing multicolor bitmap packer intact.
+- Documented the new source-art pipeline and verified the real generated C64 boot-art artifacts.
+
+### What Changed
+1. **Canonical C64 source art**
+   - C64 boot art is now sourced from the tracked artist PNG instead of the fallback output of `make_logo.py`.
+   - The art asset now lives in [artwork](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/artwork) as part of the repo.
+2. **Build pipeline only**
+   - [tools/png_to_ppm.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/png_to_ppm.py) converts the PNG into the existing `160x200` PPM intermediate.
+   - [commodore/Makefile](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/Makefile) now feeds that PPM into the unchanged [tools/ppm_to_c64_bootart.py](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/tools/ppm_to_c64_bootart.py) stage.
+   - [commodore/c64/boot.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/boot.s) was left unchanged.
+3. **Visible-art safety**
+   - The conversion path accepts the artist PNG's unused indexed-transparency metadata without flattening or editing visible pixels.
+   - The generated output contract is still `bootart64.ppm` -> `bootart64.prg` staged at `$A000` for the existing display/copy path.
+
+### Verification
+- `python3 tools/png_to_ppm.py artwork/moria8_loading_art_c64.png 160 200 /tmp/moria8_work_asset.ppm`
+- `make -C commodore out/c64/bootart64.ppm out/c64/bootart64.prg`
+- Generated artifacts:
+  - [commodore/out/c64/bootart64.ppm](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c64/bootart64.ppm)
+  - [commodore/out/c64/bootart64.prg](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/out/c64/bootart64.prg)
+
+### Outcome
+- C64 no longer ships the generated fallback logo as its boot-art source.
+- C128 still ships the generated fallback poster path, so future FEAT-BOOT-ART work is now about C128 parity or optional embellishment rather than the C64 asset pipeline.
+
+## 2026-04-13 — C64 save/load runtime-string regression audit
+
+### Scope
+- Audited the post-`save/load refactor (#9)` runtime-string changes after the restored load greeting exposed an unauthorized C64 copy regression.
+- Restored the pre-refactor save/load runtime strings in the working tree before any byte-recovery work.
+- Measured the exact C64 overrun caused by the restored strings so future fixes can target code/layout instead of copy.
+
+### Findings
+- The string-shortening change lived in [common/runtime_ui_strings.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/runtime_ui_strings.s) and was the direct cause of the visible `Welcome.` / `Welcome back.` regression.
+- Restoring the pre-refactor strings adds `54` bytes on C64 and moves `program_end` from `$BFF8` to `$C02E`.
+- The exact illegal region is `$C000-$C02D`, which is `46` bytes past `MAP_BASE`.
+- With the restored strings in place, the staged banked payload then occupies `$C02E-$CFC6`, overlapping the dungeon-map window until the resident footprint is reduced elsewhere.
+
+### Verification
+- Baseline comparison:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `Banked payload: 3992 bytes at $BFF8-$CF90`
+- Restored-string audit:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=false`
+  - `Banked payload: 3992 bytes at $C02E-$CFC6`
+
+### Outcome
+- The byte budget problem is now quantified precisely.
+- The durable rule is product-facing: recover C64 bytes from code/layout, not by shortening approved user-facing strings without explicit consent.
+
+## 2026-04-13 — C64 resident-byte recovery after runtime-string restore ✅ COMPLETE
+
+### Scope Closed
+- Closed the C64 `MAP_BASE` overrun introduced by restoring the pre-refactor save/load runtime strings.
+- Recovered the needed resident bytes without changing any user-facing copy.
+- Kept the save test coverage for the old map compressor path without carrying that compressor in the shipping resident image.
+
+### Root Cause
+- [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/save.s) still carried the old in-memory `rle_compress_map` helper, its scratch state, and its 128-byte literal buffer even though production save/load now writes the dungeon map raw.
+- That dead resident test helper was enough to push `program_end` from `$BFF8` to `$C02E` once the full runtime strings were restored.
+
+### What Changed
+1. **Dead resident compressor moved to test-only ownership**
+   - [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/save.s) now gates the in-memory RLE compressor state and routines behind `SAVE_TEST_RLE`.
+   - Production save/load keeps the raw-map contract unchanged and retains only a dedicated 8-byte `save_magic_buf` scratch for header verification.
+2. **Save test opted into the helper explicitly**
+   - [c64/tests/test_save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/tests/test_save.s) now defines `SAVE_TEST_RLE` so the round-trip compressor coverage still assembles in the unit image.
+3. **No overlay move was needed**
+   - The first recovery step solved the resident-pressure problem outright, so `title_screen.s` and `score_io.s` stayed in their existing ownership for now.
+
+### Verification
+- Exact layout gate:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `Banked payload: 3992 bytes at $BE6C-$CE04`
+- Broader regression gate:
+  - `make test64`
+  - `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+### Outcome
+- The restored runtime strings remain intact, including `Welcome back to Moria8!`.
+- The resident-byte recovery came from removing dead production ownership, not from more copy degradation.
+- Relative to the restored-string overflow state, the fix recovered `450` bytes of resident headroom and cleared the original `46`-byte `MAP_BASE` overrun with margin.
+
+## 2026-04-13 — C64 `OVL.UI` ownership pass and follow-up corrections ✅ COMPLETE
+
+### Scope Closed
+- Converted the C64 `UiOverlay` from a placeholder into the real owner for the modal UI it can safely and productively own.
+- Removed the now-dead shipping C64 import of [`common/string_bank.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/string_bank.s).
+- Landed the overlay move, then corrected the ownership mistakes exposed by live testing:
+  - recall stayed banked
+  - wizard was moved back to the banked C64 path
+  - inventory was moved back to the banked C64 path
+
+### Root Cause
+- After the earlier `save.s` cleanup, the next real ceiling was no longer resident `MAP_BASE` pressure. It was the banked `$F000` payload, which still had only `98` bytes of headroom below the vector ceiling while the dedicated `UiOverlay` slot was effectively empty.
+- The shipping C64 image also still carried an unreferenced resident import of `string_bank.s`.
+- Live testing then narrowed the safe ownership boundary further:
+  - recall cannot live in `OVL.UI` because it reads live creature/tier state that already occupies the `$E000` overlay window
+  - wizard also cannot live in `OVL.UI` on C64 because wizard entry/restore paths can redraw gameplay and re-check/reload the active tier, which repopulates `$E000` and self-clobbers any still-running overlay code
+  - inventory is technically safe in `OVL.UI`, but product-wise it is a high-frequency command and the measured cost to restore it to the banked path was only `240` bytes
+
+### What Changed
+1. **C64 modal UI ownership rebalanced**
+   - [c64/main.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/c64/main.s) now uses `OVL_UI` only for the C64 screens that benefit from it without violating the live `$E000` data contract.
+   - Final C64 ownership is:
+     - overlay-backed: [ui_character.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_character.s), [ui_equipment.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_equipment.s)
+     - banked: [ui_inventory.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_inventory.s), [ui_recall.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_recall.s), [wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/wizard.s), [ui_home.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_home.s)
+2. **Recall/tier seam hardened**
+   - [game_loop_helpers.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/game_loop_helpers.s) and [ui_restore.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_restore.s) now explicitly re-check the active tier before C64 gameplay redraw after overlay-backed modals.
+   - The `/` path now reports `Nothing recalled.` instead of silently dropping back to gameplay when no learned recall data exists for the requested symbol.
+3. **Wizard ownership corrected after live regression**
+   - [wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/wizard.s) regained the full C64 wizard menu/command owner after the overlay version proved unsafe live.
+   - [ui_wizard.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-work/commodore/common/ui_wizard.s) remains the C128 overlay owner.
+4. **Dead shipping imports removed**
+   - The C64 main build no longer imports `common/string_bank.s`; the remaining `bank_load_recall` coverage stays in the unit tests that import that file directly.
+   - The C64 banked payload also no longer imports `common/string_bank_banked.s`; `bank_decode_string` had no production callsites and only remained referenced from the subsystem tests that import that file directly.
+
+### Verification
+- Exact layout gate:
+  - `make -C commodore out/c64/moria8.prg`
+  - `Program fits below MAP_BASE=true`
+  - `banked payload: 2898 bytes at $BE6E-$C9C0`
+  - `UI overlay: 1081 bytes at $E000-$E439`
+- Broader regression gate:
+  - `make test64`
+  - `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+### Outcome
+- The banked payload is still far healthier than the pre-pass `3992`-byte state, even after restoring inventory and wizard to the banked path where live testing and product feel said they belong.
+- The dead-code audit recovered an additional `25` bytes by removing the unused shipping `string_bank_banked.s` import.
+- The final C64 tree now uses `UiOverlay` only for the low-frequency modal UI it can safely own and where the disk-load tradeoff makes sense.
+- The durable design rule is stricter than the first pass assumed: on C64, `OVL.UI` is only safe for features that will not trigger gameplay/tier restore while still executing from the overlay window.
 
 ## 2026-04-01 — `BUG-C128-BOOTART-ORDER` poster/charset flash fix ✅ COMPLETE
 

@@ -1398,12 +1398,12 @@ slain_str:
 death_source_saved:
     .byte 0
 
-// Recall command variables
-recall_prompt_str: .text "Recall which? " ; .byte 0
-recall_query_sc:   .byte 0             // Screen code of typed letter
-recall_found_type: .byte 0             // Creature type index found
-recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)
-recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
+// `/` symbol-identify prompt plus legacy monster-recall workspace.
+identify_prompt_str: .text "Enter character to be identified :" ; .byte 0
+recall_query_sc:     .byte 0             // Normalized screen code of typed symbol
+recall_found_type:   .byte 0             // Legacy monster-recall UI workspace
+recall_last_sc:      .byte 0             // Legacy monster-recall UI workspace
+recall_last_idx:     .byte 0             // Legacy monster-recall UI workspace
 run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
 
 #if C128_TEST_FORCE_DUNGEON_MELEE

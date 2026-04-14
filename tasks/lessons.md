@@ -6,6 +6,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Verification
 
 - Treat the user's exact failing command or repro as the primary gate until it passes.
+- When sibling repo checkouts or worktrees exist, verify the exact target repo path before editing, building, or concluding an asset is missing.
 - For live platform/config-specific regressions, build an exact automated repro of that same path before changing product code. If the automation does not go red the same way, do not ask the user to validate speculative fixes.
 - For C128 title `L`, distinguish “save disk already mounted before `L`” from “program disk still mounted, prompt to insert save disk.” A smoke that waits for the old first swap prompt is invalid evidence for the mounted-save-disk user path, and a mounted-save-disk harness must allow direct resume before any swap breakpoint.
 - For VICE native-monitor boot repros, do not trust the monitor log alone for crash detection. `JAM` can be emitted on emulator stdout/stderr, so exact repro harnesses must capture both monitor output and process output before deciding a boot passed.
@@ -24,6 +25,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Scope And Design
 
+- On this project, do not shorten user-facing strings to recover C64 bytes without explicit user consent. Treat visible copy as part of the product contract and recover space elsewhere first.
 - When a new visible title/boot regression appears on the active branch, freeze the unrelated save/load chase immediately. Restore the title path to the last proven product contract before treating later save/load evidence as meaningful again.
 - On this C128 title path, disabling a cache flag is not the same as restoring the older loader contract. If the live regression came with a new loader/helper path, revert the active call path itself instead of leaving the new helper in control and hoping the symptoms disappear.
 - When the user broadens a repro, redesign around the shared owner, not the first visible trigger or old bug label.
@@ -33,6 +35,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - On FEAT-DISK, `L`oad and writable setup are different contracts. First-time load should validate an existing save disk only; only explicit Disk Setup or a real save path may offer initialization.
 - If title `L` is running in one-drive mode and the program disk is no longer mounted, do not return to title/menu just to explain a wrong save disk. Keep the user inside the save-disk retry loop until they present a valid save disk.
 - On tight C64 code, put explanation text in the overlay/banked UI when possible instead of the resident caller. The user still needs the reason, but the resident title path should only carry the control decision.
+- In Kick Assembler lookup tables, do not use escaped `.text` forms for single-byte punctuation keys. For characters like backslash or quote, emit the exact byte explicitly and verify table count against pointer-table count, or later entries can shift silently.
 - On C64, a live hang with low-RAM PC values and repeated `IRQ -> $FFFF` is a banking-contract bug first: assume `$01=$35` leaked into an interrupt-driven input loop and harden the prompt/return seam before blaming disk I/O.
 - On C64, treat title/UI re-entry as its own banking boundary: normalize back to `$01=$36`, restore the runtime IRQ wedge, and repair VIC bank state at the boundary itself instead of trusting each preceding KERNAL caller to leave UI code in a safe state.
 - On 6502, never try to carry saved processor state across a `JSR`/`RTS` boundary on the hardware stack; if a helper must preserve flags across separate enter/exit routines, save them in explicit memory and rebuild `P` locally before return.
@@ -193,6 +196,13 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Layout And Build Safety
 
 - After assembly or import-order changes, re-check memory-map boundaries and treat new hangs or timeouts as likely layout regressions first.
+- On this repo, if a C64 test starts hanging right after shared code growth, treat it as a memory/layout bug first and inspect patch slots, hard-coded test buffers, and breakpoint/bootstrap contracts before blaming feature logic.
+- On memory-bound C64 code, remove dead production helpers before planning overlay moves or string compression. If a helper only exists to support a unit test path, gate it to the test build instead of carrying its state and buffers in the shipping resident image.
+- On C64, if the banked `$F000` payload is tight while `OVL.UI` is empty, move modal UI ownership into the overlay before attempting deeper compression or shared-runtime surgery.
+- On C64, do not move a modal screen into `OVL.UI` unless its live data is independent of the `$E000` overlay window. Monster recall still has to stay banked because it reads creature/tier state that shares that same window.
+- On C64, do not keep a feature in `OVL.UI` if that feature can trigger gameplay or tier restore while still executing from the overlay. Any path that can reload the active tier will repopulate `$E000` and self-clobber the running overlay code; keep those flows banked or return to banked code before restoring gameplay.
+- On C64, if an overlay-backed modal returns to gameplay through a custom redraw path instead of `ui_view_restore_modal_overlay` or `ui_view_redraw_gameplay_view`, it still needs the same tier-state recheck before gameplay resumes. Character view was a separate return seam and broke recall after the `OVL.UI` move until that was fixed explicitly.
+- For dead-code audits on this repo, verify shipping callsites separately from test callsites. A helper that still appears in subsystem tests can still be completely dead in the shipping C64 image and worth removing from the real import graph.
 - For disk images with patched boot sectors or reserved media, reserve the owned sector before file allocation.
 - When a build or test depends on tool handoff, make fresh-build paths deterministic; do not rely on warm outputs or fragile temp-path behavior.
 

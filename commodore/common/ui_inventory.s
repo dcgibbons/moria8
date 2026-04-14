@@ -1,9 +1,8 @@
 #importonce
-// ui_inventory.s — Inventory and Equipment display screens
+// ui_inventory.s — Inventory display screen
 //
-// Full-screen overlays following the ui_help.s / ui_character.s pattern.
+// Full-screen inventory view.
 // CMD_INVENTORY shows carried items (slots 0-21).
-// CMD_EQUIPMENT shows equipped items (slots 22-29).
 
 #if C128
 .const UINV_TITLE_COL = (SCREEN_COLS - 9) / 2
@@ -143,173 +142,14 @@ ui_inv_display:
 
     rts
 
-// ui_equip_display — Show equipped items (slots 22-29)
-// 8 slots: WEAPON, BODY, SHIELD, HEAD, HANDS, FEET, LIGHT, RING
-// Preserves: nothing
-ui_equip_display:
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr ui_help_clear_all
-
-    // Title
-    lda #0
-    sta zp_cursor_row
-    lda #UINV_TITLE_COL
-    sta zp_cursor_col
-    lda #<ueq_title_str
-    sta zp_ptr0
-    lda #>ueq_title_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    // Separator
-    lda #1
-    sta zp_cursor_row
-    lda #UINV_TITLE_COL
-    sta zp_cursor_col
-    lda #<uinv_sep_str
-    sta zp_ptr0
-    lda #>uinv_sep_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    // Iterate 8 equipment slots
-    lda #0
-    sta uinv_slot               // 0-7 (maps to inv slot 22-29)
-    sta uinv_visible            // Visible ordinal for non-empty selection rows
-
-!ueq_loop:
-    lda uinv_slot
-    cmp #MAX_EQUIP_SLOTS
-    bcc !ueq_cont+
-    jmp !ueq_done+
-!ueq_cont:
-
-    // Row = slot + 2
-    clc
-    adc #2
-    sta zp_cursor_row
-    lda #1
-    sta zp_cursor_col
-
-    lda uinv_slot
-    clc
-    adc #EQUIP_WEAPON           // Map 0-7 → 22-29
-    sta uinv_equip_idx
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !ueq_empty_prefix+
-
-    lda #COL_LGREY
-    sta zp_text_color
-    lda uinv_visible
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr screen_put_char
-    lda #$29                    // ')'
-    jsr screen_put_char
-    lda #$20                    // space
-    jsr screen_put_char
-    inc uinv_visible
-    jmp !ueq_prefix_done+
-
-!ueq_empty_prefix:
-    lda #4
-    sta zp_cursor_col
-
-!ueq_prefix_done:
-    // Print slot label
-    lda #COL_LGREY
-    sta zp_text_color
-    ldx uinv_slot
-    lda ueq_label_ptrs_lo,x
-    sta zp_ptr0
-    lda ueq_label_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    // Check if slot has an item
-    ldx uinv_equip_idx
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !ueq_none+
-
-    // Print item name with ego prefix/suffix (R14)
-    lda #COL_WHITE
-    sta zp_text_color
-    jsr put_inv_name_with_ego
-    // Pseudo-ID quality tag for unidentified items with IF_TRIED
-    ldx uinv_equip_idx
-    lda inv_flags,x
-    and #IF_IDENTIFIED
-    bne !ueq_no_pid+
-    lda inv_flags,x
-    and #IF_TRIED
-    beq !ueq_no_pid+
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #$20                    // Space
-    jsr screen_put_char
-    lda #$28                    // '('
-    jsr screen_put_char
-    // X still = uinv_equip_idx (screen_put_char only clobbers Y)
-    jsr pid_get_quality         // A = quality index 0-4, X preserved
-    clc
-    adc #HSTR_PID_TERRIBLE      // Sequential: TERRIBLE=0, BAD=1, ...
-    tax
-    jsr huff_decode_string      // zp_ptr0/hi → hd_decode_buf
-    // Skip "Sense: " prefix with carry-safe pointer math.
-    lda zp_ptr0
-    clc
-    adc #7
-    sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #0
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #$29                    // ')'
-    jsr screen_put_char
-!ueq_no_pid:
-    jmp !ueq_next+
-
-!ueq_none:
-    lda #COL_DGREY
-    sta zp_text_color
-    lda #<ueq_none_str
-    sta zp_ptr0
-    lda #>ueq_none_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-!ueq_next:
-    inc uinv_slot
-    jmp !ueq_loop-
-
-!ueq_done:
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #24
-    sta zp_cursor_row
-    lda #UINV_FOOTER_COL
-    sta zp_cursor_col
-    lda #<press_key_str
-    sta zp_ptr0
-    lda #>press_key_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-
-    rts
-
 // ============================================================
 // Scratch
 // ============================================================
-uinv_slot:      .byte 0
-uinv_row:       .byte 0
-uinv_any:       .byte 0
-uinv_equip_idx: .byte 0
-uinv_visible:   .byte 0
-uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
+uinv_slot:    .byte 0
+uinv_row:     .byte 0
+uinv_any:     .byte 0
+uinv_visible: .byte 0
+uinv_filter:  .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 
 // ============================================================
 // String data (screen codes via inherited encoding)
@@ -317,26 +157,3 @@ uinv_filter:    .byte $ff       // $FF=all, $FE=wearable, 0-15=exact ICAT match
 uinv_title_str:   .text "Inventory" ; .byte 0
 uinv_sep_str:     .text "---------" ; .byte 0
 uinv_nothing_str: .text "Nothing." ; .byte 0
-
-ueq_title_str:    .text "Equipment" ; .byte 0
-ueq_none_str:     .text "(none)" ; .byte 0
-
-// Equipment slot label strings
-ueq_lbl_weapon: .text "Weapon: " ; .byte 0
-ueq_lbl_body:   .text "Body:   " ; .byte 0
-ueq_lbl_shield: .text "Shield: " ; .byte 0
-ueq_lbl_head:   .text "Head:   " ; .byte 0
-ueq_lbl_hands:  .text "Hands:  " ; .byte 0
-ueq_lbl_feet:   .text "Feet:   " ; .byte 0
-ueq_lbl_light:  .text "Light:  " ; .byte 0
-ueq_lbl_ring:   .text "Ring:   " ; .byte 0
-
-ueq_label_ptrs_lo:
-    .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
-    .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
-
-ueq_label_ptrs_hi:
-    .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
-    .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
-
-// banked_ego_put_suffix — relocated to main.s (R14)

@@ -60,6 +60,7 @@ test_exit_trampoline:
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
+#import "../../common/ui_equipment.s"
 #import "../../common/ui_recall.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"

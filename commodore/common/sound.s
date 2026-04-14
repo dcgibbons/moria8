@@ -46,6 +46,8 @@
 .const SFX_LEVELUP     = $05  // Level up
 .const SFX_SPELL      = $06  // Spell cast success
 .const SFX_SPELL_FAIL = $07  // Spell fizzle
+.const SFX_HUNGER_WARN  = $08  // Entered hungry/weak
+.const SFX_HUNGER_FAINT = $09  // Entered faint
 
 // ============================================================
 // Subroutines
@@ -75,7 +77,7 @@ sound_init:
 sound_play:
     cmp #SFX_NONE
     beq !done+
-    cmp #8
+    cmp #10
     bcs !done+              // Defensive: ignore invalid effect IDs instead of indirect-jumping into garbage
     sta zp_snd_effect
     txa
@@ -102,7 +104,11 @@ sound_play:
     beq !play_levelup+
     cmp #SFX_SPELL
     beq !play_spell+
-    jsr sfx_spell_fail
+    cmp #SFX_SPELL_FAIL
+    beq !play_spell_fail+
+    cmp #SFX_HUNGER_WARN
+    beq !play_hunger_warn+
+    jsr sfx_hunger_faint
     jmp !restore+
 !play_bump:
     jsr sfx_bump
@@ -124,6 +130,12 @@ sound_play:
     jmp !restore+
 !play_spell:
     jsr sfx_spell
+    jmp !restore+
+!play_spell_fail:
+    jsr sfx_spell_fail
+    jmp !restore+
+!play_hunger_warn:
+    jsr sfx_hunger_warn
 
 !restore:
     pla
@@ -250,5 +262,41 @@ sfx_spell_fail:
     lda #$0c
     sta SID_V3_FREQ_HI
     lda #WAVE_NOISE | WAVE_GATE
+    sta SID_V3_CTRL
+    rts
+
+// Hunger warn: restrained low narrow pulse
+sfx_hunger_warn:
+    lda #$27
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    lda #$00
+    sta SID_V3_PW_LO
+    lda #$02
+    sta SID_V3_PW_HI
+    lda #$00
+    sta SID_V3_FREQ_LO
+    lda #$08
+    sta SID_V3_FREQ_HI
+    lda #WAVE_PULSE | WAVE_GATE
+    sta SID_V3_CTRL
+    rts
+
+// Hunger faint: lower, harsher pulse used only at the final danger state
+sfx_hunger_faint:
+    lda #$3a
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    lda #$00
+    sta SID_V3_PW_LO
+    lda #$01
+    sta SID_V3_PW_HI
+    lda #$00
+    sta SID_V3_FREQ_LO
+    lda #$05
+    sta SID_V3_FREQ_HI
+    lda #WAVE_PULSE | WAVE_GATE
     sta SID_V3_CTRL
     rts
