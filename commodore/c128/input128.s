@@ -126,7 +126,7 @@ input_run_scan_held_raw:
 // Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_held:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     lda #0
     rts
 #else
@@ -143,7 +143,7 @@ input_run_key_check:
 // Output: A = 1 on new key-down edge, 0 otherwise
 // Destroys: A, X, Y
 input_run_cancel_check:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     lda #0
     rts
 #else
@@ -159,7 +159,7 @@ input_run_cancel_check:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     ldx c128_test_input_idx
     lda c128_test_input_script,x
     bne !igk_script_ok+
@@ -209,13 +209,14 @@ igk_stable: .byte 0
 ips_raw_sample: .byte 0
 irk_result: .byte 0
 irk_ext_save: .byte 0
+csp_ctrl: .byte 0
 
 // input_wait_release — Block until keyboard is released (C128 direct scan)
 // Used before one-shot "press any key" prompts to avoid consuming
 // a still-held selection key from the previous screen.
 // Preserves: nothing
 input_wait_release:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     rts
 #else
 #if C128_REAL_BOOT_DIAG
@@ -311,7 +312,7 @@ input_process_sample_strict:
     lda #0
     rts
 
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
 c128_test_input_idx: .byte 0
 c128_test_input_script:
 #if C128_TEST_SCRIPTED_SPELL
@@ -363,6 +364,18 @@ c128_test_input_script:
     .byte $41              // A = Magic Missile
     .byte $4c              // L = east
     .byte $20              // SPACE = dismiss -MORE- / fizzle
+#elif C128_TEST_SCRIPTED_PRAYER
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $41              // A = priest
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $50              // P = pray
+    .byte $41              // A = first visible prayer book
+    .byte $43              // C = Bless
 #else
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -412,6 +425,8 @@ cia_scan_petscii:
     // Default shift state: unshifted ($80). Updated inline during row scan.
     lda #$80
     sta csp_shift
+    lda #0
+    sta csp_ctrl
 
     // Pre-detect shift state so both LSHIFT (row 1) and RSHIFT (row 6)
     // are known before scanning rows that contain movement letters (HJKL on row 4).
@@ -437,6 +452,20 @@ cia_scan_petscii:
     lda #$00
     sta csp_shift
 !csp_shift_r_done:
+
+    // Pre-detect Ctrl so command normalization can use the same sampled
+    // matrix state that produced the key edge, instead of racing a later
+    // physical-key probe in input_get_command.
+    lda #$7F            // Row 7 drive mask
+    sta CIA1_PORTA
+    nop
+    nop
+    lda CIA1_PORTB
+    and #$04            // Active low: 0 = CTRL pressed
+    bne !csp_ctrl_done+
+    lda #1
+    sta csp_ctrl
+!csp_ctrl_done:
 
     // --- Scan all 8 rows for a non-shift key ---
     lda #$FE            // Row 0: bit 0 driven low
@@ -571,30 +600,33 @@ cia_scan_petscii:
 
     // Apply shift modifier
     ldy csp_shift
-    bne !csp_return+    // $80 = unshifted
+    bne !csp_ctrl_normalize+    // $80 = unshifted
 
     // Shifted: handle special cases for symbols that don't follow +$80 rule
     cmp #$2E            // unshifted . → shifted > ($3E)
     bne !csp_shift_not_dot+
     lda #$3E
-    bne !csp_return+    // (always taken)
+    bne !csp_ctrl_normalize+    // (always taken)
 !csp_shift_not_dot:
     cmp #$2C            // unshifted , → shifted < ($3C)
     bne !csp_shift_not_comma+
     lda #$3C
-    bne !csp_return+
+    bne !csp_ctrl_normalize+
 !csp_shift_not_comma:
     cmp #$2F            // unshifted / → shifted ? ($3F)
     bne !csp_shift_not_hash+
     lda #$3F
-    bne !csp_return+
+    bne !csp_ctrl_normalize+
 !csp_shift_not_hash:
     cmp #$33            // unshifted 3 → shifted # ($23)
     bne !csp_shift_default+
     lda #$23
-    bne !csp_return+
+    bne !csp_ctrl_normalize+
 !csp_shift_default:
     ora #$80            // Letters ($41–$5A) + cursor keys ($11,$1D): add $80
+!csp_ctrl_normalize:
+    ldy csp_ctrl
+    jsr input_normalize_ctrl_chords_with_state
 !csp_return:
     plp
     rts
@@ -650,19 +682,6 @@ input_get_command:
 
 !get_key:
     jsr input_get_key_fast
-    cmp #$57                // W
-    beq !igc_ctrl_chord+
-    cmp #$d7                // SHIFT+W fallback
-    bne !igc_got_key+
-!igc_ctrl_chord:
-    pha
-    jsr input_ctrl_held_raw
-    beq !igc_no_ctrl+
-    pla
-    lda #$17                // CTRL+W pseudo-PETSCII
-    bne !igc_got_key+
-!igc_no_ctrl:
-    pla
 !igc_got_key:
 #if PERF_P1
     // Debug-only shortcut: 'V' dumps PERF_P1 counters in-game.
@@ -684,30 +703,7 @@ input_get_command:
     sta zp_input_cmd
     rts
 
-// input_ctrl_held_raw — Non-blocking physical Ctrl-state probe
-// Output: A = 1 if Ctrl currently held, 0 otherwise
-// Preserves: X, Y
-input_ctrl_held_raw:
-    php
-    sei
-    lda #$7f                // Row 7 drive mask
-    sta CIA1_PORTA
-    nop
-    nop
-    lda CIA1_PORTB
-    and #$04                // Active low: 0 = CTRL pressed
-    lda #0
-    bne !icrh_done+
-    lda #1
-!icrh_done:
-    pha
-    lda #$ff
-    sta CIA1_PORTA
-    pla
-    plp
-    rts
-
-#if C128_INPUT_TEST
+#if C128
 // input_normalize_ctrl_chords_with_state — Pure normalization helper used by
 // the unit test to cover the Ctrl+W chord rescue without requiring live CIA
 // state.
@@ -724,7 +720,9 @@ input_normalize_ctrl_chords_with_state:
     lda #$17
 !inct_done:
     rts
+#endif
 
+#if C128_INPUT_TEST
 // input_normalize_shifted_symbols_with_state — Pure helper for the test suite
 // to cover C128 shifted-symbol normalization without a live CIA scan.
 // Input: A = unshifted PETSCII, Y = 0 if unshifted, nonzero if shifted
@@ -762,7 +760,7 @@ input_normalize_shifted_symbols_with_state:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key_fast:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
     jmp input_get_key
 #else
 #if C128_REAL_BOOT_DIAG

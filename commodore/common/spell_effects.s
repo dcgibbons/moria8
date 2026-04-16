@@ -2,8 +2,9 @@
 // spell_effects.s — Shared effect subroutines for spells, potions, scrolls, etc.
 //
 // Phase 7.0: Extracted from player_items.s inline handlers.
-// Each subroutine implements a single effect and does NOT print messages
-// (callers handle messaging) unless noted.
+// Each subroutine implements a single effect. Base effect routines stay
+// message-light; `*_msg` wrappers own player-facing feedback when a spell or
+// item path needs it.
 //
 // Subroutines:
 //   eff_heal            — Heal player HP by amount in A

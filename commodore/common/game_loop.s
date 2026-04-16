@@ -61,6 +61,86 @@ c128_test_seed_scripted_spell_state:
     rts
 #endif
 
+#if C128_TEST_SCRIPTED_PRAYER
+c128_test_seed_scripted_prayer_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_PRIEST
+    sta player_data + PL_CLASS
+    lda #SPELL_PRIEST
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_WIS_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #%00000111
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_prayer_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_prayer_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+
+c128_test_prayer_msg_str:
+    .text "You feel righteous!" ; .byte 0
+
+c128_test_prayer_history_has_bless:
+    lda #<msg_history
+    sta zp_ptr0
+    lda #>msg_history
+    sta zp_ptr0_hi
+    ldx #MSG_HIST_COUNT
+!c128_tp_scan_slot:
+    ldy #0
+!c128_tp_cmp:
+    lda c128_test_prayer_msg_str,y
+    beq !c128_tp_found+
+    cmp (zp_ptr0),y
+    bne !c128_tp_next_slot+
+    iny
+    jmp !c128_tp_cmp-
+!c128_tp_next_slot:
+    clc
+    lda zp_ptr0
+    adc #<MSG_HIST_LEN
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #>MSG_HIST_LEN
+    sta zp_ptr0_hi
+    dex
+    bne !c128_tp_scan_slot-
+    clc
+    rts
+!c128_tp_found:
+    sec
+    rts
+#endif
+
 #if C64_TEST_SCRIPTED_SPELL
 c64_test_seed_scripted_spell_state:
     lda #0
@@ -354,6 +434,9 @@ game_new_start:
 #if C128_TEST_SCRIPTED_SPELL
     jsr c128_test_seed_scripted_spell_state
 #endif
+#if C128_TEST_SCRIPTED_PRAYER
+    jsr c128_test_seed_scripted_prayer_state
+#endif
 #if C64_TEST_SCRIPTED_SPELL
     jsr c64_test_seed_scripted_spell_state
 #endif
@@ -646,6 +729,21 @@ c128_town_move_diag_loop_top:
     bcc !c128_test_spell_return_done+
     jmp c128_test_spell_pass_sym
 !c128_test_spell_return_done:
+#endif
+#if C128_TEST_SCRIPTED_PRAYER
+    lda c128_test_spell_return_pending
+    beq !c128_test_prayer_return_done+
+    dec c128_test_spell_return_pending
+    inc c128_test_spell_return_count
+    lda c128_test_spell_return_count
+    cmp #8
+    bcc !c128_test_prayer_return_done+
+    lda zp_eff_bless
+    beq !c128_test_prayer_return_done+
+    jsr c128_test_prayer_history_has_bless
+    bcc !c128_test_prayer_return_done+
+    jmp c128_test_spell_pass_sym
+!c128_test_prayer_return_done:
 #endif
 #if C64_TEST_SCRIPTED_SPELL
     lda c64_test_spell_return_pending
@@ -1274,6 +1372,8 @@ level_change_generate_current:
     jsr player_search_mode_off
     lda #$ff
     sta zp_run_dir
+    lda #0
+    sta eff_detect_timer
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
     jsr generation_busy_tick_if_dungeon_api
@@ -1449,7 +1549,7 @@ cmd_cast:
 #else
     jsr player_cast_spell
 #endif
-    jmp command_result_restore_view_or_update_visibility
+    jmp command_result_main_or_update_visibility
 
 cmd_pray:
     jsr msg_clear
@@ -1458,7 +1558,7 @@ cmd_pray:
 #else
     jsr player_pray
 #endif
-    jmp command_result_restore_view_or_update_visibility
+    jmp command_result_main_or_update_visibility
 
 cmd_gain:
     jsr msg_clear

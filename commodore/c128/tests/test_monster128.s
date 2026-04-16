@@ -259,6 +259,7 @@ cmb_print_buf: rts
 
 // Required variables
 current_tier: .byte 0
+tier_silent_restore: .byte 0
 tier_count_table: .fill 5, 0
 c128_tier_cache_slot_lo:
     .byte 0, <BANK1_TIER_CACHE_BASE, <TEST_TIER2_BASE, 0, 0

@@ -1107,6 +1107,7 @@ banked_payload:
     #import "../common/ui_home.s"
     #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
+    #import "../common/player_magic_learn_op.s"
 
 banked_code_end:
 }
@@ -1125,6 +1126,7 @@ banked_payload_end:
 .segment TownOverlay
     #import "../common/store.s"
     #import "../common/ui_store.s"
+    #import "../common/ui_home_text.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $F000, true

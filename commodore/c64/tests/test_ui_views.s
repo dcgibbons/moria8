@@ -76,6 +76,7 @@ magic_check_new_spells:
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 #import "../../common/ui_home.s"
+#import "../../common/ui_home_text.s"
 #import "../../common/ui_help_data.s"
 #import "../../common/ui_help_page2_data.s"
 #import "../../common/ui_help.s"

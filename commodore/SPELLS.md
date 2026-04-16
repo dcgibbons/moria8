@@ -39,6 +39,25 @@
 - Glyph break chance is currently a simplified approximation rather than the exact upstream formula.
 - Class tables and book splits intentionally follow `umoria`; effect semantics intentionally prefer VMS when they differ.
 
+## Feedback Audit
+
+- Commodore now follows the locked hybrid upstream rule:
+  - no generic `You cast...` / `You pray...` success banner
+  - explicit feedback only when the effect would otherwise be silent, misleading, or easy to miss
+  - obvious projectile/map/teleport/control results stay message-light
+- Mage spells audited for explicit feedback:
+  - direct confirmation or failure text: `2 Detect Monsters`, `4 Light Area`, `5 Cure Light Wounds`, `12 Cure Poison`, `14 Remove Curse`, `17 Create Food`, `18 Recharge Item I`, `26 Recharge Item II`, `28 Haste Self`
+  - no extra cast banner by design because the outcome is already visible: `1`, `3`, `6-11`, `13`, `15-16`, `19-25`, `27`, `29-31`
+- Priest prayers audited for explicit feedback:
+  - direct confirmation or failure text: `1 Detect Evil`, `2 Cure Light Wounds`, `3 Bless`, `4 Remove Fear`, `5 Call Light`, `14 Create Food`, `15 Remove Curse`, `16 Resist Heat and Cold`, `17 Neutralize Poison`, `19 Cure Serious Wounds`, `20 Sense Invisible`, `21 Protection from Evil`, `24 Cure Critical Wounds`, `26 Prayer`, `28 Heal`, `31 Holy Word`
+  - no extra cast banner by design because the outcome is already visible: `6-13`, `18`, `22-23`, `25`, `27`, `29-30`
+- Current Commodore messaging choices after the audit:
+  - `Bless`, `Chant`, and `Prayer` now show an explicit onset message when the blessed state starts
+  - `Haste Self`, `Protection from Evil`, and `Sense Invisible` keep explicit onset feedback
+  - `Resist Heat and Cold` now has explicit onset feedback, but it is still tied to the current packed-flag implementation rather than exact upstream timers
+  - `Create Food`, `Glyph of Warding`, and `Recharge` now explain blocked/no-target cases instead of failing silently
+  - timed expiry text for bless/haste/protection is still intentionally omitted on Commodore; this remains a documented deviation from richer `umoria` status messaging
+
 ## Book Layout
 
 - Mage `M1 [Beginners-Magick]`: `1-7`

@@ -8,6 +8,9 @@
 
 .encoding "screencode_mixed"
 
+.const HSTR_PM_BOOK_CAST = HSTR_PM_YOU_CAST
+.const HSTR_PM_BOOK_PRAY = HSTR_PM_YOU_PRAY
+
 // ============================================================
 // player_cast_spell — Handle 'm' (mage-affinity spell classes)
 // Output: carry SET = turn consumed, CLEAR = cancelled
@@ -136,6 +139,7 @@ player_cast_spell:
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jmp c64_test_spell_fail_cancel_sym
 #endif
+    jsr msg_clear
     clc
     rts
 
@@ -149,6 +153,9 @@ player_pray:
     beq !pp_can_pray+
     ldx #HSTR_PM_NO_PRAY
     jsr huff_print_msg
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_no_cast_sym
 #endif
@@ -157,6 +164,9 @@ player_pray:
 !pp_can_pray:
     jsr pm_require_class_level
     bcs !pp_level_ok+
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_level_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_level_sym
 #endif
@@ -175,6 +185,9 @@ player_pray:
     bne !pp_have_prayers+
     ldx #HSTR_PM_NOT_KNOWN
     jsr huff_print_msg
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_known_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_known_sym
 #endif
@@ -185,6 +198,9 @@ player_pray:
     bcc !pp_cancel+
     jsr pm_validate_selected_spell
     bcs !pp_ready+
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_validate_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_validate_sym
 #endif
@@ -200,6 +216,9 @@ player_pray:
     jsr huff_print_msg
     lda #SFX_SPELL_FAIL
     jsr sound_play
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_roll_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_roll_sym
 #endif
@@ -211,6 +230,14 @@ player_pray:
     jsr pm_mark_worked
     lda #SFX_SPELL
     jsr sound_play
+#if C128_TEST_SCRIPTED_PRAYER
+    inc c128_test_spell_success_count
+    lda c128_test_spell_return_pending
+    bne !pp_test_pending_set128+
+    lda #20
+    sta c128_test_spell_return_pending
+!pp_test_pending_set128:
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     inc c64_test_spell_success_count
     lda c64_test_spell_return_pending
@@ -223,9 +250,13 @@ player_pray:
     rts
 
 !pp_cancel:
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_cancel_sym
+#endif
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_cancel_sym
 #endif
+    jsr msg_clear
     clc
     rts
 
@@ -286,8 +317,8 @@ pm_require_class_level:
 
 pm_select_book:
 !pm_select_retry:
+    jsr pm_book_prompt_huff_id
     lda #ICAT_BOOK
-    ldx #HSTR_IGS_PROMPT
     jsr piw_prompt_filtered_inv
     bcs !pm_have_books+
     clc
@@ -331,6 +362,21 @@ pm_select_book:
     sta pm_book_mask_hi
     jsr msg_clear
     sec
+    rts
+
+pm_book_prompt_huff_id:
+    lda pm_mode
+    beq !pm_prompt_not_study+
+    ldx #HSTR_IGS_PROMPT
+    rts
+!pm_prompt_not_study:
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_prompt_pray+
+    ldx #HSTR_PM_BOOK_CAST
+    rts
+!pm_prompt_pray:
+    ldx #HSTR_PM_BOOK_PRAY
     rts
 
 pm_build_known_list_from_book:
@@ -428,6 +474,10 @@ pm_build_learnable_list_from_book:
 
 pm_prompt_visible_spell_choice:
 !pm_psc_prompt:
+    // On C128, release-gate before drawing the follow-up prompt so a quick
+    // book-letter -> spell-letter transition does not get swallowed by a
+    // post-render wait.
+    jsr input_prepare_followup_key
     ldx #HSTR_PM_FOOTER_PRAY
     lda pm_spell_type
     cmp #SPELL_MAGE
@@ -436,12 +486,18 @@ pm_prompt_visible_spell_choice:
 !pm_psc_prompt_ready:
     lda pm_spell_count
     jsr piw_print_prompt_with_count
+#if C128
+    jsr input_get_key_fast
+#else
     jsr input_get_key
+#endif
     cmp #$3f
     beq !pm_psc_show_list+
     jsr pm_pick_visible_spell
     bcc !pm_psc_done+
-    jmp msg_clear
+    jsr msg_clear
+    sec
+    rts
 !pm_psc_done:
     rts
 
@@ -453,7 +509,9 @@ pm_prompt_visible_spell_choice:
     pla
     jsr pm_pick_visible_spell
     bcc !pm_psc_prompt-
-    jmp msg_clear
+    jsr msg_clear
+    sec
+    rts
 
 pm_pick_visible_spell:
     sec

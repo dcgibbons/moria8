@@ -106,6 +106,11 @@ test_fail0:
     jsr input_normalize_ctrl_chords_with_state
     cmp #$57
     bne test_fail
+
+    lda #$17               // Normalized CTRL+W should map to wizard mode
+    jsr petscii_to_command
+    cmp #CMD_WIZARD
+    bne test_fail
     jmp test_continue
 
 test_fail:

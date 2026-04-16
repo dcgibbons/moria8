@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #23
+    ldx #24
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -225,7 +225,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 24, $ff
+tc_results: .fill 25, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -907,7 +907,8 @@ test_start:
     sta tc_results + 5
 !t6_done:
 
-    // Test 7: CAST no-turn restores the gameplay view without consuming a turn.
+    // Test 7: CAST no-turn preserves the current gameplay view so
+    // wrong-command messages stay visible.
     jsr reset_state
     lda #6
     sta test_case_idx
@@ -922,16 +923,12 @@ test_start:
     lda test_turn_calls
     bne !t7_fail+
     lda test_screen_clear_calls
-    cmp #1
     bne !t7_fail+
     lda test_viewport_calls
-    cmp #1
     bne !t7_fail+
     lda test_render_full_calls
-    cmp #1
     bne !t7_fail+
     lda test_status_calls
-    cmp #1
     bne !t7_fail+
     lda #$01
     sta tc_results + 6
@@ -1566,8 +1563,35 @@ test_start:
 !t24_pass:
     lda #$01
     sta tc_results + 23
-    jmp test_finish
+    jmp !t25+
 !t24_fail:
     lda #$00
     sta tc_results + 23
+    jmp test_finish
+
+    // Test 25: changing dungeon levels clears detect-monsters state.
+!t25:
+    jsr reset_state
+    lda #24
+    sta test_case_idx
+    lda #9
+    sta test_stairs_tile
+    lda #7
+    sta eff_detect_timer
+    lda #CMD_STAIRS_DN
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_player_dlvl
+    cmp #2
+    bne !t25_fail+
+    lda eff_detect_timer
+    bne !t25_fail+
+    lda #$01
+    sta tc_results + 24
+    jmp test_finish
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
     jmp test_finish

@@ -3,6 +3,51 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-SHARED-MAGIC-MISSILE-PROJECTILE-FIZZLE
+- [ ] Reported Failure Gate:
+  - `Magic Missile` must animate from the player’s actual viewport row/column and must not end with `Your spell fizzles out.` when it visibly cast at a target in town or dungeon
+- [ ] root-cause the shared bolt/projectile regression in the current tree
+- [ ] BUG-PRIEST-BOOK-B-FEEDBACK-BEHAVIOR
+- [ ] Reported Failure Gate:
+  - priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must have correct live behavior and correct player-visible feedback instead of beeping, no-oping, or showing the wrong message
+- [ ] audit the current implementation and live feedback contracts for priest book B prayers before changing effect code
+- [ ] BUG-MP-BOOK-PROMPT-TEXT
+- [ ] Reported Failure Gate:
+  - `m`/`p` must not show `Study which book`; cast must show a cast-book prompt, pray must show a pray-book prompt, and study must keep the study-book prompt
+- [ ] replace the oversized inline spell-book prompt helper with compact Huffman-backed prompt IDs
+- [ ] verify:
+  - `make build128`
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] BUG-C128-PRAYER-SNAPSHOT-NOOP
+- [ ] Reported Failure Gate:
+  - restore ~/vice-snapshot-20260416125631.vsf on C128, then `p`, `a`, and any prayer letter (`a`, `b`, or `c`) must execute the selected prayer instead of silently no-oping
+- [ ] corrected scope from live user retest:
+  - current checked-out C128 code appears to have regressed the shared cast/pray letter-selection path, not just priest-only prayer effects
+  - C128 `m` and `p` selection failures should be treated as one shared casting-system regression until disproven
+- [x] BUG-C128-PRAY-NO-EFFECT-WIZARD-MISDISPATCH
+- [ ] Reported Failure Gate:
+  - C128 live gameplay `p` must actually execute the selected prayer, and `Ctrl+W` must enter wizard mode instead of wear/takeoff
+- [x] reproduce and root-cause the C128 prayer command path so selected prayers do not silently no-op
+- [x] reproduce and root-cause the C128 `Ctrl+W` command decode so it dispatches to `CMD_WIZARD` reliably
+- [x] verify:
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `TEST_FILTER=scripted_prayer_cast_smoke bash commodore/c128/run_tests128.sh`
+
+- [x] FEAT-SPELL-FEEDBACK-AUDIT
+- [x] audit all 31 mage + 31 priest spells/prayers for player-visible feedback and align Commodore with the locked hybrid upstream policy
+- [x] add or reuse spell/prayer feedback only where the effect is otherwise silent, misleading, or missing relative to current UMoria behavior
+- [x] keep cast/pray wrapper messaging generic-free and put visible feedback in the effect/status path instead
+- [x] extend `commodore/SPELLS.md` with the spell-feedback audit/results
+- [x] verify:
+  - `make test64`
+  - `make build64`
+- [ ] residual verification note:
+  - `make build128` still emits the existing `Banked payload staged source ends below overlay window` assertion
+  - this assert is unchanged from `HEAD` `bf4e611` (`$E028` staged-source end in both trees)
 - [ ] BUG-C64-MAGIC-MISSILE-CRASH
 - [ ] Reported Failure Gate:
   - C64 live gameplay `Magic Missile` cast must not crash from the easy reproducible shipping path in the dungeon with REU enabled, with an actual targetable monster in the aimed tile
@@ -5577,6 +5622,28 @@ The section below is retained only as historical context for the earlier dual-en
 - `make test64`
   - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 
+## 2026-04-16 C128 Build128 Assert Fix
+
+### Reported Failure Gate
+- `make build128`
+
+### Root Cause
+- The spell-feedback branch added enough resident/staged bytes that the C128 banked payload staged-source span crossed the `$E000` overlay window assertion.
+- My first byte-recovery move put the Home-mode `hm_*` strings into `ui_store.s`, which fixed `make build128` but bloated unrelated C64 tests that import `ui_store.s`.
+- That in turn pushed `test_background.s` into the `$D000` I/O hole and exposed a separate fragile `test_effects.s` cast-loop assumption.
+
+### Fix
+- Moved the Home-mode text out of the C128 banked payload.
+- Split the Home-only strings into [`commodore/common/ui_home_text.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/ui_home_text.s) and imported that only in the real town overlays and the one C64 test that actually exercises Home UI.
+- Tightened the combat message invariant so slot 41 stays zero after append operations.
+- Updated the synthetic `test_effects.s` repeated-cast case to follow the current prompt-driven cast path instead of the older brittle `?` loop.
+
+### Verification
+- `make build128`
+  - passed with `Made 262 asserts , 0 failed`
+- `make test64`
+  - passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+
 ### Spell Prompt Follow-up
 - Fixed the redundant `-more-` that appeared after choosing a book/spell in the new prompt-driven `m`/`p` flow.
 - Root cause:
@@ -6259,3 +6326,17 @@ The section below is retained only as historical context for the earlier dual-en
   - passed with `=== Results: 3 passed, 0 failed (of 3 suites) ===`
 - `make test64`
   - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+- BUG-C128-PRAY-NO-EFFECT-WIZARD-MISDISPATCH:
+  - root cause 1: C128 `Ctrl+W` decoded `W` and Ctrl from separate scans, so the live command path could race back to plain `CMD_WEAR`; fix was to normalize the chord from the same CIA sample in `input128.s` and keep `CTRL+W` mapped as PETSCII `$17` -> `CMD_WIZARD`
+  - root cause 2: the suite had no priest execution smoke, so the earlier C128 prayer regression escaped; fix was to add `scripted_prayer_cast_smoke` plus wire it into `test128-fast-smoke`
+  - correction after live retest: the scripted smoke was still too weak because it only proved the seeded bless timer path and could pass while the live C128 priest UX still appeared broken; the active next step is to replace it with a product-faithful priest smoke that proves visible prayer feedback/effect through the real gameplay path
+  - follow-on regressions fixed while proving the gate:
+    - resident/banked layout drift from the new C128 input helper and prayer smoke support
+    - stale C128 test harness stubs missing `eff_detect_timer` and `tier_silent_restore` after earlier shared gameplay changes
+  - verification:
+    - `make build128` PASS
+    - `TEST_FILTER=scripted_prayer_cast_smoke bash commodore/c128/run_tests128.sh` PASS
+    - `make test64` PASS (`36 passed, 0 failed`)
+    - `make test128-fast` PASS
+    - `make test128-fast-smoke` PASS (`5 passed, 0 failed`)

@@ -207,6 +207,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - For VICE monitor-driven C128 boot smokes, do not chain multiple `until` probes in one boot playback. Use one symbol probe per boot run, or the playback can report misleading state and turn a healthy boot into a red harness.
 - In shared assembly, do not assume there is a `C64` build flag. This tree keys the 64-bit path as `!C128`, so `#if C64` silently misses C64-only shrink/fallback code until the memory map proves otherwise.
 - On C64, fullscreen modal prompts should use `ui_clear_full_screen_safe`, not the bulk `screen_clear`, when live residue matters. The row-by-row clear is the proven-safe path for C64 modal transitions, including save/load disk prompts.
+- On this repo, do not spend resident Huffman-table budget on spell-only feedback that can live in an overlay-local string. Spell execution text for blocked/no-target/single-overlay paths should stay with the overlay owner first; resident messaging is for shared always-live status/reporting paths.
 
 ## Layout And Build Safety
 
@@ -229,6 +230,10 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - For dead-code audits on this repo, verify shipping callsites separately from test callsites. A helper that still appears in subsystem tests can still be completely dead in the shipping C64 image and worth removing from the real import graph.
 - For disk images with patched boot sectors or reserved media, reserve the owned sector before file allocation.
 - When a build or test depends on tool handoff, make fresh-build paths deterministic; do not rely on warm outputs or fragile temp-path behavior.
+- On message-line gameplay commands, do not route all no-turn exits through a “restore gameplay view” helper. For prompt-driven commands like `m`/`p`, that clears the screen and turns a real error message into a flash; cancel paths should clear their own prompt state, while wrong-command errors should fall back to the normal no-turn main-loop path.
+- On C128, every secondary prompt in a multi-step command must explicitly gate `input_get_key` with `input_wait_release` or `input_prepare_followup_key`, even if the previous step already did so. The spell book prompt was release-gated, but the immediate follow-up spell-choice prompt was not, so the held book-selection key was consumed as the spell choice.
+- On C128, a follow-up release gate placed after rendering the next prompt can swallow a fast second keypress. For prompt-to-prompt flows like book -> spell selection, do the release gate before drawing the second prompt, then read the key normally.
+- Do not rely on `msg_clear` to preserve carry on C128. Clearing a non-status row calls `screen_clear_row`, and the VDC implementation leaves carry reflecting its row compares. Any chooser that uses carry for success/cancel must `jsr msg_clear` and then set carry explicitly before returning.
 
 ## C64 Banking And IRQ
 
@@ -243,3 +248,10 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - On C64, restoring the active tier after an overlay/UI action is not the same thing as a real dungeon-depth transition. If that restore path reuses `tier_check_transition` directly, `tier_load` will leak the transient `Loading...` message into normal gameplay; use a silent restore path for overlay recovery.
 - On C64, overlay-driven tier invalidation can surface again through stale `$E0xx` monster-name pointers even after the main overlay restore is fixed. `creature_get_name` has its own tier reload path, and it also must suppress transient `Loading...` messaging during internal recovery.
 - If a full-screen chooser footer says a letter selects an item/spell, do not route that path through a read-only modal dismiss helper. The caller must either treat the returned key as a real selection or change the footer text; anything else is a broken UI contract.
+- If a branch regresses the reported build gate, do not argue that the same assert was already red on `HEAD`. The branch still owns the regression if the current branch work pushed the build/test over the edge, and the correct response is to fix the current tree and then verify the exact reported gate.
+- When recovering bytes for one platform, do not hide shared text/data inside a broadly imported module unless every consumer actually needs it. Moving Home-only strings into `ui_store.s` fixed C128 size pressure but pushed unrelated C64 tests over their memory limits; isolate feature-local text in a dedicated owner file instead.
+
+- When a shared gameplay owner gains a new global like `eff_detect_timer` or `tier_silent_restore`, update the C128 unit harness stubs in the same change. `main_loop128` and `monster128` both went red only because the test owners lagged the shared symbol contract.
+- When a new high-value regression smoke is added to close an escaped bug, wire it into the standard `make test128-fast-smoke` target immediately. A targeted-only smoke is not enough coverage for the next regression pass.
+- A scripted C128 smoke that only checks an internal timer or success counter is not sufficient proof for live spell/prayer UX. For `m`/`p` flows, the smoke must prove a user-visible effect or message through the real gameplay path, or it can pass while the manual C128 experience is still broken.
+- If the user reports that both C128 spells and prayers regressed in the current tree, stop doing prayer-only debugging. Reclassify it immediately as a shared casting-path regression and audit the recent shared cast/pray edits before touching effect-specific code.

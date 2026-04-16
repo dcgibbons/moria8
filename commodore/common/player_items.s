@@ -863,7 +863,6 @@ iq_effect_speed:
 
     ldx #HSTR_PIQ_SPEED
     jsr huff_print_msg
-
     sec
     rts
 
@@ -1007,7 +1006,6 @@ iq_effect_confusion:
 
 iq_effect_detect_mon:
     jsr eff_detect_monsters
-
     ldx #HSTR_PIQ_SENSE
     jsr huff_print_msg
     sec
@@ -1137,7 +1135,6 @@ irs_effect_light:
     jsr eff_light_room
     ldx #HSTR_PIQ_LIGHT
     jsr huff_print_msg
-
     sec
     rts
 

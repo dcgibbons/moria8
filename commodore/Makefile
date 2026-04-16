@@ -170,7 +170,7 @@ test128-fast:
 	cd c128 && python3 -u ./harness128_batch.py --mode compare --snapshot-path out/ready.vsf --vice $(VICE128) --connect-timeout 12
 
 test128-fast-smoke:
-	cd c128 && TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|town_overlay_smoke' ./run_tests128.sh
+	cd c128 && TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
 
 check-zp:
 	python3 ../tools/check_zp_usage.py

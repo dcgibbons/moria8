@@ -106,13 +106,13 @@ Sorry, what was that again?
 @PM_NO_MANA Not enough mana.
 @PM_NO_EXP You're not experienced enough.
 @PM_FAIL Your spell fails.
-@PM_YOU_CAST You cast ~
-@PM_YOU_PRAY You pray ~
-@PM_TITLE_MAGE Mage Spells
-@PM_TITLE_PRAY Prayers
+@PM_YOU_CAST Spell book (a-v)?
+@PM_YOU_PRAY Prayer book (a-v)?
+@PM_TITLE_MAGE .
+@PM_TITLE_PRAY .
 @PM_FOOTER_CAST Cast which? (a-p, ESC)
 @PM_FOOTER_PRAY Pray which? (a-p, ESC)
-@PM_LEARNED You have learned ~
+@PM_LEARNED .
 
 # ===== Player items strings (Pattern A + C) =====
 @PIW_WEAR_PROMPT Wear which item (a-v)?

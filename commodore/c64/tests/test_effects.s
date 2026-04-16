@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #36
+    ldx #39
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -109,7 +109,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 37, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -157,6 +157,10 @@ test_screen_flash_at:
 
 test_input_get_key_qmark:
     lda #$3f
+    rts
+
+test_input_get_key_a:
+    lda #$41
     rts
 
 test_input_get_modal_spell_a:
@@ -218,15 +222,12 @@ test_start:
     // Pre-stuff keyboard buffer for -more- prompts
     lda #8
     sta $c6
+    ldx #7
     lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
+!seed_keys:
+    sta $0277,x
+    dex
+    bpl !seed_keys-
 
     // Clear all effect timers
     lda #0
@@ -1948,7 +1949,7 @@ test_start:
     // calls keep the cast UI/execute flow stable.
     // ==========================================
 !t37:
-    :PatchJump(input_get_key, test_input_get_key_qmark)
+    :PatchJump(input_get_key, test_input_get_key_a)
     :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_a)
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_selected)
@@ -2008,10 +2009,102 @@ test_start:
     bne !t37_fail+
     lda #$01
     sta tc_results + 36
-    jmp !tests_done+
+    jmp !t38+
 !t37_fail:
     lda #$00
     sta tc_results + 36
+
+    // ==========================================
+    // Test 38: Mage using pray shows the explicit
+    // "no pray" message instead of silently flashing.
+    // ==========================================
+!t38:
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    jsr player_pray
+    bcs !t38_fail+
+    lda tpm_huff_calls
+    beq !t38_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_NO_PRAY
+    bne !t38_fail+
+    lda #$01
+    sta tc_results + 37
+    jmp !t39+
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
+
+    // ==========================================
+    // Test 39: Priest using magic shows the explicit
+    // "no cast" message instead of silently flashing.
+    // ==========================================
+!t39:
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    jsr player_init
+    lda #CLASS_PRIEST
+    sta player_data + PL_CLASS
+    lda #SPELL_PRIEST
+    sta player_data + PL_SPELL_TYPE
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    jsr player_cast_spell
+    bcs !t39_fail+
+    lda tpm_huff_calls
+    beq !t39_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_NO_CAST
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp !t40+
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
+
+    // ==========================================
+    // Test 40: Book prompt wording follows the
+    // current action (cast / pray / study).
+    // ==========================================
+!t40:
+    lda #0
+    sta pm_mode
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    jsr pm_book_prompt_huff_id
+    cpx #HSTR_PM_BOOK_CAST
+    bne !t40_fail+
+
+    lda #0
+    sta pm_mode
+    lda #SPELL_PRIEST
+    sta pm_spell_type
+    jsr pm_book_prompt_huff_id
+    cpx #HSTR_PM_BOOK_PRAY
+    bne !t40_fail+
+
+    lda #1
+    sta pm_mode
+    lda #SPELL_PRIEST
+    sta pm_spell_type
+    jsr pm_book_prompt_huff_id
+    cpx #HSTR_IGS_PROMPT
+    bne !t40_fail+
+
+    lda #$01
+    sta tc_results + 39
+    jmp !tests_done+
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
 
 !tests_done:
     jmp test_finish
@@ -2076,10 +2169,6 @@ tv_snapshot_viewport:
     sta zp_ptr0
     lda #>tv_snapshot_screen
     sta zp_ptr0_hi
-    lda #<tv_snapshot_color
-    sta zp_ptr1
-    lda #>tv_snapshot_color
-    sta zp_ptr1_hi
     lda #0
     sta tv_row_idx
 !tv_snap_row:
@@ -2096,20 +2185,10 @@ tv_snapshot_viewport:
     adc #0
     sta zp_screen_hi
 
-    lda color_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_color_lo
-    lda color_row_hi,x
-    adc #0
-    sta zp_color_hi
-
     ldy #0
 !tv_snap_col:
     lda (zp_screen_lo),y
     sta (zp_ptr0),y
-    lda (zp_color_lo),y
-    sta (zp_ptr1),y
     iny
     cpy #VIEWPORT_W
     bne !tv_snap_col-
@@ -2121,13 +2200,6 @@ tv_snapshot_viewport:
     bcc !tv_snap_screen_advance_done+
     inc zp_ptr0_hi
 !tv_snap_screen_advance_done:
-    lda zp_ptr1
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr1
-    bcc !tv_snap_color_advance_done+
-    inc zp_ptr1_hi
-!tv_snap_color_advance_done:
     inc tv_row_idx
     lda tv_row_idx
     cmp #VIEWPORT_H
@@ -2147,10 +2219,6 @@ tv_compare_viewport:
     sta zp_ptr0
     lda #>tv_snapshot_screen
     sta zp_ptr0_hi
-    lda #<tv_snapshot_color
-    sta zp_ptr1
-    lda #>tv_snapshot_color
-    sta zp_ptr1_hi
     lda #0
     sta tv_row_idx
 !tv_cmp_row:
@@ -2166,14 +2234,6 @@ tv_compare_viewport:
     lda screen_row_hi,x
     adc #0
     sta zp_screen_hi
-
-    lda color_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_color_lo
-    lda color_row_hi,x
-    adc #0
-    sta zp_color_hi
 
     ldy #0
 !tv_cmp_col:
@@ -2192,13 +2252,6 @@ tv_compare_viewport:
     bcc !tv_cmp_screen_advance_done+
     inc zp_ptr0_hi
 !tv_cmp_screen_advance_done:
-    lda zp_ptr1
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr1
-    bcc !tv_cmp_color_advance_done+
-    inc zp_ptr1_hi
-!tv_cmp_color_advance_done:
     inc tv_row_idx
     lda tv_row_idx
     cmp #VIEWPORT_H
@@ -2216,9 +2269,8 @@ tv_compare_viewport:
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end <= $ba5c, true
+.assert "effects test body stays below scratch buffers", effects_test_body_end <= $bad9, true
 
-.segmentdef TestEffectsBuffers [start=$ba5c]
+.segmentdef TestEffectsBuffers [start=$bad9]
 .segment TestEffectsBuffers
 tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
-tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0

@@ -921,7 +921,7 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -3065,6 +3065,7 @@ first_banked_function:
     #import "../common/player_magic_display.s"
     #import "../common/player_magic.s"
     #import "../common/player_magic_levelup.s"
+    #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_tail.s"
     #import "../common/projectile.s"
     #import "../common/ranged_fire.s"
@@ -3167,6 +3168,7 @@ program_end:
 .segment TownOverlay
     #import "../common/store.s"
     #import "../common/ui_store.s"
+    #import "../common/ui_home_text.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $f000, true

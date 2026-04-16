@@ -120,6 +120,7 @@ player_attack_monster:
 
     ldx cmb_slot
     jsr monster_remove
+    inc zp_dirty_count          // Force redraw of the killed monster tile
 
 !pam_next_blow:
     dec zp_combat_blows
@@ -1156,6 +1157,8 @@ combat_append_str:
     jmp !cas_loop-
 !cas_done:
     stx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
     rts
 
 // combat_append_monster_name — Append current monster's name to buffer
@@ -1194,6 +1197,8 @@ combat_append_digits:
     bne !cad_emit-
 !cad_done:
     stx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
     rts
 
 combat_clamp_msg_idx:

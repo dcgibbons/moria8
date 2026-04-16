@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #28
+    ldx #29
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -95,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 29, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 30, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1113,10 +1113,64 @@ test_start:
     bne !t29_fail+
     lda #$01
     sta tc_results + 28
-    jmp !tests_done+
+    jmp !t30+
 !t29_fail:
     lda #$00
     sta tc_results + 28
+
+    // ==========================================
+    // Test 30: melee kill marks the scene dirty for redraw.
+    // ==========================================
+!t30:
+    jsr monster_init_table
+    lda #0
+    sta zp_dirty_count
+
+    // Place a floor tile with an occupied monster at (20,15).
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    :MapWrite_ptr0_y()
+
+    // Populate slot 0 as a one-hit kill target.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #4
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    lda #20
+    ldy #15
+    jsr player_attack_monster
+
+    lda zp_dirty_count
+    cmp #1
+    bne !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !tests_done+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
 
 !tests_done:
     jmp test_exit_trampoline

@@ -632,6 +632,7 @@ test_tramp_disk_setup_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
 msg_row1_col: .byte 0
+eff_detect_timer: .byte 0
 test_cast_ok: .byte 0
 test_save_success: .byte 0
 test_disk_setup_success: .byte 0
@@ -1118,7 +1119,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 8: CAST no-turn restores gameplay view without consuming a turn.
+    // Test 8: CAST no-turn preserves the current gameplay view so
+    // wrong-command messages stay visible.
     lda #8
     sta test_case_id
     jsr reset_state
@@ -1135,19 +1137,15 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_screen_clear_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_viewport_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_render_full_calls
-    cmp #1
     beq *+5
     jmp test_fail
     lda test_status_calls
-    cmp #1
     beq *+5
     jmp test_fail
 
