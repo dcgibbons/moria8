@@ -8,22 +8,23 @@
 // in tc_results[] and copy to $0400 at the very end.
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(bootstrap)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
-// Bootstrap — must be before imports so it's in RAM below $A000.
-bootstrap:
-    lda $01
-    and #%11111110          // Clear bit 0 -> bank out BASIC ROM
-    sta $01
+// Bootstrap + exit trampoline must stay in "Test Code" so run_tests.sh
+// breaks at the BRK below rather than at the end of the imported body.
+test_bootstrap:
+    :BankOutBasic()
     jmp test_start
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #31
+    sei
+    :BankOutBasic()
+    ldx #36
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -31,7 +32,7 @@ test_finish:
     bpl !copy-
     brk
 
-.pc = * "Test Body"
+.pc = $0830 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -74,6 +75,8 @@ test_finish:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -106,7 +109,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 32, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 37, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -119,6 +122,10 @@ tlk_expected_g: .text "G"
 tlk_flash_calls: .byte 0
 tlk_flash_row:   .byte 0
 tlk_flash_col:   .byte 0
+tpm_spell_exec_calls: .byte 0
+tpm_huff_calls:   .byte 0
+tpm_last_huff_id: .byte 0
+tpm_cast_loop_ctr: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -146,6 +153,47 @@ test_screen_flash_at:
     stx tlk_flash_row
     sty tlk_flash_col
     inc tlk_flash_calls
+    rts
+
+test_input_get_key_qmark:
+    lda #$3f
+    rts
+
+test_input_get_modal_spell_a:
+    lda #$41
+    rts
+
+test_tramp_spell_execute_selected:
+    inc tpm_spell_exec_calls
+    rts
+
+test_huff_print_msg:
+    stx tpm_last_huff_id
+    inc tpm_huff_calls
+    rts
+
+test_pm_select_book:
+    lda #0
+    sta pm_book_idx
+    lda #<book_mask_0
+    sta pm_book_mask_lo
+    lda #>book_mask_0
+    sta pm_book_mask_hi
+    sec
+    rts
+
+test_pm_pick_visible_spell:
+    lda #0
+    sta pm_spell_idx
+    sec
+    rts
+
+test_pm_validate_selected_spell:
+    sec
+    rts
+
+test_calc_spell_failure_success:
+    clc
     rts
 
 test_start:
@@ -995,37 +1043,22 @@ test_start:
     sta tc_results + 17
 
     // ==========================================
-    // Test 19: Confused casting bypasses known/level checks
-    // Set confusion, all 16 spells known, mana=50, mage, level 1
-    // Stuff keyboard 'A' → pm_do_cast should cast (mana decreases)
+    // Test 19: Validated spell cast consumes mana
+    // Set up spell 0 (Magic Missile), validate it, then consume mana.
     // ==========================================
 !t19:
-    // Refill keyboard buffer for spell list display + -more- prompts
-    lda #8
-    sta $c6
-    lda #$41                         // 'A' to select spell
-    sta $0277
-    lda #$20                         // Spaces for -more- prompts
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
-    // Clear death flag, clear blindness
+    // Clear death flag, clear blindness/confusion
     lda #0
     sta zp_game_flags
     sta zp_eff_blind
+    sta zp_eff_confuse
 
-    // Set up as mage with all 16 spells known
+    // Set up as mage
     lda #SPELL_MAGE
     sta pm_spell_type
     sta player_data + PL_SPELL_TYPE
-    lda #$ff
-    sta player_data + PL_SPELLS_KNOWN
-    sta player_data + PL_SPELLS_KNOWN_HI
+    lda #0
+    sta pm_spell_idx
 
     // Set up mage table pointers
     lda #<mage_spell_mana
@@ -1049,7 +1082,7 @@ test_start:
     lda #>mage_spell_name_hi
     sta pm_name_hi_hi
 
-    // Mana=50, level=1, confusion active
+    // Mana=50, level high enough to validate spell 0
     lda #50
     sta zp_player_mp
     sta player_data + PL_MANA
@@ -1071,9 +1104,11 @@ test_start:
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
 
-    jsr pm_do_cast
+    jsr pm_validate_selected_spell
+    bcc !t19_fail+
+    jsr pm_consume_mana
 
-    // Mana should have decreased (any random spell costs >= 1)
+    // Mana should have decreased (Magic Missile costs 1)
     lda zp_player_mp
     cmp #50
     bcs !t19_fail+                   // Mana didn't decrease → bug
@@ -1723,10 +1758,260 @@ test_start:
     bne !t32_fail+
     lda #$01
     sta tc_results + 31
-    jmp !tests_done+
+    jmp !t33+
 !t32_fail:
     lda #$00
     sta tc_results + 31
+
+    // ==========================================
+    // Test 33: Learnable spell scan preserves the catalog index
+    // Build the level-50 mage list for [Beginners-Magick] and
+    // verify we get the expected 7 entries instead of looping.
+    // ==========================================
+!t33:
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+
+    lda #<book_mask_0
+    sta pm_book_mask_lo
+    lda #>book_mask_0
+    sta pm_book_mask_hi
+
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+
+    jsr pm_setup_active_tables
+    jsr pm_build_learnable_list_from_book
+
+    lda pm_spell_count
+    cmp #7
+    bne !t33_fail+
+    lda pm_spell_list + 0
+    cmp #0
+    bne !t33_fail+
+    lda pm_spell_list + 6
+    cmp #6
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 32
+    jmp !t34+
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+
+    // ==========================================
+    // Test 34: Repeated casts of an already-selected spell
+    // keep mana/worked bookkeeping stable.
+    // ==========================================
+!t34:
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    lda #0
+    sta pm_spell_idx
+    lda #1
+    sta pm_spell_count
+
+    lda #16
+    sta tpm_cast_loop_ctr
+!t34_cast_loop:
+    lda #1
+    sta pm_cost_tmp
+    jsr pm_consume_mana
+    jsr pm_mark_worked
+    dec tpm_cast_loop_ctr
+    lda tpm_cast_loop_ctr
+    bne !t34_cast_loop-
+
+    lda zp_player_mp
+    cmp #4
+    bne !t34_fail+
+    lda player_data + PL_MANA
+    cmp #4
+    bne !t34_fail+
+    lda pm_spell_idx
+    cmp #0
+    bne !t34_fail+
+    lda pm_spell_count
+    cmp #1
+    bne !t34_fail+
+    lda player_data + PL_SPELLS_WORKED_0
+    and #$01
+    cmp #$01
+    bne !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+
+    // ==========================================
+    // Test 35: Rogue level 1 fails early with
+    // the "not experienced enough" message.
+    // ==========================================
+!t35:
+    jsr player_init
+    lda #CLASS_ROGUE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #0
+    sta inv_item_id + 0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    jsr player_cast_spell
+    bcs !t35_fail+
+    lda tpm_huff_calls
+    beq !t35_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_NO_EXP
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 34
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+
+    // ==========================================
+    // Test 36: Ranger level 1 fails early with
+    // the "not experienced enough" message.
+    // ==========================================
+!t36:
+    jsr player_init
+    lda #CLASS_RANGER
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #0
+    sta inv_item_id + 0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    jsr player_cast_spell
+    bcs !t36_fail+
+    lda tpm_huff_calls
+    beq !t36_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_NO_EXP
+    bne !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+
+    // ==========================================
+    // Test 37: Repeated full player_cast_spell
+    // calls keep the cast UI/execute flow stable.
+    // ==========================================
+!t37:
+    :PatchJump(input_get_key, test_input_get_key_qmark)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_a)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(pm_select_book, test_pm_select_book)
+    :PatchJump(pm_pick_visible_spell, test_pm_pick_visible_spell)
+    :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta tpm_spell_exec_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    lda #8
+    sta tpm_cast_loop_ctr
+!t37_cast_loop:
+    jsr player_cast_spell
+    bcc !t37_fail+
+    dec tpm_cast_loop_ctr
+    bne !t37_cast_loop-
+
+    lda tpm_spell_exec_calls
+    cmp #8
+    bne !t37_fail+
+    lda zp_player_mp
+    cmp #12
+    bne !t37_fail+
+    lda player_data + PL_MANA
+    cmp #12
+    bne !t37_fail+
+    lda player_data + PL_SPELLS_WORKED_0
+    and #$01
+    cmp #$01
+    bne !t37_fail+
+    lda #$01
+    sta tc_results + 36
+    jmp !tests_done+
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
 
 !tests_done:
     jmp test_finish
@@ -1931,9 +2216,9 @@ tv_compare_viewport:
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end < $b400, true
+.assert "effects test body stays below scratch buffers", effects_test_body_end <= $ba5c, true
 
-.segmentdef TestEffectsBuffers [start=$b400]
+.segmentdef TestEffectsBuffers [start=$ba5c]
 .segment TestEffectsBuffers
 tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
 tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0

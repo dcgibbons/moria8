@@ -921,6 +921,21 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
+#elif C128_TEST_SCRIPTED_SPELL
+c128_test_spell_fail_no_cast_sym:
+    brk
+c128_test_spell_fail_level_sym:
+    brk
+c128_test_spell_fail_known_sym:
+    brk
+c128_test_spell_fail_validate_sym:
+    brk
+c128_test_spell_fail_roll_sym:
+    brk
+c128_test_spell_fail_cancel_sym:
+    brk
+c128_test_spell_pass_sym:
+    brk
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_town_fail_sym:
     brk
@@ -1551,8 +1566,12 @@ tramp_title_load_and_draw:
 
 .macro C128BankedComputeTrampoline(target) {
     sei
+    lda $01
+    pha
     :BankOutKernal()
     jsr target
+    pla
+    sta $01
     lda #MMU_ALL_RAM
     sta $ff00
     cli
@@ -1566,19 +1585,32 @@ tramp_player_pray:
     :C128BankedComputeTrampoline(player_pray)
 
 tramp_spell_list_display:
-    :C128BankedComputeTrampoline(spell_list_display)
+    :C128UIOverlayDisplayTrampoline(spell_list_display)
+
+tramp_spell_execute_selected:
+    lda #3                      // OVL_DEATH
+    jsr overlay_load
+    bcc !tses_loaded+
+    rts
+!tses_loaded:
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr spell_execute_selected
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
 
 tramp_magic_recalc_mana:
     :C128BankedComputeTrampoline(magic_recalc_mana)
 
 tramp_magic_check_new_spells:
     :C128BankedComputeTrampoline(magic_check_new_spells)
-
-tramp_mage_effect_dispatch:
-    :C128BankedComputeTrampoline(mage_effect_dispatch)
-
-tramp_priest_effect_dispatch:
-    :C128BankedComputeTrampoline(priest_effect_dispatch)
 
 tramp_ranged_fire:
     :C128BankedComputeTrampoline(ranged_fire)
@@ -2687,7 +2719,8 @@ c128_cache_state_end:
 #import "../common/game_loop.s"
 #import "../common/turn.s"
 #import "../common/player_items.s"
-#import "../common/player_magic.s"
+#import "../common/player_magic_state.s"
+#import "../common/player_magic_state_ops.s"
 #import "../common/perf_p1.s"
 
 // Init-only strings — kept in main RAM
@@ -3030,6 +3063,7 @@ banked_payload:
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/player_magic_display.s"
+    #import "../common/player_magic.s"
     #import "../common/player_magic_levelup.s"
     #import "../common/player_magic_tail.s"
     #import "../common/projectile.s"
@@ -3152,6 +3186,7 @@ ovl_start_end:
 // ============================================================
 .segment DeathOverlay
     #import "../common/score.s"
+    #import "../common/player_magic_execute_overlay.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
@@ -3176,6 +3211,8 @@ ovl_help_end:
     #import "../common/ui_character.s"
     #import "../common/ui_recall.s"
     #import "../common/ui_wizard.s"
+    #import "../common/spell_names.s"
+    #import "../common/player_magic_select_overlay.s"
     #import "../common/player_gain_spell.s"
     #import "../common/title_screen.s"
 ovl_ui_end:

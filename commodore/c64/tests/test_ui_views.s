@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #13
+    ldx #15
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -17,6 +17,12 @@ test_exit_trampoline:
 .pc = $0828 "Main"
 
 .encoding "screencode_mixed"
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -55,10 +61,8 @@ test_exit_trampoline:
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/player_items.s"
-#import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../../common/ui_recall.s"
@@ -128,7 +132,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 14, $ff
+tc_results: .fill 16, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -150,7 +154,7 @@ test_start:
     lda #>help_pages
     sta help_pages_src_hi
 
-    ldx #13
+    ldx #15
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -173,6 +177,8 @@ test_start:
     jsr test_filtered_equipment_view
     jsr test_filtered_prompt_range
     jsr test_message_history_ring
+    jsr test_message_more_resume
+    jsr test_modal_restore_resets_message_state
 
     jmp test_exit_trampoline
 
@@ -1063,6 +1069,98 @@ test_message_history_ring:
     sta tc_results + 13
     rts
 
+test_message_more_resume:
+    jsr reset_shared_state
+    jsr msg_init
+
+    :PatchJump(input_get_key, test_input_get_key)
+
+    lda #$20
+    sta test_key_script
+    lda #0
+    sta test_key_idx
+    lda #1
+    sta test_key_len
+
+    lda #<hist_msg_one
+    sta zp_ptr0
+    lda #>hist_msg_one
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #<hist_msg_two
+    sta zp_ptr0
+    lda #>hist_msg_two
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #<hist_msg_three
+    sta zp_ptr0
+    lda #>hist_msg_three
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda zp_msg_flags
+    cmp #MSG_PENDING
+    bne !fail+
+
+    lda #<expected_more_resume_row0
+    sta zp_ptr0
+    lda #>expected_more_resume_row0
+    sta zp_ptr0_hi
+    lda #0
+    ldx #0
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda $0400 + (40 * 1)
+    cmp #$20
+    bne !fail+
+
+    lda msg_hist_idx
+    cmp #3
+    bne !fail+
+
+    lda msg_history + (MSG_HIST_LEN * 2)
+    cmp #'T'
+    bne !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 14
+    rts
+
+test_modal_restore_resets_message_state:
+    jsr reset_shared_state
+
+    lda #0
+    sta zp_player_dlvl
+    sta current_tier
+    sta tier_loaded
+
+    lda #MSG_PENDING | MSG_FULL
+    sta zp_msg_flags
+    lda #23
+    sta msg_row1_col
+
+    jsr ui_view_restore_modal_overlay
+
+    lda zp_msg_flags
+    bne !fail+
+    lda msg_row1_col
+    bne !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 15
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -1091,6 +1189,10 @@ hist_msg_f: .text "F" ; .byte 0
 hist_msg_g: .text "G" ; .byte 0
 hist_msg_h: .text "H" ; .byte 0
 hist_msg_i: .text "I" ; .byte 0
+hist_msg_one: .text "ONE" ; .byte 0
+hist_msg_two: .text "TWO" ; .byte 0
+hist_msg_three: .text "THREE" ; .byte 0
+expected_more_resume_row0: .text "THREE" ; .byte 0
 !ok:
     sec
     rts

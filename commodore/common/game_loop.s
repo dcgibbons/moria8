@@ -15,6 +15,278 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
+#if C128_TEST_SCRIPTED_SPELL
+c128_test_seed_scripted_spell_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
+
+#if C64_TEST_SCRIPTED_SPELL
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c64_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c64_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c64_test_dungeon_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c64_test_dungeon_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+
+c64_test_force_spell_target_monster:
+    lda zp_player_dlvl
+    bne !ctstm_have_dlvl+
+    rts
+!ctstm_have_dlvl:
+    lda c64_test_spell_return_pending
+    beq !ctstm_ready+
+    rts
+!ctstm_ready:
+    lda c64_test_spell_success_count
+    cmp active_dungeon_count
+    bcc !ctstm_have_type+
+    rts
+!ctstm_have_type:
+    sta c64_test_spell_target_type
+    lda zp_player_y
+    sta c64_test_spell_target_y
+    lda #1
+    sta c64_test_spell_path_offset
+!ctstm_clear_path:
+    lda zp_player_x
+    clc
+    adc c64_test_spell_path_offset
+    sta c64_test_spell_target_x
+    lda c64_test_spell_target_x
+    ldy c64_test_spell_target_y
+    jsr monster_find_at
+    bcc !ctstm_clear_tile+
+    jsr monster_remove
+
+!ctstm_clear_tile:
+    ldx c64_test_spell_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy c64_test_spell_target_x
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    inc c64_test_spell_path_offset
+    lda c64_test_spell_path_offset
+    cmp #7
+    bcc !ctstm_clear_path-
+
+    lda c64_test_spell_target_x
+    sta ms_spawn_x
+    lda c64_test_spell_target_y
+    sta ms_spawn_y
+    lda c64_test_spell_target_type
+    jsr monster_spawn_one
+    bcs !ctstm_spawned+
+    rts
+!ctstm_spawned:
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    // Force the next hit-message name lookup down the stale-tier reload path.
+    // This matches the live C64 dungeon spell crash: current_tier is gone, but
+    // spawned dungeon monsters still hold $E0xx name pointers that require
+    // creature_get_name -> tier_load -> reu_fetch_tier to recover.
+    lda #0
+    sta current_tier
+    sta tier_loaded
+!ctstm_done:
+    rts
+
+c64_test_spell_target_x: .byte 0
+c64_test_spell_target_y: .byte 0
+c64_test_spell_target_type: .byte 0
+c64_test_spell_path_offset: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    rts
+
+c64_test_force_detect_evil_monster:
+    ldx #0
+!ctdem_spawn_loop:
+    lda zp_player_y
+    sta c64_test_detect_row
+    ldy c64_test_detect_offsets,x
+    sty c64_test_detect_offset
+    lda zp_player_x
+    clc
+    adc c64_test_detect_offset
+    sta c64_test_detect_col
+    ldy c64_test_detect_row
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !ctdem_next+
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #(TILE_TYPE_MASK | FLAG_LIT)
+    :MapWrite_ptr0_y()
+    lda c64_test_detect_col
+    sta ms_spawn_x
+    lda c64_test_detect_row
+    sta ms_spawn_y
+    lda c64_test_detect_types,x
+    jsr monster_spawn_one
+!ctdem_next:
+    inx
+    cpx #5
+    bcc !ctdem_spawn_loop-
+!ctdem_done:
+    rts
+
+c64_test_detect_row: .byte 0
+c64_test_detect_col: .byte 0
+c64_test_detect_offset: .byte 0
+c64_test_detect_offsets:
+    .byte 6, 8, 10, 12, 14
+c64_test_detect_types:
+    .byte 0, 4, 8, 14, 22
+#endif
+
 // ============================================================
 // game_new_start — New game initialization
 // Called from platform main.s after title menu selects "New Game".
@@ -64,7 +336,6 @@ game_new_start:
     lda #0
     sta eff_fear_timer
 
-    // --- Character creation ---
     jsr tramp_player_create
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($86)
@@ -79,6 +350,19 @@ game_new_start:
     jsr tramp_ui_char_display
     jsr input_get_modal_dismiss_key
     jsr screen_clear
+
+#if C128_TEST_SCRIPTED_SPELL
+    jsr c128_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jsr c64_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_seed_scripted_spell_state
+#endif
 
     // --- Starting equipment ---
     // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
@@ -159,6 +443,10 @@ game_new_start:
     // --- Main game loop ---
     // Initialize dungeon level and generate map (new game only)
     lda #0
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    clc
+    adc #10
+#endif
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
     sta player_data + PL_MAX_DLVL
@@ -203,6 +491,12 @@ game_new_start:
 #if C128_REAL_BOOT_DIAG
     ldx #$26
     jsr c128_stack_guard_check
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_force_detect_evil_monster
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
 #endif
 
     // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
@@ -249,6 +543,7 @@ game_new_start:
 #else
     jmp c128_test_town_pass_sym
 #endif
+
 #elif C128_TEST_CACHE_SURVIVAL
     lda c128_test_summary_seen
     bne !gns_script_pass+
@@ -340,6 +635,55 @@ c128_town_move_diag_loop_top:
     jsr player_sync_from_zp
     jsr tramp_game_over
 !test_force_death_done:
+#endif
+#if C128_TEST_SCRIPTED_SPELL
+    lda c128_test_spell_return_pending
+    beq !c128_test_spell_return_done+
+    dec c128_test_spell_return_pending
+    inc c128_test_spell_return_count
+    lda c128_test_spell_return_count
+    cmp #8
+    bcc !c128_test_spell_return_done+
+    jmp c128_test_spell_pass_sym
+!c128_test_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    lda c64_test_spell_return_pending
+    beq !c64_test_spell_return_done+
+    dec c64_test_spell_return_pending
+    inc c64_test_spell_return_count
+    lda c64_test_spell_return_count
+    cmp #8
+    bcc !c64_test_spell_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    lda c64_test_spell_return_pending
+    beq !c64_test_dungeon_spell_return_done+
+    dec c64_test_spell_return_pending
+    lda c64_test_spell_return_pending
+    bne !c64_test_dungeon_spell_return_done+
+    lda c64_test_spell_success_count
+    cmp active_dungeon_count
+    bcc !c64_test_dungeon_spell_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_dungeon_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    lda c64_test_spell_return_pending
+    beq !c64_test_detect_return_done+
+    dec c64_test_spell_return_pending
+    inc c64_test_spell_return_count
+    lda c64_test_spell_return_count
+    cmp #20
+    bcc !c64_test_detect_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_detect_return_done:
+#endif
+
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
 #endif
 
     // --- Running continuation ---
@@ -949,6 +1293,9 @@ level_change_generate_current:
     jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
     jsr generation_busy_tick_if_dungeon_api
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
+#endif
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
 #endif
@@ -1115,11 +1462,7 @@ cmd_pray:
 
 cmd_gain:
     jsr msg_clear
-#if C128
     jsr tramp_item_gain_spell
-#else
-    jsr item_gain_spell
-#endif
     jmp command_result_main_or_status_only
 
 cmd_fire:

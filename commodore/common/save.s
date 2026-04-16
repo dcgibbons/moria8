@@ -15,9 +15,9 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 #if C128
-.const SAVE_VERSION    = $0d
+.const SAVE_VERSION    = $0e
 #else
-.const SAVE_VERSION    = $0c
+.const SAVE_VERSION    = $0d
 #endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1

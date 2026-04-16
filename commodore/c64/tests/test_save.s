@@ -36,6 +36,18 @@ test_finish:
 
 #define SAVE_TEST_RLE
 
+player_cast_spell:
+    rts
+
+player_pray:
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -77,7 +89,6 @@ test_finish:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"

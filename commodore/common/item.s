@@ -53,6 +53,10 @@ inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_flags:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
 
+glyph_x:      .fill MAX_GLYPHS, 0
+glyph_y:      .fill MAX_GLYPHS, 0
+glyph_active: .fill MAX_GLYPHS, 0
+
 // ============================================================
 // Scratch variables
 // ============================================================
@@ -95,6 +99,7 @@ item_init_floor:
     bpl !iif_loop-
     lda #0
     sta zp_item_count
+    jsr glyph_clear_all
     rts
 
 // item_init_inventory — Clear all 30 inventory/equipment slots
@@ -257,6 +262,70 @@ floor_item_find_at:
     jmp !fifa_loop-
 !fifa_miss:
     clc
+    rts
+
+glyph_clear_all:
+    lda #0
+    ldx #MAX_GLYPHS - 1
+!gca_loop:
+    sta glyph_active,x
+    dex
+    bpl !gca_loop-
+    rts
+
+glyph_find_at:
+    sta fi_add_x
+    sty fi_add_y
+    ldx #0
+!gfa_loop:
+    cpx #MAX_GLYPHS
+    bcs !gfa_miss+
+    lda glyph_active,x
+    beq !gfa_next+
+    lda glyph_x,x
+    cmp fi_add_x
+    bne !gfa_next+
+    lda glyph_y,x
+    cmp fi_add_y
+    beq !gfa_hit+
+!gfa_next:
+    inx
+    jmp !gfa_loop-
+!gfa_hit:
+    sec
+    rts
+!gfa_miss:
+    clc
+    rts
+
+glyph_add_at:
+    jsr glyph_find_at
+    bcs !gaa_done+
+    ldx #0
+!gaa_scan:
+    cpx #MAX_GLYPHS
+    bcs !gaa_full+
+    lda glyph_active,x
+    beq !gaa_store+
+    inx
+    jmp !gaa_scan-
+!gaa_store:
+    lda fi_add_x
+    sta glyph_x,x
+    lda fi_add_y
+    sta glyph_y,x
+    lda #1
+    sta glyph_active,x
+!gaa_done:
+    sec
+    rts
+!gaa_full:
+    clc
+    rts
+
+glyph_remove:
+    lda #0
+    sta glyph_active,x
     rts
 
 // inv_add_item — Add item to first empty carried slot (0-21)

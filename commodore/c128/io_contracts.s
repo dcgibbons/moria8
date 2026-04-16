@@ -28,10 +28,9 @@
 :C128AuditBelowIo("tramp_player_cast_spell", tramp_player_cast_spell)
 :C128AuditBelowIo("tramp_player_pray", tramp_player_pray)
 :C128AuditBelowIo("tramp_spell_list_display", tramp_spell_list_display)
+:C128AuditBelowIo("tramp_spell_execute_selected", tramp_spell_execute_selected)
 :C128AuditBelowIo("tramp_magic_recalc_mana", tramp_magic_recalc_mana)
 :C128AuditBelowIo("tramp_magic_check_new_spells", tramp_magic_check_new_spells)
-:C128AuditBelowIo("tramp_mage_effect_dispatch", tramp_mage_effect_dispatch)
-:C128AuditBelowIo("tramp_priest_effect_dispatch", tramp_priest_effect_dispatch)
 :C128AuditBelowIo("tramp_ranged_fire", tramp_ranged_fire)
 :C128AuditBelowIo("tramp_player_tunnel", tramp_player_tunnel)
 :C128AuditBelowIo("tramp_throw_item", tramp_throw_item)
@@ -94,6 +93,7 @@
 :C128AuditTownOverlay("store_enter", store_enter)
 :C128AuditDeathOverlay("score_calculate", score_calculate)
 :C128AuditDeathOverlay("score_death_screen", score_death_screen)
+:C128AuditDeathOverlay("spell_execute_selected", spell_execute_selected)
 :C128AuditHelpOverlay("ui_help_display", ui_help_display)
 :C128AuditHelpOverlay("ui_inv_display", ui_inv_display)
 :C128AuditHelpOverlay("ui_equip_display", ui_equip_display)
@@ -109,15 +109,23 @@
 :C128AuditDungeonOverlay("find_special_room", find_special_room)
 
 // Reloadable banked payload entrypoints.
-:C128AuditBanked("calc_spell_failure", calc_spell_failure)
-:C128AuditBanked("spell_list_display", spell_list_display)
+:C128AuditOutOfIo("calc_spell_failure", calc_spell_failure, $E000)
+.assert "AUDIT-IO-C128 calc_spell_failure extent stays out of the I/O hole", (calc_spell_failure_end - 1) < $D000 || (calc_spell_failure_end - 1) >= $E000, true
+:C128AuditBanked("pm_setup_active_tables", pm_setup_active_tables)
+:C128AuditBanked("pm_require_class_level", pm_require_class_level)
+:C128AuditBanked("pm_select_book", pm_select_book)
+:C128AuditBanked("pm_build_known_list_from_book", pm_build_known_list_from_book)
+:C128AuditBanked("pm_build_learnable_list_from_book", pm_build_learnable_list_from_book)
+:C128AuditBanked("pm_pick_visible_spell", pm_pick_visible_spell)
+:C128AuditBanked("pm_validate_selected_spell", pm_validate_selected_spell)
+:C128AuditBanked("pm_consume_mana", pm_consume_mana)
+:C128AuditOutOfIo("pm_mark_worked", pm_mark_worked, $E000)
+:C128AuditOutOfIo("pm_learn_selected_spell", pm_learn_selected_spell, $E000)
 :C128AuditBanked("home_enter", home_enter)
 :C128AuditBanked("home_retrieve", home_retrieve)
 :C128AuditBanked("home_deposit", home_deposit)
 :C128AuditBanked("magic_recalc_mana", magic_recalc_mana)
 :C128AuditBanked("magic_check_new_spells", magic_check_new_spells)
-:C128AuditBanked("mage_effect_dispatch", mage_effect_dispatch)
-:C128AuditBanked("priest_effect_dispatch", priest_effect_dispatch)
 :C128AuditBanked("player_tunnel", player_tunnel)
 :C128AuditBanked("ranged_fire", ranged_fire)
 :C128AuditBanked("throw_item", throw_item)
@@ -131,5 +139,5 @@
 :C128AuditOutOfIo("player_pray", player_pray, $F000)
 :C128AuditOutOfIo("item_aim_wand", item_aim_wand, $F000)
 :C128AuditOutOfIo("item_use_staff", item_use_staff, $F000)
-// Display literals that must remain readable with I/O visible.
-.assert "AUDIT-IO-C128 pm_header_str stays below the I/O hole", pm_header_str < $D000, true
+// Spell UI display literals must stay with the UI overlay, not in low common RAM.
+.assert "AUDIT-IO-C128 pm_header_str stays in the UI overlay", pm_header_str >= $E000 && pm_header_str < $F000, true

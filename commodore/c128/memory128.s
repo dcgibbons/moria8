@@ -727,10 +727,6 @@ mmu_common_select_bank0:
 
 mmu_common_save_p:
     .byte 0
-
-    // Shared bank-safe display strings that must stay visible to the
-    // banked UI code without consuming runtime-low budget.
-    #import "../common/player_magic_display_data.s"
 }
 mmu_common_helpers_blob_end:
 

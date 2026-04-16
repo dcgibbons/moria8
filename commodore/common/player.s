@@ -66,16 +66,32 @@
 .const PL_HEIGHT    = 58   // Height (aesthetic)
 .const PL_WEIGHT    = 59   // Weight (aesthetic)
 .const PL_SPELL_TYPE = 60  // Spell type (0=none, 1=mage, 2=priest)
-.const PL_SPELLS_KNOWN = 61 // Bitmask of spells learned (16 bits)
-.const PL_SPELLS_KNOWN_HI = 62
+.const PL_SPELLS_LEARNT_0 = 61 // 32-bit learned mask (bits 0-30 used)
+.const PL_SPELLS_LEARNT_1 = 62
+.const PL_SPELLS_LEARNT_2 = 63
+.const PL_SPELLS_LEARNT_3 = 64
+.const PL_SPELLS_WORKED_0 = 65 // 32-bit worked/successfully-cast mask
+.const PL_SPELLS_WORKED_1 = 66
+.const PL_SPELLS_WORKED_2 = 67
+.const PL_SPELLS_WORKED_3 = 68
+.const PL_SPELLS_FORGOTTEN_0 = 69 // 32-bit forgotten mask
+.const PL_SPELLS_FORGOTTEN_1 = 70
+.const PL_SPELLS_FORGOTTEN_2 = 71
+.const PL_SPELLS_FORGOTTEN_3 = 72
+.const PL_NEW_SPELLS = 73     // Pending spells/prayers the player can learn
+.const PL_SPELL_ORDER = 74    // 32 bytes: learn/remember/forget order; 99 = empty
+.const PL_SPELL_ORDER_LAST = PL_SPELL_ORDER + 31
+// Backward-compatible aliases used by older tests/helpers during the transition.
+.const PL_SPELLS_KNOWN = PL_SPELLS_LEARNT_0
+.const PL_SPELLS_KNOWN_HI = PL_SPELLS_LEARNT_1
 // Experience factor (race_xp% + class_xp%, range 100-165)
-.const PL_EXPFACT   = 63
+.const PL_EXPFACT   = 106
 // Reserved
-.const PL_RESERVED  = 64   // Start of reserved area
-.const PL_SOCIAL_CLASS = 65 // 1 byte: social class (1-100)
-.const PL_XP_FRAC_LO = 66  // Hidden fractional XP (16-bit fixed point)
-.const PL_XP_FRAC_HI = 67
-.const PL_STRUCT_SIZE = 82  // Total struct size (with padding)
+.const PL_RESERVED  = 107   // Pseudo-ID timer
+.const PL_SOCIAL_CLASS = 108 // 1 byte: social class (1-100)
+.const PL_XP_FRAC_LO = 109  // Hidden fractional XP (16-bit fixed point)
+.const PL_XP_FRAC_HI = 110
+.const PL_STRUCT_SIZE = 111  // Total struct size
 
 // Player flags
 .const PLF_MALE     = $01
@@ -120,7 +136,14 @@ player_init:
     sta player_data,x
     dex
     bpl !loop-
+    lda #99
+    ldx #31
+!spell_order_loop:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !spell_order_loop-
     // Clear player_background (160 bytes = 2 x 80)
+    lda #0
     ldx #79
 !bg_loop:
     sta player_background,x
@@ -851,4 +874,4 @@ udb_line_hi:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "Player struct size", PL_STRUCT_SIZE, 82
+.assert "Player struct size", PL_STRUCT_SIZE, 111

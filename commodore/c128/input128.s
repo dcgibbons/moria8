@@ -126,7 +126,7 @@ input_run_scan_held_raw:
 // Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_held:
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
     lda #0
     rts
 #else
@@ -143,7 +143,7 @@ input_run_key_check:
 // Output: A = 1 on new key-down edge, 0 otherwise
 // Destroys: A, X, Y
 input_run_cancel_check:
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
     lda #0
     rts
 #else
@@ -159,7 +159,7 @@ input_run_cancel_check:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
     ldx c128_test_input_idx
     lda c128_test_input_script,x
     bne !igk_script_ok+
@@ -215,7 +215,7 @@ irk_ext_save: .byte 0
 // a still-held selection key from the previous screen.
 // Preserves: nothing
 input_wait_release:
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
     rts
 #else
 #if C128_REAL_BOOT_DIAG
@@ -311,9 +311,59 @@ input_process_sample_strict:
     lda #0
     rts
 
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
 c128_test_input_idx: .byte 0
 c128_test_input_script:
+#if C128_TEST_SCRIPTED_SPELL
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4d              // M = cast
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+    .byte $4d              // M = cast again
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $41              // A = Magic Missile
+    .byte $4c              // L = east
+    .byte $20              // SPACE = dismiss -MORE- / fizzle
+#else
     .byte $4e              // N = New
     .byte $41              // A = race
     .byte $0d              // RETURN = accept stats
@@ -330,6 +380,7 @@ c128_test_input_script:
     .byte $4c
     .byte $4c
     .byte $4c
+#endif
     .byte $00
 #endif
 
@@ -711,7 +762,7 @@ input_normalize_shifted_symbols_with_state:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key_fast:
-#if C128_TEST_SCRIPTED_INPUT
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL
     jmp input_get_key
 #else
 #if C128_REAL_BOOT_DIAG

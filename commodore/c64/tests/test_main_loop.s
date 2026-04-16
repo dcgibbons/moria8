@@ -106,6 +106,9 @@ delete_savefile:
 .label tramp_ui_inv_display = ui_inv_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
+.label tramp_spell_list_display = test_spell_list_display
+.label tramp_spell_execute_selected = test_spell_execute_selected
+.label tramp_item_gain_spell = test_item_gain_spell
 .label tramp_player_create = player_create
 
 tramp_store_init_all:
@@ -115,6 +118,27 @@ tramp_store_restock_all:
     rts
 
 tramp_store_enter:
+    rts
+
+test_spell_list_display:
+    rts
+
+test_spell_execute_selected:
+    rts
+
+test_item_gain_spell:
+    rts
+
+player_cast_spell:
+    rts
+
+player_pray:
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
     rts
 
 check_player_on_store_door:
@@ -181,7 +205,6 @@ tramp_dig_ability:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../../common/ui_identify.s"

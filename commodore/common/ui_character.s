@@ -302,7 +302,8 @@ ui_char_display:
     jsr screen_put_decimal
     lda #$2f                     // '/'
     jsr screen_put_char
-    lda #16
+    ldx player_data + PL_CLASS
+    lda class_spell_total,x
     jsr screen_put_decimal
 !ucd_no_spells:
 
@@ -415,29 +416,12 @@ char_gold_label:
 char_spells_label:
     .text "Spells: " ; .byte $00
 
-// count_spells_known — Count set bits in PL_SPELLS_KNOWN (16 bits)
-// Returns: A = count (0-16)
-// Clobbers: X, zp_temp0
+// count_spells_known — Count set bits in the widened learned mask
+// Returns: A = count
+// Clobbers: zp_ptr0, A, X, Y, zp_temp0
 count_spells_known:
-    lda #0
-    sta zp_temp0
-    ldx #7
-!csk_lo:
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN
-    beq !csk_lo_skip+
-    inc zp_temp0
-!csk_lo_skip:
-    dex
-    bpl !csk_lo-
-    ldx #7
-!csk_hi:
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN_HI
-    beq !csk_hi_skip+
-    inc zp_temp0
-!csk_hi_skip:
-    dex
-    bpl !csk_hi-
-    lda zp_temp0
-    rts
+    lda #<player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0
+    lda #>player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0_hi
+    jmp spell_mask_count_ptr

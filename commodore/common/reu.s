@@ -593,6 +593,7 @@ reu_fetch_tier:
     ldx current_tier
 
     // Set up DMA: REU → $E000
+    php
     sei
     lda $01
     pha
@@ -623,7 +624,7 @@ reu_fetch_tier:
 
     pla
     sta $01                     // Restore bank config
-    cli
+    plp
     rts
 
 

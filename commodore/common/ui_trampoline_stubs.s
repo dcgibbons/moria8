@@ -3,12 +3,35 @@
 //
 // In the game build, trampolines bank out KERNAL to call $F000/$E000 code.
 // In test builds, the code is at normal addresses so direct calls work.
+#import "spell_data.s"
+#import "spell_names.s"
+
+test_spell_list_display:
+    jmp test_spell_list_display_impl
+
+test_spell_execute_selected:
+    jmp test_spell_execute_selected_impl
+
+item_gain_spell:
+    rts
+
+test_spell_list_display_impl:
+    rts
+
+test_spell_execute_selected_impl:
+    rts
+
+.assert "test_spell_list_display patch slot stays 3 bytes", test_spell_execute_selected - test_spell_list_display, 3
+.assert "test_spell_execute_selected patch slot stays 3 bytes", item_gain_spell - test_spell_execute_selected, 3
 
 // $F000 UI screen trampolines
 .label tramp_ui_char_display = ui_char_display
 .label tramp_ui_inv_display = ui_inv_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
+.label tramp_spell_list_display = test_spell_list_display
+.label tramp_spell_execute_selected = test_spell_execute_selected
+.label tramp_item_gain_spell = item_gain_spell
 .label ui_wizard_display = wizard_test_ui_wizard_display
 .label tramp_ui_wizard_display = ui_wizard_display
 

@@ -17,8 +17,19 @@
 // ============================================================
 // Scratch variables
 // ============================================================
+.const EFF_ICAT_WAND  = 14
+.const EFF_ICAT_STAFF = 15
+
 eff_target_slot: .byte 0           // Target slot for identify
 eff_room_idx:    .byte 0           // Room loop index for light
+eff_work_idx:    .byte 0
+eff_work_x:      .byte 0
+eff_work_y:      .byte 0
+eff_work_x2:     .byte 0
+eff_work_y2:     .byte 0
+eff_work_count:  .byte 0
+eff_work_flag:   .byte 0
+eff_work_damage: .byte 0
 
 // ============================================================
 // eff_heal — Heal player HP

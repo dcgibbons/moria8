@@ -3,6 +3,53 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C64-MAGIC-MISSILE-CRASH
+- [ ] Reported Failure Gate:
+  - C64 live gameplay `Magic Missile` cast must not crash from the easy reproducible shipping path in the dungeon with REU enabled, with an actual targetable monster in the aimed tile
+- [x] reproduce the easy live C64 `Magic Missile` crash in an automated REU-enabled dungeon-target smoke before attempting any product fix
+- [x] root-cause the snapshot-backed C64 spell crash at the `-more-` resume seam in shared message handling
+- [x] harden the shared `msg_show_more` / `msg_save_history` path for C64 and add a direct C64 regression for message resume after `-more-`
+- [x] root-cause the remaining C64 dungeon target crash in the stale-tier monster-name reload path (`creature_get_name -> tier_load -> reu_fetch_tier`)
+- [x] preserve caller IRQ/banking state in the C64 REU/tier helpers and add a current-build dungeon spell smoke that forces the stale-tier REU name-reload path
+- [x] verify:
+  - `make test64`
+- [ ] BUG-C64-DETECT-EVIL-CRASH
+- [ ] Reported Failure Gate:
+  - C64 in-dungeon `Detect Evil` cast must not crash back to BASIC from the live gameplay path
+- [ ] reproduce the live C64 in-dungeon `Detect Evil` crash in an automated scripted smoke before attempting any product fix
+- [ ] BUG-TRAP-HP-UNDERFLOW
+- [ ] Reported Failure Gate:
+  - C64 live gameplay trap damage must not corrupt HP to wrapped values like `65535/9` after a rockfall hit
+- [ ] reproduce the rockfall-trap HP corruption from the live gameplay path before attempting any product fix
+- [x] BUG-C64-SPELL-CAST-FFFF
+- [ ] Reported Failure Gate:
+  - C64 live gameplay spell cast must not leave `$01=$35` with IRQs enabled or hang at `PC=$FFFF` after the cast path returns
+- [x] root-cause the C64 post-cast lockup on the real spell-hit path
+- [x] add a focused regression that proves C64 `creature_get_name` preserves caller IRQ/banking state when entered from `SEI/$35`
+- [x] verify:
+  - `make build64`
+  - `make test64`
+- [ ] BUG-C128-SPELL-CAST-D026
+- [ ] Reported Failure Gate:
+  - `python3 commodore/c128/tests/product_spell_cast_smoke.py --vice /opt/homebrew/bin/x128 --boot-d64 commodore/out/moria8-c128.d71`
+- [x] reproduce the shipping-build C128 spell-cast crash in an automated test before attempting another fix
+- [ ] root-cause the shipping spell-cast jump into `$D026` on the product disk image
+- [x] FEAT-ADDITIONAL-SPELLS
+- [x] Reported Failure Gate:
+  - implement the remaining spells from `commodore/BUILDPLAN.md` with audited VMS/UMoria parity on both C64 and C128
+- [x] replace the simplified 16-spell model with full class-aware 31-spell tables and explicit book bitmasks
+- [x] widen player spell state and save/load handling for full-catalog learning/worked/order tracking
+- [x] rework cast/pray/study flows around upstream-style book-scoped spell selection and class-specific learning rules
+- [x] implement the missing mage and priest spell/prayer effects and correct any existing spell drift that blocks parity
+- [x] update character/status UX and spell counting for the widened state and full class spell access
+- [x] create an exhaustive spells document covering current Commodore behavior, new spells, and VMS-vs-UMoria differences
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test`
 - [x] BUG-C128-RECALL-GLYPH-CORRUPTION
 - [x] Reported Failure Gate:
   - C128 recall screen shows corrupted attack / hit-dice glyphs (`D` separator and attack mnemonic bytes)
@@ -69,6 +116,25 @@ This file is a temporary working scratchpad.
   - `/` identifies what a symbol on screen stands for
   - `look` remains the path for the exact visible creature
   - leave the current combat-earned recall implementation alone for now
+- [x] BUG-SPELL-HARDENING
+- [x] Reported Failure Gate:
+  - C64: repeated `Magic Missile` casts must not hang or drift into `$FFFF`
+  - C64: rogue/ranger level-1 `m` must explain why casting is unavailable instead of prompting for a book and then doing nothing
+  - C128: spell casting must not JAM in the I/O hole (`$D023` reported)
+- [x] audit the active spell runtime seams and extend the harnesses so these exact gameplay paths are covered directly
+- [x] fix class-level gating so non-ready spell classes fail early with a user-facing explanation before any book prompt
+- [x] add focused C64 spell coverage for:
+  - repeated `Magic Missile` casts through the real spell flow
+  - low-level rogue/ranger `m` UX
+- [x] isolate and fix the C128 spell-cast banking/JAM regression and add a focused runtime smoke for it
+- [x] add spell integrity / expanded spell-state save-load coverage that exercises cross-byte spell masks and persisted spell state
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test`
 - [x] BUG-C64-RECALL-OVERLAY-STATE
 - [x] restore C64 active-tier state after overlay-backed modal screens so recall and other tier-dependent gameplay paths do not run after `OVL.UI` invalidates `$E000`
 - [x] re-check the active tier at the start of the shared C64 `/` recall path and the C64 character-view return path before gameplay redraw
@@ -116,6 +182,136 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- BUG-C64-MAGIC-MISSILE-CRASH / BUG-C64-DETECT-EVIL-CRASH shared progress:
+  - exact red repro:
+    - `python3 commodore/c64/tests/snapshot_spell_more_smoke.py --snapshot /Users/chadwick/vice-snapshot-20260415171837.vsf --keybuf 'maal' --entry-symbol .msg_show_more --after-entry-keybuf ' ' --return-symbol .main_loop`
+    - this failed reliably before the fix, proving the crash was in the resumed `-more-` path after dismissing the prompt, not in spell targeting itself
+  - root cause:
+    - the shared `msg_print` full-screen branch still saved/restored `zp_ptr0` around `msg_show_more`, then restarted through `msg_print`
+    - the actual stable source pointer was already cached in `msg_src_lo/msg_src_hi`, and `msg_save_history` on C64 was still exposed to IRQ-time low-ZP pointer clobber during that resumed copy path
+  - fix:
+    - make `msg_save_history` atomic on C64 too with `php/sei ... plp`
+    - simplify the `-more-` resume branch to clear flags and jump straight to `msg_print_cached` instead of stack-saving/restoring `zp_ptr0`
+    - add a direct C64 regression in `commodore/c64/tests/test_ui_views.s` that fills both message rows, dismisses `-more-`, and asserts the resumed message/history state
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+- BUG-C64-MAGIC-MISSILE-CRASH follow-up:
+  - new snapshot-backed repro:
+    - `~/vice-snapshot-20260415181150.vsf`
+    - user path: `m`, `a`, `a`, dismiss `-more-`, press direction, then crash to BASIC
+  - diagnostic result:
+    - the old snapshot cannot be the closure gate after rebuilding because `.vsf` restores the old RAM image too, so current symbols no longer describe the restored code after layout changes
+    - the snapshot was still good enough to root-cause the remaining live seam: after the projectile hit path reached `projectile_msg_suffix`, execution fell through `combat_append_monster_name -> creature_get_name -> tier_load -> reu_fetch_tier`
+  - root cause:
+    - the stale-tier dungeon-monster name reload path was still reopening IRQs on C64 with raw `sei ... cli` helpers inside `reu_fetch_tier` and the C64 activation section of `tier_load`
+    - that path is reachable from a live spell hit when the monster still has `$E0xx` tier name pointers but `current_tier` has been cleared, which forces `creature_get_name` to reload the tier inside the spell/message path
+  - fix:
+    - preserve caller flags in `commodore/common/reu.s` `reu_fetch_tier` with `php/sei ... plp`
+    - preserve caller flags in the C64 banked-activation section of `commodore/common/tier_manager.s` `tier_load` with `php/sei ... plp`
+    - add `commodore/c64/tests/test_tier.s` coverage for `reu_fetch_tier` preserving `SEI/$35`
+    - strengthen the current-build `scripted_dungeon_target_spell_smoke` so it now deliberately forces the stale-tier reload path by clearing `current_tier`/`tier_loaded` after spawning the dungeon target monster under REU
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+- Spell cast/pray chooser UX follow-up:
+  - fixed the bogus post-book `-more-` prompt by resetting message-row state in the shared modal restore path (`commodore/common/ui_restore.s`) before gameplay prompts resume
+  - removed the new auto-popup spell list for `m`/`p`; book pick now returns to a message-line spell/prayer prompt again
+  - on-demand list still exists from the chooser via `?`, which opens the full-screen spell viewer and then returns to the chooser prompt
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+    - `make build128` PASS
+- BUG-C64-SPELL-CAST-FFFF:
+  - root cause:
+    - `creature_get_name` on C64 always finished its banked/normal copy path with `cli`
+    - when called from the live spell-hit path, the caller was intentionally running under `SEI` with `$01=$35` while the overlay spell code had KERNAL banked out
+    - that unconditional `cli` reopened IRQs before the caller restored normal banking, so the next interrupt fetched vectors out of RAM and collapsed into the user-reported `$FFFF` garbage-execution loop
+  - fix:
+    - preserve the caller interrupt state with `php/sei ... plp` in each C64 `creature_get_name` entry path that runs through the banked/name-copy logic
+    - keep restoring `$01` from `cgn_saved_p01`, but stop unconditionally enabling IRQs on return
+  - regression:
+    - `commodore/c64/tests/test_tier.s` test 11 now calls `creature_get_name` from the exact hazardous context (`SEI`, `$01=$35`) and asserts that:
+      - the expected name bytes are returned
+      - the helper returns with IRQ-disable still set
+      - `$01` is still `$35` on return
+  - verification so far:
+    - `make build64` PASS
+    - focused `tier` regression PASS (`11/11`)
+    - exact broader gate: `make test64` PASS (`34 passed, 0 failed`)
+  - follow-up test-harness fix:
+    - the red `effects` suite was a unit-harness bug, not a new product spell regression
+    - `test_effects.s` test 37 patched `test_spell_list_display` / `test_spell_execute_selected` with 3-byte `JMP`s, but the shared stubs in `ui_trampoline_stubs.s` were only 1-byte `RTS` bodies
+    - fix: turn those two shared spell stubs into explicit 3-byte patch slots and keep the late suite boundary assert exact (`<= $ba5c`) once the body fit precisely to the buffer start
+- BUG-C128-SPELL-CAST-D026:
+  - one real spell-specific C128 crash is fixed:
+    - `calc_spell_failure` had drifted so its live branch target for the non-faint path landed in the I/O hole at `$D026`
+    - fix: move `calc_spell_failure` into the banked spell block and add a full-extent residency assert
+  - a second real runtime seam is also fixed:
+    - the C128 banked spell trampolines were banking KERNAL out by mutating `$01` and not restoring `$01` on return
+    - fix: `C128BankedComputeTrampoline` and `tramp_spell_execute_selected` now save/restore `$01`
+  - the first shipping-image repro harness was invalid:
+    - native-monitor `break` / `until` log lines against `$D026` were ambiguous enough to false-fail even on title-screen idle
+    - `commodore/c128/tests/product_spell_cast_smoke.py` was rewritten to use remote monitor breakpoints instead of monlog text
+  - current status:
+    - build and focused C128 smokes are green after the two product fixes
+    - the shipping-image product smoke is now honest, but still needs a reliable way to prove the autostart cast path reaches its success marker before it can replace the user’s live manual gate
+- FEAT-ADDITIONAL-SPELLS progress:
+  - spell catalogs are now widened to the full `31 mage + 31 priest` sets with `umoria` class tables and explicit per-book bitmasks
+  - player spell state is widened from the old 2-byte learned mask to learned/worked/forgotten/order tracking in `player_data`
+  - save versions were intentionally bumped (`C64 $0d`, `C128 $0e`) rather than attempting silent migration
+  - C64/C128 spell ownership is now split cleanly:
+    - selection/study UI lives in `UiOverlay`
+    - execution dispatch lives in `DeathOverlay`
+  - implemented/fixed high-value spell semantics in the current tree:
+    - mage `Sleep II` now uses adjacent sleep instead of mass sleep
+    - priest `Sanctuary` now uses adjacent sleep
+    - priest `Detect Doors/Stairs` now reveals both doors and stairs
+    - priest `Remove Curse` now clears curses across carried/equipped items
+    - priest `Glyph of Warding` is now mechanically active
+    - priest `Holy Word` now follows the VMS-style cure/full-heal/dispel-evil behavior already chosen for Commodore
+  - documentation added at `commodore/SPELLS.md` with:
+    - full 62-entry spell/prayer catalog
+    - legacy vs added status
+    - per-book membership
+    - per-class level/mana/fail data
+    - current Commodore deviations and upstream-source notes
+  - C64 test harness fixes:
+    - `test_main_loop.s` now uses tiny local spell stubs instead of importing the full spell runtime, keeping the test body below `$C000`
+    - `ui_trampoline_stubs.s` now provides no-op spell trampolines instead of dragging full spell overlays into unrelated suites
+    - `test_effects.s` was updated off the removed `pm_do_cast` helper and its local scratch buffers were moved up to `$B800`
+    - `test_save.s` and `test_monster_magic.s` were trimmed the same way after the spell refactor pushed both resident test bodies past `$C000`; local spell stubs brought them back under `MAP_BASE` and restored the breakpoint contract
+    - fixed the live C64 `m` -> book -> `a` hang by making `spell_mask_test_ptr` preserve `X` and correcting the 31-spell mask-byte table to use `8,8,8,7` grouping
+    - added a focused `test_effects.s` regression that builds the learnable mage list for `[Beginners-Magick]` and verifies all 7 entries are returned
+  - C128 smoke harness fixes:
+    - `build_boot_assets()` now invalidates on shared `../common/*.s`, `../c64/*.s`, and the actual booted `out/moria128.d71`
+    - `boot_title_idle_smoke` now uses one monitor `until` probe per boot run instead of chaining two `until` commands in one playback file
+  - spell hardening follow-up:
+    - `player_cast_spell` and `player_pray` now gate on `class_spell_min_level` before prompting for books, so low-level rogue/ranger flows fail early with `HSTR_PM_NO_EXP`
+    - `scripted_spell_cast_smoke` is now part of the default live gates on both platforms instead of a dormant helper smoke:
+      - C64 `make test64` now runs a disk-backed in-game cast flow that completes chargen, opens the filtered book prompt, casts repeatedly, and only passes after the live pass trap is reached
+      - C128 `make test128-fast-smoke` now includes `scripted_spell_cast_smoke`, and the scripted flow must return to `main_loop` after repeated successful casts
+    - fixed the scripted smoke input contract to use filtered-inventory letters, not raw carried-slot letters:
+      - the only visible book in the filtered prompt is `A`, even when it lives in carried slot `B`
+      - both C64 and C128 scripted spell inputs now select the book with `A`
+    - fixed the C64 smoke harness classification so a reached pass trap is authoritative; it no longer misreports a later cycle-limit after `BRK` as a spell JAM
+    - `test_effects.s` now covers:
+      - high-book-bit learnable-list construction for `[Beginners-Magick]`
+      - repeated full `player_cast_spell` flow stability
+      - rogue/ranger low-level `m` UX
+    - the C128 spell-load JAM was fixed by moving spell UI literals out of low common RAM and back into the UI overlay owner
+    - the follow-up live C128 spell JAM at `$D063` was caused by `player_cast_spell` staying below `$D000` while its internal `pm_*` helpers drifted into `$D000-$D2xx`
+    - repaired by splitting resident spell state from spell logic:
+      - `player_magic_state.s` keeps shared spell scratch/state resident
+      - C128 `player_magic.s` now lives in the banked payload, so `player_cast_spell` and its `pm_*` helper callees resolve at `$F2xx-$F5xx`
+      - resident bookkeeping helpers (`pm_mark_worked`, `pm_learn_selected_spell`) moved out of the banked payload to keep the staged source below `$E000`
+      - C128 IO audits now cover the internal `pm_*` helper surfaces, not just the top-level trampolines
+      - C64 unit suites now import the split resident spell-state owners directly
+  - final verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 34 passed, 0 failed (of 34 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
+    - `make test128-fast-smoke` -> `=== Results: 4 passed, 0 failed (of 4 suites) ===`
+    - `cd commodore/c128 && TEST_FILTER='scripted_spell_cast_smoke' ./run_tests128.sh` -> `=== Results: 1 passed, 0 failed (of 1 suites) ===`
+    - `make test` -> PASS
 - BUG-C128-RECALL-GLYPH-CORRUPTION follow-up:
   - root cause was in the shared recall renderer, not a C128-only overlay/load issue
   - fixed four shared-renderer bugs in `commodore/common/ui_recall.s`:
@@ -5380,6 +5576,46 @@ The section below is retained only as historical context for the earlier dual-en
   - passed with `=== Results: 3 passed, 0 failed (of 3 suites) ===`
 - `make test64`
   - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+### Spell Prompt Follow-up
+- Fixed the redundant `-more-` that appeared after choosing a book/spell in the new prompt-driven `m`/`p` flow.
+- Root cause:
+  - the accepted chooser prompts still occupied the message rows
+  - the next gameplay prompt (`Direction?`) arrived as a third message and forced `-more-`
+- Correction:
+  - accepted book and spell choices now clear the message area before handing off to the next gameplay prompt
+  - `msg_clear` now also resets `msg_row1_col` so row-state is fully reset
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+  - added direct chooser regression in `ui_views`
+
+### Dungeon Spell Loading Message
+- Fixed the wrong `Loading...` message appearing after dungeon spell casts like `Detect Monsters`.
+- Root cause:
+  - C64 overlay-backed spell execution restored the current creature tier after returning from `OVL.DEATH`
+  - that restore path reused `tier_check_transition`
+  - `tier_load` treated it like a real depth transition and printed `Loading...`
+- Correction:
+  - added `tier_restore_after_overlay`
+  - overlay/UI return paths now use the silent restore helper instead of raw `tier_check_transition`
+  - `tier_load` now suppresses the transient loading message during silent restores
+  - stale `$E0xx` monster-name recovery in `creature_get_name` now also sets the silent-restore flag around its internal tier reload
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+  - added direct regressions in `test_tier.s`
+
+### Spell List `?` Selection
+- Fixed the prompt/list mismatch where pressing `?` from cast/pray opened the full-screen spell list, but pressing a spell letter only dismissed the overlay and dropped back to the previous prompt.
+- Root cause:
+  - `pm_prompt_visible_spell_choice` treated the overlay list as a read-only modal
+  - it always read a dismiss key after `tramp_spell_list_display` even though the overlay footer advertised direct spell selection
+- Correction:
+  - the `?` path now feeds the overlay key back through `pm_pick_visible_spell`
+  - valid letter choice selects the spell immediately
+  - non-letter/ESC continues to return to the previous chooser prompt
+  - moved the regression coverage into `test_effects.s` and slimmed `test_ui_views.s` back down to avoid I/O-hole growth
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
 
 ### Active C128 Title-Load Gate
 - Reported failure gate:

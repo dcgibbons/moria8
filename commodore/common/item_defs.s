@@ -12,6 +12,7 @@
 
 // Floor Item Constants
 .const MAX_FLOOR_ITEMS = 32
+.const MAX_GLYPHS      = 4
 .const FI_EMPTY        = $ff
 
 // Equipment Slot Constants (indices 22-29 in unified table)

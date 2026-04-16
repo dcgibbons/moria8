@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #27
+    ldx #28
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -71,6 +71,8 @@ test_exit_trampoline:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -93,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 28, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 29, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1077,10 +1079,47 @@ test_start:
     bne !t28_fail+
     lda #$01
     sta tc_results + 27
-    jmp !tests_done+
+    jmp !t29+
 !t28_fail:
     lda #$00
     sta tc_results + 27
 
+    // ==========================================
+    // Test 29: combat message appends must keep slot 41 reserved for
+    // the null terminator instead of scribbling into the next symbol.
+    // ==========================================
+!t29:
+    lda #41
+    sta cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41
+    lda #'Y'
+    sta cmb_you_str
+
+    lda #<tc_one_char_z
+    ldy #>tc_one_char_z
+    jsr combat_append_str
+    lda #<tc_one_char_dot
+    ldy #>tc_one_char_dot
+    jsr combat_append_str
+
+    lda cmb_buf_idx
+    cmp #41
+    bne !t29_fail+
+    lda combat_msg_buf + 41
+    bne !t29_fail+
+    lda cmb_you_str
+    cmp #'Y'
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp !tests_done+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
 !tests_done:
     jmp test_exit_trampoline
+
+tc_one_char_z:   .text "Z" ; .byte 0
+tc_one_char_dot: .text "." ; .byte 0

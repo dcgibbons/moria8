@@ -61,9 +61,28 @@ monster_ai_tick:
     lda (zp_ptr0),y
     sta zp_mon_flags
 
-    // Check speed
+    // Check speed, including per-monster spell adjustment stored in
+    // MX_SPEED_CNT (-1 = slowed, 0 = normal base speed, +1 = hasted).
     ldx zp_mon_type
     lda cr_speed,x
+    sta zp_mon_speed
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_SPEED_CNT
+    lda (zp_ptr0),y
+    beq !mat_apply_base+
+    bpl !mat_speed_up+
+    lda zp_mon_speed
+    beq !mat_apply_base+
+    dec zp_mon_speed
+    jmp !mat_apply_base+
+!mat_speed_up:
+    lda zp_mon_speed
+    cmp #2
+    bcs !mat_apply_base+
+    inc zp_mon_speed
+!mat_apply_base:
+    lda zp_mon_speed
     bne !mat_not_slow+
 
     // Speed 0 = slow: act every other turn (even turns only)
@@ -644,6 +663,18 @@ monster_try_step:
     beq !mts_not_fleeing+
     jmp !mts_blocked+
 !mts_not_fleeing:
+    lda zp_player_x
+    ldy zp_player_y
+    jsr glyph_find_at
+    bcc !mts_glyph_done_player+
+    jsr monster_should_break_glyph
+    bcs !mts_break_player_glyph+
+    jmp !mts_blocked+
+!mts_break_player_glyph:
+    jsr glyph_remove
+    lda #1
+    sta mat_action_dirty
+!mts_glyph_done_player:
 
     // Town creatures don't attack unless provoked
     lda zp_mon_type
@@ -703,6 +734,18 @@ monster_try_step:
     beq !mts_unoccupied+
     jmp !mts_blocked+           // Another monster there
 !mts_unoccupied:
+    lda mat_target_x
+    ldy mat_target_y
+    jsr glyph_find_at
+    bcc !mts_no_glyph+
+    jsr monster_should_break_glyph
+    bcs !mts_break_glyph+
+    jmp !mts_blocked+
+!mts_break_glyph:
+    jsr glyph_remove
+    lda #1
+    sta mat_action_dirty
+!mts_no_glyph:
 
     // Check CF_ATTACK_ONLY — prevent actual movement
     ldx zp_mon_type
@@ -753,6 +796,25 @@ monster_try_step:
 
 !mts_blocked:
     clc
+    rts
+
+monster_should_break_glyph:
+    ldx zp_mon_type
+    lda cr_level,x
+    lsr
+    lsr
+    lsr
+    clc
+    adc #1
+    sta zp_temp0
+    lda #100
+    jsr rng_range
+    cmp zp_temp0
+    bcc !msg_break+
+    clc
+    rts
+!msg_break:
+    sec
     rts
 
 // ============================================================

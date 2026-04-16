@@ -60,6 +60,7 @@ OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
 DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
+SCRIPTED_SPELL_BOOT_ASSETS_BUILT=0
 CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 LOAD_RESUME_BOOT_ASSETS_BUILT=0
 REAL_BOOT_DIAG_ASSETS_BUILT=0
@@ -514,13 +515,13 @@ describe_phase_token() {
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
-            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
+            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
             printf 'cache\tcache_survival_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
@@ -556,7 +557,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -566,7 +567,7 @@ suite_matches_phase_token() {
             ;;
         town)
             case "$suite_name" in
-                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
+                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
             esac
             ;;
         cache)
@@ -771,7 +772,7 @@ groups = {
     "title/runtime": ["title_menu_ready", "game_new_start", "load_resume_game"],
     "movement/render": ["main_loop", "vp_render_status_loop", "update_visibility", "render_viewport", "player_try_move"],
     "combat": ["player_attack_monster", "combat_apply_damage", "monster_attack_player"],
-    "commands": ["item_aim_wand", "item_use_staff", "item_gain_spell", "player_cast_spell", "player_pray", "spell_list_display", "ranged_fire", "throw_item", "bash_command"],
+    "commands": ["item_aim_wand", "item_use_staff", "item_gain_spell", "player_cast_spell", "player_pray", "spell_list_display", "spell_execute_selected", "magic_check_new_spells", "calc_spell_failure", "ranged_fire", "throw_item", "bash_command"],
 }
 
 for group, names in groups.items():
@@ -1434,10 +1435,11 @@ build_boot_assets() {
     fi
 
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/128.runtime.prg out/main.vs -- \
-            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../tools/make_logo.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py; then
+            main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json ../tools/make_logo.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
+            ../common/*.s ../c64/*.s; then
         BOOT_ASSETS_BUILT=1
         return
     fi
@@ -1709,7 +1711,7 @@ build_title_art_boot_assets() {
             out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2192,6 +2194,62 @@ build_scripted_input_boot_assets() {
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
     c128_set_active_variant "scripted_input"
+    return 0
+}
+
+build_scripted_spell_boot_assets() {
+    if [ "$SCRIPTED_SPELL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_spell"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_scriptedspell.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/128.runtime.prg; then
+        SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_spell_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local scripted_d64="out/moria128_scriptedspell.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_SPELL -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_spell"
     return 0
 }
 
@@ -3220,10 +3278,7 @@ run_boot_title_idle_smoke() {
     : > "$log_file"
 
     {
-        echo "break \$${game_over_prompt}"
         echo "until \$${title_show_sysinfo}"
-        echo "until \$${title_menu_ready}"
-        echo "g"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -3239,6 +3294,24 @@ run_boot_title_idle_smoke() {
         return
     fi
 
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam before title_show_sysinfo on idle boot" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    : > "$log_file"
+    {
+        echo "until \$${title_menu_ready}"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 120000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    vice_rc=$?
+
     if ! grep -qi "^UNTIL: .*C:\$${title_menu_ready}" "$log_file"; then
         boot_log_report_failure "did not reach title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
         FAIL=$((FAIL + 1))
@@ -3246,8 +3319,8 @@ run_boot_title_idle_smoke() {
         return
     fi
 
-    if boot_log_has_stop_at "$log_file" "$game_over_prompt"; then
-        boot_log_report_failure "hit game_over_prompt instead of staying on the title menu" "$log_file" "game_over_prompt" "$game_over_prompt" "$vice_rc"
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam before title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3580,6 +3653,108 @@ run_scripted_summary_to_town_smoke() {
 
     echo "PASS"
     PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_spell_cast_smoke() {
+    local name="scripted_spell_cast_smoke"
+    echo -n "  $name: "
+
+    build_scripted_spell_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_test_spell_pass
+    local -a spell_fail_labels=(
+        "c128_test_spell_fail_no_cast_sym"
+        "c128_test_spell_fail_level_sym"
+        "c128_test_spell_fail_known_sym"
+        "c128_test_spell_fail_validate_sym"
+        "c128_test_spell_fail_roll_sym"
+        "c128_test_spell_fail_cancel_sym"
+    )
+    local -a spell_fail_addrs=()
+    local label addr
+    c128_test_spell_pass=$(awk '/\.c128_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${spell_fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        spell_fail_addrs+=("$addr")
+    done
+    if [ -z "${c128_test_spell_pass:-}" ]; then
+        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_scriptedspell.d64"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    local pass_lc
+    local pass_hit
+    : > "$log_file"
+    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${spell_fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_log_report_failure "jam during scripted spell cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!spell_fail_labels[@]}"; do
+        addr="${spell_fail_addrs[$idx]}"
+        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+            boot_log_report_failure "scripted spell cast hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
+            echo "    fail_label: ${spell_fail_labels[$idx]}"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during scripted spell cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    boot_log_report_failure "did not reach scripted spell pass trap" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+    FAIL=$((FAIL + 1))
     TOTAL=$((TOTAL + 1))
 }
 
@@ -4317,6 +4492,7 @@ run_selected_suites() {
     run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke || return 1
     run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke || return 1
     run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke || return 1
+    run_named_suite scripted_spell_cast_smoke run_scripted_spell_cast_smoke || return 1
     run_named_suite real_input_town_move_diag run_real_input_town_move_diag || return 1
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1

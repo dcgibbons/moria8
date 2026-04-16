@@ -12,6 +12,7 @@ else
     KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE=0)
 fi
 VICE="x64sc"
+C1541="${C1541:-c1541}"
 PASS=0
 FAIL=0
 TOTAL=0
@@ -66,7 +67,7 @@ run_test() {
     run_vice_once() {
         local log_path="$1"
         script -q "$log_path" \
-            "$VICE" -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+            "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
             -autostart "${src%.s}.prg" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -145,7 +146,7 @@ run_sound_monitor_test() {
     }
 
     script -q "$log_file" \
-        "$VICE" -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
         -autostart "${src%.s}.prg" -moncommands "$mon_file" \
         -limitcycles "$cycles" +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -212,6 +213,471 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_scripted_spell_cast_smoke() {
+    local name="scripted_spell_cast_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols -define C64_TEST_SCRIPTED_SPELL -o out/moria_spell_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_spell_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_spell_smoke.prg "moria64" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_spell_fail_no_cast_sym"
+        "c64_test_spell_fail_level_sym"
+        "c64_test_spell_fail_known_sym"
+        "c64_test_spell_fail_validate_sym"
+        "c64_test_spell_fail_roll_sym"
+        "c64_test_spell_fail_cancel_sym"
+        "c64_test_spell_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (scripted spell hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (scripted spell flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (scripted spell flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted spell pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_dungeon_target_spell_smoke() {
+    local name="scripted_dungeon_target_spell_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_DUNGEON_SPELL \
+            -o out/moria_dungeon_spell_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_dungeon_spell_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_dungeon_spell_smoke.prg "moria64" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_spell_fail_no_cast_sym"
+        "c64_test_spell_fail_level_sym"
+        "c64_test_spell_fail_known_sym"
+        "c64_test_spell_fail_validate_sym"
+        "c64_test_spell_fail_roll_sym"
+        "c64_test_spell_fail_cancel_sym"
+        "c64_test_spell_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -reu -reusize 512 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (scripted dungeon spell hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (scripted dungeon spell flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (scripted dungeon spell flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted dungeon spell pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_detect_evil_smoke() {
+    local name="scripted_detect_evil_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT \
+            -o out/moria_detect_evil_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_detect_evil_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_detect_evil_smoke.prg "moria64" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_spell_fail_no_cast_sym"
+        "c64_test_spell_fail_level_sym"
+        "c64_test_spell_fail_known_sym"
+        "c64_test_spell_fail_validate_sym"
+        "c64_test_spell_fail_roll_sym"
+        "c64_test_spell_fail_cancel_sym"
+        "c64_test_spell_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (scripted detect evil hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (scripted detect evil jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (scripted detect evil timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted detect evil pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 echo "=== Moria Phase 1 Tests ==="
 echo ""
 
@@ -243,19 +709,19 @@ run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
-run_test "combat" "tests/test_combat.s" "0400 041b" 28 500000000
+run_test "combat" "tests/test_combat.s" "0400 041c" 29 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 041f" 32 1000000000
+run_test "effects" "tests/test_effects.s" "0400 0424" 37 1000000000
 run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 040c" 13 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 040f" 16 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
-run_test "tier" "tests/test_tier.s" "0400 040a" 11 500000000
+run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
 run_test "render" "tests/test_render.s" "0400 0403" 4 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
@@ -264,6 +730,9 @@ run_test "throw" "tests/test_throw.s" "0400 0405" 6 500000000
 run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
+run_scripted_spell_cast_smoke
+run_scripted_dungeon_target_spell_smoke
+run_scripted_detect_evil_smoke
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

@@ -230,6 +230,8 @@ tramp_dig_ability:
 #import "../common/player_items.s"
 #import "../common/spell_data.s"
 #import "../common/spell_effects.s"
+#import "../common/player_magic_state.s"
+#import "../common/player_magic_state_ops.s"
 #import "../common/player_magic.s"
 #import "dungeon_render.s"
 #import "../common/dungeon_los.s"
@@ -706,7 +708,7 @@ tramp_ui_inv_display:
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_display:
-    lda #OVL_UI
+    lda #OVL_HELP
     jsr overlay_load
     bcs !done+
     sei
@@ -723,6 +725,40 @@ tramp_ui_recall:
     jsr ui_recall_display
     jmp tramp_sr_epilogue
 
+tramp_item_gain_spell:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr item_gain_spell
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_spell_list_display:
+    lda #OVL_UI
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr spell_list_display
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_spell_execute_selected:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr spell_execute_selected
+    jsr tier_restore_after_overlay
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_identify:
     lda #OVL_UI
     jsr overlay_load
@@ -731,7 +767,7 @@ tramp_ui_identify:
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_identify_print
-    jsr tier_check_transition
+    jsr tier_restore_after_overlay
 !done:
     jmp tramp_sr_epilogue
 
@@ -779,6 +815,63 @@ tramp_store_enter:
     jsr store_overlay_preamble
     jsr store_enter
     jmp tramp_sr_epilogue
+
+#if C64_TEST_SCRIPTED_SPELL
+c64_test_spell_fail_no_cast_sym:
+    brk
+c64_test_spell_fail_level_sym:
+    brk
+c64_test_spell_fail_known_sym:
+    brk
+c64_test_spell_fail_validate_sym:
+    brk
+c64_test_spell_fail_roll_sym:
+    brk
+c64_test_spell_fail_cancel_sym:
+    brk
+c64_test_spell_fail_input_sym:
+    brk
+c64_test_spell_pass_sym:
+    brk
+#else
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+c64_test_spell_fail_no_cast_sym:
+    brk
+c64_test_spell_fail_level_sym:
+    brk
+c64_test_spell_fail_known_sym:
+    brk
+c64_test_spell_fail_validate_sym:
+    brk
+c64_test_spell_fail_roll_sym:
+    brk
+c64_test_spell_fail_cancel_sym:
+    brk
+c64_test_spell_fail_input_sym:
+    brk
+c64_test_spell_pass_sym:
+    brk
+#else
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_spell_fail_no_cast_sym:
+    brk
+c64_test_spell_fail_level_sym:
+    brk
+c64_test_spell_fail_known_sym:
+    brk
+c64_test_spell_fail_validate_sym:
+    brk
+c64_test_spell_fail_roll_sym:
+    brk
+c64_test_spell_fail_cancel_sym:
+    brk
+c64_test_spell_fail_input_sym:
+    brk
+c64_test_spell_pass_sym:
+    brk
+#endif
+#endif
+#endif
 
 // ============================================================
 // Startup overlay trampoline — load overlay, bank out KERNAL, call $E000+
@@ -1056,6 +1149,7 @@ ovl_start_end:
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
     #import "../common/score.s"
+    #import "../common/player_magic_execute_overlay.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
@@ -1067,6 +1161,7 @@ ovl_death_end:
     #import "../common/ui_help_data.s"
     #import "../common/ui_help_page2_data.s"
     #import "../common/ui_help.s"
+    #import "../common/ui_equipment.s"
     #import "../common/ui_disk_setup.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
@@ -1076,9 +1171,11 @@ ovl_help_end:
 // UI overlay — low-frequency modal UI and symbol identify screens
 // ============================================================
 .segment UiOverlay
-    #import "../common/ui_equipment.s"
     #import "../common/ui_character.s"
     #import "../common/ui_identify.s"
+    #import "../common/spell_names.s"
+    #import "../common/player_magic_select_overlay.s"
+    #import "../common/player_gain_spell_impl.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true

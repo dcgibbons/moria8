@@ -1093,6 +1093,7 @@ creature_get_name:
     // C64: bank/read ptr from tier name arrays at $E000.
     txa
     tay                         // Y = creature index (preserved across banking)
+    php
     sei
     lda $01
     sta cgn_saved_p01
@@ -1117,6 +1118,7 @@ creature_get_name:
 !cgn_do_bank_c64:
 #if !C128
     // C64: bank out KERNAL for $E0xx pointer reads
+    php
     sei
     lda $01
     sta cgn_saved_p01
@@ -1149,7 +1151,11 @@ creature_get_name:
     bcc !cgn_next_tier+         // count < index → not in this tier
     beq !cgn_next_tier+         // count == index → index out of [0..count-1]
     // count > index → this tier covers creature X
-    jsr tier_load               // Load tier (current_tier already set)
+    lda #1
+    sta tier_silent_restore
+    jsr tier_load               // Internal stale-name recovery; no visible load msg
+    lda #0
+    sta tier_silent_restore
     ldx current_tier
     bne !cgn_reload_ok+
     jmp !cgn_reload_fail+       // Load failed (disk error) → "?"
@@ -1169,6 +1175,7 @@ creature_get_name:
     lda cr_name_lo,x
     sta zp_ptr1
 #if !C128
+    php
     sei
     lda $01
     sta cgn_saved_p01           // Save bank config without using stack
@@ -1221,7 +1228,7 @@ creature_get_name:
 #if !C128
     lda cgn_saved_p01
     sta $01
-    cli
+    plp
 #endif
     lda #<creature_name_buf
     ldy #>creature_name_buf

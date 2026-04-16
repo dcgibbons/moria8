@@ -24,7 +24,7 @@ cmd_show_character_view:
 #if !C128
     // C64 character view is overlay-backed and returns through a custom
     // full-screen redraw path, so it must also re-establish the active tier.
-    jsr tier_check_transition
+    jsr tier_restore_after_overlay
 #endif
     jsr screen_clear
     jmp vp_render_status_loop
