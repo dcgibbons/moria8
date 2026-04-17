@@ -61,25 +61,57 @@ test_exit_trampoline:
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
-#import "../../common/player_items.s"
-#import "../../common/spell_data.s"
-#import "../../common/projectile.s"
-#import "../../common/spell_effects.s"
-#import "../../common/player_magic_state.s"
-#import "../../common/player_magic_state_ops.s"
-#import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+
+store_init_all:
+    rts
+
+store_restock_all:
+    rts
+
+store_enter:
+    rts
+
+ui_help_show_paged:
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    rts
+
+ui_inv_display:
+ui_inv_select_display:
+    rts
+
+ui_equip_display:
+    rts
+
+show_inv_and_select:
+    lda #$20
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
+
+pm_setup_active_tables:
+    rts
+
+eff_teleport_self:
+    rts
+
+eff_kill_monster:
+    rts
+
+eff_detect_timer:
+    .byte 0
+
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s

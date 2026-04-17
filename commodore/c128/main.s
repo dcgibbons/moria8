@@ -1525,14 +1525,34 @@ tramp_ui_help_display:
 !done:
     jmp tramp_ui_exit
 
+tramp_ui_ui_overlay_common:
+    sta !ui_target+ + 1
+    jsr tramp_ui_enter
+    lda #C128_UI_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+!ui_target:
+    jsr ui_char_display
+!done:
+    jmp tramp_ui_exit
+
 tramp_ui_char_display:
-    :C128UIOverlayDisplayTrampoline(ui_char_display)
+    lda #<ui_char_display
+    jmp tramp_ui_ui_overlay_common
 
 tramp_ui_inv_display:
+    lda #<ui_inv_display
+    jmp tramp_ui_inv_common
+
+tramp_ui_inv_select_display:
+    lda #<ui_inv_select_display
+tramp_ui_inv_common:
+    sta !inv_target+ + 1
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
     jsr overlay_load
     bcs !done+
+!inv_target:
     jsr ui_inv_display
 !done:
     jmp tramp_ui_exit
@@ -1547,13 +1567,16 @@ tramp_ui_equip_display:
     jmp tramp_ui_exit
 
 tramp_ui_recall:
-    :C128UIOverlayDisplayTrampoline(ui_recall_display)
+    lda #<ui_recall_display
+    jmp tramp_ui_ui_overlay_common
 
 tramp_ui_wizard_display:
-    :C128UIOverlayDisplayTrampoline(ui_wizard_display)
+    lda #<ui_wizard_display
+    jmp tramp_ui_ui_overlay_common
 
 tramp_item_gain_spell:
-    :C128UIOverlayDisplayTrampoline(item_gain_spell)
+    lda #<item_gain_spell
+    jmp tramp_ui_ui_overlay_common
 
 tramp_title_load_and_draw:
     lda #C128_UI_OVERLAY_ID

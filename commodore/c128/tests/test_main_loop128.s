@@ -183,6 +183,7 @@ tramp_ui_help_display:
 tramp_ui_inv_display:
     inc test_inventory_calls
     rts
+.label tramp_ui_inv_select_display = ui_inv_select_display
 
 tramp_ui_char_display:
     inc test_char_calls

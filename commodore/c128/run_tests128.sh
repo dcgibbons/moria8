@@ -974,6 +974,7 @@ for kind, _display, symbol, arg in contracts:
 for label in (
     "tramp_ui_help_display",
     "tramp_ui_inv_display",
+    "tramp_ui_inv_select_display",
     "tramp_ui_equip_display",
     "tramp_ui_recall",
 ):
@@ -1313,6 +1314,12 @@ required_chains = [
         "jsr huff_print_msg",
         "jsr input_prepare_followup_key",
         "jsr input_get_key",
+    ]),
+    ("inventory_overlay_select", (root / "common" / "player_items.s").read_text().splitlines(), [
+        "show_inv_and_select:",
+        "jsr input_prepare_followup_key",
+        "jsr tramp_ui_inv_select_display",
+        "jsr input_get_key_fast",
     ]),
     ("wizard_heal_choice", (root / "common" / "ui_wizard.s").read_text().splitlines(), [
         "ui_wizard_cmd_heal_cure:",

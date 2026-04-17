@@ -27,6 +27,7 @@ test_spell_execute_selected_impl:
 // $F000 UI screen trampolines
 .label tramp_ui_char_display = ui_char_display
 .label tramp_ui_inv_display = ui_inv_display
+.label tramp_ui_inv_select_display = ui_inv_select_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
 .label tramp_spell_list_display = test_spell_list_display

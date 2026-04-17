@@ -707,6 +707,13 @@ tramp_ui_inv_display:
     jsr ui_inv_display
     jmp tramp_sr_epilogue
 
+tramp_ui_inv_select_display:
+    sei
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
+    sta $01
+    jsr ui_inv_select_display
+    jmp tramp_sr_epilogue
+
 tramp_ui_equip_display:
     lda #OVL_HELP
     jsr overlay_load

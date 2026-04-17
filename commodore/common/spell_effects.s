@@ -178,7 +178,7 @@ eff_identify_prompt:
 
     cmp #$3f
     bne !eip_not_inv+
-    lda #$ff
+    lda #$fd
     jsr show_inv_and_select
 !eip_not_inv:
 

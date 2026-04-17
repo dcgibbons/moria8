@@ -65,13 +65,18 @@ equip_slot_for_cat:
 // show_inv_and_select — Show filtered inventory overlay and return the chosen
 // key after restoring gameplay. Used by item-selection dialogs so `?` can
 // select directly from the inventory list instead of forcing a second prompt.
-// Input: A = filter value ($FF=all, $FE=wearable, 0-15=exact ICAT match)
+// Input: A = filter value ($FF=all, $FE=wearable, $FD=identify-all, 0-15=exact ICAT match)
 // Output: A = key pressed while the inventory overlay was visible
 // Preserves: nothing
 show_inv_and_select:
-    sta uinv_filter
-    jsr tramp_ui_inv_display
-    jsr input_get_modal_dismiss_key
+    sta piw_filter
+    jsr input_prepare_followup_key
+    jsr tramp_ui_inv_select_display
+#if C128
+    jsr input_get_key_fast
+#else
+    jsr input_get_key
+#endif
     pha
     jsr ui_view_restore_modal_overlay
     pla
@@ -101,6 +106,8 @@ piw_inv_slot_matches_filter:
 
     ldy piw_filter
     cpy #$ff
+    beq !piw_inv_match+
+    cpy #$fd
     beq !piw_inv_match+
 
     tax

@@ -752,7 +752,7 @@ run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 0405" 6 50000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0430" 49 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 040f" 16 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0411" 18 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000

@@ -1500,7 +1500,7 @@ cmd_drop:
 
 cmd_inventory:
     lda #$ff
-    sta uinv_filter             // Show all items
+    sta piw_filter              // Show all items
     jmp cmd_show_inventory_view
 
 cmd_equipment:
