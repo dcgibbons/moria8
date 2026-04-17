@@ -345,6 +345,21 @@ monster_wake:
     sta (zp_ptr0),y
     rts
 
+// monster_apply_sleep — Clear awake state and set the live sleep counter
+// Input: A = sleep duration, X = monster slot index
+// Clobbers: A, Y, zp_ptr0/hi
+monster_apply_sleep:
+    pha
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    and #<~MF_AWAKE
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    pla
+    sta (zp_ptr0),y
+    rts
+
 // monster_init_table — Mark all 32 slots empty, reset count
 // Clears 384 bytes (32 slots × 12 bytes). Two-pass loop because
 // cpx #384 truncates to cpx #128 on 6502 (8-bit immediate).

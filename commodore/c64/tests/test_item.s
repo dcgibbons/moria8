@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #46
+    ldx #48
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -97,14 +97,40 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 47, $ff
+tc_results: .fill 49, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
+test_key_idx: .byte 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+test_input_get_key_script:
+    ldx test_key_idx
+    lda test_key_script,x
+    beq !default+
+    inx
+    stx test_key_idx
+    rts
+!default:
+    lda #$20
+    rts
+
+test_input_wait_release:
+    rts
+
+test_key_script: .fill 8, 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #46
+    ldx #48
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2219,10 +2245,134 @@ test_start:
 
     lda #$01
     sta tc_results + 46
-    jmp !tests_done+
+    jmp !t48+
 !t47_fail:
     lda #$00
     sta tc_results + 46
+
+    // ==========================================
+    // Test 48: identify prompt supports '?'
+    // inventory view and then identifies the
+    // selected item after returning.
+    // ==========================================
+!t48:
+    jsr item_init_inventory
+    :PatchJump(input_get_key, test_input_get_key_script)
+    :PatchJump(input_wait_release, test_input_wait_release)
+    lda #0
+    sta test_key_idx
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #0
+    sta id_known + 17
+
+    lda #21
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    // Read identify scroll, then use '?' at the
+    // identify prompt and pick slot B directly
+    // from the inventory overlay.
+    lda #$41
+    sta test_key_script + 0
+    lda #$3f
+    sta test_key_script + 1
+    lda #$42
+    sta test_key_script + 2
+    lda #0
+    sta test_key_script + 3
+
+    jsr item_read_scroll
+
+    lda id_known + 17
+    cmp #1
+    bne !t48_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t48_fail+
+    lda id_known + 21
+    cmp #1
+    bne !t48_fail+
+
+    lda #$01
+    sta tc_results + 47
+    jmp !t49+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+
+    // ==========================================
+    // Test 49: identify '?' dismiss key does
+    // not get reused as the actual identify
+    // selection after returning to the prompt.
+    // ==========================================
+!t49:
+    jsr item_init_inventory
+    lda #0
+    sta test_key_idx
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #0
+    sta id_known + 17
+
+    lda #21
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    // Read identify scroll, show inventory with '?',
+    // then dismiss it with space. No item should be
+    // identified just because the overlay was shown.
+    lda #$41
+    sta test_key_script + 0
+    lda #$3f
+    sta test_key_script + 1
+    lda #$20
+    sta test_key_script + 2
+    lda #0
+    sta test_key_script + 3
+
+    jsr item_read_scroll
+
+    lda id_known + 17
+    bne !t49_fail+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t49_fail+
+
+    lda #$01
+    sta tc_results + 48
+    jmp !tests_done+
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

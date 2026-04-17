@@ -23,14 +23,6 @@
 
 eff_target_slot: .byte 0           // Target slot for identify
 eff_room_idx:    .byte 0           // Room loop index for light
-eff_work_idx:    .byte 0
-eff_work_x:      .byte 0
-eff_work_y:      .byte 0
-eff_work_x2:     .byte 0
-eff_work_y2:     .byte 0
-eff_work_count:  .byte 0
-eff_work_flag:   .byte 0
-eff_work_damage: .byte 0
 
 // ============================================================
 // eff_heal — Heal player HP
@@ -178,11 +170,17 @@ eff_teleport_self:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_identify_prompt:
-    // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
+!eip_retry:
     ldx #HSTR_PIQ_IDENTIFY_PROMPT
     jsr huff_print_msg
-
+    jsr input_prepare_followup_key
     jsr input_get_key
+
+    cmp #$3f
+    bne !eip_not_inv+
+    lda #$ff
+    jsr show_inv_and_select
+!eip_not_inv:
 
     // Cancel check
     cmp #$03
@@ -190,7 +188,6 @@ eff_identify_prompt:
     cmp #$20
     beq !eip_cancel+
 
-    // Convert to slot
     sec
     sbc #$41
     bcc !eip_cancel+
@@ -475,10 +472,8 @@ eff_sleep_adjacent:
     ldy df_target_y
     jsr monster_find_at
     bcc !esa_skip+
-    jsr monster_get_ptr             // zp_ptr0 = entry
-    ldy #MX_SLEEP_CUR
     lda #20                         // Sleep for 20 turns
-    sta (zp_ptr0),y
+    jsr monster_apply_sleep
 !esa_skip:
     rts
 
@@ -542,11 +537,11 @@ eff_bolt:
 !eb_trace:
     dec proj_steps
     bne !eb_has_steps+
-    jmp !eb_fizzle+
+    rts
 !eb_has_steps:
     jsr trace_step
     bcs !eb_check_mon+
-    jmp !eb_fizzle+                 // Blocked or out of bounds
+    rts                             // Blocked or out of bounds
 
 !eb_check_mon:
     // --- Animate bolt: draw * at current position if on-screen ---
@@ -589,6 +584,7 @@ eff_bolt:
 !eb_got_monster:
 
     // Hit a monster! X = slot index
+    stx cmb_slot
     stx zp_temp2                // Save monster slot
 
     // Get monster type for messages
@@ -624,11 +620,6 @@ eff_bolt:
     jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr sound_play
-    rts
-
-!eb_fizzle:
-    ldx #HSTR_EB_FIZZLE
-    jsr huff_print_msg
     rts
 
 // ============================================================
@@ -670,22 +661,34 @@ eff_damage_adjacent:
     rts
 
 // ============================================================
-// eff_directional_monster — Get direction, find monster at target
+// eff_directional_monster — Get direction, trace until the first monster hit
 // Output: carry SET = monster found (X = slot index),
-//         carry CLEAR = no monster
+//         carry CLEAR = no monster along the traced path
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_directional_monster:
     jsr get_direction_target
     bcc !edm_fail+
-
-    lda df_target_x
-    ldy df_target_y
+    jsr calc_direction_index
+    bcc !edm_fail+
+    lda zp_player_x
+    sta proj_cx
+    lda zp_player_y
+    sta proj_cy
+    lda #20
+    sta proj_steps
+!edm_trace:
+    jsr trace_step
+    bcc !edm_fail+
+    lda proj_cx
+    ldy proj_cy
     jsr monster_find_at
-    rts                             // Carry state from monster_find_at
+    bcs !edm_done+
+    dec proj_steps
+    bne !edm_trace-
 
 !edm_fail:
-    clc
+!edm_done:
     rts
 
 // ============================================================

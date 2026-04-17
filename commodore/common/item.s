@@ -851,8 +851,7 @@ item_drop:
     cmp #$3f
     bne !idr_not_inv+
     lda #$ff                    // Filter: show all items
-    jsr show_inv_and_restore
-    jmp item_drop
+    jsr show_inv_and_select
 !idr_not_inv:
 
     // Check for ESC ($03) or space ($20) -> cancel

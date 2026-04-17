@@ -47,3 +47,21 @@ c64_test_spell_return_count: .byte 0
 #endif
 #endif
 #endif
+
+#if C128
+pm_book_prompt_huff_id:
+    lda pm_mode
+    beq !pm_prompt_not_study+
+    ldx #HSTR_IGS_PROMPT
+    rts
+!pm_prompt_not_study:
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_prompt_pray+
+    ldx #HSTR_PM_YOU_CAST
+    rts
+!pm_prompt_pray:
+    ldx #HSTR_PM_YOU_PRAY
+    rts
+pm_book_prompt_huff_id_end:
+#endif

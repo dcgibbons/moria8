@@ -1105,6 +1105,7 @@ help_mod = (root / "common" / "ui_help.s").read_text().splitlines()
 store_mod = (root / "common" / "ui_store.s").read_text().splitlines()
 loop_helpers = (root / "common" / "game_loop_helpers.s").read_text().splitlines()
 player_magic_mod = (root / "common" / "player_magic.s").read_text().splitlines()
+spell_effects_mod = (root / "common" / "spell_effects.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1306,6 +1307,19 @@ required_chains = [
         "jsr piw_print_prompt_with_count",
         "jsr input_prepare_followup_key",
         "jsr input_get_key",
+    ]),
+    ("identify_prompt_choice", spell_effects_mod, [
+        "eff_identify_prompt:",
+        "jsr huff_print_msg",
+        "jsr input_prepare_followup_key",
+        "jsr input_get_key",
+    ]),
+    ("wizard_heal_choice", (root / "common" / "ui_wizard.s").read_text().splitlines(), [
+        "ui_wizard_cmd_heal_cure:",
+        "lda player_data + PL_MAX_MANA",
+        "sta player_data + PL_MANA",
+        "sta zp_player_mp",
+        "sta zp_player_mmp",
     ]),
 ]
 

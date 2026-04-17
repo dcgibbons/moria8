@@ -4,6 +4,24 @@
 // Kept out of the C128 UI overlay so spell-study modal code can stay within
 // $E000-$EFFF while still calling the shared learn helper directly.
 
+pm_add_spell_to_order:
+    ldx #0
+!pm_aso_loop:
+    cpx #32
+    bcs !pm_aso_done+
+    lda player_data + PL_SPELL_ORDER,x
+    cmp pm_spell_idx
+    beq !pm_aso_done+
+    cmp #99
+    beq !pm_aso_store+
+    inx
+    jmp !pm_aso_loop-
+!pm_aso_store:
+    lda pm_spell_idx
+    sta player_data + PL_SPELL_ORDER,x
+!pm_aso_done:
+    rts
+
 pm_learn_selected_spell:
     lda #<player_data + PL_SPELLS_LEARNT_0
     sta zp_ptr0

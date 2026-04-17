@@ -283,8 +283,8 @@ screen_flash_at:
     lda #COL_WHITE
     sta (zp_ptr0),y
 
-    // Delay (~10ms at 1MHz)
-    ldx #$08
+    // Delay (~20ms at 1MHz)
+    ldx #$10
 !sfa_delay_o:
     ldy #$00
 !sfa_delay_i:

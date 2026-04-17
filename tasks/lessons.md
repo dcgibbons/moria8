@@ -208,6 +208,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - In shared assembly, do not assume there is a `C64` build flag. This tree keys the 64-bit path as `!C128`, so `#if C64` silently misses C64-only shrink/fallback code until the memory map proves otherwise.
 - On C64, fullscreen modal prompts should use `ui_clear_full_screen_safe`, not the bulk `screen_clear`, when live residue matters. The row-by-row clear is the proven-safe path for C64 modal transitions, including save/load disk prompts.
 - On this repo, do not spend resident Huffman-table budget on spell-only feedback that can live in an overlay-local string. Spell execution text for blocked/no-target/single-overlay paths should stay with the overlay owner first; resident messaging is for shared always-live status/reporting paths.
+- When one newly added spell/prayer family is clearly under-tested, do not keep fixing single entries ad hoc. Broaden immediately to a behavior-family audit and build representative runtime coverage before trusting the larger feature set.
 
 ## Layout And Build Safety
 
@@ -234,6 +235,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - On C128, every secondary prompt in a multi-step command must explicitly gate `input_get_key` with `input_wait_release` or `input_prepare_followup_key`, even if the previous step already did so. The spell book prompt was release-gated, but the immediate follow-up spell-choice prompt was not, so the held book-selection key was consumed as the spell choice.
 - On C128, a follow-up release gate placed after rendering the next prompt can swallow a fast second keypress. For prompt-to-prompt flows like book -> spell selection, do the release gate before drawing the second prompt, then read the key normally.
 - Do not rely on `msg_clear` to preserve carry on C128. Clearing a non-status row calls `screen_clear_row`, and the VDC implementation leaves carry reflecting its row compares. Any chooser that uses carry for success/cancel must `jsr msg_clear` and then set carry explicitly before returning.
+- On C128, start-address residency audits are not enough for callable helpers near `$D000`. Audit the full function extent with explicit end labels; `pm_mark_worked` still JAMmed even after its entrypoint moved below the I/O hole because the tail of the routine crossed into `$D000`.
 
 ## C64 Banking And IRQ
 
@@ -255,3 +257,4 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - When a new high-value regression smoke is added to close an escaped bug, wire it into the standard `make test128-fast-smoke` target immediately. A targeted-only smoke is not enough coverage for the next regression pass.
 - A scripted C128 smoke that only checks an internal timer or success counter is not sufficient proof for live spell/prayer UX. For `m`/`p` flows, the smoke must prove a user-visible effect or message through the real gameplay path, or it can pass while the manual C128 experience is still broken.
 - If the user reports that both C128 spells and prayers regressed in the current tree, stop doing prayer-only debugging. Reclassify it immediately as a shared casting-path regression and audit the recent shared cast/pray edits before touching effect-specific code.
+- When the repo already has local upstream source trees called out in project notes, use them before answering historical/parity questions from memory.

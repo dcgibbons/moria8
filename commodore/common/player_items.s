@@ -62,17 +62,19 @@ equip_slot_for_cat:
 // Subroutines
 // ============================================================
 
-// show_inv_and_restore — Show filtered inventory overlay, wait for key, restore screen
+// show_inv_and_select — Show filtered inventory overlay and return the chosen
+// key after restoring gameplay. Used by item-selection dialogs so `?` can
+// select directly from the inventory list instead of forcing a second prompt.
 // Input: A = filter value ($FF=all, $FE=wearable, 0-15=exact ICAT match)
-// Used by item selection dialogs when player presses '?'.
-// NOTE (RP15-4): After return, callers re-prompt without re-validating game
-// state. This is safe because the overlay is read-only (no state mutation).
+// Output: A = key pressed while the inventory overlay was visible
 // Preserves: nothing
-show_inv_and_restore:
+show_inv_and_select:
     sta uinv_filter
     jsr tramp_ui_inv_display
     jsr input_get_modal_dismiss_key
+    pha
     jsr ui_view_restore_modal_overlay
+    pla
     rts
 
 // show_equip_and_restore — Show equipment overlay, wait for key, restore screen
@@ -82,7 +84,7 @@ show_equip_and_restore:
     jsr tramp_ui_equip_display
     jsr input_get_modal_dismiss_key
     jsr ui_view_restore_modal_overlay
-    rts
+    jmp input_wait_release
 
 // piw_inv_slot_matches_filter — check whether a carried slot is visible
 // Input: X = carried slot index, piw_filter = active filter
@@ -328,8 +330,7 @@ item_wear:
     cmp #$3f
     bne !iw_not_inv+
     lda #$fe                    // Filter: wearable items
-    jsr show_inv_and_restore
-    jmp item_wear
+    jsr show_inv_and_select
 !iw_not_inv:
 
     // Check for ESC ($03) or space ($20) -> cancel
@@ -775,8 +776,7 @@ item_quaff:
     cmp #$3f
     bne !iq_not_inv+
     lda #ICAT_POTION
-    jsr show_inv_and_restore
-    jmp item_quaff
+    jsr show_inv_and_select
 !iq_not_inv:
 
     // Check for ESC ($03) or space ($20) -> cancel
@@ -1074,8 +1074,7 @@ item_read_scroll:
     cmp #$3f
     bne !irs_not_inv+
     lda #ICAT_SCROLL
-    jsr show_inv_and_restore
-    jmp !irs_can_see-
+    jsr show_inv_and_select
 !irs_not_inv:
 
     // Check for ESC or space -> cancel
@@ -1348,8 +1347,7 @@ item_aim_wand:
     cmp #$3f
     bne !iaw_not_inv+
     lda #ICAT_WAND
-    jsr show_inv_and_restore
-    jmp item_aim_wand
+    jsr show_inv_and_select
 !iaw_not_inv:
 
     // Check for ESC or space -> cancel
@@ -1473,8 +1471,7 @@ item_use_staff:
     cmp #$3f
     bne !ius_not_inv+
     lda #ICAT_STAFF
-    jsr show_inv_and_restore
-    jmp item_use_staff
+    jsr show_inv_and_select
 !ius_not_inv:
 
     // Check for ESC or space -> cancel

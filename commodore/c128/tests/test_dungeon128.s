@@ -186,15 +186,21 @@ test_start:
 
     // Test 5: VDC special-effect flash color setter/resetter stay in sync
     // with the VIC->VDC palette translation table.
+    ldx #17
     lda #COL_CYAN
     jsr screen_flash_set_color
     lda sfa_flash_attr
     cmp vic_to_vdc_color + COL_CYAN
     bne !fail2+
+    cpx #17
+    bne !fail2+
 
+    ldx #17
     jsr screen_flash_reset_color
     lda sfa_flash_attr
     cmp #VDC_WHITE
+    bne !fail2+
+    cpx #17
     bne !fail2+
 
     jmp !after_fail2+

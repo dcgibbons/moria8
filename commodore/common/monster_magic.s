@@ -307,19 +307,7 @@ monster_cast_bolt:
     jsr math_dice             // → zp_math_a
 
     lda zp_math_a
-    sta zp_combat_dmg
-    jsr mon_atk_apply_damage
-    bcs !mcb_dead+
-
-    lda #SFX_HIT
-    jsr sound_play
-    rts
-!mcb_dead:
-    ldx zp_mon_type
-    inc recall_deaths,x
-    stx zp_death_source
-    jsr player_death_check
-    rts
+    jmp mm_apply_spell_damage
 
 // ============================================================
 // Spell handler 2: monster_cast_breath
@@ -351,21 +339,30 @@ monster_cast_breath:
     lda #255
     jmp !mcb_apply+
 !mcb_no_cap:
+    // Timed "Resist Heat and Cold" should blunt elemental breath damage.
+    // This path currently models only fire breath, so any active resist flag
+    // reduces the damage here until the elemental spell family is widened.
+    ldx zp_eff_resist
+    beq !mcb_store+
+    ldx #3
+    jsr math_div_16x8
+!mcb_store:
     lda zp_math_a
 !mcb_apply:
+    jmp mm_apply_spell_damage
+
+mm_apply_spell_damage:
     sta zp_combat_dmg
     jsr mon_atk_apply_damage
-    bcs !mcbr_dead+
-
+    bcs !masd_dead+
     lda #SFX_HIT
     jsr sound_play
     rts
-!mcbr_dead:
+!masd_dead:
     ldx zp_mon_type
     inc recall_deaths,x
     stx zp_death_source
-    jsr player_death_check
-    rts
+    jmp player_death_check
 
 // ============================================================
 // Spell handler 3: monster_cast_summon

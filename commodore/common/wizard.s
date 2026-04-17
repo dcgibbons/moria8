@@ -251,6 +251,8 @@ wizard_cmd_heal_cure:
     sta zp_player_mhp_hi
     lda player_data + PL_MAX_MANA
     sta player_data + PL_MANA
+    sta zp_player_mp
+    sta zp_player_mmp
     lda #0
     sta zp_eff_poison
     sta zp_eff_blind

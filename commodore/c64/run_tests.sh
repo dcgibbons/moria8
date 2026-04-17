@@ -17,6 +17,35 @@ PASS=0
 FAIL=0
 TOTAL=0
 
+check_static_contract() {
+    local name="$1"
+    local file="$2"
+    local pattern="$3"
+
+    echo -n "  $name: "
+    if python3 - "$file" "$pattern" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text()
+needles = [part.strip() for part in sys.argv[2].split("|||") if part.strip()]
+pos = 0
+for needle in needles:
+    idx = text.find(needle, pos)
+    if idx < 0:
+        raise SystemExit(1)
+    pos = idx + len(needle)
+PY
+    then
+        echo "PASS"
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL"
+        FAIL=$((FAIL + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+}
+
 run_test() {
     local name="$1"
     local src="$2"
@@ -696,6 +725,9 @@ else
 fi
 TOTAL=$((TOTAL + 1))
 
+check_static_contract "wizard_heal_contract" "../common/wizard.s" \
+    "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
+
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
 run_test "math"   "tests/test_math.s"   "0400 040f" 16
@@ -711,8 +743,14 @@ run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
 run_test "combat" "tests/test_combat.s" "0400 041c" 29 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 0426" 39 1000000000
-run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
+run_test "effects" "tests/test_effects.s" "0400 042c" 45 1000000000
+run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
+run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
+run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
+run_test "utility_effects" "tests/test_utility_effects.s" "0400 0403" 4 500000000
+run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 0405" 6 500000000
+run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
+run_test "item" "tests/test_item.s" "0400 0430" 49 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 040f" 16 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
@@ -720,7 +758,7 @@ run_sound_monitor_test
 run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
-run_test "monster_magic" "tests/test_monster_magic.s" "0400 0407" 8 500000000
+run_test "monster_magic" "tests/test_monster_magic.s" "0400 0408" 9 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
 run_test "render" "tests/test_render.s" "0400 0403" 4 500000000

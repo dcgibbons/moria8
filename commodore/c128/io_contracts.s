@@ -120,7 +120,10 @@
 :C128AuditBanked("pm_validate_selected_spell", pm_validate_selected_spell)
 :C128AuditBanked("pm_consume_mana", pm_consume_mana)
 :C128AuditBanked("pm_learn_selected_spell", pm_learn_selected_spell)
+:C128AuditOutOfIo("pm_finish_success_common", pm_finish_success_common, $E000)
+.assert "AUDIT-IO-C128 pm_finish_success_common extent stays out of the I/O hole", (pm_finish_success_common_end - 1) < $D000 || (pm_finish_success_common_end - 1) >= $E000, true
 :C128AuditOutOfIo("pm_mark_worked", pm_mark_worked, $E000)
+.assert "AUDIT-IO-C128 pm_mark_worked extent stays out of the I/O hole", (pm_mark_worked_end - 1) < $D000 || (pm_mark_worked_end - 1) >= $E000, true
 :C128AuditBanked("home_enter", home_enter)
 :C128AuditBanked("home_retrieve", home_retrieve)
 :C128AuditBanked("home_deposit", home_deposit)

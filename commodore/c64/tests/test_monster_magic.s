@@ -3,7 +3,7 @@
 // Tests: monster_can_cast (4 tests), monster_cast_bolt, monster_cast_breath,
 //        monster_cast_blind, monster_cast_heal.
 //
-// Results at $0400-$0407: $01 = pass, $00 = fail per test
+// Results at $0400-$0408: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #8
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -101,7 +101,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 8, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 9, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -601,10 +601,82 @@ test_start:
 
     lda #$01
     sta tc_results + 7
-    jmp !tests_done+
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+
+    // ==========================================
+    // Test 9: Active resist reduces breath damage
+    // Set monster HP to 30, breath would do 10; resist reduces to 3
+    // ==========================================
+!t9:
+    lda #0
+    sta zp_msg_flags
+
+    // Re-stuff keyboard buffer
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    // Reset player HP and enable timed resist
+    lda #100
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_game_flags
+    lda #$03
+    sta zp_eff_resist
+
+    // Set up a monster in slot 0 with HP=30
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #24
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #30
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #12
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #12
+    sta (zp_ptr0),y
+
+    lda #24
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+
+    jsr monster_cast_breath
+
+    // Damage = 100 - remaining HP; expect 3 (10/3)
+    lda #100
+    sec
+    sbc zp_player_hp_lo
+    cmp #3
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp !tests_done+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
 
 !tests_done:
     jmp test_exit_trampoline

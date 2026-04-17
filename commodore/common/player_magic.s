@@ -88,14 +88,8 @@ player_cast_spell:
     rts
 !pm_ready:
     jsr calc_spell_failure
-    php
-    jsr pm_consume_mana
-    plp
     bcc !pm_success+
-    ldx #HSTR_PM_FAIL
-    jsr huff_print_msg
-    lda #SFX_SPELL_FAIL
-    jsr sound_play
+    jsr pm_handle_fail_roll
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_roll_sym
 #endif
@@ -108,11 +102,8 @@ player_cast_spell:
     sec
     rts
 !pm_success:
-    jsr pm_print_cast_message
     jsr tramp_spell_execute_selected
-    jsr pm_mark_worked
-    lda #SFX_SPELL
-    jsr sound_play
+    jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_SPELL
     inc c128_test_spell_success_count
     inc c128_test_spell_return_pending
@@ -208,14 +199,8 @@ player_pray:
     rts
 !pp_ready:
     jsr calc_spell_failure
-    php
-    jsr pm_consume_mana
-    plp
     bcc !pp_success+
-    ldx #HSTR_PM_FAIL
-    jsr huff_print_msg
-    lda #SFX_SPELL_FAIL
-    jsr sound_play
+    jsr pm_handle_fail_roll
 #if C128_TEST_SCRIPTED_PRAYER
     jmp c128_test_spell_fail_roll_sym
 #endif
@@ -225,11 +210,8 @@ player_pray:
     sec
     rts
 !pp_success:
-    jsr pm_print_cast_message
     jsr tramp_spell_execute_selected
-    jsr pm_mark_worked
-    lda #SFX_SPELL
-    jsr sound_play
+    jsr pm_finish_success_common
 #if C128_TEST_SCRIPTED_PRAYER
     inc c128_test_spell_success_count
     lda c128_test_spell_return_pending
@@ -315,6 +297,14 @@ pm_require_class_level:
     sec
     rts
 
+pm_handle_fail_roll:
+    ldx #HSTR_PM_FAIL
+    jsr huff_print_msg
+    lda #SFX_SPELL_FAIL
+    jsr sound_play
+    jsr pm_consume_mana
+    rts
+
 pm_select_book:
 !pm_select_retry:
     jsr pm_book_prompt_huff_id
@@ -329,8 +319,7 @@ pm_select_book:
     cmp #$3f
     bne !pm_not_inv+
     lda #ICAT_BOOK
-    jsr show_inv_and_restore
-    jmp !pm_select_retry-
+    jsr show_inv_and_select
 !pm_not_inv:
     cmp #$20
     beq !pm_book_cancel+
@@ -364,6 +353,7 @@ pm_select_book:
     sec
     rts
 
+#if !C128
 pm_book_prompt_huff_id:
     lda pm_mode
     beq !pm_prompt_not_study+
@@ -378,6 +368,7 @@ pm_book_prompt_huff_id:
 !pm_prompt_pray:
     ldx #HSTR_PM_BOOK_PRAY
     rts
+#endif
 
 pm_build_known_list_from_book:
     lda #0

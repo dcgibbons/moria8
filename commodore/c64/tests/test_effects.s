@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #39
+    ldx #44
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -78,6 +78,7 @@ test_finish:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_feedback.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
@@ -109,7 +110,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 40, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 45, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -2101,10 +2102,216 @@ test_start:
 
     lda #$01
     sta tc_results + 39
-    jmp !tests_done+
+    jmp !t41+
 !t40_fail:
     lda #$00
     sta tc_results + 39
+    jmp !t41+
+
+    // ==========================================
+    // Test 41: bolt spells flash at the target
+    // viewport cell and do not fizzle when an
+    // adjacent monster is hit.
+    // ==========================================
+!t41:
+    jsr tv_setup_dark_room
+    :PatchJump(get_direction_target, test_get_direction_target_east)
+    :PatchJump(screen_flash_at, test_screen_flash_at)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+
+    lda #0
+    sta tlk_flash_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    lda #23
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #1
+    jsr monster_spawn_one
+    bcc !t41_fail+
+
+    lda #10
+    ldx #10
+    ldy #0
+    jsr eff_bolt
+
+    lda tlk_flash_calls
+    cmp #1
+    bne !t41_fail+
+    lda tlk_flash_row
+    cmp #11
+    bne !t41_fail+
+    lda tlk_flash_col
+    cmp #21
+    bne !t41_fail+
+    lda tpm_huff_calls
+    beq !t41_pass+
+    lda tpm_last_huff_id
+    cmp #HSTR_EB_FIZZLE
+    beq !t41_fail+
+!t41_pass:
+    lda #$01
+    sta tc_results + 40
+    jmp !t42+
+!t41_fail:
+    lda #$00
+    sta tc_results + 40
+
+    // ==========================================
+    // Test 42: Small spell/prayer heal reports
+    // "feel better" and increases HP.
+    // ==========================================
+!t42:
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    lda #10
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #20
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #4
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #14
+    bne !t42_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t42_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_FEEL_BETTER
+    bne !t42_fail+
+    lda #$01
+    sta tc_results + 41
+    jmp !t43+
+!t42_fail:
+    lda #$00
+    sta tc_results + 41
+
+    // ==========================================
+    // Test 43: Large spell/prayer heal reports
+    // "much better" and caps normally.
+    // ==========================================
+!t43:
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    lda #10
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #40
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #20
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #30
+    bne !t43_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t43_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_MUCH_BETTER
+    bne !t43_fail+
+    lda #$01
+    sta tc_results + 42
+    jmp !t44+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // ==========================================
+    // Test 44: Full-HP spell/prayer heal stays
+    // silent and leaves HP unchanged.
+    // ==========================================
+!t44:
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    lda #20
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #20
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #4
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #20
+    bne !t44_fail+
+    lda tpm_huff_calls
+    bne !t44_fail+
+    lda #$01
+    sta tc_results + 43
+    jmp !t45+
+!t44_fail:
+    lda #$00
+    sta tc_results + 43
+
+    // ==========================================
+    // Test 45: The high-end Heal prayer path
+    // caps to max HP and reports success.
+    // ==========================================
+!t45:
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    lda #5
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #40
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #200
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #40
+    bne !t45_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t45_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_MUCH_BETTER
+    bne !t45_fail+
+    lda #$01
+    sta tc_results + 44
+    jmp !tests_done+
+!t45_fail:
+    lda #$00
+    sta tc_results + 44
 
 !tests_done:
     jmp test_finish
@@ -2269,8 +2476,8 @@ tv_compare_viewport:
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end <= $bad9, true
+.assert "effects test body stays below scratch buffers", effects_test_body_end <= $be00, true
 
-.segmentdef TestEffectsBuffers [start=$bad9]
+.segmentdef TestEffectsBuffers [start=$be00]
 .segment TestEffectsBuffers
 tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0

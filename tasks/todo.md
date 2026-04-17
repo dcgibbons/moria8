@@ -3,14 +3,79 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] FEAT-NEW-SPELL-HARDENING
+- [ ] Reported Failure Gate:
+  - newly added spells/prayers must have correct live behavior, correct visible feedback, and correct platform-specific rendering/input behavior; `Magic Missile` must animate from the player’s actual viewport row/column without a bogus `Your spell fizzles out.`, and priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must not beep/no-op or show misleading feedback
+- [ ] BUG-SHARED-INV-OVERLAY-DIRECT-SELECT
+- [ ] Reported Failure Gate:
+  - item/book prompts that support `?` must allow direct selection from the inventory overlay instead of forcing a dismiss-and-reprompt flow; behavior should match the other selectable overlays consistently
+- [x] BUG-C128-REPEATED-FIRE-BOLT-JAM
+- [ ] Reported Failure Gate:
+  - repeated `Fire Bolt` casts on C128 must not JAM in the cast-success tail; latest live monitor traces unwound through `pm_finish_success_common -> pm_mark_worked` and crashed at `$D014` and then `$001C`
+- [x] move C128-only prompt helpers out of the crowded resident spell-state tail so the full cast-success epilogue stays below `$D000`
+- [x] tighten the C128 callable residency audit to check helper extents, not just symbol starts, for the cast-success tail
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
+- [ ] Reported Failure Gate:
+  - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
+- [ ] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
+- [ ] Reported Failure Gate:
+  - `Sleep II` and `Sleep III` must actually put monsters to sleep by clearing awake state as well as setting the sleep counter; the exact verification gate remains `make test64`
+- [ ] BUG-SHARED-MONSTER-REDRAW-AFTER-TRANSFORM
+- [ ] Reported Failure Gate:
+  - monster-changing effects such as `Polymorph Other` must not leave stale/missing monster tiles on screen until the monster moves again; the exact verification gate remains `make test64`
+- [ ] build a behavior-family spell/prayer audit matrix covering all newly added effects
+- [ ] fix the shared bolt/projectile regression first, then re-check whether any remaining `Magic Missile` issue is visual-only or a second logic bug
+- [ ] audit the under-tested effect families starting with:
+  - bolt/projectile spells
+  - heals
+  - timed buffs/protections/resistances
+  - detect/reveal prayers
+  - directional/adjacent monster-control effects
+- [ ] add runtime coverage for at least one representative from each high-risk family before claiming the feature hardened
+- [x] add representative runtime coverage for:
+  - shared bolt/projectile spells
+  - heals
+  - timed buffs/protections/resistances
+  - detect/reveal prayers
+  - adjacent monster-control effects
+  - area/utility/high-end priest effects (`Sense Surroundings`, `Glyph of Warding`, `Holy Word`)
+- [ ] BUG-PRIEST-RESIST-SEMANTICS
+- [ ] Reported Failure Gate:
+  - `Resist Heat and Cold` must have meaningful live gameplay semantics instead of only setting an otherwise-unused packed flag and showing onset feedback
+- [x] trace the real fire/cold gameplay consumers and wire the prayer into the currently implemented breath-damage path
+- [ ] broaden the prayer beyond the current fire-breath consumer if more elemental hostile actions land later
 - [ ] BUG-SHARED-MAGIC-MISSILE-PROJECTILE-FIZZLE
 - [ ] Reported Failure Gate:
   - `Magic Missile` must animate from the player’s actual viewport row/column and must not end with `Your spell fizzles out.` when it visibly cast at a target in town or dungeon
 - [ ] root-cause the shared bolt/projectile regression in the current tree
+- [x] BUG-BALL-SPELL-KILL-FEEDBACK
+- [x] Reported Failure Gate:
+  - ball-style spells such as `Stinking Cloud` and `Fire Ball` must report monster kills with the normal slain message instead of silently removing the target
+- [x] route lethal ball-spell kills through the shared combat kill-message owner instead of the silent remove/XP helper
+- [x] add focused ball-family coverage that proves lethal area damage uses the kill-message path without destabilizing the broad C64 gate
+- [x] BUG-STINKING-CLOUD-NOOP
+- [ ] Reported Failure Gate:
+  - `Stinking Cloud` must visibly cast as a ball-style spell and must damage monsters in its target area instead of only beeping and appearing to do nothing
+- [x] add a direct runtime regression for the shared `eff_ball` path before changing gameplay code
+- [x] harden the ball-family cast path so `Stinking Cloud` and other ball spells visibly travel and apply area damage
 - [ ] BUG-PRIEST-BOOK-B-FEEDBACK-BEHAVIOR
 - [ ] Reported Failure Gate:
   - priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must have correct live behavior and correct player-visible feedback instead of beeping, no-oping, or showing the wrong message
 - [ ] audit the current implementation and live feedback contracts for priest book B prayers before changing effect code
+- [ ] BUG-C128-IDENTIFY-ITEM-PROMPT-NOOP
+- [ ] Reported Failure Gate:
+  - C128 item-identify prompt must accept the chosen item letter and identify the item instead of immediately falling through to `Nothing seems to happen.`
+- [ ] harden the shared `eff_identify_prompt` follow-up input path for C128 and add coverage
+- [ ] BUG-SHARED-IDENTIFY-QMARK-DISMISS-LEAK
+- [ ] Reported Failure Gate:
+  - after `?` from the identify item prompt, dismissing the read-only inventory overlay must not reuse that dismiss key as the actual item selection; the `?` overlay behavior must stay consistent with the other view-only item overlays
+- [ ] BUG-SHARED-OVERCAST-ORDERING
+- [ ] Reported Failure Gate:
+  - overcast spell/prayer casts must not print `Not enough mana.` before the spell effect executes; identify-style spells must follow upstream overcast ordering instead of warning first and prompting second
+- [ ] align shared overcast handling with upstream sequencing and messaging instead of treating it as an identify-specific prompt bug
 - [ ] BUG-MP-BOOK-PROMPT-TEXT
 - [ ] Reported Failure Gate:
   - `m`/`p` must not show `Study which book`; cast must show a cast-book prompt, pray must show a pray-book prompt, and study must keep the study-book prompt

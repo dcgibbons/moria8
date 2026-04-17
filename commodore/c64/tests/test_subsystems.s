@@ -122,22 +122,22 @@ test_huff_integrity:
     cmp #>$02c8
     bne !fail+
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2)
-    cmp #<$044f
+    cmp #<$044c
     bne !fail+
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2) + 1
-    cmp #>$044f
+    cmp #>$044c
     bne !fail+
     lda huff_str_data + $02c8
-    cmp #$8e
+    cmp #$8d
     bne !fail+
     lda huff_str_data + $02c9
-    cmp #$75
+    cmp #$b7
     bne !fail+
-    lda huff_str_data + $044f
-    cmp #$0a
+    lda huff_str_data + $044c
+    cmp #$28
     bne !fail+
-    lda huff_str_data + $0450
-    cmp #$c8
+    lda huff_str_data + $044d
+    cmp #$ca
     bne !fail+
     lda #$01
     bne !store+
@@ -456,6 +456,6 @@ test_bank_image:
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $8e, $75, $fe, $d8, $f5, $93, $44, $a0
-    .byte $0a, $c8, $7a, $e6, $fb, $d0, $e5, $ad, $a5, $74, $7c, $ed, $00, $cf, $52, $02, $89, $40
+    .byte $8d, $b7, $fe, $d0, $f7, $93, $70, $80
+    .byte $28, $ca, $7a, $e6, $ba, $d2, $e5, $bd, $25, $76, $7c, $ed, $04, $d1, $92, $2a, $e1, $00
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

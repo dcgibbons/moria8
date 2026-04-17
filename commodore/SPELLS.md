@@ -34,7 +34,8 @@
 ## Known Deviations
 
 - `Detect Evil` is still implemented through the generic monster-detect path, not a strict evil-only reveal.
-- `Resist Heat and Cold` currently sets the existing packed resistance flags directly; it does not yet model upstream timed duration semantics.
+- `Resist Heat and Cold` currently sets the existing packed resistance flags directly instead of upstream split timers.
+- The current tree now uses those flags to reduce the implemented elemental breath-damage path, but broader fire/cold consumers are still not modeled yet.
 - `Glyph of Warding` is mechanically active, but there is no special dungeon-tile rendering for glyphs yet.
 - Glyph break chance is currently a simplified approximation rather than the exact upstream formula.
 - Class tables and book splits intentionally follow `umoria`; effect semantics intentionally prefer VMS when they differ.
@@ -57,6 +58,49 @@
   - `Resist Heat and Cold` now has explicit onset feedback, but it is still tied to the current packed-flag implementation rather than exact upstream timers
   - `Create Food`, `Glyph of Warding`, and `Recharge` now explain blocked/no-target cases instead of failing silently
   - timed expiry text for bless/haste/protection is still intentionally omitted on Commodore; this remains a documented deviation from richer `umoria` status messaging
+
+## Coverage Audit
+
+- Shared family coverage added during hardening:
+  - bolts/projectiles:
+    - `Magic Missile` now has a shared runtime regression proving bolt flashes originate from the correct viewport cell and do not end in `HSTR_EB_FIZZLE` on an immediate hit
+    - C128 also has a direct unit guard that `screen_flash_set_color` preserves the row register used by `screen_flash_at`
+  - heals:
+    - shared spell/prayer heal coverage now proves:
+      - small heals increase HP and emit `You feel better.`
+      - large heals emit `You feel much better.`
+      - capped heals stop at max HP
+      - full-HP spell/prayer heals stay silent instead of printing a bogus success message
+  - timed buff/protection feedback:
+    - dedicated runtime coverage now exists for bless onset/refresh and resist onset/refresh
+    - `Resist Heat and Cold` now also has a direct runtime regression proving it reduces hostile breath damage
+  - adjacent monster-control feedback:
+    - dedicated runtime coverage now exists for `Sanctuary` no-target feedback and for actually sleeping an adjacent monster
+  - detect/reveal feedback:
+    - dedicated runtime coverage now exists for `Detect Monsters` result/no-result behavior
+    - dedicated runtime coverage now exists for `Detect Evil` result/no-result behavior
+  - area / utility / high-end priest effects:
+    - dedicated runtime coverage now exists for `Sense Surroundings` map reveal behavior
+    - dedicated runtime coverage now exists for `Glyph of Warding` success and blocked-by-object behavior
+    - dedicated runtime coverage now exists for `Holy Word` heal/cleanse/dispel behavior
+- Current focused runtime suites:
+  - `commodore/c64/tests/test_effects.s`
+    - shared bolt/projectile regression coverage
+    - shared spell/prayer heal-family coverage
+  - `commodore/c64/tests/test_utility_effects.s`
+    - `Sense Surroundings`
+    - `Glyph of Warding`
+    - `Holy Word`
+  - `commodore/c64/tests/test_prayer_feedback.s`
+    - `Chant`
+    - `Sanctuary`
+    - `Resist Heat and Cold`
+  - `commodore/c64/tests/test_detect_feedback.s`
+    - `Detect Monsters`
+    - `Detect Evil`
+- Coverage still shallow or missing for:
+  - higher-end priest book 3/4 dispel and utility prayers
+  - area-effect spell families beyond the existing shared smokes and utility representatives above
 
 ## Book Layout
 
@@ -128,7 +172,7 @@
 | 13 | Legacy | P2 | Sanctuary | 7/5/36 | 11/10/45 | Sleep adjacent monsters | Uses VMS-style local sanctuary |
 | 14 | Legacy | P2 | Create Food | 7/5/38 | 13/10/45 | Create food on player tile | - |
 | 15 | Legacy | P2 | Remove Curse | 7/6/38 | 13/11/45 | Remove curses from carried and equipped items | Broader than mage version |
-| 16 | Legacy | P2 | Resist Heat and Cold | 7/7/38 | 15/13/45 | Set heat/cold resistance flags | Still uses packed-flag shortcut, not timed upstream duration |
+| 16 | Legacy | P2 | Resist Heat and Cold | 7/7/38 | 15/13/45 | Reduce implemented elemental breath damage via packed resist flags | Still uses packed-flag shortcut, not timed upstream duration |
 | 17 | Added | P3 | Neutralize Poison | 9/6/38 | 15/15/50 | Clear poison | - |
 | 18 | Added | P3 | Orb of Draining | 9/7/38 | 17/15/50 | Holy ball damage `3d6 + level` | - |
 | 19 | Added | P3 | Cure Serious Wounds | 9/7/40 | 17/15/50 | Heal `8d4` | - |
