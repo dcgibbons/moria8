@@ -33,6 +33,35 @@ eff_map_area:
     sta vis_room_revealed
     rts
 
+pmu_create_food:
+    lda zp_player_x
+    ldy zp_player_y
+    jsr floor_item_find_at
+    bcc !ecf_free+
+    jsr floor_item_remove
+!ecf_free:
+    lda zp_player_x
+    sta fi_add_x
+    lda zp_player_y
+    sta fi_add_y
+    lda #15
+    sta fi_add_id
+    jsr fi_add_clear_plain_meta
+    lda #1
+    sta fi_add_qty
+    jsr floor_item_add
+    bcc !ecf_fail+
+    lda #1
+    sta vis_room_revealed
+    lda #<pmu_msg_create_food
+    ldy #>pmu_msg_create_food
+    jsr pmx_print_inline
+    sec
+    rts
+!ecf_fail:
+    clc
+    rts
+
 eff_dispel_flagged:
     lda #0
     sta pmx_work_idx
@@ -153,3 +182,5 @@ eff_glyph_of_warding:
 
 pmx_msg_object_under:
     .text "There is already an object under you." ; .byte 0
+pmu_msg_create_food:
+    .text "You create food." ; .byte 0

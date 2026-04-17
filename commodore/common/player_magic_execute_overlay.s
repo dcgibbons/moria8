@@ -426,27 +426,7 @@ eff_protect_from_evil:
     jmp pmx_add_protect_msg
 
 eff_create_food:
-    lda zp_player_x
-    ldy zp_player_y
-    jsr floor_item_find_at
-    bcc !ecf_free+
-    clc
-    rts
-!ecf_free:
-    lda zp_player_x
-    sta fi_add_x
-    lda zp_player_y
-    sta fi_add_y
-    lda #15
-    sta fi_add_id
-    jsr fi_add_clear_plain_meta
-    lda #1
-    sta fi_add_qty
-    jsr floor_item_add
-    lda #1
-    sta vis_room_revealed
-    sec
-    rts
+    jmp pmu_create_food
 
 eff_recharge_item:
     sta pmx_work_damage

@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #3
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -100,7 +100,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 4, $ff
+tc_results: .fill 5, $ff
 
 tpm_msg_calls:    .byte 0
 tpm_last_msg_lo:  .byte 0
@@ -247,8 +247,56 @@ test_start:
     lda #$00
     sta tc_results + 2
 
-    // Test 4: Holy Word heals, clears maladies, and dispels an evil monster.
+    // Test 4: Create Food replaces any item underfoot and reports success.
 !t4:
+    jsr tv_setup_dark_room
+    :PatchJump(msg_print, test_msg_print)
+    lda #0
+    sta tpm_msg_calls
+    sta tpm_last_msg_lo
+    sta tpm_last_msg_hi
+    lda zp_player_x
+    sta fi_add_x
+    lda zp_player_y
+    sta fi_add_y
+    lda #17
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t4_fail+
+    jsr pmu_create_food
+    bcc !t4_fail+
+    lda tpm_msg_calls
+    cmp #1
+    bne !t4_fail+
+    lda tpm_last_msg_lo
+    cmp #<pmu_msg_create_food
+    bne !t4_fail+
+    lda tpm_last_msg_hi
+    cmp #>pmu_msg_create_food
+    bne !t4_fail+
+    lda zp_player_x
+    ldy zp_player_y
+    jsr floor_item_find_at
+    bcc !t4_fail+
+    lda fi_item_id,x
+    cmp #15
+    bne !t4_fail+
+    lda #$01
+    sta tc_results + 3
+    jmp !t5+
+!t4_fail:
+    lda #$00
+    sta tc_results + 3
+
+    // Test 5: Holy Word heals, clears maladies, and dispels an evil monster.
+!t5:
     jsr tv_setup_dark_room
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(combat_award_xp, test_combat_award_xp)
@@ -262,19 +310,19 @@ test_start:
     sta ms_spawn_y
     lda #0
     jsr monster_spawn_one
-    bcs !t4_spawn_ok+
+    bcs !t5_spawn_ok+
     lda #$17
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_spawn_ok:
+!t5_spawn_ok:
     stx test_mon_slot
     jsr monster_get_ptr
     jsr test_find_evil_type
-    bcs !t4_have_evil_type+
+    bcs !t5_have_evil_type+
     lda #$19
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_have_evil_type:
+!t5_have_evil_type:
     ldy #MX_TYPE
     sta (zp_ptr0),y
     ldy #MX_HP_LO
@@ -307,61 +355,61 @@ test_start:
     jsr eff_holy_word
     lda zp_player_hp_lo
     cmp #40
-    beq !t4_hp_ok+
+    beq !t5_hp_ok+
     lda zp_player_hp_lo
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_hp_ok:
+!t5_hp_ok:
     lda zp_eff_poison
-    beq !t4_poison_ok+
+    beq !t5_poison_ok+
     lda #$11
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_poison_ok:
+!t5_poison_ok:
     lda zp_eff_blind
-    beq !t4_blind_ok+
+    beq !t5_blind_ok+
     lda #$12
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_blind_ok:
+!t5_blind_ok:
     lda zp_eff_confuse
-    beq !t4_confuse_ok+
+    beq !t5_confuse_ok+
     lda #$13
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_confuse_ok:
+!t5_confuse_ok:
     lda eff_fear_timer
-    beq !t4_fear_ok+
+    beq !t5_fear_ok+
     lda #$14
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_fear_ok:
+!t5_fear_ok:
     lda tpm_huff_calls
     cmp #1
-    beq !t4_huff_count_ok+
+    beq !t5_huff_count_ok+
     lda #$15
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_huff_count_ok:
+!t5_huff_count_ok:
     lda tpm_last_huff_id
     cmp #HSTR_PIQ_MUCH_BETTER
-    beq !t4_huff_id_ok+
+    beq !t5_huff_id_ok+
     lda #$16
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_huff_id_ok:
+!t5_huff_id_ok:
     ldx test_mon_slot
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
-    beq !t4_monster_ok+
+    beq !t5_monster_ok+
     lda #$18
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
-!t4_monster_ok:
+!t5_monster_ok:
     lda #$01
-    sta tc_results + 3
+    sta tc_results + 4
     jmp test_finish
 tv_setup_dark_room:
     jsr fill_map_rock
