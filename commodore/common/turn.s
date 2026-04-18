@@ -144,11 +144,13 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // [skip resist($58)], bless($59), hero($5a), regen($5b)
+    // [skip resist($58)], [skip bless($59)], hero($5a), regen($5b)
     .assert "Simple-dec range", zp_eff_regen - zp_eff_protect, 6
     ldy #zp_eff_protect
 !tse_loop:
     cpy #zp_eff_resist
+    beq !tse_next+
+    cpy #zp_eff_bless
     beq !tse_next+
     lda $00,y
     beq !tse_next+
@@ -159,6 +161,17 @@ turn_tick_effects:
     iny
     cpy #zp_eff_regen + 1
     bne !tse_loop-
+
+    // Blessed / Prayer
+    lda zp_eff_bless
+    beq !no_bless+
+    sec
+    sbc #1
+    sta zp_eff_bless
+    bne !no_bless+
+    ldx #HSTR_PMX_PRAYER_OFF
+    jsr huff_print_msg
+!no_bless:
 
     // Word of recall
     lda zp_eff_word_recall

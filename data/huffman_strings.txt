@@ -206,6 +206,7 @@ Sorry, what was that again?
 @PIQ_VERY_GOOD You feel very good.
 @PMX_RIGHTEOUS You feel righteous!
 @PMX_RESIST_ON You feel resistant to heat and cold.
+@PMX_PRAYER_OFF The prayer has expired.
 @PMX_SLEEP_SUCCESS A monster falls asleep.
 
 # ===== Bash command strings (OPT-4.8) =====

@@ -3,6 +3,35 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-PRAYER-EXPIRY-ONSET-MESSAGE
+- [x] Reported Failure Gate:
+  - when `Prayer` wears off, the player must not see the cast/onset message reused; the shared turn timer path should report the correct expiry text, with `make test64` and `make test128-fast-smoke` as the regression gates
+- [x] root-cause whether the bless timer expiry is missing or incorrectly reusing the onset message
+- [x] restore the upstream-style `Prayer` expiry message in the shared timer path
+- [x] add timer-level regression coverage for bless expiry messaging
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the shared timer path did not have a distinct bless/prayer expiry message; `Prayer` onset used `You feel righteous!`, but expiry was previously silent/misleading in live play
+  - `turn_tick_effects` now handles `zp_eff_bless` separately from the generic decrement loop and prints `The prayer has expired.` when the timer reaches zero
+  - `commodore/c64/tests/test_turn.s` now covers bless expiry messaging directly, and the stale Huffman subsystem fixture was refreshed to match the regenerated corpus
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-RUN-MESSAGE-DISAPPEARS
+- [x] Reported Failure Gate:
+  - while running, if a gameplay message appears, running must pause and the message must remain visible instead of being cleared by the next automatic run step; verify with `make test64` and `make test128-fast-smoke`
+- [x] root-cause the shared run/message contract so newly printed messages stop corridor running before the next step clears the message area
+- [x] add regression coverage for the exact run-interrupted-by-message case
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `run_step` now cancels corridor running when the turn leaves a pending gameplay message, so the next automatic run step cannot clear the message area before the player reads it
+  - regression coverage in `commodore/c64/tests/test_main_loop.s` proves a message produced during running leaves `zp_run_dir = $ff`, preserves `zp_msg_flags = MSG_PENDING`, and avoids a second `msg_clear`
+  - while widening that suite coverage, a previously hidden stale stairs test was corrected to use `TILE_STAIRS_DN` instead of raw `9`
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
 - [x] BUG-STATUS-FULL-REFLASH-ON-MOVE
 - [x] Reported Failure Gate:
   - on C128, ordinary movement must not visibly flash the full 3-row status bar every turn; partial status updates should be used when only some fields change

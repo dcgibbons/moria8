@@ -1698,6 +1698,11 @@ run_step:
 
 !run_post:
     jsr status_draw
+    lda zp_msg_flags
+    beq !run_keep_running+
+    lda #$ff
+    sta zp_run_dir
+!run_keep_running:
     jmp main_loop
 
 !run_blocked:

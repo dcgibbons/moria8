@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #15
+    ldx #16
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -56,6 +56,7 @@ eff_detect_timer:    .byte 0
 .const HSTR_TTL_OUT          = 46
 .const HSTR_RECALL_ARRIVE    = 47
 .const HSTR_PID_TERRIBLE     = 48
+.const HSTR_PMX_PRAYER_OFF   = 174
 
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
@@ -74,7 +75,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 16, $ff
+tc_results: .fill 17, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -354,7 +355,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #15
+    ldx #16
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -680,10 +681,33 @@ test_start:
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp !t12+
+    jmp t17_test
 !t10_fail:
     lda #$00
     sta tc_results + 9
+    jmp t17_test
+
+t17_test:
+    // Test 17: bless/prayer expiry prints the dedicated expiry message.
+    jsr reset_state
+    lda #1
+    sta zp_eff_bless
+    jsr turn_tick_effects
+    lda zp_eff_bless
+    bne !t17_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t17_fail+
+    lda test_last_huff_id
+    cmp #HSTR_PMX_PRAYER_OFF
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp !t12+
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+    jmp !t12+
 
 !t1_seq:
     jsr install_turn_patches
@@ -757,11 +781,11 @@ test_start:
     jmp !t16+
 
 !t16:
-    // Test 16: monster AI carry-only dirty reports still promote turn_scene_dirty.
+    // Test 16: monster AI explicit dirty reports still promote turn_scene_dirty.
     jsr reset_state
-    lda #0
-    sta test_monster_ai_return_a
     lda #1
+    sta test_monster_ai_return_a
+    lda #0
     sta test_monster_ai_return_c
     jsr turn_post_action
     lda test_monster_ai_calls
