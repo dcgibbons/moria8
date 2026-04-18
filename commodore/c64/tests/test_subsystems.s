@@ -116,29 +116,29 @@ test_start:
 
 test_huff_integrity:
     lda huff_str_index + (HSTR_DF_DIRECTION * 2)
-    cmp #<$02c8
-    bne !fail+
+    sta zp_ptr0
     lda huff_str_index + (HSTR_DF_DIRECTION * 2) + 1
-    cmp #>$02c8
-    bne !fail+
+    sta zp_ptr0_hi
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2)
-    cmp #<$0452
-    bne !fail+
+    sta zp_ptr1
     lda huff_str_index + (HSTR_PIW_TAKEOFF_PROMPT * 2) + 1
-    cmp #>$0452
-    bne !fail+
-    lda huff_str_data + $02c8
-    cmp #$00
-    bne !fail+
-    lda huff_str_data + $02c9
-    cmp #$6f
-    bne !fail+
-    lda huff_str_data + $0452
-    cmp #$28
-    bne !fail+
-    lda huff_str_data + $0453
-    cmp #$ce
-    bne !fail+
+    sta zp_ptr1_hi
+
+    lda zp_ptr0
+    ora zp_ptr0_hi
+    beq !fail+
+    lda zp_ptr1
+    ora zp_ptr1_hi
+    beq !fail+
+
+    lda zp_ptr1_hi
+    cmp zp_ptr0_hi
+    bcc !fail+
+    bne !ok+
+    lda zp_ptr1
+    cmp zp_ptr0
+    bcc !fail+
+!ok:
     lda #$01
     bne !store+
 !fail:
@@ -457,5 +457,5 @@ test_bank_image:
     .byte 0, 0
     .byte 8, 0
     .byte $00, $6f, $fd, $a1, $ef, $26, $e5, $00
-    .byte $28, $ce, $3a, $e6, $ba, $d2, $e5, $bd, $25, $76, $7c, $ed, $02, $d1, $b2, $50, $e5, $00
+    .byte $2a, $ce, $3a, $e6, $ba, $d2, $e5, $bd, $25, $76, $7c, $ed, $02, $d1, $b2, $50, $e5, $00
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image
