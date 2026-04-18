@@ -743,7 +743,7 @@ run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
 run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
 run_test "combat" "tests/test_combat.s" "0400 041c" 29 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
-run_test "effects" "tests/test_effects.s" "0400 0430" 49 1000000000
+run_test "effects" "tests/test_effects.s" "0400 0431" 50 1000000000
 run_test "genocide" "tests/test_genocide.s" "0400 0400" 1 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000

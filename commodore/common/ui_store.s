@@ -296,9 +296,9 @@ store_draw_screen:
     jmp !sds_gold_done+
 
 !sds_big_gold:
-    ldx #HSTR_UIS_BIG_GOLD
-    jsr huff_decode_string
-    jsr screen_put_string
+    lda #<uis_big_gold_str
+    ldy #>uis_big_gold_str
+    jsr uis_screen_put_inline
 
 !sds_gold_done:
     // Row 18: Menu
@@ -468,9 +468,9 @@ sbuy_show_price:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_UIS_GP_BUY
-    jsr huff_decode_string
-    jmp screen_put_string       // Tail call
+    lda #<uis_gp_buy_str
+    ldy #>uis_gp_buy_str
+    jmp uis_screen_put_inline   // Tail call
 
 sbuy_no_gold:
     jsr store_clear_msg_area
@@ -613,8 +613,9 @@ store_sell:
     bcs !ssell_cat_ok+
 
     // Store doesn't buy it
-    ldx #HSTR_UIS_NO_BUY
-    jsr ssell_show_error
+    lda #<uis_no_buy_str
+    ldy #>uis_no_buy_str
+    jsr ssell_show_error_ptr
     rts
 
 !ssell_cat_ok:
@@ -624,8 +625,9 @@ store_sell:
     and #IF_CURSED
     beq !ssell_not_cursed+
 
-    ldx #HSTR_UIS_CURSED
-    jsr ssell_show_error
+    lda #<uis_cursed_str
+    ldy #>uis_cursed_str
+    jsr ssell_show_error_ptr
     rts
 
 !ssell_not_cursed:
@@ -643,8 +645,9 @@ store_sell:
     ora sb_price_hi
     bne !ssell_has_value+
 
-    ldx #HSTR_UIS_WORTHLESS
-    jsr ssell_show_error
+    lda #<uis_worthless_str
+    ldy #>uis_worthless_str
+    jsr ssell_show_error_ptr
     rts
 
 !ssell_has_value:
@@ -672,8 +675,9 @@ store_sell:
     ldx zp_store_idx
     lda hg_kicked,x
     beq !ssell_do_haggle+
-    ldx #HSTR_HG_KICKED
-    jsr ssell_show_error
+    lda #<hg_kicked_str
+    ldy #>hg_kicked_str
+    jsr ssell_show_error_ptr
     rts
 
 !ssell_do_haggle:
@@ -686,8 +690,9 @@ ssell_execute:
     jsr store_find_empty_slot
     bcs !ssell_has_slot+
 
-    ldx #HSTR_UIS_STORE_FULL
-    jsr ssell_show_error
+    lda #<uis_store_full_str
+    ldy #>uis_store_full_str
+    jsr ssell_show_error_ptr
     rts
 
 !ssell_has_slot:
@@ -725,10 +730,11 @@ ssell_execute:
     jsr input_get_key
     rts
 
-// ssell_show_error — Show error message on row 22, wait for key
-// Input: X = Huffman string ID (HSTR_*)
-ssell_show_error:
-    jsr huff_decode_string
+// ssell_show_error_ptr — Show error message on row 22, wait for key
+// Input: A/Y = string pointer
+ssell_show_error_ptr:
+    sta zp_ptr0
+    sty zp_ptr0_hi
     lda #COL_RED
     sta zp_text_color
     lda #22
@@ -753,15 +759,15 @@ ssell_show_offer:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_UIS_GP_SELL
-    jsr huff_decode_string
-    jmp screen_put_string       // Tail call
+    lda #<uis_gp_sell_str
+    ldy #>uis_gp_sell_str
+    jmp uis_screen_put_inline   // Tail call
 
 // ============================================================
 // Helpers
 // ============================================================
 
-// show_msg — Display a table-driven message (Huffman-decoded)
+// show_msg — Display a table-driven overlay-local message
 // Input: X = message index (MSG_* constant)
 // All messages use column 1.
 // Clobbers: A, X, Y
@@ -772,9 +778,15 @@ show_msg:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    lda msg_tbl_hstr_id,x
-    tax
-    jsr huff_decode_string
+    lda msg_tbl_lo,x
+    sta zp_ptr0
+    lda msg_tbl_hi,x
+    sta zp_ptr0_hi
+    jmp screen_put_string
+
+uis_screen_put_inline:
+    sta zp_ptr0
+    sty zp_ptr0_hi
     jmp screen_put_string
 
 // check_cancel — Check if A is a cancel key (Q, ESC, SPACE)
@@ -1055,9 +1067,7 @@ hg_show_final_prompt:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_HG_GP
-    jsr huff_decode_string
-    jsr screen_put_string
+    jsr hg_print_gp_suffix
 
     pla
     tax
@@ -1553,9 +1563,7 @@ hg_show_ask:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_HG_GP
-    jsr huff_decode_string
-    jsr screen_put_string
+    jsr hg_print_gp_suffix
 
     // Row 21: prompt
     ldx #MSG_YOUR_OFFER
@@ -1586,9 +1594,7 @@ hg_show_offer:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_HG_GP
-    jsr huff_decode_string
-    jsr screen_put_string
+    jsr hg_print_gp_suffix
 
     // Row 21: prompt
     ldx #MSG_YOUR_PRICE
@@ -1619,9 +1625,9 @@ hg_show_counter:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_HG_QMARK
-    jsr huff_decode_string
-    jmp screen_put_string
+    lda #<hg_qmark_str
+    ldy #>hg_qmark_str
+    jmp uis_screen_put_inline
 
 // hg_show_final — Display "FINAL OFFER: [ask] GP." + "TAKE IT? (Y/N)"
 hg_show_final:
@@ -1639,20 +1645,81 @@ hg_show_final:
 
     lda #COL_WHITE
     sta zp_text_color
-    ldx #HSTR_HG_GP
-    jsr huff_decode_string
-    jsr screen_put_string
+    jsr hg_print_gp_suffix
 
     // Row 21: "TAKE IT? (Y/N)"
     ldx #MSG_TAKE
     jmp show_msg
 
+hg_print_gp_suffix:
+    lda #<hg_gp_str
+    ldy #>hg_gp_str
+    jmp uis_screen_put_inline
+
 hg_retry_str:
     .text "WHAT WAS THAT?" ; .byte 0
+uis_gold_str:
+    .text "Gold: " ; .byte 0
+uis_big_gold_str:
+    .text ">65535" ; .byte 0
+uis_menu_str:
+    .text "B)uy  S)ell  Q)uit" ; .byte 0
+uis_buy_which_str:
+    .text "Buy which item? (a-l)" ; .byte 0
+uis_price_str:
+    .text "Price: " ; .byte 0
+uis_gp_buy_str:
+    .text " gp. Buy? (Y/N)" ; .byte 0
+uis_bought_str:
+    .text "Bought!" ; .byte 0
+uis_no_afford_str:
+    .text "You cannot afford that." ; .byte 0
+uis_pack_full_str:
+    .text "Your pack is full." ; .byte 0
+uis_sell_title_str:
+    .text "Sell Items" ; .byte 0
+uis_sell_which_str:
+    .text "Sell which item? (a-v)" ; .byte 0
+uis_offer_str:
+    .text "Offer: " ; .byte 0
+uis_gp_sell_str:
+    .text " gp. Sell? (Y/N)" ; .byte 0
+uis_sold_str:
+    .text "Sold!" ; .byte 0
+uis_no_buy_str:
+    .text "We don't buy that." ; .byte 0
+uis_worthless_str:
+    .text "That is worthless." ; .byte 0
+uis_store_full_str:
+    .text "The store is full." ; .byte 0
+uis_cursed_str:
+    .text "That item is cursed." ; .byte 0
+hg_asks_str:
+    .text "Asks " ; .byte 0
+hg_offers_str:
+    .text "Offers " ; .byte 0
+hg_gp_str:
+    .text " gp." ; .byte 0
+hg_your_offer_str:
+    .text "Your offer? (Q=cancel)" ; .byte 0
+hg_your_price_str:
+    .text "Your price? (Q=cancel)" ; .byte 0
+hg_counter_str:
+    .text "How about " ; .byte 0
+hg_qmark_str:
+    .text " gp?" ; .byte 0
+hg_final_str:
+    .text "Final offer: " ; .byte 0
+hg_take_str:
+    .text "Take it? (Y/N)" ; .byte 0
+hg_kicked_str:
+    .text "Get out of my store!" ; .byte 0
+hg_agreed_str:
+    .text "Agreed!" ; .byte 0
 
 // ============================================================
 // Message display tables (indexed by MSG_* constants)
-// Strings are Huffman-compressed in main RAM (huffman_data.s)
+// Strings live in the town overlay so common resident RAM does not carry them.
 // ============================================================
 msg_tbl_color:
     .byte COL_YELLOW, COL_WHITE, COL_WHITE, COL_RED, COL_LGREEN
@@ -1664,8 +1731,13 @@ msg_tbl_row:
     .byte 21, 22, 22, 0, 23
     .byte 22, 23, 20, 21, 20
     .byte 21, 20, 20, 21, 22
-msg_tbl_hstr_id:
-    .byte HSTR_UIS_GOLD, HSTR_UIS_MENU, HSTR_UIS_BUY_WHICH, HSTR_HG_KICKED, HSTR_UIS_BOUGHT
-    .byte HSTR_UIS_PRICE, HSTR_UIS_NO_AFFORD, HSTR_UIS_PACK_FULL, HSTR_UIS_SELL_TITLE, HSTR_UIS_SELL_WHICH
-    .byte HSTR_UIS_OFFER, HSTR_UIS_SOLD, HSTR_HG_ASKS, HSTR_HG_YOUR_OFFER, HSTR_HG_OFFERS
-    .byte HSTR_HG_YOUR_PRICE, HSTR_HG_COUNTER, HSTR_HG_FINAL, HSTR_HG_TAKE, HSTR_HG_AGREED
+msg_tbl_lo:
+    .byte <uis_gold_str, <uis_menu_str, <uis_buy_which_str, <hg_kicked_str, <uis_bought_str
+    .byte <uis_price_str, <uis_no_afford_str, <uis_pack_full_str, <uis_sell_title_str, <uis_sell_which_str
+    .byte <uis_offer_str, <uis_sold_str, <hg_asks_str, <hg_your_offer_str, <hg_offers_str
+    .byte <hg_your_price_str, <hg_counter_str, <hg_final_str, <hg_take_str, <hg_agreed_str
+msg_tbl_hi:
+    .byte >uis_gold_str, >uis_menu_str, >uis_buy_which_str, >hg_kicked_str, >uis_bought_str
+    .byte >uis_price_str, >uis_no_afford_str, >uis_pack_full_str, >uis_sell_title_str, >uis_sell_which_str
+    .byte >uis_offer_str, >uis_sold_str, >hg_asks_str, >hg_your_offer_str, >hg_offers_str
+    .byte >hg_your_price_str, >hg_counter_str, >hg_final_str, >hg_take_str, >hg_agreed_str

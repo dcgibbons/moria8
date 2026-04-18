@@ -112,7 +112,7 @@ Sorry, what was that again?
 @PM_TITLE_PRAY Type?
 @PM_FOOTER_CAST Cast which? (a-p, ESC)
 @PM_FOOTER_PRAY Pray which? (a-p, ESC)
-@PM_LEARNED 
+@PIQ_LITTLE_BETTER You feel a little better.
 
 # ===== Player items strings (Pattern A + C) =====
 @PIW_WEAR_PROMPT Wear which item (a-v)?
@@ -129,7 +129,7 @@ Sorry, what was that again?
 @PIW_YUCK . Yuck!
 @PIQ_QUAFF_PROMPT Quaff which potion (a-v)?
 @PIQ_READ_PROMPT Read which scroll (a-v)?
-@PIQ_FEEL_BETTER You feel better.
+@PMU_CREATE_FOOD You create food.
 @PIQ_SPEED You feel yourself moving faster.
 @PIQ_TERRIBLE That tasted terrible!
 @PIQ_NOTHING Nothing seems to happen.
@@ -179,35 +179,7 @@ Sorry, what was that again?
 
 # ===== Store UI strings (OPT-3.3 overlay compression) =====
 # NOTE: ~ at end of line = trailing space (stripped by encoder before encoding)
-@UIS_GOLD Gold: ~
-@UIS_BIG_GOLD >65535
-@UIS_MENU B)uy  S)ell  Q)uit
-@UIS_BUY_WHICH Buy which item? (a-l)
-@UIS_PRICE Price: ~
-@UIS_GP_BUY  gp. Buy? (Y/N)
-@UIS_BOUGHT Bought!
-@UIS_NO_AFFORD You cannot afford that.
 @UIS_PACK_FULL Your pack is full.
-@UIS_SELL_TITLE Sell Items
-@UIS_SELL_WHICH Sell which item? (a-v)
-@UIS_OFFER Offer: ~
-@UIS_GP_SELL  gp. Sell? (Y/N)
-@UIS_SOLD Sold!
-@UIS_NO_BUY We don't buy that.
-@UIS_WORTHLESS That is worthless.
-@UIS_STORE_FULL The store is full.
-@UIS_CURSED That item is cursed.
-@HG_ASKS Asks ~
-@HG_OFFERS Offers ~
-@HG_GP  gp.
-@HG_YOUR_OFFER Your offer? (Q=cancel)
-@HG_YOUR_PRICE Your price? (Q=cancel)
-@HG_COUNTER How about ~
-@HG_QMARK  gp?
-@HG_FINAL Final offer: ~
-@HG_TAKE Take it? (Y/N)
-@HG_KICKED Get out of my store!
-@HG_AGREED Agreed!
 
 # ===== Tunnel strings (R2.5) =====
 @TUN_DIG_GRANITE You dig in the granite wall.
@@ -231,10 +203,10 @@ Sorry, what was that again?
 
 # ===== Pseudo-ID quality strings (OPT-4.8) =====
 @PID_TERRIBLE Sense: Terrible
-@PID_BAD 
-@PID_AVERAGE 
-@PID_GOOD 
-@PID_EXCELLENT 
+@PIQ_VERY_GOOD You feel very good.
+@PMX_RIGHTEOUS You feel righteous!
+@PMX_RESIST_ON You feel resistant to heat and cold.
+@PMX_SLEEP_SUCCESS A monster falls asleep.
 
 # ===== Bash command strings (OPT-4.8) =====
 @BASH_SMASH You smash into the door!

@@ -9,6 +9,7 @@
 
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
+#import "player_heal_feedback.s"
 
 // ============================================================
 // Constants
@@ -844,13 +845,8 @@ iq_effect_cure:
     adc #4                          // [4, 11]
     sta piw_qty                     // Reuse as heal amount
 
-    // Heal player HP (shared subroutine)
     lda piw_qty
-    jsr eff_heal
-
-    ldx #HSTR_PIQ_FEEL_BETTER
-    jsr huff_print_msg
-
+    jsr pmx_heal_and_report
     sec
     rts
 
@@ -937,10 +933,7 @@ iq_effect_csw:
     ldy #5                          // bonus = 5
     jsr math_dice                   // Result in zp_math_a (max 45, fits 8 bits)
     lda zp_math_a
-    jsr eff_heal
-
-    ldx #HSTR_PIQ_MUCH_BETTER
-    jsr huff_print_msg
+    jsr pmx_heal_and_report
     sec
     rts
 
@@ -1556,9 +1549,7 @@ item_use_staff:
     ldy #1
     jsr math_dice
     lda zp_math_a                   // Low byte of result (sufficient for 2-9)
-    jsr eff_heal
-    ldx #HSTR_PIQ_FEEL_BETTER
-    jsr huff_print_msg
+    jsr pmx_heal_and_report
     sec
     rts
 

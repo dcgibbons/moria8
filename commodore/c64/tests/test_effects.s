@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #48
+    ldx #49
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 49, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -134,6 +134,10 @@ tpm_cast_loop_ctr: .byte 0
 tpm_key_idx: .byte 0
 tpm_msg_seen: .byte 0
 tpm_msg_buf:  .fill 42, 0
+tpm_expected_little_better:
+    .text "You feel a little better." ; .byte 0
+tpm_expected_very_good:
+    .text "You feel very good." ; .byte 0
 tpm_expected_identify_csw:
     .text "This is a Cure Serious Wounds potion." ; .byte 0
 
@@ -209,6 +213,21 @@ test_tramp_spell_execute_selected:
 test_huff_print_msg:
     stx tpm_last_huff_id
     inc tpm_huff_calls
+    rts
+
+test_msg_print_capture:
+    ldy #0
+!copy:
+    lda (zp_ptr0),y
+    sta tpm_msg_buf,y
+    cmp #0
+    beq !done+
+    iny
+    cpy #42
+    bcc !copy-
+!done:
+    lda #1
+    sta tpm_msg_seen
     rts
 
 test_cmb_term_and_print_capture:
@@ -2217,8 +2236,8 @@ test_start:
     sta tc_results + 40
 
     // ==========================================
-    // Test 42: Small spell/prayer heal reports
-    // "feel better" and increases HP.
+    // Test 42: Tiny spell/prayer heal reports
+    // "a little better" and increases HP.
     // ==========================================
 !t42:
     :PatchJump(huff_print_msg, test_huff_print_msg)
@@ -2226,6 +2245,7 @@ test_start:
     lda #0
     sta tpm_huff_calls
     sta tpm_last_huff_id
+    sta tpm_msg_seen
 
     lda #10
     sta zp_player_hp_lo
@@ -2248,7 +2268,7 @@ test_start:
     cmp #1
     bne !t42_fail+
     lda tpm_last_huff_id
-    cmp #HSTR_PIQ_FEEL_BETTER
+    cmp #HSTR_PIQ_LITTLE_BETTER
     bne !t42_fail+
     lda #$01
     sta tc_results + 41
@@ -2258,13 +2278,54 @@ test_start:
     sta tc_results + 41
 
     // ==========================================
-    // Test 43: Large spell/prayer heal reports
-    // "much better" and caps normally.
+    // Test 43: Modest spell/prayer heal reports
+    // "feel better."
     // ==========================================
 !t43:
     lda #0
     sta tpm_huff_calls
     sta tpm_last_huff_id
+    sta tpm_msg_seen
+
+    lda #10
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #40
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_mhp_hi
+
+    lda #10
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #20
+    bne !t43_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t43_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_EFF_POISON_END
+    bne !t43_fail+
+    lda #$01
+    sta tc_results + 42
+    jmp !t44+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // ==========================================
+    // Test 44: Large spell/prayer heal reports
+    // "much better" and caps normally.
+    // ==========================================
+!t44:
+    lda #0
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    sta tpm_msg_seen
 
     lda #10
     sta zp_player_hp_lo
@@ -2282,47 +2343,12 @@ test_start:
 
     lda zp_player_hp_lo
     cmp #30
-    bne !t43_fail+
-    lda tpm_huff_calls
-    cmp #1
-    bne !t43_fail+
-    lda tpm_last_huff_id
-    cmp #HSTR_PIQ_MUCH_BETTER
-    bne !t43_fail+
-    lda #$01
-    sta tc_results + 42
-    jmp !t44+
-!t43_fail:
-    lda #$00
-    sta tc_results + 42
-
-    // ==========================================
-    // Test 44: Full-HP spell/prayer heal stays
-    // silent and leaves HP unchanged.
-    // ==========================================
-!t44:
-    lda #0
-    sta tpm_huff_calls
-    sta tpm_last_huff_id
-
-    lda #20
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    lda #20
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-
-    lda #4
-    jsr pmx_heal_and_report
-
-    lda zp_player_hp_lo
-    cmp #20
     bne !t44_fail+
     lda tpm_huff_calls
+    cmp #1
+    bne !t44_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_MUCH_BETTER
     bne !t44_fail+
     lda #$01
     sta tc_results + 43
@@ -2333,12 +2359,13 @@ test_start:
 
     // ==========================================
     // Test 45: The high-end Heal prayer path
-    // caps to max HP and reports success.
+    // caps to max HP and reports "very good."
     // ==========================================
 !t45:
     lda #0
     sta tpm_huff_calls
     sta tpm_last_huff_id
+    sta tpm_msg_seen
 
     lda #5
     sta zp_player_hp_lo
@@ -2361,7 +2388,7 @@ test_start:
     cmp #1
     bne !t45_fail+
     lda tpm_last_huff_id
-    cmp #HSTR_PIQ_MUCH_BETTER
+    cmp #HSTR_PIQ_VERY_GOOD
     bne !t45_fail+
     lda #$01
     sta tc_results + 44
@@ -2371,31 +2398,35 @@ test_start:
     sta tc_results + 44
 
     // ==========================================
-    // Test 46: spell list '?' then ESC cancels
-    // the whole selection flow instead of
-    // dropping back to the footer prompt.
+    // Test 46: Full-HP spell/prayer heal stays
+    // silent and leaves HP unchanged.
     // ==========================================
 !t46:
-    :PatchJump(input_get_key, test_input_get_key_qmark_then_esc)
-    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_esc)
     lda #0
-    sta tpm_key_idx
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    sta tpm_msg_seen
 
-    lda #SPELL_MAGE
-    sta pm_spell_type
+    lda #20
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
     lda #0
-    sta pm_mode
-    lda #1
-    sta pm_spell_count
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #20
+    sta zp_player_mhp_lo
     lda #0
-    sta pm_spell_list
-    lda #$ff
-    sta pm_spell_idx
+    sta zp_player_mhp_hi
 
-    jsr pm_prompt_visible_spell_choice
-    bcs !t46_fail+
-    lda pm_spell_idx
-    cmp #$ff
+    lda #4
+    jsr pmx_heal_and_report
+
+    lda zp_player_hp_lo
+    cmp #20
+    bne !t46_fail+
+    lda tpm_huff_calls
+    bne !t46_fail+
+    lda tpm_msg_seen
     bne !t46_fail+
     lda #$01
     sta tc_results + 45
@@ -2405,12 +2436,12 @@ test_start:
     sta tc_results + 45
 
     // ==========================================
-    // Test 47: spell list '?' then STOP-style
-    // raw cancel ($03) cancels the whole flow
-    // instead of dropping back to the footer.
+    // Test 47: spell list '?' then ESC cancels
+    // the whole selection flow instead of
+    // dropping back to the footer prompt.
     // ==========================================
 !t47:
-    :PatchJump(input_get_key, test_input_get_key_qmark_then_stop)
+    :PatchJump(input_get_key, test_input_get_key_qmark_then_esc)
     :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_esc)
     lda #0
     sta tpm_key_idx
@@ -2439,10 +2470,44 @@ test_start:
     sta tc_results + 46
 
     // ==========================================
-    // Test 48: identify prompt message includes
-    // the category noun for a potion type.
+    // Test 48: spell list '?' then STOP-style
+    // raw cancel ($03) cancels the whole flow
+    // instead of dropping back to the footer.
     // ==========================================
 !t48:
+    :PatchJump(input_get_key, test_input_get_key_qmark_then_stop)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_esc)
+    lda #0
+    sta tpm_key_idx
+
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #0
+    sta pm_mode
+    lda #1
+    sta pm_spell_count
+    lda #0
+    sta pm_spell_list
+    lda #$ff
+    sta pm_spell_idx
+
+    jsr pm_prompt_visible_spell_choice
+    bcs !t48_fail+
+    lda pm_spell_idx
+    cmp #$ff
+    bne !t48_fail+
+    lda #$01
+    sta tc_results + 47
+    jmp !t49+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
+
+    // ==========================================
+    // Test 49: identify prompt message includes
+    // the category noun for a potion type.
+    // ==========================================
+!t49:
     :PatchJump(input_get_key, test_input_get_key_a)
     :PatchJump(cmb_term_and_print, test_cmb_term_and_print_capture)
     jsr item_init_inventory
@@ -2464,13 +2529,13 @@ test_start:
 
     lda id_known + 25
     cmp #1
-    bne !t48_fail+
+    bne !t49_fail+
     lda inv_flags + 1
     and #IF_IDENTIFIED
-    beq !t48_fail+
+    beq !t49_fail+
     lda tpm_msg_seen
     cmp #1
-    bne !t48_fail+
+    bne !t49_fail+
 
     lda #<tpm_expected_identify_csw
     sta zp_ptr0
@@ -2484,27 +2549,27 @@ test_start:
 !t48_cmp:
     lda (zp_ptr0),y
     cmp (zp_ptr1),y
-    bne !t48_fail+
+    bne !t49_fail+
     cmp #0
-    beq !t48_pass+
+    beq !t49_pass+
     iny
     cpy #42
     bcc !t48_cmp-
-    bcs !t48_fail+
-!t48_pass:
+    bcs !t49_fail+
+!t49_pass:
     lda #$01
-    sta tc_results + 47
-    jmp !t49+
-!t48_fail:
+    sta tc_results + 48
+    jmp !t50+
+!t49_fail:
     lda #$00
-    sta tc_results + 47
+    sta tc_results + 48
 
     // ==========================================
-    // Test 49: identify prompt uses filtered
+    // Test 50: identify prompt uses filtered
     // visible-slot letters, not absolute slot
     // letters, when inventory has gaps.
     // ==========================================
-!t49:
+!t50:
     :PatchJump(input_get_key, test_input_get_key_b)
     jsr item_init_inventory
 
@@ -2531,19 +2596,19 @@ test_start:
     jsr eff_identify_prompt
 
     lda id_known + 17
-    bne !t49_fail+
+    bne !t50_fail+
     lda id_known + 25
     cmp #1
-    bne !t49_fail+
+    bne !t50_fail+
     lda inv_flags + 4
     and #IF_IDENTIFIED
-    beq !t49_fail+
+    beq !t50_fail+
     lda #$01
-    sta tc_results + 48
+    sta tc_results + 49
     jmp !tests_done+
-!t49_fail:
+!t50_fail:
     lda #$00
-    sta tc_results + 48
+    sta tc_results + 49
 
 !tests_done:
     jmp test_finish

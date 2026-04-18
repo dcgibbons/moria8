@@ -5,11 +5,12 @@
 // exercise timed-buff and adjacent-effect feedback without importing the
 // entire spell dispatch surface.
 
+#import "player_heal_feedback.s"
+
 pmx_feedback_sleep_hits: .byte 0
 pmx_feedback_dir_idx:    .byte 0
 pmx_feedback_x:          .byte 0
 pmx_feedback_y:          .byte 0
-pmx_feedback_heal_amt:   .byte 0
 
 pmx_add_speed_msg:
     tax
@@ -37,37 +38,10 @@ pmx_add_bless_msg:
     sta zp_eff_bless
     pla
     bne !pabm_done+
-    lda #<pmx_msg_bless_on
-    ldy #>pmx_msg_bless_on
-    jsr pmx_print_inline
+    ldx #HSTR_PMX_RIGHTEOUS
+    jsr huff_print_msg
 !pabm_done:
     rts
-
-pmx_heal_and_report:
-    sta pmx_feedback_heal_amt
-
-    lda zp_player_hp_hi
-    cmp zp_player_mhp_hi
-    bcc !phar_apply+
-    bne !phar_done+
-    lda zp_player_hp_lo
-    cmp zp_player_mhp_lo
-    bcc !phar_apply+
-!phar_done:
-    rts
-
-!phar_apply:
-    lda pmx_feedback_heal_amt
-    jsr eff_heal
-    lda pmx_feedback_heal_amt
-    cmp #15
-    bcc !phar_small+
-    ldx #HSTR_PIQ_MUCH_BETTER
-    jsr huff_print_msg
-    rts
-!phar_small:
-    ldx #HSTR_PIQ_FEEL_BETTER
-    jmp huff_print_msg
 
 pmx_add_protect_msg:
     tax
@@ -94,9 +68,8 @@ pmx_set_resist_heat_cold_msg:
     sta zp_eff_resist
     pla
     bne !psrhc_done+
-    lda #<pmx_msg_resist_on
-    ldy #>pmx_msg_resist_on
-    jsr pmx_print_inline
+    ldx #HSTR_PMX_RESIST_ON
+    jsr huff_print_msg
 !psrhc_done:
     rts
 
@@ -134,9 +107,8 @@ pmx_sleep_adjacent_msg:
 !psam_done:
     rts
 !psam_any:
-    lda #<pmx_msg_sleep_success
-    ldy #>pmx_msg_sleep_success
-    jsr pmx_print_inline
+    ldx #HSTR_PMX_SLEEP_SUCCESS
+    jsr huff_print_msg
     rts
 
 pmx_report_sleep_result:
@@ -145,9 +117,8 @@ pmx_report_sleep_result:
     ldx #HSTR_PIQ_NOTHING
     jmp huff_print_msg
 !prvs_any:
-    lda #<pmx_msg_sleep_success
-    ldy #>pmx_msg_sleep_success
-    jmp pmx_print_inline
+    ldx #HSTR_PMX_SLEEP_SUCCESS
+    jmp huff_print_msg
 
 pmx_set_see_invisible_msg:
     lda zp_eff_see_inv
@@ -167,10 +138,3 @@ pmx_print_inline:
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp msg_print
-
-pmx_msg_bless_on:
-    .text "You feel righteous!" ; .byte 0
-pmx_msg_resist_on:
-    .text "You feel resistant to heat and cold." ; .byte 0
-pmx_msg_sleep_success:
-    .text "A monster falls asleep." ; .byte 0

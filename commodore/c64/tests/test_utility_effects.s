@@ -250,11 +250,14 @@ test_start:
     // Test 4: Create Food replaces any item underfoot and reports success.
 !t4:
     jsr tv_setup_dark_room
+    :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(msg_print, test_msg_print)
     lda #0
     sta tpm_msg_calls
     sta tpm_last_msg_lo
     sta tpm_last_msg_hi
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
     lda zp_player_x
     sta fi_add_x
     lda zp_player_y
@@ -272,14 +275,11 @@ test_start:
     bcc !t4_fail+
     jsr pmu_create_food
     bcc !t4_fail+
-    lda tpm_msg_calls
+    lda tpm_huff_calls
     cmp #1
     bne !t4_fail+
-    lda tpm_last_msg_lo
-    cmp #<pmu_msg_create_food
-    bne !t4_fail+
-    lda tpm_last_msg_hi
-    cmp #>pmu_msg_create_food
+    lda tpm_last_huff_id
+    cmp #HSTR_PMU_CREATE_FOOD
     bne !t4_fail+
     lda zp_player_x
     ldy zp_player_y
@@ -299,9 +299,13 @@ test_start:
 !t5:
     jsr tv_setup_dark_room
     :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(msg_print, test_msg_print)
     :PatchJump(combat_award_xp, test_combat_award_xp)
     :PatchJump(combat_check_levelup, test_combat_check_levelup)
     lda #0
+    sta tpm_msg_calls
+    sta tpm_last_msg_lo
+    sta tpm_last_msg_hi
     sta tpm_huff_calls
     sta tpm_last_huff_id
     lda #23
@@ -385,15 +389,21 @@ test_start:
     jmp test_finish
 !t5_fear_ok:
     lda tpm_huff_calls
+    bne !t5_huff_count_ok+
+    lda tpm_msg_calls
     cmp #1
     beq !t5_huff_count_ok+
     lda #$15
     sta tc_results + 4
     jmp test_finish
 !t5_huff_count_ok:
+    lda tpm_huff_calls
+    cmp #1
+    bne !t5_huff_fail+
     lda tpm_last_huff_id
-    cmp #HSTR_PIQ_MUCH_BETTER
+    cmp #HSTR_PIQ_VERY_GOOD
     beq !t5_huff_id_ok+
+!t5_huff_fail:
     lda #$16
     sta tc_results + 4
     jmp test_finish

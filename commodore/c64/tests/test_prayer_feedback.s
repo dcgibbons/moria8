@@ -35,6 +35,12 @@ test_finish:
 .const HSTR_PIQ_FEEL_BETTER = 3
 .const HSTR_PIQ_MUCH_BETTER = 4
 .const HSTR_PIQ_NOTHING = 5
+.const HSTR_PMX_RIGHTEOUS = 6
+.const HSTR_PMX_RESIST_ON = 7
+.const HSTR_PMX_SLEEP_SUCCESS = 8
+.const HSTR_PIQ_LITTLE_BETTER = 9
+.const HSTR_PIQ_VERY_GOOD = 10
+.const HSTR_EFF_POISON_END = 11
 .const MX_SLEEP_CUR = 7
 
 tc_results: .fill 10, $ff
@@ -104,20 +110,18 @@ test_start:
     // Test 1: Bless onset shows a message and sets the timer.
     lda #0
     sta test_msg_calls
+    sta test_huff_calls
     sta zp_eff_bless
     lda #24
     jsr pmx_add_bless_msg
     lda zp_eff_bless
     cmp #24
     bne !t1_fail+
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t1_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_bless_on
-    bne !t1_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_bless_on
+    lda test_last_huff
+    cmp #HSTR_PMX_RIGHTEOUS
     bne !t1_fail+
     lda #$01
     sta tc_results + 0
@@ -171,6 +175,7 @@ test_start:
 !t4:
     lda #0
     sta test_msg_calls
+    sta test_huff_calls
     lda #1
     sta test_mon_present
     lda #11
@@ -183,14 +188,11 @@ test_start:
     lda test_mon_data + MX_SLEEP_CUR
     cmp #20
     bne !t4_fail+
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t4_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_sleep_success
-    bne !t4_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_sleep_success
+    lda test_last_huff
+    cmp #HSTR_PMX_SLEEP_SUCCESS
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -226,14 +228,11 @@ test_start:
     sta test_huff_calls
     lda #1
     jsr pmx_report_sleep_result
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t6_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_sleep_success
-    bne !t6_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_sleep_success
+    lda test_last_huff
+    cmp #HSTR_PMX_SLEEP_SUCCESS
     bne !t6_fail+
     lda #$01
     sta tc_results + 5
@@ -246,19 +245,17 @@ test_start:
 !t7:
     lda #0
     sta test_msg_calls
+    sta test_huff_calls
     sta zp_eff_resist
     jsr pmx_set_resist_heat_cold_msg
     lda zp_eff_resist
     cmp #$03
     bne !t7_fail+
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t7_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_resist_on
-    bne !t7_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_resist_on
+    lda test_last_huff
+    cmp #HSTR_PMX_RESIST_ON
     bne !t7_fail+
     lda #$01
     sta tc_results + 6

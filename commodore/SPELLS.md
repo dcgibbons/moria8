@@ -67,8 +67,10 @@
     - C128 also has a direct unit guard that `screen_flash_set_color` preserves the row register used by `screen_flash_at`
   - heals:
     - shared spell/prayer heal coverage now proves:
-      - small heals increase HP and emit `You feel better.`
+      - tiny heals emit `You feel a little better.`
+      - modest heals emit `You feel better.`
       - large heals emit `You feel much better.`
+      - strongest heals emit `You feel very good.`
       - capped heals stop at max HP
       - full-HP spell/prayer heals stay silent instead of printing a bogus success message
   - timed buff/protection feedback:

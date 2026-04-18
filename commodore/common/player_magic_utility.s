@@ -4,6 +4,8 @@
 // Split out from the main execute overlay so focused runtime suites can cover
 // map/dispel/glyph/heal utility behavior without importing the full dispatcher.
 
+#import "player_heal_feedback.s"
+
 pmu_map_row: .byte 0
 
 eff_map_area:
@@ -53,9 +55,8 @@ pmu_create_food:
     bcc !ecf_fail+
     lda #1
     sta vis_room_revealed
-    lda #<pmu_msg_create_food
-    ldy #>pmu_msg_create_food
-    jsr pmx_print_inline
+    ldx #HSTR_PMU_CREATE_FOOD
+    jsr huff_print_msg
     sec
     rts
 !ecf_fail:
@@ -144,14 +145,8 @@ eff_holy_word:
     lda #0
     sta zp_eff_blind
     sta zp_eff_confuse
-    lda zp_player_mhp_lo
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda zp_player_mhp_hi
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-    ldx #HSTR_PIQ_MUCH_BETTER
-    jsr huff_print_msg
+    lda #200
+    jsr pmx_heal_and_report
     lda #CF_EVIL
     sta pmx_work_flag
     lda zp_player_lvl
@@ -182,5 +177,3 @@ eff_glyph_of_warding:
 
 pmx_msg_object_under:
     .text "There is already an object under you." ; .byte 0
-pmu_msg_create_food:
-    .text "You create food." ; .byte 0
