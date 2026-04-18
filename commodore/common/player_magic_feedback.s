@@ -13,8 +13,6 @@ pmx_feedback_heal_amt:   .byte 0
 
 pmx_add_speed_msg:
     tax
-    lda zp_eff_speed
-    pha
     txa
     clc
     adc zp_eff_speed
@@ -22,11 +20,8 @@ pmx_add_speed_msg:
     lda #$7f
 !pasm_store:
     sta zp_eff_speed
-    pla
-    bne !pasm_done+
     ldx #HSTR_PIQ_SPEED
     jsr huff_print_msg
-!pasm_done:
     rts
 
 pmx_add_bless_msg:

@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #7
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -37,7 +37,7 @@ test_finish:
 .const HSTR_PIQ_NOTHING = 5
 .const MX_SLEEP_CUR = 7
 
-tc_results: .fill 8, $ff
+tc_results: .fill 10, $ff
 
 test_msg_calls:    .byte 0
 test_last_msg_lo:  .byte 0
@@ -281,8 +281,55 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp test_finish
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+
+    // Test 9: Haste onset shows the speed message and sets the timer.
+!t9:
+    lda #0
+    sta test_huff_calls
+    sta zp_eff_speed
+    lda #24
+    jsr pmx_add_speed_msg
+    lda zp_eff_speed
+    cmp #24
+    bne !t9_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t9_fail+
+    lda test_last_huff
+    cmp #HSTR_PIQ_SPEED
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp !t10+
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+
+    // Test 10: Haste refresh still reports the speed effect.
+!t10:
+    lda #0
+    sta test_huff_calls
+    lda #5
+    sta zp_eff_speed
+    lda #24
+    jsr pmx_add_speed_msg
+    lda zp_eff_speed
+    cmp #29
+    bne !t10_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t10_fail+
+    lda test_last_huff
+    cmp #HSTR_PIQ_SPEED
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp test_finish
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
     jmp test_finish
