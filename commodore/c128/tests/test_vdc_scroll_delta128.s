@@ -16,6 +16,7 @@
 .const MX_Y = 1
 .const MX_TYPE = 2
 .const MAX_MONSTERS = 32
+.const DETECT_TIMER_EVIL_ONLY = $80 | 20
 
 #import "../../common/dungeon_data.s"
 #import "../../common/color.s"
@@ -50,6 +51,7 @@ it_display: .fill 2, 0
 
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
+cr_mflags:  .fill 2, 0
 monster_stub_entry:
     .fill 12, EMPTY_SLOT
 
@@ -148,6 +150,7 @@ test_start:
     jsr test_render_single_tile_item_override
     jsr test_render_single_tile_monster_override
     jsr test_render_single_tile_player_override
+    jsr test_render_single_tile_detect_evil_hides_non_evil
     jsr test_h_scroll_left_fast_path
     jsr test_left_scroll_falls_back
     jsr test_v_scroll_up_first_op_uses_copy_mode
@@ -168,6 +171,8 @@ init_floor_items:
     sta it_display + 1
     lda #$4d
     sta cr_display + 1
+    lda #0
+    sta cr_mflags + 1
     rts
 
 reset_render_overrides:
@@ -350,6 +355,42 @@ test_render_single_tile_player_override:
     lda #SC_PLAYER
     sta test_expected_char
     lda #VDC_WHITE
+    sta test_expected_attr
+    jsr assert_vdc_cell
+    rts
+
+test_render_single_tile_detect_evil_hides_non_evil:
+    jsr setup_single_tile_scene
+    lda #DETECT_TIMER_EVIL_ONLY
+    sta eff_detect_timer
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #COL_RED
+    sta test_mon_color_vic
+    lda #0
+    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #10
+    sta test_row_rel
+    lda #14
+    sta test_col_rel
+    lda #SC_SPACE
+    sta test_expected_char
+    lda #VDC_BLACK
     sta test_expected_attr
     jsr assert_vdc_cell
     rts

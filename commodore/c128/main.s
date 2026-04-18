@@ -1683,13 +1683,15 @@ tramp_dig_ability:
     rts
 }
 
-// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
-// Pinned low to avoid $D000 drift.
+// tramp_ego_get_ac_bonus — Get ego AC bonus from the low-RAM table.
+// Keep this inline on C128 so low runtime does not carry a separate helper.
 tramp_ego_apply_damage:
     :C128BankedPreserveATrampoline(ego_apply_damage)
 
 tramp_ego_get_ac_bonus:
-    :C128BankedPreserveAReturnTrampoline(ego_get_ac_bonus)
+    tax
+    lda ego_ac_bonus,x
+    rts
 
 .macro C128BankedStatusTrampoline(target) {
     php
@@ -3128,7 +3130,7 @@ program_end:
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
-.assert "Ego AC routine stays in low runtime RAM", ego_get_ac_bonus < FLOOR_ITEM_BASE, true
+.assert "Ego AC table stays in low runtime RAM", ego_ac_bonus < FLOOR_ITEM_BASE, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true

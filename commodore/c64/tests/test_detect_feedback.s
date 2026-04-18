@@ -62,6 +62,10 @@ eff_detect_monsters:
     inc test_detect_calls
     rts
 
+eff_detect_evil_only:
+    inc test_detect_calls
+    rts
+
 huff_print_msg:
     stx test_last_huff
     inc test_huff_calls

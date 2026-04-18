@@ -203,20 +203,32 @@ render_viewport:
 
     // Not visited — check if detect monsters reveals an occupant
     lda eff_detect_timer
-    bne !rv_detect_chk+
-    jmp !draw_blank+
+    beq !rv_detect_blank+
 !rv_detect_chk:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !rv_detect_render+
+    ldy zp_render_x
+    lda rv_row_occ,y
+    beq !rv_detect_blank+
+    bmi !rv_detect_blank+
+    lda eff_detect_timer
+    bpl !rv_detect_render+
+    tax
+    dex
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #$04                    // CF_EVIL
+    beq !rv_detect_blank+
+!rv_detect_blank:
     jmp !draw_blank+
 !rv_detect_render:
-    // Detected monster on unvisited tile — blank background, then monster
-    lda #$20                    // Space (blank tile)
+    // Detected monster on unvisited tile — blank background, then normal item/monster overlay.
+    lda #$20
     sta zp_temp0
-    lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
+    lda #VDC_BLACK
     sta zp_temp1
-    jmp !rv_no_item+            // Skip to monster check
+    jmp !rv_no_item+
 !rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)

@@ -85,7 +85,7 @@
 :C128AuditRuntimeLow("roll_ego_type", roll_ego_type)
 :C128AuditRuntimeLow("ego_get_suffix_ptr", ego_get_suffix_ptr)
 :C128AuditRuntimeLow("ego_apply_damage", ego_apply_damage)
-:C128AuditRuntimeLow("ego_get_ac_bonus", ego_get_ac_bonus)
+:C128AuditRuntimeLow("ego_ac_bonus", ego_ac_bonus)
 
 // Overlay entrypoints.
 :C128AuditStartupOverlay("player_create", player_create)

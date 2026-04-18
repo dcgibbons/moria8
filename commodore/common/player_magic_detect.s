@@ -17,7 +17,7 @@ pmx_detect_monsters_msg:
     jmp pmx_detect_print_inline
 
 pmx_detect_evil_msg:
-    jsr eff_detect_monsters
+    jsr eff_detect_evil_only
     jsr pmx_any_active_evil_monster
     bcc !pdem_none+
     lda #<pmx_msg_evil_on

@@ -249,16 +249,27 @@ eff_cure_poison:
 
 // ============================================================
 // eff_detect_monsters — Activate detect monsters effect (timer)
-// While timer > 0, renderer shows all active monsters regardless
+// While timer > 0, renderer shows detected monsters regardless
 // of tile visibility. No permanent FLAG_VISITED side-effect.
 // Input: none
 // Output: eff_detect_timer set, vis_room_revealed = 1
 // Clobbers: A
 // ============================================================
-eff_detect_timer: .byte 0              // Turns remaining (0 = inactive)
+.const DETECT_TIMER_TURNS = 20
+.const DETECT_TIMER_EVIL_ONLY = $80
+.const DETECT_TIMER_MASK = $7f
+
+eff_detect_timer: .byte 0              // Low 7 bits = turns, high bit = evil-only
 
 eff_detect_monsters:
-    lda #20
+    lda #DETECT_TIMER_TURNS
+    sta eff_detect_timer
+    lda #1
+    sta vis_room_revealed
+    rts
+
+eff_detect_evil_only:
+    lda #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     sta eff_detect_timer
     lda #1
     sta vis_room_revealed

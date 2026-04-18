@@ -3,6 +3,28 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-DETECT-EVIL-FALSE-NO-EVIL
+- [x] Reported Failure Gate:
+  - `make test128-fast-smoke`
+- [x] root-cause the exact C128 smoke/build failure introduced by the current detect-evil parity work before changing more product code
+- [x] fix detect-evil parity so evil-only detection does not highlight non-evil monsters while still preserving redraw/runtime behavior on both C64 and C128
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] AUDIT-PRAYER-PASS-1
+- [ ] Reported Failure Gate:
+  - priest prayers should have upstream-faithful live behavior, visible feedback where upstream provides it, and correct C64/C128 prompt/render behavior; `make test64` and `make test128-fast-smoke` remain the exact regression gates for prayer-side fixes
+- [ ] prayer audit findings, prioritized:
+  - `Slow Poison` is currently silent in Commodore, but both VMS and umoria print a reduction message when poison is actually reduced
+  - `Blind Creature` currently applies `MX_STUN`; both VMS and umoria route the prayer through the confuse-monster path instead
+  - `Turn Undead` currently applies a silent confuse effect to all undead slots; upstream only affects visible/LOS undead and prints per-monster `runs frantically!` / `is unaffected.` feedback
+  - `Dispel Undead` / `Dispel Evil` currently damage flagged monsters silently and without a visibility gate; upstream restricts them to visible/LOS targets and prints per-monster `shudders.` / `dissolves!`
+  - `Detect Evil` still uses the generic monster-detect path; this is a known documented deviation already captured elsewhere
+- [ ] implement the control/dispel prayer fixes in severity order:
+  - `Blind Creature`
+  - `Turn Undead`
+  - `Dispel Undead` / `Dispel Evil`
+  - `Slow Poison`
 - [ ] FEAT-NEW-SPELL-HARDENING
 - [ ] Reported Failure Gate:
   - newly added spells/prayers must have correct live behavior, correct visible feedback, and correct platform-specific rendering/input behavior; `Magic Missile` must animate from the player’s actual viewport row/column without a bogus `Your spell fizzles out.`, and priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must not beep/no-op or show misleading feedback

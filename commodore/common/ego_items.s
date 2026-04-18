@@ -210,7 +210,9 @@ ead_ego_type: .byte 0
 // Output: A = AC bonus (0 if none)
 // Clobbers: X
 // ============================================================
+#if !C128
 ego_get_ac_bonus:
     tax
     lda ego_ac_bonus,x
     rts
+#endif
