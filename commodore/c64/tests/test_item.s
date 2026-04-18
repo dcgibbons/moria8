@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #49
+    ldx #50-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -211,7 +211,7 @@ test_pick_recharge_item:
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #49
+    ldx #51-1
     lda #$ff
 !clr:
     sta tc_results,x

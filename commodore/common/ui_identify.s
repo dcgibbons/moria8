@@ -157,7 +157,7 @@ identify_symbol_hi:
     .byte >identify_missile_str, >identify_sword_str, >identify_bow_str, >identify_misc_item_str
 
 identify_space_str:         .text "  - An open pit." ; .byte 0
-identify_potion_str:        .text "! - A potion or flask." ; .byte 0
+identify_potion_str:        .text "! - A potion." ; .byte 0
 identify_amulet_str:        .byte $22 ; .text " - An amulet, periapt, or necklace." ; .byte 0
 identify_wall_str:          .text "# - A stone wall." ; .byte 0
 identify_treasure_str:      .text "$ - Treasure." ; .byte 0
@@ -184,7 +184,7 @@ identify_loose_rock_str:    .text "; - A loose rock." ; .byte 0
 identify_stairs_up_str:     .text "< - An up staircase." ; .byte 0
 identify_ring_str:          .text "= - A ring." ; .byte 0
 identify_stairs_down_str:   .text "> - A down staircase." ; .byte 0
-identify_scroll_str:        .text "? - A scroll or book." ; .byte 0
+identify_scroll_str:        .text "? - A scroll." ; .byte 0
 identify_A_str:             .text "A - Giant Ant Lion." ; .byte 0
 identify_B_str:             .text "B - The Balrog." ; .byte 0
 identify_C_str:             .text "C - Gelentanious Cube." ; .byte 0

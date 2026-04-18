@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #46
+    ldx #47
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 47, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 48, $ff      // Result buffer (copied to $0400 at the end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -132,6 +132,10 @@ tpm_huff_calls:   .byte 0
 tpm_last_huff_id: .byte 0
 tpm_cast_loop_ctr: .byte 0
 tpm_key_idx: .byte 0
+tpm_msg_seen: .byte 0
+tpm_msg_buf:  .fill 42, 0
+tpm_expected_identify_csw:
+    .text "This is a Cure Serious Wounds potion." ; .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -181,6 +185,10 @@ test_input_get_key_a:
     lda #$41
     rts
 
+test_input_get_key_b:
+    lda #$42
+    rts
+
 test_input_get_modal_spell_a:
     lda #$41
     rts
@@ -201,6 +209,24 @@ test_tramp_spell_execute_selected:
 test_huff_print_msg:
     stx tpm_last_huff_id
     inc tpm_huff_calls
+    rts
+
+test_cmb_term_and_print_capture:
+    ldx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf,x
+    ldx #0
+!copy:
+    lda combat_msg_buf,x
+    sta tpm_msg_buf,x
+    cmp #0
+    beq !done+
+    inx
+    cpx #42
+    bcc !copy-
+!done:
+    lda #1
+    sta tpm_msg_seen
     rts
 
 test_pm_select_book:
@@ -2407,10 +2433,71 @@ test_start:
     bne !t47_fail+
     lda #$01
     sta tc_results + 46
-    jmp !tests_done+
+    jmp !t48+
 !t47_fail:
     lda #$00
     sta tc_results + 46
+
+    // ==========================================
+    // Test 48: identify prompt message includes
+    // the category noun for a potion type.
+    // ==========================================
+!t48:
+    :PatchJump(input_get_key, test_input_get_key_b)
+    :PatchJump(cmb_term_and_print, test_cmb_term_and_print_capture)
+    jsr item_init_inventory
+
+    lda #0
+    sta tpm_msg_seen
+    sta id_known + 25
+
+    lda #25
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+    sta inv_ego + 1
+
+    jsr eff_identify_prompt
+
+    lda id_known + 25
+    cmp #1
+    bne !t48_fail+
+    lda inv_flags + 1
+    and #IF_IDENTIFIED
+    beq !t48_fail+
+    lda tpm_msg_seen
+    cmp #1
+    bne !t48_fail+
+
+    lda #<tpm_expected_identify_csw
+    sta zp_ptr0
+    lda #>tpm_expected_identify_csw
+    sta zp_ptr0_hi
+    lda #<tpm_msg_buf
+    sta zp_ptr1
+    lda #>tpm_msg_buf
+    sta zp_ptr1_hi
+    ldy #0
+!t48_cmp:
+    lda (zp_ptr0),y
+    cmp (zp_ptr1),y
+    bne !t48_fail+
+    cmp #0
+    beq !t48_pass+
+    iny
+    cpy #42
+    bcc !t48_cmp-
+    bcs !t48_fail+
+!t48_pass:
+    lda #$01
+    sta tc_results + 47
+    jmp !tests_done+
+!t48_fail:
+    lda #$00
+    sta tc_results + 47
 
 !tests_done:
     jmp test_finish

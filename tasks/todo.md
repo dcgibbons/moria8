@@ -32,6 +32,12 @@ This file is a temporary working scratchpad.
 - [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
 - [ ] Reported Failure Gate:
   - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [ ] BUG-SHARED-GENOCIDE-PARITY
+- [ ] Reported Failure Gate:
+  - `Genocide` must prompt for a monster glyph/type and exterminate all matching monsters on the current level instead of requiring a directional target; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [ ] replace the current directional-targeted genocide flow with a direct glyph prompt in the shared spell execute overlay
+- [ ] normalize the typed creature glyph the same way the recall/symbol UI does so `Genocide` matches the actual `cr_display` values used by live monsters
+- [ ] add focused runtime coverage proving `Genocide` removes multiple same-glyph monsters without requiring a directional target
 - [ ] BUG-SHARED-SPELL-LIST-ESC-CANCEL
 - [ ] Reported Failure Gate:
   - after selecting a book and pressing `?`, pressing `Esc` on the spell/prayer list must cancel the whole selection flow instead of dropping back to the `Cast which?` / `Pray which?` prompt
@@ -252,6 +258,9 @@ This file is a temporary working scratchpad.
   - `/` identifies what a symbol on screen stands for
   - `look` remains the path for the exact visible creature
   - leave the current combat-earned recall implementation alone for now
+- [ ] BUG-IDENTIFY-MISSING-CATEGORY-NOUN
+- [ ] Reported Failure Gate:
+  - identify feedback must include the item category noun for bare-name consumables and jewelry, e.g. `This is a Cure Serious Wounds potion.`
 - [x] BUG-SPELL-HARDENING
 - [x] Reported Failure Gate:
   - C64: repeated `Magic Missile` casts must not hang or drift into `$FFFF`

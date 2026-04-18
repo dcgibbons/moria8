@@ -6,17 +6,19 @@
 
 .const PMX_ICAT_WAND  = 14
 .const PMX_ICAT_STAFF = 15
+#if C128
+.const PMX_KEY_ESC    = KEY_ESC
+#else
+.const PMX_KEY_ESC    = $1b
+#endif
 
 pmx_work_idx:    .byte 0
 pmx_work_x:      .byte 0
 pmx_work_y:      .byte 0
-pmx_work_x2:     .byte 0
-pmx_work_y2:     .byte 0
 pmx_work_flag:   .byte 0
 pmx_work_damage: .byte 0
 pmx_target_slot: .byte 0
 pmx_find_stairs_row: .byte 0
-pmx_map_row: .byte 0
 
 #import "player_magic_ball.s"
 
@@ -664,13 +666,15 @@ eff_teleport_other:
     rts
 
 eff_genocide:
-    jsr eff_directional_monster
+    ldx #HSTR_PM_TITLE_PRAY
+    jsr huff_print_msg
+    jsr input_prepare_followup_key
+    jsr input_get_key
+    cmp #PMX_KEY_ESC
+    beq !egeno_done+
+    jsr recall_key_to_screen_code
     bcc !egeno_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_display,x
+    lda recall_query_sc
     sta pmx_work_flag
     ldx #0
 !egeno_loop:

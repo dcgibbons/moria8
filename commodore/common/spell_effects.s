@@ -18,8 +18,8 @@
 // ============================================================
 // Scratch variables
 // ============================================================
-.const EFF_ICAT_WAND  = 14
-.const EFF_ICAT_STAFF = 15
+.const EFF_ICAT_WAND   = 14
+.const EFF_ICAT_STAFF  = 15
 
 eff_target_slot: .byte 0           // Target slot for identify
 eff_room_idx:    .byte 0           // Room loop index for light
@@ -197,16 +197,15 @@ eff_identify_prompt:
     sta eff_target_slot
     tax
     lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !eip_cancel+
+    bmi !eip_cancel+
 
     // Identify that item type
-    tax
+    tay
+    pha
     lda #1
-    sta id_known,x
+    sta id_known,y
 
     // Set IF_IDENTIFIED on the item instance
-    ldx eff_target_slot
     lda inv_flags,x
     ora #IF_IDENTIFIED
     sta inv_flags,x
@@ -218,16 +217,16 @@ eff_identify_prompt:
     ldx #HSTR_PIQ_THISIS
     jsr huff_append_combat
 
-    ldx eff_target_slot
-    lda inv_item_id,x
+    pla
     tax
-    lda it_name_lo,x                // Always real name (type is now known)
+    lda it_name_lo,x
     ldy it_name_hi,x
     jsr combat_append_str
 
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
+!eip_print:
 
     jsr cmb_term_and_print
 
