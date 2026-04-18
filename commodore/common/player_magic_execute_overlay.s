@@ -20,6 +20,116 @@ pmx_map_row: .byte 0
 
 #import "player_magic_ball.s"
 
+pmx_build_recharge_cache:
+    lda #0
+    sta piw_visible_count
+    ldx #0
+!pmx_recharge_scan:
+    cpx #MAX_INV_SLOTS
+    bcs !pmx_recharge_done+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pmx_recharge_next+
+    tay
+    lda it_category,y
+    cmp #ICAT_WAND
+    beq !pmx_recharge_store+
+    cmp #ICAT_STAFF
+    bne !pmx_recharge_next+
+!pmx_recharge_store:
+    txa
+    ldy piw_visible_count
+    sta piw_visible_slots,y
+    iny
+    sty piw_visible_count
+!pmx_recharge_next:
+    inx
+    jmp !pmx_recharge_scan-
+!pmx_recharge_done:
+    lda piw_visible_count
+    rts
+
+pmx_pick_recharge_item:
+    jsr pmx_build_recharge_cache
+    bne !pmx_recharge_have_choices+
+    lda #$ff
+    clc
+    rts
+!pmx_recharge_have_choices:
+    sec
+    sbc #1
+    clc
+    adc #$01                    // Screen code 'A'
+    sta pmx_recharge_prompt_last
+    lda #<pmx_recharge_prompt_str
+    sta zp_ptr0
+    lda #>pmx_recharge_prompt_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jsr input_prepare_followup_key
+    jsr input_get_key
+    cmp #$3f
+    bne !pmx_recharge_not_inv+
+    lda #$ff
+    jsr show_inv_and_select
+    cmp #$03
+    beq !pmx_recharge_cancel+
+    cmp #$20
+    beq !pmx_recharge_cancel+
+    sec
+    sbc #$41
+    bcc !pmx_recharge_cancel+
+    cmp #MAX_INV_SLOTS
+    bcs !pmx_recharge_cancel+
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pmx_recharge_cancel+
+    tay
+    lda it_category,y
+    cmp #ICAT_WAND
+    beq !pmx_recharge_ok+
+    cmp #ICAT_STAFF
+    beq !pmx_recharge_ok+
+    lda #0
+    clc
+    rts
+!pmx_recharge_not_inv:
+    cmp #$03
+    beq !pmx_recharge_cancel+
+    cmp #$20
+    beq !pmx_recharge_cancel+
+    jsr piw_pick_filtered_inv_key
+    bcs !pmx_recharge_ok+
+!pmx_recharge_cancel:
+    lda #0
+    clc
+    rts
+!pmx_recharge_ok:
+    lda inv_item_id,x
+    sec
+    rts
+
+pmx_print_recharged_item:
+    lda #0
+    sta cmb_buf_idx
+
+    lda #<pmx_msg_recharged_prefix
+    ldy #>pmx_msg_recharged_prefix
+    jsr combat_append_str
+
+    ldx pmx_target_slot
+    lda inv_ego,x
+    sta fi_add_ego
+    lda inv_item_id,x
+    jsr item_append_name
+
+    lda #<pmx_msg_recharged_suffix
+    ldy #>pmx_msg_recharged_suffix
+    jsr combat_append_str
+
+    jmp cmb_term_and_print
+
 spell_execute_selected:
     lda pm_spell_type
     cmp #SPELL_MAGE
@@ -430,22 +540,11 @@ eff_create_food:
 
 eff_recharge_item:
     sta pmx_work_damage
-    ldx #0
-!eri_scan:
-    cpx #MAX_INV_SLOTS
-    bcs !eri_none+
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !eri_next+
-    tay
-    lda it_category,y
-    cmp #PMX_ICAT_WAND
-    beq !eri_found+
-    cmp #PMX_ICAT_STAFF
-    beq !eri_found+
-!eri_next:
-    inx
-    jmp !eri_scan-
+    jsr pmx_pick_recharge_item
+    bcs !eri_found+
+    cmp #$ff
+    beq !eri_none+
+    rts
 !eri_found:
     stx pmx_target_slot
     lda inv_p1,x
@@ -483,6 +582,7 @@ eff_recharge_item:
     clc
     adc inv_p1,x
     sta inv_p1,x
+    jsr pmx_print_recharged_item
 !eri_done:
     rts
 !eri_none:
@@ -594,5 +694,14 @@ eff_genocide:
 
 pmx_msg_bright_flash:
     .text "There is a bright flash of light." ; .byte 0
+pmx_msg_recharged_prefix:
+    .text "The " ; .byte 0
+pmx_msg_recharged_suffix:
+    .text " glows briefly." ; .byte 0
+pmx_recharge_prompt_str:
+    .text "Recharge which item (a-"
+pmx_recharge_prompt_last:
+    .text "a"
+    .text ")?" ; .byte 0
 pmx_msg_no_recharge:
     .text "You have nothing to recharge." ; .byte 0

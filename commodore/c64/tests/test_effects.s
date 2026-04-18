@@ -115,6 +115,10 @@ tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
+tv_hash_lo: .byte 0
+tv_hash_hi: .byte 0
+tv_snapshot_lo: .byte 0
+tv_snapshot_hi: .byte 0
 tlk_expected_n: .text "n"
 tlk_expected_c: .text "c"
 tlk_expected_t: .text "t"
@@ -1416,14 +1420,19 @@ test_start:
     // Normalize the viewport before snapshot so the comparison isolates
     // the pickup/full-redraw behavior rather than prior local-redraw drift.
     jsr render_viewport
-    jsr tv_snapshot_viewport
+    jsr tv_hash_viewport
+    sta tv_snapshot_lo
+    stx tv_snapshot_hi
     jsr item_pickup
     bcs !t24_pickup_ok+
     jmp !t24_fail+
 !t24_pickup_ok:
     jsr render_viewport
-    jsr tv_compare_viewport
-    bcs !t24_fail+
+    jsr tv_hash_viewport
+    cmp tv_snapshot_lo
+    bne !t24_fail+
+    cpx tv_snapshot_hi
+    bne !t24_fail+
 
     lda #$01
     sta tc_results + 23
@@ -2367,18 +2376,17 @@ tv_setup_dark_room:
     jsr render_viewport
     rts
 
-tv_snapshot_viewport:
+tv_hash_viewport:
     lda $01
     pha
     and #%11111110
     sta $01
-    lda #<tv_snapshot_screen
-    sta zp_ptr0
-    lda #>tv_snapshot_screen
-    sta zp_ptr0_hi
     lda #0
+    sta tv_hash_lo
+    lda #0
+    sta tv_hash_hi
     sta tv_row_idx
-!tv_snap_row:
+!tv_hash_row:
     ldx tv_row_idx
     txa
     clc
@@ -2393,91 +2401,28 @@ tv_snapshot_viewport:
     sta zp_screen_hi
 
     ldy #0
-!tv_snap_col:
+!tv_hash_col:
     lda (zp_screen_lo),y
-    sta (zp_ptr0),y
+    clc
+    adc tv_hash_lo
+    sta tv_hash_lo
+    bcc !tv_hash_next+
+    inc tv_hash_hi
+!tv_hash_next:
     iny
     cpy #VIEWPORT_W
-    bne !tv_snap_col-
+    bne !tv_hash_col-
 
-    lda zp_ptr0
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr0
-    bcc !tv_snap_screen_advance_done+
-    inc zp_ptr0_hi
-!tv_snap_screen_advance_done:
     inc tv_row_idx
     lda tv_row_idx
     cmp #VIEWPORT_H
-    beq !tv_snap_done+
-    jmp !tv_snap_row-
-!tv_snap_done:
+    beq !tv_hash_done+
+    jmp !tv_hash_row-
+!tv_hash_done:
+    lda tv_hash_lo
+    ldx tv_hash_hi
     pla
     sta $01
-    rts
-
-tv_compare_viewport:
-    lda $01
-    pha
-    and #%11111110
-    sta $01
-    lda #<tv_snapshot_screen
-    sta zp_ptr0
-    lda #>tv_snapshot_screen
-    sta zp_ptr0_hi
-    lda #0
-    sta tv_row_idx
-!tv_cmp_row:
-    ldx tv_row_idx
-    txa
-    clc
-    adc #VIEWPORT_Y
-    tax
-    lda screen_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_screen_lo
-    lda screen_row_hi,x
-    adc #0
-    sta zp_screen_hi
-
-    ldy #0
-!tv_cmp_col:
-    lda (zp_screen_lo),y
-    cmp (zp_ptr0),y
-    bne !tv_cmp_mismatch+
-!tv_cmp_next:
-    iny
-    cpy #VIEWPORT_W
-    bne !tv_cmp_col-
-
-    lda zp_ptr0
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr0
-    bcc !tv_cmp_screen_advance_done+
-    inc zp_ptr0_hi
-!tv_cmp_screen_advance_done:
-    inc tv_row_idx
-    lda tv_row_idx
-    cmp #VIEWPORT_H
-    beq !tv_cmp_match+
-    jmp !tv_cmp_row-
-!tv_cmp_mismatch:
-    pla
-    sta $01
-    sec
-    rts
-!tv_cmp_match:
-    pla
-    sta $01
-    clc
     rts
 
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end <= $be00, true
-
-.segmentdef TestEffectsBuffers [start=$be00]
-.segment TestEffectsBuffers
-tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0

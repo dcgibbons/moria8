@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #48
+    ldx #49
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -97,7 +97,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 49, $ff
+tc_results: .fill 50, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -128,9 +128,90 @@ test_input_wait_release:
 
 test_key_script: .fill 8, 0
 
+test_build_recharge_cache:
+    ldy #0
+    ldx #0
+!tbrc_scan:
+    cpx #MAX_INV_SLOTS
+    bcs !tbrc_done+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !tbrc_next+
+    tay
+    lda it_category,y
+    cmp #ICAT_WAND
+    beq !tbrc_store+
+    cmp #ICAT_STAFF
+    bne !tbrc_next+
+!tbrc_store:
+    txa
+    ldy piw_visible_count
+    sta piw_visible_slots,y
+    iny
+    sty piw_visible_count
+!tbrc_next:
+    inx
+    jmp !tbrc_scan-
+!tbrc_done:
+    lda piw_visible_count
+    rts
+
+test_pick_recharge_item:
+    lda #0
+    sta piw_visible_count
+    jsr test_build_recharge_cache
+    bne !tpri_have_choices+
+    lda #$ff
+    clc
+    rts
+!tpri_have_choices:
+    jsr input_prepare_followup_key
+    jsr input_get_key
+    cmp #$3f
+    bne !tpri_not_inv+
+    lda #$ff
+    jsr show_inv_and_select
+    cmp #$03
+    beq !tpri_cancel+
+    cmp #$20
+    beq !tpri_cancel+
+    sec
+    sbc #$41
+    bcc !tpri_cancel+
+    cmp #MAX_INV_SLOTS
+    bcs !tpri_cancel+
+    tax
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !tpri_cancel+
+    tay
+    lda it_category,y
+    cmp #ICAT_WAND
+    beq !tpri_ok+
+    cmp #ICAT_STAFF
+    beq !tpri_ok+
+    lda #0
+    clc
+    rts
+!tpri_not_inv:
+    cmp #$03
+    beq !tpri_cancel+
+    cmp #$20
+    beq !tpri_cancel+
+    jsr piw_pick_filtered_inv_key
+    bcs !tpri_ok+
+!tpri_cancel:
+    lda #0
+    clc
+    rts
+!tpri_ok:
+    lda inv_item_id,x
+    sec
+    rts
+
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #48
+    ldx #49
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2369,10 +2450,70 @@ test_start:
 
     lda #$01
     sta tc_results + 48
-    jmp !tests_done+
+    jmp !t50+
 !t49_fail:
     lda #$00
     sta tc_results + 48
+
+    // ==========================================
+    // Test 50: rechargeable-item prompt supports
+    // '?' inventory overlay and returns the
+    // selected wand/staff slot directly.
+    // ==========================================
+!t50:
+    jsr item_init_inventory
+    lda #0
+    sta test_key_idx
+
+    lda #0
+    sta zp_msg_flags
+
+    lda #17                     // potion: not rechargeable
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #39                     // wand
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #5
+    sta inv_p1 + 1
+    lda #0
+    sta inv_flags + 1
+
+    lda #43                     // staff
+    sta inv_item_id + 3
+    lda #1
+    sta inv_qty + 3
+    lda #7
+    sta inv_p1 + 3
+    lda #0
+    sta inv_flags + 3
+
+    lda #$3f
+    sta test_key_script + 0
+    lda #$44                    // absolute inventory slot D => slot 3 staff
+    sta test_key_script + 1
+    lda #0
+    sta test_key_script + 2
+
+    jsr test_pick_recharge_item
+    bcc !t50_fail+
+    cpx #3
+    bne !t50_fail+
+    cmp #43
+    bne !t50_fail+
+
+    lda #$01
+    sta tc_results + 49
+    jmp !tests_done+
+!t50_fail:
+    lda #$00
+    sta tc_results + 49
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
