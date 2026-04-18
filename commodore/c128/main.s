@@ -1525,8 +1525,10 @@ tramp_ui_help_display:
 !done:
     jmp tramp_ui_exit
 
-tramp_ui_ui_overlay_common:
+tramp_ui_ui_overlay_patch_target:
     sta !ui_target+ + 1
+    stx !ui_target+ + 2
+tramp_ui_ui_overlay_common:
     jsr tramp_ui_enter
     lda #C128_UI_OVERLAY_ID
     jsr overlay_load
@@ -1537,7 +1539,6 @@ tramp_ui_ui_overlay_common:
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
-    lda #<ui_char_display
     jmp tramp_ui_ui_overlay_common
 
 tramp_ui_inv_display:
@@ -1568,15 +1569,18 @@ tramp_ui_equip_display:
 
 tramp_ui_recall:
     lda #<ui_recall_display
-    jmp tramp_ui_ui_overlay_common
+    ldx #>ui_recall_display
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_ui_wizard_display:
     lda #<ui_wizard_display
-    jmp tramp_ui_ui_overlay_common
+    ldx #>ui_wizard_display
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_item_gain_spell:
     lda #<item_gain_spell
-    jmp tramp_ui_ui_overlay_common
+    ldx #>item_gain_spell
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_title_load_and_draw:
     lda #C128_UI_OVERLAY_ID

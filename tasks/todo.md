@@ -9,6 +9,9 @@ This file is a temporary working scratchpad.
 - [ ] BUG-SHARED-INV-OVERLAY-DIRECT-SELECT
 - [ ] Reported Failure Gate:
   - item/book prompts that support `?` must allow direct selection from the inventory overlay instead of forcing a dismiss-and-reprompt flow; behavior should match the other selectable overlays consistently
+- [ ] BUG-C128-MONSTER-REDRAW-DETECT-STALE
+- [ ] Reported Failure Gate:
+  - on C128, monster presence/movement changes must redraw immediately: detected monsters must appear on the cast turn, moved/killed monsters must not linger, and monsters must not disappear until a later movement/full redraw
 - [x] BUG-C128-REPEATED-FIRE-BOLT-JAM
 - [ ] Reported Failure Gate:
   - repeated `Fire Bolt` casts on C128 must not JAM in the cast-success tail; latest live monitor traces unwound through `pm_finish_success_common -> pm_mark_worked` and crashed at `$D014` and then `$001C`

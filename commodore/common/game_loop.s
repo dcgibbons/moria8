@@ -854,6 +854,17 @@ c128_town_move_diag_loop_top:
     lda #$11
     jsr c128_town_dump_log
 #endif
+    // Snapshot the pre-command player/view state once per main-loop
+    // iteration so any later stationary command can safely use the shared
+    // post-turn redraw helpers.
+    ldx zp_player_x
+    stx old_player_x
+    ldx zp_player_y
+    stx old_player_y
+    ldx zp_view_x
+    stx old_view_x
+    ldx zp_view_y
+    stx old_view_y
     jsr input_get_command
 #if C128
 c128_town_move_diag_after_input_get_command:
@@ -962,16 +973,6 @@ c128_town_move_diag_after_input_get_command:
     jsr perf_p1_move_start
 #endif
 #endif
-
-    // Save positions before move for dirty render
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-    ldx zp_view_y
-    stx old_view_y
 
     // Clear message before move so combat messages survive
     pha                         // Save command ID (A) — msg_clear clobbers A

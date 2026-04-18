@@ -226,7 +226,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 25, $ff
+tc_results: .fill 26, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -291,6 +291,7 @@ test_pickup_ok: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_update_clears_reveal: .byte 0
 test_stairs_tile: .byte 0
 test_save_success: .byte 0
 test_disk_setup_success: .byte 0
@@ -401,6 +402,7 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_update_clears_reveal
     sta test_stairs_tile
     sta test_save_success
     sta test_disk_setup_success
@@ -489,6 +491,11 @@ test_viewport_update:
 
 test_update_visibility:
     inc test_update_visibility_calls
+    lda test_update_clears_reveal
+    beq !done+
+    lda #0
+    sta vis_room_revealed
+!done:
     rts
 
 test_render_local_area:
@@ -1040,7 +1047,8 @@ test_start:
     sta tc_results + 9
     jmp !t11+
 
-    // Test 11: READ still falls back to full redraw when a room reveal is pending.
+    // Test 11: READ still falls back to full redraw when a pre-update room
+    // reveal is pending, even if update_visibility clears the flag.
 !t11:
     jsr reset_state
     lda #10
@@ -1048,6 +1056,7 @@ test_start:
     lda #1
     sta test_read_ok
     sta vis_room_revealed
+    sta test_update_clears_reveal
     lda #CMD_READ
     sta test_cmd_script
     lda #1
@@ -1591,8 +1600,55 @@ test_start:
     bne !t25_fail+
     lda #$01
     sta tc_results + 24
-    jmp test_finish
+    jmp !t26+
 !t25_fail:
     lda #$00
     sta tc_results + 24
+    jmp !t26+
+
+    // Test 26: stationary update-visibility commands snapshot the render
+    // baseline before running, so local redraw does not use stale movement
+    // positions.
+!t26:
+    jsr reset_state
+    lda #25
+    sta test_case_idx
+    lda #1
+    sta test_cast_ok
+    lda #2
+    sta old_player_x
+    lda #3
+    sta old_player_y
+    lda #4
+    sta old_view_x
+    lda #5
+    sta old_view_y
+    lda #CMD_CAST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_render_local_calls
+    cmp #1
+    bne !t26_fail+
+    lda test_render_full_calls
+    bne !t26_fail+
+    lda old_player_x
+    cmp zp_player_x
+    bne !t26_fail+
+    lda old_player_y
+    cmp zp_player_y
+    bne !t26_fail+
+    lda old_view_x
+    cmp zp_view_x
+    bne !t26_fail+
+    lda old_view_y
+    cmp zp_view_y
+    bne !t26_fail+
+    lda #$01
+    sta tc_results + 25
+    jmp test_finish
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
     jmp test_finish

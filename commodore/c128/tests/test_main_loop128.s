@@ -183,6 +183,9 @@ tramp_ui_help_display:
 tramp_ui_inv_display:
     inc test_inventory_calls
     rts
+ui_inv_select_display:
+    inc test_inventory_calls
+    rts
 .label tramp_ui_inv_select_display = ui_inv_select_display
 
 tramp_ui_char_display:
@@ -634,12 +637,14 @@ test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
 msg_row1_col: .byte 0
 eff_detect_timer: .byte 0
+piw_filter: .byte 0
 test_cast_ok: .byte 0
 test_save_success: .byte 0
 test_disk_setup_success: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_update_clears_reveal: .byte 0
 test_scroll_delta_success: .byte 0
 test_force_view_scroll_y: .byte 0
 test_stairs_tile: .byte 0
@@ -715,6 +720,7 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_update_clears_reveal
     sta test_scroll_delta_success
     sta test_force_view_scroll_y
     sta test_stairs_tile
@@ -798,6 +804,11 @@ test_viewport_update:
     rts
 
 test_update_visibility:
+    lda test_update_clears_reveal
+    beq !done+
+    lda #0
+    sta vis_room_revealed
+!done:
     rts
 
 test_render_local_area:
@@ -1532,6 +1543,85 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_delete_savefile_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 22: pre-update room reveal still forces a full redraw when
+    // update_visibility clears vis_room_revealed.
+    lda #22
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_cast_ok
+    sta vis_room_revealed
+    sta test_update_clears_reveal
+    lda #CMD_CAST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_cast_spell_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_local_calls
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 23: stationary update-visibility commands snapshot the render
+    // baseline before running, so local redraw does not use stale movement
+    // positions.
+    lda #23
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_cast_ok
+    lda #2
+    sta old_player_x
+    lda #3
+    sta old_player_y
+    lda #4
+    sta old_view_x
+    lda #5
+    sta old_view_y
+    lda #CMD_CAST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_render_local_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    beq *+5
+    jmp test_fail
+    lda old_player_x
+    cmp zp_player_x
+    beq *+5
+    jmp test_fail
+    lda old_player_y
+    cmp zp_player_y
+    beq *+5
+    jmp test_fail
+    lda old_view_x
+    cmp zp_view_x
+    beq *+5
+    jmp test_fail
+    lda old_view_y
+    cmp zp_view_y
     beq *+5
     jmp test_fail
     jmp test_pass

@@ -245,7 +245,12 @@ post_turn_update_visibility_or_die:
     bcc !ptuvs_alive+
     jmp player_died
 !ptuvs_alive:
+    lda vis_room_revealed
+    pha
     jsr update_visibility
+    pla
+    ora vis_room_revealed
+    sta vis_room_revealed
     jsr viewport_update
     lda zp_view_x
     cmp old_view_x
@@ -283,5 +288,4 @@ vp_render_status_loop:
     jsr render_viewport
     jsr status_draw
     jmp main_loop
-
 ghl_saved_scene_dirty: .byte 0
