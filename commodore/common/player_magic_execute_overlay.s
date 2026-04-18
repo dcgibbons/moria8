@@ -487,6 +487,7 @@ eff_find_stairs:
 eff_sleep_all:
     lda #0
     sta pmx_work_idx
+    sta pmx_work_flag
 !esa_all_loop:
     ldx pmx_work_idx
     cpx #MAX_MONSTERS
@@ -509,11 +510,13 @@ eff_sleep_all:
     ldx pmx_work_idx
     lda #25
     jsr monster_apply_sleep
+    inc pmx_work_flag
 !esa_all_next:
     inc pmx_work_idx
     jmp !esa_all_loop-
 !esa_all_done:
-    rts
+    lda pmx_work_flag
+    jmp pmx_report_sleep_result
 
 eff_haste_self:
     lda #20

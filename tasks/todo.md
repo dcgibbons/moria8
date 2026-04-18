@@ -25,7 +25,11 @@ This file is a temporary working scratchpad.
   - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
 - [ ] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
 - [ ] Reported Failure Gate:
-  - `Sleep II` and `Sleep III` must actually put monsters to sleep by clearing awake state as well as setting the sleep counter; the exact verification gate remains `make test64`
+  - `Sleep II` and `Sleep III` must actually put monsters to sleep by using the live sleep counter, and the player must get visible feedback instead of a silent beep/no-op; the exact verification gate remains `make test64`
+- [ ] Reported Failure Gate:
+  - `make test128-fast-smoke`
+- [ ] rework `monster_wake_check` to use live per-monster sleep state instead of species base sleep data so spell-induced sleep persists
+- [ ] add shared visible feedback for adjacent sleep and mass sleep so `Sleep II` / `Sleep III` report what happened
 - [ ] BUG-SHARED-MONSTER-REDRAW-AFTER-TRANSFORM
 - [ ] Reported Failure Gate:
   - monster-changing effects such as `Polymorph Other` must not leave stale/missing monster tiles on screen until the monster moves again; the exact verification gate remains `make test64`

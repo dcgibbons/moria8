@@ -133,12 +133,26 @@ pmx_sleep_adjacent_msg:
     jmp !psam_loop-
 !psam_done_scan:
     lda pmx_feedback_sleep_hits
-    bne !psam_done+
-    lda #<pmx_msg_no_nearby_effect
-    ldy #>pmx_msg_no_nearby_effect
-    jsr pmx_print_inline
+    bne !psam_any+
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_print_msg
 !psam_done:
     rts
+!psam_any:
+    lda #<pmx_msg_sleep_success
+    ldy #>pmx_msg_sleep_success
+    jsr pmx_print_inline
+    rts
+
+pmx_report_sleep_result:
+    cmp #0
+    bne !prvs_any+
+    ldx #HSTR_PIQ_NOTHING
+    jmp huff_print_msg
+!prvs_any:
+    lda #<pmx_msg_sleep_success
+    ldy #>pmx_msg_sleep_success
+    jmp pmx_print_inline
 
 pmx_set_see_invisible_msg:
     lda zp_eff_see_inv
@@ -163,5 +177,5 @@ pmx_msg_bless_on:
     .text "You feel righteous!" ; .byte 0
 pmx_msg_resist_on:
     .text "You feel resistant to heat and cold." ; .byte 0
-pmx_msg_no_nearby_effect:
-    .text "No nearby monster is affected." ; .byte 0
+pmx_msg_sleep_success:
+    .text "A monster falls asleep." ; .byte 0

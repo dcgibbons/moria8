@@ -273,7 +273,8 @@ monster_process_one:
 
 // ============================================================
 // monster_wake_check — Check if monster should wake up
-// Chebyshev distance to player <= cr_aaf[type], then roll vs sleep.
+// Chebyshev distance to player <= cr_aaf[type], then tick the live sleep
+// counter toward zero and wake once it expires.
 // Sets MF_AWAKE in zp_mon_flags if waking up.
 // Clobbers: A, X, Y, zp_temp3, zp_temp4
 // ============================================================
@@ -312,23 +313,21 @@ monster_wake_check:
     beq !mwc_in_range+          // Equal = in range
     bcs !mwc_too_far+           // Greater = too far
 !mwc_in_range:
-
-    // In range — check sleep value
-    lda cr_sleep,x
-    beq !mwc_wake+              // sleep=0 → always wake immediately
-
-    // Roll: rng_range(sleep). If result == 0, wake up.
-    // A already has sleep value
-    jsr rng_range               // Returns [0, sleep-1]
-    cmp #0
-    bne !mwc_too_far+           // Didn't wake this turn
+    // In range — tick the live sleep counter down toward wake-up.
+    // Contract: monster_process_one enters here with zp_ptr0 already
+    // pointing at the current monster entry.
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    beq !mwc_wake+              // sleep=0 → wake immediately
+    sec
+    sbc #1
+    sta (zp_ptr0),y
+    bne !mwc_too_far+           // Still asleep this turn
 
 !mwc_wake:
     lda zp_mon_flags
     ora #MF_AWAKE
     sta zp_mon_flags
-    // Write back flags immediately (wake persists)
-    jsr monster_write_back
     // Group wake propagation
     ldx zp_mon_type
     lda cr_mflags,x

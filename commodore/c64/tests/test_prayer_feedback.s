@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #5
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -34,9 +34,10 @@ test_finish:
 .const HSTR_PIQ_EYES_TINGLE = 2
 .const HSTR_PIQ_FEEL_BETTER = 3
 .const HSTR_PIQ_MUCH_BETTER = 4
+.const HSTR_PIQ_NOTHING = 5
 .const MX_SLEEP_CUR = 7
 
-tc_results: .fill 6, $ff
+tc_results: .fill 8, $ff
 
 test_msg_calls:    .byte 0
 test_last_msg_lo:  .byte 0
@@ -149,17 +150,15 @@ test_start:
 !t3:
     lda #0
     sta test_msg_calls
+    sta test_huff_calls
     sta test_mon_present
     sta test_mon_data + MX_SLEEP_CUR
     jsr pmx_sleep_adjacent_msg
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t3_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_no_nearby_effect
-    bne !t3_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_no_nearby_effect
+    lda test_last_huff
+    cmp #HSTR_PIQ_NOTHING
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
@@ -168,7 +167,7 @@ test_start:
     lda #$00
     sta tc_results + 2
 
-    // Test 4: Sanctuary sleeps an adjacent monster without extra message.
+    // Test 4: Sanctuary sleeps an adjacent monster and reports it.
 !t4:
     lda #0
     sta test_msg_calls
@@ -185,6 +184,13 @@ test_start:
     cmp #20
     bne !t4_fail+
     lda test_msg_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_msg_sleep_success
+    bne !t4_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_msg_sleep_success
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -193,23 +199,18 @@ test_start:
     lda #$00
     sta tc_results + 3
 
-    // Test 5: Resist onset shows a message and sets the resist flags.
+    // Test 5: Mass sleep with no visible targets shows feedback.
 !t5:
     lda #0
     sta test_msg_calls
-    sta zp_eff_resist
-    jsr pmx_set_resist_heat_cold_msg
-    lda zp_eff_resist
-    cmp #$03
-    bne !t5_fail+
-    lda test_msg_calls
+    sta test_huff_calls
+    lda #0
+    jsr pmx_report_sleep_result
+    lda test_huff_calls
     cmp #1
     bne !t5_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_msg_resist_on
-    bne !t5_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_msg_resist_on
+    lda test_last_huff
+    cmp #HSTR_PIQ_NOTHING
     bne !t5_fail+
     lda #$01
     sta tc_results + 4
@@ -218,8 +219,56 @@ test_start:
     lda #$00
     sta tc_results + 4
 
-    // Test 6: Resist refresh stays silent.
+    // Test 6: Mass sleep with one visible target reports it.
 !t6:
+    lda #0
+    sta test_msg_calls
+    sta test_huff_calls
+    lda #1
+    jsr pmx_report_sleep_result
+    lda test_msg_calls
+    cmp #1
+    bne !t6_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_msg_sleep_success
+    bne !t6_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_msg_sleep_success
+    bne !t6_fail+
+    lda #$01
+    sta tc_results + 5
+    jmp !t7+
+!t6_fail:
+    lda #$00
+    sta tc_results + 5
+
+    // Test 7: Resist onset shows a message and sets the resist flags.
+!t7:
+    lda #0
+    sta test_msg_calls
+    sta zp_eff_resist
+    jsr pmx_set_resist_heat_cold_msg
+    lda zp_eff_resist
+    cmp #$03
+    bne !t7_fail+
+    lda test_msg_calls
+    cmp #1
+    bne !t7_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_msg_resist_on
+    bne !t7_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_msg_resist_on
+    bne !t7_fail+
+    lda #$01
+    sta tc_results + 6
+    jmp !t8+
+!t7_fail:
+    lda #$00
+    sta tc_results + 6
+
+    // Test 8: Resist refresh stays silent.
+!t8:
     lda #0
     sta test_msg_calls
     lda #1
@@ -227,13 +276,13 @@ test_start:
     jsr pmx_set_resist_heat_cold_msg
     lda zp_eff_resist
     cmp #$03
-    bne !t6_fail+
+    bne !t8_fail+
     lda test_msg_calls
-    bne !t6_fail+
+    bne !t8_fail+
     lda #$01
-    sta tc_results + 5
+    sta tc_results + 7
     jmp test_finish
-!t6_fail:
+!t8_fail:
     lda #$00
-    sta tc_results + 5
+    sta tc_results + 7
     jmp test_finish
