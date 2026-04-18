@@ -3,6 +3,34 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-STATUS-FULL-REFLASH-ON-MOVE
+- [x] Reported Failure Gate:
+  - on C128, ordinary movement must not visibly flash the full 3-row status bar every turn; partial status updates should be used when only some fields change
+- [x] root-cause why `status_draw` is repainting the full bar on every movement turn
+- [x] restore row-level status redraws for ordinary dirty-field updates while preserving forced full redraws after screen/status clears
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `turn_post_action` still marks status dirty each turn, but `status_draw` now only clears and redraws the specific dirty status rows unless bit7 explicitly forces a full repaint
+  - forced full status repaint behavior after full-screen clears and explicit status-row clears is preserved through the existing `zp_ui_dirty` bit7 contract
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-VDC-MOVE-REDRAW-SLOWDOWN
+- [x] Reported Failure Gate:
+  - on C128, ordinary player movement must not visibly repaint the full status block every turn after the recent monster-redraw fixes; `make test64` and `make test128-fast-smoke` remain the exact regression gates while restoring the fast local/scroll redraw path
+- [x] root-cause which monster AI changes are incorrectly promoting ordinary nearby movement to `turn_scene_dirty`
+- [x] narrow the monster AI dirty-scene contract so only non-local visible changes force the expensive redraw path
+- [x] add regression coverage for the movement redraw contract without reintroducing stale/disappearing monster bugs
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `monster_ai_tick` now returns `A=mat_scene_dirty` only for non-local visible monster changes instead of promoting every monster action to the expensive redraw path
+  - the non-local helper now suppresses redraw requests for tiles already covered by the normal local player redraw and keeps detect-mode remote changes conservative without reintroducing stale monsters
+  - regression coverage added two helper-level checks in `commodore/c64/tests/test_monster_ai.s` for nearby vs remote dirty-tile promotion, with suite count updated in `commodore/c64/run_tests.sh`
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
 - [x] BUG-DETECT-EVIL-FALSE-NO-EVIL
 - [x] Reported Failure Gate:
   - `make test128-fast-smoke`

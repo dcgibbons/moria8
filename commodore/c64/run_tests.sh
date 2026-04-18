@@ -740,7 +740,7 @@ run_test "turn" "tests/test_turn.s" "0400 040e" 15 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
-run_test "monster_ai" "tests/test_monster_ai.s" "0400 0415" 22 500000000
+run_test "monster_ai" "tests/test_monster_ai.s" "0400 0418" 25 500000000
 run_test "combat" "tests/test_combat.s" "0400 041c" 29 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040b" 12 500000000
 run_test "effects" "tests/test_effects.s" "0400 0431" 50 1000000000

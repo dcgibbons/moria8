@@ -20,7 +20,8 @@ mat_sign_dx:  .byte 0       // Direction sign toward player (-1, 0, +1)
 mat_sign_dy:  .byte 0
 mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
-mat_action_dirty: .byte 0    // 1 if current monster changed visible scene
+mat_scene_dirty: .byte 0     // 1 if any monster changed a non-local visible tile
+mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -32,6 +33,7 @@ monster_ai_tick:
     lda #0
     sta zp_mon_idx
     sta mat_any_moved
+    sta mat_scene_dirty
 
 !mat_loop:
     lda zp_mon_idx
@@ -128,11 +130,11 @@ monster_ai_tick:
 !mat_done:
     lda mat_any_moved
     beq !mat_done_clear+
-    lda #1
+    lda mat_scene_dirty
     sec
     rts
 !mat_done_clear:
-    lda #0
+    lda mat_scene_dirty
     clc
     rts
 
@@ -202,6 +204,7 @@ monster_process_one:
     bcc !mpo_town_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_town_no_move:
     jmp !mpo_writeback+
 !mpo_not_town:
@@ -215,6 +218,7 @@ monster_process_one:
     bcc !mpo_toward_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_toward_no_move:
     jmp !mpo_writeback+
 
@@ -223,6 +227,7 @@ monster_process_one:
     bcc !mpo_flee_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_flee_no_move:
     jmp !mpo_writeback+
 
@@ -231,6 +236,7 @@ monster_process_one:
     bcc !mpo_conf_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_conf_no_move:
 
 !mpo_writeback:
@@ -260,6 +266,9 @@ monster_process_one:
     jsr monster_spawn_one
     lda #1
     sta mat_action_dirty
+    lda ms_spawn_x
+    ldy ms_spawn_y
+    jsr mat_mark_tile_dirty_if_nonlocal
 !breed_fail:
     pla
     sta zp_mon_idx              // Restore original monster index
@@ -271,6 +280,126 @@ monster_process_one:
     rts
 !mpo_done_clear:
     clc
+    rts
+
+// ============================================================
+// mat_mark_move_dirty — mark old/new monster tiles dirty only when the
+// normal local redraw does not already cover them.
+// Uses zp_mon_type for detect-evil filtering.
+// ============================================================
+mat_mark_move_dirty:
+    lda mat_old_x
+    ldy mat_old_y
+    jsr mat_mark_tile_dirty_if_nonlocal
+    lda zp_mon_x
+    ldy zp_mon_y
+    // Tail-call the shared tile helper for the new position.
+    // If either old or new tile is non-local visible, the turn layer
+    // will promote to the expensive redraw path exactly once.
+    jmp mat_mark_tile_dirty_if_nonlocal
+
+// ============================================================
+// mat_mark_tile_dirty_if_nonlocal — Set mat_scene_dirty only for tiles
+// that are both currently render-relevant and outside the normal local
+// redraw footprint around the old/current player positions.
+// Input: A = map x, Y = map y
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_temp0/1, zp_mon_scratch0/1
+// ============================================================
+mat_mark_tile_dirty_if_nonlocal:
+    sta zp_temp0
+    sty zp_temp1
+
+    // Skip tiles outside the viewport entirely.
+    lda zp_temp0
+    sec
+    sbc zp_view_x
+    bcc !mtd_done+
+    cmp #VIEWPORT_W
+    bcs !mtd_done+
+    lda zp_temp1
+    sec
+    sbc zp_view_y
+    bcc !mtd_done+
+    cmp #VIEWPORT_H
+    bcs !mtd_done+
+
+    // The existing local redraw already covers tiles near the player.
+    // Do not promote those to the full redraw path.
+    lda zp_player_x
+    sta zp_mon_scratch0
+    lda zp_player_y
+    sta zp_mon_scratch1
+    jsr mat_tile_within_local_radius
+    bcs !mtd_done+
+
+    // Inspect the tile's current render state.
+    ldx zp_temp1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_temp0
+    :MapRead_ptr0_y()
+    sta zp_mon_scratch1
+
+    // Visited + lit tiles are visible remotely and need a redraw.
+    lda zp_mon_scratch1
+    and #(FLAG_VISITED | FLAG_LIT)
+    cmp #(FLAG_VISITED | FLAG_LIT)
+    beq !mtd_mark+
+
+!mtd_unvisited:
+    // Unvisited tiles only matter while a detect effect is drawing monsters.
+    lda eff_detect_timer
+    beq !mtd_done+
+
+!mtd_mark:
+    lda #1
+    sta mat_scene_dirty
+!mtd_done:
+    rts
+
+// ============================================================
+// mat_tile_within_local_radius — true if tile is within the light-radius+1
+// square around the center in zp_mon_scratch0/1.
+// Input:
+//   zp_temp0/zp_temp1 = tile x/y
+//   zp_mon_scratch0/1 = center x/y
+// Output: carry set = covered by local redraw, clear = non-local
+// ============================================================
+mat_tile_within_local_radius:
+    lda zp_temp0
+    sec
+    sbc zp_mon_scratch0
+    bcs !mtlr_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!mtlr_dx_pos:
+    sta zp_mon_scratch0
+
+    lda zp_temp1
+    sec
+    sbc zp_mon_scratch1
+    bcs !mtlr_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!mtlr_dy_pos:
+    cmp zp_mon_scratch0
+    bcs !mtlr_have_dist+
+    lda zp_mon_scratch0
+!mtlr_have_dist:
+    sta zp_mon_scratch1
+    lda zp_light_radius
+    clc
+    adc #1
+    cmp zp_mon_scratch1
+    bcs !mtlr_yes+
+    clc
+    rts
+!mtlr_yes:
+    sec
     rts
 
 // ============================================================

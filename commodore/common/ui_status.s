@@ -162,16 +162,8 @@ status_draw:
     sta status_dirty_rows
 
 !sd_dirty_ready:
-    // Any visible change redraws the full 3-line status block.
-    // Row-level partial redraw proved invalid because other flows may clear
-    // status lines independently; keep bar updates atomic.
-    lda status_dirty_rows
-    beq !sd_no_change+
-    lda #$07
-    sta status_dirty_rows
-    jmp !sd_draw+
-!sd_no_change:
-    // No visible status changes: either force redraw (bit7) or clear dirty and return.
+    // Full clears and explicit status-row clears force a full repaint via bit7.
+    // Ordinary per-turn updates should only redraw the rows that actually changed.
     lda zp_ui_dirty
     and #%10000000
     beq !sd_no_force+
@@ -179,6 +171,8 @@ status_draw:
     sta status_dirty_rows
     jmp !sd_draw+
 !sd_no_force:
+    lda status_dirty_rows
+    bne !sd_draw+
     jmp !sd_clear_dirty_only+
 
 !sd_draw:
@@ -189,17 +183,6 @@ status_draw:
     pha
     lda zp_text_color
     pha
-
-    // Clear the full 3-line status block before redrawing it. Several
-    // numeric fields are variable-width, so redraw without a clear can leave
-    // stale trailing digits behind (for example 21 -> 211).
-    ldx #STATUS_ROW
-!sd_clear_rows:
-    txa
-    jsr screen_clear_row
-    inx
-    cpx #STATUS_ROW + 3
-    bne !sd_clear_rows-
 
     // Clear input row (row 24) — many code paths bypass vp_render_status_loop
     lda #INPUT_ROW
@@ -213,6 +196,8 @@ status_draw:
 !sd_row21_draw:
     lda #STATUS_ROW
     sta zp_cursor_row
+    lda #STATUS_ROW
+    jsr screen_clear_row
 
     // Player name
     lda #COL_WHITE
@@ -293,6 +278,8 @@ status_draw:
 !sd_row22_draw:
     lda #STATUS_ROW + 1
     sta zp_cursor_row
+    lda #STATUS_ROW + 1
+    jsr screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
 
@@ -392,6 +379,8 @@ status_draw:
 !sd_row23_draw:
     lda #STATUS_ROW + 2
     sta zp_cursor_row
+    lda #STATUS_ROW + 2
+    jsr screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
 

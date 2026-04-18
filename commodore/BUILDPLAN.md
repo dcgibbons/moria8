@@ -55,6 +55,7 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
+| Medium | `OPT-STATUS-ROW23` split the bottom status row into field-level redraws | Medium | Medium | No | The current status renderer now redraws only dirty rows, but row 23 still clears and repaints `HP`, `MP`, `AC`, `AU`, and hunger/state as a unit. A later optimization pass should keep the forced full-repaint contract for screen/status clears while giving row 23 fixed-width field redraw helpers so single-field changes like mana ticks do not visibly flash the whole bottom row. |
 | Low | `OPT-5` further overlays for magic/spells/UI | High | Low | No | Only useful if main-segment pressure returns. |
 
 ## Open Features
