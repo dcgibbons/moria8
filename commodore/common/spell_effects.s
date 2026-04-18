@@ -170,10 +170,15 @@ eff_teleport_self:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_identify_prompt:
-!eip_retry:
+    lda #$fd
     ldx #HSTR_PIQ_IDENTIFY_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !eip_have_choices+
+    clc
+    rts
+!eip_have_choices:
     jsr input_prepare_followup_key
+!eip_retry:
     jsr input_get_key
 
     cmp #$3f
@@ -188,16 +193,9 @@ eff_identify_prompt:
     cmp #$20
     beq !eip_cancel+
 
-    sec
-    sbc #$41
+    jsr piw_pick_filtered_inv_key
     bcc !eip_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !eip_cancel+
-
-    sta eff_target_slot
-    tax
-    lda inv_item_id,x
-    bmi !eip_cancel+
+    stx eff_target_slot
 
     // Identify that item type
     tay

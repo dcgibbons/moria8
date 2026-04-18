@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #47
+    ldx #48
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 48, $ff      // Result buffer (copied to $0400 at the end)
+tc_results: .fill 49, $ff      // Result buffer (copied to $0400 at the end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -2443,7 +2443,7 @@ test_start:
     // the category noun for a potion type.
     // ==========================================
 !t48:
-    :PatchJump(input_get_key, test_input_get_key_b)
+    :PatchJump(input_get_key, test_input_get_key_a)
     :PatchJump(cmb_term_and_print, test_cmb_term_and_print_capture)
     jsr item_init_inventory
 
@@ -2494,10 +2494,56 @@ test_start:
 !t48_pass:
     lda #$01
     sta tc_results + 47
-    jmp !tests_done+
+    jmp !t49+
 !t48_fail:
     lda #$00
     sta tc_results + 47
+
+    // ==========================================
+    // Test 49: identify prompt uses filtered
+    // visible-slot letters, not absolute slot
+    // letters, when inventory has gaps.
+    // ==========================================
+!t49:
+    :PatchJump(input_get_key, test_input_get_key_b)
+    jsr item_init_inventory
+
+    lda #0
+    sta id_known + 17
+    sta id_known + 25
+
+    lda #17
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #25
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+    lda #0
+    sta inv_p1 + 4
+    sta inv_flags + 4
+
+    jsr eff_identify_prompt
+
+    lda id_known + 17
+    bne !t49_fail+
+    lda id_known + 25
+    cmp #1
+    bne !t49_fail+
+    lda inv_flags + 4
+    and #IF_IDENTIFIED
+    beq !t49_fail+
+    lda #$01
+    sta tc_results + 48
+    jmp !tests_done+
+!t49_fail:
+    lda #$00
+    sta tc_results + 48
 
 !tests_done:
     jmp test_finish

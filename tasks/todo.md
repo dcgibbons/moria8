@@ -258,6 +258,9 @@ This file is a temporary working scratchpad.
   - `/` identifies what a symbol on screen stands for
   - `look` remains the path for the exact visible creature
   - leave the current combat-earned recall implementation alone for now
+- [ ] BUG-IDENTIFY-FILTERED-ITEM-CHOOSER
+- [ ] Reported Failure Gate:
+  - `Identify` must use the same filtered visible-slot chooser contract as the other item prompts, so gaps in inventory do not make `?` overlay letters or direct prompt letters select the wrong absolute slot
 - [ ] BUG-IDENTIFY-MISSING-CATEGORY-NOUN
 - [ ] Reported Failure Gate:
   - identify feedback must include the item category noun for bare-name consumables and jewelry, e.g. `This is a Cure Serious Wounds potion.`

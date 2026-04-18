@@ -1567,14 +1567,14 @@ test_start:
 
     // Stuff keyboard buffer:
     // 1. 'A' ($41) — select scroll in slot 0
-    // 2. 'B' ($42) — select potion in slot 1 to identify
+    // 2. 'A' ($41) — select the first visible item to identify
     // 3. Space ($20) — dismiss -MORE- after "THIS IS A..." message
     // (2-line message area: prompt + identify fit in rows 0-1, no -MORE- between them)
     lda #3
     sta $c6
     lda #$41                        // 'A' — read the scroll in slot 0
     sta $0277
-    lda #$42                        // 'B' — identify the potion in slot 1
+    lda #$41                        // 'A' — identify the first visible item
     sta $0278
     lda #$20                        // Space — dismiss -MORE- after result
     sta $0279
@@ -2366,13 +2366,13 @@ test_start:
     sta inv_flags + 1
 
     // Read identify scroll, then use '?' at the
-    // identify prompt and pick slot B directly
+    // identify prompt and pick slot A directly
     // from the inventory overlay.
     lda #$41
     sta test_key_script + 0
     lda #$3f
     sta test_key_script + 1
-    lda #$42
+    lda #$41
     sta test_key_script + 2
     lda #0
     sta test_key_script + 3
