@@ -108,11 +108,11 @@ Sorry, what was that again?
 @PM_FAIL Your spell fails.
 @PM_YOU_CAST Spell book (a-v)?
 @PM_YOU_PRAY Prayer book (a-v)?
-@PM_TITLE_MAGE .
-@PM_TITLE_PRAY .
+@PM_TITLE_MAGE Monster slows.
+@PM_TITLE_PRAY 
 @PM_FOOTER_CAST Cast which? (a-p, ESC)
 @PM_FOOTER_PRAY Pray which? (a-p, ESC)
-@PM_LEARNED .
+@PM_LEARNED 
 
 # ===== Player items strings (Pattern A + C) =====
 @PIW_WEAR_PROMPT Wear which item (a-v)?
@@ -231,10 +231,10 @@ Sorry, what was that again?
 
 # ===== Pseudo-ID quality strings (OPT-4.8) =====
 @PID_TERRIBLE Sense: Terrible
-@PID_BAD Sense: Bad
-@PID_AVERAGE Sense: Average
-@PID_GOOD Sense: Good
-@PID_EXCELLENT Sense: Excellent
+@PID_BAD 
+@PID_AVERAGE 
+@PID_GOOD 
+@PID_EXCELLENT 
 
 # ===== Bash command strings (OPT-4.8) =====
 @BASH_SMASH You smash into the door!

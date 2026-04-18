@@ -14,7 +14,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #3
+    ldx #4
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -98,7 +98,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 4, $ff
+tc_results: .fill 5, $ff
 tde_huff_calls: .byte 0
 tde_last_huff_id: .byte 0
 
@@ -310,10 +310,35 @@ test_start:
 !t4_pass:
     lda #$01
     sta tc_results + 3
-    jmp test_finish
+    jmp !t5+
 !t4_fail:
     lda #$00
     sta tc_results + 3
+    jmp !t5+
+
+    // Test 5: slow-monster feedback routes through
+    // the shared Huffman message path.
+!t5:
+    lda #0
+    sta tde_huff_calls
+    sta tde_last_huff_id
+
+    ldx #HSTR_PM_TITLE_MAGE
+    jsr huff_print_msg
+
+    lda tde_huff_calls
+    cmp #1
+    bne !t5_fail+
+    lda tde_last_huff_id
+    cmp #HSTR_PM_TITLE_MAGE
+    bne !t5_fail+
+!t5_pass:
+    lda #$01
+    sta tc_results + 4
+    jmp test_finish
+!t5_fail:
+    lda #$00
+    sta tc_results + 4
     jmp test_finish
 
 tv_setup_dark_room:

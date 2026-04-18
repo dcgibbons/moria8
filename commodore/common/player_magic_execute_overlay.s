@@ -416,6 +416,8 @@ eff_slow_monster_dir:
     ldy #MX_SLEEP_CUR
     lda #0
     sta (zp_ptr0),y
+    ldx #HSTR_PM_TITLE_MAGE
+    jsr huff_print_msg
 !eslow_done:
     rts
 

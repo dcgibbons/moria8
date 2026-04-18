@@ -23,6 +23,9 @@ This file is a temporary working scratchpad.
 - [ ] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
 - [ ] Reported Failure Gate:
   - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
+- [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
+- [ ] Reported Failure Gate:
+  - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
 - [ ] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
 - [ ] Reported Failure Gate:
   - `Sleep II` and `Sleep III` must actually put monsters to sleep by using the live sleep counter, and the player must get visible feedback instead of a silent beep/no-op; the exact verification gate remains `make test64`
