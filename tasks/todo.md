@@ -12,6 +12,12 @@ This file is a temporary working scratchpad.
 - [ ] BUG-C128-MONSTER-REDRAW-DETECT-STALE
 - [ ] Reported Failure Gate:
   - on C128, monster presence/movement changes must redraw immediately: detected monsters must appear on the cast turn, moved/killed monsters must not linger, and monsters must not disappear until a later movement/full redraw
+- [x] root-cause the shared dirty-scene seam where monster AI movement reported redraw state in carry but the turn layer latched accumulator state
+- [x] make monster-driven scene dirtiness deterministic for stationary commands and ordinary end-of-turn monster movement
+- [x] add shared turn-level regression coverage so monster AI movement always promotes to `turn_scene_dirty`
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
 - [x] BUG-C128-REPEATED-FIRE-BOLT-JAM
 - [ ] Reported Failure Gate:
   - repeated `Fire Bolt` casts on C128 must not JAM in the cast-success tail; latest live monitor traces unwound through `pm_finish_success_common -> pm_mark_worked` and crashed at `$D014` and then `$001C`
@@ -26,6 +32,16 @@ This file is a temporary working scratchpad.
 - [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
 - [ ] Reported Failure Gate:
   - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [ ] BUG-SHARED-SPELL-LIST-ESC-CANCEL
+- [ ] Reported Failure Gate:
+  - after selecting a book and pressing `?`, pressing `Esc` on the spell/prayer list must cancel the whole selection flow instead of dropping back to the `Cast which?` / `Pray which?` prompt
+- [x] root-cause the remaining live-only C128 failure: the spell/prayer list still release-gated after drawing, so a quick first `Esc` could be swallowed before the selectable overlay key read
+- [x] treat `?` spell/prayer list selection as a true cancel on `Esc` instead of a failed pick that loops back to the footer prompt
+- [x] add a direct `? -> Esc` spell chooser regression and keep the effects harness count aligned
+- [x] add a dedicated C128 scripted smoke for `book -> ? -> Esc` and include it in `make test128-fast-smoke`
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
 - [ ] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
 - [ ] Reported Failure Gate:
   - `Sleep II` and `Sleep III` must actually put monsters to sleep by using the live sleep counter, and the player must get visible feedback instead of a silent beep/no-op; the exact verification gate remains `make test64`

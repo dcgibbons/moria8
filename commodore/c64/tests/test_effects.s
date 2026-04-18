@@ -24,7 +24,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #44
+    ldx #46
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 45, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 47, $ff      // Result buffer (copied to $0400 at the end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -131,6 +131,7 @@ tpm_spell_exec_calls: .byte 0
 tpm_huff_calls:   .byte 0
 tpm_last_huff_id: .byte 0
 tpm_cast_loop_ctr: .byte 0
+tpm_key_idx: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -164,6 +165,18 @@ test_input_get_key_qmark:
     lda #$3f
     rts
 
+test_input_get_key_qmark_then_esc:
+    ldx tpm_key_idx
+    lda tpm_key_script,x
+    inc tpm_key_idx
+    rts
+
+test_input_get_key_qmark_then_stop:
+    ldx tpm_key_idx
+    lda tpm_key_script_stop,x
+    inc tpm_key_idx
+    rts
+
 test_input_get_key_a:
     lda #$41
     rts
@@ -171,6 +184,15 @@ test_input_get_key_a:
 test_input_get_modal_spell_a:
     lda #$41
     rts
+
+test_input_get_modal_spell_esc:
+    lda #$1b
+    rts
+
+tpm_key_script:
+    .byte $3f, $1b
+tpm_key_script_stop:
+    .byte $3f, $03
 
 test_tramp_spell_execute_selected:
     inc tpm_spell_exec_calls
@@ -2317,10 +2339,78 @@ test_start:
     bne !t45_fail+
     lda #$01
     sta tc_results + 44
-    jmp !tests_done+
+    jmp !t46+
 !t45_fail:
     lda #$00
     sta tc_results + 44
+
+    // ==========================================
+    // Test 46: spell list '?' then ESC cancels
+    // the whole selection flow instead of
+    // dropping back to the footer prompt.
+    // ==========================================
+!t46:
+    :PatchJump(input_get_key, test_input_get_key_qmark_then_esc)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_esc)
+    lda #0
+    sta tpm_key_idx
+
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #0
+    sta pm_mode
+    lda #1
+    sta pm_spell_count
+    lda #0
+    sta pm_spell_list
+    lda #$ff
+    sta pm_spell_idx
+
+    jsr pm_prompt_visible_spell_choice
+    bcs !t46_fail+
+    lda pm_spell_idx
+    cmp #$ff
+    bne !t46_fail+
+    lda #$01
+    sta tc_results + 45
+    jmp !t47+
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
+
+    // ==========================================
+    // Test 47: spell list '?' then STOP-style
+    // raw cancel ($03) cancels the whole flow
+    // instead of dropping back to the footer.
+    // ==========================================
+!t47:
+    :PatchJump(input_get_key, test_input_get_key_qmark_then_stop)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_esc)
+    lda #0
+    sta tpm_key_idx
+
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #0
+    sta pm_mode
+    lda #1
+    sta pm_spell_count
+    lda #0
+    sta pm_spell_list
+    lda #$ff
+    sta pm_spell_idx
+
+    jsr pm_prompt_visible_spell_choice
+    bcs !t47_fail+
+    lda pm_spell_idx
+    cmp #$ff
+    bne !t47_fail+
+    lda #$01
+    sta tc_results + 46
+    jmp !tests_done+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
 
 !tests_done:
     jmp test_finish

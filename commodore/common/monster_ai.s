@@ -128,9 +128,11 @@ monster_ai_tick:
 !mat_done:
     lda mat_any_moved
     beq !mat_done_clear+
+    lda #1
     sec
     rts
 !mat_done_clear:
+    lda #0
     clc
     rts
 

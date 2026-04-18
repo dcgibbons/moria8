@@ -15,7 +15,7 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
 c128_test_seed_scripted_spell_state:
     lda #0
     sta c128_test_spell_success_count
@@ -431,7 +431,7 @@ game_new_start:
     jsr input_get_modal_dismiss_key
     jsr screen_clear
 
-#if C128_TEST_SCRIPTED_SPELL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
     jsr c128_test_seed_scripted_spell_state
 #endif
 #if C128_TEST_SCRIPTED_PRAYER

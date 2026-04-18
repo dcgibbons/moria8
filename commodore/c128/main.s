@@ -921,7 +921,7 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -936,6 +936,10 @@ c128_test_spell_fail_cancel_sym:
     brk
 c128_test_spell_pass_sym:
     brk
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_spell_cancel_pass_sym:
+    brk
+#endif
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_town_fail_sym:
     brk

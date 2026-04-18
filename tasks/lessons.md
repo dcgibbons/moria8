@@ -209,6 +209,10 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - On C64, fullscreen modal prompts should use `ui_clear_full_screen_safe`, not the bulk `screen_clear`, when live residue matters. The row-by-row clear is the proven-safe path for C64 modal transitions, including save/load disk prompts.
 - On this repo, do not spend resident Huffman-table budget on spell-only feedback that can live in an overlay-local string. Spell execution text for blocked/no-target/single-overlay paths should stay with the overlay owner first; resident messaging is for shared always-live status/reporting paths.
 - When one newly added spell/prayer family is clearly under-tested, do not keep fixing single entries ad hoc. Broaden immediately to a behavior-family audit and build representative runtime coverage before trusting the larger feature set.
+- In shared 6502 contracts, do not let a caller infer boolean state from whatever `A` happened to hold when the callee only promised carry. If the caller persists accumulator state, the callee must return an explicit `A=0/1` value or the scene-dirty/redraw path will drift into nondeterministic visual bugs.
+- Do not use `input_get_modal_dismiss_key` for overlays that already present a real selectable footer. Spell/prayer list overlays are selectable screens, not read-only modals; on C128 the dismiss-helper contract can preserve the wrong behavior even when the shared cancel path looks correct.
+- On C128 direct-scan UI paths, raw Esc is `KEY_ESC` (`$AE`), not PETSCII `$1B`. Any shared prompt or list cancel path that compares literal `$1B` will false-green on C64 tests and stay broken live on C128.
+- For selectable overlays on C128, do the release gate before drawing the overlay, not after. A post-draw `input_wait_release` can swallow the user's first quick selection/cancel key even when synthetic scripted tests stay green.
 
 ## Layout And Build Safety
 

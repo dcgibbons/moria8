@@ -126,7 +126,7 @@ input_run_scan_held_raw:
 // Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_held:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
     lda #0
     rts
 #else
@@ -143,7 +143,7 @@ input_run_key_check:
 // Output: A = 1 on new key-down edge, 0 otherwise
 // Destroys: A, X, Y
 input_run_cancel_check:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
     lda #0
     rts
 #else
@@ -159,7 +159,7 @@ input_run_cancel_check:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
     ldx c128_test_input_idx
     lda c128_test_input_script,x
     bne !igk_script_ok+
@@ -216,7 +216,7 @@ csp_ctrl: .byte 0
 // a still-held selection key from the previous screen.
 // Preserves: nothing
 input_wait_release:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
     rts
 #else
 #if C128_REAL_BOOT_DIAG
@@ -312,7 +312,7 @@ input_process_sample_strict:
     lda #0
     rts
 
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
 c128_test_input_idx: .byte 0
 c128_test_input_script:
 #if C128_TEST_SCRIPTED_SPELL
@@ -364,6 +364,19 @@ c128_test_input_script:
     .byte $41              // A = Magic Missile
     .byte $4c              // L = east
     .byte $20              // SPACE = dismiss -MORE- / fizzle
+#elif C128_TEST_SCRIPTED_SPELL_CANCEL
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4d              // M = cast
+    .byte $41              // A = first visible book in filtered prompt
+    .byte $3f              // ? = spell list
+    .byte KEY_ESC          // ESC = cancel from list
 #elif C128_TEST_SCRIPTED_PRAYER
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -760,7 +773,7 @@ input_normalize_shifted_symbols_with_state:
 // Output: A = PETSCII code of key pressed
 // Preserves: X, Y
 input_get_key_fast:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
     jmp input_get_key
 #else
 #if C128_REAL_BOOT_DIAG

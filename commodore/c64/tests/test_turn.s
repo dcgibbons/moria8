@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #14
+    ldx #15
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -74,7 +74,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 15, $ff
+tc_results: .fill 16, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -100,6 +100,8 @@ test_tier_invalidate_calls: .byte 0
 test_level_change_calls: .byte 0
 test_inv_remove_calls: .byte 0
 test_monster_ai_calls: .byte 0
+test_monster_ai_return_a: .byte 0
+test_monster_ai_return_c: .byte 0
 test_player_death_calls: .byte 0
 test_sound_calls: .byte 0
 test_last_sound: .byte $ff
@@ -115,7 +117,13 @@ test_last_sound: .byte $ff
 
 monster_ai_tick:
     inc test_monster_ai_calls
-    lda #0
+    lda test_monster_ai_return_c
+    beq !clear+
+    lda test_monster_ai_return_a
+    sec
+    rts
+!clear:
+    lda test_monster_ai_return_a
     clc
     rts
 
@@ -255,6 +263,8 @@ reset_state:
     sta test_level_change_calls
     sta test_inv_remove_calls
     sta test_monster_ai_calls
+    sta test_monster_ai_return_a
+    sta test_monster_ai_return_c
     sta test_player_death_calls
     sta test_sound_calls
     sta zp_turn_lo
@@ -344,7 +354,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #14
+    ldx #15
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -740,10 +750,34 @@ test_start:
     bne !t11_fail+
     lda #$01
     sta tc_results + 10
-    jmp test_finish
+    jmp !t16+
 !t11_fail:
     lda #$00
     sta tc_results + 10
+    jmp !t16+
+
+!t16:
+    // Test 16: monster AI carry-only dirty reports still promote turn_scene_dirty.
+    jsr reset_state
+    lda #0
+    sta test_monster_ai_return_a
+    lda #1
+    sta test_monster_ai_return_c
+    jsr turn_post_action
+    lda test_monster_ai_calls
+    cmp #1
+    bne !t16_fail+
+    lda turn_scene_dirty
+    cmp #1
+    bne !t16_fail+
+    lda zp_dirty_count
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp test_finish
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
     jmp test_finish
 
 !t12:

@@ -40,8 +40,10 @@ item_gain_spell:
     cmp #SPELL_PRIEST
     beq !igs_random_prayer+
 
-    jsr tramp_spell_list_display
+    // Keep study-list selection on the same selectable-overlay input contract
+    // as cast/pray and inventory `?` flows.
     jsr input_prepare_followup_key
+    jsr tramp_spell_list_display
     jsr input_get_key
     jsr pm_pick_visible_spell
     bcc !igs_cancel_restore+

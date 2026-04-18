@@ -10,6 +10,12 @@
 
 .const HSTR_PM_BOOK_CAST = HSTR_PM_YOU_CAST
 .const HSTR_PM_BOOK_PRAY = HSTR_PM_YOU_PRAY
+#if C128
+.const PM_KEY_ESC = KEY_ESC
+#else
+.const PM_KEY_ESC = $1b
+#endif
+.const PM_KEY_STOP = $03
 
 // ============================================================
 // player_cast_spell — Handle 'm' (mage-affinity spell classes)
@@ -24,6 +30,9 @@ player_cast_spell:
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_no_cast_sym
 #endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
 #if C64_TEST_SCRIPTED_SPELL
     jmp c64_test_spell_fail_no_cast_sym
 #endif
@@ -36,6 +45,9 @@ player_cast_spell:
     jsr pm_require_class_level
     bcs !pm_level_ok+
 #if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_level_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
     jmp c128_test_spell_fail_level_sym
 #endif
 #if C64_TEST_SCRIPTED_SPELL
@@ -62,6 +74,9 @@ player_cast_spell:
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_known_sym
 #endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_known_sym
+#endif
 #if C64_TEST_SCRIPTED_SPELL
     jmp c64_test_spell_fail_known_sym
 #endif
@@ -78,6 +93,9 @@ player_cast_spell:
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_validate_sym
 #endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_validate_sym
+#endif
 #if C64_TEST_SCRIPTED_SPELL
     jmp c64_test_spell_fail_validate_sym
 #endif
@@ -91,6 +109,9 @@ player_cast_spell:
     bcc !pm_success+
     jsr pm_handle_fail_roll
 #if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_roll_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
     jmp c128_test_spell_fail_roll_sym
 #endif
 #if C64_TEST_SCRIPTED_SPELL
@@ -123,6 +144,9 @@ player_cast_spell:
 !pm_cancel:
 #if C128_TEST_SCRIPTED_SPELL
     jmp c128_test_spell_fail_cancel_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_cancel_pass_sym
 #endif
 #if C64_TEST_SCRIPTED_SPELL
     jmp c64_test_spell_fail_cancel_sym
@@ -323,7 +347,7 @@ pm_select_book:
 !pm_not_inv:
     cmp #$20
     beq !pm_book_cancel+
-    cmp #$1b
+    cmp #PM_KEY_ESC
     beq !pm_book_cancel+
     jsr piw_pick_filtered_inv_key
     bcs !pm_book_slot_ok+
@@ -493,15 +517,31 @@ pm_prompt_visible_spell_choice:
     rts
 
 !pm_psc_show_list:
+    // Match other selectable overlays: release-gate before drawing the list
+    // so a quick first selection/cancel key is not swallowed by the gate.
+    jsr input_prepare_followup_key
     jsr tramp_spell_list_display
-    jsr input_get_modal_dismiss_key
+#if C128
+    jsr input_get_key_fast
+#else
+    jsr input_get_key
+#endif
     pha
     jsr ui_view_restore_modal_overlay
     pla
+    cmp #PM_KEY_STOP
+    beq !pm_psc_cancel+
+    cmp #$20
+    beq !pm_psc_cancel+
+    cmp #PM_KEY_ESC
+    beq !pm_psc_cancel+
     jsr pm_pick_visible_spell
     bcc !pm_psc_prompt-
     jsr msg_clear
     sec
+    rts
+!pm_psc_cancel:
+    clc
     rts
 
 pm_pick_visible_spell:
