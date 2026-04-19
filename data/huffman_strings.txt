@@ -202,12 +202,6 @@ Sorry, what was that again?
 @IDR_FLOOR_FULL No room on the floor.
 
 # ===== Pseudo-ID quality strings (OPT-4.8) =====
-@PID_TERRIBLE Sense: Terrible
-@PIQ_VERY_GOOD You feel very good.
-@PMX_RIGHTEOUS You feel righteous!
-@PMX_RESIST_ON You feel resistant to heat and cold.
-@PMX_PRAYER_OFF The prayer has expired.
-@PMX_SLEEP_SUCCESS A monster falls asleep.
 
 # ===== Bash command strings (OPT-4.8) =====
 @BASH_SMASH You smash into the door!
@@ -217,3 +211,11 @@ Sorry, what was that again?
 @BASH_EMPTY You bash at empty space.
 @BASH_STUNNED  appears stunned!
 @BASH_IGNORES  ignores your bash!
+
+# ===== Additional pseudo-ID quality strings =====
+@PID_TERRIBLE Sense: Terrible
+@PID_BAD Sense: Bad
+@PID_AVERAGE Sense: Average
+@PID_GOOD Sense: Good
+@PID_EXCELLENT Sense: Excellent
+@PIQ_VERY_GOOD You feel very good.

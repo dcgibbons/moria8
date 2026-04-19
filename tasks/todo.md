@@ -6610,3 +6610,16 @@ The section below is retained only as historical context for the earlier dual-en
     - `make test64` PASS (`36 passed, 0 failed`)
     - `make test128-fast` PASS
     - `make test128-fast-smoke` PASS (`5 passed, 0 failed`)
+
+### Current Review
+- BUG-PRAYER-PSEUDOID-HUFFMAN:
+  - root cause: `turn_tick_pseudo_id` still assumed contiguous resident Huffman IDs and could decode a fresh pseudo-ID message as `You feel righteous!` while running; the real bless expiry path was separate and still correctly produced `The prayer has expired.`
+  - fix shape:
+    - added explicit PID quality strings in `data/huffman_strings.txt`
+    - made the PID block contiguous again so `turn_tick_pseudo_id` can use arithmetic without a resident lookup table
+    - moved overlay-only prayer feedback strings (`You feel righteous!`, `A monster falls asleep.`, `You feel resistant to heat and cold.`) out of the resident Huffman pool into `player_magic_feedback.s`
+    - kept the shared resident prayer-expiry message local in `turn.s`
+    - refreshed the C64 subsystem string-bank fixture and the test-layout buffers that drifted because of the Huffman/table changes
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)

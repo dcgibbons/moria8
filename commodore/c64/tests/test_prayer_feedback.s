@@ -35,9 +35,6 @@ test_finish:
 .const HSTR_PIQ_FEEL_BETTER = 3
 .const HSTR_PIQ_MUCH_BETTER = 4
 .const HSTR_PIQ_NOTHING = 5
-.const HSTR_PMX_RIGHTEOUS = 6
-.const HSTR_PMX_RESIST_ON = 7
-.const HSTR_PMX_SLEEP_SUCCESS = 8
 .const HSTR_PIQ_LITTLE_BETTER = 9
 .const HSTR_PIQ_VERY_GOOD = 10
 .const HSTR_EFF_POISON_END = 11
@@ -117,11 +114,14 @@ test_start:
     lda zp_eff_bless
     cmp #24
     bne !t1_fail+
-    lda test_huff_calls
+    lda test_msg_calls
     cmp #1
     bne !t1_fail+
-    lda test_last_huff
-    cmp #HSTR_PMX_RIGHTEOUS
+    lda test_last_msg_lo
+    cmp #<pmx_righteous_msg
+    bne !t1_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_righteous_msg
     bne !t1_fail+
     lda #$01
     sta tc_results + 0
@@ -188,11 +188,14 @@ test_start:
     lda test_mon_data + MX_SLEEP_CUR
     cmp #20
     bne !t4_fail+
-    lda test_huff_calls
+    lda test_msg_calls
     cmp #1
     bne !t4_fail+
-    lda test_last_huff
-    cmp #HSTR_PMX_SLEEP_SUCCESS
+    lda test_last_msg_lo
+    cmp #<pmx_sleep_success_msg
+    bne !t4_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_sleep_success_msg
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -228,11 +231,14 @@ test_start:
     sta test_huff_calls
     lda #1
     jsr pmx_report_sleep_result
-    lda test_huff_calls
+    lda test_msg_calls
     cmp #1
     bne !t6_fail+
-    lda test_last_huff
-    cmp #HSTR_PMX_SLEEP_SUCCESS
+    lda test_last_msg_lo
+    cmp #<pmx_sleep_success_msg
+    bne !t6_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_sleep_success_msg
     bne !t6_fail+
     lda #$01
     sta tc_results + 5
@@ -251,11 +257,14 @@ test_start:
     lda zp_eff_resist
     cmp #$03
     bne !t7_fail+
-    lda test_huff_calls
+    lda test_msg_calls
     cmp #1
     bne !t7_fail+
-    lda test_last_huff
-    cmp #HSTR_PMX_RESIST_ON
+    lda test_last_msg_lo
+    cmp #<pmx_resist_on_msg
+    bne !t7_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_resist_on_msg
     bne !t7_fail+
     lda #$01
     sta tc_results + 6

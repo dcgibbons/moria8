@@ -12,6 +12,13 @@
 
 .pc = $E000 "Result Buffer"
 tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
+tpm_msg_buf:  .fill 42, 0
+tpm_expected_little_better:
+    .text "You feel a little better." ; .byte 0
+tpm_expected_very_good:
+    .text "You feel very good." ; .byte 0
+tpm_expected_identify_csw:
+    .text "This is a Cure Serious Wounds potion." ; .byte 0
 
 .pc = $080E "Test Code"
 
@@ -137,13 +144,6 @@ tpm_last_huff_id: .byte 0
 tpm_cast_loop_ctr: .byte 0
 tpm_key_idx: .byte 0
 tpm_msg_seen: .byte 0
-tpm_msg_buf:  .fill 42, 0
-tpm_expected_little_better:
-    .text "You feel a little better." ; .byte 0
-tpm_expected_very_good:
-    .text "You feel very good." ; .byte 0
-tpm_expected_identify_csw:
-    .text "This is a Cure Serious Wounds potion." ; .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -220,6 +220,7 @@ test_huff_print_msg:
     rts
 
 test_msg_print_capture:
+    :BankOutKernal()
     ldy #0
 !copy:
     lda (zp_ptr0),y
@@ -230,11 +231,13 @@ test_msg_print_capture:
     cpy #42
     bcc !copy-
 !done:
+    :BankInKernal()
     lda #1
     sta tpm_msg_seen
     rts
 
 test_cmb_term_and_print_capture:
+    :BankOutKernal()
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
@@ -248,6 +251,7 @@ test_cmb_term_and_print_capture:
     cpx #42
     bcc !copy-
 !done:
+    :BankInKernal()
     lda #1
     sta tpm_msg_seen
     rts
@@ -2549,6 +2553,7 @@ test_start:
     sta zp_ptr1
     lda #>tpm_msg_buf
     sta zp_ptr1_hi
+    :BankOutKernal()
     ldy #0
 !t48_cmp:
     lda (zp_ptr0),y
@@ -2561,10 +2566,12 @@ test_start:
     bcc !t48_cmp-
     bcs !t49_fail+
 !t49_pass:
+    :BankInKernal()
     lda #$01
     sta tc_results + 48
     jmp !t50+
 !t49_fail:
+    :BankInKernal()
     lda #$00
     sta tc_results + 48
 

@@ -11,7 +11,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #16
+    ldx #17
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -55,8 +55,11 @@ eff_detect_timer:    .byte 0
 .const HSTR_TTL_DIM          = 45
 .const HSTR_TTL_OUT          = 46
 .const HSTR_RECALL_ARRIVE    = 47
-.const HSTR_PID_TERRIBLE     = 48
-.const HSTR_PMX_PRAYER_OFF   = 174
+.const HSTR_PID_TERRIBLE     = 177
+.const HSTR_PID_BAD          = 178
+.const HSTR_PID_AVERAGE      = 179
+.const HSTR_PID_GOOD         = 180
+.const HSTR_PID_EXCELLENT    = 181
 
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
@@ -75,7 +78,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 17, $ff
+tc_results: .fill 18, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -88,6 +91,9 @@ test_store_restock_calls: .byte 0
 test_status_dirty_calls: .byte 0
 test_huff_calls: .byte 0
 test_last_huff_id: .byte 0
+test_msg_calls: .byte 0
+test_last_msg_lo: .byte 0
+test_last_msg_hi: .byte 0
 test_level_generate_calls: .byte 0
 test_monster_spawn_calls: .byte 0
 test_item_spawn_calls: .byte 0
@@ -202,6 +208,14 @@ huff_print_msg:
     stx test_last_huff_id
     rts
 
+msg_print:
+    inc test_msg_calls
+    lda zp_ptr0
+    sta test_last_msg_lo
+    lda zp_ptr0_hi
+    sta test_last_msg_hi
+    rts
+
 player_death_check:
     inc test_player_death_calls
     rts
@@ -251,6 +265,9 @@ reset_state:
     sta test_status_dirty_calls
     sta test_huff_calls
     sta test_last_huff_id
+    sta test_msg_calls
+    sta test_last_msg_lo
+    sta test_last_msg_hi
     sta test_level_generate_calls
     sta test_monster_spawn_calls
     sta test_item_spawn_calls
@@ -355,7 +372,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #16
+    ldx #17
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -695,18 +712,53 @@ t17_test:
     jsr turn_tick_effects
     lda zp_eff_bless
     bne !t17_fail+
-    lda test_huff_calls
+    lda test_msg_calls
     cmp #1
     bne !t17_fail+
-    lda test_last_huff_id
-    cmp #HSTR_PMX_PRAYER_OFF
+    lda test_last_msg_lo
+    cmp #<turn_prayer_off_msg
+    bne !t17_fail+
+    lda test_last_msg_hi
+    cmp #>turn_prayer_off_msg
     bne !t17_fail+
     lda #$01
     sta tc_results + 16
-    jmp !t12+
+    jmp t18_test
 !t17_fail:
     lda #$00
     sta tc_results + 16
+    jmp t18_test
+
+t18_test:
+    // Test 18: pseudo-ID quality messages use explicit quality strings.
+    jsr reset_state
+    lda #1
+    sta zp_pseudo_id_timer
+    lda #1
+    sta player_data + PL_RESERVED
+    lda #5
+    sta inv_item_id + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    jsr turn_tick_pseudo_id
+    lda inv_flags + EQUIP_WEAPON
+    and #IF_TRIED
+    beq !t18_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t18_fail+
+    lda test_last_huff_id
+    cmp #HSTR_PID_AVERAGE
+    bne !t18_fail+
+    lda zp_pseudo_id_timer
+    cmp #1
+    bne !t18_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp !t12+
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
     jmp !t12+
 
 !t1_seq:

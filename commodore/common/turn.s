@@ -169,8 +169,11 @@ turn_tick_effects:
     sbc #1
     sta zp_eff_bless
     bne !no_bless+
-    ldx #HSTR_PMX_PRAYER_OFF
-    jsr huff_print_msg
+    lda #<turn_prayer_off_msg
+    sta zp_ptr0
+    lda #>turn_prayer_off_msg
+    sta zp_ptr0_hi
+    jsr msg_print
 !no_bless:
 
     // Word of recall
@@ -537,13 +540,8 @@ turn_tick_pseudo_id:
     ora #IF_TRIED
     sta inv_flags,x
 
-    // Get quality index
-    stx pid_save_x
+    // Get quality index and map it onto the explicit contiguous PID block.
     jsr pid_get_quality         // A = quality index 0-4
-    sta pid_save_q
-
-    // Print "Sense: <quality>" via Huffman (sequential HSTR_PID_TERRIBLE+q)
-    lda pid_save_q
     clc
     adc #HSTR_PID_TERRIBLE
     tax
@@ -561,8 +559,9 @@ turn_tick_pseudo_id:
 !pid_done:
     rts
 
-pid_save_x: .byte 0
-pid_save_q: .byte 0
+turn_prayer_off_msg:
+    .text "The prayer has expired."
+    .byte 0
 
 // pid_get_quality — Determine quality level from item enchantment
 // Input: X = inventory slot index
@@ -594,5 +593,3 @@ pid_get_quality:
 !pgq_avg:
     lda #2                      // AVERAGE (p1 = 0)
     rts
-
-// Pseudo-ID strings migrated to Huffman (HSTR_PID_* in huffman_data.s)

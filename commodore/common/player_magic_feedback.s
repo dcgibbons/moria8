@@ -38,8 +38,9 @@ pmx_add_bless_msg:
     sta zp_eff_bless
     pla
     bne !pabm_done+
-    ldx #HSTR_PMX_RIGHTEOUS
-    jsr huff_print_msg
+    lda #<pmx_righteous_msg
+    ldy #>pmx_righteous_msg
+    jsr pmx_print_inline
 !pabm_done:
     rts
 
@@ -68,8 +69,9 @@ pmx_set_resist_heat_cold_msg:
     sta zp_eff_resist
     pla
     bne !psrhc_done+
-    ldx #HSTR_PMX_RESIST_ON
-    jsr huff_print_msg
+    lda #<pmx_resist_on_msg
+    ldy #>pmx_resist_on_msg
+    jsr pmx_print_inline
 !psrhc_done:
     rts
 
@@ -107,8 +109,9 @@ pmx_sleep_adjacent_msg:
 !psam_done:
     rts
 !psam_any:
-    ldx #HSTR_PMX_SLEEP_SUCCESS
-    jsr huff_print_msg
+    lda #<pmx_sleep_success_msg
+    ldy #>pmx_sleep_success_msg
+    jsr pmx_print_inline
     rts
 
 pmx_report_sleep_result:
@@ -117,8 +120,9 @@ pmx_report_sleep_result:
     ldx #HSTR_PIQ_NOTHING
     jmp huff_print_msg
 !prvs_any:
-    ldx #HSTR_PMX_SLEEP_SUCCESS
-    jmp huff_print_msg
+    lda #<pmx_sleep_success_msg
+    ldy #>pmx_sleep_success_msg
+    jmp pmx_print_inline
 
 pmx_set_see_invisible_msg:
     lda zp_eff_see_inv
@@ -138,3 +142,15 @@ pmx_print_inline:
     sta zp_ptr0
     sty zp_ptr0_hi
     jmp msg_print
+
+pmx_righteous_msg:
+    .text "You feel righteous!"
+    .byte 0
+
+pmx_resist_on_msg:
+    .text "You feel resistant to heat and cold."
+    .byte 0
+
+pmx_sleep_success_msg:
+    .text "A monster falls asleep."
+    .byte 0
