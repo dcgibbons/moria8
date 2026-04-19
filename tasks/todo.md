@@ -3,6 +3,19 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-PSEUDO-ID-STRING-ID-ASSUMPTION
+- [ ] Reported Failure Gate:
+  - pseudo-ID quality text in equipment must use the correct quality strings instead of unrelated Huffman entries like `You feel righteous!`; keep `make test64` and `make test128-fast-smoke` green
+- [x] replace the sequential `HSTR_PID_TERRIBLE + quality` assumption in the equipment overlay with an explicit local PID string lookup
+- [x] keep the broader timer-message path out of this pass so resident C64 memory stays stable
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the equipment screen assumed the PID Huffman entries were contiguous
+  - after the Huffman table changed, that arithmetic started decoding unrelated strings, which then got post-processed as if they began with `Sense: `
+  - the product fix stayed overlay-local in `ui_equipment.s`; the exact gates also exposed an unrelated `test_effects.s` layout overrun past `MAP_BASE`, which was fixed by moving its result buffer under KERNAL ROM and adding boundary asserts
+
 - [ ] BUG-C128-INPUT-CONTRACT-REDESIGN
 - [ ] Reported Failure Gate:
   - on C128, shifted running and other direct-scan interactions must stop depending on PETSCII-decoded held-state; `Shift+H` must not self-cancel after a few tiles, and `make test64` plus `make test128-fast-smoke` must remain green while the C128 input contract is redesigned

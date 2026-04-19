@@ -10,6 +10,9 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
+.pc = $E000 "Result Buffer"
+tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
+
 .pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
@@ -24,15 +27,17 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
+    :BankOutKernal()
     ldx #49
 !copy:
     lda tc_results,x
     sta $0400,x
     dex
     bpl !copy-
+    :BankInKernal()
     brk
 
-.pc = $0830 "Main"
+.pc = $0840 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -110,7 +115,6 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
 tv_step_idx: .byte 0
 tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
@@ -2714,3 +2718,6 @@ tv_hash_viewport:
     rts
 
 effects_test_body_end:
+
+.assert "Effects test stays below MAP_BASE", effects_test_body_end <= MAP_BASE, true
+.assert "Effects result buffer stays under KERNAL ROM", tc_results + 50 <= $10000, true

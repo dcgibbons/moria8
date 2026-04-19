@@ -123,17 +123,10 @@ ui_equip_display:
     jsr screen_put_char
     // X still = ueq_equip_idx (screen_put_char only clobbers Y)
     jsr pid_get_quality        // A = quality index 0-4, X preserved
-    clc
-    adc #HSTR_PID_TERRIBLE     // Sequential: TERRIBLE=0, BAD=1, ...
     tax
-    jsr huff_decode_string     // zp_ptr0/hi -> hd_decode_buf
-    // Skip "Sense: " prefix with carry-safe pointer math.
-    lda zp_ptr0
-    clc
-    adc #7
+    lda ueq_pid_ptrs_lo,x
     sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #0
+    lda ueq_pid_ptrs_hi,x
     sta zp_ptr0_hi
     jsr screen_put_string
     lda #$29                   // ')'
@@ -193,6 +186,12 @@ ueq_lbl_feet:   .text "Feet:   " ; .byte 0
 ueq_lbl_light:  .text "Light:  " ; .byte 0
 ueq_lbl_ring:   .text "Ring:   " ; .byte 0
 
+ueq_pid_terrible:  .text "Terrible" ; .byte 0
+ueq_pid_bad:       .text "Bad" ; .byte 0
+ueq_pid_average:   .text "Average" ; .byte 0
+ueq_pid_good:      .text "Good" ; .byte 0
+ueq_pid_excellent: .text "Excellent" ; .byte 0
+
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
     .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
@@ -200,3 +199,9 @@ ueq_label_ptrs_lo:
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
+
+ueq_pid_ptrs_lo:
+    .byte <ueq_pid_terrible, <ueq_pid_bad, <ueq_pid_average, <ueq_pid_good, <ueq_pid_excellent
+
+ueq_pid_ptrs_hi:
+    .byte >ueq_pid_terrible, >ueq_pid_bad, >ueq_pid_average, >ueq_pid_good, >ueq_pid_excellent
