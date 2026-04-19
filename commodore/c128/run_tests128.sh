@@ -511,7 +511,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
@@ -549,7 +549,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -1361,6 +1361,63 @@ print("ok")
 PY
 )
     if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_input_run_guard_check() {
+    echo -n "  input_run_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+lines = Path("input128.s").read_text().splitlines()
+
+def block(label: str) -> list[str]:
+    out = []
+    in_block = False
+    for ln in lines:
+        s = ln.strip()
+        if not in_block:
+            if s.startswith(label):
+                in_block = True
+            continue
+        if s.endswith(":") and not s.startswith("!"):
+            break
+        out.append(s)
+    return out
+
+errors = []
+scan_block = block("input_run_scan_held_raw:")
+held_block = block("input_run_key_held:")
+
+if not scan_block:
+    errors.append("missing input_run_scan_held_raw block")
+elif any("cia_scan_petscii" in ln for ln in scan_block):
+    errors.append("input_run_scan_held_raw must not call cia_scan_petscii")
+
+if not held_block:
+    errors.append("missing input_run_key_held block")
+elif any("irk_neutral_latch" in ln for ln in held_block):
+    errors.append("input_run_key_held still depends on irk_neutral_latch")
+
+if not any("input_run_row_has_nonmodifier:" in ln for ln in lines):
+    errors.append("missing input_run_row_has_nonmodifier helper")
+
+if errors:
+    print("\n".join(errors))
+PY
+)
+    if [ -n "$check_out" ]; then
         echo "FAIL"
         echo "$check_out" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -4830,6 +4887,7 @@ run_selected_suites() {
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_input_run_guard run_input_run_guard_check || return 1
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 

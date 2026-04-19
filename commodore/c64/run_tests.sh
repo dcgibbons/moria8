@@ -735,7 +735,7 @@ run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040a" 11
-run_test "main_loop" "tests/test_main_loop.s" "0400 041a" 27 500000000
+run_test "main_loop" "tests/test_main_loop.s" "0400 041b" 28 500000000
 run_test "turn" "tests/test_turn.s" "0400 0410" 17 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000

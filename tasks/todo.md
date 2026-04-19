@@ -3,6 +3,81 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C128-INPUT-CONTRACT-REDESIGN
+- [ ] Reported Failure Gate:
+  - on C128, shifted running and other direct-scan interactions must stop depending on PETSCII-decoded held-state; `Shift+H` must not self-cancel after a few tiles, and `make test64` plus `make test128-fast-smoke` must remain green while the C128 input contract is redesigned
+- [x] replace the C128 run sampler with a raw physical matrix contract that ignores modifier-only state without using `cia_scan_petscii`
+- [ ] keep command decoding and modal/prompt input on the existing decoded path so the redesign does not widen the C64/C128 fracture
+- [x] place the new raw C128 run sampler in a dedicated resident runtime asset instead of trimming unrelated bytes to force it into an existing segment
+- [ ] add unit and guard coverage proving the run sampler no longer depends on PETSCII and that modifier-only rows are ignored
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] review:
+  - live monitor breakpoint at `$BA6C` proved the bad stop is `main_loop !run_cancel`, not `run_step`
+  - the true root cause is architectural: C128 running was feeding a PETSCII-decoded sample into the run held/cancel FSM, so transient decoded neutral states could arm cancel and then reinterpret the same held chord as a fresh edge
+  - the fix must leave C64/shared game logic on the same high-level contracts while confining C128-only differences to the raw matrix sampler
+
+- [x] BUG-C128-RUN-SHIFT-CHORD-REGRESSION
+- [x] Reported Failure Gate:
+  - on C128, starting a run with `Shift+H` must not stop after a few tiles while the key chord is still held, and later releasing `Shift` after releasing `H` must not cancel the run; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause the split between run pre-arm held-state detection and run cancel-edge detection on C128
+- [x] restore correct held-chord behavior for shifted run startup while still ignoring modifier-only cancel edges
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the earlier seam split was still wrong because the real C128 failure was not “wrong key domain” alone; it was arming run-cancel after a single transient neutral sample during shifted key release
+  - the corrected design now uses one boolean non-modifier sample source for C128 running and adds a stable-neutral latch in `input_run_key_held` before cancel can arm
+  - after cancel is armed, `input_run_cancel_check` uses the same boolean sample source and the shared edge debouncer, so the run path no longer mixes PETSCII decoding with run cancel state
+  - `commodore/c128/input128.s` is now the C128-specific run contract:
+    - boolean non-modifier key sample
+    - stable-neutral detection for pre-arm
+    - shared edge detection only after neutral is stable
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-RUN-SHIFT-RELEASE-CANCEL
+- [x] Reported Failure Gate:
+  - starting a run with a shifted direction like `Shift+H` must not stop when the player later releases `Shift`; modifier-only state must not count as a held/cancel key, and `make test64` plus `make test128-fast-smoke` must stay green
+- [x] root-cause whether the C128 run held/cancel scanner is treating pure modifier state as a live key sample
+- [x] make C128 run held/cancel polling ignore modifier-only state while preserving shifted direction startup
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - on C128, the run held/cancel path was sampling raw physical key state, so pure `Shift` still counted as a held key after a shifted run command started
+  - that made releasing `Shift` participate in the run state machine and could stop running even though no gameplay stop reason or visible message existed
+  - `commodore/c128/input128.s` now uses a modifier-filtered run sample based on `cia_scan_petscii`, so bare Shift/Ctrl/C= do not count as held/cancel keys while shifted run directions still work
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-RUN-STALE-PENDING-MESSAGE
+- [x] Reported Failure Gate:
+  - if running is started after a spell/prayer/status message is still visible, the run must not immediately stop on that stale pending message, surface old text like `You feel righteous!`, or behave like a hidden `-MORE-` prompt; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause whether `CMD_RUN` is inheriting stale `zp_msg_flags` / message state from the previous action instead of starting like ordinary movement
+- [x] clear old pending messages at run start and add a direct regression for stale-message run startup
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `CMD_RUN` was not clearing old message state before arming the runner, unlike ordinary movement
+  - that let visible stale messages from spells/prayers/detect effects survive into the run loop, where `run_post` immediately canceled running on `zp_msg_flags` and the leftover text could feel like a hidden prompt or a resurfaced unrelated message
+  - `commodore/common/game_loop.s` now clears the message area before converting the run command into `zp_run_dir`, and `commodore/c64/tests/test_main_loop.s` now covers the stale-message startup case directly
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-RUN-STOP-INPUT-STATE
+- [x] Reported Failure Gate:
+  - after running stops automatically, the next manual direction key must work immediately instead of feeling like it was eaten; keep `make test64` and `make test128-fast-smoke` green while fixing the shared run-stop state cleanup
+- [x] root-cause which automatic run-stop paths leave stale run-input state armed after the runner is canceled
+- [x] reset the shared run-cancel/input state on automatic run stops without changing the intended run-stop conditions themselves
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the run stop itself was valid: the runner was stopping on nearby monsters as designed, but C128 direct-scan input state stayed armed after automatic run-stop paths, so the first manual movement key could be swallowed
+  - the fix is deliberately C128-only in `commodore/common/game_loop.s`: automatic run-stop paths now clear `run_input_armed` and reset the shared run-cancel edge state without dragging extra C64 resident bytes into the `MAP_BASE` ceiling
+  - the C64 `main_loop` regression remains green for message-pauses-while-running, and the exact regression gates are green again after narrowing the fix to the platform seam that actually owned the bug
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
 - [x] BUG-PRAYER-EXPIRY-ONSET-MESSAGE
 - [x] Reported Failure Gate:
   - when `Prayer` wears off, the player must not see the cast/onset message reused; the shared turn timer path should report the correct expiry text, with `make test64` and `make test128-fast-smoke` as the regression gates

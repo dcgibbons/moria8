@@ -1613,6 +1613,9 @@ cmd_look:
     jmp main_loop
 
 cmd_run:
+    pha                         // Save command ID — msg_clear clobbers A
+    jsr msg_clear
+    pla
     sec
     sbc #CMD_RUN_N              // Direction index 0-7
     sta zp_run_dir
@@ -1620,6 +1623,13 @@ cmd_run:
     sta run_input_armed
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
+
+#if C128
+run_stop_reset_input_state:
+    lda #0
+    sta run_input_armed
+    jmp input_run_cancel_reset
+#endif
 
 // ============================================================
 // run_step — Execute one step of corridor running
@@ -1702,17 +1712,26 @@ run_step:
     beq !run_keep_running+
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
 !run_keep_running:
     jmp main_loop
 
 !run_blocked:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jmp main_loop
 
 !run_trap_stop:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
     jmp !player_died+
@@ -1723,6 +1742,9 @@ run_step:
 !run_stop_move:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+

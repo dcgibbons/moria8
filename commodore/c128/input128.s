@@ -58,83 +58,12 @@
 // Subroutines
 // ============================================================
 
-// input_run_scan_held_raw — Non-blocking: returns nonzero if any physical key is held
-// Used by the running path so shifted movement keys remain visible while physically held.
-// Output: A = nonzero if any key held, 0 if no key
-// Destroys: A, X
-input_run_scan_held_raw:
-    php
-    sei
-    lda #$ff
-    sta CIA1_DDRA
-    lda #$00
-    sta CIA1_DDRB
-
-    lda C128_KBD_EXT
-    sta irk_ext_save
-    ora #%11000000
-    sta C128_KBD_EXT
-
-    lda #$00
-    sta CIA1_PORTA
-    nop
-    nop
-    lda CIA1_PORTB
-    cmp #$ff
-    bne !irk_pressed+
-
-    lda #$ff
-    sta CIA1_PORTA
-    lda irk_ext_save
-    ora #%11000000
-    and #%10111111
-    sta C128_KBD_EXT
-    nop
-    nop
-    lda CIA1_PORTB
-    cmp #$ff
-    bne !irk_pressed+
-
-    lda irk_ext_save
-    ora #%11000000
-    and #%01111111
-    sta C128_KBD_EXT
-    nop
-    nop
-    lda CIA1_PORTB
-    cmp #$ff
-    bne !irk_pressed+
-
-    lda #0
-    beq !irk_store+
-
-!irk_pressed:
-    lda #1
-
-!irk_store:
-    sta irk_result
-    lda #$ff
-    sta CIA1_PORTA
-    lda irk_ext_save
-    sta C128_KBD_EXT
-    plp
-    lda irk_result
-    rts
-
-// input_run_key_held — Non-blocking: returns nonzero if any key is currently pressed
-// Used by the pre-arm running path in game_loop.s to ignore the initiating held key(s).
+// input_run_key_held — Non-blocking: returns nonzero if any non-modifier key is
+// physically down. Running arming/cancel phase policy stays shared.
 // Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
 input_run_key_held:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
-    lda #0
-    rts
-#else
-    jsr input_run_scan_held_raw
-    rts
-#endif
-
-// input_run_key_check — Backward-compatible alias for held-state polling
+    jmp input_run_scan_held_raw
 input_run_key_check:
     jmp input_run_key_held
 
@@ -143,13 +72,8 @@ input_run_key_check:
 // Output: A = 1 on new key-down edge, 0 otherwise
 // Destroys: A, X, Y
 input_run_cancel_check:
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
-    lda #0
-    rts
-#else
     jsr input_run_scan_held_raw
-    // Fall through into shared run-cancel state machine for testability.
-#endif
+    jmp input_run_process_sample
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
@@ -207,8 +131,6 @@ igk_key: .byte 0
 igk_last_sample: .byte 0
 igk_stable: .byte 0
 ips_raw_sample: .byte 0
-irk_result: .byte 0
-irk_ext_save: .byte 0
 csp_ctrl: .byte 0
 
 // input_wait_release — Block until keyboard is released (C128 direct scan)

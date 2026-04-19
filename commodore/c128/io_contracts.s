@@ -77,6 +77,7 @@
 :C128AuditBelowIo("game_over_prompt", game_over_prompt)
 
 // Runtime-low Bank 0 call surfaces loaded from 128.runtime.prg.
+:C128AuditRuntimeInput("input_run_scan_held_raw", input_run_scan_held_raw)
 :C128AuditRuntimeLow("monster_get_threat_color", monster_get_threat_color)
 :C128AuditRuntimeLow("viewport_update", viewport_update)
 :C128AuditRuntimeLow("render_viewport", render_viewport)

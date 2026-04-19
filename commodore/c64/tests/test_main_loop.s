@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #26
+    ldx #27
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -226,7 +226,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 27, $ff
+tc_results: .fill 28, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -240,6 +240,7 @@ test_render_local_calls: .byte 0
 test_render_full_calls: .byte 0
 test_viewport_calls: .byte 0
 test_msg_clear_calls: .byte 0
+test_msg_clear_clears_state: .byte 0
 test_do_look_calls: .byte 0
 test_update_visibility_calls: .byte 0
 test_screen_clear_calls: .byte 0
@@ -354,6 +355,7 @@ reset_state:
     sta test_render_full_calls
     sta test_viewport_calls
     sta test_msg_clear_calls
+    sta test_msg_clear_clears_state
     sta test_do_look_calls
     sta test_update_visibility_calls
     sta test_screen_clear_calls
@@ -475,6 +477,11 @@ test_input_get_key:
 
 test_msg_clear:
     inc test_msg_clear_calls
+    lda test_msg_clear_clears_state
+    beq !done+
+    lda #0
+    sta zp_msg_flags
+!done:
     rts
 
 test_turn_post_action:
@@ -1681,15 +1688,43 @@ test_start:
     cmp #1
     bne !t27_fail+
     lda test_msg_clear_calls
-    cmp #1
+    cmp #2
     bne !t27_fail+
     lda zp_msg_flags
     cmp #MSG_PENDING
     bne !t27_fail+
     lda #$01
     sta tc_results + 26
-    jmp test_finish
+    jmp !t28+
 !t27_fail:
     lda #$00
     sta tc_results + 26
+    jmp !t28+
+
+    // Test 28: starting a run clears any previously pending message so
+    // the runner does not immediately stop on stale message state.
+!t28:
+    jsr reset_state
+    lda #27
+    sta test_case_idx
+    lda #MSG_PENDING
+    sta zp_msg_flags
+    lda #1
+    sta test_msg_clear_clears_state
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_msg_clear_calls
+    cmp #1
+    bne !t28_fail+
+    lda zp_msg_flags
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp test_finish
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
     jmp test_finish

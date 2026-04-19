@@ -32,6 +32,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
+.segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d20, min=$0d20, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 
@@ -1907,6 +1908,10 @@ restart_entry:
     bcc !runtime_low_loaded+
     jmp entry_main
 !runtime_low_loaded:
+    jsr c128_load_runtime_input_prg
+    bcc !runtime_input_loaded+
+    jmp entry_main
+!runtime_input_loaded:
     jsr c128_load_runtime_common_prg
     bcc !runtime_common_loaded+
     jmp entry_main
@@ -2011,7 +2016,11 @@ runtime_low_filename:
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
     .text "128.RUNTIME" ; .byte 0
-.const RUNTIME_COMMON_FILE_NUM = 3
+.const RUNTIME_INPUT_FILE_NUM = 3
+runtime_input_filename:
+    .byte $31, $32, $38, $2e, $49, $4e, $50, $55, $54 // "128.INPUT"
+.const RUNTIME_INPUT_FILENAME_LEN = * - runtime_input_filename
+.const RUNTIME_COMMON_FILE_NUM = 4
 runtime_common_filename:
     .byte $31, $32, $38, $2e, $46, $44, $49, $53, $4b // "128.FDISK"
 .const RUNTIME_COMMON_FILENAME_LEN = * - runtime_common_filename
@@ -2068,6 +2077,21 @@ c128_load_runtime_low_prg:
     lda #$00
     sta zp_ptr1
     lda #$10
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
+c128_load_runtime_input_prg:
+    lda #RUNTIME_INPUT_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_INPUT_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_input_filename
+    sta zp_ptr0
+    lda #>runtime_input_filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$0b
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
@@ -3068,6 +3092,16 @@ runtime_common_data_end:
 }
 .segment Default
 
+// RuntimeInputData segment — dedicated raw C128 run-input helpers loaded into
+// the reclaimed boot-sector page after boot completes.
+.segment RuntimeInputData
+.pseudopc $0b00 {
+runtime_input_data_start:
+    #import "input_run_raw128.s"
+runtime_input_data_end:
+}
+.segment Default
+
 // RuntimeLowData segment — low-RAM resident code loaded into Bank 0 before title.
 .segment RuntimeLowData
 .pseudopc $1000 {
@@ -3126,6 +3160,7 @@ program_end:
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
@@ -3147,6 +3182,10 @@ program_end:
 
 .macro C128AuditRuntimeLow(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in runtime.low Bank 0 RAM", symbol >= runtime_low_data_start && symbol < runtime_low_data_end, true
+}
+
+.macro C128AuditRuntimeInput(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in runtime.input Bank 0 RAM", symbol >= runtime_input_data_start && symbol < runtime_input_data_end, true
 }
 
 .macro C128AuditStartupOverlay(name, symbol) {
