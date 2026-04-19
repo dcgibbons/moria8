@@ -449,6 +449,8 @@ test_inventory_view:
     sta inv_qty + 0
     lda #EGO_SLAY_EVIL
     sta inv_ego + 0
+    lda #IF_SENSED
+    sta inv_flags + 0
 
     jsr ui_inv_display
 
@@ -494,6 +496,8 @@ test_inventory_select_view:
     sta inv_item_id + 0
     lda #1
     sta inv_qty + 0
+    lda #$ff
+    sta piw_filter
 
     jsr ui_inv_select_display
 
@@ -552,6 +556,8 @@ test_equipment_view:
     sta inv_qty + EQUIP_WEAPON
     lda #EGO_SLAY_EVIL
     sta inv_ego + EQUIP_WEAPON
+    lda #IF_SENSED
+    sta inv_flags + EQUIP_WEAPON
 
     jsr ui_equip_display
 
@@ -1300,7 +1306,7 @@ expected_help_notes:
     .text "Notes" ; .byte 0
 expected_inventory_line:
     .byte $01
-    .text ") Long Sword (Slay Evil)" ; .byte 0
+    .text ") Long Sword (Slay Evil) (magik)" ; .byte 0
 expected_filtered_inv_line_a:
     .byte $01
     .text ") " ; .byte 0
@@ -1320,7 +1326,7 @@ expected_quaff_prompt_ab:
     .text "Quaff which potion (a-b)?" ; .byte 0
 expected_equip_line:
     .byte $01
-    .text ") Weapon: Long Sword (Slay Evil)" ; .byte 0
+    .text ") Weapon: Long Sword (Slay Evil) (magi" ; .byte 0
 expected_recall_lv:
     .text "LV 1" ; .byte 0
 expected_recall_hp:

@@ -165,6 +165,7 @@ put_inv_name_with_ego:
     lda pinwe_id
     jsr item_get_name_ptr
     jsr screen_put_string
+    jsr put_inv_sensed_suffix
     rts
 !pinwe_not_tool:
     lda pinwe_id
@@ -173,6 +174,23 @@ put_inv_name_with_ego:
     ldx pinwe_sl
     lda inv_ego,x
     jsr banked_ego_put_suffix
+    jsr put_inv_sensed_suffix
     rts
+
+put_inv_sensed_suffix:
+    ldx pinwe_sl
+    lda inv_flags,x
+    and #IF_IDENTIFIED | IF_SENSED
+    cmp #IF_SENSED
+    bne !pinwe_done+
+    lda #<pinwe_sensed_suffix
+    sta zp_ptr0
+    lda #>pinwe_sensed_suffix
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!pinwe_done:
+    rts
+
+pinwe_sensed_suffix: .text " (magik)" ; .byte 0
 pinwe_id: .byte 0
 pinwe_sl: .byte 0

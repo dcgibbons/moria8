@@ -676,6 +676,13 @@ load_resume_game:
 #endif
 #endif
 
+    // Viewport coords are transient and not restored from saves. Seed a
+    // neutral origin before the first post-load deadband update so stale
+    // title/UI state cannot leave the renderer starting from $FF rows/cols.
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+
     // Clear screen and render the loaded level
     jsr screen_clear
     jsr update_visibility
@@ -1529,18 +1536,18 @@ cmd_quaff:
 
 cmd_read:
     jsr msg_clear
-    jsr item_read_scroll
+    jsr tramp_item_read_scroll
     // After teleportation or light, need visibility + render
     jmp command_result_main_or_update_visibility
 
 cmd_aim:
     jsr msg_clear
-    jsr item_aim_wand
+    jsr tramp_item_aim_wand
     jmp command_result_main_or_update_visibility
 
 cmd_use:
     jsr msg_clear
-    jsr item_use_staff
+    jsr tramp_item_use_staff
     jmp command_result_main_or_update_visibility
 
 cmd_cast:
@@ -1586,7 +1593,7 @@ cmd_throw:
 
 cmd_refuel:
     jsr msg_clear
-    jsr item_refuel
+    jsr tramp_item_refuel
     jmp command_result_main_or_status_only
 
 cmd_bash:
@@ -2059,30 +2066,6 @@ roll_tool_ego_check:
     rts
 
 // ============================================================
-// banked_ego_put_suffix — Write ego suffix to screen
-// Relocated from $F000 to main RAM (R14). Calls ego_get_suffix_ptr
-// ($F000) — requires KERNAL banked out (always true when called).
-// Input: A = ego type (0 = no ego)
-// Clobbers: A, Y, zp_ptr0
-// ============================================================
-banked_ego_put_suffix:
-    cmp #0
-    beq !beps_done+
-    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000 RAM)
-    ldy #0
-!beps_loop:
-    :MapRead_ptr0_y()
-    beq !beps_done+
-    sty beps_save_y
-    jsr screen_put_char
-    ldy beps_save_y
-    iny
-    jmp !beps_loop-
-!beps_done:
-    rts
-beps_save_y: .byte 0
-
-// ============================================================
 // put_tool_ego_prefix — Print ego prefix for digging tools
 // Input: A = ego (1 or 2), X = item type ID (62 or 63)
 // Output: prefix string printed to screen (e.g., "Gnomish ")
@@ -2128,12 +2111,33 @@ tool_ego_prefix_hi:
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 
 // ============================================================
+// banked_ego_put_suffix — Write ego suffix to screen
+// Input: A = ego type (0 = no ego)
+// Clobbers: A, Y, zp_ptr0
+// ============================================================
+banked_ego_put_suffix:
+    cmp #0
+    beq !beps_done+
+    jsr ego_get_suffix_ptr
+    ldy #0
+!beps_loop:
+    :MapRead_ptr0_y()
+    beq !beps_done+
+    sty beps_save_y
+    jsr screen_put_char
+    ldy beps_save_y
+    iny
+    jmp !beps_loop-
+!beps_done:
+    rts
+beps_save_y: .byte 0
+
+// ============================================================
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
-// Shared helper to avoid duplicating prefix check logic in $F000.
 // Input: X = inventory slot index
 // For ICAT_DIGGING + ego>0: prints "Gnomish Shovel" (prefix + name)
-// For other + ego>0: prints "Long Sword (Flame)" (name + suffix via platform trampoline)
-// For ego=0: prints base name only
+// For other + ego>0: prints "Long Sword (Flame)"
+// For auto-sensed unidentified items, appends the persistent "(magik)" marker.
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_inv_name_with_ego:
@@ -2146,12 +2150,12 @@ put_inv_name_with_ego:
     ldx pinwe_slot
     lda inv_ego,x
     beq !pinwe_not_tool+
-    // Tool ego prefix + base name (no suffix)
     ldx pinwe_item_id
     jsr put_tool_ego_prefix
     lda pinwe_item_id
     jsr item_get_name_ptr
     jsr screen_put_string
+    jsr put_inv_sensed_suffix
     rts
 !pinwe_not_tool:
     lda pinwe_item_id
@@ -2159,7 +2163,24 @@ put_inv_name_with_ego:
     jsr screen_put_string
     ldx pinwe_slot
     lda inv_ego,x
-    jsr tramp_ego_put_suffix
+    jsr banked_ego_put_suffix
+    jsr put_inv_sensed_suffix
     rts
+
+put_inv_sensed_suffix:
+    ldx pinwe_slot
+    lda inv_flags,x
+    and #IF_IDENTIFIED | IF_SENSED
+    cmp #IF_SENSED
+    bne !pinwe_done+
+    lda #<pinwe_sensed_suffix
+    sta zp_ptr0
+    lda #>pinwe_sensed_suffix
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!pinwe_done:
+    rts
+
+pinwe_sensed_suffix: .text " (magik)" ; .byte 0
 pinwe_item_id: .byte 0
 pinwe_slot:    .byte 0
