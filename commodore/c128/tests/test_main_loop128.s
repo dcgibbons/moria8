@@ -314,6 +314,11 @@ item_gain_spell:
 item_refuel:
     rts
 
+.label tramp_item_read_scroll = item_read_scroll
+.label tramp_item_aim_wand = item_aim_wand
+.label tramp_item_use_staff = item_use_staff
+.label tramp_item_refuel = item_refuel
+
 player_tunnel:
     rts
 
@@ -630,6 +635,7 @@ test_cast_spell_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_save_game_calls: .byte 0
+test_load_game_calls: .byte 0
 test_disk_prompt_save_calls: .byte 0
 test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
@@ -640,6 +646,7 @@ eff_detect_timer: .byte 0
 piw_filter: .byte 0
 test_cast_ok: .byte 0
 test_save_success: .byte 0
+test_load_success: .byte 0
 test_disk_setup_success: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
@@ -674,6 +681,7 @@ install_jump_patch:
     :PatchJump(input_wait_release, test_input_wait_release)
     :PatchJump(input_get_key, test_input_get_key)
     :PatchJump(input_get_key_fast, test_input_get_key)
+    :PatchJump(load_game, test_load_game)
     rts
 
 reset_state:
@@ -709,6 +717,7 @@ reset_state:
     sta test_search_scan_calls
     sta test_wizard_calls
     sta test_save_game_calls
+    sta test_load_game_calls
     sta test_disk_prompt_save_calls
     sta test_disk_prompt_game_calls
     sta test_tramp_disk_setup_calls
@@ -716,6 +725,7 @@ reset_state:
     sta test_delete_savefile_calls
     sta test_cast_ok
     sta test_save_success
+    sta test_load_success
     sta test_disk_setup_success
     sta test_move_relocated
     sta test_move_disturbs_search
@@ -888,6 +898,16 @@ test_input_get_key:
     rts
 !default:
     lda #$20
+    rts
+
+test_load_game:
+    inc test_load_game_calls
+    lda test_load_success
+    beq !fail+
+    sec
+    rts
+!fail:
+    clc
     rts
 
 test_tramp_player_cast_spell:
@@ -1403,8 +1423,35 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 18: scroll + remote scene dirtiness must bypass the C128 delta path.
+    // Test 18: load_resume_game seeds a neutral viewport before the first
+    // deadband-based viewport_update call.
     lda #18
+    sta test_case_id
+    jsr reset_state
+    lda #$ff
+    sta zp_view_x
+    sta zp_view_y
+    lda #1
+    sta test_force_view_scroll_y
+    jsr load_resume_game
+    lda test_viewport_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda zp_view_x
+    beq *+5
+    jmp test_fail
+    lda zp_view_y
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_render_full_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 19: scroll + remote scene dirtiness must bypass the C128 delta path.
+    lda #19
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1436,9 +1483,9 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 19: a successful CMD_SAVE in C128 one-drive flow still routes
+    // Test 20: a successful CMD_SAVE in C128 one-drive flow still routes
     // through disk setup, save, and the shared game-return owner.
-    lda #19
+    lda #20
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1473,9 +1520,9 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 20: a failed CMD_SAVE still routes through the shared game-return
+    // Test 21: a failed CMD_SAVE still routes through the shared game-return
     // owner before resuming gameplay.
-    lda #20
+    lda #21
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1516,9 +1563,9 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 21: player_died routes through the shared game-return owner after
+    // Test 22: player_died routes through the shared game-return owner after
     // death-screen disk I/O when disk setup is already complete.
-    lda #21
+    lda #22
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1546,9 +1593,9 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 22: pre-update room reveal still forces a full redraw when
+    // Test 23: pre-update room reveal still forces a full redraw when
     // update_visibility clears vis_room_revealed.
-    lda #22
+    lda #23
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1580,10 +1627,10 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 23: stationary update-visibility commands snapshot the render
+    // Test 24: stationary update-visibility commands snapshot the render
     // baseline before running, so local redraw does not use stale movement
     // positions.
-    lda #23
+    lda #24
     sta test_case_id
     jsr reset_state
     lda #1
@@ -1622,6 +1669,38 @@ test_entry:
     jmp test_fail
     lda old_view_y
     cmp zp_view_y
+    beq *+5
+    jmp test_fail
+
+    // Test 25: title load failure keeps the error modal up for a fresh
+    // dismiss key before returning to the title menu.
+    lda #25
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta disk_mode
+    sta disk_setup_done
+    lda #0
+    sta test_load_success
+    lda #$20
+    sta test_key_script
+    lda #1
+    sta test_key_len
+    jsr title_load_game
+    lda test_load_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_wait_release_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_get_key_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_disk_prompt_game_calls
+    cmp #1
     beq *+5
     jmp test_fail
     jmp test_pass

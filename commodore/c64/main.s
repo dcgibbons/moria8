@@ -15,6 +15,7 @@
 .segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg="out/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg="out/ovl.ui",    start=$e000, min=$e000, max=$efff]
+.segmentdef ItemActionsOverlay [outPrg="out/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 
 .pc = $0801 "BASIC Stub"
@@ -227,6 +228,7 @@ tramp_dig_ability:
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/item.s"
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../common/player_items.s"
 #import "../common/spell_data.s"
 #import "../common/spell_effects.s"
@@ -381,7 +383,8 @@ title_load_game:
     bcc !title_load_fail+
     jmp load_resume_game
 !title_load_fail:
-    jsr input_get_key           // Let user see error message from load_game
+    jsr input_get_modal_dismiss_key
+    jsr disk_prompt_game        // Swap back for tier loading after dismissal
     jmp title_enter_menu
 
 // ============================================================
@@ -531,36 +534,6 @@ tramp_ego_append_suffix:
 !teas_done:
     rts
 
-// tramp_ego_put_suffix — Write ego suffix directly to screen
-// Input: A = ego type
-// Uses screen_put_char to write each char while KERNAL banked out.
-// Clobbers: A, X, Y, zp_ptr0
-tramp_ego_put_suffix:
-    cmp #0
-    beq !teps_done+
-    pha
-    sei
-    lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
-    sta $01
-    pla
-    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000)
-    // Read chars from $F000 and write to screen
-    ldy #0
-!teps_loop:
-    lda (zp_ptr0),y
-    beq !teps_end+
-    sty teps_save_y
-    jsr screen_put_char         // Clobbers Y
-    ldy teps_save_y
-    iny
-    bne !teps_loop-
-!teps_end:
-    inc $01
-    cli
-!teps_done:
-    rts
-teps_save_y: .byte 0
-
 // ============================================================
 // tramp_ego_apply_damage — Apply ego slay/bonus damage (banked at $F000)
 // Input: A = ego type (1-7), cmb_damage and cmb_type set
@@ -701,17 +674,25 @@ tramp_ui_char_display:
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_display:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs !done+
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_inv_display
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_select_display:
+    lda #OVL_HELP
+    jsr overlay_load
+    bcs !done+
     sei
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
     jsr ui_inv_select_display
+!done:
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_display:
@@ -740,6 +721,50 @@ tramp_item_gain_spell:
     lda #BANK_NO_KERNAL
     sta $01
     jsr item_gain_spell
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_item_read_scroll:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr item_read_scroll
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_item_aim_wand:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr item_aim_wand
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_item_use_staff:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr item_use_staff
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_item_refuel:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr item_refuel
 !done:
     jmp tramp_sr_epilogue
 
@@ -1110,7 +1135,6 @@ banked_payload:
     #import "../common/ego_items.s"
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
-    #import "../common/ui_inventory.s"
     #import "../common/ui_home.s"
     #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
@@ -1170,6 +1194,7 @@ ovl_death_end:
     #import "../common/ui_help_data.s"
     #import "../common/ui_help_page2_data.s"
     #import "../common/ui_help.s"
+    #import "../common/ui_inventory.s"
     #import "../common/ui_equipment.s"
     #import "../common/ui_disk_setup.s"
 ovl_help_end:
@@ -1188,6 +1213,15 @@ ovl_help_end:
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $F000, true
+
+// ============================================================
+// Item actions overlay — low-frequency read/aim/use/refuel commands
+// ============================================================
+.segment ItemActionsOverlay
+    #import "../common/item_actions_overlay.s"
+ovl_items_end:
+.print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
+.assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true
 
 // ============================================================
 // Dungeon generation overlay — town + dungeon generation at $E000

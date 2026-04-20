@@ -3,6 +3,53 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-SAVE-VERSION-COMPAT-REGRESSION
+- [x] Reported Failure Gate:
+  - older valid saves must not be mislabeled as `corrupt` after the new floor-item save format bump; widen backward compatibility deliberately and keep `make test64` plus `make test128-fast-smoke` green
+- [x] root-cause which historical save versions the current loader still accepts versus which ones the repo has emitted in prior builds
+- [x] widen the accepted save-version range and treat all pre-floor-table versions as 32-slot floor-item saves
+- [x] split `unsupported save version` from actual corruption in load results and user-facing messaging
+- [x] add direct save-loader coverage for version acceptance/rejection
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the floor-item expansion had widened the save layout but only accepted the immediate prior version, so older valid C64/C128 saves were funneled into the same `Save file corrupt!` path as genuinely bad data
+  - the loader now accepts all historical save versions this tree emitted on each platform, and every pre-expanded save version automatically uses the legacy 32-slot floor-item layout during load
+  - true version mismatches now report `Unsupported save.` instead of `Save file corrupt!`
+  - the C128 title load-failure path now waits through the modal-dismiss helper before returning to the menu, so the failure text stays up for a fresh key instead of leaking through the initiating `L`
+  - direct C64 save coverage now asserts the version-acceptance and legacy-floor-layout helpers, and the save suite contract was widened from `10` to `12` tests so those new checks are part of the exact gate
+
+- [x] BUG-FLOOR-DROP-CAPACITY-OVERFLOW
+- [x] Reported Failure Gate:
+  - dropping items on an empty floor tile must not fail with `no room on floor` just because the level has exceeded the old 32-slot global floor-item ceiling; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause the current `no room on floor` path and confirm whether it is a per-tile rule or the shared floor-item table ceiling
+- [x] redesign the floor-item backing store so the level can hold materially more floor objects without banking hacks or message-path hacks
+- [x] preserve save/load behavior deliberately, including backward-compatible load support for the old 32-slot save layout
+- [x] add a direct regression proving drop item #33 on an otherwise empty tile succeeds
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the live `no room on floor` path was not tile-local at all; `item_drop` always places on the player's tile and only failed because the shared floor-item table hard-capped the level at 32 objects
+  - the fix keeps the always-live `$CF00-$CFFF` budget by packing floor RAM more densely: gold now stores `qty_hi` in `fi_p1`, and floor flags + ego type now share one packed meta byte
+  - that raises `MAX_FLOOR_ITEMS` from 32 to 42 without banking hacks, and save/load stays deliberate by serializing the old logical field layout on the fly plus accepting the prior 32-slot save version on load
+  - the exact C64 gate also exposed two unrelated but still-uncommitted test layout overruns (`test_monster.s`, `test_monster_magic.s`) and an old overgrown `test_effects.s` regression; all three were repaired so the reported gate is actually green again
+
+- [x] BUG-STALE-OCCUPIED-BLOCKS-FLOOR-ITEM-TILE
+- [x] Reported Failure Gate:
+  - floor items must not block movement or corridor-running just because the map tile carries a stale `FLAG_OCCUPIED`; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause why a visible floor-item tile can behave like a blocked monster tile even when no live monster entry exists there
+- [x] validate `FLAG_OCCUPIED` against `monster_find_at` in shared movement and running paths, and clear stale occupied bits in place
+- [x] add a direct regression with `FLAG_HAS_ITEM | FLAG_OCCUPIED` on a floor tile and no live monster table entry
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `player_try_move` and `run_check_adjacent_monsters` were trusting the map bit alone, while rendering only showed a monster when `monster_find_at` actually found one
+  - that let stale occupied bits create a live bug where an item-looking tile blocked movement or stopped running as if a monster were there
+  - the fix routes both paths through a shared live-occupant check that self-heals stale map state by clearing `FLAG_OCCUPIED` when no monster entry exists at that coordinate
+
 - [x] BUG-PSEUDO-ID-STRING-ID-ASSUMPTION
 - [ ] Reported Failure Gate:
   - pseudo-ID quality text in equipment must use the correct quality strings instead of unrelated Huffman entries like `You feel righteous!`; keep `make test64` and `make test128-fast-smoke` green
@@ -197,6 +244,23 @@ This file is a temporary working scratchpad.
 - [ ] Reported Failure Gate:
   - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
 - [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
+- [x] BUG-SHARED-PSEUDO-ID-UMORIA-PARITY
+- [ ] Reported Failure Gate:
+  - pseudo-ID wording/behavior must match `umoria`'s useful auto-sense flow instead of the current `Sense: Average/Good/...` quality hack; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [x] replace the current quality-based pseudo-ID turn path with `umoria`-style enchantment sensing over pack + equipment
+- [x] add a dedicated item-instance sensed-magical flag instead of reusing the old quality bit semantics
+- [x] remove the `Terrible/Bad/Average/Good/Excellent` pseudo-ID UI and replace it with a persistent `magik` marker on sensed, unidentified items
+- [x] keep full identification clearing the sensed-magical marker so item state stays coherent
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the old class-based pseudo-ID timer was replaced with `umoria`'s outer cadence in `turn_tick_pseudo_id`: every 16 turns, if not confused, roll `10 + 750 / (5 + level)` and only then scan the item list
+  - the scan now matches `umoria`'s order and per-item odds: pack first at `1/50`, then equipment at `1/10`, setting the dedicated `IF_SENSED` marker and printing the useful slot-localized wording instead of `Sense: Average/Good/...`
+  - full identify and wizard identify paths now clear `IF_SENSED`, while inventory/equipment rendering persists the new ` (magik)` marker for sensed-but-unidentified items
+  - the first pack/equipment pass had a real 6502 flag bug: after `rng_range`, the code restored the slot index into `X` and then branched on `BNE`, so it was testing the restored slot number instead of the RNG result and only slot `0` could ever auto-sense
+  - the exact red gate after the cadence change was not product logic; `test_save.s` had drifted past `MAP_BASE`, and shrinking the test image plus restoring a local `ui_help_display` stub brought the suite back under `$C000` so `make test64` could verify the feature cleanly
+
 - [ ] Reported Failure Gate:
   - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
 - [ ] BUG-SHARED-GENOCIDE-PARITY
@@ -6620,6 +6684,67 @@ The section below is retained only as historical context for the earlier dual-en
     - moved overlay-only prayer feedback strings (`You feel righteous!`, `A monster falls asleep.`, `You feel resistant to heat and cold.`) out of the resident Huffman pool into `player_magic_feedback.s`
     - kept the shared resident prayer-expiry message local in `turn.s`
     - refreshed the C64 subsystem string-bank fixture and the test-layout buffers that drifted because of the Huffman/table changes
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- ITEM-ACTIONS-OVERLAY-AND-UMORIA-PSEUDOID:
+  - item-action cold paths (`item_read_scroll`, `item_aim_wand`, `item_use_staff`, `item_refuel`) now live in a dedicated product overlay instead of bloating the resident/default image
+  - automatic pseudo-ID messaging now matches the `umoria`-style useful wording pass instead of the old quality-adjective presentation, with the prayer pseudo-ID decode bug fixed by restoring a contiguous PID block in the Huffman table
+  - cleanup/fallout fixed in the exact C64 gate:
+    - `test_ui_views.s` had a stale 41-character equipment expectation on a 40-column row
+    - `test_item.s` had silently grown past `MAP_BASE`; `store_data.s` moved out of the resident test body and the suite now asserts the boundary explicitly
+    - `run_tests.sh` now parses `script` tty logs as text and retries once when the VICE monitor dump is missing
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-LOAD-RESUME-VIEWPORT-SEED:
+  - root cause: `load_resume_game` called `viewport_update` as if it were a fresh initializer, but the C128 implementation is a deadband adjuster that expects sane existing `zp_view_x/zp_view_y`
+  - snapshot proof from `~/vice-snapshot-20260419114026.vsf`:
+    - `zp_player_x = $b0`, `zp_player_y = $0a`
+    - `zp_view_x = $6f`, `zp_view_y = $ff`
+    - `zp_msg_flags = $01`
+  - that stale `zp_view_y = $ff` made the first post-load render start from map row 255, which matches the stray top-row VDC garbage after returning from save
+  - fix shape:
+    - seed `zp_view_x/zp_view_y` to `0` in `load_resume_game` before the first `viewport_update`
+    - add a direct C128 `main_loop128` regression proving load-resume zeroes stale viewport state before the deadband updater runs
+    - repair the unrelated but real overlay-state drift in `reu_stash_overlays`, which had added overlay 7 everywhere except the REU stash loop
+  - note:
+    - `You feel weakened.` is not part of this bug; it is the real poison-dart CON-drain message from `dungeon_features.s`, and the live screenshot's `CO:15` matches that effect
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-INVENTORY-EGO-SUFFIX-GARBAGE:
+  - live symptom on fresh-build C128 inventory screen: `Long SwordITEM 0-63:`
+  - root cause: this was not stale-row residue from the wizard prompt; the append started exactly at the end of the base item name because the display path would blindly treat any nonzero `inv_ego` as a valid suffix/prefix index
+  - fix shape:
+    - clamp invalid ego values in the shared display helpers before appending prefixes/suffixes
+    - keep the fix in the shared UI path (`game_loop.s` / `ui_trampoline_stubs.s`) instead of growing the C128 low-runtime ego module
+    - add a C64 regression proving an invalid `inv_ego` on `Long Sword` renders as plain `Long Sword` rather than walking into unrelated text
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-SAVE-DRIVE9-FALSE-CORRUPT:
+  - Reported Failure Gate:
+    - `x128 -80col -8 commodore/out/moria8-c128.d71 -9 ~/moria8128save.d81`
+    - title flow: `Load` -> `Use drive 9?` = `Yes` -> dismiss `Insert save disk`
+  - snapshot proof from `~/vice-snapshot-20260419214207.vsf`:
+    - `load_result = $02` (`CORRUPT`)
+    - `load_save_version = $0e`
+    - `save_device = $09`
+    - `save_io_error = $00`
+    - so the failure was not unsupported-version or drive selection; it was a checksum mismatch during a valid legacy C128 load
+  - root cause:
+    - the C128 KERNAL byte-I/O wrappers in `commodore/common/save.s` (`load_read_byte`, `save_write_byte`, `save_write_byte_raw`) did not preserve `X`
+    - `load_read_floor_items` and `save_write_floor_items` keep the floor-slot index in `X` across those calls
+    - on the live C128 drive-9 path, `CHRIN/CHROUT` clobbered `X`, so floor-item logical fields were under-read/under-written
+    - that shifted the legacy 32-slot floor-item stream, left `fi_p1` zeroed for gold stacks, misaligned later blocks, and made a valid save fail the final checksum compare
+  - fix shape:
+    - preserve `X` in the shared C128 save/load byte wrappers instead of patching the floor-item loops ad hoc
+    - keep the legacy-version support and `Unsupported save.` split from the earlier compatibility work
   - verification:
     - `make test64` PASS (`44 passed, 0 failed`)
     - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)

@@ -764,7 +764,7 @@ run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0411" 18 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0409" 10 1000000000
+run_test "save"  "tests/test_save.s"  "0400 040b" 12 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 0408" 9 500000000

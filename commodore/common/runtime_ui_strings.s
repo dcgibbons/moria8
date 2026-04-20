@@ -36,6 +36,12 @@ save_corrupt_str:
 #else
     .text "Save file corrupt!" ; .byte 0
 #endif
+save_unsupported_str:
+#if !C128
+    .text "Unsupported save." ; .byte 0
+#else
+    .text "Unsupported save." ; .byte 0
+#endif
 save_ioerr_str:
 #if !C128
     .text "Disk error!" ; .byte 0

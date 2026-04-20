@@ -16,15 +16,16 @@
 .const SAVE_MAGIC_SIZE = 8
 #if C128
 .const SAVE_VERSION    = $0f
-.const PREV_SAVE_VERSION = $0e
+.const OLDEST_SAVE_VERSION = $0d
 #else
 .const SAVE_VERSION    = $0e
-.const PREV_SAVE_VERSION = $0d
+.const OLDEST_SAVE_VERSION = $0c
 #endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
 .const LOAD_RESULT_IOERR     = 3
+.const LOAD_RESULT_UNSUPPORTED = 4
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -516,11 +517,9 @@ load_game:
     bcc !check_magic-
 
     lda save_magic_buf + SAVE_MAGIC_SIZE - 1
-    cmp #SAVE_VERSION
-    beq !load_version_ok+
-    cmp #PREV_SAVE_VERSION
-    beq !load_version_ok+
-    jmp !load_corrupt+
+    jsr save_version_supported
+    bcs !load_version_ok+
+    jmp !load_unsupported+
 !load_version_ok:
     lda save_magic_buf + SAVE_MAGIC_SIZE - 1
     sta load_save_version
@@ -630,12 +629,7 @@ load_game:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
     // Close file after successful read
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr load_close_file_restore
 
     // Sync struct → ZP
     jsr player_search_clear_transient_state
@@ -659,12 +653,7 @@ load_game:
     lda #LOAD_RESULT_CORRUPT
     sta load_result
     // Close file (may still be open if corruption detected mid-read)
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr load_close_file_restore
     lda #<save_corrupt_str
     sta zp_ptr0
     lda #>save_corrupt_str
@@ -677,14 +666,25 @@ load_game:
     jmp !load_return_fail+
 #endif
 
+!load_unsupported:
+    lda #LOAD_RESULT_UNSUPPORTED
+    sta load_result
+    jsr load_close_file_restore
+    lda #<save_unsupported_str
+    sta zp_ptr0
+    lda #>save_unsupported_str
+    sta zp_ptr0_hi
+    jsr msg_print
+#if C128
+    clc
+    rts
+#else
+    jmp !load_return_fail+
+#endif
+
 !load_close_notfound:
     // File was opened but returned no data — close before showing message
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr load_close_file_restore
 !load_notfound:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
@@ -729,6 +729,15 @@ load_game:
 // Input: save_block_lo/hi = source addr, save_count_lo/hi = byte count
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
+load_close_file_restore:
+    jsr save_restore_channels
+    lda #SAVE_FILE_NUM
+    jsr SAVE_CLOSE
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    rts
+
 save_write_block:
     lda save_block_lo
     sta zp_ptr0
@@ -780,7 +789,14 @@ save_write_block:
 // Clobbers: flags
 // ============================================================
 save_write_byte:
+#if C128
+    sta zp_temp0
+    txa
     pha
+    lda zp_temp0
+#else
+    pha
+#endif
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -788,7 +804,11 @@ save_write_byte:
     bcc !swby_no_carry+
     inc save_cksum_hi
 !swby_no_carry:
+#if C128
+    lda zp_temp0
+#else
     pla
+#endif
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
@@ -797,6 +817,12 @@ save_write_byte:
     inc save_io_error
 !swby_ok:
     pla
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
     rts
 
 // ============================================================
@@ -804,6 +830,12 @@ save_write_byte:
 // Input: A = byte to write
 // ============================================================
 save_write_byte_raw:
+#if C128
+    sta zp_temp0
+    txa
+    pha
+    lda zp_temp0
+#endif
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
@@ -812,6 +844,12 @@ save_write_byte_raw:
     inc save_io_error
 !swbr_ok:
     pla
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
     rts
 
 // ============================================================
@@ -906,6 +944,10 @@ load_read_block:
 // Clobbers: A, flags
 // ============================================================
 load_read_byte:
+#if C128
+    txa
+    pha
+#endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
 #if !C128
@@ -925,6 +967,12 @@ load_read_byte:
     inc save_cksum_hi
 !lrby_no_carry:
     pla                     // A = original byte
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
     rts
 
 // ============================================================
@@ -936,8 +984,8 @@ load_read_floor_items:
     lda #MAX_FLOOR_ITEMS
     sta load_floor_item_count
     lda load_save_version
-    cmp #PREV_SAVE_VERSION
-    bne !lrfi_count_ready+
+    jsr save_version_uses_legacy_floor_layout
+    bcc !lrfi_count_ready+
     lda #32
     sta load_floor_item_count
 !lrfi_count_ready:
@@ -1045,6 +1093,38 @@ load_read_floor_items:
     inx
     jmp !lrfi_ego-
 !lrfi_done:
+    rts
+
+// ============================================================
+// save_version_supported — Accept any historical save version this tree
+// has emitted on the current platform.
+// Input: A = save version byte
+// Output: carry set = supported, carry clear = unsupported
+// ============================================================
+save_version_supported:
+    cmp #OLDEST_SAVE_VERSION
+    bcc !svs_unsupported+
+    cmp #(SAVE_VERSION + 1)
+    bcs !svs_unsupported+
+    sec
+    rts
+!svs_unsupported:
+    clc
+    rts
+
+// ============================================================
+// save_version_uses_legacy_floor_layout — Older supported saves still carry
+// the pre-expanded 32-slot floor-item layout.
+// Input: A = save version byte
+// Output: carry set = legacy 32-slot floor layout, carry clear = current layout
+// ============================================================
+save_version_uses_legacy_floor_layout:
+    cmp #SAVE_VERSION
+    bcc !svl_legacy+
+    clc
+    rts
+!svl_legacy:
+    sec
     rts
 
 #if C128

@@ -32,6 +32,7 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
+.segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d20, min=$0d20, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
@@ -1506,6 +1507,7 @@ tramp_ui_exit:
 
 .const C128_HELP_OVERLAY_ID = 5
 .const C128_UI_OVERLAY_ID = 6
+.const C128_ITEMS_OVERLAY_ID = 7
 
 .macro C128UIOverlayDisplayTrampoline(target) {
     jsr tramp_ui_enter
@@ -1586,6 +1588,37 @@ tramp_item_gain_spell:
     lda #<item_gain_spell
     ldx #>item_gain_spell
     jmp tramp_ui_ui_overlay_patch_target
+
+.macro C128OverlayComputeTrampoline(overlay_id, target) {
+    lda #overlay_id
+    jsr overlay_load
+    bcs !done+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr target
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+!done:
+    rts
+}
+
+tramp_item_read_scroll:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_read_scroll)
+
+tramp_item_aim_wand:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_aim_wand)
+
+tramp_item_use_staff:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_use_staff)
+
+tramp_item_refuel:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_refuel)
 
 tramp_title_load_and_draw:
     lda #C128_UI_OVERLAY_ID
@@ -2002,8 +2035,8 @@ title_load_game:
     jsr disk_prompt_game
     jmp load_resume_game
 !title_load_fail:
+    jsr input_get_modal_dismiss_key
     jsr disk_prompt_game
-    jsr input_get_key
     jmp title_enter_menu
 
 // ============================================================
@@ -2204,30 +2237,6 @@ tramp_ego_append_suffix:
 !teas_done:
     rts
 
-tramp_ego_put_suffix:
-    cmp #0
-    beq !teps_done+
-    pha
-    sei
-    :BankOutKernal()           // KERNAL off, I/O on
-    pla
-    jsr ego_get_suffix_ptr
-    ldy #0
-!teps_loop:
-    lda (zp_ptr0),y
-    beq !teps_end+
-    sty teps_save_y
-    jsr screen_put_char
-    ldy teps_save_y
-    iny
-    jmp !teps_loop-
-!teps_end:
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-!teps_done:
-    rts
-teps_save_y: .byte 0
 c128_load_arg_x: .byte 0
 c128_load_arg_y: .byte 0
 kernal_irq_vec_lo: .byte 0
@@ -2276,16 +2285,18 @@ ovl_fn_help:  .byte $31,$32,$38,$2e,$48,$45,$4c,$50                  // "128.HEL
 ovl_fn_help_end:
 ovl_fn_ui:    .byte $31,$32,$38,$2e,$55,$49                          // "128.UI"
 ovl_fn_ui_end:
+ovl_fn_items: .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53              // "128.ITEMS"
+ovl_fn_items_end:
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
 ovl_fn_len:
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0
@@ -2727,7 +2738,7 @@ c128_final_return_stack_7:     .byte 0
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000
 c128_cache_state_end:
 
 .assert "Program fits below map area", * <= MAP_BASE, true
@@ -2775,9 +2786,9 @@ c128_cache_state_end:
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
 #import "../common/turn.s"
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../common/player_items.s"
 #import "../common/player_magic_state.s"
-#import "../common/player_magic_state_ops.s"
 #import "../common/perf_p1.s"
 
 // Init-only strings — kept in main RAM
@@ -3130,6 +3141,7 @@ banked_payload:
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/player_magic_display.s"
+    #import "../common/player_magic_state_ops.s"
     #import "../common/player_magic.s"
     #import "../common/player_magic_levelup.s"
     #import "../common/player_magic_learn_op.s"
@@ -3206,6 +3218,10 @@ program_end:
 
 .macro C128AuditUiOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the UI overlay", symbol >= $E000 && symbol < ovl_ui_end, true
+}
+
+.macro C128AuditItemsOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the items overlay", symbol >= $E000 && symbol < ovl_items_end, true
 }
 
 .macro C128AuditDungeonOverlay(name, symbol) {
@@ -3294,6 +3310,15 @@ ovl_ui_end:
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
 .assert "Help title text stays inside help overlay", help_title_str >= $E000 && help_title_str < ovl_help_end, true
 .assert "Help content table stays inside help overlay", help_lines >= $E000 && help_lines < ovl_help_end, true
+
+// ============================================================
+// Item actions overlay — low-frequency read/aim/use/refuel commands
+// ============================================================
+.segment ItemActionsOverlay
+    #import "../common/item_actions_overlay.s"
+ovl_items_end:
+.print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
+.assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
 
 // ============================================================
 // Dungeon generation overlay
