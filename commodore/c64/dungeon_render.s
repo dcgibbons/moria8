@@ -345,6 +345,7 @@ render_viewport:
     sta zp_temp1
 
 !rv_no_monster:
+rv_apply_player_override:
     // Check if this is the player position
     lda zp_render_x
     clc
@@ -372,6 +373,7 @@ render_viewport:
     sta zp_temp0
     lda #COL_BLACK
     sta zp_temp1
+    jmp rv_apply_player_override
 
 !write_tile:
     // Screen column = render_x + VIEWPORT_X (1)
@@ -581,6 +583,7 @@ render_single_tile:
     sta zp_temp4
 
 !rst_no_monster:
+rst_apply_player_override:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
@@ -599,6 +602,7 @@ render_single_tile:
     sta zp_temp3
     lda #COL_BLACK
     sta zp_temp4
+    jmp rst_apply_player_override
 
 !rst_write:
     ldy rst_col_tmp

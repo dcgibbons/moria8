@@ -382,6 +382,7 @@ render_viewport:
     sta zp_temp1
 
 !rv_no_monster:
+rv_apply_player_override_vdc:
     // Check if this is the player position
     lda rst_row_tmp
     beq !not_player+
@@ -402,6 +403,7 @@ render_viewport:
     sta zp_temp0
     lda #VDC_BLACK          // Pre-translated VDC black (Opt 2)
     sta zp_temp1
+    jmp rv_apply_player_override_vdc
 
 !write_tile:
     // Buffer screen code and pre-translated VDC color (all paths set zp_temp1 to VDC-native)
@@ -1110,6 +1112,7 @@ render_single_tile:
     sta zp_temp4
 
 !rst_no_monster:
+rst_apply_player_override_vdc:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
@@ -1128,6 +1131,7 @@ render_single_tile:
     sta zp_temp3
     lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp4
+    jmp rst_apply_player_override_vdc
 
 !rst_write:
     sei                         // IRQ off: protect char + attr VDC writes as atomic pair
