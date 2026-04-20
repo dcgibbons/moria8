@@ -146,8 +146,10 @@ render_viewport:
     jsr mmu_copy_map_row
 
     // Most rows have no item/monster flags. Accumulate both bits across the
-    // staged row so we only run the population pass(es) that are actually
-    // needed for this row.
+    // staged row so we only run the monster population pass when actually
+    // needed for this row. Item population always runs because it owns the
+    // row cache reset for both item and monster overlays.
+    jsr rv_populate_row_items
     lda #0
     ldx #0
 !rv_occ_scan:
@@ -155,12 +157,6 @@ render_viewport:
     inx
     cpx #VIEWPORT_W
     bne !rv_occ_scan-
-    tay
-    and #FLAG_HAS_ITEM
-    beq !rv_occ_no_items+
-    jsr rv_populate_row_items
-!rv_occ_no_items:
-    tya
     and #FLAG_OCCUPIED
     beq !rv_occ_done+
     jsr rv_populate_row_monsters
@@ -726,14 +722,12 @@ render_viewport_scroll_delta:
     rts
 
 rv_populate_row_items:
-    ldx #0
-rv_items_zero:
+    ldy #VIEWPORT_W - 1
     lda #0
-    sta rv_row_occ,x
-    inx
-    cpx #VIEWPORT_W
-    bne rv_items_zero
-
+!rv_row_occ_zero:
+    sta rv_row_occ,y
+    dey
+    bpl !rv_row_occ_zero-
     ldx #0
 rv_items_scan:
     cpx #MAX_FLOOR_ITEMS
