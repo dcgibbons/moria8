@@ -1785,7 +1785,7 @@ game_over_prompt:
 !gop_quit:
     jmp exit_trampoline         // Unified C128 behavior: R == Q
 !gop_restart:
-    jmp restart_entry
+    jmp game_restart
 game_over_prompt_end:
 
 // ============================================================
@@ -1902,22 +1902,20 @@ restart_entry:
     lda $dd0d               // Acknowledge pending CIA2
     lda #0
     sta $d01a               // Disable all VIC-II interrupt sources
-    lda #$ff
-    sta $d019               // Acknowledge any pending VIC-II interrupts
+    ldx #$ff
+    stx $d019               // Acknowledge any pending VIC-II interrupts
 
     // Disable Screen Editor software cursor blink.
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero.
-    lda #$ff
-    sta zp_screen_editor_state
+    stx zp_screen_editor_state
     // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
     lda #<mmu_common_irq
     sta $0314
     lda #>mmu_common_irq
     sta $0315
 
-    lda #$ff
-    sta zp_screen_editor_mode   // Screen Editor: 80-col mode
+    stx zp_screen_editor_mode   // Screen Editor: 80-col mode
 
     cli
 
@@ -3099,6 +3097,7 @@ c128_test_verify_cache_survival:
 runtime_common_data_start:
     #import "../common/disk_setup_runtime128.s"
     #import "../common/title_cache_runtime128.s"
+    #import "restart128.s"
 runtime_common_data_end:
 }
 .segment Default
