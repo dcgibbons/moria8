@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #9
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -38,9 +38,11 @@ test_finish:
 .const HSTR_PIQ_LITTLE_BETTER = 9
 .const HSTR_PIQ_VERY_GOOD = 10
 .const HSTR_EFF_POISON_END = 11
+.const HSTR_PIW_WAND_CLOUD = 12
 .const MX_SLEEP_CUR = 7
+.const MX_CONFUSE = 9
 
-tc_results: .fill 10, $ff
+tc_results: .fill 12, $ff
 
 test_msg_calls:    .byte 0
 test_last_msg_lo:  .byte 0
@@ -92,6 +94,16 @@ monster_apply_sleep:
     ldy #MX_SLEEP_CUR
     pla
     sta (zp_ptr0),y
+    rts
+
+eff_directional_monster:
+    lda test_mon_present
+    beq !edm_miss+
+    ldx #0
+    sec
+    rts
+!edm_miss:
+    clc
     rts
 
 eff_heal:
@@ -334,8 +346,54 @@ test_start:
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp test_finish
+    jmp !t11+
 !t10_fail:
     lda #$00
     sta tc_results + 9
+    jmp !t11+
+
+    // Test 11: directional confuse prayer reports a confused hit and sets MX_CONFUSE.
+!t11:
+    lda #0
+    sta test_huff_calls
+    lda #1
+    sta test_mon_present
+    lda #0
+    sta test_mon_data + MX_CONFUSE
+    jsr pmx_confuse_monster_dir_msg
+    lda test_mon_data + MX_CONFUSE
+    cmp #10
+    bne !t11_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t11_fail+
+    lda test_last_huff
+    cmp #HSTR_PIW_WAND_CLOUD
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // Test 12: directional confuse prayer reports no-effect feedback on a miss.
+!t12:
+    lda #0
+    sta test_huff_calls
+    lda #0
+    sta test_mon_present
+    jsr pmx_confuse_monster_dir_msg
+    lda test_huff_calls
+    cmp #1
+    bne !t12_fail+
+    lda test_last_huff
+    cmp #HSTR_PIQ_NOTHING
+    bne !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp test_finish
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
     jmp test_finish

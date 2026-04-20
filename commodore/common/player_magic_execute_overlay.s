@@ -190,14 +190,7 @@ med_s6:
     lda #9
     jmp eff_ball
 med_s7:
-    jsr eff_directional_monster
-    bcc !med_s7_done+
-    jsr monster_get_ptr
-    ldy #MX_CONFUSE
-    lda #10
-    sta (zp_ptr0),y
-!med_s7_done:
-    rts
+    jmp pmx_confuse_monster_dir_msg
 med_s8:
     lda #3
     ldx #8
@@ -297,14 +290,7 @@ ped_s7:
 !ped_s7_done:
     rts
 ped_s8:
-    jsr eff_directional_monster
-    bcc !ped_s8_done+
-    jsr monster_get_ptr
-    ldy #MX_STUN
-    lda #10
-    sta (zp_ptr0),y
-!ped_s8_done:
-    rts
+    jmp pmx_confuse_monster_dir_msg
 ped_s10:
     lda #4
     ldx #4

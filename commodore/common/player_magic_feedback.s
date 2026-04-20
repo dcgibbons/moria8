@@ -124,6 +124,19 @@ pmx_report_sleep_result:
     ldy #>pmx_sleep_success_msg
     jmp pmx_print_inline
 
+pmx_confuse_monster_dir_msg:
+    jsr eff_directional_monster
+    bcc !pcmd_miss+
+    jsr monster_get_ptr
+    ldy #MX_CONFUSE
+    lda #10
+    sta (zp_ptr0),y
+    ldx #HSTR_PIW_WAND_CLOUD
+    jmp huff_print_msg
+!pcmd_miss:
+    ldx #HSTR_PIQ_NOTHING
+    jmp huff_print_msg
+
 pmx_set_see_invisible_msg:
     lda zp_eff_see_inv
     ora zp_eff_invis

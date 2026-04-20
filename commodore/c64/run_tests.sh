@@ -735,6 +735,8 @@ TOTAL=$((TOTAL + 1))
 
 check_static_contract "wizard_heal_contract" "../common/wizard.s" \
     "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
+check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
+    "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
@@ -757,7 +759,7 @@ run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
 run_test "utility_effects" "tests/test_utility_effects.s" "0400 0403" 4 500000000
-run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 0409" 10 500000000
+    run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040b" 12 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0432" 51 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000

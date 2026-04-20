@@ -3,6 +3,50 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-PRIEST-BLIND-CREATURE-NO-FEEDBACK
+- [x] Reported Failure Gate:
+  - priest `Blind Creature` must not just beep silently; it must apply the correct directional effect and give player-facing feedback while keeping `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which priest spell slot currently owns `Blind Creature` and why it is behaving as a silent no-feedback effect
+- [x] restore the upstream-style directional confuse-monster behavior for `Blind Creature` and make the result path print useful feedback
+- [x] add focused regression coverage for hit/miss feedback on the directional confuse prayer path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - upstream `umoria` routes priest `Blind Creature` through the directional confuse-monster effect, not a silent stun timer
+  - our priest slot `ped_s8` had drifted to `MX_STUN` with no message owner, which is why live play only produced a beep/direction prompt and no useful feedback
+  - the fix introduces one shared directional-confuse feedback helper and routes both priest `Blind Creature` and mage `Confusion` through it, so a hit now reports `The monster looks confused.` and a miss reports `Nothing seems to happen.`
+  - focused prayer-feedback coverage now exercises both hit and miss paths, and the exact gates remain green
+
+- [x] BUG-C128-DOUBLE-PRELOAD-AFTER-LOADED-SAVE-QUIT
+- [x] Reported Failure Gate:
+  - on C128, after loading from a savefile game, quitting, and choosing `S)tart` from the quit prompt, startup preload must not run twice; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which restart/title owner is causing the second C128 preload only on the loaded-save quit path
+- [x] fix the C128 restart flow so quitting a loaded save and choosing `Start` performs exactly one preload pass before returning to title/new-game flow
+- [x] add regression coverage for the loaded-save quit -> restart path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the first attempt was wrong because it still sent `S)tart` back through `restart_entry`, which is the boot-time preload owner on C128
+  - the correct C128 contract is a tiny resident `game_restart` owner in `RuntimeCommonData` that resets the stack, invalidates tier state, clears overlay ownership, and jumps directly to `title_enter_menu` on the already-live runtime
+  - this keeps the boot preload one-time while still returning cleanly to the title/menu path after quitting a loaded save
+  - the dedicated `loaded_save_restart_preload_smoke.py` repro remains out of the default fast-smoke filter because its monitor boot staging still needs work; the product-level gate is `make test128-fast-smoke`, which is green
+
+- [x] BUG-C64-LEARN-SPELL-FOLLOWUP-KEY-LEAK
+- [x] Reported Failure Gate:
+  - on C64, learning a spell from a book must accept the selected spell letter instead of leaking the initiating `F` into the follow-up prompt and falling back into nonsense commands like `You have nothing there.`; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which follow-up prompt path on C64 is still letting the initiating command key survive into the learn-spell selector
+- [x] fix the C64 learn-spell owner path so it uses the fresh-key modal helper without widening the shared follow-up helper contract
+- [x] add regression coverage/guarding for the learn-spell follow-up contract
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the decisive live clue was that after the study list appeared, the next key was reaching main-loop commands while the list stayed painted on screen; that means the study command had already unwound back to gameplay before owning the follow-up selection key
+  - the real seam was overlay re-entry: `item_gain_spell` already runs inside `OVL_UI`, but it was calling the spell list through `tramp_spell_list_display`, which reloaded the same overlay and returned through the resident trampoline epilogue instead of staying in the local study flow
+  - the fix keeps study inside its owning overlay by calling `spell_list_display` directly from `player_gain_spell_impl.s`, while the lowercase PETSCII normalization in `pm_pick_visible_spell` remains a valid robustness fix for C64 letter prompts
+
 - [x] BUG-SAVE-VERSION-COMPAT-REGRESSION
 - [x] Reported Failure Gate:
   - older valid saves must not be mislabeled as `corrupt` after the new floor-item save format bump; widen backward compatibility deliberately and keep `make test64` plus `make test128-fast-smoke` green
