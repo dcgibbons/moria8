@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -39,10 +39,11 @@ test_finish:
 .const HSTR_PIQ_VERY_GOOD = 10
 .const HSTR_EFF_POISON_END = 11
 .const HSTR_PIW_WAND_CLOUD = 12
+.const MX_TYPE = 2
 .const MX_SLEEP_CUR = 7
 .const MX_CONFUSE = 9
 
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 
 test_msg_calls:    .byte 0
 test_last_msg_lo:  .byte 0
@@ -53,6 +54,10 @@ test_mon_present:  .byte 0
 test_mon_x:        .byte 0
 test_mon_y:        .byte 0
 test_mon_data:     .fill 12, 0
+test_rng_result:   .byte 0
+
+cr_level:
+    .byte 0
 
 huff_print_msg:
     stx test_last_huff
@@ -107,6 +112,10 @@ eff_directional_monster:
     rts
 
 eff_heal:
+    rts
+
+rng_range:
+    lda test_rng_result
     rts
 
 #import "../../common/player_magic_feedback.s"
@@ -167,6 +176,7 @@ test_start:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
+    sta test_rng_result
     sta test_mon_present
     sta test_mon_data + MX_SLEEP_CUR
     jsr pmx_sleep_adjacent_msg
@@ -188,12 +198,16 @@ test_start:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
+    sta test_rng_result
     lda #1
     sta test_mon_present
     lda #11
     sta test_mon_x
     lda #10
     sta test_mon_y
+    lda #0
+    sta cr_level
+    sta test_mon_data + MX_TYPE
     lda #0
     sta test_mon_data + MX_SLEEP_CUR
     jsr pmx_sleep_adjacent_msg
@@ -216,18 +230,35 @@ test_start:
     lda #$00
     sta tc_results + 3
 
-    // Test 5: Mass sleep with no visible targets shows feedback.
+    // Test 5: Sanctuary with adjacent resistant monster reports it.
 !t5:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
+    lda #1
+    sta test_mon_present
+    lda #11
+    sta test_mon_x
+    lda #10
+    sta test_mon_y
+    lda #20
+    sta cr_level
     lda #0
-    jsr pmx_report_sleep_result
-    lda test_huff_calls
+    sta test_mon_data + MX_TYPE
+    sta test_mon_data + MX_SLEEP_CUR
+    lda #0
+    sta test_rng_result
+    jsr pmx_sleep_adjacent_msg
+    lda test_mon_data + MX_SLEEP_CUR
+    bne !t5_fail+
+    lda test_msg_calls
     cmp #1
     bne !t5_fail+
-    lda test_last_huff
-    cmp #HSTR_PIQ_NOTHING
+    lda test_last_msg_lo
+    cmp #<pmx_sleep_unaffected_msg
+    bne !t5_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_sleep_unaffected_msg
     bne !t5_fail+
     lda #$01
     sta tc_results + 4
@@ -236,21 +267,18 @@ test_start:
     lda #$00
     sta tc_results + 4
 
-    // Test 6: Mass sleep with one visible target reports it.
+    // Test 6: Mass sleep with no visible targets shows feedback.
 !t6:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
-    lda #1
+    lda #0
     jsr pmx_report_sleep_result
-    lda test_msg_calls
+    lda test_huff_calls
     cmp #1
     bne !t6_fail+
-    lda test_last_msg_lo
-    cmp #<pmx_sleep_success_msg
-    bne !t6_fail+
-    lda test_last_msg_hi
-    cmp #>pmx_sleep_success_msg
+    lda test_last_huff
+    cmp #HSTR_PIQ_NOTHING
     bne !t6_fail+
     lda #$01
     sta tc_results + 5
@@ -259,24 +287,21 @@ test_start:
     lda #$00
     sta tc_results + 5
 
-    // Test 7: Resist onset shows a message and sets the resist flags.
+    // Test 7: Mass sleep with one visible target reports it.
 !t7:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
-    sta zp_eff_resist
-    jsr pmx_set_resist_heat_cold_msg
-    lda zp_eff_resist
-    cmp #$03
-    bne !t7_fail+
+    lda #1
+    jsr pmx_report_sleep_result
     lda test_msg_calls
     cmp #1
     bne !t7_fail+
     lda test_last_msg_lo
-    cmp #<pmx_resist_on_msg
+    cmp #<pmx_sleep_success_msg
     bne !t7_fail+
     lda test_last_msg_hi
-    cmp #>pmx_resist_on_msg
+    cmp #>pmx_sleep_success_msg
     bne !t7_fail+
     lda #$01
     sta tc_results + 6
@@ -285,17 +310,24 @@ test_start:
     lda #$00
     sta tc_results + 6
 
-    // Test 8: Resist refresh stays silent.
+    // Test 8: Resist onset shows a message and sets the resist flags.
 !t8:
     lda #0
     sta test_msg_calls
-    lda #1
+    sta test_huff_calls
     sta zp_eff_resist
     jsr pmx_set_resist_heat_cold_msg
     lda zp_eff_resist
     cmp #$03
     bne !t8_fail+
     lda test_msg_calls
+    cmp #1
+    bne !t8_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_resist_on_msg
+    bne !t8_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_resist_on_msg
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
@@ -304,21 +336,17 @@ test_start:
     lda #$00
     sta tc_results + 7
 
-    // Test 9: Haste onset shows the speed message and sets the timer.
+    // Test 9: Resist refresh stays silent.
 !t9:
     lda #0
-    sta test_huff_calls
-    sta zp_eff_speed
-    lda #24
-    jsr pmx_add_speed_msg
-    lda zp_eff_speed
-    cmp #24
+    sta test_msg_calls
+    lda #1
+    sta zp_eff_resist
+    jsr pmx_set_resist_heat_cold_msg
+    lda zp_eff_resist
+    cmp #$03
     bne !t9_fail+
-    lda test_huff_calls
-    cmp #1
-    bne !t9_fail+
-    lda test_last_huff
-    cmp #HSTR_PIQ_SPEED
+    lda test_msg_calls
     bne !t9_fail+
     lda #$01
     sta tc_results + 8
@@ -327,16 +355,15 @@ test_start:
     lda #$00
     sta tc_results + 8
 
-    // Test 10: Haste refresh still reports the speed effect.
+    // Test 10: Haste onset shows the speed message and sets the timer.
 !t10:
     lda #0
     sta test_huff_calls
-    lda #5
     sta zp_eff_speed
     lda #24
     jsr pmx_add_speed_msg
     lda zp_eff_speed
-    cmp #29
+    cmp #24
     bne !t10_fail+
     lda test_huff_calls
     cmp #1
@@ -350,10 +377,34 @@ test_start:
 !t10_fail:
     lda #$00
     sta tc_results + 9
-    jmp !t11+
 
-    // Test 11: directional confuse prayer reports a confused hit and sets MX_CONFUSE.
+    // Test 11: Haste refresh still reports the speed effect.
 !t11:
+    lda #0
+    sta test_huff_calls
+    lda #5
+    sta zp_eff_speed
+    lda #24
+    jsr pmx_add_speed_msg
+    lda zp_eff_speed
+    cmp #29
+    bne !t11_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t11_fail+
+    lda test_last_huff
+    cmp #HSTR_PIQ_SPEED
+    bne !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+    jmp !t12+
+
+    // Test 12: directional confuse prayer reports a confused hit and sets MX_CONFUSE.
+!t12:
     lda #0
     sta test_huff_calls
     lda #1
@@ -363,22 +414,22 @@ test_start:
     jsr pmx_confuse_monster_dir_msg
     lda test_mon_data + MX_CONFUSE
     cmp #10
-    bne !t11_fail+
+    bne !t12_fail+
     lda test_huff_calls
     cmp #1
-    bne !t11_fail+
+    bne !t12_fail+
     lda test_last_huff
     cmp #HSTR_PIW_WAND_CLOUD
-    bne !t11_fail+
+    bne !t12_fail+
     lda #$01
-    sta tc_results + 10
-    jmp !t12+
-!t11_fail:
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
     lda #$00
-    sta tc_results + 10
+    sta tc_results + 11
 
-    // Test 12: directional confuse prayer reports no-effect feedback on a miss.
-!t12:
+    // Test 13: directional confuse prayer reports no-effect feedback on a miss.
+!t13:
     lda #0
     sta test_huff_calls
     lda #0
@@ -386,14 +437,14 @@ test_start:
     jsr pmx_confuse_monster_dir_msg
     lda test_huff_calls
     cmp #1
-    bne !t12_fail+
+    bne !t13_fail+
     lda test_last_huff
     cmp #HSTR_PIQ_NOTHING
-    bne !t12_fail+
+    bne !t13_fail+
     lda #$01
-    sta tc_results + 11
+    sta tc_results + 12
     jmp test_finish
-!t12_fail:
+!t13_fail:
     lda #$00
-    sta tc_results + 11
+    sta tc_results + 12
     jmp test_finish

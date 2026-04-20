@@ -8,9 +8,11 @@
 #import "player_heal_feedback.s"
 
 pmx_feedback_sleep_hits: .byte 0
+pmx_feedback_sleep_seen: .byte 0
 pmx_feedback_dir_idx:    .byte 0
 pmx_feedback_x:          .byte 0
 pmx_feedback_y:          .byte 0
+pmx_feedback_mon_slot:   .byte 0
 
 pmx_add_speed_msg:
     tax
@@ -78,6 +80,7 @@ pmx_set_resist_heat_cold_msg:
 pmx_sleep_adjacent_msg:
     lda #0
     sta pmx_feedback_sleep_hits
+    sta pmx_feedback_sleep_seen
     sta pmx_feedback_dir_idx
 !psam_loop:
     ldx pmx_feedback_dir_idx
@@ -95,8 +98,10 @@ pmx_sleep_adjacent_msg:
     ldy pmx_feedback_y
     jsr monster_find_at
     bcc !psam_next+
-    lda #20
-    jsr monster_apply_sleep
+    inc pmx_feedback_sleep_seen
+    stx pmx_feedback_mon_slot
+    jsr pmx_try_sleep_monster
+    bcc !psam_next+
     inc pmx_feedback_sleep_hits
 !psam_next:
     inc pmx_feedback_dir_idx
@@ -104,6 +109,8 @@ pmx_sleep_adjacent_msg:
 !psam_done_scan:
     lda pmx_feedback_sleep_hits
     bne !psam_any+
+    lda pmx_feedback_sleep_seen
+    bne !psam_unaffected+
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
 !psam_done:
@@ -112,6 +119,28 @@ pmx_sleep_adjacent_msg:
     lda #<pmx_sleep_success_msg
     ldy #>pmx_sleep_success_msg
     jsr pmx_print_inline
+    rts
+!psam_unaffected:
+    lda #<pmx_sleep_unaffected_msg
+    ldy #>pmx_sleep_unaffected_msg
+    jmp pmx_print_inline
+
+pmx_try_sleep_monster:
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda #40
+    jsr rng_range
+    cmp cr_level,x
+    bcc !ptsm_resist+
+    ldx pmx_feedback_mon_slot
+    lda #20
+    jsr monster_apply_sleep
+    sec
+    rts
+!ptsm_resist:
+    clc
     rts
 
 pmx_report_sleep_result:
@@ -166,4 +195,8 @@ pmx_resist_on_msg:
 
 pmx_sleep_success_msg:
     .text "A monster falls asleep."
+    .byte 0
+
+pmx_sleep_unaffected_msg:
+    .text "A monster is unaffected."
     .byte 0

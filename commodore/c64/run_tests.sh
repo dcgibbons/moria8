@@ -746,7 +746,7 @@ run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
 run_test "input"  "tests/test_input.s"  "0400 040a" 11
 run_test "main_loop" "tests/test_main_loop.s" "0400 041b" 28 500000000
-run_test "turn" "tests/test_turn.s" "0400 0414" 21 500000000
+run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000
 run_test "monster" "tests/test_monster.s" "0400 040c" 13 500000000
@@ -759,7 +759,7 @@ run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
 run_test "utility_effects" "tests/test_utility_effects.s" "0400 0403" 4 500000000
-    run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040b" 12 500000000
+    run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 0432" 51 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
