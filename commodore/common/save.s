@@ -15,9 +15,11 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 #if C128
-.const SAVE_VERSION    = $0e
+.const SAVE_VERSION    = $0f
+.const PREV_SAVE_VERSION = $0e
 #else
-.const SAVE_VERSION    = $0d
+.const SAVE_VERSION    = $0e
+.const PREV_SAVE_VERSION = $0d
 #endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
@@ -73,6 +75,8 @@ rle_lit_len:    .byte 0         // Literal buffer length
 #endif
 save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
+load_save_version: .byte 0
+load_floor_item_count: .byte 0
 #if SAVE_TEST_RLE
 rle_work_lo:    .byte <CREATURE_BASE  // RLE workspace pointer lo (default CREATURE_BASE)
 rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
@@ -352,15 +356,8 @@ save_return_fail:
     // 15. Monster table (32 × 12 = 384 bytes)
     :save_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 
-    // 16. Floor items (8 × 32 = 256 bytes)
-    :save_block(fi_item_id, MAX_FLOOR_ITEMS)
-    :save_block(fi_x, MAX_FLOOR_ITEMS)
-    :save_block(fi_y, MAX_FLOOR_ITEMS)
-    :save_block(fi_qty, MAX_FLOOR_ITEMS)
-    :save_block(fi_qty_hi, MAX_FLOOR_ITEMS)
-    :save_block(fi_p1, MAX_FLOOR_ITEMS)
-    :save_block(fi_flags, MAX_FLOOR_ITEMS)
-    :save_block(fi_ego, MAX_FLOOR_ITEMS)
+    // 16. Floor items (logical 8-field layout, serialized from packed RAM)
+    jsr save_write_floor_items
 
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :save_block(recall_data_start, RECALL_DATA_SIZE)
@@ -515,8 +512,18 @@ load_game:
     jmp !load_corrupt+
 !magic_ok:
     inx
-    cpx #SAVE_MAGIC_SIZE
+    cpx #SAVE_MAGIC_SIZE - 1
     bcc !check_magic-
+
+    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
+    cmp #SAVE_VERSION
+    beq !load_version_ok+
+    cmp #PREV_SAVE_VERSION
+    beq !load_version_ok+
+    jmp !load_corrupt+
+!load_version_ok:
+    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
+    sta load_save_version
 
     // --- Read all blocks in same order as save ---
 
@@ -588,14 +595,7 @@ load_game:
     :load_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 
     // 16. Floor items
-    :load_block(fi_item_id, MAX_FLOOR_ITEMS)
-    :load_block(fi_x, MAX_FLOOR_ITEMS)
-    :load_block(fi_y, MAX_FLOOR_ITEMS)
-    :load_block(fi_qty, MAX_FLOOR_ITEMS)
-    :load_block(fi_qty_hi, MAX_FLOOR_ITEMS)
-    :load_block(fi_p1, MAX_FLOOR_ITEMS)
-    :load_block(fi_flags, MAX_FLOOR_ITEMS)
-    :load_block(fi_ego, MAX_FLOOR_ITEMS)
+    jsr load_read_floor_items
 
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :load_block(recall_data_start, RECALL_DATA_SIZE)
@@ -815,6 +815,59 @@ save_write_byte_raw:
     rts
 
 // ============================================================
+// save_write_floor_items — Serialize packed floor-item RAM as the legacy
+// logical field layout:
+//   id, x, y, qty, qty_hi, p1, flags, ego
+// This preserves item semantics while allowing a denser in-RAM layout.
+// ============================================================
+save_write_floor_items:
+    :save_block(fi_item_id, MAX_FLOOR_ITEMS)
+    :save_block(fi_x, MAX_FLOOR_ITEMS)
+    :save_block(fi_y, MAX_FLOOR_ITEMS)
+    :save_block(fi_qty, MAX_FLOOR_ITEMS)
+
+    ldx #0
+!swfi_qty_hi:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_p1_start+
+    jsr floor_item_get_qty_hi_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_qty_hi-
+
+!swfi_p1_start:
+    ldx #0
+!swfi_p1:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_flags_start+
+    jsr floor_item_get_p1_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_p1-
+
+!swfi_flags_start:
+    ldx #0
+!swfi_flags:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_ego_start+
+    jsr floor_item_get_flags_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_flags-
+
+!swfi_ego_start:
+    ldx #0
+!swfi_ego:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_done+
+    jsr floor_item_get_ego_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_ego-
+!swfi_done:
+    rts
+
+// ============================================================
 // load_read_block — Read N bytes from open sequential file to dest (zp_ptr0)
 // Accumulates checksum. Advances zp_ptr0.
 // Input: zp_ptr0/hi = dest addr, save_count_lo/hi = byte count
@@ -872,6 +925,126 @@ load_read_byte:
     inc save_cksum_hi
 !lrby_no_carry:
     pla                     // A = original byte
+    rts
+
+// ============================================================
+// load_read_floor_items — Read floor items from savefile into the packed
+// in-RAM floor table. Supports both the prior 32-slot save layout and the
+// new 42-slot layout via the version byte already validated in load_game.
+// ============================================================
+load_read_floor_items:
+    lda #MAX_FLOOR_ITEMS
+    sta load_floor_item_count
+    lda load_save_version
+    cmp #PREV_SAVE_VERSION
+    bne !lrfi_count_ready+
+    lda #32
+    sta load_floor_item_count
+!lrfi_count_ready:
+    jsr item_init_floor
+
+    lda #<fi_item_id
+    sta zp_ptr0
+    lda #>fi_item_id
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_x
+    sta zp_ptr0
+    lda #>fi_x
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_y
+    sta zp_ptr0
+    lda #>fi_y
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_qty
+    sta zp_ptr0
+    lda #>fi_qty
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    ldx #0
+!lrfi_qty_hi:
+    cpx load_floor_item_count
+    bcs !lrfi_p1_start+
+    jsr load_read_byte
+    pha
+    lda fi_item_id,x
+    cmp #2
+    bcs !lrfi_qty_hi_skip+
+    pla
+    sta fi_p1,x
+    jmp !lrfi_qty_hi_next+
+!lrfi_qty_hi_skip:
+    pla
+!lrfi_qty_hi_next:
+    inx
+    jmp !lrfi_qty_hi-
+
+!lrfi_p1_start:
+    ldx #0
+!lrfi_p1:
+    cpx load_floor_item_count
+    bcs !lrfi_flags_start+
+    jsr load_read_byte
+    pha
+    lda fi_item_id,x
+    cmp #2
+    bcc !lrfi_p1_skip+
+    pla
+    sta fi_p1,x
+    jmp !lrfi_p1_next+
+!lrfi_p1_skip:
+    pla
+!lrfi_p1_next:
+    inx
+    jmp !lrfi_p1-
+
+!lrfi_flags_start:
+    ldx #0
+!lrfi_flags:
+    cpx load_floor_item_count
+    bcs !lrfi_ego_start+
+    jsr load_read_byte
+    asl
+    asl
+    asl
+    sta fi_meta,x
+    inx
+    jmp !lrfi_flags-
+
+!lrfi_ego_start:
+    ldx #0
+!lrfi_ego:
+    cpx load_floor_item_count
+    bcs !lrfi_done+
+    jsr load_read_byte
+    and #FI_META_EGO_MASK
+    ora fi_meta,x
+    sta fi_meta,x
+    inx
+    jmp !lrfi_ego-
+!lrfi_done:
     rts
 
 #if C128

@@ -91,8 +91,6 @@ test_finish:
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/player_magic_feedback.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -112,6 +110,9 @@ ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
     rts
 #import "../../common/ui_trampoline_stubs.s"
 
@@ -2616,11 +2617,26 @@ test_start:
     beq !t50_fail+
     lda #$01
     sta tc_results + 49
-    jmp !tests_done+
+    jmp !t51+
 !t50_fail:
     lda #$00
     sta tc_results + 49
 
+    // ==========================================
+    // Test 51: stale occupied bit does not block
+    // moving onto a floor item tile with no live monster.
+    // ==========================================
+!t51:
+    jsr monster_init_table
+
+    lda #20
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #20
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #17
 !tests_done:
     jmp test_finish
 

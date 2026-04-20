@@ -3,7 +3,7 @@
 // Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
 //        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$041f: $01 = pass, $00 = fail per test (32 tests)
+// Results at $0400-$0432: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #50-1
+    ldx #51-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -81,13 +81,13 @@ test_exit_trampoline:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
 #import "../../common/ui_help.s"
 #import "../../common/ui_trampoline_stubs.s"
 
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
+#import "../../common/store_data.s"
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 .segment Default
@@ -97,7 +97,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 50, $ff
+tc_results: .fill 51, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -1451,8 +1451,8 @@ test_start:
     jsr floor_item_add
 
     // Set IF_CURSED flag on floor item
-    lda #IF_CURSED
-    sta fi_flags                    // Slot 0
+    lda #IF_CURSED << FI_META_FLAGS_SHIFT
+    sta fi_meta                     // Slot 0
 
     // Stuff keyboard buffer for -more-
     lda #1
@@ -2510,11 +2510,77 @@ test_start:
 
     lda #$01
     sta tc_results + 49
-    jmp !tests_done+
+    jmp !t51+
 !t50_fail:
     lda #$00
     sta tc_results + 49
 
+    // ==========================================
+    // Test 51: floor item #33 can still be added
+    // on an empty tile after the floor table grows
+    // beyond the old 32-slot global ceiling.
+    // ==========================================
+!t51:
+    jsr item_init_floor
+    ldx #0
+!t51_seed_loop:
+    cpx #32
+    bcs !t51_seed_done+
+    txa
+    clc
+    adc #1
+    sta fi_add_x
+    lda #1
+    sta fi_add_y
+    lda #2
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t51_fail+
+    inx
+    jmp !t51_seed_loop-
+!t51_seed_done:
+    lda #10
+    sta fi_add_x
+    sta fi_add_y
+    lda #2
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t51_fail+
+
+    lda #10
+    ldy #10
+    jsr floor_item_find_at
+    bcc !t51_fail+
+    lda fi_item_id,x
+    cmp #2
+    bne !t51_fail+
+    lda zp_item_count
+    cmp #33
+    bne !t51_fail+
+
+    lda #$01
+    sta tc_results + 50
+    jmp !tests_done+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+item_test_body_end:
+
+.assert "Item test stays below MAP_BASE", item_test_body_end <= MAP_BASE, true

@@ -88,10 +88,11 @@ magic_check_new_spells:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+ui_help_display:
+store_init_all:
+store_restock_all:
+store_enter:
+    rts
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
