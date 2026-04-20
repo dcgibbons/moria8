@@ -3,6 +3,71 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT
+- [ ] Reported Failure Gate:
+  - on C128, `Earthquake` must no longer just beep; it must mutate terrain and apply its real area effect while keeping `make test64` and `make test128-fast-smoke` green
+- [x] narrow the live symptom with one discriminating question before returning to deeper emulator instrumentation
+- [x] root-cause the effect gating contract used by `eff_earthquake`
+- [x] fix the shared random-range return contract so branch-on-result callers like `Earthquake` work as intended
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest C128 `Earthquake` before commit
+
+- [ ] BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING
+- [x] BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING
+- [ ] Reported Failure Gate:
+  - `Sanctuary` should report meaningful nearby-monster feedback instead of collapsing adjacent resistant targets into `Nothing seems to happen.`; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect upstream `umoria` Sanctuary behavior and current Commodore prayer path
+- [x] update the shared adjacent-sleep feedback owner to distinguish no-target from nearby-unaffected targets
+- [x] add focused runtime coverage for the resistant-adjacent Sanctuary case
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [ ] BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT
+- [ ] Reported Failure Gate:
+  - if `Call Light` reports failure, it must not light the room or otherwise fake a successful light effect; keep `make test64` and `make test128-fast-smoke` green
+- [ ] prove whether failed `Call Light` is actually mutating room/light state or whether the failed turn only triggers an ordinary redraw/visibility update that looks like a light effect
+- [ ] if real, fix the cast/effect ordering so failed casts cannot light the room
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [ ] BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC
+- [ ] Reported Failure Gate:
+  - on C128, monsters that are clearly in the same visible lit room must not randomly disappear from the VDC gameplay frame; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the provided C128 snapshot and prove whether the visible-room monster state is correct before render or whether occupancy/visibility data is already wrong
+- [x] fix the shared post-turn redraw contract so visible room monsters do not depend on a too-small local redraw footprint
+- [x] add focused regression coverage for the redraw-promotion rule
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest the provided C128 disappearing-monsters room repro before commit
+- [ ] follow-up after failed live retest:
+  - patch the C128 renderer-owned `rv_row_occ` row cache so it is cleared every row before monster/item staging
+  - rerun `make test64`
+  - rerun `make test128-fast-smoke`
+
+- [ ] BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE
+- [ ] Reported Failure Gate:
+  - after a teleport on C128, the player must still be visible in the dungeon view even if the destination tile was previously unseen; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause whether the teleport/redraw path is failing to rebuild visibility or whether the renderer is incorrectly blanking the player on unseen tiles
+- [x] fix the gameplay renderer contract so the player glyph wins even on unseen/unvisited tiles, without regressing monster/item hidden-tile behavior
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest the teleport repro before commit
+
+- [ ] BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER
+- [ ] Reported Failure Gate:
+  - on C128, dismissing the prayer/spell list overlay must redraw the gameplay view with visible monsters intact instead of dropping them from the VDC frame; keep `make test64` and `make test128-fast-smoke` green
+- [ ] root-cause which gameplay-view restore seam after spell/prayer list dismissal is repainting terrain without rebuilding live visibility state
+- [ ] fix the shared modal/fullscreen gameplay restore path so it refreshes visibility before redraw
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
 - [x] BUG-PRIEST-BLIND-CREATURE-NO-FEEDBACK
 - [x] Reported Failure Gate:
   - priest `Blind Creature` must not just beep silently; it must apply the correct directional effect and give player-facing feedback while keeping `make test64` and `make test128-fast-smoke` green

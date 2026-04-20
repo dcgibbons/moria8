@@ -5,6 +5,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Verification
 
+- When two plausible owners can be separated by one quick live question, ask that first before diving into emulator instrumentation or snapshot micro-probing.
 - Treat the user's exact failing command or repro as the primary gate until it passes.
 - On multi-platform feature work, re-run the exact build/test gate for every affected platform before calling the work complete; one green target does not cover the other.
 - On C128, do not move code behind KERNAL-space addresses into the banked `$F000` payload if low-RAM/runtime code still jumps to those symbols while KERNAL-visible state is active; verify the linked symbol address, visible execution bank, and callsite banking together.
@@ -15,8 +16,14 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - Do not claim a fix from theory, partial tests, or neighboring evidence while the live gate is still red.
 - For visual, boot, and interaction bugs, the user-visible path outranks synthetic harness evidence.
 - Re-run the exact reported gate after each candidate fix before changing your conclusion about status.
+- Do not run the exact C64 and C128 make gates in parallel. They share generated artifacts and VICE/harness state closely enough to turn a clean product tree into a fake timeout or stale-output failure.
+- If the user says the live product repro is unchanged, treat any local smoke or control-flow theory as incomplete immediately. Do not ask for trust; go find the next real owner in the live path.
 - Once the fix is in, the relevant targeted gates are green, and independent tester signoff is green, stop; do not churn on redundant broad reruns after a transient harness hiccup unless the user explicitly asks for more proof.
 - For gameplay-facing feature work, do not rely on helper-level spell tests as evidence that the live command path is safe. Add at least one direct cast/study/pray runtime path per platform before handing the feature back for manual testing.
+- When a C64 command opens a second-step selectable prompt, do not assume the generic follow-up helper is the right owner. Fix the specific command path first, because widening a shared helper can silently break unrelated prompt flows that relied on the old no-op contract.
+- When the user says a live repro is from a fresh build and provides matching evidence, stop arguing old-session/stale-binary theories. Treat the live repro as authoritative and go find the real product seam.
+- On C64 PETSCII selection prompts, do not assume letter picks arrive as uppercase only. If a live overlay uses `a-b-c` style letters, normalize lowercase PETSCII before subtracting `$41`, or the prompt will silently reject valid unshifted keypresses.
+- When code is already executing inside an overlay, do not bounce back into that same overlay through a resident trampoline just to call a sibling UI routine. On C64, that can unwind through the trampoline epilogue and return control to gameplay while the overlay remains painted on screen.
 - For C128 gameplay crash reports, do not trust a special `C128_TEST_*` build as proof for the shipping image. Add or use a product-image repro that boots `commodore/out/moria8-c128.d71` and drives the real input path before claiming the live bug is covered.
 - For filtered inventory prompts, the selection letters are contiguous visible entries, not raw carried-slot letters. A book in carried slot `B` is still selected with `A` if it is the first visible filtered item.
 - In monitor-driven runtime smokes, once the pass trap is reached, treat that as the primary result. Do not classify the run as a product JAM because VICE later hit a cycle limit after the `BRK` pass trap and no follow-up monitor command exited the session.
@@ -206,6 +213,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - Do not run `make disk128` and `make test128-fast-smoke` in parallel. They share C128 build outputs under `commodore/out/c128` and `commodore/c128/out`, so the results are invalid as verification evidence.
 - Do not add a transient state consumer without proving the producer exists in the current tree. The `disk_setup_done == 2` C128 title-load helper was dead code because the active title setup path never emitted that state.
 - If the user says the live repro is unchanged, treat any automation that claims the bug is fixed as invalid immediately. Do not keep defending or iterating on under-modeled C128 save/load smokes once the manual drive-8-before-`L` gate disagrees.
+- On C128 VDC bugs, if snapshot evidence proves the map/monster state is correct but the live retest is still wrong, stop patching turn-level redraw flags and inspect renderer-owned staging buffers next. A stale per-row cache can look exactly like a visibility bug.
 - Do not wire a low-level C128 IRQ/CHRIN wrapper probe into the generic autostart unit worker until that worker is proven stable for the test. The focused `test_wrapper_irq128.s` probe is useful, but enabling it in the default unit phase before the harness survives real IRQ windows only turns the suite red with a VICE segfault and no actionable log.
 - For 8563 VDC block operations, verify the register trigger contract byte-for-byte: mode/select registers must be programmed before the register write that starts the operation, and stale device state should be treated as part of the bug until disproven.
 - If a user-visible C128 title regression survives a rollback of only the active title path, stop preserving inactive experiments “just in case.” In this tree the exact screenshot gate only moved once the whole save/load-era product slice was restored to `HEAD`; leaving inactive title/runtime helpers in place still preserved the bad layout.

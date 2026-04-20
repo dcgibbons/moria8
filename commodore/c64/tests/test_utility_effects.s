@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #4
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -71,6 +71,7 @@ test_finish:
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/player_magic_feedback.s"
+#import "../../common/player_magic_earthquake.s"
 #import "../../common/player_magic_utility.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -100,7 +101,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 5, $ff
+tc_results: .fill 8, $ff
 
 tpm_msg_calls:    .byte 0
 tpm_last_msg_lo:  .byte 0
@@ -108,9 +109,11 @@ tpm_last_msg_hi:  .byte 0
 tpm_huff_calls:   .byte 0
 tpm_last_huff_id: .byte 0
 test_mon_slot:    .byte 0
+test_rng_idx:     .byte 0
 pmx_work_idx:     .byte 0
 pmx_work_flag:    .byte 0
 pmx_work_damage:  .byte 0
+test_rng_script:  .fill 160, 1
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -143,6 +146,35 @@ test_combat_award_xp:
     rts
 
 test_combat_check_levelup:
+    rts
+
+test_rng_range:
+    ldx test_rng_idx
+    lda test_rng_script,x
+    inc test_rng_idx
+    rts
+
+test_rng_fill_ones:
+    lda #0
+    sta test_rng_idx
+    ldx #0
+    lda #1
+!trfo_loop:
+    sta test_rng_script,x
+    inx
+    cpx #160
+    bne !trfo_loop-
+    rts
+
+test_rng_fill_zeroes:
+    lda #0
+    sta test_rng_idx
+    ldx #0
+!trfz_loop:
+    sta test_rng_script,x
+    inx
+    cpx #160
+    bne !trfz_loop-
     rts
 
 test_start:
@@ -420,6 +452,168 @@ test_start:
 !t5_monster_ok:
     lda #$01
     sta tc_results + 4
+    jmp !t6+
+
+    // Test 6: Earthquake full effect marks redraw and can open a wall tile.
+!t6:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    :PatchJump(msg_print, test_msg_print)
+    jsr test_rng_fill_ones
+    lda #0
+    sta tpm_msg_calls
+    lda #0
+    sta vis_room_revealed
+    sta turn_scene_dirty
+    lda #28
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #18
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    lda #0
+    sta test_rng_script + 0
+    jsr eff_earthquake
+    lda vis_room_revealed
+    cmp #1
+    bne !t6_fail+
+    lda turn_scene_dirty
+    cmp #1
+    bne !t6_fail+
+    lda tpm_msg_calls
+    cmp #1
+    bne !t6_fail+
+    lda tpm_last_msg_lo
+    cmp #<eq_cast_msg
+    bne !t6_fail+
+    lda tpm_last_msg_hi
+    cmp #>eq_cast_msg
+    bne !t6_fail+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !t6_fail+
+    lda #$01
+    sta tc_results + 5
+    jmp !t7+
+!t6_fail:
+    lda #$00
+    sta tc_results + 5
+
+    // Test 7: Earthquake tile helper removes a floor item and makes a wall.
+!t7:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_ones
+    lda #21
+    sta fi_add_x
+    lda #11
+    sta fi_add_y
+    lda #17
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_qty_hi
+    sta fi_add_p1
+    sta fi_add_flags
+    sta fi_add_ego
+    jsr floor_item_add
+    bcc !t7_fail+
+    lda #21
+    sta eq_cur_x
+    lda #11
+    sta eq_cur_y
+    lda #0
+    sta eq_changed
+    lda #9
+    sta test_rng_script + 0
+    jsr eq_process_tile
+    lda eq_changed
+    cmp #1
+    bne !t7_fail+
+    lda #21
+    ldy #11
+    jsr floor_item_find_at
+    bcs !t7_fail+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_WALL_H
+    bne !t7_fail+
+    lda (zp_ptr0),y
+    and #FLAG_HAS_ITEM
+    bne !t7_fail+
+    lda #$01
+    sta tc_results + 6
+    jmp !t8+
+!t7_fail:
+    lda #$00
+    sta tc_results + 6
+
+    // Test 8: Earthquake tile helper kills an attack-only monster cleanly.
+!t8:
+    jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_ones
+    lda #21
+    sta ms_spawn_x
+    lda #11
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+    bcs !t8_spawn_ok+
+    jmp !t8_fail+
+!t8_spawn_ok:
+    stx test_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #6                      // CF_ATTACK_ONLY
+    sta (zp_ptr0),y
+    lda #21
+    sta eq_cur_x
+    lda #11
+    sta eq_cur_y
+    lda #0
+    sta eq_changed
+    lda #9
+    sta test_rng_script + 0
+    jsr eq_process_tile
+    lda eq_changed
+    cmp #1
+    bne !t8_fail+
+    ldx test_mon_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    bne !t8_fail+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #21
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !t8_fail+
+    lda #$01
+    sta tc_results + 7
+    jmp test_finish
+!t8_fail:
+    lda #$00
+    sta tc_results + 7
     jmp test_finish
 tv_setup_dark_room:
     jsr fill_map_rock
