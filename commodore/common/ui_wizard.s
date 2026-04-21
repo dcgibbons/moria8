@@ -312,6 +312,7 @@ ui_wizard_cmd_identify:
     cmp #FI_EMPTY
     beq !wiz_ident_next+
     lda inv_flags,x
+    and #~IF_SENSED & $ff
     ora #IF_IDENTIFIED
     sta inv_flags,x
     lda inv_item_id,x

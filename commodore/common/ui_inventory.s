@@ -96,7 +96,6 @@ ui_inv_display_common:
     jsr piw_inv_slot_matches_filter
     bcc !uinv_next+
 !uinv_show:
-
     // Print letter and item name
     lda uinv_row
     sta zp_cursor_row

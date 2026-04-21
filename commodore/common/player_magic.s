@@ -545,6 +545,12 @@ pm_prompt_visible_spell_choice:
     rts
 
 pm_pick_visible_spell:
+    cmp #$61
+    bcc !pm_pick_upper_ready+
+    cmp #$7b
+    bcs !pm_pick_upper_ready+
+    and #$df
+!pm_pick_upper_ready:
     sec
     sbc #$41
     bcc !pm_pick_fail+
