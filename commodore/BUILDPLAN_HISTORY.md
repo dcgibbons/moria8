@@ -6,6 +6,33 @@
 
 ---
 
+## 2026-04-21 — `BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS` sparse all-item prompt contract ✅ COMPLETE
+
+### Scope Closed
+- Fixed the `drop` item-selector regression so the `?` overlay and prompt again match what the player can actually press in a sparse inventory, including the live C128 lowercase-letter path.
+
+### What Shipped
+1. **All-items `drop` prompt range works like the other item selectors again**
+   - `commodore/common/item.s`
+   - `drop` now prints a real sparse absolute-slot range instead of the bogus hardcoded `(a-v)` text that escaped into live gameplay.
+2. **C128 lowercase direct-scan letter picks are normalized on the local `drop` path**
+   - `commodore/common/item.s`
+   - lowercase inventory-letter selection after `drop -> ?` now accepts the real shifted-lowercase PETSCII values returned by the C128 CIA scanner.
+3. **Shared prompt machinery was trimmed back instead of widened**
+   - `commodore/common/player_items.s`
+   - the failed attempt to teach the common prompt helpers new all-items semantics was backed out, and the shared prompt-print path was tightened enough to recover the C128 staged-source headroom.
+4. **Compressed prompt text refreshed**
+   - `data/huffman_strings.txt`
+   - `commodore/common/huffman_data.s`
+   - regenerated after the prompt-text changes so the shipping builds and tests use the updated strings.
+
+### Verification
+- `make -C commodore build128`: PASS
+- `./commodore/c64/run_tests.sh`: back to the pre-existing broad red baseline (`effects`, `item`, `ui_views`, `subsystems`), with no new gate failure introduced by this fix
+- user confirmed the live C128 `drop` prompt now works again
+
+---
+
 ## 2026-04-21 — `BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS` exact prompt filtering ✅ COMPLETE
 
 ### Scope Closed

@@ -54,6 +54,10 @@
   - upstream `umoria` and `vms-moria` filter book prompts by exact book class before selection, while the Commodore port had drifted to a broad `ICAT_BOOK` prompt followed by late rejection
   - the live fix now uses exact mage-book vs prayer-book prompt filters, so both the visible letters and the `?` inventory overlay only show books the active caster can actually use
   - the focused regression coverage now seeds a mixed inventory and asserts that prayer selection only renders prayer books in the visible prompt list
+- The `drop` item prompt contract is now back in line with the rest of the item selectors:
+  - sparse all-item inventories once again advertise the real highest selectable letter instead of a hardcoded `(a-v)` range
+  - the C128 live fix also handles lowercase direct-scan letter picks on the `drop -> ?` path without widening the shared prompt parser contract
+  - the final fix stayed local enough to keep the C128 staged-source/build128 gate green instead of growing the shared prompt machinery
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

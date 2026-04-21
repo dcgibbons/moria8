@@ -129,8 +129,8 @@ piw_inv_slot_matches_filter:
     sec
     sbc #58
     cmp #3
-    bcc !piw_inv_match+
     bcs !piw_inv_fail+
+    bcc !piw_inv_match+
 
 !piw_inv_wearable:
     tax
@@ -149,14 +149,7 @@ piw_inv_slot_matches_filter:
     sec
     sbc #55
     cmp #3
-    bcc !piw_inv_match+
     bcs !piw_inv_fail+
-
-!piw_inv_fail:
-    clc
-    pla
-    tax
-    rts
 
 !piw_inv_match:
     sec
@@ -164,10 +157,18 @@ piw_inv_slot_matches_filter:
     tax
     rts
 
-// piw_build_visible_inv_cache — cache visible carried slots for a filter
+!piw_inv_fail:
+    clc
+    pla
+    tax
+    rts
+
+// piw_count_filtered_inv / piw_build_visible_inv_cache — count/cache visible
+// carried slots for a filter.
 // Input: A = filter value
 // Output: A = visible count
 // Clobbers: X, Y
+piw_count_filtered_inv:
 piw_build_visible_inv_cache:
     sta piw_filter
     ldy #0
@@ -190,21 +191,14 @@ piw_build_visible_inv_cache:
     tya
     rts
 
-// piw_count_filtered_inv — count visible carried items for a filter
-// Input: A = filter value
-// Output: A = visible count
-// Clobbers: X, Y
-piw_count_filtered_inv:
-    jmp piw_build_visible_inv_cache
-
 // piw_prompt_filtered_inv — print a filtered inventory prompt or "nothing there"
 // Input: A = filter value, X = Huffman prompt string id
 // Output: carry set if the prompt was printed, carry clear if no visible items
 piw_prompt_filtered_inv:
-    sta piw_filter
+    tay
     txa
     pha
-    lda piw_filter
+    tya
     jsr piw_build_visible_inv_cache
     bne !piw_prompt_inv_have_choices+
     pla
@@ -216,7 +210,17 @@ piw_prompt_filtered_inv:
     sta piw_qty
     pla
     tax
+    lda piw_filter
+    cmp #$ff
+    bne !piw_prompt_inv_contiguous+
+    ldy piw_visible_count
+    lda piw_visible_slots - 1,y
+    clc
+    adc #1                      // absolute slot 0 -> range count 1 -> 'A'
+    bne !piw_prompt_inv_emit+
+!piw_prompt_inv_contiguous:
     lda piw_qty
+!piw_prompt_inv_emit:
     jsr piw_print_prompt_with_count
     sec
     rts
@@ -243,8 +247,11 @@ piw_pick_filtered_inv_key:
     rts
 
 // piw_build_visible_equip_cache — cache non-empty equipment slots
+// piw_count_visible_equip / piw_build_visible_equip_cache — count/cache
+// non-empty equipment slots for takeoff prompt mapping.
 // Output: A = non-empty equipment count
 // Clobbers: X, Y
+piw_count_visible_equip:
 piw_build_visible_equip_cache:
     ldy #0
     ldx #EQUIP_WEAPON
@@ -262,12 +269,6 @@ piw_build_visible_equip_cache:
     sty piw_visible_count
     tya
     rts
-
-// piw_count_visible_equip — count equipped items for takeoff prompt mapping
-// Output: A = non-empty equipment count
-// Clobbers: X, Y
-piw_count_visible_equip:
-    jmp piw_build_visible_equip_cache
 
 // piw_pick_visible_equip_key — map a contiguous equipment letter to a slot
 // Input: A = PETSCII key
@@ -295,17 +296,11 @@ piw_pick_visible_equip_key:
 // Output: message printed via the message-line path
 piw_print_prompt_with_count:
     sta piw_p1
-#if C128
-    php
-    sei
-#endif
     jsr huff_decode_string
 
     lda piw_p1
-    sec
-    sbc #1
     clc
-    adc #$01                    // Screen code 'A'
+    adc #$40                    // Screen code 'A' for count 1
     sta piw_qty
 
     ldy #0
@@ -333,12 +328,9 @@ piw_print_prompt_with_count:
     sta msg_src_lo
     lda zp_ptr0_hi
     sta msg_src_hi
-    plp
-    jsr msg_print_cached
-    rts
+    jmp msg_print_cached
 #else
-    jsr msg_print
-    rts
+    jmp msg_print
 #endif
 
 // item_wear — Wear/wield an item from carried inventory

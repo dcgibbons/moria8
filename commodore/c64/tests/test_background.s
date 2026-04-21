@@ -94,6 +94,14 @@ show_inv_and_select:
     lda #$20
     rts
 
+piw_prompt_filtered_inv:
+    clc
+    rts
+
+piw_pick_filtered_inv_key:
+    clc
+    rts
+
 magic_recalc_mana:
     rts
 

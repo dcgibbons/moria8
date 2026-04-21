@@ -196,6 +196,7 @@ reset_shared_state:
     sta help_page_idx
     sta test_key_idx
     sta test_key_len
+    sta piw_visible_count
     sta zp_cursor_row
     sta zp_cursor_col
     sta zp_store_idx
@@ -221,6 +222,8 @@ reset_shared_state:
     sta player_data + PL_RACE
     sta player_data + PL_CLASS
     sta player_data + PL_AC
+    lda #$ff
+    sta piw_filter
 
     ldx #STAT_COUNT - 1
     lda #10
@@ -534,13 +537,35 @@ test_inventory_select_view:
     jsr reset_shared_state
 
     lda #4
-    sta inv_item_id + 0
+    sta inv_item_id + 1
     lda #1
-    sta inv_qty + 0
+    sta inv_qty + 1
+    lda #17
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
     lda #$ff
     sta piw_filter
 
     jsr ui_inv_select_display
+
+    lda #<expected_sparse_inv_line_b
+    sta zp_ptr0
+    lda #>expected_sparse_inv_line_b
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_sparse_inv_line_e
+    sta zp_ptr0
+    lda #>expected_sparse_inv_line_e
+    sta zp_ptr0_hi
+    lda #3
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
 
     lda #<uinv_select_str
     sta zp_ptr0
@@ -1409,6 +1434,12 @@ expected_filtered_inv_line_a:
     .text ") " ; .byte 0
 expected_filtered_inv_line_b:
     .byte $02
+    .text ") " ; .byte 0
+expected_sparse_inv_line_b:
+    .byte $02
+    .text ") " ; .byte 0
+expected_sparse_inv_line_e:
+    .byte $05
     .text ") " ; .byte 0
 expected_filtered_book_line_a:
     .byte $01

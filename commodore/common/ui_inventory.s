@@ -34,6 +34,8 @@ ui_inv_display:
 // Preserves: nothing
 ui_inv_select_display:
     lda piw_filter
+    jsr piw_build_visible_inv_cache
+    lda piw_filter
     cmp #$fd
     beq !uinv_identify_select+
     lda #UINV_SELECT_COL

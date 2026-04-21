@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #51-1
+    ldx #52-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -97,7 +97,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 51, $ff
+tc_results: .fill 52, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -175,15 +175,8 @@ test_pick_recharge_item:
     beq !tpri_cancel+
     cmp #$20
     beq !tpri_cancel+
-    sec
-    sbc #$41
+    jsr piw_pick_filtered_inv_key
     bcc !tpri_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !tpri_cancel+
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !tpri_cancel+
     tay
     lda it_category,y
     cmp #ICAT_WAND
@@ -211,7 +204,7 @@ test_pick_recharge_item:
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #51-1
+    ldx #52-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2496,7 +2489,7 @@ test_start:
 
     lda #$3f
     sta test_key_script + 0
-    lda #$44                    // absolute inventory slot D => slot 3 staff
+    lda #$43                    // visible item C => slot 3 staff
     sta test_key_script + 1
     lda #0
     sta test_key_script + 2
@@ -2572,10 +2565,85 @@ test_start:
 
     lda #$01
     sta tc_results + 50
-    jmp !tests_done+
+    jmp !t52+
 !t51_fail:
     lda #$00
     sta tc_results + 50
+
+    // ==========================================
+    // Test 52: item_drop '?' overlay preserves
+    // real sparse inventory letters for direct
+    // selection.
+    // ==========================================
+!t52:
+    jsr item_init_floor
+    jsr item_init_inventory
+    :PatchJump(input_get_key, test_input_get_key_script)
+    :PatchJump(input_wait_release, test_input_wait_release)
+    lda #0
+    sta test_key_idx
+    sta zp_msg_flags
+
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #4
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #6
+    sta inv_item_id + 4
+    lda #1
+    sta inv_qty + 4
+    lda #0
+    sta inv_p1 + 4
+    sta inv_flags + 4
+
+    lda #$3f
+    sta test_key_script + 0
+    lda #$45                    // slot E => sparse inventory slot 4
+    sta test_key_script + 1
+    lda #0
+    sta test_key_script + 2
+
+    jsr item_drop
+    bcc !t52_fail+
+
+    lda inv_item_id + 1
+    cmp #4
+    bne !t52_fail+
+    lda inv_item_id + 4
+    cmp #FI_EMPTY
+    bne !t52_fail+
+
+    lda #10
+    ldy #10
+    jsr floor_item_find_at
+    bcc !t52_fail+
+    lda fi_item_id,x
+    cmp #6
+    bne !t52_fail+
+
+    lda #$01
+    sta tc_results + 51
+    jmp !tests_done+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

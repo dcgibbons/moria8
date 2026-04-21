@@ -3,6 +3,23 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS
+- [x] Reported Failure Gate:
+  - in `drop`, the prompt and the `?` inventory overlay must agree on the real sparse inventory letters the player can press; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted new regression
+- [x] inspect the `drop` prompt path and the shared direct-select inventory overlay to prove where visible overlay letters diverge from the `item_drop` parser
+- [x] fix `item_drop` so the `?` overlay selection path preserves the real sparse all-items letters instead of forcing filtered-selector contiguous semantics onto `drop`
+- [x] add focused regression coverage for sparse-inventory drop selection via `?`
+- [x] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - the first attempts went down the wrong road twice: all-items `?` overlays were incorrectly treated like filtered relabeling views, and later the bogus `(a-v)` range was removed instead of fixed
+  - the correct ownership split is now explicit: filtered prompts still use the shared contiguous-range helper, while `drop` owns the sparse absolute-slot semantics the user actually sees in gameplay
+  - `item_drop` now uses the shared prompt helper with the all-items branch restored for absolute highest-slot range patching, so sparse inventories display `Drop which item (a-d)?` like the other item selectors instead of lying with `(a-v)`
+  - the live C128 failure after `?` was a separate encoding seam: direct CIA scan returns shifted lowercase PETSCII (`$c1-$da`) for lowercase letter picks, so `item_drop` now normalizes that local prompt path before the absolute-slot math
+  - `ui_inv_select_display` still only relabels genuinely filtered inventory views (`!= $ff`), so book/potion/scroll/wear selectors stay contiguous while all-items overlays preserve the player's real sparse letters
+  - the bad shared prompt-generalization work was backed out so `make -C commodore build128` returned to green; `./commodore/c64/run_tests.sh` is back at the existing broad red baseline (`effects`, `item`, `ui_views`, `subsystems`) rather than introducing a new regression
+
 - [x] BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS
 - [ ] Reported Failure Gate:
   - prayer and spell book prompts must only list the matching upstream book class, and the shared regression gate must stay green

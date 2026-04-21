@@ -914,8 +914,13 @@ item_pickup:
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
 item_drop:
     // Print prompt
+    lda #$ff
     ldx #HSTR_IDR_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !idr_have_choices+
+    clc
+    rts
+!idr_have_choices:
 
     jsr input_prepare_followup_key
 
@@ -924,16 +929,19 @@ item_drop:
 
     // '?' shows inventory (all items) and re-prompts
     cmp #$3f
-    bne !idr_not_inv+
-    lda #$ff                    // Filter: show all items
+    bne !idr_direct_pick+
+    lda #$ff                    // Filter: show all items with real slot letters
     jsr show_inv_and_select
-!idr_not_inv:
 
-    // Check for ESC ($03) or space ($20) -> cancel
-    cmp #$03
-    beq !idr_cancel+
-    cmp #$20
-    beq !idr_cancel+
+!idr_direct_pick:
+#if C128
+    cmp #$c1
+    bcc !idr_norm_done+
+    cmp #$db
+    bcs !idr_norm_done+
+    and #$7f                    // Shifted lowercase PETSCII -> uppercase
+!idr_norm_done:
+#endif
 
     // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
     sec
@@ -946,9 +954,13 @@ item_drop:
     tax
     lda inv_item_id,x
     cmp #FI_EMPTY
-    bne !idr_found+
+    beq !idr_empty+
+
+    // X = inventory slot. Save it.
+    stx ipu_slot
 
     // Empty slot
+!idr_empty:
     ldx #HSTR_PIW_NOTHING
     jsr huff_print_msg
     clc
@@ -959,10 +971,6 @@ item_drop:
     jsr huff_print_msg
     clc
     rts
-
-!idr_found:
-    // X = inventory slot. Save it.
-    stx ipu_slot
 
     // Set up floor item from inventory data
     lda zp_player_x
