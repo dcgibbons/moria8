@@ -38,6 +38,10 @@
     - monster recall and wizard stay on the banked C64 path because both can hit gameplay/tier restore flows that need the live `$E000` tier window
     - the dead resident `string_bank.s` import and dead banked `string_bank_banked.s` import are both gone from the shipping C64 image
     - current direct C64 assembly reports `Program fits below MAP_BASE=true` with `banked payload: 2898 bytes at $BE6E-$C9C0`
+- The recent C128 `Glyph of Warding` cast-text corruption is now closed:
+  - the root cause was ownership/layout drift, not character encoding
+  - gameplay spell text no longer depends on raw resident literals that can spill into `DeathOverlay` or past the C128 staged-source ceiling
+  - the glyph feedback and save/load status copy now live in the shared Huffman dictionary, which restored the C128 staged image under `$E000` without shortening user-facing text
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

@@ -181,9 +181,8 @@ eff_glyph_of_warding:
     ldy zp_player_y
     jsr floor_item_find_at
     bcc !egow_free+
-    lda #<pmx_msg_object_under
-    ldy #>pmx_msg_object_under
-    jsr pmx_print_inline
+    ldx #HSTR_PMU_GLYPH_BLOCK
+    jsr huff_print_msg
     rts
 !egow_free:
     lda zp_player_x
@@ -192,8 +191,7 @@ eff_glyph_of_warding:
     bcc !egow_done+
     lda #1
     sta vis_room_revealed
+    ldx #HSTR_PMU_GLYPH_OK
+    jmp huff_print_msg
 !egow_done:
     rts
-
-pmx_msg_object_under:
-    .text "There is already an object under you." ; .byte 0

@@ -214,9 +214,8 @@ med_s14:
 med_s16:
     jsr eff_create_food
     bcs !med_s16_done+
-    lda #<pmx_msg_object_under
-    ldy #>pmx_msg_object_under
-    jsr pmx_print_inline
+    ldx #HSTR_PMU_GLYPH_BLOCK
+    jsr huff_print_msg
 !med_s16_done:
     rts
 med_s17:
@@ -312,9 +311,8 @@ ped_s12:
 ped_s13:
     jsr eff_create_food
     bcs !ped_s13_done+
-    lda #<pmx_msg_object_under
-    ldy #>pmx_msg_object_under
-    jsr pmx_print_inline
+    ldx #HSTR_PMU_GLYPH_BLOCK
+    jsr huff_print_msg
 !ped_s13_done:
     rts
 ped_s14:

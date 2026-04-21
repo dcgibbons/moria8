@@ -691,11 +691,8 @@ load_resume_game:
     jsr status_draw
 
     // Welcome back message
-    lda #<save_welcome_str
-    sta zp_ptr0
-    lda #>save_welcome_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_WELCOME
+    jsr huff_print_msg
 
 main_loop:
 #if C128

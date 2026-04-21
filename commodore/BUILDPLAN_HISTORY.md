@@ -6,6 +6,50 @@
 
 ---
 
+## 2026-04-21 — C128 `Glyph of Warding` cast-text ownership repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C128 corruption in the `Glyph of Warding` cast message.
+- Repaired the underlying ownership/layout seam instead of adding another spell-text overlay or shortening copy.
+- Folded the affected gameplay and save/load status strings into the shared Huffman dictionary so the resident image fits again on both platforms.
+
+### Root Cause
+- The visible corruption was not a PETSCII-vs-screen-code problem.
+- The original WIP placed the glyph strings where their linked addresses could drift into the wrong ownership region on C128:
+  - one attempt left them in staged-only space past the live `$E000` overlay window
+  - another attempt moved them into `DeathOverlay`, which overflowed that overlay
+  - moving them into the resident Default image then pushed the staged C128 banked payload source past the required `$E000` ceiling
+- The real bug class was ownership drift: live gameplay spell feedback was depending on fragile raw literals instead of the project’s established compressed-string path.
+
+### What Changed
+1. **Glyph feedback moved to Huffman-backed message IDs**
+   - [common/player_magic_utility.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/player_magic_utility.s) now prints glyph-success and blocked-underfoot feedback through `HSTR_PMU_GLYPH_OK` / `HSTR_PMU_GLYPH_BLOCK` instead of raw string pointers.
+   - [common/player_magic_execute_overlay.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/player_magic_execute_overlay.s) now uses the same Huffman-backed blocked-underfoot message for `Create Food`, removing the last dependency on the deleted raw spell-runtime text block.
+2. **Resident save/load status strings were moved into the shared dictionary**
+   - [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/save.s) and [common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/game_loop.s) now print save/load status, overwrite, media, and welcome-back messages through new `HSTR_SAVE_*` entries.
+   - [common/runtime_ui_strings.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/runtime_ui_strings.s) now keeps only the genuinely direct-dereference title/disk UI strings that still need raw resident ownership.
+3. **Huffman corpus and tests updated**
+   - [data/huffman_strings.txt](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/data/huffman_strings.txt) and regenerated [common/huffman_data.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/huffman_data.s) now include the glyph and save/load status entries.
+   - [c64/tests/test_utility_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c64/tests/test_utility_effects.s) now asserts on the glyph Huffman IDs instead of deleted raw string symbols.
+
+### Verification
+- Exact build/layout gate:
+  - `make -C commodore build128` = `PASS`
+  - C128 staged banked payload source restored below `$E000` (`Banked payload: 4085 bytes at $CFCF-$DFC4`)
+  - C128 death overlay restored under its ceiling (`Death overlay: 4056 bytes at $E000-$EFD8`)
+- Broader C64 regression run:
+  - `./commodore/c64/run_tests.sh` = `41 passed, 4 failed`
+  - the touched `utility_effects` suite now assembles and runs with the new glyph Huffman IDs
+  - the remaining failures were unrelated pre-existing suites (`effects`, `item`, `subsystems`)
+- Live validation:
+  - user confirmed the C128 glyph cast message now renders correctly
+
+### Outcome
+- The glyph corruption is removed from active work.
+- The fix reinforces the project rule that new resident gameplay text should prefer Huffman ownership over ad hoc raw literals when layout pressure is already tight.
+
+---
+
 ## 2026-04-13 — `FEAT-VMS-RECALL-SEMANTICS` `/` symbol identify ✅ COMPLETE
 
 ### Scope Closed

@@ -342,6 +342,9 @@ test_start:
     lda #0
     sta vis_room_revealed
     sta tpm_msg_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(msg_print, test_msg_print)
     jsr eff_glyph_of_warding
     lda glyph_active + 0
@@ -356,7 +359,11 @@ test_start:
     lda vis_room_revealed
     cmp #1
     bne !t2_fail+
-    lda tpm_msg_calls
+    lda tpm_huff_calls
+    cmp #1
+    bne !t2_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PMU_GLYPH_OK
     bne !t2_fail+
     lda #$01
     sta tc_results + 1
@@ -372,6 +379,8 @@ test_start:
     lda #0
     sta vis_room_revealed
     sta tpm_msg_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
     sta tpm_last_msg_lo
     sta tpm_last_msg_hi
     lda zp_player_x
@@ -392,14 +401,11 @@ test_start:
     jsr eff_glyph_of_warding
     lda glyph_active + 0
     bne !t3_fail+
-    lda tpm_msg_calls
+    lda tpm_huff_calls
     cmp #1
     bne !t3_fail+
-    lda tpm_last_msg_lo
-    cmp #<pmx_msg_object_under
-    bne !t3_fail+
-    lda tpm_last_msg_hi
-    cmp #>pmx_msg_object_under
+    lda tpm_last_huff_id
+    cmp #HSTR_PMU_GLYPH_BLOCK
     bne !t3_fail+
     lda #$01
     sta tc_results + 2

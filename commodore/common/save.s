@@ -152,11 +152,8 @@ save_confirm_overwrite:
     sta save_block_hi
     jsr save_file_exists
     bcc !save_confirm_done+
-    lda #<save_overwrite_str
-    sta zp_ptr0
-    lda #>save_overwrite_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_OVERWRITE
+    jsr huff_print_msg
 #if C128
     jsr input_prepare_followup_key
 #endif
@@ -184,11 +181,8 @@ save_confirm_overwrite:
 save_select_output_name_c64:
     jsr save_file_exists
     bcc !save_select_ok+
-    lda #<save_overwrite_str
-    sta zp_ptr0
-    lda #>save_overwrite_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_OVERWRITE
+    jsr huff_print_msg
 !save_select_loop:
     jsr input_get_key
     cmp #$59                // Y
@@ -210,18 +204,12 @@ save_game:
     bcc !save_media_ok+
     lda disk_setup_done
     bne !save_wrong_media+
-    lda #<disk_need_save_str
-    sta zp_ptr0
-    lda #>disk_need_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_NEED_SAVE
     bne !save_media_fail+
 !save_wrong_media:
-    lda #<disk_bad_save_str
-    sta zp_ptr0
-    lda #>disk_bad_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
-    jsr msg_print
+    jsr huff_print_msg
 save_return_fail:
 #if !C128
     lda #BANK_NO_BASIC
@@ -240,11 +228,8 @@ save_return_fail:
 #endif
 
     // Show "SAVING GAME..." message
-    lda #<save_saving_str
-    sta zp_ptr0
-    lda #>save_saving_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_SAVING
+    jsr huff_print_msg
 
     // Sync ZP fields back to player struct
     jsr player_sync_from_zp
@@ -391,11 +376,8 @@ save_return_fail:
     sta $dd00
 
     // Show success
-    lda #<save_done_str
-    sta zp_ptr0
-    lda #>save_done_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_DONE
+    jsr huff_print_msg
 #if !C128
     lda #BANK_NO_BASIC
     sta $01
@@ -411,11 +393,8 @@ save_return_fail:
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
 !save_error:
-    lda #<save_ioerr_str
-    sta zp_ptr0
-    lda #>save_ioerr_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
     jmp save_return_fail
 
 // ============================================================
@@ -437,28 +416,19 @@ load_game:
     bcc !load_media_ok+
     lda disk_setup_done
     bne !load_wrong_media+
-    lda #<disk_need_save_str
-    sta zp_ptr0
-    lda #>disk_need_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_NEED_SAVE
     bne !load_media_fail+
 !load_wrong_media:
-    lda #<disk_bad_save_str
-    sta zp_ptr0
-    lda #>disk_bad_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 !load_media_ok:
 
     // Show "LOADING GAME..." message
-    lda #<save_load_str
-    sta zp_ptr0
-    lda #>save_load_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_LOADING
+    jsr huff_print_msg
 
     // Reset checksum
     lda #0
@@ -654,11 +624,8 @@ load_game:
     sta load_result
     // Close file (may still be open if corruption detected mid-read)
     jsr load_close_file_restore
-    lda #<save_corrupt_str
-    sta zp_ptr0
-    lda #>save_corrupt_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_CORRUPT
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -670,11 +637,8 @@ load_game:
     lda #LOAD_RESULT_UNSUPPORTED
     sta load_result
     jsr load_close_file_restore
-    lda #<save_unsupported_str
-    sta zp_ptr0
-    lda #>save_unsupported_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_UNSUPPORTED
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -689,11 +653,8 @@ load_game:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
-    lda #<save_notfound_str
-    sta zp_ptr0
-    lda #>save_notfound_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_NOTFOUND
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -704,11 +665,8 @@ load_game:
 !load_fail:
     lda #LOAD_RESULT_IOERR
     sta load_result
-    lda #<save_ioerr_str
-    sta zp_ptr0
-    lda #>save_ioerr_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
 #if C128
     clc
     rts

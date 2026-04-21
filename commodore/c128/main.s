@@ -3143,6 +3143,10 @@ runtime_low_data_end:
 }
 .segment Default
 
+#if C128
+ego_str_holy_avenger_common:
+    .text " (Holy Avenger)" ; .byte 0
+#endif
 
 // ============================================================
 // Banked code payload — stored inline here, copied to $F000
@@ -3174,7 +3178,6 @@ first_banked_function:
 banked_code_end:
 }
 banked_payload_end:
-
 
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
@@ -3256,8 +3259,6 @@ program_end:
 
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_ind_pfx < $D000, true
-.assert "Need-save message stays below I/O hole", disk_need_save_str < $D000, true
-.assert "Wrong-save message stays below I/O hole", disk_bad_save_str < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true

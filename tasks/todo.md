@@ -3,6 +3,15 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT
+- [ ] Reported Failure Gate:
+  - live C128 `Glyph of Warding` cast message must stop rendering corrupt text; the current WIP manual repro is still unchanged
+- [x] prove whether the corruption owner is encoding or residency/layout
+- [x] move the glyph message strings to the correct resident owner without regressing C64/C128 layout
+- [ ] verify:
+  - `make -C commodore build128` PASS
+  - `./commodore/c64/run_tests.sh` FAIL for unrelated existing suites (`effects`, `item`, `subsystems`); `utility_effects` now assembles/runs with the new Huffman glyph IDs
+
 - [ ] BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR
 - [ ] Reported Failure Gate:
   - `Sense Surroundings` must match `umoria`'s prayer behavior (`spellMapCurrentArea`) instead of sharing the current wizard floor-plan reveal; keep `make test64` and `make test128-fast-smoke` green
@@ -6975,3 +6984,28 @@ The section below is retained only as historical context for the earlier dual-en
   - current implementation clamps live message rendering to one row width and stores only one `SCREEN_COLS` slice per history entry in `commodore/common/ui_messages.s`, `commodore/c64/screen.s`, and `commodore/c128/screen_vdc.s`
   - priority: low polish; rare on normal play, more visible on deeper levels with long monster names/effects
   - desired future fix: wrap across rows 0-1 cleanly, preserve sensible `-more-` behavior, and decide whether history should keep wrapped/continued lines or widened entries
+
+- [ ] BUG-GLYPH-OF-WARDING-UMORIA-PARITY
+- [x] Reported Failure Gate:
+  - `Glyph of Warding` should work like upstream `umoria` and provide clear player-facing feedback; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current glyph placement/break mechanic and the live UX path
+- [x] verify the exact upstream `umoria` glyph behavior and break semantics
+- [x] patch the spell to match upstream mechanics as closely as practical and add clear placement/block/break feedback
+- [x] add focused regression coverage for glyph placement and monster interaction feedback
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+  - review:
+    - mechanic fix: glyph break odds now follow the upstream `umoria` shape (`1/12` gate, then `1/250 < monster level`), and the blocker is removed correctly when a monster breaks it
+    - UX fix: glyphs render as a visible rune on the map; placement still refuses occupied floor-item tiles and keeps the existing blockage message
+    - C128 root cause: the first red C128 gate was not “the machine is out of RAM”; the resident staged source for the banked payload had drifted one byte into the `$E000-$EFFF` overlay window
+    - consultant-backed correction: keep glyph rendering in the resident renderer, fix the staged-source contract instead of changing player-facing text to save space
+    - implementation detail: fixed a real C128 glyph-render bug where `glyph_find_at` could read a stale `Y` on no-item tiles, tightened `glyph_find_at` itself to reclaim resident bytes, and moved the C128-only `Holy Avenger` suffix out of `RuntimeLowData` into ordinary `Default` RAM
+    - live follow-up from snapshot `~/vice-snapshot-20260421120315.vsf`: the intermediate attempt that parked the C128-only suffix inside `memory128.s`’s Common-RAM MMU helper blob destabilized the `w_close -> ExitKernal_sub` preload path during `MONSTER.DB.1` load and produced a live JAM at `$016D`; that placement is now reverted
+    - live glyph-message follow-up: `Glyph of Warding` now prints `A glyph appears beneath you.` without reusing `OVL_DEATH` ownership for the message text; on C128 the gameplay-owned glyph strings were moved out of the banked payload so `banked_code_end <= $FFFA` and `banked_payload_end <= $E000` stay green again
+    - live glyph-message rendering fix: the first placement message build used the wrong assembler encoding for direct `msg_print` strings, so the live C128 path rendered garbage; `player_magic_runtime_text.s` now assembles under `screencode_mixed`
+    - consultant note: the cleaner future full ownership move is to shift glyph-effect runtime text/effect handling into a gameplay-owned overlay such as `OVL_ITEMS`, but this fix stays minimal and keeps the live spell text out of the death overlay
+    - verification:
+      - `make test64` PASS (`45 passed, 0 failed`)
+      - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+      - `TEST_FILTER='boot_tier_transition_smoke' bash commodore/c128/run_tests128.sh` PASS (`1 passed, 0 failed`)
