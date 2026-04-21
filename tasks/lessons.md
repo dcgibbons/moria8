@@ -41,6 +41,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Scope And Design
 
 - For shared C64/C128 UI renderers, do not emit raw mixed-case screen-code literals through `screen_put_char` unless the bytes are valid for both backends. If a shared path needs explicit letters, prefer PETSCII-safe uppercase bytes or add a test that inspects the rendered bytes.
+- On C128 VDC gameplay rendering, keep full-frame `render_viewport` and per-tile `render_single_tile` overlay precedence in lockstep. If one path draws glyphs/items/monsters/player differently, `vis_room_revealed` or modal restores will erase live state until a later local redraw repairs it.
 - On 6502 UI code, do not assume `screen_put_char` preserves `A` or `Y`. If you need to emit the same literal twice or keep an index alive across character writes, reload the literal and move the index to preserved state first.
 - For compact monster/recall views, do not render placeholder attack slots with zero dice or sides as literal `0D0` data. Treat zero-damage attack entries as absent until real recall knowledge exists.
 - On this project, do not shorten user-facing strings to recover C64 bytes without explicit user consent. Treat visible copy as part of the product contract and recover space elsewhere first.

@@ -6,6 +6,43 @@
 
 ---
 
+## 2026-04-21 — C128 `Glyph of Warding` VDC redraw parity fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C128 VDC bug where casting `Glyph of Warding` could make earlier visible glyphs disappear until the player moved.
+- Repaired the renderer ownership seam directly instead of pushing spell-state or text ownership around again.
+- Added focused VDC coverage so full-frame redraw and single-tile redraw now share the same glyph contract.
+
+### Root Cause
+- Gameplay state was correct; the provided VICE snapshot still had the older glyph alive in RAM at its map coordinates.
+- The bug was a renderer-parity failure inside [c128/dungeon_render_vdc.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/dungeon_render_vdc.s):
+  - `render_single_tile` already checked `glyph_find_at` and could paint `SC_GLYPH`
+  - full-frame `render_viewport` repainted terrain, items, and monsters but did not reapply the glyph overlay
+- Casting `Glyph of Warding` sets the shared room-reveal redraw path, which promoted the next frame to a full redraw. That redraw erased previously visible glyphs until later movement triggered local tile repaint through `render_single_tile`.
+
+### What Changed
+1. **Full-frame VDC redraw now applies glyph overlay**
+   - [c128/dungeon_render_vdc.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/dungeon_render_vdc.s) now overlays `SC_GLYPH` during `render_viewport` with the same precedence model used by `render_single_tile`: terrain first, then item/monster/glyph, then player override.
+2. **Renderer-local byte recovery kept the fix in the correct owner**
+   - The runtime-low budget pressure from the new glyph parity logic was absorbed by tightening short control-flow hops and row-scan loops inside the same VDC renderer module instead of relocating gameplay ownership.
+3. **Focused VDC regression coverage added**
+   - [c128/tests/test_vdc_scroll_delta128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/tests/test_vdc_scroll_delta128.s) now stubs `glyph_find_at` and asserts that a full `render_viewport` paints a visible glyph tile correctly.
+
+### Verification
+- Exact build/layout gate:
+  - `make -C commodore build128` = `PASS`
+  - `RuntimeLowData-segment: $1000-$19f4`, back below the floor-item table boundary
+- Exact reported fast C128 gate:
+  - `make test128-fast` = harness startup failure twice (`unable to connect to VICE monitor at 127.0.0.1:6510`) before tests executed
+- Live validation:
+  - user confirmed the disappearing-glyph VDC repro is fixed in gameplay
+
+### Outcome
+- The bug is removed from active work.
+- The design rule is now explicit: full-frame and local VDC redraw paths must keep overlay precedence in lockstep or room-reveal/modal redraws will erase live scene state until later tile repairs.
+
+---
+
 ## 2026-04-21 — C128 `Glyph of Warding` cast-text ownership repair ✅ COMPLETE
 
 ### Scope Closed

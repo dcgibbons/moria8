@@ -3,6 +3,20 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS
+- [ ] Reported Failure Gate:
+  - on C128 VDC, casting `Glyph of Warding` repeatedly must not make previously visible glyphs disappear until movement; keep `make test128-fast` green
+- [x] inspect the provided VICE snapshot and prove whether glyph state is wrong in RAM or only wrong on screen
+- [x] root-cause the redraw seam between full-frame `render_viewport` and `render_single_tile`
+- [x] add focused VDC regression coverage for glyph overlay on full viewport redraw
+- [ ] verify:
+  - `make test128-fast`
+- [ ] review:
+  - snapshot state kept the prior glyph alive in gameplay RAM, so this was not a lost-state bug
+  - `render_single_tile` already overlaid glyphs, but full-frame `render_viewport` repainted terrain/items/monsters and never reapplied the glyph layer
+  - casting set `vis_room_revealed`, which promoted the next frame to a full redraw, so the renderer erased old glyphs until movement triggered local tile redraws that *did* know about glyphs
+  - the product fix belongs in VDC renderer parity, not in spell state, message ownership, or overlay placement
+
 - [ ] BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT
 - [ ] Reported Failure Gate:
   - live C128 `Glyph of Warding` cast message must stop rendering corrupt text; the current WIP manual repro is still unchanged

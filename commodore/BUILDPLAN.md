@@ -42,6 +42,10 @@
   - the root cause was ownership/layout drift, not character encoding
   - gameplay spell text no longer depends on raw resident literals that can spill into `DeathOverlay` or past the C128 staged-source ceiling
   - the glyph feedback and save/load status copy now live in the shared Huffman dictionary, which restored the C128 staged image under `$E000` without shortening user-facing text
+- The recent C128 `Glyph of Warding` disappearing-glyph redraw bug is now closed:
+  - the root cause was renderer parity drift, not lost glyph state
+  - full `render_viewport` now reapplies the glyph overlay instead of only the single-tile path doing so
+  - the focused VDC renderer tests now cover glyph overlay on full redraw so room-reveal redraws cannot silently erase visible glyphs again
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

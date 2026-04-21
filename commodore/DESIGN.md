@@ -361,6 +361,10 @@ The palette is defined in `color.s`:
 - Monsters: color-coded by threat (green = low, yellow = moderate, red = high,
   relative to player level)
 - Unlit/unknown tiles: black (not rendered)
+- C128 VDC renderer invariant: `render_viewport` and `render_single_tile` must
+  apply the same overlay precedence for items, monsters, glyphs, and player.
+  Full redraws triggered by room reveal or modal restore are common enough that
+  any drift between those paths becomes a live disappearing-entity bug.
 
 ### 9. Variable Monster Speed
 
