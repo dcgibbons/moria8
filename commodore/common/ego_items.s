@@ -24,8 +24,6 @@
 .const EGO_FROST_BRAND   = 5
 .const EGO_DEFENDER      = 6
 .const EGO_HOLY_AVENGER  = 7
-.const EGO_TYPE_COUNT    = 8
-
 // ============================================================
 // roll_ego_type — Determine ego type for a spawned item
 // Input: A = item type ID

@@ -101,6 +101,8 @@ roll_tool_ego_check:
 banked_ego_put_suffix:
     cmp #0
     beq !beps_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !beps_done+
     jsr ego_get_suffix_ptr
     ldy #0
 !beps_loop:
@@ -160,6 +162,8 @@ put_inv_name_with_ego:
     ldx pinwe_sl
     lda inv_ego,x
     beq !pinwe_not_tool+
+    cmp #EGO_TYPE_COUNT
+    bcs !pinwe_not_tool+
     ldx pinwe_id
     jsr put_tool_ego_prefix
     lda pinwe_id
@@ -173,6 +177,10 @@ put_inv_name_with_ego:
     jsr screen_put_string
     ldx pinwe_sl
     lda inv_ego,x
+    cmp #EGO_TYPE_COUNT
+    bcc !pinwe_valid_ego+
+    lda #0
+!pinwe_valid_ego:
     jsr banked_ego_put_suffix
     jsr put_inv_sensed_suffix
     rts

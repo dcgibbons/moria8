@@ -30,6 +30,7 @@
 :C128AuditBelowIo("tramp_player_pray", tramp_player_pray)
 :C128AuditBelowIo("tramp_spell_list_display", tramp_spell_list_display)
 :C128AuditBelowIo("tramp_spell_execute_selected", tramp_spell_execute_selected)
+:C128AuditBelowIo("tramp_eff_earthquake", tramp_eff_earthquake)
 :C128AuditBelowIo("tramp_magic_recalc_mana", tramp_magic_recalc_mana)
 :C128AuditBelowIo("tramp_magic_check_new_spells", tramp_magic_check_new_spells)
 :C128AuditBelowIo("tramp_ranged_fire", tramp_ranged_fire)
@@ -48,7 +49,6 @@
 :C128AuditBelowIo("tramp_ego_apply_damage", tramp_ego_apply_damage)
 :C128AuditBelowIo("tramp_ego_get_ac_bonus", tramp_ego_get_ac_bonus)
 :C128AuditBelowIo("tramp_ego_append_suffix", tramp_ego_append_suffix)
-:C128AuditBelowIo("tramp_ego_put_suffix", tramp_ego_put_suffix)
 :C128AuditBelowIo("save_game", save_game)
 :C128AuditBelowIo("load_game", load_game)
 :C128AuditBelowIo("load_read_byte", load_read_byte)
@@ -143,7 +143,10 @@
 :C128AuditOutOfIo("reu_show_status_banked", reu_show_status_banked, $E000)
 :C128AuditOutOfIo("player_cast_spell", player_cast_spell, $F000)
 :C128AuditOutOfIo("player_pray", player_pray, $F000)
-:C128AuditOutOfIo("item_aim_wand", item_aim_wand, $F000)
-:C128AuditOutOfIo("item_use_staff", item_use_staff, $F000)
+:C128AuditItemsOverlay("item_read_scroll", item_read_scroll)
+:C128AuditItemsOverlay("item_aim_wand", item_aim_wand)
+:C128AuditItemsOverlay("item_use_staff", item_use_staff)
+:C128AuditItemsOverlay("item_refuel", item_refuel)
+:C128AuditItemsOverlay("eff_earthquake", eff_earthquake)
 // Spell UI display literals must stay with the UI overlay, not in low common RAM.
 .assert "AUDIT-IO-C128 pm_header_str stays in the UI overlay", pm_header_str >= $E000 && pm_header_str < $F000, true

@@ -107,31 +107,6 @@ ui_equip_display:
     lda #COL_WHITE
     sta zp_text_color
     jsr put_inv_name_with_ego
-    // Pseudo-ID quality tag for unidentified items with IF_TRIED
-    ldx ueq_equip_idx
-    lda inv_flags,x
-    and #IF_IDENTIFIED
-    bne !ueq_no_pid+
-    lda inv_flags,x
-    and #IF_TRIED
-    beq !ueq_no_pid+
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #$20                   // Space
-    jsr screen_put_char
-    lda #$28                   // '('
-    jsr screen_put_char
-    // X still = ueq_equip_idx (screen_put_char only clobbers Y)
-    jsr pid_get_quality        // A = quality index 0-4, X preserved
-    tax
-    lda ueq_pid_ptrs_lo,x
-    sta zp_ptr0
-    lda ueq_pid_ptrs_hi,x
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #$29                   // ')'
-    jsr screen_put_char
-!ueq_no_pid:
     jmp !ueq_next+
 
 !ueq_none:
@@ -186,12 +161,6 @@ ueq_lbl_feet:   .text "Feet:   " ; .byte 0
 ueq_lbl_light:  .text "Light:  " ; .byte 0
 ueq_lbl_ring:   .text "Ring:   " ; .byte 0
 
-ueq_pid_terrible:  .text "Terrible" ; .byte 0
-ueq_pid_bad:       .text "Bad" ; .byte 0
-ueq_pid_average:   .text "Average" ; .byte 0
-ueq_pid_good:      .text "Good" ; .byte 0
-ueq_pid_excellent: .text "Excellent" ; .byte 0
-
 ueq_label_ptrs_lo:
     .byte <ueq_lbl_weapon, <ueq_lbl_body, <ueq_lbl_shield, <ueq_lbl_head
     .byte <ueq_lbl_hands, <ueq_lbl_feet, <ueq_lbl_light, <ueq_lbl_ring
@@ -199,9 +168,3 @@ ueq_label_ptrs_lo:
 ueq_label_ptrs_hi:
     .byte >ueq_lbl_weapon, >ueq_lbl_body, >ueq_lbl_shield, >ueq_lbl_head
     .byte >ueq_lbl_hands, >ueq_lbl_feet, >ueq_lbl_light, >ueq_lbl_ring
-
-ueq_pid_ptrs_lo:
-    .byte <ueq_pid_terrible, <ueq_pid_bad, <ueq_pid_average, <ueq_pid_good, <ueq_pid_excellent
-
-ueq_pid_ptrs_hi:
-    .byte >ueq_pid_terrible, >ueq_pid_bad, >ueq_pid_average, >ueq_pid_good, >ueq_pid_excellent

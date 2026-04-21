@@ -321,9 +321,8 @@ test_start:
     sta fi_qty
     lda #0
     sta fi_p1
-    sta fi_flags
     lda #EGO_SLAY_EVIL
-    sta fi_ego
+    sta fi_meta
     lda #1
     sta zp_item_count
 

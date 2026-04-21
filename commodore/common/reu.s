@@ -636,6 +636,10 @@ reu_fetch_tier:
 // continues from reu_tier_offset_lo/hi (overlays sit after tiers).
 // Clobbers: A, X, Y
 reu_stash_overlays:
+    // Keep this local count explicit because reu.s is imported before overlay.s.
+    // The filename tables below are asserted against it so overlay additions must
+    // update this contract deliberately.
+    .const REU_OVERLAY_COUNT = 7
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
@@ -702,7 +706,7 @@ reu_stash_overlays:
 
     ldx reu_ovl_idx
     inx
-    cpx #7                      // Overlays 1-6
+    cpx #(REU_OVERLAY_COUNT + 1)
     bne !rso_loop-
 
     // Set overlay sizes (all 4KB = $1000) and activate REU path
@@ -713,7 +717,7 @@ reu_stash_overlays:
     lda #$10
     sta ovl_reu_size_hi,x
     inx
-    cpx #7
+    cpx #(REU_OVERLAY_COUNT + 1)
     bne !rso_sizes-
 
     lda #1
@@ -763,6 +767,7 @@ reu_fn_o3: .text "128.DEATH" ; .byte 0
 reu_fn_o4: .text "128.GEN" ; .byte 0
 reu_fn_o5: .text "128.HELP" ; .byte 0
 reu_fn_o6: .text "128.UI" ; .byte 0
+reu_fn_o7: .text "128.ITEMS" ; .byte 0
 #else
 reu_fn_o1: .text "64.START" ; .byte 0
 reu_fn_o2: .text "64.TOWN" ; .byte 0
@@ -770,13 +775,15 @@ reu_fn_o3: .text "64.DEATH" ; .byte 0
 reu_fn_o4: .text "64.GEN" ; .byte 0
 reu_fn_o5: .text "64.HELP" ; .byte 0
 reu_fn_o6: .text "64.UI" ; .byte 0
+reu_fn_o7: .text "64.ITEMS" ; .byte 0
 #endif
 
 // Pointer tables (0-based index)
 reu_fn_tier_lo: .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4
 reu_fn_tier_hi: .byte >reu_fn_t1, >reu_fn_t2, >reu_fn_t3, >reu_fn_t4
-reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3, <reu_fn_o4, <reu_fn_o5, <reu_fn_o6
-reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3, >reu_fn_o4, >reu_fn_o5, >reu_fn_o6
+reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3, <reu_fn_o4, <reu_fn_o5, <reu_fn_o6, <reu_fn_o7
+reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3, >reu_fn_o4, >reu_fn_o5, >reu_fn_o6, >reu_fn_o7
+.assert "REU overlay filename table count stays in sync", reu_fn_ovl_hi - reu_fn_ovl_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)
 reu_loading_hdr: .text "Loading into REU:" ; .byte 0

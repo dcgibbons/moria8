@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #17
+    ldx #18
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -133,7 +133,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 18, $ff
+tc_results: .fill 19, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -155,7 +155,7 @@ test_start:
     lda #>help_pages
     sta help_pages_src_hi
 
-    ldx #17
+    ldx #18
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -167,6 +167,7 @@ test_start:
     jsr test_character_view
     jsr test_help_view
     jsr test_inventory_view
+    jsr test_inventory_invalid_ego_view
     jsr test_inventory_select_view
     jsr test_inventory_identify_select_view
     jsr test_equipment_view
@@ -487,6 +488,45 @@ test_inventory_view:
     lda #$00
 !store:
     sta tc_results + 2
+    rts
+
+test_inventory_invalid_ego_view:
+    jsr reset_shared_state
+
+    lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #$40
+    sta inv_ego + 0
+
+    jsr ui_inv_display
+
+    lda #<expected_inventory_plain_line
+    sta zp_ptr0
+    lda #>expected_inventory_plain_line
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #2
+    sta zp_cursor_row
+    lda #13
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldy #0
+    lda (zp_screen_lo),y
+    cmp #$20
+    bne !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 18
     rts
 
 test_inventory_select_view:
@@ -1307,6 +1347,9 @@ expected_help_notes:
 expected_inventory_line:
     .byte $01
     .text ") Long Sword (Slay Evil) (magik)" ; .byte 0
+expected_inventory_plain_line:
+    .byte $01
+    .text ") Long Sword" ; .byte 0
 expected_filtered_inv_line_a:
     .byte $01
     .text ") " ; .byte 0

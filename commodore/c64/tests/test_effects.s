@@ -124,18 +124,10 @@ press_key_str:
 tc_loop:    .byte 0
 tc_ok:      .byte 0
 tv_step_idx: .byte 0
-tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
-tv_hash_lo: .byte 0
-tv_hash_hi: .byte 0
 tv_snapshot_lo: .byte 0
 tv_snapshot_hi: .byte 0
-tlk_expected_n: .text "n"
-tlk_expected_c: .text "c"
-tlk_expected_t: .text "t"
-tlk_expected_w: .text "w"
-tlk_expected_g: .text "G"
 tlk_flash_calls: .byte 0
 tlk_flash_row:   .byte 0
 tlk_flash_col:   .byte 0
@@ -145,6 +137,10 @@ tpm_last_huff_id: .byte 0
 tpm_cast_loop_ctr: .byte 0
 tpm_key_idx: .byte 0
 tpm_msg_seen: .byte 0
+tpm_key_script:
+    .byte $3f, $1b
+tpm_key_script_stop:
+    .byte $3f, $03
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -154,9 +150,6 @@ tpm_msg_seen: .byte 0
     lda #>replacement
     sta target + 2
 }
-
-test_input_wait_release:
-    rts
 
 test_get_direction_target_east:
     lda zp_player_x
@@ -174,10 +167,6 @@ test_screen_flash_at:
     inc tlk_flash_calls
     rts
 
-test_input_get_key_qmark:
-    lda #$3f
-    rts
-
 test_input_get_key_qmark_then_esc:
     ldx tpm_key_idx
     lda tpm_key_script,x
@@ -190,6 +179,7 @@ test_input_get_key_qmark_then_stop:
     inc tpm_key_idx
     rts
 
+test_input_get_modal_spell_a:
 test_input_get_key_a:
     lda #$41
     rts
@@ -198,18 +188,9 @@ test_input_get_key_b:
     lda #$42
     rts
 
-test_input_get_modal_spell_a:
-    lda #$41
-    rts
-
 test_input_get_modal_spell_esc:
     lda #$1b
     rts
-
-tpm_key_script:
-    .byte $3f, $1b
-tpm_key_script_stop:
-    .byte $3f, $03
 
 test_tramp_spell_execute_selected:
     inc tpm_spell_exec_calls
@@ -282,7 +263,7 @@ test_calc_spell_failure_success:
     rts
 
 test_start:
-    :PatchJump(input_wait_release, test_input_wait_release)
+    :PatchJump(input_wait_release, store_enter)
 
     // Seed RNG deterministically
     lda #$42
@@ -1495,19 +1476,23 @@ test_start:
 
     // Normalize the viewport before snapshot so the comparison isolates
     // the pickup/full-redraw behavior rather than prior local-redraw drift.
+    // Two fixed sentinel tiles are enough here because the player already
+    // masked the picked-up item; unrelated viewport corners must stay stable.
     jsr render_viewport
-    jsr tv_hash_viewport
+    lda $0451
     sta tv_snapshot_lo
-    stx tv_snapshot_hi
+    lda $0746
+    sta tv_snapshot_hi
     jsr item_pickup
     bcs !t24_pickup_ok+
     jmp !t24_fail+
 !t24_pickup_ok:
     jsr render_viewport
-    jsr tv_hash_viewport
+    lda $0451
     cmp tv_snapshot_lo
     bne !t24_fail+
-    cpx tv_snapshot_hi
+    lda $0746
+    cmp tv_snapshot_hi
     bne !t24_fail+
 
     lda #$01
@@ -1630,7 +1615,7 @@ test_start:
     jsr do_look
 
     lda $0408                   // "You see n..." vs "You see a..."
-    cmp tlk_expected_n
+    cmp #'n'
     bne !t27_fail+
     lda tlk_flash_calls
     bne !t27_fail+
@@ -1664,7 +1649,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a c..."
-    cmp tlk_expected_c
+    cmp #'c'
     bne !t28_fail+
 
     lda #$01
@@ -1695,7 +1680,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a t..."
-    cmp tlk_expected_t
+    cmp #'t'
     bne !t29_fail+
 
     lda #$01
@@ -1750,7 +1735,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a w..."
-    cmp tlk_expected_w
+    cmp #'w'
     bne !t30_fail+
 
     lda #$01
@@ -1788,7 +1773,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a G..."
-    cmp tlk_expected_g
+    cmp #'G'
     bne !t31_fail+
 
     lda #$01
@@ -2689,55 +2674,6 @@ tv_setup_dark_room:
     jsr update_visibility
     jsr viewport_update
     jsr render_viewport
-    rts
-
-tv_hash_viewport:
-    lda $01
-    pha
-    and #%11111110
-    sta $01
-    lda #0
-    sta tv_hash_lo
-    lda #0
-    sta tv_hash_hi
-    sta tv_row_idx
-!tv_hash_row:
-    ldx tv_row_idx
-    txa
-    clc
-    adc #VIEWPORT_Y
-    tax
-    lda screen_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_screen_lo
-    lda screen_row_hi,x
-    adc #0
-    sta zp_screen_hi
-
-    ldy #0
-!tv_hash_col:
-    lda (zp_screen_lo),y
-    clc
-    adc tv_hash_lo
-    sta tv_hash_lo
-    bcc !tv_hash_next+
-    inc tv_hash_hi
-!tv_hash_next:
-    iny
-    cpy #VIEWPORT_W
-    bne !tv_hash_col-
-
-    inc tv_row_idx
-    lda tv_row_idx
-    cmp #VIEWPORT_H
-    beq !tv_hash_done+
-    jmp !tv_hash_row-
-!tv_hash_done:
-    lda tv_hash_lo
-    ldx tv_hash_hi
-    pla
-    sta $01
     rts
 
 effects_test_body_end:

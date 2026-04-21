@@ -40,10 +40,11 @@ item_gain_spell:
     cmp #SPELL_PRIEST
     beq !igs_random_prayer+
 
-    // Keep study-list selection on the same selectable-overlay input contract
-    // as cast/pray and inventory `?` flows.
-    jsr input_prepare_followup_key
-    jsr tramp_spell_list_display
+    // Study already runs inside the UI overlay on both C64 and C128, so
+    // render the list locally instead of re-entering the same overlay
+    // through a resident trampoline.
+    jsr input_prepare_modal_dismiss_key
+    jsr spell_list_display
     jsr input_get_key
     jsr pm_pick_visible_spell
     bcc !igs_cancel_restore+

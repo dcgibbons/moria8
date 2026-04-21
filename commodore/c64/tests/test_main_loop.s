@@ -102,15 +102,25 @@ delete_savefile:
     inc test_delete_savefile_calls
     rts
 
-.label tramp_ui_char_display = ui_char_display
-.label tramp_ui_inv_display = ui_inv_display
-.label tramp_ui_inv_select_display = ui_inv_select_display
-.label tramp_ui_help_display = ui_help_display
-.label tramp_ui_equip_display = ui_equip_display
 .label tramp_spell_list_display = test_spell_list_display
 .label tramp_spell_execute_selected = test_spell_execute_selected
 .label tramp_item_gain_spell = test_item_gain_spell
 .label tramp_player_create = player_create
+
+tramp_ui_char_display:
+    rts
+
+tramp_ui_inv_display:
+    rts
+
+tramp_ui_inv_select_display:
+    rts
+
+tramp_ui_help_display:
+    rts
+
+tramp_ui_equip_display:
+    rts
 
 tramp_store_init_all:
     rts
@@ -120,6 +130,11 @@ tramp_store_restock_all:
 
 tramp_store_enter:
     rts
+
+.label tramp_item_read_scroll = item_read_scroll
+.label tramp_item_aim_wand = item_aim_wand
+.label tramp_item_use_staff = item_use_staff
+.label tramp_item_refuel = item_refuel
 
 test_spell_list_display:
     rts
@@ -151,11 +166,6 @@ check_player_on_store_door:
 
 tramp_ui_identify:
     inc test_recall_ui_calls
-    jsr ui_identify_print
-    lda test_last_string_lo
-    sta test_identify_string_lo
-    lda test_last_string_hi
-    sta test_identify_string_hi
     rts
 
 tramp_ui_recall:
@@ -180,7 +190,6 @@ tramp_dig_ability:
 #import "../../common/ui_messages.s"
 #import "../../common/ui_status.s"
 #import "../../common/ui_help_clear.s"
-#import "../../common/ui_character.s"
 #import "../../common/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -206,9 +215,6 @@ tramp_dig_ability:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
-#import "../../common/ui_identify.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -219,7 +225,6 @@ tramp_dig_ability:
 #import "../../common/tunnel.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/ui_help.s"
 #import "../../common/generation_busy.s"
 #import "../../common/game_loop.s"
 

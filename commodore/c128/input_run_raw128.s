@@ -78,13 +78,11 @@ input_run_scan_held_raw:
     beq !irs_none+
 
 !irs_pressed:
-    lda #1
+    ldx #1
     bne !irs_store+
 !irs_none:
-    lda #0
+    ldx #0
 !irs_store:
-    sta irs_result
-
     lda irs_save_pra
     sta CIA1_PORTA
     lda irs_save_ddra
@@ -95,7 +93,7 @@ input_run_scan_held_raw:
     sta C128_KBD_EXT
 
     plp
-    lda irs_result
+    txa
     rts
 
 // input_run_row_has_nonmodifier — classify one raw keyboard row sample for the
@@ -144,5 +142,17 @@ irs_save_ddra:  .byte 0
 irs_save_ddrb:  .byte 0
 irs_ext_save:   .byte 0
 irs_drive_mask: .byte 0
-irs_result:     .byte 0
 irs_row_raw:    .byte 0
+
+// Restore the spell-execution overlay after a cross-overlay Earthquake call so
+// the original return address lands in live code again.
+c128_return_to_death_overlay:
+    lda #3                      // OVL_DEATH
+    jsr overlay_load
+    bcs !fatal+
+    jsr c128_restore_runtime_guards
+    sei
+    :BankOutKernal()
+    rts
+!fatal:
+    jmp entry_main
