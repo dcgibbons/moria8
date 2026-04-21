@@ -317,6 +317,22 @@ render_viewport:
     jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp1
 !rv_no_item:
+    lda zp_view_x
+    clc
+    adc zp_render_x
+    pha
+    lda zp_view_y
+    clc
+    adc zp_render_y
+    tay
+    pla
+    jsr glyph_find_at
+    bcc !rv_no_glyph+
+    lda #SC_GLYPH
+    sta zp_temp0
+    lda #COL_GLYPH
+    sta zp_temp1
+!rv_no_glyph:
 
     // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
@@ -562,6 +578,15 @@ render_single_tile:
     jsr item_get_floor_color        // A = identification-aware color
     sta zp_temp4
 !rst_no_item:
+    ldy zp_temp1                // Y = map_y
+    lda zp_temp0                // A = map_x
+    jsr glyph_find_at
+    bcc !rst_no_glyph+
+    lda #SC_GLYPH
+    sta zp_temp3
+    lda #COL_GLYPH
+    sta zp_temp4
+!rst_no_glyph:
 
     // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp

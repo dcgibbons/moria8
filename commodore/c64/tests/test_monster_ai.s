@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #24
+    ldx #25
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -110,7 +110,30 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 25, $ff      // Result buffer (copied to $0400 at end)
+tai_attack_calls: .byte 0
+tai_rng_values:   .fill 4, 0
+tai_rng_idx:      .byte 0
+tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+test_monster_attack_player:
+    inc tai_attack_calls
+    rts
+
+test_rng_range:
+    ldx tai_rng_idx
+    lda tai_rng_values,x
+    inc tai_rng_idx
+    ora #0
+    rts
 
 test_start:
 
@@ -1954,10 +1977,61 @@ test_start:
 
     lda #$01
     sta tc_results + 24
-    jmp !tests_done+
+    jmp !t26+
 !t25_fail:
     lda #$00
     sta tc_results + 24
+
+    // ==========================================
+    // Test 26: glyphs use umoria break odds and
+    // a broken glyph stops blocking the player tile.
+    // ==========================================
+!t26:
+    :PatchJump(rng_range, test_rng_range)
+    lda #4
+    sta zp_mon_type
+    lda #20
+    sta cr_level + 4
+
+    :PatchJump(monster_attack_player, test_monster_attack_player)
+    jsr glyph_clear_all
+    lda #20
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    lda zp_player_x
+    ldy zp_player_y
+    jsr glyph_add_at
+    bcs !t26_add_ok+
+    jmp !t26_fail+
+!t26_add_ok:
+    lda #0
+    sta tai_rng_idx
+    sta tai_rng_values + 0      // high bucket zero -> compare low bucket
+    lda #19
+    sta tai_rng_values + 1
+    lda #0
+    sta tai_attack_calls
+    sta mat_action_dirty
+    sta mat_fleeing
+    lda zp_player_x
+    sta mat_target_x
+    lda zp_player_y
+    sta mat_target_y
+    jsr monster_try_step
+    lda glyph_active + 0
+    bne !t26_fail+
+    lda tai_attack_calls
+    cmp #1
+    beq !t26_attack_ok+
+    jmp !t26_fail+
+!t26_attack_ok:
+    lda #$01
+    sta tc_results + 25
+    jmp !tests_done+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
 
 !tests_done:
     jmp test_finish

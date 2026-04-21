@@ -7,6 +7,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 - When two plausible owners can be separated by one quick live question, ask that first before diving into emulator instrumentation or snapshot micro-probing.
 - Treat the user's exact failing command or repro as the primary gate until it passes.
+- Before any commit in a dirty worktree, audit every tracked modified file and classify it explicitly as in-scope, out-of-scope, or user-owned. Do not assume "files I touched this turn" equals the full intended change set.
 - On multi-platform feature work, re-run the exact build/test gate for every affected platform before calling the work complete; one green target does not cover the other.
 - On C128, do not move code behind KERNAL-space addresses into the banked `$F000` payload if low-RAM/runtime code still jumps to those symbols while KERNAL-visible state is active; verify the linked symbol address, visible execution bank, and callsite banking together.
 - When sibling repo checkouts or worktrees exist, verify the exact target repo path before editing, building, or concluding an asset is missing.

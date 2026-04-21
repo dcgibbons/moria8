@@ -797,13 +797,13 @@ monster_try_step:
     ldy zp_player_y
     jsr glyph_find_at
     bcc !mts_glyph_done_player+
+    stx zp_temp0
     jsr monster_should_break_glyph
+    ldx zp_temp0
     bcs !mts_break_player_glyph+
     jmp !mts_blocked+
 !mts_break_player_glyph:
     jsr glyph_remove
-    lda #1
-    sta mat_action_dirty
 !mts_glyph_done_player:
 
     // Town creatures don't attack unless provoked
@@ -868,7 +868,9 @@ monster_try_step:
     ldy mat_target_y
     jsr glyph_find_at
     bcc !mts_no_glyph+
+    stx zp_temp0
     jsr monster_should_break_glyph
+    ldx zp_temp0
     bcs !mts_break_glyph+
     jmp !mts_blocked+
 !mts_break_glyph:
@@ -929,18 +931,15 @@ monster_try_step:
     rts
 
 monster_should_break_glyph:
-    ldx zp_mon_type
-    lda cr_level,x
-    lsr
-    lsr
-    lsr
-    clc
-    adc #1
-    sta zp_temp0
-    lda #100
+    lda #12
     jsr rng_range
-    cmp zp_temp0
+    bne !msg_hold+
+    lda #250
+    jsr rng_range
+    ldx zp_mon_type
+    cmp cr_level,x
     bcc !msg_break+
+!msg_hold:
     clc
     rts
 !msg_break:

@@ -109,7 +109,11 @@ ego_str_slay_undead:  .text " (Slay Undead)" ; .byte 0
 ego_str_flame:        .text " (Flame)" ; .byte 0
 ego_str_frost:        .text " (Frost)" ; .byte 0
 ego_str_defender:     .text " (Defender)" ; .byte 0
+#if C128
+.label ego_str_holy_avenger = ego_str_holy_avenger_common
+#else
 ego_str_holy_avenger: .text " (Holy Avenger)" ; .byte 0
+#endif
 
 // ============================================================
 // Ego data tables (indexed by ego type 0-7)

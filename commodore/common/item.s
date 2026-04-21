@@ -351,40 +351,40 @@ glyph_clear_all:
 
 glyph_find_at:
     sta fi_add_x
-    sty fi_add_y
     ldx #0
 !gfa_loop:
-    cpx #MAX_GLYPHS
-    bcs !gfa_miss+
     lda glyph_active,x
     beq !gfa_next+
     lda glyph_x,x
     cmp fi_add_x
     bne !gfa_next+
-    lda glyph_y,x
-    cmp fi_add_y
+    tya
+    cmp glyph_y,x
     beq !gfa_hit+
 !gfa_next:
     inx
-    jmp !gfa_loop-
-!gfa_hit:
-    sec
-    rts
+    cpx #MAX_GLYPHS
+    bcc !gfa_loop-
 !gfa_miss:
     clc
     rts
+!gfa_hit:
+    rts
 
 glyph_add_at:
+    sty fi_add_y
     jsr glyph_find_at
     bcs !gaa_done+
     ldx #0
 !gaa_scan:
-    cpx #MAX_GLYPHS
-    bcs !gaa_full+
     lda glyph_active,x
     beq !gaa_store+
     inx
-    jmp !gaa_scan-
+    cpx #MAX_GLYPHS
+    bcc !gaa_scan-
+!gaa_full:
+    clc
+    rts
 !gaa_store:
     lda fi_add_x
     sta glyph_x,x
@@ -394,9 +394,6 @@ glyph_add_at:
     sta glyph_active,x
 !gaa_done:
     sec
-    rts
-!gaa_full:
-    clc
     rts
 
 glyph_remove:
