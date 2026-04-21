@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #7
+    ldx #8
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -102,7 +102,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 8, $ff
+tc_results: .fill 9, $ff
 
 tpm_msg_calls:    .byte 0
 tpm_last_msg_lo:  .byte 0
@@ -176,6 +176,21 @@ test_rng_fill_zeroes:
     inx
     cpx #160
     bne !trfz_loop-
+    rts
+
+test_dispel_evil_msg:
+    lda #CF_EVIL
+    sta pmx_work_flag
+    lda zp_player_lvl
+    asl
+    clc
+    adc zp_player_lvl
+    sta pmx_work_damage
+    jsr eff_dispel_flagged
+    bne !tdem_done+
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_print_msg
+!tdem_done:
     rts
 
 test_start:
@@ -534,7 +549,8 @@ test_start:
     jmp test_finish
 !t5_fear_ok:
     lda tpm_huff_calls
-    bne !t5_huff_count_ok+
+    cmp #1
+    bne !t5_huff_fail+
     lda tpm_msg_calls
     cmp #1
     beq !t5_huff_count_ok+
@@ -542,9 +558,6 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_huff_count_ok:
-    lda tpm_huff_calls
-    cmp #1
-    bne !t5_huff_fail+
     lda tpm_last_huff_id
     cmp #HSTR_PIQ_VERY_GOOD
     beq !t5_huff_id_ok+
@@ -553,6 +566,17 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_huff_id_ok:
+    lda tpm_last_msg_lo
+    cmp #<combat_msg_buf
+    bne !t5_msg_fail+
+    lda tpm_last_msg_hi
+    cmp #>combat_msg_buf
+    beq !t5_msg_ok+
+!t5_msg_fail:
+    lda #$1a
+    sta tc_results + 4
+    jmp test_finish
+!t5_msg_ok:
     ldx test_mon_slot
     jsr monster_get_ptr
     ldy #MX_TYPE
@@ -723,10 +747,41 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp test_finish
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
+    jmp test_finish
+
+    // Test 9: Dispel Evil reports no-effect when no evil targets remain.
+!t9:
+    jsr tv_setup_dark_room
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(msg_print, test_msg_print)
+    lda #0
+    sta tpm_msg_calls
+    sta tpm_last_msg_lo
+    sta tpm_last_msg_hi
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+    lda #1
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    jsr test_dispel_evil_msg
+    lda tpm_huff_calls
+    cmp #1
+    bne !t9_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PIQ_NOTHING
+    bne !t9_fail+
+    lda tpm_msg_calls
+    bne !t9_fail+
+    lda #$01
+    sta tc_results + 8
+    jmp test_finish
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
     jmp test_finish
 tv_setup_dark_room:
     jsr fill_map_rock

@@ -205,8 +205,7 @@ med_s8:
 med_s13:
     jsr eff_remove_curse
     ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 med_s14:
     lda #4
     ldx #8
@@ -321,8 +320,7 @@ ped_s13:
 ped_s14:
     jsr eff_remove_curse_all
     ldx #HSTR_PIQ_CLEANSED
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 ped_s15:
     jmp eff_resist_heat_cold
 ped_s17:
@@ -367,7 +365,12 @@ ped_s28:
     clc
     adc zp_player_lvl
     sta pmx_work_damage
-    jmp eff_dispel_flagged
+    jsr eff_dispel_flagged
+    bne !ped_s28_done+
+    ldx #HSTR_PIQ_NOTHING
+    jmp huff_print_msg
+!ped_s28_done:
+    rts
 ped_s29:
     jmp eff_glyph_of_warding
 ped_s30:
@@ -583,10 +586,8 @@ eff_recharge_item:
 !eri_done:
     rts
 !eri_none:
-    lda #<pmx_msg_no_recharge
-    ldy #>pmx_msg_no_recharge
-    jsr pmx_print_inline
-    rts
+    ldx #HSTR_PIW_NOTHING
+    jmp huff_print_msg
 
 eff_polymorph_other:
     jsr eff_directional_monster
@@ -702,5 +703,3 @@ pmx_recharge_prompt_str:
 pmx_recharge_prompt_last:
     .text "a"
     .text ")?" ; .byte 0
-pmx_msg_no_recharge:
-    .text "You have nothing to recharge." ; .byte 0

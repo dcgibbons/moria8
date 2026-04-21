@@ -6915,3 +6915,38 @@ The section below is retained only as historical context for the earlier dual-en
   - verification:
     - `make test64` PASS (`44 passed, 0 failed`)
     - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-DISPELL-EVIL-MISSING-FEEDBACK
+- [x] Reported Failure Gate:
+  - `dispell evil` should print player-facing feedback instead of silently removing the monster; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect current dispel-evil prayer/effect flow and upstream `umoria` feedback contract
+- [x] add the missing dispel-evil message on successful removal without widening unrelated effect behavior
+- [x] add focused regression coverage for successful dispel-evil feedback
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: priest `Dispel Evil` and `Holy Word` both remove killed evil monsters through `eff_dispel_flagged` in `commodore/common/player_magic_utility.s`, and that shared kill path awarded XP plus removed the monster without emitting any player-facing feedback
+  - fix shape: on a successful dispel kill, reuse the resident combat kill builder so the player now gets `You have slain the <monster>.` instead of a silent deletion; this stays layout-safe because it reuses `cmb_kill_str` instead of adding new overlay-owned text
+  - regression: `commodore/c64/tests/test_utility_effects.s` now requires the `Holy Word` evil-dispel path to emit exactly one built combat message via `combat_msg_buf`, so this cannot slip back to a silent remove
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-DISPELL-EVIL-NO-EFFECT-FEEDBACK
+- [x] Reported Failure Gate:
+  - when no evil monsters are left, `dispell evil` should print a no-effect message instead of only beeping; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the shared dispel path for the zero-kill case
+- [x] add no-effect feedback without regressing kill messaging
+- [x] add focused regression coverage for the zero-effect path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: priest `Dispel Evil` damaged every evil monster through `eff_dispel_flagged`, but the prayer owner only emitted kill messages; when there were no evil targets left, the cast path returned with no player-facing message
+  - fix shape: `ped_s28` now prints `Nothing seems to happen.` only when `eff_dispel_flagged` finds zero eligible evil monsters; surviving-but-damaged evil monsters still stay silent unless one dies, so kill feedback is unchanged
+  - regression: `commodore/c64/tests/test_utility_effects.s` now includes a ninth case that exercises the no-target `Dispel Evil` path and requires one Huffman `HSTR_PIQ_NOTHING` message with no combat message output; `commodore/c64/run_tests.sh` was updated so the exact gate reads the ninth result byte
+  - memory/layout note: the first attempt overflowed `DeathOverlay`; the final byte recovery reused the resident `HSTR_PIW_NOTHING` for the recharge-empty prompt so the new prayer feedback fit without adding another overlay string
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)

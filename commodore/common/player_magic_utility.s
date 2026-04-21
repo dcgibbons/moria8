@@ -9,6 +9,8 @@
 #endif
 #import "player_heal_feedback.s"
 
+pmu_dispel_targets: .byte 0
+
 eff_reveal_floorplan:
     ldx #0
 !erf_row:
@@ -74,6 +76,8 @@ pmu_create_food:
 
 eff_dispel_flagged:
     lda #0
+    sta pmu_dispel_targets
+    lda #0
     sta pmx_work_idx
 !edf_loop:
     ldx pmx_work_idx
@@ -90,6 +94,7 @@ eff_dispel_flagged:
     beq !edf_next+
     lda pmx_work_damage
     beq !edf_next+
+    inc pmu_dispel_targets
     jsr rng_range
     clc
     adc #1
@@ -100,10 +105,15 @@ eff_dispel_flagged:
     jsr combat_apply_damage_16
     bcc !edf_next+
     jsr eff_kill_monster
+    lda #<cmb_kill_str
+    ldy #>cmb_kill_str
+    jsr msg_build_action
+    jsr cmb_print_buf
 !edf_next:
     inc pmx_work_idx
     jmp !edf_loop-
 !edf_done:
+    lda pmu_dispel_targets
     rts
 
 eff_turn_undead:
