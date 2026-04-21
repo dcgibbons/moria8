@@ -269,8 +269,7 @@ mm_print_monster_name:
 
     ldx zp_mon_type
     jsr creature_get_name       // A=lo, Y=hi (handles KERNAL banking)
-    jsr combat_append_str
-    rts
+    jmp combat_append_str
 
 // ============================================================
 // mm_print_spell_msg — Print "THE <name> <suffix>"
@@ -285,8 +284,7 @@ mm_print_spell_msg:
     jsr combat_append_str
 
     // Null-terminate
-    jsr cmb_term_and_print
-    rts
+    jmp cmb_term_and_print
 
 // ============================================================
 // Spell handler 1: monster_cast_bolt
@@ -356,8 +354,7 @@ mm_apply_spell_damage:
     jsr mon_atk_apply_damage
     bcs !masd_dead+
     lda #SFX_HIT
-    jsr sound_play
-    rts
+    jmp sound_play
 !masd_dead:
     ldx zp_mon_type
     inc recall_deaths,x
@@ -433,8 +430,7 @@ monster_cast_teleport:
     jsr huff_decode_to_ptr2
     jsr mm_print_spell_msg
 
-    jsr eff_teleport_self
-    rts
+    jmp eff_teleport_self
 
 // ============================================================
 // Spell handler 5: monster_cast_blind

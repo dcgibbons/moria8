@@ -156,19 +156,25 @@ eff_destroy_area:
 eff_holy_word:
     jsr eff_remove_fear
     jsr eff_cure_poison
-    lda #0
-    sta zp_eff_blind
-    sta zp_eff_confuse
-    lda #200
-    jsr pmx_heal_and_report
+    lda zp_player_mhp_lo
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda zp_player_mhp_hi
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    ldx #HSTR_PIQ_VERY_GOOD
+    jsr huff_print_msg
+    jsr player_calc_stats
+    jsr player_sync_to_zp
+    lda #3
+    sta eff_invuln_timer
     lda #CF_EVIL
     sta pmx_work_flag
     lda zp_player_lvl
     asl
     asl
     sta pmx_work_damage
-    jsr eff_dispel_flagged
-    rts
+    jmp eff_dispel_flagged
 
 eff_glyph_of_warding:
     lda zp_player_x

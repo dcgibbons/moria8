@@ -110,6 +110,7 @@ tpm_last_msg_hi:  .byte 0
 tpm_huff_calls:   .byte 0
 tpm_last_huff_id: .byte 0
 test_mon_slot:    .byte 0
+test_expected_stat: .byte 0
 test_rng_idx:     .byte 0
 pmx_work_idx:     .byte 0
 pmx_work_flag:    .byte 0
@@ -455,7 +456,8 @@ test_start:
     lda #$00
     sta tc_results + 3
 
-    // Test 5: Holy Word heals, clears maladies, and dispels an evil monster.
+    // Test 5: Holy Word matches umoria: full heal, remove fear/poison,
+    // restore stats, grant invulnerability, and dispel an evil monster.
 !t5:
     jsr tv_setup_dark_room
     :PatchJump(huff_print_msg, test_huff_print_msg)
@@ -501,10 +503,12 @@ test_start:
     lda #0
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
-    lda #40
+    lda #$2c
     sta zp_player_mhp_lo
-    lda #0
+    sta player_data + PL_MHP_LO
+    lda #1
     sta zp_player_mhp_hi
+    sta player_data + PL_MHP_HI
     lda #7
     sta zp_eff_poison
     lda #8
@@ -516,11 +520,31 @@ test_start:
     lda #1
     sta zp_player_lvl
     sta player_data + PL_LEVEL
+    lda #0
+    sta player_data + PL_RACE
+    sta player_data + PL_CLASS
+    ldx #0
+!t5_seed_stats:
+    lda #12
+    sta player_data + PL_STR_BASE,x
+    inx
+    cpx #6
+    bcc !t5_seed_stats-
+    jsr player_calc_stats
+    lda player_data + PL_STR_CUR
+    sta test_expected_stat
+    lda #3
+    sta player_data + PL_STR_CUR
+    sta zp_player_str
     jsr eff_holy_word
     lda zp_player_hp_lo
-    cmp #40
+    cmp #$2c
+    bne !t5_hp_fail+
+    lda zp_player_hp_hi
+    cmp #1
     beq !t5_hp_ok+
-    lda zp_player_hp_lo
+!t5_hp_fail:
+    lda zp_player_hp_hi
     sta tc_results + 4
     jmp test_finish
 !t5_hp_ok:
@@ -531,12 +555,14 @@ test_start:
     jmp test_finish
 !t5_poison_ok:
     lda zp_eff_blind
+    cmp #8
     beq !t5_blind_ok+
     lda #$12
     sta tc_results + 4
     jmp test_finish
 !t5_blind_ok:
     lda zp_eff_confuse
+    cmp #9
     beq !t5_confuse_ok+
     lda #$13
     sta tc_results + 4
@@ -548,6 +574,20 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_fear_ok:
+    lda player_data + PL_STR_CUR
+    cmp test_expected_stat
+    beq !t5_stat_ok+
+    lda #$1b
+    sta tc_results + 4
+    jmp test_finish
+!t5_stat_ok:
+    lda eff_invuln_timer
+    cmp #3
+    beq !t5_invuln_ok+
+    lda #$1c
+    sta tc_results + 4
+    jmp test_finish
+!t5_invuln_ok:
     lda tpm_huff_calls
     cmp #1
     bne !t5_huff_fail+

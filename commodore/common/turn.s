@@ -56,12 +56,10 @@ turn_maybe_play_hunger_alert:
     beq !faint+
 
     lda #SFX_HUNGER_WARN
-    jsr sound_play
-    rts
+    jmp sound_play
 !faint:
     lda #SFX_HUNGER_FAINT
-    jsr sound_play
-    rts
+    jmp sound_play
 !done:
     rts
 
@@ -216,6 +214,11 @@ turn_tick_effects:
     jsr huff_print_msg
 !no_recall:
 
+    lda eff_invuln_timer
+    beq !no_invuln+
+    dec eff_invuln_timer
+!no_invuln:
+
     // Detect monsters timer
     lda eff_detect_timer
     beq !no_detect+
@@ -274,8 +277,7 @@ turn_tick_hunger:
 
     jsr player_update_hunger_state
     pla
-    jsr turn_maybe_play_hunger_alert
-    rts
+    jmp turn_maybe_play_hunger_alert
 !starving:
     // Food is 0 — player takes damage each turn
     jsr player_update_hunger_state
@@ -286,8 +288,7 @@ turn_tick_hunger:
     jsr turn_apply_one_damage
     lda #DEATH_STARVE
     sta zp_death_source
-    jsr player_death_check
-    rts
+    jmp player_death_check
 
 // turn_apply_one_damage — Subtract 1 HP from the player, clamped at 0.
 // Syncs HP back to player_data.
@@ -439,9 +440,7 @@ turn_post_action:
 !no_restock:
 
     // Mark status bar as dirty so it redraws
-    jsr status_mark_dirty
-
-    rts
+    jmp status_mark_dirty
 
 // turn_recall_clear_old_occupied — clear the current map tile occupied bit
 // before an actual recall teleport transition.

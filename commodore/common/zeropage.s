@@ -184,6 +184,7 @@
 .label zp_snd_timer    = $6d   // Sound duration counter
 .label zp_snd_phase    = $6e   // Sound envelope phase
 .label zp_snd_spare    = $6f   // Spare
+.label eff_invuln_timer = zp_snd_spare
 
 // --- Monster AI scratch ($70–$7f) ---
 .label zp_mon_idx      = $70   // Current monster index being processed

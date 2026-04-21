@@ -3,7 +3,7 @@
 // Tests: monster_can_cast (4 tests), monster_cast_bolt, monster_cast_breath,
 //        monster_cast_blind, monster_cast_heal.
 //
-// Results at $0400-$0408: $01 = pass, $00 = fail per test
+// Results at $0400-$0409: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #8
+    ldx #9
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -102,7 +102,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 9, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -674,10 +674,35 @@ test_start:
     bne !t9_fail+
     lda #$01
     sta tc_results + 8
-    jmp !tests_done+
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results + 8
+
+    // Test 10: Holy Word invulnerability blocks monster spell damage.
+!t10:
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #3
+    sta eff_invuln_timer
+    lda #10
+    jsr mm_apply_spell_damage
+    lda zp_player_hp_lo
+    cmp #50
+    bne !t10_fail+
+    lda zp_player_hp_hi
+    beq !t10_ok+
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
+    jmp !tests_done+
+!t10_ok:
+    lda #$01
+    sta tc_results + 9
 
 !tests_done:
     jmp test_exit_trampoline

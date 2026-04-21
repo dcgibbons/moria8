@@ -189,7 +189,7 @@
 | 28 | Added | P4 | Heal | 21/16/60 | 33/28/60 | Heal `200` HP | - |
 | 29 | Added | P4 | Dispel Evil | 25/20/70 | 35/32/70 | Dispel evil for `3 * level` | - |
 | 30 | Added | P4 | Glyph of Warding | 33/24/90 | 37/36/90 | Place a blocking glyph on the player tile | Active mechanically; no special tile render yet |
-| 31 | Added | P4 | Holy Word | 39/32/80 | 39/38/90 | Full heal, cure maladies, dispel evil for `4 * level` | Commodore follows VMS-style holy-word behavior |
+| 31 | Added | P4 | Holy Word | 39/32/80 | 39/38/90 | Heal to full, remove fear/poison, restore stats, 3 turns invulnerability, dispel evil for `4 * level` | Now matches upstream `umoria` |
 
 ## Upstream Comparison Notes
 
@@ -201,7 +201,12 @@
 - VMS is the source of truth for the main semantic choices:
   - `Sleep II` and `Sanctuary` are local sleep effects, not the broader alternatives found in some later ports
   - priest `Remove Curse` is treated as the stronger all-items version
-  - `Holy Word` is the cure-maladies/full-heal/dispelling prayer, not a mixed old-port compromise
+- `umoria` is now the source of truth for `Holy Word`:
+  - full heal
+  - remove fear and poison
+  - restore all stats
+  - grant 3 turns of invulnerability
+  - dispel evil for `4 * level`
 - Remaining follow-up candidates if stricter parity is required:
   - exact evil-only detection for `Detect Evil`
   - exact timed handling for `Resist Heat and Cold`

@@ -205,6 +205,7 @@ eff_identify_prompt:
 
     // Set IF_IDENTIFIED on the item instance
     lda inv_flags,x
+    and #~IF_SENSED & $ff
     ora #IF_IDENTIFIED
     sta inv_flags,x
 

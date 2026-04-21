@@ -6950,3 +6950,21 @@ The section below is retained only as historical context for the earlier dual-en
   - verification:
     - `make test64` PASS (`45 passed, 0 failed`)
     - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-HOLY-WORD-UMORIA-PARITY
+- [x] Reported Failure Gate:
+  - `Holy Word` should match upstream `umoria` exactly rather than the current Commodore VMS-style compromise; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current `Holy Word` implementation, existing status/timer owners, and upstream `umoria` contract
+- [x] patch `Holy Word` to full-heal, restore stats, grant 3 turns of invulnerability, and dispel evil with the upstream behavior
+- [x] add focused regression coverage for the upgraded `Holy Word` behavior and invulnerability enforcement
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: the branch had documented `Holy Word` as a VMS-style compromise, so the live implementation only did a partial cleanse/heal/dispel pass and omitted upstream `umoria` effects like stat restoration and 3 turns of invulnerability
+  - fix shape: `eff_holy_word` now follows the upstream `umoria` contract: heal to max HP, remove fear and poison, recalculate stats back to their normal values, grant a 3-turn invulnerability timer, and still dispel evil for `4 * level`
+  - regression: `commodore/c64/tests/test_utility_effects.s` now requires the upgraded `Holy Word` path to full-heal above the old `200` HP ceiling, preserve blind/confuse state, restore a corrupted stat, and set the invulnerability timer; `commodore/c64/tests/test_monster_attack.s` and `commodore/c64/tests/test_monster_magic.s` now also prove the timer blocks both melee and monster-spell damage
+  - memory/layout note: the first implementation overran both C64 resident `MAP_BASE` and the C128 staged-source ceiling; the final fix reused the existing ZP sound spare for the short timer and recovered shared resident bytes with tail-call cleanup so both platform layout gates stayed green
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
