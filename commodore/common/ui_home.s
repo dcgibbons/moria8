@@ -12,7 +12,6 @@
 .const PETSCII_HM_D      = $44
 .const PETSCII_HM_Q      = $51
 .const PETSCII_HM_R      = $52
-.const PETSCII_HM_ESC    = $1b
 .const PETSCII_HM_SPACE  = $20
 
 // ============================================================
@@ -64,7 +63,7 @@ home_enter:
     // Q, ESC, or space = exit
     cmp #PETSCII_HM_Q
     beq !he_exit+
-    cmp #PETSCII_HM_ESC
+    jsr input_is_modal_escape_key
     beq !he_exit+
     cmp #PETSCII_HM_SPACE
     beq !he_exit+
@@ -101,7 +100,7 @@ home_retrieve:
     // Q/ESC/space = cancel
     cmp #PETSCII_HM_Q
     beq !hr_cancel_relay+
-    cmp #PETSCII_HM_ESC
+    jsr input_is_modal_escape_key
     beq !hr_cancel_relay+
     cmp #PETSCII_HM_SPACE
     beq !hr_cancel_relay+
@@ -277,10 +276,10 @@ home_deposit:
 
     jsr input_get_key
 
-    // Q/ESC/space = cancel
+    // Q/escape-equivalent/space = cancel
     cmp #PETSCII_HM_Q
     beq !hd_cancel_relay+
-    cmp #PETSCII_HM_ESC
+    jsr input_is_modal_escape_key
     beq !hd_cancel_relay+
     cmp #PETSCII_HM_SPACE
     beq !hd_cancel_relay+

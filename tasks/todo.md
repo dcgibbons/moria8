@@ -3,6 +3,25 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-HELP-ESC-CANCEL-CONTRACT
+- [ ] Reported Failure Gate:
+  - help screens must exit on `ESC` on C128 and on `RUN/STOP` as the C64 escape surrogate, while `./commodore/c64/run_tests.sh` and the relevant C128 UI gate stay green
+- [x] inspect the shared help loop and platform input layers to prove whether this is a VICE issue or a product key-contract bug
+- [x] centralize modal escape-key classification in the shared input/UI helper layer
+- [x] route help and existing modal cancel callsites through that shared escape contract
+- [x] update visible help footer copy so C64 no longer claims a literal `ESC` key
+- [x] broaden the C128 modal escape-equivalent to accept `STOP` as a pragmatic fallback when host `Escape` does not map cleanly through VICE
+- [ ] verify:
+  - `./commodore/c64/run_tests.sh` = `42 passed, 3 failed` with the same unrelated existing failures in `effects`, `item`, `subsystems`; touched `main_loop` is green at `29/29` and `ui_views` is green at `18/18`
+  - `make -C commodore build128` = PASS after the modal-cancel/help-copy changes
+  - `make test128-fast` = still blocked by the unrelated existing `input128` assembly failure in `commodore/c128/input_run_raw128.s` (`overlay_load`, `c128_restore_runtime_guards`, `BankOutKernal`, `entry_main`)
+  - focused `python3 -u commodore/c128/harness128.py --name main_loop128 --prg commodore/c128/tests/test_main_loop128.prg --vs commodore/c128/tests/test_main_loop128.vs --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --timeout 30 --connect-timeout 12` still times out after the updated ESC/STOP cases assemble and load
+- [ ] review:
+  - the help bug was product code, not a VICE-only issue: shared help compared against literal `$1b` on C64 even though the real platform cancel surrogate is `RUN/STOP`
+  - C128 already had a real `KEY_ESC` path, so the shared modal layer needed a platform-aware escape-equivalent helper rather than more hard-coded compares
+  - live VICE behavior still appears to make host `Escape` unreliable for this path, so the product now accepts both `ESC` and `STOP` for C128 modal dismissal while keeping gameplay command input unchanged
+  - store/home/spell-list cancel logic had already drifted into multiple local definitions; this pass centralizes only the escape-equivalent piece without widening gameplay command input
+
 - [ ] BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS
 - [ ] Reported Failure Gate:
   - on C128 VDC, casting `Glyph of Warding` repeatedly must not make previously visible glyphs disappear until movement; keep `make test128-fast` green

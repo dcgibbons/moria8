@@ -14,7 +14,6 @@
 .const PETSCII_Y      = $59
 .const PETSCII_N      = $4e
 .const PETSCII_Q      = $51
-.const PETSCII_ESC    = $1b   // RUN/STOP mapped as ESC
 .const PETSCII_SPACE  = $20
 .const PETSCII_A      = $41
 .const HG_MIN_CONCESSION = 5
@@ -86,10 +85,10 @@ store_enter:
     jmp !se_loop-
 !se_not_sell:
 
-    // Q, ESC, or space = exit
+    // Q, escape-equivalent, or space = exit
     cmp #PETSCII_Q
     beq !se_exit+
-    cmp #PETSCII_ESC
+    jsr input_is_modal_escape_key
     beq !se_exit+
     cmp #PETSCII_SPACE
     beq !se_exit+
@@ -789,14 +788,14 @@ uis_screen_put_inline:
     sty zp_ptr0_hi
     jmp screen_put_string
 
-// check_cancel — Check if A is a cancel key (Q, ESC, SPACE)
+// check_cancel — Check if A is a cancel key (Q, escape-equivalent, SPACE)
 // Input: A = key code
 // Output: Z set if cancel, Z clear if not; A preserved
 // Clobbers: flags only
 check_cancel:
     cmp #PETSCII_Q
     beq !cc_yes+
-    cmp #PETSCII_ESC
+    jsr input_is_modal_escape_key
     beq !cc_yes+
     cmp #PETSCII_SPACE
 !cc_yes:

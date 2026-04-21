@@ -6,12 +6,6 @@
 
 .const PMX_ICAT_WAND  = 14
 .const PMX_ICAT_STAFF = 15
-#if C128
-.const PMX_KEY_ESC    = KEY_ESC
-#else
-.const PMX_KEY_ESC    = $1b
-#endif
-
 #if PMX_EARTHQUAKE_EXTERNAL
 .const PMX_EARTHQUAKE_TARGET = tramp_eff_earthquake
 #else
@@ -659,7 +653,7 @@ eff_genocide:
     jsr huff_print_msg
     jsr input_prepare_followup_key
     jsr input_get_key
-    cmp #PMX_KEY_ESC
+    jsr input_is_modal_escape_key
     beq !egeno_done+
     jsr recall_key_to_screen_code
     bcc !egeno_done+

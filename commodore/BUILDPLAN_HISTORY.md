@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-04-21 — `BUG-HELP-ESC-CANCEL-CONTRACT` modal cancel contract fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the platform contract for help-screen and read-only modal dismissal so the visible prompts match real Commodore keyboard behavior instead of depending on synthetic `ESC` assumptions.
+- Closed the C128 usability gap seen under VICE by accepting `STOP` alongside real `ESC` for modal dismissal without widening gameplay command input.
+
+### What Shipped
+1. **Shared modal escape-equivalent helper now owns the platform split**
+   - `commodore/common/input_ui_helpers.s`
+   - read-only modal flows now classify dismiss keys through `input_is_modal_escape_key` instead of scattering raw `$1b` / `KEY_ESC` compares
+2. **Help/store/home/spell modal callsites now use the shared contract**
+   - `commodore/common/game_loop_helpers.s`
+   - `commodore/common/ui_store.s`
+   - `commodore/common/ui_home.s`
+   - `commodore/common/player_magic.s`
+   - `commodore/common/player_magic_execute_overlay.s`
+3. **Visible help copy now matches the actual product contract**
+   - C64 help now advertises `RUN/STOP` instead of a literal `ESC`
+   - C128 help now advertises `ESC/STOP`
+4. **Regression coverage added for both platforms**
+   - `commodore/c64/tests/test_main_loop.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - `commodore/c128/tests/test_main_loop128.s`
+
+### Verification
+- `./commodore/c64/run_tests.sh` completed at `42 passed, 3 failed` with the same unrelated existing failures in `effects`, `item`, and `subsystems`; touched suites stayed green (`main_loop` `29/29`, `ui_views` `18/18`).
+- `make -C commodore build128` passed.
+- `make test128-fast` remained blocked by the preexisting unrelated `input128` assembly break in `commodore/c128/input_run_raw128.s`.
+
+### Outcome
+- The modal/help dismiss contract is now explicit and platform-correct:
+  - C64 uses `RUN/STOP` as the escape-equivalent dismiss key
+  - C128 keeps real `ESC` and also accepts `STOP` for modal reliability under VICE
+- The fix stays scoped to read-only modal dismissal and does not widen gameplay command semantics.
+
 ## 2026-04-21 — C128 `Glyph of Warding` VDC redraw parity fix ✅ COMPLETE
 
 ### Scope Closed

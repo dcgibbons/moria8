@@ -1056,8 +1056,76 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 5: HELP waits for key release and redraws via help clear.
+    // Test 5: HELP exits immediately on ESC and redraws once.
     lda #5
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_HELP
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #1
+    sta test_key_len
+    lda #KEY_ESC
+    sta test_key_script + 0
+    jsr run_case
+    lda test_help_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_wait_release_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_get_key_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_help_clear_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 6: HELP exits immediately on STOP and redraws once.
+    lda #6
+    sta test_case_id
+    jsr reset_state
+    lda #CMD_HELP
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #1
+    sta test_key_len
+    lda #$03
+    sta test_key_script + 0
+    jsr run_case
+    lda test_help_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_wait_release_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_get_key_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_help_clear_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda test_status_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 7: HELP advances on SPACE and redraws after the final page.
+    lda #7
     sta test_case_id
     jsr reset_state
     lda #CMD_HELP
@@ -1091,8 +1159,8 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 6: INVENTORY uses dismiss gating and redraws via help-clear.
-    lda #6
+    // Test 8: INVENTORY uses dismiss gating and redraws via help-clear.
+    lda #8
     sta test_case_id
     jsr reset_state
     lda #CMD_INVENTORY

@@ -398,7 +398,7 @@ test_help_view:
     lda #>uh_next_key_str
     sta zp_ptr0_hi
     lda #24
-    ldx #5
+    ldx #3
     jsr assert_screen_string
     bcc !fail+
 
@@ -429,7 +429,7 @@ test_help_view:
     lda #>uh_press_key_str
     sta zp_ptr0_hi
     lda #24
-    ldx #8
+    ldx #5
     jsr assert_screen_string
     bcc !fail+
 

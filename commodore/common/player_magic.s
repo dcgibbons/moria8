@@ -10,13 +10,6 @@
 
 .const HSTR_PM_BOOK_CAST = HSTR_PM_YOU_CAST
 .const HSTR_PM_BOOK_PRAY = HSTR_PM_YOU_PRAY
-#if C128
-.const PM_KEY_ESC = KEY_ESC
-#else
-.const PM_KEY_ESC = $1b
-#endif
-.const PM_KEY_STOP = $03
-
 // ============================================================
 // player_cast_spell — Handle 'm' (mage-affinity spell classes)
 // Output: carry SET = turn consumed, CLEAR = cancelled
@@ -347,7 +340,7 @@ pm_select_book:
 !pm_not_inv:
     cmp #$20
     beq !pm_book_cancel+
-    cmp #PM_KEY_ESC
+    jsr input_is_modal_escape_key
     beq !pm_book_cancel+
     jsr piw_pick_filtered_inv_key
     bcs !pm_book_slot_ok+
@@ -529,11 +522,9 @@ pm_prompt_visible_spell_choice:
     pha
     jsr ui_view_restore_modal_overlay
     pla
-    cmp #PM_KEY_STOP
-    beq !pm_psc_cancel+
     cmp #$20
     beq !pm_psc_cancel+
-    cmp #PM_KEY_ESC
+    jsr input_is_modal_escape_key
     beq !pm_psc_cancel+
     jsr pm_pick_visible_spell
     bcc !pm_psc_prompt-

@@ -8,11 +8,6 @@
 .const HELP_KEY_Q = $51
 .const HELP_KEY_SPACE = $20
 .const HELP_KEY_RETURN = $0d
-#if C128
-.const HELP_KEY_ESC = KEY_ESC
-#else
-.const HELP_KEY_ESC = $1b
-#endif
 
 // ============================================================
 // Shared UI-only command flows
@@ -39,7 +34,7 @@ cmd_show_help_view:
     jsr input_get_key
     cmp #HELP_KEY_Q
     beq !help_done+
-    cmp #HELP_KEY_ESC
+    jsr input_is_modal_escape_key
     beq !help_done+
     cmp #HELP_KEY_SPACE
     beq !help_advance+

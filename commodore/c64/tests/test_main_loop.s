@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #27
+    ldx #28
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -117,6 +117,7 @@ tramp_ui_inv_select_display:
     rts
 
 tramp_ui_help_display:
+    inc test_help_calls
     rts
 
 tramp_ui_equip_display:
@@ -231,7 +232,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 28, $ff
+tc_results: .fill 29, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -280,6 +281,7 @@ test_ui_step_1: .byte 0
 test_ui_step_2: .byte 0
 test_ui_step_3: .byte 0
 test_recall_ui_calls: .byte 0
+test_help_calls: .byte 0
 test_key_idx: .byte 0
 test_key_len: .byte 0
 test_key_script: .fill 4, 0
@@ -395,6 +397,7 @@ reset_state:
     sta test_ui_step_2
     sta test_ui_step_3
     sta test_recall_ui_calls
+    sta test_help_calls
     sta test_key_idx
     sta test_key_len
     sta test_last_string_lo
@@ -744,7 +747,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #23
+    ldx #28
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1728,8 +1731,43 @@ test_start:
     bne !t28_fail+
     lda #$01
     sta tc_results + 27
-    jmp test_finish
+    jmp !t29+
 !t28_fail:
     lda #$00
     sta tc_results + 27
+    jmp !t29+
+
+    // Test 29: HELP exits immediately on C64 STOP/RUN-STOP without
+    // advancing to later pages.
+!t29:
+    jsr reset_state
+    lda #28
+    sta test_case_idx
+    lda #CMD_HELP
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #$03
+    sta test_key_script + 0
+    lda #1
+    sta test_key_len
+    jsr run_case
+    lda test_help_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_viewport_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp test_finish
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
     jmp test_finish
