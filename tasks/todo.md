@@ -6968,3 +6968,10 @@ The section below is retained only as historical context for the earlier dual-en
   - verification:
     - `make test64` PASS (`45 passed, 0 failed`)
     - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [ ] BUG-LONG-MESSAGE-TRUNCATION-POLISH
+- [ ] backlog:
+  - long combat/status messages can clip instead of wrapping across the 2-line message area, e.g. `Your spell fails.` followed by a long monster effect line like `the Ancient Multi-Hued Dragon confuses yo`
+  - current implementation clamps live message rendering to one row width and stores only one `SCREEN_COLS` slice per history entry in `commodore/common/ui_messages.s`, `commodore/c64/screen.s`, and `commodore/c128/screen_vdc.s`
+  - priority: low polish; rare on normal play, more visible on deeper levels with long monster names/effects
+  - desired future fix: wrap across rows 0-1 cleanly, preserve sensible `-more-` behavior, and decide whether history should keep wrapped/continued lines or widened entries
