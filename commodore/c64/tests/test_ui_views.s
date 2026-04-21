@@ -6,7 +6,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #18
+    ldx #19
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -133,7 +133,7 @@ tramp_ego_put_suffix:
     rts
 teps_save_y: .byte 0
 
-tc_results: .fill 19, $ff
+tc_results: .fill 20, $ff
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -155,7 +155,7 @@ test_start:
     lda #>help_pages
     sta help_pages_src_hi
 
-    ldx #18
+    ldx #19
     lda #$ff
 !clr_results:
     sta tc_results,x
@@ -178,6 +178,7 @@ test_start:
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
     jsr test_filtered_inventory_view
+    jsr test_book_filtered_inventory_view
     jsr test_filtered_equipment_view
     jsr test_filtered_prompt_range
     jsr test_message_history_ring
@@ -526,7 +527,7 @@ test_inventory_invalid_ego_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 18
+    sta tc_results + 3
     rts
 
 test_inventory_select_view:
@@ -555,7 +556,7 @@ test_inventory_select_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 16
+    sta tc_results + 4
     rts
 
 test_inventory_identify_select_view:
@@ -584,7 +585,7 @@ test_inventory_identify_select_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 17
+    sta tc_results + 5
     rts
 
 test_equipment_view:
@@ -624,7 +625,7 @@ test_equipment_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 3
+    sta tc_results + 6
     rts
 
 test_recall_view:
@@ -739,7 +740,7 @@ test_recall_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 4
+    sta tc_results + 7
     rts
 
 test_store_view:
@@ -786,7 +787,7 @@ test_store_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 5
+    sta tc_results + 8
     rts
 
 test_ui_help_clear_forces_status_redraw:
@@ -830,7 +831,7 @@ test_ui_help_clear_forces_status_redraw:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 6
+    sta tc_results + 9
     rts
 
 test_home_view:
@@ -881,7 +882,7 @@ test_home_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 7
+    sta tc_results + 10
     rts
 
 test_status_redraw_shrinks_numbers:
@@ -929,7 +930,7 @@ test_status_redraw_shrinks_numbers:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 8
+    sta tc_results + 11
     rts
 
 test_screen_clear_forces_status_redraw:
@@ -973,7 +974,7 @@ test_screen_clear_forces_status_redraw:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 9
+    sta tc_results + 12
     rts
 
 test_filtered_inventory_view:
@@ -1021,7 +1022,60 @@ test_filtered_inventory_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 10
+    sta tc_results + 13
+    rts
+
+test_book_filtered_inventory_view:
+    jsr reset_shared_state
+
+    lda #47
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+
+    lda #48
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+
+    lda #55
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+
+    lda #58
+    sta inv_item_id + 3
+    lda #1
+    sta inv_qty + 3
+
+    lda #PIW_FILTER_PRAYER_BOOK
+    sta piw_filter
+    jsr ui_inv_display
+
+    lda #<expected_filtered_book_line_a
+    sta zp_ptr0
+    lda #>expected_filtered_book_line_a
+    sta zp_ptr0_hi
+    lda #2
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #<expected_filtered_book_line_b
+    sta zp_ptr0
+    lda #>expected_filtered_book_line_b
+    sta zp_ptr0_hi
+    lda #3
+    ldx #1
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 14
     rts
 
 test_filtered_equipment_view:
@@ -1062,7 +1116,7 @@ test_filtered_equipment_view:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 11
+    sta tc_results + 15
     rts
 
 test_filtered_prompt_range:
@@ -1087,7 +1141,7 @@ test_filtered_prompt_range:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 12
+    sta tc_results + 16
     rts
 
 test_message_history_ring:
@@ -1170,7 +1224,7 @@ test_message_history_ring:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 13
+    sta tc_results + 17
     rts
 
 test_message_more_resume:
@@ -1234,7 +1288,7 @@ test_message_more_resume:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 14
+    sta tc_results + 18
     rts
 
 test_modal_restore_resets_message_state:
@@ -1262,7 +1316,7 @@ test_modal_restore_resets_message_state:
 !fail:
     lda #$00
 !store:
-    sta tc_results + 15
+    sta tc_results + 19
     rts
 
 assert_screen_string:
@@ -1356,6 +1410,12 @@ expected_filtered_inv_line_a:
 expected_filtered_inv_line_b:
     .byte $02
     .text ") " ; .byte 0
+expected_filtered_book_line_a:
+    .byte $01
+    .text ") Holy Prayer Book" ; .byte 0
+expected_filtered_book_line_b:
+    .byte $02
+    .text ") Words of Wisdom" ; .byte 0
 expected_store_line:
     .byte $01
     .text ") Ration of Food" ; .byte 0

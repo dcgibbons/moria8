@@ -6,6 +6,33 @@
 
 ---
 
+## 2026-04-21 — `BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS` exact prompt filtering ✅ COMPLETE
+
+### Scope Closed
+- Fixed the mixed spell/prayer book inventory prompt bug so the visible selection range now matches upstream Moria behavior instead of exposing the wrong book class and rejecting it only after selection.
+
+### What Shipped
+1. **Spell/prayer book prompts now filter by exact book class**
+   - `commodore/common/player_magic.s`
+   - the live selector now derives an exact mage-book or prayer-book prompt filter from `pm_spell_type` before calling the shared inventory prompt path
+2. **Shared inventory visibility now owns exact book-class filtering**
+   - `commodore/common/player_items.s`
+   - the prompt-time `?` overlay and visible letter range now show only mage books for mage flows and only prayer books for prayer flows
+3. **Focused regression coverage added**
+   - `commodore/c64/tests/test_ui_views.s`
+   - seeds a mixed inventory and asserts that the prayer-book filtered view renders only `Holy Prayer Book` and `Words of Wisdom`
+4. **C64 test harness updated for the added regression slot**
+   - `commodore/c64/run_tests.sh`
+
+### Verification
+- Upstream parity confirmed from the local source trees:
+  - `~/Projects/thirdparty/umoria/src/player_pray.cpp`
+  - `~/Projects/thirdparty/umoria/src/mage_spells.cpp`
+  - `~/Projects/thirdparty/vms-moria/source/include/prayer.inc`
+  - `~/Projects/thirdparty/vms-moria/source/include/magic.inc`
+- `make -C commodore build128` passed after trimming the banked spell-selection path back under the C128 `$F000-$FFFA` ceiling.
+- `./commodore/c64/run_tests.sh` remained red overall because of unrelated existing failures in `effects`, `item`, `subsystems`, and the already-red aggregate `ui_views` suite; the new mixed-book regression itself passed in the raw `ui_views` results.
+
 ## 2026-04-21 — `BUG-HELP-ESC-CANCEL-CONTRACT` modal cancel contract fix ✅ COMPLETE
 
 ### Scope Closed

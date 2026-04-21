@@ -325,17 +325,17 @@ pm_handle_fail_roll:
 pm_select_book:
 !pm_select_retry:
     jsr pm_book_prompt_huff_id
-    lda #ICAT_BOOK
+    lda #PIW_FILTER_MAGE_BOOK + 1
+    sec
+    sbc pm_spell_type
     jsr piw_prompt_filtered_inv
-    bcs !pm_have_books+
-    clc
-    rts
+    bcc !pm_book_cancel+
 !pm_have_books:
     jsr input_prepare_followup_key
     jsr input_get_key
     cmp #$3f
     bne !pm_not_inv+
-    lda #ICAT_BOOK
+    lda piw_filter
     jsr show_inv_and_select
 !pm_not_inv:
     cmp #$20

@@ -551,6 +551,12 @@ The game has four distinct phases where different code modules are active. Modul
 
 Core gameplay that must be callable at all times: combat, monster AI, spells, spell effects, movement, dungeon gen/render, LOS, item logic, player state, math, screen routines, RNG, input, messages, turn management. No changes.
 
+For spell and prayer book selection, prompt-time ownership is narrower than generic
+inventory category ownership. The live selector must filter by exact book class before
+showing letters or drawing the `?` overlay: mage flows may expose only mage books and
+prayer flows may expose only prayer books. Late rejection after a broad `ICAT_BOOK`
+prompt is not acceptable because it mislabels the visible selection range.
+
 **Region 2: Permanent banked at `$F000` — always callable (via trampoline)**
 
 Currently: special rooms (435 lines), ego items (214 lines), title sysinfo (84 lines). Total 1,101 bytes, 2,989 bytes free.

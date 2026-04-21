@@ -3,6 +3,22 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS
+- [ ] Reported Failure Gate:
+  - prayer and spell book prompts must only list the matching upstream book class, and the shared regression gate must stay green
+- [x] inspect the local selector and compare it against the local `umoria` / `vms-moria` source trees
+- [x] replace the broad `ICAT_BOOK` prompt filter with exact mage-book vs prayer-book prompt filters at the selection boundary
+- [x] add focused mixed-inventory regression coverage for the shared book selector
+- [x] verify:
+  - `./commodore/c64/run_tests.sh`
+  - `make -C commodore build128`
+- [x] review:
+  - upstream `umoria` and `vms-moria` both filter book prompts by exact book tval before the prompt (`TV_MAGIC_BOOK` vs `TV_PRAYER_BOOK` / `90` vs `91`)
+  - the current Commodore path drifted by prompting on the broad `ICAT_BOOK` category and only rejecting the wrong book type after selection, so the inventory list itself was already wrong
+  - the Commodore fix now uses exact mage-book and prayer-book prompt filters, so both the prompt letters and the `?` inventory overlay only show the matching book class before selection
+  - `make -C commodore build128` is green again after trimming the banked spell-selection path back under the C128 `$F000-$FFFA` ceiling
+  - `./commodore/c64/run_tests.sh` is still red overall for existing suite issues: `effects` and `item` still fail their `MAP_BASE` asserts, `subsystems` still reports `7/10`, and `ui_views` still reports `14/20`; the new mixed-book regression itself passed in slot 14 of the `ui_views` raw results
+
 - [ ] BUG-HELP-ESC-CANCEL-CONTRACT
 - [ ] Reported Failure Gate:
   - help screens must exit on `ESC` on C128 and on `RUN/STOP` as the C64 escape surrogate, while `./commodore/c64/run_tests.sh` and the relevant C128 UI gate stay green

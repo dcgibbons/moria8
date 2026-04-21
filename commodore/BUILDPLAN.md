@@ -50,6 +50,10 @@
   - the root cause was renderer parity drift, not lost glyph state
   - full `render_viewport` now reapplies the glyph overlay instead of only the single-tile path doing so
   - the focused VDC renderer tests now cover glyph overlay on full redraw so room-reveal redraws cannot silently erase visible glyphs again
+- The mixed spell/prayer book inventory prompt bug is now closed:
+  - upstream `umoria` and `vms-moria` filter book prompts by exact book class before selection, while the Commodore port had drifted to a broad `ICAT_BOOK` prompt followed by late rejection
+  - the live fix now uses exact mage-book vs prayer-book prompt filters, so both the visible letters and the `?` inventory overlay only show books the active caster can actually use
+  - the focused regression coverage now seeds a mixed inventory and asserts that prayer selection only renders prayer books in the visible prompt list
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

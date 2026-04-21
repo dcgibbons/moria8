@@ -38,6 +38,9 @@ piw_filter:   .byte $ff        // Active inventory filter for prompt/select help
 piw_visible_count: .byte 0     // Number of cached visible slots
 piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
 
+.const PIW_FILTER_PRAYER_BOOK = $fb
+.const PIW_FILTER_MAGE_BOOK   = $fc
+
 // ============================================================
 // Category -> equipment slot mapping table
 // ============================================================
@@ -110,14 +113,24 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_match+
     cpy #$fd
     beq !piw_inv_match+
-
     tax
     lda it_category,x
     cpy #$fe
     beq !piw_inv_wearable+
     cmp piw_filter
-    bne !piw_inv_fail+
     beq !piw_inv_match+
+    cpy #PIW_FILTER_MAGE_BOOK
+    beq !piw_inv_mage_book+
+    cpy #PIW_FILTER_PRAYER_BOOK
+    bne !piw_inv_fail+
+    lda piw_item_id
+    cmp #48
+    beq !piw_inv_match+
+    sec
+    sbc #58
+    cmp #3
+    bcc !piw_inv_match+
+    bcs !piw_inv_fail+
 
 !piw_inv_wearable:
     tax
@@ -126,7 +139,18 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_fail+
     lda equip_slot_for_cat,x
     cmp #$ff
+    beq !piw_inv_fail+
     bne !piw_inv_match+
+
+!piw_inv_mage_book:
+    lda piw_item_id
+    cmp #47
+    beq !piw_inv_match+
+    sec
+    sbc #55
+    cmp #3
+    bcc !piw_inv_match+
+    bcs !piw_inv_fail+
 
 !piw_inv_fail:
     clc
