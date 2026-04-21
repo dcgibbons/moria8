@@ -757,6 +757,25 @@ tramp_item_use_staff:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_eff_earthquake:
+    lda #OVL_ITEMS
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr eff_earthquake
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !fatal+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+!done:
+    rts
+!fatal:
+    jmp restart_entry
+
 tramp_item_refuel:
     lda #OVL_ITEMS
     jsr overlay_load
@@ -788,6 +807,17 @@ tramp_spell_execute_selected:
     sta $01
     jsr spell_execute_selected
     jsr tier_restore_after_overlay
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_reveal_floorplan:
+    lda #OVL_DEATH
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL
+    sta $01
+    jsr eff_reveal_floorplan
 !done:
     jmp tramp_sr_epilogue
 
@@ -1139,6 +1169,7 @@ banked_payload:
     #import "../common/ui_recall.s"
     #import "../common/disk_setup_banked.s"
     #import "../common/player_magic_learn_op.s"
+    #import "../common/player_magic_map.s"
 
 banked_code_end:
 }
@@ -1182,7 +1213,11 @@ ovl_start_end:
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
     #import "../common/score.s"
+    #define PMX_EARTHQUAKE_EXTERNAL
+    #define PMX_MAP_AREA_EXTERNAL
     #import "../common/player_magic_execute_overlay.s"
+    #undef PMX_MAP_AREA_EXTERNAL
+    #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
@@ -1218,7 +1253,9 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
+    #define ITEM_ACTIONS_EARTHQUAKE_OWNER
     #import "../common/item_actions_overlay.s"
+    #undef ITEM_ACTIONS_EARTHQUAKE_OWNER
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true

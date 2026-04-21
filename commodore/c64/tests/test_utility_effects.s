@@ -70,6 +70,7 @@ test_finish:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_map.s"
 #import "../../common/player_magic_feedback.s"
 #import "../../common/player_magic_earthquake.s"
 #import "../../common/player_magic_utility.s"
@@ -178,10 +179,38 @@ test_rng_fill_zeroes:
     rts
 
 test_start:
-    // Test 1: Sense Surroundings / map-area marks tiles visited.
+    // Test 1: Sense Surroundings follows umoria-style map-area behavior:
+    // reveal floors plus adjacent room/corridor walls, but keep untouched
+    // solid rock and hidden doors unrevealed.
     jsr tv_setup_dark_room
+    :PatchJump(rng_range, test_rng_range)
+    jsr test_rng_fill_zeroes
     lda #0
     sta vis_room_revealed
+
+    // Untouched solid rock well outside the mapped room/corridor.
+    ldx #5
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #5
+    lda (zp_ptr0),y
+    and #~FLAG_VISITED & $ff
+    sta (zp_ptr0),y
+
+    // Room wall enclosing the mapped dark room.
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    lda (zp_ptr0),y
+    and #~FLAG_VISITED & $ff
+    sta (zp_ptr0),y
+
+    // Room floor in the mapped dark room.
     ldx #12
     lda map_row_lo,x
     sta zp_ptr0
@@ -191,11 +220,95 @@ test_start:
     lda (zp_ptr0),y
     and #~FLAG_VISITED & $ff
     sta (zp_ptr0),y
+
+    // Hidden door on the room wall should stay hidden.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #19
+    lda #TILE_SECRET
+    sta (zp_ptr0),y
+
+    // Corridor floor and its wall should both map like umoria's area map.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda (zp_ptr0),y
+    and #~FLAG_VISITED & $ff
+    sta (zp_ptr0),y
+
     jsr eff_map_area
     lda vis_room_revealed
     cmp #1
     bne !t1_fail+
+
+    // Solid rock stays dark.
+    ldx #5
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #5
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    bne !t1_fail+
+
+    // Room wall is revealed.
+    ldx #9
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
     ldy #24
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t1_fail+
+
+    // Room floor is revealed.
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #24
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t1_fail+
+
+    // Hidden door stays hidden.
+    ldy #19
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_SECRET
+    bne !t1_fail+
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    bne !t1_fail+
+
+    // Corridor floor maps.
+    ldy #10
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t1_fail+
+    ldx #11
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
     lda (zp_ptr0),y
     and #FLAG_VISITED
     beq !t1_fail+

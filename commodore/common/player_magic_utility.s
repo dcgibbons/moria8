@@ -4,36 +4,45 @@
 // Split out from the main execute overlay so focused runtime suites can cover
 // map/dispel/glyph/heal utility behavior without importing the full dispatcher.
 
+#if !PMX_MAP_AREA_EXTERNAL
+    #import "player_magic_map.s"
+#endif
 #import "player_heal_feedback.s"
 
-pmu_map_row: .byte 0
-
-eff_map_area:
-    lda #1
-    sta pmu_map_row
-!emap_row:
-    lda pmu_map_row
-    cmp #MAP_ROWS - 1
-    bcs !emap_done+
-    tax
+eff_reveal_floorplan:
+    ldx #0
+!erf_row:
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #1
-!emap_col:
+    ldy #0
+!erf_col:
     :MapRead_ptr0_y()
+    sta zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !erf_visit+
+    cmp #TILE_DOOR_OPEN
+    bcs !erf_visit+
+    lda zp_temp0
+    and #FLAG_LIT
+    beq !erf_next+
+!erf_visit:
+    lda zp_temp0
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
+!erf_next:
     iny
-    cpy #MAP_COLS - 1
-    bcc !emap_col-
-    inc pmu_map_row
-    jmp !emap_row-
-!emap_done:
+    cpy #MAP_COLS
+    bcc !erf_col-
+    inx
+    cpx #MAP_ROWS
+    bcc !erf_row-
+!erf_done:
     lda #1
     sta vis_room_revealed
-    rts
+    jmp eff_find_doors
 
 pmu_create_food:
     lda zp_player_x
@@ -126,11 +135,6 @@ eff_turn_undead:
     jmp !etud_loop-
 !etud_done:
     rts
-
-eff_earthquake:
-    lda #4
-    ldx #8
-    jmp eff_damage_adjacent
 
 eff_destroy_area:
     lda #15

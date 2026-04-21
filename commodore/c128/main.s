@@ -1617,6 +1617,25 @@ tramp_item_aim_wand:
 tramp_item_use_staff:
     :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_use_staff)
 
+tramp_eff_earthquake:
+    lda #C128_ITEMS_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr eff_item_overlay_dispatch
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    jmp c128_return_to_death_overlay
+!done:
+    rts
+
 tramp_item_refuel:
     :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_refuel)
 
@@ -2773,6 +2792,7 @@ c128_cache_state_end:
 #import "../common/spell_effects.s"
 #import "../common/item.s"
 #import "../common/store_data.s"
+
 #import "../common/save.s"
 #import "../common/disk_swap.s"
 #import "../common/dungeon_los.s"
@@ -3155,6 +3175,7 @@ banked_code_end:
 }
 banked_payload_end:
 
+
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
@@ -3275,7 +3296,11 @@ ovl_start_end:
 // ============================================================
 .segment DeathOverlay
     #import "../common/score.s"
+    #define PMX_EARTHQUAKE_EXTERNAL
+    #define PMX_MAP_AREA_EXTERNAL
     #import "../common/player_magic_execute_overlay.s"
+    #undef PMX_MAP_AREA_EXTERNAL
+    #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
@@ -3314,7 +3339,11 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
+    #define ITEM_ACTIONS_EARTHQUAKE_OWNER
+    #define ITEM_ACTIONS_MAP_AREA_OWNER
     #import "../common/item_actions_overlay.s"
+    #undef ITEM_ACTIONS_MAP_AREA_OWNER
+    #undef ITEM_ACTIONS_EARTHQUAKE_OWNER
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true

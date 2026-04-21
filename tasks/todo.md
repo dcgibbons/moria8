@@ -3,6 +3,17 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR
+- [ ] Reported Failure Gate:
+  - `Sense Surroundings` must match `umoria`'s prayer behavior (`spellMapCurrentArea`) instead of sharing the current wizard floor-plan reveal; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current Commodore prayer/wizard reveal paths and confirm they currently share the same logic
+- [x] inspect upstream `umoria` prayer versus wizard mapping/light behavior and identify the contract drift
+- [ ] split the prayer onto an `umoria`-style current-area mapping path without changing the wizard reveal owner
+- [ ] add focused utility coverage for mapped room walls, mapped corridor walls, and unrevealed hidden doors/solid rock
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
 - [ ] BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT
 - [ ] Reported Failure Gate:
   - on C128, `Earthquake` must no longer just beep; it must mutate terrain and apply its real area effect while keeping `make test64` and `make test128-fast-smoke` green
@@ -6585,6 +6596,53 @@ The section below is retained only as historical context for the earlier dual-en
     - `make test128-fast-smoke`
     - `make test64`
   - then rerun the same narrow live C64 init repro before touching save/load follow-up bugs
+
+## BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR
+
+### Goal
+- Make the priest `Sense Surroundings` prayer follow upstream `umoria` `spellMapCurrentArea()` behavior exactly enough for the Commodore tile model:
+  - map the current visible area plus the same random spill shape
+  - reveal floor tiles
+  - reveal enclosing room/corridor walls around mapped floors
+  - keep hidden doors hidden
+  - keep wizard reveal separate
+
+### Implementation
+- Added a dedicated `eff_map_area` in `commodore/common/player_magic_map.s` for the umoria-style prayer behavior.
+- Kept wizard floor-plan reveal separate in `commodore/common/player_magic_utility.s` / `commodore/common/wizard.s`.
+- On C128, kept `Sense Surroundings` out of the full `DeathOverlay` by routing both earthquake and map-area through the existing item-overlay trampoline, with dispatch selected from resident `pm_spell_idx`.
+- Tightened the prayer dispatch code in `commodore/common/player_magic_execute_overlay.s` by sharing the undead/evil dispel setup tail, which recovered the bytes needed to keep `DeathOverlay` under `$F000`.
+- Expanded `commodore/c64/tests/test_utility_effects.s` to prove:
+  - mapped room floor is revealed
+  - mapped room wall is revealed
+  - mapped corridor wall is revealed
+  - untouched rock stays dark
+  - hidden doors stay hidden
+
+### Review
+- Upstream parity checked against `umoria` prayer behavior rather than the local wizard reveal path.
+- C128 staging, overlay, and runtime-low residency constraints were all re-verified after the ownership split.
+
+### Verification
+- Exact reported command: `make test64` PASS
+- Broader regression suites: `make test128-fast-smoke` PASS
+
+### Live Regression Follow-up
+- The first C128 prayer patch still shipped a real live regression even though the gates were green.
+- User monitor trace:
+  - CPU JAM at `$49B1`
+  - caller chain through `$49AE`
+- Root cause:
+  - `eff_map_area` used raw `(zp_ptr1),y` reads/writes in the adjacent-wall pass.
+  - On C128, map rows live in Bank 1, so those raw accesses scribbled Bank 0 resident code instead of the map.
+  - `$49AE` is `status_put_stat_val`, which got overwritten by Bank 1-style map bytes and later JAMed when status redraw executed.
+- Fix:
+  - switched the adjacent-tile pass in `commodore/common/player_magic_map.s` to `:MapRead_ptr1_y()` / `:MapWrite_ptr1_y()`
+  - left the C64 behavior unchanged while restoring correct Bank 1 ownership on C128
+
+### Verification
+- Exact reported command: `make test64` PASS
+- Broader regression suites: `make test128-fast-smoke` PASS
 
 ### Redesign Implementation
 - Implemented the redesign as low-RAM copied helper images instead of a special banked C64 writer:

@@ -12,6 +12,12 @@
 .const PMX_KEY_ESC    = $1b
 #endif
 
+#if PMX_EARTHQUAKE_EXTERNAL
+.const PMX_EARTHQUAKE_TARGET = tramp_eff_earthquake
+#else
+.const PMX_EARTHQUAKE_TARGET = eff_earthquake
+#endif
+
 pmx_work_idx:    .byte 0
 pmx_work_x:      .byte 0
 pmx_work_y:      .byte 0
@@ -250,7 +256,7 @@ ped_tbl_lo:
     .byte <(ped_s8-1), <(eff_teleport_self-1), <(ped_s10-1), <(ped_s11-1)
     .byte <(ped_s12-1), <(ped_s13-1), <(ped_s14-1), <(ped_s15-1)
     .byte <(eff_cure_poison-1), <(ped_s17-1), <(ped_s18-1), <(ped_s19-1)
-    .byte <(ped_s20-1), <(eff_earthquake-1), <(eff_map_area-1), <(ped_s23-1)
+    .byte <(ped_s20-1), <(PMX_EARTHQUAKE_TARGET-1), <(PMX_EARTHQUAKE_TARGET-1), <(ped_s23-1)
     .byte <(eff_turn_undead-1), <(ped_s25-1), <(ped_s26-1), <(ped_s27-1)
     .byte <(ped_s28-1), <(ped_s29-1), <(ped_s30-1)
 ped_tbl_hi:
@@ -259,7 +265,7 @@ ped_tbl_hi:
     .byte >(ped_s8-1), >(eff_teleport_self-1), >(ped_s10-1), >(ped_s11-1)
     .byte >(ped_s12-1), >(ped_s13-1), >(ped_s14-1), >(ped_s15-1)
     .byte >(eff_cure_poison-1), >(ped_s17-1), >(ped_s18-1), >(ped_s19-1)
-    .byte >(ped_s20-1), >(eff_earthquake-1), >(eff_map_area-1), >(ped_s23-1)
+    .byte >(ped_s20-1), >(PMX_EARTHQUAKE_TARGET-1), >(PMX_EARTHQUAKE_TARGET-1), >(ped_s23-1)
     .byte >(eff_turn_undead-1), >(ped_s25-1), >(ped_s26-1), >(ped_s27-1)
     .byte >(ped_s28-1), >(ped_s29-1), >(ped_s30-1)
 
@@ -348,18 +354,13 @@ ped_s25:
     jmp pmx_add_bless_msg
 ped_s26:
     lda #CF_UNDEAD
-    sta pmx_work_flag
-    lda zp_player_lvl
-    asl
-    clc
-    adc zp_player_lvl
-    sta pmx_work_damage
-    jmp eff_dispel_flagged
+    bne !ped_s26_28+
 ped_s27:
     lda #200
     jmp pmx_heal_and_report
 ped_s28:
     lda #CF_EVIL
+!ped_s26_28:
     sta pmx_work_flag
     lda zp_player_lvl
     asl
@@ -385,6 +386,9 @@ pmx_light_room_msg:
 #import "player_magic_detect.s"
 #import "player_magic_feedback.s"
 #import "player_magic_utility.s"
+#if !PMX_EARTHQUAKE_EXTERNAL
+    #import "player_magic_earthquake.s"
+#endif
 
 eff_sleep_monster_dir:
     jsr eff_directional_monster
