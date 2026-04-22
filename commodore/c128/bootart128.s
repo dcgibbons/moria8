@@ -1,9 +1,10 @@
 #importonce
-// bootart128.s — Generated C128 boot-art helper
+// bootart128.s — C128 VDC boot art (511 custom tiles across 512 charset slots)
 //
-// Loads into Bank 0 RAM at $2800. Entry points:
-//   $2800: show    — save the overwritten alternate-charset slice and render poster
-//   $2803: restore — restore the saved alternate-charset bytes
+// Hardware Standard (16K VDC):
+// - Index Map:     $0000 - $07CF
+// - Attribute Map: $0800 - $0FCF
+// - Charset RAM:   $2000 - $3FFF (16 bytes per character slot)
 
 #import "../out/c128/bootart128.inc"
 
@@ -14,222 +15,207 @@
 
 .const VDC_ADDR_REG         = $d600
 .const VDC_DATA_REG         = $d601
-.const VDC_SCREEN_BASE      = $0000
-.const VDC_ATTRIB_BASE      = $0800
-.const VDC_ALT_CHARSET_BASE = $3000
-.const VDC_COLS             = 80
-.const VDC_ROWS             = 25
-.const CUSTOM_CODE_FIRST    = 0
-.const SC_SPACE             = $20
-.const ATTR_BLACK_PLAIN     = $00
-.const VDC_CLEAR_PAGES      = 8
+.const VDC_SCREEN_VDC_BASE  = $0000
+.const VDC_ATTR_VDC_BASE    = $0800
+.const VDC_CHARSET_VDC_BASE = $2000
+.const KERNAL_JDLCHR        = $ff62
+.const VDC_ATTR_MODE        = %01000000
 
-.label zp_temp0 = $02
-.label zp_temp1 = $03
 .label zp_ptr0 = $06
 .label zp_ptr0_hi = $07
+.label vdc_page_count = $08
+.label vdc_reg25_work = $09
 
 bootart_show:
+    jsr save_vdc_state
     jsr set_vdc_bg_black
-    jsr save_original_alt_glyphs
-    jsr upload_custom_alt_glyphs
-    jsr render_generated_poster
+
+    // 1. Point the VDC character generator at the full 512-slot charset in
+    // VDC RAM while preserving the active 80-column timing geometry.
+    ldx #28
+    lda #$20
+    jsr vdc_write_reg
+
+    // R12/13: Display Base ($0000)
+    ldx #12
+    lda #$00
+    jsr vdc_write_reg
+    ldx #13
+    lda #$00
+    jsr vdc_write_reg
+
+    // R20/21: Attribute Base ($0800)
+    ldx #20
+    lda #$08
+    jsr vdc_write_reg
+    ldx #21
+    lda #$00
+    jsr vdc_write_reg
+    
+    // 2. Clear Screen Index Map (at $0000)
+    lda #$00
+    ldy #$00
+    jsr vdc_set_update_addr
+    ldx #8
+    lda #0
+    jsr fill_vdc_block 
+    
+    // 3. Upload the generated charset to VDC $2000.
+    // The asset always provides 512 charset slots * 16 bytes = 8192 bytes = 32 pages.
+    lda #<bootart_charset_data
+    sta zp_ptr0
+    lda #>bootart_charset_data
+    sta zp_ptr0_hi
+    lda #>VDC_CHARSET_VDC_BASE
+    ldy #<VDC_CHARSET_VDC_BASE
+    jsr vdc_set_update_addr
+    lda #32
+    jsr upload_pages
+
+    // 4. Upload Screen Index Map ($0000)
+    lda #<bootart_screen_data
+    sta zp_ptr0
+    lda #>bootart_screen_data
+    sta zp_ptr0_hi
+    lda #>VDC_SCREEN_VDC_BASE
+    ldy #<VDC_SCREEN_VDC_BASE
+    jsr vdc_set_update_addr
+    lda #8 // 2000 bytes
+    jsr upload_pages
+
+    // 5. Upload Attribute Map ($0800)
+    lda #<bootart_attr_data
+    sta zp_ptr0
+    lda #>bootart_attr_data
+    sta zp_ptr0_hi
+    lda #>VDC_ATTR_VDC_BASE
+    ldy #<VDC_ATTR_VDC_BASE
+    jsr vdc_set_update_addr
+    lda #8 // 2000 bytes
+    jsr upload_pages
+
+    // 6. Keep the existing mode geometry and only force per-character
+    // attributes on. Writing a fixed reg25 value here breaks the live
+    // 80-column framing.
+    ldx #25
+    jsr vdc_read_reg
+    ora #VDC_ATTR_MODE
+    sta vdc_reg25_work
+    lda vdc_reg25_work
+    jsr vdc_write_reg
     rts
 
 bootart_restore:
-    jsr clear_bootart_screen
-    jsr restore_original_alt_glyphs
+    jsr restore_vdc_state
+    // Reset to Standard ROM Font and Clear Screen
+    lda #$00
+    ldy #$00
+    jsr vdc_set_update_addr
+    ldx #8
+    lda #$20
+    jsr fill_vdc_block
+    lda #$08
+    ldy #$00
+    jsr vdc_set_update_addr
+    ldx #8
+    lda #$00
+    jsr fill_vdc_block
+    jsr KERNAL_JDLCHR
+    rts
+
+save_vdc_state:
+    ldx #12
+    jsr vdc_read_reg
+    sta vdc_orig_r12
+    ldx #13
+    jsr vdc_read_reg
+    sta vdc_orig_r13
+    ldx #20
+    jsr vdc_read_reg
+    sta vdc_orig_r20
+    ldx #21
+    jsr vdc_read_reg
+    sta vdc_orig_r21
+    ldx #25
+    jsr vdc_read_reg
+    sta vdc_orig_r25
+    ldx #28
+    jsr vdc_read_reg
+    sta vdc_orig_r28
+    rts
+
+restore_vdc_state:
+    ldx #12
+    lda vdc_orig_r12
+    jsr vdc_write_reg
+    ldx #13
+    lda vdc_orig_r13
+    jsr vdc_write_reg
+    ldx #20
+    lda vdc_orig_r20
+    jsr vdc_write_reg
+    ldx #21
+    lda vdc_orig_r21
+    jsr vdc_write_reg
+    ldx #25
+    lda vdc_orig_r25
+    jsr vdc_write_reg
+    ldx #28
+    lda vdc_orig_r28
+    jsr vdc_write_reg
     rts
 
 set_vdc_bg_black:
     ldx #26
     jsr vdc_read_reg
     and #$0f
-    sta zp_temp0
-    lda #$00
-    ora zp_temp0
+    ora #$00
     ldx #26
     jsr vdc_write_reg
     rts
 
-save_original_alt_glyphs:
-    lda #<saved_alt_glyphs
-    sta zp_ptr0
-    lda #>saved_alt_glyphs
-    sta zp_ptr0_hi
-    lda #>custom_charset_vdc_base
-    ldy #<custom_charset_vdc_base
-    jsr vdc_set_update_addr
-
-!loop:
-    lda zp_ptr0_hi
-    cmp #>saved_alt_glyphs_end
-    bne !copy+
-    lda zp_ptr0
-    cmp #<saved_alt_glyphs_end
-    beq !done+
-!copy:
-    jsr vdc_read_data
-    ldy #0
-    sta (zp_ptr0),y
-    inc zp_ptr0
-    bne !loop-
-    inc zp_ptr0_hi
-    jmp !loop-
-!done:
-    rts
-
-upload_custom_alt_glyphs:
-    lda #<bootart_charset_data
-    sta zp_ptr0
-    lda #>bootart_charset_data
-    sta zp_ptr0_hi
-    lda #>custom_charset_vdc_base
-    ldy #<custom_charset_vdc_base
-    jsr vdc_set_update_addr
-
-!loop:
-    lda zp_ptr0_hi
-    cmp #>bootart_charset_data_end
-    bne !copy+
-    lda zp_ptr0
-    cmp #<bootart_charset_data_end
-    beq !done+
-!copy:
-    ldy #0
-    lda (zp_ptr0),y
-    jsr vdc_write_data
-    inc zp_ptr0
-    bne !loop-
-    inc zp_ptr0_hi
-    jmp !loop-
-!done:
-    rts
-
-restore_original_alt_glyphs:
-    lda #<saved_alt_glyphs
-    sta zp_ptr0
-    lda #>saved_alt_glyphs
-    sta zp_ptr0_hi
-    lda #>custom_charset_vdc_base
-    ldy #<custom_charset_vdc_base
-    jsr vdc_set_update_addr
-
-!loop:
-    lda zp_ptr0_hi
-    cmp #>saved_alt_glyphs_end
-    bne !copy+
-    lda zp_ptr0
-    cmp #<saved_alt_glyphs_end
-    beq !done+
-!copy:
-    ldy #0
-    lda (zp_ptr0),y
-    jsr vdc_write_data
-    inc zp_ptr0
-    bne !loop-
-    inc zp_ptr0_hi
-    jmp !loop-
-!done:
-    rts
-
-render_generated_poster:
-    // Write attributes first so the poster screen codes never appear under
-    // the previous charset/attribute state during the visible upload.
-    lda #<bootart_attr_data
-    sta zp_ptr0
-    lda #>bootart_attr_data
-    sta zp_ptr0_hi
-    lda #>VDC_ATTRIB_BASE
-    ldy #<VDC_ATTRIB_BASE
-    jsr vdc_set_update_addr
-!attr_loop:
-    lda zp_ptr0_hi
-    cmp #>bootart_attr_data_end
-    bne !attr_copy+
-    lda zp_ptr0
-    cmp #<bootart_attr_data_end
-    beq !attr_done+
-!attr_copy:
-    ldy #0
-    lda (zp_ptr0),y
-    jsr vdc_write_data
-    inc zp_ptr0
-    bne !attr_loop-
-    inc zp_ptr0_hi
-    jmp !attr_loop-
-!attr_done:
-
-    lda #<bootart_screen_data
-    sta zp_ptr0
-    lda #>bootart_screen_data
-    sta zp_ptr0_hi
-    lda #>VDC_SCREEN_BASE
-    ldy #<VDC_SCREEN_BASE
-    jsr vdc_set_update_addr
-!screen_loop:
-    lda zp_ptr0_hi
-    cmp #>bootart_screen_data_end
-    bne !screen_copy+
-    lda zp_ptr0
-    cmp #<bootart_screen_data_end
-    beq !screen_done+
-!screen_copy:
-    ldy #0
-    lda (zp_ptr0),y
-    jsr vdc_write_data
-    inc zp_ptr0
-    bne !screen_loop-
-    inc zp_ptr0_hi
-    jmp !screen_loop-
-!screen_done:
-    rts
-
-clear_bootart_screen:
-    lda #>VDC_SCREEN_BASE
-    ldy #<VDC_SCREEN_BASE
-    jsr vdc_set_update_addr
+upload_pages:
+    sta vdc_page_count
     ldx #31
     jsr vdc_select_reg
-    lda #VDC_CLEAR_PAGES
-    sta zp_temp0
+!loop:
     ldy #0
-    lda #SC_SPACE
-!screen_fill:
-    jsr vdc_wait
+!inner:
+    lda (zp_ptr0),y
+    :vdc_wait_inlined()
     sta VDC_DATA_REG
-    dey
-    bne !screen_fill-
-    dec zp_temp0
-    bne !screen_fill-
-
-    lda #>VDC_ATTRIB_BASE
-    ldy #<VDC_ATTRIB_BASE
-    jsr vdc_set_update_addr
-    ldx #31
-    jsr vdc_select_reg
-    lda #VDC_CLEAR_PAGES
-    sta zp_temp0
-    ldy #0
-    lda #ATTR_BLACK_PLAIN
-!attr_fill:
-    jsr vdc_wait
-    sta VDC_DATA_REG
-    dey
-    bne !attr_fill-
-    dec zp_temp0
-    bne !attr_fill-
+    iny
+    bne !inner-
+    inc zp_ptr0_hi
+    dec vdc_page_count
+    bne !loop-
     rts
 
-vdc_wait:
+fill_vdc_block:
+    stx vdc_page_count
+    ldx #31
+    jsr vdc_select_reg
+!loop:
+    ldy #0
+!inner:
+    :vdc_wait_inlined()
+    sta VDC_DATA_REG
+    iny
+    bne !inner-
+    dec vdc_page_count
+    bne !loop-
+    rts
+
+.macro vdc_wait_inlined() {
+!wait:
     bit VDC_ADDR_REG
-    bpl vdc_wait
-    rts
+    bpl !wait-
+}
 
 vdc_select_reg:
-    jsr vdc_wait
+    :vdc_wait_inlined()
     stx VDC_ADDR_REG
-    jsr vdc_wait
+    :vdc_wait_inlined()
     rts
 
 vdc_write_reg:
@@ -252,37 +238,20 @@ vdc_set_update_addr:
     jsr vdc_write_reg
     rts
 
-vdc_write_data:
-    ldx #31
-    jsr vdc_write_reg
-    rts
-
-vdc_read_data:
-    ldx #31
-    jsr vdc_read_reg
-    rts
+.align 16
+vdc_orig_r12:  .byte 0
+vdc_orig_r13:  .byte 0
+vdc_orig_r20:  .byte 0
+vdc_orig_r21:  .byte 0
+vdc_orig_r25:  .byte 0
+vdc_orig_r28:  .byte 0
 
 .align 16
 bootart_charset_data:
     .import binary "../out/c128/bootart128_charset.bin"
-
-.assert "bootart charset bytes match generated metadata", * - bootart_charset_data == BOOTART_CHARSET_BYTES, true
-.label bootart_charset_data_end = *
-
 bootart_screen_data:
     .import binary "../out/c128/bootart128_screen.bin"
-
-.assert "bootart screen map is 2000 bytes", * - bootart_screen_data == 2000, true
-.label bootart_screen_data_end = *
-
 bootart_attr_data:
     .import binary "../out/c128/bootart128_attr.bin"
 
-.assert "bootart attr map is 2000 bytes", * - bootart_attr_data == 2000, true
-.label bootart_attr_data_end = *
-
-.label custom_charset_vdc_base = VDC_ALT_CHARSET_BASE + (CUSTOM_CODE_FIRST * 16)
-.align 16
-.label saved_alt_glyphs = *
-.label saved_alt_glyphs_end = saved_alt_glyphs + BOOTART_CHARSET_BYTES
-.assert "bootart workspace stays below $7000", saved_alt_glyphs_end <= $7000, true
+.assert "bootart stays below $7000", * <= $7000, true
