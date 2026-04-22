@@ -34,8 +34,6 @@ ui_inv_display:
 // Preserves: nothing
 ui_inv_select_display:
     lda piw_filter
-    jsr piw_build_visible_inv_cache
-    lda piw_filter
     cmp #$fd
     beq !uinv_identify_select+
     lda #UINV_SELECT_COL
@@ -104,23 +102,12 @@ ui_inv_display_common:
     lda #1
     sta zp_cursor_col
 
-    // Unfiltered inventory keeps absolute slot letters; filtered views are
-    // relabeled contiguously so prompt/parser/overlay stay aligned.
-    lda piw_filter
-    cmp #$ff
-    bne !uinv_filtered_letter+
-    lda uinv_slot
-    clc
-    adc #$01                    // Screen code 'A'
-    jsr screen_put_char
-    jmp !uinv_letter_done+
-!uinv_filtered_letter:
+    // Carried pack letters follow the current visible order.
     lda uinv_visible
     clc
     adc #$01                    // Screen code 'A'
     jsr screen_put_char
     inc uinv_visible
-!uinv_letter_done:
 
     // ") "
     lda #$29                    // Screen code ')'

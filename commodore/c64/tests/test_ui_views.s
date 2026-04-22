@@ -537,30 +537,30 @@ test_inventory_select_view:
     jsr reset_shared_state
 
     lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #17
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
-    lda #17
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
     lda #$ff
     sta piw_filter
 
     jsr ui_inv_select_display
 
-    lda #<expected_sparse_inv_line_b
+    lda #<expected_filtered_inv_line_a
     sta zp_ptr0
-    lda #>expected_sparse_inv_line_b
+    lda #>expected_filtered_inv_line_a
     sta zp_ptr0_hi
     lda #2
     ldx #1
     jsr assert_screen_string
     bcc !fail+
 
-    lda #<expected_sparse_inv_line_e
+    lda #<expected_filtered_inv_line_b
     sta zp_ptr0
-    lda #>expected_sparse_inv_line_e
+    lda #>expected_filtered_inv_line_b
     sta zp_ptr0_hi
     lda #3
     ldx #1
@@ -1434,12 +1434,6 @@ expected_filtered_inv_line_a:
     .text ") " ; .byte 0
 expected_filtered_inv_line_b:
     .byte $02
-    .text ") " ; .byte 0
-expected_sparse_inv_line_b:
-    .byte $02
-    .text ") " ; .byte 0
-expected_sparse_inv_line_e:
-    .byte $05
     .text ") " ; .byte 0
 expected_filtered_book_line_a:
     .byte $01

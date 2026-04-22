@@ -79,7 +79,6 @@ fi_add_p1:  .byte 0       // Enchantment / charges
 fi_add_ego: .byte 0       // Ego type (0=none)
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
-ici_count:  .byte 0       // inv_count_items scratch counter (RP14-7)
 
 // ============================================================
 // Subroutines
@@ -433,9 +432,27 @@ inv_add_item:
     rts
 
 // inv_remove_item — Remove item from inventory slot X
+// Carried slots compact after removal; equipment clears in place.
 // Input: X = slot index (0-29)
-// Clobbers: A
+// Clobbers: A, X
 inv_remove_item:
+    cpx #MAX_INV_SLOTS - 1
+    bcs !iri_clear_slot+
+!iri_shift_loop:
+    lda inv_item_id + 1,x
+    sta inv_item_id,x
+    lda inv_qty + 1,x
+    sta inv_qty,x
+    lda inv_p1 + 1,x
+    sta inv_p1,x
+    lda inv_flags + 1,x
+    sta inv_flags,x
+    lda inv_ego + 1,x
+    sta inv_ego,x
+    inx
+    cpx #MAX_INV_SLOTS - 1
+    bcc !iri_shift_loop-
+!iri_clear_slot:
     lda #FI_EMPTY
     sta inv_item_id,x
     lda #0
@@ -449,21 +466,16 @@ inv_remove_item:
 // Output: A = count
 // Clobbers: X
 inv_count_items:
-    lda #0
-    sta ici_count               // Dedicated scratch counter (RP14-7)
     ldx #0
 !ici_loop:
-    cpx #MAX_INV_SLOTS
-    bcs !ici_done+
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !ici_next+
-    inc ici_count
-!ici_next:
+    beq !ici_done+
     inx
-    jmp !ici_loop-
+    cpx #MAX_INV_SLOTS
+    bcc !ici_loop-
 !ici_done:
-    lda ici_count
+    txa
     rts
 
 // ============================================================

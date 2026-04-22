@@ -58,6 +58,10 @@
   - sparse all-item inventories once again advertise the real highest selectable letter instead of a hardcoded `(a-v)` range
   - the C128 live fix also handles lowercase direct-scan letter picks on the `drop -> ?` path without widening the shared prompt parser contract
   - the final fix stayed local enough to keep the C128 staged-source/build128 gate green instead of growing the shared prompt machinery
+- Carried inventory removal now matches upstream Moria pack compaction:
+  - local `umoria` and `vms-moria` both shift later carried items left after a whole-item removal, and the Commodore port now does the same instead of preserving sparse holes
+  - carried-item letters now follow the current packed order, while equipment remains fixed-slot
+  - the exact verification gates are back at the intended state after the change: forced `build128` is green again and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

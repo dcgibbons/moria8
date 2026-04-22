@@ -2571,9 +2571,9 @@ test_start:
     sta tc_results + 50
 
     // ==========================================
-    // Test 52: item_drop '?' overlay preserves
-    // real sparse inventory letters for direct
-    // selection.
+    // Test 52: item_drop '?' overlay follows
+    // the compact carried-pack letters, and
+    // removing the middle item compacts left.
     // ==========================================
 !t52:
     jsr item_init_floor
@@ -2598,6 +2598,14 @@ test_start:
     sta (zp_ptr0),y
 
     lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #6
     sta inv_item_id + 1
     lda #1
     sta inv_qty + 1
@@ -2605,17 +2613,17 @@ test_start:
     sta inv_p1 + 1
     sta inv_flags + 1
 
-    lda #6
-    sta inv_item_id + 4
+    lda #17
+    sta inv_item_id + 2
     lda #1
-    sta inv_qty + 4
+    sta inv_qty + 2
     lda #0
-    sta inv_p1 + 4
-    sta inv_flags + 4
+    sta inv_p1 + 2
+    sta inv_flags + 2
 
     lda #$3f
     sta test_key_script + 0
-    lda #$45                    // slot E => sparse inventory slot 4
+    lda #$42                    // slot B => compact middle carried item
     sta test_key_script + 1
     lda #0
     sta test_key_script + 2
@@ -2623,10 +2631,13 @@ test_start:
     jsr item_drop
     bcc !t52_fail+
 
-    lda inv_item_id + 1
+    lda inv_item_id + 0
     cmp #4
     bne !t52_fail+
-    lda inv_item_id + 4
+    lda inv_item_id + 1
+    cmp #17
+    bne !t52_fail+
+    lda inv_item_id + 2
     cmp #FI_EMPTY
     bne !t52_fail+
 

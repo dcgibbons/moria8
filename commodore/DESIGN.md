@@ -64,6 +64,14 @@ in SEI/bank-out/access/bank-in/CLI sequences. Because this overhead is expensive
 region instead. Reserve $E000–$FFFF for infrequent bulk access (tier data loading,
 save/load).
 
+**Carried inventory contract:** The carried pack is a dense prefix, not a sparse
+absolute-slot array. Whole-item removals shift later carried items left, so pack
+letters always follow the current packed order (`A..` current count). Equipment
+remains fixed-slot and does not compact. Filtered selectors should keep mapping
+through their visible-slot cache; direct all-items carried prompts may still do
+`A -> slot` math only because the dense-pack invariant now makes visible order
+and carried-slot order the same thing.
+
 ---
 
 ## Data Compression Strategy

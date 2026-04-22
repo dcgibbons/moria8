@@ -3,6 +3,26 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM
+- [x] Reported Failure Gate:
+  - carried inventory must compact after whole-item removals like local `umoria` / `vms-moria`, so item letters reorder contiguously; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted regressions
+- [x] replace the clear-only carried-slot removal helper with compacting pack removal while preserving fixed-slot equipment clears
+- [x] remove the unfiltered sparse-letter/prompt special cases so all-items carried-pack prompts and overlays reflect the current dense pack order
+- [x] update the focused inventory/drop regressions that currently encode sparse-slot assumptions
+- [x] verify:
+  - `make -B -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - upstream parity: local `umoria` and `vms-moria` both compact the carried pack after whole-item removals, so the Commodore port now matches that dense-prefix contract instead of preserving sparse holes
+  - implementation: `inv_remove_item` now shifts carried slots left, `inv_count_items` now stops at the first empty carried slot, and the all-items inventory overlay/path now treats carried letters as current packed order rather than durable absolute slot ids
+  - caller boundary: direct carried-letter consumers like `drop` and `throw` still decode `A..V` to slot index, but that is now correct only because packed carried letters and slot order are intentionally the same invariant
+  - consultant guidance: keep equipment fixed-slot, keep filtered selectors on the visible-slot cache, and do not widen this work into upstream sorted insertion
+  - regression fallout: the first byte-trim pass over-optimized `piw_prompt_filtered_inv` and accidentally passed the Huffman prompt id where the inventory filter should have gone; the corrected version saves/restores `X` through zero-page scratch instead
+  - verification:
+    - exact reported command `make -B -C commodore build128`: PASS
+    - exact reported command `./commodore/c64/run_tests.sh`: PASS at restored baseline (`41 passed, 4 failed`)
+    - broader regression note: the remaining red suites are the pre-existing `effects`, `item`, `ui_views`, and `subsystems` aggregate failures
+
 - [x] BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS
 - [x] Reported Failure Gate:
   - in `drop`, the prompt and the `?` inventory overlay must agree on the real sparse inventory letters the player can press; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted new regression

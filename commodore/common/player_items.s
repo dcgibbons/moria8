@@ -195,32 +195,15 @@ piw_build_visible_inv_cache:
 // Input: A = filter value, X = Huffman prompt string id
 // Output: carry set if the prompt was printed, carry clear if no visible items
 piw_prompt_filtered_inv:
-    tay
-    txa
-    pha
-    tya
+    stx piw_qty
     jsr piw_build_visible_inv_cache
     bne !piw_prompt_inv_have_choices+
-    pla
     ldx #HSTR_PIW_NOTHING
     jsr huff_print_msg
     clc
     rts
 !piw_prompt_inv_have_choices:
-    sta piw_qty
-    pla
-    tax
-    lda piw_filter
-    cmp #$ff
-    bne !piw_prompt_inv_contiguous+
-    ldy piw_visible_count
-    lda piw_visible_slots - 1,y
-    clc
-    adc #1                      // absolute slot 0 -> range count 1 -> 'A'
-    bne !piw_prompt_inv_emit+
-!piw_prompt_inv_contiguous:
-    lda piw_qty
-!piw_prompt_inv_emit:
+    ldx piw_qty
     jsr piw_print_prompt_with_count
     sec
     rts

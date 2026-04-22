@@ -6,6 +6,53 @@
 
 ---
 
+## 2026-04-21 — `BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM` dense carried-pack parity ✅ COMPLETE
+
+### Scope Closed
+- Fixed the long-standing carried-inventory drift where whole-item removals left sparse holes and item letters no longer matched upstream Moria behavior.
+- Re-anchored the Commodore carried-pack contract on the local upstream trees: both `umoria` and `vms-moria` compact the pack after removals.
+
+### What Shipped
+1. **Carried-slot removal now compacts like upstream**
+   - `commodore/common/item.s`
+   - `inv_remove_item` now shifts later carried slots left after a whole-item removal while preserving fixed-slot clear behavior for equipment.
+   - `inv_count_items` now stops at the first empty carried slot, which matches the new dense-prefix invariant.
+2. **All-items carried overlays/prompts now follow packed order**
+   - `commodore/common/player_items.s`
+   - `commodore/common/ui_inventory.s`
+   - the all-items inventory overlay/path now treats carried letters as the current packed order instead of durable sparse slot ids.
+3. **Prompt/layout recovery kept the change within both platform ceilings**
+   - `commodore/common/throw.s`
+   - the final byte recovery stayed local and restored the forced C128 staged-source gate without backing out the dense-pack behavior.
+4. **Focused regressions were updated around the packed invariant**
+   - `commodore/c64/tests/test_item.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - the drop/inventory-view tests now assert dense carried-pack order and post-removal left-compaction instead of sparse-hole preservation.
+
+### Root Cause / Notes
+- The old Commodore model treated carried inventory as sparse absolute slots:
+  - whole-item removals only cleared the chosen slot
+  - insertions refilled the first empty hole
+  - all-items prompt letters therefore drifted away from upstream Moria’s packed-pack model
+- Consultant review narrowed the correct ownership boundary:
+  - carried inventory should compact and present current packed letters
+  - equipment should remain fixed-slot
+  - filtered selectors should continue to use the visible-slot cache rather than invent a second ownership model
+- The first byte-trim pass on the shared prompt helper introduced a real regression by feeding the Huffman prompt id into the inventory-filter cache builder; the final helper preserves `A` and saves/restores the prompt id through scratch instead.
+
+### Verification
+- Local upstream parity verified from:
+  - `~/Projects/thirdparty/umoria/src/inventory.cpp`
+  - `~/Projects/thirdparty/vms-moria/source/include/misc.inc`
+- Exact reported gate:
+  - `make -B -C commodore build128`: PASS
+- Exact reported gate:
+  - `./commodore/c64/run_tests.sh`: PASS at restored baseline `41 passed, 4 failed (of 45 suites)`
+- Outcome:
+  - the remaining red suites are the same pre-existing aggregate failures (`effects`, `item`, `ui_views`, `subsystems`); this fix did not add a new standing failure
+
+---
+
 ## 2026-04-21 — `BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS` sparse all-item prompt contract ✅ COMPLETE
 
 ### Scope Closed
