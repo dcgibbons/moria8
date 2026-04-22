@@ -845,6 +845,20 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 
 ## Review
+- C128 bootart centering follow-up:
+  - replaced the earlier hard-coded scanline shift in `tools/ppm_to_c128_bootart.py` with a title-safe framing pass that keeps the center block fixed and compresses only the decorative side borders into the practical 24px safe margins
+  - the generator now prints source/framed non-black bounds, horizontal center, and effective safe-area margins on each rebuild so placement can be checked from the real asset pipeline
+  - kept the restored 512-slot charset / 511 usable-tile contract intact and updated the bootart assembly comments to match the real 8KB upload
+  - after the live screenshot showed the art still appeared widened and clipped, fixed the runtime owner in `commodore/c128/bootart128.s` so bootart no longer writes a hard-coded VDC reg 25 mode value; it now preserves the active 80-column geometry and only forces attribute mode on
+  - switched the C128 bootart build in `commodore/Makefile` to use the committed tile-native source asset `artwork/moria8_C128loadingart_tile_native.png`
+  - updated the converter so title-safe framing is conditional: if the source art is already inside the safe window, the old border squeeze is skipped
+  - tightened the palette to the gold/gray family and changed cell color selection from average-lit-pixel color to dominant-lit-pixel color so the native asset survives the VDC conversion more cleanly
+  - final kept asset is the converter-resolved banner image that matches the live result, centered at `320.0` with stable bounds `(34,43)-(606,156)`
+  - updated `commodore/c128/run_tests128.sh` so the C128 build freshness check fingerprints the new PNG source and `png_to_ppm.py` instead of the old `make_logo.py` path
+  - verification:
+    - `python3 -m py_compile tools/ppm_to_c128_bootart.py` -> PASS
+    - `make -C commodore disk128` -> PASS
+    - `make -C commodore run128` -> previously launched with the reg-25-preserving bootart runtime for live visual re-check
 - BUG-C64-MAGIC-MISSILE-CRASH / BUG-C64-DETECT-EVIL-CRASH shared progress:
   - exact red repro:
     - `python3 commodore/c64/tests/snapshot_spell_more_smoke.py --snapshot /Users/chadwick/vice-snapshot-20260415171837.vsf --keybuf 'maal' --entry-symbol .msg_show_more --after-entry-keybuf ' ' --return-symbol .main_loop`

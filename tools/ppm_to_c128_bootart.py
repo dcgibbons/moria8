@@ -2,7 +2,7 @@
 """Convert a 640x200 RGB PPM into a C128 VDC custom-charset boot-art asset set.
 
 Outputs:
-- <prefix>_charset.bin : 2048 bytes (128 Set-1 glyph slots x 16 bytes)
+- <prefix>_charset.bin : 8192 bytes (512 glyph slots x 16 bytes)
 - <prefix>_screen.bin  : 2000-byte 80x25 screen map
 - <prefix>_attr.bin    : 2000-byte 80x25 VDC attribute map
 - <prefix>_preview.ppm : reconstructed 640x200 preview of the quantized poster
@@ -24,12 +24,22 @@ ROWS = 25
 POSTER_COLS = 80
 POSTER_X_OFFSET = (COLS - POSTER_COLS) // 2
 BLANK_CODE = 0x20
-CODE_ORDER = tuple(code for code in range(0x80) if code != BLANK_CODE)
+CODE_ORDER = tuple(code for code in range(512) if code != BLANK_CODE)
 MAX_CUSTOM_TILES = len(CODE_ORDER)
-ATTR_ALT_MODE = 0x80
+ATTR_ALT_MODE = 0x00
 REGION_FRAME = "frame"
 REGION_INTERIOR = "interior"
 FRAME_TILE_BUDGET = 48
+SAFE_MARGIN_COLS = 3
+SAFE_MARGIN_PX = SAFE_MARGIN_COLS * CELL_W
+FRAME_SOURCE_COLS = 7
+FRAME_SOURCE_PX = FRAME_SOURCE_COLS * CELL_W
+FRAME_DEST_COLS = FRAME_SOURCE_COLS - SAFE_MARGIN_COLS
+FRAME_DEST_PX = FRAME_DEST_COLS * CELL_W
+INTERIOR_START_X = FRAME_SOURCE_PX
+INTERIOR_END_X = WIDTH - FRAME_SOURCE_PX
+SAFE_WINDOW_LEFT = SAFE_MARGIN_PX
+SAFE_WINDOW_RIGHT = WIDTH - SAFE_MARGIN_PX - 1
 BAYER4 = (
     (0, 8, 2, 10),
     (12, 4, 14, 6),
@@ -56,7 +66,7 @@ VDC_PALETTE = {
     0xF: (0xFF, 0xFF, 0xFF),  # white
 }
 
-FRAME_PALETTE = (0x6, 0xE, 0x7, 0xC, 0xD)
+FRAME_PALETTE = (0x6, 0xE, 0x7, 0xF)
 INTERIOR_PALETTE = tuple(idx for idx in VDC_PALETTE if idx != 0)
 
 
@@ -192,12 +202,8 @@ def make_region_cell_mask(
     if key == 0 or not on_pixels:
         return 0, None
 
-    avg_rgb = (
-        sum(px[0] for px in on_pixels) // len(on_pixels),
-        sum(px[1] for px in on_pixels) // len(on_pixels),
-        sum(px[2] for px in on_pixels) // len(on_pixels),
-    )
-    return key, avg_rgb
+    dominant_rgb = Counter(on_pixels).most_common(1)[0][0]
+    return key, dominant_rgb
 
 
 def make_cell_mask(
@@ -216,7 +222,7 @@ def write_preview(
     screen: bytes,
     attrs: bytes,
 ) -> None:
-    attr_to_rgb = {val: VDC_PALETTE[(val & 0x0F) >> 1 | ((val & 0x01) << 3)] for val in ENCODED_ATTRS.values()}
+    attr_to_rgb = {val & 0x7F: VDC_PALETTE[(val & 0x0F) >> 1 | ((val & 0x01) << 3)] for val in ENCODED_ATTRS.values()}
     pixels = bytearray()
     for cell_y in range(ROWS):
         for row in range(CELL_H):
@@ -227,8 +233,9 @@ def write_preview(
                     tile_row = 0
                     fg = VDC_PALETTE[0]
                 else:
-                    tile_row = charset_rows[code][row]
-                    fg = attr_to_rgb.get(attr, VDC_PALETTE[7])
+                    full_code = code | (256 if attr & 0x80 else 0)
+                    tile_row = charset_rows[full_code][row]
+                    fg = attr_to_rgb.get(attr & 0x7F, VDC_PALETTE[7])
                 for bit in range(7, -1, -1):
                     if tile_row & (1 << bit):
                         pixels.extend(fg)
@@ -236,6 +243,112 @@ def write_preview(
                         pixels.extend(VDC_PALETTE[0])
     header = f"P6\n{WIDTH} {HEIGHT}\n255\n".encode("ascii")
     dst.write_bytes(header + pixels)
+
+
+def rgb_at(pixels: bytes | bytearray, x: int, y: int) -> tuple[int, int, int]:
+    offset = (y * WIDTH + x) * 3
+    return pixels[offset], pixels[offset + 1], pixels[offset + 2]
+
+
+def set_rgb(row: bytearray, x: int, rgb: tuple[int, int, int]) -> None:
+    offset = x * 3
+    row[offset] = rgb[0]
+    row[offset + 1] = rgb[1]
+    row[offset + 2] = rgb[2]
+
+
+def content_bounds(pixels: bytes | bytearray) -> tuple[int, int, int, int] | None:
+    left = WIDTH
+    right = -1
+    top = HEIGHT
+    bottom = -1
+    for y in range(HEIGHT):
+        row_offset = y * WIDTH * 3
+        for x in range(WIDTH):
+            offset = row_offset + x * 3
+            if pixels[offset] or pixels[offset + 1] or pixels[offset + 2]:
+                if x < left:
+                    left = x
+                if x > right:
+                    right = x
+                if y < top:
+                    top = y
+                if y > bottom:
+                    bottom = y
+    if right < 0:
+        return None
+    return left, top, right, bottom
+
+
+def format_center(left: int, right: int) -> str:
+    total = left + right
+    if total & 1:
+        return f"{total // 2}.5"
+    return str(total // 2)
+
+
+def print_framing_report(label: str, pixels: bytes | bytearray) -> None:
+    bounds = content_bounds(pixels)
+    if bounds is None:
+        print(f"{label}: no non-black pixels")
+        return
+    left, top, right, bottom = bounds
+    print(
+        f"{label}: bounds=({left},{top})-({right},{bottom}) "
+        f"center_x={format_center(left, right)} "
+        f"safe_margins=({left - SAFE_WINDOW_LEFT},{SAFE_WINDOW_RIGHT - right})"
+    )
+
+
+def needs_title_safe_framing(pixels: bytes | bytearray) -> bool:
+    bounds = content_bounds(pixels)
+    if bounds is None:
+        return False
+    left, _top, right, _bottom = bounds
+    return left < SAFE_WINDOW_LEFT or right > SAFE_WINDOW_RIGHT
+
+
+def resample_x_nearest(
+    pixels: bytes | bytearray,
+    row_y: int,
+    src_start: int,
+    src_width: int,
+    dest_width: int,
+) -> list[tuple[int, int, int]]:
+    row: list[tuple[int, int, int]] = []
+    for dest_x in range(dest_width):
+        src_x = src_start + (dest_x * src_width) // dest_width
+        row.append(rgb_at(pixels, src_x, row_y))
+    return row
+
+
+def apply_title_safe_framing(pixels: bytes | bytearray) -> bytearray:
+    framed = bytearray(WIDTH * HEIGHT * 3)
+    for y in range(HEIGHT):
+        row = bytearray(WIDTH * 3)
+
+        left_frame = resample_x_nearest(pixels, y, 0, FRAME_SOURCE_PX, FRAME_DEST_PX)
+        for x, rgb in enumerate(left_frame):
+            set_rgb(row, SAFE_MARGIN_PX + x, rgb)
+
+        interior_width = INTERIOR_END_X - INTERIOR_START_X
+        for x in range(interior_width):
+            set_rgb(row, INTERIOR_START_X + x, rgb_at(pixels, INTERIOR_START_X + x, y))
+
+        right_frame = resample_x_nearest(
+            pixels,
+            y,
+            INTERIOR_END_X,
+            FRAME_SOURCE_PX,
+            FRAME_DEST_PX,
+        )
+        right_dest_start = WIDTH - SAFE_MARGIN_PX - FRAME_DEST_PX
+        for x, rgb in enumerate(right_frame):
+            set_rgb(row, right_dest_start + x, rgb)
+
+        row_offset = y * WIDTH * 3
+        framed[row_offset:row_offset + WIDTH * 3] = row
+    return framed
 
 
 def convert_ppm(src: Path, out_prefix: Path) -> None:
@@ -251,10 +364,17 @@ def convert_ppm(src: Path, out_prefix: Path) -> None:
     if maxval != 255:
         raise ValueError(f"expected 8-bit PPM, got maxval={maxval}")
 
-    pixels = blob[pixel_start:]
+    pixels = bytearray(blob[pixel_start:])
     expected = WIDTH * HEIGHT * 3
     if len(pixels) != expected:
         raise ValueError(f"expected {expected} RGB bytes, got {len(pixels)}")
+
+    print_framing_report("source", pixels)
+    if needs_title_safe_framing(pixels):
+        pixels = apply_title_safe_framing(pixels)
+        print_framing_report("framed", pixels)
+    else:
+        print("framed: skipped (source already inside title-safe window)")
 
     cells: list[tuple[int, tuple[int, int, int] | None, str]] = []
 
@@ -300,7 +420,7 @@ def convert_ppm(src: Path, out_prefix: Path) -> None:
     if not prototypes:
         raise ValueError("no nonblank tiles found")
 
-    charset_rows = [[0] * CELL_H for _ in range(0x80)]
+    charset_rows = [[0] * CELL_H for _ in range(512)]
     code_map = {}
     for idx, key in enumerate(prototypes):
         code = CODE_ORDER[idx]
@@ -321,18 +441,20 @@ def convert_ppm(src: Path, out_prefix: Path) -> None:
             best_code = CODE_ORDER[0]
             best_dist = 1 << 62
             for idx, proto_key in enumerate(prototypes):
-                dist = (key ^ proto_key).bit_count()
+                dist = bin(key ^ proto_key).count('1')
                 if dist < best_dist:
                     best_dist = dist
                     best_code = CODE_ORDER[idx]
             code = best_code
-        screen[dst] = code
-        attrs[dst] = (
-            nearest_vdc_attr_from_palette(
-                avg_rgb or (255, 255, 255),
-                region_palette(region),
-            )
+        screen[dst] = code & 0xFF
+        base_attr = nearest_vdc_attr_from_palette(
+            avg_rgb or (255, 255, 255),
+            region_palette(region),
         )
+        if code >= 256:
+            attrs[dst] = base_attr | 0x80
+        else:
+            attrs[dst] = base_attr & 0x7F
 
     charset = bytearray()
     for rows in charset_rows:
