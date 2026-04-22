@@ -1139,8 +1139,6 @@ load_read_map_c128:
     ora save_count_hi
     beq !lrm_done+
     jsr load_read_byte
-    pha
-    pla
     ldy #0
     jsr mmu_safe_map_write_ptr0
     lda #MMU_NORMAL

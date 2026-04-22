@@ -10,7 +10,6 @@
 // Constants
 // ============================================================
 .const MAX_TRAPS = 16
-
 // Trap type indices
 .const TRAP_OPEN_PIT    = 0   // 1d4 damage
 .const TRAP_ARROW       = 1   // 1d8 damage

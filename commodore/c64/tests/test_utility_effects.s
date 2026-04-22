@@ -15,7 +15,7 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    ldx #8
+    ldx #9
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -102,7 +102,7 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .fill 9, $ff
+tc_results: .fill 10, $ff
 
 tpm_msg_calls:    .byte 0
 tpm_last_msg_lo:  .byte 0
@@ -824,11 +824,65 @@ test_start:
     bne !t9_fail+
     lda #$01
     sta tc_results + 8
-    jmp test_finish
+    jmp !t10+
 !t9_fail:
     lda #$00
     sta tc_results + 8
+    jmp !t10+
+
+    // Test 10: Find Doors reveals all secret doors on the map.
+!t10:
+    jsr tv_setup_dark_room
+    lda #0
+    sta vis_room_revealed
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #18
+    lda #TILE_SECRET
+    sta (zp_ptr0),y
+
+    ldy #19
+    lda #TILE_SECRET
+    sta (zp_ptr0),y
+
+    jsr eff_find_doors
+
+    lda vis_room_revealed
+    cmp #1
+    bne !t10_fail+
+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #18
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t10_fail+
+    lda (zp_ptr0),y
+    and #FLAG_VISITED
+    beq !t10_fail+
+
+    ldy #19
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_DOOR_CLOSED
+    bne !t10_fail+
+
+    lda #$01
+    sta tc_results + 9
     jmp test_finish
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
+    jmp test_finish
+
 tv_setup_dark_room:
     jsr fill_map_rock
     jsr item_init_floor

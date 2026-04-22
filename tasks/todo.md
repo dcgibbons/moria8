@@ -3,6 +3,22 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS
+- [ ] Reported Failure Gate:
+  - `./commodore/c64/run_tests.sh`
+- [x] restore `make -C commodore build128` to green after the whole-map optimization investigation
+- [x] confirm the exact remaining C64 red suites after the optimization pass
+- [ ] fix the `effects` and `item` MAP_BASE overflows introduced by the current shared-code layout
+- [ ] fix the `ui_views` runtime failures introduced by the current utility/inventory path changes
+- [ ] fix the `subsystems` runtime failures introduced by the current shared path changes
+- [ ] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [ ] review:
+  - the stable landed optimization in this pass is direct stair marking from the existing `stairs_*` coordinates
+  - `Find Doors` optimization remains deferred because the safe room-perimeter implementation currently conflicts with the resident/overlay memory budget
+  - current exact state after backing out the unsafe door variants: `make -C commodore build128` PASS, `./commodore/c64/run_tests.sh` red in `effects`, `item`, `ui_views`, `subsystems`
+
 - [ ] BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT
 - [ ] Reported Failure Gate:
   - if `Call Light` reports failure, it must not light the room or otherwise fake a successful light effect; keep `make test64` and `make test128-fast-smoke` green

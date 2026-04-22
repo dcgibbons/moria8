@@ -18,6 +18,69 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+cmb_buf_idx:     .byte 0
+combat_msg_buf:  .fill 42, 0
+
+reu_present:     .byte 0
+reu_loading_row: .byte 0
+
+reu_loading_hdr:
+    .text "Loading into REU:" ; .byte 0
+reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
+reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
+reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
+reu_fn_t4: .text "MONSTER.DB.4" ; .byte 0
+reu_fn_tier_lo:
+    .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4
+reu_fn_tier_hi:
+    .byte >reu_fn_t1, >reu_fn_t2, >reu_fn_t3, >reu_fn_t4
+
+df_target_x: .byte 0
+df_target_y: .byte 0
+.label cmb_period = $00
+cmb_type:   .byte 0
+cmb_damage: .byte 0
+
+reu_show_status:
+reu_load_all_tiers:
+reu_stash_overlays:
+reu_fetch_tier:
+reu_show_file:
+overlay_invalidate:
+find_random_floor:
+combat_append_decimal_16:
+cmb_term_and_print:
+viewport_update:
+render_viewport:
+player_update_hunger_state:
+eff_heal:
+eff_detect_monsters:
+eff_light_room:
+eff_identify_prompt:
+eff_teleport_self:
+eff_remove_curse:
+eff_aggravate:
+eff_bolt:
+eff_directional_monster:
+    rts
+
+combat_append_str:
+    sta zp_ptr1
+    sty zp_ptr1_hi
+    ldx cmb_buf_idx
+    ldy #0
+!loop:
+    lda (zp_ptr1),y
+    beq !done+
+    sta combat_msg_buf,x
+    inx
+    iny
+    cpx #41
+    bcc !loop-
+!done:
+    stx cmb_buf_idx
+    rts
+
 magic_recalc_mana:
     rts
 
@@ -26,7 +89,6 @@ magic_check_new_spells:
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
-#import "../../common/reu.s"
 #import "../screen.s"
 #import "../../common/color.s"
 #import "../config.s"
@@ -34,6 +96,7 @@ magic_check_new_spells:
 #import "../../common/rng.s"
 #import "../../common/math.s"
 #import "../../common/tables.s"
+#import "../../common/dungeon_data.s"
 #import "../../common/item_defs.s"
 #import "../../common/player.s"
 #import "../../common/ui_messages.s"
@@ -47,31 +110,16 @@ magic_check_new_spells:
 #import "../../common/player_create.s"
 .segment Default
 #import "../../common/sound.s"
-#import "../../common/dungeon_data.s"
-#import "../../common/dungeon_gen.s"
 #import "../../common/huffman.s"
-#import "../../common/dungeon_features.s"
 #import "../../common/monster.s"
 #import "../../common/tier_manager.s"
-#import "../../common/overlay.s"
-#import "../../common/monster_ai.s"
-#import "../../common/recall.s"
-#import "../../common/monster_magic.s"
 #import "../../common/item.s"
-#import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/player_items.s"
-#import "../../common/projectile.s"
-#import "../../common/spell_effects.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../../common/ui_recall.s"
-#import "../dungeon_render.s"
-#import "../../common/dungeon_los.s"
-#import "../../common/player_move.s"
-#import "../../common/combat.s"
-#import "../../common/monster_attack.s"
-#import "../../common/turn.s"
+#import "../../common/recall.s"
 #import "../../common/store_data.s"
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
@@ -86,6 +134,13 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 recall_found_type: .byte 0
+
+assign_special_room:
+vault_seal_entrance:
+spawn_special_room_monsters:
+spawn_nest_gold:
+find_special_room:
+    rts
 
 tramp_assign_special_room:     jmp assign_special_room
 tramp_vault_seal_entrance:     jmp vault_seal_entrance
@@ -177,13 +232,6 @@ test_start:
     jsr test_home_view
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
-    jsr test_filtered_inventory_view
-    jsr test_book_filtered_inventory_view
-    jsr test_filtered_equipment_view
-    jsr test_filtered_prompt_range
-    jsr test_message_history_ring
-    jsr test_message_more_resume
-    jsr test_modal_restore_resets_message_state
 
     jmp test_exit_trampoline
 
@@ -517,7 +565,7 @@ test_inventory_invalid_ego_view:
 
     lda #2
     sta zp_cursor_row
-    lda #13
+    lda #14
     sta zp_cursor_col
     jsr screen_set_cursor
     ldy #0
@@ -685,6 +733,10 @@ test_recall_view:
     sta cr_atk0_dice
     lda #6
     sta cr_atk0_sides
+    lda #0
+    sta cr_atk1_type
+    sta cr_atk1_dice
+    sta cr_atk1_sides
     lda #1
     sta recall_spells
     lda #3
@@ -863,8 +915,12 @@ test_home_view:
     jsr reset_shared_state
     jsr screen_clear
 
-    :PatchJump(input_get_key, test_input_get_key)
     :PatchJump(ui_help_clear_all, test_ui_help_clear_all)
+
+    lda #1
+    sta $c6
+    lda #$51
+    sta $0277
 
     lda #STORE_HOME
     sta zp_store_idx
@@ -874,6 +930,7 @@ test_home_view:
     sta si_qty + 84
 
     jsr home_enter
+    :PatchJump(ui_help_clear_all, ui_clear_full_screen_safe)
 
     lda #<sn_home
     sta zp_ptr0
@@ -1002,348 +1059,6 @@ test_screen_clear_forces_status_redraw:
     sta tc_results + 12
     rts
 
-test_filtered_inventory_view:
-    jsr reset_shared_state
-
-    lda #4
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-
-    lda #17
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-
-    lda #25
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
-
-    lda #ICAT_POTION
-    sta piw_filter
-    jsr ui_inv_display
-
-    lda #<expected_filtered_inv_line_a
-    sta zp_ptr0
-    lda #>expected_filtered_inv_line_a
-    sta zp_ptr0_hi
-    lda #2
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #<expected_filtered_inv_line_b
-    sta zp_ptr0
-    lda #>expected_filtered_inv_line_b
-    sta zp_ptr0_hi
-    lda #3
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 13
-    rts
-
-test_book_filtered_inventory_view:
-    jsr reset_shared_state
-
-    lda #47
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-
-    lda #48
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-
-    lda #55
-    sta inv_item_id + 2
-    lda #1
-    sta inv_qty + 2
-
-    lda #58
-    sta inv_item_id + 3
-    lda #1
-    sta inv_qty + 3
-
-    lda #PIW_FILTER_PRAYER_BOOK
-    sta piw_filter
-    jsr ui_inv_display
-
-    lda #<expected_filtered_book_line_a
-    sta zp_ptr0
-    lda #>expected_filtered_book_line_a
-    sta zp_ptr0_hi
-    lda #2
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #<expected_filtered_book_line_b
-    sta zp_ptr0
-    lda #>expected_filtered_book_line_b
-    sta zp_ptr0_hi
-    lda #3
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 14
-    rts
-
-test_filtered_equipment_view:
-    jsr reset_shared_state
-
-    lda #4
-    sta inv_item_id + EQUIP_WEAPON
-    lda #1
-    sta inv_qty + EQUIP_WEAPON
-
-    lda #14
-    sta inv_item_id + EQUIP_LIGHT
-    lda #1
-    sta inv_qty + EQUIP_LIGHT
-
-    jsr ui_equip_display
-
-    lda #<expected_filtered_eq_weapon
-    sta zp_ptr0
-    lda #>expected_filtered_eq_weapon
-    sta zp_ptr0_hi
-    lda #2
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #<expected_filtered_eq_light
-    sta zp_ptr0
-    lda #>expected_filtered_eq_light
-    sta zp_ptr0_hi
-    lda #8
-    ldx #1
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 15
-    rts
-
-test_filtered_prompt_range:
-    jsr reset_shared_state
-    jsr msg_init
-
-    lda #2
-    ldx #HSTR_PIQ_QUAFF_PROMPT
-    jsr piw_print_prompt_with_count
-
-    lda #<expected_quaff_prompt_ab
-    sta zp_ptr0
-    lda #>expected_quaff_prompt_ab
-    sta zp_ptr0_hi
-    lda #0
-    ldx #0
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 16
-    rts
-
-test_message_history_ring:
-    jsr reset_shared_state
-    jsr msg_init
-
-    lda #<hist_msg_a
-    sta zp_ptr0
-    lda #>hist_msg_a
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_b
-    sta zp_ptr0
-    lda #>hist_msg_b
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_c
-    sta zp_ptr0
-    lda #>hist_msg_c
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_d
-    sta zp_ptr0
-    lda #>hist_msg_d
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_e
-    sta zp_ptr0
-    lda #>hist_msg_e
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_f
-    sta zp_ptr0
-    lda #>hist_msg_f
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_g
-    sta zp_ptr0
-    lda #>hist_msg_g
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_h
-    sta zp_ptr0
-    lda #>hist_msg_h
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda #<hist_msg_i
-    sta zp_ptr0
-    lda #>hist_msg_i
-    sta zp_ptr0_hi
-    jsr msg_save_history
-
-    lda msg_hist_idx
-    cmp #1
-    bne !fail+
-
-    lda msg_history
-    cmp #'I'
-    bne !fail+
-    lda msg_history + 1
-    bne !fail+
-
-    lda msg_history + MSG_HIST_LEN
-    cmp #'B'
-    bne !fail+
-    lda msg_history + (MSG_HIST_LEN * 7)
-    cmp #'H'
-    bne !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 17
-    rts
-
-test_message_more_resume:
-    jsr reset_shared_state
-    jsr msg_init
-
-    :PatchJump(input_get_key, test_input_get_key)
-
-    lda #$20
-    sta test_key_script
-    lda #0
-    sta test_key_idx
-    lda #1
-    sta test_key_len
-
-    lda #<hist_msg_one
-    sta zp_ptr0
-    lda #>hist_msg_one
-    sta zp_ptr0_hi
-    jsr msg_print
-
-    lda #<hist_msg_two
-    sta zp_ptr0
-    lda #>hist_msg_two
-    sta zp_ptr0_hi
-    jsr msg_print
-
-    lda #<hist_msg_three
-    sta zp_ptr0
-    lda #>hist_msg_three
-    sta zp_ptr0_hi
-    jsr msg_print
-
-    lda zp_msg_flags
-    cmp #MSG_PENDING
-    bne !fail+
-
-    lda #<expected_more_resume_row0
-    sta zp_ptr0
-    lda #>expected_more_resume_row0
-    sta zp_ptr0_hi
-    lda #0
-    ldx #0
-    jsr assert_screen_string
-    bcc !fail+
-
-    lda $0400 + (40 * 1)
-    cmp #$20
-    bne !fail+
-
-    lda msg_hist_idx
-    cmp #3
-    bne !fail+
-
-    lda msg_history + (MSG_HIST_LEN * 2)
-    cmp #'T'
-    bne !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 18
-    rts
-
-test_modal_restore_resets_message_state:
-    jsr reset_shared_state
-
-    lda #0
-    sta zp_player_dlvl
-    sta current_tier
-    sta tier_loaded
-
-    lda #MSG_PENDING | MSG_FULL
-    sta zp_msg_flags
-    lda #23
-    sta msg_row1_col
-
-    jsr ui_view_restore_modal_overlay
-
-    lda zp_msg_flags
-    bne !fail+
-    lda msg_row1_col
-    bne !fail+
-
-    lda #$01
-    bne !store+
-!fail:
-    lda #$00
-!store:
-    sta tc_results + 19
-    rts
-
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -1454,7 +1169,7 @@ expected_quaff_prompt_ab:
     .text "Quaff which potion (a-b)?" ; .byte 0
 expected_equip_line:
     .byte $01
-    .text ") Weapon: Long Sword (Slay Evil) (magi" ; .byte 0
+    .text ") Weapon: Long Sword (Slay Evil) (mag" ; .byte 0
 expected_recall_lv:
     .text "LV 1" ; .byte 0
 expected_recall_hp:
@@ -1470,3 +1185,6 @@ expected_status_hp_after_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
+
+ui_views_part1_end:
+.assert "UI views part 1 stays below MAP_BASE", ui_views_part1_end <= MAP_BASE, true

@@ -1791,13 +1791,13 @@ test_start:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
-    beq !t31_pass+
-!t31_skip:
-    lda #$00
-    sta tc_results+30
-    jmp !t31_done+
+    bne !t31_skip+
 !t31_pass:
     lda #$01
+    sta tc_results+30
+    jmp !t31_done+
+!t31_skip:
+    lda #$00
     sta tc_results+30
 !t31_done:
 

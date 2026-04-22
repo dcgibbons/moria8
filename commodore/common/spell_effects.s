@@ -393,40 +393,32 @@ eff_fd_row: .byte 0
 eff_find_doors:
     lda #1
     sta eff_fd_row
-
 !efd_row_loop:
     lda eff_fd_row
     cmp #MAP_ROWS - 1
     bcs !efd_done+
-
     ldx eff_fd_row
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-
     ldy #1
 !efd_col_loop:
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
     bne !efd_col_next+
-
-    // Convert to closed door
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
-
 !efd_col_next:
     iny
     cpy #MAP_COLS - 1
     bcc !efd_col_loop-
-
     inc eff_fd_row
     jmp !efd_row_loop-
-
 !efd_done:
     lda #1
     sta vis_room_revealed

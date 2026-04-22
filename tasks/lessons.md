@@ -39,6 +39,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 ## Regression Ownership
 
 - If the user says a command or harness was green before your change and is now red, treat that as your regression until the exact command is green again.
+- Do not label a red aggregate suite as “the existing baseline” unless you actually proved that with a pre-change run in the current repo state. If the user says the tree was clean before your work, the red gate is yours until it is green again.
 - Do not dismiss new failures as harness noise until you have ruled out your own layout, build, or orchestration changes.
 - When a floor item appears to block movement, do not blame item flags or rendering first. `player_try_move` only blocks on `FLAG_OCCUPIED`, so validate the live monster table and stale occupied-bit contract before patching UI or map-item code.
 - If performance is part of the contract, do not close the bug with a slower fallback unless the user explicitly approves that tradeoff.

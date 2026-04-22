@@ -290,13 +290,15 @@ piw_print_prompt_with_count:
     beq !piw_prompt_print+
     cmp #$28                    // '('
     bne !piw_prompt_not_open+
-    lda #$01                    // Screen code 'A'
+    lda #$61                    // Screen code 'a'
     sta hd_decode_buf + 1,y
     jmp !piw_prompt_next+
 !piw_prompt_not_open:
     cmp #$2d                    // '-'
     bne !piw_prompt_next+
     lda piw_qty
+    clc
+    adc #$60                    // 1 -> 'a', 2 -> 'b'
     sta hd_decode_buf + 1,y
 !piw_prompt_next:
     iny

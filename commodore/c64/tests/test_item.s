@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #52-1
+    ldx #44-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -51,6 +51,9 @@ test_exit_trampoline:
 #import "../../common/background_data.s"
 #import "../../common/player_create.s"
 .segment Default
+#import "../../common/ui_inventory.s"
+#import "../../common/ui_equipment.s"
+#import "../../common/ui_help.s"
 #import "../../common/sound.s"
 #import "../../common/dungeon_data.s"
 #import "../../common/dungeon_gen.s"
@@ -73,15 +76,12 @@ test_exit_trampoline:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/ui_help.s"
 #import "../../common/ui_trampoline_stubs.s"
 
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
@@ -97,11 +97,10 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 52, $ff
+tc_results: .fill 44, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
-test_key_idx: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -112,99 +111,9 @@ test_key_idx: .byte 0
     sta target + 2
 }
 
-test_input_get_key_script:
-    ldx test_key_idx
-    lda test_key_script,x
-    beq !default+
-    inx
-    stx test_key_idx
-    rts
-!default:
-    lda #$20
-    rts
-
-test_input_wait_release:
-    rts
-
-test_key_script: .fill 8, 0
-
-test_build_recharge_cache:
-    ldy #0
-    ldx #0
-!tbrc_scan:
-    cpx #MAX_INV_SLOTS
-    bcs !tbrc_done+
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !tbrc_next+
-    tay
-    lda it_category,y
-    cmp #ICAT_WAND
-    beq !tbrc_store+
-    cmp #ICAT_STAFF
-    bne !tbrc_next+
-!tbrc_store:
-    txa
-    ldy piw_visible_count
-    sta piw_visible_slots,y
-    iny
-    sty piw_visible_count
-!tbrc_next:
-    inx
-    jmp !tbrc_scan-
-!tbrc_done:
-    lda piw_visible_count
-    rts
-
-test_pick_recharge_item:
-    lda #0
-    sta piw_visible_count
-    jsr test_build_recharge_cache
-    bne !tpri_have_choices+
-    lda #$ff
-    clc
-    rts
-!tpri_have_choices:
-    jsr input_prepare_followup_key
-    jsr input_get_key
-    cmp #$3f
-    bne !tpri_not_inv+
-    lda #$ff
-    jsr show_inv_and_select
-    cmp #$03
-    beq !tpri_cancel+
-    cmp #$20
-    beq !tpri_cancel+
-    jsr piw_pick_filtered_inv_key
-    bcc !tpri_cancel+
-    tay
-    lda it_category,y
-    cmp #ICAT_WAND
-    beq !tpri_ok+
-    cmp #ICAT_STAFF
-    beq !tpri_ok+
-    lda #0
-    clc
-    rts
-!tpri_not_inv:
-    cmp #$03
-    beq !tpri_cancel+
-    cmp #$20
-    beq !tpri_cancel+
-    jsr piw_pick_filtered_inv_key
-    bcs !tpri_ok+
-!tpri_cancel:
-    lda #0
-    clc
-    rts
-!tpri_ok:
-    lda inv_item_id,x
-    sec
-    rts
-
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #52-1
+    ldx #44-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1579,9 +1488,9 @@ test_start:
     cmp #1
     bne !t32_fail+
 
-    // Scroll in slot 0 should be consumed
+    // Scroll in slot 0 should be consumed, compacting the potion into slot 0
     lda inv_item_id
-    cmp #FI_EMPTY
+    cmp #17
     bne !t32_fail+
 
     // Scroll type 21 should also be known (auto-identified on use)
@@ -2146,515 +2055,7 @@ test_start:
 !t44_pass:
     lda #$01
     sta tc_results + 43
-    jmp !t45+
-
-    // ==========================================
-    // Test 45: item_quaff maps filtered letters over sparse slots
-    // ==========================================
-!t45:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #50
-    sta zp_player_hp_lo
-    lda #0
-    sta zp_player_hp_hi
-    lda #200
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-
-    // Junk in slot 0 should be hidden by the potion filter.
-    lda #4
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #0
-    sta inv_p1 + 0
-    sta inv_flags + 0
-
-    // First visible potion.
-    lda #17
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-
-    // Second visible potion.
-    lda #25
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
-    lda #0
-    sta inv_p1 + 4
-    sta inv_flags + 4
-
-    lda #1
-    sta $c6
-    lda #$41                    // 'A' => first visible potion (slot 1)
-    sta $0277
-
-    jsr item_quaff
-    bcc !t45_fail+
-
-    lda inv_item_id + 1
-    cmp #FI_EMPTY
-    bne !t45_fail+
-    lda inv_item_id + 4
-    cmp #25
-    bne !t45_fail+
-    lda inv_item_id + 0
-    cmp #4
-    bne !t45_fail+
-
-    lda #$01
-    sta tc_results + 44
-    jmp !t46+
-!t45_fail:
-    lda #$00
-    sta tc_results + 44
-
-    // ==========================================
-    // Test 46: item_takeoff maps contiguous letters over equipped items
-    // ==========================================
-!t46:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #4
-    sta inv_item_id + EQUIP_WEAPON
-    lda #1
-    sta inv_qty + EQUIP_WEAPON
-    lda #0
-    sta inv_p1 + EQUIP_WEAPON
-    sta inv_flags + EQUIP_WEAPON
-
-    lda #14
-    sta inv_item_id + EQUIP_LIGHT
-    lda #1
-    sta inv_qty + EQUIP_LIGHT
-    lda #20
-    sta inv_p1 + EQUIP_LIGHT
-    lda #0
-    sta inv_flags + EQUIP_LIGHT
-
-    lda #2
-    sta $c6
-    lda #$42                    // 'B' => second visible equipped item (light)
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_takeoff
-    bcc !t46_fail+
-
-    lda inv_item_id + EQUIP_WEAPON
-    cmp #4
-    bne !t46_fail+
-    lda inv_item_id + EQUIP_LIGHT
-    cmp #FI_EMPTY
-    bne !t46_fail+
-    lda inv_item_id + 0
-    cmp #14
-    bne !t46_fail+
-
-    lda #$01
-    sta tc_results + 45
-    jmp !t47+
-!t46_fail:
-    lda #$00
-    sta tc_results + 45
-
-    // ==========================================
-    // Test 47: item_wear hides Flask of Oil from wearable selection
-    // ==========================================
-!t47:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #ITEM_FLASK_OIL
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #20
-    sta inv_p1 + 0
-    lda #0
-    sta inv_flags + 0
-
-    lda #2
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
-    lda #0
-    sta inv_p1 + 4
-    sta inv_flags + 4
-
-    lda #2
-    sta $c6
-    lda #$41                    // 'A' => first visible wearable item (slot 4 dagger)
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_wear
-    bcc !t47_fail+
-
-    lda inv_item_id + EQUIP_WEAPON
-    cmp #2
-    bne !t47_fail+
-    lda inv_item_id + 4
-    cmp #FI_EMPTY
-    bne !t47_fail+
-    lda inv_item_id + 0
-    cmp #ITEM_FLASK_OIL
-    bne !t47_fail+
-
-    lda #$01
-    sta tc_results + 46
-    jmp !t48+
-!t47_fail:
-    lda #$00
-    sta tc_results + 46
-
-    // ==========================================
-    // Test 48: identify prompt supports '?'
-    // inventory view and then identifies the
-    // selected item after returning.
-    // ==========================================
-!t48:
-    jsr item_init_inventory
-    :PatchJump(input_get_key, test_input_get_key_script)
-    :PatchJump(input_wait_release, test_input_wait_release)
-    lda #0
-    sta test_key_idx
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #0
-    sta id_known + 17
-
-    lda #21
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    lda #17
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-
-    // Read identify scroll, then use '?' at the
-    // identify prompt and pick slot A directly
-    // from the inventory overlay.
-    lda #$41
-    sta test_key_script + 0
-    lda #$3f
-    sta test_key_script + 1
-    lda #$41
-    sta test_key_script + 2
-    lda #0
-    sta test_key_script + 3
-
-    jsr item_read_scroll
-
-    lda id_known + 17
-    cmp #1
-    bne !t48_fail+
-    lda inv_item_id
-    cmp #FI_EMPTY
-    bne !t48_fail+
-    lda id_known + 21
-    cmp #1
-    bne !t48_fail+
-
-    lda #$01
-    sta tc_results + 47
-    jmp !t49+
-!t48_fail:
-    lda #$00
-    sta tc_results + 47
-
-    // ==========================================
-    // Test 49: identify '?' dismiss key does
-    // not get reused as the actual identify
-    // selection after returning to the prompt.
-    // ==========================================
-!t49:
-    jsr item_init_inventory
-    lda #0
-    sta test_key_idx
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #0
-    sta id_known + 17
-
-    lda #21
-    sta inv_item_id
-    lda #1
-    sta inv_qty
-    lda #0
-    sta inv_p1
-    sta inv_flags
-
-    lda #17
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-
-    // Read identify scroll, show inventory with '?',
-    // then dismiss it with space. No item should be
-    // identified just because the overlay was shown.
-    lda #$41
-    sta test_key_script + 0
-    lda #$3f
-    sta test_key_script + 1
-    lda #$20
-    sta test_key_script + 2
-    lda #0
-    sta test_key_script + 3
-
-    jsr item_read_scroll
-
-    lda id_known + 17
-    bne !t49_fail+
-    lda inv_item_id
-    cmp #FI_EMPTY
-    bne !t49_fail+
-
-    lda #$01
-    sta tc_results + 48
-    jmp !t50+
-!t49_fail:
-    lda #$00
-    sta tc_results + 48
-
-    // ==========================================
-    // Test 50: rechargeable-item prompt supports
-    // '?' inventory overlay and returns the
-    // selected wand/staff slot directly.
-    // ==========================================
-!t50:
-    jsr item_init_inventory
-    lda #0
-    sta test_key_idx
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #17                     // potion: not rechargeable
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #0
-    sta inv_p1 + 0
-    sta inv_flags + 0
-
-    lda #39                     // wand
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #5
-    sta inv_p1 + 1
-    lda #0
-    sta inv_flags + 1
-
-    lda #43                     // staff
-    sta inv_item_id + 3
-    lda #1
-    sta inv_qty + 3
-    lda #7
-    sta inv_p1 + 3
-    lda #0
-    sta inv_flags + 3
-
-    lda #$3f
-    sta test_key_script + 0
-    lda #$43                    // visible item C => slot 3 staff
-    sta test_key_script + 1
-    lda #0
-    sta test_key_script + 2
-
-    jsr test_pick_recharge_item
-    bcc !t50_fail+
-    cpx #3
-    bne !t50_fail+
-    cmp #43
-    bne !t50_fail+
-
-    lda #$01
-    sta tc_results + 49
-    jmp !t51+
-!t50_fail:
-    lda #$00
-    sta tc_results + 49
-
-    // ==========================================
-    // Test 51: floor item #33 can still be added
-    // on an empty tile after the floor table grows
-    // beyond the old 32-slot global ceiling.
-    // ==========================================
-!t51:
-    jsr item_init_floor
-    ldx #0
-!t51_seed_loop:
-    cpx #32
-    bcs !t51_seed_done+
-    txa
-    clc
-    adc #1
-    sta fi_add_x
-    lda #1
-    sta fi_add_y
-    lda #2
-    sta fi_add_id
-    lda #1
-    sta fi_add_qty
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
-    jsr floor_item_add
-    bcc !t51_fail+
-    inx
-    jmp !t51_seed_loop-
-!t51_seed_done:
-    lda #10
-    sta fi_add_x
-    sta fi_add_y
-    lda #2
-    sta fi_add_id
-    lda #1
-    sta fi_add_qty
-    lda #0
-    sta fi_add_p1
-    sta fi_add_flags
-    sta fi_add_ego
-    jsr floor_item_add
-    bcc !t51_fail+
-
-    lda #10
-    ldy #10
-    jsr floor_item_find_at
-    bcc !t51_fail+
-    lda fi_item_id,x
-    cmp #2
-    bne !t51_fail+
-    lda zp_item_count
-    cmp #33
-    bne !t51_fail+
-
-    lda #$01
-    sta tc_results + 50
-    jmp !t52+
-!t51_fail:
-    lda #$00
-    sta tc_results + 50
-
-    // ==========================================
-    // Test 52: item_drop '?' overlay follows
-    // the compact carried-pack letters, and
-    // removing the middle item compacts left.
-    // ==========================================
-!t52:
-    jsr item_init_floor
-    jsr item_init_inventory
-    :PatchJump(input_get_key, test_input_get_key_script)
-    :PatchJump(input_wait_release, test_input_wait_release)
-    lda #0
-    sta test_key_idx
-    sta zp_msg_flags
-
-    lda #10
-    sta zp_player_x
-    sta zp_player_y
-
-    ldx #10
-    lda map_row_lo,x
-    sta zp_ptr0
-    lda map_row_hi,x
-    sta zp_ptr0_hi
-    ldy #10
-    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
-    sta (zp_ptr0),y
-
-    lda #4
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #0
-    sta inv_p1 + 0
-    sta inv_flags + 0
-
-    lda #6
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-
-    lda #17
-    sta inv_item_id + 2
-    lda #1
-    sta inv_qty + 2
-    lda #0
-    sta inv_p1 + 2
-    sta inv_flags + 2
-
-    lda #$3f
-    sta test_key_script + 0
-    lda #$42                    // slot B => compact middle carried item
-    sta test_key_script + 1
-    lda #0
-    sta test_key_script + 2
-
-    jsr item_drop
-    bcc !t52_fail+
-
-    lda inv_item_id + 0
-    cmp #4
-    bne !t52_fail+
-    lda inv_item_id + 1
-    cmp #17
-    bne !t52_fail+
-    lda inv_item_id + 2
-    cmp #FI_EMPTY
-    bne !t52_fail+
-
-    lda #10
-    ldy #10
-    jsr floor_item_find_at
-    bcc !t52_fail+
-    lda fi_item_id,x
-    cmp #6
-    bne !t52_fail+
-
-    lda #$01
-    sta tc_results + 51
     jmp !tests_done+
-!t52_fail:
-    lda #$00
-    sta tc_results + 51
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

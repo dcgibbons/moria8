@@ -439,38 +439,45 @@ eff_remove_curse_all:
     rts
 
 eff_find_stairs:
+    lda stairs_up_x
+    ldy stairs_up_y
+    jsr pmx_mark_stairs_at
+    lda stairs_dn1_x
+    ldy stairs_dn1_y
+    jsr pmx_mark_stairs_at
+    lda stairs_dn2_x
+    ldy stairs_dn2_y
+    jsr pmx_mark_stairs_at
+!efs_done:
     lda #1
-    sta pmx_find_stairs_row
-!efs_row:
-    lda pmx_find_stairs_row
-    cmp #MAP_ROWS - 1
-    bcs !efs_done+
-    tax
+    sta vis_room_revealed
+    rts
+
+pmx_mark_stairs_at:
+    sta pmx_work_x
+    sty pmx_work_y
+    cpy #MAP_ROWS
+    bcs !pmsa_done+
+    lda pmx_work_x
+    cmp #MAP_COLS
+    bcs !pmsa_done+
+    ldx pmx_work_y
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-    ldy #1
-!efs_col:
+    ldy pmx_work_x
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_STAIRS_DN
-    beq !efs_mark+
+    beq !pmsa_mark+
     cmp #TILE_STAIRS_UP
-    bne !efs_next+
-!efs_mark:
+    bne !pmsa_done+
+!pmsa_mark:
     :MapRead_ptr0_y()
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
-!efs_next:
-    iny
-    cpy #MAP_COLS - 1
-    bcc !efs_col-
-    inc pmx_find_stairs_row
-    jmp !efs_row-
-!efs_done:
-    lda #1
-    sta vis_room_revealed
+!pmsa_done:
     rts
 
 eff_sleep_all:
