@@ -3,6 +3,20 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT
+- [ ] Reported Failure Gate:
+  - if `Call Light` reports failure, it must not light the room or otherwise fake a successful light effect; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the shared cast/pray failure ordering and the `Call Light` effect owner to prove whether a failed roll can even reach `eff_light_room`
+- [ ] build an exact forced-failure repro for `Call Light` and prove whether room/tile light state changes on the failed path or whether the symptom is only a redraw/visibility artifact
+- [ ] if real, fix the cast/effect ordering or state mutation seam so failed casts cannot light the room
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] review:
+  - initial code inspection already shows `calc_spell_failure` branches to `pm_handle_fail_roll` before `tramp_spell_execute_selected`, so the likely owners are now narrowed to either a test gap or a redraw/visibility seam rather than obvious bad effect ordering
+  - investigation status: no product mutation bug is proven yet; a temporary forced-failure regression attempt exposed setup ambiguity (`draw_dungeon_room` / room state initialization), not a real post-fail `Call Light` effect path
+  - next evidence threshold: if this shows up again live, capture a snapshot immediately after the failed cast so the renderer/light-state question can be answered from real runtime state instead of a synthetic dark-room harness
+
 - [x] BUG-C128-DEATH-HISCORE-NOT-CENTERED
 - [x] Reported Failure Gate:
   - on C128, the death screen and high-score display must be centered in 80-column mode while preserving the existing C64 layout; keep `make -C commodore build128` green
