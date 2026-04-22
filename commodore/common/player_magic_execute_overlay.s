@@ -515,7 +515,11 @@ eff_haste_self:
     jmp pmx_add_speed_msg
 
 eff_resist_heat_cold:
-    jmp pmx_set_resist_heat_cold_msg
+    lda #10
+    jsr rng_range
+    clc
+    adc #10
+    jmp pmx_add_resist_heat_cold_msg
 
 eff_sense_invisible:
     jmp pmx_set_see_invisible_msg

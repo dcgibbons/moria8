@@ -3,6 +3,25 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT
+- [x] Reported Failure Gate:
+  - Resist Heat and Cold must report its onset and behave like a timed buff again; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from targeted regressions
+- [x] inspect the prayer/effect owner and compare the current timer contract against local upstream `umoria` / `vms-moria`
+- [x] restore a timed resist-duration contract so onset feedback is printed when the effect starts and the timer decays normally
+- [x] add focused regression coverage for onset/refresh behavior
+- [x] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - local upstream `umoria`/`vms-moria` treat resist heat/cold as timed duration, not a permanent bit-flag latch
+  - the Commodore path had drifted so `zp_eff_resist` was only ever written by the prayer feedback helper, was forced to `$03`, and was explicitly skipped by the turn decay loop; that let the effect persist indefinitely and suppress future onset messaging
+  - the first helper-only fix was incomplete because live sessions/saves could still carry a preexisting nonzero resist timer, making the cast look beep-only even though the new onset-only logic was technically working
+  - the shipped fix keeps the timed-duration repair (`10 + rng(10)` plus normal per-turn decay) and also reports the resist message on every cast, which removes stale-runtime ambiguity from the live UX
+  - focused regression coverage now proves onset and refresh behavior in `test_prayer_feedback`; the attempted decay test in `test_turn` was deliberately backed out because that suite’s patch/restore shim only restores the opcode byte and my first version would have tested the shim bug, not the product timer
+  - verification:
+    - exact reported command `make -C commodore build128`: PASS
+    - exact reported command `./commodore/c64/run_tests.sh`: PASS at restored baseline (`41 passed, 4 failed`)
+
 - [x] BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM
 - [x] Reported Failure Gate:
   - carried inventory must compact after whole-item removals like local `umoria` / `vms-moria`, so item letters reorder contiguously; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted regressions

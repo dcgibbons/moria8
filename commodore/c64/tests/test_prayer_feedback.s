@@ -310,15 +310,16 @@ test_start:
     lda #$00
     sta tc_results + 6
 
-    // Test 8: Resist onset shows a message and sets the resist flags.
+    // Test 8: Resist onset shows a message and sets the resist timer.
 !t8:
     lda #0
     sta test_msg_calls
     sta test_huff_calls
     sta zp_eff_resist
-    jsr pmx_set_resist_heat_cold_msg
+    lda #17
+    jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
-    cmp #$03
+    cmp #17
     bne !t8_fail+
     lda test_msg_calls
     cmp #1
@@ -336,17 +337,25 @@ test_start:
     lda #$00
     sta tc_results + 7
 
-    // Test 9: Resist refresh stays silent.
+    // Test 9: Resist refresh still reports the effect and extends the timer.
 !t9:
     lda #0
     sta test_msg_calls
-    lda #1
+    lda #5
     sta zp_eff_resist
-    jsr pmx_set_resist_heat_cold_msg
+    lda #17
+    jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
-    cmp #$03
+    cmp #22
     bne !t9_fail+
     lda test_msg_calls
+    cmp #1
+    bne !t9_fail+
+    lda test_last_msg_lo
+    cmp #<pmx_resist_on_msg
+    bne !t9_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_resist_on_msg
     bne !t9_fail+
     lda #$01
     sta tc_results + 8

@@ -6,6 +6,48 @@
 
 ---
 
+## 2026-04-21 — `BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT` timed prayer feedback repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live `Resist Heat and Cold` prayer bug where the action could appear as a beep-only cast with no visible player feedback.
+- Re-anchored the effect on the upstream timed-buff model instead of the drifted Commodore latch behavior.
+
+### What Shipped
+1. **Resist heat/cold is timed again**
+   - `commodore/common/player_magic_execute_overlay.s`
+   - the prayer now applies `10 + rng(10)` duration instead of writing a hardcoded pseudo-flag value
+2. **Shared resist feedback now owns the cast message**
+   - `commodore/common/player_magic_feedback.s`
+   - the helper now extends the timer and prints `You feel resistant to heat and cold.` on cast so the live prayer path no longer degenerates into sound-only feedback
+3. **Turn decay now treats resist like the other timed buffs**
+   - `commodore/common/turn.s`
+   - `zp_eff_resist` is no longer skipped by the simple per-turn decay loop
+4. **State/docs/tests updated around the real contract**
+   - `commodore/common/zeropage.s`
+   - `commodore/c64/tests/test_prayer_feedback.s`
+   - `tasks/todo.md`
+   - `tasks/lessons.md`
+
+### Root Cause / Notes
+- Local upstream references (`umoria` / `vms-moria`) keep resist heat/cold as timed duration, not a permanent bit latch.
+- The Commodore port had drifted so:
+  - `zp_eff_resist` was forced to `$03`
+  - the effect helper itself was the only writer
+  - `turn_tick_effects` explicitly skipped it
+- That made the effect persist indefinitely and allowed later live casts to look silent because the timer was already nonzero in the running session or saved state.
+- The final user-visible fix is intentionally pragmatic: the cast now reports the resist message every time, which avoids stale-timer ambiguity in live gameplay while preserving timed extension semantics.
+
+### Verification
+- Exact reported gate:
+  - `make -C commodore build128`: PASS
+- Exact reported gate:
+  - `./commodore/c64/run_tests.sh`: PASS at restored baseline `41 passed, 4 failed (of 45 suites)`
+- Outcome:
+  - focused `prayer_feedback` coverage is green again
+  - user confirmed the live prayer now reports correctly
+
+---
+
 ## 2026-04-21 — `BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM` dense carried-pack parity ✅ COMPLETE
 
 ### Scope Closed

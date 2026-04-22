@@ -62,6 +62,10 @@
   - local `umoria` and `vms-moria` both shift later carried items left after a whole-item removal, and the Commodore port now does the same instead of preserving sparse holes
   - carried-item letters now follow the current packed order, while equipment remains fixed-slot
   - the exact verification gates are back at the intended state after the change: forced `build128` is green again and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
+- The recent `Resist Heat and Cold` silent-cast bug is now closed:
+  - the Commodore port had drifted from a timed buff into a quasi-permanent latched flag that suppressed later feedback and never decayed
+  - the live fix restores timed duration, per-turn decay, and player-facing feedback on cast instead of leaving the prayer path as a beep-only action
+  - the exact verification gates are back at the intended state after the change: `make -C commodore build128` is green and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

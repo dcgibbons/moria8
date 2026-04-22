@@ -156,7 +156,7 @@
 .label zp_eff_protect  = $55   // Protection timer
 .label zp_eff_invis    = $56   // Invisibility timer
 .label zp_eff_infra    = $57   // Infravision timer
-.label zp_eff_resist   = $58   // Resistance flags (bit-packed)
+.label zp_eff_resist   = $58   // Resist heat/cold timer
 .label zp_eff_bless    = $59   // Bless timer
 .label zp_eff_hero     = $5a   // Heroism timer
 .label zp_eff_regen    = $5b   // Extra regeneration timer

@@ -142,12 +142,10 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // [skip resist($58)], [skip bless($59)], hero($5a), regen($5b)
+    // resist($58), [skip bless($59)], hero($5a), regen($5b)
     .assert "Simple-dec range", zp_eff_regen - zp_eff_protect, 6
     ldy #zp_eff_protect
 !tse_loop:
-    cpy #zp_eff_resist
-    beq !tse_next+
     cpy #zp_eff_bless
     beq !tse_next+
     lda $00,y

@@ -72,6 +72,16 @@ through their visible-slot cache; direct all-items carried prompts may still do
 `A -> slot` math only because the dense-pack invariant now makes visible order
 and carried-slot order the same thing.
 
+**Timed-effect contract:** Transient buffs must behave as timers, not as sticky
+boolean latches hidden inside timer space. If an effect extends over turns, the
+effect owner must:
+- add duration on application
+- participate in `turn_tick_effects` decay unless there is an explicit separate
+  expiration owner
+- keep its player-facing cast feedback in the live gameplay path instead of
+  relying on one-shot first-set assumptions that can be invalidated by saved or
+  already-active runtime state
+
 ---
 
 ## Data Compression Strategy

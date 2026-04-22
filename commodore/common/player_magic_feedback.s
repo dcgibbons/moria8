@@ -64,17 +64,18 @@ pmx_add_protect_msg:
 !papm_done:
     rts
 
-pmx_set_resist_heat_cold_msg:
-    lda zp_eff_resist
-    pha
-    lda #$03
+pmx_add_resist_heat_cold_msg:
+    tax
+    txa
+    clc
+    adc zp_eff_resist
+    bcc !parhcm_store+
+    lda #255
+!parhcm_store:
     sta zp_eff_resist
-    pla
-    bne !psrhc_done+
     lda #<pmx_resist_on_msg
     ldy #>pmx_resist_on_msg
     jsr pmx_print_inline
-!psrhc_done:
     rts
 
 pmx_sleep_adjacent_msg:
