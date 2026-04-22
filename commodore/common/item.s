@@ -958,6 +958,7 @@ item_drop:
 
     // X = inventory slot. Save it.
     stx ipu_slot
+    bne !idr_have_item+
 
     // Empty slot
 !idr_empty:
@@ -972,6 +973,7 @@ item_drop:
     clc
     rts
 
+!idr_have_item:
     // Set up floor item from inventory data
     lda zp_player_x
     sta fi_add_x
