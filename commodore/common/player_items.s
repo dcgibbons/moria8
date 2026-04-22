@@ -299,8 +299,6 @@ piw_print_prompt_with_count:
     jsr huff_decode_string
 
     lda piw_p1
-    clc
-    adc #$40                    // Screen code 'A' for count 1
     sta piw_qty
 
     ldy #0

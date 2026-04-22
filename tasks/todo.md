@@ -19,6 +19,7 @@ This file is a temporary working scratchpad.
   - the live C128 failure after `?` was a separate encoding seam: direct CIA scan returns shifted lowercase PETSCII (`$c1-$da`) for lowercase letter picks, so `item_drop` now normalizes that local prompt path before the absolute-slot math
   - `ui_inv_select_display` still only relabels genuinely filtered inventory views (`!= $ff`), so book/potion/scroll/wear selectors stay contiguous while all-items overlays preserve the player's real sparse letters
   - the bad shared prompt-generalization work was backed out so `make -C commodore build128` returned to green; `./commodore/c64/run_tests.sh` is back at the existing broad red baseline (`effects`, `item`, `ui_views`, `subsystems`) rather than introducing a new regression
+  - follow-up repair: the first post-commit byte trim patched the dynamic prompt range using uppercase/PETSCII-style values, which rendered garbage on C64 (`a-A`/graphics) because the shared message buffer is screen-code text there; the fix restored raw VIC screen-code letters so C64 now shows `a-d` again while `build128` stays green
 
 - [x] BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS
 - [ ] Reported Failure Gate:
