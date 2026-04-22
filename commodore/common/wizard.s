@@ -127,10 +127,11 @@ wizard_generate_item_execute:
 // marking every solid-rock tile as explored. Reveals lit room geometry plus
 // traversable/special features, then exposes hidden doors.
 wizard_reveal_level:
+#if !C128
+    jmp tramp_reveal_floorplan
+#else
     ldx #0
 !wrl_row:
-    cpx #MAP_ROWS
-    bcs !wrl_done+
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
@@ -156,10 +157,11 @@ wizard_reveal_level:
     cpy #MAP_COLS
     bcc !wrl_col-
     inx
-    jmp !wrl_row-
+    cpx #MAP_ROWS
+    bcc !wrl_row-
 !wrl_done:
-    jsr eff_find_doors
-    rts
+    jmp eff_find_doors
+#endif
 
 cmd_wizard_entry:
 #if C128
@@ -251,6 +253,8 @@ wizard_cmd_heal_cure:
     sta zp_player_mhp_hi
     lda player_data + PL_MAX_MANA
     sta player_data + PL_MANA
+    sta zp_player_mp
+    sta zp_player_mmp
     lda #0
     sta zp_eff_poison
     sta zp_eff_blind
@@ -272,6 +276,7 @@ wizard_cmd_identify:
     cmp #FI_EMPTY
     beq !wiz_ident_next+
     lda inv_flags,x
+    and #~IF_SENSED & $ff
     ora #IF_IDENTIFIED
     sta inv_flags,x
     lda inv_item_id,x

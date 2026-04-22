@@ -54,6 +54,8 @@ tile_screen_codes:
 // ============================================================
 .const SC_PLAYER    = $00   // '@' in screen codes
 .const COL_PLAYER   = COL_WHITE
+.const SC_GLYPH     = $1e   // '^' rune of protection
+.const COL_GLYPH    = COL_WHITE
 .const SC_GOLD      = $24   // '$'
 .const COL_GOLD     = COL_YELLOW
 .const SC_STORE_1   = $31   // '1'

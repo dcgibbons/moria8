@@ -236,6 +236,7 @@ uv_player_in_room_x:
     clc
     rts
 
+
 // light_room_x — Permanently light and reveal room X
 // Input: X = room index
 // Output: room_lit[x] = 1, all room tiles gain FLAG_LIT | FLAG_VISITED,

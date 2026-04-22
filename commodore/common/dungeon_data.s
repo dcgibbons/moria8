@@ -142,6 +142,10 @@ room_w:      .fill MAX_ROOMS, 0   // Interior width
 room_h:      .fill MAX_ROOMS, 0   // Interior height
 room_lit:    .fill MAX_ROOMS, 0   // 0=dark, 1=lit (set by place_rooms)
 room_type:   .fill MAX_ROOMS, 0   // 0=normal, 1=pit, 2=vault, 3=nest
+sr_room_idx: .byte 0              // Special room working room index
+sr_count:    .byte 0              // Special room working loop/count scratch
+sr_mode:     .byte 0              // 0=nest, 1=pit
+sr_fixed_type: .byte 0            // Fixed pit type / temp
 
 // ============================================================
 // Stairs coordinates and level entry direction

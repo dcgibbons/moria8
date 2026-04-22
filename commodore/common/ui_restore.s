@@ -1,14 +1,18 @@
 #importonce
 // ui_restore.s — Shared gameplay-view restore helpers for modal UI flows
 
+ui_reset_message_state:
+    lda #0
+    sta zp_msg_flags
+    sta msg_row1_col
+    rts
+
 #if C128
 // ui_prepare_fullscreen_transition — clear the screen and reset message-row
 // state before a full-screen prompt or status transition.
 ui_prepare_fullscreen_transition:
     jsr screen_clear
-    lda #0
-    sta zp_msg_flags
-    sta msg_row1_col
+    jsr ui_reset_message_state
     rts
 #endif
 
@@ -16,10 +20,11 @@ ui_prepare_fullscreen_transition:
 // Used by help/inventory/spell-pick flows that return to the caller for more UI.
 // Preserves: nothing
 ui_view_restore_modal_overlay:
+    jsr ui_reset_message_state
 #if !C128
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
-    jsr tier_check_transition
+    jsr tier_restore_after_overlay
 #endif
     lda #COL_BLACK
     sta zp_text_color
@@ -33,10 +38,11 @@ ui_view_restore_modal_overlay:
 // Used by wizard/menu-style flows that replace the whole screen.
 // Preserves: nothing
 ui_view_redraw_gameplay_view:
+    jsr ui_reset_message_state
 #if !C128
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
-    jsr tier_check_transition
+    jsr tier_restore_after_overlay
 #endif
     jsr screen_clear
     jsr viewport_update

@@ -1,325 +1,641 @@
 #importonce
-// player_magic.s — Cast spell (m) and Pray (p) commands
+// player_magic.s — Cast spell (m) and pray (p) commands
 //
-// Phase 7.2: Spell list display, cast/pray logic, failure calculation.
-// Spell effects are stubbed — prints "YOU CAST <name>." or "YOU PRAY <name>."
-// Actual effect dispatch comes in steps 7.4/7.5.
-//
-// Entry points:
-//   player_cast_spell — Handle 'm' command (mage spells)
-//   player_pray       — Handle 'p' command (priest prayers)
-//
-// Returns: carry SET = turn consumed, carry CLEAR = cancelled/no turn
+// Book-scoped, class-aware spell selection following the full 31-spell model.
 
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
 
 .encoding "screencode_mixed"
 
-
+.const HSTR_PM_BOOK_CAST = HSTR_PM_YOU_CAST
+.const HSTR_PM_BOOK_PRAY = HSTR_PM_YOU_PRAY
 // ============================================================
-// Scratch variables
-// ============================================================
-pm_spell_idx:    .byte 0     // Selected spell index (0-15)
-pm_spell_type:   .byte 0     // 1=mage, 2=priest
-pm_mana_tbl_lo:  .byte 0     // Pointer to active mana cost table (lo)
-pm_mana_tbl_hi:  .byte 0
-pm_lvl_tbl_lo:   .byte 0     // Pointer to active level table (lo)
-pm_lvl_tbl_hi:   .byte 0
-pm_fail_tbl_lo:  .byte 0     // Pointer to active fail table (lo)
-pm_fail_tbl_hi:  .byte 0
-pm_name_lo_lo:   .byte 0     // Pointer to name_lo table (lo)
-pm_name_lo_hi:   .byte 0
-pm_name_hi_lo:   .byte 0     // Pointer to name_hi table (lo)
-pm_name_hi_hi:   .byte 0
-pm_row_counter:  .byte 0     // Row counter for spell list display
-pm_cost_tmp:     .byte 0     // Temp for mana cost during cast
-pm_fail_work:    .byte 0     // Working value for failure calc
-
-// ============================================================
-// player_cast_spell — Handle 'm' (cast mage spell)
+// player_cast_spell — Handle 'm' (mage-affinity spell classes)
 // Output: carry SET = turn consumed, CLEAR = cancelled
 // ============================================================
 player_cast_spell:
-    // Check if player is a mage/rogue/ranger (has mage spells)
     lda player_data + PL_SPELL_TYPE
     cmp #SPELL_MAGE
     beq !pm_can_cast+
-
-    // Cannot cast
     ldx #HSTR_PM_NO_CAST
     jsr huff_print_msg
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_no_cast_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_no_cast_sym
+#endif
+    clc
+    rts
+!pm_can_cast:
+    jsr pm_require_class_level
+    bcs !pm_level_ok+
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_level_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_level_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_level_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_level_sym
+#endif
+    clc
+    rts
+!pm_level_ok:
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #0
+    sta pm_mode
+    jsr pm_setup_active_tables
+    jsr pm_select_book
+    bcc !pm_cancel+
+    jsr pm_build_known_list_from_book
+    lda pm_spell_count
+    bne !pm_have_spells+
+    ldx #HSTR_PM_NOT_KNOWN
+    jsr huff_print_msg
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_known_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_known_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_known_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_known_sym
+#endif
+    clc
+    rts
+!pm_have_spells:
+    jsr pm_prompt_visible_spell_choice
+    bcc !pm_cancel+
+    jsr pm_validate_selected_spell
+    bcs !pm_ready+
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_validate_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_validate_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_validate_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_validate_sym
+#endif
+    clc
+    rts
+!pm_ready:
+    jsr calc_spell_failure
+    bcc !pm_success+
+    jsr pm_handle_fail_roll
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_roll_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_fail_roll_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_roll_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_roll_sym
+#endif
+    sec
+    rts
+!pm_success:
+    jsr tramp_spell_execute_selected
+    jsr pm_finish_success_common
+#if C128_TEST_SCRIPTED_SPELL
+    inc c128_test_spell_success_count
+    inc c128_test_spell_return_pending
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    inc c64_test_spell_success_count
+    inc c64_test_spell_return_pending
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    inc c64_test_spell_success_count
+    lda #12
+    sta c64_test_spell_return_pending
+#endif
+    sec
+    rts
+
+!pm_cancel:
+#if C128_TEST_SCRIPTED_SPELL
+    jmp c128_test_spell_fail_cancel_sym
+#endif
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+    jmp c128_test_spell_cancel_pass_sym
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jmp c64_test_spell_fail_cancel_sym
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jmp c64_test_spell_fail_cancel_sym
+#endif
+    jsr msg_clear
     clc
     rts
 
-!pm_can_cast:
-    lda #SPELL_MAGE
-    sta pm_spell_type
-    ldx #0                      // Mage tables at offset 0
-    jsr pm_setup
-    jmp pm_do_cast
-
 // ============================================================
-// player_pray — Handle 'p' (pray priest prayer)
+// player_pray — Handle 'p' (priest-affinity spell classes)
 // Output: carry SET = turn consumed, CLEAR = cancelled
 // ============================================================
 player_pray:
-    // Check if player is a priest/paladin (has priest prayers)
     lda player_data + PL_SPELL_TYPE
     cmp #SPELL_PRIEST
-    beq !pm_can_pray+
-
-    // Cannot pray
+    beq !pp_can_pray+
     ldx #HSTR_PM_NO_PRAY
     jsr huff_print_msg
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_no_cast_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_no_cast_sym
+#endif
     clc
     rts
-
-!pm_can_pray:
+!pp_can_pray:
+    jsr pm_require_class_level
+    bcs !pp_level_ok+
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_level_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_level_sym
+#endif
+    clc
+    rts
+!pp_level_ok:
     lda #SPELL_PRIEST
     sta pm_spell_type
-    ldx #10                     // Priest tables at offset 10
-    jsr pm_setup
-    jmp pm_do_cast
-
-// pm_setup — Copy 10 table pointer bytes from pm_tables+X to pm_mana_tbl_lo+
-// Input: X = offset into pm_tables (0=mage, 10=priest)
-// Clobbers: A, X, Y
-pm_setup:
-    ldy #9
-!pms_loop:
-    lda pm_tables,x
-    sta pm_mana_tbl_lo,y
-    inx
-    dey
-    bpl !pms_loop-
+    lda #0
+    sta pm_mode
+    jsr pm_setup_active_tables
+    jsr pm_select_book
+    bcc !pp_cancel+
+    jsr pm_build_known_list_from_book
+    lda pm_spell_count
+    bne !pp_have_prayers+
+    ldx #HSTR_PM_NOT_KNOWN
+    jsr huff_print_msg
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_known_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_known_sym
+#endif
+    clc
+    rts
+!pp_have_prayers:
+    jsr pm_prompt_visible_spell_choice
+    bcc !pp_cancel+
+    jsr pm_validate_selected_spell
+    bcs !pp_ready+
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_validate_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_validate_sym
+#endif
+    clc
+    rts
+!pp_ready:
+    jsr calc_spell_failure
+    bcc !pp_success+
+    jsr pm_handle_fail_roll
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_roll_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_roll_sym
+#endif
+    sec
+    rts
+!pp_success:
+    jsr tramp_spell_execute_selected
+    jsr pm_finish_success_common
+#if C128_TEST_SCRIPTED_PRAYER
+    inc c128_test_spell_success_count
+    lda c128_test_spell_return_pending
+    bne !pp_test_pending_set128+
+    lda #20
+    sta c128_test_spell_return_pending
+!pp_test_pending_set128:
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    inc c64_test_spell_success_count
+    lda c64_test_spell_return_pending
+    bne !pp_test_pending_set+
+    lda #20
+    sta c64_test_spell_return_pending
+!pp_test_pending_set:
+#endif
+    sec
     rts
 
-// Table pointer data: 10 bytes per spell type (stored in reverse order for dey loop)
-// Order: name_hi_hi, name_hi_lo, name_lo_hi, name_lo_lo, fail_hi, fail_lo, lvl_hi, lvl_lo, mana_hi, mana_lo
-pm_tables:
-    // Mage (offset 0)
-    .byte >mage_spell_name_hi, <mage_spell_name_hi
-    .byte >mage_spell_name_lo, <mage_spell_name_lo
-    .byte >mage_spell_fail,    <mage_spell_fail
-    .byte >mage_spell_level,   <mage_spell_level
-    .byte >mage_spell_mana,    <mage_spell_mana
-    // Priest (offset 10)
-    .byte >priest_spell_name_hi, <priest_spell_name_hi
-    .byte >priest_spell_name_lo, <priest_spell_name_lo
-    .byte >priest_spell_fail,    <priest_spell_fail
-    .byte >priest_spell_level,   <priest_spell_level
-    .byte >priest_spell_mana,    <priest_spell_mana
-
-// ============================================================
-// pm_do_cast — Shared cast/pray logic
-// ============================================================
-pm_do_cast:
-    // Display spell list overlay
-    jsr spell_list_display
-
-    // Let the initiating command key release before reading the spell choice.
-    jsr input_prepare_followup_key
-
-    // Get key selection
-    jsr input_get_key
-
-    // Check ESC ($03) or space ($20) → cancel
-    cmp #$03
-    beq !pm_cancel+
-    cmp #$20
-    beq !pm_cancel+
-
-    // Convert PETSCII letter to spell index: A=0, B=1, ..., P=15
-    sec
-    sbc #$41                        // PETSCII 'A'
-    bcc !pm_cancel+                 // Below 'A'
-    cmp #16
-    bcc !pm_valid_key+
-!pm_cancel:
+!pp_cancel:
+#if C128_TEST_SCRIPTED_PRAYER
+    jmp c128_test_spell_fail_cancel_sym
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jmp c64_test_spell_fail_cancel_sym
+#endif
+    jsr msg_clear
     clc
     rts
 
-!pm_valid_key:
-    sta pm_spell_idx
+// ============================================================
+// Helpers
+// ============================================================
+pm_setup_active_tables:
+    ldx player_data + PL_CLASS
+    lda class_spell_mana_lo,x
+    sta pm_mana_tbl_lo
+    lda class_spell_mana_hi,x
+    sta pm_mana_tbl_hi
+    lda class_spell_level_lo,x
+    sta pm_lvl_tbl_lo
+    lda class_spell_level_hi,x
+    sta pm_lvl_tbl_hi
+    lda class_spell_fail_lo,x
+    sta pm_fail_tbl_lo
+    lda class_spell_fail_hi,x
+    sta pm_fail_tbl_hi
 
-    // Restore dungeon screen before executing spell (BUG-27)
-    jsr ui_view_restore_modal_overlay
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_setup_priest_names+
+    lda #<mage_spell_name_lo
+    sta pm_name_lo_lo
+    lda #>mage_spell_name_lo
+    sta pm_name_lo_hi
+    lda #<mage_spell_name_hi
+    sta pm_name_hi_lo
+    lda #>mage_spell_name_hi
+    sta pm_name_hi_hi
+    rts
+!pm_setup_priest_names:
+    lda #<priest_spell_name_lo
+    sta pm_name_lo_lo
+    lda #>priest_spell_name_lo
+    sta pm_name_lo_hi
+    lda #<priest_spell_name_hi
+    sta pm_name_hi_lo
+    lda #>priest_spell_name_hi
+    sta pm_name_hi_hi
+    rts
 
-    // Confused? Random spell instead of player's choice
-    lda zp_eff_confuse
-    beq !pm_not_confused+
-    lda #16
-    jsr rng_range                    // A = random [0, 15]
-    sta pm_spell_idx
-    jmp !pm_known+                   // Skip known check when confused
-!pm_not_confused:
-
-    // Check if spell is known
-    lda pm_spell_idx
-    cmp #8
-    bcs !pm_check_hi+
-
-    // Spells 0-7: check lo byte
-    tax
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN
-    beq !pm_not_known+
-    jmp !pm_known+
-
-!pm_check_hi:
-    // Spells 8-15: check hi byte
-    sec
-    sbc #8
-    tax
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN_HI
-    bne !pm_known+
-
-!pm_not_known:
-    ldx #HSTR_PM_NOT_KNOWN
+pm_require_class_level:
+    ldx player_data + PL_CLASS
+    lda class_spell_min_level,x
+    cmp zp_player_lvl
+    beq !pm_rcl_ready+
+    bcc !pm_rcl_ready+
+    ldx #HSTR_PM_NO_EXP
     jsr huff_print_msg
     clc
     rts
+!pm_rcl_ready:
+    sec
+    rts
 
-!pm_known:
-    // Check mana cost
+pm_handle_fail_roll:
+    ldx #HSTR_PM_FAIL
+    jsr huff_print_msg
+    lda #SFX_SPELL_FAIL
+    jsr sound_play
+    jsr pm_consume_mana
+    rts
+
+pm_select_book:
+!pm_select_retry:
+    jsr pm_book_prompt_huff_id
+    lda #PIW_FILTER_MAGE_BOOK + 1
+    sec
+    sbc pm_spell_type
+    jsr piw_prompt_filtered_inv
+    bcc !pm_book_cancel+
+!pm_have_books:
+    jsr input_prepare_followup_key
+    jsr input_get_key
+    cmp #$3f
+    bne !pm_not_inv+
+    lda piw_filter
+    jsr show_inv_and_select
+!pm_not_inv:
+    cmp #$20
+    beq !pm_book_cancel+
+    jsr input_is_modal_escape_key
+    beq !pm_book_cancel+
+    jsr piw_pick_filtered_inv_key
+    bcs !pm_book_slot_ok+
+!pm_book_cancel:
+    clc
+    rts
+!pm_book_slot_ok:
+    jsr book_find_index
+    bcc !pm_book_type_ok+
+    clc
+    rts
+!pm_book_type_ok:
+    stx pm_book_idx
+    lda book_spell_affinity,x
+    cmp pm_spell_type
+    beq !pm_book_aff_ok+
+    ldx #HSTR_IGS_WRONG_TYPE
+    jsr huff_print_msg
+    clc
+    rts
+!pm_book_aff_ok:
+    lda book_mask_lo,x
+    sta pm_book_mask_lo
+    lda book_mask_hi,x
+    sta pm_book_mask_hi
+    jsr msg_clear
+    sec
+    rts
+
+#if !C128
+pm_book_prompt_huff_id:
+    lda pm_mode
+    beq !pm_prompt_not_study+
+    ldx #HSTR_IGS_PROMPT
+    rts
+!pm_prompt_not_study:
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_prompt_pray+
+    ldx #HSTR_PM_BOOK_CAST
+    rts
+!pm_prompt_pray:
+    ldx #HSTR_PM_BOOK_PRAY
+    rts
+#endif
+
+pm_build_known_list_from_book:
+    lda #0
+    sta pm_spell_count
+    ldx #0
+!pm_bk_loop:
+    cpx #SPELL_CATALOG_COUNT
+    bcs !pm_bk_done+
+
+    lda pm_lvl_tbl_lo
+    sta zp_ptr0
+    lda pm_lvl_tbl_hi
+    sta zp_ptr0_hi
+    txa
+    tay
+    lda (zp_ptr0),y
+    cmp #99
+    beq !pm_bk_next+
+
+    lda pm_book_mask_lo
+    sta zp_ptr0
+    lda pm_book_mask_hi
+    sta zp_ptr0_hi
+    txa
+    jsr spell_mask_test_ptr
+    bcc !pm_bk_next+
+
+    lda #<player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0
+    lda #>player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0_hi
+    txa
+    jsr spell_mask_test_ptr
+    bcc !pm_bk_next+
+
+    ldy pm_spell_count
+    txa
+    sta pm_spell_list,y
+    inc pm_spell_count
+!pm_bk_next:
+    inx
+    jmp !pm_bk_loop-
+!pm_bk_done:
+    rts
+
+pm_build_learnable_list_from_book:
+    lda #0
+    sta pm_spell_count
+    ldx #0
+!pm_bl_loop:
+    cpx #SPELL_CATALOG_COUNT
+    bcs !pm_bl_done+
+
+    lda pm_lvl_tbl_lo
+    sta zp_ptr0
+    lda pm_lvl_tbl_hi
+    sta zp_ptr0_hi
+    txa
+    tay
+    lda (zp_ptr0),y
+    cmp #99
+    beq !pm_bl_next+
+    cmp zp_player_lvl
+    beq !pm_bl_check_book+
+    bcc !pm_bl_check_book+
+    jmp !pm_bl_next+
+
+!pm_bl_check_book:
+    lda pm_book_mask_lo
+    sta zp_ptr0
+    lda pm_book_mask_hi
+    sta zp_ptr0_hi
+    txa
+    jsr spell_mask_test_ptr
+    bcc !pm_bl_next+
+
+    lda #<player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0
+    lda #>player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0_hi
+    txa
+    jsr spell_mask_test_ptr
+    bcs !pm_bl_next+
+
+    ldy pm_spell_count
+    txa
+    sta pm_spell_list,y
+    inc pm_spell_count
+!pm_bl_next:
+    inx
+    jmp !pm_bl_loop-
+!pm_bl_done:
+    rts
+
+pm_prompt_visible_spell_choice:
+!pm_psc_prompt:
+    // On C128, release-gate before drawing the follow-up prompt so a quick
+    // book-letter -> spell-letter transition does not get swallowed by a
+    // post-render wait.
+    jsr input_prepare_followup_key
+    ldx #HSTR_PM_FOOTER_PRAY
+    lda pm_spell_type
+    cmp #SPELL_MAGE
+    bne !pm_psc_prompt_ready+
+    ldx #HSTR_PM_FOOTER_CAST
+!pm_psc_prompt_ready:
+    lda pm_spell_count
+    jsr piw_print_prompt_with_count
+#if C128
+    jsr input_get_key_fast
+#else
+    jsr input_get_key
+#endif
+    cmp #$3f
+    beq !pm_psc_show_list+
+    jsr pm_pick_visible_spell
+    bcc !pm_psc_done+
+    jsr msg_clear
+    sec
+    rts
+!pm_psc_done:
+    rts
+
+!pm_psc_show_list:
+    // Match other selectable overlays: release-gate before drawing the list
+    // so a quick first selection/cancel key is not swallowed by the gate.
+    jsr input_prepare_followup_key
+    jsr tramp_spell_list_display
+#if C128
+    jsr input_get_key_fast
+#else
+    jsr input_get_key
+#endif
+    pha
+    jsr ui_view_restore_modal_overlay
+    pla
+    cmp #$20
+    beq !pm_psc_cancel+
+    jsr input_is_modal_escape_key
+    beq !pm_psc_cancel+
+    jsr pm_pick_visible_spell
+    bcc !pm_psc_prompt-
+    jsr msg_clear
+    sec
+    rts
+!pm_psc_cancel:
+    clc
+    rts
+
+pm_pick_visible_spell:
+    cmp #$61
+    bcc !pm_pick_upper_ready+
+    cmp #$7b
+    bcs !pm_pick_upper_ready+
+    and #$df
+!pm_pick_upper_ready:
+    sec
+    sbc #$41
+    bcc !pm_pick_fail+
+    cmp pm_spell_count
+    bcs !pm_pick_fail+
+    tay
+    lda pm_spell_list,y
+    sta pm_spell_idx
+    sec
+    rts
+!pm_pick_fail:
+    clc
+    rts
+
+pm_validate_selected_spell:
     lda pm_mana_tbl_lo
     sta zp_ptr0
     lda pm_mana_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
     lda (zp_ptr0),y
-    sta pm_cost_tmp                 // Save mana cost
+    sta pm_cost_tmp
 
-    // Compare with current mana
-    lda zp_player_mp
-    cmp pm_cost_tmp
-    bcs !pm_mana_ok+
-
-    // Not enough mana
-    ldx #HSTR_PM_NO_MANA
-    jsr huff_print_msg
-    clc
-    rts
-
-!pm_mana_ok:
-    // Confused? Skip level check (umoria behavior)
-    lda zp_eff_confuse
-    bne !pm_lvl_ok+
-
-    // Check minimum level
     lda pm_lvl_tbl_lo
     sta zp_ptr0
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
     ldy pm_spell_idx
-    lda (zp_ptr0),y                 // Spell min level
+    lda (zp_ptr0),y
     cmp zp_player_lvl
-    beq !pm_lvl_ok+
-    bcc !pm_lvl_ok+
-
-    // Player level too low
+    beq !pm_valid_done+
+    bcc !pm_valid_done+
     ldx #HSTR_PM_NO_EXP
     jsr huff_print_msg
     clc
     rts
+!pm_valid_done:
+    sec
+    rts
 
-!pm_lvl_ok:
-    // Deduct mana
+pm_consume_mana:
+    lda pm_cost_tmp
+    cmp zp_player_mp
+    bcc !pm_cm_normal+
+    beq !pm_cm_normal+
+
+    sec
+    sbc zp_player_mp
+    sta zp_temp0
+
+    ldx #HSTR_PM_NO_MANA
+    jsr huff_print_msg
+
+    lda #5
+    ldx zp_temp0
+    jsr math_multiply
+    lda zp_math_a
+    beq !pm_cm_zero_mp+
+    jsr rng_range
+    clc
+    adc #1
+    sta zp_eff_paralyze
+!pm_cm_zero_mp:
+    lda #0
+    sta zp_player_mp
+    sta player_data + PL_MANA
+
+    lda #3
+    jsr rng_range
+    cmp #1
+    bne !pm_cm_done+
+    lda player_data + PL_CON_CUR
+    cmp #4
+    bcc !pm_cm_done+
+    dec player_data + PL_CON_CUR
+    lda player_data + PL_CON_CUR
+    sta zp_player_con
+    jsr player_calc_hp
+    jmp !pm_cm_done+
+
+!pm_cm_normal:
     lda zp_player_mp
     sec
     sbc pm_cost_tmp
     sta zp_player_mp
     sta player_data + PL_MANA
-
-    // Roll failure check
-    jsr calc_spell_failure
-    bcc !pm_success+
-
-    // Spell failed — turn consumed
-    ldx #HSTR_PM_FAIL
-    jsr huff_print_msg
-    lda #SFX_SPELL_FAIL
-    jsr sound_play
-    sec
+!pm_cm_done:
     rts
-
-!pm_success:
-    // Build message: "YOU CAST <name>." or "YOU PRAY <name>."
-    lda #0
-    sta cmb_buf_idx
-
-    // "YOU CAST " or "YOU PRAY "
-    lda pm_spell_type
-    cmp #SPELL_MAGE
-    bne !pm_pray_verb+
-    ldx #HSTR_PM_YOU_CAST
-    jmp !pm_verb_done+
-!pm_pray_verb:
-    ldx #HSTR_PM_YOU_PRAY
-!pm_verb_done:
-    jsr huff_append_combat
-
-    // Append spell name
-    lda pm_name_lo_lo
-    sta zp_ptr0
-    lda pm_name_lo_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    lda (zp_ptr0),y                 // Name pointer lo
-    sta zp_ptr2                     // Save temporarily
-
-    lda pm_name_hi_lo
-    sta zp_ptr0
-    lda pm_name_hi_hi
-    sta zp_ptr0_hi
-    ldy pm_spell_idx
-    lda (zp_ptr0),y                 // Name pointer hi
-
-    tay                             // Y = name hi
-    lda zp_ptr2                     // A = name lo
-    jsr combat_append_str
-
-    // Append "."
-    lda #<cmb_period
-    ldy #>cmb_period
-    jsr combat_append_str
-
-    jsr cmb_term_and_print
-
-    // Dispatch to spell effect
-    lda pm_spell_type
-    cmp #SPELL_MAGE
-    bne !pm_priest_dispatch+
-    lda pm_spell_idx
-    jsr mage_effect_dispatch
-    jmp !pm_effect_done+
-!pm_priest_dispatch:
-    lda pm_spell_idx
-    jsr priest_effect_dispatch
-!pm_effect_done:
-
-    // Spell success sound
-    lda #SFX_SPELL
-    jsr sound_play
-
-    // Turn consumed
-    sec
-    rts
-
-#if !C128
-    #import "player_magic_display_data.s"
-    #import "player_magic_display.s"
-#endif
 
 #if !C128
     #import "player_magic_levelup.s"
+    #import "player_magic_display.s"
     #import "player_magic_tail.s"
 #endif
 
-// ============================================================
-// Compile-time asserts
-// ============================================================
 .assert "pm_spell_type mage", SPELL_MAGE, 1
 .assert "pm_spell_type priest", SPELL_PRIEST, 2

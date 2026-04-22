@@ -162,8 +162,7 @@ monster_attack_player:
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_HIT
-    jsr sound_play
-    rts
+    jmp sound_play
 
 !map_miss_msg:
     // Miss message: "THE <name> MISSES YOU."
@@ -171,22 +170,19 @@ monster_attack_player:
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_MISS
-    jsr sound_play
-    rts
+    jmp sound_play
 
 !map_do_aggravate:
     jsr mon_atk_effect_aggravate
     // Print shriek message
     ldx #HSTR_MAT_SHRIEK
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 
 !map_player_dead:
     ldx mat_type2
     inc recall_deaths,x
     stx zp_death_source
-    jsr player_death_check
-    rts
+    jmp player_death_check
 
 // mon_atk_calc_tohit — Compute monster's hit chance
 // hit_chance = base_to_hit[atk_type] + cr_level * 3
@@ -251,6 +247,11 @@ mon_atk_roll_tohit:
 // Output: carry set = player dead
 // Clobbers: A
 mon_atk_apply_damage:
+    lda eff_invuln_timer
+    beq !mad_apply+
+    clc
+    rts
+!mad_apply:
     // 16-bit subtraction: player HP -= damage
     lda zp_player_hp_lo
     sec
@@ -326,12 +327,10 @@ mon_atk_effect_dispatch:
     jmp !maed_normal+
 
 !maed_normal:
-    jsr mon_atk_ac_reduce
-    rts
+    jmp mon_atk_ac_reduce
 !maed_poison:
     // Full dice damage, no AC reduction (matches umoria)
-    jsr mon_atk_effect_poison
-    rts
+    jmp mon_atk_effect_poison
 !maed_confuse:
     // Full dice damage, no AC reduction (matches umoria)
     // 50% chance of applying confusion effect
@@ -343,16 +342,13 @@ mon_atk_effect_dispatch:
     rts
 !maed_paralyze:
     // Full dice damage passes through (matches umoria), then apply effect
-    jsr mon_atk_effect_paralyze
-    rts
+    jmp mon_atk_effect_paralyze
 !maed_acid:
     // Acid: full damage, no AC reduction
-    jsr mon_atk_effect_acid
-    rts
+    jmp mon_atk_effect_acid
 !maed_fear:
     // Fear: full dice damage, no AC reduction (matches umoria)
-    jsr mon_atk_effect_fear
-    rts
+    jmp mon_atk_effect_fear
 !maed_corrode:
     // Corrode: full damage, no AC reduce. Equipment corrosion deferred.
     rts
@@ -493,8 +489,7 @@ mon_atk_effect_paralyze:
 mon_atk_effect_acid:
     ldx #HSTR_MAT_ACID
     jsr huff_decode_to_ptr2
-    jsr mon_atk_build_effect_msg
-    rts
+    jmp mon_atk_build_effect_msg
 
 // mon_atk_effect_fear — Set fear timer (blocks melee)
 // Timer = rng_range(cr_level) + 3. Message only on first fear.
@@ -578,8 +573,7 @@ player_death_check:
     ora #$01                    // Set GF_DEAD (bit 0)
     sta zp_game_flags
     lda #SFX_DEATH
-    jsr sound_play
-    rts
+    jmp sound_play
 
 // ============================================================
 // Message builders

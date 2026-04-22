@@ -6,19 +6,7 @@
 //   RT_VAULT (dlvl >= 8): Enhanced treasure, entrance sealed with secret door
 //   RT_NEST (dlvl >= 3): 3-6 weaker mixed monsters + extra gold
 
-// ============================================================
-// Static scratch (safe across subroutine calls)
-// ============================================================
-sr_room_idx:    .byte 0     // Room index for special room operations
-sr_count:       .byte 0     // Spawn loop counter
-sr_mode:        .byte 0     // 0=nest (mixed), 1=pit (same type)
-sr_fixed_type:  .byte 0     // Creature type for pit (all same) / temp
-
 // Vault seal scratch
-vse_rx:     .byte 0
-vse_ry:     .byte 0
-vse_rw:     .byte 0
-vse_rh:     .byte 0
 vse_x:      .byte 0         // Current x for vertical wall scan
 vse_y_iter: .byte 0         // Current y for vertical wall scan
 
@@ -151,16 +139,16 @@ vault_seal_entrance:
 !vse_go:
     // Save room geometry to scratch
     lda room_x,x
-    sta vse_rx
+    sta zp_temp0
     lda room_y,x
-    sta vse_ry
+    sta zp_temp1
     lda room_w,x
-    sta vse_rw
+    sta zp_temp2
     lda room_h,x
-    sta vse_rh
+    sta zp_temp3
 
     // --- Scan top wall: y = ry-1, x from rx to rx+rw-1 ---
-    lda vse_ry
+    lda zp_temp1
     sec
     sbc #1
     tay                         // Y = wall row
@@ -168,44 +156,44 @@ vault_seal_entrance:
     sta zp_ptr0
     lda map_row_hi,y
     sta zp_ptr0_hi
-    ldx vse_rw                  // Count = room width
-    ldy vse_rx                  // Start at room_x
+    ldx zp_temp2                // Count = room width
+    ldy zp_temp0                // Start at room_x
     jsr vse_scan_hwall
     bcs !vse_done+
 
     // --- Scan bottom wall: y = ry+rh ---
-    lda vse_ry
+    lda zp_temp1
     clc
-    adc vse_rh
+    adc zp_temp3
     tay
     lda map_row_lo,y
     sta zp_ptr0
     lda map_row_hi,y
     sta zp_ptr0_hi
-    ldx vse_rw
-    ldy vse_rx
+    ldx zp_temp2
+    ldy zp_temp0
     jsr vse_scan_hwall
     bcs !vse_done+
 
     // --- Scan left wall: x = rx-1, y from ry to ry+rh-1 ---
-    lda vse_rx
+    lda zp_temp0
     sec
     sbc #1
     sta vse_x
-    lda vse_ry
+    lda zp_temp1
     sta vse_y_iter
-    ldx vse_rh
+    ldx zp_temp3
     jsr vse_scan_vwall
     bcs !vse_done+
 
     // --- Scan right wall: x = rx+rw ---
-    lda vse_rx
+    lda zp_temp0
     clc
-    adc vse_rw
+    adc zp_temp2
     sta vse_x
-    lda vse_ry
+    lda zp_temp1
     sta vse_y_iter
-    ldx vse_rh
+    ldx zp_temp3
     jsr vse_scan_vwall
 
 !vse_done:

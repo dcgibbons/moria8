@@ -32,6 +32,8 @@
 .segmentdef DungeonGenOverlay [outPrg=OVL_OUT + "/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef HelpOverlay       [outPrg=OVL_OUT + "/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
+.segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
+.segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d20, min=$0d20, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 
@@ -921,6 +923,25 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_spell_fail_no_cast_sym:
+    brk
+c128_test_spell_fail_level_sym:
+    brk
+c128_test_spell_fail_known_sym:
+    brk
+c128_test_spell_fail_validate_sym:
+    brk
+c128_test_spell_fail_roll_sym:
+    brk
+c128_test_spell_fail_cancel_sym:
+    brk
+c128_test_spell_pass_sym:
+    brk
+#if C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_spell_cancel_pass_sym:
+    brk
+#endif
 #elif C128_TEST_CACHE_SURVIVAL
 c128_test_town_fail_sym:
     brk
@@ -1486,6 +1507,7 @@ tramp_ui_exit:
 
 .const C128_HELP_OVERLAY_ID = 5
 .const C128_UI_OVERLAY_ID = 6
+.const C128_ITEMS_OVERLAY_ID = 7
 
 .macro C128UIOverlayDisplayTrampoline(target) {
     jsr tramp_ui_enter
@@ -1510,23 +1532,112 @@ tramp_ui_help_display:
 !done:
     jmp tramp_ui_exit
 
+tramp_ui_ui_overlay_patch_target:
+    sta !ui_target+ + 1
+    stx !ui_target+ + 2
+tramp_ui_ui_overlay_common:
+    jsr tramp_ui_enter
+    lda #C128_UI_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+!ui_target:
+    jsr ui_char_display
+!done:
+    jmp tramp_ui_exit
+
 tramp_ui_char_display:
-    :C128UIOverlayDisplayTrampoline(ui_char_display)
+    jmp tramp_ui_ui_overlay_common
 
 tramp_ui_inv_display:
-    :C128UIOverlayDisplayTrampoline(ui_inv_display)
+    lda #<ui_inv_display
+    jmp tramp_ui_inv_common
+
+tramp_ui_inv_select_display:
+    lda #<ui_inv_select_display
+tramp_ui_inv_common:
+    sta !inv_target+ + 1
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+!inv_target:
+    jsr ui_inv_display
+!done:
+    jmp tramp_ui_exit
 
 tramp_ui_equip_display:
-    :C128UIOverlayDisplayTrampoline(ui_equip_display)
+    jsr tramp_ui_enter
+    lda #C128_HELP_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr ui_equip_display
+!done:
+    jmp tramp_ui_exit
 
-tramp_ui_identify:
-    :C128UIOverlayDisplayTrampoline(ui_identify_print)
+tramp_ui_recall:
+    lda #<ui_recall_display
+    ldx #>ui_recall_display
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_ui_wizard_display:
-    :C128UIOverlayDisplayTrampoline(ui_wizard_display)
+    lda #<ui_wizard_display
+    ldx #>ui_wizard_display
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_item_gain_spell:
-    :C128UIOverlayDisplayTrampoline(item_gain_spell)
+    lda #<item_gain_spell
+    ldx #>item_gain_spell
+    jmp tramp_ui_ui_overlay_patch_target
+
+.macro C128OverlayComputeTrampoline(overlay_id, target) {
+    lda #overlay_id
+    jsr overlay_load
+    bcs !done+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr target
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+!done:
+    rts
+}
+
+tramp_item_read_scroll:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_read_scroll)
+
+tramp_item_aim_wand:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_aim_wand)
+
+tramp_item_use_staff:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_use_staff)
+
+tramp_eff_earthquake:
+    lda #C128_ITEMS_OVERLAY_ID
+    jsr overlay_load
+    bcs !done+
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr eff_item_overlay_dispatch
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    jmp c128_return_to_death_overlay
+!done:
+    rts
+
+tramp_item_refuel:
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, item_refuel)
 
 tramp_title_load_and_draw:
     lda #C128_UI_OVERLAY_ID
@@ -1539,8 +1650,12 @@ tramp_title_load_and_draw:
 
 .macro C128BankedComputeTrampoline(target) {
     sei
+    lda $01
+    pha
     :BankOutKernal()
     jsr target
+    pla
+    sta $01
     lda #MMU_ALL_RAM
     sta $ff00
     cli
@@ -1554,25 +1669,32 @@ tramp_player_pray:
     :C128BankedComputeTrampoline(player_pray)
 
 tramp_spell_list_display:
-    :C128BankedComputeTrampoline(spell_list_display)
+    :C128UIOverlayDisplayTrampoline(spell_list_display)
+
+tramp_spell_execute_selected:
+    lda #3                      // OVL_DEATH
+    jsr overlay_load
+    bcc !tses_loaded+
+    rts
+!tses_loaded:
+    jsr c128_restore_runtime_guards
+    sei
+    lda $01
+    pha
+    :BankOutKernal()
+    jsr spell_execute_selected
+    pla
+    sta $01
+    lda #MMU_ALL_RAM
+    sta $ff00
+    cli
+    rts
 
 tramp_magic_recalc_mana:
     :C128BankedComputeTrampoline(magic_recalc_mana)
 
 tramp_magic_check_new_spells:
-    jsr tramp_ui_enter
-    lda #C128_UI_OVERLAY_ID
-    jsr overlay_load
-    bcs !tmcns_done+
-    jsr magic_check_new_spells
-!tmcns_done:
-    jmp tramp_ui_exit
-
-tramp_mage_effect_dispatch:
-    :C128BankedComputeTrampoline(mage_effect_dispatch)
-
-tramp_priest_effect_dispatch:
-    :C128BankedComputeTrampoline(priest_effect_dispatch)
+    :C128BankedComputeTrampoline(magic_check_new_spells)
 
 tramp_ranged_fire:
     :C128BankedComputeTrampoline(ranged_fire)
@@ -1614,13 +1736,15 @@ tramp_dig_ability:
     rts
 }
 
-// tramp_ego_get_ac_bonus — Get ego AC bonus (banked at $F000).
-// Pinned low to avoid $D000 drift.
+// tramp_ego_get_ac_bonus — Get ego AC bonus from the low-RAM table.
+// Keep this inline on C128 so low runtime does not carry a separate helper.
 tramp_ego_apply_damage:
     :C128BankedPreserveATrampoline(ego_apply_damage)
 
 tramp_ego_get_ac_bonus:
-    :C128BankedPreserveAReturnTrampoline(ego_get_ac_bonus)
+    tax
+    lda ego_ac_bonus,x
+    rts
 
 .macro C128BankedStatusTrampoline(target) {
     php
@@ -1680,7 +1804,7 @@ game_over_prompt:
 !gop_quit:
     jmp exit_trampoline         // Unified C128 behavior: R == Q
 !gop_restart:
-    jmp restart_entry
+    jmp game_restart
 game_over_prompt_end:
 
 // ============================================================
@@ -1797,22 +1921,20 @@ restart_entry:
     lda $dd0d               // Acknowledge pending CIA2
     lda #0
     sta $d01a               // Disable all VIC-II interrupt sources
-    lda #$ff
-    sta $d019               // Acknowledge any pending VIC-II interrupts
+    ldx #$ff
+    stx $d019               // Acknowledge any pending VIC-II interrupts
 
     // Disable Screen Editor software cursor blink.
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero.
-    lda #$ff
-    sta zp_screen_editor_state
+    stx zp_screen_editor_state
     // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
     lda #<mmu_common_irq
     sta $0314
     lda #>mmu_common_irq
     sta $0315
 
-    lda #$ff
-    sta zp_screen_editor_mode   // Screen Editor: 80-col mode
+    stx zp_screen_editor_mode   // Screen Editor: 80-col mode
 
     cli
 
@@ -1836,6 +1958,10 @@ restart_entry:
     bcc !runtime_low_loaded+
     jmp entry_main
 !runtime_low_loaded:
+    jsr c128_load_runtime_input_prg
+    bcc !runtime_input_loaded+
+    jmp entry_main
+!runtime_input_loaded:
     jsr c128_load_runtime_common_prg
     bcc !runtime_common_loaded+
     jmp entry_main
@@ -1926,8 +2052,8 @@ title_load_game:
     jsr disk_prompt_game
     jmp load_resume_game
 !title_load_fail:
+    jsr input_get_modal_dismiss_key
     jsr disk_prompt_game
-    jsr input_get_key
     jmp title_enter_menu
 
 // ============================================================
@@ -1940,7 +2066,11 @@ runtime_low_filename:
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
     .text "128.RUNTIME" ; .byte 0
-.const RUNTIME_COMMON_FILE_NUM = 3
+.const RUNTIME_INPUT_FILE_NUM = 3
+runtime_input_filename:
+    .byte $31, $32, $38, $2e, $49, $4e, $50, $55, $54 // "128.INPUT"
+.const RUNTIME_INPUT_FILENAME_LEN = * - runtime_input_filename
+.const RUNTIME_COMMON_FILE_NUM = 4
 runtime_common_filename:
     .byte $31, $32, $38, $2e, $46, $44, $49, $53, $4b // "128.FDISK"
 .const RUNTIME_COMMON_FILENAME_LEN = * - runtime_common_filename
@@ -1997,6 +2127,21 @@ c128_load_runtime_low_prg:
     lda #$00
     sta zp_ptr1
     lda #$10
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
+c128_load_runtime_input_prg:
+    lda #RUNTIME_INPUT_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_INPUT_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_input_filename
+    sta zp_ptr0
+    lda #>runtime_input_filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$0b
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
@@ -2109,30 +2254,6 @@ tramp_ego_append_suffix:
 !teas_done:
     rts
 
-tramp_ego_put_suffix:
-    cmp #0
-    beq !teps_done+
-    pha
-    sei
-    :BankOutKernal()           // KERNAL off, I/O on
-    pla
-    jsr ego_get_suffix_ptr
-    ldy #0
-!teps_loop:
-    lda (zp_ptr0),y
-    beq !teps_end+
-    sty teps_save_y
-    jsr screen_put_char
-    ldy teps_save_y
-    iny
-    jmp !teps_loop-
-!teps_end:
-    lda #MMU_ALL_RAM
-    sta $ff00
-    cli
-!teps_done:
-    rts
-teps_save_y: .byte 0
 c128_load_arg_x: .byte 0
 c128_load_arg_y: .byte 0
 kernal_irq_vec_lo: .byte 0
@@ -2181,16 +2302,18 @@ ovl_fn_help:  .byte $31,$32,$38,$2e,$48,$45,$4c,$50                  // "128.HEL
 ovl_fn_help_end:
 ovl_fn_ui:    .byte $31,$32,$38,$2e,$55,$49                          // "128.UI"
 ovl_fn_ui_end:
+ovl_fn_items: .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53              // "128.ITEMS"
+ovl_fn_items_end:
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
 ovl_fn_len:
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0
@@ -2632,7 +2755,7 @@ c128_final_return_stack_7:     .byte 0
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
-    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000
+    .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000
 c128_cache_state_end:
 
 .assert "Program fits below map area", * <= MAP_BASE, true
@@ -2669,6 +2792,7 @@ c128_cache_state_end:
 #import "../common/spell_effects.s"
 #import "../common/item.s"
 #import "../common/store_data.s"
+
 #import "../common/save.s"
 #import "../common/disk_swap.s"
 #import "../common/dungeon_los.s"
@@ -2680,8 +2804,9 @@ c128_cache_state_end:
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
 #import "../common/turn.s"
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #import "../common/player_items.s"
-#import "../common/player_magic.s"
+#import "../common/player_magic_state.s"
 #import "../common/perf_p1.s"
 
 // Init-only strings — kept in main RAM
@@ -2992,7 +3117,18 @@ c128_test_verify_cache_survival:
 runtime_common_data_start:
     #import "../common/disk_setup_runtime128.s"
     #import "../common/title_cache_runtime128.s"
+    #import "restart128.s"
 runtime_common_data_end:
+}
+.segment Default
+
+// RuntimeInputData segment — dedicated raw C128 run-input helpers loaded into
+// the reclaimed boot-sector page after boot completes.
+.segment RuntimeInputData
+.pseudopc $0b00 {
+runtime_input_data_start:
+    #import "input_run_raw128.s"
+runtime_input_data_end:
 }
 .segment Default
 
@@ -3007,6 +3143,10 @@ runtime_low_data_end:
 }
 .segment Default
 
+#if C128
+ego_str_holy_avenger_common:
+    .text " (Holy Avenger)" ; .byte 0
+#endif
 
 // ============================================================
 // Banked code payload — stored inline here, copied to $F000
@@ -3024,6 +3164,10 @@ banked_payload:
 first_banked_function:
     #import "../common/ui_home.s"
     #import "../common/player_magic_display.s"
+    #import "../common/player_magic_state_ops.s"
+    #import "../common/player_magic.s"
+    #import "../common/player_magic_levelup.s"
+    #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_tail.s"
     #import "../common/projectile.s"
     #import "../common/ranged_fire.s"
@@ -3051,11 +3195,12 @@ program_end:
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
-.assert "Ego AC routine stays in low runtime RAM", ego_get_ac_bonus < FLOOR_ITEM_BASE, true
+.assert "Ego AC table stays in low runtime RAM", ego_ac_bonus < FLOOR_ITEM_BASE, true
 .assert "Cache state block stays in Bank0 program RAM", c128_cache_state_start >= $1c01, true
 .assert "Cache state block ends before overlay window", c128_cache_state_end < $e000, true
 .assert "Overlay state block starts in resident Bank0 RAM", overlay_state_block_start >= c128_cache_state_start && overlay_state_block_start < $e000, true
@@ -3072,6 +3217,10 @@ program_end:
 
 .macro C128AuditRuntimeLow(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in runtime.low Bank 0 RAM", symbol >= runtime_low_data_start && symbol < runtime_low_data_end, true
+}
+
+.macro C128AuditRuntimeInput(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in runtime.input Bank 0 RAM", symbol >= runtime_input_data_start && symbol < runtime_input_data_end, true
 }
 
 .macro C128AuditStartupOverlay(name, symbol) {
@@ -3094,6 +3243,10 @@ program_end:
     .assert "AUDIT-IO-C128 " + name + " stays in the UI overlay", symbol >= $E000 && symbol < ovl_ui_end, true
 }
 
+.macro C128AuditItemsOverlay(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in the items overlay", symbol >= $E000 && symbol < ovl_items_end, true
+}
+
 .macro C128AuditDungeonOverlay(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in the dungeon overlay", symbol >= $E000 && symbol < ovl_gen_end, true
 }
@@ -3106,8 +3259,6 @@ program_end:
 
 .assert "Title menu string stays below I/O hole", title_menu_str < $D000, true
 .assert "Save-disk indicator stays below I/O hole", ds_ind_pfx < $D000, true
-.assert "Need-save message stays below I/O hole", disk_need_save_str < $D000, true
-.assert "Wrong-save message stays below I/O hole", disk_bad_save_str < $D000, true
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true
@@ -3126,6 +3277,7 @@ program_end:
 .segment TownOverlay
     #import "../common/store.s"
     #import "../common/ui_store.s"
+    #import "../common/ui_home_text.s"
 ovl_town_end:
 .print "Town overlay: " + (ovl_town_end - $e000) + " bytes at $E000-$" + toHexString(ovl_town_end)
 .assert "Town overlay fits in $E000-$EFFF", ovl_town_end <= $f000, true
@@ -3145,6 +3297,11 @@ ovl_start_end:
 // ============================================================
 .segment DeathOverlay
     #import "../common/score.s"
+    #define PMX_EARTHQUAKE_EXTERNAL
+    #define PMX_MAP_AREA_EXTERNAL
+    #import "../common/player_magic_execute_overlay.s"
+    #undef PMX_MAP_AREA_EXTERNAL
+    #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
 .assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $f000, true
@@ -3156,6 +3313,8 @@ ovl_death_end:
     #import "ui_help_data_80.s"
     #import "../common/ui_help.s"
     #import "../common/ui_disk_setup.s"
+    #import "../common/ui_inventory.s"
+    #import "../common/ui_equipment.s"
 ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
@@ -3164,11 +3323,11 @@ ovl_help_end:
 // UI overlay — modal UI and symbol identify screens at $E000
 // ============================================================
 .segment UiOverlay
-    #import "../common/ui_inventory.s"
     #import "../common/ui_character.s"
-    #import "../common/ui_identify.s"
-    #import "../common/player_magic_levelup.s"
+    #import "../common/ui_recall.s"
     #import "../common/ui_wizard.s"
+    #import "../common/spell_names.s"
+    #import "../common/player_magic_select_overlay.s"
     #import "../common/player_gain_spell.s"
     #import "../common/title_screen.s"
 ovl_ui_end:
@@ -3176,6 +3335,19 @@ ovl_ui_end:
 .assert "UI overlay fits in $E000-$EFFF", ovl_ui_end <= $f000, true
 .assert "Help title text stays inside help overlay", help_title_str >= $E000 && help_title_str < ovl_help_end, true
 .assert "Help content table stays inside help overlay", help_lines >= $E000 && help_lines < ovl_help_end, true
+
+// ============================================================
+// Item actions overlay — low-frequency read/aim/use/refuel commands
+// ============================================================
+.segment ItemActionsOverlay
+    #define ITEM_ACTIONS_EARTHQUAKE_OWNER
+    #define ITEM_ACTIONS_MAP_AREA_OWNER
+    #import "../common/item_actions_overlay.s"
+    #undef ITEM_ACTIONS_MAP_AREA_OWNER
+    #undef ITEM_ACTIONS_EARTHQUAKE_OWNER
+ovl_items_end:
+.print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
+.assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $f000, true
 
 // ============================================================
 // Dungeon generation overlay

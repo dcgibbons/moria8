@@ -15,6 +15,358 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
+c128_test_seed_scripted_spell_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
+
+#if C128_TEST_SCRIPTED_PRAYER
+c128_test_seed_scripted_prayer_state:
+    lda #0
+    sta c128_test_spell_success_count
+    sta c128_test_spell_return_pending
+    sta c128_test_spell_return_count
+    lda #CLASS_PRIEST
+    sta player_data + PL_CLASS
+    lda #SPELL_PRIEST
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_WIS_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #%00000111
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c128_test_prayer_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c128_test_prayer_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+
+c128_test_prayer_msg_str:
+    .text "You feel righteous!" ; .byte 0
+
+c128_test_prayer_history_has_bless:
+    lda #<msg_history
+    sta zp_ptr0
+    lda #>msg_history
+    sta zp_ptr0_hi
+    ldx #MSG_HIST_COUNT
+!c128_tp_scan_slot:
+    ldy #0
+!c128_tp_cmp:
+    lda c128_test_prayer_msg_str,y
+    beq !c128_tp_found+
+    cmp (zp_ptr0),y
+    bne !c128_tp_next_slot+
+    iny
+    jmp !c128_tp_cmp-
+!c128_tp_next_slot:
+    clc
+    lda zp_ptr0
+    adc #<MSG_HIST_LEN
+    sta zp_ptr0
+    lda zp_ptr0_hi
+    adc #>MSG_HIST_LEN
+    sta zp_ptr0_hi
+    dex
+    bne !c128_tp_scan_slot-
+    clc
+    rts
+!c128_tp_found:
+    sec
+    rts
+#endif
+
+#if C64_TEST_SCRIPTED_SPELL
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c64_test_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c64_test_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta player_data + PL_SPELLS_FORGOTTEN_0
+    sta player_data + PL_SPELLS_FORGOTTEN_1
+    sta player_data + PL_SPELLS_FORGOTTEN_2
+    sta player_data + PL_SPELLS_FORGOTTEN_3
+    sta player_data + PL_NEW_SPELLS
+    lda #99
+    ldx #31
+!c64_test_dungeon_spell_order_clear:
+    sta player_data + PL_SPELL_ORDER,x
+    dex
+    bpl !c64_test_dungeon_spell_order_clear-
+    lda #0
+    sta player_data + PL_SPELL_ORDER
+    rts
+
+c64_test_force_spell_target_monster:
+    lda zp_player_dlvl
+    bne !ctstm_have_dlvl+
+    rts
+!ctstm_have_dlvl:
+    lda c64_test_spell_return_pending
+    beq !ctstm_ready+
+    rts
+!ctstm_ready:
+    lda c64_test_spell_success_count
+    cmp active_dungeon_count
+    bcc !ctstm_have_type+
+    rts
+!ctstm_have_type:
+    sta c64_test_spell_target_type
+    lda zp_player_y
+    sta c64_test_spell_target_y
+    lda #1
+    sta c64_test_spell_path_offset
+!ctstm_clear_path:
+    lda zp_player_x
+    clc
+    adc c64_test_spell_path_offset
+    sta c64_test_spell_target_x
+    lda c64_test_spell_target_x
+    ldy c64_test_spell_target_y
+    jsr monster_find_at
+    bcc !ctstm_clear_tile+
+    jsr monster_remove
+
+!ctstm_clear_tile:
+    ldx c64_test_spell_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy c64_test_spell_target_x
+    lda #TILE_FLOOR
+    :MapWrite_ptr0_y()
+    inc c64_test_spell_path_offset
+    lda c64_test_spell_path_offset
+    cmp #7
+    bcc !ctstm_clear_path-
+
+    lda c64_test_spell_target_x
+    sta ms_spawn_x
+    lda c64_test_spell_target_y
+    sta ms_spawn_y
+    lda c64_test_spell_target_type
+    jsr monster_spawn_one
+    bcs !ctstm_spawned+
+    rts
+!ctstm_spawned:
+    jsr monster_get_ptr
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #MF_AWAKE
+    sta (zp_ptr0),y
+
+    // Force the next hit-message name lookup down the stale-tier reload path.
+    // This matches the live C64 dungeon spell crash: current_tier is gone, but
+    // spawned dungeon monsters still hold $E0xx name pointers that require
+    // creature_get_name -> tier_load -> reu_fetch_tier to recover.
+    lda #0
+    sta current_tier
+    sta tier_loaded
+!ctstm_done:
+    rts
+
+c64_test_spell_target_x: .byte 0
+c64_test_spell_target_y: .byte 0
+c64_test_spell_target_type: .byte 0
+c64_test_spell_path_offset: .byte 0
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_seed_scripted_spell_state:
+    lda #0
+    sta c64_test_spell_success_count
+    sta c64_test_spell_return_pending
+    sta c64_test_spell_return_count
+    rts
+
+c64_test_force_detect_evil_monster:
+    ldx #0
+!ctdem_spawn_loop:
+    lda zp_player_y
+    sta c64_test_detect_row
+    ldy c64_test_detect_offsets,x
+    sty c64_test_detect_offset
+    lda zp_player_x
+    clc
+    adc c64_test_detect_offset
+    sta c64_test_detect_col
+    ldy c64_test_detect_row
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    bne !ctdem_next+
+    ldy c64_test_detect_col
+    :MapRead_ptr0_y()
+    and #(TILE_TYPE_MASK | FLAG_LIT)
+    :MapWrite_ptr0_y()
+    lda c64_test_detect_col
+    sta ms_spawn_x
+    lda c64_test_detect_row
+    sta ms_spawn_y
+    lda c64_test_detect_types,x
+    jsr monster_spawn_one
+!ctdem_next:
+    inx
+    cpx #5
+    bcc !ctdem_spawn_loop-
+!ctdem_done:
+    rts
+
+c64_test_detect_row: .byte 0
+c64_test_detect_col: .byte 0
+c64_test_detect_offset: .byte 0
+c64_test_detect_offsets:
+    .byte 6, 8, 10, 12, 14
+c64_test_detect_types:
+    .byte 0, 4, 8, 14, 22
+#endif
+
 // ============================================================
 // game_new_start — New game initialization
 // Called from platform main.s after title menu selects "New Game".
@@ -64,7 +416,6 @@ game_new_start:
     lda #0
     sta eff_fear_timer
 
-    // --- Character creation ---
     jsr tramp_player_create
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($86)
@@ -79,6 +430,22 @@ game_new_start:
     jsr tramp_ui_char_display
     jsr input_get_modal_dismiss_key
     jsr screen_clear
+
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
+    jsr c128_test_seed_scripted_spell_state
+#endif
+#if C128_TEST_SCRIPTED_PRAYER
+    jsr c128_test_seed_scripted_prayer_state
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    jsr c64_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_seed_scripted_spell_state
+#endif
 
     // --- Starting equipment ---
     // Wooden torch (type 13) in EQUIP_LIGHT with 134 charges (134 × 30 = 4,020 turns)
@@ -159,6 +526,10 @@ game_new_start:
     // --- Main game loop ---
     // Initialize dungeon level and generate map (new game only)
     lda #0
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    clc
+    adc #10
+#endif
     sta zp_player_dlvl
     sta player_data + PL_DLEVEL
     sta player_data + PL_MAX_DLVL
@@ -203,6 +574,12 @@ game_new_start:
 #if C128_REAL_BOOT_DIAG
     ldx #$26
     jsr c128_stack_guard_check
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    jsr c64_test_force_detect_evil_monster
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
 #endif
 
     // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
@@ -249,6 +626,7 @@ game_new_start:
 #else
     jmp c128_test_town_pass_sym
 #endif
+
 #elif C128_TEST_CACHE_SURVIVAL
     lda c128_test_summary_seen
     bne !gns_script_pass+
@@ -298,6 +676,13 @@ load_resume_game:
 #endif
 #endif
 
+    // Viewport coords are transient and not restored from saves. Seed a
+    // neutral origin before the first post-load deadband update so stale
+    // title/UI state cannot leave the renderer starting from $FF rows/cols.
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+
     // Clear screen and render the loaded level
     jsr screen_clear
     jsr update_visibility
@@ -306,11 +691,8 @@ load_resume_game:
     jsr status_draw
 
     // Welcome back message
-    lda #<save_welcome_str
-    sta zp_ptr0
-    lda #>save_welcome_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_WELCOME
+    jsr huff_print_msg
 
 main_loop:
 #if C128
@@ -340,6 +722,70 @@ c128_town_move_diag_loop_top:
     jsr player_sync_from_zp
     jsr tramp_game_over
 !test_force_death_done:
+#endif
+#if C128_TEST_SCRIPTED_SPELL
+    lda c128_test_spell_return_pending
+    beq !c128_test_spell_return_done+
+    dec c128_test_spell_return_pending
+    inc c128_test_spell_return_count
+    lda c128_test_spell_return_count
+    cmp #8
+    bcc !c128_test_spell_return_done+
+    jmp c128_test_spell_pass_sym
+!c128_test_spell_return_done:
+#endif
+#if C128_TEST_SCRIPTED_PRAYER
+    lda c128_test_spell_return_pending
+    beq !c128_test_prayer_return_done+
+    dec c128_test_spell_return_pending
+    inc c128_test_spell_return_count
+    lda c128_test_spell_return_count
+    cmp #8
+    bcc !c128_test_prayer_return_done+
+    lda zp_eff_bless
+    beq !c128_test_prayer_return_done+
+    jsr c128_test_prayer_history_has_bless
+    bcc !c128_test_prayer_return_done+
+    jmp c128_test_spell_pass_sym
+!c128_test_prayer_return_done:
+#endif
+#if C64_TEST_SCRIPTED_SPELL
+    lda c64_test_spell_return_pending
+    beq !c64_test_spell_return_done+
+    dec c64_test_spell_return_pending
+    inc c64_test_spell_return_count
+    lda c64_test_spell_return_count
+    cmp #8
+    bcc !c64_test_spell_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    lda c64_test_spell_return_pending
+    beq !c64_test_dungeon_spell_return_done+
+    dec c64_test_spell_return_pending
+    lda c64_test_spell_return_pending
+    bne !c64_test_dungeon_spell_return_done+
+    lda c64_test_spell_success_count
+    cmp active_dungeon_count
+    bcc !c64_test_dungeon_spell_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_dungeon_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    lda c64_test_spell_return_pending
+    beq !c64_test_detect_return_done+
+    dec c64_test_spell_return_pending
+    inc c64_test_spell_return_count
+    lda c64_test_spell_return_count
+    cmp #20
+    bcc !c64_test_detect_return_done+
+    jmp c64_test_spell_pass_sym
+!c64_test_detect_return_done:
+#endif
+
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
 #endif
 
     // --- Running continuation ---
@@ -412,6 +858,17 @@ c128_town_move_diag_loop_top:
     lda #$11
     jsr c128_town_dump_log
 #endif
+    // Snapshot the pre-command player/view state once per main-loop
+    // iteration so any later stationary command can safely use the shared
+    // post-turn redraw helpers.
+    ldx zp_player_x
+    stx old_player_x
+    ldx zp_player_y
+    stx old_player_y
+    ldx zp_view_x
+    stx old_view_x
+    ldx zp_view_y
+    stx old_view_y
     jsr input_get_command
 #if C128
 c128_town_move_diag_after_input_get_command:
@@ -520,16 +977,6 @@ c128_town_move_diag_after_input_get_command:
     jsr perf_p1_move_start
 #endif
 #endif
-
-    // Save positions before move for dirty render
-    ldx zp_player_x
-    stx old_player_x
-    ldx zp_player_y
-    stx old_player_y
-    ldx zp_view_x
-    stx old_view_x
-    ldx zp_view_y
-    stx old_view_y
 
     // Clear message before move so combat messages survive
     pha                         // Save command ID (A) — msg_clear clobbers A
@@ -930,6 +1377,8 @@ level_change_generate_current:
     jsr player_search_mode_off
     lda #$ff
     sta zp_run_dir
+    lda #0
+    sta eff_detect_timer
     lda #OVL_DUNGEON_GEN
     jsr overlay_load
     jsr generation_busy_tick_if_dungeon_api
@@ -949,6 +1398,9 @@ level_change_generate_current:
     jsr generation_busy_tick_if_dungeon_api
     jsr item_spawn_level
     jsr generation_busy_tick_if_dungeon_api
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    jsr c64_test_force_spell_target_monster
+#endif
 #if C128_TEST_FORCE_DUNGEON_MELEE
     jsr c128_test_force_dungeon_melee
 #endif
@@ -1053,7 +1505,7 @@ cmd_drop:
 
 cmd_inventory:
     lda #$ff
-    sta uinv_filter             // Show all items
+    sta piw_filter              // Show all items
     jmp cmd_show_inventory_view
 
 cmd_equipment:
@@ -1081,18 +1533,18 @@ cmd_quaff:
 
 cmd_read:
     jsr msg_clear
-    jsr item_read_scroll
+    jsr tramp_item_read_scroll
     // After teleportation or light, need visibility + render
     jmp command_result_main_or_update_visibility
 
 cmd_aim:
     jsr msg_clear
-    jsr item_aim_wand
+    jsr tramp_item_aim_wand
     jmp command_result_main_or_update_visibility
 
 cmd_use:
     jsr msg_clear
-    jsr item_use_staff
+    jsr tramp_item_use_staff
     jmp command_result_main_or_update_visibility
 
 cmd_cast:
@@ -1102,7 +1554,7 @@ cmd_cast:
 #else
     jsr player_cast_spell
 #endif
-    jmp command_result_restore_view_or_update_visibility
+    jmp command_result_main_or_update_visibility
 
 cmd_pray:
     jsr msg_clear
@@ -1111,15 +1563,11 @@ cmd_pray:
 #else
     jsr player_pray
 #endif
-    jmp command_result_restore_view_or_update_visibility
+    jmp command_result_main_or_update_visibility
 
 cmd_gain:
     jsr msg_clear
-#if C128
     jsr tramp_item_gain_spell
-#else
-    jsr item_gain_spell
-#endif
     jmp command_result_main_or_status_only
 
 cmd_fire:
@@ -1142,7 +1590,7 @@ cmd_throw:
 
 cmd_refuel:
     jsr msg_clear
-    jsr item_refuel
+    jsr tramp_item_refuel
     jmp command_result_main_or_status_only
 
 cmd_bash:
@@ -1169,6 +1617,9 @@ cmd_look:
     jmp main_loop
 
 cmd_run:
+    pha                         // Save command ID — msg_clear clobbers A
+    jsr msg_clear
+    pla
     sec
     sbc #CMD_RUN_N              // Direction index 0-7
     sta zp_run_dir
@@ -1176,6 +1627,13 @@ cmd_run:
     sta run_input_armed
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
+
+#if C128
+run_stop_reset_input_state:
+    lda #0
+    sta run_input_armed
+    jmp input_run_cancel_reset
+#endif
 
 // ============================================================
 // run_step — Execute one step of corridor running
@@ -1254,16 +1712,30 @@ run_step:
 
 !run_post:
     jsr status_draw
+    lda zp_msg_flags
+    beq !run_keep_running+
+    lda #$ff
+    sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
+!run_keep_running:
     jmp main_loop
 
 !run_blocked:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jmp main_loop
 
 !run_trap_stop:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
     jmp !player_died+
@@ -1274,6 +1746,9 @@ run_step:
 !run_stop_move:
     lda #$ff
     sta zp_run_dir
+#if C128
+    jsr run_stop_reset_input_state
+#endif
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
@@ -1398,12 +1873,12 @@ slain_str:
 death_source_saved:
     .byte 0
 
-// `/` symbol-identify prompt plus legacy monster-recall workspace.
-identify_prompt_str: .text "Enter character to be identified :" ; .byte 0
-recall_query_sc:     .byte 0             // Normalized screen code of typed symbol
-recall_found_type:   .byte 0             // Legacy monster-recall UI workspace
-recall_last_sc:      .byte 0             // Legacy monster-recall UI workspace
-recall_last_idx:     .byte 0             // Legacy monster-recall UI workspace
+// Recall command variables
+recall_prompt_str: .text "Recall which? " ; .byte 0
+recall_query_sc:   .byte 0             // Screen code of typed letter
+recall_found_type: .byte 0             // Creature type index found
+recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)
+recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
 run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
 
 #if C128_TEST_FORCE_DUNGEON_MELEE
@@ -1588,30 +2063,6 @@ roll_tool_ego_check:
     rts
 
 // ============================================================
-// banked_ego_put_suffix — Write ego suffix to screen
-// Relocated from $F000 to main RAM (R14). Calls ego_get_suffix_ptr
-// ($F000) — requires KERNAL banked out (always true when called).
-// Input: A = ego type (0 = no ego)
-// Clobbers: A, Y, zp_ptr0
-// ============================================================
-banked_ego_put_suffix:
-    cmp #0
-    beq !beps_done+
-    jsr ego_get_suffix_ptr      // zp_ptr0 = suffix string (in $F000 RAM)
-    ldy #0
-!beps_loop:
-    :MapRead_ptr0_y()
-    beq !beps_done+
-    sty beps_save_y
-    jsr screen_put_char
-    ldy beps_save_y
-    iny
-    jmp !beps_loop-
-!beps_done:
-    rts
-beps_save_y: .byte 0
-
-// ============================================================
 // put_tool_ego_prefix — Print ego prefix for digging tools
 // Input: A = ego (1 or 2), X = item type ID (62 or 63)
 // Output: prefix string printed to screen (e.g., "Gnomish ")
@@ -1657,12 +2108,35 @@ tool_ego_prefix_hi:
     .byte >ego_tool_prefix_orcish,  >ego_tool_prefix_dwarven
 
 // ============================================================
+// banked_ego_put_suffix — Write ego suffix to screen
+// Input: A = ego type (0 = no ego)
+// Clobbers: A, Y, zp_ptr0
+// ============================================================
+banked_ego_put_suffix:
+    cmp #0
+    beq !beps_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !beps_done+
+    jsr ego_get_suffix_ptr
+    ldy #0
+!beps_loop:
+    lda (zp_ptr0),y
+    beq !beps_done+
+    sty beps_save_y
+    jsr screen_put_char
+    ldy beps_save_y
+    iny
+    jmp !beps_loop-
+!beps_done:
+    rts
+beps_save_y: .byte 0
+
+// ============================================================
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
-// Shared helper to avoid duplicating prefix check logic in $F000.
 // Input: X = inventory slot index
 // For ICAT_DIGGING + ego>0: prints "Gnomish Shovel" (prefix + name)
-// For other + ego>0: prints "Long Sword (Flame)" (name + suffix via platform trampoline)
-// For ego=0: prints base name only
+// For other + ego>0: prints "Long Sword (Flame)"
+// For auto-sensed unidentified items, appends the persistent "(magik)" marker.
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 put_inv_name_with_ego:
@@ -1675,12 +2149,14 @@ put_inv_name_with_ego:
     ldx pinwe_slot
     lda inv_ego,x
     beq !pinwe_not_tool+
-    // Tool ego prefix + base name (no suffix)
+    cmp #EGO_TYPE_COUNT
+    bcs !pinwe_not_tool+
     ldx pinwe_item_id
     jsr put_tool_ego_prefix
     lda pinwe_item_id
     jsr item_get_name_ptr
     jsr screen_put_string
+    jsr put_inv_sensed_suffix
     rts
 !pinwe_not_tool:
     lda pinwe_item_id
@@ -1688,7 +2164,28 @@ put_inv_name_with_ego:
     jsr screen_put_string
     ldx pinwe_slot
     lda inv_ego,x
-    jsr tramp_ego_put_suffix
+    cmp #EGO_TYPE_COUNT
+    bcc !pinwe_valid_ego+
+    lda #0
+!pinwe_valid_ego:
+    jsr banked_ego_put_suffix
+    jsr put_inv_sensed_suffix
     rts
+
+put_inv_sensed_suffix:
+    ldx pinwe_slot
+    lda inv_flags,x
+    and #IF_IDENTIFIED | IF_SENSED
+    cmp #IF_SENSED
+    bne !pinwe_done+
+    lda #<pinwe_sensed_suffix
+    sta zp_ptr0
+    lda #>pinwe_sensed_suffix
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!pinwe_done:
+    rts
+
+pinwe_sensed_suffix: .text " (magik)" ; .byte 0
 pinwe_item_id: .byte 0
 pinwe_slot:    .byte 0

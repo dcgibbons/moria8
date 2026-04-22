@@ -508,10 +508,13 @@ spca_char: .byte 0
 // screen_flash_set_color — Set the transient VDC flash color from a VIC color
 // Input: A = VIC color
 screen_flash_set_color:
+    stx sfc_save_x
     tax
     lda vic_to_vdc_color,x
     sta sfa_flash_attr
+    ldx sfc_save_x
     rts
+sfc_save_x: .byte 0
 
 // screen_flash_reset_color — Restore the default transient flash color
 screen_flash_reset_color:
@@ -577,8 +580,8 @@ screen_flash_at:
     lda sfa_flash_attr
     jsr vdc_write_data
 
-    // Delay (~10ms)
-    ldx #$08
+    // Delay (~20ms)
+    ldx #$10
 !sfa_delay_o:
     ldy #$00
 !sfa_delay_i:

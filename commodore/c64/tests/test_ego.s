@@ -70,6 +70,8 @@ test_exit_trampoline:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -319,9 +321,8 @@ test_start:
     sta fi_qty
     lda #0
     sta fi_p1
-    sta fi_flags
     lda #EGO_SLAY_EVIL
-    sta fi_ego
+    sta fi_meta
     lda #1
     sta zp_item_count
 

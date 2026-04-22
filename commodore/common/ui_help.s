@@ -24,8 +24,13 @@
 .const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
 .const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
 .const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
-.const HELP_FOOTER_LEN = 23
-.const HELP_FOOTER_MORE_LEN = 29
+#if C128
+.const HELP_FOOTER_LEN = 28
+.const HELP_FOOTER_MORE_LEN = 33
+#else
+.const HELP_FOOTER_LEN = 29
+.const HELP_FOOTER_MORE_LEN = 34
+#endif
 .const HELP_FOOTER_COL = (SCREEN_COLS - HELP_FOOTER_LEN) / 2
 .const HELP_FOOTER_MORE_COL = (SCREEN_COLS - HELP_FOOTER_MORE_LEN) / 2
 .const HELP_PAGE_ENTRY_SIZE = 2
@@ -316,7 +321,12 @@ help_draw_hborder:
     jmp screen_put_char             // tail call
 
 // Local footer strings remain in the overlay.
-uh_press_key_str: .text "SPACE/RETURN/Q/ESC done" ; .byte 0
-uh_next_key_str: .text "SPACE/RETURN next  Q/ESC quit" ; .byte 0
+#if C128
+uh_press_key_str: .text "SPACE/RETURN/Q/ESC/STOP done" ; .byte 0
+uh_next_key_str: .text "SPACE/RETURN next Q/ESC/STOP quit" ; .byte 0
+#else
+uh_press_key_str: .text "SPACE/RETURN/Q/RUN/STOP done" ; .byte 0
+uh_next_key_str: .text "SPACE/RETURN next Q/RUN/STOP quit" ; .byte 0
+#endif
 
 .label ui_help_show_paged = ui_help_display

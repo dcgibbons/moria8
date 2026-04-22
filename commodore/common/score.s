@@ -7,6 +7,24 @@
 
 // Death source constants: DEATH_ALIVE/CURSED/POISON/STARVE defined in config.s
 
+// Death/high-score screen keeps a 40-column composition and centers that block
+// on wider targets such as the C128 VDC 80-column screen.
+.const SDS_LAYOUT_WIDTH      = 40
+.const SDS_COL_BASE          = (SCREEN_COLS - SDS_LAYOUT_WIDTH) / 2
+.const SDS_INFO_COL          = SDS_COL_BASE + 1
+.const SDS_DIED_COL          = SDS_COL_BASE + 11
+.const SDS_VALUE_COL         = SDS_COL_BASE + 22
+.const SDS_WIZARD_COL        = SDS_COL_BASE + 9
+.const SDS_HISCORE_HDR_COL   = SDS_COL_BASE + 4
+.const SDS_HISCORE_ROW_COL   = SDS_COL_BASE + 1
+.const SDS_HISCORE_PAD_COL   = SDS_COL_BASE + 30
+.const SDS_ANYKEY_COL        = SDS_COL_BASE + 13
+
+.assert "Death screen layout fits SCREEN_COLS", SDS_LAYOUT_WIDTH <= SCREEN_COLS, true
+.assert "Death score values stay on-screen", SDS_VALUE_COL < SCREEN_COLS, true
+.assert "High-score pad column stays on-screen", SDS_HISCORE_PAD_COL < SCREEN_COLS, true
+.assert "Death footer stays on-screen", (SDS_ANYKEY_COL + 13) <= SCREEN_COLS, true
+
 // ============================================================
 // Score scratch variables
 // ============================================================
@@ -183,7 +201,7 @@ score_death_screen:
     // Row 1: "* YOU HAVE DIED *"
     lda #1
     sta zp_cursor_row
-    lda #11
+    lda #SDS_DIED_COL
     sta zp_cursor_col
     lda #COL_RED
     sta zp_text_color
@@ -196,7 +214,7 @@ score_death_screen:
     // Row 3: Player name
     lda #3
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_WHITE
     sta zp_text_color
@@ -209,7 +227,7 @@ score_death_screen:
     // Row 4: "<race> <class>  LEVEL <lvl>"
     lda #4
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -241,7 +259,7 @@ score_death_screen:
     // Row 5: "KILLED ON DUNGEON LEVEL <depth>"
     lda #5
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #<sds_dungeon_str
     sta zp_ptr0
@@ -254,7 +272,7 @@ score_death_screen:
     // Row 7: "KILLED BY <source>"
     lda #7
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_ORANGE
     sta zp_text_color
@@ -268,7 +286,7 @@ score_death_screen:
     // Row 9: "EXPERIENCE:" + value
     lda #9
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -277,7 +295,7 @@ score_death_screen:
     lda #>sds_xp_str
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda #22
+    lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_WHITE
     sta zp_text_color
@@ -292,7 +310,7 @@ score_death_screen:
     // Row 10: "GOLD:" + value
     lda #10
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -301,7 +319,7 @@ score_death_screen:
     lda #>sds_gold_str
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda #22
+    lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_YELLOW
     sta zp_text_color
@@ -316,7 +334,7 @@ score_death_screen:
     // Row 11: "DEPTH BONUS:" + value
     lda #11
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -325,7 +343,7 @@ score_death_screen:
     lda #>sds_depth_str
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda #22
+    lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_WHITE
     sta zp_text_color
@@ -344,7 +362,7 @@ score_death_screen:
     // Row 12: "TOTAL SCORE:" + value
     lda #12
     sta zp_cursor_row
-    lda #1
+    lda #SDS_INFO_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -353,7 +371,7 @@ score_death_screen:
     lda #>sds_total_str
     sta zp_ptr0_hi
     jsr screen_put_string
-    lda #22
+    lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_GREEN
     sta zp_text_color
@@ -366,7 +384,7 @@ score_death_screen:
     beq !sds_not_wizard+
     lda #13
     sta zp_cursor_row
-    lda #9
+    lda #SDS_WIZARD_COL
     sta zp_cursor_col
     lda #COL_YELLOW
     sta zp_text_color
@@ -380,7 +398,7 @@ score_death_screen:
     // Row 14: High score header
     lda #14
     sta zp_cursor_row
-    lda #4
+    lda #SDS_HISCORE_HDR_COL
     sta zp_cursor_col
     lda #COL_CYAN
     sta zp_text_color
@@ -396,7 +414,7 @@ score_death_screen:
     // Row 24: "PRESS ANY KEY"
     lda #24
     sta zp_cursor_row
-    lda #13
+    lda #SDS_ANYKEY_COL
     sta zp_cursor_col
     lda #COL_LGREY
     sta zp_text_color
@@ -688,7 +706,7 @@ hiscore_display:
     // Position cursor
     lda hd_row
     sta zp_cursor_row
-    lda #1
+    lda #SDS_HISCORE_ROW_COL
     sta zp_cursor_col
 
     // Print rank: " N. " (1-based, right-justified in 2 chars)
@@ -729,7 +747,7 @@ hiscore_display:
     // Pad to column 30
 !hd_pad:
     lda zp_cursor_col
-    cmp #30
+    cmp #SDS_HISCORE_PAD_COL
     bcs !hd_pad_done+
     lda #$20
     jsr screen_put_char

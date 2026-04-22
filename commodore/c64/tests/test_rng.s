@@ -11,6 +11,7 @@
 // 8. rng_range_word(500) returns [0, 499]
 // 9. rng_range_word(1) always returns 0
 // 10. rng_next matches eight reference one-bit steps
+// 11. rng_range returns N/Z flags that match the returned A value
 //
 // Results at $0400: $01 = pass per test, $02 = overall
 
@@ -363,5 +364,21 @@ test_start:
     sta $0409
     sta $02
 !t10_done:
+
+    // ==========================================
+    // Test 11: rng_range must return N/Z flags for A
+    // For N=1, result is always 0, so Z must be set on return.
+    // ==========================================
+    lda #1
+    jsr rng_range
+    bne !t11_fail+
+    lda #$01
+    sta $040a
+    jmp !t11_done+
+!t11_fail:
+    lda #$00
+    sta $040a
+    sta $02
+!t11_done:
 
     brk

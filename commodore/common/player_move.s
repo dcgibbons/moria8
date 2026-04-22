@@ -137,6 +137,11 @@ c128_town_move_diag_after_occupied_read:
 #endif
     beq !not_occupied+          // No monster → continue to move
 
+    lda zp_temp3
+    ldy zp_temp4
+    jsr player_move_check_live_occupant
+    bcc !not_occupied+          // Stale occupied flag → clear and continue
+
     // Monster present — attack if not running
     lda zp_run_dir
     cmp #$ff
@@ -186,6 +191,39 @@ c128_town_move_diag_move_blocked:
     jsr sound_play
 !no_bump:
     clc                     // Carry clear = blocked
+    rts
+
+pm_live_occ_x: .byte 0
+pm_live_occ_y: .byte 0
+
+// player_move_check_live_occupant — honor FLAG_OCCUPIED only when a live
+// monster table entry still exists at the tile. If the map flag is stale,
+// clear it so movement, running, and future renders stop treating the tile as
+// blocked by a phantom monster.
+// Input:  A = x, Y = y
+// Output: carry set = live monster present, X = slot index
+//         carry clear = no live monster; stale FLAG_OCCUPIED cleared
+// Clobbers: A, X, Y, zp_ptr0/hi
+player_move_check_live_occupant:
+    sta pm_live_occ_x
+    sty pm_live_occ_y
+    jsr monster_find_at
+    bcs !pm_live_found+
+
+    ldx pm_live_occ_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy pm_live_occ_x
+    :MapRead_ptr0_y()
+    and #~FLAG_OCCUPIED & $ff
+    :MapWrite_ptr0_y()
+    clc
+    rts
+
+!pm_live_found:
+    sec
     rts
 
 // player_move_maybe_passive_search — Movement-owned passive auto-search.
@@ -442,7 +480,12 @@ run_check_adjacent_monsters:
     ldy zp_temp1
     :MapRead_ptr0_y()
     and #FLAG_OCCUPIED
-    bne !rcam_found+
+    beq !rcam_next+
+
+    lda zp_temp1
+    ldy zp_temp2
+    jsr player_move_check_live_occupant
+    bcs !rcam_found+
 
 !rcam_next:
     inc run_scratch

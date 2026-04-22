@@ -6,6 +6,297 @@
 
 ---
 
+## 2026-04-21 — `BUG-C128-DEATH-HISCORE-NOT-CENTERED` centered death overlay layout ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C128 80-column death/high-score layout so the death screen is visually centered again instead of rendering the legacy 40-column composition against the left edge.
+- Kept a single shared death-screen owner instead of forking a separate C128-only layout path.
+
+### What Shipped
+1. **Shared death screen now uses a centered 40-column layout block**
+   - `commodore/common/score.s`
+   - the death title, player summary, score breakdown, wizard banner, hiscore header, row starts, value column, and footer now derive from a shared `SDS_COL_BASE = (SCREEN_COLS - 40) / 2`
+2. **High-score row padding now respects the centered block**
+   - `commodore/common/score.s`
+   - the hiscore printer no longer pads names to an absolute 40-column screen column; it pads relative to the centered death-layout block so the table remains aligned on C128
+3. **Compile-time layout guards added**
+   - `commodore/common/score.s`
+   - asserts now keep the centered block, value column, hiscore pad column, and footer inside the visible width on both C64 and C128
+
+### Root Cause / Notes
+- The bug was not in the VDC backend. The shared death overlay still used hard-coded 40-column absolute columns (`1`, `4`, `9`, `11`, `13`, `22`, `30`) inside `score.s`.
+- On C64 those coordinates were fine. On C128 they painted the old left-anchored 40-column composition directly into an 80-column surface.
+- The correct owner is the shared death-screen layout itself, not a special C128 renderer override. The fix keeps one composition and centers that 40-column block using `SCREEN_COLS` math.
+
+### Verification
+- Exact reported gate:
+  - `make -C commodore build128`: PASS
+- Broader shared-layout sanity:
+  - `make -C commodore build64`: PASS
+- Outcome:
+  - user confirmed the live C128 death/high-score display is centered correctly again
+
+---
+
+## 2026-04-21 — `BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT` timed prayer feedback repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live `Resist Heat and Cold` prayer bug where the action could appear as a beep-only cast with no visible player feedback.
+- Re-anchored the effect on the upstream timed-buff model instead of the drifted Commodore latch behavior.
+
+### What Shipped
+1. **Resist heat/cold is timed again**
+   - `commodore/common/player_magic_execute_overlay.s`
+   - the prayer now applies `10 + rng(10)` duration instead of writing a hardcoded pseudo-flag value
+2. **Shared resist feedback now owns the cast message**
+   - `commodore/common/player_magic_feedback.s`
+   - the helper now extends the timer and prints `You feel resistant to heat and cold.` on cast so the live prayer path no longer degenerates into sound-only feedback
+3. **Turn decay now treats resist like the other timed buffs**
+   - `commodore/common/turn.s`
+   - `zp_eff_resist` is no longer skipped by the simple per-turn decay loop
+4. **State/docs/tests updated around the real contract**
+   - `commodore/common/zeropage.s`
+   - `commodore/c64/tests/test_prayer_feedback.s`
+   - `tasks/todo.md`
+   - `tasks/lessons.md`
+
+### Root Cause / Notes
+- Local upstream references (`umoria` / `vms-moria`) keep resist heat/cold as timed duration, not a permanent bit latch.
+- The Commodore port had drifted so:
+  - `zp_eff_resist` was forced to `$03`
+  - the effect helper itself was the only writer
+  - `turn_tick_effects` explicitly skipped it
+- That made the effect persist indefinitely and allowed later live casts to look silent because the timer was already nonzero in the running session or saved state.
+- The final user-visible fix is intentionally pragmatic: the cast now reports the resist message every time, which avoids stale-timer ambiguity in live gameplay while preserving timed extension semantics.
+
+### Verification
+- Exact reported gate:
+  - `make -C commodore build128`: PASS
+- Exact reported gate:
+  - `./commodore/c64/run_tests.sh`: PASS at restored baseline `41 passed, 4 failed (of 45 suites)`
+- Outcome:
+  - focused `prayer_feedback` coverage is green again
+  - user confirmed the live prayer now reports correctly
+
+---
+
+## 2026-04-21 — `BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM` dense carried-pack parity ✅ COMPLETE
+
+### Scope Closed
+- Fixed the long-standing carried-inventory drift where whole-item removals left sparse holes and item letters no longer matched upstream Moria behavior.
+- Re-anchored the Commodore carried-pack contract on the local upstream trees: both `umoria` and `vms-moria` compact the pack after removals.
+
+### What Shipped
+1. **Carried-slot removal now compacts like upstream**
+   - `commodore/common/item.s`
+   - `inv_remove_item` now shifts later carried slots left after a whole-item removal while preserving fixed-slot clear behavior for equipment.
+   - `inv_count_items` now stops at the first empty carried slot, which matches the new dense-prefix invariant.
+2. **All-items carried overlays/prompts now follow packed order**
+   - `commodore/common/player_items.s`
+   - `commodore/common/ui_inventory.s`
+   - the all-items inventory overlay/path now treats carried letters as the current packed order instead of durable sparse slot ids.
+3. **Prompt/layout recovery kept the change within both platform ceilings**
+   - `commodore/common/throw.s`
+   - the final byte recovery stayed local and restored the forced C128 staged-source gate without backing out the dense-pack behavior.
+4. **Focused regressions were updated around the packed invariant**
+   - `commodore/c64/tests/test_item.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - the drop/inventory-view tests now assert dense carried-pack order and post-removal left-compaction instead of sparse-hole preservation.
+
+### Root Cause / Notes
+- The old Commodore model treated carried inventory as sparse absolute slots:
+  - whole-item removals only cleared the chosen slot
+  - insertions refilled the first empty hole
+  - all-items prompt letters therefore drifted away from upstream Moria’s packed-pack model
+- Consultant review narrowed the correct ownership boundary:
+  - carried inventory should compact and present current packed letters
+  - equipment should remain fixed-slot
+  - filtered selectors should continue to use the visible-slot cache rather than invent a second ownership model
+- The first byte-trim pass on the shared prompt helper introduced a real regression by feeding the Huffman prompt id into the inventory-filter cache builder; the final helper preserves `A` and saves/restores the prompt id through scratch instead.
+
+### Verification
+- Local upstream parity verified from:
+  - `~/Projects/thirdparty/umoria/src/inventory.cpp`
+  - `~/Projects/thirdparty/vms-moria/source/include/misc.inc`
+- Exact reported gate:
+  - `make -B -C commodore build128`: PASS
+- Exact reported gate:
+  - `./commodore/c64/run_tests.sh`: PASS at restored baseline `41 passed, 4 failed (of 45 suites)`
+- Outcome:
+  - the remaining red suites are the same pre-existing aggregate failures (`effects`, `item`, `ui_views`, `subsystems`); this fix did not add a new standing failure
+
+---
+
+## 2026-04-21 — `BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS` sparse all-item prompt contract ✅ COMPLETE
+
+### Scope Closed
+- Fixed the `drop` item-selector regression so the `?` overlay and prompt again match what the player can actually press in a sparse inventory, including the live C128 lowercase-letter path.
+
+### What Shipped
+1. **All-items `drop` prompt range works like the other item selectors again**
+   - `commodore/common/item.s`
+   - `drop` now prints a real sparse absolute-slot range instead of the bogus hardcoded `(a-v)` text that escaped into live gameplay.
+2. **C128 lowercase direct-scan letter picks are normalized on the local `drop` path**
+   - `commodore/common/item.s`
+   - lowercase inventory-letter selection after `drop -> ?` now accepts the real shifted-lowercase PETSCII values returned by the C128 CIA scanner.
+3. **Shared prompt machinery was trimmed back instead of widened**
+   - `commodore/common/player_items.s`
+   - the failed attempt to teach the common prompt helpers new all-items semantics was backed out, and the shared prompt-print path was tightened enough to recover the C128 staged-source headroom.
+4. **Compressed prompt text refreshed**
+   - `data/huffman_strings.txt`
+   - `commodore/common/huffman_data.s`
+   - regenerated after the prompt-text changes so the shipping builds and tests use the updated strings.
+
+### Verification
+- `make -C commodore build128`: PASS
+- `./commodore/c64/run_tests.sh`: back to the pre-existing broad red baseline (`effects`, `item`, `ui_views`, `subsystems`), with no new gate failure introduced by this fix
+- user confirmed the live C128 `drop` prompt now works again
+
+---
+
+## 2026-04-21 — `BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS` exact prompt filtering ✅ COMPLETE
+
+### Scope Closed
+- Fixed the mixed spell/prayer book inventory prompt bug so the visible selection range now matches upstream Moria behavior instead of exposing the wrong book class and rejecting it only after selection.
+
+### What Shipped
+1. **Spell/prayer book prompts now filter by exact book class**
+   - `commodore/common/player_magic.s`
+   - the live selector now derives an exact mage-book or prayer-book prompt filter from `pm_spell_type` before calling the shared inventory prompt path
+2. **Shared inventory visibility now owns exact book-class filtering**
+   - `commodore/common/player_items.s`
+   - the prompt-time `?` overlay and visible letter range now show only mage books for mage flows and only prayer books for prayer flows
+3. **Focused regression coverage added**
+   - `commodore/c64/tests/test_ui_views.s`
+   - seeds a mixed inventory and asserts that the prayer-book filtered view renders only `Holy Prayer Book` and `Words of Wisdom`
+4. **C64 test harness updated for the added regression slot**
+   - `commodore/c64/run_tests.sh`
+
+### Verification
+- Upstream parity confirmed from the local source trees:
+  - `~/Projects/thirdparty/umoria/src/player_pray.cpp`
+  - `~/Projects/thirdparty/umoria/src/mage_spells.cpp`
+  - `~/Projects/thirdparty/vms-moria/source/include/prayer.inc`
+  - `~/Projects/thirdparty/vms-moria/source/include/magic.inc`
+- `make -C commodore build128` passed after trimming the banked spell-selection path back under the C128 `$F000-$FFFA` ceiling.
+- `./commodore/c64/run_tests.sh` remained red overall because of unrelated existing failures in `effects`, `item`, `subsystems`, and the already-red aggregate `ui_views` suite; the new mixed-book regression itself passed in the raw `ui_views` results.
+
+## 2026-04-21 — `BUG-HELP-ESC-CANCEL-CONTRACT` modal cancel contract fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the platform contract for help-screen and read-only modal dismissal so the visible prompts match real Commodore keyboard behavior instead of depending on synthetic `ESC` assumptions.
+- Closed the C128 usability gap seen under VICE by accepting `STOP` alongside real `ESC` for modal dismissal without widening gameplay command input.
+
+### What Shipped
+1. **Shared modal escape-equivalent helper now owns the platform split**
+   - `commodore/common/input_ui_helpers.s`
+   - read-only modal flows now classify dismiss keys through `input_is_modal_escape_key` instead of scattering raw `$1b` / `KEY_ESC` compares
+2. **Help/store/home/spell modal callsites now use the shared contract**
+   - `commodore/common/game_loop_helpers.s`
+   - `commodore/common/ui_store.s`
+   - `commodore/common/ui_home.s`
+   - `commodore/common/player_magic.s`
+   - `commodore/common/player_magic_execute_overlay.s`
+3. **Visible help copy now matches the actual product contract**
+   - C64 help now advertises `RUN/STOP` instead of a literal `ESC`
+   - C128 help now advertises `ESC/STOP`
+4. **Regression coverage added for both platforms**
+   - `commodore/c64/tests/test_main_loop.s`
+   - `commodore/c64/tests/test_ui_views.s`
+   - `commodore/c128/tests/test_main_loop128.s`
+
+### Verification
+- `./commodore/c64/run_tests.sh` completed at `42 passed, 3 failed` with the same unrelated existing failures in `effects`, `item`, and `subsystems`; touched suites stayed green (`main_loop` `29/29`, `ui_views` `18/18`).
+- `make -C commodore build128` passed.
+- `make test128-fast` remained blocked by the preexisting unrelated `input128` assembly break in `commodore/c128/input_run_raw128.s`.
+
+### Outcome
+- The modal/help dismiss contract is now explicit and platform-correct:
+  - C64 uses `RUN/STOP` as the escape-equivalent dismiss key
+  - C128 keeps real `ESC` and also accepts `STOP` for modal reliability under VICE
+- The fix stays scoped to read-only modal dismissal and does not widen gameplay command semantics.
+
+## 2026-04-21 — C128 `Glyph of Warding` VDC redraw parity fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C128 VDC bug where casting `Glyph of Warding` could make earlier visible glyphs disappear until the player moved.
+- Repaired the renderer ownership seam directly instead of pushing spell-state or text ownership around again.
+- Added focused VDC coverage so full-frame redraw and single-tile redraw now share the same glyph contract.
+
+### Root Cause
+- Gameplay state was correct; the provided VICE snapshot still had the older glyph alive in RAM at its map coordinates.
+- The bug was a renderer-parity failure inside [c128/dungeon_render_vdc.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/dungeon_render_vdc.s):
+  - `render_single_tile` already checked `glyph_find_at` and could paint `SC_GLYPH`
+  - full-frame `render_viewport` repainted terrain, items, and monsters but did not reapply the glyph overlay
+- Casting `Glyph of Warding` sets the shared room-reveal redraw path, which promoted the next frame to a full redraw. That redraw erased previously visible glyphs until later movement triggered local tile repaint through `render_single_tile`.
+
+### What Changed
+1. **Full-frame VDC redraw now applies glyph overlay**
+   - [c128/dungeon_render_vdc.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/dungeon_render_vdc.s) now overlays `SC_GLYPH` during `render_viewport` with the same precedence model used by `render_single_tile`: terrain first, then item/monster/glyph, then player override.
+2. **Renderer-local byte recovery kept the fix in the correct owner**
+   - The runtime-low budget pressure from the new glyph parity logic was absorbed by tightening short control-flow hops and row-scan loops inside the same VDC renderer module instead of relocating gameplay ownership.
+3. **Focused VDC regression coverage added**
+   - [c128/tests/test_vdc_scroll_delta128.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c128/tests/test_vdc_scroll_delta128.s) now stubs `glyph_find_at` and asserts that a full `render_viewport` paints a visible glyph tile correctly.
+
+### Verification
+- Exact build/layout gate:
+  - `make -C commodore build128` = `PASS`
+  - `RuntimeLowData-segment: $1000-$19f4`, back below the floor-item table boundary
+- Exact reported fast C128 gate:
+  - `make test128-fast` = harness startup failure twice (`unable to connect to VICE monitor at 127.0.0.1:6510`) before tests executed
+- Live validation:
+  - user confirmed the disappearing-glyph VDC repro is fixed in gameplay
+
+### Outcome
+- The bug is removed from active work.
+- The design rule is now explicit: full-frame and local VDC redraw paths must keep overlay precedence in lockstep or room-reveal/modal redraws will erase live scene state until later tile repairs.
+
+---
+
+## 2026-04-21 — C128 `Glyph of Warding` cast-text ownership repair ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C128 corruption in the `Glyph of Warding` cast message.
+- Repaired the underlying ownership/layout seam instead of adding another spell-text overlay or shortening copy.
+- Folded the affected gameplay and save/load status strings into the shared Huffman dictionary so the resident image fits again on both platforms.
+
+### Root Cause
+- The visible corruption was not a PETSCII-vs-screen-code problem.
+- The original WIP placed the glyph strings where their linked addresses could drift into the wrong ownership region on C128:
+  - one attempt left them in staged-only space past the live `$E000` overlay window
+  - another attempt moved them into `DeathOverlay`, which overflowed that overlay
+  - moving them into the resident Default image then pushed the staged C128 banked payload source past the required `$E000` ceiling
+- The real bug class was ownership drift: live gameplay spell feedback was depending on fragile raw literals instead of the project’s established compressed-string path.
+
+### What Changed
+1. **Glyph feedback moved to Huffman-backed message IDs**
+   - [common/player_magic_utility.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/player_magic_utility.s) now prints glyph-success and blocked-underfoot feedback through `HSTR_PMU_GLYPH_OK` / `HSTR_PMU_GLYPH_BLOCK` instead of raw string pointers.
+   - [common/player_magic_execute_overlay.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/player_magic_execute_overlay.s) now uses the same Huffman-backed blocked-underfoot message for `Create Food`, removing the last dependency on the deleted raw spell-runtime text block.
+2. **Resident save/load status strings were moved into the shared dictionary**
+   - [common/save.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/save.s) and [common/game_loop.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/game_loop.s) now print save/load status, overwrite, media, and welcome-back messages through new `HSTR_SAVE_*` entries.
+   - [common/runtime_ui_strings.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/runtime_ui_strings.s) now keeps only the genuinely direct-dereference title/disk UI strings that still need raw resident ownership.
+3. **Huffman corpus and tests updated**
+   - [data/huffman_strings.txt](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/data/huffman_strings.txt) and regenerated [common/huffman_data.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/huffman_data.s) now include the glyph and save/load status entries.
+   - [c64/tests/test_utility_effects.s](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/c64/tests/test_utility_effects.s) now asserts on the glyph Huffman IDs instead of deleted raw string symbols.
+
+### Verification
+- Exact build/layout gate:
+  - `make -C commodore build128` = `PASS`
+  - C128 staged banked payload source restored below `$E000` (`Banked payload: 4085 bytes at $CFCF-$DFC4`)
+  - C128 death overlay restored under its ceiling (`Death overlay: 4056 bytes at $E000-$EFD8`)
+- Broader C64 regression run:
+  - `./commodore/c64/run_tests.sh` = `41 passed, 4 failed`
+  - the touched `utility_effects` suite now assembles and runs with the new glyph Huffman IDs
+  - the remaining failures were unrelated pre-existing suites (`effects`, `item`, `subsystems`)
+- Live validation:
+  - user confirmed the C128 glyph cast message now renders correctly
+
+### Outcome
+- The glyph corruption is removed from active work.
+- The fix reinforces the project rule that new resident gameplay text should prefer Huffman ownership over ad hoc raw literals when layout pressure is already tight.
+
+---
+
 ## 2026-04-13 — `FEAT-VMS-RECALL-SEMANTICS` `/` symbol identify ✅ COMPLETE
 
 ### Scope Closed

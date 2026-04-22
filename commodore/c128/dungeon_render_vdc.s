@@ -146,8 +146,10 @@ render_viewport:
     jsr mmu_copy_map_row
 
     // Most rows have no item/monster flags. Accumulate both bits across the
-    // staged row so we only run the population pass(es) that are actually
-    // needed for this row.
+    // staged row so we only run the monster population pass when actually
+    // needed for this row. Item population always runs because it owns the
+    // row cache reset for both item and monster overlays.
+    jsr rv_populate_row_items
     lda #0
     ldx #0
 !rv_occ_scan:
@@ -155,12 +157,6 @@ render_viewport:
     inx
     cpx #VIEWPORT_W
     bne !rv_occ_scan-
-    tay
-    and #FLAG_HAS_ITEM
-    beq !rv_occ_no_items+
-    jsr rv_populate_row_items
-!rv_occ_no_items:
-    tya
     and #FLAG_OCCUPIED
     beq !rv_occ_done+
     jsr rv_populate_row_monsters
@@ -203,20 +199,32 @@ render_viewport:
 
     // Not visited — check if detect monsters reveals an occupant
     lda eff_detect_timer
-    bne !rv_detect_chk+
-    jmp !draw_blank+
+    beq !rv_detect_blank+
 !rv_detect_chk:
-    lda zp_tile_tmp
-    and #FLAG_OCCUPIED
-    bne !rv_detect_render+
+    ldy zp_render_x
+    lda rv_row_occ,y
+    beq !rv_detect_blank+
+    bmi !rv_detect_blank+
+    lda eff_detect_timer
+    bpl !rv_detect_render+
+    tax
+    dex
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    tax
+    lda cr_mflags,x
+    and #$04                    // CF_EVIL
+    beq !rv_detect_blank+
+!rv_detect_blank:
     jmp !draw_blank+
 !rv_detect_render:
-    // Detected monster on unvisited tile — blank background, then monster
-    lda #$20                    // Space (blank tile)
+    // Detected monster on unvisited tile — blank background, then normal item/monster overlay.
+    lda #$20
     sta zp_temp0
-    lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
+    lda #VDC_BLACK
     sta zp_temp1
-    jmp !rv_no_item+            // Skip to monster check
+    jmp !rv_no_item+
 !rv_visited:
 
     // Extract tile type (bits 7-4 → index 0-15)
@@ -241,7 +249,7 @@ render_viewport:
     sta zp_temp0
     lda #VDC_LGREY          // Pre-translated VDC color (Opt 2)
     sta zp_temp1
-    jmp !rv_tile_set+
+    bne !rv_tile_set+
 !rv_normal:
     // Look up screen code and pre-translated VDC color directly.
     lda tile_screen_codes,x
@@ -278,7 +286,7 @@ render_viewport:
     sta zp_temp0
     lda #VDC_YELLOW             // Pre-translated VDC color (Opt 2)
     sta zp_temp1
-    jmp !rv_no_store+
+    bne !rv_no_store+
 !rv_store_nxt:
     inx
     cpx #STORE_COUNT
@@ -299,7 +307,7 @@ render_viewport:
     // |dy| > light_radius: entire tile guaranteed outside torch range
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    jmp !rv_no_monster+         // Dimmed tiles never show monsters
+    bne !rv_no_monster+         // Dimmed tiles never show monsters
 
 !rv_check_dx:
     // |dy| <= light_radius: check |dx| = abs(map_x - player_x)
@@ -325,7 +333,7 @@ render_viewport:
     // Outside light radius → dimmed (remembered tile)
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp1
-    jmp !rv_no_monster+         // Dimmed tiles never show monsters
+    bne !rv_no_monster+         // Dimmed tiles never show monsters
 
 !rv_vis_ok:
     // Item check (visible tiles only)
@@ -374,26 +382,37 @@ render_viewport:
     sta zp_temp1
 
 !rv_no_monster:
+    lda zp_tile_tmp
+    and #FLAG_OCCUPIED
+    bne rv_apply_player_override_vdc
+    lda zp_render_x
+    clc
+    adc zp_view_x
+    ldy rv_row_map_y
+    jsr glyph_find_at
+    bcc rv_apply_player_override_vdc
+    lda #SC_GLYPH
+    sta zp_temp0
+rv_apply_player_override_vdc:
     // Check if this is the player position
     lda rst_row_tmp
-    beq !not_player+
+    beq !write_tile+
     lda zp_render_x
     cmp rv_mon_x
-    bne !not_player+
+    bne !write_tile+
 
     // Override with player character
     lda #SC_PLAYER          // '@'
     sta zp_temp0
     lda #VDC_WHITE          // Pre-translated VDC white (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp1
-    jmp !write_tile+
-!not_player:
-    jmp !write_tile+
+    bne !write_tile+
 !draw_blank:
     lda #SC_SPACE
     sta zp_temp0
     lda #VDC_BLACK          // Pre-translated VDC black (Opt 2)
     sta zp_temp1
+    bne rv_apply_player_override_vdc
 
 !write_tile:
     // Buffer screen code and pre-translated VDC color (all paths set zp_temp1 to VDC-native)
@@ -493,13 +512,12 @@ render_viewport_scroll_delta:
     sbc old_view_x
     cmp #$01
     bne !rvsd_check_h_right+
-    jmp !rvsd_h_scroll_left+
+    beq !rvsd_h_scroll_left+
 !rvsd_check_h_right:
     cmp #$ff
     bne !rvsd_no_fast_h+
     // Rightward screen shift (player moving left) is overlap-unsafe with the
     // current VDC block-copy path. Fall back to full redraw for correctness.
-    jmp !rvsd_no_fast_h+
 !rvsd_no_fast_h:
     clc
     rts
@@ -607,13 +625,13 @@ render_viewport_scroll_delta:
     sbc old_view_y
     cmp #$01
     bne !rvsd_check_v_down+
-    jmp !rvsd_v_scroll_up+
+    beq !rvsd_v_scroll_up+
 !rvsd_check_v_down:
     cmp #$ff
     beq !rvsd_v_down_ok+
     jmp !rvsd_no_fast+
 !rvsd_v_down_ok:
-    jmp !rvsd_v_scroll_down+
+    beq !rvsd_v_scroll_down+
 
 !rvsd_v_scroll_up:
     // New viewport moved down by 1 map tile; screen shifts up by 1 row.
@@ -687,7 +705,7 @@ render_viewport_scroll_delta:
     lda rvsd_row
     beq !rvsd_vd_rows_done+
     dec rvsd_row
-    jmp !rvsd_vd_row_loop-
+    bpl !rvsd_vd_row_loop-
 !rvsd_vd_rows_done:
     // Redraw newly exposed top map row.
     lda zp_view_y
@@ -714,14 +732,12 @@ render_viewport_scroll_delta:
     rts
 
 rv_populate_row_items:
-    ldx #0
-rv_items_zero:
+    ldy #VIEWPORT_W - 1
     lda #0
-    sta rv_row_occ,x
-    inx
-    cpx #VIEWPORT_W
-    bne rv_items_zero
-
+!rv_row_occ_zero:
+    sta rv_row_occ,y
+    dey
+    bpl !rv_row_occ_zero-
     ldx #0
 rv_items_scan:
     cpx #MAX_FLOOR_ITEMS
@@ -747,7 +763,7 @@ rv_items_scan:
     sta rv_row_occ,y
 rv_items_next:
     inx
-    jmp rv_items_scan
+    bne rv_items_scan
 rv_items_done:
     rts
 
@@ -780,7 +796,7 @@ rv_mon_scan:
     sta rv_row_occ,y
 rv_mon_next:
     inx
-    jmp rv_mon_scan
+    bne rv_mon_scan
 rv_mon_done:
     rts
 
@@ -990,7 +1006,7 @@ render_single_tile:
     sta zp_temp3
     lda #VDC_LGREY          // Pre-translated VDC color (Opt 2)
     sta zp_temp4
-    jmp !rst_tile_set+
+    bne !rst_tile_set+
 !rst_normal:
     lda tile_screen_codes,x
     sta zp_temp3
@@ -1017,7 +1033,7 @@ render_single_tile:
     sta zp_temp3
     lda #VDC_YELLOW             // Pre-translated VDC color (Opt 2)
     sta zp_temp4
-    jmp !rst_no_store+
+    bne !rst_no_store+
 !rst_store_nxt:
     inx
     cpx #STORE_COUNT
@@ -1059,14 +1075,14 @@ render_single_tile:
     // Dimmed
     lda #VDC_DGREY              // Pre-translated VDC dark grey (Opt 2)
     sta zp_temp4
-    jmp !rst_no_monster+        // Dimmed tiles never show monsters
+    bne !rst_no_monster+        // Dimmed tiles never show monsters
 
 !rst_vis_ok:
+    ldy zp_temp1                // Y = map_y for both item and glyph lookups
     // Item check (visible tiles only)
     lda zp_tile_tmp
     and #FLAG_HAS_ITEM
     beq !rst_no_item+
-    ldy zp_temp1                // Y = map_y
     lda zp_temp0                // A = map_x
     jsr floor_item_find_at
     bcc !rst_no_item+
@@ -1081,13 +1097,16 @@ render_single_tile:
     lda vic_to_vdc_color,x          // Translate to VDC RGBI (Opt 2: inline)
     sta zp_temp4
 !rst_no_item:
-
-    // Monster check (visible tiles only — overrides items)
     lda zp_tile_tmp
     and #FLAG_OCCUPIED
-    beq !rst_no_monster+
-    // zp_temp0 = map_x, zp_temp1 = map_y
-    ldy zp_temp1                // Y = map_y
+    bne !rst_monster+
+    lda zp_temp0                // A = map_x
+    jsr glyph_find_at           // Y already holds map_y from item lookup
+    bcc !rst_no_monster+
+    lda #SC_GLYPH
+    sta zp_temp3
+    bne !rst_no_monster+
+!rst_monster:
     lda zp_temp0                // A = map_x
     jsr monster_find_at
     bcc !rst_no_monster+        // Not found
@@ -1104,6 +1123,7 @@ render_single_tile:
     sta zp_temp4
 
 !rst_no_monster:
+rst_apply_player_override_vdc:
     // Player position override?
     lda zp_temp0
     cmp zp_player_x
@@ -1115,13 +1135,14 @@ render_single_tile:
     sta zp_temp3
     lda #VDC_WHITE              // Pre-translated (Opt 2: COL_PLAYER = COL_WHITE)
     sta zp_temp4
-    jmp !rst_write+
+    bne !rst_write+
 
 !rst_blank:
     lda #SC_SPACE
     sta zp_temp3
     lda #VDC_BLACK              // Pre-translated VDC black (Opt 2)
     sta zp_temp4
+    bne rst_apply_player_override_vdc
 
 !rst_write:
     sei                         // IRQ off: protect char + attr VDC writes as atomic pair
@@ -1177,7 +1198,7 @@ render_local_area:
     sbc zp_light_radius
     bcs !rla_mx1+
     lda #0
-    jmp !rla_mx2+
+    beq !rla_mx2+
 !rla_mx1:
     sec
     sbc #1
@@ -1228,7 +1249,7 @@ render_local_area:
     sbc zp_light_radius
     bcs !rla_my1+
     lda #0
-    jmp !rla_my2+
+    beq !rla_my2+
 !rla_my1:
     sec
     sbc #1
@@ -1283,14 +1304,14 @@ render_local_area:
     cmp rla_max_x
     beq !rla_col_done+
     inc rla_cur_x
-    jmp !rla_col-
+    bne !rla_col-
 !rla_col_done:
 
     lda rla_cur_y
     cmp rla_max_y
     beq !rla_done+
     inc rla_cur_y
-    jmp !rla_row-
+    bne !rla_row-
 !rla_done:
     rts
 

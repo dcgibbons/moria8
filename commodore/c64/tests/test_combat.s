@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #27
+    ldx #29
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -67,23 +67,66 @@ test_exit_trampoline:
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
-#import "../../common/player_items.s"
-#import "../../common/spell_data.s"
-#import "../../common/projectile.s"
-#import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+
+store_init_all:
+    rts
+
+store_restock_all:
+    rts
+
+store_enter:
+    rts
+
+ui_help_show_paged:
+ui_help_display:
+help_draw_line:
+help_draw_hborder:
+    rts
+
+ui_inv_display:
+ui_inv_select_display:
+ui_inv_dispatch:
+    rts
+
+ui_equip_display:
+    rts
+
+show_inv_and_select:
+    lda #$20
+    rts
+
+piw_prompt_filtered_inv:
+    clc
+    rts
+
+piw_pick_filtered_inv_key:
+    clc
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
+
+pm_setup_active_tables:
+    rts
+
+eff_teleport_self:
+    rts
+
+eff_kill_monster:
+    rts
+
+eff_detect_timer:
+    .byte 0
+
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s
@@ -93,7 +136,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 28, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 30, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -1077,10 +1120,101 @@ test_start:
     bne !t28_fail+
     lda #$01
     sta tc_results + 27
-    jmp !tests_done+
+    jmp !t29+
 !t28_fail:
     lda #$00
     sta tc_results + 27
 
+    // ==========================================
+    // Test 29: combat message appends must keep slot 41 reserved for
+    // the null terminator instead of scribbling into the next symbol.
+    // ==========================================
+!t29:
+    lda #41
+    sta cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41
+    lda #'Y'
+    sta cmb_you_str
+
+    lda #<tc_one_char_z
+    ldy #>tc_one_char_z
+    jsr combat_append_str
+    lda #<tc_one_char_dot
+    ldy #>tc_one_char_dot
+    jsr combat_append_str
+
+    lda cmb_buf_idx
+    cmp #41
+    bne !t29_fail+
+    lda combat_msg_buf + 41
+    bne !t29_fail+
+    lda cmb_you_str
+    cmp #'Y'
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp !t30+
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
+
+    // ==========================================
+    // Test 30: melee kill marks the scene dirty for redraw.
+    // ==========================================
+!t30:
+    jsr monster_init_table
+    lda #0
+    sta zp_dirty_count
+
+    // Place a floor tile with an occupied monster at (20,15).
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    :MapWrite_ptr0_y()
+
+    // Populate slot 0 as a one-hit kill target.
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #20
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #15
+    sta (zp_ptr0),y
+    ldy #MX_TYPE
+    lda #4
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #1
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+
+    lda #20
+    ldy #15
+    jsr player_attack_monster
+
+    lda zp_dirty_count
+    cmp #1
+    bne !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !tests_done+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+
 !tests_done:
     jmp test_exit_trampoline
+
+tc_one_char_z:   .text "Z" ; .byte 0
+tc_one_char_dot: .text "." ; .byte 0

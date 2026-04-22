@@ -81,6 +81,8 @@ recall_clear: rts
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -1789,13 +1791,13 @@ test_start:
     lda (zp_ptr0),y
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
-    beq !t31_pass+
-!t31_skip:
-    lda #$00
-    sta tc_results+30
-    jmp !t31_done+
+    bne !t31_skip+
 !t31_pass:
     lda #$01
+    sta tc_results+30
+    jmp !t31_done+
+!t31_skip:
+    lda #$00
     sta tc_results+30
 !t31_done:
 

@@ -106,13 +106,13 @@ Sorry, what was that again?
 @PM_NO_MANA Not enough mana.
 @PM_NO_EXP You're not experienced enough.
 @PM_FAIL Your spell fails.
-@PM_YOU_CAST You cast ~
-@PM_YOU_PRAY You pray ~
-@PM_TITLE_MAGE Mage Spells
-@PM_TITLE_PRAY Prayers
+@PM_YOU_CAST Spell book (a-v)?
+@PM_YOU_PRAY Prayer book (a-v)?
+@PM_TITLE_MAGE Monster slows.
+@PM_TITLE_PRAY Type?
 @PM_FOOTER_CAST Cast which? (a-p, ESC)
 @PM_FOOTER_PRAY Pray which? (a-p, ESC)
-@PM_LEARNED You have learned ~
+@PIQ_LITTLE_BETTER You feel a little better.
 
 # ===== Player items strings (Pattern A + C) =====
 @PIW_WEAR_PROMPT Wear which item (a-v)?
@@ -129,7 +129,7 @@ Sorry, what was that again?
 @PIW_YUCK . Yuck!
 @PIQ_QUAFF_PROMPT Quaff which potion (a-v)?
 @PIQ_READ_PROMPT Read which scroll (a-v)?
-@PIQ_FEEL_BETTER You feel better.
+@PMU_CREATE_FOOD You create food.
 @PIQ_SPEED You feel yourself moving faster.
 @PIQ_TERRIBLE That tasted terrible!
 @PIQ_NOTHING Nothing seems to happen.
@@ -146,6 +146,8 @@ Sorry, what was that again?
 @PIQ_EYES_TINGLE Your eyes tingle.
 @PIQ_AIR_CRACKLE The air crackles around you.
 @PIQ_CLEANSED You feel cleansed.
+@PMU_GLYPH_BLOCK There is already an object under you.
+@PMU_GLYPH_OK A glyph appears beneath you.
 @PIQ_WPN_GLOW Your weapon glows briefly.
 @PIQ_ARM_GLOW Your armor glows briefly.
 @PIQ_HANDS_GLOW Your hands begin to glow.
@@ -179,35 +181,7 @@ Sorry, what was that again?
 
 # ===== Store UI strings (OPT-3.3 overlay compression) =====
 # NOTE: ~ at end of line = trailing space (stripped by encoder before encoding)
-@UIS_GOLD Gold: ~
-@UIS_BIG_GOLD >65535
-@UIS_MENU B)uy  S)ell  Q)uit
-@UIS_BUY_WHICH Buy which item? (a-l)
-@UIS_PRICE Price: ~
-@UIS_GP_BUY  gp. Buy? (Y/N)
-@UIS_BOUGHT Bought!
-@UIS_NO_AFFORD You cannot afford that.
 @UIS_PACK_FULL Your pack is full.
-@UIS_SELL_TITLE Sell Items
-@UIS_SELL_WHICH Sell which item? (a-v)
-@UIS_OFFER Offer: ~
-@UIS_GP_SELL  gp. Sell? (Y/N)
-@UIS_SOLD Sold!
-@UIS_NO_BUY We don't buy that.
-@UIS_WORTHLESS That is worthless.
-@UIS_STORE_FULL The store is full.
-@UIS_CURSED That item is cursed.
-@HG_ASKS Asks ~
-@HG_OFFERS Offers ~
-@HG_GP  gp.
-@HG_YOUR_OFFER Your offer? (Q=cancel)
-@HG_YOUR_PRICE Your price? (Q=cancel)
-@HG_COUNTER How about ~
-@HG_QMARK  gp?
-@HG_FINAL Final offer: ~
-@HG_TAKE Take it? (Y/N)
-@HG_KICKED Get out of my store!
-@HG_AGREED Agreed!
 
 # ===== Tunnel strings (R2.5) =====
 @TUN_DIG_GRANITE You dig in the granite wall.
@@ -229,12 +203,20 @@ Sorry, what was that again?
 @IDR_DROP You drop a ~
 @IDR_FLOOR_FULL No room on the floor.
 
+# ===== Save/load status strings =====
+@SAVE_SAVING Saving game...
+@SAVE_DONE Game saved.
+@SAVE_LOADING Loading game...
+@SAVE_NOTFOUND Save file not found.
+@SAVE_CORRUPT Save file corrupt!
+@SAVE_UNSUPPORTED Unsupported save.
+@SAVE_IOERR Disk error!
+@SAVE_WELCOME Welcome back to Moria8!
+@SAVE_NEED_SAVE Need Save Disk.
+@SAVE_BAD_SAVE Wrong Save Disk.
+@SAVE_OVERWRITE Overwrite? Y/N
+
 # ===== Pseudo-ID quality strings (OPT-4.8) =====
-@PID_TERRIBLE Sense: Terrible
-@PID_BAD Sense: Bad
-@PID_AVERAGE Sense: Average
-@PID_GOOD Sense: Good
-@PID_EXCELLENT Sense: Excellent
 
 # ===== Bash command strings (OPT-4.8) =====
 @BASH_SMASH You smash into the door!
@@ -244,3 +226,14 @@ Sorry, what was that again?
 @BASH_EMPTY You bash at empty space.
 @BASH_STUNNED  appears stunned!
 @BASH_IGNORES  ignores your bash!
+
+@PIQ_VERY_GOOD You feel very good.
+@PID_WIELDING There's something about what you are wielding...
+@PID_BODY There's something about what you are wearing on your body...
+@PID_ARM There's something about what you are wearing on your arm...
+@PID_HEAD There's something about what you are wearing on your head...
+@PID_HANDS There's something about what you are wearing on your hands...
+@PID_FEET There's something about what you are wearing on your feet...
+@PID_LIGHT There's something about what you are using to light the way...
+@PID_RIGHT There's something about what you are wearing on your right hand...
+@PID_PACK There's something about what you are carrying in your pack...

@@ -124,6 +124,7 @@ rng_range:
     cmp zp_temp4            // >= N?
     bcs !retry-             // Yes, reject and retry
 !rng_done:
+    ora #0                  // Return N/Z for A while preserving carry
     rts
 
 // rng_range_word — Return random 16-bit number in range [0, N-1]

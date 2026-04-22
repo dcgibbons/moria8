@@ -1,9 +1,10 @@
 // test_tier.s — Runtime tests for tier_manager.s
 //
 // Tests: tier_check_transition logic (first entry, in-range, step up/down,
-//        town, tier 4 cap), load_tier_to_buffer.
+//        town, tier 4 cap), load_tier_to_buffer, and C64 tier/REU helpers
+//        preserving the caller interrupt/banking state.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040d: $01 = pass, $00 = fail per test (14 tests)
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -23,7 +24,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #10
+    ldx #13
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -74,6 +75,8 @@ test_finish:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -94,11 +97,11 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 12, $ff
+tc_results: .fill 14, $ff
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #10
+    ldx #13
     lda #$ff
 !clr:
     sta tc_results,x
@@ -470,11 +473,26 @@ test_start:
     lda #$e0                    // hi($E003)
     sta tier_name_hi_addr+1
 
-    // Call creature_get_name(X=1) — should resolve to "CD" ($03,$04,$00)
+    // Call creature_get_name(X=1) from the live spell-style C64 context:
+    // KERNAL out ($35) with IRQs disabled. The helper must preserve both.
+    sei
+    lda #$35
+    sta $01
     ldx #1
     jsr creature_get_name
+    php
+    pla
+    sta zp_temp0
+    lda $01
+    sta zp_temp1
 
-    // Verify creature_name_buf contains $03, $04, $00
+    // Restore the normal test banking/IRQ state before further checks.
+    lda #$36
+    sta $01
+    cli
+
+    // Verify creature_name_buf contains $03, $04, $00 and that the helper
+    // returned with IRQs still disabled while $01 remained at $35.
     lda creature_name_buf
     cmp #$03
     bne !t11_fail+
@@ -484,12 +502,188 @@ test_start:
     lda creature_name_buf + 2
     cmp #$00
     bne !t11_fail+
+    lda zp_temp0
+    and #$04
+    beq !t11_fail+
+    lda zp_temp1
+    cmp #$35
+    bne !t11_fail+
     lda #$01
     jmp !t11_store+
 !t11_fail:
     lda #$00
 !t11_store:
     sta tc_results + 10
+
+    // ============================================================
+    // Test 12: reu_fetch_tier preserves caller IRQ/$01 state
+    // The spell-path crash reached reu_fetch_tier while the caller still
+    // expected IRQs masked and KERNAL banked out ($35). The helper must
+    // return with that state intact.
+    // ============================================================
+    lda #1
+    sta current_tier
+    lda #0
+    sta reu_tier_start_lo + 1
+    sta reu_tier_start_hi + 1
+    sta tier_size_lo + 1
+    sta tier_size_hi + 1
+
+    sei
+    lda #$35
+    sta $01
+    jsr reu_fetch_tier
+    php
+    pla
+    sta zp_temp0
+    lda $01
+    sta zp_temp1
+
+    lda #$36
+    sta $01
+    cli
+
+    lda zp_temp0
+    and #$04
+    beq !t12_fail+
+    lda zp_temp1
+    cmp #$35
+    bne !t12_fail+
+    lda #$01
+    jmp !t12_store+
+!t12_fail:
+    lda #$00
+!t12_store:
+    sta tc_results + 11
+
+    // ============================================================
+    // Test 13: tier_restore_after_overlay suppresses the transient
+    // loading message while restoring the active tier after overlay use.
+    // ============================================================
+    lda #$ad                    // LDA abs
+    sta tier_load
+    lda #<tier_silent_restore
+    sta tier_load + 1
+    lda #>tier_silent_restore
+    sta tier_load + 2
+    lda #$8d                    // STA abs
+    sta tier_load + 3
+    lda #<zp_temp0
+    sta tier_load + 4
+    lda #>zp_temp0
+    sta tier_load + 5
+    lda #$a9                    // LDA #$01
+    sta tier_load + 6
+    lda #$01
+    sta tier_load + 7
+    lda #$8d                    // STA abs
+    sta tier_load + 8
+    lda #<tier_loaded
+    sta tier_load + 9
+    lda #>tier_loaded
+    sta tier_load + 10
+    lda #$60                    // RTS
+    sta tier_load + 11
+
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    sta tier_silent_restore
+    sta zp_temp0
+    lda #1
+    sta zp_player_dlvl
+    jsr tier_restore_after_overlay
+
+    lda zp_temp0
+    cmp #1
+    bne !t13_fail+
+    lda tier_silent_restore
+    bne !t13_fail+
+    lda current_tier
+    cmp #1
+    bne !t13_fail+
+    lda tier_loaded
+    cmp #1
+    bne !t13_fail+
+    lda #$01
+    jmp !t13_store+
+!t13_fail:
+    lda #$00
+!t13_store:
+    sta tc_results + 12
+
+    // ============================================================
+    // Test 14: creature_get_name stale tier-name recovery loads silently
+    // and still resolves the name through the tier tables.
+    // ============================================================
+    lda #$ad                    // LDA abs
+    sta tier_load
+    lda #<tier_silent_restore
+    sta tier_load + 1
+    lda #>tier_silent_restore
+    sta tier_load + 2
+    lda #$8d                    // STA abs
+    sta tier_load + 3
+    lda #<zp_temp0
+    sta tier_load + 4
+    lda #>zp_temp0
+    sta tier_load + 5
+    lda #$a9                    // LDA #$01
+    sta tier_load + 6
+    lda #$01
+    sta tier_load + 7
+    lda #$8d                    // STA abs
+    sta tier_load + 8
+    lda #<tier_loaded
+    sta tier_load + 9
+    lda #>tier_loaded
+    sta tier_load + 10
+    lda #$60                    // RTS
+    sta tier_load + 11
+
+    lda #$13                    // lo($E013)
+    sta cr_name_lo + 1
+    lda #$e0
+    sta cr_name_hi + 1
+    lda #<$e000
+    sta tier_name_lo_addr
+    lda #>$e000
+    sta tier_name_lo_addr + 1
+    lda #$03                    // lo($E003)
+    sta tier_name_hi_addr
+    lda #$e0
+    sta tier_name_hi_addr + 1
+    lda #3
+    sta active_dungeon_count
+    lda #0
+    sta current_tier
+    sta tier_loaded
+    sta tier_silent_restore
+    sta zp_temp0
+
+    ldx #1
+    jsr creature_get_name
+
+    lda zp_temp0
+    cmp #1
+    bne !t14_fail+
+    lda tier_silent_restore
+    bne !t14_fail+
+    lda tier_loaded
+    cmp #1
+    bne !t14_fail+
+    lda creature_name_buf
+    cmp #$03
+    bne !t14_fail+
+    lda creature_name_buf + 1
+    cmp #$04
+    bne !t14_fail+
+    lda #$01
+    jmp !t14_store+
+!t14_fail:
+    lda #$00
+!t14_store:
+    sta tc_results + 13
 
     // ============================================================
     // Done — copy results and halt

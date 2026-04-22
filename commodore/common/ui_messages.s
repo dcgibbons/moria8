@@ -95,8 +95,8 @@ msg_print:
     lda #$20
     jsr c128_town_dump_log
 #endif
-    // Cache source pointer in static RAM so C128 IRQ activity cannot
-    // clobber low-ZP pointer bytes before/during message handling.
+    // Cache source pointer in static RAM so IRQ activity cannot clobber
+    // low-ZP pointer bytes before/during message handling.
     lda zp_ptr0
     sta msg_src_lo
     lda zp_ptr0_hi
@@ -191,25 +191,13 @@ msg_print_cached:
 
 !show_more:
     // --- State 2: both rows full, 3rd message arriving ---
-    // Save incoming message pointer (msg_show_more clobbers zp_ptr0)
-    lda msg_src_lo
-    pha
-    lda msg_src_hi
-    pha
-
     jsr msg_show_more
     jsr input_get_key
 
-    // Restore message pointer
-    pla
-    sta zp_ptr0_hi
-    pla
-    sta zp_ptr0
-
-    // Clear state and restart — will take state 0 path
+    // Clear state and restart from the cached source pointer.
     lda #0
     sta zp_msg_flags
-    jmp msg_print
+    jmp msg_print_cached
 
 // msg_clear — Clear the message area and reset flags
 // Called at the start of each player turn.
@@ -229,6 +217,7 @@ msg_clear:
 
     lda #0
     sta zp_msg_flags
+    sta msg_row1_col
 !done:
     rts
 
@@ -267,12 +256,10 @@ msg_show_more:
 // Input: zp_ptr0 = original message pointer (still set from msg_print)
 // Preserves: nothing
 msg_save_history:
-    // C128: keep history copy atomic so low-ZP pointer bytes used by
+    // Keep history copy atomic so low-ZP pointer bytes used by
     // (zp_ptr0)/(zp_ptr1) cannot be clobbered mid-copy by IRQ paths.
-#if C128
     php
     sei
-#endif
     lda msg_hist_ptr_lo
     sta zp_ptr1
     lda msg_hist_ptr_hi
@@ -315,10 +302,7 @@ msg_save_history:
     lda #>msg_history
     sta msg_hist_ptr_hi
 !done_ptr:
-
-#if C128
     plp
-#endif
     rts
 
 // ============================================================

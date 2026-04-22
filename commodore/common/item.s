@@ -33,16 +33,26 @@
 #import "item_tables.s"
 
 // ============================================================
-// Floor Item Table — 32 slots x 8 arrays at $CF00 (256 bytes)
+// Floor Item Table — 42 slots packed into $CF00-$CFFB (252 bytes)
 // ============================================================
-.label fi_item_id = FLOOR_ITEM_BASE + 0       // $CF00: item type (0-24), $FF = empty
-.label fi_x       = FLOOR_ITEM_BASE + 32      // $CF20: map X
-.label fi_y       = FLOOR_ITEM_BASE + 64      // $CF40: map Y
-.label fi_qty     = FLOOR_ITEM_BASE + 96      // $CF60: quantity / gold amount
-.label fi_p1      = FLOOR_ITEM_BASE + 128     // $CF80: enchantment / charges
-.label fi_flags   = FLOOR_ITEM_BASE + 160     // $CFA0: instance flags
-.label fi_ego     = FLOOR_ITEM_BASE + 192     // $CFC0: ego type (0=none)
-.label fi_qty_hi  = FLOOR_ITEM_BASE + 224     // $CFE0: gold qty high byte
+// Layout:
+//   fi_item_id[42]  item type ($ff = empty)
+//   fi_x[42]        map X
+//   fi_y[42]        map Y
+//   fi_qty[42]      quantity / gold amount lo
+//   fi_p1[42]       p1 for non-gold, gold amount hi for gold
+//   fi_meta[42]     packed flags+ego: bits 0-2 ego, bits 3-6 IF_* flags
+.label fi_item_id = FLOOR_ITEM_BASE + 0
+.label fi_x       = fi_item_id + MAX_FLOOR_ITEMS
+.label fi_y       = fi_x + MAX_FLOOR_ITEMS
+.label fi_qty     = fi_y + MAX_FLOOR_ITEMS
+.label fi_p1      = fi_qty + MAX_FLOOR_ITEMS
+.label fi_meta    = fi_p1 + MAX_FLOOR_ITEMS
+.assert "Floor item table fits in $CF00-$CFFF", fi_meta + MAX_FLOOR_ITEMS <= FLOOR_ITEM_BASE + 256, true
+
+.const FI_META_EGO_MASK    = $07
+.const FI_META_FLAGS_SHIFT = 3
+.const FI_META_FLAGS_MASK  = $78
 
 // ============================================================
 // Inventory Table — 30 slots (22 carried + 8 equipped)
@@ -52,6 +62,10 @@ inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
 inv_flags:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
+
+glyph_x:      .fill MAX_GLYPHS, 0
+glyph_y:      .fill MAX_GLYPHS, 0
+glyph_active: .fill MAX_GLYPHS, 0
 
 // ============================================================
 // Scratch variables
@@ -65,7 +79,6 @@ fi_add_p1:  .byte 0       // Enchantment / charges
 fi_add_ego: .byte 0       // Ego type (0=none)
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
-ici_count:  .byte 0       // inv_count_items scratch counter (RP14-7)
 
 // ============================================================
 // Subroutines
@@ -83,7 +96,62 @@ fi_add_clear_plain_meta:
     sta fi_add_ego
     rts
 
-// item_init_floor — Clear all 32 floor item slots
+// floor_item_pack_add_meta — Pack fi_add_flags + fi_add_ego into floor meta
+// Output: A = packed meta byte
+// Clobbers: A
+floor_item_pack_add_meta:
+    lda fi_add_flags
+    asl
+    asl
+    asl
+    sta zp_temp0
+    lda fi_add_ego
+    and #FI_META_EGO_MASK
+    ora zp_temp0
+    rts
+
+// floor_item_get_qty_hi_x — Get 16-bit gold high byte for floor slot X
+// Output: A = qty_hi for gold items, 0 for non-gold
+floor_item_get_qty_hi_x:
+    lda fi_item_id,x
+    cmp #2
+    bcc !fi_get_qty_hi_gold+
+    lda #0
+    rts
+!fi_get_qty_hi_gold:
+    lda fi_p1,x
+    rts
+
+// floor_item_get_p1_x — Get p1/charges for non-gold floor slot X
+// Output: A = p1 for non-gold, 0 for gold
+floor_item_get_p1_x:
+    lda fi_item_id,x
+    cmp #2
+    bcs !fi_get_p1_ok+
+    lda #0
+    rts
+!fi_get_p1_ok:
+    lda fi_p1,x
+    rts
+
+// floor_item_get_flags_x — Unpack IF_* flags from floor slot X
+// Output: A = flags
+floor_item_get_flags_x:
+    lda fi_meta,x
+    and #FI_META_FLAGS_MASK
+    lsr
+    lsr
+    lsr
+    rts
+
+// floor_item_get_ego_x — Unpack ego type from floor slot X
+// Output: A = ego type (0=none)
+floor_item_get_ego_x:
+    lda fi_meta,x
+    and #FI_META_EGO_MASK
+    rts
+
+// item_init_floor — Clear all floor item slots
 // Sets all fi_item_id to $FF, zp_item_count = 0
 // Clobbers: A, X
 item_init_floor:
@@ -91,10 +159,18 @@ item_init_floor:
     lda #FI_EMPTY
 !iif_loop:
     sta fi_item_id,x
+    lda #0
+    sta fi_x,x
+    sta fi_y,x
+    sta fi_qty,x
+    sta fi_p1,x
+    sta fi_meta,x
+    lda #FI_EMPTY
     dex
     bpl !iif_loop-
     lda #0
     sta zp_item_count
+    jsr glyph_clear_all
     rts
 
 // item_init_inventory — Clear all 30 inventory/equipment slots
@@ -134,14 +210,18 @@ floor_item_add:
     sta fi_y,x
     lda fi_add_qty
     sta fi_qty,x
+    lda fi_add_id
+    cmp #2
+    bcc !fia_gold_hi+
     lda fi_add_p1
     sta fi_p1,x
-    lda fi_add_flags
-    sta fi_flags,x
-    lda fi_add_ego
-    sta fi_ego,x
+    jmp !fia_store_meta+
+!fia_gold_hi:
     lda fi_add_qty_hi
-    sta fi_qty_hi,x
+    sta fi_p1,x
+!fia_store_meta:
+    jsr floor_item_pack_add_meta
+    sta fi_meta,x
     lda #0
     sta fi_add_qty_hi       // Auto-reset for non-gold callers
 
@@ -185,7 +265,7 @@ floor_item_remove:
     lda #0
     sta fi_qty,x
     sta fi_p1,x
-    sta fi_flags,x
+    sta fi_meta,x
 
     // Decrement count
     dec zp_item_count
@@ -259,6 +339,67 @@ floor_item_find_at:
     clc
     rts
 
+glyph_clear_all:
+    lda #0
+    ldx #MAX_GLYPHS - 1
+!gca_loop:
+    sta glyph_active,x
+    dex
+    bpl !gca_loop-
+    rts
+
+glyph_find_at:
+    sta fi_add_x
+    ldx #0
+!gfa_loop:
+    lda glyph_active,x
+    beq !gfa_next+
+    lda glyph_x,x
+    cmp fi_add_x
+    bne !gfa_next+
+    tya
+    cmp glyph_y,x
+    beq !gfa_hit+
+!gfa_next:
+    inx
+    cpx #MAX_GLYPHS
+    bcc !gfa_loop-
+!gfa_miss:
+    clc
+    rts
+!gfa_hit:
+    rts
+
+glyph_add_at:
+    sty fi_add_y
+    jsr glyph_find_at
+    bcs !gaa_done+
+    ldx #0
+!gaa_scan:
+    lda glyph_active,x
+    beq !gaa_store+
+    inx
+    cpx #MAX_GLYPHS
+    bcc !gaa_scan-
+!gaa_full:
+    clc
+    rts
+!gaa_store:
+    lda fi_add_x
+    sta glyph_x,x
+    lda fi_add_y
+    sta glyph_y,x
+    lda #1
+    sta glyph_active,x
+!gaa_done:
+    sec
+    rts
+
+glyph_remove:
+    lda #0
+    sta glyph_active,x
+    rts
+
 // inv_add_item — Add item to first empty carried slot (0-21)
 // Input: fi_add_id, fi_add_qty, fi_add_p1
 // Output: carry set = success (X = slot), carry clear = full
@@ -291,9 +432,27 @@ inv_add_item:
     rts
 
 // inv_remove_item — Remove item from inventory slot X
+// Carried slots compact after removal; equipment clears in place.
 // Input: X = slot index (0-29)
-// Clobbers: A
+// Clobbers: A, X
 inv_remove_item:
+    cpx #MAX_INV_SLOTS - 1
+    bcs !iri_clear_slot+
+!iri_shift_loop:
+    lda inv_item_id + 1,x
+    sta inv_item_id,x
+    lda inv_qty + 1,x
+    sta inv_qty,x
+    lda inv_p1 + 1,x
+    sta inv_p1,x
+    lda inv_flags + 1,x
+    sta inv_flags,x
+    lda inv_ego + 1,x
+    sta inv_ego,x
+    inx
+    cpx #MAX_INV_SLOTS - 1
+    bcc !iri_shift_loop-
+!iri_clear_slot:
     lda #FI_EMPTY
     sta inv_item_id,x
     lda #0
@@ -307,21 +466,16 @@ inv_remove_item:
 // Output: A = count
 // Clobbers: X
 inv_count_items:
-    lda #0
-    sta ici_count               // Dedicated scratch counter (RP14-7)
     ldx #0
 !ici_loop:
-    cpx #MAX_INV_SLOTS
-    bcs !ici_done+
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !ici_next+
-    inc ici_count
-!ici_next:
+    beq !ici_done+
     inx
-    jmp !ici_loop-
+    cpx #MAX_INV_SLOTS
+    bcc !ici_loop-
 !ici_done:
-    lda ici_count
+    txa
     rts
 
 // ============================================================
@@ -673,8 +827,10 @@ item_pickup:
     clc
     adc fi_qty,x
     sta player_data + PL_GOLD_0
+    jsr floor_item_get_qty_hi_x
+    sta zp_temp1
     lda player_data + PL_GOLD_1
-    adc fi_qty_hi,x
+    adc zp_temp1
     sta player_data + PL_GOLD_1
     lda player_data + PL_GOLD_2
     adc #0
@@ -689,7 +845,7 @@ item_pickup:
     ldx ipu_slot
     lda fi_qty,x
     sta zp_temp0
-    lda fi_qty_hi,x
+    jsr floor_item_get_qty_hi_x
     sta zp_temp1
     jsr combat_append_decimal_16
 
@@ -729,11 +885,11 @@ item_pickup:
     sta fi_add_id
     lda fi_qty,x
     sta fi_add_qty
-    lda fi_p1,x
+    jsr floor_item_get_p1_x
     sta fi_add_p1
-    lda fi_flags,x
+    jsr floor_item_get_flags_x
     sta fi_add_flags                // Preserve floor item flags (IF_CURSED etc.)
-    lda fi_ego,x
+    jsr floor_item_get_ego_x
     sta fi_add_ego
     jsr inv_add_item
     // carry set = success (should always succeed since we checked)
@@ -770,8 +926,13 @@ item_pickup:
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4
 item_drop:
     // Print prompt
+    lda #$ff
     ldx #HSTR_IDR_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !idr_have_choices+
+    clc
+    rts
+!idr_have_choices:
 
     jsr input_prepare_followup_key
 
@@ -780,17 +941,19 @@ item_drop:
 
     // '?' shows inventory (all items) and re-prompts
     cmp #$3f
-    bne !idr_not_inv+
-    lda #$ff                    // Filter: show all items
-    jsr show_inv_and_restore
-    jmp item_drop
-!idr_not_inv:
+    bne !idr_direct_pick+
+    lda #$ff                    // Filter: show all items with real slot letters
+    jsr show_inv_and_select
 
-    // Check for ESC ($03) or space ($20) -> cancel
-    cmp #$03
-    beq !idr_cancel+
-    cmp #$20
-    beq !idr_cancel+
+!idr_direct_pick:
+#if C128
+    cmp #$c1
+    bcc !idr_norm_done+
+    cmp #$db
+    bcs !idr_norm_done+
+    and #$7f                    // Shifted lowercase PETSCII -> uppercase
+!idr_norm_done:
+#endif
 
     // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
     sec
@@ -803,9 +966,14 @@ item_drop:
     tax
     lda inv_item_id,x
     cmp #FI_EMPTY
-    bne !idr_found+
+    beq !idr_empty+
+
+    // X = inventory slot. Save it.
+    stx ipu_slot
+    bne !idr_have_item+
 
     // Empty slot
+!idr_empty:
     ldx #HSTR_PIW_NOTHING
     jsr huff_print_msg
     clc
@@ -817,10 +985,7 @@ item_drop:
     clc
     rts
 
-!idr_found:
-    // X = inventory slot. Save it.
-    stx ipu_slot
-
+!idr_have_item:
     // Set up floor item from inventory data
     lda zp_player_x
     sta fi_add_x

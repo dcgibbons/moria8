@@ -2,8 +2,9 @@
 // spell_effects.s — Shared effect subroutines for spells, potions, scrolls, etc.
 //
 // Phase 7.0: Extracted from player_items.s inline handlers.
-// Each subroutine implements a single effect and does NOT print messages
-// (callers handle messaging) unless noted.
+// Each subroutine implements a single effect. Base effect routines stay
+// message-light; `*_msg` wrappers own player-facing feedback when a spell or
+// item path needs it.
 //
 // Subroutines:
 //   eff_heal            — Heal player HP by amount in A
@@ -17,6 +18,9 @@
 // ============================================================
 // Scratch variables
 // ============================================================
+.const EFF_ICAT_WAND   = 14
+.const EFF_ICAT_STAFF  = 15
+
 eff_target_slot: .byte 0           // Target slot for identify
 eff_room_idx:    .byte 0           // Room loop index for light
 
@@ -166,11 +170,22 @@ eff_teleport_self:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_identify_prompt:
-    // Prompt: "IDENTIFY WHICH ITEM (A-V)?"
+    lda #$fd
     ldx #HSTR_PIQ_IDENTIFY_PROMPT
-    jsr huff_print_msg
-
+    jsr piw_prompt_filtered_inv
+    bcs !eip_have_choices+
+    clc
+    rts
+!eip_have_choices:
+    jsr input_prepare_followup_key
+!eip_retry:
     jsr input_get_key
+
+    cmp #$3f
+    bne !eip_not_inv+
+    lda #$fd
+    jsr show_inv_and_select
+!eip_not_inv:
 
     // Cancel check
     cmp #$03
@@ -178,27 +193,19 @@ eff_identify_prompt:
     cmp #$20
     beq !eip_cancel+
 
-    // Convert to slot
-    sec
-    sbc #$41
+    jsr piw_pick_filtered_inv_key
     bcc !eip_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !eip_cancel+
-
-    sta eff_target_slot
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !eip_cancel+
+    stx eff_target_slot
 
     // Identify that item type
-    tax
+    tay
+    pha
     lda #1
-    sta id_known,x
+    sta id_known,y
 
     // Set IF_IDENTIFIED on the item instance
-    ldx eff_target_slot
     lda inv_flags,x
+    and #~IF_SENSED & $ff
     ora #IF_IDENTIFIED
     sta inv_flags,x
 
@@ -209,16 +216,16 @@ eff_identify_prompt:
     ldx #HSTR_PIQ_THISIS
     jsr huff_append_combat
 
-    ldx eff_target_slot
-    lda inv_item_id,x
+    pla
     tax
-    lda it_name_lo,x                // Always real name (type is now known)
+    lda it_name_lo,x
     ldy it_name_hi,x
     jsr combat_append_str
 
     lda #<cmb_period
     ldy #>cmb_period
     jsr combat_append_str
+!eip_print:
 
     jsr cmb_term_and_print
 
@@ -243,16 +250,27 @@ eff_cure_poison:
 
 // ============================================================
 // eff_detect_monsters — Activate detect monsters effect (timer)
-// While timer > 0, renderer shows all active monsters regardless
+// While timer > 0, renderer shows detected monsters regardless
 // of tile visibility. No permanent FLAG_VISITED side-effect.
 // Input: none
 // Output: eff_detect_timer set, vis_room_revealed = 1
 // Clobbers: A
 // ============================================================
-eff_detect_timer: .byte 0              // Turns remaining (0 = inactive)
+.const DETECT_TIMER_TURNS = 20
+.const DETECT_TIMER_EVIL_ONLY = $80
+.const DETECT_TIMER_MASK = $7f
+
+eff_detect_timer: .byte 0              // Low 7 bits = turns, high bit = evil-only
 
 eff_detect_monsters:
-    lda #20
+    lda #DETECT_TIMER_TURNS
+    sta eff_detect_timer
+    lda #1
+    sta vis_room_revealed
+    rts
+
+eff_detect_evil_only:
+    lda #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     sta eff_detect_timer
     lda #1
     sta vis_room_revealed
@@ -375,40 +393,32 @@ eff_fd_row: .byte 0
 eff_find_doors:
     lda #1
     sta eff_fd_row
-
 !efd_row_loop:
     lda eff_fd_row
     cmp #MAP_ROWS - 1
     bcs !efd_done+
-
     ldx eff_fd_row
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
-
     ldy #1
 !efd_col_loop:
     :MapRead_ptr0_y()
     and #TILE_TYPE_MASK
     cmp #TILE_SECRET
     bne !efd_col_next+
-
-    // Convert to closed door
     :MapRead_ptr0_y()
     and #TILE_FLAG_MASK
     ora #TILE_DOOR_CLOSED
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
-
 !efd_col_next:
     iny
     cpy #MAP_COLS - 1
     bcc !efd_col_loop-
-
     inc eff_fd_row
     jmp !efd_row_loop-
-
 !efd_done:
     lda #1
     sta vis_room_revealed
@@ -463,10 +473,8 @@ eff_sleep_adjacent:
     ldy df_target_y
     jsr monster_find_at
     bcc !esa_skip+
-    jsr monster_get_ptr             // zp_ptr0 = entry
-    ldy #MX_SLEEP_CUR
     lda #20                         // Sleep for 20 turns
-    sta (zp_ptr0),y
+    jsr monster_apply_sleep
 !esa_skip:
     rts
 
@@ -530,11 +538,11 @@ eff_bolt:
 !eb_trace:
     dec proj_steps
     bne !eb_has_steps+
-    jmp !eb_fizzle+
+    rts
 !eb_has_steps:
     jsr trace_step
     bcs !eb_check_mon+
-    jmp !eb_fizzle+                 // Blocked or out of bounds
+    rts                             // Blocked or out of bounds
 
 !eb_check_mon:
     // --- Animate bolt: draw * at current position if on-screen ---
@@ -577,6 +585,7 @@ eff_bolt:
 !eb_got_monster:
 
     // Hit a monster! X = slot index
+    stx cmb_slot
     stx zp_temp2                // Save monster slot
 
     // Get monster type for messages
@@ -612,11 +621,6 @@ eff_bolt:
     jsr projectile_msg_suffix
     lda #SFX_HIT
     jsr sound_play
-    rts
-
-!eb_fizzle:
-    ldx #HSTR_EB_FIZZLE
-    jsr huff_print_msg
     rts
 
 // ============================================================
@@ -658,22 +662,34 @@ eff_damage_adjacent:
     rts
 
 // ============================================================
-// eff_directional_monster — Get direction, find monster at target
+// eff_directional_monster — Get direction, trace until the first monster hit
 // Output: carry SET = monster found (X = slot index),
-//         carry CLEAR = no monster
+//         carry CLEAR = no monster along the traced path
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_directional_monster:
     jsr get_direction_target
     bcc !edm_fail+
-
-    lda df_target_x
-    ldy df_target_y
+    jsr calc_direction_index
+    bcc !edm_fail+
+    lda zp_player_x
+    sta proj_cx
+    lda zp_player_y
+    sta proj_cy
+    lda #20
+    sta proj_steps
+!edm_trace:
+    jsr trace_step
+    bcc !edm_fail+
+    lda proj_cx
+    ldy proj_cy
     jsr monster_find_at
-    rts                             // Carry state from monster_find_at
+    bcs !edm_done+
+    dec proj_steps
+    bne !edm_trace-
 
 !edm_fail:
-    clc
+!edm_done:
     rts
 
 // ============================================================

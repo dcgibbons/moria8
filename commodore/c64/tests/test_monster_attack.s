@@ -4,7 +4,7 @@
 //        mon_atk_apply_damage, player_death_check, poison effect,
 //        paralysis effect, aggravation effect.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400-$040c: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #11
+    ldx #12
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -71,6 +71,8 @@ test_exit_trampoline:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -93,7 +95,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 12, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 13, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -521,10 +523,39 @@ test_start:
     bne !t12_fail+
     lda #$01
     sta tc_results + 11
-    jmp !tests_done+
+    jmp !t13+
 !t12_fail:
     lda #$00
     sta tc_results + 11
+
+    // ==========================================
+    // Test 13: Holy Word invulnerability blocks melee damage
+    // ==========================================
+!t13:
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    lda #3
+    sta eff_invuln_timer
+    lda #10
+    sta zp_combat_dmg
+    jsr mon_atk_apply_damage
+    bcs !t13_fail+
+    lda zp_player_hp_lo
+    cmp #50
+    bne !t13_fail+
+    lda zp_player_hp_hi
+    beq !t13_ok+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+    jmp !tests_done+
+!t13_ok:
+    lda #$01
+    sta tc_results + 12
 
 !tests_done:
     jmp test_exit_trampoline

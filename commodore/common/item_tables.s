@@ -388,7 +388,7 @@ itn_21: .text "Identify" ; .byte 0
 itn_22: .text "Teleportation" ; .byte 0
 itn_23: .text "Protection" ; .byte 0
 itn_24: .text "Strength" ; .byte 0
-itn_25: .text "Cure Serious Wounds" ; .byte 0
+itn_25: .text "Cure Serious Wounds potion" ; .byte 0
 itn_26: .text "Restore Mana" ; .byte 0
 itn_27: .text "Heroism" ; .byte 0
 itn_28: .text "Blindness" ; .byte 0

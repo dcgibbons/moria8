@@ -5,193 +5,181 @@
 // Kept separate so C128 does not leave the level-up path in the I/O hole.
 
 // ============================================================
-// magic_check_new_spells — Learn any spells the player qualifies for
-// Checks each spell 0-15: if spell_level <= player_level and not
-// already known, set the known bit and print message.
-// Called on level-up. Scans inventory for books matching
-// the player's class, then learns qualifying spells from
-// each book's 4-spell range.
+// magic_check_new_spells — Recompute how many spells/prayers the player can learn
+// Called on level-up after mana recalculation.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr2
 // ============================================================
-pm_learn_idx:    .byte 0     // Current spell index being checked
-mcns_class:      .byte 0     // Player's spell class
-mcns_inv_idx:    .byte 0     // Inventory scan index
-mcns_spell_start:.byte 0     // First spell index for current book
+mcns_allowed:    .byte 0
+mcns_known:      .byte 0
+mcns_learnable:  .byte 0
+mcns_stat_adj:   .byte 0
 
 magic_check_new_spells:
+    lda #0
+    sta player_data + PL_NEW_SPELLS
     lda player_data + PL_SPELL_TYPE
     bne !mcns_has_type+
-    rts                             // SPELL_NONE — nothing to learn
+    rts
 !mcns_has_type:
-    sta mcns_class
+    sta pm_spell_type
+    jsr pm_setup_active_tables
 
-    // Set up table pointers based on class
+    ldx player_data + PL_CLASS
+    lda class_spell_min_level,x
+    cmp zp_player_lvl
+    beq !mcns_level_ok+
+    bcc !mcns_level_ok+
+    rts
+!mcns_level_ok:
+
+    lda pm_spell_type
     cmp #SPELL_MAGE
-    bne !mcns_priest+
+    bne !mcns_wis+
+    lda player_data + PL_INT_CUR
+    jmp !mcns_stat+
+!mcns_wis:
+    lda player_data + PL_WIS_CUR
+!mcns_stat:
+    jsr mcns_get_stat_adj
+    sta mcns_stat_adj
 
-    // Mage: use mage tables
-    lda #<mage_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>mage_spell_level
-    sta pm_lvl_tbl_hi
-    lda #<mage_spell_name_lo
-    sta pm_name_lo_lo
-    lda #>mage_spell_name_lo
-    sta pm_name_lo_hi
-    lda #<mage_spell_name_hi
-    sta pm_name_hi_lo
-    lda #>mage_spell_name_hi
-    sta pm_name_hi_hi
-    jmp !mcns_scan_inv+
-
-!mcns_priest:
-    // Priest: use priest tables
-    lda #<priest_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>priest_spell_level
-    sta pm_lvl_tbl_hi
-    lda #<priest_spell_name_lo
-    sta pm_name_lo_lo
-    lda #>priest_spell_name_lo
-    sta pm_name_lo_hi
-    lda #<priest_spell_name_hi
-    sta pm_name_hi_lo
-    lda #>priest_spell_name_hi
-    sta pm_name_hi_hi
-
-!mcns_scan_inv:
-    lda #0
-    sta mcns_inv_idx
-
-!mcns_inv_loop:
-    ldx mcns_inv_idx
-    cpx #MAX_INV_SLOTS
-    bcs !mcns_done+
-
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !mcns_inv_next+
-
-    tax
-    lda it_category,x
-    cmp #ICAT_BOOK
-    bne !mcns_inv_next+
-
-    txa
-    jsr book_get_info
-    bcs !mcns_inv_next+
-
-    cpx mcns_class
-    bne !mcns_inv_next+
-
-    sta mcns_spell_start
-    jsr mcns_learn_from_book
-
-!mcns_inv_next:
-    inc mcns_inv_idx
-    jmp !mcns_inv_loop-
-
-!mcns_done:
-    rts
-
-mcns_learn_from_book:
-    lda mcns_spell_start
-    sta pm_learn_idx
-
-!mcns_loop:
-    lda pm_learn_idx
+    lda zp_player_lvl
     sec
-    sbc mcns_spell_start
+    sbc class_spell_min_level,x
+    clc
+    adc #1
+    sta zp_temp0
+
+    lda mcns_stat_adj
+    cmp #1
+    bcc !mcns_no_spells+
     cmp #4
-    bcc !mcns_cont+
+    bcc !mcns_allowed_levels+
+    cmp #6
+    bcc !mcns_allowed_three_halves+
+    cmp #6
+    beq !mcns_allowed_double+
+    lda zp_temp0
+    asl
+    clc
+    adc zp_temp0
+    lsr
+    jmp !mcns_cap_total+
+!mcns_allowed_levels:
+    lda zp_temp0
+    jmp !mcns_cap_total+
+!mcns_allowed_three_halves:
+    lda zp_temp0
+    asl
+    clc
+    adc zp_temp0
+    lsr
+    jmp !mcns_cap_total+
+!mcns_allowed_double:
+    lda zp_temp0
+    asl
+    jmp !mcns_cap_total+
+!mcns_no_spells:
+    lda #0
+    sta mcns_allowed
     rts
-!mcns_cont:
+!mcns_cap_total:
+    sta mcns_allowed
+    cmp class_spell_total,x
+    bcc !mcns_count_known+
+    lda class_spell_total,x
+    sta mcns_allowed
 
-    lda pm_learn_idx
-    cmp #8
-    bcs !mcns_hi_check+
+!mcns_count_known:
+    lda #<player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0
+    lda #>player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0_hi
+    jsr spell_mask_count_ptr
+    sta mcns_known
 
-    tax
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN
-    beq !mcns_check_level+
-    jmp !mcns_next+
-
-!mcns_hi_check:
-    sec
-    sbc #8
-    tax
-    lda spell_bit_mask,x
-    and player_data + PL_SPELLS_KNOWN_HI
-    beq !mcns_check_level+
-    jmp !mcns_next+
-
-!mcns_check_level:
+    lda #0
+    sta mcns_learnable
+    ldx #0
+!mcns_scan_spells:
+    cpx #SPELL_CATALOG_COUNT
+    bcs !mcns_finish+
     lda pm_lvl_tbl_lo
     sta zp_ptr0
     lda pm_lvl_tbl_hi
     sta zp_ptr0_hi
-    ldy pm_learn_idx
-    lda (zp_ptr0),y
-    cmp zp_player_lvl
-    beq !mcns_learn+
-    bcc !mcns_learn+
-    jmp !mcns_next+
-
-!mcns_learn:
-    lda pm_learn_idx
-    cmp #8
-    bcs !mcns_set_hi+
-
-    tax
-    lda player_data + PL_SPELLS_KNOWN
-    ora spell_bit_mask,x
-    sta player_data + PL_SPELLS_KNOWN
-    jmp !mcns_msg+
-
-!mcns_set_hi:
-    sec
-    sbc #8
-    tax
-    lda player_data + PL_SPELLS_KNOWN_HI
-    ora spell_bit_mask,x
-    sta player_data + PL_SPELLS_KNOWN_HI
-
-!mcns_msg:
-    lda #0
-    sta cmb_buf_idx
-
-    ldx #HSTR_PM_LEARNED
-    jsr huff_append_combat
-
-    lda pm_name_lo_lo
-    sta zp_ptr0
-    lda pm_name_lo_hi
-    sta zp_ptr0_hi
-    ldy pm_learn_idx
-    lda (zp_ptr0),y
-    sta zp_ptr2
-
-    lda pm_name_hi_lo
-    sta zp_ptr0
-    lda pm_name_hi_hi
-    sta zp_ptr0_hi
-    ldy pm_learn_idx
-    lda (zp_ptr0),y
-
+    txa
     tay
-    lda zp_ptr2
-    jsr combat_append_str
+    lda (zp_ptr0),y
+    cmp #99
+    beq !mcns_next_spell+
+    cmp zp_player_lvl
+    beq !mcns_known_check+
+    bcc !mcns_known_check+
+!mcns_next_spell:
+    inx
+    jmp !mcns_scan_spells-
+!mcns_known_check:
+    lda #<player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0
+    lda #>player_data + PL_SPELLS_LEARNT_0
+    sta zp_ptr0_hi
+    txa
+    jsr spell_mask_test_ptr
+    bcs !mcns_next_spell-
+    inc mcns_learnable
+    inx
+    jmp !mcns_scan_spells-
 
-    lda #<pm_bang_str
-    ldy #>pm_bang_str
-    jsr combat_append_str
+!mcns_finish:
+    lda mcns_allowed
+    sec
+    sbc mcns_known
+    bcs !mcns_positive+
+    lda #0
+!mcns_positive:
+    cmp mcns_learnable
+    bcc !mcns_store+
+    lda mcns_learnable
+!mcns_store:
+    sta player_data + PL_NEW_SPELLS
+    rts
 
-    jsr cmb_term_and_print
-
-!mcns_next:
-    inc pm_learn_idx
-    jmp !mcns_loop-
-
-pm_bang_str:
-    .byte $21, 0
+mcns_get_stat_adj:
+    cmp #8
+    bcc !mcns_adj_0+
+    cmp #15
+    bcc !mcns_adj_1+
+    cmp #18
+    bcc !mcns_adj_2+
+    cmp #68
+    bcc !mcns_adj_3+
+    cmp #88
+    bcc !mcns_adj_4+
+    cmp #108
+    bcc !mcns_adj_5+
+    cmp #118
+    bcc !mcns_adj_6+
+    lda #7
+    rts
+!mcns_adj_6:
+    lda #6
+    rts
+!mcns_adj_5:
+    lda #5
+    rts
+!mcns_adj_4:
+    lda #4
+    rts
+!mcns_adj_3:
+    lda #3
+    rts
+!mcns_adj_2:
+    lda #2
+    rts
+!mcns_adj_1:
+    lda #1
+    rts
+!mcns_adj_0:
+    lda #0
+    rts

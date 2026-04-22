@@ -64,6 +64,33 @@ in SEI/bank-out/access/bank-in/CLI sequences. Because this overhead is expensive
 region instead. Reserve $E000–$FFFF for infrequent bulk access (tier data loading,
 save/load).
 
+**Carried inventory contract:** The carried pack is a dense prefix, not a sparse
+absolute-slot array. Whole-item removals shift later carried items left, so pack
+letters always follow the current packed order (`A..` current count). Equipment
+remains fixed-slot and does not compact. Filtered selectors should keep mapping
+through their visible-slot cache; direct all-items carried prompts may still do
+`A -> slot` math only because the dense-pack invariant now makes visible order
+and carried-slot order the same thing.
+
+**Timed-effect contract:** Transient buffs must behave as timers, not as sticky
+boolean latches hidden inside timer space. If an effect extends over turns, the
+effect owner must:
+- add duration on application
+- participate in `turn_tick_effects` decay unless there is an explicit separate
+  expiration owner
+- keep its player-facing cast feedback in the live gameplay path instead of
+  relying on one-shot first-set assumptions that can be invalidated by saved or
+  already-active runtime state
+
+**Death-screen layout contract:** `score.s` remains the single owner of the
+death/high-score screen on both targets. The composition is still a 40-column
+block, but it must be expressed relative to `SCREEN_COLS` instead of raw
+absolute columns so:
+- C64 keeps the historical 40-column layout unchanged
+- C128 centers that same block cleanly in 80-column mode
+- the high-score row start, value column, pad threshold, and footer all move
+  together instead of drifting into a partial left-anchored layout
+
 ---
 
 ## Data Compression Strategy
@@ -177,6 +204,7 @@ encounters.
 main.s                    Entry point, BASIC stub, initialization
 game_loop.s               Shared main loop orchestration, movement/running core, death/exit flow
 ├── game_loop_helpers.s   Shared UI-only command flows, result-policy helpers, post-turn tails
+├── input_ui_helpers.s    Shared modal/follow-up input policy helpers, including platform escape-equivalent classification for read-only dismiss flows
 ├── config.s              System detection (C64/C128), column mode selection
 ├── memory.s              Bank switching routines, memory map management
 ├── zeropage.s            Zero page variable declarations (with KERNAL-safe zones)
@@ -361,6 +389,10 @@ The palette is defined in `color.s`:
 - Monsters: color-coded by threat (green = low, yellow = moderate, red = high,
   relative to player level)
 - Unlit/unknown tiles: black (not rendered)
+- C128 VDC renderer invariant: `render_viewport` and `render_single_tile` must
+  apply the same overlay precedence for items, monsters, glyphs, and player.
+  Full redraws triggered by room reveal or modal restore are common enough that
+  any drift between those paths becomes a live disappearing-entity bug.
 
 ### 9. Variable Monster Speed
 
@@ -545,6 +577,12 @@ The game has four distinct phases where different code modules are active. Modul
 **Region 1: Main RAM (`$0801`–`$BF41`) — always resident**
 
 Core gameplay that must be callable at all times: combat, monster AI, spells, spell effects, movement, dungeon gen/render, LOS, item logic, player state, math, screen routines, RNG, input, messages, turn management. No changes.
+
+For spell and prayer book selection, prompt-time ownership is narrower than generic
+inventory category ownership. The live selector must filter by exact book class before
+showing letters or drawing the `?` overlay: mage flows may expose only mage books and
+prayer flows may expose only prayer books. Late rejection after a broad `ICAT_BOOK`
+prompt is not acceptable because it mislabels the visible selection range.
 
 **Region 2: Permanent banked at `$F000` — always callable (via trampoline)**
 
@@ -758,6 +796,8 @@ must coordinate with creature tier overlays.
 | R7.4 | String bank format | **(TODO — Tier 2)** | Each bank is a loadable PRG file: header (string count, compressed data offset) + string index (16-bit offsets) + compressed bitstream. Banks sized to fit $E000-$EFFF (4 KB max compressed data per bank). Bank IDs assigned by content category: combat/UI, item descriptions, monster recall, etc. |
 | R7.5 | String bank loader | **(TODO — Tier 2)** | `str_bank_load(bank_id)` — loads a string bank into $E000 overlay region. **REU path:** all string banks preloaded to REU at startup (alongside creature tiers), DMA fetch on demand (~instant). **Disk path:** KERNAL LOAD from d64 on demand. `str_current_bank` tracks loaded bank to avoid redundant loads. Must coordinate with creature tier overlay (both share $E000). |
 | R7.6 | Migrate combat/UI strings | **DONE** | Migrated ~155 strings from 11 source files into Huffman-compressed storage. Net savings: 888 bytes in main code area (program_end $B196→$AE1E). Three migration patterns: A (zp_ptr0→msg_print), B (zp_ptr2→mon_atk_build_effect_msg), C (combat_append_str). New helpers: huff_decode_to_ptr2, huff_append_combat. |
+| R7.6a | Follow-up resident ownership migrations | **DONE** | Later follow-up repairs moved additional live spell/save status text into the shared Huffman dictionary when raw literals started colliding with C128 overlay and staged-source ownership. Glyph-of-warding feedback and save/load status copy now use `HSTR_*` IDs instead of fragile resident `.text` blocks. |
+| R7.6b | Prompt ownership discipline | **DONE** | Shared Huffman prompt helpers are for genuinely shared prompt contracts only. Narrow UX differences such as sparse all-item absolute-slot ranges stay caller-owned (`drop`), so prompt fixes do not bloat the shared resident/common path or destabilize the C128 staged-source ceiling. |
 | R7.7 | Monster recall text | **(TODO — future, Tier 2)** | If monster recall is ever implemented, store descriptive text in a string bank. Each creature's recall text 30-80 bytes uncompressed, ~15-40 bytes compressed. 120 creatures × ~25 bytes avg = ~3 KB compressed — fits in one bank. |
 
 **Space budget — Tier 1 (resident compressed strings):**

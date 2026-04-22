@@ -3,12 +3,36 @@
 //
 // In the game build, trampolines bank out KERNAL to call $F000/$E000 code.
 // In test builds, the code is at normal addresses so direct calls work.
+#import "spell_data.s"
+#import "spell_names.s"
+
+test_spell_list_display:
+    jmp test_spell_list_display_impl
+
+test_spell_execute_selected:
+    jmp test_spell_execute_selected_impl
+
+item_gain_spell:
+    rts
+
+test_spell_list_display_impl:
+    rts
+
+test_spell_execute_selected_impl:
+    rts
+
+.assert "test_spell_list_display patch slot stays 3 bytes", test_spell_execute_selected - test_spell_list_display, 3
+.assert "test_spell_execute_selected patch slot stays 3 bytes", item_gain_spell - test_spell_execute_selected, 3
 
 // $F000 UI screen trampolines
 .label tramp_ui_char_display = ui_char_display
 .label tramp_ui_inv_display = ui_inv_display
+.label tramp_ui_inv_select_display = ui_inv_select_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
+.label tramp_spell_list_display = test_spell_list_display
+.label tramp_spell_execute_selected = test_spell_execute_selected
+.label tramp_item_gain_spell = item_gain_spell
 .label ui_wizard_display = wizard_test_ui_wizard_display
 .label tramp_ui_wizard_display = ui_wizard_display
 
@@ -77,6 +101,8 @@ roll_tool_ego_check:
 banked_ego_put_suffix:
     cmp #0
     beq !beps_done+
+    cmp #EGO_TYPE_COUNT
+    bcs !beps_done+
     jsr ego_get_suffix_ptr
     ldy #0
 !beps_loop:
@@ -136,11 +162,14 @@ put_inv_name_with_ego:
     ldx pinwe_sl
     lda inv_ego,x
     beq !pinwe_not_tool+
+    cmp #EGO_TYPE_COUNT
+    bcs !pinwe_not_tool+
     ldx pinwe_id
     jsr put_tool_ego_prefix
     lda pinwe_id
     jsr item_get_name_ptr
     jsr screen_put_string
+    jsr put_inv_sensed_suffix
     rts
 !pinwe_not_tool:
     lda pinwe_id
@@ -148,7 +177,28 @@ put_inv_name_with_ego:
     jsr screen_put_string
     ldx pinwe_sl
     lda inv_ego,x
+    cmp #EGO_TYPE_COUNT
+    bcc !pinwe_valid_ego+
+    lda #0
+!pinwe_valid_ego:
     jsr banked_ego_put_suffix
+    jsr put_inv_sensed_suffix
     rts
+
+put_inv_sensed_suffix:
+    ldx pinwe_sl
+    lda inv_flags,x
+    and #IF_IDENTIFIED | IF_SENSED
+    cmp #IF_SENSED
+    bne !pinwe_done+
+    lda #<pinwe_sensed_suffix
+    sta zp_ptr0
+    lda #>pinwe_sensed_suffix
+    sta zp_ptr0_hi
+    jsr screen_put_string
+!pinwe_done:
+    rts
+
+pinwe_sensed_suffix: .text " (magik)" ; .byte 0
 pinwe_id: .byte 0
 pinwe_sl: .byte 0
