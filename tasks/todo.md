@@ -3,6 +3,24 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-C128-DEATH-HISCORE-NOT-CENTERED
+- [x] Reported Failure Gate:
+  - on C128, the death screen and high-score display must be centered in 80-column mode while preserving the existing C64 layout; keep `make -C commodore build128` green
+- [x] inspect the shared death/high-score layout owner and prove whether the C128 path is still using hard-coded 40-column absolute coordinates
+- [x] re-express the shared death/high-score layout as a centered 40-column block using `SCREEN_COLS` math so C64 stays unchanged and C128 recenters cleanly
+- [x] add compile-time layout guards for the centered death/high-score columns
+- [x] verify:
+  - `make -C commodore build128`
+  - `make -C commodore build64`
+- [x] review:
+  - root cause: the death/high-score overlay still used hard-coded 40-column absolute columns inside shared `score.s`, so the C128 VDC path rendered the old left-anchored composition into an 80-column surface
+  - the fix keeps one shared owner and recenters the existing 40-column composition as a block using `SCREEN_COLS` math (`SDS_COL_BASE` plus named column constants), which preserves the C64 coordinates while moving the C128 death/high-score screen into the visual center
+  - the high-score printer needed the same treatment internally: its row start, score value column, name-pad threshold, header, wizard banner, and footer were all using absolute 40-column coordinates
+  - compile-time guards now enforce that the centered block, padded high-score rows, and footer still fit on-screen on both targets
+  - verification:
+    - exact reported command `make -C commodore build128`: PASS
+    - broader sanity build `make -C commodore build64`: PASS
+
 - [x] BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT
 - [x] Reported Failure Gate:
   - Resist Heat and Cold must report its onset and behave like a timed buff again; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from targeted regressions

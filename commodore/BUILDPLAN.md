@@ -66,6 +66,10 @@
   - the Commodore port had drifted from a timed buff into a quasi-permanent latched flag that suppressed later feedback and never decayed
   - the live fix restores timed duration, per-turn decay, and player-facing feedback on cast instead of leaving the prayer path as a beep-only action
   - the exact verification gates are back at the intended state after the change: `make -C commodore build128` is green and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
+- The C128 death/high-score screen is now centered correctly in 80-column mode:
+  - the shared death overlay no longer paints a raw 40-column left-anchored layout into the VDC surface
+  - `score.s` now expresses the death screen as a centered 40-column block using `SCREEN_COLS` math, so the C64 layout remains unchanged while C128 recenters cleanly
+  - compile-time guards now keep the score values, hiscore padding column, and footer inside the visible screen on both targets
 - `FEAT-VMS-RECALL-SEMANTICS` is now closed:
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow

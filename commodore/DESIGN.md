@@ -82,6 +82,15 @@ effect owner must:
   relying on one-shot first-set assumptions that can be invalidated by saved or
   already-active runtime state
 
+**Death-screen layout contract:** `score.s` remains the single owner of the
+death/high-score screen on both targets. The composition is still a 40-column
+block, but it must be expressed relative to `SCREEN_COLS` instead of raw
+absolute columns so:
+- C64 keeps the historical 40-column layout unchanged
+- C128 centers that same block cleanly in 80-column mode
+- the high-score row start, value column, pad threshold, and footer all move
+  together instead of drifting into a partial left-anchored layout
+
 ---
 
 ## Data Compression Strategy

@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-04-21 — `BUG-C128-DEATH-HISCORE-NOT-CENTERED` centered death overlay layout ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C128 80-column death/high-score layout so the death screen is visually centered again instead of rendering the legacy 40-column composition against the left edge.
+- Kept a single shared death-screen owner instead of forking a separate C128-only layout path.
+
+### What Shipped
+1. **Shared death screen now uses a centered 40-column layout block**
+   - `commodore/common/score.s`
+   - the death title, player summary, score breakdown, wizard banner, hiscore header, row starts, value column, and footer now derive from a shared `SDS_COL_BASE = (SCREEN_COLS - 40) / 2`
+2. **High-score row padding now respects the centered block**
+   - `commodore/common/score.s`
+   - the hiscore printer no longer pads names to an absolute 40-column screen column; it pads relative to the centered death-layout block so the table remains aligned on C128
+3. **Compile-time layout guards added**
+   - `commodore/common/score.s`
+   - asserts now keep the centered block, value column, hiscore pad column, and footer inside the visible width on both C64 and C128
+
+### Root Cause / Notes
+- The bug was not in the VDC backend. The shared death overlay still used hard-coded 40-column absolute columns (`1`, `4`, `9`, `11`, `13`, `22`, `30`) inside `score.s`.
+- On C64 those coordinates were fine. On C128 they painted the old left-anchored 40-column composition directly into an 80-column surface.
+- The correct owner is the shared death-screen layout itself, not a special C128 renderer override. The fix keeps one composition and centers that 40-column block using `SCREEN_COLS` math.
+
+### Verification
+- Exact reported gate:
+  - `make -C commodore build128`: PASS
+- Broader shared-layout sanity:
+  - `make -C commodore build64`: PASS
+- Outcome:
+  - user confirmed the live C128 death/high-score display is centered correctly again
+
+---
+
 ## 2026-04-21 — `BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT` timed prayer feedback repair ✅ COMPLETE
 
 ### Scope Closed
