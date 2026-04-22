@@ -685,7 +685,15 @@ create_init_character:
     sta player_data + PL_SPELL_TYPE
     beq !no_mana+           // No spells = no mana
 
-    // Starting mana = spell_stat / 2 (INT for mage, WIS for priest)
+    ldx player_data + PL_CLASS
+    lda class_spell_min_level,x
+    cmp player_data + PL_LEVEL
+    beq !can_cast_start+
+    bcc !can_cast_start+
+    jmp !no_mana+
+
+    // Starting mana = spell stat / 2 (INT for mage affinity, WIS for priest)
+!can_cast_start:
     lda player_data + PL_SPELL_TYPE
     cmp #SPELL_MAGE
     bne !priest_mana+
@@ -768,17 +776,27 @@ create_init_character:
     jsr c128_stack_guard_check
 #endif
 
-    // Set starting spells for spell-casting classes
-    // Level 1 + Book 1 (given in main.s): mage learns 4, priest learns 3
-    lda player_data + PL_SPELL_TYPE
-    beq !no_start_spells+       // SPELL_NONE: no spells
-    cmp #SPELL_MAGE
-    bne !priest_start+
-    lda #$0F                    // Mage: spells 0-3 (all level 1)
-    .byte $2c                   // BIT abs — skip next 2 bytes
-!priest_start:
-    lda #$07                    // Priest: spells 0-2 (all level 1)
-    sta player_data + PL_SPELLS_KNOWN
+    // player_init already zeroes the widened spell-state and sets spell order to 99.
+    ldx player_data + PL_CLASS
+    lda #$07                    // Priest/paladin start with prayers 0-2
+    ldy #2
+    cpx #CLASS_MAGE
+    bne !not_start_mage+
+    lda #$0f                    // Mage starts with spells 0-3
+    ldy #3
+    bne !store_start_spells+
+!not_start_mage:
+    cpx #CLASS_PRIEST
+    beq !store_start_spells+
+    cpx #CLASS_PALADIN
+    bne !no_start_spells+
+!store_start_spells:
+    sta player_data + PL_SPELLS_LEARNT_0
+!spell_order_loop:
+    tya
+    sta player_data + PL_SPELL_ORDER,y
+    dey
+    bpl !spell_order_loop-
 !no_start_spells:
 
     // Initialize HP regen counter from CON

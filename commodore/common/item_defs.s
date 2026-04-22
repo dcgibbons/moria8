@@ -8,10 +8,13 @@
 // Item Instance Flags
 .const IF_CURSED     = $01
 .const IF_IDENTIFIED = $02
-.const IF_TRIED      = $04
+.const IF_TRIED      = $04    // Legacy pseudo-ID bit kept for save compatibility
+.const IF_SENSED     = $08    // Umoria-style auto-sensed "magik" marker
+.const EGO_TYPE_COUNT = 8
 
 // Floor Item Constants
-.const MAX_FLOOR_ITEMS = 32
+.const MAX_FLOOR_ITEMS = 42
+.const MAX_GLYPHS      = 4
 .const FI_EMPTY        = $ff
 
 // Equipment Slot Constants (indices 22-29 in unified table)

@@ -3,11 +3,745 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
-- [x] BUG-C128-BOOTART-CENTERING
-- [x] replace the hard-coded bootart centering drift in `tools/ppm_to_c128_bootart.py` with a border-only safe-framing transform that keeps the interior art centered
-- [x] emit repeatable framing measurements from the generator so C128 bootart placement is no longer judged only by ad hoc preview scripts
-- [x] verify the exact gate:
-  - `make -C commodore disk128`
+- [ ] BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS
+- [ ] Reported Failure Gate:
+  - `./commodore/c64/run_tests.sh`
+- [x] restore `make -C commodore build128` to green after the whole-map optimization investigation
+- [x] confirm the exact remaining C64 red suites after the optimization pass
+- [ ] fix the `effects` and `item` MAP_BASE overflows introduced by the current shared-code layout
+- [ ] fix the `ui_views` runtime failures introduced by the current utility/inventory path changes
+- [ ] fix the `subsystems` runtime failures introduced by the current shared path changes
+- [ ] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [ ] review:
+  - the stable landed optimization in this pass is direct stair marking from the existing `stairs_*` coordinates
+  - `Find Doors` optimization remains deferred because the safe room-perimeter implementation currently conflicts with the resident/overlay memory budget
+  - current exact state after backing out the unsafe door variants: `make -C commodore build128` PASS, `./commodore/c64/run_tests.sh` red in `effects`, `item`, `ui_views`, `subsystems`
+
+- [ ] BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT
+- [ ] Reported Failure Gate:
+  - if `Call Light` reports failure, it must not light the room or otherwise fake a successful light effect; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the shared cast/pray failure ordering and the `Call Light` effect owner to prove whether a failed roll can even reach `eff_light_room`
+- [ ] build an exact forced-failure repro for `Call Light` and prove whether room/tile light state changes on the failed path or whether the symptom is only a redraw/visibility artifact
+- [ ] if real, fix the cast/effect ordering or state mutation seam so failed casts cannot light the room
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] review:
+  - initial code inspection already shows `calc_spell_failure` branches to `pm_handle_fail_roll` before `tramp_spell_execute_selected`, so the likely owners are now narrowed to either a test gap or a redraw/visibility seam rather than obvious bad effect ordering
+  - investigation status: no product mutation bug is proven yet; a temporary forced-failure regression attempt exposed setup ambiguity (`draw_dungeon_room` / room state initialization), not a real post-fail `Call Light` effect path
+  - next evidence threshold: if this shows up again live, capture a snapshot immediately after the failed cast so the renderer/light-state question can be answered from real runtime state instead of a synthetic dark-room harness
+
+- [x] BUG-C128-DEATH-HISCORE-NOT-CENTERED
+- [x] Reported Failure Gate:
+  - on C128, the death screen and high-score display must be centered in 80-column mode while preserving the existing C64 layout; keep `make -C commodore build128` green
+- [x] inspect the shared death/high-score layout owner and prove whether the C128 path is still using hard-coded 40-column absolute coordinates
+- [x] re-express the shared death/high-score layout as a centered 40-column block using `SCREEN_COLS` math so C64 stays unchanged and C128 recenters cleanly
+- [x] add compile-time layout guards for the centered death/high-score columns
+- [x] verify:
+  - `make -C commodore build128`
+  - `make -C commodore build64`
+- [x] review:
+  - root cause: the death/high-score overlay still used hard-coded 40-column absolute columns inside shared `score.s`, so the C128 VDC path rendered the old left-anchored composition into an 80-column surface
+  - the fix keeps one shared owner and recenters the existing 40-column composition as a block using `SCREEN_COLS` math (`SDS_COL_BASE` plus named column constants), which preserves the C64 coordinates while moving the C128 death/high-score screen into the visual center
+  - the high-score printer needed the same treatment internally: its row start, score value column, name-pad threshold, header, wizard banner, and footer were all using absolute 40-column coordinates
+  - compile-time guards now enforce that the centered block, padded high-score rows, and footer still fit on-screen on both targets
+  - verification:
+    - exact reported command `make -C commodore build128`: PASS
+    - broader sanity build `make -C commodore build64`: PASS
+
+- [x] BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT
+- [x] Reported Failure Gate:
+  - Resist Heat and Cold must report its onset and behave like a timed buff again; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from targeted regressions
+- [x] inspect the prayer/effect owner and compare the current timer contract against local upstream `umoria` / `vms-moria`
+- [x] restore a timed resist-duration contract so onset feedback is printed when the effect starts and the timer decays normally
+- [x] add focused regression coverage for onset/refresh behavior
+- [x] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - local upstream `umoria`/`vms-moria` treat resist heat/cold as timed duration, not a permanent bit-flag latch
+  - the Commodore path had drifted so `zp_eff_resist` was only ever written by the prayer feedback helper, was forced to `$03`, and was explicitly skipped by the turn decay loop; that let the effect persist indefinitely and suppress future onset messaging
+  - the first helper-only fix was incomplete because live sessions/saves could still carry a preexisting nonzero resist timer, making the cast look beep-only even though the new onset-only logic was technically working
+  - the shipped fix keeps the timed-duration repair (`10 + rng(10)` plus normal per-turn decay) and also reports the resist message on every cast, which removes stale-runtime ambiguity from the live UX
+  - focused regression coverage now proves onset and refresh behavior in `test_prayer_feedback`; the attempted decay test in `test_turn` was deliberately backed out because that suite’s patch/restore shim only restores the opcode byte and my first version would have tested the shim bug, not the product timer
+  - verification:
+    - exact reported command `make -C commodore build128`: PASS
+    - exact reported command `./commodore/c64/run_tests.sh`: PASS at restored baseline (`41 passed, 4 failed`)
+
+- [x] BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM
+- [x] Reported Failure Gate:
+  - carried inventory must compact after whole-item removals like local `umoria` / `vms-moria`, so item letters reorder contiguously; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted regressions
+- [x] replace the clear-only carried-slot removal helper with compacting pack removal while preserving fixed-slot equipment clears
+- [x] remove the unfiltered sparse-letter/prompt special cases so all-items carried-pack prompts and overlays reflect the current dense pack order
+- [x] update the focused inventory/drop regressions that currently encode sparse-slot assumptions
+- [x] verify:
+  - `make -B -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - upstream parity: local `umoria` and `vms-moria` both compact the carried pack after whole-item removals, so the Commodore port now matches that dense-prefix contract instead of preserving sparse holes
+  - implementation: `inv_remove_item` now shifts carried slots left, `inv_count_items` now stops at the first empty carried slot, and the all-items inventory overlay/path now treats carried letters as current packed order rather than durable absolute slot ids
+  - caller boundary: direct carried-letter consumers like `drop` and `throw` still decode `A..V` to slot index, but that is now correct only because packed carried letters and slot order are intentionally the same invariant
+  - consultant guidance: keep equipment fixed-slot, keep filtered selectors on the visible-slot cache, and do not widen this work into upstream sorted insertion
+  - regression fallout: the first byte-trim pass over-optimized `piw_prompt_filtered_inv` and accidentally passed the Huffman prompt id where the inventory filter should have gone; the corrected version saves/restores `X` through zero-page scratch instead
+  - verification:
+    - exact reported command `make -B -C commodore build128`: PASS
+    - exact reported command `./commodore/c64/run_tests.sh`: PASS at restored baseline (`41 passed, 4 failed`)
+    - broader regression note: the remaining red suites are the pre-existing `effects`, `item`, `ui_views`, and `subsystems` aggregate failures
+
+- [x] BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS
+- [x] Reported Failure Gate:
+  - in `drop`, the prompt and the `?` inventory overlay must agree on the real sparse inventory letters the player can press; keep `make -C commodore build128` green and preserve the existing `./commodore/c64/run_tests.sh` aggregate aside from the targeted new regression
+- [x] inspect the `drop` prompt path and the shared direct-select inventory overlay to prove where visible overlay letters diverge from the `item_drop` parser
+- [x] fix `item_drop` so the `?` overlay selection path preserves the real sparse all-items letters instead of forcing filtered-selector contiguous semantics onto `drop`
+- [x] add focused regression coverage for sparse-inventory drop selection via `?`
+- [x] verify:
+  - `make -C commodore build128`
+  - `./commodore/c64/run_tests.sh`
+- [x] review:
+  - the first attempts went down the wrong road twice: all-items `?` overlays were incorrectly treated like filtered relabeling views, and later the bogus `(a-v)` range was removed instead of fixed
+  - the correct ownership split is now explicit: filtered prompts still use the shared contiguous-range helper, while `drop` owns the sparse absolute-slot semantics the user actually sees in gameplay
+  - `item_drop` now uses the shared prompt helper with the all-items branch restored for absolute highest-slot range patching, so sparse inventories display `Drop which item (a-d)?` like the other item selectors instead of lying with `(a-v)`
+  - the live C128 failure after `?` was a separate encoding seam: direct CIA scan returns shifted lowercase PETSCII (`$c1-$da`) for lowercase letter picks, so `item_drop` now normalizes that local prompt path before the absolute-slot math
+  - `ui_inv_select_display` still only relabels genuinely filtered inventory views (`!= $ff`), so book/potion/scroll/wear selectors stay contiguous while all-items overlays preserve the player's real sparse letters
+  - the bad shared prompt-generalization work was backed out so `make -C commodore build128` returned to green; `./commodore/c64/run_tests.sh` is back at the existing broad red baseline (`effects`, `item`, `ui_views`, `subsystems`) rather than introducing a new regression
+  - follow-up repair: the first post-commit byte trim patched the dynamic prompt range using uppercase/PETSCII-style values, which rendered garbage on C64 (`a-A`/graphics) because the shared message buffer is screen-code text there; the fix restored raw VIC screen-code letters so C64 now shows `a-d` again while `build128` stays green
+  - second follow-up repair: the same byte-trim pass also dropped the success branch around `!idr_empty` inside `item_drop`, so even a valid direct pick like single-item `a-a` fell through to `You have nothing there.`; the fix restores the explicit occupied-slot branch before the drop body
+
+- [x] BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS
+- [ ] Reported Failure Gate:
+  - prayer and spell book prompts must only list the matching upstream book class, and the shared regression gate must stay green
+- [x] inspect the local selector and compare it against the local `umoria` / `vms-moria` source trees
+- [x] replace the broad `ICAT_BOOK` prompt filter with exact mage-book vs prayer-book prompt filters at the selection boundary
+- [x] add focused mixed-inventory regression coverage for the shared book selector
+- [x] verify:
+  - `./commodore/c64/run_tests.sh`
+  - `make -C commodore build128`
+- [x] review:
+  - upstream `umoria` and `vms-moria` both filter book prompts by exact book tval before the prompt (`TV_MAGIC_BOOK` vs `TV_PRAYER_BOOK` / `90` vs `91`)
+  - the current Commodore path drifted by prompting on the broad `ICAT_BOOK` category and only rejecting the wrong book type after selection, so the inventory list itself was already wrong
+  - the Commodore fix now uses exact mage-book and prayer-book prompt filters, so both the prompt letters and the `?` inventory overlay only show the matching book class before selection
+  - `make -C commodore build128` is green again after trimming the banked spell-selection path back under the C128 `$F000-$FFFA` ceiling
+  - `./commodore/c64/run_tests.sh` is still red overall for existing suite issues: `effects` and `item` still fail their `MAP_BASE` asserts, `subsystems` still reports `7/10`, and `ui_views` still reports `14/20`; the new mixed-book regression itself passed in slot 14 of the `ui_views` raw results
+
+- [ ] BUG-HELP-ESC-CANCEL-CONTRACT
+- [ ] Reported Failure Gate:
+  - help screens must exit on `ESC` on C128 and on `RUN/STOP` as the C64 escape surrogate, while `./commodore/c64/run_tests.sh` and the relevant C128 UI gate stay green
+- [x] inspect the shared help loop and platform input layers to prove whether this is a VICE issue or a product key-contract bug
+- [x] centralize modal escape-key classification in the shared input/UI helper layer
+- [x] route help and existing modal cancel callsites through that shared escape contract
+- [x] update visible help footer copy so C64 no longer claims a literal `ESC` key
+- [x] broaden the C128 modal escape-equivalent to accept `STOP` as a pragmatic fallback when host `Escape` does not map cleanly through VICE
+- [ ] verify:
+  - `./commodore/c64/run_tests.sh` = `42 passed, 3 failed` with the same unrelated existing failures in `effects`, `item`, `subsystems`; touched `main_loop` is green at `29/29` and `ui_views` is green at `18/18`
+  - `make -C commodore build128` = PASS after the modal-cancel/help-copy changes
+  - `make test128-fast` = still blocked by the unrelated existing `input128` assembly failure in `commodore/c128/input_run_raw128.s` (`overlay_load`, `c128_restore_runtime_guards`, `BankOutKernal`, `entry_main`)
+  - focused `python3 -u commodore/c128/harness128.py --name main_loop128 --prg commodore/c128/tests/test_main_loop128.prg --vs commodore/c128/tests/test_main_loop128.vs --snapshot commodore/c128/out/ready.vsf --no-reset-environment --vice /opt/homebrew/bin/x128 --timeout 30 --connect-timeout 12` still times out after the updated ESC/STOP cases assemble and load
+- [ ] review:
+  - the help bug was product code, not a VICE-only issue: shared help compared against literal `$1b` on C64 even though the real platform cancel surrogate is `RUN/STOP`
+  - C128 already had a real `KEY_ESC` path, so the shared modal layer needed a platform-aware escape-equivalent helper rather than more hard-coded compares
+  - live VICE behavior still appears to make host `Escape` unreliable for this path, so the product now accepts both `ESC` and `STOP` for C128 modal dismissal while keeping gameplay command input unchanged
+  - store/home/spell-list cancel logic had already drifted into multiple local definitions; this pass centralizes only the escape-equivalent piece without widening gameplay command input
+
+- [ ] BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS
+- [ ] Reported Failure Gate:
+  - on C128 VDC, casting `Glyph of Warding` repeatedly must not make previously visible glyphs disappear until movement; keep `make test128-fast` green
+- [x] inspect the provided VICE snapshot and prove whether glyph state is wrong in RAM or only wrong on screen
+- [x] root-cause the redraw seam between full-frame `render_viewport` and `render_single_tile`
+- [x] add focused VDC regression coverage for glyph overlay on full viewport redraw
+- [ ] verify:
+  - `make test128-fast`
+- [ ] review:
+  - snapshot state kept the prior glyph alive in gameplay RAM, so this was not a lost-state bug
+  - `render_single_tile` already overlaid glyphs, but full-frame `render_viewport` repainted terrain/items/monsters and never reapplied the glyph layer
+  - casting set `vis_room_revealed`, which promoted the next frame to a full redraw, so the renderer erased old glyphs until movement triggered local tile redraws that *did* know about glyphs
+  - the product fix belongs in VDC renderer parity, not in spell state, message ownership, or overlay placement
+
+- [ ] BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT
+- [ ] Reported Failure Gate:
+  - live C128 `Glyph of Warding` cast message must stop rendering corrupt text; the current WIP manual repro is still unchanged
+- [x] prove whether the corruption owner is encoding or residency/layout
+- [x] move the glyph message strings to the correct resident owner without regressing C64/C128 layout
+- [ ] verify:
+  - `make -C commodore build128` PASS
+  - `./commodore/c64/run_tests.sh` FAIL for unrelated existing suites (`effects`, `item`, `subsystems`); `utility_effects` now assembles/runs with the new Huffman glyph IDs
+
+- [ ] BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR
+- [ ] Reported Failure Gate:
+  - `Sense Surroundings` must match `umoria`'s prayer behavior (`spellMapCurrentArea`) instead of sharing the current wizard floor-plan reveal; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current Commodore prayer/wizard reveal paths and confirm they currently share the same logic
+- [x] inspect upstream `umoria` prayer versus wizard mapping/light behavior and identify the contract drift
+- [ ] split the prayer onto an `umoria`-style current-area mapping path without changing the wizard reveal owner
+- [ ] add focused utility coverage for mapped room walls, mapped corridor walls, and unrevealed hidden doors/solid rock
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [ ] BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT
+- [ ] Reported Failure Gate:
+  - on C128, `Earthquake` must no longer just beep; it must mutate terrain and apply its real area effect while keeping `make test64` and `make test128-fast-smoke` green
+- [x] narrow the live symptom with one discriminating question before returning to deeper emulator instrumentation
+- [x] root-cause the effect gating contract used by `eff_earthquake`
+- [x] fix the shared random-range return contract so branch-on-result callers like `Earthquake` work as intended
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest C128 `Earthquake` before commit
+
+- [ ] BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING
+- [x] BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING
+- [ ] Reported Failure Gate:
+  - `Sanctuary` should report meaningful nearby-monster feedback instead of collapsing adjacent resistant targets into `Nothing seems to happen.`; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect upstream `umoria` Sanctuary behavior and current Commodore prayer path
+- [x] update the shared adjacent-sleep feedback owner to distinguish no-target from nearby-unaffected targets
+- [x] add focused runtime coverage for the resistant-adjacent Sanctuary case
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [ ] BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT
+- [ ] Reported Failure Gate:
+  - if `Call Light` reports failure, it must not light the room or otherwise fake a successful light effect; keep `make test64` and `make test128-fast-smoke` green
+- [ ] prove whether failed `Call Light` is actually mutating room/light state or whether the failed turn only triggers an ordinary redraw/visibility update that looks like a light effect
+- [ ] if real, fix the cast/effect ordering so failed casts cannot light the room
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [ ] BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC
+- [ ] Reported Failure Gate:
+  - on C128, monsters that are clearly in the same visible lit room must not randomly disappear from the VDC gameplay frame; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the provided C128 snapshot and prove whether the visible-room monster state is correct before render or whether occupancy/visibility data is already wrong
+- [x] fix the shared post-turn redraw contract so visible room monsters do not depend on a too-small local redraw footprint
+- [x] add focused regression coverage for the redraw-promotion rule
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest the provided C128 disappearing-monsters room repro before commit
+- [ ] follow-up after failed live retest:
+  - patch the C128 renderer-owned `rv_row_occ` row cache so it is cleared every row before monster/item staging
+  - rerun `make test64`
+  - rerun `make test128-fast-smoke`
+
+- [ ] BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE
+- [ ] Reported Failure Gate:
+  - after a teleport on C128, the player must still be visible in the dungeon view even if the destination tile was previously unseen; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause whether the teleport/redraw path is failing to rebuild visibility or whether the renderer is incorrectly blanking the player on unseen tiles
+- [x] fix the gameplay renderer contract so the player glyph wins even on unseen/unvisited tiles, without regressing monster/item hidden-tile behavior
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] live-retest the teleport repro before commit
+
+- [ ] BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER
+- [ ] Reported Failure Gate:
+  - on C128, dismissing the prayer/spell list overlay must redraw the gameplay view with visible monsters intact instead of dropping them from the VDC frame; keep `make test64` and `make test128-fast-smoke` green
+- [ ] root-cause which gameplay-view restore seam after spell/prayer list dismissal is repainting terrain without rebuilding live visibility state
+- [ ] fix the shared modal/fullscreen gameplay restore path so it refreshes visibility before redraw
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+
+- [x] BUG-PRIEST-BLIND-CREATURE-NO-FEEDBACK
+- [x] Reported Failure Gate:
+  - priest `Blind Creature` must not just beep silently; it must apply the correct directional effect and give player-facing feedback while keeping `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which priest spell slot currently owns `Blind Creature` and why it is behaving as a silent no-feedback effect
+- [x] restore the upstream-style directional confuse-monster behavior for `Blind Creature` and make the result path print useful feedback
+- [x] add focused regression coverage for hit/miss feedback on the directional confuse prayer path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - upstream `umoria` routes priest `Blind Creature` through the directional confuse-monster effect, not a silent stun timer
+  - our priest slot `ped_s8` had drifted to `MX_STUN` with no message owner, which is why live play only produced a beep/direction prompt and no useful feedback
+  - the fix introduces one shared directional-confuse feedback helper and routes both priest `Blind Creature` and mage `Confusion` through it, so a hit now reports `The monster looks confused.` and a miss reports `Nothing seems to happen.`
+  - focused prayer-feedback coverage now exercises both hit and miss paths, and the exact gates remain green
+
+- [x] BUG-C128-DOUBLE-PRELOAD-AFTER-LOADED-SAVE-QUIT
+- [x] Reported Failure Gate:
+  - on C128, after loading from a savefile game, quitting, and choosing `S)tart` from the quit prompt, startup preload must not run twice; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which restart/title owner is causing the second C128 preload only on the loaded-save quit path
+- [x] fix the C128 restart flow so quitting a loaded save and choosing `Start` performs exactly one preload pass before returning to title/new-game flow
+- [x] add regression coverage for the loaded-save quit -> restart path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the first attempt was wrong because it still sent `S)tart` back through `restart_entry`, which is the boot-time preload owner on C128
+  - the correct C128 contract is a tiny resident `game_restart` owner in `RuntimeCommonData` that resets the stack, invalidates tier state, clears overlay ownership, and jumps directly to `title_enter_menu` on the already-live runtime
+  - this keeps the boot preload one-time while still returning cleanly to the title/menu path after quitting a loaded save
+  - the dedicated `loaded_save_restart_preload_smoke.py` repro remains out of the default fast-smoke filter because its monitor boot staging still needs work; the product-level gate is `make test128-fast-smoke`, which is green
+
+- [x] BUG-C64-LEARN-SPELL-FOLLOWUP-KEY-LEAK
+- [x] Reported Failure Gate:
+  - on C64, learning a spell from a book must accept the selected spell letter instead of leaking the initiating `F` into the follow-up prompt and falling back into nonsense commands like `You have nothing there.`; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause which follow-up prompt path on C64 is still letting the initiating command key survive into the learn-spell selector
+- [x] fix the C64 learn-spell owner path so it uses the fresh-key modal helper without widening the shared follow-up helper contract
+- [x] add regression coverage/guarding for the learn-spell follow-up contract
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the decisive live clue was that after the study list appeared, the next key was reaching main-loop commands while the list stayed painted on screen; that means the study command had already unwound back to gameplay before owning the follow-up selection key
+  - the real seam was overlay re-entry: `item_gain_spell` already runs inside `OVL_UI`, but it was calling the spell list through `tramp_spell_list_display`, which reloaded the same overlay and returned through the resident trampoline epilogue instead of staying in the local study flow
+  - the fix keeps study inside its owning overlay by calling `spell_list_display` directly from `player_gain_spell_impl.s`, while the lowercase PETSCII normalization in `pm_pick_visible_spell` remains a valid robustness fix for C64 letter prompts
+
+- [x] BUG-SAVE-VERSION-COMPAT-REGRESSION
+- [x] Reported Failure Gate:
+  - older valid saves must not be mislabeled as `corrupt` after the new floor-item save format bump; widen backward compatibility deliberately and keep `make test64` plus `make test128-fast-smoke` green
+- [x] root-cause which historical save versions the current loader still accepts versus which ones the repo has emitted in prior builds
+- [x] widen the accepted save-version range and treat all pre-floor-table versions as 32-slot floor-item saves
+- [x] split `unsupported save version` from actual corruption in load results and user-facing messaging
+- [x] add direct save-loader coverage for version acceptance/rejection
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the floor-item expansion had widened the save layout but only accepted the immediate prior version, so older valid C64/C128 saves were funneled into the same `Save file corrupt!` path as genuinely bad data
+  - the loader now accepts all historical save versions this tree emitted on each platform, and every pre-expanded save version automatically uses the legacy 32-slot floor-item layout during load
+  - true version mismatches now report `Unsupported save.` instead of `Save file corrupt!`
+  - the C128 title load-failure path now waits through the modal-dismiss helper before returning to the menu, so the failure text stays up for a fresh key instead of leaking through the initiating `L`
+  - direct C64 save coverage now asserts the version-acceptance and legacy-floor-layout helpers, and the save suite contract was widened from `10` to `12` tests so those new checks are part of the exact gate
+
+- [x] BUG-FLOOR-DROP-CAPACITY-OVERFLOW
+- [x] Reported Failure Gate:
+  - dropping items on an empty floor tile must not fail with `no room on floor` just because the level has exceeded the old 32-slot global floor-item ceiling; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause the current `no room on floor` path and confirm whether it is a per-tile rule or the shared floor-item table ceiling
+- [x] redesign the floor-item backing store so the level can hold materially more floor objects without banking hacks or message-path hacks
+- [x] preserve save/load behavior deliberately, including backward-compatible load support for the old 32-slot save layout
+- [x] add a direct regression proving drop item #33 on an otherwise empty tile succeeds
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the live `no room on floor` path was not tile-local at all; `item_drop` always places on the player's tile and only failed because the shared floor-item table hard-capped the level at 32 objects
+  - the fix keeps the always-live `$CF00-$CFFF` budget by packing floor RAM more densely: gold now stores `qty_hi` in `fi_p1`, and floor flags + ego type now share one packed meta byte
+  - that raises `MAX_FLOOR_ITEMS` from 32 to 42 without banking hacks, and save/load stays deliberate by serializing the old logical field layout on the fly plus accepting the prior 32-slot save version on load
+  - the exact C64 gate also exposed two unrelated but still-uncommitted test layout overruns (`test_monster.s`, `test_monster_magic.s`) and an old overgrown `test_effects.s` regression; all three were repaired so the reported gate is actually green again
+
+- [x] BUG-STALE-OCCUPIED-BLOCKS-FLOOR-ITEM-TILE
+- [x] Reported Failure Gate:
+  - floor items must not block movement or corridor-running just because the map tile carries a stale `FLAG_OCCUPIED`; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause why a visible floor-item tile can behave like a blocked monster tile even when no live monster entry exists there
+- [x] validate `FLAG_OCCUPIED` against `monster_find_at` in shared movement and running paths, and clear stale occupied bits in place
+- [x] add a direct regression with `FLAG_HAS_ITEM | FLAG_OCCUPIED` on a floor tile and no live monster table entry
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `player_try_move` and `run_check_adjacent_monsters` were trusting the map bit alone, while rendering only showed a monster when `monster_find_at` actually found one
+  - that let stale occupied bits create a live bug where an item-looking tile blocked movement or stopped running as if a monster were there
+  - the fix routes both paths through a shared live-occupant check that self-heals stale map state by clearing `FLAG_OCCUPIED` when no monster entry exists at that coordinate
+
+- [x] BUG-PSEUDO-ID-STRING-ID-ASSUMPTION
+- [ ] Reported Failure Gate:
+  - pseudo-ID quality text in equipment must use the correct quality strings instead of unrelated Huffman entries like `You feel righteous!`; keep `make test64` and `make test128-fast-smoke` green
+- [x] replace the sequential `HSTR_PID_TERRIBLE + quality` assumption in the equipment overlay with an explicit local PID string lookup
+- [x] keep the broader timer-message path out of this pass so resident C64 memory stays stable
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the equipment screen assumed the PID Huffman entries were contiguous
+  - after the Huffman table changed, that arithmetic started decoding unrelated strings, which then got post-processed as if they began with `Sense: `
+  - the product fix stayed overlay-local in `ui_equipment.s`; the exact gates also exposed an unrelated `test_effects.s` layout overrun past `MAP_BASE`, which was fixed by moving its result buffer under KERNAL ROM and adding boundary asserts
+
+- [ ] BUG-C128-INPUT-CONTRACT-REDESIGN
+- [ ] Reported Failure Gate:
+  - on C128, shifted running and other direct-scan interactions must stop depending on PETSCII-decoded held-state; `Shift+H` must not self-cancel after a few tiles, and `make test64` plus `make test128-fast-smoke` must remain green while the C128 input contract is redesigned
+- [x] replace the C128 run sampler with a raw physical matrix contract that ignores modifier-only state without using `cia_scan_petscii`
+- [ ] keep command decoding and modal/prompt input on the existing decoded path so the redesign does not widen the C64/C128 fracture
+- [x] place the new raw C128 run sampler in a dedicated resident runtime asset instead of trimming unrelated bytes to force it into an existing segment
+- [ ] add unit and guard coverage proving the run sampler no longer depends on PETSCII and that modifier-only rows are ignored
+- [ ] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] review:
+  - live monitor breakpoint at `$BA6C` proved the bad stop is `main_loop !run_cancel`, not `run_step`
+  - the true root cause is architectural: C128 running was feeding a PETSCII-decoded sample into the run held/cancel FSM, so transient decoded neutral states could arm cancel and then reinterpret the same held chord as a fresh edge
+  - the fix must leave C64/shared game logic on the same high-level contracts while confining C128-only differences to the raw matrix sampler
+
+- [x] BUG-C128-RUN-SHIFT-CHORD-REGRESSION
+- [x] Reported Failure Gate:
+  - on C128, starting a run with `Shift+H` must not stop after a few tiles while the key chord is still held, and later releasing `Shift` after releasing `H` must not cancel the run; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause the split between run pre-arm held-state detection and run cancel-edge detection on C128
+- [x] restore correct held-chord behavior for shifted run startup while still ignoring modifier-only cancel edges
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the earlier seam split was still wrong because the real C128 failure was not “wrong key domain” alone; it was arming run-cancel after a single transient neutral sample during shifted key release
+  - the corrected design now uses one boolean non-modifier sample source for C128 running and adds a stable-neutral latch in `input_run_key_held` before cancel can arm
+  - after cancel is armed, `input_run_cancel_check` uses the same boolean sample source and the shared edge debouncer, so the run path no longer mixes PETSCII decoding with run cancel state
+  - `commodore/c128/input128.s` is now the C128-specific run contract:
+    - boolean non-modifier key sample
+    - stable-neutral detection for pre-arm
+    - shared edge detection only after neutral is stable
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-RUN-SHIFT-RELEASE-CANCEL
+- [x] Reported Failure Gate:
+  - starting a run with a shifted direction like `Shift+H` must not stop when the player later releases `Shift`; modifier-only state must not count as a held/cancel key, and `make test64` plus `make test128-fast-smoke` must stay green
+- [x] root-cause whether the C128 run held/cancel scanner is treating pure modifier state as a live key sample
+- [x] make C128 run held/cancel polling ignore modifier-only state while preserving shifted direction startup
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - on C128, the run held/cancel path was sampling raw physical key state, so pure `Shift` still counted as a held key after a shifted run command started
+  - that made releasing `Shift` participate in the run state machine and could stop running even though no gameplay stop reason or visible message existed
+  - `commodore/c128/input128.s` now uses a modifier-filtered run sample based on `cia_scan_petscii`, so bare Shift/Ctrl/C= do not count as held/cancel keys while shifted run directions still work
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-RUN-STALE-PENDING-MESSAGE
+- [x] Reported Failure Gate:
+  - if running is started after a spell/prayer/status message is still visible, the run must not immediately stop on that stale pending message, surface old text like `You feel righteous!`, or behave like a hidden `-MORE-` prompt; keep `make test64` and `make test128-fast-smoke` green
+- [x] root-cause whether `CMD_RUN` is inheriting stale `zp_msg_flags` / message state from the previous action instead of starting like ordinary movement
+- [x] clear old pending messages at run start and add a direct regression for stale-message run startup
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `CMD_RUN` was not clearing old message state before arming the runner, unlike ordinary movement
+  - that let visible stale messages from spells/prayers/detect effects survive into the run loop, where `run_post` immediately canceled running on `zp_msg_flags` and the leftover text could feel like a hidden prompt or a resurfaced unrelated message
+  - `commodore/common/game_loop.s` now clears the message area before converting the run command into `zp_run_dir`, and `commodore/c64/tests/test_main_loop.s` now covers the stale-message startup case directly
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-RUN-STOP-INPUT-STATE
+- [x] Reported Failure Gate:
+  - after running stops automatically, the next manual direction key must work immediately instead of feeling like it was eaten; keep `make test64` and `make test128-fast-smoke` green while fixing the shared run-stop state cleanup
+- [x] root-cause which automatic run-stop paths leave stale run-input state armed after the runner is canceled
+- [x] reset the shared run-cancel/input state on automatic run stops without changing the intended run-stop conditions themselves
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the run stop itself was valid: the runner was stopping on nearby monsters as designed, but C128 direct-scan input state stayed armed after automatic run-stop paths, so the first manual movement key could be swallowed
+  - the fix is deliberately C128-only in `commodore/common/game_loop.s`: automatic run-stop paths now clear `run_input_armed` and reset the shared run-cancel edge state without dragging extra C64 resident bytes into the `MAP_BASE` ceiling
+  - the C64 `main_loop` regression remains green for message-pauses-while-running, and the exact regression gates are green again after narrowing the fix to the platform seam that actually owned the bug
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-PRAYER-EXPIRY-ONSET-MESSAGE
+- [x] Reported Failure Gate:
+  - when `Prayer` wears off, the player must not see the cast/onset message reused; the shared turn timer path should report the correct expiry text, with `make test64` and `make test128-fast-smoke` as the regression gates
+- [x] root-cause whether the bless timer expiry is missing or incorrectly reusing the onset message
+- [x] restore the upstream-style `Prayer` expiry message in the shared timer path
+- [x] add timer-level regression coverage for bless expiry messaging
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the shared timer path did not have a distinct bless/prayer expiry message; `Prayer` onset used `You feel righteous!`, but expiry was previously silent/misleading in live play
+  - `turn_tick_effects` now handles `zp_eff_bless` separately from the generic decrement loop and prints `The prayer has expired.` when the timer reaches zero
+  - `commodore/c64/tests/test_turn.s` now covers bless expiry messaging directly, and the stale Huffman subsystem fixture was refreshed to match the regenerated corpus
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-RUN-MESSAGE-DISAPPEARS
+- [x] Reported Failure Gate:
+  - while running, if a gameplay message appears, running must pause and the message must remain visible instead of being cleared by the next automatic run step; verify with `make test64` and `make test128-fast-smoke`
+- [x] root-cause the shared run/message contract so newly printed messages stop corridor running before the next step clears the message area
+- [x] add regression coverage for the exact run-interrupted-by-message case
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `run_step` now cancels corridor running when the turn leaves a pending gameplay message, so the next automatic run step cannot clear the message area before the player reads it
+  - regression coverage in `commodore/c64/tests/test_main_loop.s` proves a message produced during running leaves `zp_run_dir = $ff`, preserves `zp_msg_flags = MSG_PENDING`, and avoids a second `msg_clear`
+  - while widening that suite coverage, a previously hidden stale stairs test was corrected to use `TILE_STAIRS_DN` instead of raw `9`
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-STATUS-FULL-REFLASH-ON-MOVE
+- [x] Reported Failure Gate:
+  - on C128, ordinary movement must not visibly flash the full 3-row status bar every turn; partial status updates should be used when only some fields change
+- [x] root-cause why `status_draw` is repainting the full bar on every movement turn
+- [x] restore row-level status redraws for ordinary dirty-field updates while preserving forced full redraws after screen/status clears
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `turn_post_action` still marks status dirty each turn, but `status_draw` now only clears and redraws the specific dirty status rows unless bit7 explicitly forces a full repaint
+  - forced full status repaint behavior after full-screen clears and explicit status-row clears is preserved through the existing `zp_ui_dirty` bit7 contract
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-C128-VDC-MOVE-REDRAW-SLOWDOWN
+- [x] Reported Failure Gate:
+  - on C128, ordinary player movement must not visibly repaint the full status block every turn after the recent monster-redraw fixes; `make test64` and `make test128-fast-smoke` remain the exact regression gates while restoring the fast local/scroll redraw path
+- [x] root-cause which monster AI changes are incorrectly promoting ordinary nearby movement to `turn_scene_dirty`
+- [x] narrow the monster AI dirty-scene contract so only non-local visible changes force the expensive redraw path
+- [x] add regression coverage for the movement redraw contract without reintroducing stale/disappearing monster bugs
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `monster_ai_tick` now returns `A=mat_scene_dirty` only for non-local visible monster changes instead of promoting every monster action to the expensive redraw path
+  - the non-local helper now suppresses redraw requests for tiles already covered by the normal local player redraw and keeps detect-mode remote changes conservative without reintroducing stale monsters
+  - regression coverage added two helper-level checks in `commodore/c64/tests/test_monster_ai.s` for nearby vs remote dirty-tile promotion, with suite count updated in `commodore/c64/run_tests.sh`
+  - exact reported command: `make test64` PASS
+  - broader regression suites: `make test128-fast-smoke` PASS
+- [x] BUG-DETECT-EVIL-FALSE-NO-EVIL
+- [x] Reported Failure Gate:
+  - `make test128-fast-smoke`
+- [x] root-cause the exact C128 smoke/build failure introduced by the current detect-evil parity work before changing more product code
+- [x] fix detect-evil parity so evil-only detection does not highlight non-evil monsters while still preserving redraw/runtime behavior on both C64 and C128
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] AUDIT-PRAYER-PASS-1
+- [ ] Reported Failure Gate:
+  - priest prayers should have upstream-faithful live behavior, visible feedback where upstream provides it, and correct C64/C128 prompt/render behavior; `make test64` and `make test128-fast-smoke` remain the exact regression gates for prayer-side fixes
+- [ ] prayer audit findings, prioritized:
+  - `Slow Poison` is currently silent in Commodore, but both VMS and umoria print a reduction message when poison is actually reduced
+  - `Blind Creature` currently applies `MX_STUN`; both VMS and umoria route the prayer through the confuse-monster path instead
+  - `Turn Undead` currently applies a silent confuse effect to all undead slots; upstream only affects visible/LOS undead and prints per-monster `runs frantically!` / `is unaffected.` feedback
+  - `Dispel Undead` / `Dispel Evil` currently damage flagged monsters silently and without a visibility gate; upstream restricts them to visible/LOS targets and prints per-monster `shudders.` / `dissolves!`
+  - `Detect Evil` still uses the generic monster-detect path; this is a known documented deviation already captured elsewhere
+- [ ] implement the control/dispel prayer fixes in severity order:
+  - `Blind Creature`
+  - `Turn Undead`
+  - `Dispel Undead` / `Dispel Evil`
+  - `Slow Poison`
+- [ ] FEAT-NEW-SPELL-HARDENING
+- [ ] Reported Failure Gate:
+  - newly added spells/prayers must have correct live behavior, correct visible feedback, and correct platform-specific rendering/input behavior; `Magic Missile` must animate from the player’s actual viewport row/column without a bogus `Your spell fizzles out.`, and priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must not beep/no-op or show misleading feedback
+- [ ] BUG-SHARED-INV-OVERLAY-DIRECT-SELECT
+- [ ] Reported Failure Gate:
+  - item/book prompts that support `?` must allow direct selection from the inventory overlay instead of forcing a dismiss-and-reprompt flow; behavior should match the other selectable overlays consistently
+- [ ] BUG-C128-MONSTER-REDRAW-DETECT-STALE
+- [ ] Reported Failure Gate:
+  - on C128, monster presence/movement changes must redraw immediately: detected monsters must appear on the cast turn, moved/killed monsters must not linger, and monsters must not disappear until a later movement/full redraw
+- [x] root-cause the shared dirty-scene seam where monster AI movement reported redraw state in carry but the turn layer latched accumulator state
+- [x] make monster-driven scene dirtiness deterministic for stationary commands and ordinary end-of-turn monster movement
+- [x] add shared turn-level regression coverage so monster AI movement always promotes to `turn_scene_dirty`
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] BUG-C128-REPEATED-FIRE-BOLT-JAM
+- [ ] Reported Failure Gate:
+  - repeated `Fire Bolt` casts on C128 must not JAM in the cast-success tail; latest live monitor traces unwound through `pm_finish_success_common -> pm_mark_worked` and crashed at `$D014` and then `$001C`
+- [x] move C128-only prompt helpers out of the crowded resident spell-state tail so the full cast-success epilogue stays below `$D000`
+- [x] tighten the C128 callable residency audit to check helper extents, not just symbol starts, for the cast-success tail
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
+- [ ] Reported Failure Gate:
+  - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
+- [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
+- [x] BUG-SHARED-PSEUDO-ID-UMORIA-PARITY
+- [ ] Reported Failure Gate:
+  - pseudo-ID wording/behavior must match `umoria`'s useful auto-sense flow instead of the current `Sense: Average/Good/...` quality hack; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [x] replace the current quality-based pseudo-ID turn path with `umoria`-style enchantment sensing over pack + equipment
+- [x] add a dedicated item-instance sensed-magical flag instead of reusing the old quality bit semantics
+- [x] remove the `Terrible/Bad/Average/Good/Excellent` pseudo-ID UI and replace it with a persistent `magik` marker on sensed, unidentified items
+- [x] keep full identification clearing the sensed-magical marker so item state stays coherent
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the old class-based pseudo-ID timer was replaced with `umoria`'s outer cadence in `turn_tick_pseudo_id`: every 16 turns, if not confused, roll `10 + 750 / (5 + level)` and only then scan the item list
+  - the scan now matches `umoria`'s order and per-item odds: pack first at `1/50`, then equipment at `1/10`, setting the dedicated `IF_SENSED` marker and printing the useful slot-localized wording instead of `Sense: Average/Good/...`
+  - full identify and wizard identify paths now clear `IF_SENSED`, while inventory/equipment rendering persists the new ` (magik)` marker for sensed-but-unidentified items
+  - the first pack/equipment pass had a real 6502 flag bug: after `rng_range`, the code restored the slot index into `X` and then branched on `BNE`, so it was testing the restored slot number instead of the RNG result and only slot `0` could ever auto-sense
+  - the exact red gate after the cadence change was not product logic; `test_save.s` had drifted past `MAP_BASE`, and shrinking the test image plus restoring a local `ui_help_display` stub brought the suite back under `$C000` so `make test64` could verify the feature cleanly
+
+- [ ] Reported Failure Gate:
+  - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [ ] BUG-SHARED-GENOCIDE-PARITY
+- [ ] Reported Failure Gate:
+  - `Genocide` must prompt for a monster glyph/type and exterminate all matching monsters on the current level instead of requiring a directional target; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [ ] replace the current directional-targeted genocide flow with a direct glyph prompt in the shared spell execute overlay
+- [ ] normalize the typed creature glyph the same way the recall/symbol UI does so `Genocide` matches the actual `cr_display` values used by live monsters
+- [ ] add focused runtime coverage proving `Genocide` removes multiple same-glyph monsters without requiring a directional target
+- [ ] BUG-SHARED-SPELL-LIST-ESC-CANCEL
+- [ ] Reported Failure Gate:
+  - after selecting a book and pressing `?`, pressing `Esc` on the spell/prayer list must cancel the whole selection flow instead of dropping back to the `Cast which?` / `Pray which?` prompt
+- [x] root-cause the remaining live-only C128 failure: the spell/prayer list still release-gated after drawing, so a quick first `Esc` could be swallowed before the selectable overlay key read
+- [x] treat `?` spell/prayer list selection as a true cancel on `Esc` instead of a failed pick that loops back to the footer prompt
+- [x] add a direct `? -> Esc` spell chooser regression and keep the effects harness count aligned
+- [x] add a dedicated C128 scripted smoke for `book -> ? -> Esc` and include it in `make test128-fast-smoke`
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
+- [ ] Reported Failure Gate:
+  - `Sleep II` and `Sleep III` must actually put monsters to sleep by using the live sleep counter, and the player must get visible feedback instead of a silent beep/no-op; the exact verification gate remains `make test64`
+- [ ] Reported Failure Gate:
+  - `make test128-fast-smoke`
+- [ ] rework `monster_wake_check` to use live per-monster sleep state instead of species base sleep data so spell-induced sleep persists
+- [ ] add shared visible feedback for adjacent sleep and mass sleep so `Sleep II` / `Sleep III` report what happened
+- [ ] BUG-SHARED-MONSTER-REDRAW-AFTER-TRANSFORM
+- [ ] Reported Failure Gate:
+  - monster-changing effects such as `Polymorph Other` must not leave stale/missing monster tiles on screen until the monster moves again; the exact verification gate remains `make test64`
+- [ ] build a behavior-family spell/prayer audit matrix covering all newly added effects
+- [ ] fix the shared bolt/projectile regression first, then re-check whether any remaining `Magic Missile` issue is visual-only or a second logic bug
+- [ ] audit the under-tested effect families starting with:
+  - bolt/projectile spells
+  - heals
+  - timed buffs/protections/resistances
+  - detect/reveal prayers
+  - directional/adjacent monster-control effects
+- [ ] add runtime coverage for at least one representative from each high-risk family before claiming the feature hardened
+- [x] add representative runtime coverage for:
+  - shared bolt/projectile spells
+  - heals
+  - timed buffs/protections/resistances
+  - detect/reveal prayers
+  - adjacent monster-control effects
+  - area/utility/high-end priest effects (`Sense Surroundings`, `Glyph of Warding`, `Holy Word`)
+- [ ] BUG-PRIEST-RESIST-SEMANTICS
+- [ ] Reported Failure Gate:
+  - `Resist Heat and Cold` must have meaningful live gameplay semantics instead of only setting an otherwise-unused packed flag and showing onset feedback
+- [x] trace the real fire/cold gameplay consumers and wire the prayer into the currently implemented breath-damage path
+- [ ] broaden the prayer beyond the current fire-breath consumer if more elemental hostile actions land later
+- [ ] BUG-SHARED-MAGIC-MISSILE-PROJECTILE-FIZZLE
+- [ ] Reported Failure Gate:
+  - `Magic Missile` must animate from the player’s actual viewport row/column and must not end with `Your spell fizzles out.` when it visibly cast at a target in town or dungeon
+- [ ] root-cause the shared bolt/projectile regression in the current tree
+- [x] BUG-BALL-SPELL-KILL-FEEDBACK
+- [x] Reported Failure Gate:
+  - ball-style spells such as `Stinking Cloud` and `Fire Ball` must report monster kills with the normal slain message instead of silently removing the target
+- [x] route lethal ball-spell kills through the shared combat kill-message owner instead of the silent remove/XP helper
+- [x] add focused ball-family coverage that proves lethal area damage uses the kill-message path without destabilizing the broad C64 gate
+- [x] BUG-STINKING-CLOUD-NOOP
+- [ ] Reported Failure Gate:
+  - `Stinking Cloud` must visibly cast as a ball-style spell and must damage monsters in its target area instead of only beeping and appearing to do nothing
+- [x] add a direct runtime regression for the shared `eff_ball` path before changing gameplay code
+- [x] harden the ball-family cast path so `Stinking Cloud` and other ball spells visibly travel and apply area damage
+- [ ] BUG-PRIEST-BOOK-B-FEEDBACK-BEHAVIOR
+- [ ] Reported Failure Gate:
+  - priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must have correct live behavior and correct player-visible feedback instead of beeping, no-oping, or showing the wrong message
+- [ ] audit the current implementation and live feedback contracts for priest book B prayers before changing effect code
+- [ ] BUG-C128-IDENTIFY-ITEM-PROMPT-NOOP
+- [ ] Reported Failure Gate:
+  - C128 item-identify prompt must accept the chosen item letter and identify the item instead of immediately falling through to `Nothing seems to happen.`
+- [ ] harden the shared `eff_identify_prompt` follow-up input path for C128 and add coverage
+- [ ] BUG-SHARED-IDENTIFY-QMARK-DISMISS-LEAK
+- [ ] Reported Failure Gate:
+  - after `?` from the identify item prompt, dismissing the read-only inventory overlay must not reuse that dismiss key as the actual item selection; the `?` overlay behavior must stay consistent with the other view-only item overlays
+- [ ] BUG-SHARED-OVERCAST-ORDERING
+- [ ] Reported Failure Gate:
+  - overcast spell/prayer casts must not print `Not enough mana.` before the spell effect executes; identify-style spells must follow upstream overcast ordering instead of warning first and prompting second
+- [ ] align shared overcast handling with upstream sequencing and messaging instead of treating it as an identify-specific prompt bug
+- [ ] BUG-MP-BOOK-PROMPT-TEXT
+- [ ] Reported Failure Gate:
+  - `m`/`p` must not show `Study which book`; cast must show a cast-book prompt, pray must show a pray-book prompt, and study must keep the study-book prompt
+- [ ] replace the oversized inline spell-book prompt helper with compact Huffman-backed prompt IDs
+- [ ] verify:
+  - `make build128`
+  - `make test64`
+  - `make test128-fast-smoke`
+- [ ] BUG-C128-PRAYER-SNAPSHOT-NOOP
+- [ ] Reported Failure Gate:
+  - restore ~/vice-snapshot-20260416125631.vsf on C128, then `p`, `a`, and any prayer letter (`a`, `b`, or `c`) must execute the selected prayer instead of silently no-oping
+- [ ] corrected scope from live user retest:
+  - current checked-out C128 code appears to have regressed the shared cast/pray letter-selection path, not just priest-only prayer effects
+  - C128 `m` and `p` selection failures should be treated as one shared casting-system regression until disproven
+- [x] BUG-C128-PRAY-NO-EFFECT-WIZARD-MISDISPATCH
+- [ ] Reported Failure Gate:
+  - C128 live gameplay `p` must actually execute the selected prayer, and `Ctrl+W` must enter wizard mode instead of wear/takeoff
+- [x] reproduce and root-cause the C128 prayer command path so selected prayers do not silently no-op
+- [x] reproduce and root-cause the C128 `Ctrl+W` command decode so it dispatches to `CMD_WIZARD` reliably
+- [x] verify:
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `TEST_FILTER=scripted_prayer_cast_smoke bash commodore/c128/run_tests128.sh`
+
+- [x] FEAT-SPELL-FEEDBACK-AUDIT
+- [x] audit all 31 mage + 31 priest spells/prayers for player-visible feedback and align Commodore with the locked hybrid upstream policy
+- [x] add or reuse spell/prayer feedback only where the effect is otherwise silent, misleading, or missing relative to current UMoria behavior
+- [x] keep cast/pray wrapper messaging generic-free and put visible feedback in the effect/status path instead
+- [x] extend `commodore/SPELLS.md` with the spell-feedback audit/results
+- [x] verify:
+  - `make test64`
+  - `make build64`
+- [ ] residual verification note:
+  - `make build128` still emits the existing `Banked payload staged source ends below overlay window` assertion
+  - this assert is unchanged from `HEAD` `bf4e611` (`$E028` staged-source end in both trees)
+- [ ] BUG-C64-MAGIC-MISSILE-CRASH
+- [ ] Reported Failure Gate:
+  - C64 live gameplay `Magic Missile` cast must not crash from the easy reproducible shipping path in the dungeon with REU enabled, with an actual targetable monster in the aimed tile
+- [x] reproduce the easy live C64 `Magic Missile` crash in an automated REU-enabled dungeon-target smoke before attempting any product fix
+- [x] root-cause the snapshot-backed C64 spell crash at the `-more-` resume seam in shared message handling
+- [x] harden the shared `msg_show_more` / `msg_save_history` path for C64 and add a direct C64 regression for message resume after `-more-`
+- [x] root-cause the remaining C64 dungeon target crash in the stale-tier monster-name reload path (`creature_get_name -> tier_load -> reu_fetch_tier`)
+- [x] preserve caller IRQ/banking state in the C64 REU/tier helpers and add a current-build dungeon spell smoke that forces the stale-tier REU name-reload path
+- [x] verify:
+  - `make test64`
+- [ ] BUG-C64-DETECT-EVIL-CRASH
+- [ ] Reported Failure Gate:
+  - C64 in-dungeon `Detect Evil` cast must not crash back to BASIC from the live gameplay path
+- [ ] reproduce the live C64 in-dungeon `Detect Evil` crash in an automated scripted smoke before attempting any product fix
+- [ ] BUG-TRAP-HP-UNDERFLOW
+- [ ] Reported Failure Gate:
+  - C64 live gameplay trap damage must not corrupt HP to wrapped values like `65535/9` after a rockfall hit
+- [ ] reproduce the rockfall-trap HP corruption from the live gameplay path before attempting any product fix
+- [x] BUG-C64-SPELL-CAST-FFFF
+- [ ] Reported Failure Gate:
+  - C64 live gameplay spell cast must not leave `$01=$35` with IRQs enabled or hang at `PC=$FFFF` after the cast path returns
+- [x] root-cause the C64 post-cast lockup on the real spell-hit path
+- [x] add a focused regression that proves C64 `creature_get_name` preserves caller IRQ/banking state when entered from `SEI/$35`
+- [x] verify:
+  - `make build64`
+  - `make test64`
+- [ ] BUG-C128-SPELL-CAST-D026
+- [ ] Reported Failure Gate:
+  - `python3 commodore/c128/tests/product_spell_cast_smoke.py --vice /opt/homebrew/bin/x128 --boot-d64 commodore/out/moria8-c128.d71`
+- [x] reproduce the shipping-build C128 spell-cast crash in an automated test before attempting another fix
+- [ ] root-cause the shipping spell-cast jump into `$D026` on the product disk image
+- [x] FEAT-ADDITIONAL-SPELLS
+- [x] Reported Failure Gate:
+  - implement the remaining spells from `commodore/BUILDPLAN.md` with audited VMS/UMoria parity on both C64 and C128
+- [x] replace the simplified 16-spell model with full class-aware 31-spell tables and explicit book bitmasks
+- [x] widen player spell state and save/load handling for full-catalog learning/worked/order tracking
+- [x] rework cast/pray/study flows around upstream-style book-scoped spell selection and class-specific learning rules
+- [x] implement the missing mage and priest spell/prayer effects and correct any existing spell drift that blocks parity
+- [x] update character/status UX and spell counting for the widened state and full class spell access
+- [x] create an exhaustive spells document covering current Commodore behavior, new spells, and VMS-vs-UMoria differences
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test`
+- [x] BUG-C128-RECALL-GLYPH-CORRUPTION
+- [x] Reported Failure Gate:
+  - C128 recall screen shows corrupted attack / hit-dice glyphs (`D` separator and attack mnemonic bytes)
+- [x] make the shared recall renderer emit cross-platform-safe bytes for hit-dice separators and attack abbreviations
+- [x] fix the shared attack-abbreviation printer to stop losing letters when `screen_put_char` clobbers `Y`
+- [x] add a regression that checks the rendered recall HP / ATK bytes instead of only the title/name line
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+- [x] BUG-RECALL-RESTORE-UMORIA
+- [x] restore the active `/` command from symbol glossary mode back to the old killed-monster recall flow
+- [x] rewire production C64/C128 recall ownership so `ui_recall_display` is reachable again
+- [x] update shared/runtime tests to expect monster recall instead of symbol identify
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+- [x] BUG-C128-TITLE-BOOT-QUIT-PROMPT
+- [x] Reported Failure Gate:
+  - boot to C128 title after `128.runtime` load and do not fall into `R)EBOOT S)TART Q)UIT`
+- [x] restore the C128 title boot path so it reaches and stays on the main menu after runtime preload
+- [x] tighten the idle title smoke so it fails on `game_over_prompt`, not just `title_show_sysinfo`
+- [x] verify the exact repro proxy:
+  - `make build128`
+  - `TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh`
+- [x] BUG-C128-BUILD-GATE
+- [x] Reported Failure Gate:
+  - `make build128`
+- [x] restore the broken C128 build introduced by the UI ownership refactor
+- [x] re-fit `UiOverlay` within `$E000-$EFFF` without regressing the symbol/audit contracts
+- [x] verify the exact reported gate:
+  - `make build128`
 - [x] FEAT-AUD
 - [x] add a shared hunger-alert sound that stays distinct from the current combat/UI palette:
   - `HUNGRY` and `WEAK` use the mild low-pulse warning
@@ -39,6 +773,31 @@ This file is a temporary working scratchpad.
   - `/` identifies what a symbol on screen stands for
   - `look` remains the path for the exact visible creature
   - leave the current combat-earned recall implementation alone for now
+- [ ] BUG-IDENTIFY-FILTERED-ITEM-CHOOSER
+- [ ] Reported Failure Gate:
+  - `Identify` must use the same filtered visible-slot chooser contract as the other item prompts, so gaps in inventory do not make `?` overlay letters or direct prompt letters select the wrong absolute slot
+- [ ] BUG-IDENTIFY-MISSING-CATEGORY-NOUN
+- [ ] Reported Failure Gate:
+  - identify feedback must include the item category noun for bare-name consumables and jewelry, e.g. `This is a Cure Serious Wounds potion.`
+- [x] BUG-SPELL-HARDENING
+- [x] Reported Failure Gate:
+  - C64: repeated `Magic Missile` casts must not hang or drift into `$FFFF`
+  - C64: rogue/ranger level-1 `m` must explain why casting is unavailable instead of prompting for a book and then doing nothing
+  - C128: spell casting must not JAM in the I/O hole (`$D023` reported)
+- [x] audit the active spell runtime seams and extend the harnesses so these exact gameplay paths are covered directly
+- [x] fix class-level gating so non-ready spell classes fail early with a user-facing explanation before any book prompt
+- [x] add focused C64 spell coverage for:
+  - repeated `Magic Missile` casts through the real spell flow
+  - low-level rogue/ranger `m` UX
+- [x] isolate and fix the C128 spell-cast banking/JAM regression and add a focused runtime smoke for it
+- [x] add spell integrity / expanded spell-state save-load coverage that exercises cross-byte spell masks and persisted spell state
+- [x] verify:
+  - `make build64`
+  - `make build128`
+  - `make test64`
+  - `make test128-fast`
+  - `make test128-fast-smoke`
+  - `make test`
 - [x] BUG-C64-RECALL-OVERLAY-STATE
 - [x] restore C64 active-tier state after overlay-backed modal screens so recall and other tier-dependent gameplay paths do not run after `OVL.UI` invalidates `$E000`
 - [x] re-check the active tier at the start of the shared C64 `/` recall path and the C64 character-view return path before gameplay redraw
@@ -100,6 +859,213 @@ This file is a temporary working scratchpad.
     - `python3 -m py_compile tools/ppm_to_c128_bootart.py` -> PASS
     - `make -C commodore disk128` -> PASS
     - `make -C commodore run128` -> previously launched with the reg-25-preserving bootart runtime for live visual re-check
+- BUG-C64-MAGIC-MISSILE-CRASH / BUG-C64-DETECT-EVIL-CRASH shared progress:
+  - exact red repro:
+    - `python3 commodore/c64/tests/snapshot_spell_more_smoke.py --snapshot /Users/chadwick/vice-snapshot-20260415171837.vsf --keybuf 'maal' --entry-symbol .msg_show_more --after-entry-keybuf ' ' --return-symbol .main_loop`
+    - this failed reliably before the fix, proving the crash was in the resumed `-more-` path after dismissing the prompt, not in spell targeting itself
+  - root cause:
+    - the shared `msg_print` full-screen branch still saved/restored `zp_ptr0` around `msg_show_more`, then restarted through `msg_print`
+    - the actual stable source pointer was already cached in `msg_src_lo/msg_src_hi`, and `msg_save_history` on C64 was still exposed to IRQ-time low-ZP pointer clobber during that resumed copy path
+  - fix:
+    - make `msg_save_history` atomic on C64 too with `php/sei ... plp`
+    - simplify the `-more-` resume branch to clear flags and jump straight to `msg_print_cached` instead of stack-saving/restoring `zp_ptr0`
+    - add a direct C64 regression in `commodore/c64/tests/test_ui_views.s` that fills both message rows, dismisses `-more-`, and asserts the resumed message/history state
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+- BUG-C64-MAGIC-MISSILE-CRASH follow-up:
+  - new snapshot-backed repro:
+    - `~/vice-snapshot-20260415181150.vsf`
+    - user path: `m`, `a`, `a`, dismiss `-more-`, press direction, then crash to BASIC
+  - diagnostic result:
+    - the old snapshot cannot be the closure gate after rebuilding because `.vsf` restores the old RAM image too, so current symbols no longer describe the restored code after layout changes
+    - the snapshot was still good enough to root-cause the remaining live seam: after the projectile hit path reached `projectile_msg_suffix`, execution fell through `combat_append_monster_name -> creature_get_name -> tier_load -> reu_fetch_tier`
+  - root cause:
+    - the stale-tier dungeon-monster name reload path was still reopening IRQs on C64 with raw `sei ... cli` helpers inside `reu_fetch_tier` and the C64 activation section of `tier_load`
+    - that path is reachable from a live spell hit when the monster still has `$E0xx` tier name pointers but `current_tier` has been cleared, which forces `creature_get_name` to reload the tier inside the spell/message path
+  - fix:
+    - preserve caller flags in `commodore/common/reu.s` `reu_fetch_tier` with `php/sei ... plp`
+    - preserve caller flags in the C64 banked-activation section of `commodore/common/tier_manager.s` `tier_load` with `php/sei ... plp`
+    - add `commodore/c64/tests/test_tier.s` coverage for `reu_fetch_tier` preserving `SEI/$35`
+    - strengthen the current-build `scripted_dungeon_target_spell_smoke` so it now deliberately forces the stale-tier reload path by clearing `current_tier`/`tier_loaded` after spawning the dungeon target monster under REU
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+- Spell cast/pray chooser UX follow-up:
+  - fixed the bogus post-book `-more-` prompt by resetting message-row state in the shared modal restore path (`commodore/common/ui_restore.s`) before gameplay prompts resume
+  - removed the new auto-popup spell list for `m`/`p`; book pick now returns to a message-line spell/prayer prompt again
+  - on-demand list still exists from the chooser via `?`, which opens the full-screen spell viewer and then returns to the chooser prompt
+  - verification:
+    - `make test64` PASS (`36 passed, 0 failed`)
+    - `make build128` PASS
+- BUG-C64-SPELL-CAST-FFFF:
+  - root cause:
+    - `creature_get_name` on C64 always finished its banked/normal copy path with `cli`
+    - when called from the live spell-hit path, the caller was intentionally running under `SEI` with `$01=$35` while the overlay spell code had KERNAL banked out
+    - that unconditional `cli` reopened IRQs before the caller restored normal banking, so the next interrupt fetched vectors out of RAM and collapsed into the user-reported `$FFFF` garbage-execution loop
+  - fix:
+    - preserve the caller interrupt state with `php/sei ... plp` in each C64 `creature_get_name` entry path that runs through the banked/name-copy logic
+    - keep restoring `$01` from `cgn_saved_p01`, but stop unconditionally enabling IRQs on return
+  - regression:
+    - `commodore/c64/tests/test_tier.s` test 11 now calls `creature_get_name` from the exact hazardous context (`SEI`, `$01=$35`) and asserts that:
+      - the expected name bytes are returned
+      - the helper returns with IRQ-disable still set
+      - `$01` is still `$35` on return
+  - verification so far:
+    - `make build64` PASS
+    - focused `tier` regression PASS (`11/11`)
+    - exact broader gate: `make test64` PASS (`34 passed, 0 failed`)
+  - follow-up test-harness fix:
+    - the red `effects` suite was a unit-harness bug, not a new product spell regression
+    - `test_effects.s` test 37 patched `test_spell_list_display` / `test_spell_execute_selected` with 3-byte `JMP`s, but the shared stubs in `ui_trampoline_stubs.s` were only 1-byte `RTS` bodies
+    - fix: turn those two shared spell stubs into explicit 3-byte patch slots and keep the late suite boundary assert exact (`<= $ba5c`) once the body fit precisely to the buffer start
+- BUG-C128-SPELL-CAST-D026:
+  - one real spell-specific C128 crash is fixed:
+    - `calc_spell_failure` had drifted so its live branch target for the non-faint path landed in the I/O hole at `$D026`
+    - fix: move `calc_spell_failure` into the banked spell block and add a full-extent residency assert
+  - a second real runtime seam is also fixed:
+    - the C128 banked spell trampolines were banking KERNAL out by mutating `$01` and not restoring `$01` on return
+    - fix: `C128BankedComputeTrampoline` and `tramp_spell_execute_selected` now save/restore `$01`
+  - the first shipping-image repro harness was invalid:
+    - native-monitor `break` / `until` log lines against `$D026` were ambiguous enough to false-fail even on title-screen idle
+    - `commodore/c128/tests/product_spell_cast_smoke.py` was rewritten to use remote monitor breakpoints instead of monlog text
+  - current status:
+    - build and focused C128 smokes are green after the two product fixes
+    - the shipping-image product smoke is now honest, but still needs a reliable way to prove the autostart cast path reaches its success marker before it can replace the user’s live manual gate
+- FEAT-ADDITIONAL-SPELLS progress:
+  - spell catalogs are now widened to the full `31 mage + 31 priest` sets with `umoria` class tables and explicit per-book bitmasks
+  - player spell state is widened from the old 2-byte learned mask to learned/worked/forgotten/order tracking in `player_data`
+  - save versions were intentionally bumped (`C64 $0d`, `C128 $0e`) rather than attempting silent migration
+  - C64/C128 spell ownership is now split cleanly:
+    - selection/study UI lives in `UiOverlay`
+    - execution dispatch lives in `DeathOverlay`
+  - implemented/fixed high-value spell semantics in the current tree:
+    - mage `Sleep II` now uses adjacent sleep instead of mass sleep
+    - priest `Sanctuary` now uses adjacent sleep
+    - priest `Detect Doors/Stairs` now reveals both doors and stairs
+    - priest `Remove Curse` now clears curses across carried/equipped items
+    - priest `Glyph of Warding` is now mechanically active
+    - priest `Holy Word` now follows the VMS-style cure/full-heal/dispel-evil behavior already chosen for Commodore
+  - documentation added at `commodore/SPELLS.md` with:
+    - full 62-entry spell/prayer catalog
+    - legacy vs added status
+    - per-book membership
+    - per-class level/mana/fail data
+    - current Commodore deviations and upstream-source notes
+  - C64 test harness fixes:
+    - `test_main_loop.s` now uses tiny local spell stubs instead of importing the full spell runtime, keeping the test body below `$C000`
+    - `ui_trampoline_stubs.s` now provides no-op spell trampolines instead of dragging full spell overlays into unrelated suites
+    - `test_effects.s` was updated off the removed `pm_do_cast` helper and its local scratch buffers were moved up to `$B800`
+    - `test_save.s` and `test_monster_magic.s` were trimmed the same way after the spell refactor pushed both resident test bodies past `$C000`; local spell stubs brought them back under `MAP_BASE` and restored the breakpoint contract
+    - fixed the live C64 `m` -> book -> `a` hang by making `spell_mask_test_ptr` preserve `X` and correcting the 31-spell mask-byte table to use `8,8,8,7` grouping
+    - added a focused `test_effects.s` regression that builds the learnable mage list for `[Beginners-Magick]` and verifies all 7 entries are returned
+  - C128 smoke harness fixes:
+    - `build_boot_assets()` now invalidates on shared `../common/*.s`, `../c64/*.s`, and the actual booted `out/moria128.d71`
+    - `boot_title_idle_smoke` now uses one monitor `until` probe per boot run instead of chaining two `until` commands in one playback file
+  - spell hardening follow-up:
+    - `player_cast_spell` and `player_pray` now gate on `class_spell_min_level` before prompting for books, so low-level rogue/ranger flows fail early with `HSTR_PM_NO_EXP`
+    - `scripted_spell_cast_smoke` is now part of the default live gates on both platforms instead of a dormant helper smoke:
+      - C64 `make test64` now runs a disk-backed in-game cast flow that completes chargen, opens the filtered book prompt, casts repeatedly, and only passes after the live pass trap is reached
+      - C128 `make test128-fast-smoke` now includes `scripted_spell_cast_smoke`, and the scripted flow must return to `main_loop` after repeated successful casts
+    - fixed the scripted smoke input contract to use filtered-inventory letters, not raw carried-slot letters:
+      - the only visible book in the filtered prompt is `A`, even when it lives in carried slot `B`
+      - both C64 and C128 scripted spell inputs now select the book with `A`
+    - fixed the C64 smoke harness classification so a reached pass trap is authoritative; it no longer misreports a later cycle-limit after `BRK` as a spell JAM
+    - `test_effects.s` now covers:
+      - high-book-bit learnable-list construction for `[Beginners-Magick]`
+      - repeated full `player_cast_spell` flow stability
+      - rogue/ranger low-level `m` UX
+    - the C128 spell-load JAM was fixed by moving spell UI literals out of low common RAM and back into the UI overlay owner
+    - the follow-up live C128 spell JAM at `$D063` was caused by `player_cast_spell` staying below `$D000` while its internal `pm_*` helpers drifted into `$D000-$D2xx`
+    - repaired by splitting resident spell state from spell logic:
+      - `player_magic_state.s` keeps shared spell scratch/state resident
+      - C128 `player_magic.s` now lives in the banked payload, so `player_cast_spell` and its `pm_*` helper callees resolve at `$F2xx-$F5xx`
+      - resident bookkeeping helpers (`pm_mark_worked`, `pm_learn_selected_spell`) moved out of the banked payload to keep the staged source below `$E000`
+      - C128 IO audits now cover the internal `pm_*` helper surfaces, not just the top-level trampolines
+      - C64 unit suites now import the split resident spell-state owners directly
+  - final verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 34 passed, 0 failed (of 34 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
+    - `make test128-fast-smoke` -> `=== Results: 4 passed, 0 failed (of 4 suites) ===`
+    - `cd commodore/c128 && TEST_FILTER='scripted_spell_cast_smoke' ./run_tests128.sh` -> `=== Results: 1 passed, 0 failed (of 1 suites) ===`
+    - `make test` -> PASS
+- BUG-C128-RECALL-GLYPH-CORRUPTION follow-up:
+  - root cause was in the shared recall renderer, not a C128-only overlay/load issue
+  - fixed four shared-renderer bugs in `commodore/common/ui_recall.s`:
+    - the HP / damage-dice separator used raw screen-code `$04` for `D`, which displays as lowercase `d` on the C128 VDC backend
+    - the attack abbreviation printer indexed `rcl_atk_3` through `Y`, but `screen_put_char` clobbers `Y`, so only the first attack letter survived and the rest came from the wrong table bytes
+    - the inter-attack separator reused one loaded space byte across two `screen_put_char` calls, but `screen_put_char` does not preserve `A`, so the second separator cell could render garbage
+    - placeholder creature attack slots with `type=HIT` but `dice/sides=0` were rendered literally as `HIT 0D0` instead of being treated as unknown / absent data
+  - repaired by:
+    - switching the explicit `D` writes to PETSCII-safe uppercase `$44`
+    - storing attack abbreviations as PETSCII-safe uppercase bytes
+    - iterating the abbreviation bytes through `X`, which both screen backends preserve
+    - reloading the literal space before each separator write
+    - only rendering an attack slot when `type`, `dice`, and `sides` are all nonzero, with `Atk: None` as the fallback when no real attack data is known
+  - strengthened regression coverage in `commodore/c64/tests/test_ui_views.s`:
+    - seed the recall test creature with a real attack
+    - assert the rendered `HP` bytes contain `1D8`
+    - assert the rendered attack bytes contain `HIT 2D6`
+    - assert the zero-damage placeholder case renders `None` instead of `0D0`
+  - verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
+- BUG-RECALL-RESTORE-UMORIA follow-up:
+  - restored `/` to the old monster-memory recall behavior in `commodore/common/game_loop_helpers.s`
+  - the shared command now:
+    - prompts `Recall which?`
+    - normalizes the typed creature symbol
+    - searches creature types with matching display glyphs
+    - only opens recall for creatures with known memory (`kills/deaths/attacks/spells`)
+    - cycles through additional matching creature types on repeated input
+  - restored production recall owners:
+    - C64: `tramp_ui_recall` plus banked `ui_recall.s`
+    - C128: `tramp_ui_recall` plus `ui_recall.s` in `UiOverlay`
+  - intentionally displaced the now-unused C128 symbol-identify owner from the product build to keep the C128 memory layout safe
+  - updated the C64 `main_loop` recall test so it seeds recall knowledge and asserts the recall UI path instead of the old identify-string behavior
+  - verification:
+    - `make build64` -> PASS
+    - `make build128` -> PASS
+    - `make test64` -> `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+    - `make test128-fast` -> PASS for both `cold` and `snapshot`
+- BUG-C128-TITLE-BOOT-QUIT-PROMPT follow-up:
+  - root cause was the earlier C128 layout fix moving `title_screen.s` into the banked `$F000` payload
+  - that move violated the live C128 bank/visibility contract:
+    - `c128_title_load_and_draw_cached` in low RAM still jumps directly to `title_render_data` and `title_fallback_render`
+    - those helpers were no longer resident/overlay code, so the title path could reach the wrong bytes while KERNAL-visible state was active
+  - repaired by:
+    - moving `title_screen.s` back into `UiOverlay`
+    - restoring the original C128 title trampoline pattern that loads `OVL.UI` and tail-jumps into `title_load_and_draw`
+    - keeping the safe ownership savings that were not part of the regression:
+      - `player_magic_levelup.s` stays banked
+      - `ui_inventory.s` and `ui_equipment.s` stay in `HelpOverlay`
+      - `magic_check_new_spells` stays banked
+  - strengthened the boot smoke:
+    - `boot_title_idle_smoke` now requires both `title_show_sysinfo` and `title_menu_ready`
+    - it now fails if `game_over_prompt` is hit during initial boot or idle title soak
+  - verification:
+    - `make build128` -> PASS
+    - `TEST_FILTER='boot_title_idle_smoke' bash commodore/c128/run_tests128.sh` -> PASS
+- BUG-C128-BUILD-GATE follow-up:
+  - root cause was real and two-layered:
+    - `ui_equip_display` had been split into `commodore/common/ui_equipment.s`, but C128 never imported that owner
+    - after restoring that symbol, `UiOverlay` was still oversized, so the branch had shipped with a second latent C128 layout failure
+  - restored C128 ownership by:
+    - moving `ui_equip_display` and `ui_inv_display` into `HelpOverlay`
+    - moving `magic_check_new_spells` and `title_screen.s` into the banked payload
+    - switching `tramp_magic_check_new_spells` to the banked compute trampoline
+    - switching `tramp_title_load_and_draw` to banked execution with the existing UI enter/exit contract
+    - updating `commodore/c128/io_contracts.s` to match the new overlay/banked residency
+  - final green C128 layout:
+    - `UiOverlay`: `3908` bytes at `$E000-$EF44`
+    - `HelpOverlay`: `3899` bytes at `$E000-$EF3B`
+    - `Banked payload`: `3998` bytes, staged source ending at `$DE92`
+  - verification:
+    - exact reported gate: `make build128` -> PASS
+    - sibling platform safety check: `make build64` -> PASS
+    - tester signoff: `ALL TESTS PASSED`
 - FEAT-AUD follow-up:
   - added two new shared sound IDs in `commodore/common/sound.s`:
     - `SFX_HUNGER_WARN` for entry into `HUNGRY` and `WEAK`
@@ -5288,6 +6254,68 @@ The section below is retained only as historical context for the earlier dual-en
 - `make test64`
   - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
 
+## 2026-04-16 C128 Build128 Assert Fix
+
+### Reported Failure Gate
+- `make build128`
+
+### Root Cause
+- The spell-feedback branch added enough resident/staged bytes that the C128 banked payload staged-source span crossed the `$E000` overlay window assertion.
+- My first byte-recovery move put the Home-mode `hm_*` strings into `ui_store.s`, which fixed `make build128` but bloated unrelated C64 tests that import `ui_store.s`.
+- That in turn pushed `test_background.s` into the `$D000` I/O hole and exposed a separate fragile `test_effects.s` cast-loop assumption.
+
+### Fix
+- Moved the Home-mode text out of the C128 banked payload.
+- Split the Home-only strings into [`commodore/common/ui_home_text.s`](/Users/chadwick/Library/Mobile%20Documents/com~apple~CloudDocs/Projects/6502/moria8-spells/commodore/common/ui_home_text.s) and imported that only in the real town overlays and the one C64 test that actually exercises Home UI.
+- Tightened the combat message invariant so slot 41 stays zero after append operations.
+- Updated the synthetic `test_effects.s` repeated-cast case to follow the current prompt-driven cast path instead of the older brittle `?` loop.
+
+### Verification
+- `make build128`
+  - passed with `Made 262 asserts , 0 failed`
+- `make test64`
+  - passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+
+### Spell Prompt Follow-up
+- Fixed the redundant `-more-` that appeared after choosing a book/spell in the new prompt-driven `m`/`p` flow.
+- Root cause:
+  - the accepted chooser prompts still occupied the message rows
+  - the next gameplay prompt (`Direction?`) arrived as a third message and forced `-more-`
+- Correction:
+  - accepted book and spell choices now clear the message area before handing off to the next gameplay prompt
+  - `msg_clear` now also resets `msg_row1_col` so row-state is fully reset
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+  - added direct chooser regression in `ui_views`
+
+### Dungeon Spell Loading Message
+- Fixed the wrong `Loading...` message appearing after dungeon spell casts like `Detect Monsters`.
+- Root cause:
+  - C64 overlay-backed spell execution restored the current creature tier after returning from `OVL.DEATH`
+  - that restore path reused `tier_check_transition`
+  - `tier_load` treated it like a real depth transition and printed `Loading...`
+- Correction:
+  - added `tier_restore_after_overlay`
+  - overlay/UI return paths now use the silent restore helper instead of raw `tier_check_transition`
+  - `tier_load` now suppresses the transient loading message during silent restores
+  - stale `$E0xx` monster-name recovery in `creature_get_name` now also sets the silent-restore flag around its internal tier reload
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+  - added direct regressions in `test_tier.s`
+
+### Spell List `?` Selection
+- Fixed the prompt/list mismatch where pressing `?` from cast/pray opened the full-screen spell list, but pressing a spell letter only dismissed the overlay and dropped back to the previous prompt.
+- Root cause:
+  - `pm_prompt_visible_spell_choice` treated the overlay list as a read-only modal
+  - it always read a dismiss key after `tramp_spell_list_display` even though the overlay footer advertised direct spell selection
+- Correction:
+  - the `?` path now feeds the overlay key back through `pm_pick_visible_spell`
+  - valid letter choice selects the spell immediately
+  - non-letter/ESC continues to return to the previous chooser prompt
+  - moved the regression coverage into `test_effects.s` and slimmed `test_ui_views.s` back down to avoid I/O-hole growth
+- Verification:
+  - `make test64` passed with `=== Results: 36 passed, 0 failed (of 36 suites) ===`
+
 ### Active C128 Title-Load Gate
 - Reported failure gate:
   - boot to the C128 title menu
@@ -5747,6 +6775,53 @@ The section below is retained only as historical context for the earlier dual-en
     - `make test64`
   - then rerun the same narrow live C64 init repro before touching save/load follow-up bugs
 
+## BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR
+
+### Goal
+- Make the priest `Sense Surroundings` prayer follow upstream `umoria` `spellMapCurrentArea()` behavior exactly enough for the Commodore tile model:
+  - map the current visible area plus the same random spill shape
+  - reveal floor tiles
+  - reveal enclosing room/corridor walls around mapped floors
+  - keep hidden doors hidden
+  - keep wizard reveal separate
+
+### Implementation
+- Added a dedicated `eff_map_area` in `commodore/common/player_magic_map.s` for the umoria-style prayer behavior.
+- Kept wizard floor-plan reveal separate in `commodore/common/player_magic_utility.s` / `commodore/common/wizard.s`.
+- On C128, kept `Sense Surroundings` out of the full `DeathOverlay` by routing both earthquake and map-area through the existing item-overlay trampoline, with dispatch selected from resident `pm_spell_idx`.
+- Tightened the prayer dispatch code in `commodore/common/player_magic_execute_overlay.s` by sharing the undead/evil dispel setup tail, which recovered the bytes needed to keep `DeathOverlay` under `$F000`.
+- Expanded `commodore/c64/tests/test_utility_effects.s` to prove:
+  - mapped room floor is revealed
+  - mapped room wall is revealed
+  - mapped corridor wall is revealed
+  - untouched rock stays dark
+  - hidden doors stay hidden
+
+### Review
+- Upstream parity checked against `umoria` prayer behavior rather than the local wizard reveal path.
+- C128 staging, overlay, and runtime-low residency constraints were all re-verified after the ownership split.
+
+### Verification
+- Exact reported command: `make test64` PASS
+- Broader regression suites: `make test128-fast-smoke` PASS
+
+### Live Regression Follow-up
+- The first C128 prayer patch still shipped a real live regression even though the gates were green.
+- User monitor trace:
+  - CPU JAM at `$49B1`
+  - caller chain through `$49AE`
+- Root cause:
+  - `eff_map_area` used raw `(zp_ptr1),y` reads/writes in the adjacent-wall pass.
+  - On C128, map rows live in Bank 1, so those raw accesses scribbled Bank 0 resident code instead of the map.
+  - `$49AE` is `status_put_stat_val`, which got overwritten by Bank 1-style map bytes and later JAMed when status redraw executed.
+- Fix:
+  - switched the adjacent-tile pass in `commodore/common/player_magic_map.s` to `:MapRead_ptr1_y()` / `:MapWrite_ptr1_y()`
+  - left the C64 behavior unchanged while restoring correct Bank 1 ownership on C128
+
+### Verification
+- Exact reported command: `make test64` PASS
+- Broader regression suites: `make test128-fast-smoke` PASS
+
 ### Redesign Implementation
 - Implemented the redesign as low-RAM copied helper images instead of a special banked C64 writer:
   - `commodore/common/disk_setup_banked.s` now owns two raw helper byte blocks:
@@ -5930,3 +7005,176 @@ The section below is retained only as historical context for the earlier dual-en
   - passed with `=== Results: 3 passed, 0 failed (of 3 suites) ===`
 - `make test64`
   - passed with `=== Results: 33 passed, 0 failed (of 33 suites) ===`
+
+- BUG-C128-PRAY-NO-EFFECT-WIZARD-MISDISPATCH:
+  - root cause 1: C128 `Ctrl+W` decoded `W` and Ctrl from separate scans, so the live command path could race back to plain `CMD_WEAR`; fix was to normalize the chord from the same CIA sample in `input128.s` and keep `CTRL+W` mapped as PETSCII `$17` -> `CMD_WIZARD`
+  - root cause 2: the suite had no priest execution smoke, so the earlier C128 prayer regression escaped; fix was to add `scripted_prayer_cast_smoke` plus wire it into `test128-fast-smoke`
+  - correction after live retest: the scripted smoke was still too weak because it only proved the seeded bless timer path and could pass while the live C128 priest UX still appeared broken; the active next step is to replace it with a product-faithful priest smoke that proves visible prayer feedback/effect through the real gameplay path
+  - follow-on regressions fixed while proving the gate:
+    - resident/banked layout drift from the new C128 input helper and prayer smoke support
+    - stale C128 test harness stubs missing `eff_detect_timer` and `tier_silent_restore` after earlier shared gameplay changes
+  - verification:
+    - `make build128` PASS
+    - `TEST_FILTER=scripted_prayer_cast_smoke bash commodore/c128/run_tests128.sh` PASS
+    - `make test64` PASS (`36 passed, 0 failed`)
+    - `make test128-fast` PASS
+    - `make test128-fast-smoke` PASS (`5 passed, 0 failed`)
+
+### Current Review
+- BUG-PRAYER-PSEUDOID-HUFFMAN:
+  - root cause: `turn_tick_pseudo_id` still assumed contiguous resident Huffman IDs and could decode a fresh pseudo-ID message as `You feel righteous!` while running; the real bless expiry path was separate and still correctly produced `The prayer has expired.`
+  - fix shape:
+    - added explicit PID quality strings in `data/huffman_strings.txt`
+    - made the PID block contiguous again so `turn_tick_pseudo_id` can use arithmetic without a resident lookup table
+    - moved overlay-only prayer feedback strings (`You feel righteous!`, `A monster falls asleep.`, `You feel resistant to heat and cold.`) out of the resident Huffman pool into `player_magic_feedback.s`
+    - kept the shared resident prayer-expiry message local in `turn.s`
+    - refreshed the C64 subsystem string-bank fixture and the test-layout buffers that drifted because of the Huffman/table changes
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- ITEM-ACTIONS-OVERLAY-AND-UMORIA-PSEUDOID:
+  - item-action cold paths (`item_read_scroll`, `item_aim_wand`, `item_use_staff`, `item_refuel`) now live in a dedicated product overlay instead of bloating the resident/default image
+  - automatic pseudo-ID messaging now matches the `umoria`-style useful wording pass instead of the old quality-adjective presentation, with the prayer pseudo-ID decode bug fixed by restoring a contiguous PID block in the Huffman table
+  - cleanup/fallout fixed in the exact C64 gate:
+    - `test_ui_views.s` had a stale 41-character equipment expectation on a 40-column row
+    - `test_item.s` had silently grown past `MAP_BASE`; `store_data.s` moved out of the resident test body and the suite now asserts the boundary explicitly
+    - `run_tests.sh` now parses `script` tty logs as text and retries once when the VICE monitor dump is missing
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-LOAD-RESUME-VIEWPORT-SEED:
+  - root cause: `load_resume_game` called `viewport_update` as if it were a fresh initializer, but the C128 implementation is a deadband adjuster that expects sane existing `zp_view_x/zp_view_y`
+  - snapshot proof from `~/vice-snapshot-20260419114026.vsf`:
+    - `zp_player_x = $b0`, `zp_player_y = $0a`
+    - `zp_view_x = $6f`, `zp_view_y = $ff`
+    - `zp_msg_flags = $01`
+  - that stale `zp_view_y = $ff` made the first post-load render start from map row 255, which matches the stray top-row VDC garbage after returning from save
+  - fix shape:
+    - seed `zp_view_x/zp_view_y` to `0` in `load_resume_game` before the first `viewport_update`
+    - add a direct C128 `main_loop128` regression proving load-resume zeroes stale viewport state before the deadband updater runs
+    - repair the unrelated but real overlay-state drift in `reu_stash_overlays`, which had added overlay 7 everywhere except the REU stash loop
+  - note:
+    - `You feel weakened.` is not part of this bug; it is the real poison-dart CON-drain message from `dungeon_features.s`, and the live screenshot's `CO:15` matches that effect
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-INVENTORY-EGO-SUFFIX-GARBAGE:
+  - live symptom on fresh-build C128 inventory screen: `Long SwordITEM 0-63:`
+  - root cause: this was not stale-row residue from the wizard prompt; the append started exactly at the end of the base item name because the display path would blindly treat any nonzero `inv_ego` as a valid suffix/prefix index
+  - fix shape:
+    - clamp invalid ego values in the shared display helpers before appending prefixes/suffixes
+    - keep the fix in the shared UI path (`game_loop.s` / `ui_trampoline_stubs.s`) instead of growing the C128 low-runtime ego module
+    - add a C64 regression proving an invalid `inv_ego` on `Long Sword` renders as plain `Long Sword` rather than walking into unrelated text
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- BUG-C128-SAVE-DRIVE9-FALSE-CORRUPT:
+  - Reported Failure Gate:
+    - `x128 -80col -8 commodore/out/moria8-c128.d71 -9 ~/moria8128save.d81`
+    - title flow: `Load` -> `Use drive 9?` = `Yes` -> dismiss `Insert save disk`
+  - snapshot proof from `~/vice-snapshot-20260419214207.vsf`:
+    - `load_result = $02` (`CORRUPT`)
+    - `load_save_version = $0e`
+    - `save_device = $09`
+    - `save_io_error = $00`
+    - so the failure was not unsupported-version or drive selection; it was a checksum mismatch during a valid legacy C128 load
+  - root cause:
+    - the C128 KERNAL byte-I/O wrappers in `commodore/common/save.s` (`load_read_byte`, `save_write_byte`, `save_write_byte_raw`) did not preserve `X`
+    - `load_read_floor_items` and `save_write_floor_items` keep the floor-slot index in `X` across those calls
+    - on the live C128 drive-9 path, `CHRIN/CHROUT` clobbered `X`, so floor-item logical fields were under-read/under-written
+    - that shifted the legacy 32-slot floor-item stream, left `fi_p1` zeroed for gold stacks, misaligned later blocks, and made a valid save fail the final checksum compare
+  - fix shape:
+    - preserve `X` in the shared C128 save/load byte wrappers instead of patching the floor-item loops ad hoc
+    - keep the legacy-version support and `Unsupported save.` split from the earlier compatibility work
+  - verification:
+    - `make test64` PASS (`44 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-DISPELL-EVIL-MISSING-FEEDBACK
+- [x] Reported Failure Gate:
+  - `dispell evil` should print player-facing feedback instead of silently removing the monster; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect current dispel-evil prayer/effect flow and upstream `umoria` feedback contract
+- [x] add the missing dispel-evil message on successful removal without widening unrelated effect behavior
+- [x] add focused regression coverage for successful dispel-evil feedback
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: priest `Dispel Evil` and `Holy Word` both remove killed evil monsters through `eff_dispel_flagged` in `commodore/common/player_magic_utility.s`, and that shared kill path awarded XP plus removed the monster without emitting any player-facing feedback
+  - fix shape: on a successful dispel kill, reuse the resident combat kill builder so the player now gets `You have slain the <monster>.` instead of a silent deletion; this stays layout-safe because it reuses `cmb_kill_str` instead of adding new overlay-owned text
+  - regression: `commodore/c64/tests/test_utility_effects.s` now requires the `Holy Word` evil-dispel path to emit exactly one built combat message via `combat_msg_buf`, so this cannot slip back to a silent remove
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-DISPELL-EVIL-NO-EFFECT-FEEDBACK
+- [x] Reported Failure Gate:
+  - when no evil monsters are left, `dispell evil` should print a no-effect message instead of only beeping; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the shared dispel path for the zero-kill case
+- [x] add no-effect feedback without regressing kill messaging
+- [x] add focused regression coverage for the zero-effect path
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: priest `Dispel Evil` damaged every evil monster through `eff_dispel_flagged`, but the prayer owner only emitted kill messages; when there were no evil targets left, the cast path returned with no player-facing message
+  - fix shape: `ped_s28` now prints `Nothing seems to happen.` only when `eff_dispel_flagged` finds zero eligible evil monsters; surviving-but-damaged evil monsters still stay silent unless one dies, so kill feedback is unchanged
+  - regression: `commodore/c64/tests/test_utility_effects.s` now includes a ninth case that exercises the no-target `Dispel Evil` path and requires one Huffman `HSTR_PIQ_NOTHING` message with no combat message output; `commodore/c64/run_tests.sh` was updated so the exact gate reads the ninth result byte
+  - memory/layout note: the first attempt overflowed `DeathOverlay`; the final byte recovery reused the resident `HSTR_PIW_NOTHING` for the recharge-empty prompt so the new prayer feedback fit without adding another overlay string
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [x] BUG-HOLY-WORD-UMORIA-PARITY
+- [x] Reported Failure Gate:
+  - `Holy Word` should match upstream `umoria` exactly rather than the current Commodore VMS-style compromise; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current `Holy Word` implementation, existing status/timer owners, and upstream `umoria` contract
+- [x] patch `Holy Word` to full-heal, restore stats, grant 3 turns of invulnerability, and dispel evil with the upstream behavior
+- [x] add focused regression coverage for the upgraded `Holy Word` behavior and invulnerability enforcement
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: the branch had documented `Holy Word` as a VMS-style compromise, so the live implementation only did a partial cleanse/heal/dispel pass and omitted upstream `umoria` effects like stat restoration and 3 turns of invulnerability
+  - fix shape: `eff_holy_word` now follows the upstream `umoria` contract: heal to max HP, remove fear and poison, recalculate stats back to their normal values, grant a 3-turn invulnerability timer, and still dispel evil for `4 * level`
+  - regression: `commodore/c64/tests/test_utility_effects.s` now requires the upgraded `Holy Word` path to full-heal above the old `200` HP ceiling, preserve blind/confuse state, restore a corrupted stat, and set the invulnerability timer; `commodore/c64/tests/test_monster_attack.s` and `commodore/c64/tests/test_monster_magic.s` now also prove the timer blocks both melee and monster-spell damage
+  - memory/layout note: the first implementation overran both C64 resident `MAP_BASE` and the C128 staged-source ceiling; the final fix reused the existing ZP sound spare for the short timer and recovered shared resident bytes with tail-call cleanup so both platform layout gates stayed green
+  - verification:
+    - `make test64` PASS (`45 passed, 0 failed`)
+    - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+
+- [ ] BUG-LONG-MESSAGE-TRUNCATION-POLISH
+- [ ] backlog:
+  - long combat/status messages can clip instead of wrapping across the 2-line message area, e.g. `Your spell fails.` followed by a long monster effect line like `the Ancient Multi-Hued Dragon confuses yo`
+  - current implementation clamps live message rendering to one row width and stores only one `SCREEN_COLS` slice per history entry in `commodore/common/ui_messages.s`, `commodore/c64/screen.s`, and `commodore/c128/screen_vdc.s`
+  - priority: low polish; rare on normal play, more visible on deeper levels with long monster names/effects
+  - desired future fix: wrap across rows 0-1 cleanly, preserve sensible `-more-` behavior, and decide whether history should keep wrapped/continued lines or widened entries
+
+- [ ] BUG-GLYPH-OF-WARDING-UMORIA-PARITY
+- [x] Reported Failure Gate:
+  - `Glyph of Warding` should work like upstream `umoria` and provide clear player-facing feedback; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current glyph placement/break mechanic and the live UX path
+- [x] verify the exact upstream `umoria` glyph behavior and break semantics
+- [x] patch the spell to match upstream mechanics as closely as practical and add clear placement/block/break feedback
+- [x] add focused regression coverage for glyph placement and monster interaction feedback
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+  - review:
+    - mechanic fix: glyph break odds now follow the upstream `umoria` shape (`1/12` gate, then `1/250 < monster level`), and the blocker is removed correctly when a monster breaks it
+    - UX fix: glyphs render as a visible rune on the map; placement still refuses occupied floor-item tiles and keeps the existing blockage message
+    - C128 root cause: the first red C128 gate was not “the machine is out of RAM”; the resident staged source for the banked payload had drifted one byte into the `$E000-$EFFF` overlay window
+    - consultant-backed correction: keep glyph rendering in the resident renderer, fix the staged-source contract instead of changing player-facing text to save space
+    - implementation detail: fixed a real C128 glyph-render bug where `glyph_find_at` could read a stale `Y` on no-item tiles, tightened `glyph_find_at` itself to reclaim resident bytes, and moved the C128-only `Holy Avenger` suffix out of `RuntimeLowData` into ordinary `Default` RAM
+    - live follow-up from snapshot `~/vice-snapshot-20260421120315.vsf`: the intermediate attempt that parked the C128-only suffix inside `memory128.s`’s Common-RAM MMU helper blob destabilized the `w_close -> ExitKernal_sub` preload path during `MONSTER.DB.1` load and produced a live JAM at `$016D`; that placement is now reverted
+    - live glyph-message follow-up: `Glyph of Warding` now prints `A glyph appears beneath you.` without reusing `OVL_DEATH` ownership for the message text; on C128 the gameplay-owned glyph strings were moved out of the banked payload so `banked_code_end <= $FFFA` and `banked_payload_end <= $E000` stay green again
+    - live glyph-message rendering fix: the first placement message build used the wrong assembler encoding for direct `msg_print` strings, so the live C128 path rendered garbage; `player_magic_runtime_text.s` now assembles under `screencode_mixed`
+    - consultant note: the cleaner future full ownership move is to shift glyph-effect runtime text/effect handling into a gameplay-owned overlay such as `OVL_ITEMS`, but this fix stays minimal and keeps the live spell text out of the death overlay
+    - verification:
+      - `make test64` PASS (`45 passed, 0 failed`)
+      - `make test128-fast-smoke` PASS (`6 passed, 0 failed`)
+      - `TEST_FILTER='boot_tier_transition_smoke' bash commodore/c128/run_tests128.sh` PASS (`1 passed, 0 failed`)

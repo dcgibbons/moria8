@@ -103,7 +103,7 @@ ui_recall_display:
     ldx recall_found_type
     lda cr_hd_num,x
     jsr screen_put_decimal
-    lda #$04                    // 'D'
+    lda #$44                    // PETSCII 'D' — portable across C64/C128 backends
     jsr screen_put_char
     ldx recall_found_type
     lda cr_hd_sides,x
@@ -120,35 +120,55 @@ ui_recall_display:
     jsr rcl_put_str
 
     jsr rcl_white
+    lda #0
+    sta rcl_any_atk
+
+    // Print attack 0 if the slot actually carries damage.
     ldx recall_found_type
     lda cr_atk0_type,x
-    beq !rcl_no_atk+
-    // Print attack 0: type + dice
-    tay                         // Y = type for lookup
+    beq !rcl_atk1+
+    sta rcl_atk_type
     lda cr_atk0_dice,x
+    beq !rcl_atk1+
     sta rcl_dice
     lda cr_atk0_sides,x
+    beq !rcl_atk1+
     sta rcl_sides
-    tya
+    lda rcl_atk_type
     jsr rcl_print_atk
+    inc rcl_any_atk
 
-    // Attack 1 (on same row)
+!rcl_atk1:
+    // Print attack 1 only if it is real and non-zero.
     ldx recall_found_type
     lda cr_atk1_type,x
     beq !rcl_no_atk+
-    lda #$20
-    jsr screen_put_char
-    jsr screen_put_char
-    ldx recall_found_type
-    lda cr_atk1_type,x
-    tay
+    sta rcl_atk_type
     lda cr_atk1_dice,x
+    beq !rcl_no_atk+
     sta rcl_dice
     lda cr_atk1_sides,x
+    beq !rcl_no_atk+
     sta rcl_sides
-    tya
+
+    lda rcl_any_atk
+    beq !rcl_print_atk1+
+    lda #$20
+    jsr screen_put_char
+    lda #$20
+    jsr screen_put_char
+!rcl_print_atk1:
+    lda rcl_atk_type
     jsr rcl_print_atk
+    inc rcl_any_atk
+
 !rcl_no_atk:
+    lda rcl_any_atk
+    bne !rcl_atk_done+
+    lda #<rcl_s_none
+    ldy #>rcl_s_none
+    jsr rcl_put_str
+!rcl_atk_done:
 
     // --- Spells (row 8): "SPELLS: YES/NONE" ---
     lda #8
@@ -246,19 +266,21 @@ rcl_print_atk:
     asl                         // *2
     clc
     adc rcl_scratch             // *3
-    tay
-    lda rcl_atk_3,y
+    tax
+    lda rcl_atk_3,x
     jsr screen_put_char
-    lda rcl_atk_3+1,y
+    inx
+    lda rcl_atk_3,x
     jsr screen_put_char
-    lda rcl_atk_3+2,y
+    inx
+    lda rcl_atk_3,x
     jsr screen_put_char
     lda #$20
     jsr screen_put_char
 !rpa_dice:
     lda rcl_dice
     jsr screen_put_decimal
-    lda #$04                    // 'D'
+    lda #$44                    // PETSCII 'D' — portable across C64/C128 backends
     jsr screen_put_char
     lda rcl_sides
     jmp screen_put_decimal      // Tail call
@@ -278,16 +300,18 @@ rcl_s_none:  .text "None" ; .byte 0
 rcl_s_yes:   .text "Yes" ; .byte 0
 
 // Attack type 3-char abbreviations (9 × 3 = 27 bytes)
+// Stored as PETSCII-safe uppercase bytes so screen_put_char renders them
+// consistently on both the C64 direct-screen path and the C128 VDC path.
 rcl_atk_3:
-    .text "   "     // 0: ATK_NONE / unused
-    .text "HIT"     // 1: ATK_NORMAL
-    .text "CNF"     // 2: ATK_CONFUSE
-    .text "FER"     // 3: ATK_FEAR
-    .text "ACD"     // 4: ATK_ACID
-    .text "COR"     // 5: ATK_CORRODE
-    .text "PAR"     // 6: ATK_PARALYZE
-    .text "PSN"     // 7: ATK_POISON
-    .text "AGG"     // 8: ATK_AGGRAVATE
+    .byte $20, $20, $20     // 0: ATK_NONE / unused
+    .byte $48, $49, $54     // 1: ATK_NORMAL    HIT
+    .byte $43, $4e, $46     // 2: ATK_CONFUSE   CNF
+    .byte $46, $45, $52     // 3: ATK_FEAR      FER
+    .byte $41, $43, $44     // 4: ATK_ACID      ACD
+    .byte $43, $4f, $52     // 5: ATK_CORRODE   COR
+    .byte $50, $41, $52     // 6: ATK_PARALYZE  PAR
+    .byte $50, $53, $4e     // 7: ATK_POISON    PSN
+    .byte $41, $47, $47     // 8: ATK_AGGRAVATE AGG
 
 // ATK code (0-20) → abbreviation index
 rcl_atk_idx:
@@ -295,5 +319,7 @@ rcl_atk_idx:
 
 // Scratch variables
 rcl_scratch: .byte 0
+rcl_any_atk: .byte 0
+rcl_atk_type:.byte 0
 rcl_dice:    .byte 0
 rcl_sides:   .byte 0

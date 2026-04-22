@@ -3,29 +3,23 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
 
-.pc = $080E "Test Code"
+.pc = $080E "Bootstrap"
 
 .encoding "screencode_mixed"
 
 bootstrap:
     jmp test_start
 
-test_finish:
-    ldx #14
-!copy:
-    lda tc_results,x
-    sta $0400,x
-    dex
-    bpl !copy-
-    brk
-
-.pc = $0830 "Main"
+.pc = $0830 "Test Code"
 
 #import "../../common/zeropage.s"
 #import "../../common/tables.s"
 #import "../../common/item_defs.s"
+#import "../../common/math.s"
 
 .const FLAG_OCCUPIED       = $01
+.const FLAG_VISITED        = $04
+.const FLAG_LIT            = $08
 .const PL_HP_LO            = 33
 .const PL_HP_HI            = 34
 .const PL_MHP_LO           = 35
@@ -55,8 +49,15 @@ eff_detect_timer:    .byte 0
 .const HSTR_TTL_DIM          = 45
 .const HSTR_TTL_OUT          = 46
 .const HSTR_RECALL_ARRIVE    = 47
-.const HSTR_PID_TERRIBLE     = 48
-
+.const HSTR_PID_WIELDING     = 178
+.const HSTR_PID_BODY         = 179
+.const HSTR_PID_ARM          = 180
+.const HSTR_PID_HEAD         = 181
+.const HSTR_PID_HANDS        = 182
+.const HSTR_PID_FEET         = 183
+.const HSTR_PID_LIGHT        = 184
+.const HSTR_PID_RIGHT        = 185
+.const HSTR_PID_PACK         = 186
 .const DEATH_POISON  = $FE
 .const DEATH_STARVE  = $FF
 .const SFX_HUNGER_WARN  = $08
@@ -66,6 +67,7 @@ player_data:         .fill 80, 0
 inv_item_id:         .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:              .fill TOTAL_INV_SLOTS, 0
 inv_flags:           .fill TOTAL_INV_SLOTS, 0
+inv_ego:             .fill TOTAL_INV_SLOTS, 0
 level_entry_dir:     .byte 0
 current_tier:        .byte 0
 tier_loaded:         .byte 0
@@ -74,7 +76,7 @@ test_map_row:        .fill 80, FLAG_OCCUPIED
 map_row_lo:          .fill 48, <test_map_row
 map_row_hi:          .fill 48, >test_map_row
 
-tc_results: .fill 15, $ff
+tc_results: .fill 23, $ff
 
 test_seq_next: .byte 0
 test_seq_effects: .byte 0
@@ -87,6 +89,9 @@ test_store_restock_calls: .byte 0
 test_status_dirty_calls: .byte 0
 test_huff_calls: .byte 0
 test_last_huff_id: .byte 0
+test_msg_calls: .byte 0
+test_last_msg_lo: .byte 0
+test_last_msg_hi: .byte 0
 test_level_generate_calls: .byte 0
 test_monster_spawn_calls: .byte 0
 test_item_spawn_calls: .byte 0
@@ -100,9 +105,13 @@ test_tier_invalidate_calls: .byte 0
 test_level_change_calls: .byte 0
 test_inv_remove_calls: .byte 0
 test_monster_ai_calls: .byte 0
+test_monster_ai_return_a: .byte 0
+test_monster_ai_return_c: .byte 0
 test_player_death_calls: .byte 0
 test_sound_calls: .byte 0
 test_last_sound: .byte $ff
+test_rng_result: .byte 0
+test_last_rng_bound: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -115,8 +124,24 @@ test_last_sound: .byte $ff
 
 monster_ai_tick:
     inc test_monster_ai_calls
-    lda #0
+    lda test_monster_ai_return_c
+    beq !clear+
+    lda test_monster_ai_return_a
+    sec
+    rts
+!clear:
+    lda test_monster_ai_return_a
     clc
+    rts
+
+map_get_tile:
+    lda map_row_lo,y
+    sta zp_ptr0
+    lda map_row_hi,y
+    sta zp_ptr0_hi
+    txa
+    tay
+    :MapRead_ptr0_y()
     rts
 
 status_mark_dirty:
@@ -193,6 +218,14 @@ huff_print_msg:
     stx test_last_huff_id
     rts
 
+msg_print:
+    inc test_msg_calls
+    lda zp_ptr0
+    sta test_last_msg_lo
+    lda zp_ptr0_hi
+    sta test_last_msg_hi
+    rts
+
 player_death_check:
     inc test_player_death_calls
     rts
@@ -200,6 +233,11 @@ player_death_check:
 sound_play:
     inc test_sound_calls
     sta test_last_sound
+    rts
+
+rng_range:
+    sta test_last_rng_bound
+    lda test_rng_result
     rts
 
 inv_remove_item:
@@ -242,6 +280,9 @@ reset_state:
     sta test_status_dirty_calls
     sta test_huff_calls
     sta test_last_huff_id
+    sta test_msg_calls
+    sta test_last_msg_lo
+    sta test_last_msg_hi
     sta test_level_generate_calls
     sta test_monster_spawn_calls
     sta test_item_spawn_calls
@@ -255,8 +296,12 @@ reset_state:
     sta test_level_change_calls
     sta test_inv_remove_calls
     sta test_monster_ai_calls
+    sta test_monster_ai_return_a
+    sta test_monster_ai_return_c
     sta test_player_death_calls
     sta test_sound_calls
+    sta test_rng_result
+    sta test_last_rng_bound
     sta zp_turn_lo
     sta zp_turn_hi
     sta turn_scene_dirty
@@ -291,14 +336,15 @@ reset_state:
     sta test_last_sound
     lda #$ff
     sta zp_run_dir
-    lda #FI_EMPTY
     ldx #TOTAL_INV_SLOTS - 1
 !clr_inv:
+    lda #FI_EMPTY
     sta inv_item_id,x
     lda #0
     sta inv_p1,x
+    sta inv_flags,x
+    sta inv_ego,x
     dex
-    lda #FI_EMPTY
     bpl !clr_inv-
     lda #FLAG_OCCUPIED
     ldx #79
@@ -344,7 +390,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #14
+    ldx #22
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -670,10 +716,161 @@ test_start:
     bne !t10_fail+
     lda #$01
     sta tc_results + 9
-    jmp !t12+
+    jmp t17_test
 !t10_fail:
     lda #$00
     sta tc_results + 9
+    jmp t17_test
+
+t17_test:
+    // Test 17: bless/prayer expiry prints the dedicated expiry message.
+    jsr reset_state
+    lda #1
+    sta zp_eff_bless
+    jsr turn_tick_effects
+    lda zp_eff_bless
+    bne !t17_fail+
+    lda test_msg_calls
+    cmp #1
+    bne !t17_fail+
+    lda test_last_msg_lo
+    cmp #<turn_prayer_off_msg
+    bne !t17_fail+
+    lda test_last_msg_hi
+    cmp #>turn_prayer_off_msg
+    bne !t17_fail+
+    lda #$01
+    sta tc_results + 16
+    jmp t18_test
+!t17_fail:
+    lda #$00
+    sta tc_results + 16
+    jmp t18_test
+
+t18_test:
+    // Test 18: umoria outer pseudo-ID chance uses level-based bound on 16-turn cadence.
+    jsr reset_state
+    lda #1
+    sta zp_player_lvl
+    lda #$0f
+    sta zp_turn_lo
+    lda #5
+    sta inv_item_id + 1
+    lda #1
+    sta inv_p1 + 1
+    lda #1
+    sta test_rng_result
+    jsr turn_tick_pseudo_id
+    lda inv_flags + 1
+    and #IF_SENSED
+    bne !t18_fail+
+    lda test_last_rng_bound
+    cmp #135
+    bne !t18_fail+
+    lda test_msg_calls
+    cmp #0
+    bne !t18_fail+
+    lda #$01
+    sta tc_results + 17
+    jmp t19_test
+!t18_fail:
+    lda #$00
+    sta tc_results + 17
+    jmp t19_test
+
+t19_test:
+    // Test 19: equipped positive gear uses the exact umoria-style wording.
+    jsr reset_state
+    lda #40
+    sta zp_player_lvl
+    lda #$0f
+    sta zp_turn_lo
+    lda #5
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_p1 + EQUIP_WEAPON
+    lda #0
+    sta test_rng_result
+    jsr turn_tick_pseudo_id
+    lda inv_flags + EQUIP_WEAPON
+    and #IF_SENSED
+    beq !t19_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t19_fail+
+    lda test_last_huff_id
+    cmp #HSTR_PID_WIELDING
+    bne !t19_fail+
+    lda test_msg_calls
+    bne !t19_fail+
+    lda #$01
+    sta tc_results + 18
+    jmp t20_test
+!t19_fail:
+    lda #$00
+    sta tc_results + 18
+    jmp t20_test
+
+t20_test:
+    // Test 20: carried positive gear uses the pack wording and sensing path.
+    jsr reset_state
+    lda #1
+    sta zp_player_lvl
+    lda #$0f
+    sta zp_turn_lo
+    lda #5
+    sta inv_item_id + 1
+    lda #2
+    sta inv_p1 + 1
+    lda #0
+    sta test_rng_result
+    jsr turn_tick_pseudo_id
+    lda inv_flags + 1
+    and #IF_SENSED
+    beq !t20_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t20_fail+
+    lda test_last_huff_id
+    cmp #HSTR_PID_PACK
+    bne !t20_fail+
+    lda test_msg_calls
+    bne !t20_fail+
+    lda #$01
+    sta tc_results + 19
+    jmp t21_test
+!t20_fail:
+    lda #$00
+    sta tc_results + 19
+    jmp t21_test
+
+t21_test:
+    // Test 21: equipped light source fuel does not pseudo-sense as magic.
+    jsr reset_state
+    lda #1
+    sta zp_player_lvl
+    lda #$0f
+    sta zp_turn_lo
+    lda #13
+    sta inv_item_id + EQUIP_LIGHT
+    lda #10
+    sta inv_p1 + EQUIP_LIGHT
+    lda #0
+    sta test_rng_result
+    jsr turn_tick_pseudo_id
+    lda inv_flags + EQUIP_LIGHT
+    and #IF_SENSED
+    bne !t21_fail+
+    lda test_huff_calls
+    cmp #0
+    bne !t21_fail+
+    lda #$01
+    sta tc_results + 20
+    jmp !t12+
+!t21_fail:
+    lda #$00
+    sta tc_results + 20
+    jmp !t12+
 
 !t1_seq:
     jsr install_turn_patches
@@ -740,10 +937,83 @@ test_start:
     bne !t11_fail+
     lda #$01
     sta tc_results + 10
-    jmp test_finish
+    jmp !t16+
 !t11_fail:
     lda #$00
     sta tc_results + 10
+    jmp !t16+
+
+!t16:
+    // Test 16: monster AI explicit dirty reports still promote turn_scene_dirty.
+    jsr reset_state
+    lda #1
+    sta test_monster_ai_return_a
+    lda #0
+    sta test_monster_ai_return_c
+    jsr turn_post_action
+    lda test_monster_ai_calls
+    cmp #1
+    bne !t16_fail+
+    lda turn_scene_dirty
+    cmp #1
+    bne !t16_fail+
+    lda zp_dirty_count
+    bne !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !t22+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+    jmp !t22+
+
+!t22:
+    // Test 22: carry-only monster movement still promotes redraw in lit rooms.
+    jsr reset_state
+    lda #10
+    sta zp_player_x
+    lda #0
+    sta zp_player_y
+    lda #(FLAG_VISITED | FLAG_LIT)
+    sta test_map_row + 10
+    lda #1
+    sta test_monster_ai_return_c
+    lda #0
+    sta test_monster_ai_return_a
+    jsr turn_post_action
+    lda turn_scene_dirty
+    cmp #1
+    bne !t22_fail+
+    lda #$01
+    sta tc_results + 21
+    jmp !t23+
+!t22_fail:
+    lda #$00
+    sta tc_results + 21
+    jmp !t23+
+
+!t23:
+    // Test 23: the carry-only promotion does not fire on unlit tiles.
+    jsr reset_state
+    lda #10
+    sta zp_player_x
+    lda #0
+    sta zp_player_y
+    lda #0
+    sta test_map_row + 10
+    lda #1
+    sta test_monster_ai_return_c
+    lda #0
+    sta test_monster_ai_return_a
+    jsr turn_post_action
+    lda turn_scene_dirty
+    bne !t23_fail+
+    lda #$01
+    sta tc_results + 22
+    jmp test_finish
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
     jmp test_finish
 
 !t12:
@@ -862,3 +1132,12 @@ test_start:
     lda #$00
     sta tc_results + 14
     jmp !t1_seq-
+
+test_finish:
+    ldx #22
+!copy:
+    lda tc_results,x
+    sta $0400,x
+    dex
+    bpl !copy-
+    brk

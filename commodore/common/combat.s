@@ -120,6 +120,7 @@ player_attack_monster:
 
     ldx cmb_slot
     jsr monster_remove
+    inc zp_dirty_count          // Force redraw of the killed monster tile
 
 !pam_next_blow:
     dec zp_combat_blows
@@ -1061,6 +1062,7 @@ msg_build_action:
     ldy #>cmb_period
     jsr combat_append_str       // "."
 
+    jsr combat_clamp_msg_idx
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
@@ -1085,6 +1087,7 @@ combat_kill_message:
 // cmb_term_and_print — Null-terminate combat_msg_buf and print it
 // Clobbers: A, X
 cmb_term_and_print:
+    jsr combat_clamp_msg_idx
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
@@ -1129,6 +1132,7 @@ msg_build_levelup:
     ldy #>cmb_period
     jsr combat_append_str
 
+    jsr combat_clamp_msg_idx
     ldx cmb_buf_idx
     lda #0
     sta combat_msg_buf,x
@@ -1143,16 +1147,18 @@ combat_append_str:
     ldx cmb_buf_idx
     ldy #0
 !cas_loop:
+    cpx #41                     // Keep slot 41 reserved for null terminator
+    bcs !cas_done+
     lda (zp_ptr1),y
     beq !cas_done+
     sta combat_msg_buf,x
     inx
     iny
-    cpx #41                     // Buffer overflow protection
-    bcs !cas_done+
     jmp !cas_loop-
 !cas_done:
     stx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
     rts
 
 // combat_append_monster_name — Append current monster's name to buffer
@@ -1181,13 +1187,27 @@ combat_append_digits:
     ldx cmb_buf_idx
     ldy #0
 !cad_emit:
+    cpx #41                     // Keep slot 41 reserved for null terminator
+    bcs !cad_done+
     lda nf_digit_buf,y
     sta combat_msg_buf,x
     inx
     iny
     cpy zp_temp2
     bne !cad_emit-
+!cad_done:
     stx cmb_buf_idx
+    lda #0
+    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
+    rts
+
+combat_clamp_msg_idx:
+    lda cmb_buf_idx
+    cmp #42
+    bcc !ccmi_done+
+    lda #41
+    sta cmb_buf_idx
+!ccmi_done:
     rts
 
 // ============================================================

@@ -41,8 +41,7 @@ throw_item:
     cmp #$3f
     bne !tw_not_inv+
     lda #$ff                    // Filter: show all items
-    jsr show_inv_and_restore
-    jmp throw_item
+    jsr show_inv_and_select
 !tw_not_inv:
 
     // ESC ($03) or space ($20) → cancel

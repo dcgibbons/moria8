@@ -27,6 +27,18 @@ test_exit_trampoline:
 
 .encoding "screencode_mixed"
 
+player_cast_spell:
+    rts
+
+player_pray:
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -68,7 +80,6 @@ test_exit_trampoline:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
@@ -77,10 +88,13 @@ test_exit_trampoline:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/store.s"
-#import "../../common/ui_store.s"
-#import "../../common/ui_help.s"
+ui_help_display:
+store_init_all:
+store_restock_all:
+store_enter:
+    rts
+bit_mask_table:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
 #import "../../common/ui_trampoline_stubs.s"
 
 // Strings referenced by imported modules but defined in main.s

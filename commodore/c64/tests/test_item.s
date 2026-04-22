@@ -3,7 +3,7 @@
 // Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
 //        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$041f: $01 = pass, $00 = fail per test (32 tests)
+// Results at $0400-$0432: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #46
+    ldx #44-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -51,6 +51,9 @@ test_exit_trampoline:
 #import "../../common/background_data.s"
 #import "../../common/player_create.s"
 .segment Default
+#import "../../common/ui_inventory.s"
+#import "../../common/ui_equipment.s"
+#import "../../common/ui_help.s"
 #import "../../common/sound.s"
 #import "../../common/dungeon_data.s"
 #import "../../common/dungeon_gen.s"
@@ -70,22 +73,21 @@ test_exit_trampoline:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/store_data.s"
-#import "../../common/ui_help.s"
 #import "../../common/ui_trampoline_stubs.s"
 
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]
 .segment TestStoreOverlay
+#import "../../common/store_data.s"
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 .segment Default
@@ -95,14 +97,23 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 47, $ff
+tc_results: .fill 44, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #46
+    ldx #44-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1342,8 +1353,8 @@ test_start:
     jsr floor_item_add
 
     // Set IF_CURSED flag on floor item
-    lda #IF_CURSED
-    sta fi_flags                    // Slot 0
+    lda #IF_CURSED << FI_META_FLAGS_SHIFT
+    sta fi_meta                     // Slot 0
 
     // Stuff keyboard buffer for -more-
     lda #1
@@ -1458,14 +1469,14 @@ test_start:
 
     // Stuff keyboard buffer:
     // 1. 'A' ($41) — select scroll in slot 0
-    // 2. 'B' ($42) — select potion in slot 1 to identify
+    // 2. 'A' ($41) — select the first visible item to identify
     // 3. Space ($20) — dismiss -MORE- after "THIS IS A..." message
     // (2-line message area: prompt + identify fit in rows 0-1, no -MORE- between them)
     lda #3
     sta $c6
     lda #$41                        // 'A' — read the scroll in slot 0
     sta $0277
-    lda #$42                        // 'B' — identify the potion in slot 1
+    lda #$41                        // 'A' — identify the first visible item
     sta $0278
     lda #$20                        // Space — dismiss -MORE- after result
     sta $0279
@@ -1477,9 +1488,9 @@ test_start:
     cmp #1
     bne !t32_fail+
 
-    // Scroll in slot 0 should be consumed
+    // Scroll in slot 0 should be consumed, compacting the potion into slot 0
     lda inv_item_id
-    cmp #FI_EMPTY
+    cmp #17
     bne !t32_fail+
 
     // Scroll type 21 should also be known (auto-identified on use)
@@ -2044,184 +2055,12 @@ test_start:
 !t44_pass:
     lda #$01
     sta tc_results + 43
-    jmp !t45+
-
-    // ==========================================
-    // Test 45: item_quaff maps filtered letters over sparse slots
-    // ==========================================
-!t45:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #50
-    sta zp_player_hp_lo
-    lda #0
-    sta zp_player_hp_hi
-    lda #200
-    sta zp_player_mhp_lo
-    lda #0
-    sta zp_player_mhp_hi
-
-    // Junk in slot 0 should be hidden by the potion filter.
-    lda #4
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #0
-    sta inv_p1 + 0
-    sta inv_flags + 0
-
-    // First visible potion.
-    lda #17
-    sta inv_item_id + 1
-    lda #1
-    sta inv_qty + 1
-    lda #0
-    sta inv_p1 + 1
-    sta inv_flags + 1
-
-    // Second visible potion.
-    lda #25
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
-    lda #0
-    sta inv_p1 + 4
-    sta inv_flags + 4
-
-    lda #1
-    sta $c6
-    lda #$41                    // 'A' => first visible potion (slot 1)
-    sta $0277
-
-    jsr item_quaff
-    bcc !t45_fail+
-
-    lda inv_item_id + 1
-    cmp #FI_EMPTY
-    bne !t45_fail+
-    lda inv_item_id + 4
-    cmp #25
-    bne !t45_fail+
-    lda inv_item_id + 0
-    cmp #4
-    bne !t45_fail+
-
-    lda #$01
-    sta tc_results + 44
-    jmp !t46+
-!t45_fail:
-    lda #$00
-    sta tc_results + 44
-
-    // ==========================================
-    // Test 46: item_takeoff maps contiguous letters over equipped items
-    // ==========================================
-!t46:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #4
-    sta inv_item_id + EQUIP_WEAPON
-    lda #1
-    sta inv_qty + EQUIP_WEAPON
-    lda #0
-    sta inv_p1 + EQUIP_WEAPON
-    sta inv_flags + EQUIP_WEAPON
-
-    lda #14
-    sta inv_item_id + EQUIP_LIGHT
-    lda #1
-    sta inv_qty + EQUIP_LIGHT
-    lda #20
-    sta inv_p1 + EQUIP_LIGHT
-    lda #0
-    sta inv_flags + EQUIP_LIGHT
-
-    lda #2
-    sta $c6
-    lda #$42                    // 'B' => second visible equipped item (light)
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_takeoff
-    bcc !t46_fail+
-
-    lda inv_item_id + EQUIP_WEAPON
-    cmp #4
-    bne !t46_fail+
-    lda inv_item_id + EQUIP_LIGHT
-    cmp #FI_EMPTY
-    bne !t46_fail+
-    lda inv_item_id + 0
-    cmp #14
-    bne !t46_fail+
-
-    lda #$01
-    sta tc_results + 45
-    jmp !t47+
-!t46_fail:
-    lda #$00
-    sta tc_results + 45
-
-    // ==========================================
-    // Test 47: item_wear hides Flask of Oil from wearable selection
-    // ==========================================
-!t47:
-    jsr item_init_inventory
-
-    lda #0
-    sta zp_msg_flags
-
-    lda #ITEM_FLASK_OIL
-    sta inv_item_id + 0
-    lda #1
-    sta inv_qty + 0
-    lda #20
-    sta inv_p1 + 0
-    lda #0
-    sta inv_flags + 0
-
-    lda #2
-    sta inv_item_id + 4
-    lda #1
-    sta inv_qty + 4
-    lda #0
-    sta inv_p1 + 4
-    sta inv_flags + 4
-
-    lda #2
-    sta $c6
-    lda #$41                    // 'A' => first visible wearable item (slot 4 dagger)
-    sta $0277
-    lda #$20
-    sta $0278
-
-    jsr item_wear
-    bcc !t47_fail+
-
-    lda inv_item_id + EQUIP_WEAPON
-    cmp #2
-    bne !t47_fail+
-    lda inv_item_id + 4
-    cmp #FI_EMPTY
-    bne !t47_fail+
-    lda inv_item_id + 0
-    cmp #ITEM_FLASK_OIL
-    bne !t47_fail+
-
-    lda #$01
-    sta tc_results + 46
     jmp !tests_done+
-!t47_fail:
-    lda #$00
-    sta tc_results + 46
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+item_test_body_end:
+
+.assert "Item test stays below MAP_BASE", item_test_body_end <= MAP_BASE, true

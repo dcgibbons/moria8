@@ -28,6 +28,7 @@
 // ============================================================
 current_tier:   .byte 0     // 0 = no tier (town/embedded), 1-4 = active tier
 tier_loaded:    .byte 0     // 1 = a tier has been loaded from disk/REU
+tier_silent_restore: .byte 0    // 1 = suppress transient "Loading..." during overlay restore
 // C128 tier cache metadata: active tier payload mirrored into the named Bank 1
 // tier-cache ownership window from memory128.s.
 c128_tier_cache_base_lo: .byte 0
@@ -44,6 +45,7 @@ tier_invalidate_state:
     lda #0
     sta current_tier
     sta tier_loaded
+    sta tier_silent_restore
     sta c128_tier_cache_size_lo
     sta c128_tier_cache_size_hi
     sta tier_name_lo_addr
@@ -249,6 +251,16 @@ tier_check_transition:
     jsr tier_load
     rts
 
+// tier_restore_after_overlay — re-establish current tier data after an overlay
+// or modal UI action without surfacing the transient "Loading..." message.
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0, zp_temp1
+tier_restore_after_overlay:
+    lda #1
+    sta tier_silent_restore
+    jsr tier_check_transition
+    lda #0
+    sta tier_silent_restore
+    rts
 
 // ============================================================
 // tier_load — Load a specific tier into the active creature buffer
@@ -265,6 +277,8 @@ tier_load:
     // Show loading message only when we are not already presenting the
     // full-screen generation busy UI.
     lda generation_busy_active_api
+    bne !tl_skip_loading_msg+
+    lda tier_silent_restore
     bne !tl_skip_loading_msg+
     lda #<tier_loading_str
     sta zp_ptr0
@@ -320,6 +334,7 @@ tier_load:
     // Data is now in RAM at $E000 (under KERNAL ROM).
     // Bank out KERNAL to read, copy SoA to active buffer.
 #if !C128
+    php
     sei
     lda $01
     pha                         // Save bank config
@@ -375,7 +390,7 @@ tier_load:
 #if !C128
     pla
     sta $01                     // Restore bank config
-    cli
+    plp
 #endif
 
     // Clear stale name pointers for indices beyond this tier's range.

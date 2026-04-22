@@ -60,6 +60,9 @@ OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
 DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
+SCRIPTED_SPELL_BOOT_ASSETS_BUILT=0
+SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=0
+SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=0
 CACHE_SURVIVAL_BOOT_ASSETS_BUILT=0
 LOAD_RESUME_BOOT_ASSETS_BUILT=0
 REAL_BOOT_DIAG_ASSETS_BUILT=0
@@ -508,19 +511,19 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128\n'
             ;;
         smokes)
-            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
+            printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
             ;;
         boot)
             printf 'boot\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,boot_diag_copy\n'
             ;;
         town)
-            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
+            printf 'town\ttown_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,real_input_town_move_diag,real_boot_crash_harness\n'
             ;;
         cache)
             printf 'cache\tcache_survival_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke,overlay_data_transition_smoke\n'
@@ -546,7 +549,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -556,7 +559,7 @@ suite_matches_phase_token() {
             ;;
         smokes)
             case "$suite_name" in
-                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
+                boot_d64_smoke|boot_title_idle_smoke|title_art_smoke|boot_title_load_missing_savefile_smoke|boot_title_load_mounted_save_smoke|vic40_clean_boot_smoke|new_key_stability_smoke|boot_title_newgame_smoke|boot_title_load_resume_smoke|boot_tier_transition_smoke|town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|cache_survival_smoke|dungeon_attack_stability_smoke|death_overlay_smoke|restart_to_title_smoke|preload_partial_failure_smoke|overlay_partial_failure_smoke) return 0 ;;
             esac
             ;;
         boot)
@@ -566,7 +569,7 @@ suite_matches_phase_token() {
             ;;
         town)
             case "$suite_name" in
-                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
+                town_overlay_smoke|town_overlay_female_smoke|town_overlay_state_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|real_input_town_move_diag|real_boot_crash_harness) return 0 ;;
             esac
             ;;
         cache)
@@ -771,7 +774,7 @@ groups = {
     "title/runtime": ["title_menu_ready", "game_new_start", "load_resume_game"],
     "movement/render": ["main_loop", "vp_render_status_loop", "update_visibility", "render_viewport", "player_try_move"],
     "combat": ["player_attack_monster", "combat_apply_damage", "monster_attack_player"],
-    "commands": ["item_aim_wand", "item_use_staff", "item_gain_spell", "player_cast_spell", "player_pray", "spell_list_display", "ranged_fire", "throw_item", "bash_command"],
+    "commands": ["item_aim_wand", "item_use_staff", "item_gain_spell", "player_cast_spell", "player_pray", "spell_list_display", "spell_execute_selected", "magic_check_new_spells", "calc_spell_failure", "ranged_fire", "throw_item", "bash_command"],
 }
 
 for group, names in groups.items():
@@ -972,6 +975,7 @@ for kind, _display, symbol, arg in contracts:
 for label in (
     "tramp_ui_help_display",
     "tramp_ui_inv_display",
+    "tramp_ui_inv_select_display",
     "tramp_ui_equip_display",
     "tramp_ui_recall",
 ):
@@ -1102,6 +1106,8 @@ dfeat = (root / "common" / "dungeon_features.s").read_text().splitlines()
 help_mod = (root / "common" / "ui_help.s").read_text().splitlines()
 store_mod = (root / "common" / "ui_store.s").read_text().splitlines()
 loop_helpers = (root / "common" / "game_loop_helpers.s").read_text().splitlines()
+player_magic_mod = (root / "common" / "player_magic.s").read_text().splitlines()
+spell_effects_mod = (root / "common" / "spell_effects.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1298,6 +1304,43 @@ required_chains = [
         "jsr input_wait_release",
         "jsr input_get_key",
     ]),
+    ("spell_prompt_choice", player_magic_mod, [
+        "pm_prompt_visible_spell_choice:",
+        "jsr piw_print_prompt_with_count",
+        "jsr input_prepare_followup_key",
+        "jsr input_get_key",
+    ]),
+    ("identify_prompt_choice", spell_effects_mod, [
+        "eff_identify_prompt:",
+        "jsr huff_print_msg",
+        "jsr input_prepare_followup_key",
+        "jsr input_get_key",
+    ]),
+    ("inventory_overlay_select", (root / "common" / "player_items.s").read_text().splitlines(), [
+        "show_inv_and_select:",
+        "jsr input_prepare_followup_key",
+        "jsr tramp_ui_inv_select_display",
+        "jsr input_get_key_fast",
+    ]),
+    ("spell_list_overlay_select", player_magic_mod, [
+        "!pm_psc_show_list:",
+        "jsr input_prepare_followup_key",
+        "jsr tramp_spell_list_display",
+        "jsr input_get_key_fast",
+    ]),
+    ("study_list_overlay_select", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
+        "!igs_have_choices:",
+        "jsr input_prepare_followup_key",
+        "jsr tramp_spell_list_display",
+        "jsr input_get_key",
+    ]),
+    ("wizard_heal_choice", (root / "common" / "ui_wizard.s").read_text().splitlines(), [
+        "ui_wizard_cmd_heal_cure:",
+        "lda player_data + PL_MAX_MANA",
+        "sta player_data + PL_MANA",
+        "sta zp_player_mp",
+        "sta zp_player_mmp",
+    ]),
 ]
 
 for name, lines, chain in required_chains:
@@ -1318,6 +1361,63 @@ print("ok")
 PY
 )
     if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_input_run_guard_check() {
+    echo -n "  input_run_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+lines = Path("input128.s").read_text().splitlines()
+
+def block(label: str) -> list[str]:
+    out = []
+    in_block = False
+    for ln in lines:
+        s = ln.strip()
+        if not in_block:
+            if s.startswith(label):
+                in_block = True
+            continue
+        if s.endswith(":") and not s.startswith("!"):
+            break
+        out.append(s)
+    return out
+
+errors = []
+scan_block = block("input_run_scan_held_raw:")
+held_block = block("input_run_key_held:")
+
+if not scan_block:
+    errors.append("missing input_run_scan_held_raw block")
+elif any("cia_scan_petscii" in ln for ln in scan_block):
+    errors.append("input_run_scan_held_raw must not call cia_scan_petscii")
+
+if not held_block:
+    errors.append("missing input_run_key_held block")
+elif any("irk_neutral_latch" in ln for ln in held_block):
+    errors.append("input_run_key_held still depends on irk_neutral_latch")
+
+if not any("input_run_row_has_nonmodifier:" in ln for ln in lines):
+    errors.append("missing input_run_row_has_nonmodifier helper")
+
+if errors:
+    print("\n".join(errors))
+PY
+)
+    if [ -n "$check_out" ]; then
         echo "FAIL"
         echo "$check_out" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1434,12 +1534,13 @@ build_boot_assets() {
     fi
 
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
-            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/128.runtime.prg out/main.vs -- \
             main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json \
             ../artwork/moria8_C128loadingart_tile_native.png \
-            ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py; then
+            ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
+            ../common/*.s ../c64/*.s; then
         BOOT_ASSETS_BUILT=1
         return
     fi
@@ -1711,7 +1812,7 @@ build_title_art_boot_assets() {
             out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2194,6 +2295,174 @@ build_scripted_input_boot_assets() {
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
     c128_set_active_variant "scripted_input"
+    return 0
+}
+
+build_scripted_spell_boot_assets() {
+    if [ "$SCRIPTED_SPELL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_spell"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    if c128_active_variant_is "scripted_spell" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_scriptedspell.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/128.runtime.prg; then
+        SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_spell_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local scripted_d64="out/moria128_scriptedspell.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_SPELL -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_spell"
+    return 0
+}
+
+build_scripted_spell_cancel_boot_assets() {
+    if [ "$SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_spell_cancel"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    if c128_active_variant_is "scripted_spell_cancel" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_scriptedspellcancel.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/128.runtime.prg; then
+        SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_spell_cancel_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local scripted_d64="out/moria128_scriptedspellcancel.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_SPELL_CANCEL -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell-cancel main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+        echo "FAIL (scripted-spell-cancel disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_spell_cancel"
+    return 0
+}
+
+build_scripted_prayer_boot_assets() {
+    if [ "$SCRIPTED_PRAYER_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "scripted_prayer"; then
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    if c128_active_variant_is "scripted_prayer" && ! c128_outputs_need_refresh \
+            out/moria128.prg out/moria128_scriptedprayer.d64 out/main.vs -- \
+            main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
+            out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
+            out/ovl.gen out/128.runtime.prg; then
+        SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
+        return 0
+    fi
+
+    local build_log
+    build_log="$(test128_tmp_file test128_boot_scripted_prayer_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local scripted_d64="out/moria128_scriptedprayer.d64"
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_PRAYER -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (scripted-prayer main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write out/boot128.prg "moria8.128" \
+            -write out/moria128.prg "moria128" \
+            -write out/title "title" \
+            -write out/monster.db.1 "monster.db.1" \
+            -write out/monster.db.2 "monster.db.2" \
+            -write out/monster.db.3 "monster.db.3" \
+            -write out/monster.db.4 "monster.db.4" \
+            -write out/ovl.town "ovl.town" \
+            -write out/ovl.start "ovl.start" \
+            -write out/ovl.death "ovl.death" \
+            -write out/ovl.gen "ovl.gen" \
+            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+        echo "FAIL (scripted-prayer disk build failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
+    c128_set_active_variant "scripted_prayer"
     return 0
 }
 
@@ -3202,10 +3471,12 @@ run_boot_title_idle_smoke() {
     build_boot_assets || return
 
     local main_vs="out/main.vs"
-    local title_show_sysinfo
+    local title_show_sysinfo title_menu_ready game_over_prompt
     title_show_sysinfo=$(awk '/\.title_show_sysinfo$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${title_show_sysinfo:-}" ]; then
-        echo "FAIL (missing title_show_sysinfo in out/main.vs)"
+    title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    game_over_prompt=$(awk '/\.game_over_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_show_sysinfo:-}" ] || [ -z "${title_menu_ready:-}" ] || [ -z "${game_over_prompt:-}" ]; then
+        echo "FAIL (missing title boot probe symbols in out/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3221,7 +3492,6 @@ run_boot_title_idle_smoke() {
 
     {
         echo "until \$${title_show_sysinfo}"
-        echo "g"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
@@ -3237,8 +3507,45 @@ run_boot_title_idle_smoke() {
         return
     fi
 
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam before title_show_sysinfo on idle boot" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
     : > "$log_file"
+    {
+        echo "until \$${title_menu_ready}"
+    } > "$mon_file"
+
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 120000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    vice_rc=$?
+
+    if ! grep -qi "^UNTIL: .*C:\$${title_menu_ready}" "$log_file"; then
+        boot_log_report_failure "did not reach title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam before title_menu_ready on idle boot" "$log_file" "title_menu_ready" "$title_menu_ready" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    : > "$log_file"
+    {
+        echo "break \$${game_over_prompt}"
+        echo "g"
+    } > "$mon_file"
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" \
         -monlog -monlogname "$log_file" \
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -3246,6 +3553,13 @@ run_boot_title_idle_smoke() {
 
     if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
         boot_log_report_failure "jam during idle title soak" "$log_file" "title_show_sysinfo" "$title_show_sysinfo" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if boot_log_has_stop_at "$log_file" "$game_over_prompt"; then
+        boot_log_report_failure "entered game_over_prompt during idle title soak" "$log_file" "game_over_prompt" "$game_over_prompt" "$vice_rc"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3552,6 +3866,312 @@ run_scripted_summary_to_town_smoke() {
 
     echo "PASS"
     PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_spell_cast_smoke() {
+    local name="scripted_spell_cast_smoke"
+    echo -n "  $name: "
+
+    build_scripted_spell_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_test_spell_pass
+    local -a spell_fail_labels=(
+        "c128_test_spell_fail_no_cast_sym"
+        "c128_test_spell_fail_level_sym"
+        "c128_test_spell_fail_known_sym"
+        "c128_test_spell_fail_validate_sym"
+        "c128_test_spell_fail_roll_sym"
+        "c128_test_spell_fail_cancel_sym"
+    )
+    local -a spell_fail_addrs=()
+    local label addr
+    c128_test_spell_pass=$(awk '/\.c128_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${spell_fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        spell_fail_addrs+=("$addr")
+    done
+    if [ -z "${c128_test_spell_pass:-}" ]; then
+        echo "FAIL (missing scripted spell pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_scriptedspell.d64"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    local pass_lc
+    local pass_hit
+    : > "$log_file"
+    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${spell_fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_log_report_failure "jam during scripted spell cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!spell_fail_labels[@]}"; do
+        addr="${spell_fail_addrs[$idx]}"
+        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+            boot_log_report_failure "scripted spell cast hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
+            echo "    fail_label: ${spell_fail_labels[$idx]}"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during scripted spell cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    boot_log_report_failure "did not reach scripted spell pass trap" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_spell_list_cancel_smoke() {
+    local name="scripted_spell_list_cancel_smoke"
+    echo -n "  $name: "
+
+    build_scripted_spell_cancel_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_test_spell_pass
+    local -a spell_fail_labels=(
+        "c128_test_spell_fail_no_cast_sym"
+        "c128_test_spell_fail_level_sym"
+        "c128_test_spell_fail_known_sym"
+        "c128_test_spell_fail_validate_sym"
+        "c128_test_spell_fail_roll_sym"
+        "c128_test_spell_fail_cancel_sym"
+    )
+    local -a spell_fail_addrs=()
+    local label addr
+    c128_test_spell_pass=$(awk '/\.c128_test_spell_cancel_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${spell_fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        spell_fail_addrs+=("$addr")
+    done
+    if [ -z "${c128_test_spell_pass:-}" ]; then
+        echo "FAIL (missing scripted spell cancel pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_scriptedspellcancel.d64"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    local pass_lc
+    local pass_hit
+    : > "$log_file"
+    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${spell_fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_log_report_failure "jam during scripted spell list cancel flow" "$log_file" "c128_test_spell_cancel_pass" "$c128_test_spell_pass" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!spell_fail_labels[@]}"; do
+        addr="${spell_fail_addrs[$idx]}"
+        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+            boot_log_report_failure "scripted spell list cancel hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
+            echo "    fail_label: ${spell_fail_labels[$idx]}"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during scripted spell list cancel flow" "$log_file" "c128_test_spell_cancel_pass" "$c128_test_spell_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    boot_log_report_failure "did not reach scripted spell list cancel pass trap" "$log_file" "c128_test_spell_cancel_pass" "$c128_test_spell_pass" "$vice_rc"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_prayer_cast_smoke() {
+    local name="scripted_prayer_cast_smoke"
+    echo -n "  $name: "
+
+    build_scripted_prayer_boot_assets || return
+
+    local main_vs="out/main.vs"
+    local c128_test_spell_pass
+    local -a spell_fail_labels=(
+        "c128_test_spell_fail_no_cast_sym"
+        "c128_test_spell_fail_level_sym"
+        "c128_test_spell_fail_known_sym"
+        "c128_test_spell_fail_validate_sym"
+        "c128_test_spell_fail_roll_sym"
+        "c128_test_spell_fail_cancel_sym"
+    )
+    local -a spell_fail_addrs=()
+    local label addr
+    c128_test_spell_pass=$(awk '/\.c128_test_spell_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${spell_fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        spell_fail_addrs+=("$addr")
+    done
+    if [ -z "${c128_test_spell_pass:-}" ]; then
+        echo "FAIL (missing scripted prayer pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local abs_d64
+    abs_d64="$(cd out && pwd)/moria128_scriptedprayer.d64"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_${name}.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_${name}.log")"
+    local pass_lc
+    local pass_hit
+    : > "$log_file"
+    pass_lc=$(echo "$c128_test_spell_pass" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${spell_fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${c128_test_spell_pass}"
+        echo "g"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$log_file" || grep -qi "^BREAK: .*C:\$${c128_test_spell_pass}" "$log_file"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+            boot_log_report_failure "jam during scripted prayer cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!spell_fail_labels[@]}"; do
+        addr="${spell_fail_addrs[$idx]}"
+        if grep -qi "^BREAK: .*C:\$${addr}" "$log_file"; then
+            boot_log_report_failure "scripted prayer cast hit fail trap" "$log_file" "${spell_fail_labels[$idx]}" "$addr" "$vice_rc"
+            echo "    fail_label: ${spell_fail_labels[$idx]}"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        boot_log_report_failure "jam during scripted prayer cast flow" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    boot_log_report_failure "did not reach scripted prayer pass trap" "$log_file" "c128_test_spell_pass" "$c128_test_spell_pass" "$vice_rc"
+    FAIL=$((FAIL + 1))
     TOTAL=$((TOTAL + 1))
 }
 
@@ -4269,6 +4889,7 @@ run_selected_suites() {
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_input_run_guard run_input_run_guard_check || return 1
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
@@ -4289,6 +4910,9 @@ run_selected_suites() {
     run_named_suite town_overlay_female_smoke run_town_overlay_female_smoke || return 1
     run_named_suite town_overlay_state_smoke run_town_overlay_state_smoke || return 1
     run_named_suite scripted_summary_to_town_smoke run_scripted_summary_to_town_smoke || return 1
+    run_named_suite scripted_spell_cast_smoke run_scripted_spell_cast_smoke || return 1
+    run_named_suite scripted_spell_list_cancel_smoke run_scripted_spell_list_cancel_smoke || return 1
+    run_named_suite scripted_prayer_cast_smoke run_scripted_prayer_cast_smoke || return 1
     run_named_suite real_input_town_move_diag run_real_input_town_move_diag || return 1
     run_named_suite real_boot_crash_harness run_real_boot_crash_harness || return 1
     run_named_suite overlay_data_transition_smoke run_overlay_data_transition_smoke || return 1

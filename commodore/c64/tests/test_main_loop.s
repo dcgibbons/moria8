@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #23
+    ldx #28
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -102,11 +102,26 @@ delete_savefile:
     inc test_delete_savefile_calls
     rts
 
-.label tramp_ui_char_display = ui_char_display
-.label tramp_ui_inv_display = ui_inv_display
-.label tramp_ui_help_display = ui_help_display
-.label tramp_ui_equip_display = ui_equip_display
+.label tramp_spell_list_display = test_spell_list_display
+.label tramp_spell_execute_selected = test_spell_execute_selected
+.label tramp_item_gain_spell = test_item_gain_spell
 .label tramp_player_create = player_create
+
+tramp_ui_char_display:
+    rts
+
+tramp_ui_inv_display:
+    rts
+
+tramp_ui_inv_select_display:
+    rts
+
+tramp_ui_help_display:
+    inc test_help_calls
+    rts
+
+tramp_ui_equip_display:
+    rts
 
 tramp_store_init_all:
     rts
@@ -115,6 +130,32 @@ tramp_store_restock_all:
     rts
 
 tramp_store_enter:
+    rts
+
+.label tramp_item_read_scroll = item_read_scroll
+.label tramp_item_aim_wand = item_aim_wand
+.label tramp_item_use_staff = item_use_staff
+.label tramp_item_refuel = item_refuel
+
+test_spell_list_display:
+    rts
+
+test_spell_execute_selected:
+    rts
+
+test_item_gain_spell:
+    rts
+
+player_cast_spell:
+    rts
+
+player_pray:
+    rts
+
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
     rts
 
 check_player_on_store_door:
@@ -126,11 +167,10 @@ check_player_on_store_door:
 
 tramp_ui_identify:
     inc test_recall_ui_calls
-    jsr ui_identify_print
-    lda test_last_string_lo
-    sta test_identify_string_lo
-    lda test_last_string_hi
-    sta test_identify_string_hi
+    rts
+
+tramp_ui_recall:
+    inc test_recall_ui_calls
     rts
 
 tramp_dig_ability:
@@ -151,7 +191,6 @@ tramp_dig_ability:
 #import "../../common/ui_messages.s"
 #import "../../common/ui_status.s"
 #import "../../common/ui_help_clear.s"
-#import "../../common/ui_character.s"
 #import "../../common/stat_display.s"
 .segmentdef TestCreateOverlay [start=$D000]
 .segment TestCreateOverlay
@@ -177,10 +216,6 @@ tramp_dig_ability:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
-#import "../../common/ui_identify.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -191,14 +226,13 @@ tramp_dig_ability:
 #import "../../common/tunnel.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
-#import "../../common/ui_help.s"
 #import "../../common/generation_busy.s"
 #import "../../common/game_loop.s"
 
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 24, $ff
+tc_results: .fill 29, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -212,6 +246,7 @@ test_render_local_calls: .byte 0
 test_render_full_calls: .byte 0
 test_viewport_calls: .byte 0
 test_msg_clear_calls: .byte 0
+test_msg_clear_clears_state: .byte 0
 test_do_look_calls: .byte 0
 test_update_visibility_calls: .byte 0
 test_screen_clear_calls: .byte 0
@@ -246,6 +281,7 @@ test_ui_step_1: .byte 0
 test_ui_step_2: .byte 0
 test_ui_step_3: .byte 0
 test_recall_ui_calls: .byte 0
+test_help_calls: .byte 0
 test_key_idx: .byte 0
 test_key_len: .byte 0
 test_key_script: .fill 4, 0
@@ -263,6 +299,8 @@ test_pickup_ok: .byte 0
 test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
+test_turn_sets_message: .byte 0
+test_update_clears_reveal: .byte 0
 test_stairs_tile: .byte 0
 test_save_success: .byte 0
 test_disk_setup_success: .byte 0
@@ -324,6 +362,7 @@ reset_state:
     sta test_render_full_calls
     sta test_viewport_calls
     sta test_msg_clear_calls
+    sta test_msg_clear_clears_state
     sta test_do_look_calls
     sta test_update_visibility_calls
     sta test_screen_clear_calls
@@ -358,6 +397,7 @@ reset_state:
     sta test_ui_step_2
     sta test_ui_step_3
     sta test_recall_ui_calls
+    sta test_help_calls
     sta test_key_idx
     sta test_key_len
     sta test_last_string_lo
@@ -373,6 +413,8 @@ reset_state:
     sta test_move_relocated
     sta test_move_disturbs_search
     sta test_scene_dirty
+    sta test_turn_sets_message
+    sta test_update_clears_reveal
     sta test_stairs_tile
     sta test_save_success
     sta test_disk_setup_success
@@ -443,12 +485,22 @@ test_input_get_key:
 
 test_msg_clear:
     inc test_msg_clear_calls
+    lda test_msg_clear_clears_state
+    beq !done+
+    lda #0
+    sta zp_msg_flags
+!done:
     rts
 
 test_turn_post_action:
     inc test_turn_calls
     lda test_scene_dirty
     sta turn_scene_dirty
+    lda test_turn_sets_message
+    beq !done+
+    lda #MSG_PENDING
+    sta zp_msg_flags
+!done:
     rts
 
 test_status_draw:
@@ -461,6 +513,11 @@ test_viewport_update:
 
 test_update_visibility:
     inc test_update_visibility_calls
+    lda test_update_clears_reveal
+    beq !done+
+    lda #0
+    sta vis_room_revealed
+!done:
     rts
 
 test_render_local_area:
@@ -690,7 +747,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #23
+    ldx #28
     lda #$ff
 !clr:
     sta tc_results,x
@@ -880,7 +937,8 @@ test_start:
     sta tc_results + 5
 !t6_done:
 
-    // Test 7: CAST no-turn restores the gameplay view without consuming a turn.
+    // Test 7: CAST no-turn preserves the current gameplay view so
+    // wrong-command messages stay visible.
     jsr reset_state
     lda #6
     sta test_case_idx
@@ -895,16 +953,12 @@ test_start:
     lda test_turn_calls
     bne !t7_fail+
     lda test_screen_clear_calls
-    cmp #1
     bne !t7_fail+
     lda test_viewport_calls
-    cmp #1
     bne !t7_fail+
     lda test_render_full_calls
-    cmp #1
     bne !t7_fail+
     lda test_status_calls
-    cmp #1
     bne !t7_fail+
     lda #$01
     sta tc_results + 6
@@ -1015,7 +1069,8 @@ test_start:
     sta tc_results + 9
     jmp !t11+
 
-    // Test 11: READ still falls back to full redraw when a room reveal is pending.
+    // Test 11: READ still falls back to full redraw when a pre-update room
+    // reveal is pending, even if update_visibility clears the flag.
 !t11:
     jsr reset_state
     lda #10
@@ -1023,6 +1078,7 @@ test_start:
     lda #1
     sta test_read_ok
     sta vis_room_revealed
+    sta test_update_clears_reveal
     lda #CMD_READ
     sta test_cmd_script
     lda #1
@@ -1499,6 +1555,18 @@ test_start:
     sta test_key_script + 0
     lda #1
     sta test_key_len
+    ldx #MAX_CREATURES - 1
+!t24_seed_recall:
+    lda cr_display,x
+    cmp #$10
+    bne !t24_seed_next+
+    lda #1
+    sta recall_kills,x
+    jmp !t24_seed_done+
+!t24_seed_next:
+    dex
+    bpl !t24_seed_recall-
+!t24_seed_done:
     lda #CMD_RECALL
     sta test_cmd_script
     lda #1
@@ -1518,28 +1586,188 @@ test_start:
     jmp test_finish
 !t24_ui_ok:
     lda test_msg_clear_calls
-    cmp #2
+    cmp #1
     beq !t24_clear_ok+
     lda #$04
     sta tc_results + 23
     jmp test_finish
 !t24_clear_ok:
-    lda test_identify_string_lo
-    cmp #<identify_p_str
-    bne !t24_fail_lo+
-!t24_lo_ok:
-    lda test_identify_string_hi
-    cmp #>identify_p_str
-    beq !t24_pass+
-!t24_fail_lo:
-    lda #$05
-    sta tc_results + 23
-    jmp test_finish
 !t24_pass:
     lda #$01
     sta tc_results + 23
-    jmp test_finish
+    jmp !t25+
 !t24_fail:
     lda #$00
     sta tc_results + 23
+    jmp test_finish
+
+    // Test 25: changing dungeon levels clears detect-monsters state.
+!t25:
+    jsr reset_state
+    lda #24
+    sta test_case_idx
+    lda #TILE_STAIRS_DN
+    sta test_stairs_tile
+    lda #7
+    sta eff_detect_timer
+    lda #CMD_STAIRS_DN
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_player_dlvl
+    cmp #2
+    bne !t25_fail+
+    lda eff_detect_timer
+    bne !t25_fail+
+    lda #$01
+    sta tc_results + 24
+    jmp !t26+
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
+    jmp !t26+
+
+    // Test 26: stationary update-visibility commands snapshot the render
+    // baseline before running, so local redraw does not use stale movement
+    // positions.
+!t26:
+    jsr reset_state
+    lda #25
+    sta test_case_idx
+    lda #1
+    sta test_cast_ok
+    lda #2
+    sta old_player_x
+    lda #3
+    sta old_player_y
+    lda #4
+    sta old_view_x
+    lda #5
+    sta old_view_y
+    lda #CMD_CAST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_render_local_calls
+    cmp #1
+    bne !t26_fail+
+    lda test_render_full_calls
+    bne !t26_fail+
+    lda old_player_x
+    cmp zp_player_x
+    bne !t26_fail+
+    lda old_player_y
+    cmp zp_player_y
+    bne !t26_fail+
+    lda old_view_x
+    cmp zp_view_x
+    bne !t26_fail+
+    lda old_view_y
+    cmp zp_view_y
+    bne !t26_fail+
+    lda #$01
+    sta tc_results + 25
+    jmp !t27+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
+    jmp !t27+
+
+    // Test 27: a message produced during running stops the run before the
+    // next automatic step clears the message area again.
+!t27:
+    jsr reset_state
+    lda #26
+    sta test_case_idx
+    lda #1
+    sta test_move_ok
+    sta test_turn_sets_message
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda zp_run_dir
+    cmp #$ff
+    bne !t27_fail+
+    lda test_turn_calls
+    cmp #1
+    bne !t27_fail+
+    lda test_msg_clear_calls
+    cmp #2
+    bne !t27_fail+
+    lda zp_msg_flags
+    cmp #MSG_PENDING
+    bne !t27_fail+
+    lda #$01
+    sta tc_results + 26
+    jmp !t28+
+!t27_fail:
+    lda #$00
+    sta tc_results + 26
+    jmp !t28+
+
+    // Test 28: starting a run clears any previously pending message so
+    // the runner does not immediately stop on stale message state.
+!t28:
+    jsr reset_state
+    lda #27
+    sta test_case_idx
+    lda #MSG_PENDING
+    sta zp_msg_flags
+    lda #1
+    sta test_msg_clear_clears_state
+    lda #CMD_RUN_N
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_msg_clear_calls
+    cmp #1
+    bne !t28_fail+
+    lda zp_msg_flags
+    bne !t28_fail+
+    lda #$01
+    sta tc_results + 27
+    jmp !t29+
+!t28_fail:
+    lda #$00
+    sta tc_results + 27
+    jmp !t29+
+
+    // Test 29: HELP exits immediately on C64 STOP/RUN-STOP without
+    // advancing to later pages.
+!t29:
+    jsr reset_state
+    lda #28
+    sta test_case_idx
+    lda #CMD_HELP
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #$03
+    sta test_key_script + 0
+    lda #1
+    sta test_key_len
+    jsr run_case
+    lda test_help_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_viewport_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_render_full_calls
+    cmp #1
+    bne !t29_fail+
+    lda test_status_calls
+    cmp #1
+    bne !t29_fail+
+    lda #$01
+    sta tc_results + 28
+    jmp test_finish
+!t29_fail:
+    lda #$00
+    sta tc_results + 28
     jmp test_finish

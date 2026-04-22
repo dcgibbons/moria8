@@ -107,38 +107,6 @@ ui_equip_display:
     lda #COL_WHITE
     sta zp_text_color
     jsr put_inv_name_with_ego
-    // Pseudo-ID quality tag for unidentified items with IF_TRIED
-    ldx ueq_equip_idx
-    lda inv_flags,x
-    and #IF_IDENTIFIED
-    bne !ueq_no_pid+
-    lda inv_flags,x
-    and #IF_TRIED
-    beq !ueq_no_pid+
-    lda #COL_YELLOW
-    sta zp_text_color
-    lda #$20                   // Space
-    jsr screen_put_char
-    lda #$28                   // '('
-    jsr screen_put_char
-    // X still = ueq_equip_idx (screen_put_char only clobbers Y)
-    jsr pid_get_quality        // A = quality index 0-4, X preserved
-    clc
-    adc #HSTR_PID_TERRIBLE     // Sequential: TERRIBLE=0, BAD=1, ...
-    tax
-    jsr huff_decode_string     // zp_ptr0/hi -> hd_decode_buf
-    // Skip "Sense: " prefix with carry-safe pointer math.
-    lda zp_ptr0
-    clc
-    adc #7
-    sta zp_ptr0
-    lda zp_ptr0_hi
-    adc #0
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    lda #$29                   // ')'
-    jsr screen_put_char
-!ueq_no_pid:
     jmp !ueq_next+
 
 !ueq_none:

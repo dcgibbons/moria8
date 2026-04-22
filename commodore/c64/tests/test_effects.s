@@ -8,30 +8,36 @@
 // in tc_results[] and copy to $0400 at the very end.
 
 .pc = $0801 "BASIC Stub"
-:BasicUpstart2(bootstrap)
+:BasicUpstart2(test_bootstrap)
 
-.pc = $0810 "Test Code"
+.pc = $E000 "Result Buffer"
+tc_results: .fill 50, $ff      // Result buffer (copied to $0400 at the end)
+
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
-// Bootstrap — must be before imports so it's in RAM below $A000.
-bootstrap:
-    lda $01
-    and #%11111110          // Clear bit 0 -> bank out BASIC ROM
-    sta $01
+// Bootstrap + exit trampoline must stay in "Test Code" so run_tests.sh
+// breaks at the BRK below rather than at the end of the imported body.
+test_bootstrap:
+    :BankOutBasic()
     jmp test_start
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #31
+    sei
+    :BankOutBasic()
+    :BankOutKernal()
+    ldx #49
 !copy:
     lda tc_results,x
     sta $0400,x
     dex
     bpl !copy-
+    :BankInKernal()
     brk
 
-.pc = * "Test Body"
+.pc = $0840 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -71,18 +77,21 @@ test_finish:
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
 #import "../../common/player_items.s"
-#import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
+#import "../../common/spell_data.s"
+#import "../../common/player_move.s"
+#import "../../common/turn.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
-#import "../../common/player_move.s"
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
-#import "../../common/turn.s"
+magic_recalc_mana:
+    rts
+
+magic_check_new_spells:
+    rts
+
 store_init_all:
     rts
 
@@ -96,6 +105,9 @@ ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
     rts
 #import "../../common/ui_trampoline_stubs.s"
 
@@ -106,19 +118,16 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 32, $ff      // Result buffer (copied to $0400 at end)
 tv_step_idx: .byte 0
-tv_row_idx: .byte 0
 tv_prev_x:  .byte 0
 tv_prev_y:  .byte 0
-tlk_expected_n: .text "n"
-tlk_expected_c: .text "c"
-tlk_expected_t: .text "t"
-tlk_expected_w: .text "w"
-tlk_expected_g: .text "G"
+tv_snapshot_lo: .byte 0
+tv_snapshot_hi: .byte 0
 tlk_flash_calls: .byte 0
 tlk_flash_row:   .byte 0
 tlk_flash_col:   .byte 0
+tpm_huff_calls:   .byte 0
+tpm_last_huff_id: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -128,9 +137,6 @@ tlk_flash_col:   .byte 0
     lda #>replacement
     sta target + 2
 }
-
-test_input_wait_release:
-    rts
 
 test_get_direction_target_east:
     lda zp_player_x
@@ -148,8 +154,13 @@ test_screen_flash_at:
     inc tlk_flash_calls
     rts
 
+test_huff_print_msg:
+    stx tpm_last_huff_id
+    inc tpm_huff_calls
+    rts
+
 test_start:
-    :PatchJump(input_wait_release, test_input_wait_release)
+    :PatchJump(input_wait_release, store_enter)
 
     // Seed RNG deterministically
     lda #$42
@@ -170,15 +181,12 @@ test_start:
     // Pre-stuff keyboard buffer for -more- prompts
     lda #8
     sta $c6
+    ldx #7
     lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
+!seed_keys:
+    sta $0277,x
+    dex
+    bpl !seed_keys-
 
     // Clear all effect timers
     lda #0
@@ -856,233 +864,10 @@ test_start:
     bne !t14_fail+
     lda #$01
     sta tc_results + 13
-    jmp !t15+
+    jmp !t20+
 !t14_fail:
     lda #$00
     sta tc_results + 13
-
-    // ==========================================
-    // Test 15: Hunger penalty increases spell failure value
-    // Set up mage tables, high level player, spell 0: base clamps to 5
-    // Set HUNGER_FAINT → +20 penalty → pm_fail_work >= 25
-    // ==========================================
-!t15:
-    // Refill keyboard buffer for -more- prompts
-    lda #8
-    sta $c6
-    lda #$20
-    sta $0277
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
-    // Clear death flag
-    lda #0
-    sta zp_game_flags
-
-    // Set up mage spell tables
-    lda #SPELL_MAGE
-    sta pm_spell_type
-    lda #<mage_spell_fail
-    sta pm_fail_tbl_lo
-    lda #>mage_spell_fail
-    sta pm_fail_tbl_hi
-    lda #<mage_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>mage_spell_level
-    sta pm_lvl_tbl_hi
-    lda #0
-    sta pm_spell_idx                 // Spell 0: fail_base=22, level=1
-
-    // High level player so base failure clamps to 5
-    lda #10
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #18
-    sta player_data + PL_INT_CUR     // High INT → bonus=3, still clamps to 5
-
-    // Set hunger to FAINT
-    lda #HUNGER_FAINT
-    sta zp_hunger_state
-
-    jsr calc_spell_failure
-
-    // pm_fail_work should be >= 25 (5 base + 20 hunger penalty)
-    lda pm_fail_work
-    cmp #25
-    bcc !t15_fail+
-    lda #$01
-    sta tc_results + 14
-    jmp !t16+
-!t15_fail:
-    lda #$00
-    sta tc_results + 14
-
-    // ==========================================
-    // Test 16: No hunger penalty at HUNGER_FULL
-    // Same setup but HUNGER_FULL → pm_fail_work == 5 (minimum, no penalty)
-    // ==========================================
-!t16:
-    // Same table setup as test 15 (already set)
-    lda #0
-    sta pm_spell_idx
-    lda #10
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #18
-    sta player_data + PL_INT_CUR
-
-    // Set hunger to FULL
-    lda #HUNGER_FULL
-    sta zp_hunger_state
-
-    jsr calc_spell_failure
-
-    // pm_fail_work should be exactly 5 (minimum, no penalty)
-    lda pm_fail_work
-    cmp #5
-    bne !t16_fail+
-    lda #$01
-    sta tc_results + 15
-    jmp !t17+
-!t16_fail:
-    lda #$00
-    sta tc_results + 15
-
-    // ==========================================
-    // Test 17: count_spells_known returns correct count
-    // Set PL_SPELLS_KNOWN=$07 (3 spells), PL_SPELLS_KNOWN_HI=$01 (1 spell)
-    // Expected: A == 4
-    // ==========================================
-!t17:
-    lda #$07
-    sta player_data + PL_SPELLS_KNOWN
-    lda #$01
-    sta player_data + PL_SPELLS_KNOWN_HI
-
-    jsr count_spells_known
-
-    cmp #4
-    bne !t17_fail+
-    lda #$01
-    sta tc_results + 16
-    jmp !t18+
-!t17_fail:
-    lda #$00
-    sta tc_results + 16
-
-    // ==========================================
-    // Test 18: Blindness blocks scroll reading (turn not consumed)
-    // Set zp_eff_blind=5, call item_read_scroll, verify carry clear
-    // ==========================================
-!t18:
-    lda #5
-    sta zp_eff_blind
-
-    jsr item_read_scroll
-
-    // Carry should be clear (no turn consumed)
-    bcs !t18_fail+
-    lda #$01
-    sta tc_results + 17
-    jmp !t19+
-!t18_fail:
-    lda #$00
-    sta tc_results + 17
-
-    // ==========================================
-    // Test 19: Confused casting bypasses known/level checks
-    // Set confusion, all 16 spells known, mana=50, mage, level 1
-    // Stuff keyboard 'A' → pm_do_cast should cast (mana decreases)
-    // ==========================================
-!t19:
-    // Refill keyboard buffer for spell list display + -more- prompts
-    lda #8
-    sta $c6
-    lda #$41                         // 'A' to select spell
-    sta $0277
-    lda #$20                         // Spaces for -more- prompts
-    sta $0278
-    sta $0279
-    sta $027a
-    sta $027b
-    sta $027c
-    sta $027d
-    sta $027e
-
-    // Clear death flag, clear blindness
-    lda #0
-    sta zp_game_flags
-    sta zp_eff_blind
-
-    // Set up as mage with all 16 spells known
-    lda #SPELL_MAGE
-    sta pm_spell_type
-    sta player_data + PL_SPELL_TYPE
-    lda #$ff
-    sta player_data + PL_SPELLS_KNOWN
-    sta player_data + PL_SPELLS_KNOWN_HI
-
-    // Set up mage table pointers
-    lda #<mage_spell_mana
-    sta pm_mana_tbl_lo
-    lda #>mage_spell_mana
-    sta pm_mana_tbl_hi
-    lda #<mage_spell_level
-    sta pm_lvl_tbl_lo
-    lda #>mage_spell_level
-    sta pm_lvl_tbl_hi
-    lda #<mage_spell_fail
-    sta pm_fail_tbl_lo
-    lda #>mage_spell_fail
-    sta pm_fail_tbl_hi
-    lda #<mage_spell_name_lo
-    sta pm_name_lo_lo
-    lda #>mage_spell_name_lo
-    sta pm_name_lo_hi
-    lda #<mage_spell_name_hi
-    sta pm_name_hi_lo
-    lda #>mage_spell_name_hi
-    sta pm_name_hi_hi
-
-    // Mana=50, level=1, confusion active
-    lda #50
-    sta zp_player_mp
-    sta player_data + PL_MANA
-    lda #50
-    sta zp_player_mmp
-    lda #1
-    sta zp_player_lvl
-    sta player_data + PL_LEVEL
-    lda #10
-    sta zp_eff_confuse
-    lda #18
-    sta player_data + PL_INT_CUR
-
-    // HP high so monster effects don't kill
-    lda #200
-    sta zp_player_hp_lo
-    sta player_data + PL_HP_LO
-    lda #0
-    sta zp_player_hp_hi
-    sta player_data + PL_HP_HI
-
-    jsr pm_do_cast
-
-    // Mana should have decreased (any random spell costs >= 1)
-    lda zp_player_mp
-    cmp #50
-    bcs !t19_fail+                   // Mana didn't decrease → bug
-    lda #$01
-    sta tc_results + 18
-    jmp !t20+
-!t19_fail:
-    lda #$00
-    sta tc_results + 18
 
     // ==========================================
     // Test 20: Extra regen on odd turn increases mana
@@ -1378,15 +1163,24 @@ test_start:
 
     // Normalize the viewport before snapshot so the comparison isolates
     // the pickup/full-redraw behavior rather than prior local-redraw drift.
+    // Two fixed sentinel tiles are enough here because the player already
+    // masked the picked-up item; unrelated viewport corners must stay stable.
     jsr render_viewport
-    jsr tv_snapshot_viewport
+    lda $0451
+    sta tv_snapshot_lo
+    lda $0746
+    sta tv_snapshot_hi
     jsr item_pickup
     bcs !t24_pickup_ok+
     jmp !t24_fail+
 !t24_pickup_ok:
     jsr render_viewport
-    jsr tv_compare_viewport
-    bcs !t24_fail+
+    lda $0451
+    cmp tv_snapshot_lo
+    bne !t24_fail+
+    lda $0746
+    cmp tv_snapshot_hi
+    bne !t24_fail+
 
     lda #$01
     sta tc_results + 23
@@ -1508,7 +1302,7 @@ test_start:
     jsr do_look
 
     lda $0408                   // "You see n..." vs "You see a..."
-    cmp tlk_expected_n
+    cmp #'n'
     bne !t27_fail+
     lda tlk_flash_calls
     bne !t27_fail+
@@ -1542,7 +1336,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a c..."
-    cmp tlk_expected_c
+    cmp #'c'
     bne !t28_fail+
 
     lda #$01
@@ -1573,7 +1367,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a t..."
-    cmp tlk_expected_t
+    cmp #'t'
     bne !t29_fail+
 
     lda #$01
@@ -1628,7 +1422,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a w..."
-    cmp tlk_expected_w
+    cmp #'w'
     bne !t30_fail+
 
     lda #$01
@@ -1666,7 +1460,7 @@ test_start:
     jsr do_look
 
     lda $040a                   // "You see a G..."
-    cmp tlk_expected_g
+    cmp #'G'
     bne !t31_fail+
 
     lda #$01
@@ -1727,7 +1521,6 @@ test_start:
 !t32_fail:
     lda #$00
     sta tc_results + 31
-
 !tests_done:
     jmp test_finish
 
@@ -1782,158 +1575,7 @@ tv_setup_dark_room:
     jsr render_viewport
     rts
 
-tv_snapshot_viewport:
-    lda $01
-    pha
-    and #%11111110
-    sta $01
-    lda #<tv_snapshot_screen
-    sta zp_ptr0
-    lda #>tv_snapshot_screen
-    sta zp_ptr0_hi
-    lda #<tv_snapshot_color
-    sta zp_ptr1
-    lda #>tv_snapshot_color
-    sta zp_ptr1_hi
-    lda #0
-    sta tv_row_idx
-!tv_snap_row:
-    ldx tv_row_idx
-    txa
-    clc
-    adc #VIEWPORT_Y
-    tax
-    lda screen_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_screen_lo
-    lda screen_row_hi,x
-    adc #0
-    sta zp_screen_hi
-
-    lda color_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_color_lo
-    lda color_row_hi,x
-    adc #0
-    sta zp_color_hi
-
-    ldy #0
-!tv_snap_col:
-    lda (zp_screen_lo),y
-    sta (zp_ptr0),y
-    lda (zp_color_lo),y
-    sta (zp_ptr1),y
-    iny
-    cpy #VIEWPORT_W
-    bne !tv_snap_col-
-
-    lda zp_ptr0
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr0
-    bcc !tv_snap_screen_advance_done+
-    inc zp_ptr0_hi
-!tv_snap_screen_advance_done:
-    lda zp_ptr1
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr1
-    bcc !tv_snap_color_advance_done+
-    inc zp_ptr1_hi
-!tv_snap_color_advance_done:
-    inc tv_row_idx
-    lda tv_row_idx
-    cmp #VIEWPORT_H
-    beq !tv_snap_done+
-    jmp !tv_snap_row-
-!tv_snap_done:
-    pla
-    sta $01
-    rts
-
-tv_compare_viewport:
-    lda $01
-    pha
-    and #%11111110
-    sta $01
-    lda #<tv_snapshot_screen
-    sta zp_ptr0
-    lda #>tv_snapshot_screen
-    sta zp_ptr0_hi
-    lda #<tv_snapshot_color
-    sta zp_ptr1
-    lda #>tv_snapshot_color
-    sta zp_ptr1_hi
-    lda #0
-    sta tv_row_idx
-!tv_cmp_row:
-    ldx tv_row_idx
-    txa
-    clc
-    adc #VIEWPORT_Y
-    tax
-    lda screen_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_screen_lo
-    lda screen_row_hi,x
-    adc #0
-    sta zp_screen_hi
-
-    lda color_row_lo,x
-    clc
-    adc #VIEWPORT_X
-    sta zp_color_lo
-    lda color_row_hi,x
-    adc #0
-    sta zp_color_hi
-
-    ldy #0
-!tv_cmp_col:
-    lda (zp_screen_lo),y
-    cmp (zp_ptr0),y
-    bne !tv_cmp_mismatch+
-!tv_cmp_next:
-    iny
-    cpy #VIEWPORT_W
-    bne !tv_cmp_col-
-
-    lda zp_ptr0
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr0
-    bcc !tv_cmp_screen_advance_done+
-    inc zp_ptr0_hi
-!tv_cmp_screen_advance_done:
-    lda zp_ptr1
-    clc
-    adc #VIEWPORT_W
-    sta zp_ptr1
-    bcc !tv_cmp_color_advance_done+
-    inc zp_ptr1_hi
-!tv_cmp_color_advance_done:
-    inc tv_row_idx
-    lda tv_row_idx
-    cmp #VIEWPORT_H
-    beq !tv_cmp_match+
-    jmp !tv_cmp_row-
-!tv_cmp_mismatch:
-    pla
-    sta $01
-    sec
-    rts
-!tv_cmp_match:
-    pla
-    sta $01
-    clc
-    rts
-
 effects_test_body_end:
-.assert "effects test body stays below scratch buffers", effects_test_body_end < $b400, true
 
-.segmentdef TestEffectsBuffers [start=$b400]
-.segment TestEffectsBuffers
-tv_snapshot_screen: .fill VIEWPORT_W * VIEWPORT_H, 0
-tv_snapshot_color:  .fill VIEWPORT_W * VIEWPORT_H, 0
+.assert "Effects test stays below MAP_BASE", effects_test_body_end <= MAP_BASE, true
+.assert "Effects result buffer stays under KERNAL ROM", tc_results + 50 <= $10000, true

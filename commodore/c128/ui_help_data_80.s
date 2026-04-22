@@ -207,7 +207,7 @@ help_more_lines:
     .text "Prompts" ; .byte $fc, HELP80_COL2 ; .text "Notes" ; .byte 0
 
     .byte 0
-    .text "ESC or Q Cancel"
+    .text "ESC/STOP/Q Cancel"
     .byte $fc, HELP80_COL2
     .text "SPACE/RETURN advance"
     .byte 0

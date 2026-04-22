@@ -44,6 +44,18 @@
 // Output: A = nonzero if any key held, 0 if no key
 // Preserves: X, Y
 input_run_key_held:
+#if C64_TEST_SCRIPTED_SPELL
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    lda #0
+    rts
+#else
     lda $01
     pha
     php
@@ -86,6 +98,9 @@ input_run_key_held:
     sta $01
     lda irk_result
     rts
+#endif
+#endif
+#endif
 
 // input_run_key_check — Backward-compatible alias for held-state polling
 input_run_key_check:
@@ -103,6 +118,36 @@ irk_save_ddrb: .byte 0
 irk_result: .byte 0
 
 input_get_key:
+#if C64_TEST_SCRIPTED_SPELL
+    ldx c64_test_input_idx
+    lda c64_test_input_script,x
+    bne !igk_script_ok+
+    jmp c64_test_spell_fail_input_sym
+!igk_script_ok:
+    inx
+    stx c64_test_input_idx
+    rts
+#else
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    ldx c64_test_input_idx
+    lda c64_test_input_script,x
+    bne !igk_dungeon_script_ok+
+    jmp c64_test_spell_fail_input_sym
+!igk_dungeon_script_ok:
+    inx
+    stx c64_test_input_idx
+    rts
+#else
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    ldx c64_test_input_idx
+    lda c64_test_input_script,x
+    bne !igk_detect_script_ok+
+    jmp c64_test_spell_fail_input_sym
+!igk_detect_script_ok:
+    inx
+    stx c64_test_input_idx
+    rts
+#else
     lda $01
     pha
     php                     // Save processor flags (preserves I flag)
@@ -120,6 +165,9 @@ input_get_key:
     sta $01                 // Restore original banking state
     lda igk_key
     rts
+#endif
+#endif
+#endif
 igk_key: .byte 0
 
 // input_wait_release — Drain pending buffered keys and wait until no key is pending
@@ -127,6 +175,15 @@ igk_key: .byte 0
 // not auto-dismiss the next screen.
 // Preserves: X, Y
 input_wait_release:
+#if C64_TEST_SCRIPTED_SPELL
+    rts
+#else
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    rts
+#else
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    rts
+#else
     lda $01
     pha
     php                     // Save processor flags (preserves I flag)
@@ -154,6 +211,87 @@ input_wait_release:
     pla
     sta $01                 // Restore original banking state
     rts
+#endif
+#endif
+#endif
+
+#if C64_TEST_SCRIPTED_SPELL
+c64_test_input_idx: .byte 0
+c64_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    .byte $43              // C = priest
+#else
+    .byte $42              // B = mage
+#endif
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    .byte $4c              // L = step onto town stairs
+    .byte $3e              // > = descend into dungeon
+    .byte $50, $41, $41    // P A A = pray Detect Evil once
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+#else
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+    .byte $4d, $41, $41, $4c, $20
+#endif
+    .byte $00
+#endif
+
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+c64_test_input_idx: .byte 0
+c64_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4c              // L = step onto town stairs
+    .byte $3e              // > = descend into dungeon
+    .for (var i = 0; i < 24; i++) {
+        .byte $4d, $41, $41, $4c // M A A L = Magic Missile east
+    }
+    .byte $00
+#endif
+
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+c64_test_input_idx: .byte 0
+c64_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $43              // C = priest
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $50, $41, $41    // P A A = pray Detect Evil once
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $2e, $2e, $2e, $2e
+    .byte $00
+#endif
 
 // input_get_command — Wait for a keypress, return command ID
 // Output: A = command ID (CMD_* constant)

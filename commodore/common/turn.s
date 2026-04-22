@@ -56,12 +56,10 @@ turn_maybe_play_hunger_alert:
     beq !faint+
 
     lda #SFX_HUNGER_WARN
-    jsr sound_play
-    rts
+    jmp sound_play
 !faint:
     lda #SFX_HUNGER_FAINT
-    jsr sound_play
-    rts
+    jmp sound_play
 !done:
     rts
 
@@ -144,11 +142,11 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // [skip resist($58)], bless($59), hero($5a), regen($5b)
+    // resist($58), [skip bless($59)], hero($5a), regen($5b)
     .assert "Simple-dec range", zp_eff_regen - zp_eff_protect, 6
     ldy #zp_eff_protect
 !tse_loop:
-    cpy #zp_eff_resist
+    cpy #zp_eff_bless
     beq !tse_next+
     lda $00,y
     beq !tse_next+
@@ -159,6 +157,20 @@ turn_tick_effects:
     iny
     cpy #zp_eff_regen + 1
     bne !tse_loop-
+
+    // Blessed / Prayer
+    lda zp_eff_bless
+    beq !no_bless+
+    sec
+    sbc #1
+    sta zp_eff_bless
+    bne !no_bless+
+    lda #<turn_prayer_off_msg
+    sta zp_ptr0
+    lda #>turn_prayer_off_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+!no_bless:
 
     // Word of recall
     lda zp_eff_word_recall
@@ -200,11 +212,21 @@ turn_tick_effects:
     jsr huff_print_msg
 !no_recall:
 
+    lda eff_invuln_timer
+    beq !no_invuln+
+    dec eff_invuln_timer
+!no_invuln:
+
     // Detect monsters timer
     lda eff_detect_timer
     beq !no_detect+
-    dec eff_detect_timer
+    sec
+    sbc #1
+    sta eff_detect_timer
+    and #$7f
     bne !no_detect+
+    lda #0
+    sta eff_detect_timer
     // Expired — trigger redraw to hide detected monsters
     lda #1
     sta vis_room_revealed
@@ -253,8 +275,7 @@ turn_tick_hunger:
 
     jsr player_update_hunger_state
     pla
-    jsr turn_maybe_play_hunger_alert
-    rts
+    jmp turn_maybe_play_hunger_alert
 !starving:
     // Food is 0 — player takes damage each turn
     jsr player_update_hunger_state
@@ -265,8 +286,7 @@ turn_tick_hunger:
     jsr turn_apply_one_damage
     lda #DEATH_STARVE
     sta zp_death_source
-    jsr player_death_check
-    rts
+    jmp player_death_check
 
 // turn_apply_one_damage — Subtract 1 HP from the player, clamped at 0.
 // Syncs HP back to player_data.
@@ -387,6 +407,21 @@ turn_post_action:
     jsr monster_ai_tick
     ora zp_dirty_count              // pending non-local redraw request
     sta turn_scene_dirty
+    bcc !tpa_no_room_promote+
+    bne !tpa_no_room_promote+
+
+    // Lit rooms expose monster movement beyond the player's local
+    // light-radius redraw box. If monster AI moved anything this turn while
+    // the player stands on a visible lit tile, promote to the full redraw path.
+    ldx zp_player_x
+    ldy zp_player_y
+    jsr map_get_tile
+    and #(FLAG_VISITED | FLAG_LIT)
+    cmp #(FLAG_VISITED | FLAG_LIT)
+    bne !tpa_no_room_promote+
+    lda #1
+    sta turn_scene_dirty
+!tpa_no_room_promote:
     lda #0
     sta zp_dirty_count
 
@@ -403,9 +438,7 @@ turn_post_action:
 !no_restock:
 
     // Mark status bar as dirty so it redraws
-    jsr status_mark_dirty
-
-    rts
+    jmp status_mark_dirty
 
 // turn_recall_clear_old_occupied — clear the current map tile occupied bit
 // before an actual recall teleport transition.
@@ -490,91 +523,145 @@ eff_fear_timer:   .byte 0
 // Pseudo-identification system
 // ============================================================
 
-// turn_tick_pseudo_id — Pseudo-identify equipped items over time
-// Each turn, decrements zp_pseudo_id_timer. When it reaches 0, scans
-// equipment for the first unidentified item without IF_TRIED.
-// Sets IF_TRIED, prints quality message, and resets timer.
+// turn_tick_pseudo_id — Auto-sense magical gear over time.
+// Matches umoria's cadence: every 16 turns, if not confused, roll a
+// level-based outer chance (10 + 750 / (5 + level)). On success, scan carried
+// items first (1/50 per eligible item) and then equipment (1/10 per eligible
+// item), reporting the result with umoria-style useful wording.
 // Preserves: nothing
 turn_tick_pseudo_id:
-    lda zp_pseudo_id_timer
-    beq !pid_done+              // Timer 0 = inactive
-    dec zp_pseudo_id_timer
-    bne !pid_done+              // Not expired yet
+    lda zp_turn_lo
+    and #$0f
+    cmp #$0f
+    beq !pid_turn_ok+
+    jmp !pid_done+
+!pid_turn_ok:
+    lda zp_eff_confuse
+    beq !pid_clear_ok+
+    jmp !pid_done+
+!pid_clear_ok:
+    lda #<750
+    sta zp_math_a
+    lda #>750
+    sta zp_math_b
+    lda #5
+    clc
+    adc zp_player_lvl
+    tax
+    jsr math_div_16x8
+    lda zp_math_a
+    clc
+    adc #10
+    jsr rng_range
+    beq !pid_outer_ok+
+    jmp !pid_done+
+!pid_outer_ok:
 
-    // Timer expired — scan equipment slots
+    ldx #0
+!pid_scan_pack:
+    cpx #MAX_INV_SLOTS
+    bcs !pid_scan_equip+
+    lda inv_item_id,x
+    cmp #FI_EMPTY
+    beq !pid_next_pack+
+    jsr pid_item_enchanted
+    bcc !pid_next_pack+
+    stx pid_slot
+    lda #50
+    jsr rng_range
+    pha
+    ldx pid_slot
+    pla
+    bne !pid_next_pack+
+    lda inv_flags,x
+    ora #IF_SENSED
+    sta inv_flags,x
+    jsr pid_print_sense_msg
+    jmp !pid_done+
+!pid_next_pack:
+    inx
+    bne !pid_scan_pack-
+
+!pid_scan_equip:
     ldx #EQUIP_WEAPON
-!pid_scan:
+!pid_scan_gear:
     lda inv_item_id,x
     cmp #FI_EMPTY
     beq !pid_next+
+    jsr pid_item_enchanted
+    bcc !pid_next+
+    stx pid_slot
+    lda #10
+    jsr rng_range
+    pha
+    ldx pid_slot
+    pla
+    bne !pid_next+
     lda inv_flags,x
-    and #IF_IDENTIFIED
-    bne !pid_next+              // Already fully identified
-    lda inv_flags,x
-    and #IF_TRIED
-    bne !pid_next+              // Already pseudo-ID'd
-
-    // Found unID'd item — set IF_TRIED
-    lda inv_flags,x
-    ora #IF_TRIED
+    ora #IF_SENSED
     sta inv_flags,x
-
-    // Get quality index
-    stx pid_save_x
-    jsr pid_get_quality         // A = quality index 0-4
-    sta pid_save_q
-
-    // Print "Sense: <quality>" via Huffman (sequential HSTR_PID_TERRIBLE+q)
-    lda pid_save_q
-    clc
-    adc #HSTR_PID_TERRIBLE
-    tax
-    jsr huff_print_msg
-    jmp !pid_reset+
+    jsr pid_print_sense_msg
+    jmp !pid_done+
 
 !pid_next:
     inx
     cpx #EQUIP_RING + 1
-    bcc !pid_scan-
-    // No unID'd items found — still reset timer
-!pid_reset:
-    lda player_data + PL_RESERVED
-    sta zp_pseudo_id_timer
+    bcc !pid_scan_gear-
 !pid_done:
     rts
 
-pid_save_x: .byte 0
-pid_save_q: .byte 0
+turn_prayer_off_msg:
+    .text "The prayer has expired."
+    .byte 0
 
-// pid_get_quality — Determine quality level from item enchantment
+// pid_item_enchanted — Return carry set for unsensed positive magical gear
 // Input: X = inventory slot index
-// Output: A = quality index (0=TERRIBLE, 1=BAD, 2=AVERAGE, 3=GOOD, 4=EXCELLENT)
+// Output: carry set = eligible for auto-sense
 // Preserves: X
-pid_get_quality:
+pid_item_enchanted:
     lda inv_flags,x
-    and #IF_CURSED
-    bne !pgq_bad+
+    and #IF_IDENTIFIED | IF_SENSED | IF_CURSED
+    bne !pid_no+
+    lda inv_item_id,x
+    cmp #13
+    beq !pid_no+               // Wooden torch fuel is not pseudo-ID-worthy
+    cmp #14
+    beq !pid_no+               // Brass lantern fuel is not pseudo-ID-worthy
+    lda inv_ego,x
+    bne !pid_yes+
     lda inv_p1,x
-    bmi !pgq_neg+
-    // Positive or zero
-    beq !pgq_avg+
-    cmp #3
-    bcs !pgq_exc+
-    lda #3                      // GOOD (p1 = 1 or 2)
+    beq !pid_no+
+    bmi !pid_no+
+!pid_yes:
+    sec
     rts
-!pgq_exc:
-    lda #4                      // EXCELLENT (p1 >= 3)
-    rts
-!pgq_neg:
-    cmp #$FF
-    beq !pgq_bad+
-    lda #0                      // TERRIBLE (p1 <= -2)
-    rts
-!pgq_bad:
-    lda #1                      // BAD (p1 = -1 or cursed)
-    rts
-!pgq_avg:
-    lda #2                      // AVERAGE (p1 = 0)
+!pid_no:
+    clc
     rts
 
-// Pseudo-ID strings migrated to Huffman (HSTR_PID_* in huffman_data.s)
+// pid_print_sense_msg — Print the exact umoria auto-sense wording for slot X
+// Input: X = inventory slot index
+// Preserves: nothing
+pid_print_sense_msg:
+    cpx #MAX_INV_SLOTS
+    bcc !pid_pack_msg+
+    txa
+    sec
+    sbc #EQUIP_WEAPON
+    tay
+    ldx pid_huff_msg,y
+    jmp huff_print_msg
+!pid_pack_msg:
+    ldx #HSTR_PID_PACK
+    jmp huff_print_msg
+
+pid_huff_msg:
+    .byte HSTR_PID_WIELDING
+    .byte HSTR_PID_BODY
+    .byte HSTR_PID_ARM
+    .byte HSTR_PID_HEAD
+    .byte HSTR_PID_HANDS
+    .byte HSTR_PID_FEET
+    .byte HSTR_PID_LIGHT
+    .byte HSTR_PID_RIGHT
+pid_slot: .byte 0

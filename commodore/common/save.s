@@ -15,14 +15,17 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 #if C128
-.const SAVE_VERSION    = $0d
+.const SAVE_VERSION    = $0f
+.const OLDEST_SAVE_VERSION = $0d
 #else
-.const SAVE_VERSION    = $0c
+.const SAVE_VERSION    = $0e
+.const OLDEST_SAVE_VERSION = $0c
 #endif
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
 .const LOAD_RESULT_IOERR     = 3
+.const LOAD_RESULT_UNSUPPORTED = 4
 
 // ZP game state range to save ($40–$5f = 32 bytes)
 // Coverage: player struct fields ($2B-$3F) saved via player_sync_from_zp.
@@ -73,6 +76,8 @@ rle_lit_len:    .byte 0         // Literal buffer length
 #endif
 save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
+load_save_version: .byte 0
+load_floor_item_count: .byte 0
 #if SAVE_TEST_RLE
 rle_work_lo:    .byte <CREATURE_BASE  // RLE workspace pointer lo (default CREATURE_BASE)
 rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
@@ -147,11 +152,8 @@ save_confirm_overwrite:
     sta save_block_hi
     jsr save_file_exists
     bcc !save_confirm_done+
-    lda #<save_overwrite_str
-    sta zp_ptr0
-    lda #>save_overwrite_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_OVERWRITE
+    jsr huff_print_msg
 #if C128
     jsr input_prepare_followup_key
 #endif
@@ -179,11 +181,8 @@ save_confirm_overwrite:
 save_select_output_name_c64:
     jsr save_file_exists
     bcc !save_select_ok+
-    lda #<save_overwrite_str
-    sta zp_ptr0
-    lda #>save_overwrite_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_OVERWRITE
+    jsr huff_print_msg
 !save_select_loop:
     jsr input_get_key
     cmp #$59                // Y
@@ -205,18 +204,12 @@ save_game:
     bcc !save_media_ok+
     lda disk_setup_done
     bne !save_wrong_media+
-    lda #<disk_need_save_str
-    sta zp_ptr0
-    lda #>disk_need_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_NEED_SAVE
     bne !save_media_fail+
 !save_wrong_media:
-    lda #<disk_bad_save_str
-    sta zp_ptr0
-    lda #>disk_bad_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
-    jsr msg_print
+    jsr huff_print_msg
 save_return_fail:
 #if !C128
     lda #BANK_NO_BASIC
@@ -235,11 +228,8 @@ save_return_fail:
 #endif
 
     // Show "SAVING GAME..." message
-    lda #<save_saving_str
-    sta zp_ptr0
-    lda #>save_saving_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_SAVING
+    jsr huff_print_msg
 
     // Sync ZP fields back to player struct
     jsr player_sync_from_zp
@@ -352,15 +342,8 @@ save_return_fail:
     // 15. Monster table (32 × 12 = 384 bytes)
     :save_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 
-    // 16. Floor items (8 × 32 = 256 bytes)
-    :save_block(fi_item_id, MAX_FLOOR_ITEMS)
-    :save_block(fi_x, MAX_FLOOR_ITEMS)
-    :save_block(fi_y, MAX_FLOOR_ITEMS)
-    :save_block(fi_qty, MAX_FLOOR_ITEMS)
-    :save_block(fi_qty_hi, MAX_FLOOR_ITEMS)
-    :save_block(fi_p1, MAX_FLOOR_ITEMS)
-    :save_block(fi_flags, MAX_FLOOR_ITEMS)
-    :save_block(fi_ego, MAX_FLOOR_ITEMS)
+    // 16. Floor items (logical 8-field layout, serialized from packed RAM)
+    jsr save_write_floor_items
 
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :save_block(recall_data_start, RECALL_DATA_SIZE)
@@ -393,11 +376,8 @@ save_return_fail:
     sta $dd00
 
     // Show success
-    lda #<save_done_str
-    sta zp_ptr0
-    lda #>save_done_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_DONE
+    jsr huff_print_msg
 #if !C128
     lda #BANK_NO_BASIC
     sta $01
@@ -413,11 +393,8 @@ save_return_fail:
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
 !save_error:
-    lda #<save_ioerr_str
-    sta zp_ptr0
-    lda #>save_ioerr_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
     jmp save_return_fail
 
 // ============================================================
@@ -439,28 +416,19 @@ load_game:
     bcc !load_media_ok+
     lda disk_setup_done
     bne !load_wrong_media+
-    lda #<disk_need_save_str
-    sta zp_ptr0
-    lda #>disk_need_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_NEED_SAVE
     bne !load_media_fail+
 !load_wrong_media:
-    lda #<disk_bad_save_str
-    sta zp_ptr0
-    lda #>disk_bad_save_str
-    sta zp_ptr0_hi
+    ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
-    jsr msg_print
+    jsr huff_print_msg
     clc
     rts
 !load_media_ok:
 
     // Show "LOADING GAME..." message
-    lda #<save_load_str
-    sta zp_ptr0
-    lda #>save_load_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_LOADING
+    jsr huff_print_msg
 
     // Reset checksum
     lda #0
@@ -515,8 +483,16 @@ load_game:
     jmp !load_corrupt+
 !magic_ok:
     inx
-    cpx #SAVE_MAGIC_SIZE
+    cpx #SAVE_MAGIC_SIZE - 1
     bcc !check_magic-
+
+    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
+    jsr save_version_supported
+    bcs !load_version_ok+
+    jmp !load_unsupported+
+!load_version_ok:
+    lda save_magic_buf + SAVE_MAGIC_SIZE - 1
+    sta load_save_version
 
     // --- Read all blocks in same order as save ---
 
@@ -588,14 +564,7 @@ load_game:
     :load_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
 
     // 16. Floor items
-    :load_block(fi_item_id, MAX_FLOOR_ITEMS)
-    :load_block(fi_x, MAX_FLOOR_ITEMS)
-    :load_block(fi_y, MAX_FLOOR_ITEMS)
-    :load_block(fi_qty, MAX_FLOOR_ITEMS)
-    :load_block(fi_qty_hi, MAX_FLOOR_ITEMS)
-    :load_block(fi_p1, MAX_FLOOR_ITEMS)
-    :load_block(fi_flags, MAX_FLOOR_ITEMS)
-    :load_block(fi_ego, MAX_FLOOR_ITEMS)
+    jsr load_read_floor_items
 
     // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
     :load_block(recall_data_start, RECALL_DATA_SIZE)
@@ -630,12 +599,7 @@ load_game:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
     // Close file after successful read
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr load_close_file_restore
 
     // Sync struct → ZP
     jsr player_search_clear_transient_state
@@ -659,17 +623,22 @@ load_game:
     lda #LOAD_RESULT_CORRUPT
     sta load_result
     // Close file (may still be open if corruption detected mid-read)
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-    lda #<save_corrupt_str
-    sta zp_ptr0
-    lda #>save_corrupt_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    jsr load_close_file_restore
+    ldx #HSTR_SAVE_CORRUPT
+    jsr huff_print_msg
+#if C128
+    clc
+    rts
+#else
+    jmp !load_return_fail+
+#endif
+
+!load_unsupported:
+    lda #LOAD_RESULT_UNSUPPORTED
+    sta load_result
+    jsr load_close_file_restore
+    ldx #HSTR_SAVE_UNSUPPORTED
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -679,21 +648,13 @@ load_game:
 
 !load_close_notfound:
     // File was opened but returned no data — close before showing message
-    jsr save_restore_channels
-    lda #SAVE_FILE_NUM
-    jsr SAVE_CLOSE
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr load_close_file_restore
 !load_notfound:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
-    lda #<save_notfound_str
-    sta zp_ptr0
-    lda #>save_notfound_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_NOTFOUND
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -704,11 +665,8 @@ load_game:
 !load_fail:
     lda #LOAD_RESULT_IOERR
     sta load_result
-    lda #<save_ioerr_str
-    sta zp_ptr0
-    lda #>save_ioerr_str
-    sta zp_ptr0_hi
-    jsr msg_print
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
 #if C128
     clc
     rts
@@ -729,6 +687,15 @@ load_game:
 // Input: save_block_lo/hi = source addr, save_count_lo/hi = byte count
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
+load_close_file_restore:
+    jsr save_restore_channels
+    lda #SAVE_FILE_NUM
+    jsr SAVE_CLOSE
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    rts
+
 save_write_block:
     lda save_block_lo
     sta zp_ptr0
@@ -780,7 +747,14 @@ save_write_block:
 // Clobbers: flags
 // ============================================================
 save_write_byte:
+#if C128
+    sta zp_temp0
+    txa
     pha
+    lda zp_temp0
+#else
+    pha
+#endif
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -788,7 +762,11 @@ save_write_byte:
     bcc !swby_no_carry+
     inc save_cksum_hi
 !swby_no_carry:
+#if C128
+    lda zp_temp0
+#else
     pla
+#endif
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
@@ -797,6 +775,12 @@ save_write_byte:
     inc save_io_error
 !swby_ok:
     pla
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
     rts
 
 // ============================================================
@@ -804,6 +788,12 @@ save_write_byte:
 // Input: A = byte to write
 // ============================================================
 save_write_byte_raw:
+#if C128
+    sta zp_temp0
+    txa
+    pha
+    lda zp_temp0
+#endif
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
@@ -812,6 +802,65 @@ save_write_byte_raw:
     inc save_io_error
 !swbr_ok:
     pla
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
+    rts
+
+// ============================================================
+// save_write_floor_items — Serialize packed floor-item RAM as the legacy
+// logical field layout:
+//   id, x, y, qty, qty_hi, p1, flags, ego
+// This preserves item semantics while allowing a denser in-RAM layout.
+// ============================================================
+save_write_floor_items:
+    :save_block(fi_item_id, MAX_FLOOR_ITEMS)
+    :save_block(fi_x, MAX_FLOOR_ITEMS)
+    :save_block(fi_y, MAX_FLOOR_ITEMS)
+    :save_block(fi_qty, MAX_FLOOR_ITEMS)
+
+    ldx #0
+!swfi_qty_hi:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_p1_start+
+    jsr floor_item_get_qty_hi_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_qty_hi-
+
+!swfi_p1_start:
+    ldx #0
+!swfi_p1:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_flags_start+
+    jsr floor_item_get_p1_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_p1-
+
+!swfi_flags_start:
+    ldx #0
+!swfi_flags:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_ego_start+
+    jsr floor_item_get_flags_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_flags-
+
+!swfi_ego_start:
+    ldx #0
+!swfi_ego:
+    cpx #MAX_FLOOR_ITEMS
+    bcs !swfi_done+
+    jsr floor_item_get_ego_x
+    jsr save_write_byte
+    inx
+    jmp !swfi_ego-
+!swfi_done:
     rts
 
 // ============================================================
@@ -853,6 +902,10 @@ load_read_block:
 // Clobbers: A, flags
 // ============================================================
 load_read_byte:
+#if C128
+    txa
+    pha
+#endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
 #if !C128
@@ -872,6 +925,164 @@ load_read_byte:
     inc save_cksum_hi
 !lrby_no_carry:
     pla                     // A = original byte
+#if C128
+    sta zp_temp0
+    pla
+    tax
+    lda zp_temp0
+#endif
+    rts
+
+// ============================================================
+// load_read_floor_items — Read floor items from savefile into the packed
+// in-RAM floor table. Supports both the prior 32-slot save layout and the
+// new 42-slot layout via the version byte already validated in load_game.
+// ============================================================
+load_read_floor_items:
+    lda #MAX_FLOOR_ITEMS
+    sta load_floor_item_count
+    lda load_save_version
+    jsr save_version_uses_legacy_floor_layout
+    bcc !lrfi_count_ready+
+    lda #32
+    sta load_floor_item_count
+!lrfi_count_ready:
+    jsr item_init_floor
+
+    lda #<fi_item_id
+    sta zp_ptr0
+    lda #>fi_item_id
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_x
+    sta zp_ptr0
+    lda #>fi_x
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_y
+    sta zp_ptr0
+    lda #>fi_y
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_qty
+    sta zp_ptr0
+    lda #>fi_qty
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    ldx #0
+!lrfi_qty_hi:
+    cpx load_floor_item_count
+    bcs !lrfi_p1_start+
+    jsr load_read_byte
+    pha
+    lda fi_item_id,x
+    cmp #2
+    bcs !lrfi_qty_hi_skip+
+    pla
+    sta fi_p1,x
+    jmp !lrfi_qty_hi_next+
+!lrfi_qty_hi_skip:
+    pla
+!lrfi_qty_hi_next:
+    inx
+    jmp !lrfi_qty_hi-
+
+!lrfi_p1_start:
+    ldx #0
+!lrfi_p1:
+    cpx load_floor_item_count
+    bcs !lrfi_flags_start+
+    jsr load_read_byte
+    pha
+    lda fi_item_id,x
+    cmp #2
+    bcc !lrfi_p1_skip+
+    pla
+    sta fi_p1,x
+    jmp !lrfi_p1_next+
+!lrfi_p1_skip:
+    pla
+!lrfi_p1_next:
+    inx
+    jmp !lrfi_p1-
+
+!lrfi_flags_start:
+    ldx #0
+!lrfi_flags:
+    cpx load_floor_item_count
+    bcs !lrfi_ego_start+
+    jsr load_read_byte
+    asl
+    asl
+    asl
+    sta fi_meta,x
+    inx
+    jmp !lrfi_flags-
+
+!lrfi_ego_start:
+    ldx #0
+!lrfi_ego:
+    cpx load_floor_item_count
+    bcs !lrfi_done+
+    jsr load_read_byte
+    and #FI_META_EGO_MASK
+    ora fi_meta,x
+    sta fi_meta,x
+    inx
+    jmp !lrfi_ego-
+!lrfi_done:
+    rts
+
+// ============================================================
+// save_version_supported — Accept any historical save version this tree
+// has emitted on the current platform.
+// Input: A = save version byte
+// Output: carry set = supported, carry clear = unsupported
+// ============================================================
+save_version_supported:
+    cmp #OLDEST_SAVE_VERSION
+    bcc !svs_unsupported+
+    cmp #(SAVE_VERSION + 1)
+    bcs !svs_unsupported+
+    sec
+    rts
+!svs_unsupported:
+    clc
+    rts
+
+// ============================================================
+// save_version_uses_legacy_floor_layout — Older supported saves still carry
+// the pre-expanded 32-slot floor-item layout.
+// Input: A = save version byte
+// Output: carry set = legacy 32-slot floor layout, carry clear = current layout
+// ============================================================
+save_version_uses_legacy_floor_layout:
+    cmp #SAVE_VERSION
+    bcc !svl_legacy+
+    clc
+    rts
+!svl_legacy:
+    sec
     rts
 
 #if C128
@@ -928,8 +1139,6 @@ load_read_map_c128:
     ora save_count_hi
     beq !lrm_done+
     jsr load_read_byte
-    pha
-    pla
     ldy #0
     jsr mmu_safe_map_write_ptr0
     lda #MMU_NORMAL

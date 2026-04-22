@@ -70,7 +70,7 @@
 //   - bottom common RAM:       $0000-$0FFF (shared across banks, not cache-safe)
 //   - overlay cache UI:        $1000-$1FFF
 //   - overlay cache HELP:      $2000-$2FFF
-//   - scrubbed low reclaim:    $3000-$3FFF
+//   - overlay cache ITEMS:     $3000-$3FFF
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
 //   - DB/data region:          $7400-$7FFF
 //   - tier cache window:       $8000-$94F7
@@ -95,8 +95,8 @@
 .const BANK1_OVERLAY_UI_END  = $1fff
 .const BANK1_OVERLAY_HELP_BASE = $2000
 .const BANK1_OVERLAY_HELP_END  = $2fff
-.const BANK1_RECLAIMED_LOW_BASE = $3000
-.const BANK1_RECLAIMED_LOW_END  = $3fff
+.const BANK1_OVERLAY_ITEMS_BASE = $3000
+.const BANK1_OVERLAY_ITEMS_END  = $3fff
 .const C128_FUTURE_MAP_COLS = 198
 .const C128_FUTURE_MAP_ROWS = 66
 .const C128_FUTURE_MAP_SIZE = C128_FUTURE_MAP_COLS * C128_FUTURE_MAP_ROWS
@@ -149,6 +149,7 @@
 .const OVERLAY_CACHE_SLOT_SIZE = $1000
 .const OVERLAY_CACHE_UI_BASE    = BANK1_OVERLAY_UI_BASE
 .const OVERLAY_CACHE_HELP_BASE  = BANK1_OVERLAY_HELP_BASE
+.const OVERLAY_CACHE_ITEMS_BASE = BANK1_OVERLAY_ITEMS_BASE
 .const OVERLAY_CACHE_START_BASE = BANK1_OVERLAY_STARTUP_BASE
 .const OVERLAY_CACHE_TOWN_BASE  = BANK1_OVERLAY_TOWN_BASE
 .const OVERLAY_CACHE_DEATH_BASE = BANK1_OVERLAY_DEATH_BASE
@@ -553,9 +554,9 @@ c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
 
 bank1_overlay_cache_slot_lo:
-    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE
+    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE
 bank1_overlay_cache_slot_hi:
-    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE
+    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE
 
 // Common-RAM MMU helpers copied to $0C06 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
@@ -727,10 +728,6 @@ mmu_common_select_bank0:
 
 mmu_common_save_p:
     .byte 0
-
-    // Shared bank-safe display strings that must stay visible to the
-    // banked UI code without consuming runtime-low budget.
-    #import "../common/player_magic_display_data.s"
 }
 mmu_common_helpers_blob_end:
 
@@ -808,8 +805,8 @@ copy_to_e000:
 .assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true
 :AssertRegionBefore("Bank1 common region ends below staged source span", BANK1_COMMON_END, BANK1_STAGE_SOURCE_BASE)
 :AssertRegionBefore("UI overlay cache ends before help overlay cache", BANK1_OVERLAY_UI_END, BANK1_OVERLAY_HELP_BASE)
-:AssertRegionBefore("Help overlay cache ends before reclaimed low free region", BANK1_OVERLAY_HELP_END, BANK1_RECLAIMED_LOW_BASE)
-:AssertRegionBefore("Reclaimed low region ends before map region", BANK1_RECLAIMED_LOW_END, MAP_BASE)
+:AssertRegionBefore("Help overlay cache ends before items overlay cache", BANK1_OVERLAY_HELP_END, BANK1_OVERLAY_ITEMS_BASE)
+:AssertRegionBefore("Items overlay cache ends before map region", BANK1_OVERLAY_ITEMS_END, MAP_BASE)
 :AssertRegionBefore("Reserved future map span ends before Bank1 DB region", BANK1_MAP_RESERVED_END, BANK1_DB_BASE)
 :AssertRegionBefore("Bank1 DB ends before tier cache window", BANK1_DB_END, BANK1_TIER_CACHE_BASE)
 :AssertRegionBefore("Tier cache ends before reserved gap 0", BANK1_TIER_CACHE_END, BANK1_RESERVED_GAP0_BASE)

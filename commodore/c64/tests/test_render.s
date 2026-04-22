@@ -5,7 +5,10 @@
 //  2. Visible item overrides floor glyph/color
 //  3. Visible monster overrides item
 //  4. Player overrides monster and item
-//  5. Town viewport clamps to the fixed 66x22 town bounds
+//  5. Detect Evil hides non-evil monsters on unvisited tiles
+//  6. Player still renders on an unvisited tile
+//  7. Visible glyph renders when no item/monster overrides it
+//  8. Town viewport clamps to the fixed 66x22 town bounds
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -17,7 +20,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #4
+    ldx #7
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -56,6 +59,7 @@ mmu_safe_map_write_ptr1:
 .const MX_X = 0
 .const MX_Y = 1
 .const MX_TYPE = 2
+.const DETECT_TIMER_EVIL_ONLY = $80 | 20
 
 eff_detect_timer: .byte 0
 test_item_active:   .byte 0
@@ -67,14 +71,18 @@ test_mon_active:    .byte 0
 test_mon_x:         .byte 0
 test_mon_y:         .byte 0
 test_mon_type:      .byte 0
+test_glyph_active:  .byte 0
+test_glyph_x:       .byte 0
+test_glyph_y:       .byte 0
 test_expect_char:   .byte 0
 test_expect_color:  .byte 0
-tc_results:         .fill 5, $ff
+tc_results:         .fill 8, $ff
 
 fi_item_id: .fill 1, 0
 it_display: .fill 2, 0
 cr_display: .fill 2, 0
 cr_color:   .fill 2, 0
+cr_mflags:  .fill 2, 0
 monster_stub_entry: .fill 12, EMPTY_SLOT
 
 item_get_floor_color:
@@ -122,6 +130,21 @@ monster_get_ptr:
     sta zp_ptr0_hi
     rts
 
+glyph_find_at:
+    ldx test_glyph_active
+    beq !miss+
+    cmp test_glyph_x
+    bne !miss+
+    tya
+    cmp test_glyph_y
+    bne !miss+
+    ldx #0
+    sec
+    rts
+!miss:
+    clc
+    rts
+
 #import "../dungeon_render.s"
 
 test_start:
@@ -130,7 +153,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #4
+    ldx #6
     lda #$ff
 !clr:
     sta tc_results,x
@@ -141,6 +164,9 @@ test_start:
     jsr test_item_override
     jsr test_monster_override
     jsr test_player_override
+    jsr test_detect_evil_hides_non_evil
+    jsr test_player_on_unvisited_tile
+    jsr test_visible_glyph
     jsr test_town_viewport_clamp
     jmp test_exit_trampoline
 
@@ -148,6 +174,7 @@ setup_scene:
     lda #0
     sta test_item_active
     sta test_mon_active
+    sta test_glyph_active
     sta eff_detect_timer
     lda #COL_WHITE
     sta zp_text_color
@@ -171,6 +198,8 @@ setup_scene:
     sta cr_display + 1
     lda #COL_RED
     sta cr_color + 1
+    lda #0
+    sta cr_mflags + 1
     rts
 
 test_hidden_blank:
@@ -329,6 +358,68 @@ test_player_override:
     sta tc_results + 3
     rts
 
+test_detect_evil_hides_non_evil:
+    jsr setup_scene
+    lda #DETECT_TIMER_EVIL_ONLY
+    sta eff_detect_timer
+    lda #1
+    sta test_mon_active
+    lda #24
+    sta test_mon_x
+    lda #20
+    sta test_mon_y
+    lda #1
+    sta test_mon_type
+    lda #0
+    sta cr_mflags + 1
+    ldx #24
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_OCCUPIED)
+    jsr map_set_tile
+    lda #24
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #SC_SPACE
+    sta test_expect_char
+    lda #COL_BLACK
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 4
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 4
+    rts
+
+test_player_on_unvisited_tile:
+    jsr setup_scene
+    ldx #20
+    ldy #20
+    lda #(TILE_FLOOR << 4)
+    jsr map_set_tile
+    lda #20
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #SC_PLAYER
+    sta test_expect_char
+    lda #COL_PLAYER
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 5
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 5
+    rts
+
 test_town_viewport_clamp:
     lda #0
     sta zp_player_dlvl
@@ -344,11 +435,42 @@ test_town_viewport_clamp:
     cmp #TOWN_MAP_ROWS - VIEWPORT_H
     bne !fail+
     lda #$01
-    sta tc_results + 4
+    sta tc_results + 7
     rts
 !fail:
     lda #$00
-    sta tc_results + 4
+    sta tc_results + 7
+    rts
+
+test_visible_glyph:
+    jsr setup_scene
+    lda #1
+    sta test_glyph_active
+    lda #22
+    sta test_glyph_x
+    lda #20
+    sta test_glyph_y
+    ldx #22
+    ldy #20
+    lda #((TILE_FLOOR << 4) | FLAG_VISITED | FLAG_LIT)
+    jsr map_set_tile
+    lda #22
+    sta zp_temp0
+    lda #20
+    sta zp_temp1
+    jsr render_single_tile
+    lda #SC_GLYPH
+    sta test_expect_char
+    lda #COL_GLYPH
+    sta test_expect_color
+    jsr assert_rendered_tile
+    bcs !fail+
+    lda #$01
+    sta tc_results + 6
+    rts
+!fail:
+    lda #$00
+    sta tc_results + 6
     rts
 
 assert_rendered_tile:

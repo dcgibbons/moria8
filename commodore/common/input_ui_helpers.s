@@ -39,6 +39,25 @@ input_get_modal_dismiss_key:
     jmp input_get_key
 #endif
 
+// input_is_modal_escape_key — classify the platform's escape-equivalent key
+// for read-only modal dismissal.
+// Input: A = raw key from input_get_key/input_get_key_fast
+// Output: Z set when the key is the platform escape-equivalent, Z clear otherwise
+// Preserves: A
+input_is_modal_escape_key:
+#if C128
+    cmp #KEY_ESC
+    beq !yes+
+    cmp #$03                    // STOP key raw code on C128
+!yes:
+#else
+    cmp #$03                    // RUN/STOP raw cancel on C64
+    beq !yes+
+    cmp #$1b                    // Synthetic/test ESC fallback
+!yes:
+#endif
+    rts
+
 // input_flush_run_cancel_buffer — Hide the raw keyboard-buffer flush needed
 // when cancelling a run on C64. C128 direct-scan input does not use it.
 input_flush_run_cancel_buffer:

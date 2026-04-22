@@ -4,6 +4,7 @@
 #define C128_INPUT_TEST
 #import "../../common/zeropage.s"
 #import "../input128.s"
+#import "../input_run_raw128.s"
 
 c128_restore_runtime_vectors:
     rts
@@ -105,6 +106,11 @@ test_fail0:
     ldy #0                 // No Ctrl => stays W
     jsr input_normalize_ctrl_chords_with_state
     cmp #$57
+    bne test_fail
+
+    lda #$17               // Normalized CTRL+W should map to wizard mode
+    jsr petscii_to_command
+    cmp #CMD_WIZARD
     bne test_fail
     jmp test_continue
 
@@ -349,10 +355,67 @@ test_run_cancel_checks:
     cmp #1
     bne test_fail3
 
-    jmp test_scan_restore_checks
+    jmp test_run_raw_row_checks
 
 test_fail3:
     jmp test_fail_loop
+
+test_run_raw_row_checks:
+    lda #$7f               // Row 1: left shift only
+    ldx #1
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail3
+
+    lda #$fd               // Row 1: W pressed
+    ldx #1
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail3
+
+    lda #$ef               // Row 6: right shift only
+    ldx #6
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail3
+
+    lda #$fb               // Row 7: CTRL only
+    ldx #7
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail3
+
+    lda #$df               // Row 7: C= only
+    ldx #7
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail3
+
+    lda #$7f               // Row 7: STOP pressed
+    ldx #7
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail3
+
+    lda #$fe               // Row 8: ALT only
+    ldx #8
+    jsr input_run_row_has_nonmodifier
+    cmp #0
+    bne test_fail3
+
+    lda #$fd               // Row 8: keypad 8 pressed
+    ldx #8
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail3
+
+    lda #$fe               // Row 9: ESC pressed
+    ldx #9
+    jsr input_run_row_has_nonmodifier
+    cmp #1
+    bne test_fail3
+
+    jmp test_scan_restore_checks
 
 test_scan_restore_checks:
     // Scan routine must always restore keyboard drive registers.
@@ -365,28 +428,40 @@ test_scan_restore_checks:
     jsr cia_scan_petscii
     lda CIA1_PORTA
     cmp #$FF
-    bne test_fail3
+    bne !scan_restore_fail+
     lda C128_KBD_EXT
     cmp #%00001111
-    bne test_fail3
+    bne !scan_restore_fail+
     lda test_ext_orig
     sta C128_KBD_EXT
 
     lda #%00110011
     sta C128_KBD_EXT
-    lda #$00
+    lda #$12
     sta CIA1_PORTA
+    lda #$34
+    sta CIA1_DDRA
+    lda #$56
+    sta CIA1_DDRB
     jsr input_run_scan_held_raw
     cmp #0
-    bne test_fail3
+    bne !scan_restore_fail+
     lda CIA1_PORTA
-    cmp #$FF
-    bne test_fail3
+    cmp #$12
+    bne !scan_restore_fail+
+    lda CIA1_DDRA
+    cmp #$34
+    bne !scan_restore_fail+
+    lda CIA1_DDRB
+    cmp #$56
+    bne !scan_restore_fail+
     lda C128_KBD_EXT
     cmp #%00110011
-    bne test_fail3
+    bne !scan_restore_fail+
 
     jmp test_pass
+!scan_restore_fail:
+    jmp test_fail3
 
 test_fail_loop:
     jmp test_fail_loop

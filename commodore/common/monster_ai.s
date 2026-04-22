@@ -20,7 +20,8 @@ mat_sign_dx:  .byte 0       // Direction sign toward player (-1, 0, +1)
 mat_sign_dy:  .byte 0
 mat_fleeing:  .byte 0       // 1 = fleeing (suppress attack in try_step)
 mat_any_moved: .byte 0       // 1 if any monster moved/spawned this tick
-mat_action_dirty: .byte 0    // 1 if current monster changed visible scene
+mat_scene_dirty: .byte 0     // 1 if any monster changed a non-local visible tile
+mat_action_dirty: .byte 0    // 1 if current monster changed gameplay state
 
 // ============================================================
 // monster_ai_tick — Main AI loop
@@ -32,6 +33,7 @@ monster_ai_tick:
     lda #0
     sta zp_mon_idx
     sta mat_any_moved
+    sta mat_scene_dirty
 
 !mat_loop:
     lda zp_mon_idx
@@ -61,9 +63,28 @@ monster_ai_tick:
     lda (zp_ptr0),y
     sta zp_mon_flags
 
-    // Check speed
+    // Check speed, including per-monster spell adjustment stored in
+    // MX_SPEED_CNT (-1 = slowed, 0 = normal base speed, +1 = hasted).
     ldx zp_mon_type
     lda cr_speed,x
+    sta zp_mon_speed
+    ldx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_SPEED_CNT
+    lda (zp_ptr0),y
+    beq !mat_apply_base+
+    bpl !mat_speed_up+
+    lda zp_mon_speed
+    beq !mat_apply_base+
+    dec zp_mon_speed
+    jmp !mat_apply_base+
+!mat_speed_up:
+    lda zp_mon_speed
+    cmp #2
+    bcs !mat_apply_base+
+    inc zp_mon_speed
+!mat_apply_base:
+    lda zp_mon_speed
     bne !mat_not_slow+
 
     // Speed 0 = slow: act every other turn (even turns only)
@@ -109,9 +130,11 @@ monster_ai_tick:
 !mat_done:
     lda mat_any_moved
     beq !mat_done_clear+
+    lda mat_scene_dirty
     sec
     rts
 !mat_done_clear:
+    lda mat_scene_dirty
     clc
     rts
 
@@ -181,6 +204,7 @@ monster_process_one:
     bcc !mpo_town_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_town_no_move:
     jmp !mpo_writeback+
 !mpo_not_town:
@@ -194,6 +218,7 @@ monster_process_one:
     bcc !mpo_toward_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_toward_no_move:
     jmp !mpo_writeback+
 
@@ -202,6 +227,7 @@ monster_process_one:
     bcc !mpo_flee_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_flee_no_move:
     jmp !mpo_writeback+
 
@@ -210,6 +236,7 @@ monster_process_one:
     bcc !mpo_conf_no_move+
     lda #1
     sta mat_action_dirty
+    jsr mat_mark_move_dirty
 !mpo_conf_no_move:
 
 !mpo_writeback:
@@ -239,6 +266,9 @@ monster_process_one:
     jsr monster_spawn_one
     lda #1
     sta mat_action_dirty
+    lda ms_spawn_x
+    ldy ms_spawn_y
+    jsr mat_mark_tile_dirty_if_nonlocal
 !breed_fail:
     pla
     sta zp_mon_idx              // Restore original monster index
@@ -253,8 +283,129 @@ monster_process_one:
     rts
 
 // ============================================================
+// mat_mark_move_dirty — mark old/new monster tiles dirty only when the
+// normal local redraw does not already cover them.
+// Uses zp_mon_type for detect-evil filtering.
+// ============================================================
+mat_mark_move_dirty:
+    lda mat_old_x
+    ldy mat_old_y
+    jsr mat_mark_tile_dirty_if_nonlocal
+    lda zp_mon_x
+    ldy zp_mon_y
+    // Tail-call the shared tile helper for the new position.
+    // If either old or new tile is non-local visible, the turn layer
+    // will promote to the expensive redraw path exactly once.
+    jmp mat_mark_tile_dirty_if_nonlocal
+
+// ============================================================
+// mat_mark_tile_dirty_if_nonlocal — Set mat_scene_dirty only for tiles
+// that are both currently render-relevant and outside the normal local
+// redraw footprint around the old/current player positions.
+// Input: A = map x, Y = map y
+// Clobbers: A, X, Y, zp_ptr0/hi, zp_temp0/1, zp_mon_scratch0/1
+// ============================================================
+mat_mark_tile_dirty_if_nonlocal:
+    sta zp_temp0
+    sty zp_temp1
+
+    // Skip tiles outside the viewport entirely.
+    lda zp_temp0
+    sec
+    sbc zp_view_x
+    bcc !mtd_done+
+    cmp #VIEWPORT_W
+    bcs !mtd_done+
+    lda zp_temp1
+    sec
+    sbc zp_view_y
+    bcc !mtd_done+
+    cmp #VIEWPORT_H
+    bcs !mtd_done+
+
+    // The existing local redraw already covers tiles near the player.
+    // Do not promote those to the full redraw path.
+    lda zp_player_x
+    sta zp_mon_scratch0
+    lda zp_player_y
+    sta zp_mon_scratch1
+    jsr mat_tile_within_local_radius
+    bcs !mtd_done+
+
+    // Inspect the tile's current render state.
+    ldx zp_temp1
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy zp_temp0
+    :MapRead_ptr0_y()
+    sta zp_mon_scratch1
+
+    // Visited + lit tiles are visible remotely and need a redraw.
+    lda zp_mon_scratch1
+    and #(FLAG_VISITED | FLAG_LIT)
+    cmp #(FLAG_VISITED | FLAG_LIT)
+    beq !mtd_mark+
+
+!mtd_unvisited:
+    // Unvisited tiles only matter while a detect effect is drawing monsters.
+    lda eff_detect_timer
+    beq !mtd_done+
+
+!mtd_mark:
+    lda #1
+    sta mat_scene_dirty
+!mtd_done:
+    rts
+
+// ============================================================
+// mat_tile_within_local_radius — true if tile is within the light-radius+1
+// square around the center in zp_mon_scratch0/1.
+// Input:
+//   zp_temp0/zp_temp1 = tile x/y
+//   zp_mon_scratch0/1 = center x/y
+// Output: carry set = covered by local redraw, clear = non-local
+// ============================================================
+mat_tile_within_local_radius:
+    lda zp_temp0
+    sec
+    sbc zp_mon_scratch0
+    bcs !mtlr_dx_pos+
+    eor #$ff
+    clc
+    adc #1
+!mtlr_dx_pos:
+    sta zp_mon_scratch0
+
+    lda zp_temp1
+    sec
+    sbc zp_mon_scratch1
+    bcs !mtlr_dy_pos+
+    eor #$ff
+    clc
+    adc #1
+!mtlr_dy_pos:
+    cmp zp_mon_scratch0
+    bcs !mtlr_have_dist+
+    lda zp_mon_scratch0
+!mtlr_have_dist:
+    sta zp_mon_scratch1
+    lda zp_light_radius
+    clc
+    adc #1
+    cmp zp_mon_scratch1
+    bcs !mtlr_yes+
+    clc
+    rts
+!mtlr_yes:
+    sec
+    rts
+
+// ============================================================
 // monster_wake_check — Check if monster should wake up
-// Chebyshev distance to player <= cr_aaf[type], then roll vs sleep.
+// Chebyshev distance to player <= cr_aaf[type], then tick the live sleep
+// counter toward zero and wake once it expires.
 // Sets MF_AWAKE in zp_mon_flags if waking up.
 // Clobbers: A, X, Y, zp_temp3, zp_temp4
 // ============================================================
@@ -293,23 +444,21 @@ monster_wake_check:
     beq !mwc_in_range+          // Equal = in range
     bcs !mwc_too_far+           // Greater = too far
 !mwc_in_range:
-
-    // In range — check sleep value
-    lda cr_sleep,x
-    beq !mwc_wake+              // sleep=0 → always wake immediately
-
-    // Roll: rng_range(sleep). If result == 0, wake up.
-    // A already has sleep value
-    jsr rng_range               // Returns [0, sleep-1]
-    cmp #0
-    bne !mwc_too_far+           // Didn't wake this turn
+    // In range — tick the live sleep counter down toward wake-up.
+    // Contract: monster_process_one enters here with zp_ptr0 already
+    // pointing at the current monster entry.
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    beq !mwc_wake+              // sleep=0 → wake immediately
+    sec
+    sbc #1
+    sta (zp_ptr0),y
+    bne !mwc_too_far+           // Still asleep this turn
 
 !mwc_wake:
     lda zp_mon_flags
     ora #MF_AWAKE
     sta zp_mon_flags
-    // Write back flags immediately (wake persists)
-    jsr monster_write_back
     // Group wake propagation
     ldx zp_mon_type
     lda cr_mflags,x
@@ -644,6 +793,18 @@ monster_try_step:
     beq !mts_not_fleeing+
     jmp !mts_blocked+
 !mts_not_fleeing:
+    lda zp_player_x
+    ldy zp_player_y
+    jsr glyph_find_at
+    bcc !mts_glyph_done_player+
+    stx zp_temp0
+    jsr monster_should_break_glyph
+    ldx zp_temp0
+    bcs !mts_break_player_glyph+
+    jmp !mts_blocked+
+!mts_break_player_glyph:
+    jsr glyph_remove
+!mts_glyph_done_player:
 
     // Town creatures don't attack unless provoked
     lda zp_mon_type
@@ -703,6 +864,20 @@ monster_try_step:
     beq !mts_unoccupied+
     jmp !mts_blocked+           // Another monster there
 !mts_unoccupied:
+    lda mat_target_x
+    ldy mat_target_y
+    jsr glyph_find_at
+    bcc !mts_no_glyph+
+    stx zp_temp0
+    jsr monster_should_break_glyph
+    ldx zp_temp0
+    bcs !mts_break_glyph+
+    jmp !mts_blocked+
+!mts_break_glyph:
+    jsr glyph_remove
+    lda #1
+    sta mat_action_dirty
+!mts_no_glyph:
 
     // Check CF_ATTACK_ONLY — prevent actual movement
     ldx zp_mon_type
@@ -753,6 +928,22 @@ monster_try_step:
 
 !mts_blocked:
     clc
+    rts
+
+monster_should_break_glyph:
+    lda #12
+    jsr rng_range
+    bne !msg_hold+
+    lda #250
+    jsr rng_range
+    ldx zp_mon_type
+    cmp cr_level,x
+    bcc !msg_break+
+!msg_hold:
+    clc
+    rts
+!msg_break:
+    sec
     rts
 
 // ============================================================

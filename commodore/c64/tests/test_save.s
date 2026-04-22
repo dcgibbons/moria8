@@ -1,9 +1,9 @@
 // test_save.s — Runtime tests for save/load system
 //
 // Tests: RLE round-trip (uniform, alternating, mixed), checksum complement,
-// recount_monsters, recount_floor_items.
+// recount_monsters, recount_floor_items, save-version compatibility helpers.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040b: $01 = pass, $00 = fail per test (12 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -24,7 +24,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #9
+    ldx #11
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -35,6 +35,13 @@ test_finish:
 .pc = * "Test Body"
 
 #define SAVE_TEST_RLE
+
+player_cast_spell:
+player_pray:
+magic_recalc_mana:
+magic_check_new_spells:
+ui_help_display:
+    rts
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -77,7 +84,6 @@ test_finish:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
-#import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
@@ -87,8 +93,6 @@ test_finish:
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #import "../../common/store_data.s"
-#import "../../common/ui_help.s"
-
 // Store code goes in a dummy overlay segment so it doesn't bloat the test body.
 // test_save.s doesn't test store code, but turn.s→tramp_store_restock_all
 // needs these symbols. Placing them past $D000 avoids overlapping MAP_BASE.
@@ -797,6 +801,51 @@ t7_set_slot31:
     lda #$01
 !t10_store:
     sta tc_results + 9
+
+    // ============================================================
+    // Test 11: save_version_supported accepts all historical C64 save versions.
+    // ============================================================
+    lda #$0c
+    jsr save_version_supported
+    bcc !t11_fail+
+    lda #$0d
+    jsr save_version_supported
+    bcc !t11_fail+
+    lda #$0e
+    jsr save_version_supported
+    bcc !t11_fail+
+    lda #$01
+    bne !t11_store+
+!t11_fail:
+    lda #$00
+!t11_store:
+    sta tc_results + 10
+
+    // ============================================================
+    // Test 12: unsupported/floor-layout helpers reject future versions and
+    // treat pre-$0e saves as the legacy 32-slot floor layout.
+    // ============================================================
+    lda #$0b
+    jsr save_version_supported
+    bcs !t12_fail+
+    lda #$0f
+    jsr save_version_supported
+    bcs !t12_fail+
+    lda #$0c
+    jsr save_version_uses_legacy_floor_layout
+    bcc !t12_fail+
+    lda #$0d
+    jsr save_version_uses_legacy_floor_layout
+    bcc !t12_fail+
+    lda #$0e
+    jsr save_version_uses_legacy_floor_layout
+    bcs !t12_fail+
+    lda #$01
+    bne !t12_store+
+!t12_fail:
+    lda #$00
+!t12_store:
+    sta tc_results + 11
 
     jmp test_finish
 

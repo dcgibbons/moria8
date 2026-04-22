@@ -23,7 +23,7 @@ bootstrap:
 
 // test_finish — Copy results to $0400 and halt.
 test_finish:
-    ldx #21
+    ldx #25
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -74,6 +74,8 @@ test_finish:
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
+#import "../../common/player_magic_state.s"
+#import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
@@ -108,7 +110,30 @@ tai_save_x: .byte 0
 tai_save_y: .byte 0
 tai_ok:     .byte 0
 tai_count:  .byte 0
-tc_results: .fill 22, $ff      // Result buffer (copied to $0400 at end)
+tai_attack_calls: .byte 0
+tai_rng_values:   .fill 4, 0
+tai_rng_idx:      .byte 0
+tc_results: .fill 26, $ff      // Result buffer (copied to $0400 at end)
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
+
+test_monster_attack_player:
+    inc tai_attack_calls
+    rts
+
+test_rng_range:
+    ldx tai_rng_idx
+    lda tai_rng_values,x
+    inc tai_rng_idx
+    ora #0
+    rts
 
 test_start:
 
@@ -151,12 +176,12 @@ test_start:
     lda #200
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
-    lda #0
+    lda #4
     sta zp_player_hp_hi
     sta player_data + PL_HP_HI
 
     // Set player AC to 0 (default)
-    lda #0
+    lda #4
     sta zp_player_ac
     sta player_data + PL_AC
     sta zp_game_flags
@@ -169,7 +194,7 @@ test_start:
     sta player_data + PL_LEVEL
 
     // Generate a dungeon level for all tests
-    lda #0
+    lda #4
     sta level_entry_dir
     jsr level_generate
 
@@ -304,7 +329,7 @@ test_start:
     jsr monster_spawn_one
 
     // Place player within AAF range (distance=5)
-    lda #30
+    lda #24
     sta zp_player_x
     lda #20
     sta zp_player_y
@@ -423,7 +448,7 @@ test_start:
     sta ms_spawn_x
     lda #15
     sta ms_spawn_y
-    lda #4
+    lda #0
     jsr monster_spawn_one
 
     // Manually set MF_AWAKE
@@ -725,7 +750,7 @@ test_start:
     sta ms_spawn_x
     lda #20
     sta ms_spawn_y
-    lda #4
+    lda #3
     jsr monster_spawn_one
 
     // Set awake
@@ -1764,6 +1789,249 @@ test_start:
     lda #0
     sta cr_spell_chance
     sta cr_spell_flags
+    jmp !t23+
+
+    // ==========================================
+    // Test 23: the live sleep counter, not the
+    // species base sleep value, controls waking.
+    // ==========================================
+!t23:
+    jsr monster_init_table
+    lda #0
+    sta zp_game_flags
+
+    lda #8
+    sta $c6
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t23_fill:
+    lda #TILE_FLOOR | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #31
+    bne !t23_fill-
+
+    lda #20
+    sta ms_spawn_x
+    lda #15
+    sta ms_spawn_y
+    lda #4
+    jsr monster_spawn_one
+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_FLAGS
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #2
+    sta (zp_ptr0),y
+
+    lda #20
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+
+    ldx #0
+    stx zp_mon_idx
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda (zp_ptr0),y
+    sta zp_mon_x
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    sta zp_mon_y
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta zp_mon_type
+    ldy #MX_FLAGS
+    lda (zp_ptr0),y
+    sta zp_mon_flags
+
+    jsr monster_wake_check
+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    cmp #1
+    bne !t23_fail+
+    lda zp_mon_flags
+    and #MF_AWAKE
+    bne !t23_fail+
+
+    jsr monster_wake_check
+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    bne !t23_fail+
+    lda zp_mon_flags
+    and #MF_AWAKE
+    beq !t23_fail+
+
+    lda #$01
+    sta tc_results + 22
+    jmp !t24+
+!t23_fail:
+    lda #$00
+    sta tc_results + 22
+
+    // ==========================================
+    // Test 24: nearby monster movement should not
+    // promote the non-local redraw latch.
+    // ==========================================
+!t24:
+    lda #0
+    sta mat_scene_dirty
+    sta eff_detect_timer
+
+    lda #20
+    sta zp_player_x
+    sta old_player_x
+    lda #15
+    sta zp_player_y
+    sta old_player_y
+    lda #0
+    sta zp_view_x
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #1
+    sta zp_light_radius
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t24_fill:
+    lda #TILE_FLOOR | FLAG_VISITED
+    sta (zp_ptr0),y
+    iny
+    cpy #24
+    bne !t24_fill-
+
+    lda #4
+    sta zp_mon_type
+    lda #22
+    ldy #15
+    jsr mat_mark_tile_dirty_if_nonlocal
+    lda mat_scene_dirty
+    bne !t24_fail+
+
+    lda #$01
+    sta tc_results + 23
+    jmp !t25+
+!t24_fail:
+    lda #$00
+    sta tc_results + 23
+
+    // ==========================================
+    // Test 25: remote lit-room movement still
+    // promotes the non-local redraw latch.
+    // ==========================================
+!t25:
+    lda #0
+    sta mat_scene_dirty
+    sta eff_detect_timer
+
+    lda #20
+    sta zp_player_x
+    sta old_player_x
+    lda #15
+    sta zp_player_y
+    sta old_player_y
+    lda #0
+    sta zp_view_x
+    sta old_view_x
+    sta zp_view_y
+    sta old_view_y
+    lda #1
+    sta zp_light_radius
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+!t25_fill:
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    sta (zp_ptr0),y
+    iny
+    cpy #30
+    bne !t25_fill-
+
+    lda #4
+    sta zp_mon_type
+    lda #28
+    ldy #15
+    jsr mat_mark_tile_dirty_if_nonlocal
+    lda mat_scene_dirty
+    cmp #1
+    bne !t25_fail+
+
+    lda #$01
+    sta tc_results + 24
+    jmp !t26+
+!t25_fail:
+    lda #$00
+    sta tc_results + 24
+
+    // ==========================================
+    // Test 26: glyphs use umoria break odds and
+    // a broken glyph stops blocking the player tile.
+    // ==========================================
+!t26:
+    :PatchJump(rng_range, test_rng_range)
+    lda #4
+    sta zp_mon_type
+    lda #20
+    sta cr_level + 4
+
+    :PatchJump(monster_attack_player, test_monster_attack_player)
+    jsr glyph_clear_all
+    lda #20
+    sta zp_player_x
+    lda #15
+    sta zp_player_y
+    lda zp_player_x
+    ldy zp_player_y
+    jsr glyph_add_at
+    bcs !t26_add_ok+
+    jmp !t26_fail+
+!t26_add_ok:
+    lda #0
+    sta tai_rng_idx
+    sta tai_rng_values + 0      // high bucket zero -> compare low bucket
+    lda #19
+    sta tai_rng_values + 1
+    lda #0
+    sta tai_attack_calls
+    sta mat_action_dirty
+    sta mat_fleeing
+    lda zp_player_x
+    sta mat_target_x
+    lda zp_player_y
+    sta mat_target_y
+    jsr monster_try_step
+    lda glyph_active + 0
+    bne !t26_fail+
+    lda tai_attack_calls
+    cmp #1
+    beq !t26_attack_ok+
+    jmp !t26_fail+
+!t26_attack_ok:
+    lda #$01
+    sta tc_results + 25
+    jmp !tests_done+
+!t26_fail:
+    lda #$00
+    sta tc_results + 25
 
 !tests_done:
     jmp test_finish
