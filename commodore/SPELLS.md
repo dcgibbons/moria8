@@ -153,7 +153,7 @@
     - `Word of Destruction` spell-id mapping plus deterministic adjacent kill and nearby terrain mutation
     - `Word of Destruction` redraw updates and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_genocide.s`
-    - `Genocide` spell-id mapping, current glyph-prompt feedback, and removal of all matching monsters while leaving nonmatches alive
+    - `Genocide` spell-id mapping, compact `Type?` glyph-prompt feedback, and removal of all matching monsters while leaving nonmatches alive
     - `Genocide` cast-fail preservation and mana/worked bookkeeping
   - `commodore/c64/tests/test_confusion.s`
     - `Confusion` spell-id mapping and directional confuse-hit behavior
@@ -273,7 +273,7 @@
     - `Word of Destruction` spell-id mapping plus deterministic adjacent kill and nearby terrain mutation
     - `Word of Destruction` redraw updates and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_genocide128.s`
-    - `Genocide` spell-id mapping, current glyph-prompt feedback, and removal of all matching monsters while leaving nonmatches alive
+    - `Genocide` spell-id mapping, compact `Type?` glyph-prompt feedback, and removal of all matching monsters while leaving nonmatches alive
     - `Genocide` cast-fail preservation and mana/worked bookkeeping
   - `commodore/c128/tests/test_confusion128.s`
     - `Confusion` spell-id mapping and directional confuse-hit behavior
@@ -383,7 +383,7 @@
 | 28 | Added | M4 | Haste Self | 25/12/65 | -- | 33/25/75 | Temporary self-speed boost | Row-covered on `C64+C128`: focused coverage proves deterministic speed-timer onset and refresh growth, explicit speed-onset feedback on both paths, and cast-fail/success mana/worked bookkeeping |
 | 29 | Added | M4 | Fire Ball | 29/18/65 | -- | 35/25/80 | Fire ball `49` | Row-covered on `C64+C128`: shared ball coverage proves visible travel, area damage, and kill-path handling, and focused row coverage proves spell-id mapping, empty-area silence, and cast-fail/success mana/worked bookkeeping |
 | 30 | Added | M4 | Word of Destruction | 33/21/80 | -- | 37/30/95 | Destroy surrounding area | Row-covered on `C64+C128`: focused coverage proves deterministic adjacent kill plus nearby secret-door/trap mutation, redraw updates, and cast-fail/success mana/worked bookkeeping |
-| 31 | Added | M4 | Genocide | 37/25/95 | -- | -- | Remove one creature type | Row-covered on `C64+C128`: focused coverage proves current glyph-prompt genocide removes all matching monsters while leaving nonmatches alive, has no extra no-match text, and preserves cast-fail/success mana/worked bookkeeping |
+| 31 | Added | M4 | Genocide | 37/25/95 | -- | -- | Remove one creature type | Row-covered on `C64+C128`: focused coverage proves compact `Type?` glyph-prompt genocide removes all matching monsters while leaving nonmatches alive, has no extra no-match text, and preserves cast-fail/success mana/worked bookkeeping |
 
 ## Priest-Affinity Catalog
 

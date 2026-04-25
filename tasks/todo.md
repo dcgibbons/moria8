@@ -3,6 +3,22 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-SHARED-GENOCIDE-PARITY
+- [x] Reported Failure Gate:
+  - `Genocide` must prompt for a monster glyph/type and exterminate all matching monsters on the current level instead of requiring a directional target; exact verification gates: `make test64` and `make test128-fast-smoke`
+- [x] audit current shared `eff_genocide` implementation and focused C64/C128 tests
+- [x] keep direct glyph/type extermination path; product code already scans all live monsters by normalized `cr_display` glyph and removes matching entries
+- [x] keep the compact existing `Type?` glyph prompt (`HSTR_PM_TITLE_PRAY`) because adding an inline overlay prompt overflows the C128 death overlay
+- [x] update docs/task notes to assert the glyph prompt and all-matching removal contract
+- [x] verify:
+  - focused C128 Genocide compare run
+  - `make build`
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `eff_genocide` already uses the recall glyph normalizer, scans current live monster entries, compares against each monster type's `cr_display`, and removes every matching monster on the level.
+  - The focused C64/C128 row tests already prove two same-glyph monsters are removed while a nonmatching monster remains, with no directional target helper involved.
+  - A more descriptive inline prompt was rejected because the C128 death overlay is exactly full; the compact existing `Type?` Huffman prompt preserves the current memory boundary.
 - [x] BUG-SHARED-SLEEP-EFFECT-AWAKE-STATE
 - [x] Reported Failure Gate:
   - `Sleep II` and `Sleep III` must actually put monsters to sleep by using the live sleep counter, and the player must get visible feedback instead of a silent beep/no-op; exact regression gates are `make test64` and `make test128-fast-smoke`
@@ -234,12 +250,12 @@ This file is a temporary working scratchpad.
 
 - [ ] Reported Failure Gate:
   - `Slow Monster` must report that the targeted monster was slowed instead of silently beeping; exact verification gates: `make test64` and `make test128-fast-smoke`
-- [ ] BUG-SHARED-GENOCIDE-PARITY
-- [ ] Reported Failure Gate:
+- [x] BUG-SHARED-GENOCIDE-PARITY
+- [x] Reported Failure Gate:
   - `Genocide` must prompt for a monster glyph/type and exterminate all matching monsters on the current level instead of requiring a directional target; exact verification gates: `make test64` and `make test128-fast-smoke`
-- [ ] replace the current directional-targeted genocide flow with a direct glyph prompt in the shared spell execute overlay
-- [ ] normalize the typed creature glyph the same way the recall/symbol UI does so `Genocide` matches the actual `cr_display` values used by live monsters
-- [ ] add focused runtime coverage proving `Genocide` removes multiple same-glyph monsters without requiring a directional target
+- [x] replace the current directional-targeted genocide flow with a direct glyph prompt in the shared spell execute overlay
+- [x] normalize the typed creature glyph the same way the recall/symbol UI does so `Genocide` matches the actual `cr_display` values used by live monsters
+- [x] add focused runtime coverage proving `Genocide` removes multiple same-glyph monsters without requiring a directional target
 - [ ] BUG-SHARED-SPELL-LIST-ESC-CANCEL
 - [ ] Reported Failure Gate:
   - after selecting a book and pressing `?`, pressing `Esc` on the spell/prayer list must cancel the whole selection flow instead of dropping back to the `Cast which?` / `Pray which?` prompt
