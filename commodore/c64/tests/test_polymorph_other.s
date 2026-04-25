@@ -126,14 +126,14 @@ test_huff_print_msg:
     inc tpo_huff_calls
     rts
 
-test_eff_directional_monster:
-    lda test_mon_present
-    beq !miss+
-    ldx #0
-    sec
-    rts
-!miss:
+test_get_direction_target_east:
+    lda zp_player_x
     clc
+    adc #1
+    sta df_target_x
+    lda zp_player_y
+    sta df_target_y
+    sec
     rts
 
 test_monster_get_ptr:
@@ -141,6 +141,21 @@ test_monster_get_ptr:
     sta zp_ptr0
     lda #>test_mon_data
     sta zp_ptr0_hi
+    rts
+
+test_monster_find_at:
+    cmp test_mon_data + MX_X
+    bne !miss+
+    cpy test_mon_data + MX_Y
+    bne !miss+
+    lda test_mon_present
+    beq !miss+
+    jsr test_monster_get_ptr
+    ldx #0
+    sec
+    rts
+!miss:
+    clc
     rts
 
 test_monster_remove:
@@ -297,6 +312,13 @@ test_reset_polymorph_state:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+    ldy #10
+!clear_path:
+    lda #TILE_FLOOR | FLAG_LIT
+    :MapWrite_ptr0_y()
+    iny
+    cpy #13
+    bcc !clear_path-
     ldy #12
     lda #TILE_FLOOR | FLAG_LIT | FLAG_OCCUPIED
     :MapWrite_ptr0_y()
@@ -308,7 +330,8 @@ test_start:
     :PatchJump(pm_select_book, test_pm_select_book)
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
-    :PatchJump(eff_directional_monster, test_eff_directional_monster)
+    :PatchJump(get_direction_target, test_get_direction_target_east)
+    :PatchJump(monster_find_at, test_monster_find_at)
     :PatchJump(monster_get_ptr, test_monster_get_ptr)
     :PatchJump(monster_remove, test_monster_remove)
     :PatchJump(pick_creature_type, test_pick_creature_type)

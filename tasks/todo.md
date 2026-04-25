@@ -3,6 +3,21 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
+- [x] Reported Failure Gate:
+  - Directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared regression gates are `make test64` and `make test128-fast-smoke`
+- [x] audit shared `eff_directional_monster` and Polymorph Other row tests
+- [x] replace adjacent-only Polymorph row stubs with real directional tracing at range on C64 and C128
+- [x] update docs/task notes to reflect the current ranged contract
+- [x] verify:
+  - `make build`
+  - focused C128 Polymorph Other compare run
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - Product `eff_directional_monster` already traces up to 20 steps along the chosen direction and leaves `zp_ptr0` on the found monster.
+  - The stale Polymorph Other row tests patched out the shared helper, so they now stub only direction selection and monster lookup.
+  - The focused Polymorph target now sits two tiles east through an empty lit floor tile; an adjacent-only implementation would miss it.
 - [x] SLOW-MONSTER-CONTROL-FEEDBACK
 - [x] Reported Failure Gate:
   - Slow Poison must print the upstream poison-reduced feedback only when poison is actually reduced; Slow Monster must report that the targeted monster was slowed instead of title/beep feedback; Blind Creature must be re-audited against the shared directional-confuse path; exact regression gates are `make test64` and `make test128-fast-smoke`
@@ -178,8 +193,8 @@ This file is a temporary working scratchpad.
 - [x] verify:
   - `make test64`
   - `make test128-fast-smoke`
-- [ ] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
-- [ ] Reported Failure Gate:
+- [x] BUG-SHARED-DIRECTIONAL-MONSTER-PATH
+- [x] Reported Failure Gate:
   - directional monster effects must trace through the chosen line instead of only checking the adjacent tile; `Polymorph Other` must work at range, and the shared C64 gate remains `make test64`
 - [ ] BUG-SHARED-SLOW-MONSTER-FEEDBACK
 - [x] BUG-SHARED-PSEUDO-ID-UMORIA-PARITY

@@ -151,7 +151,6 @@ tunnel_spawn_gold:
 combat_award_xp:
 combat_check_levelup:
 find_random_floor:
-monster_find_at:
 combat_apply_damage_16:
 sound_play:
 piw_prompt_filtered_inv:
@@ -185,6 +184,21 @@ huff_print_msg:
 test_eff_directional_monster:
     lda test_mon_present
     beq !miss+
+    ldx #0
+    sec
+    rts
+!miss:
+    clc
+    rts
+
+monster_find_at:
+    cmp test_mon_data + MX_X
+    bne !miss+
+    cpy test_mon_data + MX_Y
+    bne !miss+
+    lda test_mon_present
+    beq !miss+
+    jsr monster_get_ptr
     ldx #0
     sec
     rts
@@ -351,6 +365,13 @@ test_reset_polymorph_state:
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+    ldy #10
+!clear_path:
+    lda #TILE_FLOOR | FLAG_LIT
+    :MapWrite_ptr0_y()
+    iny
+    cpy #13
+    bcc !clear_path-
     ldy #12
     lda #TILE_FLOOR | FLAG_LIT | FLAG_OCCUPIED
     :MapWrite_ptr0_y()
@@ -377,7 +398,6 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_polymorph_execute)
-    :PatchJump(eff_directional_monster, test_eff_directional_monster)
 
     // Test 1: successful cast silently replaces the target monster type at the
     // same coordinates, keeps occupancy valid, spends 7 mana, and marks worked.
