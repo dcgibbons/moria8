@@ -156,11 +156,11 @@
 .label zp_eff_protect  = $55   // Protection timer
 .label zp_eff_invis    = $56   // Invisibility timer
 .label zp_eff_infra    = $57   // Infravision timer
-.label zp_eff_resist   = $58   // Resist heat/cold timer
+.label zp_eff_resist   = $58   // Resist heat/fire timer
 .label zp_eff_bless    = $59   // Bless timer
 .label zp_eff_hero     = $5a   // Heroism timer
 .label zp_eff_regen    = $5b   // Extra regeneration timer
-.label zp_eff_free_act = $5c   // Free action flag
+.label eff_resist_cold_timer = $5c // Resist cold timer
 .label zp_eff_see_inv  = $5d   // See invisible flag
 .label zp_eff_word_recall = $5e // Word of recall timer
 .label zp_death_source = $5f   // Death cause (monster index or special DEATH_* code)

@@ -320,9 +320,13 @@ test_start:
     sta test_msg_calls
     sta test_huff_calls
     sta zp_eff_resist
+    sta eff_resist_cold_timer
     lda #17
     jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
+    cmp #17
+    bne !t8_fail+
+    lda eff_resist_cold_timer
     cmp #17
     bne !t8_fail+
     lda test_msg_calls
@@ -347,9 +351,14 @@ test_start:
     sta test_msg_calls
     lda #5
     sta zp_eff_resist
+    lda #7
+    sta eff_resist_cold_timer
     lda #17
     jsr pmx_add_resist_heat_cold_msg
     lda zp_eff_resist
+    cmp #22
+    bne !t9_fail+
+    lda eff_resist_cold_timer
     cmp #22
     bne !t9_fail+
     lda test_msg_calls

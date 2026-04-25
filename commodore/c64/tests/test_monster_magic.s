@@ -3,7 +3,7 @@
 // Tests: monster_can_cast (4 tests), monster_cast_bolt, monster_cast_breath,
 //        monster_cast_blind, monster_cast_heal.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test
+// Results at $0400-$040a: $01 = pass, $00 = fail per test
 // NOTE: msg_print writes to screen row 0 ($0400+), so we store results
 // in tc_results[] and copy to $0400 at the very end.
 
@@ -15,7 +15,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #10
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -102,7 +102,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 10, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 11, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -638,6 +638,8 @@ test_start:
     sta zp_game_flags
     lda #$03
     sta zp_eff_resist
+    lda #0
+    sta eff_resist_cold_timer
 
     // Set up a monster in slot 0 with HP=30
     jsr monster_init_table
@@ -679,8 +681,74 @@ test_start:
     lda #$00
     sta tc_results + 8
 
-    // Test 10: Holy Word invulnerability blocks monster spell damage.
+    // Test 10: Cold-only resistance does not reduce current fire breath.
 !t10:
+    lda #0
+    sta zp_msg_flags
+
+    lda #8
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+    sta $027b
+    sta $027c
+    sta $027d
+    sta $027e
+
+    lda #100
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_game_flags
+    sta zp_eff_resist
+    lda #$03
+    sta eff_resist_cold_timer
+
+    jsr monster_init_table
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #24
+    sta (zp_ptr0),y
+    ldy #MX_HP_LO
+    lda #30
+    sta (zp_ptr0),y
+    ldy #MX_HP_HI
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_X
+    lda #12
+    sta (zp_ptr0),y
+    ldy #MX_Y
+    lda #12
+    sta (zp_ptr0),y
+
+    lda #24
+    sta zp_mon_type
+    lda #0
+    sta zp_mon_idx
+
+    jsr monster_cast_breath
+
+    lda #100
+    sec
+    sbc zp_player_hp_lo
+    cmp #10
+    bne !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !t11+
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
+
+    // Test 11: Holy Word invulnerability blocks monster spell damage.
+!t11:
     lda #50
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
@@ -693,16 +761,16 @@ test_start:
     jsr mm_apply_spell_damage
     lda zp_player_hp_lo
     cmp #50
-    bne !t10_fail+
+    bne !t11_fail+
     lda zp_player_hp_hi
-    beq !t10_ok+
-!t10_fail:
+    beq !t11_ok+
+!t11_fail:
     lda #$00
-    sta tc_results + 9
+    sta tc_results + 10
     jmp !tests_done+
-!t10_ok:
+!t11_ok:
     lda #$01
-    sta tc_results + 9
+    sta tc_results + 10
 
 !tests_done:
     jmp test_exit_trampoline

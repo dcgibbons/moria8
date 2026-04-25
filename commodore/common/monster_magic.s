@@ -337,9 +337,8 @@ monster_cast_breath:
     lda #255
     jmp !mcb_apply+
 !mcb_no_cap:
-    // Timed "Resist Heat and Cold" should blunt elemental breath damage.
-    // This path currently models only fire breath, so any active resist flag
-    // reduces the damage here until the elemental spell family is widened.
+    // This path currently models only fire breath, so only the heat/fire
+    // half of Resist Heat and Cold reduces it.
     ldx zp_eff_resist
     beq !mcb_store+
     ldx #3

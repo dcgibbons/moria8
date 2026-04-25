@@ -168,7 +168,7 @@ Negative-case priority for every row:
 | 13 | Sanctuary | P2 | Sleep | C64+C128 | Sleep adjacent eligible monster | adjacent monster sleeps | Shared seam + spell-id mapping | Yes | Required: no adjacent monsters and resistant target | explicit success, unaffected, and no-target texts required | Sleep/control |
 | 14 | Create Food | P2 | Placement | C64+C128 | Create food on eligible player tile | food item appears under player per current replacement rules | Shared seam + spell-id mapping | Yes | Required: blocked tile/object case per current semantics | explicit success text if current path uses it; blocked/no-target text required | Placement/blocking |
 | 15 | Remove Curse | P2 | Inventory Utility | C64+C128 | Carrying/equipped cursed item is cleansed | curse flags clear from eligible inventory/equipment set | Shared seam + spell-id mapping | Yes | Required: no cursed carried/equipped items | explicit cleansed text on success; no-effect text or silence policy required | Inventory utility / targeted item |
-| 16 | Resist Heat and Cold | P2 | Timed Buff | C64+C128 | Gain resist while not already resisted and verify damage reduction | resist state/timer increases and hostile elemental path is reduced under current Commodore semantics | Shared seam + spell-id mapping | Yes | Required: refresh/already-active case | explicit onset text; refresh policy must match current behavior | Timed buff/protection |
+| 16 | Resist Heat and Cold | P2 | Timed Buff | C64+C128 | Gain resist while not already resisted and verify damage reduction | split heat/fire and cold timers increase, and the implemented fire-breath path is reduced only by the heat/fire timer | Shared seam + spell-id mapping | Yes | Required: refresh/already-active case and cold-only no-fire-reduction case | explicit onset text; refresh policy must match current behavior | Timed buff/protection |
 | 17 | Neutralize Poison | P3 | Utility Cleanse | C64+C128 | Cast while poisoned | poison state clears | Shared seam + spell-id mapping | Yes | Required: not poisoned | explicit success text when poison clears; no-effect text or silence policy required | Timed buff/protection |
 | 18 | Orb of Draining | P3 | Ball | C64+C128 | Holy ball affects eligible monster | ball path runs and target takes damage or dies | Shared seam + spell-id mapping | Yes | Required: empty target area | success is message-light unless current build prints one; empty-area no-effect contract required | Area-effect |
 | 19 | Cure Serious Wounds | P3 | Heal | C64+C128 | Heal while injured | HP increases by valid range and caps at max | Shared seam + spell-id mapping | Yes | Required: full-HP cast stays no-op | heal-tier success text when injured; silence at full HP; cast fail explicit | Heal family |
@@ -239,7 +239,7 @@ Negative-case priority for every row:
 
 - Current Commodore behavior is the expected contract unless a row explicitly states otherwise.
 - Known documented deviations in `commodore/SPELLS.md` must be treated as current expected behavior until deliberately changed:
-  - `Resist Heat and Cold` uses the current packed-resist implementation
+  - broader fire/cold damage consumers are not modeled yet; current coverage is limited to the implemented fire-breath path
   - glyph rendering and glyph break behavior use current Commodore rules
 
 ### Spell identity, not subclass duplication

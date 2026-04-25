@@ -142,8 +142,9 @@ turn_tick_effects:
 !no_speed:
 
     // Simple-dec effects: protect($55), invis($56), infra($57),
-    // resist($58), [skip bless($59)], hero($5a), regen($5b)
-    .assert "Simple-dec range", zp_eff_regen - zp_eff_protect, 6
+    // heat/fire resist($58), [skip bless($59)], hero($5a), regen($5b),
+    // cold resist($5c)
+    .assert "Simple-dec range", eff_resist_cold_timer - zp_eff_protect, 7
     ldy #zp_eff_protect
 !tse_loop:
     cpy #zp_eff_bless
@@ -155,7 +156,7 @@ turn_tick_effects:
     sta $00,y
 !tse_next:
     iny
-    cpy #zp_eff_regen + 1
+    cpy #eff_resist_cold_timer + 1
     bne !tse_loop-
 
     // Blessed / Prayer

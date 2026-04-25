@@ -311,6 +311,7 @@ reset_state:
     sta zp_eff_confuse
     sta zp_eff_paralyze
     sta eff_fear_timer
+    sta eff_resist_cold_timer
     sta zp_eff_speed
     sta zp_eff_protect
     sta zp_eff_invis

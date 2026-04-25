@@ -21,6 +21,7 @@
 .const SAVE_VERSION    = $0e
 .const OLDEST_SAVE_VERSION = $0c
 #endif
+.const SAVE_FLOOR42_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
 .const LOAD_RESULT_CORRUPT   = 2
@@ -284,7 +285,7 @@ save_return_fail:
     // 3. ZP game state $40-$5f (32 bytes)
     :save_block(ZP_STATE_START, ZP_STATE_SIZE)
 
-    // 3b. Fear timer (static RAM, 1 byte)
+    // 3b. Static effect timers
     :save_block(eff_fear_timer, 1)
 
     // 4. RNG state $1a-$1d (4 bytes)
@@ -505,7 +506,7 @@ load_game:
     // 3. ZP game state
     :load_block(ZP_STATE_START, ZP_STATE_SIZE)
 
-    // 3b. Fear timer (static RAM, 1 byte)
+    // 3b. Static effect timers
     :load_block(eff_fear_timer, 1)
 
     // 4. RNG state
@@ -1077,7 +1078,7 @@ save_version_supported:
 // Output: carry set = legacy 32-slot floor layout, carry clear = current layout
 // ============================================================
 save_version_uses_legacy_floor_layout:
-    cmp #SAVE_VERSION
+    cmp #SAVE_FLOOR42_VERSION
     bcc !svl_legacy+
     clc
     rts

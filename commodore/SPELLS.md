@@ -33,8 +33,8 @@
 
 ## Known Deviations
 
-- `Resist Heat and Cold` currently sets the existing packed resistance flags directly instead of upstream split timers.
-- The current tree now uses those flags to reduce the implemented elemental breath-damage path, but broader fire/cold consumers are still not modeled yet.
+- `Resist Heat and Cold` now stores separate heat/fire and cold timers. The current prayer refresh still applies the same duration to both halves.
+- The current tree uses the heat/fire timer to reduce the implemented fire-breath damage path, but broader fire/cold consumers are still not modeled yet.
 - `Glyph of Warding` is mechanically active, but there is no special dungeon-tile rendering for glyphs yet.
 - Glyph break chance is currently a simplified approximation rather than the exact upstream formula.
 - Class tables and book splits intentionally follow `umoria`; effect semantics intentionally prefer VMS when they differ.
@@ -54,7 +54,7 @@
 - Current Commodore messaging choices after the audit:
   - `Bless`, `Chant`, and `Prayer` now show an explicit onset message when the blessed state starts
   - `Haste Self`, `Protection from Evil`, and `Sense Invisible` keep explicit onset feedback
-  - `Resist Heat and Cold` now has explicit onset feedback, but it is still tied to the current packed-flag implementation rather than exact upstream timers
+  - `Resist Heat and Cold` now has explicit onset feedback and split heat/fire vs cold timer storage; the current prayer path refreshes both halves together
   - `Create Food`, `Glyph of Warding`, and `Recharge` now explain blocked/no-target cases instead of failing silently
   - timed expiry text for bless/haste/protection is still intentionally omitted on Commodore; this remains a documented deviation from richer `umoria` status messaging
 
@@ -86,7 +86,7 @@
     - priest `Remove Fear` now also has row-level coverage on `C64+C128` for prayer-id mapping, explicit fear-clear text, calm/no-op silence, and cast-fail/success mana/worked bookkeeping
     - priest `Call Light` now also has row-level coverage on `C64+C128` for prayer-id mapping, shared room-light seam dispatch, explicit light feedback, redraw flagging, and cast-fail/success mana/worked bookkeeping
     - priest `Slow Poison` now also has row-level coverage on `C64+C128` for prayer-id mapping, current poison-severity reduction semantics, reduced-poison feedback, already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping
-    - `Resist Heat and Cold` now also has a direct runtime regression proving it reduces hostile breath damage
+    - `Resist Heat and Cold` now also has direct runtime coverage proving split heat/cold timer onset/refresh behavior and heat/fire-only reduction of the implemented hostile fire-breath path
   - adjacent monster-control feedback:
     - dedicated runtime coverage now exists for `Sanctuary` no-target feedback and for actually sleeping an adjacent monster
     - `Sleep I` now also has row-level coverage on `C64+C128` for directional single-target sleep mutation, current message-light no-target behavior, and cast-fail/success bookkeeping
@@ -406,7 +406,7 @@
 | 13 | Legacy | P2 | Sanctuary | 7/5/36 | 11/10/45 | Sleep adjacent monsters | Row-covered on `C64+C128`: focused local-sleep coverage proves prayer-id mapping, adjacent sleep success, explicit unaffected/no-target feedback, and cast-fail/success mana/worked bookkeeping; uses the current VMS-style local sanctuary |
 | 14 | Legacy | P2 | Create Food | 7/5/38 | 13/10/45 | Create food on player tile | Row-covered on `C64+C128`: focused placement coverage proves prayer-id mapping, underfoot item replacement on success, current blocked semantics when no floor-item slot is free, explicit success/blocked feedback, and cast-fail/success mana/worked bookkeeping |
 | 15 | Legacy | P2 | Remove Curse | 7/6/38 | 13/11/45 | Remove curses from carried and equipped items | Row-covered on `C64+C128`: focused coverage proves the stronger priest all-items curse clear across carried and equipped slots, current explicit `CLEANSED` feedback even when nothing is cursed, and cast-fail/success mana/worked bookkeeping; broader than mage version |
-| 16 | Legacy | P2 | Resist Heat and Cold | 7/7/38 | 15/13/45 | Reduce implemented elemental breath damage via packed resist flags | Row-covered on `C64+C128`: focused `C128` coverage plus stable shared `C64` seam coverage prove prayer-id mapping, current packed resist-timer onset/refresh behavior, hostile breath reduction under current Commodore semantics, and cast-fail/success mana/worked bookkeeping; still uses the packed-flag shortcut, not timed upstream duration |
+| 16 | Legacy | P2 | Resist Heat and Cold | 7/7/38 | 15/13/45 | Split heat/fire and cold resistance timers; reduce implemented fire-breath damage via heat/fire timer | Row-covered on `C64+C128`: focused `C128` coverage plus stable shared `C64` seam coverage prove prayer-id mapping, split heat/cold timer onset/refresh behavior, heat/fire-only hostile breath reduction under current Commodore semantics, and cast-fail/success mana/worked bookkeeping; broader fire/cold damage consumers are still not modeled |
 | 17 | Added | P3 | Neutralize Poison | 9/6/38 | 15/15/50 | Clear poison | - |
 | 18 | Added | P3 | Orb of Draining | 9/7/38 | 17/15/50 | Holy ball damage `3d6 + level` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, shared ball-path kill behavior on target-area hits, current message-light empty-area success, and cast-fail/success mana/worked bookkeeping |
 | 19 | Added | P3 | Cure Serious Wounds | 9/7/40 | 17/15/50 | Heal `8d4` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, current `8d4` heal-tier behavior through the shared `ped_s18 -> heal_dice -> pmx_heal_and_report` seam, injured-heal mid-tier feedback, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |

@@ -64,14 +64,13 @@ pmx_add_protect_msg:
     rts
 
 pmx_add_resist_heat_cold_msg:
-    tax
-    txa
     clc
     adc zp_eff_resist
     bcc !parhcm_store+
     lda #255
 !parhcm_store:
     sta zp_eff_resist
+    sta eff_resist_cold_timer
     lda #<pmx_resist_on_msg
     ldy #>pmx_resist_on_msg
     jmp pmx_print_inline
@@ -195,14 +194,14 @@ pmx_righteous_msg:
     .text "You feel righteous!"
     .byte 0
 
-pmx_resist_on_msg:
-    .text "You feel resistant to heat and cold."
-    .byte 0
-
 pmx_sleep_success_msg:
     .text "A monster falls asleep."
     .byte 0
 
 pmx_sleep_unaffected_msg:
     .text "A monster is unaffected."
+    .byte 0
+
+pmx_resist_on_msg:
+    .text "You feel resistant to heat and cold."
     .byte 0

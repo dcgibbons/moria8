@@ -3,6 +3,51 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-PRIEST-RESIST-SEMANTICS
+- [x] Reported Failure Gate:
+  - `Resist Heat and Cold` currently reduces implemented elemental breath damage, but still uses a single packed heat/cold timer and broader fire/cold damage consumers are not modeled
+- [x] audit current implementation and consumers
+- [x] confirm prior live behavior:
+  - `pmx_add_resist_heat_cold_msg` set the old single `zp_eff_resist` timer and printed `You feel resistant to heat and cold.`
+  - `monster_cast_breath` is the only hostile elemental damage consumer currently implemented, and active `zp_eff_resist` reduced that fire-breath damage path
+  - focused C128 row coverage and C64 monster-magic coverage already prove the breath reduction
+- [x] test split-timer implementation feasibility
+- [x] resolve resident-size work:
+  - adding split heat/cold timer state plus tick/save migration code moved the C64 banked payload start past `MAP_BASE` and failed the mandatory boundary assert
+  - a narrower heat-in-ZP/cold-in-RAM attempt still crossed the C64 resident boundary
+  - the first approved memory-recovery path, moving the raw resist message to Huffman, did not free enough resident memory; per the user requirement, work stopped and asked before choosing another path
+  - after user approval, tried moving only the C64 cast/pray command entries into the banked payload, but live testing proved that modal path is unsafe when copied to `$F000`
+  - the final implementation keeps cast/pray resident; C64 still fits because the copied banked payload source is init-only and the guarded resident `program_end` remains below `MAP_BASE`
+  - broader fire/cold consumer work remains blocked until those consumers exist
+- [x] verify rollback:
+  - `make build`
+- [x] implement split heat/cold timer plan:
+  - keep `zp_eff_resist` as heat/fire resistance
+  - reuse saved ZP byte `$5c` as `eff_resist_cold_timer`, replacing the dead free-action mirror without changing save layout or version
+  - prayer onset/refresh applies the same duration to both heat/fire and cold halves
+  - fire-breath reduction checks only the heat/fire timer, and cold-only resistance does not reduce the current fire-breath path
+  - C64 keeps the live cast/pray modal command path resident; only low-frequency spell execution remains behind the existing overlay trampoline
+- [x] verify:
+  - `make -C commodore test64`
+  - focused C128 `resist_heat_cold_prayer128` compare run
+  - `make -C commodore test128-fast-smoke`
+  - `make -C commodore test128-fast`
+  - C64 build/boundary check via `make -C commodore build`
+  - C128 build/boundary check via direct Kick Assembler invocation for `c128/main.s`
+  - `git diff --check`
+- [x] review:
+  - The implemented split is storage-real and ticked independently, while the current single `Resist Heat and Cold` prayer refreshes both halves together because there is not yet a separate cold-only producer.
+  - Save compatibility stays at the existing versions because `$5c` is already inside the saved zero-page state block.
+  - The removed `$5c` free-action mirror was dead state; the live paralysis path did not maintain it, so removing the check preserves current effective behavior while freeing the byte for cold resistance.
+- [x] live C64 follow-up failure:
+  - User live-tested successful C64 cast and got a hang with monitor state `PC=$0008`, `$01=$35`, repeated `IRQ -> ffff` frames, no JAM.
+  - First attempted fix was wrong: running the entry path under `$36` exposed KERNAL ROM at `$F000+`, so pressing `m` executed ROM/editor code and visibly scrolled/corrupted the screen.
+  - Second attempted fix was also wrong: re-hiding KERNAL after the nested spell-execute trampoline still left the live modal cast path too fragile, and the live test returned to the `$01=$35` IRQ/vector hang.
+  - Root cause: the C64 live cast/pray entry path nests KERNAL keyboard IRQs and overlay trampolines. Moving that modal path into copied `$F000` widened the banking contract too far.
+  - Fix: abandon the banked cast/pray entry move and keep `player_cast_spell` / `player_pray` resident. The current C64 build still fits because the copied banked payload source is init-only and may live after `program_end`; the guarded resident program remains below `MAP_BASE`.
+  - verify:
+    - `make -C commodore build64`
+    - `make -C commodore test64`
 - [x] BUG-SHARED-GENOCIDE-PARITY
 - [x] Reported Failure Gate:
   - `Genocide` must prompt for a monster glyph/type and exterminate all matching monsters on the current level instead of requiring a directional target; exact verification gates: `make test64` and `make test128-fast-smoke`

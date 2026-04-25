@@ -353,6 +353,7 @@ test_reset_resist_prayer_state:
     sta test_spell_exec_calls
     sta test_rng_value
     sta zp_eff_resist
+    sta eff_resist_cold_timer
     lda #$ff
     sta test_last_spell_idx
 
@@ -433,6 +434,9 @@ test_start:
     lda zp_eff_resist
     cmp #10
     bne !t1_fail+
+    lda eff_resist_cold_timer
+    cmp #10
+    bne !t1_fail+
     lda test_msg_calls
     cmp #1
     bne !t1_fail+
@@ -471,6 +475,8 @@ test_after_onset:
     jsr test_reset_resist_prayer_state
     lda #5
     sta zp_eff_resist
+    lda #7
+    sta eff_resist_cold_timer
     jsr player_pray
     bcc !t2_fail+
     lda test_spell_exec_calls
@@ -480,6 +486,9 @@ test_after_onset:
     cmp #15
     bne !t2_fail+
     lda zp_eff_resist
+    cmp #15
+    bne !t2_fail+
+    lda eff_resist_cold_timer
     cmp #15
     bne !t2_fail+
     lda test_msg_calls
@@ -513,6 +522,8 @@ test_after_refresh:
     jsr test_reset_resist_prayer_state
     lda #4
     sta zp_eff_resist
+    lda #6
+    sta eff_resist_cold_timer
     jsr player_pray
     bcc !t3_fail+
     lda test_spell_exec_calls
@@ -525,6 +536,9 @@ test_after_refresh:
     bne !t3_fail+
     lda zp_eff_resist
     cmp #4
+    bne !t3_fail+
+    lda eff_resist_cold_timer
+    cmp #6
     bne !t3_fail+
     lda zp_player_mp
     cmp #13

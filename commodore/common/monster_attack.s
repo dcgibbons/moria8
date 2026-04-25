@@ -438,10 +438,6 @@ mon_atk_effect_confuse:
 // Timer = rng_range(cr_level) + 1
 // Clobbers: A, X, Y, zp_temp3, zp_temp4, zp_math_*
 mon_atk_effect_paralyze:
-    // Check free action flag
-    lda zp_eff_free_act
-    bne !mepa_resist+           // Free action blocks paralysis
-
     // Already paralyzed? No stacking
     lda zp_eff_paralyze
     bne !mepa_done+

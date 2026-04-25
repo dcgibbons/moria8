@@ -338,7 +338,7 @@ test_start:
 !t9:
     lda #0
     sta zp_eff_paralyze
-    sta zp_eff_free_act         // No free action
+    sta player_data + PL_FLAGS  // No free action
     lda #CLASS_WARRIOR
     sta player_data + PL_CLASS
     lda #1
