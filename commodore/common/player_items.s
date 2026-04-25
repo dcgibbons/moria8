@@ -74,8 +74,15 @@ equip_slot_for_cat:
 // Preserves: nothing
 show_inv_and_select:
     sta piw_filter
+#if C128
     jsr input_prepare_followup_key
+#else
+    jsr input_prepare_modal_dismiss_key
+#endif
     jsr tramp_ui_inv_select_display
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
+    jmp test_assert_book_overlay
+#endif
 #if C128
     jsr input_get_key_fast
 #else
@@ -90,6 +97,9 @@ show_inv_and_select:
 // Used by item_takeoff when player presses '?'.
 // Preserves: nothing
 show_equip_and_restore:
+#if !C128
+    jsr input_prepare_modal_dismiss_key
+#endif
     jsr tramp_ui_equip_display
     jsr input_get_modal_dismiss_key
     jsr ui_view_restore_modal_overlay
@@ -290,7 +300,7 @@ piw_print_prompt_with_count:
     beq !piw_prompt_print+
     cmp #$28                    // '('
     bne !piw_prompt_not_open+
-    lda #$61                    // Screen code 'a'
+    lda #$01                    // C64 screen code 'a'
     sta hd_decode_buf + 1,y
     jmp !piw_prompt_next+
 !piw_prompt_not_open:
@@ -298,7 +308,7 @@ piw_print_prompt_with_count:
     bne !piw_prompt_next+
     lda piw_qty
     clc
-    adc #$60                    // 1 -> 'a', 2 -> 'b'
+    adc #$00                    // 1 -> screen code 'a', 2 -> 'b'
     sta hd_decode_buf + 1,y
 !piw_prompt_next:
     iny

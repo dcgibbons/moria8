@@ -3,6 +3,1025 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [ ] MERGE-PREP-SQUASH-SPELLTESTS
+- [x] Reported Failure Gate:
+  - `git merge --squash spelltests`
+  - `make test`
+- [x] inspect branch delta and current tree state before applying the squash merge
+- [x] apply the squash merge without committing
+- [x] identify why the clean merge breaks tests
+- [x] fix the merge fallout with minimal changes on `main`
+- [x] verify:
+  - `make test`
+- [x] review:
+  - initial post-squash `make test` stopped in C64 with `11 passed, 97 failed`; nearly every runtime suite failed before execution with `could not determine BRK address`, and `sound` tried to read missing `tests/test_sound_monitor.sym`
+  - root cause is the C64 runner contract, not individual spell/product tests: `run_test` parsed Kick Assembler's `Test Code` memory-map line without passing `-showmem`, and `run_sound_monitor_test` looked for old `.sym` syntax while the assembler emits VICE `.vs` symbols
+  - after fixing the C64 runner, C128 exposed two test-harness merge drifts: `input_run_raw128.s` contained a shipping-only overlay-return helper in a file directly imported by `test_input128.s`, and `test_main_loop128.s` needed local stubs/constants plus a quit script for its direct `load_resume_game` case
+  - correction: the C128 boot-art dependency should come from commit `0c51afa0e0cb2402b09267c6c28348564dc74485`; restore that commit's PNG-backed boot-art pipeline instead of patching the Makefile around the missing image
+  - correction: keep `artwork/CREDITS.md` from `main`; commit `c59e587ca539fc8bd1133d41116527b76f35a89f` does not contain it, and the branch-side deletion was not desired
+  - focused C64 aggregate after fixing the runner: `./commodore/c64/run_tests.sh` PASS (`109 passed, 0 failed`)
+  - focused C128 fast gate after fixing the C128 harness drift: `make test128-fast` PASS in cold and snapshot modes
+  - exact reported gate after all fixes: `make test` PASS (`test64`: `109 passed, 0 failed`; `test128-fast`: cold/snapshot PASS; `test128-fast-smoke`: `8 passed, 0 failed`)
+
+- [x] PRAYER-P4-31-HOLY-WORD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Holy Word` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared composite holy-word seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Holy Word prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Holy Word` is now row-covered on `C64+C128` without product changes: the row now proves prayer-id mapping, full heal, poison clear, fear clear, stat restore, invulnerability timer onset, evil-target dispel behavior, the current explicit `HSTR_PIQ_VERY_GOOD` message contract, and cast-fail/success mana/worked bookkeeping.
+  - the `C64` row proof is intentionally split: `commodore/c64/tests/test_holy_word_prayer.s` proves the real `player_pray` slot mapping and cast-fail/success bookkeeping, while the existing shared seam coverage in `commodore/c64/tests/test_utility_effects.s` continues to prove the shipped `eff_holy_word` composite heal/cleanse/stat-restore/invulnerability/dispel behavior. The `C128` focused row proof in `commodore/c128/tests/test_holy_word_prayer128.s` proves both the injured+poisoned+afraid+evil-target full composite cast and the current no-evil/already-clean-full success behavior.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests holy_word_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`109 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P4-30-GLYPH-OF-WARDING
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Glyph of Warding` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared glyph-placement seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Glyph of Warding prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Glyph of Warding` is now row-covered on `C64+C128` without product changes: focused prayer-path coverage proves prayer-id mapping and cast-fail/success mana/worked bookkeeping on both platforms; the `C128` row proof also proves success creates a glyph record with explicit `HSTR_PMU_GLYPH_OK` feedback, blocked-by-item casts print `HSTR_PMU_GLYPH_BLOCK`, and `vis_room_revealed` is set on success.
+  - the `C64` row proof lives in `commodore/c64/tests/test_glyph_of_warding_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_glyph_of_warding_prayer128.s`; on `C64`, the shared glyph-placement/blocking seam remains covered in `commodore/c64/tests/test_utility_effects.s`, while the focused prayer harness proves the real `player_pray` slot mapping and bookkeeping without duplicating the placement owner.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests glyph_of_warding_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`108 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P4-29-DISPEL-EVIL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Dispel Evil` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared flagged-dispel seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Dispel Evil prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Dispel Evil` is now row-covered on `C64+C128` without product changes: focused flagged-dispel suites prove the real prayer slot `28`, the current shared `ped_s28 -> eff_dispel_flagged` semantics across active `CF_EVIL` targets for `rng(3*level)+1` damage, explicit `HSTR_PIQ_NOTHING` on no-evil casts, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_dispel_evil_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_dispel_evil_prayer128.s`; both drive the real `player_pray` path with `book_mask_7` and intentionally reuse the shipped flagged-dispel owner so the row proves the priest mapping/bookkeeping seam rather than a duplicate evil-only implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests dispel_evil_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`107 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P4-28-HEAL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Heal` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared strongest-heal seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Heal coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Heal` is now row-covered on `C64+C128` without product changes: focused heal-row coverage proves prayer-id mapping, the current fixed `200`-HP `ped_s27 -> pmx_heal_and_report` behavior, strongest-heal feedback while injured, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_heal_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_heal_prayer128.s`; both drive the real `player_pray` path with `book_mask_7` and prove the priest slot mapping/bookkeeping seam rather than a duplicate heal implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests heal_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`106 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P3-24-CURE-CRITICAL-WOUNDS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Cure Critical Wounds` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared heal seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Cure Critical Wounds prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Cure Critical Wounds` is now row-covered on `C64+C128` without product changes: focused heal-row suites prove the real prayer slot `23`, current `16d4` heal-tier behavior through the shared `ped_s23 -> heal_dice -> pmx_heal_and_report` seam, injured-heal high-tier feedback, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_cure_critical_wounds_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_cure_critical_wounds_prayer128.s`; both drive the real `player_pray` path with `book_mask_6`, lock the heal roll to `16`, and prove the priest slot mapping/bookkeeping rather than a duplicate heal implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests cure_critical_wounds_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`102 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P3-20-SENSE-INVISIBLE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Sense Invisible` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared see-invisible seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Sense Invisible prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Sense Invisible` is now row-covered on `C64+C128` without product changes: focused prayer suites prove the real prayer slot `19`, onset behavior that sets both `zp_eff_see_inv` and `zp_eff_invis` with explicit `HSTR_PIQ_EYES_TINGLE` feedback, current silent refresh behavior when either effect is already active, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_sense_invisible_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_sense_invisible_prayer128.s`; both drive the real `player_pray` path with `book_mask_6` and reuse the shared `ped_s19 -> eff_sense_invisible -> pmx_set_see_invisible_msg` seam so the row proves priest mapping/bookkeeping rather than a duplicate invisibility implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests sense_invisible_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`98 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P3-19-CURE-SERIOUS-WOUNDS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Cure Serious Wounds` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared heal seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Cure Serious Wounds prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Cure Serious Wounds` is now row-covered on `C64+C128` without product changes: focused prayer suites prove the real prayer slot `18`, current `8d4` heal-tier behavior, injured-heal feedback via the shared mid-tier heal text, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_cure_serious_wounds_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_cure_serious_wounds_prayer128.s`; both drive the real `player_pray` path with `book_mask_6` and reuse the shared `ped_s18 -> heal_dice -> pmx_heal_and_report` seam so the row proves priest mapping/bookkeeping rather than inventing a duplicate heal implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests cure_serious_wounds_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`97 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P3-18-ORB-OF-DRAINING
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Orb of Draining` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared ball seam and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Orb of Draining prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Orb of Draining` is now row-covered on `C64+C128` without product changes: focused prayer suites prove the real prayer slot `17`, shared ball-path kill behavior on a target-area hit, current message-light empty-area success, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_orb_of_draining_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_orb_of_draining_prayer128.s`; both drive the real `player_pray` path with `book_mask_6` and intentionally reuse the existing shared `eff_ball` owner so this row proves the priest mapping/bookkeeping seam rather than a second independent ball implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests orb_of_draining_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`96 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-16-RESIST-HEAT-COLD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Resist Heat and Cold` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared resist-timer and breath-damage seams and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Resist Heat and Cold prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Resist Heat and Cold` is now row-covered on `C64+C128` without product changes: focused C128 row coverage proves the real prayer slot `15`, current packed resist-timer onset/refresh behavior, hostile breath reduction under the current Commodore semantics, and cast-fail/success mana/worked bookkeeping.
+  - the `C128` row proof lives in `commodore/c128/tests/test_resist_heat_cold_prayer128.s`; it drives the real `player_pray` path with `book_mask_5` and mirrors the current `ped_s15 -> eff_resist_heat_cold` owner locally so the row stays locked to the shipped priest mapping/bookkeeping seam without changing core prayer code.
+  - the `C64` half of the row is intentionally composed from existing stable shared suites instead of a new standalone harness: `commodore/c64/tests/test_prayer_feedback.s` proves onset/refresh message-and-timer behavior, and `commodore/c64/tests/test_monster_magic.s` proves active resist reduces hostile breath damage under the current packed-flag model.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests resist_heat_cold_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`95 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-15-REMOVE-CURSE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Remove Curse` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the broader all-items remove-curse owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Remove Curse prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Remove Curse` is now row-covered on `C64+C128` without product changes: focused row suites prove the real prayer slot `14`, broader carried-plus-equipped curse removal, the current explicit `CLEANSED` feedback even when nothing is cursed, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_remove_curse_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_remove_curse_prayer128.s`; both drive the real `player_pray` path with `book_mask_5` and intentionally mirror the shipped private `ped_s14` helper locally so the row stays locked to the current priest all-items behavior without changing core prayer code.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests remove_curse_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`95 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-14-CREATE-FOOD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Create Food` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared placement owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Create Food prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Create Food` is now row-covered on `C64+C128` without product changes: focused placement suites prove the real prayer slot `13`, shared underfoot ration placement/replacement behavior, current blocked semantics when no floor-item slot is free, explicit success/blocked feedback, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_create_food_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_create_food_prayer128.s`; both drive the real `player_pray` path with `book_mask_5` and intentionally reuse the existing shared `eff_create_food` owner so this row proves the priest mapping/bookkeeping seam rather than a second independent placement implementation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests create_food_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`94 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-13-SANCTUARY
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Sanctuary` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared adjacent-sleep owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Sanctuary prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Sanctuary` is now row-covered on `C64+C128` without product changes: focused local-sleep suites prove the real prayer slot `12`, shared adjacent-sleep behavior on the priest path, explicit success/unaffected/no-target feedback, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_sanctuary_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_sanctuary_prayer128.s`; both drive the real `player_pray` path with `book_mask_5` and intentionally reuse the current local `pmx_sleep_adjacent_msg` semantics already documented as the VMS-style sanctuary behavior.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests sanctuary_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`93 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-12-CHANT
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Chant` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared bless owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Chant prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Chant` is now row-covered on `C64+C128` without product changes: focused timed-buff suites prove the real prayer slot `11`, the current stronger bless-timer growth path (`24-47 + current`) through the tiny `ped_s11` owner, explicit onset text, silent refresh behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_chant_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_chant_prayer128.s`; both drive the real `player_pray` path with `book_mask_5`, lock the RNG contribution to `0` so the onset/refresh totals are deterministic, and prove the priest slot mapping rather than a generic bless helper alone.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests chant_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`92 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-11-CURE-MEDIUM-WOUNDS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Cure Medium Wounds` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared heal owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Cure Medium Wounds prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Cure Medium Wounds` is now row-covered on `C64+C128` without product changes: focused heal-row suites prove the real prayer slot `10`, current `4d4` owner behavior through a local mirror of the tiny `ped_s10 -> heal_dice` shim, injured heal feedback, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_cure_medium_wounds_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_cure_medium_wounds_prayer128.s`; both drive the real `player_pray` path, use `book_mask_5`, and lock the heal roll to `4` so the current heal-tier message and bookkeeping stay deterministic while still proving the priest slot mapping.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests cure_medium_wounds_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`91 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-10-PORTAL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Portal` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared self-teleport owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Portal prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Portal` is now row-covered on `C64+C128` without product changes: focused teleport-row suites prove the real prayer slot `9`, shared `eff_teleport_self` dispatch, deterministic long-range relocation, occupied-tile invariants and redraw flagging, message-light success, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_portal_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_portal_prayer128.s`; both drive the real `player_pray` path and intentionally reuse the existing shared self-teleport owner so this row proves the priest mapping/bookkeeping seam rather than duplicating effect logic in a new way.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests portal_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`90 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P2-09-BLIND-CREATURE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Blind Creature` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional-control owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Blind Creature prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Blind Creature` is now row-covered on `C64+C128` without product changes: focused control-row suites prove the real prayer slot `8`, current shared directional-confuse behavior on the priest path, confuse-timer mutation on hit, current `HSTR_PIQ_NOTHING` no-target feedback on miss, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_blind_creature_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_blind_creature_prayer128.s`; both drive the real `player_pray` path and intentionally lock in the current shared `pmx_confuse_monster_dir_msg` behavior because there is no distinct blind/stun prayer implementation in the current build.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests blind_creature_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`89 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-08-SLOW-POISON
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Slow Poison` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared poison-severity owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Slow Poison prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Slow Poison` is now row-covered on `C64+C128` without product changes: focused cleanse-row suites prove the real prayer slot `7`, current poison-severity reduction semantics (`lsr` then `ora #1` when poisoned), already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_slow_poison_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_slow_poison_prayer128.s`; both drive the real `player_pray` path and mirror the current tiny prayer-owned poison-severity seam locally.
+  - while restoring the exact `make test64` gate, the focused priest test harnesses exposed that priest rows must use `book_mask_4` for book 1, not the mage `book_mask_0`; earlier low-slot prayer rows happened to pass under the accidental overlap, but `Slow Poison` is the first slot outside that overlap.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests slow_poison_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`88 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-07-DETECT-DOORS-STAIRS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Detect Doors/Stairs` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared door/stair reveal owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Detect Doors/Stairs prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Detect Doors/Stairs` is now row-covered on `C64+C128` without product changes: focused detect-row suites prove the real prayer slot `6`, shared `eff_find_doors` plus stair-mark dispatch under the current restored rules, secret-door and tracked-stairs reveal, current silent no-eligible-target behavior, redraw flagging via `vis_room_revealed`, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_detect_doors_stairs_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_detect_doors_stairs_prayer128.s`; both drive the real `player_pray` path and mirror the tiny overlay-owned stair-mark helper locally so the shared resident door reveal plus shared stair semantics stay directly covered.
+  - while restoring the exact reported gate, `commodore/c64/tests/test_effects_magic.s` was returned to the repo’s working breakpoint contract: bootstrap plus `test_finish` remain in the `"Test Code"` segment so `run_tests.sh` breaks on the final `BRK` instead of on the imported body end.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests detect_doors_stairs_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`87 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-06-FIND-TRAPS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Find Traps` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared trap-reveal owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Find Traps prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Find Traps` is now row-covered on `C64+C128` without product changes: focused detect-row suites prove the real prayer slot `5`, shared `eff_find_traps` dispatch, tracked hidden-trap reveal, the current silent no-eligible-trap behavior, redraw flagging via `vis_room_revealed`, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_find_traps_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_find_traps_prayer128.s`; both drive the real `player_pray` path and rely on the same shared trap-reveal owner already used inside the broader mage detect row.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests find_traps_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`86 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-05-CALL-LIGHT
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Call Light` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared light-room owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Call Light prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Call Light` is now row-covered on `C64+C128` without product changes: focused light-row suites prove the real prayer slot `4`, shared `eff_light_room` dispatch through the room-light seam, explicit `HSTR_PIQ_LIGHT` feedback, redraw flagging via `vis_room_revealed`, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_call_light_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_call_light_prayer128.s`; both drive the real `player_pray` path and patch only the tiny `light_room_x` seam so the shared room-light owner stays under direct coverage.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests call_light_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`85 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-04-REMOVE-FEAR
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Remove Fear` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared fear-clear owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Remove Fear prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Remove Fear` is now row-covered on `C64+C128` without product changes: focused row suites prove the real prayer slot `3`, explicit fear-clear text, calm/no-op silence, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_remove_fear_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_remove_fear_prayer128.s`; both drive the real `player_pray` path and mirror the tiny overlay-owned fear-clear seam locally where needed.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests remove_fear_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`84 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-03-BLESS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Bless` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared bless owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Bless prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Bless` is now row-covered on `C64+C128` without product changes: focused row suites prove the real prayer slot `2`, explicit onset text, silent refresh behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_bless_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_bless_prayer128.s`; both drive the real `player_pray` path and use the shared bless owner with deterministic `12`-turn onset and `17`-turn refresh totals.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests bless_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`83 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-02-CURE-LIGHT-WOUNDS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Cure Light Wounds` prayer row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared heal owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Cure Light Wounds prayer coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - priest `Cure Light Wounds` is now row-covered on `C64+C128` without product changes: focused row suites prove the real prayer slot `1`, injured heal feedback, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_cure_light_wounds_prayer.s`, and the `C128` row proof lives in `commodore/c128/tests/test_cure_light_wounds_prayer128.s`; both drive the real `player_pray` path and use the shared heal/report owner with the priest `3d3` amount.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests cure_light_wounds_prayer128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`82 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] PRAYER-P1-01-DETECT-EVIL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Detect Evil` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared detect-evil owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Detect Evil row coverage without changing core prayer code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this prayer
+- [x] review:
+  - `Detect Evil` is now row-covered on `C64+C128` without product changes: focused row suites prove the real prayer slot `0`, current Commodore generic-detect timer/reveal semantics, explicit evil-present and no-evil feedback, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_detect_evil.s`, with shared detect feedback still locked in by `commodore/c64/tests/test_detect_feedback.s`; the `C128` row proof lives in `commodore/c128/tests/test_detect_evil128.s`.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests detect_evil128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`81 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-31-GENOCIDE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Genocide` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared genocide owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Genocide row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Genocide` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `30`, current glyph-prompt feedback, removal of all matching monsters while leaving nonmatches alive, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_genocide.s`, and the `C128` row proof lives in `commodore/c128/tests/test_genocide128.s`; both drive the real cast path and hit the actual `eff_genocide` owner with deterministic typed glyph input so the current prompt and extermination behavior stay stable.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests genocide128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`80 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-30-WORD-OF-DESTRUCTION
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Word of Destruction` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared area-destruction owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Word of Destruction row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Word of Destruction` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `29`, deterministic adjacent monster kill plus nearby secret-door/trap mutation, redraw updates, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_word_of_destruction.s`, and the `C128` row proof lives in `commodore/c128/tests/test_word_of_destruction128.s`; both drive the real cast path and use the actual shared `eff_destroy_area` owner with a deterministic adjacent-floor target so the kill and terrain mutation stay stable.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests word_of_destruction128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`80 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-29-FIRE-BALL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Fire Ball` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared ball owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Fire Ball row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Fire Ball` is now row-covered on `C64+C128` without product changes: the existing shared `eff_ball` coverage continues to prove visible travel, area damage, and kill-path handling, while focused row suites now prove the real spell slot `28`, silent empty-area success, explicit cast-fail handling, and mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_fire_ball.s`, and the `C128` row proof lives in `commodore/c128/tests/test_fire_ball128.s`; both drive the real cast path and use the actual `eff_ball` damage flow with deterministic east-target setup and `49` damage.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests fire_ball128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`79 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-28-HASTE-SELF
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Haste Self` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared self-speed owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Haste Self row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Haste Self` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `27`, deterministic speed-timer growth on both onset and refresh, explicit shared speed feedback on both paths, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_haste_self.s`, and the `C128` row proof lives in `commodore/c128/tests/test_haste_self128.s`; both drive the real cast path and mirror the current overlay-owned `eff_haste_self` logic through a narrow local seam so the timer math stays deterministic under a scripted RNG roll.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests haste_self128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`78 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-27-TELEPORT-OTHER
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Teleport Other` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared teleport-target owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Teleport Other row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Teleport Other` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `26`, deterministic target relocation through the teleport-target seam, old/new occupied-tile invariants preserved, the moved monster's sleep cleared, silent no-target behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_teleport_other.s`, and the `C128` row proof lives in `commodore/c128/tests/test_teleport_other128.s`; both drive the real cast path and mirror the current overlay-owned `eff_teleport_other` logic through a narrow local seam because the spell owner is not resident in the focused test images.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests teleport_other128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`77 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-26-RECHARGE-ITEM-II
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Recharge Item II` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared recharge owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Recharge Item II row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Recharge Item II` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `25`, stronger eligible-item recharge mutation, explicit `HSTR_PIW_NOTHING` no-eligible-item feedback, destructive bright-flash backfire behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_recharge_item_ii.s`, and the `C128` row proof lives in `commodore/c128/tests/test_recharge_item_ii128.s`; both drive the real cast path for success/no-eligible/cast-fail cases and validate the stronger recharge path with work damage `50`, while the destructive backfire remains covered by the deterministic bright-flash branch check.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests recharge_item_ii128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`76 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M4-25-FROST-BALL
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Frost Ball` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared ball owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Frost Ball row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Frost Ball` is now row-covered on `C64+C128` without product changes: the existing shared `eff_ball` coverage continues to prove visible travel, area damage, and kill-path handling, while focused row suites now prove the real spell slot `24`, silent empty-area success, explicit cast-fail handling, and mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_frost_ball.s`, and the `C128` row proof lives in `commodore/c128/tests/test_frost_ball128.s`; both drive the real cast path and use the actual `eff_ball` damage flow with deterministic east-target setup and `33` damage.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests frost_ball128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`75 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-24-SLOW-MONSTER
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Slow Monster` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional-control owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Slow Monster row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Slow Monster` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `23`, directional slow-state mutation with `MX_SPEED_CNT` forced to slowed and `MX_SLEEP_CUR` cleared, the current success/no-target behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_slow_monster.s`, and the `C128` row proof lives in `commodore/c128/tests/test_slow_monster128.s`; both drive the real cast path and mirror the current overlay-owned `eff_slow_monster_dir` behavior through a narrow local seam because the spell owner is not resident in the focused test images.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests slow_monster128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`74 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-23-FIRE-BOLT
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Fire Bolt` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional-bolt owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Fire Bolt row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Fire Bolt` is now row-covered on `C64+C128` without product changes: shared bolt coverage continues to prove the projectile hit/miss contract, and focused row suites prove the real spell slot `22`, kill-path-valid success, silent no-target behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_fire_bolt.s`, and the `C128` row proof lives in `commodore/c128/tests/test_fire_bolt128.s`; both drive the real cast path and patch only the execution seam needed to call the actual `eff_bolt` owner with deterministic `6d8+1` Fire Bolt parameters.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests fire_bolt128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`73 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-22-SLEEP-III
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Sleep III` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared visible-sleep owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Sleep III row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Sleep III` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `21`, visible monsters sleep while hidden monsters remain unaffected, current explicit success/no-target feedback, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_sleep_iii.s`, and the `C128` row proof lives in `commodore/c128/tests/test_sleep_iii128.s`; both drive the real cast path through a narrow shared seam mirroring the current `eff_sleep_all` visibility loop and feedback contract.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests sleep_iii128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`72 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-21-IDENTIFY
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Identify` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared identify owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Identify row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Identify` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `20`, eligible-item identification with the exact built identify message, current cancel/no-eligible-item feedback behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_identify_spell.s`, and the `C128` row proof lives in `commodore/c128/tests/test_identify128.s`; both drive the real cast path, and the `C64` suite also locks down the current prompt-driven identify behavior after fixing a local test reset bug that had pre-seeded the identified flag.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests identify128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`71 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-20-POLYMORPH-OTHER
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Polymorph Other` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared polymorph owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Polymorph Other row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Polymorph Other` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `19`, silent successful replacement of the target monster at the same coordinates, preserved occupied-tile invariants plus redraw flagging, silent no-target behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_polymorph_other.s`, and the `C128` row proof lives in `commodore/c128/tests/test_polymorph_other128.s`; both drive the real cast path and keep the current polymorph replacement deterministic through narrow `pick_creature_type` and spawn/remove seams.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests polymorph_other128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`70 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-19-SLEEP-II
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Sleep II` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared adjacent-sleep owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Sleep II row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Sleep II` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `18`, adjacent sleep success with explicit success feedback, explicit unaffected feedback for resistant adjacent targets, explicit no-target feedback when no adjacent monsters are present, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_sleep_ii.s`, and the `C128` row proof lives in `commodore/c128/tests/test_sleep_ii128.s`; both drive the real cast path and keep the adjacent-sleep effect deterministic through a narrow shared seam around the current local-sleep behavior.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests sleep_ii128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`69 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-18-RECHARGE-ITEM-I
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Recharge Item I` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared recharge owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Recharge Item I row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Recharge Item I` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `17`, eligible-item recharge mutation, explicit `HSTR_PIW_NOTHING` no-eligible-item feedback, destructive bright-flash backfire behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_recharge_item_i.s`, and the `C128` row proof lives in `commodore/c128/tests/test_recharge_item_i128.s`; both drive the real cast path for success/no-eligible/cast-fail cases and validate the destructive backfire at the shared recharge branch in a deterministic focused seam check.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests recharge_item_i128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`68 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M3-17-CREATE-FOOD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Create Food` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared create-food owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Create Food row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Create Food` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `16`, underfoot item replacement on success, the current blocked semantics when no floor-item slot is free, explicit success/blocked feedback, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_create_food.s`, and the `C128` row proof lives in `commodore/c128/tests/test_create_food128.s`; both drive the real cast path and keep the helper semantics narrow by mirroring the current `pmu_create_food` placement contract inside the focused test trampoline.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests create_food128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`67 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-16-TURN-STONE-TO-MUD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Turn Stone to Mud` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared wall-to-mud owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Turn Stone to Mud row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Turn Stone to Mud` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `15`, directional wall-to-floor mutation with `vis_room_revealed` update, the current silent blocked/no-effect behavior on non-wall targets, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_turn_stone_to_mud.s`, and the `C128` row proof lives in `commodore/c128/tests/test_turn_stone_to_mud128.s`; both drive the real cast path and use the actual `eff_wall_to_mud` owner with deterministic east-target map fixtures.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests turn_stone_to_mud128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`66 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-15-FROST-BOLT
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Frost Bolt` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional bolt owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Frost Bolt row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Frost Bolt` is now row-covered on `C64+C128` without product changes: the existing shared bolt/projectile coverage continues to prove the general hit/miss projectile contract, and focused row suites now prove the real spell slot `14`, silent no-target behavior, kill-path-valid success, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the `C64` row proof lives in `commodore/c64/tests/test_frost_bolt.s`, and the `C128` row proof lives in `commodore/c128/tests/test_frost_bolt128.s`; both drive the real cast path and patch only the execution seam needed to call the actual `eff_bolt` owner with deterministic `4d8+1` Frost Bolt parameters.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests frost_bolt128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`65 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-14-REMOVE-CURSE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Remove Curse` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared remove-curse owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Remove Curse row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Remove Curse` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `13`, equipped-only curse removal, carried curse preservation, the current explicit `CLEANSED` feedback even when no cursed equipment is present, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_remove_curse.s`, and the C128 row proof lives in `commodore/c128/tests/test_remove_curse128.s`; both drive the real cast path and use the actual `eff_remove_curse` owner while pinning the current mage-only equipped-item semantics.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests remove_curse128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`64 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-13-TELEPORT-SELF
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Teleport Self` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared unrestricted self-teleport owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Teleport Self row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Teleport Self` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `12`, deterministic long-range relocation through the unrestricted self-teleport seam, old/new `FLAG_OCCUPIED` bookkeeping, message-light success, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_teleport_self.s`, and the C128 row proof lives in `commodore/c128/tests/test_teleport_self128.s`; both drive the real cast path and patch `find_random_floor` to a deterministic far target while using the actual `eff_teleport_self` owner.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests teleport_self128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`63 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-11-SLEEP-I
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Sleep I` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional sleep owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Sleep I row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Sleep I` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `10`, target sleep-timer mutation plus awake-flag clearing on hit, current message-light no-target behavior, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_sleep_i.s`, and the C128 row proof lives in `commodore/c128/tests/test_sleep_i128.s`; both drive the real cast path and patch only the directional-target seam while using the exact current single-target sleep application logic.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests sleep_i128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`62 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-10-TRAP-DOOR-DESTRUCTION
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Trap/Door Destruction` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared destroy-traps/doors owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Trap/Door Destruction row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Trap/Door Destruction` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `9`, adjacent secret/closed doors opening, adjacent trap removal from both the map and `trap_count`, silent no-effect behavior when only non-adjacent fixtures exist, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_trap_door_destruction.s`, and the C128 row proof lives in `commodore/c128/tests/test_trap_door_destruction128.s`; both drive the real cast path and use the actual `eff_destroy_traps_doors` owner with deterministic adjacent-map fixtures.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests trap_door_destruction128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`61 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-09-LIGHTNING-BOLT
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Lightning Bolt` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional bolt owner and prove whether the row can be covered without product changes
+- [x] add focused C64/C128 Lightning Bolt row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Lightning Bolt` is now row-covered on `C64+C128` without product changes: the existing shared bolt/projectile coverage continues to prove the general hit/miss projectile contract, and focused row suites now prove the real spell slot `8`, silent no-target behavior, kill-path-valid success, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_lightning_bolt.s`, and the C128 row proof lives in `commodore/c128/tests/test_lightning_bolt128.s`; both drive the real cast path and patch only the execution seam needed to call the actual `eff_bolt` owner with deterministic `3d8+1` Lightning Bolt parameters.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests lightning_bolt128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`60 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M2-08-CONFUSION
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Confusion` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared directional confusion coverage on `C64` and `C128`
+- [x] add focused C64/C128 Confusion row coverage without changing core spell code
+- [x] run focused proof plus make test64 and make test128-fast-smoke
+- [x] update `commodore/SPELLS.md` and `tasks/todo.md` review, then commit this spell
+- [x] review:
+  - `Confusion` is now row-covered on `C64+C128` without product changes: the existing shared directional-confuse coverage continues to prove the user-facing hit/miss feedback contract, and focused row suites now prove the real spell slot `7`, target `MX_CONFUSE` mutation on hit, no-target feedback on miss, and cast-fail/success mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_confusion.s`, and the C128 row proof lives in `commodore/c128/tests/test_confusion128.s`; both drive the real cast path and patch the directional-target seam so the hit/miss cases stay deterministic.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests confusion128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`59 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M1-07-STINKING-CLOUD
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Stinking Cloud` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared ball-effect owner and prove whether the row can be covered without product changes
+- [x] extend focused row coverage for `Stinking Cloud` on `C64` and `C128` without changing core spell code
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path spell-dispatch proof
+- [x] update `commodore/SPELLS.md` to record `Stinking Cloud` row coverage status
+- [x] verify:
+  - focused `Stinking Cloud` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Stinking Cloud` is now row-covered on `C64+C128` without product changes: the existing shared `eff_ball` suite continues to prove visible travel, target-area damage, and lethal kill-path handling, while focused row suites now prove the real spell slot `6`, silent empty-area success, explicit cast-fail handling, and mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_stinking_cloud.s`, and the C128 row proof lives in `commodore/c128/tests/test_stinking_cloud128.s`; both drive the real cast path and use the actual `eff_ball` damage flow with deterministic east-target setup.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests stinking_cloud128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`58 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M1-06-FIND-HIDDEN-TRAPS-DOORS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Find Hidden Traps/Doors` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared trap/door detect owner and prove whether the row can be covered without product changes
+- [x] extend focused row coverage for `Find Hidden Traps/Doors` on `C64` and `C128` without changing core spell code
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path spell-dispatch proof
+- [x] update `commodore/SPELLS.md` to record `Find Hidden Traps/Doors` row coverage status
+- [x] verify:
+  - focused `Find Hidden Traps/Doors` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Find Hidden Traps/Doors` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `5`, combined secret-door plus hidden-trap reveal through the shared detect effects, silent no-effect behavior when nothing eligible exists, explicit cast-fail handling, and mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_find_hidden_traps_doors.s`, and the C128 row proof lives in `commodore/c128/tests/test_find_hidden_traps_doors128.s`; both drive the real cast path and use the actual `eff_find_doors` + `eff_find_traps` sequence for deterministic map mutation.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests find_hidden_traps_doors128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`57 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M1-05-CURE-LIGHT-WOUNDS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Cure Light Wounds` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared heal/message owner and prove whether the row can be covered without product changes
+- [x] extend focused row coverage for `Cure Light Wounds` on `C64` and `C128` without changing core spell code
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path spell-dispatch proof
+- [x] update `commodore/SPELLS.md` to record `Cure Light Wounds` row coverage status
+- [x] verify:
+  - focused `Cure Light Wounds` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Cure Light Wounds` is now row-covered on `C64+C128` without product changes: focused row suites prove the real spell slot `4`, injured-heal feedback through the shared heal seam, full-HP silence/no-op behavior, explicit cast-fail handling, and mana/worked bookkeeping on both platforms.
+  - the C64 row proof lives in `commodore/c64/tests/test_cure_light_wounds.s`, and the C128 row proof lives in `commodore/c128/tests/test_cure_light_wounds128.s`; both drive the real cast path and stub only the shared effect seam needed to keep the heal amount deterministic.
+  - exact verification:
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests cure_light_wounds128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`56 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M1-04-LIGHT-AREA
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Light Area` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared light-room/message owner and prove whether the row can be covered without product changes
+- [x] extend focused row coverage for `Light Area` on `C64` and `C128` without changing core spell code
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path spell-dispatch proof
+- [x] update `commodore/SPELLS.md` to record `Light Area` row coverage status
+- [x] verify:
+  - focused `Light Area` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Light Area` is now row-covered on `C64+C128` without product changes: focused C64 coverage proves the shared light-room helper now explicitly checks redraw state alongside room/tile light mutation, and a dedicated C64 spell-row suite proves explicit light feedback plus cast success/fail mana/worked bookkeeping for spell slot `3`.
+  - the exact same shared `Light Area` spell-dispatch product path remains green on `C128` through `make test128-fast-smoke` and its `scripted_spell_cast_smoke`; the attempted extra C128 unit harness was backed out rather than land a red side path.
+  - exact verification:
+    - focused `C64` row proof: `commodore/c64/tests/test_effects.s` and `commodore/c64/tests/test_light_area.s`
+    - exact reported gate `make test64`: PASS (`55 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] BUG-C64-PROMPT-RANGE-CORRUPTION
+- [x] Reported Failure Gate:
+  - C64 live immediate command prompts from `Drop`, `Wear`, `Take-off`, `Cast`, and `Prayer` must render correct prompt ranges on a fresh build
+- [x] ignore `Throw` for this bug; it is a separate issue and not valid evidence for the filtered prompt-overlay family
+- [x] compare the failing prompt-time flows and narrow the real owner to the dynamic prompt-render seam instead of generic overlay ownership
+- [x] implement the shared C64 held-key release fix in `input_wait_release` so prompt-time modal overlays do not rely only on `KBDBUF_COUNT`
+- [x] inspect the new immediate-command snapshot and prove whether the corruption lives in input flow or in the dynamic prompt-text bytes themselves
+- [x] identify the actual prompt corruption seam: C64 message-line prompt patching was writing PETSCII lowercase range letters into screen RAM instead of C64 screen-code letters
+- [x] add focused runtime regression coverage for the shared patcher and the live immediate prompt owners on C64
+- [x] verify:
+  - direct Kick Assembler compile of `commodore/c64/main.s` stays below `MAP_BASE`
+  - `make -C commodore build64`
+  - `make test64`
+  - fresh user live retest of `W`, `T`, `M`, `P`, and `D`
+- [x] review:
+  - the earlier scratchpad status was wrong because the live user gate was still red
+  - the current landed product fix is the prompt patcher itself: `piw_print_prompt_with_count` now writes C64 screen-code letters into the decoded prompt buffer instead of PETSCII lowercase bytes
+  - the earlier `input_wait_release` / prompt-time overlay work closed a real shared C64 held-key seam, but it was not the root cause of the visible prompt corruption the user reported here
+  - `Throw` is explicitly out of scope for this bug and should not be used again as a discriminator
+  - the decisive snapshot from the immediate broken prompt frame proved the core visual corruption is the dynamic range-letter bytes themselves: the C64 prompt showed `$61/$63` in screen RAM for `a-c`, which renders as graphics garbage on the live character set
+  - the new regression coverage now locks down both the shared patcher and the real immediate command owners on C64: `Drop`, `Wear`, `Take-off`, mage/prayer book prompts, and cast/pray footer prompts
+  - exact verification so far:
+    - direct Kick Assembler compile of `commodore/c64/main.s`: PASS (`Program fits below MAP_BASE=true`)
+    - `make -C commodore build64`: PASS
+    - `make test64`: PASS (`54 passed, 0 failed`)
+    - live user verification: PASS
+
+- [x] BUG-C64-SPELL-NAMES-CORRUPT-AFTER-PHASE-DOOR-FIX
+- [x] Reported Failure Gate:
+  - C64 live spell-book names must render correctly again after the `Phase Door` fix; keep `make test64` and `make test128-fast-smoke` green
+- [x] inspect the current C64 spell-list/string owner and compare the rebuilt overlay/resident layout against the prior build
+- [x] prove the actual live rendering failure owner across both real mage UI paths: `book prompt -> ? -> inventory overlay` and `book select -> ? -> spell list overlay`
+- [x] fix the live C64 product regression at the actual UI owner without breaking the validated `Phase Door` behavior
+- [x] add explicit real rendered-text regressions for both spell-related overlays on both platforms:
+  - mage-book inventory overlay via `m -> ?`
+  - spell list overlay via `m -> book -> ?`
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - the earlier layout-based explanation was incomplete, and the screenshot path was broader than the spell list alone: the mage UI has two distinct real render contracts, the book inventory overlay (`m -> ?`) and the spell list overlay (`m -> book -> ?`)
+  - no additional core product bug was reproduced in code after wiring exact live assertions into both paths; the actionable defect here was the missing regression coverage, not another confirmed spell-code change
+  - the C128 fast-smoke wiring briefly pushed the shared banked spell payload 4 bytes past the CPU-vector ceiling; trimming a dead jump in `pm_select_book` restored the exact gate without backing out the new overlay smokes
+  - the new product-path smokes now stop while the overlay text is still live and assert concrete rendered strings on both platforms, so this class of corruption is now part of the exact gates instead of relying on end-user screenshots
+  - exact verification:
+    - `make test64`: PASS (`54 passed, 0 failed`)
+    - `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+
+- [x] SPELL-M1-03-PHASE-DOOR
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Phase Door` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] inspect the shared teleport owner to prove whether focused row coverage can be added without product changes
+- [x] stop for user approval before changing core spell code if the row is blocked by a real `Phase Door` product bug
+- [x] fix the shared `Phase Door` teleport seam so the validated nearby destination is actually applied without changing unrestricted teleport behavior
+- [x] extend focused row coverage for `Phase Door` on `C64` and `C128`
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path mage cast-flow proof
+- [x] update `commodore/SPELLS.md` to record `Phase Door` row coverage status
+- [x] verify:
+  - focused `Phase Door` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - root cause: `eff_phase_door` validated a nearby destination, then tail-jumped into `eff_teleport_self`, which rerolled `find_random_floor` and discarded the validated near tile
+  - product fix: split teleport application from teleport destination selection, keep unrestricted teleport behavior in `eff_teleport_self`, and let `Phase Door` apply its already-validated nearby destination without a second roll
+  - focused row coverage now proves on `C64+C128`: relocation lands on the validated nearby tile, old/new `FLAG_OCCUPIED` bookkeeping is correct, `vis_room_revealed` is set, cast failure spends the real `2` mana and stays unworked, and successful cast remains message-light while marking spell slot `2` worked
+  - exact verification:
+    - focused `C64` row proof: `commodore/c64/tests/test_phase_door.s`
+    - focused `C128` row proof: `TEST_FILTER='phase_door128' bash commodore/c128/run_tests128.sh`
+    - exact reported gate `make test64`: PASS (`48 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`6 passed, 0 failed`)
+
+- [x] SPELL-M1-02-DETECT-MONSTERS
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Detect Monsters` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] extend focused row coverage for `Detect Monsters` on `C64` and `C128` without changing core spell code
+- [x] keep the existing generic live spell-cast smokes green on `C64` and `C128` as the product-path spell-dispatch proof
+- [x] update `commodore/SPELLS.md` to record `Detect Monsters` row coverage status
+- [x] verify:
+  - focused `Detect Monsters` coverage
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Detect Monsters` is now row-covered on `C64+C128`: the existing generic live cast smokes still prove product-path mage cast flow on both platforms, while focused row tests now prove spell-id mapping, detect-present/no-creatures feedback, and cast-fail mana/worked bookkeeping for the actual `Detect Monsters` row.
+  - exact verification:
+    - focused `C64` row proof: `commodore/c64/tests/test_detect_feedback.s` and `commodore/c64/tests/test_effects_magic.s`
+    - focused `C128` row proof: `python3 -u commodore/c128/harness128_batch.py --mode cold --tests detect_monsters128 --vice /opt/homebrew/bin/x128 --connect-timeout 12`
+    - exact reported gate `make test64`: PASS (`47 passed, 0 failed`)
+    - exact reported gate `make test128-fast-smoke`: PASS (`6 passed, 0 failed`)
+
+- [x] SPELL-M1-01-MAGIC-MISSILE
+- [x] Reported Failure Gate:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] confirm the current `Magic Missile` row gaps against `commodore/SPELL_TEST_PLAN.md`
+- [x] add focused C64 coverage for any missing `Magic Missile` row outcomes without changing core spell code
+- [x] add focused C128 coverage for any missing `Magic Missile` row outcomes without changing core spell code
+- [x] update `commodore/SPELLS.md` to record `Magic Missile` row coverage status
+- [x] verify:
+  - focused C64 `Magic Missile` tests
+  - focused C128 `Magic Missile` tests
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - `Magic Missile` is now row-covered on `C64+C128`: product success comes from the existing scripted cast smokes, while focused unit coverage now proves cast-fail bookkeeping and silent no-target behavior without changing core spell code
+  - exact verification:
+    - focused C64 assembly/runtime coverage: `test_effects_magic.s` and `test_directional_effects.s`
+    - focused C128 monitor-driven unit coverage: `test_magic_missile128.s` via direct `until $pass / break $fail` VICE moncommands
+    - broad gates: `make test64` PASS (`48/48`), `make test128-fast-smoke` PASS (`6/6`)
+
 - [ ] BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS
 - [ ] Reported Failure Gate:
   - `./commodore/c64/run_tests.sh`

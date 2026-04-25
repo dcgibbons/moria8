@@ -6,6 +6,71 @@
 
 ---
 
+## 2026-04-22 — C64 prompt-range corruption fix and spell UI regression hardening ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C64 prompt corruption affecting immediate command-entry prompts such as `Wear`, `Take off`, `Drop`, `Spell book`, and `Prayer book`.
+- Closed the earlier spell UI test gap by adding product-path overlay smokes for both C64 and C128 mage book/spell list flows.
+- Locked the exact C64 prompt-range failure class down with focused runtime coverage.
+
+### What Shipped
+1. **C64 prompt-range patcher now writes screen-code letters**
+   - `commodore/common/player_items.s`
+   - the shared `piw_print_prompt_with_count` patcher now writes C64 screen-code `a..z` bytes into the decoded prompt buffer instead of PETSCII lowercase bytes, which restores live prompts like `(a-c)` and `(a-v)` on the C64 message line
+2. **Selectable prompt-time overlay handling was tightened on C64**
+   - `commodore/c64/input.s`
+   - `commodore/common/player_items.s`
+   - `commodore/common/player_magic.s`
+   - the C64 prompt/overlay key-owner seams now explicitly gate prompt-time selectable overlays through the C64 modal-dismiss preparation path where needed, and `input_wait_release` now waits for both buffered and physically held keys to clear
+3. **Cross-platform product-path overlay smokes added**
+   - `commodore/c64/main.s`
+   - `commodore/c128/main.s`
+   - `commodore/c64/run_tests.sh`
+   - `commodore/c128/run_tests128.sh`
+   - `commodore/c128/input128.s`
+   - `commodore/Makefile`
+   - both platforms now have explicit scripted product-path coverage for:
+     - mage book inventory overlay via `m -> ?`
+     - spell list overlay via `m -> book -> ?`
+   - the C128 fast-smoke gate now includes those overlay checks, and the shared banked spell path was trimmed back under the C128 CPU-vector ceiling after the first smoke-build pass
+4. **Focused C64 prompt-render regression coverage added**
+   - `commodore/c64/tests/test_item_ui.s`
+   - `commodore/c64/tests/test_ui_views_filters.s`
+   - the shared prompt patcher now has a direct `Drop which item (a-v)?` byte-level check, and the live immediate prompt rows are asserted for:
+     - `Drop`
+     - `Wear`
+     - `Take off`
+     - mage book prompt
+     - prayer book prompt
+     - `Cast which?`
+     - `Pray which?`
+   - the older prompt-range expectation test was updated to the corrected C64 screen-code contract
+5. **Session docs updated around the real owner and test gap**
+   - `tasks/lessons.md`
+   - `tasks/todo.md`
+
+### Root Cause / Notes
+- The hard part was that the visible symptom looked like general prompt/overlay corruption, so the early investigation drifted into input flow, overlay ownership, and dismissal timing.
+- The decisive evidence came from a VICE snapshot dump of the live broken prompt frame. It showed the prompt text bytes in C64 screen RAM directly:
+  - the prompt shell was fine
+  - the dynamically patched range letters were wrong bytes
+  - the buffer contained PETSCII lowercase like `$61/$63` where C64 screen RAM needed screen-code letters like `$01/$03`
+- That proved the real owner was the shared prompt patcher, not the overlay renderer.
+- A second gap was test shape: existing coverage proved flow and overlay presence, but not the exact screen-RAM bytes of dynamically patched prompts on C64.
+
+### Verification
+- Exact C64 product/build gate:
+  - `make -C commodore build64`: PASS
+- Exact C64 regression gate:
+  - `make test64`: PASS (`54 passed, 0 failed`)
+- Exact C128 smoke gate:
+  - `make test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+- Outcome:
+  - user confirmed the live C64 prompt corruption is fixed
+  - the specific failure class now has focused runtime coverage instead of relying on end-user screenshots
+
+---
+
 ## 2026-04-21 — `BUG-C128-DEATH-HISCORE-NOT-CENTERED` centered death overlay layout ✅ COMPLETE
 
 ### Scope Closed

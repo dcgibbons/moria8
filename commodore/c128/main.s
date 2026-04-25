@@ -918,12 +918,114 @@ tramp_store_enter:
     jsr c128_restore_runtime_guards
     jmp store_enter
 
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+test_expect_screen_string:
+    sta test_expect_row
+    stx test_expect_col
+    lda test_expect_row
+    sta zp_cursor_row
+    lda test_expect_col
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    lda zp_screen_hi
+    ldy zp_screen_lo
+    jsr vdc_set_update_addr
+    ldy #0
+!tes_loop:
+    lda (zp_ptr0),y
+    beq !tes_ok+
+    stx test_expect_save_x
+    ldx #31
+    jsr vdc_read_reg
+    cmp (zp_ptr0),y
+    bne !tes_fail+
+    ldx test_expect_save_x
+    iny
+    bne !tes_loop-
+!tes_fail:
+    clc
+    rts
+!tes_ok:
+    sec
+    rts
+
+test_expect_row: .byte 0
+test_expect_col: .byte 0
+test_expect_save_x: .byte 0
+
+.encoding "screencode_mixed"
+test_inventory_title_str: .text "Inventory" ; .byte 0
+test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
+test_mage_book_title_str: .text "Mage Book" ; .byte 0
+test_magic_missile_str:   .text "Magic Missile" ; .byte 0
+test_phase_door_str:      .text "Phase Door" ; .byte 0
+
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY
+test_assert_book_overlay:
+    lda #<test_inventory_title_str
+    sta zp_ptr0
+    lda #>test_inventory_title_str
+    sta zp_ptr0_hi
+    lda #0
+    ldx #35
+    jsr test_expect_screen_string
+    bcc !book_fail+
+
+    lda #<test_beginner_book_str
+    sta zp_ptr0
+    lda #>test_beginner_book_str
+    sta zp_ptr0_hi
+    lda #2
+    ldx #4
+    jsr test_expect_screen_string
+    bcc !book_fail+
+
+    jmp c128_test_book_overlay_pass_sym
+!book_fail:
+    jmp c128_test_book_overlay_fail_sym
+#endif
+
+#if C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+test_assert_spell_list_overlay:
+    lda #<test_mage_book_title_str
+    sta zp_ptr0
+    lda #>test_mage_book_title_str
+    sta zp_ptr0_hi
+    lda #0
+    ldx #14
+    jsr test_expect_screen_string
+    bcc !list_fail+
+
+    lda #<test_magic_missile_str
+    sta zp_ptr0
+    lda #>test_magic_missile_str
+    sta zp_ptr0_hi
+    lda #2
+    ldx #4
+    jsr test_expect_screen_string
+    bcc !list_fail+
+
+    lda #<test_phase_door_str
+    sta zp_ptr0
+    lda #>test_phase_door_str
+    sta zp_ptr0_hi
+    lda #4
+    ldx #4
+    jsr test_expect_screen_string
+    bcc !list_fail+
+
+    jmp c128_test_spell_list_overlay_pass_sym
+!list_fail:
+    jmp c128_test_spell_list_overlay_fail_sym
+#endif
+#endif
+
 #if C128_TEST_SCRIPTED_INPUT
 c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -940,6 +1042,18 @@ c128_test_spell_pass_sym:
     brk
 #if C128_TEST_SCRIPTED_SPELL_CANCEL
 c128_test_spell_cancel_pass_sym:
+    brk
+#endif
+#if C128_TEST_SCRIPTED_BOOK_OVERLAY
+c128_test_book_overlay_fail_sym:
+    brk
+c128_test_book_overlay_pass_sym:
+    brk
+#endif
+#if C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+c128_test_spell_list_overlay_fail_sym:
+    brk
+c128_test_spell_list_overlay_pass_sym:
     brk
 #endif
 #elif C128_TEST_CACHE_SURVIVAL

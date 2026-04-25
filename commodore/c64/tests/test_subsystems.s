@@ -68,7 +68,6 @@ sb_tier_invalidate_calls: .byte 0
 sb_load_arg_a: .byte 0
 sb_load_arg_x: .byte 0
 sb_load_arg_y: .byte 0
-
 tier_invalidate_state:
     inc sb_tier_invalidate_calls
     rts

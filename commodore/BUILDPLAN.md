@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-04-13)
+## Current State (2026-04-22)
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
@@ -54,6 +54,13 @@
   - upstream `umoria` and `vms-moria` filter book prompts by exact book class before selection, while the Commodore port had drifted to a broad `ICAT_BOOK` prompt followed by late rejection
   - the live fix now uses exact mage-book vs prayer-book prompt filters, so both the visible letters and the `?` inventory overlay only show books the active caster can actually use
   - the focused regression coverage now seeds a mixed inventory and asserts that prayer selection only renders prayer books in the visible prompt list
+- The recent C64 immediate prompt-range corruption is now closed and hardened:
+  - the root cause was an encoding seam in the shared dynamic prompt patcher, not an overlay/input flow bug
+  - C64 prompt ranges like `(a-c)` now patch screen-code letters into screen RAM instead of PETSCII lowercase bytes
+  - focused C64 runtime coverage now locks down the shared prompt patcher plus the live `Drop`, `Wear`, `Take-off`, spell/prayer-book, and cast/pray prompt rows
+- Spell UI regression coverage is now stronger on both platforms:
+  - C64 and C128 both have product-path smokes for the mage book inventory overlay (`m -> ?`) and the spell list overlay (`m -> book -> ?`)
+  - `make test128-fast-smoke` now includes those overlay smokes instead of relying only on cast/cancel flows
 - The `drop` item prompt contract is now back in line with the rest of the item selectors:
   - sparse all-item inventories once again advertise the real highest selectable letter instead of a hardcoded `(a-v)` range
   - the C128 live fix also handles lowercase direct-scan letter picks on the `drop -> ?` path without widening the shared prompt parser contract

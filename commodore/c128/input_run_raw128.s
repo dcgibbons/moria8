@@ -144,6 +144,7 @@ irs_ext_save:   .byte 0
 irs_drive_mask: .byte 0
 irs_row_raw:    .byte 0
 
+#if !C128_INPUT_TEST
 // Restore the spell-execution overlay after a cross-overlay Earthquake call so
 // the original return address lands in live code again.
 c128_return_to_death_overlay:
@@ -156,3 +157,4 @@ c128_return_to_death_overlay:
     rts
 !fatal:
     jmp entry_main
+#endif

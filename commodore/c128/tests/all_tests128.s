@@ -56,3 +56,9 @@ test_entry:
 
 .filenamespace monster128
 #import "test_monster128.s"
+
+.filenamespace detect_monsters128
+#import "test_detect_monsters128.s"
+
+.filenamespace phase_door128
+#import "test_phase_door128.s"

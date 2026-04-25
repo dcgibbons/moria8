@@ -124,10 +124,16 @@ eff_light_room:
 // Clobbers: A, X, Y, zp_ptr0
 // ============================================================
 eff_teleport_self:
-    jsr player_search_mode_off
     jsr find_random_floor
     bcc !ets_fail+
 
+// eff_teleport_apply_target — Move player to df_target_x/y
+// Input: df_target_x/y = destination, zp_player_x/y = current position
+// Output: player moved, FLAG_OCCUPIED updated, vis_room_revealed set
+// Clobbers: A, X, Y, zp_ptr0
+// ============================================================
+eff_teleport_apply_target:
+    jsr player_search_mode_off
     // Clear FLAG_OCCUPIED at old position
     ldx zp_player_y
     lda map_row_lo,x
@@ -348,7 +354,7 @@ eff_phase_door:
     rts
 !epd_ok:
     // Move player (df_target_x/y already set by find_random_floor)
-    jmp eff_teleport_self
+    jmp eff_teleport_apply_target
 
 // ============================================================
 // eff_find_traps — Reveal all hidden traps in LOS range

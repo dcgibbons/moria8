@@ -57,7 +57,7 @@ run_test() {
 
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -showmem -o "${src%.s}.prg" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -138,7 +138,7 @@ run_sound_monitor_test() {
     echo -n "  $name: "
 
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -showmem -vicesymbols -o "${src%.s}.prg" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -148,7 +148,7 @@ run_sound_monitor_test() {
         return
     fi
 
-    local sym_file="${src%.s}.sym"
+    local sym_file="${src%.s}.vs"
     local mon_file
     local log_file
     mon_file=$(mktemp -t "test_${name}_mon")
@@ -156,7 +156,7 @@ run_sound_monitor_test() {
 
     lookup_label() {
         local label="$1"
-        awk -F'[$=]' "/\\.label ${label}=\\$/{print toupper(\$3); exit}" "$sym_file"
+        awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file"
     }
 
     local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail hunger_warn hunger_faint)
@@ -399,6 +399,308 @@ run_scripted_spell_cast_smoke() {
     fi
 
     echo "FAIL (did not reach scripted spell pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_book_overlay_smoke() {
+    local name="scripted_book_overlay_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_BOOK_OVERLAY \
+            -o out/moria_book_overlay_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_book_overlay_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_book_overlay_smoke.prg "moria64" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_book_overlay_fail_sym"
+        "c64_test_book_overlay_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_book_overlay_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted book overlay pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (book overlay hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (book overlay flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (book overlay flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted book overlay pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_scripted_spell_list_overlay_smoke() {
+    local name="scripted_spell_list_overlay_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY \
+            -o out/moria_spell_list_overlay_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_spell_list_overlay_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_spell_list_overlay_smoke.prg "moria64" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_spell_list_overlay_fail_sym"
+        "c64_test_spell_list_overlay_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_spell_list_overlay_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted spell list overlay pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+    local vice_rc=$?
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (spell list overlay hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (spell list overlay flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (spell list overlay flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted spell list overlay pass trap)"
     echo "    Log: $tty_log"
     FAIL=$((FAIL + 1))
     TOTAL=$((TOTAL + 1))
@@ -737,6 +1039,14 @@ check_static_contract "wizard_heal_contract" "../common/wizard.s" \
     "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
+check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
+    "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
+check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
+    "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr input_get_key"
+check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
+    "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
+check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
+    "!pm_psc_show_list:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_spell_list_display|||jsr input_get_key"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
@@ -754,16 +1064,72 @@ run_test "monster_ai" "tests/test_monster_ai.s" "0400 0419" 26 500000000
 run_test "combat" "tests/test_combat.s" "0400 041c" 29 500000000
 run_test "monster_attack" "tests/test_monster_attack.s" "0400 040c" 13 500000000
 run_test "effects" "tests/test_effects.s" "0400 0431" 27 1000000000
-run_test "effects_magic" "tests/test_effects_magic.s" "0400 0431" 22 1000000000
-run_test "genocide" "tests/test_genocide.s" "0400 0400" 1 500000000
+run_test "effects_magic" "tests/test_effects_magic.s" "0400 0433" 23 1000000000
+run_test "cure_light_wounds" "tests/test_cure_light_wounds.s" "0400 0402" 3 500000000
+run_test "confusion" "tests/test_confusion.s" "0400 0402" 3 500000000
+run_test "lightning_bolt" "tests/test_lightning_bolt.s" "0400 0402" 3 500000000
+run_test "frost_bolt" "tests/test_frost_bolt.s" "0400 0402" 3 500000000
+run_test "turn_stone_to_mud" "tests/test_turn_stone_to_mud.s" "0400 0402" 3 500000000
+run_test "create_food" "tests/test_create_food.s" "0400 0402" 3 500000000
+run_test "recharge_item_i" "tests/test_recharge_item_i.s" "0400 0403" 4 500000000
+run_test "recharge_item_ii" "tests/test_recharge_item_ii.s" "0400 0403" 4 500000000
+run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0402" 3 500000000
+run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
+run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0403" 4 500000000
+run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
+run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000
+run_test "slow_monster" "tests/test_slow_monster.s" "0400 0402" 3 500000000
+run_test "polymorph_other" "tests/test_polymorph_other.s" "0400 0402" 3 500000000
+run_test "identify_spell" "tests/test_identify_spell.s" "0400 0403" 4 500000000
+run_test "teleport_self" "tests/test_teleport_self.s" "0400 0401" 2 500000000
+run_test "remove_curse" "tests/test_remove_curse.s" "0400 0402" 3 500000000
+run_test "find_hidden_traps_doors" "tests/test_find_hidden_traps_doors.s" "0400 0402" 3 500000000
+run_test "stinking_cloud" "tests/test_stinking_cloud.s" "0400 0402" 3 500000000
+run_test "frost_ball" "tests/test_frost_ball.s" "0400 0402" 3 500000000
+run_test "teleport_other" "tests/test_teleport_other.s" "0400 0402" 3 500000000
+run_test "haste_self" "tests/test_haste_self.s" "0400 0402" 3 500000000
+run_test "fire_ball" "tests/test_fire_ball.s" "0400 0402" 3 500000000
+run_test "word_of_destruction" "tests/test_word_of_destruction.s" "0400 0401" 2 500000000
+run_test "light_area" "tests/test_light_area.s" "0400 0401" 2 500000000
+run_test "phase_door" "tests/test_phase_door.s" "0400 0402" 3 500000000
+run_test "genocide" "tests/test_genocide.s" "0400 0401" 2 500000000
 run_test "directional_effects" "tests/test_directional_effects.s" "0400 0403" 4 500000000
 run_test "overcast_ordering" "tests/test_overcast_ordering.s" "0400 0400" 1 500000000
 run_test "ball_effects" "tests/test_ball_effects.s" "0400 0401" 2 500000000
 run_test "utility_effects" "tests/test_utility_effects.s" "0400 0409" 10 500000000
+run_test "detect_evil" "tests/test_detect_evil.s" "0400 0402" 3 500000000
+run_test "cure_light_wounds_prayer" "tests/test_cure_light_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "bless_prayer" "tests/test_bless_prayer.s" "0400 0402" 3 500000000
+run_test "remove_fear_prayer" "tests/test_remove_fear_prayer.s" "0400 0402" 3 500000000
+run_test "call_light_prayer" "tests/test_call_light_prayer.s" "0400 0401" 2 500000000
+run_test "find_traps_prayer" "tests/test_find_traps_prayer.s" "0400 0402" 3 500000000
+run_test "detect_doors_stairs_prayer" "tests/test_detect_doors_stairs_prayer.s" "0400 0402" 3 500000000
+run_test "slow_poison_prayer" "tests/test_slow_poison_prayer.s" "0400 0402" 3 500000000
+run_test "blind_creature_prayer" "tests/test_blind_creature_prayer.s" "0400 0402" 3 500000000
+run_test "portal_prayer" "tests/test_portal_prayer.s" "0400 0401" 2 500000000
+run_test "cure_medium_wounds_prayer" "tests/test_cure_medium_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "cure_serious_wounds_prayer" "tests/test_cure_serious_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "sense_invisible_prayer" "tests/test_sense_invisible_prayer.s" "0400 0402" 3 500000000
+run_test "protection_from_evil_prayer" "tests/test_protection_from_evil_prayer.s" "0400 0402" 3 500000000
+run_test "earthquake_prayer" "tests/test_earthquake_prayer.s" "0400 0402" 3 500000000
+run_test "sense_surroundings_prayer" "tests/test_sense_surroundings_prayer.s" "0400 0402" 3 500000000
+run_test "cure_critical_wounds_prayer" "tests/test_cure_critical_wounds_prayer.s" "0400 0402" 3 500000000
+run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0402" 3 500000000
+run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
+run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0402" 3 500000000
+run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0401" 2 500000000
+run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
+run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
+run_test "chant_prayer" "tests/test_chant_prayer.s" "0400 0402" 3 500000000
+run_test "sanctuary_prayer" "tests/test_sanctuary_prayer.s" "0400 0403" 4 500000000
+run_test "create_food_prayer" "tests/test_create_food_prayer.s" "0400 0402" 3 500000000
+run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 500000000
+run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 042b" 44 1000000000
-run_test "item_ui" "tests/test_item_ui.s" "0400 0407" 8 1000000000
+run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 13 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
@@ -783,8 +1149,9 @@ run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 run_scripted_spell_cast_smoke
+run_scripted_book_overlay_smoke
+run_scripted_spell_list_overlay_smoke
 run_scripted_dungeon_target_spell_smoke
-run_scripted_detect_evil_smoke
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="

@@ -1,12 +1,14 @@
-// test_genocide.s — Focused runtime test for shared genocide spell behavior
-//
-// Keeps glyph-based genocide coverage out of the large effects suite so the
-// product death overlay can be exercised without pushing that harness around.
+// test_genocide.s — Focused runtime tests for the Genocide spell row
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
+.pc = $E000 "Result Buffer"
+tg_results: .fill 2, $ff
+
 .pc = $080E "Test Code"
+
+.encoding "screencode_mixed"
 
 test_bootstrap:
     :BankOutBasic()
@@ -15,11 +17,17 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    lda tc_results
-    sta $0400
+    :BankOutKernal()
+    ldx #1
+!copy:
+    lda tg_results,x
+    sta $0400,x
+    dex
+    bpl !copy-
+    :BankInKernal()
     brk
 
-.pc = $0830 "Main"
+.pc = $0840 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -96,9 +104,10 @@ help_draw_hborder:
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
-tc_results: .byte $ff
-tpm_huff_calls: .byte 0
-tpm_last_huff_id: .byte 0
+tg_huff_calls: .byte 0
+tg_last_huff_id: .byte 0
+tg_spell_exec_calls: .byte 0
+tg_last_spell_idx: .byte $ff
 
 recall_query_sc: .byte 0
 
@@ -112,12 +121,49 @@ recall_query_sc: .byte 0
 }
 
 test_huff_print_msg:
-    stx tpm_last_huff_id
-    inc tpm_huff_calls
+    stx tg_last_huff_id
+    inc tg_huff_calls
     rts
 
 test_input_get_key_w:
     lda #$57
+    rts
+
+test_tramp_spell_execute_selected:
+    inc tg_spell_exec_calls
+    lda pm_spell_idx
+    sta tg_last_spell_idx
+    jsr eff_genocide
+    rts
+
+test_pm_select_book:
+    lda #3
+    sta pm_book_idx
+    lda #<book_mask_3
+    sta pm_book_mask_lo
+    lda #>book_mask_3
+    sta pm_book_mask_hi
+    sec
+    rts
+
+test_pm_prompt_visible_spell_choice:
+    lda #30
+    sta pm_spell_idx
+    sec
+    rts
+
+test_pm_validate_selected_spell:
+    lda #25
+    sta pm_cost_tmp
+    sec
+    rts
+
+test_calc_spell_failure_success:
+    clc
+    rts
+
+test_calc_spell_failure_fail:
+    sec
     rts
 
 recall_key_to_screen_code:
@@ -145,12 +191,13 @@ recall_key_to_screen_code:
     clc
     rts
 
-tv_setup_dark_room:
+test_setup_room:
     jsr fill_map_rock
     jsr item_init_floor
     jsr monster_init_table
     lda #0
     sta vis_room_revealed
+    sta zp_dirty_count
     lda #$ff
     sta vis_cached_room_idx
     lda #0
@@ -196,21 +243,14 @@ tv_setup_dark_room:
     jsr render_viewport
     rts
 
-test_start:
-    :PatchJump(input_get_key, test_input_get_key_w)
-    :PatchJump(huff_print_msg, test_huff_print_msg)
-
-    jsr msg_init
-    jsr sound_init
-    jsr tv_setup_dark_room
-
+test_spawn_genocide_targets:
     lda #23
     sta ms_spawn_x
     lda #12
     sta ms_spawn_y
     lda #2                      // 'W'
     jsr monster_spawn_one
-    bcc !fail+
+    bcc !done+
 
     lda #24
     sta ms_spawn_x
@@ -218,7 +258,7 @@ test_start:
     sta ms_spawn_y
     lda #10                     // also 'W'
     jsr monster_spawn_one
-    bcc !fail+
+    bcc !done+
 
     lda #25
     sta ms_spawn_x
@@ -226,56 +266,171 @@ test_start:
     sta ms_spawn_y
     lda #1                      // non-matching glyph
     jsr monster_spawn_one
-    bcc !fail+
+!done:
+    rts
 
+test_reset_genocide_spell_state:
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #30
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
     lda #0
+    sta player_data + PL_SPELLS_LEARNT_0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    lda #$40
+    sta player_data + PL_SPELLS_LEARNT_3
+    lda #0
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta tg_huff_calls
+    sta tg_last_huff_id
+    sta tg_spell_exec_calls
     sta vis_room_revealed
-    sta tpm_huff_calls
-    sta tpm_last_huff_id
+    sta zp_dirty_count
+    lda #$ff
+    sta tg_last_spell_idx
+    rts
 
-    jsr eff_genocide
+test_start:
+    :PatchJump(input_get_key, test_input_get_key_w)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(pm_select_book, test_pm_select_book)
+    :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
+    :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    lda tpm_huff_calls
+    jsr msg_init
+    jsr sound_init
+
+    // Test 1: successful cast reaches spell slot 30, prompts for a glyph,
+    // removes all matching monsters, leaves nonmatches alive, spends 25 mana,
+    // and marks Genocide worked.
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    jsr test_reset_genocide_spell_state
+    jsr test_setup_room
+    jsr test_spawn_genocide_targets
+    jsr player_cast_spell
+    bcc !t1_fail+
+    lda tg_spell_exec_calls
     cmp #1
-    bne !fail+
-    lda tpm_last_huff_id
+    bne !t1_fail+
+    lda tg_last_spell_idx
+    cmp #30
+    bne !t1_fail+
+    lda tg_huff_calls
+    cmp #1
+    bne !t1_fail+
+    lda tg_last_huff_id
     cmp #HSTR_PM_TITLE_PRAY
-    bne !fail+
-
+    bne !t1_fail+
     lda vis_room_revealed
     cmp #1
-    bne !fail+
-
+    bne !t1_fail+
     ldx #0
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
-    bne !fail+
-
+    bne !t1_fail+
     ldx #1
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #EMPTY_SLOT
-    bne !fail+
-
+    bne !t1_fail+
     ldx #2
     jsr monster_get_ptr
     ldy #MX_TYPE
     lda (zp_ptr0),y
     cmp #1
-    bne !fail+
-
+    bne !t1_fail+
     lda zp_mon_count
     cmp #1
-    bne !fail+
-
+    bne !t1_fail+
+    lda zp_player_mp
+    cmp #5
+    bne !t1_fail+
+    lda player_data + PL_MANA
+    cmp #5
+    bne !t1_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$40
+    beq !t1_fail+
     lda #$01
-    sta tc_results
-    jmp test_finish
-
-!fail:
+    sta tg_results + 0
+    jmp !t2+
+!t1_fail:
     lda #$00
-    sta tc_results
+    sta tg_results + 0
+
+    // Test 2: cast failure spends mana, prints HSTR_PM_FAIL, does not prompt
+    // or execute, leaves monsters unchanged, and does not mark worked.
+!t2:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    jsr test_reset_genocide_spell_state
+    jsr test_setup_room
+    jsr test_spawn_genocide_targets
+    jsr player_cast_spell
+    bcc !t2_fail+
+    lda tg_spell_exec_calls
+    bne !t2_fail+
+    lda tg_huff_calls
+    cmp #1
+    bne !t2_fail+
+    lda tg_last_huff_id
+    cmp #HSTR_PM_FAIL
+    bne !t2_fail+
+    lda vis_room_revealed
+    bne !t2_fail+
+    ldx #0
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #2
+    bne !t2_fail+
+    ldx #1
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #10
+    bne !t2_fail+
+    ldx #2
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #1
+    bne !t2_fail+
+    lda zp_mon_count
+    cmp #3
+    bne !t2_fail+
+    lda zp_player_mp
+    cmp #5
+    bne !t2_fail+
+    lda player_data + PL_MANA
+    cmp #5
+    bne !t2_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$40
+    bne !t2_fail+
+    lda #$01
+    sta tg_results + 1
+    jmp test_finish
+!t2_fail:
+    lda #$00
+    sta tg_results + 1
     jmp test_finish

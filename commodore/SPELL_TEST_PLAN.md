@@ -37,6 +37,9 @@ This is not a wishlist and not a historical audit. A spell is not considered cov
 - Message contract must match on `C64` and `C128` unless a row explicitly documents a justified platform-specific exception.
 - Every row requires `C64 + C128`.
 - Every row must have at least one product-path success case and at least one product-path failure case.
+- Product-path proof and row-proof are different obligations:
+  - product-path proof shows the real cast/pray flow reaches the intended runtime owner on that platform
+  - row-proof shows the row's exact negative/message/bookkeeping contract, which may require a focused harness beyond the product smoke
 - Helper-path tests may supplement coverage, but they cannot be the only proof for a row.
 - Product-path tests must respect existing platform risks:
   - `C64`: overlay ownership, resident-vs-overlay seams, and memory-growth boundaries.
@@ -190,6 +193,14 @@ Negative-case priority for every row:
 - `Some message happened` is not sufficient.
 - Explicit silence is a valid and required assertion for message-light spells.
 - Message-light spells must not grow a generic `You cast...` or `You pray...` success banner.
+- When a row calls for message-light success or no-effect handling, assert the intended silence on that exact path; do not treat omitted message checks as equivalent coverage.
+
+### C128 proof model
+
+- On `C128`, a row is complete only when both of these exist:
+  - a product-path proof that exercises the real cast/pray dispatch on the built runtime
+  - a row-level proof for any exact negative, message-light, or bookkeeping contract not already covered by that product path
+- Focused C128 row proofs may use a narrow harness around the stable shared seam when the product smoke would otherwise be too coarse.
 
 ### Prompt and selection validation
 

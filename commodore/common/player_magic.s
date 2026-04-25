@@ -512,8 +512,15 @@ pm_prompt_visible_spell_choice:
 !pm_psc_show_list:
     // Match other selectable overlays: release-gate before drawing the list
     // so a quick first selection/cancel key is not swallowed by the gate.
+#if C128
     jsr input_prepare_followup_key
+#else
+    jsr input_prepare_modal_dismiss_key
+#endif
     jsr tramp_spell_list_display
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+    jmp test_assert_spell_list_overlay
+#endif
 #if C128
     jsr input_get_key_fast
 #else

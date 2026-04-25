@@ -1196,6 +1196,10 @@ test_start:
     jsr tv_setup_dark_room
     jsr eff_light_room
 
+    lda vis_room_revealed
+    cmp #1
+    bne !t25_fail+
+
     lda room_lit
     cmp #1
     bne !t25_fail+

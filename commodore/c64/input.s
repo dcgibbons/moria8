@@ -48,6 +48,14 @@ input_run_key_held:
     lda #0
     rts
 #else
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+    lda #0
+    rts
+#else
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     lda #0
     rts
@@ -101,6 +109,8 @@ input_run_key_held:
 #endif
 #endif
 #endif
+#endif
+#endif
 
 // input_run_key_check — Backward-compatible alias for held-state polling
 input_run_key_check:
@@ -124,6 +134,26 @@ input_get_key:
     bne !igk_script_ok+
     jmp c64_test_spell_fail_input_sym
 !igk_script_ok:
+    inx
+    stx c64_test_input_idx
+    rts
+#else
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+    ldx c64_test_input_idx
+    lda c64_test_input_script,x
+    bne !igk_book_script_ok+
+    jmp c64_test_book_overlay_fail_input_sym
+!igk_book_script_ok:
+    inx
+    stx c64_test_input_idx
+    rts
+#else
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+    ldx c64_test_input_idx
+    lda c64_test_input_script,x
+    bne !igk_list_script_ok+
+    jmp c64_test_spell_list_overlay_fail_input_sym
+!igk_list_script_ok:
     inx
     stx c64_test_input_idx
     rts
@@ -168,6 +198,8 @@ input_get_key:
 #endif
 #endif
 #endif
+#endif
+#endif
 igk_key: .byte 0
 
 // input_wait_release — Drain pending buffered keys and wait until no key is pending
@@ -176,6 +208,12 @@ igk_key: .byte 0
 // Preserves: X, Y
 input_wait_release:
 #if C64_TEST_SCRIPTED_SPELL
+    rts
+#else
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+    rts
+#else
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     rts
 #else
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
@@ -204,6 +242,8 @@ input_wait_release:
     inc zp_entropy
     lda KBDBUF_COUNT
     bne !iwr_drain-
+    jsr input_run_key_held
+    bne !iwr_wait-
     lda KBDBUF_COUNT
     bne !iwr_drain-
 
@@ -211,6 +251,8 @@ input_wait_release:
     pla
     sta $01                 // Restore original banking state
     rts
+#endif
+#endif
 #endif
 #endif
 #endif
@@ -250,6 +292,39 @@ c64_test_input_script:
     .byte $4d, $41, $41, $4c, $20
     .byte $4d, $41, $41, $4c, $20
 #endif
+    .byte $00
+#endif
+
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+c64_test_input_idx: .byte 0
+c64_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4d              // M = cast
+    .byte $3f              // ? = inventory overlay from book prompt
+    .byte $00
+#endif
+
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+c64_test_input_idx: .byte 0
+c64_test_input_script:
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $4d              // M = cast
+    .byte $41              // A = first visible book
+    .byte $3f              // ? = spell list overlay
     .byte $00
 #endif
 

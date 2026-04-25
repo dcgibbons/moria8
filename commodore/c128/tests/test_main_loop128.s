@@ -14,6 +14,11 @@ test_start:
 .encoding "screencode_mixed"
 
 .const TILE_STAIRS_DN = $90
+.const HSTR_SAVE_WELCOME = 0
+.const EGO_TYPE_COUNT = 8
+.const IF_IDENTIFIED = $02
+.const IF_SENSED = $08
+.const SFX_PICKUP = 0
 
 .macro MapRead_ptr0_y() {
     jsr mmu_safe_map_read_ptr0
@@ -38,6 +43,9 @@ rng_seed:
     rts
 
 sound_play:
+    rts
+
+huff_print_msg:
     rts
 
 msg_init:
@@ -136,6 +144,24 @@ save_game:
     rts
 !save_fail:
     clc
+    rts
+
+load_game:
+    jmp test_load_game
+
+title_load_game:
+    jsr rng_seed
+    lda #SFX_PICKUP
+    jsr sound_play
+    jsr msg_init
+    jsr disk_prompt_save
+    jsr load_game
+    bcc !title_load_fail+
+    jsr disk_prompt_game
+    jmp load_resume_game
+!title_load_fail:
+    jsr input_get_modal_dismiss_key
+    jsr disk_prompt_game
     rts
 
 disk_prompt_save:
@@ -357,6 +383,10 @@ item_get_name_ptr:
 sound_init:
     rts
 
+input_run_scan_held_raw:
+    lda #0
+    rts
+
 viewport_update:
     jmp test_viewport_update
 
@@ -539,7 +569,6 @@ ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000
-.const SFX_PICKUP = 0
 .const SPELL_MAGE = 1
 .const OVL_DUNGEON_GEN = 4
 .const EQUIP_WEAPON = 22
@@ -1501,6 +1530,12 @@ test_entry:
     sta zp_view_y
     lda #1
     sta test_force_view_scroll_y
+    lda #CMD_QUIT
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    lda #2
+    sta test_cmd_budget
     jsr load_resume_game
     lda test_viewport_calls
     cmp #1

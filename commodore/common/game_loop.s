@@ -15,7 +15,7 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_seed_scripted_spell_state:
     lda #0
     sta c128_test_spell_success_count
@@ -141,7 +141,7 @@ c128_test_prayer_history_has_bless:
     rts
 #endif
 
-#if C64_TEST_SCRIPTED_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c64_test_seed_scripted_spell_state:
     lda #0
     sta c64_test_spell_success_count
@@ -431,13 +431,13 @@ game_new_start:
     jsr input_get_modal_dismiss_key
     jsr screen_clear
 
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c128_test_seed_scripted_spell_state
 #endif
 #if C128_TEST_SCRIPTED_PRAYER
     jsr c128_test_seed_scripted_prayer_state
 #endif
-#if C64_TEST_SCRIPTED_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c64_test_seed_scripted_spell_state
 #endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL

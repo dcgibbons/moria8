@@ -25,12 +25,12 @@ pm_name_lo_hi:     .byte 0
 pm_name_hi_lo:     .byte 0
 pm_name_hi_hi:     .byte 0
 pm_spell_list:     .fill SPELL_LIST_MAX, 0
-#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL
+#if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_spell_success_count: .byte 0
 c128_test_spell_return_pending: .byte 0
 c128_test_spell_return_count: .byte 0
 #endif
-#if C64_TEST_SCRIPTED_SPELL
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c64_test_spell_success_count: .byte 0
 c64_test_spell_return_pending: .byte 0
 c64_test_spell_return_count: .byte 0

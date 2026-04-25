@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 50, $ff
+tc_results: .fill 52, $ff
 tpm_msg_buf:  .fill 42, 0
 tpm_expected_identify_csw:
     .text "This is a Cure Serious Wounds potion." ; .byte 0
@@ -21,7 +21,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #49
+    ldx #51
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -214,12 +214,22 @@ test_pm_pick_visible_spell:
     sec
     rts
 
+test_pm_pick_visible_spell_b:
+    lda #1
+    sta pm_spell_idx
+    sec
+    rts
+
 test_pm_validate_selected_spell:
     sec
     rts
 
 test_calc_spell_failure_success:
     clc
+    rts
+
+test_calc_spell_failure_fail:
+    sec
     rts
 
 test_start:
@@ -1068,10 +1078,140 @@ test_start:
     beq !t50_fail+
     lda #$01
     sta tc_results + 49
-    jmp !tests_done+
+    jmp !t51+
 !t50_fail:
     lda #$00
     sta tc_results + 49
+
+!t51:
+    :PatchJump(input_get_key, test_input_get_key_a)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_a)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(pm_select_book, test_pm_select_book)
+    :PatchJump(pm_pick_visible_spell, test_pm_pick_visible_spell)
+    :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #1
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta tpm_spell_exec_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    jsr player_cast_spell
+    bcc !t51_fail+
+    lda tpm_spell_exec_calls
+    bne !t51_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t51_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_FAIL
+    bne !t51_fail+
+    lda zp_player_mp
+    cmp #19
+    bne !t51_fail+
+    lda player_data + PL_MANA
+    cmp #19
+    bne !t51_fail+
+    lda player_data + PL_SPELLS_WORKED_0
+    and #$01
+    bne !t51_fail+
+    lda #$01
+    sta tc_results + 50
+    jmp !t52+
+!t51_fail:
+    lda #$00
+    sta tc_results + 50
+
+!t52:
+    :PatchJump(input_get_key, test_input_get_key_b)
+    :PatchJump(input_get_modal_dismiss_key, test_input_get_modal_spell_a)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(pm_select_book, test_pm_select_book)
+    :PatchJump(pm_pick_visible_spell, test_pm_pick_visible_spell_b)
+    :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+
+    jsr player_init
+    lda #CLASS_MAGE
+    sta player_data + PL_CLASS
+    lda #SPELL_MAGE
+    sta player_data + PL_SPELL_TYPE
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_INT_CUR
+    lda #20
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta zp_player_mmp
+    sta player_data + PL_MAX_MANA
+    lda #$02
+    sta player_data + PL_SPELLS_LEARNT_0
+    lda #0
+    sta player_data + PL_SPELLS_LEARNT_1
+    sta player_data + PL_SPELLS_LEARNT_2
+    sta player_data + PL_SPELLS_LEARNT_3
+    sta player_data + PL_SPELLS_WORKED_0
+    sta player_data + PL_SPELLS_WORKED_1
+    sta player_data + PL_SPELLS_WORKED_2
+    sta player_data + PL_SPELLS_WORKED_3
+    sta tpm_spell_exec_calls
+    sta tpm_huff_calls
+    sta tpm_last_huff_id
+
+    jsr player_cast_spell
+    bcc !t52_fail+
+    lda tpm_spell_exec_calls
+    bne !t52_fail+
+    lda tpm_huff_calls
+    cmp #1
+    bne !t52_fail+
+    lda tpm_last_huff_id
+    cmp #HSTR_PM_FAIL
+    bne !t52_fail+
+    lda zp_player_mp
+    cmp #19
+    bne !t52_fail+
+    lda player_data + PL_MANA
+    cmp #19
+    bne !t52_fail+
+    lda player_data + PL_SPELLS_WORKED_0
+    and #$02
+    bne !t52_fail+
+    lda #$01
+    sta tc_results + 51
+    jmp !tests_done+
+!t52_fail:
+    lda #$00
+    sta tc_results + 51
 
 !tests_done:
     jmp test_finish
@@ -1079,4 +1219,4 @@ test_start:
 effects_magic_test_body_end:
 
 .assert "Effects magic test stays below MAP_BASE", effects_magic_test_body_end <= MAP_BASE, true
-.assert "Effects magic result buffer stays under KERNAL ROM", tc_results + 50 <= $10000, true
+.assert "Effects magic result buffer stays under KERNAL ROM", tc_results + 52 <= $10000, true

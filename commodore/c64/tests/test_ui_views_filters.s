@@ -773,7 +773,7 @@ expected_filtered_eq_light:
     .text ") Light: " ; .byte 0
 expected_quaff_prompt_ab:
     .byte $51, $15, $01, $06, $06, $20, $17, $08, $09, $03, $08, $20
-    .byte $10, $0f, $14, $09, $0f, $0e, $20, $28, $61, $2d, $62, $29, $3f, $00
+    .byte $10, $0f, $14, $09, $0f, $0e, $20, $28, $01, $2d, $02, $29, $3f, $00
 expected_equip_line:
     .byte $01
     .text ") Weapon: Long Sword (Slay Evil) (mag" ; .byte 0

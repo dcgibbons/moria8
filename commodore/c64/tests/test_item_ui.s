@@ -7,7 +7,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tc_results: .fill 8, $ff
+tc_results: .fill 16, $ff
 
 .pc = $080E "Test Code"
 test_bootstrap:
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #7
+    ldx #15
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -98,6 +98,7 @@ press_key_str:
 
 test_key_idx: .byte 0
 test_key_script: .fill 8, 0
+captured_prompt_row0: .fill 40, 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -120,6 +121,38 @@ test_input_get_key_script:
     rts
 
 test_input_wait_release:
+    rts
+
+capture_prompt_row0:
+    ldx #0
+!capture_loop:
+    lda $0400,x
+    sta captured_prompt_row0,x
+    inx
+    cpx #40
+    bcc !capture_loop-
+    rts
+
+test_input_get_key_capture_space:
+    jsr capture_prompt_row0
+    lda #$20
+    rts
+
+assert_captured_prompt_row0:
+    ldy #0
+!assert_loop:
+    lda (zp_ptr0),y
+    beq !assert_ok+
+    cmp captured_prompt_row0,y
+    bne !assert_fail+
+    iny
+    cpy #40
+    bcc !assert_loop-
+!assert_fail:
+    clc
+    rts
+!assert_ok:
+    sec
     rts
 
 test_build_recharge_cache:
@@ -692,13 +725,341 @@ test_start:
     bne !t8_fail+
     lda #$01
     sta tc_results + 7
-    jmp !tests_done+
+    jmp !t9+
 !t8_fail:
     lda #$00
     sta tc_results + 7
 
+    // Test 9: direct drop prompt patch uses C64 screen-code range letters
+!t9:
+    lda #0
+    sta zp_msg_flags
+    lda #22
+    ldx #HSTR_IDR_PROMPT
+    jsr piw_print_prompt_with_count
+
+    lda #<expected_drop_prompt_av
+    sta zp_ptr0
+    lda #>expected_drop_prompt_av
+    sta zp_ptr0_hi
+    ldy #0
+!t9_cmp:
+    lda (zp_ptr0),y
+    beq !t9_pass+
+    cmp $0400,y
+    bne !t9_fail+
+    iny
+    cpy #40
+    bcc !t9_cmp-
+!t9_fail:
+    lda #$00
+    sta tc_results + 8
+    jmp !t10+
+!t9_pass:
+    lda #$01
+    sta tc_results + 8
+
+    // Test 10: item_wear prompt row renders contiguous screen-code letters
+!t10:
+    jsr item_init_inventory
+    :PatchJump(input_get_key, test_input_get_key_capture_space)
+    :PatchJump(input_wait_release, test_input_wait_release)
+    lda #0
+    sta zp_msg_flags
+
+    lda #2
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #7
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #9
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
+
+    jsr item_wear
+
+    lda #<expected_wear_prompt_ac
+    sta zp_ptr0
+    lda #>expected_wear_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t10_fail+
+    lda #$01
+    sta tc_results + 9
+    jmp !t11+
+!t10_fail:
+    lda #$00
+    sta tc_results + 9
+
+    // Test 11: item_takeoff prompt row renders contiguous screen-code letters
+!t11:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+    lda #0
+    sta inv_p1 + EQUIP_WEAPON
+    sta inv_flags + EQUIP_WEAPON
+
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #1
+    sta inv_qty + EQUIP_SHIELD
+    lda #0
+    sta inv_p1 + EQUIP_SHIELD
+    sta inv_flags + EQUIP_SHIELD
+
+    lda #14
+    sta inv_item_id + EQUIP_LIGHT
+    lda #1
+    sta inv_qty + EQUIP_LIGHT
+    lda #20
+    sta inv_p1 + EQUIP_LIGHT
+    lda #0
+    sta inv_flags + EQUIP_LIGHT
+
+    jsr item_takeoff
+
+    lda #<expected_takeoff_prompt_ac
+    sta zp_ptr0
+    lda #>expected_takeoff_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t11_fail+
+    lda #$01
+    sta tc_results + 10
+    jmp !t12+
+!t11_fail:
+    lda #$00
+    sta tc_results + 10
+
+    // Test 12: item_drop prompt row renders contiguous screen-code letters
+!t12:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+
+    lda #4
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #6
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #17
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
+
+    jsr item_drop
+
+    lda #<expected_drop_prompt_ac
+    sta zp_ptr0
+    lda #>expected_drop_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t12_fail+
+    lda #$01
+    sta tc_results + 11
+    jmp !t13+
+!t12_fail:
+    lda #$00
+    sta tc_results + 11
+
+    // Test 13: mage book prompt row renders contiguous screen-code letters
+!t13:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    sta pm_mode
+    lda #SPELL_MAGE
+    sta pm_spell_type
+
+    lda #47
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #55
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #56
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
+
+    jsr pm_select_book
+
+    lda #<expected_spell_book_prompt_ac
+    sta zp_ptr0
+    lda #>expected_spell_book_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t13_fail+
+    lda #$01
+    sta tc_results + 12
+    jmp !t14+
+!t13_fail:
+    lda #$00
+    sta tc_results + 12
+
+    // Test 14: prayer book prompt row renders contiguous screen-code letters
+!t14:
+    jsr item_init_inventory
+    lda #0
+    sta zp_msg_flags
+    sta pm_mode
+    lda #SPELL_PRIEST
+    sta pm_spell_type
+
+    lda #48
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #0
+    sta inv_p1 + 0
+    sta inv_flags + 0
+
+    lda #58
+    sta inv_item_id + 1
+    lda #1
+    sta inv_qty + 1
+    lda #0
+    sta inv_p1 + 1
+    sta inv_flags + 1
+
+    lda #59
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
+
+    jsr pm_select_book
+
+    lda #<expected_prayer_book_prompt_ac
+    sta zp_ptr0
+    lda #>expected_prayer_book_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t14_fail+
+    lda #$01
+    sta tc_results + 13
+    jmp !t15+
+!t14_fail:
+    lda #$00
+    sta tc_results + 13
+
+    // Test 15: cast footer prompt row renders contiguous screen-code letters
+!t15:
+    lda #0
+    sta zp_msg_flags
+    lda #SPELL_MAGE
+    sta pm_spell_type
+    lda #3
+    sta pm_spell_count
+
+    jsr pm_prompt_visible_spell_choice
+
+    lda #<expected_cast_prompt_ac
+    sta zp_ptr0
+    lda #>expected_cast_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t15_fail+
+    lda #$01
+    sta tc_results + 14
+    jmp !t16+
+!t15_fail:
+    lda #$00
+    sta tc_results + 14
+
+    // Test 16: pray footer prompt row renders contiguous screen-code letters
+!t16:
+    lda #0
+    sta zp_msg_flags
+    lda #SPELL_PRIEST
+    sta pm_spell_type
+    lda #3
+    sta pm_spell_count
+
+    jsr pm_prompt_visible_spell_choice
+
+    lda #<expected_pray_prompt_ac
+    sta zp_ptr0
+    lda #>expected_pray_prompt_ac
+    sta zp_ptr0_hi
+    jsr assert_captured_prompt_row0
+    bcc !t16_fail+
+    lda #$01
+    sta tc_results + 15
+    jmp !tests_done+
+!t16_fail:
+    lda #$00
+    sta tc_results + 15
+
 !tests_done:
     jmp test_finish
+
+expected_drop_prompt_av:
+    .text "Drop which item (a-v)?" ; .byte 0
+expected_wear_prompt_ac:
+    .text "Wear which item (a-c)?" ; .byte 0
+expected_takeoff_prompt_ac:
+    .text "Take off which item (a-c)?" ; .byte 0
+expected_drop_prompt_ac:
+    .text "Drop which item (a-c)?" ; .byte 0
+expected_spell_book_prompt_ac:
+    .text "Spell book (a-c)?" ; .byte 0
+expected_prayer_book_prompt_ac:
+    .text "Prayer book (a-c)?" ; .byte 0
+expected_cast_prompt_ac:
+    .text "Cast which? (a-c" ; .byte 0
+expected_pray_prompt_ac:
+    .text "Pray which? (a-c" ; .byte 0
 
 item_ui_test_body_end:
 
