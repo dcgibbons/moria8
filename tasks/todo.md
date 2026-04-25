@@ -3,6 +3,96 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] TEST-C64-C128-FULL-INPUT-TREE
+- [x] Reported Failure Gate:
+  - Design and implement proper full input-tree coverage for both platforms so raw key mapping, `input_get_command`, and command dispatch cannot drift independently again
+- [x] add independent expected key/command tables to C64 and C128 input tests instead of deriving expectations from production key-map macros
+- [x] add real-`input_get_command` main-loop integration coverage:
+  - C64: unknown-key retry, lowercase `f` -> gain, shifted `F` -> fire, `M` -> cast
+  - C128: unknown-key retry, lowercase `f` -> gain, shifted `F` -> fire, `M` -> cast, `P` -> prayer
+- [x] harden shared command-dispatch table assertions for both low-byte and high-byte indexes across the full discrete command range
+- [x] verify:
+  - focused C128 `input128,main_loop128`
+  - `make test64`
+  - `make test128-fast`
+  - `make build`
+- [x] review:
+  - C64 `test_input` now checks 55 hand-authored PETSCII cases, and C128 `test_input128` checks the same shared cases plus keypad/extended-key policy
+  - C64 `test_main_loop` now restores the real `input_get_command` for integration cases while keeping only raw key input scripted; the C64 prayer key is covered by the full mapper table because the existing C64 main-loop harness does not have a stable prayer handler seam
+  - C128 `test_main_loop128` covers real-input dispatch through gain, fire, cast, and prayer trampoline seams
+  - verification passed: focused C128 input/main-loop run, `make test64` (`110 passed, 0 failed`), `make test128-fast`, and `make build`; `make build` still reports the pre-existing C128 staged-source assertion failure while exiting 0
+- [x] BUG-C64-LEARN-SPELL-F-KEY-SNAPSHOT-RED
+- [x] Reported Failure Gate:
+  - User-provided live C64 snapshot `~/vice-snapshot-20260424222929.vsf`; from that snapshot, pressing `f` still does nothing, so this snapshot path is the active repro gate
+- [x] update lessons for the second incorrect closure
+- [x] load the snapshot in C64 VICE and trace the actual `f` path through command decode, command dispatch, prompt text, and prompt follow-up input
+- [x] fix the actual owner shown by the snapshot, without breaking C128 or shifted fire
+- [x] verify against the snapshot path plus regression gates:
+  - snapshot repro
+  - `make test64`
+  - `make test128-fast`
+- [x] review:
+  - the snapshot proved C64 received PETSCII `$46/$66` and decoded `f` to `CMD_GAIN`; the key map was not the remaining owner
+  - the real break was the shared command-dispatch high-byte table: it had one fewer entry than the low-byte table, so `CMD_GAIN` combined `<cmd_gain` with the following command's high byte and jumped to the wrong address in the live image
+  - `command_dispatch_hi` now includes the missing `CMD_RUN_SE` placeholder, and assembler assertions lock both dispatch-table lengths plus the exact `CMD_GAIN` low/high indexes
+  - rebuilt product `commodore/out/c64/moria8.prg` now maps `CMD_GAIN` to `cmd_gain` (`$b5fc`) instead of the bad mixed-page target
+  - verification passed: `make test64` (`110 passed, 0 failed`), `make test128-fast`, `make build`; `make build` still reports the pre-existing C128 staged-source assertion failure while exiting 0
+- [x] BUG-C64-LEARN-SPELL-F-KEY-LIVE-STILL-RED
+- [x] Reported Failure Gate:
+  - User live-tested C64 after `$66 -> CMD_GAIN`; pressing `f` still does not activate spell learning, so the active gate is the real C64 product behavior, not only `petscii_to_command`
+- [x] update lessons for the incorrect prior closure
+- [x] reproduce the live C64 command path far enough to prove whether `f` reaches `input_get_command`, `cmd_gain`, `tramp_item_gain_spell`, and `item_gain_spell`
+- [x] fix the actual failing product path without disturbing shifted `F` ranged fire
+- [x] add/adjust verification so the product C64 learn path is covered, not just the pure key mapper
+- [x] verify:
+  - product/path-focused C64 learn test or smoke
+  - `make test64`
+- [x] review:
+  - the mapper-only `$66 -> CMD_GAIN` fix was insufficient because the live C64 failure was at the follow-up prompt seam, not only at command decode
+  - `pm_select_book` now uses `input_prepare_modal_dismiss_key` before reading the book-selection key, so the initiating `f/m/p` command cannot repeat into the prompt and cancel it immediately on C64
+  - added a `book_prompt_fresh_key_contract` static gate alongside the existing learn/spell-list fresh-key contracts
+  - verification passed: `make test64` (`110 passed, 0 failed`) and `make test128-fast`
+- [x] BUG-C64-LEARN-SPELL-F-KEY
+- [x] Reported Failure Gate:
+  - On C64, pressing `f` should activate spell/prayer learning from a book; if C128 accepts the same key, C64 should not require a different binding
+- [x] verify the C64 key decode path maps live `f` input to `CMD_GAIN`
+- [x] patch the minimal input mapping/normalization gap without changing shifted `F` fire behavior
+- [x] add focused C64 input coverage for lowercase `f` -> `CMD_GAIN`
+- [x] verify:
+  - focused C64 input test
+  - `make test64`
+- [x] review:
+  - root cause was PETSCII case coverage: the shared command map accepted `$46` for learn and `$C6` for shifted fire, but not lowercase `$66` observed on C64
+  - fixed by adding `$66 -> CMD_GAIN` in the shared input table while leaving `$C6 -> CMD_FIRE` unchanged
+  - C64 input test now checks lowercase `f` explicitly and the run harness reads the added twelfth result byte
+  - verification passed: `make test64` with `input: PASS (12/12 tests)` and final `109 passed, 0 failed`
+- [x] BUG-PRAYER-DETECT-EVIL-DISPEL-VISIBLE
+- [x] Reported Failure Gate:
+  - Detect Evil must be instant evil-only current-panel reveal with no detect timer; its wrapper must print evil-present only from the effect result, and Dispel Undead / Dispel Evil / Holy Word dispel must affect only visible/LOS flagged monsters with per-target `shudders.` / `dissolves!` feedback while preserving `HSTR_PIQ_NOTHING` for no targets
+- [x] repair Detect Evil product code:
+  - scan active evil monsters only
+  - restrict reveal to current viewport
+  - mark affected monster tiles `FLAG_VISITED | FLAG_LIT`
+  - leave `eff_detect_timer = 0`
+  - return nonzero only when an evil monster was revealed
+- [x] update Detect Evil message wrapper and C64/C128 focused coverage for no-evil vs evil result contracts
+- [x] repair flagged dispel product code:
+  - gate flagged targets through `los_is_visible`
+  - count only visible/LOS affected targets
+  - apply damage and kill through existing monster/combat owners
+  - print `The <monster> shudders.` for damage and `The <monster> dissolves!` for kills
+- [x] update C64/C128 Dispel Undead/Evil/Holy Word focused coverage and required stubs
+- [x] update stale spell docs that describe old Detect Evil timer and message-light dispel behavior
+- [x] verify:
+  - focused C64/C128 Detect Evil and flagged-dispel tests
+  - `make test64`
+  - `make test128-fast`
+- [x] review:
+  - `eff_detect_evil_only` now performs an immediate current-viewport evil scan, permanently lights/visits revealed evil monster tiles, clears `eff_detect_timer`, and returns the found flag consumed by `pmx_detect_evil_msg`
+  - the old evil-only detect-timer renderer path was removed from C64/C128 renderers and the shared turn tick now treats detect-monsters as the only timer-backed monster reveal
+  - `eff_dispel_flagged` now requires `los_is_visible`, counts only affected visible targets, applies damage through combat, kills through `eff_kill_monster`, and prints per-target shudders/dissolves feedback
+  - focused C128 fixture imports needed explicit LOS/combat feedback stubs because the shared utility helper is assembled by tests that do not exercise dispel directly
+  - verification passed: focused C128 detect/dispel suite, `make test64`, `make test128-fast`, and `make build`; `make build` still reports the pre-existing C128 staged-source assertion failure while exiting 0
 - [ ] OPT-C128-BOOTART-PACK
 - [ ] Reported Failure Gate:
   - C128 boot art should ship in a smaller packed form without changing the visible poster result or breaking `make build128`; the first packed-runtime attempt rendered flashing garbage and was backed out

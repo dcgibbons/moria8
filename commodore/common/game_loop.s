@@ -1206,90 +1206,264 @@ c128_town_move_diag_after_status_draw:
     jmp main_loop
 
 command_dispatch_lo:
+command_dispatch_lo_stairs_dn:
     .byte <cmd_stairs_dn
+command_dispatch_lo_stairs_up:
     .byte <cmd_stairs_up
+command_dispatch_lo_rest:
     .byte <cmd_rest
+command_dispatch_lo_search:
     .byte <cmd_search
+command_dispatch_lo_open:
     .byte <cmd_open
+command_dispatch_lo_close:
     .byte <cmd_close
+command_dispatch_lo_pickup:
     .byte <cmd_pickup
+command_dispatch_lo_drop:
     .byte <cmd_drop
+command_dispatch_lo_inventory:
     .byte <cmd_inventory
+command_dispatch_lo_equipment:
     .byte <cmd_equipment
+command_dispatch_lo_wear:
     .byte <cmd_wear
+command_dispatch_lo_takeoff:
     .byte <cmd_takeoff
+command_dispatch_lo_eat:
     .byte <cmd_eat
+command_dispatch_lo_quaff:
     .byte <cmd_quaff
+command_dispatch_lo_read:
     .byte <cmd_read
+command_dispatch_lo_aim:
     .byte <cmd_aim
+command_dispatch_lo_use:
     .byte <cmd_use
+command_dispatch_lo_cast:
     .byte <cmd_cast
+command_dispatch_lo_pray:
     .byte <cmd_pray
+command_dispatch_lo_char_info:
     .byte <cmd_dispatch_ignore    // CMD_CHAR_INFO handled above
+command_dispatch_lo_map:
     .byte <cmd_dispatch_ignore    // CMD_MAP unused
+command_dispatch_lo_recall:
     .byte <cmd_dispatch_ignore    // CMD_RECALL handled above
+command_dispatch_lo_look:
     .byte <cmd_look
+command_dispatch_lo_run:
     .byte <cmd_dispatch_ignore    // CMD_RUN meta-command unused
+command_dispatch_lo_save:
     .byte <cmd_dispatch_ignore    // CMD_SAVE handled above
+command_dispatch_lo_quit:
     .byte <cmd_dispatch_ignore    // CMD_QUIT handled above
+command_dispatch_lo_help:
     .byte <cmd_dispatch_ignore    // CMD_HELP handled above
+command_dispatch_lo_version:
     .byte <cmd_dispatch_ignore    // CMD_VERSION handled above / ignored
+command_dispatch_lo_run_n:
     .byte <cmd_dispatch_ignore    // CMD_RUN_N handled above
+command_dispatch_lo_run_s:
     .byte <cmd_dispatch_ignore    // CMD_RUN_S handled above
+command_dispatch_lo_run_w:
     .byte <cmd_dispatch_ignore    // CMD_RUN_W handled above
+command_dispatch_lo_run_e:
     .byte <cmd_dispatch_ignore    // CMD_RUN_E handled above
+command_dispatch_lo_run_nw:
     .byte <cmd_dispatch_ignore    // CMD_RUN_NW handled above
+command_dispatch_lo_run_ne:
     .byte <cmd_dispatch_ignore    // CMD_RUN_NE handled above
+command_dispatch_lo_run_sw:
     .byte <cmd_dispatch_ignore    // CMD_RUN_SW handled above
+command_dispatch_lo_run_se:
     .byte <cmd_dispatch_ignore    // CMD_RUN_SE handled above
+command_dispatch_lo_gain:
     .byte <cmd_gain
+command_dispatch_lo_fire:
     .byte <cmd_fire
+command_dispatch_lo_throw:
     .byte <cmd_throw
+command_dispatch_lo_refuel:
     .byte <cmd_refuel
+command_dispatch_lo_bash:
     .byte <cmd_bash
+command_dispatch_lo_tunnel:
     .byte <cmd_tunnel
+command_dispatch_lo_end:
 command_dispatch_hi:
+command_dispatch_hi_stairs_dn:
     .byte >cmd_stairs_dn
+command_dispatch_hi_stairs_up:
     .byte >cmd_stairs_up
+command_dispatch_hi_rest:
     .byte >cmd_rest
+command_dispatch_hi_search:
     .byte >cmd_search
+command_dispatch_hi_open:
     .byte >cmd_open
+command_dispatch_hi_close:
     .byte >cmd_close
+command_dispatch_hi_pickup:
     .byte >cmd_pickup
+command_dispatch_hi_drop:
     .byte >cmd_drop
+command_dispatch_hi_inventory:
     .byte >cmd_inventory
+command_dispatch_hi_equipment:
     .byte >cmd_equipment
+command_dispatch_hi_wear:
     .byte >cmd_wear
+command_dispatch_hi_takeoff:
     .byte >cmd_takeoff
+command_dispatch_hi_eat:
     .byte >cmd_eat
+command_dispatch_hi_quaff:
     .byte >cmd_quaff
+command_dispatch_hi_read:
     .byte >cmd_read
+command_dispatch_hi_aim:
     .byte >cmd_aim
+command_dispatch_hi_use:
     .byte >cmd_use
+command_dispatch_hi_cast:
     .byte >cmd_cast
+command_dispatch_hi_pray:
     .byte >cmd_pray
+command_dispatch_hi_char_info:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_map:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_recall:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_look:
     .byte >cmd_look
+command_dispatch_hi_run:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_save:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_quit:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_help:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_version:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_n:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_s:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_w:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_e:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_nw:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_ne:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_sw:
     .byte >cmd_dispatch_ignore
+command_dispatch_hi_run_se:
+    .byte >cmd_dispatch_ignore
+command_dispatch_hi_gain:
     .byte >cmd_gain
+command_dispatch_hi_fire:
     .byte >cmd_fire
+command_dispatch_hi_throw:
     .byte >cmd_throw
+command_dispatch_hi_refuel:
     .byte >cmd_refuel
+command_dispatch_hi_bash:
     .byte >cmd_bash
+command_dispatch_hi_tunnel:
     .byte >cmd_tunnel
+command_dispatch_hi_end:
+
+.assert "command dispatch lo count", command_dispatch_lo_end - command_dispatch_lo, CMD_TUNNEL - CMD_STAIRS_DN + 1
+.assert "command dispatch hi count", command_dispatch_hi_end - command_dispatch_hi, CMD_TUNNEL - CMD_STAIRS_DN + 1
+.assert "CMD_STAIRS_DN dispatch index", command_dispatch_lo_stairs_dn - command_dispatch_lo, CMD_STAIRS_DN - CMD_STAIRS_DN
+.assert "CMD_STAIRS_UP dispatch index", command_dispatch_lo_stairs_up - command_dispatch_lo, CMD_STAIRS_UP - CMD_STAIRS_DN
+.assert "CMD_REST dispatch index", command_dispatch_lo_rest - command_dispatch_lo, CMD_REST - CMD_STAIRS_DN
+.assert "CMD_SEARCH dispatch index", command_dispatch_lo_search - command_dispatch_lo, CMD_SEARCH - CMD_STAIRS_DN
+.assert "CMD_OPEN dispatch index", command_dispatch_lo_open - command_dispatch_lo, CMD_OPEN - CMD_STAIRS_DN
+.assert "CMD_CLOSE dispatch index", command_dispatch_lo_close - command_dispatch_lo, CMD_CLOSE - CMD_STAIRS_DN
+.assert "CMD_PICKUP dispatch index", command_dispatch_lo_pickup - command_dispatch_lo, CMD_PICKUP - CMD_STAIRS_DN
+.assert "CMD_DROP dispatch index", command_dispatch_lo_drop - command_dispatch_lo, CMD_DROP - CMD_STAIRS_DN
+.assert "CMD_INVENTORY dispatch index", command_dispatch_lo_inventory - command_dispatch_lo, CMD_INVENTORY - CMD_STAIRS_DN
+.assert "CMD_EQUIPMENT dispatch index", command_dispatch_lo_equipment - command_dispatch_lo, CMD_EQUIPMENT - CMD_STAIRS_DN
+.assert "CMD_WEAR dispatch index", command_dispatch_lo_wear - command_dispatch_lo, CMD_WEAR - CMD_STAIRS_DN
+.assert "CMD_TAKEOFF dispatch index", command_dispatch_lo_takeoff - command_dispatch_lo, CMD_TAKEOFF - CMD_STAIRS_DN
+.assert "CMD_EAT dispatch index", command_dispatch_lo_eat - command_dispatch_lo, CMD_EAT - CMD_STAIRS_DN
+.assert "CMD_QUAFF dispatch index", command_dispatch_lo_quaff - command_dispatch_lo, CMD_QUAFF - CMD_STAIRS_DN
+.assert "CMD_READ dispatch index", command_dispatch_lo_read - command_dispatch_lo, CMD_READ - CMD_STAIRS_DN
+.assert "CMD_AIM dispatch index", command_dispatch_lo_aim - command_dispatch_lo, CMD_AIM - CMD_STAIRS_DN
+.assert "CMD_USE dispatch index", command_dispatch_lo_use - command_dispatch_lo, CMD_USE - CMD_STAIRS_DN
+.assert "CMD_CAST dispatch index", command_dispatch_lo_cast - command_dispatch_lo, CMD_CAST - CMD_STAIRS_DN
+.assert "CMD_PRAY dispatch index", command_dispatch_lo_pray - command_dispatch_lo, CMD_PRAY - CMD_STAIRS_DN
+.assert "CMD_CHAR_INFO dispatch index", command_dispatch_lo_char_info - command_dispatch_lo, CMD_CHAR_INFO - CMD_STAIRS_DN
+.assert "CMD_MAP dispatch index", command_dispatch_lo_map - command_dispatch_lo, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_RECALL dispatch index", command_dispatch_lo_recall - command_dispatch_lo, CMD_RECALL - CMD_STAIRS_DN
+.assert "CMD_LOOK dispatch index", command_dispatch_lo_look - command_dispatch_lo, CMD_LOOK - CMD_STAIRS_DN
+.assert "CMD_RUN dispatch index", command_dispatch_lo_run - command_dispatch_lo, CMD_RUN - CMD_STAIRS_DN
+.assert "CMD_SAVE dispatch index", command_dispatch_lo_save - command_dispatch_lo, CMD_SAVE - CMD_STAIRS_DN
+.assert "CMD_QUIT dispatch index", command_dispatch_lo_quit - command_dispatch_lo, CMD_QUIT - CMD_STAIRS_DN
+.assert "CMD_HELP dispatch index", command_dispatch_lo_help - command_dispatch_lo, CMD_HELP - CMD_STAIRS_DN
+.assert "CMD_VERSION dispatch index", command_dispatch_lo_version - command_dispatch_lo, CMD_VERSION - CMD_STAIRS_DN
+.assert "CMD_RUN_N dispatch index", command_dispatch_lo_run_n - command_dispatch_lo, CMD_RUN_N - CMD_STAIRS_DN
+.assert "CMD_RUN_S dispatch index", command_dispatch_lo_run_s - command_dispatch_lo, CMD_RUN_S - CMD_STAIRS_DN
+.assert "CMD_RUN_W dispatch index", command_dispatch_lo_run_w - command_dispatch_lo, CMD_RUN_W - CMD_STAIRS_DN
+.assert "CMD_RUN_E dispatch index", command_dispatch_lo_run_e - command_dispatch_lo, CMD_RUN_E - CMD_STAIRS_DN
+.assert "CMD_RUN_NW dispatch index", command_dispatch_lo_run_nw - command_dispatch_lo, CMD_RUN_NW - CMD_STAIRS_DN
+.assert "CMD_RUN_NE dispatch index", command_dispatch_lo_run_ne - command_dispatch_lo, CMD_RUN_NE - CMD_STAIRS_DN
+.assert "CMD_RUN_SW dispatch index", command_dispatch_lo_run_sw - command_dispatch_lo, CMD_RUN_SW - CMD_STAIRS_DN
+.assert "CMD_RUN_SE dispatch index", command_dispatch_lo_run_se - command_dispatch_lo, CMD_RUN_SE - CMD_STAIRS_DN
+.assert "CMD_GAIN dispatch index", command_dispatch_lo_gain - command_dispatch_lo, CMD_GAIN - CMD_STAIRS_DN
+.assert "CMD_FIRE dispatch index", command_dispatch_lo_fire - command_dispatch_lo, CMD_FIRE - CMD_STAIRS_DN
+.assert "CMD_THROW dispatch index", command_dispatch_lo_throw - command_dispatch_lo, CMD_THROW - CMD_STAIRS_DN
+.assert "CMD_REFUEL dispatch index", command_dispatch_lo_refuel - command_dispatch_lo, CMD_REFUEL - CMD_STAIRS_DN
+.assert "CMD_BASH dispatch index", command_dispatch_lo_bash - command_dispatch_lo, CMD_BASH - CMD_STAIRS_DN
+.assert "CMD_TUNNEL dispatch index", command_dispatch_lo_tunnel - command_dispatch_lo, CMD_TUNNEL - CMD_STAIRS_DN
+.assert "CMD_STAIRS_DN hi dispatch index", command_dispatch_hi_stairs_dn - command_dispatch_hi, CMD_STAIRS_DN - CMD_STAIRS_DN
+.assert "CMD_STAIRS_UP hi dispatch index", command_dispatch_hi_stairs_up - command_dispatch_hi, CMD_STAIRS_UP - CMD_STAIRS_DN
+.assert "CMD_REST hi dispatch index", command_dispatch_hi_rest - command_dispatch_hi, CMD_REST - CMD_STAIRS_DN
+.assert "CMD_SEARCH hi dispatch index", command_dispatch_hi_search - command_dispatch_hi, CMD_SEARCH - CMD_STAIRS_DN
+.assert "CMD_OPEN hi dispatch index", command_dispatch_hi_open - command_dispatch_hi, CMD_OPEN - CMD_STAIRS_DN
+.assert "CMD_CLOSE hi dispatch index", command_dispatch_hi_close - command_dispatch_hi, CMD_CLOSE - CMD_STAIRS_DN
+.assert "CMD_PICKUP hi dispatch index", command_dispatch_hi_pickup - command_dispatch_hi, CMD_PICKUP - CMD_STAIRS_DN
+.assert "CMD_DROP hi dispatch index", command_dispatch_hi_drop - command_dispatch_hi, CMD_DROP - CMD_STAIRS_DN
+.assert "CMD_INVENTORY hi dispatch index", command_dispatch_hi_inventory - command_dispatch_hi, CMD_INVENTORY - CMD_STAIRS_DN
+.assert "CMD_EQUIPMENT hi dispatch index", command_dispatch_hi_equipment - command_dispatch_hi, CMD_EQUIPMENT - CMD_STAIRS_DN
+.assert "CMD_WEAR hi dispatch index", command_dispatch_hi_wear - command_dispatch_hi, CMD_WEAR - CMD_STAIRS_DN
+.assert "CMD_TAKEOFF hi dispatch index", command_dispatch_hi_takeoff - command_dispatch_hi, CMD_TAKEOFF - CMD_STAIRS_DN
+.assert "CMD_EAT hi dispatch index", command_dispatch_hi_eat - command_dispatch_hi, CMD_EAT - CMD_STAIRS_DN
+.assert "CMD_QUAFF hi dispatch index", command_dispatch_hi_quaff - command_dispatch_hi, CMD_QUAFF - CMD_STAIRS_DN
+.assert "CMD_READ hi dispatch index", command_dispatch_hi_read - command_dispatch_hi, CMD_READ - CMD_STAIRS_DN
+.assert "CMD_AIM hi dispatch index", command_dispatch_hi_aim - command_dispatch_hi, CMD_AIM - CMD_STAIRS_DN
+.assert "CMD_USE hi dispatch index", command_dispatch_hi_use - command_dispatch_hi, CMD_USE - CMD_STAIRS_DN
+.assert "CMD_CAST hi dispatch index", command_dispatch_hi_cast - command_dispatch_hi, CMD_CAST - CMD_STAIRS_DN
+.assert "CMD_PRAY hi dispatch index", command_dispatch_hi_pray - command_dispatch_hi, CMD_PRAY - CMD_STAIRS_DN
+.assert "CMD_CHAR_INFO hi dispatch index", command_dispatch_hi_char_info - command_dispatch_hi, CMD_CHAR_INFO - CMD_STAIRS_DN
+.assert "CMD_MAP hi dispatch index", command_dispatch_hi_map - command_dispatch_hi, CMD_MAP - CMD_STAIRS_DN
+.assert "CMD_RECALL hi dispatch index", command_dispatch_hi_recall - command_dispatch_hi, CMD_RECALL - CMD_STAIRS_DN
+.assert "CMD_LOOK hi dispatch index", command_dispatch_hi_look - command_dispatch_hi, CMD_LOOK - CMD_STAIRS_DN
+.assert "CMD_RUN hi dispatch index", command_dispatch_hi_run - command_dispatch_hi, CMD_RUN - CMD_STAIRS_DN
+.assert "CMD_SAVE hi dispatch index", command_dispatch_hi_save - command_dispatch_hi, CMD_SAVE - CMD_STAIRS_DN
+.assert "CMD_QUIT hi dispatch index", command_dispatch_hi_quit - command_dispatch_hi, CMD_QUIT - CMD_STAIRS_DN
+.assert "CMD_HELP hi dispatch index", command_dispatch_hi_help - command_dispatch_hi, CMD_HELP - CMD_STAIRS_DN
+.assert "CMD_VERSION hi dispatch index", command_dispatch_hi_version - command_dispatch_hi, CMD_VERSION - CMD_STAIRS_DN
+.assert "CMD_RUN_N hi dispatch index", command_dispatch_hi_run_n - command_dispatch_hi, CMD_RUN_N - CMD_STAIRS_DN
+.assert "CMD_RUN_S hi dispatch index", command_dispatch_hi_run_s - command_dispatch_hi, CMD_RUN_S - CMD_STAIRS_DN
+.assert "CMD_RUN_W hi dispatch index", command_dispatch_hi_run_w - command_dispatch_hi, CMD_RUN_W - CMD_STAIRS_DN
+.assert "CMD_RUN_E hi dispatch index", command_dispatch_hi_run_e - command_dispatch_hi, CMD_RUN_E - CMD_STAIRS_DN
+.assert "CMD_RUN_NW hi dispatch index", command_dispatch_hi_run_nw - command_dispatch_hi, CMD_RUN_NW - CMD_STAIRS_DN
+.assert "CMD_RUN_NE hi dispatch index", command_dispatch_hi_run_ne - command_dispatch_hi, CMD_RUN_NE - CMD_STAIRS_DN
+.assert "CMD_RUN_SW hi dispatch index", command_dispatch_hi_run_sw - command_dispatch_hi, CMD_RUN_SW - CMD_STAIRS_DN
+.assert "CMD_RUN_SE hi dispatch index", command_dispatch_hi_run_se - command_dispatch_hi, CMD_RUN_SE - CMD_STAIRS_DN
+.assert "CMD_GAIN hi dispatch index", command_dispatch_hi_gain - command_dispatch_hi, CMD_GAIN - CMD_STAIRS_DN
+.assert "CMD_FIRE hi dispatch index", command_dispatch_hi_fire - command_dispatch_hi, CMD_FIRE - CMD_STAIRS_DN
+.assert "CMD_THROW hi dispatch index", command_dispatch_hi_throw - command_dispatch_hi, CMD_THROW - CMD_STAIRS_DN
+.assert "CMD_REFUEL hi dispatch index", command_dispatch_hi_refuel - command_dispatch_hi, CMD_REFUEL - CMD_STAIRS_DN
+.assert "CMD_BASH hi dispatch index", command_dispatch_hi_bash - command_dispatch_hi, CMD_BASH - CMD_STAIRS_DN
+.assert "CMD_TUNNEL hi dispatch index", command_dispatch_hi_tunnel - command_dispatch_hi, CMD_TUNNEL - CMD_STAIRS_DN
 
 cmd_dispatch_ignore:
     jmp main_loop

@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #28
+    ldx #31
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -144,12 +144,14 @@ test_spell_execute_selected:
     rts
 
 test_item_gain_spell:
+    inc test_gain_calls
     rts
 
 player_cast_spell:
     rts
 
 player_pray:
+    inc test_pray_calls
     rts
 
 magic_recalc_mana:
@@ -232,7 +234,7 @@ tramp_dig_ability:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 29, $ff
+tc_results: .fill 32, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -260,6 +262,9 @@ test_get_dir_calls: .byte 0
 test_door_open_calls: .byte 0
 test_read_scroll_calls: .byte 0
 test_cast_spell_calls: .byte 0
+test_pray_calls: .byte 0
+test_gain_calls: .byte 0
+test_fire_calls: .byte 0
 test_item_pickup_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
@@ -349,6 +354,16 @@ install_jump_patch:
     :PatchJump(creature_get_name, test_creature_get_name)
     :PatchJump(monster_spawn_level, test_monster_spawn_level)
     :PatchJump(item_spawn_level, test_item_spawn_level)
+    :PatchJump(ranged_fire, test_ranged_fire)
+    rts
+
+restore_real_input_get_command:
+    lda #$a9
+    sta input_get_command
+    lda #$00
+    sta input_get_command + 1
+    lda #$85
+    sta input_get_command + 2
     rts
 
 reset_state:
@@ -376,6 +391,9 @@ reset_state:
     sta test_door_open_calls
     sta test_read_scroll_calls
     sta test_cast_spell_calls
+    sta test_pray_calls
+    sta test_gain_calls
+    sta test_fire_calls
     sta test_item_pickup_calls
     sta test_search_scan_calls
     sta test_wizard_calls
@@ -622,6 +640,11 @@ test_player_cast_spell:
     sec
     rts
 !fail:
+    clc
+    rts
+
+test_ranged_fire:
+    inc test_fire_calls
     clc
     rts
 
@@ -1766,8 +1789,87 @@ test_start:
     bne !t29_fail+
     lda #$01
     sta tc_results + 28
-    jmp test_finish
+    jmp !t30+
 !t29_fail:
     lda #$00
     sta tc_results + 28
+    jmp !t30+
+
+    // Test 30: real input_get_command ignores an unmapped key, then
+    // lowercase f dispatches to learn/gain.
+!t30:
+    jsr restore_real_input_get_command
+    jsr reset_state
+    lda #29
+    sta test_case_idx
+    lda #$30
+    sta test_key_script + 0
+    lda #$66
+    sta test_key_script + 1
+    lda #$d1
+    sta test_key_script + 2
+    lda #3
+    sta test_key_len
+    jsr run_case
+    lda test_gain_calls
+    cmp #1
+    bne !t30_fail+
+    lda test_fire_calls
+    bne !t30_fail+
+    lda #$01
+    sta tc_results + 29
+    jmp !t31+
+!t30_fail:
+    lda #$00
+    sta tc_results + 29
+    jmp !t31+
+
+    // Test 31: real input_get_command routes shifted F to fire, not learn.
+!t31:
+    jsr reset_state
+    lda #30
+    sta test_case_idx
+    lda #$c6
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_fire_calls
+    cmp #1
+    bne !t31_fail+
+    lda test_gain_calls
+    bne !t31_fail+
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+    jmp !t32+
+
+    // Test 32: real input_get_command routes M to cast.
+!t32:
+    jsr reset_state
+    lda #31
+    sta test_case_idx
+    lda #1
+    sta test_cast_ok
+    lda #$4d
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_cast_spell_calls
+    cmp #1
+    bne !t32_fail+
+    lda #$01
+    sta tc_results + 31
+    jmp test_finish
+!t32_fail:
+    lda #$00
+    sta tc_results + 31
     jmp test_finish

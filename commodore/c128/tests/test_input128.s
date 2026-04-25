@@ -14,6 +14,45 @@ c128_restore_runtime_vectors:
 
 .pc = $3000 "Test Code"
 
+input_tree_idx: .byte 0
+
+input_tree_keys:
+    .byte $4b, $4a, $48, $4c, $59, $55, $42, $4e
+    .byte $91, $11, $9d, $1d
+    .byte $3e, $3c, $2e, $53, $4f, $43, $47, $2c
+    .byte $44, $49, $45, $57, $54, $51, $52, $41
+    .byte $5a, $4d, $50, $3f, $58, $46, $66
+    .byte $c3, $d1, $c5, $d3, $c6, $d4, $d2, $c4
+    .byte $23, $2b, $2f, $17
+    .byte $cb, $ca, $c8, $cc, $d9, $d5, $c2, $ce
+    .byte KEY_KP8, KEY_KP2, KEY_KP4, KEY_KP6
+    .byte KEY_KP7, KEY_KP9, KEY_KP1, KEY_KP3
+    .byte KEY_KP5, KEY_KP_PLUS, KEY_ESC
+    .byte KEY_KP_MINUS, KEY_KP_DOT, KEY_KP0, KEY_ALT, KEY_LF
+
+input_tree_cmds:
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_STAIRS_DN, CMD_STAIRS_UP, CMD_REST, CMD_SEARCH
+    .byte CMD_OPEN, CMD_CLOSE, CMD_PICKUP, CMD_PICKUP
+    .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
+    .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
+    .byte CMD_USE, CMD_CAST, CMD_PRAY, CMD_HELP
+    .byte CMD_LOOK, CMD_GAIN, CMD_GAIN
+    .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
+    .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_BASH
+    .byte CMD_SEARCH_MODE, CMD_TUNNEL, CMD_RECALL, CMD_WIZARD
+    .byte CMD_RUN_N, CMD_RUN_S, CMD_RUN_W, CMD_RUN_E
+    .byte CMD_RUN_NW, CMD_RUN_NE, CMD_RUN_SW, CMD_RUN_SE
+    .byte CMD_MOVE_N, CMD_MOVE_S, CMD_MOVE_W, CMD_MOVE_E
+    .byte CMD_MOVE_NW, CMD_MOVE_NE, CMD_MOVE_SW, CMD_MOVE_SE
+    .byte CMD_REST, CMD_TUNNEL, CMD_QUIT
+    .byte CMD_NONE, CMD_NONE, CMD_NONE, CMD_NONE, CMD_NONE
+
+.label input_tree_expected_count = input_tree_cmds - input_tree_keys
+.assert "input128 tree expected table sizes match", input_tree_expected_count, * - input_tree_cmds
+
 test_start:
     sei
     cld
@@ -206,6 +245,21 @@ test_continue:
     jsr petscii_to_command
     cmp #CMD_NONE
     bne test_fail2
+
+    lda #0
+    sta input_tree_idx
+!full_tree_loop:
+    ldx input_tree_idx
+    cpx #input_tree_expected_count
+    beq !full_tree_done+
+    lda input_tree_keys,x
+    jsr petscii_to_command
+    ldx input_tree_idx
+    cmp input_tree_cmds,x
+    bne test_fail2
+    inc input_tree_idx
+    jmp !full_tree_loop-
+!full_tree_done:
 
     jmp test_edge_checks
 

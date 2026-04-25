@@ -1039,6 +1039,8 @@ check_static_contract "wizard_heal_contract" "../common/wizard.s" \
     "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
+check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s" \
+    "pm_select_book:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_modal_dismiss_key|||jsr input_get_key|||jsr piw_pick_filtered_inv_key"
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
@@ -1054,8 +1056,8 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
-run_test "input"  "tests/test_input.s"  "0400 040a" 11
-run_test "main_loop" "tests/test_main_loop.s" "0400 041c" 29 500000000
+run_test "input"  "tests/test_input.s"  "0400 040c" 13
+run_test "main_loop" "tests/test_main_loop.s" "0400 041f" 32 500000000
 run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10
 run_test "dungeon" "tests/test_dungeon.s" "0400 0424" 37 500000000

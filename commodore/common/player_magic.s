@@ -331,7 +331,7 @@ pm_select_book:
     jsr piw_prompt_filtered_inv
     bcc !pm_book_cancel+
 !pm_have_books:
-    jsr input_prepare_followup_key
+    jsr input_prepare_modal_dismiss_key
     jsr input_get_key
     cmp #$3f
     bne !pm_not_inv+

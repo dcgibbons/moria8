@@ -40,6 +40,7 @@
     // Special
     .byte $58   // X — look / examine
     .byte $46   // F — gain spell from book
+    .byte $66   // f — gain spell from book (C64 lowercase PETSCII)
     // Shifted keys
     .byte $c3   // SHIFT+C — character info
     .byte $d1   // SHIFT+Q — quit
@@ -73,7 +74,7 @@
     .byte CMD_DROP, CMD_INVENTORY, CMD_EQUIPMENT, CMD_WEAR
     .byte CMD_TAKEOFF, CMD_QUAFF, CMD_READ, CMD_AIM
     .byte CMD_USE, CMD_CAST, CMD_PRAY, CMD_HELP
-    .byte CMD_LOOK, CMD_GAIN
+    .byte CMD_LOOK, CMD_GAIN, CMD_GAIN
     .byte CMD_CHAR_INFO, CMD_QUIT, CMD_EAT, CMD_SAVE
     .byte CMD_FIRE, CMD_THROW, CMD_REFUEL, CMD_BASH
     .byte CMD_SEARCH_MODE

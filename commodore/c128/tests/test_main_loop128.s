@@ -478,6 +478,7 @@ tramp_ui_recall:
     rts
 
 tramp_item_gain_spell:
+    inc test_gain_calls
     rts
 
 creature_get_name:
@@ -490,12 +491,14 @@ tramp_player_cast_spell:
     jmp test_tramp_player_cast_spell
 
 tramp_player_pray:
+    inc test_pray_calls
     rts
 
 tramp_magic_check_new_spells:
     rts
 
 tramp_ranged_fire:
+    inc test_fire_calls
     rts
 
 tramp_player_tunnel:
@@ -661,6 +664,9 @@ test_game_over_prompt_calls: .byte 0
 test_exit_calls: .byte 0
 test_case_id: .byte 0
 test_cast_spell_calls: .byte 0
+test_pray_calls: .byte 0
+test_gain_calls: .byte 0
+test_fire_calls: .byte 0
 test_search_scan_calls: .byte 0
 test_wizard_calls: .byte 0
 test_save_game_calls: .byte 0
@@ -713,6 +719,15 @@ install_jump_patch:
     :PatchJump(load_game, test_load_game)
     rts
 
+restore_real_input_get_command:
+    lda #$a9
+    sta input_get_command
+    lda #$01
+    sta input_get_command + 1
+    lda #$85
+    sta input_get_command + 2
+    rts
+
 reset_state:
     lda #0
     sta test_cmd_idx
@@ -743,6 +758,9 @@ reset_state:
     sta test_game_over_prompt_calls
     sta test_exit_calls
     sta test_cast_spell_calls
+    sta test_pray_calls
+    sta test_gain_calls
+    sta test_fire_calls
     sta test_search_scan_calls
     sta test_wizard_calls
     sta test_save_game_calls
@@ -1803,6 +1821,82 @@ test_entry:
     beq *+5
     jmp test_fail
     lda test_disk_prompt_game_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 26: real input_get_command ignores an unmapped key, then
+    // lowercase f dispatches to learn/gain.
+    lda #26
+    sta test_case_id
+    jsr restore_real_input_get_command
+    jsr reset_state
+    lda #$30
+    sta test_key_script + 0
+    lda #$66
+    sta test_key_script + 1
+    lda #$d1
+    sta test_key_script + 2
+    lda #3
+    sta test_key_len
+    jsr run_case
+    lda test_gain_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_fire_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 27: real input_get_command routes shifted F to ranged fire.
+    lda #27
+    sta test_case_id
+    jsr reset_state
+    lda #$c6
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_fire_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_gain_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 28: real input_get_command routes M to cast.
+    lda #28
+    sta test_case_id
+    jsr reset_state
+    lda #1
+    sta test_cast_ok
+    lda #$4d
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_cast_spell_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+
+    // Test 29: real input_get_command routes P to prayer.
+    lda #29
+    sta test_case_id
+    jsr reset_state
+    lda #$50
+    sta test_key_script + 0
+    lda #$d1
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+    lda test_pray_calls
     cmp #1
     beq *+5
     jmp test_fail
