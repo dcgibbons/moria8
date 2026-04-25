@@ -120,6 +120,7 @@ test_last_spell_idx: .byte $ff
 test_kill_calls: .byte 0
 test_progress: .byte 0
 test_rng_value: .byte 0
+test_los_visible: .byte 1
 vis_room_revealed: .byte 0
 vis_cached_room_idx: .byte 0
 dg_room_x: .byte 0
@@ -172,7 +173,6 @@ huff_append_combat:
 combat_append_str:
 cmb_term_and_print:
 tunnel_spawn_gold:
-monster_remove:
 combat_award_xp:
 combat_check_levelup:
 find_random_floor:
@@ -187,6 +187,27 @@ fi_add_clear_plain_meta:
     rts
 
 sound_play:
+    rts
+
+combat_append_monster_name:
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+    rts
+
+los_is_visible:
+    lda test_los_visible
+    beq !hidden+
+    sec
+    rts
+!hidden:
+    clc
+    rts
+
+monster_remove:
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #EMPTY_SLOT
+    sta (zp_ptr0),y
     rts
 
 huff_print_msg:
@@ -373,6 +394,8 @@ test_reset_dispel_undead_prayer_state:
     sta test_spell_exec_calls
     sta test_kill_calls
     sta test_rng_value
+    lda #1
+    sta test_los_visible
     lda #$ff
     sta test_last_spell_idx
 
@@ -435,9 +458,9 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
 
-    // Test 1: Dispel Undead kills an eligible 1 HP undead through the shared
-    // flagged-dispel owner, leaves non-undead untouched, stays message-light on
-    // success, spends 24 mana, and marks slot 26 worked.
+    // Test 1: Dispel Undead kills a visible eligible 1 HP undead through the
+    // shared flagged-dispel owner, leaves non-undead untouched, spends 24 mana,
+    // and marks slot 26 worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_dispel_undead_prayer_state
     lda #CF_UNDEAD
@@ -483,15 +506,19 @@ test_start:
 !t1_fail:
     jmp test_fail
 
-    // Test 2: no undead prints HSTR_PIQ_NOTHING, spends mana, and still marks
-    // the prayer worked.
+    // Test 2: an undead target outside LOS prints HSTR_PIQ_NOTHING, spends
+    // mana, and still marks the prayer worked.
 test_after_success:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_dispel_undead_prayer_state
-    lda #2
+    lda #CF_UNDEAD
+    sta cr_mflags + 1
+    lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
     lda #5
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    lda #0
+    sta test_los_visible
     lda #0
     sta test_rng_value
     jsr player_pray
@@ -503,6 +530,9 @@ test_after_success:
     cmp #26
     bne !t2_fail+
     lda test_kill_calls
+    bne !t2_fail+
+    lda test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
+    cmp #5
     bne !t2_fail+
     lda test_huff_calls
     cmp #1

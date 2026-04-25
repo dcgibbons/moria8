@@ -132,6 +132,7 @@ test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_kill_calls: .byte 0
 test_progress: .byte 0
+test_los_visible: .byte 1
 eff_fear_timer: .byte 0
 vis_room_revealed: .byte 0
 vis_cached_room_idx: .byte 0
@@ -196,9 +197,29 @@ fi_add_clear_plain_meta:
     clc
     rts
 
-monster_remove:
 combat_award_xp:
 combat_check_levelup:
+    rts
+
+combat_append_monster_name:
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+    rts
+
+los_is_visible:
+    lda test_los_visible
+    beq !hidden+
+    sec
+    rts
+!hidden:
+    clc
+    rts
+
+monster_remove:
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #EMPTY_SLOT
+    sta (zp_ptr0),y
     rts
 
 sound_play:

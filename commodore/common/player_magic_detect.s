@@ -18,8 +18,7 @@ pmx_detect_monsters_msg:
 
 pmx_detect_evil_msg:
     jsr eff_detect_evil_only
-    jsr pmx_any_active_evil_monster
-    bcc !pdem_none+
+    beq !pdem_none+
     lda #<pmx_msg_evil_on
     ldy #>pmx_msg_evil_on
     jmp pmx_detect_print_inline
@@ -27,30 +26,6 @@ pmx_detect_evil_msg:
     lda #<pmx_msg_no_evil
     ldy #>pmx_msg_no_evil
     jmp pmx_detect_print_inline
-
-pmx_any_active_evil_monster:
-    ldx #0
-!paaem_loop:
-    cpx #MAX_MONSTERS
-    bcs !paaem_none+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !paaem_next+
-    tay
-    lda cr_mflags,y
-    and #CF_EVIL
-    bne !paaem_found+
-!paaem_next:
-    inx
-    jmp !paaem_loop-
-!paaem_found:
-    sec
-    rts
-!paaem_none:
-    clc
-    rts
 
 pmx_any_active_monster:
     ldx #0

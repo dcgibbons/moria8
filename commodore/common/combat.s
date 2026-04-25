@@ -1117,6 +1117,37 @@ projectile_msg_suffix:
     jsr combat_append_str
     jmp cmb_term_and_print
 
+combat_msg_monster_shudders:
+    lda #<cmb_shudders_str
+    ldy #>cmb_shudders_str
+    jmp combat_msg_monster_suffix
+
+combat_msg_monster_dissolves:
+    lda #<cmb_dissolves_str
+    ldy #>cmb_dissolves_str
+combat_msg_monster_suffix:
+    pha
+    tya
+    pha
+    lda #0
+    sta cmb_buf_idx
+    lda #<cmb_the_cap_str
+    ldy #>cmb_the_cap_str
+    jsr combat_append_str
+    jsr combat_append_monster_name
+    pla
+    tay
+    pla
+    jsr combat_append_str
+    jmp cmb_term_and_print
+
+cmb_the_cap_str:
+    .text "The " ; .byte 0
+cmb_shudders_str:
+    .text " shudders." ; .byte 0
+cmb_dissolves_str:
+    .text " dissolves!" ; .byte 0
+
 // msg_build_levelup — "Welcome to level N."
 msg_build_levelup:
     lda #0

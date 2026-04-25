@@ -10,6 +10,7 @@
 #import "player_heal_feedback.s"
 
 pmu_dispel_targets: .byte 0
+pmu_dispel_type: .byte 0
 
 eff_reveal_floorplan:
     ldx #0
@@ -92,6 +93,20 @@ eff_dispel_flagged:
     lda cr_mflags,x
     and pmx_work_flag
     beq !edf_next+
+    ldy #MX_X
+    lda (zp_ptr0),y
+    tax
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    tay
+    jsr los_is_visible
+    bcc !edf_next+
+    ldx pmx_work_idx
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    sta pmu_dispel_type
+    sta cmb_type
     lda pmx_work_damage
     beq !edf_next+
     inc pmu_dispel_targets
@@ -103,12 +118,14 @@ eff_dispel_flagged:
     sta zp_math_b
     ldx pmx_work_idx
     jsr combat_apply_damage_16
-    bcc !edf_next+
+    bcs !edf_kill+
+    lda pmu_dispel_type
+    sta cmb_type
+    jsr combat_msg_monster_shudders
+    jmp !edf_next+
+!edf_kill:
     jsr eff_kill_monster
-    lda #<cmb_kill_str
-    ldy #>cmb_kill_str
-    jsr msg_build_action
-    jsr cmb_print_buf
+    jsr combat_msg_monster_dissolves
 !edf_next:
     inc pmx_work_idx
     jmp !edf_loop-

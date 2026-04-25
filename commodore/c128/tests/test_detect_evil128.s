@@ -8,6 +8,8 @@
 .const MONSTER_ENTRY_SIZE = 12
 .const EMPTY_SLOT = $ff
 .const CF_EVIL = $04
+.const MX_X = 0
+.const MX_Y = 1
 .const MX_TYPE = 2
 .const DETECT_TIMER_TURNS = 20
 .const DETECT_TIMER_EVIL_ONLY = $80
@@ -161,9 +163,30 @@ eff_detect_monsters:
     rts
 
 eff_detect_evil_only:
-    lda #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
+    lda #0
     sta eff_detect_timer
+    ldx #0
+!edeo_loop:
+    cpx #MAX_MONSTERS
+    bcs !edeo_none+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !edeo_next+
+    tay
+    lda cr_mflags,y
+    and #CF_EVIL
+    bne !edeo_found+
+!edeo_next:
+    inx
+    jmp !edeo_loop-
+!edeo_found:
     lda #1
+    sta vis_room_revealed
+    rts
+!edeo_none:
+    lda #0
     sta vis_room_revealed
     rts
 
@@ -311,8 +334,8 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_detect_evil_execute)
 
-    // Test 1: no evil monsters use the explicit no-evil message, set detect
-    // state, spend mana, and mark the prayer worked.
+    // Test 1: no evil monsters use the explicit no-evil message, leave detect
+    // timer state clear, spend mana, and mark the prayer worked.
     jsr test_clear_monsters
     jsr test_reset_detect_state
     lda #0
@@ -337,10 +360,8 @@ test_start:
     lda test_huff_calls
     bne !t1_fail+
     lda eff_detect_timer
-    cmp #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     bne !t1_fail+
     lda vis_room_revealed
-    cmp #1
     bne !t1_fail+
     lda zp_player_mp
     cmp #19
@@ -357,8 +378,8 @@ test_start:
 !t1_fail:
     jmp test_fail
 
-    // Test 2: an evil monster reports presence of evil and preserves the
-    // current detect-state contract.
+    // Test 2: an evil monster reports presence of evil without arming the
+    // old detect timer.
 test_after_none:
     jsr test_clear_monsters
     jsr test_reset_detect_state
@@ -386,7 +407,6 @@ test_after_none:
     lda test_huff_calls
     bne !t2_fail+
     lda eff_detect_timer
-    cmp #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1

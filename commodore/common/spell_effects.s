@@ -22,7 +22,6 @@
 .const EFF_ICAT_STAFF  = 15
 
 eff_target_slot: .byte 0           // Target slot for identify
-eff_room_idx:    .byte 0           // Room loop index for light
 
 // ============================================================
 // eff_heal — Heal player HP
@@ -67,11 +66,8 @@ eff_heal:
 // Clobbers: A, X
 // ============================================================
 eff_light_room:
-    lda #0
-    sta eff_room_idx
-
+    ldx #0
 !elr_loop:
-    ldx eff_room_idx
     cpx room_count
     bcs !elr_corridor+              // Player not in any room
 
@@ -108,7 +104,7 @@ eff_light_room:
     rts
 
 !elr_next:
-    inc eff_room_idx
+    inx
     jmp !elr_loop-
 
 !elr_corridor:
@@ -263,10 +259,11 @@ eff_cure_poison:
 // Clobbers: A
 // ============================================================
 .const DETECT_TIMER_TURNS = 20
-.const DETECT_TIMER_EVIL_ONLY = $80
-.const DETECT_TIMER_MASK = $7f
+.const EDEO_MX_X = 0
+.const EDEO_MX_Y = 1
+.const EDEO_CF_EVIL = $04
 
-eff_detect_timer: .byte 0              // Low 7 bits = turns, high bit = evil-only
+eff_detect_timer: .byte 0
 
 eff_detect_monsters:
     lda #DETECT_TIMER_TURNS
@@ -276,10 +273,61 @@ eff_detect_monsters:
     rts
 
 eff_detect_evil_only:
-    lda #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
+    lda #0
     sta eff_detect_timer
+    tax
+    stx vis_room_revealed
+!edeo_loop:
+    cpx #MAX_MONSTERS
+    bcs !edeo_done+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !edeo_next+
+    tay
+    lda cr_mflags,y
+    and #EDEO_CF_EVIL
+    beq !edeo_next+
+
+    ldy #EDEO_MX_Y
+    lda (zp_ptr0),y
+    sta zp_temp1
+    sec
+    sbc zp_view_y
+    bcc !edeo_next+
+    cmp #VIEWPORT_H
+    bcs !edeo_next+
+
+    ldy #EDEO_MX_X
+    lda (zp_ptr0),y
+    sta zp_temp0
+    sec
+    sbc zp_view_x
+    bcc !edeo_next+
+    cmp #VIEWPORT_W
+    bcs !edeo_next+
+
+    txa
+    pha
+    ldx zp_temp1
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy zp_temp0
+    :MapRead_ptr1_y()
+    ora #(FLAG_VISITED | FLAG_LIT)
+    :MapWrite_ptr1_y()
     lda #1
     sta vis_room_revealed
+    pla
+    tax
+!edeo_next:
+    inx
+    jmp !edeo_loop-
+!edeo_done:
+    lda vis_room_revealed
     rts
 
 // ============================================================
@@ -482,28 +530,6 @@ eff_sleep_adjacent:
     lda #20                         // Sleep for 20 turns
     jsr monster_apply_sleep
 !esa_skip:
-    rts
-
-// ============================================================
-// eff_confuse_adjacent — Confuse all adjacent monsters
-// Clobbers: A, X, Y, zp_ptr0, zp_temp0-1
-// ============================================================
-eff_confuse_adjacent:
-    lda #<!eca_cb+
-    sta adj_callback
-    lda #>!eca_cb+
-    sta adj_callback+1
-    jmp for_each_adjacent
-!eca_cb:
-    lda df_target_x
-    ldy df_target_y
-    jsr monster_find_at
-    bcc !eca_skip+
-    jsr monster_get_ptr
-    ldy #MX_CONFUSE
-    lda #10                         // Confuse for 10 turns
-    sta (zp_ptr0),y
-!eca_skip:
     rts
 
 // ============================================================
@@ -886,56 +912,6 @@ eff_kill_monster:
     jsr combat_award_xp
     jsr combat_check_levelup
 
-    rts
-
-// ============================================================
-// eff_dispel_undead — Damage all active undead monsters
-// Damage = (1d3) * player_level per monster
-// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_temp0-4, zp_math_a/b
-// ============================================================
-eff_du_idx: .byte 0
-
-eff_dispel_undead:
-    lda #0
-    sta eff_du_idx
-
-!edu_loop:
-    ldx eff_du_idx
-    cpx #MAX_MONSTERS
-    bcs !edu_done+
-
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edu_next+
-
-    // Check CF_UNDEAD flag
-    tax                             // X = creature type
-    lda cr_mflags,x
-    and #CF_UNDEAD
-    beq !edu_next+
-
-    // Undead monster — roll 1d3 * player_level
-    lda #3
-    jsr rng_range                   // A = [0, 2]
-    clc
-    adc #1                          // A = [1, 3]
-    ldx zp_player_lvl              // X = level
-    jsr math_multiply               // zp_math_a = lo, zp_math_b = hi
-
-    // Apply damage
-    ldx eff_du_idx
-    jsr combat_apply_damage_16
-    bcc !edu_next+              // Still alive
-    // Monster killed
-    jsr eff_kill_monster        // X preserved by helper
-
-!edu_next:
-    inc eff_du_idx
-    jmp !edu_loop-
-
-!edu_done:
     rts
 
 // ============================================================

@@ -204,18 +204,7 @@ render_viewport:
     ldy zp_render_x
     lda rv_row_occ,y
     beq !rv_detect_blank+
-    bmi !rv_detect_blank+
-    lda eff_detect_timer
     bpl !rv_detect_render+
-    tax
-    dex
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    tax
-    lda cr_mflags,x
-    and #$04                    // CF_EVIL
-    beq !rv_detect_blank+
 !rv_detect_blank:
     jmp !draw_blank+
 !rv_detect_render:

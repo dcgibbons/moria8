@@ -168,6 +168,9 @@ piw_print_prompt_with_count:
 screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+los_is_visible:
     clc
     rts
 

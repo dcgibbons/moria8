@@ -270,15 +270,29 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: current Dispel Undead damages eligible undead through the shared
+    // Test 1: Dispel Undead damages visible eligible undead through the shared
     // flagged-dispel owner, kills a 1 HP undead, leaves non-undead untouched,
-    // stays message-light on success, spends 24 mana, and marks slot 26 worked.
+    // spends 24 mana, and marks slot 26 worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_dispel_undead_prayer_state
     lda #CF_UNDEAD
     sta cr_mflags + 1
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #20
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_X
+    sta zp_player_x
+    lda #12
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
+    sta zp_player_y
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr1_y()
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_HP_LO
     lda #2

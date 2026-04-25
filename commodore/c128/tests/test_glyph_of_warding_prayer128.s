@@ -155,6 +155,9 @@ show_inv_and_select:
 tramp_spell_list_display:
 monster_get_ptr:
 combat_kill_message:
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+los_is_visible:
 monster_wake:
 monster_apply_sleep:
 projectile_msg_suffix:

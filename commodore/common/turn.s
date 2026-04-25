@@ -220,13 +220,8 @@ turn_tick_effects:
     // Detect monsters timer
     lda eff_detect_timer
     beq !no_detect+
-    sec
-    sbc #1
-    sta eff_detect_timer
-    and #$7f
+    dec eff_detect_timer
     bne !no_detect+
-    lda #0
-    sta eff_detect_timer
     // Expired — trigger redraw to hide detected monsters
     lda #1
     sta vis_room_revealed

@@ -263,8 +263,8 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: Detect Evil with no evil monsters reports none, sets detect
-    // state, spends mana, and marks the prayer worked.
+    // Test 1: Detect Evil with no evil monsters reports none, leaves detect
+    // timer state clear, spends mana, and marks the prayer worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
     jsr test_reset_detect_evil_prayer_state
@@ -290,10 +290,8 @@ test_start:
     lda tde_huff_calls
     bne !t1_fail+
     lda eff_detect_timer
-    cmp #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     bne !t1_fail+
     lda vis_room_revealed
-    cmp #1
     bne !t1_fail+
     lda zp_player_mp
     cmp #19
@@ -311,16 +309,23 @@ test_start:
     lda #$00
     sta tc_results + 0
 
-    // Test 2: Detect Evil with an evil monster reports presence of evil and
-    // preserves the detect state contract.
+    // Test 2: Detect Evil with an evil monster in the current panel reports
+    // presence of evil and marks that tile visible/lit without a timer.
 !t2:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_clear_monsters
     jsr test_reset_detect_evil_prayer_state
     lda #1
     sta test_mon_table + MX_TYPE
+    lda #20
+    sta test_mon_table + MX_X
+    lda #12
+    sta test_mon_table + MX_Y
     lda #CF_EVIL
     sta cr_mflags + 1
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
     jsr player_pray
     bcc !t2_fail+
     lda tde_spell_exec_calls
@@ -339,10 +344,19 @@ test_start:
     cmp #>pmx_msg_evil_on
     bne !t2_fail+
     lda eff_detect_timer
-    cmp #DETECT_TIMER_TURNS | DETECT_TIMER_EVIL_ONLY
     bne !t2_fail+
     lda vis_room_revealed
     cmp #1
+    bne !t2_fail+
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy #20
+    :MapRead_ptr1_y()
+    and #(FLAG_VISITED | FLAG_LIT)
+    cmp #(FLAG_VISITED | FLAG_LIT)
     bne !t2_fail+
     lda zp_player_mp
     cmp #19

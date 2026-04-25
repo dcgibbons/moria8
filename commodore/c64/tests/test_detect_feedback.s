@@ -64,6 +64,27 @@ eff_detect_monsters:
 
 eff_detect_evil_only:
     inc test_detect_calls
+    ldx #0
+!edeo_loop:
+    cpx #MAX_MONSTERS
+    bcs !edeo_none+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !edeo_next+
+    tay
+    lda cr_mflags,y
+    and #CF_EVIL
+    bne !edeo_found+
+!edeo_next:
+    inx
+    jmp !edeo_loop-
+!edeo_found:
+    lda #1
+    rts
+!edeo_none:
+    lda #0
     rts
 
 huff_print_msg:

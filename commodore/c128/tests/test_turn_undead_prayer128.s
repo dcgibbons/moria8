@@ -11,6 +11,8 @@
 .const VIEWPORT_W = 78
 .const VIEWPORT_H = 19
 .const MONSTER_ENTRY_SIZE = 12
+.const MX_X = 0
+.const MX_Y = 1
 .const MX_TYPE = 2
 .const MX_SLEEP_CUR = 7
 .const MX_CONFUSE = 9
@@ -178,6 +180,9 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 combat_kill_message:
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+los_is_visible:
 floor_item_find_at:
 floor_item_remove:
 floor_item_add:

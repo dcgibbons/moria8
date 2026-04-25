@@ -234,6 +234,8 @@ stat_bonus_index:
     lda #0
     rts
 
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
 los_is_visible:
     sec
     rts
