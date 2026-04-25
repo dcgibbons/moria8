@@ -3224,6 +3224,7 @@ runtime_common_data_start:
     #import "../common/disk_setup_runtime128.s"
     #import "../common/title_cache_runtime128.s"
     #import "restart128.s"
+    #import "../common/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../common/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY

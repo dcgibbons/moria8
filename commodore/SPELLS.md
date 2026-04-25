@@ -85,7 +85,7 @@
     - priest `Bless` now also has row-level coverage on `C64+C128` for prayer-id mapping, explicit onset text, silent refresh policy, and cast-fail/success mana/worked bookkeeping
     - priest `Remove Fear` now also has row-level coverage on `C64+C128` for prayer-id mapping, explicit fear-clear text, calm/no-op silence, and cast-fail/success mana/worked bookkeeping
     - priest `Call Light` now also has row-level coverage on `C64+C128` for prayer-id mapping, shared room-light seam dispatch, explicit light feedback, redraw flagging, and cast-fail/success mana/worked bookkeeping
-    - priest `Slow Poison` now also has row-level coverage on `C64+C128` for prayer-id mapping, current poison-severity reduction semantics, already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping
+    - priest `Slow Poison` now also has row-level coverage on `C64+C128` for prayer-id mapping, current poison-severity reduction semantics, reduced-poison feedback, already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping
     - `Resist Heat and Cold` now also has a direct runtime regression proving it reduces hostile breath damage
   - adjacent monster-control feedback:
     - dedicated runtime coverage now exists for `Sanctuary` no-target feedback and for actually sleeping an adjacent monster
@@ -94,7 +94,7 @@
   - directional control:
     - shared directional-confuse runtime coverage now proves hit feedback (`The monster looks confused.`) and miss feedback (`Nothing seems to happen.`)
     - `Confusion` now also has row-level coverage on `C64+C128` for spell-id mapping, confuse-timer mutation, and cast-fail/success mana/worked bookkeeping
-    - priest `Blind Creature` now also has row-level coverage on `C64+C128` for prayer-id mapping and the current shared directional-confuse behavior: confuse-timer mutation on hit, current no-target feedback on miss, and cast-fail/success mana/worked bookkeeping
+    - priest `Blind Creature` now also has row-level coverage on `C64+C128` for prayer-id mapping and the current shared directional-confuse behavior: confuse-timer mutation on hit, no stun mutation, current no-target feedback on miss, and cast-fail/success mana/worked bookkeeping
     - `Polymorph Other` now also has row-level coverage on `C64+C128` for silent successful target replacement, preserved occupied-tile invariants, silent no-target behavior, and cast-fail/success bookkeeping
   - detect/reveal feedback:
     - dedicated runtime coverage now exists for `Detect Monsters` result/no-result behavior
@@ -129,10 +129,10 @@
     - priest `Detect Doors/Stairs` prayer-id mapping and shared door/stair reveal dispatch
     - priest `Detect Doors/Stairs` secret-door and stair reveal, silent no-eligible-target behavior, and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_slow_poison_prayer.s`
-    - priest `Slow Poison` prayer-id mapping and current poison-severity reduction
+    - priest `Slow Poison` prayer-id mapping, current poison-severity reduction, and reduced-poison feedback
     - priest `Slow Poison` already-clear silence/no-op and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_blind_creature_prayer.s`
-    - priest `Blind Creature` prayer-id mapping and current shared directional-confuse hit behavior
+    - priest `Blind Creature` prayer-id mapping and current shared directional-confuse hit behavior without stun mutation
     - priest `Blind Creature` current no-target feedback and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_cure_light_wounds.s`
     - `Cure Light Wounds` injured heal feedback
@@ -192,8 +192,8 @@
     - `Fire Bolt` spell-id mapping and directional bolt kill-path behavior
     - `Fire Bolt` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_slow_monster.s`
-    - `Slow Monster` spell-id mapping and directional slow-state mutation behavior
-    - `Slow Monster` current success/no-target behavior and cast-fail/success bookkeeping
+    - `Slow Monster` spell-id mapping, directional slow-state mutation behavior, and slowed-target feedback
+    - `Slow Monster` current no-target behavior and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_polymorph_other.s`
     - `Polymorph Other` spell-id mapping and deterministic target replacement behavior
     - `Polymorph Other` silent no-target behavior and cast-fail/success bookkeeping
@@ -312,8 +312,8 @@
     - `Fire Bolt` spell-id mapping and directional bolt kill-path behavior
     - `Fire Bolt` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_slow_monster128.s`
-    - `Slow Monster` spell-id mapping and directional slow-state mutation behavior
-    - `Slow Monster` current success/no-target behavior and cast-fail/success bookkeeping
+    - `Slow Monster` spell-id mapping, directional slow-state mutation behavior, and slowed-target feedback
+    - `Slow Monster` current no-target behavior and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_polymorph_other128.s`
     - `Polymorph Other` spell-id mapping and deterministic target replacement behavior
     - `Polymorph Other` silent no-target behavior and cast-fail/success bookkeeping
@@ -376,7 +376,7 @@
 | 21 | Added | M3 | Identify | 11/7/99 | 29/18/99 | 23/25/95 | Item identify prompt | Row-covered on `C64+C128`: focused coverage proves eligible-item identification with the exact built identify message, current cancel/no-eligible-item feedback behavior, and cast-fail/success mana/worked bookkeeping |
 | 22 | Added | M3 | Sleep III | 13/7/50 | -- | 23/20/60 | Sleep all visible monsters | Row-covered on `C64+C128`: focused coverage proves visible monsters sleep while hidden monsters remain unaffected, current explicit success/no-target feedback, and cast-fail/success mana/worked bookkeeping |
 | 23 | Added | M3 | Fire Bolt | 15/9/50 | -- | 25/20/60 | Directional fire bolt `6d8` | Row-covered on `C64+C128`: shared bolt coverage proves the projectile hit/miss contract, and focused row coverage proves spell-id mapping, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
-| 24 | Added | M3 | Slow Monster | 17/9/50 | -- | 25/21/65 | Slow target monster | Row-covered on `C64+C128`: focused coverage proves directional slow-state mutation with sleep cleared, current success/no-target behavior, and cast-fail/success mana/worked bookkeeping |
+| 24 | Added | M3 | Slow Monster | 17/9/50 | -- | 25/21/65 | Slow target monster | Row-covered on `C64+C128`: focused coverage proves directional slow-state mutation with sleep cleared, slowed-target feedback, current no-target behavior, and cast-fail/success mana/worked bookkeeping |
 | 25 | Added | M4 | Frost Ball | 19/12/55 | -- | 27/21/65 | Frost ball `33` | Row-covered on `C64+C128`: shared ball coverage proves visible travel, area damage, and kill-path handling, and focused row coverage proves spell-id mapping, empty-area silence, and cast-fail/success mana/worked bookkeeping |
 | 26 | Added | M4 | Recharge Item II | 21/12/90 | -- | 29/23/95 | Stronger recharge with break risk | Row-covered on `C64+C128`: focused coverage proves stronger eligible-item recharge mutation, explicit no-eligible-item feedback, destructive bright-flash backfire behavior, and cast-fail/success mana/worked bookkeeping |
 | 27 | Added | M4 | Teleport Other | 23/12/60 | -- | 31/25/70 | Teleport target monster away | Row-covered on `C64+C128`: focused coverage proves deterministic target relocation with occupied-tile invariants preserved, sleep cleared on the moved monster, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
@@ -398,8 +398,8 @@
 | 5 | Legacy | P1 | Call Light | 3/2/25 | 5/4/35 | Lights room/corridor | Row-covered on `C64+C128`: focused light-row coverage proves prayer-id mapping, shared room-light seam dispatch, explicit light feedback, redraw flagging, and cast-fail/success mana/worked bookkeeping |
 | 6 | Legacy | P1 | Find Traps | 3/3/27 | 7/5/40 | Detect traps | Row-covered on `C64+C128`: focused detect-row coverage proves prayer-id mapping, tracked hidden-trap reveal, current silent no-eligible-trap behavior, redraw flagging, and cast-fail/success mana/worked bookkeeping |
 | 7 | Legacy | P1 | Detect Doors/Stairs | 3/3/27 | 7/5/40 | Detect doors and stairs | Row-covered on `C64+C128`: focused detect-row coverage proves prayer-id mapping, secret-door plus tracked-stairs reveal under the restored rules, current silent no-eligible-target behavior, redraw flagging, and cast-fail/success mana/worked bookkeeping |
-| 8 | Legacy | P1 | Slow Poison | 3/3/28 | 9/7/40 | Reduce poison severity | Row-covered on `C64+C128`: focused cleanse-row coverage proves prayer-id mapping, current poison-severity reduction semantics, already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |
-| 9 | Legacy | P2 | Blind Creature | 5/4/29 | 9/7/40 | Directional blind/stun effect | Row-covered on `C64+C128`: focused control-row coverage proves prayer-id mapping and the current shared directional-confuse behavior, with confuse-timer mutation on hit, current no-target feedback on miss, and cast-fail/success mana/worked bookkeeping |
+| 8 | Legacy | P1 | Slow Poison | 3/3/28 | 9/7/40 | Reduce poison severity | Row-covered on `C64+C128`: focused cleanse-row coverage proves prayer-id mapping, current poison-severity reduction semantics, reduced-poison feedback, already-clear silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |
+| 9 | Legacy | P2 | Blind Creature | 5/4/29 | 9/7/40 | Directional creature confusion | Row-covered on `C64+C128`: focused control-row coverage proves prayer-id mapping and the current shared directional-confuse behavior, with confuse-timer mutation on hit, no stun mutation, current no-target feedback on miss, and cast-fail/success mana/worked bookkeeping |
 | 10 | Legacy | P2 | Portal | 5/4/30 | 9/8/40 | Self-teleport | Row-covered on `C64+C128`: focused coverage proves prayer-id mapping, deterministic long-range relocation, occupied-tile invariants, message-light success, and cast-fail/success mana/worked bookkeeping |
 | 11 | Legacy | P2 | Cure Medium Wounds | 5/4/32 | 11/9/40 | Heal `4d4` | Row-covered on `C64+C128`: focused heal-row coverage proves prayer-id mapping, current `4d4` heal-tier behavior, injured heal feedback, full-HP silence/no-op, and cast-fail/success mana/worked bookkeeping |
 | 12 | Legacy | P2 | Chant | 5/5/34 | 11/10/45 | Bless timer `24-47 + current` | Row-covered on `C64+C128`: focused timed-buff coverage proves prayer-id mapping, explicit onset text, silent refresh behavior, stronger bless-timer growth, and cast-fail/success mana/worked bookkeeping |

@@ -11,6 +11,7 @@
 .const VIEWPORT_W = 78
 .const VIEWPORT_H = 19
 .const MX_CONFUSE = 9
+.const MX_STUN = 8
 .const MX_SLEEP_CUR = 7
 .const MX_TYPE = 2
 .const MAX_MONSTERS = 32
@@ -179,6 +180,10 @@ huff_print_msg:
 test_eff_directional_monster:
     lda test_mon_present
     beq !miss+
+    lda #<test_mon_data
+    sta zp_ptr0
+    lda #>test_mon_data
+    sta zp_ptr0_hi
     ldx #0
     sec
     rts
@@ -234,6 +239,7 @@ test_reset_blind_creature_state:
     lda #0
     sta test_mon_present
     sta test_mon_data + MX_CONFUSE
+    sta test_mon_data + MX_STUN
     sta test_huff_calls
     sta test_last_huff
     sta test_spell_exec_calls
@@ -311,6 +317,8 @@ test_start:
     lda test_mon_data + MX_CONFUSE
     cmp #10
     bne !t1_fail+
+    lda test_mon_data + MX_STUN
+    bne !t1_fail+
     lda test_huff_calls
     cmp #1
     bne !t1_fail+
@@ -347,6 +355,8 @@ test_after_hit:
     bne !t2_fail+
     lda test_mon_data + MX_CONFUSE
     bne !t2_fail+
+    lda test_mon_data + MX_STUN
+    bne !t2_fail+
     lda test_huff_calls
     cmp #1
     bne !t2_fail+
@@ -380,6 +390,8 @@ test_after_miss:
     lda test_spell_exec_calls
     bne !t3_fail+
     lda test_mon_data + MX_CONFUSE
+    bne !t3_fail+
+    lda test_mon_data + MX_STUN
     bne !t3_fail+
     lda test_huff_calls
     cmp #1

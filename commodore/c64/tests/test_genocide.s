@@ -75,6 +75,7 @@ test_finish:
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
 #import "../../common/player_magic_feedback.s"
+#import "../../common/player_magic_slow_runtime.s"
 #import "../../common/player_magic_execute_overlay.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"

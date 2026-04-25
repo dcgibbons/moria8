@@ -83,6 +83,7 @@ itn_30:
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_slow_runtime.s"
 #import "../../common/player_magic_execute_overlay.s"
 
 .pc = $0801 "BASIC Stub"

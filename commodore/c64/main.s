@@ -1288,6 +1288,7 @@ banked_payload:
     #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_map.s"
     #import "../common/player_magic_turn_banked.s"
+    #import "../common/player_magic_slow_runtime.s"
 
 banked_code_end:
 }

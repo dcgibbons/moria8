@@ -66,6 +66,7 @@ itn_30:
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_slow_runtime.s"
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -97,6 +98,9 @@ test_mon_present: .byte 0
 test_mon_data: .fill 12, 0
 test_huff_calls: .byte 0
 test_last_huff: .byte 0
+test_msg_calls: .byte 0
+test_last_msg_lo: .byte 0
+test_last_msg_hi: .byte 0
 test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
@@ -121,7 +125,6 @@ viewport_update:
 render_viewport:
 status_draw:
 msg_clear:
-msg_print:
 screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
@@ -176,9 +179,22 @@ huff_print_msg:
     inc test_huff_calls
     rts
 
+msg_print:
+    lda zp_ptr0
+    sta test_last_msg_lo
+    lda zp_ptr0_hi
+    sta test_last_msg_hi
+    inc test_msg_calls
+    clc
+    rts
+
 test_eff_directional_monster:
     lda test_mon_present
     beq !miss+
+    lda #<test_mon_data
+    sta zp_ptr0
+    lda #>test_mon_data
+    sta zp_ptr0_hi
     ldx #0
     sec
     rts
@@ -196,15 +212,17 @@ monster_get_ptr:
 test_eff_slow_monster_dir:
     jsr eff_directional_monster
     bcc !done+
-    jsr monster_get_ptr
     ldy #MX_SPEED_CNT
     lda #$ff
     sta (zp_ptr0),y
-    ldy #MX_SLEEP_CUR
+    iny
     lda #0
     sta (zp_ptr0),y
-    ldx #HSTR_PM_TITLE_MAGE
-    jsr huff_print_msg
+    lda #<pmx_slow_monster_msg
+    sta zp_ptr0
+    lda #>pmx_slow_monster_msg
+    sta zp_ptr0_hi
+    jsr msg_print
 !done:
     rts
 
@@ -250,6 +268,9 @@ test_reset_slow_monster_state:
     sta test_mon_present
     sta test_huff_calls
     sta test_last_huff
+    sta test_msg_calls
+    sta test_last_msg_lo
+    sta test_last_msg_hi
     sta test_spell_exec_calls
     lda #$ff
     sta test_last_spell_idx
@@ -312,7 +333,7 @@ test_start:
     :PatchJump(eff_directional_monster, test_eff_directional_monster)
 
     // Test 1: successful cast on a valid target slows it, clears sleep,
-    // prints the current success huff id, spends 9 mana, and marks worked.
+    // prints the slowed-target message, spends 9 mana, and marks worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_slow_monster_state
     lda #1
@@ -331,10 +352,15 @@ test_start:
     lda test_mon_data + MX_SLEEP_CUR
     bne !t1_fail+
     lda test_huff_calls
+    bne !t1_fail+
+    lda test_msg_calls
     cmp #1
     bne !t1_fail+
-    lda test_last_huff
-    cmp #HSTR_PM_TITLE_MAGE
+    lda test_last_msg_lo
+    cmp #<pmx_slow_monster_msg
+    bne !t1_fail+
+    lda test_last_msg_hi
+    cmp #>pmx_slow_monster_msg
     bne !t1_fail+
     lda zp_player_mp
     cmp #11
@@ -365,6 +391,8 @@ test_after_success:
     cmp #23
     bne !t2_fail+
     lda test_huff_calls
+    bne !t2_fail+
+    lda test_msg_calls
     bne !t2_fail+
     lda test_mon_data + MX_SPEED_CNT
     bne !t2_fail+
@@ -402,6 +430,8 @@ test_after_no_target:
     bne !t3_fail+
     lda test_last_huff
     cmp #HSTR_PM_FAIL
+    bne !t3_fail+
+    lda test_msg_calls
     bne !t3_fail+
     lda test_mon_data + MX_SPEED_CNT
     bne !t3_fail+

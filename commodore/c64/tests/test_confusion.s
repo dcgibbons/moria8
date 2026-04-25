@@ -127,6 +127,10 @@ test_huff_print_msg:
 test_eff_directional_monster:
     lda test_mon_present
     beq !miss+
+    lda #<test_mon_data
+    sta zp_ptr0
+    lda #>test_mon_data
+    sta zp_ptr0_hi
     ldx #0
     sec
     rts

@@ -24,8 +24,7 @@ pmx_add_speed_msg:
 !pasm_store:
     sta zp_eff_speed
     ldx #HSTR_PIQ_SPEED
-    jsr huff_print_msg
-    rts
+    jmp huff_print_msg
 
 pmx_add_bless_msg:
     tax
@@ -42,7 +41,7 @@ pmx_add_bless_msg:
     bne !pabm_done+
     lda #<pmx_righteous_msg
     ldy #>pmx_righteous_msg
-    jsr pmx_print_inline
+    jmp pmx_print_inline
 !pabm_done:
     rts
 
@@ -60,7 +59,7 @@ pmx_add_protect_msg:
     pla
     bne !papm_done+
     ldx #HSTR_PIQ_PROTECTED
-    jsr huff_print_msg
+    jmp huff_print_msg
 !papm_done:
     rts
 
@@ -75,7 +74,17 @@ pmx_add_resist_heat_cold_msg:
     sta zp_eff_resist
     lda #<pmx_resist_on_msg
     ldy #>pmx_resist_on_msg
-    jsr pmx_print_inline
+    jmp pmx_print_inline
+
+pmx_slow_poison_msg:
+    lda zp_eff_poison
+    beq !pspm_done+
+    lsr
+    ora #1
+    sta zp_eff_poison
+    ldx #HSTR_EFF_POISON_END
+    jmp huff_print_msg
+!pspm_done:
     rts
 
 pmx_sleep_adjacent_msg:
@@ -113,14 +122,11 @@ pmx_sleep_adjacent_msg:
     lda pmx_feedback_sleep_seen
     bne !psam_unaffected+
     ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-!psam_done:
-    rts
+    jmp huff_print_msg
 !psam_any:
     lda #<pmx_sleep_success_msg
     ldy #>pmx_sleep_success_msg
-    jsr pmx_print_inline
-    rts
+    jmp pmx_print_inline
 !psam_unaffected:
     lda #<pmx_sleep_unaffected_msg
     ldy #>pmx_sleep_unaffected_msg
@@ -157,7 +163,6 @@ pmx_report_sleep_result:
 pmx_confuse_monster_dir_msg:
     jsr eff_directional_monster
     bcc !pcmd_miss+
-    jsr monster_get_ptr
     ldy #MX_CONFUSE
     lda #10
     sta (zp_ptr0),y
@@ -177,7 +182,7 @@ pmx_set_see_invisible_msg:
     pla
     bne !pssim_done+
     ldx #HSTR_PIQ_EYES_TINGLE
-    jsr huff_print_msg
+    jmp huff_print_msg
 !pssim_done:
     rts
 

@@ -280,13 +280,7 @@ ped_s6:
     jsr eff_find_doors
     jmp eff_find_stairs
 ped_s7:
-    lda zp_eff_poison
-    beq !ped_s7_done+
-    lsr
-    ora #1
-    sta zp_eff_poison
-!ped_s7_done:
-    rts
+    jmp pmx_slow_poison_msg
 ped_s8:
     jmp pmx_confuse_monster_dir_msg
 ped_s10:
@@ -396,15 +390,15 @@ eff_sleep_monster_dir:
 eff_slow_monster_dir:
     jsr eff_directional_monster
     bcc !eslow_done+
-    jsr monster_get_ptr
     ldy #MX_SPEED_CNT
     lda #$ff
     sta (zp_ptr0),y
-    ldy #MX_SLEEP_CUR
+    iny
     lda #0
     sta (zp_ptr0),y
-    ldx #HSTR_PM_TITLE_MAGE
-    jsr huff_print_msg
+    lda #<pmx_slow_monster_msg
+    ldy #>pmx_slow_monster_msg
+    jmp pmx_print_inline
 !eslow_done:
     rts
 

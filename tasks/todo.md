@@ -3,6 +3,24 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] SLOW-MONSTER-CONTROL-FEEDBACK
+- [x] Reported Failure Gate:
+  - Slow Poison must print the upstream poison-reduced feedback only when poison is actually reduced; Slow Monster must report that the targeted monster was slowed instead of title/beep feedback; Blind Creature must be re-audited against the shared directional-confuse path; exact regression gates are `make test64` and `make test128-fast-smoke`
+- [x] audit current product paths and focused tests for Slow Poison, Slow Monster, and Blind Creature
+- [x] implement layout-safe feedback fixes for Slow Poison and Slow Monster
+- [x] update C64/C128 focused tests and docs so they assert the new feedback contract and Blind Creature audit result
+- [x] verify:
+  - focused C128 spell-row tests: `confusion128,slow_poison_prayer128,slow_monster128,blind_creature_prayer128,genocide128`
+  - `make build`
+  - `make test64`
+  - `make test128-fast-smoke`
+  - `make test128-fast`
+- [x] review:
+  - `Slow Poison` now halves poison as before but prints `HSTR_EFF_POISON_END` only when the poison counter was nonzero; already-clear casts remain silent/no-op after successful prayer bookkeeping
+  - `Slow Monster` no longer prints the mage title huff id on success; it now mutates the target speed counter, clears sleep, and prints the compact `It slows.` feedback from runtime/banked string storage so the C64/C128 death overlays stay within bounds
+  - `Blind Creature` re-audit found product code already uses the shared directional-confuse helper; focused C64/C128 tests now assert confuse is set and stun remains untouched
+  - `eff_directional_monster` already leaves `zp_ptr0` on the found monster, so the shared confuse helper no longer repeats `monster_get_ptr`; focused stubs were updated to preserve that real side effect
+  - verification passed: `make build`, focused C128 row batch, `make test64` (`110 passed, 0 failed`), `make test128-fast-smoke` (`8 passed, 0 failed`), and `make test128-fast`
 - [x] TEST-C64-C128-FULL-INPUT-TREE
 - [x] Reported Failure Gate:
   - Design and implement proper full input-tree coverage for both platforms so raw key mapping, `input_get_command`, and command dispatch cannot drift independently again

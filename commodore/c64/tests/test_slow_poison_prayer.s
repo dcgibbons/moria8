@@ -73,6 +73,7 @@ test_finish:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_feedback.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -125,19 +126,7 @@ test_tramp_slow_poison_prayer_execute:
     inc tspp_spell_exec_calls
     lda pm_spell_idx
     sta tspp_last_spell_idx
-    lda zp_eff_poison
-    beq !done+
-    cmp #1
-    beq !one+
-    lsr
-    ora #1
-    sta zp_eff_poison
-    jmp !done+
-!one:
-    lda #1
-    sta zp_eff_poison
-!done:
-    rts
+    jmp pmx_slow_poison_msg
 
 test_pm_select_book:
     lda #0
@@ -215,7 +204,7 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
     // Test 1: poisoned prayer reduces poison severity with the current
-    // lsr/ora#1 rule, stays message-light, spends 3 mana, and marks slot 7
+    // lsr/ora#1 rule, reports reduced poison, spends 3 mana, and marks slot 7
     // worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_slow_poison_prayer_state
@@ -230,6 +219,10 @@ test_start:
     cmp #7
     bne !t1_fail+
     lda tspp_huff_calls
+    cmp #1
+    bne !t1_fail+
+    lda tspp_last_huff_id
+    cmp #HSTR_EFF_POISON_END
     bne !t1_fail+
     lda zp_eff_poison
     cmp #5
