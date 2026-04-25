@@ -236,6 +236,8 @@ stat_bonus_index:
 
 combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
+combat_msg_monster_runs_frantically:
+combat_msg_monster_unaffected:
 los_is_visible:
     sec
     rts

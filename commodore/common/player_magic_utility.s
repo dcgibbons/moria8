@@ -10,7 +10,40 @@
 #import "player_heal_feedback.s"
 
 pmu_dispel_targets: .byte 0
-pmu_dispel_type: .byte 0
+
+#if !PMU_VISIBLE_FLAGGED_EXTERNAL
+pmu_find_visible_flagged:
+!pfvf_loop:
+    ldx pmx_work_idx
+    cpx #MAX_MONSTERS
+    bcs !pfvf_none+
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #EMPTY_SLOT
+    beq !pfvf_next+
+    sta cmb_type
+    tax
+    lda cr_mflags,x
+    and pmx_work_flag
+    beq !pfvf_next+
+    ldy #MX_X
+    lda (zp_ptr0),y
+    tax
+    ldy #MX_Y
+    lda (zp_ptr0),y
+    tay
+    jsr los_is_visible
+    bcc !pfvf_next+
+    sec
+    rts
+!pfvf_next:
+    inc pmx_work_idx
+    bne !pfvf_loop-
+!pfvf_none:
+    clc
+    rts
+#endif
 
 eff_reveal_floorplan:
     ldx #0
@@ -81,32 +114,8 @@ eff_dispel_flagged:
     lda #0
     sta pmx_work_idx
 !edf_loop:
-    ldx pmx_work_idx
-    cpx #MAX_MONSTERS
-    bcs !edf_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !edf_next+
-    tax
-    lda cr_mflags,x
-    and pmx_work_flag
-    beq !edf_next+
-    ldy #MX_X
-    lda (zp_ptr0),y
-    tax
-    ldy #MX_Y
-    lda (zp_ptr0),y
-    tay
-    jsr los_is_visible
-    bcc !edf_next+
-    ldx pmx_work_idx
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    sta pmu_dispel_type
-    sta cmb_type
+    jsr pmu_find_visible_flagged
+    bcc !edf_done+
     lda pmx_work_damage
     beq !edf_next+
     inc pmu_dispel_targets
@@ -119,8 +128,6 @@ eff_dispel_flagged:
     ldx pmx_work_idx
     jsr combat_apply_damage_16
     bcs !edf_kill+
-    lda pmu_dispel_type
-    sta cmb_type
     jsr combat_msg_monster_shudders
     jmp !edf_next+
 !edf_kill:
@@ -134,33 +141,39 @@ eff_dispel_flagged:
     rts
 
 eff_turn_undead:
+    lda #CF_UNDEAD
+    sta pmx_work_flag
     lda #0
+    sta pmu_dispel_targets
     sta pmx_work_idx
 !etud_loop:
-    ldx pmx_work_idx
-    cpx #MAX_MONSTERS
-    bcs !etud_done+
-    jsr monster_get_ptr
-    ldy #MX_TYPE
-    lda (zp_ptr0),y
-    cmp #EMPTY_SLOT
-    beq !etud_next+
-    tax
-    lda cr_mflags,x
-    and #CF_UNDEAD
-    beq !etud_next+
-    ldx pmx_work_idx
-    jsr monster_get_ptr
+    jsr pmu_find_visible_flagged
+    bcc !etud_done+
+    inc pmu_dispel_targets
+    lda #40
+    jsr rng_range
+    ldx cmb_type
+    cmp cr_level,x
+    bcc !etud_unaffected+
     ldy #MX_CONFUSE
     lda zp_player_lvl
     sta (zp_ptr0),y
     ldy #MX_SLEEP_CUR
     lda #0
     sta (zp_ptr0),y
+    jsr combat_msg_monster_runs_frantically
+    jmp !etud_next+
+!etud_unaffected:
+    jsr combat_msg_monster_unaffected
 !etud_next:
     inc pmx_work_idx
     jmp !etud_loop-
 !etud_done:
+    lda pmu_dispel_targets
+    bne !etud_return+
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_print_msg
+!etud_return:
     rts
 
 eff_destroy_area:

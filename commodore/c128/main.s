@@ -34,7 +34,7 @@
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
-.segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d20, min=$0d20, max=$0fff]
+.segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0ce3, min=$0ce3, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -1884,12 +1884,6 @@ tramp_reu_show_status:
     :C128BankedStatusTrampoline(reu_show_status_banked)
 
 // ============================================================
-// game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
-// ============================================================
-game_over_str:
-    .text "R)EBOOT S)TART Q)UIT" ; .byte 0
-game_over_str_end:
-
 .const GAME_OVER_COL = (SCREEN_COLS - 20) / 2
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
@@ -2179,7 +2173,7 @@ runtime_low_filename:
     .byte $31, $32, $38, $2e, $52, $55, $4e, $54, $49, $4d, $45 // "128.RUNTIME"
 .const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
-    .text "128.RUNTIME" ; .byte 0
+    .text "R-TIME" ; .byte 0
 .const RUNTIME_INPUT_FILE_NUM = 3
 runtime_input_filename:
     .byte $31, $32, $38, $2e, $49, $4e, $50, $55, $54 // "128.INPUT"
@@ -2911,7 +2905,9 @@ c128_cache_state_end:
 #import "../common/disk_swap.s"
 #import "../common/dungeon_los.s"
 #import "../common/monster_attack.s"
+#define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/combat.s"
+#undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/player_move.s"
 #import "../common/look_flash_target.s"
 #import "../common/ui_help_clear.s"
@@ -2923,10 +2919,6 @@ c128_cache_state_end:
 #import "../common/player_magic_state.s"
 #import "../common/perf_p1.s"
 
-// Init-only strings — kept in main RAM
-// ============================================================
-title_str:
-    .text "MORIA8 C=128" ; .byte 0
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
     lda #<MAP_BASE
@@ -3227,11 +3219,14 @@ c128_test_verify_cache_survival:
 #endif
 
 .segment RuntimeCommonData
-.pseudopc $0d20 {
+.pseudopc $0ce3 {
 runtime_common_data_start:
     #import "../common/disk_setup_runtime128.s"
     #import "../common/title_cache_runtime128.s"
     #import "restart128.s"
+    #define PMU_TURN_FEEDBACK_ONLY
+    #import "../common/player_magic_turn_banked.s"
+    #undef PMU_TURN_FEEDBACK_ONLY
 runtime_common_data_end:
 }
 .segment Default
@@ -3253,6 +3248,11 @@ runtime_low_data_start:
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../common/ego_items.s"
+game_over_str:
+    .text "R)EBOOT S)TART Q)UIT" ; .byte 0
+game_over_str_end:
+title_str:
+    .text "MORIA8 C128" ; .byte 0
 runtime_low_data_end:
 }
 .segment Default
@@ -3309,6 +3309,7 @@ program_end:
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "Runtime common starts after MMU common helpers", runtime_common_data_start >= MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob), true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true

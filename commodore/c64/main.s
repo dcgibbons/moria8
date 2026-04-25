@@ -238,7 +238,9 @@ tramp_dig_ability:
 #import "dungeon_render.s"
 #import "../common/dungeon_los.s"
 #import "../common/player_move.s"
+#define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/combat.s"
+#undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/projectile.s"
 #import "../common/ranged_fire.s"
 #import "../common/throw.s"
@@ -1174,7 +1176,7 @@ game_over_prompt:
     jmp game_restart
 
 game_over_str:
-    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
+    .text "R)EBOOT S)TART  Q)UIT" ; .byte 0
 
 // ============================================================
 // game_restart — reset game state, return to title screen
@@ -1285,6 +1287,7 @@ banked_payload:
     #import "../common/disk_setup_banked.s"
     #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_map.s"
+    #import "../common/player_magic_turn_banked.s"
 
 banked_code_end:
 }
@@ -1330,7 +1333,9 @@ ovl_start_end:
     #import "../common/score.s"
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
+    #define PMU_VISIBLE_FLAGGED_EXTERNAL
     #import "../common/player_magic_execute_overlay.s"
+    #undef PMU_VISIBLE_FLAGGED_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
 ovl_death_end:

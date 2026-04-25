@@ -99,6 +99,7 @@ trap_x: .fill 16, 0
 trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
+cr_level: .fill 65, 0
 fi_add_x: .byte 0
 fi_add_y: .byte 0
 fi_add_id: .byte 0
@@ -170,6 +171,8 @@ screen_flash_reset_color:
 screen_flash_at:
 combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
+combat_msg_monster_runs_frantically:
+combat_msg_monster_unaffected:
 los_is_visible:
     clc
     rts

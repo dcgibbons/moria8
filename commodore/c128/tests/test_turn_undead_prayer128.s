@@ -113,6 +113,9 @@ test_last_huff: .byte 0
 test_spell_exec_calls: .byte 0
 test_last_spell_idx: .byte $ff
 test_progress: .byte 0
+test_frantic_calls: .byte 0
+test_unaffected_calls: .byte 0
+test_rng_value: .byte 0
 pmx_work_idx: .byte 0
 pmx_work_flag: .byte 0
 pmx_work_damage: .byte 0
@@ -180,13 +183,31 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 combat_kill_message:
-combat_msg_monster_shudders:
-combat_msg_monster_dissolves:
-los_is_visible:
 floor_item_find_at:
 floor_item_remove:
 floor_item_add:
 fi_add_clear_plain_meta:
+    clc
+    rts
+
+combat_msg_monster_shudders:
+combat_msg_monster_dissolves:
+    rts
+
+combat_msg_monster_runs_frantically:
+    inc test_frantic_calls
+    rts
+
+combat_msg_monster_unaffected:
+    inc test_unaffected_calls
+    rts
+
+los_is_visible:
+    cpx #25
+    beq !hidden+
+    sec
+    rts
+!hidden:
     clc
     rts
 
@@ -210,6 +231,10 @@ get_direction_target:
 huff_print_msg:
     stx test_last_huff
     inc test_huff_calls
+    rts
+
+test_rng_range:
+    lda test_rng_value
     rts
 
 msg_build_action:
@@ -291,6 +316,9 @@ test_reset_turn_undead_prayer_state:
     sta test_huff_calls
     sta test_last_huff
     sta test_spell_exec_calls
+    sta test_frantic_calls
+    sta test_unaffected_calls
+    sta test_rng_value
     sta cr_mflags + 0
     sta cr_mflags + 1
     sta cr_mflags + 2
@@ -348,10 +376,11 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_turn_undead_prayer_execute)
+    :PatchJump(rng_range, test_rng_range)
 
-    // Test 1: current Turn Undead affects every active undead monster,
-    // clearing sleep and setting MX_CONFUSE = player level, leaves
-    // non-undead untouched, stays silent, and marks slot 24 worked.
+    // Test 1: Turn Undead affects only visible undead. Low-level visible
+    // undead turn and report frantically, high-level visible undead resist and
+    // report unaffected, hidden undead and non-undead stay unchanged.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_turn_undead_prayer_state
     lda #CF_UNDEAD
@@ -359,6 +388,10 @@ test_start:
     sta cr_mflags + 3
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #20
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #12
+    sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_Y
     lda #7
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
     lda #2
@@ -367,10 +400,30 @@ test_start:
     sta test_mon_table + (1 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
     lda #3
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #21
+    sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #12
+    sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_Y
     lda #5
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
     lda #4
     sta test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
+    lda #3
+    sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_TYPE
+    lda #25
+    sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_X
+    lda #12
+    sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_Y
+    lda #6
+    sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
+    lda #8
+    sta test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
+    lda #1
+    sta cr_level + 1
+    lda #10
+    sta cr_level + 3
+    lda #5
+    sta test_rng_value
     jsr player_pray
     bcc !t1_fail+
     lda test_spell_exec_calls
@@ -390,9 +443,22 @@ test_start:
     cmp #9
     bne !t1_fail+
     lda test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
-    cmp #50
+    cmp #4
     bne !t1_fail+
     lda test_mon_table + (2 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
+    cmp #5
+    bne !t1_fail+
+    lda test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_CONFUSE
+    cmp #8
+    bne !t1_fail+
+    lda test_mon_table + (3 * MONSTER_ENTRY_SIZE) + MX_SLEEP_CUR
+    cmp #6
+    bne !t1_fail+
+    lda test_frantic_calls
+    cmp #1
+    bne !t1_fail+
+    lda test_unaffected_calls
+    cmp #1
     bne !t1_fail+
     lda test_huff_calls
     bne !t1_fail+
@@ -411,8 +477,8 @@ test_start:
 !t1_fail:
     jmp test_fail
 
-    // Test 2: no active undead is still a silent successful cast that spends
-    // mana and marks the prayer worked.
+    // Test 2: no visible undead prints HSTR_PIQ_NOTHING, spends mana, and
+    // marks the prayer worked.
 test_after_success:
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_turn_undead_prayer_state
@@ -434,6 +500,14 @@ test_after_success:
     cmp #9
     bne !t2_fail+
     lda test_huff_calls
+    cmp #1
+    bne !t2_fail+
+    lda test_last_huff
+    cmp #HSTR_PIQ_NOTHING
+    bne !t2_fail+
+    lda test_frantic_calls
+    bne !t2_fail+
+    lda test_unaffected_calls
     bne !t2_fail+
     lda zp_player_mp
     cmp #9

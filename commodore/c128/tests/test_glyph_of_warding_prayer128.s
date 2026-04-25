@@ -100,6 +100,7 @@ trap_x: .fill 16, 0
 trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
+cr_level: .fill 65, 0
 
 fi_x: .fill MAX_FLOOR_ITEMS, 0
 fi_y: .fill MAX_FLOOR_ITEMS, 0
@@ -157,6 +158,8 @@ monster_get_ptr:
 combat_kill_message:
 combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
+combat_msg_monster_runs_frantically:
+combat_msg_monster_unaffected:
 los_is_visible:
 monster_wake:
 monster_apply_sleep:

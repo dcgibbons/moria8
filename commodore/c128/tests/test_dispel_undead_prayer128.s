@@ -99,6 +99,7 @@ trap_x: .fill 16, 0
 trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
+cr_level: .fill 65, 0
 cmb_kill_str:
     .text "KILL" ; .byte 0
 pmx_work_idx: .byte 0
@@ -192,6 +193,8 @@ sound_play:
 combat_append_monster_name:
 combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
+combat_msg_monster_runs_frantically:
+combat_msg_monster_unaffected:
     rts
 
 los_is_visible:

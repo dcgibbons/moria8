@@ -1125,6 +1125,18 @@ combat_msg_monster_shudders:
 combat_msg_monster_dissolves:
     lda #<cmb_dissolves_str
     ldy #>cmb_dissolves_str
+    jmp combat_msg_monster_suffix
+
+#if !PMU_TURN_FEEDBACK_EXTERNAL
+combat_msg_monster_runs_frantically:
+    lda #<cmb_runs_frantically_str
+    ldy #>cmb_runs_frantically_str
+    jmp combat_msg_monster_suffix
+
+combat_msg_monster_unaffected:
+    lda #<cmb_unaffected_str
+    ldy #>cmb_unaffected_str
+#endif
 combat_msg_monster_suffix:
     pha
     tya
@@ -1147,6 +1159,12 @@ cmb_shudders_str:
     .text " shudders." ; .byte 0
 cmb_dissolves_str:
     .text " dissolves!" ; .byte 0
+#if !PMU_TURN_FEEDBACK_EXTERNAL
+cmb_runs_frantically_str:
+    .text " runs frantically!" ; .byte 0
+cmb_unaffected_str:
+    .text " is unaffected." ; .byte 0
+#endif
 
 // msg_build_levelup — "Welcome to level N."
 msg_build_levelup:

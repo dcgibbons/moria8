@@ -106,9 +106,7 @@ score_calculate:
     sta score_operand_1
     lda #0
     sta score_operand_2
-    jsr math_add_24
-
-    rts
+    jmp math_add_24
 
 // ============================================================
 // screen_put_decimal_24 — Write a 24-bit value as decimal at cursor
@@ -522,12 +520,11 @@ hiscore_insert:
     sta score_operand_0
     jsr math_cmp_24             // accum vs operand
     bcc !hi_next+               // accum < operand → keep looking
-    // accum >= operand → insert here
-    jmp !hi_insert_here+
+    bcs !hi_insert_here+        // accum >= operand → insert here
 
 !hi_next:
     inc hi_insert_idx
-    jmp !hi_find-
+    bne !hi_find-
 
 !hi_insert_here:
     // Check if table is already full and we're past the end
@@ -669,20 +666,18 @@ hiscore_display:
 !hd_loop:
     lda hd_idx
     cmp hiscore_count
-    bcc !hd_not_done+
-    jmp !hd_done+
-!hd_not_done:
+    bcs !hd_exit+
     cmp #HISCORE_MAX_ENTRIES
-    bcc !hd_not_max+
-    jmp !hd_done+
-!hd_not_max:
+    bcs !hd_exit+
 
     // Check if this row would exceed screen
     lda hd_row
     cmp #24
-    bcc !hd_not_screen+
+    bcs !hd_exit+
+    jmp !hd_continue+
+!hd_exit:
     jmp !hd_done+
-!hd_not_screen:
+!hd_continue:
 
     // Compute byte offset
     lda hd_idx
