@@ -71,6 +71,121 @@
 
 ---
 
+## 2026-04-22 — `tasks/todo.md` archival cleanup pass ✅ COMPLETE
+
+### Scope Closed
+- Reduced `tasks/todo.md` back toward a real active scratchpad instead of an appended archive of closed incidents.
+- Moved the earliest fully closed scratchpad era out of the active task list and into project history.
+
+### Archived From `tasks/todo.md`
+- `BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS`
+- `BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT`
+- `BUG-C128-DEATH-HISCORE-NOT-CENTERED`
+- `BUG-RESIST-HEAT-COLD-SILENT-TIMER-DRIFT`
+- `BUG-COMPACT-CARRIED-INVENTORY-LIKE-UPSTREAM`
+- `BUG-DROP-QUESTION-MARK-SELECT-USES-WRONG-LETTERS`
+- `BUG-BOOK-PROMPT-MIXES-SPELL-AND-PRAYER-BOOKS`
+- `BUG-HELP-ESC-CANCEL-CONTRACT`
+- `BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS`
+- `BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT`
+- `BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR`
+- `BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT`
+- `BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING`
+- `BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC`
+- `BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE`
+- `BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER`
+- `BUG-PRIEST-BLIND-CREATURE-NO-FEEDBACK`
+- `BUG-C128-DOUBLE-PRELOAD-AFTER-LOADED-SAVE-QUIT`
+- `BUG-C64-LEARN-SPELL-FOLLOWUP-KEY-LEAK`
+- `BUG-SAVE-VERSION-COMPAT-REGRESSION`
+- `BUG-FLOOR-DROP-CAPACITY-OVERFLOW`
+- `BUG-STALE-OCCUPIED-BLOCKS-FLOOR-ITEM-TILE`
+- `BUG-PSEUDO-ID-STRING-ID-ASSUMPTION`
+
+### Notes
+- This was a tracker hygiene pass, not a new implementation pass.
+- The main goal was to stop `tasks/todo.md` from presenting already-complete work as current work.
+- Later appended scratchpad eras still need follow-up cleanup; this pass only removed the earliest fully closed block so the active file now starts with genuinely open work.
+
+### Follow-Up Cleanup Included
+- A later tracker cleanup pass also removed archived writeups for:
+  - `BUG-DIG-SHIFT-D`
+  - `BUG-GAMEOVER-CLEAR-C64`
+  - `BUG-GEN-CLEAR-C64`
+  - these had become closed design/history sections embedded in the active scratchpad rather than live tasks
+- A further cleanup pass also removed archived writeups for:
+  - `BUG-HELP-PAGING`
+  - `REF-INPUT-TABLES`
+  - `REF-C128-TRAMP`
+  - `REF-CONSTS`
+  - these were already fully recorded in `BUILDPLAN_HISTORY.md` and no longer belonged in the active scratchpad
+- Another cleanup pass also removed archived writeups for:
+  - `BUG-XP-PACE`
+  - the C128 dungeon-entry overlay/tier ownership fix follow-up
+  - these were already captured in `BUILDPLAN_HISTORY.md` and no longer belonged in the active scratchpad
+- Another cleanup pass also removed archived writeups for:
+  - `AUDIT-IO-C128`
+  - `REF-MON-SOA`
+  - these were already captured in `BUILDPLAN_HISTORY.md` and no longer belonged in the active scratchpad
+- Another cleanup pass also removed closed spell/parity bug writeups for:
+  - `BUG-DISPELL-EVIL-MISSING-FEEDBACK`
+  - `BUG-DISPELL-EVIL-NO-EFFECT-FEEDBACK`
+  - `BUG-HOLY-WORD-UMORIA-PARITY`
+  - `BUG-GLYPH-OF-WARDING-UMORIA-PARITY`
+  - these were finished work that no longer belonged in the active scratchpad, even though they had been left embedded inside a mixed lower section
+- Another cleanup pass also removed closed run/status bug writeups for:
+  - `BUG-C128-RUN-SHIFT-CHORD-REGRESSION`
+  - `BUG-C128-RUN-SHIFT-RELEASE-CANCEL`
+  - `BUG-RUN-STALE-PENDING-MESSAGE`
+  - `BUG-C128-RUN-STOP-INPUT-STATE`
+  - `BUG-PRAYER-EXPIRY-ONSET-MESSAGE`
+  - `BUG-RUN-MESSAGE-DISAPPEARS`
+  - `BUG-STATUS-FULL-REFLASH-ON-MOVE`
+  - `BUG-C128-VDC-MOVE-REDRAW-SLOWDOWN`
+  - `BUG-DETECT-EVIL-FALSE-NO-EVIL`
+  - these were finished work that no longer belonged in the active scratchpad, even though they had been left embedded near active redesign tasks
+- Another cleanup pass also removed additional fully checked standalone bug writeups for:
+  - `BUG-BALL-SPELL-KILL-FEEDBACK`
+  - `BUG-C128-RECALL-GLYPH-CORRUPTION`
+  - `BUG-RECALL-RESTORE-UMORIA`
+  - `BUG-C128-TITLE-BOOT-QUIT-PROMPT`
+  - `BUG-C128-BUILD-GATE`
+  - `BUG-C64-INVENTORY-OVERLAY-OWNERSHIP`
+  - `BUG-C64-WIZARD-OVERLAY-OWNERSHIP`
+  - `BUG-SPELL-HARDENING`
+  - `BUG-C64-RECALL-OVERLAY-STATE`
+  - `BUG-C64-STRING-SHORTEN-REGRESSION`
+  - `BUG-HARNESS-C128-1`
+  - these were fully checked standalone bug blocks that no longer belonged in the active scratchpad
+
+## 2026-04-22 — spell-branch backlog reconciliation and merged closure sweep ✅ COMPLETE
+
+### Scope Closed
+- Reconciled the active backlog docs after the merged spell branch left several already-shipped fixes and features still marked as open.
+- Removed stale active-plan entries for work that is already complete in the main project history.
+
+### What Closed In This Reconciliation
+- Features:
+  - `FEAT-BOOT-ART`
+  - `FEAT1`
+- Bugs:
+  - `BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS`
+  - `BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT`
+  - `BUG-HELP-ESC-CANCEL-CONTRACT`
+  - `BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS`
+  - `BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT`
+  - `BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR`
+  - `BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT`
+  - `BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING`
+  - `BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC`
+  - `BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE`
+  - `BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER`
+
+### Notes
+- This pass is documentation reconciliation, not a fresh implementation pass.
+- The underlying work was already completed and merged on the spell branch; the stale state was that `BUILDPLAN.md` and `tasks/todo.md` still showed those items as open.
+- Earlier detailed history entries for individual fixes remain the source of truth where they already exist; this entry records the closure sweep that brought the active backlog back in sync.
+
 ## 2026-04-21 — `BUG-C128-DEATH-HISCORE-NOT-CENTERED` centered death overlay layout ✅ COMPLETE
 
 ### Scope Closed
