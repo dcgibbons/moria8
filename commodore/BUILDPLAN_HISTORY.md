@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-04-26 — `BUG-POISON-CURE-FEEDBACK` Cure Poison / Neutralize Poison feedback ✅ COMPLETE
+
+### Scope Closed
+- Rechecked the stale backlog item that `Cure Poison` and `Neutralize Poison` gave no success feedback.
+- Confirmed the issue was still real: both direct rows dispatched to silent `eff_cure_poison`, and the focused tests asserted no message on poisoned success.
+- Added feedback for actual poison clearing while preserving silence for already-clear casts.
+
+### What Shipped
+1. **Direct poison-clearing rows now report recovery**
+   - `commodore/common/player_magic_execute_overlay.s`
+   - mage `Cure Poison` and priest `Neutralize Poison` now dispatch to `pmx_cure_poison_msg`
+   - the wrapper clears `zp_eff_poison` and prints `HSTR_EFF_POISON_END` (`You feel better.`) only when poison was nonzero
+2. **Silent low-level effect remains available**
+   - `commodore/common/spell_effects.s`
+   - `eff_cure_poison` still only clears the poison timer
+   - composite/internal callers such as `Holy Word` keep their existing single-message behavior
+3. **C128 placement stays inside hard boundaries**
+   - `commodore/c128/main.s`
+   - C128 product builds place the wrapper in runtime-low RAM instead of increasing the Default staged source or Death overlay
+   - the fallback title string moved into the UI overlay and the game-over prompt was shortened so runtime-low still ends at `$19FF`
+4. **Tests and docs updated**
+   - C64/C128 `Cure Poison` and `Neutralize Poison` row tests now require recovery feedback on actual poison clear
+   - `commodore/SPELLS.md` and `commodore/SPELL_TEST_PLAN.md` now document the feedback contract
+
+### Verification
+- Focused C128 cold rows: `cure_poison128,neutralize_poison_prayer128`: PASS
+- `make -C commodore test64`: PASS (`120 passed, 0 failed`)
+- `make disk128`: PASS (`364 asserts, 0 failed`)
+- `make test128-fast`: PASS
+
+---
+
 ## 2026-04-26 — `BUG-C128-SPELL-BOOK-ESC-JAM-E4D8` item overlay key-read banking fix ✅ COMPLETE
 
 ### Scope Closed

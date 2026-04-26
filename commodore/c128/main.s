@@ -1883,7 +1883,7 @@ tramp_reu_show_status:
     :C128BankedStatusTrampoline(reu_show_status_banked)
 
 // ============================================================
-.const GAME_OVER_COL = (SCREEN_COLS - 20) / 2
+.const GAME_OVER_COL = (SCREEN_COLS - 18) / 2
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
@@ -2896,7 +2896,9 @@ c128_cache_state_end:
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/spell_data.s"
+#define C128_PRODUCT_RUNTIME_LOW_CURE
 #import "../common/spell_effects.s"
+#undef C128_PRODUCT_RUNTIME_LOW_CURE
 #import "../common/item.s"
 #import "../common/store_data.s"
 
@@ -3248,11 +3250,18 @@ runtime_low_data_start:
     #import "monster_threat_vdc.s"
     #import "dungeon_render_vdc.s"
     #import "../common/ego_items.s"
+pmx_cure_poison_msg:
+    lda zp_eff_poison
+    beq !pcpm_done+
+    lda #0
+    sta zp_eff_poison
+    ldx #HSTR_EFF_POISON_END
+    jmp huff_print_msg
+!pcpm_done:
+    rts
 game_over_str:
-    .text "R)EBOOT S)TART Q)UIT" ; .byte 0
+    .text "R)BOOT S)NEW Q)UIT" ; .byte 0
 game_over_str_end:
-title_str:
-    .text "MORIA8 C128" ; .byte 0
 runtime_low_data_end:
 }
 .segment Default
@@ -3444,6 +3453,8 @@ ovl_help_end:
     #import "../common/spell_names.s"
     #import "../common/player_magic_select_overlay.s"
     #import "../common/player_gain_spell.s"
+title_str:
+    .text "MORIA8 C128" ; .byte 0
     #import "../common/title_screen.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)

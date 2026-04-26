@@ -181,7 +181,7 @@ test_tramp_neutralize_poison_execute:
     inc test_spell_exec_calls
     lda pm_spell_idx
     sta test_last_spell_idx
-    jmp eff_cure_poison
+    jmp pmx_cure_poison_msg
 
 test_pm_select_book:
     lda #6
@@ -273,8 +273,8 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_neutralize_poison_execute)
 
-    // Test 1: poisoned prayer clears poison, spends 6 mana, stays silent, and
-    // marks Neutralize Poison worked.
+    // Test 1: poisoned prayer clears poison, reports recovery, spends 6 mana,
+    // and marks Neutralize Poison worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_neutralize_poison_state
     lda #9
@@ -290,6 +290,10 @@ test_start:
     lda zp_eff_poison
     bne !t1_fail+
     lda test_huff_calls
+    cmp #1
+    bne !t1_fail+
+    lda test_last_huff
+    cmp #HSTR_EFF_POISON_END
     bne !t1_fail+
     lda zp_player_mp
     cmp #14

@@ -250,6 +250,18 @@ eff_cure_poison:
     sta zp_eff_poison
     rts
 
+#if !C128_PRODUCT_RUNTIME_LOW_CURE
+pmx_cure_poison_msg:
+    lda zp_eff_poison
+    beq !pcpm_done+
+    lda #0
+    sta zp_eff_poison
+    ldx #HSTR_EFF_POISON_END
+    jmp huff_print_msg
+!pcpm_done:
+    rts
+#endif
+
 // ============================================================
 // eff_detect_monsters — Activate detect monsters effect (timer)
 // While timer > 0, renderer shows detected monsters regardless

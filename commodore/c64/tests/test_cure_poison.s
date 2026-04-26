@@ -120,7 +120,7 @@ test_tramp_cure_poison_execute:
     inc tcp_spell_exec_calls
     lda pm_spell_idx
     sta tcp_last_spell_idx
-    jmp eff_cure_poison
+    jmp pmx_cure_poison_msg
 
 test_pm_select_book:
     lda #1
@@ -198,8 +198,8 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: poisoned cast clears poison, spends 5 mana, stays silent, and
-    // marks Cure Poison worked.
+    // Test 1: poisoned cast clears poison, reports recovery, spends 5 mana,
+    // and marks Cure Poison worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_cure_poison_state
     lda #9
@@ -215,6 +215,10 @@ test_start:
     lda zp_eff_poison
     bne !t1_fail+
     lda tcp_huff_calls
+    cmp #1
+    bne !t1_fail+
+    lda tcp_last_huff_id
+    cmp #HSTR_EFF_POISON_END
     bne !t1_fail+
     lda zp_player_mp
     cmp #15

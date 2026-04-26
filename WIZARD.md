@@ -81,6 +81,17 @@ This:
 - restores mana
 - clears poison, blindness, confusion, paralysis, fear, recall timer, and speed timer
 
+### Test poison cures
+
+Wizard Mode does not have a direct command to set poison. To test `Cure Poison`
+or `Neutralize Poison` feedback:
+
+1. Generate a poison potion: `Ctrl+W`, `G`, `19`
+2. Quaff the generated potion with `q`
+3. Cast `Cure Poison` or pray `Neutralize Poison`
+4. Expected result: poison clears and `You feel better.` is printed
+5. Cast/pray the same row again while already clear; it should remain silent
+
 ### Generate common test items
 
 - Cure Light Wounds potion: `17`

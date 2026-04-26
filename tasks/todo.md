@@ -3,6 +3,21 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [ ] BUG-POISON-CURE-FEEDBACK
+ - [x] Reported Failure Gate:
+   - Backlog item check: `Cure Poison` and `Neutralize Poison` do not give feedback; verify whether stale, and fix if still true.
+ - [x] inspect current effect dispatch, docs, and focused C64/C128 row tests
+ - [x] add spell/prayer-facing poison-clear feedback without changing silent low-level effect callers
+ - [x] update focused C64/C128 tests and spell docs
+ - [x] verify focused poison rows plus relevant C64/C128 regression gates
+ - [x] review:
+   - The backlog item was still valid: mage `Cure Poison` and priest `Neutralize Poison` dispatched directly to silent `eff_cure_poison`, and the focused row tests explicitly asserted zero feedback on poisoned success.
+   - Added `pmx_cure_poison_msg` as the direct spell/prayer dispatch target. It prints `HSTR_EFF_POISON_END` (`You feel better.`) only when `zp_eff_poison` was nonzero, then clears poison; already-clear casts remain silent.
+   - Kept `eff_cure_poison` silent for composite/internal callers such as `Holy Word`. On C128 product builds, the reporting wrapper lives in runtime-low RAM so the Default staged source and Death overlay boundaries remain green.
+   - Updated C64/C128 focused tests and spell docs to require poison-clear feedback on actual clear and silence on already-clear success.
+   - Verification passed: focused C128 `cure_poison128,neutralize_poison_prayer128`, `make -C commodore test64` (`120 passed, 0 failed`), `make disk128` with `364 asserts, 0 failed`, and `make test128-fast`.
+
+## Recently Completed Task
  - [x] BUG-C128-SPELL-BOOK-ESC-JAM-E4D8
  - [x] Reported Failure Gate:
    - C128 live spell-book ESC path CPU JAMs at `$E4D8`; monitor stack: `$2EAF -> JSR $E4BE`, `$C049 -> JSR $2E99`
