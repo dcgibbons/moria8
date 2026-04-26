@@ -5,96 +5,10 @@
 
 ---
 
-## Current State (2026-04-26)
+## Active Scope (2026-04-26)
 
-- All core phases 1–9 are complete.
-- C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
-- The Commodore build is centered on [Makefile](Makefile), with the root [Makefile](../Makefile) acting as a thin wrapper.
-- Shipping disk artifacts are now split by platform:
-  - C64: [out/moria8-c64.d64](out/moria8-c64.d64)
-  - C128: [out/moria8-c128.d71](out/moria8-c128.d71)
-- C64 now has a working boot-art path that loads a separate `bootart64` asset, copies it into a VIC-safe hidden-RAM bitmap layout, keeps it visible through the later `MORIA64` load, and is now sourced from the tracked artist PNG at `artwork/moria8_loading_art_c64.png`.
-- C128 now has a working native 80-column boot-art path sourced from the tracked tile-native PNG at `artwork/moria8_C128loadingart_tile_native.png`; the build converts it into a VDC custom-charset poster helper, keeps it visible through the later `MORIA128` load, then restores the normal charset contract before the title flow.
-- The C128 boot-art helper now writes the poster attribute map before the screen map, so the custom-font poster does not flash briefly under the old charset state first.
-- The help/modal cancel contract is now platform-correct:
-  - C64 uses `RUN/STOP` as the escape-equivalent dismiss key for help and other read-only modal screens
-  - C128 keeps real `ESC` support and also accepts `STOP` so modal dismissal remains reliable under VICE host-key mapping quirks
-  - the shared modal input helper layer now owns that escape-equivalent classification instead of open-coded raw key compares
-- C64 in-game input now locks the KERNAL Shift+C= charset toggle:
-  - startup and IRQ-backed input/release polling set `$0291` bit 7 before enabling keyboard IRQ scanning
-  - live C64 Commodore+Shift can no longer flip the active VIC charset while the game is running
-  - focused C64 input coverage and static contracts pin this before-`cli` input invariant
-- The current shipping-art baseline is split by platform:
-  - C64 uses the shipped artist PNG through the bitmap boot-art pipeline.
-  - C128 uses the tracked tile-native PNG through the VDC custom-charset boot-art pipeline.
-- The title screen and disk directory cards now show per-platform display versions sourced from [../version.json](../version.json).
-- Town now uses a fixed shared `66x22` footprint on both platforms, with the 8-building Commodore layout refit inside that space; C64 clamps town viewport movement to that logical footprint, while C128 preserves the existing wide entry framing and prevents fake border-wall artifacts by keeping out-of-town backing space non-presentational.
-- FEAT-DISK is now operational on both platforms:
-  - C64 title `L`, one-drive/two-drive setup, save-disk marker init, save, and load are working again.
-  - C128 in-game `Shift+S`, save-disk marker init on drive `9`, save, reboot, and later load are working again.
-- The shared save/load refactor is now closed on both platforms:
-  - save files are kept after load and after death instead of being consumed automatically
-  - saving over an existing `THE.GAME` now asks for overwrite confirmation
-  - C128 one-drive flows no longer ask for the program disk again after initial load
-  - C64/C128 prompt cadence and fullscreen clears have been reworked so save/load disk prompts no longer stack on stale gameplay/title screens
-- Post-refactor copy audit follow-up is now closed:
-  - the restored pre-refactor save/load runtime strings remain in place
-  - the C64 resident overrun was fixed by moving the dead save-side RLE compressor to test-only ownership instead of touching user-facing copy
-  - the follow-up C64 UI ownership pass is also now closed:
-    - `UiOverlay` now owns the character and equipment modal screens on C64
-    - inventory is back on the banked C64 path because it is a high-frequency command and the measured cost is only `240` bytes
-    - monster recall and wizard stay on the banked C64 path because both can hit gameplay/tier restore flows that need the live `$E000` tier window
-    - the dead resident `string_bank.s` import and dead banked `string_bank_banked.s` import are both gone from the shipping C64 image
-    - current direct C64 assembly reports `Program fits below MAP_BASE=true` with `banked payload: 2898 bytes at $BE6E-$C9C0`
-- The recent C128 `Glyph of Warding` cast-text corruption is now closed:
-  - the root cause was ownership/layout drift, not character encoding
-  - gameplay spell text no longer depends on raw resident literals that can spill into `DeathOverlay` or past the C128 staged-source ceiling
-  - the glyph feedback and save/load status copy now live in the shared Huffman dictionary, which restored the C128 staged image under `$E000` without shortening user-facing text
-- The recent C128 `Glyph of Warding` disappearing-glyph redraw bug is now closed:
-  - the root cause was renderer parity drift, not lost glyph state
-  - full `render_viewport` now reapplies the glyph overlay instead of only the single-tile path doing so
-  - the focused VDC renderer tests now cover glyph overlay on full redraw so room-reveal redraws cannot silently erase visible glyphs again
-- The mixed spell/prayer book inventory prompt bug is now closed:
-  - upstream `umoria` and `vms-moria` filter book prompts by exact book class before selection, while the Commodore port had drifted to a broad `ICAT_BOOK` prompt followed by late rejection
-  - the live fix now uses exact mage-book vs prayer-book prompt filters, so both the visible letters and the `?` inventory overlay only show books the active caster can actually use
-  - the focused regression coverage now seeds a mixed inventory and asserts that prayer selection only renders prayer books in the visible prompt list
-- The recent C64 immediate prompt-range corruption is now closed and hardened:
-  - the root cause was an encoding seam in the shared dynamic prompt patcher, not an overlay/input flow bug
-  - C64 prompt ranges like `(a-c)` now patch screen-code letters into screen RAM instead of PETSCII lowercase bytes
-  - focused C64 runtime coverage now locks down the shared prompt patcher plus the live `Drop`, `Wear`, `Take-off`, spell/prayer-book, and cast/pray prompt rows
-- Spell UI regression coverage is now stronger on both platforms:
-  - C64 and C128 both have product-path smokes for the mage book inventory overlay (`m -> ?`) and the spell list overlay (`m -> book -> ?`)
-  - `make test128-fast-smoke` now includes those overlay smokes instead of relying only on cast/cancel flows
-- The `drop` item prompt contract is now back in line with the rest of the item selectors:
-  - sparse all-item inventories once again advertise the real highest selectable letter instead of a hardcoded `(a-v)` range
-  - the C128 live fix also handles lowercase direct-scan letter picks on the `drop -> ?` path without widening the shared prompt parser contract
-  - the final fix stayed local enough to keep the C128 staged-source/build128 gate green instead of growing the shared prompt machinery
-- The `throw` item prompt and landing redraw contract is now closed:
-  - throw now uses the shared occupied carried-item selector, so the prompt range, `?` overlay, and accepted letters all match the visible carried-item list
-  - successful non-potion throws now request the existing post-action scene redraw after floor placement, so landed items become visible immediately instead of waiting for later movement
-  - focused C64 throw coverage now checks selector mapping and the thrown-item redraw latch
-- C64/C128 program-media preload filenames now use single-source string ownership:
-  - runtime, tier, and overlay preload display paths point at the same filename literals used by KERNAL `SETNAM`, with explicit load lengths excluding display terminators
-  - C64 REU filename display translates those PETSCII filename bytes to screen codes instead of requiring duplicate screen-code display strings
-  - `c128_user_visible_string_guard` rejects reintroducing duplicate/shortened C128 preload filename display strings
-- Carried inventory removal now matches upstream Moria pack compaction:
-  - local `umoria` and `vms-moria` both shift later carried items left after a whole-item removal, and the Commodore port now does the same instead of preserving sparse holes
-  - carried-item letters now follow the current packed order, while equipment remains fixed-slot
-  - the exact verification gates are back at the intended state after the change: forced `build128` is green again and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
-- The recent `Resist Heat and Cold` silent-cast bug is now closed:
-  - the Commodore port had drifted from a timed buff into a quasi-permanent latched flag that suppressed later feedback and never decayed
-  - the live fix restores timed duration, per-turn decay, and player-facing feedback on cast instead of leaving the prayer path as a beep-only action
-  - the exact verification gates are back at the intended state after the change: `make -C commodore build128` is green and the C64 full test command is restored to its prior `41 passed, 4 failed` baseline
-- The C128 death/high-score screen is now centered correctly in 80-column mode:
-  - the shared death overlay no longer paints a raw 40-column left-anchored layout into the VDC surface
-  - `score.s` now expresses the death screen as a centered 40-column block using `SCREEN_COLS` math, so the C64 layout remains unchanged while C128 recenters cleanly
-  - compile-time guards now keep the score values, hiscore padding column, and footer inside the visible screen on both targets
-- `FEAT-VMS-RECALL-SEMANTICS` is now closed:
-  - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
-  - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow
-  - detailed monster knowledge remains a future `look`/UX follow-up rather than a `/` responsibility
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, `BUG-HELP-ESC-CANCEL-CONTRACT`, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, `BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS`, `BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT`, `BUG-C64-COMMODORE-SHIFT-CHARSET`, `BUG-THROW-INVENTORY-FILTER`, `BUG-THROWN-ITEM-REDRAW`, `BUG-C128-RUNTIME-PRELOAD-DISPLAY-NAME`, `REF-FILENAME-SINGLE-SOURCE`, `BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS`, `BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT`, `BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR`, `BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT`, `BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING`, `BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC`, `BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE`, `BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, `FEAT-BOOT-ART`, `FEAT1`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
-- C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
+- Keep this file limited to open phases, cleanup work, and features.
+- Completed current-state details and resolved task notes through 2026-04-26 are archived in [BUILDPLAN_HISTORY.md](BUILDPLAN_HISTORY.md).
 
 ## Open Phases / Display Work
 

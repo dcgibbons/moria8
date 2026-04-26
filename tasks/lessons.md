@@ -5,6 +5,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Verification
 
+- When the user asks for active doc cleanup, move completed material out of `tasks/todo.md` and `commodore/BUILDPLAN.md` into `commodore/BUILDPLAN_HISTORY.md` verbatim before rewriting active docs. Do not leave stale `[x]`, "recently completed," or resolved-state blocks in active planning files.
 - When an action creates or removes a remote floor-visible object without moving the player, set the existing scene-redraw latch at the mutation site. A correct floor table and `FLAG_HAS_ITEM` update is not enough if the post-action renderer can choose the local redraw path.
 - Do not satisfy a “not wall” visual/inspect bug with a generic nearby message. If the user-visible object is a glyph/rune, the regression must assert glyph/rune copy, not merely any non-wall description.
 - For placement spells that store state separately from terrain, prayer-row tests must exercise the user-visible inspect/look path after placement, not only spell dispatch, placement bookkeeping, renderer glyphs, or monster interactions.
