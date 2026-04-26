@@ -1049,6 +1049,10 @@ check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items
     "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
     "!pm_psc_show_list:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_spell_list_display|||jsr input_get_key"
+check_static_contract "overcast_faint_more_contract" "../common/player_magic.s" \
+    "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr input_get_key"
+check_static_contract "paralysis_final_tick_message_contract" "../common/game_loop.s" \
+    "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count

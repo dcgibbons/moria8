@@ -6,7 +6,7 @@
 .pc = $E000 "Result Buffer"
 tc_results: .fill 2, $ff
 
-.pc = $080E "Bootstrap"
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
@@ -27,7 +27,10 @@ test_finish:
     :BankInKernal()
     jmp test_done_break
 
-.pc = $0840 "Test Code"
+test_done_break:
+    brk
+
+.pc = $0840 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -305,6 +308,3 @@ test_start:
     lda #$00
     sta tc_results + 1
     jmp test_finish
-
-test_done_break:
-    brk

@@ -55,11 +55,16 @@
   - `Haste Self`, `Protection from Evil`, and `Sense Invisible` keep explicit onset feedback
   - `Resist Heat and Cold` now has explicit onset feedback and split heat/fire vs cold timer storage; the current prayer path refreshes both halves together
   - `Create Food`, `Glyph of Warding`, and `Recharge` now explain blocked/no-target cases instead of failing silently
+  - successful overcasts now run the spell/prayer effect first, then print `You faint from fatigue.` once, show `-MORE-`, and wait for acknowledgement before paralysis turns begin
+  - forced paralysis turns intentionally do not enter unattended `-MORE-`; the final recovery tick clears stale message state before `You can move again.`
   - timed expiry text for bless/haste/protection is still intentionally omitted on Commodore; this remains a documented deviation from richer `umoria` status messaging
 
 ## Coverage Audit
 
 - Shared family coverage added during hardening:
+  - shared cast/pray bookkeeping:
+    - C64 has runtime and static coverage proving successful overcast ordering: effect/prompt work completes before faint feedback, faint feedback is acknowledged with `-MORE-`, mana is zeroed, paralysis is applied, and automatic paralysis recovery cannot stack into an unattended message prompt
+    - C128 has focused prayer-row coverage proving successful overcast prayers print the faint feedback once, call the acknowledgement path, zero mana, apply paralysis, and preserve worked-bit bookkeeping
   - bolts/projectiles:
     - `Magic Missile` now has a shared runtime regression proving bolt flashes originate from the correct viewport cell and do not end in `HSTR_EB_FIZZLE` on an immediate hit
     - `Magic Missile` now also has row-level coverage on `C64+C128` for explicit cast-fail handling, silent no-target behavior, and mana/worked bookkeeping

@@ -103,7 +103,7 @@ Sorry, what was that again?
 @PM_NO_CAST You cannot cast spells.
 @PM_NO_PRAY You cannot pray.
 @PM_NOT_KNOWN You don't know that spell.
-@PM_NO_MANA Not enough mana.
+@PM_NO_MANA You faint from fatigue.
 @PM_NO_EXP You're not experienced enough.
 @PM_FAIL Your spell fails.
 @PM_YOU_CAST Spell book (a-v)?

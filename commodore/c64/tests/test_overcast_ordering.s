@@ -1,7 +1,8 @@
 // test_overcast_ordering.s — Runtime regression for shared overcast sequencing.
 //
 // Ensures a successful overcast spell executes first, then emits the
-// insufficient-mana warning after the effect/prompt work has already run.
+// upstream faint-from-fatigue feedback after the effect/prompt work has already
+// run.
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -99,6 +100,8 @@ tpm_spell_exec_calls: .byte 0
 tpm_huff_calls:     .byte 0
 tpm_first_huff_id:  .byte 0
 tpm_second_huff_id: .byte 0
+tpm_more_calls:     .byte 0
+tpm_key_calls:      .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -113,7 +116,12 @@ test_input_wait_release:
     rts
 
 test_input_get_key_a:
+    inc tpm_key_calls
     lda #$41
+    rts
+
+test_msg_show_more:
+    inc tpm_more_calls
     rts
 
 test_pm_select_book:
@@ -164,6 +172,7 @@ test_huff_print_msg:
 test_start:
     :PatchJump(input_wait_release, test_input_wait_release)
     :PatchJump(input_get_key, test_input_get_key_a)
+    :PatchJump(msg_show_more, test_msg_show_more)
     :PatchJump(huff_print_msg, test_huff_print_msg)
     :PatchJump(test_spell_execute_selected, test_tramp_spell_execute_prompt)
     :PatchJump(pm_select_book, test_pm_select_book)
@@ -197,6 +206,8 @@ test_start:
     sta tpm_huff_calls
     sta tpm_first_huff_id
     sta tpm_second_huff_id
+    sta tpm_more_calls
+    sta tpm_key_calls
 
     jsr player_cast_spell
     bcc !fail+
@@ -212,6 +223,14 @@ test_start:
     lda tpm_second_huff_id
     cmp #HSTR_PM_NO_MANA
     bne !fail+
+    lda tpm_more_calls
+    cmp #1
+    bne !fail+
+    lda tpm_key_calls
+    cmp #2
+    bne !fail+
+    lda zp_eff_paralyze
+    beq !fail+
     lda zp_player_mp
     bne !fail+
     lda player_data + PL_MANA

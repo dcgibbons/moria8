@@ -96,6 +96,8 @@ vis_room_revealed: .byte 0
 
 test_huff_calls: .byte 0
 test_last_huff: .byte 0
+test_more_calls: .byte 0
+test_key_calls: .byte 0
 test_msg_calls: .byte 0
 test_last_msg_lo: .byte 0
 test_last_msg_hi: .byte 0
@@ -123,7 +125,6 @@ viewport_update:
 render_viewport:
 status_draw:
 input_wait_release:
-input_get_key:
 input_get_key_fast:
 show_inv_and_select:
 tramp_spell_list_display:
@@ -153,6 +154,16 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 msg_clear:
+    clc
+    rts
+
+input_get_key:
+    inc test_key_calls
+    clc
+    rts
+
+test_msg_show_more:
+    inc test_more_calls
     clc
     rts
 
@@ -235,6 +246,9 @@ test_reset_prayer_prayer_state:
     lda #0
     sta test_huff_calls
     sta test_last_huff
+    sta test_more_calls
+    sta test_key_calls
+    sta zp_msg_flags
     sta test_msg_calls
     sta test_last_msg_lo
     sta test_last_msg_hi
@@ -294,6 +308,7 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
     :PatchJump(tramp_spell_execute_selected, test_tramp_spell_execute_selected)
+    :PatchJump(msg_show_more, test_msg_show_more)
 
     // Test 1: onset prints the righteous message, sets the bless timer to 48,
     // spends 22 mana, and marks Prayer worked.
@@ -372,38 +387,83 @@ test_after_onset:
 !t2_fail:
     jmp test_fail
 
-    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not set
-    // bless, and leaves Prayer unworked.
+    // Test 3: successful overcast prayer executes, then prints upstream-style
+    // fatigue faint feedback, zeros mana, and applies paralysis.
 test_after_refresh:
-    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_prayer_prayer_state
+    lda #1
+    sta zp_player_mp
+    sta player_data + PL_MANA
+    sta test_rng_value
     jsr player_pray
     bcc !t3_fail+
     lda test_spell_exec_calls
+    cmp #1
     bne !t3_fail+
-    lda zp_eff_bless
+    lda test_last_spell_idx
+    cmp #25
     bne !t3_fail+
     lda test_huff_calls
     cmp #1
     bne !t3_fail+
     lda test_last_huff
-    cmp #HSTR_PM_FAIL
+    cmp #HSTR_PM_NO_MANA
     bne !t3_fail+
-    lda test_msg_calls
+    lda test_more_calls
+    cmp #1
+    bne !t3_fail+
+    lda test_key_calls
+    cmp #1
+    bne !t3_fail+
+    lda zp_eff_paralyze
+    cmp #2
     bne !t3_fail+
     lda zp_player_mp
-    cmp #8
     bne !t3_fail+
     lda player_data + PL_MANA
-    cmp #8
     bne !t3_fail+
     lda player_data + PL_SPELLS_WORKED_3
     and #$02
-    bne !t3_fail+
+    beq !t3_fail+
+    lda #4
+    sta test_progress
+    jmp test_after_overcast
+!t3_fail:
+    jmp test_fail
+
+    // Test 4: cast failure spends mana, prints HSTR_PM_FAIL, does not set
+    // bless, and leaves Prayer unworked.
+test_after_overcast:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    jsr test_reset_prayer_prayer_state
+    jsr player_pray
+    bcc !t4_fail+
+    lda test_spell_exec_calls
+    bne !t4_fail+
+    lda zp_eff_bless
+    bne !t4_fail+
+    lda test_huff_calls
+    cmp #1
+    bne !t4_fail+
+    lda test_last_huff
+    cmp #HSTR_PM_FAIL
+    bne !t4_fail+
+    lda test_msg_calls
+    bne !t4_fail+
+    lda zp_player_mp
+    cmp #8
+    bne !t4_fail+
+    lda player_data + PL_MANA
+    cmp #8
+    bne !t4_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$02
+    bne !t4_fail+
     lda #3
     sta test_progress
     jmp test_pass
-!t3_fail:
+!t4_fail:
     jmp test_fail
 
 test_fail_loop:

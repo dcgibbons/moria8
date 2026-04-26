@@ -54,7 +54,7 @@ player_cast_spell:
 !pm_level_ok:
     lda #SPELL_MAGE
     sta pm_spell_type
-    lda #0
+    lsr
     sta pm_mode
     jsr pm_setup_active_tables
     jsr pm_select_book
@@ -595,12 +595,15 @@ pm_consume_mana:
     bcc !pm_cm_normal+
     beq !pm_cm_normal+
 
-    sec
     sbc zp_player_mp
     sta zp_temp0
 
     ldx #HSTR_PM_NO_MANA
     jsr huff_print_msg
+    // The faint reason is important feedback; acknowledge it during the
+    // initiating action so forced paralysis turns never enter -MORE-.
+    jsr msg_show_more
+    jsr input_get_key
 
     lda #5
     ldx zp_temp0
@@ -618,16 +621,15 @@ pm_consume_mana:
 
     lda #3
     jsr rng_range
-    cmp #1
-    bne !pm_cm_done+
+    lsr
+    bcc !pm_cm_done+
     lda player_data + PL_CON_CUR
     cmp #4
     bcc !pm_cm_done+
     dec player_data + PL_CON_CUR
-    lda player_data + PL_CON_CUR
-    sta zp_player_con
+    dec zp_player_con
     jsr player_calc_hp
-    jmp !pm_cm_done+
+    rts
 
 !pm_cm_normal:
     lda zp_player_mp

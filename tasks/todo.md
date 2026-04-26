@@ -11,6 +11,7 @@ This file is a temporary working scratchpad.
 - [x] verify:
   - `make -C commodore test64`
   - `make -C commodore test128-fast-smoke`
+  - `make -C commodore test128-fast`
 - [x] review:
   - Upstream umoria and VMS Moria both model Glyph of Warding as scare-monster / visible-trap object text `a strange rune` displayed as `^`.
   - The shared look path now reports the glyph through `HSTR_PMU_GLYPH_OK` text `You see a strange rune.` instead of generic trap text, and the C64 prayer row asserts that exact message ID.
@@ -5480,3 +5481,52 @@ The section below is retained only as historical context for the earlier dual-en
   - current implementation clamps live message rendering to one row width and stores only one `SCREEN_COLS` slice per history entry in `commodore/common/ui_messages.s`, `commodore/c64/screen.s`, and `commodore/c128/screen_vdc.s`
   - priority: low polish; rare on normal play, more visible on deeper levels with long monster names/effects
   - desired future fix: wrap across rows 0-1 cleanly, preserve sensible `-more-` behavior, and decide whether history should keep wrapped/continued lines or widened entries
+
+- [x] BUG-MANA-EXHAUSTION-C64-HANG
+- [x] Reported Failure Gate:
+  - Live C64 overcast/faint hang with monitor trace `PC=$0004`, `$01=$35`, repeated `IRQ -> ffff`; treat as a C64 KERNAL-hidden IRQ/message path regression from the mana feedback change.
+- [x] prevent automatic paralysis turns from entering message `-MORE-` / input while preserving visible faint reason during the faint
+- [x] add focused regression coverage for final paralysis tick with a full message area
+- [x] verify:
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+  - `make -C commodore test128-fast`
+- [x] review:
+  - Root cause was the previous message-preservation change allowing forced paralysis ticks to stack into the two-line message queue; the final `You can move again.` could become a third message and enter `-MORE-`/input from a no-input turn.
+  - `game_loop.s` now preserves the faint reason during paralysis, but clears stale message state only when `zp_eff_paralyze == 1` immediately before the final tick that can print recovery feedback.
+  - C64 has a static contract locking that exact branch order so the final automatic paralysis tick cannot regress back into a queued-message/input path.
+  - Verification is green on C64 and C128 smoke.
+
+- [x] BUG-MANA-EXHAUSTION-FEEDBACK
+- [x] Reported Failure Gate:
+  - Live overcast/fainting after going below minimum mana only leaves visible `You can move again.` feedback; player needs the upstream-style reason for the faint.
+- [x] audit Commodore mana exhaustion and paralysis message flow against local VMS Moria and umoria
+- [x] replace the generic low-mana feedback with upstream overcast faint feedback while preserving paralysis odds, zero-mana behavior, and existing CON-damage mechanics
+- [x] keep fainting-turn mana regeneration unchanged because paralysis still advances normal turns, matching the observed recovery explanation
+- [x] add focused C64 and C128 tests proving overcast success reports faint feedback and still zeros mana/paralyzes
+- [x] verify:
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+- [x] review:
+  - VMS Moria prints `You faint from the effort!` for mage overcast and `You faint from fatigue!` for prayer overcast; umoria has the same split.
+  - Commodore now uses compact upstream-style `You faint from fatigue.` feedback for the shared overcast path instead of the old generic `Not enough mana.` string, keeping C64 under the resident `MAP_BASE` boundary.
+  - The main loop no longer clears the message on every paralyzed turn, so the faint reason can remain visible while the player is unable to act; `You can move again.` still prints when paralysis expires.
+  - C64 `overcast_ordering` asserts successful overcast executes first, prints faint feedback second, zeroes mana, and sets paralysis; C128 `prayer_prayer128` adds the same prayer-side overcast proof.
+  - The Huffman tree change required refreshing the isolated C64 string-bank fixture, and the large `call_light_prayer` test's BRK trap was moved below `$A000` after the code-growth exposed the documented C64 test-bootstrap hazard.
+
+- [x] BUG-MANA-EXHAUSTION-FAINT-MORE
+- [x] Reported Failure Gate:
+  - User correction: `You faint from fatigue.` should have a `-MORE-` acknowledgement, but automatic paralysis ticks must still not enter `-MORE-` unattended.
+- [x] route overcast faint feedback through the normal full-message `-MORE-` path during `pm_consume_mana`
+- [x] update C64/C128 overcast tests to assert the faint message forces the message queue full before the acknowledgement path
+- [x] verify:
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+  - `make -C commodore test128-fast`
+- [x] review:
+  - `pm_consume_mana` now prints `You faint from fatigue.` once, then calls the existing `msg_show_more` / `input_get_key` acknowledgement path before forced paralysis turns begin.
+  - Follow-up live correction: do not re-enter `huff_print_msg` for the faint message after `-MORE-`; that duplicated the visible faint line after the keypress.
+  - The automatic paralysis loop still clears only on the final forced tick, preventing the recovery message from entering an unattended `-MORE-` prompt.
+  - C64 stayed inside the resident boundary after local byte trims in the same spell setup/mana routine; current C64 `program_end=$BFFC`, below `MAP_BASE=$C000`.
+  - C128 banked payload also stays below CPU vectors after the byte trim; current forced build reports `$D004-$DFFE` staged payload and `banked_code_end` within bounds.
+  - Verification is green: `make -C commodore test64`, `make -C commodore test128-fast-smoke`, and escalated `make -C commodore test128-fast`.

@@ -828,7 +828,10 @@ c128_town_move_diag_loop_top:
     // Paralysis check — skip input, just tick the turn
     lda zp_eff_paralyze
     beq !not_paralyzed+
+    cmp #1
+    bne !paralyzed_tick+
     jsr msg_clear
+!paralyzed_tick:
     jsr turn_post_action
     lda zp_game_flags
     and #$01
