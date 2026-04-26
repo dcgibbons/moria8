@@ -22,6 +22,22 @@ eff_item_overlay_dispatch:
     jmp eff_map_area
 #endif
 
+item_action_get_key:
+    jsr input_get_key
+#if C128
+    sta iagk_key
+    lda #MMU_ALL_RAM
+    sta $ff00
+    lda #BANK_NO_ROMS
+    sta $01
+    lda iagk_key
+#endif
+    rts
+
+#if C128
+iagk_key: .byte 0
+#endif
+
 // ============================================================
 // item_read_scroll — Read a scroll from inventory
 // Prompts "READ WHICH SCROLL (A-V)?", waits for keypress.
@@ -46,7 +62,7 @@ item_read_scroll:
 !irs_have_choices:
     jsr input_prepare_followup_key
 
-    jsr input_get_key
+    jsr item_action_get_key
 
     cmp #$3f
     bne !irs_not_inv+
@@ -54,7 +70,7 @@ item_read_scroll:
     jsr show_inv_and_select
 !irs_not_inv:
 
-    cmp #$03
+    jsr input_is_modal_escape_key
     beq !irs_cancel_tramp+
     cmp #$20
     beq !irs_cancel_tramp+
@@ -282,13 +298,13 @@ item_aim_wand:
     rts
 !iaw_have_choices:
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr item_action_get_key
     cmp #$3f
     bne !iaw_not_inv+
     lda #ICAT_WAND
     jsr show_inv_and_select
 !iaw_not_inv:
-    cmp #$03
+    jsr input_is_modal_escape_key
     beq !iaw_cancel_tramp+
     cmp #$20
     beq !iaw_cancel_tramp+
@@ -391,13 +407,13 @@ item_use_staff:
     rts
 !ius_have_choices:
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr item_action_get_key
     cmp #$3f
     bne !ius_not_inv+
     lda #ICAT_STAFF
     jsr show_inv_and_select
 !ius_not_inv:
-    cmp #$03
+    jsr input_is_modal_escape_key
     beq !ius_cancel_tramp+
     cmp #$20
     beq !ius_cancel_tramp+

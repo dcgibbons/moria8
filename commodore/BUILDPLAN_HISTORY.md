@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-04-26 — `BUG-C128-SPELL-BOOK-ESC-JAM-E4D8` item overlay key-read banking fix ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C128 live crash where pressing ESC from a spell-book flow could be followed by a CPU JAM at `$E4D8`.
+- Root-caused the monitor trace through `cmd_aim -> tramp_item_aim_wand -> item_aim_wand` in the Items overlay.
+- Closed the coverage gap that let overlay prompt code call the C128 input path without restoring overlay execution banking.
+
+### What Shipped
+1. **C128 Items overlay key reads now restore executable overlay banking**
+   - `commodore/common/item_actions_overlay.s`
+   - added `item_action_get_key`, which calls `input_get_key`, saves the key, restores `$FF00=MMU_ALL_RAM` and `$01=BANK_NO_ROMS`, then returns the key to overlay code
+   - `item_read_scroll`, `item_aim_wand`, and `item_use_staff` now use that wrapper before continuing in the overlay
+2. **ESC handling now uses the shared modal predicate**
+   - the same scroll/wand/staff prompt paths now call `input_is_modal_escape_key`
+   - C128 `KEY_ESC` is treated as cancel instead of relying on the C64 raw `$03` value
+3. **C128 static coverage now checks the real overlay contract**
+   - `commodore/c128/run_tests128.sh`
+   - the audit now rejects direct `input_get_key` in the affected Items overlay prompts and requires the C128 wrapper to restore `$FF00/$01`
+
+### Root Cause / Notes
+- The unsafe pattern was introduced by `44c0946 add remaining spells and prayers (#11)` on 2026-04-22 when low-frequency item commands moved into the C128 Items overlay.
+- The later spell/input changes made the manual ESC path easier to hit, but the root bug was the overlay prompt continuing after `input_get_key` had restored normal runtime banking.
+- Existing scripted spell-list cancel coverage stopped at the internal cancel pass trap, so it did not prove the next gameplay command after returning from the modal.
+
+### Verification
+- `make disk128`: PASS, including runtime-loaded code, staged-source, CPU-vector, and overlay-fit asserts
+- `TEST_FILTER='scripted_spell_list_cancel_smoke' bash commodore/c128/run_tests128.sh`: PASS
+- `TEST_FILTER='c128_item_overlay_key_guard' bash run_tests128.sh` from `commodore/c128`: PASS
+- `make -C commodore test128-fast-smoke`: PASS (`8 passed, 0 failed`)
+- `make test128-fast`: PASS
+- `make -C commodore test64`: PASS (`120 passed, 0 failed`)
+- `git diff --check`: PASS
+
+---
+
 ## 2026-04-26 — `BUG-C64-COMMODORE-SHIFT-CHARSET` in-game charset switch lock ✅ COMPLETE
 
 ### Scope Closed

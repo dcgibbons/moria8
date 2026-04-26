@@ -513,7 +513,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
@@ -551,7 +551,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -1206,19 +1206,19 @@ required_chains = [
         "ldx #HSTR_PIQ_READ_PROMPT",
         "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr item_action_get_key",
     ]),
     ("item_aim_wand", items, [
         "ldx #HSTR_PIW_AIM_PROMPT",
         "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr item_action_get_key",
     ]),
     ("item_use_staff", items, [
         "ldx #HSTR_PIW_USE_PROMPT",
         "jsr piw_prompt_filtered_inv",
         "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr item_action_get_key",
     ]),
     ("item_gain_spell", items, [
         "ldx #HSTR_IGS_PROMPT",
@@ -1350,6 +1350,26 @@ for name, lines, chain in required_chains:
         print(f"{name} must gate with input_wait_release before input_get_key")
         raise SystemExit(1)
 
+if not has_ordered_chain(items, [
+    "item_action_get_key:",
+    "jsr input_get_key",
+    "#if C128",
+    "sta iagk_key",
+    "lda #MMU_ALL_RAM",
+    "sta $ff00",
+    "lda #BANK_NO_ROMS",
+    "sta $01",
+    "lda iagk_key",
+]):
+    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    raise SystemExit(1)
+
+for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
+    body = section_after(name, items)
+    if any("jsr input_get_key" in line for line in body):
+        print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
+        raise SystemExit(1)
+
 if not has_ordered_chain(help_mod, [
     "#if C128",
     "jsr screen_put_char",
@@ -1358,6 +1378,89 @@ if not has_ordered_chain(help_mod, [
 ]):
     print("ui_help_draw_line must use screen_put_char on C128 and keep direct RAM path only for C64")
     raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+run_item_overlay_key_guard_check() {
+    echo -n "  item_overlay_key_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+root = Path("..").resolve()
+items = (root / "common" / "item_actions_overlay.s").read_text().splitlines()
+
+def has_ordered_chain(lines: list[str], tokens: list[str], window: int = 28) -> bool:
+    for i, ln in enumerate(lines):
+        if tokens[0] not in ln:
+            continue
+        pos = i
+        ok = True
+        for tok in tokens[1:]:
+            found = False
+            for j in range(pos + 1, min(pos + 1 + window, len(lines))):
+                if tok in lines[j]:
+                    pos = j
+                    found = True
+                    break
+            if not found:
+                ok = False
+                break
+        if ok:
+            return True
+    return False
+
+def section_after(label: str, lines: list[str]) -> list[str]:
+    out = []
+    in_block = False
+    for ln in lines:
+        s = ln.strip()
+        if not in_block:
+            if s.startswith(label):
+                in_block = True
+            continue
+        if s and s.endswith(":") and not s.startswith("!"):
+            break
+        out.append(s)
+    return out
+
+if not has_ordered_chain(items, [
+    "item_action_get_key:",
+    "jsr input_get_key",
+    "#if C128",
+    "sta iagk_key",
+    "lda #MMU_ALL_RAM",
+    "sta $ff00",
+    "lda #BANK_NO_ROMS",
+    "sta $01",
+    "lda iagk_key",
+]):
+    print("C128 item overlay key reads must restore overlay banking after input_get_key")
+    raise SystemExit(1)
+
+for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
+    body = section_after(name, items)
+    if any("jsr input_get_key" in line for line in body):
+        print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
+        raise SystemExit(1)
+    if not any("jsr item_action_get_key" in line for line in body):
+        print(f"{name[:-1]} must use item_action_get_key")
+        raise SystemExit(1)
 
 print("ok")
 PY
@@ -5278,6 +5381,7 @@ run_selected_suites() {
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
+    run_named_suite c128_item_overlay_key_guard run_item_overlay_key_guard_check || return 1
     run_named_suite c128_input_run_guard run_input_run_guard_check || return 1
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1

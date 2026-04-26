@@ -3,7 +3,21 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
- - [ ] None
+ - [x] BUG-C128-SPELL-BOOK-ESC-JAM-E4D8
+ - [x] Reported Failure Gate:
+   - C128 live spell-book ESC path CPU JAMs at `$E4D8`; monitor stack: `$2EAF -> JSR $E4BE`, `$C049 -> JSR $2E99`
+ - [x] map `$2E99/$2EAF/$E4BE/$E4D8` to current C128 symbols and overlay ownership
+ - [x] inspect spell book / spell list cancel flow and C128 overlay trampoline return path
+ - [x] fix root cause without weakening C128 runtime-loaded/overlay boundary asserts
+ - [x] verify with an exact C128 spell-book ESC smoke or focused gate, then relevant C128 regression gate
+ - [x] close the escaped-test gap so item overlay prompt reads cannot call `input_get_key` directly on C128
+ - [x] review:
+   - The trace maps `$C049` to `cmd_aim`, `$2E99/$2EAF` to `tramp_item_aim_wand`, and `$E4BE/$E4D8` into `item_aim_wand` inside the Items overlay. The visible spell-book ESC repro was falling through into an item-action prompt path and then continuing overlay execution after a prompt key read.
+   - C128 item-action prompts now read keys through `item_action_get_key`, which restores `$FF00=MMU_ALL_RAM` and `$01=BANK_NO_ROMS` before the overlay executes its next instruction.
+   - Scroll/wand/staff item overlay prompts now use `input_is_modal_escape_key`, so C128 `KEY_ESC` is treated as cancel instead of depending on raw C64-style `$03`.
+   - Test gap: the existing scripted spell-list cancel smoke stopped at `c128_test_spell_cancel_pass_sym`, so it proved ESC reached the spell cancel branch but did not continue into the next live command path. The C128 static prompt audit also asserted the dangerous direct `jsr input_get_key` shape instead of the overlay banking contract.
+   - Coverage now rejects direct `input_get_key` inside the affected Items overlay prompt routines and requires the C128 key wrapper to restore `$FF00/$01` before overlay execution continues.
+   - Verification passed: `make disk128` with C128 runtime/overlay boundary asserts green, focused `TEST_FILTER='scripted_spell_list_cancel_smoke' bash commodore/c128/run_tests128.sh`, `TEST_FILTER='c128_item_overlay_key_guard' bash run_tests128.sh` from `commodore/c128`, `make -C commodore test128-fast-smoke` (`8 passed, 0 failed`), `make -C commodore test64` (`120 passed, 0 failed`), `make test128-fast`, and `git diff --check`.
 
 ## Recently Completed Task
  - [x] BUG-C64-COMMODORE-SHIFT-CHARSET
