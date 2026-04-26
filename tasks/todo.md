@@ -3,6 +3,25 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [x] BUG-C128-RUNTIME-PRELOAD-DISPLAY-NAME
+ - [x] Reported Failure Gate:
+   - User screenshot: C128 preload list shows `R-TIME` where the runtime asset should appear as `128.RUNTIME`.
+ - [x] trace current disk filename, loader filename, and preload display string ownership
+ - [x] restore the user-visible preload display string to `128.RUNTIME`
+ - [x] add a front-door AGENTS rule banning incidental user-visible string shortening
+ - [x] replace the duplicated runtime load/display strings with one shared literal and a length that excludes the display terminator
+ - [x] replace duplicated REU/preload tier and overlay display filename literals with pointers to the KERNAL filename literals
+ - [x] make REU filename display accept PETSCII filenames directly, translating on C64 where screen RAM requires screen codes
+ - [x] add a C128 static guard that fails if runtime/tier/overlay preload filenames stop using single unshortened source strings
+ - [x] verify C64/C128 filename display/load gates
+ - [x] review:
+   - Root cause: commit `0ee571ab` shortened only `runtime_low_display_str` to `R-TIME` during unrelated C128 byte-pressure work for turn-undead feedback.
+   - The actual C128 loader filename bytes still targeted `128.RUNTIME`, and the disk builders still write `out/128.runtime.prg` as `128.runtime`; the screenshot was a misleading display-only abbreviation, not an on-disk rename.
+   - Restored the preload display string so the visible boot list matches the real program-media filename, then removed the duplicate source by making `runtime_low_filename` and `runtime_low_display_str` point at the same null-terminated literal. KERNAL `SETNAM` uses `RUNTIME_LOW_FILENAME_LEN`, which excludes the terminator; `reu_show_file` uses the terminator.
+   - Generalized the shape for tier and overlay preload display: REU display pointer tables now reference `tier_fn_*` and `ovl_fn_*` KERNAL filename literals directly, and those literals are null-terminated after their load-length end labels.
+   - Hardened the rule in AGENTS and added `c128_user_visible_string_guard` so runtime/tier/overlay preload filenames cannot be shortened or split again without a red check.
+
+## Previous Task
  - [x] BUG-THROWN-ITEM-REDRAW
  - [x] Reported Failure Gate:
    - Live bug: sometimes thrown non-potion items do not appear where they land until the player moves a few spaces

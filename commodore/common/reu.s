@@ -733,7 +733,7 @@ reu_ovl_idx: .byte 0
 // ============================================================
 
 // reu_show_file — Display filename during REU stashing
-// Input: zp_ptr0 = screen-code string (null-terminated)
+// Input: zp_ptr0 = PETSCII filename string (null-terminated)
 // Uses reu_loading_row for current row, increments after display.
 // Clobbers: A, X, Y
 reu_show_file:
@@ -741,7 +741,33 @@ reu_show_file:
     sta zp_cursor_row
     lda #2
     sta zp_cursor_col
+#if C128
     jsr screen_put_string
+#else
+    jsr screen_set_cursor
+    ldy #0
+!rsf_loop:
+    lda (zp_ptr0),y
+    beq !rsf_done+
+    cmp #$41
+    bcc !rsf_write+
+    cmp #$5b
+    bcc !rsf_upper+
+    cmp #$61
+    bcc !rsf_write+
+    cmp #$7b
+    bcs !rsf_write+
+!rsf_upper:
+    and #$1f
+!rsf_write:
+    sta (zp_screen_lo),y
+    lda zp_text_color
+    sta (zp_color_lo),y
+    iny
+    cpy #40
+    bcc !rsf_loop-
+!rsf_done:
+#endif
     inc reu_loading_row
     rts
 
@@ -755,34 +781,12 @@ reu_show_status:
     rts                         // Patched to $4C (JMP abs) at startup
     .byte 0, 0                  // Operand bytes filled by init patch
 
-// Screen-code filename strings for display
-reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
-reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
-reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
-reu_fn_t4: .text "MONSTER.DB.4" ; .byte 0
-#if C128
-reu_fn_o1: .text "128.START" ; .byte 0
-reu_fn_o2: .text "128.TOWN" ; .byte 0
-reu_fn_o3: .text "128.DEATH" ; .byte 0
-reu_fn_o4: .text "128.GEN" ; .byte 0
-reu_fn_o5: .text "128.HELP" ; .byte 0
-reu_fn_o6: .text "128.UI" ; .byte 0
-reu_fn_o7: .text "128.ITEMS" ; .byte 0
-#else
-reu_fn_o1: .text "64.START" ; .byte 0
-reu_fn_o2: .text "64.TOWN" ; .byte 0
-reu_fn_o3: .text "64.DEATH" ; .byte 0
-reu_fn_o4: .text "64.GEN" ; .byte 0
-reu_fn_o5: .text "64.HELP" ; .byte 0
-reu_fn_o6: .text "64.UI" ; .byte 0
-reu_fn_o7: .text "64.ITEMS" ; .byte 0
-#endif
-
-// Pointer tables (0-based index)
-reu_fn_tier_lo: .byte <reu_fn_t1, <reu_fn_t2, <reu_fn_t3, <reu_fn_t4
-reu_fn_tier_hi: .byte >reu_fn_t1, >reu_fn_t2, >reu_fn_t3, >reu_fn_t4
-reu_fn_ovl_lo:  .byte <reu_fn_o1, <reu_fn_o2, <reu_fn_o3, <reu_fn_o4, <reu_fn_o5, <reu_fn_o6, <reu_fn_o7
-reu_fn_ovl_hi:  .byte >reu_fn_o1, >reu_fn_o2, >reu_fn_o3, >reu_fn_o4, >reu_fn_o5, >reu_fn_o6, >reu_fn_o7
+// Display pointer tables (0-based index). These intentionally point at the
+// KERNAL filename literals; do not add separate display filename copies.
+reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
+reu_fn_tier_hi: .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
+reu_fn_ovl_lo:  .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
+reu_fn_ovl_hi:  .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
 .assert "REU overlay filename table count stays in sync", reu_fn_ovl_hi - reu_fn_ovl_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)

@@ -579,9 +579,13 @@ tier_load_disk:
 // ============================================================
 // "MONSTER.DB.1" through "MONSTER.DB.4" — matches d64 directory entries
 tier_fn_1:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $31  // "MONSTER.DB.1"
+tier_fn_1_end: .byte 0
 tier_fn_2:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $32  // "MONSTER.DB.2"
+tier_fn_2_end: .byte 0
 tier_fn_3:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $33  // "MONSTER.DB.3"
+tier_fn_3_end: .byte 0
 tier_fn_4:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $34  // "MONSTER.DB.4"
+tier_fn_4_end: .byte 0
 
 tier_fn_addr_lo:
     .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4

@@ -51,6 +51,13 @@ This file provides foundational mandates and technical guidance for AI agents (G
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
+## User-Facing Text Is Not Scratch Space
+
+- Do **not** shorten, abbreviate, rename, truncate, or otherwise degrade user-visible strings to recover bytes unless the user explicitly asks for that exact text change.
+- This includes boot/preload lists, disk filenames as displayed to the player, prompts, menu labels, status messages, spell feedback, and error text.
+- If a build exceeds a memory or overlay boundary, recover bytes from code structure, dead helpers, data ownership, overlays, or deduplication. Do not take bytes from UX copy as an incidental optimization.
+- If a string must change for a real product reason, call that out explicitly in `tasks/todo.md`, update docs/tests, and verify the rendered text path.
+
 ## Project Overview
 
 Port of the rogue-like game Moria to Commodore 64 and 128, written entirely in 6502 assembly using the Kick Assembler toolchain. Based on [umoria](https://github.com/dungeons-of-moria/umoria) (originally PASCAL on VAX/VMS).

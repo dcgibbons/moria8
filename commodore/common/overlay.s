@@ -196,21 +196,21 @@ c128_overlay_fn_guard_check:
 
 ovl_fn_guard_expected:
 #if C128
-    .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54
-    .byte $31,$32,$38,$2e,$54,$4f,$57,$4e
-    .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48
-    .byte $31,$32,$38,$2e,$47,$45,$4e
-    .byte $31,$32,$38,$2e,$48,$45,$4c,$50
-    .byte $31,$32,$38,$2e,$55,$49
-    .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53
+    .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54,$00
+    .byte $31,$32,$38,$2e,$54,$4f,$57,$4e,$00
+    .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48,$00
+    .byte $31,$32,$38,$2e,$47,$45,$4e,$00
+    .byte $31,$32,$38,$2e,$48,$45,$4c,$50,$00
+    .byte $31,$32,$38,$2e,$55,$49,$00
+    .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53,$00
 #else
-    .byte $36,$34,$2e,$53,$54,$41,$52,$54
-    .byte $36,$34,$2e,$54,$4f,$57,$4e
-    .byte $36,$34,$2e,$44,$45,$41,$54,$48
-    .byte $36,$34,$2e,$47,$45,$4e
-    .byte $36,$34,$2e,$48,$45,$4c,$50
-    .byte $36,$34,$2e,$55,$49
-    .byte $36,$34,$2e,$49,$54,$45,$4d,$53
+    .byte $36,$34,$2e,$53,$54,$41,$52,$54,$00
+    .byte $36,$34,$2e,$54,$4f,$57,$4e,$00
+    .byte $36,$34,$2e,$44,$45,$41,$54,$48,$00
+    .byte $36,$34,$2e,$47,$45,$4e,$00
+    .byte $36,$34,$2e,$48,$45,$4c,$50,$00
+    .byte $36,$34,$2e,$55,$49,$00
+    .byte $36,$34,$2e,$49,$54,$45,$4d,$53,$00
 #endif
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
     .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
@@ -390,18 +390,25 @@ overlay_fetch_reu:
 #if !C128
 ovl_fn_start: .byte $36,$34,$2e,$53,$54,$41,$52,$54              // "64.START"
 ovl_fn_start_end:
+.byte 0
 ovl_fn_town:  .byte $36,$34,$2e,$54,$4f,$57,$4e                  // "64.TOWN"
 ovl_fn_town_end:
+.byte 0
 ovl_fn_death: .byte $36,$34,$2e,$44,$45,$41,$54,$48              // "64.DEATH"
 ovl_fn_death_end:
+.byte 0
 ovl_fn_gen:   .byte $36,$34,$2e,$47,$45,$4e                      // "64.GEN"
 ovl_fn_gen_end:
+.byte 0
 ovl_fn_help:  .byte $36,$34,$2e,$48,$45,$4c,$50                  // "64.HELP"
 ovl_fn_help_end:
+.byte 0
 ovl_fn_ui:    .byte $36,$34,$2e,$55,$49                          // "64.UI"
 ovl_fn_ui_end:
+.byte 0
 ovl_fn_items: .byte $36,$34,$2e,$49,$54,$45,$4d,$53              // "64.ITEMS"
 ovl_fn_items_end:
+.byte 0
 
 ovl_fn_addr_lo:
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items

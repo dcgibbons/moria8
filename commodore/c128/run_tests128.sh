@@ -513,7 +513,7 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
             ;;
         units)
             printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
@@ -551,7 +551,7 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
             esac
             ;;
         units)
@@ -1019,6 +1019,74 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_user_visible_string_guard_check() {
+    echo -n "  user_visible_string_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+main_text = Path("main.s").read_text()
+common = Path("..") / "common"
+reu_text = (common / "reu.s").read_text()
+tier_text = (common / "tier_manager.s").read_text()
+overlay_text = (common / "overlay.s").read_text()
+required = {
+    "runtime_low_filename/display alias": 'runtime_low_filename:\nruntime_low_display_str:\n    .text "128.RUNTIME"\nruntime_low_filename_end:\n    .byte 0\n.const RUNTIME_LOW_FILENAME_LEN = runtime_low_filename_end - runtime_low_filename',
+    "runtime_input null-terminated load filename": 'runtime_input_filename_end:\n    .byte 0\n.const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename',
+    "runtime_common null-terminated load filename": 'runtime_common_filename_end:\n    .byte 0\n.const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename',
+    "REU tier display points at load filenames": 'reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4',
+    "REU overlay display points at load filenames": 'reu_fn_ovl_lo:  .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items',
+}
+
+sources = {
+    "runtime_low_filename/display alias": main_text,
+    "runtime_input null-terminated load filename": main_text,
+    "runtime_common null-terminated load filename": main_text,
+    "REU tier display points at load filenames": reu_text,
+    "REU overlay display points at load filenames": reu_text,
+}
+
+missing = [name for name, token in required.items() if token not in sources[name]]
+if missing:
+    for name in missing:
+        print(f"{name} must stay a single unshortened source string")
+    raise SystemExit(1)
+
+for forbidden in (
+    'reu_fn_t1: .text',
+    'reu_fn_o1: .text',
+):
+    if forbidden in reu_text:
+        print(f"{forbidden} reintroduced a duplicate display filename")
+        raise SystemExit(1)
+
+for name in ("tier_fn_1_end", "tier_fn_2_end", "tier_fn_3_end", "tier_fn_4_end"):
+    if f"{name}: .byte 0" not in tier_text:
+        print(f"{name} must terminate the shared tier filename literal")
+        raise SystemExit(1)
+
+for name in ("ovl_fn_start_end", "ovl_fn_town_end", "ovl_fn_death_end", "ovl_fn_gen_end", "ovl_fn_help_end", "ovl_fn_ui_end", "ovl_fn_items_end"):
+    if f"{name}:\n.byte 0" not in main_text or f"{name}:\n.byte 0" not in overlay_text:
+        print(f"{name} must terminate the shared C64/C128 overlay filename literal")
+        raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_80col_layout_guard_check() {
     echo -n "  layout80_guard: "
 
@@ -1100,6 +1168,7 @@ import re
 
 root = Path("..").resolve()
 screen = (root / "c128" / "screen_vdc.s").read_text().splitlines()
+main_text = (root / "c128" / "main.s").read_text()
 items = (root / "common" / "player_items.s").read_text().splitlines()
 item_mod = (root / "common" / "item.s").read_text().splitlines()
 throw_mod = (root / "common" / "throw.s").read_text().splitlines()
@@ -5380,6 +5449,7 @@ run_selected_suites() {
     run_named_suite main128_asm run_main_assembly_check || return 1
     run_named_suite c128_artifact_budget run_artifact_budget_check || return 1
     run_named_suite c128_symbol_placement run_symbol_placement_check || return 1
+    run_named_suite c128_user_visible_string_guard run_user_visible_string_guard_check || return 1
     run_named_suite c128_prompt_irq_guard run_prompt_irq_guard_check || return 1
     run_named_suite c128_item_overlay_key_guard run_item_overlay_key_guard_check || return 1
     run_named_suite c128_input_run_guard run_input_run_guard_check || return 1

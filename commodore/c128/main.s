@@ -2169,18 +2169,26 @@ title_load_game:
 // ============================================================
 .const RUNTIME_LOW_FILE_NUM = 2
 runtime_low_filename:
-    .byte $31, $32, $38, $2e, $52, $55, $4e, $54, $49, $4d, $45 // "128.RUNTIME"
-.const RUNTIME_LOW_FILENAME_LEN = * - runtime_low_filename
 runtime_low_display_str:
-    .text "R-TIME" ; .byte 0
+    .text "128.RUNTIME"
+runtime_low_filename_end:
+    .byte 0
+.const RUNTIME_LOW_FILENAME_LEN = runtime_low_filename_end - runtime_low_filename
+// `runtime_low_filename` and `runtime_low_display_str` intentionally share one
+// string: SETNAM uses the explicit length above, display uses the terminator.
+// Do not split these labels into independent literals.
 .const RUNTIME_INPUT_FILE_NUM = 3
 runtime_input_filename:
     .byte $31, $32, $38, $2e, $49, $4e, $50, $55, $54 // "128.INPUT"
-.const RUNTIME_INPUT_FILENAME_LEN = * - runtime_input_filename
+runtime_input_filename_end:
+    .byte 0
+.const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename
 .const RUNTIME_COMMON_FILE_NUM = 4
 runtime_common_filename:
     .byte $31, $32, $38, $2e, $46, $44, $49, $53, $4b // "128.FDISK"
-.const RUNTIME_COMMON_FILENAME_LEN = * - runtime_common_filename
+runtime_common_filename_end:
+    .byte 0
+.const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename
 
 c128_load_runtime_prg:
     lda #0
@@ -2399,18 +2407,25 @@ overlay_state_block_start:
 current_overlay: .byte 0
 ovl_fn_start: .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54              // "128.START"
 ovl_fn_start_end:
+.byte 0
 ovl_fn_town:  .byte $31,$32,$38,$2e,$54,$4f,$57,$4e                  // "128.TOWN"
 ovl_fn_town_end:
+.byte 0
 ovl_fn_death: .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48              // "128.DEATH"
 ovl_fn_death_end:
+.byte 0
 ovl_fn_gen:   .byte $31,$32,$38,$2e,$47,$45,$4e                      // "128.GEN"
 ovl_fn_gen_end:
+.byte 0
 ovl_fn_help:  .byte $31,$32,$38,$2e,$48,$45,$4c,$50                  // "128.HELP"
 ovl_fn_help_end:
+.byte 0
 ovl_fn_ui:    .byte $31,$32,$38,$2e,$55,$49                          // "128.UI"
 ovl_fn_ui_end:
+.byte 0
 ovl_fn_items: .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53              // "128.ITEMS"
 ovl_fn_items_end:
+.byte 0
 ovl_fn_addr_lo:
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
 ovl_fn_addr_hi:

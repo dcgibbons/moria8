@@ -6,6 +6,52 @@
 
 ---
 
+## 2026-04-26 — `BUG-C128-RUNTIME-PRELOAD-DISPLAY-NAME` / `REF-FILENAME-SINGLE-SOURCE` preload filename ownership ✅ COMPLETE
+
+### Scope Closed
+- Fixed the C128 preload screen showing `R-TIME` instead of the real `128.RUNTIME` program-media filename.
+- Removed the duplicated source-of-truth pattern that let filename display text drift away from the KERNAL load filename.
+- Hardened future agent behavior with a top-level no-string-shortening rule and a focused C128 guard.
+
+### What Shipped
+1. **Runtime filename display now aliases the load filename**
+   - `commodore/c128/main.s`
+   - `runtime_low_filename` and `runtime_low_display_str` now point at the same null-terminated `128.RUNTIME` literal
+   - `RUNTIME_LOW_FILENAME_LEN` is computed from `runtime_low_filename_end`, so `SETNAM` excludes the display terminator while `reu_show_file` uses it
+2. **Tier and overlay preload display now reuses KERNAL filename literals**
+   - `commodore/common/tier_manager.s`
+   - `commodore/common/overlay.s`
+   - `commodore/common/reu.s`
+   - REU tier/overlay display pointer tables now point at `tier_fn_*` and `ovl_fn_*` instead of separate `reu_fn_*` display strings
+   - tier and overlay filename literals are null-terminated immediately after their load-length end labels
+3. **C64 REU display handles PETSCII filenames directly**
+   - `commodore/common/reu.s`
+   - C64 `reu_show_file` now translates uppercase PETSCII filename bytes to screen codes while rendering the preload list
+   - C128 continues through the VDC `screen_put_string` PETSCII-facing path
+4. **Regression guard rejects drift**
+   - `commodore/c128/run_tests128.sh`
+   - added `c128_user_visible_string_guard`
+   - the guard rejects reintroducing duplicate C128 REU display filename literals and requires the runtime/tier/overlay filename-display alias shape
+5. **Process docs now ban incidental visible-copy shortening**
+   - `AGENTS.md`
+   - `tasks/lessons.md`
+   - user-facing strings are explicitly not byte-savings scratch space; memory pressure must be solved through code/data ownership, deduplication, or architecture
+
+### Root Cause / Notes
+- Commit `0ee571ab` shortened only `runtime_low_display_str` to `R-TIME` during unrelated C128 byte-pressure work. The actual KERNAL load filename and disk-builder entry remained `128.RUNTIME`, so the bug was display-only but misleading.
+- Lessons already contained multiple "do not shorten strings" entries; that was insufficient. The effective repair is a hard repo rule plus a test guard.
+- Net compiled resident savings versus the last committed baseline after the broader refactor:
+  - C64 main PRG: `50,720 -> 50,658` (`-62` bytes)
+  - C128 main PRG: `50,167 -> 50,059` (`-108` bytes)
+
+### Verification
+- `make -C commodore test64`: PASS (`120 passed, 0 failed`)
+- `TEST_FILTER='c128_user_visible_string_guard' bash run_tests128.sh`: PASS
+- `make test128-fast`: PASS
+- `git diff --check`: PASS
+
+---
+
 ## 2026-04-26 — `BUG-THROW-INVENTORY-FILTER` / `BUG-THROWN-ITEM-REDRAW` throw selector and landing redraw ✅ COMPLETE
 
 ### Scope Closed
