@@ -30,8 +30,13 @@ tw_save_ego:   .byte 0     // Saved ego before consumption
 // ============================================================
 throw_item:
     // 1. Prompt for item
+    lda #$ff
     ldx #HSTR_TW_PROMPT
-    jsr huff_print_msg
+    jsr piw_prompt_filtered_inv
+    bcs !tw_have_choices+
+    clc
+    rts
+!tw_have_choices:
 
     jsr input_prepare_followup_key
 
@@ -50,24 +55,8 @@ throw_item:
     cmp #$20
     beq !tw_cancel+
 
-    // Convert PETSCII letter to slot index (A-V = $41-$56 → 0-21)
-    sec
-    sbc #$41
-    bcc !tw_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !tw_cancel+
-
-    // Check slot occupied
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    bne !tw_slot_ok+
-
-    // Empty slot
-    ldx #HSTR_PIW_NOTHING
-    jsr huff_print_msg
-    clc
-    rts
+    jsr piw_pick_filtered_inv_key
+    bcs !tw_slot_ok+
 
 !tw_cancel:
     ldx #HSTR_PIW_NEVERMIND
@@ -312,7 +301,8 @@ tw_consume_item:
     lda tw_save_ego
     sta fi_add_ego
     jsr floor_item_add
-    // Ignore failure (table full)
+    bcc !tw_done+                  // Ignore failure (table full)
+    inc turn_action_redraw_pending
 
 !tw_done:
     sec                         // Turn consumed

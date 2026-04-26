@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-04-26 — `BUG-THROW-INVENTORY-FILTER` / `BUG-THROWN-ITEM-REDRAW` throw selector and landing redraw ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live throw prompt bug where the command still behaved like a fixed `a-v` absolute-slot picker instead of filtering to the currently occupied carried-item list.
+- Fixed the follow-up live redraw bug where non-potion thrown items could land correctly in the floor table but stay invisible until later movement forced a broader viewport redraw.
+
+### What Shipped
+1. **Throw now uses the shared carried-item selector contract**
+   - `commodore/common/throw.s`
+   - `throw_item` now calls `piw_prompt_filtered_inv` and `piw_pick_filtered_inv_key` with filter `$ff`
+   - the prompt range, `?` overlay, and accepted letters now all come from the same occupied carried-item visible list
+2. **Thrown items request immediate scene redraw after landing**
+   - `commodore/common/throw.s`
+   - successful non-potion floor placement now increments `turn_action_redraw_pending`
+   - the existing post-action path promotes that latch into `turn_scene_dirty`, forcing the remote landing tile to redraw immediately
+3. **Focused throw coverage now pins both contracts**
+   - `commodore/c64/tests/test_throw.s`
+   - `commodore/c64/run_tests.sh`
+   - the throw suite now checks occupied-slot selector filtering, visible-letter-to-slot mapping, rejection beyond the visible count, and the floor-placement redraw latch
+
+### Root Cause / Notes
+- The old throw selector was the remaining outlier after the filtered-prompt work: it printed `HSTR_TW_PROMPT` directly, used `$ff` only for the `?` overlay, then parsed letters by subtracting `$41` and checking physical slots.
+- The landing redraw bug was separate: `floor_item_add` correctly wrote the floor item and `FLAG_HAS_ITEM`, but the throw path did not mark a remote scene mutation. When the post-action renderer chose the local redraw path, the landed item tile could remain visually stale until player movement later caused a wider redraw.
+- The fix stays local to throw rather than changing `floor_item_add`, because generation, drops, and spell-created floor items already own their own redraw policy.
+
+### Verification
+- `bash commodore/c64/run_tests.sh`: PASS (`120 passed, 0 failed`, including `throw: PASS (10/10 tests)`)
+- `make test128-fast`: PASS
+- `git diff --check`: PASS
+
+---
+
 ## 2026-04-26 — `BUG-POISON-CURE-FEEDBACK` Cure Poison / Neutralize Poison feedback ✅ COMPLETE
 
 ### Scope Closed

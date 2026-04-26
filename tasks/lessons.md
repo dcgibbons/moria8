@@ -5,6 +5,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Verification
 
+- When an action creates or removes a remote floor-visible object without moving the player, set the existing scene-redraw latch at the mutation site. A correct floor table and `FLAG_HAS_ITEM` update is not enough if the post-action renderer can choose the local redraw path.
 - Do not satisfy a “not wall” visual/inspect bug with a generic nearby message. If the user-visible object is a glyph/rune, the regression must assert glyph/rune copy, not merely any non-wall description.
 - For placement spells that store state separately from terrain, prayer-row tests must exercise the user-visible inspect/look path after placement, not only spell dispatch, placement bookkeeping, renderer glyphs, or monster interactions.
 - Do not move the C64 live cast/pray modal entry path into the copied `$F000` banked payload. That path nests input, KERNAL keyboard IRQs, and overlay trampolines; keeping it resident is safer than trying to maintain `$01`/IRQ invariants across every nested return.

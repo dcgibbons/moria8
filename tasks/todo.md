@@ -3,6 +3,35 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [x] BUG-THROWN-ITEM-REDRAW
+ - [x] Reported Failure Gate:
+   - Live bug: sometimes thrown non-potion items do not appear where they land until the player moves a few spaces
+   - Focused working gate: C64 `throw` runtime suite
+ - [x] inspect thrown item floor-placement path and post-action redraw latches
+ - [x] mark successful thrown floor placement as a pending scene redraw
+ - [x] add focused throw coverage for the redraw latch
+ - [x] verify focused throw coverage and relevant C64/C128 regression gates
+ - [x] review:
+   - Root cause: thrown non-potion items were added to the floor table and had `FLAG_HAS_ITEM` set on the map, but the throw path did not request a scene redraw. The post-action path could therefore take the local redraw path, leaving remote landing tiles stale until movement later forced a broader viewport update.
+   - `tw_consume_item` now increments `turn_action_redraw_pending` after successful floor placement, matching the existing remote-mutation redraw contract used by projectile/spell/kill paths.
+   - Added a C64 throw regression that exercises the actual thrown-item consumption path, verifies the floor item exists at the landing tile, and asserts the pending redraw latch is set.
+   - Verification passed: C64 `throw` row (`10/10`) inside `bash commodore/c64/run_tests.sh`, full C64 suite (`120 passed, 0 failed`), and `make test128-fast`.
+
+## Previous Task
+ - [x] BUG-THROW-INVENTORY-FILTER
+ - [x] Reported Failure Gate:
+   - Backlog item check: `throw does not filter the inventory list properly`
+   - Focused working gate: C64 `throw` runtime suite
+ - [x] inspect current throw selector, shared filtered inventory helpers, and focused throw coverage
+ - [x] route throw through the shared occupied carried-item selector
+ - [x] add focused selector coverage for throw/all-carried filtering
+ - [x] verify focused throw coverage and relevant C64/C128 regression gates
+ - [x] review:
+   - `throw_item` now uses the shared filtered inventory prompt/cache/pick path with filter `$ff`, so the prompt range, `?` overlay, and accepted letters are based on occupied carried entries instead of the old fixed `a-v` absolute-slot parse.
+   - Added three C64 throw checks proving the all-carried selector skips empty slots, maps visible `B` to the second occupied item rather than physical slot 1, and rejects letters beyond the visible occupied count.
+   - Verification passed: C64 `throw` row (`9/9`) inside `bash commodore/c64/run_tests.sh`, full C64 suite (`120 passed, 0 failed`), `make test128-fast`, and `git diff --check`.
+
+## Previous Task
  - [ ] BUG-POISON-CURE-FEEDBACK
  - [x] Reported Failure Gate:
    - Backlog item check: `Cure Poison` and `Neutralize Poison` do not give feedback; verify whether stale, and fix if still true.

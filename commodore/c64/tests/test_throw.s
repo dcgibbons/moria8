@@ -1,9 +1,10 @@
 // test_throw.s — Runtime tests for throw.s
 //
 // Tests: range calculation (light/heavy/weightless), potion detection,
-//        item consumption, floor item placement, to-hit calculation.
+//        item consumption, to-hit calculation, throw selector filtering,
+//        thrown-item redraw.
 //
-// Results at $0400-$0405: $01 = pass, $00 = fail per test (6 tests)
+// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +14,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #5
+    ldx #9
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -90,7 +91,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 6, $ff
+tc_results: .fill 10, $ff
 
 test_start:
     // Seed RNG
@@ -260,5 +261,130 @@ test_start:
     lda #$01
     sta tc_results+5
 !t6_done:
+
+    // ==========================================
+    // Test 7: Throw selector cache with filter $ff only lists occupied slots
+    // Slot 1 is empty; visible list must be 0, 2, 5.
+    // ==========================================
+    jsr item_init_inventory
+    lda #2                      // Dagger
+    sta inv_item_id+0
+    lda #1
+    sta inv_qty+0
+    lda #17                     // Potion
+    sta inv_item_id+2
+    lda #1
+    sta inv_qty+2
+    lda #15                     // Food
+    sta inv_item_id+5
+    lda #1
+    sta inv_qty+5
+
+    lda #$ff
+    jsr piw_build_visible_inv_cache
+    cmp #3
+    bne !t7_fail+
+    lda piw_visible_slots+0
+    cmp #0
+    bne !t7_fail+
+    lda piw_visible_slots+1
+    cmp #2
+    bne !t7_fail+
+    lda piw_visible_slots+2
+    cmp #5
+    bne !t7_fail+
+    lda #$01
+    sta tc_results+6
+    jmp !t7_done+
+!t7_fail:
+    lda #$00
+    sta tc_results+6
+!t7_done:
+
+    // ==========================================
+    // Test 8: Throw selector maps visible B to second occupied slot, not slot 1
+    // ==========================================
+    lda #$ff
+    jsr piw_build_visible_inv_cache
+    lda #$42                    // 'B'
+    jsr piw_pick_filtered_inv_key
+    bcc !t8_fail+
+    cpx #2
+    bne !t8_fail+
+    cmp #17
+    bne !t8_fail+
+    lda #$01
+    sta tc_results+7
+    jmp !t8_done+
+!t8_fail:
+    lda #$00
+    sta tc_results+7
+!t8_done:
+
+    // ==========================================
+    // Test 9: Throw selector rejects letters beyond visible occupied entries
+    // ==========================================
+    lda #$ff
+    jsr piw_build_visible_inv_cache
+    lda #$44                    // 'D'
+    jsr piw_pick_filtered_inv_key
+    bcc !t9_pass+
+    lda #$00
+    sta tc_results+8
+    jmp !t9_done+
+!t9_pass:
+    lda #$01
+    sta tc_results+8
+!t9_done:
+
+    // ==========================================
+    // Test 10: Thrown non-potion floor placement requests a scene redraw
+    // ==========================================
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #0
+    sta turn_action_redraw_pending
+    sta inv_p1+0
+    sta inv_flags+0
+    sta inv_ego+0
+    sta tw_slot
+    lda #2                      // Dagger
+    sta inv_item_id+0
+    sta tw_item_id
+    lda #1
+    sta inv_qty+0
+    lda #20
+    sta tw_last_x
+    lda #15
+    sta tw_last_y
+
+    jsr tw_consume_item
+    bcc !t10_fail+
+    lda turn_action_redraw_pending
+    beq !t10_fail+
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcc !t10_fail+
+    lda fi_item_id,x
+    cmp #2
+    bne !t10_fail+
+    lda #$01
+    sta tc_results+9
+    jmp !t10_done+
+!t10_fail:
+    lda #$00
+    sta tc_results+9
+!t10_done:
 
     jmp test_exit_trampoline

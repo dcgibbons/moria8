@@ -1168,7 +1168,7 @@ run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
 run_test "render" "tests/test_render.s" "0400 0407" 8 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
-run_test "throw" "tests/test_throw.s" "0400 0405" 6 500000000
+run_test "throw" "tests/test_throw.s" "0400 0409" 10 500000000
 run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
