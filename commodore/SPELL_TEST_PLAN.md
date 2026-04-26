@@ -240,7 +240,7 @@ Negative-case priority for every row:
 - Current Commodore behavior is the expected contract unless a row explicitly states otherwise.
 - Known documented deviations in `commodore/SPELLS.md` must be treated as current expected behavior until deliberately changed:
   - broader fire/cold damage consumers are not modeled yet; current coverage is limited to the implemented fire-breath path
-  - glyph rendering and glyph break behavior use current Commodore rules
+  - glyph rendering uses the shared visible `SC_GLYPH` `^` marker; look/inspect reports `You see a strange rune.`, matching the upstream scare-monster object name, and break behavior uses upstream `randint(3000) < monster level` odds
 
 ### Spell identity, not subclass duplication
 

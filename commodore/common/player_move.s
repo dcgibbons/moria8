@@ -760,9 +760,14 @@ dl_print_tile_no_flash:
     lda df_target_x
     ldy df_target_y
     jsr floor_item_find_at
+    bcs !dl_item+
+    jsr glyph_find_at_stashed
     bcc !dl_step+               // Empty floor — keep scanning
+    ldx #HSTR_PMU_GLYPH_OK
+    bne dl_print_tile
 
     // Found an item on floor — get its name
+!dl_item:
     lda fi_item_id,x
     jsr item_get_name_ptr
     lda zp_ptr0

@@ -34,9 +34,8 @@
 ## Known Deviations
 
 - `Resist Heat and Cold` now stores separate heat/fire and cold timers. The current prayer refresh still applies the same duration to both halves.
+- `Glyph of Warding` is modeled as an upstream-style scare-monster object: it renders with the `SC_GLYPH` `^` marker, look/inspect reports `You see a strange rune.`, and monsters can break it with upstream `randint(3000) < monster level` odds.
 - The current tree uses the heat/fire timer to reduce the implemented fire-breath damage path, but broader fire/cold consumers are still not modeled yet.
-- `Glyph of Warding` is mechanically active, but there is no special dungeon-tile rendering for glyphs yet.
-- Glyph break chance is currently a simplified approximation rather than the exact upstream formula.
 - Class tables and book splits intentionally follow `umoria`; effect semantics intentionally prefer VMS when they differ.
 
 ## Feedback Audit
@@ -420,7 +419,7 @@
 | 27 | Added | P4 | Dispel Undead | 17/14/55 | 31/24/60 | Dispel undead for `3 * level` | Row-covered on `C64+C128`: focused flagged-dispel coverage proves prayer-id mapping, the shared `ped_s26 -> eff_dispel_flagged` semantics across visible/LOS `CF_UNDEAD` targets for `rng(3*level)+1` damage, per-target `shudders.` / `dissolves!` feedback, explicit `HSTR_PIQ_NOTHING` on no visible undead casts, and cast-fail/success mana/worked bookkeeping |
 | 28 | Added | P4 | Heal | 21/16/60 | 33/28/60 | Heal `200` HP | Row-covered on `C64+C128`: focused heal-row coverage proves prayer-id mapping, the current fixed `200`-HP `ped_s27 -> pmx_heal_and_report` behavior, strongest-heal feedback while injured, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |
 | 29 | Added | P4 | Dispel Evil | 25/20/70 | 35/32/70 | Dispel evil for `3 * level` | Row-covered on `C64+C128`: focused flagged-dispel coverage proves prayer-id mapping, the shared `ped_s28 -> eff_dispel_flagged` semantics across visible/LOS `CF_EVIL` targets for `rng(3*level)+1` damage, per-target `shudders.` / `dissolves!` feedback, explicit `HSTR_PIQ_NOTHING` on no visible evil casts, and cast-fail/success mana/worked bookkeeping |
-| 30 | Added | P4 | Glyph of Warding | 33/24/90 | 37/36/90 | Place a blocking glyph on the player tile | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping and cast-fail/success mana/worked bookkeeping on both platforms; `C128` focused row proof also proves success creates a glyph record with explicit `HSTR_PMU_GLYPH_OK` feedback, blocked-by-item casts print `HSTR_PMU_GLYPH_BLOCK`, and `vis_room_revealed` is set on success, while the `C64` shared glyph-placement/blocking seam remains covered in `test_utility_effects` (no special dungeon-tile render yet) |
+| 30 | Added | P4 | Glyph of Warding | 33/24/90 | 37/36/90 | Place a blocking glyph on the player tile | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping and cast-fail/success mana/worked bookkeeping on both platforms; success creates a glyph record, prints `HSTR_PMU_GLYPH_OK` (`You see a strange rune.`), marks the scene for redraw, renders a visible `SC_GLYPH` `^` marker, look/inspect reports the rune before terrain beyond it, blocks monsters, and uses the upstream `randint(3000) < monster level` break odds; blocked-by-item casts print `HSTR_PMU_GLYPH_BLOCK` |
 | 31 | Added | P4 | Holy Word | 39/32/80 | 39/38/90 | Heal to full, remove fear/poison, restore stats, 3 turns invulnerability, dispel evil for `4 * level` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, full heal, poison clear, fear clear, stat restore, invulnerability timer onset, visible/LOS evil-target dispel behavior with per-target feedback, the current explicit `HSTR_PIQ_VERY_GOOD` message contract, and cast-fail/success mana/worked bookkeeping; the `C64` shared composite seam remains covered in `test_utility_effects`, while `C128` focused row proof also proves the current no-visible-evil/already-clean-full success behavior |
 
 ## Upstream Comparison Notes
@@ -442,4 +441,3 @@
 - Remaining follow-up candidates if stricter parity is required:
   - exact evil-only detection for `Detect Evil`
   - exact timed handling for `Resist Heat and Cold`
-  - exact glyph-render and glyph-break formulas

@@ -192,13 +192,14 @@ floor_item_add:
     // Find first empty slot
     ldx #0
 !fia_scan:
-    cpx #MAX_FLOOR_ITEMS
-    bcs !fia_full+
     lda fi_item_id,x
     cmp #FI_EMPTY
     beq !fia_found+
     inx
-    jmp !fia_scan-
+    cpx #MAX_FLOOR_ITEMS
+    bne !fia_scan-
+    clc
+    rts
 
 !fia_found:
     // Write all fields
@@ -316,10 +317,8 @@ floor_item_remove:
 floor_item_find_at:
     sta fi_add_x                // Stash search x
     sty fi_add_y                // Stash search y
-    ldx #0
+    ldx #MAX_FLOOR_ITEMS - 1
 !fifa_loop:
-    cpx #MAX_FLOOR_ITEMS
-    bcs !fifa_miss+
     lda fi_item_id,x
     cmp #FI_EMPTY
     beq !fifa_next+
@@ -330,11 +329,10 @@ floor_item_find_at:
     cmp fi_add_y
     bne !fifa_next+
     // Found
-    sec
     rts
 !fifa_next:
-    inx
-    jmp !fifa_loop-
+    dex
+    bpl !fifa_loop-
 !fifa_miss:
     clc
     rts
@@ -350,7 +348,8 @@ glyph_clear_all:
 
 glyph_find_at:
     sta fi_add_x
-    ldx #0
+glyph_find_at_stashed:
+    ldx #MAX_GLYPHS - 1
 !gfa_loop:
     lda glyph_active,x
     beq !gfa_next+
@@ -361,9 +360,8 @@ glyph_find_at:
     cmp glyph_y,x
     beq !gfa_hit+
 !gfa_next:
-    inx
-    cpx #MAX_GLYPHS
-    bcc !gfa_loop-
+    dex
+    bpl !gfa_loop-
 !gfa_miss:
     clc
     rts

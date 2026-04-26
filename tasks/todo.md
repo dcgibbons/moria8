@@ -3,6 +3,50 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-PRAYER-GLYPH-LOOK-COPY
+- [x] Reported Failure Gate:
+  - Live Glyph of Warding look/inspect now says `You see a trap.`; it must identify the warding mark as a glyph/rune instead of a generic trap
+- [x] add a real glyph/rune look Huffman string and update the prayer-level assertion to require it
+- [x] recover any needed C64/C128 boundary bytes without changing user-facing copy elsewhere
+- [x] verify:
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+- [x] review:
+  - Upstream umoria and VMS Moria both model Glyph of Warding as scare-monster / visible-trap object text `a strange rune` displayed as `^`.
+  - The shared look path now reports the glyph through `HSTR_PMU_GLYPH_OK` text `You see a strange rune.` instead of generic trap text, and the C64 prayer row asserts that exact message ID.
+  - Reusing the existing Glyph-of-Warding Huffman slot avoided adding a second resident string; C64 and C128 hard boundary asserts are green.
+
+- [x] BUG-PRAYER-GLYPH-LOOK-DESCRIPTION
+- [x] Reported Failure Gate:
+  - Live Glyph of Warding look/inspect reports the underlying tile as `You see a wall.` instead of the placed warding mark; exact regression gates are focused glyph prayer coverage plus `make test64` and `make test128-fast-smoke`
+- [x] add prayer-level regression coverage proving the placed glyph is described before underlying terrain
+- [x] fix the shared look path so active glyphs are authoritative over terrain descriptions
+- [x] verify:
+  - focused C64 glyph prayer test
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - C64 `glyph_of_warding_prayer` now executes the real `eff_glyph_of_warding` path and has a third assertion that places a prayer-created glyph on a visible floor tile with a visible wall beyond it; `do_look` must report the glyph/rune message instead of scanning through to the wall.
+  - Shared `do_look` now checks the active glyph table on empty visible floor tiles before stepping farther along the look ray, matching the upstream visible-trap/rune model.
+  - Shared item/glyph table scans were compacted enough to keep C64 `program_end` at `$c000` and C128 staged banked payload at `$d007-$e000`; all C64/C128 boundary asserts are green.
+
+- [x] BUG-PRAYER-GLYPH-WARDING-PARITY
+- [x] Reported Failure Gate:
+  - `Glyph of Warding` is mechanically active, but the task list still calls out missing special dungeon tile rendering and simplified break chance; exact regression gates are `make test64` and `make test128-fast-smoke`
+- [x] audit current glyph placement, rendering, and monster-break logic against local VMS/umoria upstream
+- [x] implement only the remaining product gap:
+  - keep existing visible `SC_GLYPH` renderer paths if they are already real on both C64 and C128
+  - change monster glyph break odds to upstream parity: one `randint/randomNumber(3000) < monster_level` style roll, not the current two-stage approximation
+- [x] update focused C64/C128 coverage and spell docs so stale “no special rendering” notes are removed
+- [x] verify:
+  - `make test64`
+  - `make test128-fast-smoke`
+- [x] review:
+  - C64 and C128 already render a visible `SC_GLYPH` marker through the shared glyph lookup; the stale docs were the source of the "no special dungeon-tile rendering" note.
+  - `monster_should_break_glyph` now uses the upstream `randint(3000) < monster level` semantics by rolling `rng_range_word(3000)`, converting to `1..3000`, and returning the comparison carry directly.
+  - The glyph slot save moved onto the stack because `rng_range_word` owns `zp_temp0/1`; the focused C64 `monster_ai` test now proves both the hold edge and break edge.
+  - C64 resident and C128 staged/runtime boundaries remained tight; byte-neutral cleanup in C64 restart and C128 banked-copy setup kept all segment assertions green.
+
 - [x] BUG-PRIEST-RESIST-SEMANTICS
 - [x] Reported Failure Gate:
   - `Resist Heat and Cold` currently reduces implemented elemental breath damage, but still uses a single packed heat/cold timer and broader fire/cold damage consumers are not modeled

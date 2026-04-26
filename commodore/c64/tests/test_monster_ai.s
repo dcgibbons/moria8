@@ -135,6 +135,17 @@ test_rng_range:
     ora #0
     rts
 
+test_rng_range_word:
+    ldx tai_rng_idx
+    lda tai_rng_values,x
+    sta zp_temp2
+    inx
+    lda tai_rng_values,x
+    sta zp_temp3
+    inx
+    stx tai_rng_idx
+    rts
+
 test_start:
 
     // Seed RNG deterministically
@@ -1987,7 +1998,7 @@ test_start:
     // a broken glyph stops blocking the player tile.
     // ==========================================
 !t26:
-    :PatchJump(rng_range, test_rng_range)
+    :PatchJump(rng_range_word, test_rng_range_word)
     lda #4
     sta zp_mon_type
     lda #20
@@ -2007,10 +2018,37 @@ test_start:
 !t26_add_ok:
     lda #0
     sta tai_rng_idx
-    sta tai_rng_values + 0      // high bucket zero -> compare low bucket
-    lda #19
+    lda #19                     // 19 is not < level-1 (19): glyph holds
+    sta tai_rng_values + 0
+    lda #0
     sta tai_rng_values + 1
     lda #0
+    sta tai_attack_calls
+    sta mat_action_dirty
+    sta mat_fleeing
+    lda zp_player_x
+    sta mat_target_x
+    lda zp_player_y
+    sta mat_target_y
+    jsr monster_try_step
+    lda glyph_active + 0
+    beq !t26_fail+
+    lda tai_attack_calls
+    bne !t26_fail+
+
+    jsr glyph_clear_all
+    lda zp_player_x
+    ldy zp_player_y
+    jsr glyph_add_at
+    bcc !t26_fail+
+    lda #0
+    sta tai_rng_idx
+    lda #4
+    sta zp_mon_type
+    lda #18                     // 18 is < level-1 (19): glyph breaks
+    sta tai_rng_values + 0
+    lda #0
+    sta tai_rng_values + 1
     sta tai_attack_calls
     sta mat_action_dirty
     sta mat_fleeing

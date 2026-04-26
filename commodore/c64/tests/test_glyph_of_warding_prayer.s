@@ -4,7 +4,7 @@
 :BasicUpstart2(test_bootstrap)
 
 .pc = $E000 "Result Buffer"
-tgw_results: .fill 2, $ff
+tgw_results: .fill 3, $ff
 
 .pc = $080E "Bootstrap"
 
@@ -18,7 +18,7 @@ test_finish:
     sei
     :BankOutBasic()
     :BankOutKernal()
-    ldx #1
+    ldx #2
 !copy:
     lda tgw_results,x
     sta $0400,x
@@ -73,6 +73,7 @@ test_finish:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
+#import "../../common/player_magic_utility.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -106,6 +107,9 @@ tgw_spell_exec_calls: .byte 0
 tgw_huff_calls: .byte 0
 tgw_last_huff_id: .byte 0
 tgw_last_spell_idx: .byte $ff
+pmx_work_idx: .byte 0
+pmx_work_flag: .byte 0
+pmx_work_damage: .byte 0
 
 .macro PatchJump(target, replacement) {
     lda #$4c
@@ -128,6 +132,29 @@ test_tramp_glyph_of_warding_execute:
     inc tgw_spell_exec_calls
     lda pm_spell_idx
     sta tgw_last_spell_idx
+    jsr eff_glyph_of_warding
+    rts
+
+test_get_direction_target_east:
+    lda zp_player_x
+    clc
+    adc #1
+    sta df_target_x
+    lda zp_player_y
+    sta df_target_y
+    sec
+    rts
+
+test_write_tile:
+    pha
+    txa
+    tax
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    pla
+    :MapWrite_ptr0_y()
     rts
 
 test_pm_select_book:
@@ -218,9 +245,8 @@ test_start:
     :PatchJump(pm_prompt_visible_spell_choice, test_pm_prompt_visible_spell_choice)
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
-    // Test 1: successful prayer reaches slot 29, spends 36 mana, and marks
-    // the prayer worked. The shared Glyph of Warding seam remains covered by
-    // test_utility_effects on C64.
+    // Test 1: successful prayer reaches slot 29, spends 36 mana, creates a
+    // visible glyph, and marks the prayer worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_glyph_state
     jsr player_pray
@@ -232,9 +258,18 @@ test_start:
     cmp #29
     bne !t1_fail+
     lda tgw_huff_calls
+    cmp #1
+    bne !t1_fail+
+    lda tgw_last_huff_id
+    cmp #HSTR_PMU_GLYPH_OK
     bne !t1_fail+
     lda vis_room_revealed
+    cmp #1
     bne !t1_fail+
+    lda #22
+    ldy #12
+    jsr glyph_find_at
+    bcc !t1_fail+
     lda zp_player_mp
     cmp #4
     bne !t1_fail+
@@ -251,36 +286,72 @@ test_start:
     lda #$00
     sta tgw_results + 0
 
-    // Test 2: cast failure spends mana, prints HSTR_PM_FAIL, does not execute,
-    // and leaves Glyph of Warding unworked.
+    // Test 2: the prayer-created glyph is described before underlying terrain
+    // when looked at. This catches glyphs that render but inspect as walls.
 !t2:
-    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
+    :PatchJump(get_direction_target, test_get_direction_target_east)
     jsr test_reset_glyph_state
     jsr player_pray
     bcc !t2_fail+
-    lda tgw_spell_exec_calls
-    bne !t2_fail+
+    lda #21
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_LIT
+    ldx #12
+    ldy #22
+    jsr test_write_tile
+    lda #TILE_WALL_H | FLAG_VISITED | FLAG_LIT
+    ldx #12
+    ldy #23
+    jsr test_write_tile
+    lda #0
+    sta tgw_huff_calls
+    sta tgw_last_huff_id
+    jsr do_look
     lda tgw_huff_calls
     cmp #1
     bne !t2_fail+
     lda tgw_last_huff_id
-    cmp #HSTR_PM_FAIL
-    bne !t2_fail+
-    lda zp_player_mp
-    cmp #4
-    bne !t2_fail+
-    lda player_data + PL_MANA
-    cmp #4
-    bne !t2_fail+
-    lda player_data + PL_SPELLS_WORKED_3
-    and #$20
+    cmp #HSTR_PMU_GLYPH_OK
     bne !t2_fail+
     lda #$01
     sta tgw_results + 1
-    jmp test_finish
+    jmp !t3+
 !t2_fail:
     lda #$00
     sta tgw_results + 1
+
+    // Test 3: cast failure spends mana, prints HSTR_PM_FAIL, does not execute,
+    // and leaves Glyph of Warding unworked.
+!t3:
+    :PatchJump(calc_spell_failure, test_calc_spell_failure_fail)
+    jsr test_reset_glyph_state
+    jsr player_pray
+    bcc !t3_fail+
+    lda tgw_spell_exec_calls
+    bne !t3_fail+
+    lda tgw_huff_calls
+    cmp #1
+    bne !t3_fail+
+    lda tgw_last_huff_id
+    cmp #HSTR_PM_FAIL
+    bne !t3_fail+
+    lda zp_player_mp
+    cmp #4
+    bne !t3_fail+
+    lda player_data + PL_MANA
+    cmp #4
+    bne !t3_fail+
+    lda player_data + PL_SPELLS_WORKED_3
+    and #$20
+    bne !t3_fail+
+    lda #$01
+    sta tgw_results + 2
+    jmp test_finish
+!t3_fail:
+    lda #$00
+    sta tgw_results + 2
     jmp test_finish
 
 test_done_break:

@@ -1120,7 +1120,7 @@ run_test "turn_undead_prayer" "tests/test_turn_undead_prayer.s" "0400 0402" 3 50
 run_test "prayer_prayer" "tests/test_prayer_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_undead_prayer" "tests/test_dispel_undead_prayer.s" "0400 0402" 3 500000000
 run_test "dispel_evil_prayer" "tests/test_dispel_evil_prayer.s" "0400 0402" 3 500000000
-run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0401" 2 500000000
+run_test "glyph_of_warding_prayer" "tests/test_glyph_of_warding_prayer.s" "0400 0402" 3 500000000
 run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000000
 run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
 run_test "chant_prayer" "tests/test_chant_prayer.s" "0400 0402" 3 500000000

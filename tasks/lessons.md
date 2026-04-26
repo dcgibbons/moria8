@@ -5,6 +5,8 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 ## Verification
 
+- Do not satisfy a “not wall” visual/inspect bug with a generic nearby message. If the user-visible object is a glyph/rune, the regression must assert glyph/rune copy, not merely any non-wall description.
+- For placement spells that store state separately from terrain, prayer-row tests must exercise the user-visible inspect/look path after placement, not only spell dispatch, placement bookkeeping, renderer glyphs, or monster interactions.
 - Do not move the C64 live cast/pray modal entry path into the copied `$F000` banked payload. That path nests input, KERNAL keyboard IRQs, and overlay trampolines; keeping it resident is safer than trying to maintain `$01`/IRQ invariants across every nested return.
 - If the user says the live spell/prayer cast still only beeps after a helper-level green test, stop treating the helper as the owner. Trace the full product cast -> execute -> restore path and find the live message-clobber seam before claiming the fix.
 - If the user says a live command key still does nothing after a pure key-mapper test is green, stop treating `petscii_to_command` as sufficient proof. Trace the full product path through input, dispatch, trampoline/overlay load, and target routine before claiming a live input fix.

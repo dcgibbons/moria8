@@ -147,7 +147,7 @@ Sorry, what was that again?
 @PIQ_AIR_CRACKLE The air crackles around you.
 @PIQ_CLEANSED You feel cleansed.
 @PMU_GLYPH_BLOCK There is already an object under you.
-@PMU_GLYPH_OK A glyph appears beneath you.
+@PMU_GLYPH_OK You see a strange rune.
 @PIQ_WPN_GLOW Your weapon glows briefly.
 @PIQ_ARM_GLOW Your armor glows briefly.
 @PIQ_HANDS_GLOW Your hands begin to glow.

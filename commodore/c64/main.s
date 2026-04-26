@@ -1197,10 +1197,11 @@ game_restart:
     // Clear static game-state variables in data segments
     lda #0
     sta eff_fear_timer
-    sta recall_query_sc
-    sta recall_found_type
-    sta recall_last_sc
-    sta recall_last_idx
+    ldx #3
+!clr_recall:
+    sta recall_query_sc,x
+    dex
+    bpl !clr_recall-
 
     // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
     lda #$ff

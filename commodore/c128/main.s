@@ -715,12 +715,11 @@ init_copy_banked:
     sta zp_ptr0
     lda #>banked_payload
     sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
+    ldy #$00
+    sty zp_ptr1
     lda #$F0
     sta zp_ptr1_hi
     ldx #((banked_payload_end - banked_payload + 255) / 256)
-    ldy #0
     // Switch to NOIO for the copy (source crosses $D000)
     lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
     sta $ff00

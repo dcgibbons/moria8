@@ -797,10 +797,12 @@ monster_try_step:
     ldy zp_player_y
     jsr glyph_find_at
     bcc !mts_glyph_done_player+
-    stx zp_temp0
+    txa
+    pha
     jsr monster_should_break_glyph
-    ldx zp_temp0
-    bcs !mts_break_player_glyph+
+    pla
+    tax
+    bcc !mts_break_player_glyph+
     jmp !mts_blocked+
 !mts_break_player_glyph:
     jsr glyph_remove
@@ -868,10 +870,12 @@ monster_try_step:
     ldy mat_target_y
     jsr glyph_find_at
     bcc !mts_no_glyph+
-    stx zp_temp0
+    txa
+    pha
     jsr monster_should_break_glyph
-    ldx zp_temp0
-    bcs !mts_break_glyph+
+    pla
+    tax
+    bcc !mts_break_glyph+
     jmp !mts_blocked+
 !mts_break_glyph:
     jsr glyph_remove
@@ -931,18 +935,20 @@ monster_try_step:
     rts
 
 monster_should_break_glyph:
-    lda #12
-    jsr rng_range
+    lda #<$0bb8
+    sta zp_temp0
+    lda #>$0bb8
+    sta zp_temp1
+    jsr rng_range_word          // upstream: randint(3000) < monster level
+    lda zp_temp3
     bne !msg_hold+
-    lda #250
-    jsr rng_range
+    inc zp_temp2                // convert 0..2999 to upstream 1..3000
+    beq !msg_hold+
+    lda zp_temp2
     ldx zp_mon_type
     cmp cr_level,x
-    bcc !msg_break+
-!msg_hold:
-    clc
     rts
-!msg_break:
+!msg_hold:
     sec
     rts
 
