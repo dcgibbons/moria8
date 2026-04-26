@@ -601,8 +601,7 @@ eff_polymorph_other:
     jsr monster_remove
     jsr pick_creature_type
     jsr monster_spawn_one
-    lda #1
-    sta vis_room_revealed
+    inc zp_dirty_count
 !epo_done:
     rts
 
@@ -648,8 +647,7 @@ eff_teleport_other:
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    inc zp_dirty_count
 !eto_done:
     rts
 

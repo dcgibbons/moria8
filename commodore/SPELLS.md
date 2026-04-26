@@ -99,7 +99,7 @@
     - shared directional-confuse runtime coverage now proves hit feedback (`The monster looks confused.`) and miss feedback (`Nothing seems to happen.`)
     - `Confusion` now also has row-level coverage on `C64+C128` for spell-id mapping, confuse-timer mutation, and cast-fail/success mana/worked bookkeeping
     - priest `Blind Creature` now also has row-level coverage on `C64+C128` for prayer-id mapping and the current shared directional-confuse behavior: confuse-timer mutation on hit, no stun mutation, current no-target feedback on miss, and cast-fail/success mana/worked bookkeeping
-    - `Polymorph Other` now also has row-level coverage on `C64+C128` for shared directional line tracing to a ranged target, silent successful target replacement, preserved occupied-tile invariants, silent no-target behavior, and cast-fail/success bookkeeping
+    - `Polymorph Other` now also has row-level coverage on `C64+C128` for shared directional line tracing to a ranged target, silent successful target replacement, preserved occupied-tile invariants, durable scene-redraw request, silent no-target behavior, and cast-fail/success bookkeeping
   - detect/reveal feedback:
     - dedicated runtime coverage now exists for `Detect Monsters` result/no-result behavior
     - dedicated runtime coverage now exists for `Detect Evil` result/no-result behavior
@@ -199,7 +199,7 @@
     - `Slow Monster` spell-id mapping, directional slow-state mutation behavior, and slowed-target feedback
     - `Slow Monster` current no-target behavior and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_polymorph_other.s`
-    - `Polymorph Other` spell-id mapping, shared directional line tracing, and deterministic ranged target replacement behavior
+    - `Polymorph Other` spell-id mapping, shared directional line tracing, deterministic ranged target replacement behavior, and durable monster-redraw request
     - `Polymorph Other` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_identify_spell.s`
     - `Identify` spell-id mapping and exact built identify-message behavior
@@ -208,7 +208,7 @@
     - `Teleport Self` spell-id mapping and long-range relocation behavior
     - `Teleport Self` cast-fail/success bookkeeping
   - `commodore/c64/tests/test_teleport_other.s`
-    - `Teleport Other` spell-id mapping and deterministic target relocation behavior
+    - `Teleport Other` spell-id mapping, deterministic target relocation behavior, and durable monster-redraw request
     - `Teleport Other` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c64/tests/test_haste_self.s`
     - `Haste Self` spell-id mapping and deterministic speed-timer onset/refresh behavior
@@ -319,7 +319,7 @@
     - `Slow Monster` spell-id mapping, directional slow-state mutation behavior, and slowed-target feedback
     - `Slow Monster` current no-target behavior and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_polymorph_other128.s`
-    - `Polymorph Other` spell-id mapping, shared directional line tracing, and deterministic ranged target replacement behavior
+    - `Polymorph Other` spell-id mapping, shared directional line tracing, deterministic ranged target replacement behavior, and durable monster-redraw request
     - `Polymorph Other` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_identify128.s`
     - `Identify` spell-id mapping and exact built identify-message behavior
@@ -328,7 +328,7 @@
     - `Teleport Self` spell-id mapping and long-range relocation behavior
     - `Teleport Self` cast-fail/success bookkeeping
   - `commodore/c128/tests/test_teleport_other128.s`
-    - `Teleport Other` spell-id mapping and deterministic target relocation behavior
+    - `Teleport Other` spell-id mapping, deterministic target relocation behavior, and durable monster-redraw request
     - `Teleport Other` silent no-target behavior and cast-fail/success bookkeeping
   - `commodore/c128/tests/test_haste_self128.s`
     - `Haste Self` spell-id mapping and deterministic speed-timer onset/refresh behavior
@@ -376,14 +376,14 @@
 | 17 | Added | M3 | Create Food | 9/7/45 | 25/12/95 | 17/17/55 | Create food on player tile | Row-covered on `C64+C128`: focused coverage proves underfoot item replacement on success, current blocked semantics when no floor-item slot is free, explicit success/blocked feedback, and cast-fail/success mana/worked bookkeeping |
 | 18 | Added | M3 | Recharge Item I | 9/7/75 | 27/15/99 | 17/17/90 | Recharge wand/staff, with break risk | Row-covered on `C64+C128`: focused coverage proves eligible-item recharge mutation, explicit no-eligible-item feedback, destructive bright-flash backfire behavior, and cast-fail/success mana/worked bookkeeping |
 | 19 | Added | M3 | Sleep II | 9/7/45 | -- | 21/17/55 | Sleep adjacent monsters | Row-covered on `C64+C128`: focused coverage proves adjacent local-sleep success, explicit success/unaffected/no-target feedback, and cast-fail/success mana/worked bookkeeping |
-| 20 | Added | M3 | Polymorph Other | 11/7/45 | -- | 21/19/60 | Replace target monster with another | Row-covered on `C64+C128`: focused coverage proves the shared directional helper traces through the chosen line to a ranged target, then performs silent successful target replacement at the same coordinates with occupied-tile invariants preserved, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
+| 20 | Added | M3 | Polymorph Other | 11/7/45 | -- | 21/19/60 | Replace target monster with another | Row-covered on `C64+C128`: focused coverage proves the shared directional helper traces through the chosen line to a ranged target, then performs silent successful target replacement at the same coordinates with occupied-tile invariants preserved, requests a durable post-turn scene redraw without faking a room reveal, preserves silent no-target behavior, and maintains cast-fail/success mana/worked bookkeeping |
 | 21 | Added | M3 | Identify | 11/7/99 | 29/18/99 | 23/25/95 | Item identify prompt | Row-covered on `C64+C128`: focused coverage proves eligible-item identification with the exact built identify message, current cancel/no-eligible-item feedback behavior, and cast-fail/success mana/worked bookkeeping |
 | 22 | Added | M3 | Sleep III | 13/7/50 | -- | 23/20/60 | Sleep all visible monsters | Row-covered on `C64+C128`: focused coverage proves visible monsters sleep while hidden monsters remain unaffected, current explicit success/no-target feedback, and cast-fail/success mana/worked bookkeeping |
 | 23 | Added | M3 | Fire Bolt | 15/9/50 | -- | 25/20/60 | Directional fire bolt `6d8` | Row-covered on `C64+C128`: shared bolt coverage proves the projectile hit/miss contract, and focused row coverage proves spell-id mapping, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
 | 24 | Added | M3 | Slow Monster | 17/9/50 | -- | 25/21/65 | Slow target monster | Row-covered on `C64+C128`: focused coverage proves directional slow-state mutation with sleep cleared, slowed-target feedback, current no-target behavior, and cast-fail/success mana/worked bookkeeping |
 | 25 | Added | M4 | Frost Ball | 19/12/55 | -- | 27/21/65 | Frost ball `33` | Row-covered on `C64+C128`: shared ball coverage proves visible travel, area damage, and kill-path handling, and focused row coverage proves spell-id mapping, empty-area silence, and cast-fail/success mana/worked bookkeeping |
 | 26 | Added | M4 | Recharge Item II | 21/12/90 | -- | 29/23/95 | Stronger recharge with break risk | Row-covered on `C64+C128`: focused coverage proves stronger eligible-item recharge mutation, explicit no-eligible-item feedback, destructive bright-flash backfire behavior, and cast-fail/success mana/worked bookkeeping |
-| 27 | Added | M4 | Teleport Other | 23/12/60 | -- | 31/25/70 | Teleport target monster away | Row-covered on `C64+C128`: focused coverage proves deterministic target relocation with occupied-tile invariants preserved, sleep cleared on the moved monster, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
+| 27 | Added | M4 | Teleport Other | 23/12/60 | -- | 31/25/70 | Teleport target monster away | Row-covered on `C64+C128`: focused coverage proves deterministic target relocation with occupied-tile invariants preserved, sleep cleared on the moved monster, durable post-turn scene redraw requested without faking a room reveal, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
 | 28 | Added | M4 | Haste Self | 25/12/65 | -- | 33/25/75 | Temporary self-speed boost | Row-covered on `C64+C128`: focused coverage proves deterministic speed-timer onset and refresh growth, explicit speed-onset feedback on both paths, and cast-fail/success mana/worked bookkeeping |
 | 29 | Added | M4 | Fire Ball | 29/18/65 | -- | 35/25/80 | Fire ball `49` | Row-covered on `C64+C128`: shared ball coverage proves visible travel, area damage, and kill-path handling, and focused row coverage proves spell-id mapping, empty-area silence, and cast-fail/success mana/worked bookkeeping |
 | 30 | Added | M4 | Word of Destruction | 33/21/80 | -- | 37/30/95 | Destroy surrounding area | Row-covered on `C64+C128`: focused coverage proves deterministic adjacent kill plus nearby secret-door/trap mutation, redraw updates, and cast-fail/success mana/worked bookkeeping |

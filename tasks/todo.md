@@ -5530,3 +5530,21 @@ The section below is retained only as historical context for the earlier dual-en
   - C64 stayed inside the resident boundary after local byte trims in the same spell setup/mana routine; current C64 `program_end=$BFFC`, below `MAP_BASE=$C000`.
   - C128 banked payload also stays below CPU vectors after the byte trim; current forced build reports `$D004-$DFFE` staged payload and `banked_code_end` within bounds.
   - Verification is green: `make -C commodore test64`, `make -C commodore test128-fast-smoke`, and escalated `make -C commodore test128-fast`.
+
+- [x] BUG-MONSTER-EFFECT-REDRAW
+- [ ] Reported Failure Gate:
+  - Polymorph Other and similar monster effects may leave stale or missing monster tiles until a later movement/redraw.
+- [x] inspect monster-transform/effect producers and the shared post-turn redraw contract
+- [x] make visible monster transform/status effects request a durable post-turn scene redraw through the existing action-redraw latch, not only incidental visibility flags
+- [x] add focused C64 and C128 Polymorph Other regression coverage for the redraw request
+- [ ] verify:
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+  - `make -C commodore test128-fast`
+- [x] review:
+  - Root cause: Polymorph Other and Teleport Other changed monster type/position and map occupancy, but relied on `vis_room_revealed` as an incidental redraw trigger. That was the wrong contract for monster-only mutations and did not explicitly exercise the durable action-redraw latch used by post-turn rendering.
+  - `eff_polymorph_other` and `eff_teleport_other` now increment the shared pending redraw latch (`zp_dirty_count` / `turn_action_redraw_pending`) after successful monster replacement/relocation. `turn_post_action` already folds that latch into `turn_scene_dirty`, so the existing command tail promotes the result to a full scene redraw.
+  - The old fake room-reveal flag was removed from these monster-only effects; focused tests now assert `vis_room_revealed == 0` and `zp_dirty_count == 1` on success.
+  - C64 and C128 Polymorph Other and Teleport Other row tests cover the redraw request while preserving silent no-target and cast-fail behavior.
+  - The first C128 smoke rerun caught a real overlay boundary failure from the initial byte growth (`DeathOverlay` reached `$F002`); replacing the room-reveal trigger with the existing redraw latch recovered the bytes and made the contract cleaner.
+  - Verification is green: `make -C commodore test64`, `make -C commodore test128-fast-smoke`, and `make test128-fast`.

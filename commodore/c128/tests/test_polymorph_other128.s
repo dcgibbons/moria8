@@ -273,8 +273,7 @@ test_tramp_polymorph_execute:
     jsr monster_remove
     jsr pick_creature_type
     jsr monster_spawn_one
-    lda #1
-    sta vis_room_revealed
+    inc zp_dirty_count
 !done:
     rts
 
@@ -317,6 +316,7 @@ test_reset_polymorph_state:
     sta test_remove_calls
     sta test_spawn_calls
     sta vis_room_revealed
+    sta zp_dirty_count
     lda #$ff
     sta test_last_spell_idx
 
@@ -434,6 +434,8 @@ test_start:
     cmp #10
     bne !t1_fail+
     lda vis_room_revealed
+    bne !t1_fail+
+    lda zp_dirty_count
     cmp #1
     bne !t1_fail+
     ldx #10
@@ -482,6 +484,8 @@ test_after_success:
     lda test_mon_present
     bne !t2_fail+
     lda vis_room_revealed
+    bne !t2_fail+
+    lda zp_dirty_count
     bne !t2_fail+
     lda zp_player_mp
     cmp #13

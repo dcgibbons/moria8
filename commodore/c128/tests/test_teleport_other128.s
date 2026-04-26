@@ -247,8 +247,7 @@ test_eff_teleport_other:
     :MapRead_ptr0_y()
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
-    lda #1
-    sta vis_room_revealed
+    inc zp_dirty_count
 !done:
     rts
 
@@ -374,6 +373,7 @@ test_reset_teleport_other_state:
     sta test_spell_exec_calls
     sta test_find_random_floor_calls
     sta vis_room_revealed
+    sta zp_dirty_count
     lda #$ff
     sta test_last_spell_idx
 
@@ -462,6 +462,8 @@ test_start:
     lda test_mon_data + MX_SLEEP_CUR
     bne !t1_fail+
     lda vis_room_revealed
+    bne !t1_fail+
+    lda zp_dirty_count
     cmp #1
     bne !t1_fail+
     ldx #10
@@ -512,6 +514,8 @@ test_after_success:
     bne !t2_fail+
     lda vis_room_revealed
     bne !t2_fail+
+    lda zp_dirty_count
+    bne !t2_fail+
     lda zp_player_mp
     cmp #8
     bne !t2_fail+
@@ -560,6 +564,8 @@ test_after_no_target:
     cmp #5
     bne !t3_fail+
     lda vis_room_revealed
+    bne !t3_fail+
+    lda zp_dirty_count
     bne !t3_fail+
     ldx #10
     ldy #12
