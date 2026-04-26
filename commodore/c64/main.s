@@ -265,6 +265,7 @@ entry_main:
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
     jsr disk_reset_session_state
+    jsr c64_install_ram_irq_vectors
 
     // BASIC ROM already banked out by bootstrap above
 
@@ -400,6 +401,38 @@ irq_no_blink_after_cld:
     lda #1
     sta zp_screen_editor_state // Force non-zero (inc wraps $FF→$00, re-enabling blink)
     jmp $ea31               // Continue to standard KERNAL IRQ handler
+
+// c64_irq_hidden_rom — IRQ/NMI handler for all-RAM mode.
+// If an interrupt leaks through while $01 hides KERNAL, CPU vectors read RAM
+// at $FFFA/$FFFE. Acknowledge likely interrupt sources and return without
+// touching KERNAL ROM, which is not visible in that banking mode.
+c64_irq_hidden_rom:
+    cld
+    pha
+    lda $dc0d
+    lda $dd0d
+    lda $d019
+    sta $d019
+    pla
+    rti
+
+c64_install_ram_irq_vectors:
+    php
+    sei
+    lda $01
+    pha
+    lda #BANK_NO_KERNAL
+    sta $01
+    lda #<c64_irq_hidden_rom
+    sta $fffa
+    sta $fffe
+    lda #>c64_irq_hidden_rom
+    sta $fffb
+    sta $ffff
+    pla
+    sta $01
+    plp
+    rts
 
 // ============================================================
 // kernal_load_safe — KERNAL LOAD wrapper for C64
@@ -612,6 +645,7 @@ platform_runtime_resync_c64:
     sta $0314
     lda #>irq_no_blink
     sta $0315
+    jsr c64_install_ram_irq_vectors
     lda #BANK_NO_BASIC
     sta $01
     lda $dd00
@@ -648,9 +682,18 @@ platform_services_install64:
 // ============================================================
 // UI screen trampolines — help and modal UI load from $E000 overlays
 // ============================================================
+overlay_load_no_kernal:
+    jsr overlay_load
+    bcs !done+
+    sei
+    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
+    sta $01
+!done:
+    rts
+
 tramp_ui_help_display:
     lda #OVL_HELP
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcc !loaded+
     jmp tramp_sr_epilogue
 !loaded:
@@ -658,52 +701,37 @@ tramp_ui_help_display:
     sta help_pages_src_lo
     lda #>help_pages
     sta help_pages_src_hi
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_help_display
     jmp tramp_sr_epilogue
 
 tramp_ui_char_display:
     lda #OVL_UI
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_char_display
 !done:
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_display:
     lda #OVL_HELP
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_inv_display
 !done:
     jmp tramp_sr_epilogue
 
 tramp_ui_inv_select_display:
     lda #OVL_HELP
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_inv_select_display
 !done:
     jmp tramp_sr_epilogue
 
 tramp_ui_equip_display:
     lda #OVL_HELP
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_equip_display
 !done:
     jmp tramp_sr_epilogue
@@ -717,120 +745,87 @@ tramp_ui_recall:
 
 tramp_item_gain_spell:
     lda #OVL_UI
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr item_gain_spell
 !done:
     jmp tramp_sr_epilogue
 
 tramp_item_read_scroll:
     lda #OVL_ITEMS
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr item_read_scroll
 !done:
     jmp tramp_sr_epilogue
 
 tramp_item_aim_wand:
     lda #OVL_ITEMS
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr item_aim_wand
 !done:
     jmp tramp_sr_epilogue
 
 tramp_item_use_staff:
     lda #OVL_ITEMS
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr item_use_staff
 !done:
     jmp tramp_sr_epilogue
 
 tramp_eff_earthquake:
-    lda #OVL_ITEMS
-    jsr overlay_load
-    bcs !done+
     sei
     lda #BANK_NO_KERNAL
     sta $01
-    jsr eff_earthquake
-    lda #OVL_DEATH
-    jsr overlay_load
-    bcs !fatal+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
-!done:
+    jsr eff_earthquake_banked
     rts
-!fatal:
-    jmp restart_entry
 
 tramp_item_refuel:
     lda #OVL_ITEMS
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr item_refuel
 !done:
     jmp tramp_sr_epilogue
 
 tramp_spell_list_display:
     lda #OVL_UI
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr spell_list_display
 !done:
     jmp tramp_sr_epilogue
 
 tramp_spell_execute_selected:
     lda #OVL_DEATH
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr spell_execute_selected
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
     jsr tier_restore_after_overlay
 !done:
     jmp tramp_sr_epilogue
 
 tramp_reveal_floorplan:
     lda #OVL_DEATH
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL
-    sta $01
     jsr eff_reveal_floorplan
 !done:
     jmp tramp_sr_epilogue
 
 tramp_ui_identify:
     lda #OVL_UI
-    jsr overlay_load
+    jsr overlay_load_no_kernal
     bcs !done+
-    sei
-    lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
-    sta $01
     jsr ui_identify_print
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
     jsr tier_restore_after_overlay
 !done:
     jmp tramp_sr_epilogue
@@ -1290,6 +1285,9 @@ banked_payload:
     #import "../common/player_magic_map.s"
     #import "../common/player_magic_turn_banked.s"
     #import "../common/player_magic_slow_runtime.s"
+    #define PM_EQ_BANKED
+    #import "../common/player_magic_earthquake.s"
+    #undef PM_EQ_BANKED
 
 banked_code_end:
 }
@@ -1375,9 +1373,7 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
-    #define ITEM_ACTIONS_EARTHQUAKE_OWNER
     #import "../common/item_actions_overlay.s"
-    #undef ITEM_ACTIONS_EARTHQUAKE_OWNER
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true

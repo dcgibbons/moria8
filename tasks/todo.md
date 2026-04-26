@@ -3,9 +3,74 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [x] BUG-C64-EARTHQUAKE-HANG-121051
+ - [x] Reported Failure Gate:
+   - Fresh C64 live Earthquake prayer still hangs after the Death-overlay restore fix; snapshot `~/vice-snapshot-20260426121051.vsf`
+ - [x] inspect snapshot CPU/RAM/overlay state against current `main.vs`
+ - [x] identify whether the hang is overlay return, KERNAL/disk restore, IRQ/vector, or post-cast turn handling
+ - [x] fix root cause without weakening C64 segment/boundary asserts
+ - [x] verify with `make disk64`, focused Earthquake coverage, and `make -C commodore test64`
+ - [x] review:
+   - Previous closure was still incomplete: restoring `OVL_DEATH` before returning fixed the `$001E` JAM path, but the fresh live snapshot still showed a broken product control-flow path.
+   - Snapshot `~/vice-snapshot-20260426121051.vsf` had `OVL_DEATH` loaded and hidden-RAM vectors installed, but the stack contained repeated interrupt frames returning into map RAM around `$C6FF`, not a valid code path. That made the remaining issue the cross-overlay trampoline shape itself, not just the missing restore.
+   - Final C64 fix: move the Earthquake effect into the banked `$F000` payload as `eff_earthquake_banked`, and make `tramp_eff_earthquake` call it directly while `OVL_DEATH` remains loaded. The Items overlay no longer owns the prayer Earthquake routine, so `OVL_DEATH -> resident trampoline -> effect -> OVL_DEATH caller` is no longer a disk/overlay reload chain.
+   - The C64 scripted smoke disk builders now include `64.items`, keeping overlay-backed product smokes closer to the shipping disk layout.
+   - Verification passed: `make disk64` (`Program fits below MAP_BASE=true`, `Banked payload fits below I/O $D000=true`) and `make -C commodore test64` (`118 passed, 0 failed`, including `earthquake_prayer`, scripted spell smokes, and the updated Earthquake trampoline contract).
+
+## Recently Completed Task
+ - [x] BUG-C64-EARTHQUAKE-JAM-001E
+ - [x] Reported Failure Gate:
+   - Fresh C64 live Earthquake prayer still fails after the RAM-vector fix; user reports `CPU JAM at $001E`
+ - [x] inspect current binary/symbols and low-RAM crash address
+ - [x] identify why execution reaches zero page instead of returning from the live prayer path
+ - [x] fix root cause without weakening C64 segment/boundary asserts
+ - [x] verify with `make disk64`, focused C64 Earthquake coverage, and `make -C commodore test64`
+ - [x] review:
+   - Previous closure was wrong: green static contracts and `make -C commodore test64` did not reproduce the fresh live C64 Earthquake failure.
+   - `$001E` is `zp_math_a`, so the live crash was not a legitimate code address; it pointed to a bad return/jump path.
+   - Root cause: `spell_execute_selected` runs from `OVL_DEATH`, while the resident Earthquake trampoline loads `OVL_ITEMS` over that caller. Removing the post-effect `OVL_DEATH` restore made the trampoline `RTS` into the wrong overlay bytes.
+   - Fix: `tramp_eff_earthquake` now calls `eff_earthquake` from `OVL_ITEMS`, switches back to `$36`/CLI for the KERNAL-backed `OVL_DEATH` reload, then re-enters `$35`/SEI before returning to the Death overlay caller.
+   - Added the corrected C64 static contract that pins the safe overlay restore order.
+   - Attempted a product-style Earthquake prayer smoke, but the extra C64 scripted harness code pushed `Program fits below MAP_BASE=false`; that un-runnable diagnostic scaffold was removed instead of being left in-tree.
+   - Verification passed: `make disk64` (`Program fits below MAP_BASE=true`) and `make -C commodore test64` (`118 passed, 0 failed`, including `earthquake_prayer` and the updated trampoline contract).
+
+## Recently Completed Task
+ - [x] BUG-C64-EARTHQUAKE-HANG
+ - [x] Reported Failure Gate:
+   - C64 live Earthquake prayer still hangs after previous banking fixes; latest snapshot `~/vice-snapshot-20260426114337.vsf`
+ - [x] inspect current Earthquake prayer implementation, C64 coverage, and any C64 layout-sensitive paths
+ - [x] reproduce from the snapshot or an automated C64 prayer flow
+ - [x] fix root cause without weakening segment/boundary asserts
+ - [x] verify focused Earthquake coverage plus relevant C64 regression gate
+ - [x] review:
+   - First fix was incomplete: the C64 shipping `tramp_eff_earthquake` no longer reloads `OVL_DEATH` after `eff_earthquake`, but the user retest proved that was not the whole live failure.
+   - Fresh snapshot `~/vice-snapshot-20260426114337.vsf` showed the actual remaining failure: an interrupt leaked through while `$01` hid KERNAL, so the CPU read the all-RAM IRQ vector at `$FFFE/$FFFF`, found `$FFFF`, and spiraled into garbage/stack growth.
+   - Fix: install an all-RAM C64 IRQ/NMI handler in the RAM vectors before hidden-KERNAL overlay work; it acknowledges CIA/VIC interrupt sources and `RTI`s without jumping through KERNAL ROM. Also keep the earlier banking fix that restores normal C64 game banking before `tier_restore_after_overlay`.
+   - Size follow-up: the initial RAM-vector fix pushed C64 resident code over `MAP_BASE`; resident size was recovered by consolidating repeated overlay-load/no-KERNAL trampoline preambles into `overlay_load_no_kernal`, with the existing boundary assert left intact.
+   - Test gap: the existing C64 Earthquake prayer row test patched `test_spell_execute_selected` to call `eff_earthquake` directly, so it covered effect semantics but skipped the product `OVL_DEATH -> resident trampoline -> OVL_ITEMS` dispatch path where the bug lived.
+   - Added `earthquake_trampoline_no_hidden_kernal_load_contract`, `spell_execute_tier_restore_kernal_contract`, and `c64_hidden_kernal_irq_vector_contract` so C64 tests now pin the dangerous banking/vector contracts.
+   - Prior verification was insufficient: `make disk64` and `make -C commodore test64` passed, but the live C64 snapshot path still failed.
+   - Verification now passed after the RAM-vector and size-recovery fix: `make disk64` (`Program fits below MAP_BASE=true`) and `make -C commodore test64` (`118 passed, 0 failed`).
+   - Snapshot note: the user VSF was the diagnostic anchor for the failing patched binary; final closure still needs a fresh product retest for the exact manual path because old VSFs restore the old machine RAM image.
+
+## Recently Completed Task
+ - [x] SPELL-FINAL-AUDIT
+ - [x] Reported Failure Gate:
+   - Final audit request: determine whether any open spell-work items remain after the spell backlog fixes
+ - [x] scan task/docs for stale active spell backlog wording
+ - [x] cross-check spell/prayer coverage notes and remaining model-scope differences
+ - [x] clean stale docs if needed
+ - [x] review:
+   - No active spell/prayer backlog items remain after the audit.
+   - Updated `commodore/SPELLS.md` so `Cure Poison` and `Neutralize Poison` reflect their new dedicated C64/C128 row coverage.
+   - Retired stale active-looking spell TODO entries that were already closed by later work: prayer feedback audit, transform redraw, Resist Heat/Cold semantics, Magic Missile projectile feedback/crash, priest book B feedback, identify prompt, overcast ordering, cast/pray prompt text, C128 prayer no-op, C64 Detect Evil crash, and C128 spell-cast `$D026`.
+   - Verified the old C64 Detect Evil crash note against the current fresh C64 disk with `product_detect_evil_smoke`; it passed.
+   - The only remaining spell-related note is documented model scope: `Resist Heat and Cold` uses same-duration refresh for both split timers and the engine has no broader fire/cold consumers yet; current end-user impact is negligible, so it is not active backlog.
+
+## Recently Completed Task
  - [x] SPELL-POISON-CURE-ROW-COVERAGE
  - [x] Reported Failure Gate:
-   - Coverage-only gap: mage `Cure Poison` and priest `Neutralize Poison` share implemented `eff_cure_poison`, but lack dedicated row-level C64/C128 runtime tests
+   - Previous coverage-only gap: mage `Cure Poison` and priest `Neutralize Poison` share implemented `eff_cure_poison`; this task added dedicated row-level C64/C128 runtime tests
  - [x] add C64 row tests for mage `Cure Poison` and priest `Neutralize Poison`
  - [x] add C128 row tests and register them in C128 focused/batch test lists
  - [x] verify focused rows on both platforms plus relevant broad regression gates
@@ -53,7 +118,7 @@ This file is a temporary working scratchpad.
   - no active backlog remains for the previously tracked spell fixes: Detect Evil, flagged dispels, Turn Undead, slow/control feedback, ranged directional monster effects, sleep state semantics, Genocide, Resist Heat and Cold split storage, Glyph of Warding, mana exhaustion feedback, redraw-after-transform, and long-message `-more-` collision
   - the full mage/priest catalogs are present; class level/mana/fail data still matches local `umoria` values for the supported 31-entry spell/prayer catalogs
   - strict `umoria` Holy Word parity follow-up has since been completed: Commodore `Holy Word` heals, cleanses, restores stats, grants invulnerability, dispels evil, and separately runs the Turn Undead side effect
-  - remaining coverage-only follow-up: mage `Cure Poison` and priest `Neutralize Poison` both share the implemented poison-clear effect, but do not yet have dedicated row-level C64/C128 runtime tests
+  - mage `Cure Poison` and priest `Neutralize Poison` now have dedicated row-level C64/C128 runtime tests for the shared poison-clear effect
   - `Resist Heat and Cold` is no longer a packed-timer spell backlog item; remaining differences are model scope, namely same-duration refresh for both timers and broader fire/cold consumers that do not exist yet
   - long two-line wrapping remains a UI polish item, not a spell backlog item
 - [x] verification:
@@ -343,10 +408,10 @@ This file is a temporary working scratchpad.
   - the true root cause is architectural: C128 running was feeding a PETSCII-decoded sample into the run held/cancel FSM, so transient decoded neutral states could arm cancel and then reinterpret the same held chord as a fresh edge
   - the fix must leave C64/shared game logic on the same high-level contracts while confining C128-only differences to the raw matrix sampler
 
-- [ ] AUDIT-PRAYER-PASS-1
-- [ ] Reported Failure Gate:
+- [x] AUDIT-PRAYER-PASS-1
+- [x] Reported Failure Gate:
   - priest prayers should have upstream-faithful live behavior, visible feedback where upstream provides it, and correct C64/C128 prompt/render behavior; `make test64` and `make test128-fast-smoke` remain the exact regression gates for prayer-side fixes
-- [ ] prayer audit findings, prioritized:
+- [x] prayer audit findings, prioritized:
   - `Slow Poison` is currently silent in Commodore, but both VMS and umoria print a reduction message when poison is actually reduced
   - `Blind Creature` needs re-audit against current shared directional-confuse behavior before changing product code
 - [x] TURN-UNDEAD-VISIBLE-FEEDBACK
@@ -437,18 +502,18 @@ This file is a temporary working scratchpad.
   - `make test128-fast-smoke`
 - [x] rework `monster_wake_check` to use live per-monster sleep state instead of species base sleep data so spell-induced sleep persists
 - [x] add shared visible feedback for adjacent sleep and mass sleep so `Sleep II` / `Sleep III` report what happened
-- [ ] BUG-SHARED-MONSTER-REDRAW-AFTER-TRANSFORM
-- [ ] Reported Failure Gate:
+- [x] BUG-SHARED-MONSTER-REDRAW-AFTER-TRANSFORM
+- [x] Reported Failure Gate:
   - monster-changing effects such as `Polymorph Other` must not leave stale/missing monster tiles on screen until the monster moves again; the exact verification gate remains `make test64`
-- [ ] build a behavior-family spell/prayer audit matrix covering all newly added effects
-- [ ] fix the shared bolt/projectile regression first, then re-check whether any remaining `Magic Missile` issue is visual-only or a second logic bug
-- [ ] audit the under-tested effect families starting with:
+- [x] build a behavior-family spell/prayer audit matrix covering all newly added effects
+- [x] fix the shared bolt/projectile regression first, then re-check whether any remaining `Magic Missile` issue is visual-only or a second logic bug
+- [x] audit the under-tested effect families starting with:
   - bolt/projectile spells
   - heals
   - timed buffs/protections/resistances
   - detect/reveal prayers
   - directional/adjacent monster-control effects
-- [ ] add runtime coverage for at least one representative from each high-risk family before claiming the feature hardened
+- [x] add runtime coverage for at least one representative from each high-risk family before claiming the feature hardened
 - [x] add representative runtime coverage for:
   - shared bolt/projectile spells
   - heals
@@ -456,47 +521,47 @@ This file is a temporary working scratchpad.
   - detect/reveal prayers
   - adjacent monster-control effects
   - area/utility/high-end priest effects (`Sense Surroundings`, `Glyph of Warding`, `Holy Word`)
-- [ ] BUG-PRIEST-RESIST-SEMANTICS
-- [ ] Reported Failure Gate:
+- [x] BUG-PRIEST-RESIST-SEMANTICS
+- [x] Reported Failure Gate:
   - `Resist Heat and Cold` must have meaningful live gameplay semantics instead of only setting an otherwise-unused packed flag and showing onset feedback
 - [x] trace the real fire/cold gameplay consumers and wire the prayer into the currently implemented breath-damage path
-- [ ] broaden the prayer beyond the current fire-breath consumer if more elemental hostile actions land later
-- [ ] BUG-SHARED-MAGIC-MISSILE-PROJECTILE-FIZZLE
-- [ ] Reported Failure Gate:
+- [x] broaden the prayer beyond the current fire-breath consumer if more elemental hostile actions land later
+- [x] BUG-SHARED-MAGIC-MISSILE-PROJECTILE-FIZZLE
+- [x] Reported Failure Gate:
   - `Magic Missile` must animate from the player’s actual viewport row/column and must not end with `Your spell fizzles out.` when it visibly cast at a target in town or dungeon
-- [ ] root-cause the shared bolt/projectile regression in the current tree
+- [x] root-cause the shared bolt/projectile regression in the current tree
 - [x] BUG-STINKING-CLOUD-NOOP
 - [ ] Reported Failure Gate:
   - `Stinking Cloud` must visibly cast as a ball-style spell and must damage monsters in its target area instead of only beeping and appearing to do nothing
 - [x] add a direct runtime regression for the shared `eff_ball` path before changing gameplay code
 - [x] harden the ball-family cast path so `Stinking Cloud` and other ball spells visibly travel and apply area damage
-- [ ] BUG-PRIEST-BOOK-B-FEEDBACK-BEHAVIOR
-- [ ] Reported Failure Gate:
+- [x] BUG-PRIEST-BOOK-B-FEEDBACK-BEHAVIOR
+- [x] Reported Failure Gate:
   - priest book B prayers (`Chant`, `Sanctuary`, `Resist Heat and Cold`) must have correct live behavior and correct player-visible feedback instead of beeping, no-oping, or showing the wrong message
-- [ ] audit the current implementation and live feedback contracts for priest book B prayers before changing effect code
-- [ ] BUG-C128-IDENTIFY-ITEM-PROMPT-NOOP
-- [ ] Reported Failure Gate:
+- [x] audit the current implementation and live feedback contracts for priest book B prayers before changing effect code
+- [x] BUG-C128-IDENTIFY-ITEM-PROMPT-NOOP
+- [x] Reported Failure Gate:
   - C128 item-identify prompt must accept the chosen item letter and identify the item instead of immediately falling through to `Nothing seems to happen.`
-- [ ] harden the shared `eff_identify_prompt` follow-up input path for C128 and add coverage
-- [ ] BUG-SHARED-IDENTIFY-QMARK-DISMISS-LEAK
-- [ ] Reported Failure Gate:
+- [x] harden the shared `eff_identify_prompt` follow-up input path for C128 and add coverage
+- [x] BUG-SHARED-IDENTIFY-QMARK-DISMISS-LEAK
+- [x] Reported Failure Gate:
   - after `?` from the identify item prompt, dismissing the read-only inventory overlay must not reuse that dismiss key as the actual item selection; the `?` overlay behavior must stay consistent with the other view-only item overlays
-- [ ] BUG-SHARED-OVERCAST-ORDERING
-- [ ] Reported Failure Gate:
+- [x] BUG-SHARED-OVERCAST-ORDERING
+- [x] Reported Failure Gate:
   - overcast spell/prayer casts must not print `Not enough mana.` before the spell effect executes; identify-style spells must follow upstream overcast ordering instead of warning first and prompting second
-- [ ] align shared overcast handling with upstream sequencing and messaging instead of treating it as an identify-specific prompt bug
-- [ ] BUG-MP-BOOK-PROMPT-TEXT
-- [ ] Reported Failure Gate:
+- [x] align shared overcast handling with upstream sequencing and messaging instead of treating it as an identify-specific prompt bug
+- [x] BUG-MP-BOOK-PROMPT-TEXT
+- [x] Reported Failure Gate:
   - `m`/`p` must not show `Study which book`; cast must show a cast-book prompt, pray must show a pray-book prompt, and study must keep the study-book prompt
-- [ ] replace the oversized inline spell-book prompt helper with compact Huffman-backed prompt IDs
-- [ ] verify:
+- [x] replace the oversized inline spell-book prompt helper with compact Huffman-backed prompt IDs
+- [x] verify:
   - `make build128`
   - `make test64`
   - `make test128-fast-smoke`
-- [ ] BUG-C128-PRAYER-SNAPSHOT-NOOP
-- [ ] Reported Failure Gate:
+- [x] BUG-C128-PRAYER-SNAPSHOT-NOOP
+- [x] Reported Failure Gate:
   - restore ~/vice-snapshot-20260416125631.vsf on C128, then `p`, `a`, and any prayer letter (`a`, `b`, or `c`) must execute the selected prayer instead of silently no-oping
-- [ ] corrected scope from live user retest:
+- [x] corrected scope from live user retest:
   - current checked-out C128 code appears to have regressed the shared cast/pray letter-selection path, not just priest-only prayer effects
   - C128 `m` and `p` selection failures should be treated as one shared casting-system regression until disproven
 - [x] BUG-C128-PRAY-NO-EFFECT-WIZARD-MISDISPATCH
@@ -519,11 +584,11 @@ This file is a temporary working scratchpad.
 - [x] verify:
   - `make test64`
   - `make build64`
-- [ ] residual verification note:
+- [x] residual verification note:
   - `make build128` still emits the existing `Banked payload staged source ends below overlay window` assertion
   - this assert is unchanged from `HEAD` `bf4e611` (`$E028` staged-source end in both trees)
-- [ ] BUG-C64-MAGIC-MISSILE-CRASH
-- [ ] Reported Failure Gate:
+- [x] BUG-C64-MAGIC-MISSILE-CRASH
+- [x] Reported Failure Gate:
   - C64 live gameplay `Magic Missile` cast must not crash from the easy reproducible shipping path in the dungeon with REU enabled, with an actual targetable monster in the aimed tile
 - [x] reproduce the easy live C64 `Magic Missile` crash in an automated REU-enabled dungeon-target smoke before attempting any product fix
 - [x] root-cause the snapshot-backed C64 spell crash at the `-more-` resume seam in shared message handling
@@ -532,10 +597,10 @@ This file is a temporary working scratchpad.
 - [x] preserve caller IRQ/banking state in the C64 REU/tier helpers and add a current-build dungeon spell smoke that forces the stale-tier REU name-reload path
 - [x] verify:
   - `make test64`
-- [ ] BUG-C64-DETECT-EVIL-CRASH
-- [ ] Reported Failure Gate:
+- [x] BUG-C64-DETECT-EVIL-CRASH
+- [x] Reported Failure Gate:
   - C64 in-dungeon `Detect Evil` cast must not crash back to BASIC from the live gameplay path
-- [ ] reproduce the live C64 in-dungeon `Detect Evil` crash in an automated scripted smoke before attempting any product fix
+- [x] reproduce the live C64 in-dungeon `Detect Evil` crash in an automated scripted smoke before attempting any product fix
 - [ ] BUG-TRAP-HP-UNDERFLOW
 - [ ] Reported Failure Gate:
   - C64 live gameplay trap damage must not corrupt HP to wrapped values like `65535/9` after a rockfall hit
@@ -548,11 +613,11 @@ This file is a temporary working scratchpad.
 - [x] verify:
   - `make build64`
   - `make test64`
-- [ ] BUG-C128-SPELL-CAST-D026
-- [ ] Reported Failure Gate:
+- [x] BUG-C128-SPELL-CAST-D026
+- [x] Reported Failure Gate:
   - `python3 commodore/c128/tests/product_spell_cast_smoke.py --vice /opt/homebrew/bin/x128 --boot-d64 commodore/out/moria8-c128.d71`
 - [x] reproduce the shipping-build C128 spell-cast crash in an automated test before attempting another fix
-- [ ] root-cause the shipping spell-cast jump into `$D026` on the product disk image
+- [x] root-cause the shipping spell-cast jump into `$D026` on the product disk image
 - [x] FEAT-ADDITIONAL-SPELLS
 - [x] Reported Failure Gate:
   - implement the remaining spells from `commodore/BUILDPLAN.md` with audited VMS/UMoria parity on both C64 and C128

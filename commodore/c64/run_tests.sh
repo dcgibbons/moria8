@@ -294,7 +294,8 @@ run_scripted_spell_cast_smoke() {
             -write out/ovl.death "64.death" \
             -write out/ovl.gen "64.gen" \
             -write out/ovl.help "64.help" \
-            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -450,7 +451,8 @@ run_scripted_book_overlay_smoke() {
             -write out/ovl.death "64.death" \
             -write out/ovl.gen "64.gen" \
             -write out/ovl.help "64.help" \
-            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -601,7 +603,8 @@ run_scripted_spell_list_overlay_smoke() {
             -write out/ovl.death "64.death" \
             -write out/ovl.gen "64.gen" \
             -write out/ovl.help "64.help" \
-            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -752,7 +755,8 @@ run_scripted_dungeon_target_spell_smoke() {
             -write out/ovl.death "64.death" \
             -write out/ovl.gen "64.gen" \
             -write out/ovl.help "64.help" \
-            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -908,7 +912,8 @@ run_scripted_detect_evil_smoke() {
             -write out/ovl.death "64.death" \
             -write out/ovl.gen "64.gen" \
             -write out/ovl.help "64.help" \
-            -write out/ovl.ui "64.ui" >>"$build_log" 2>&1; then
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -1053,6 +1058,12 @@ check_static_contract "overcast_faint_more_contract" "../common/player_magic.s" 
     "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr input_get_key"
 check_static_contract "paralysis_final_tick_message_contract" "../common/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
+check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \
+    "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
+check_static_contract "spell_execute_tier_restore_kernal_contract" "main.s" \
+    "tramp_spell_execute_selected:|||lda #OVL_DEATH|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||lda #BANK_NO_BASIC|||sta \$01|||cli|||jsr tier_restore_after_overlay"
+check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
+    "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
@@ -1161,7 +1172,6 @@ run_scripted_spell_cast_smoke
 run_scripted_book_overlay_smoke
 run_scripted_spell_list_overlay_smoke
 run_scripted_dungeon_target_spell_smoke
-
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed (of $TOTAL suites) ==="
 if [ $FAIL -gt 0 ]; then
