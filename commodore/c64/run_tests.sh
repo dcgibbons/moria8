@@ -1084,6 +1084,7 @@ run_test "trap_door_destruction" "tests/test_trap_door_destruction.s" "0400 0402
 run_test "sleep_i" "tests/test_sleep_i.s" "0400 0402" 3 500000000
 run_test "sleep_ii" "tests/test_sleep_ii.s" "0400 0403" 4 500000000
 run_test "sleep_iii" "tests/test_sleep_iii.s" "0400 0402" 3 500000000
+run_test "cure_poison" "tests/test_cure_poison.s" "0400 0402" 3 500000000
 run_test "fire_bolt" "tests/test_fire_bolt.s" "0400 0402" 3 500000000
 run_test "slow_monster" "tests/test_slow_monster.s" "0400 0402" 3 500000000
 run_test "polymorph_other" "tests/test_polymorph_other.s" "0400 0402" 3 500000000
@@ -1130,6 +1131,7 @@ run_test "holy_word_prayer" "tests/test_holy_word_prayer.s" "0400 0401" 2 500000
 run_test "heal_prayer" "tests/test_heal_prayer.s" "0400 0402" 3 500000000
 run_test "chant_prayer" "tests/test_chant_prayer.s" "0400 0402" 3 500000000
 run_test "sanctuary_prayer" "tests/test_sanctuary_prayer.s" "0400 0403" 4 500000000
+run_test "neutralize_poison_prayer" "tests/test_neutralize_poison_prayer.s" "0400 0402" 3 500000000
 run_test "create_food_prayer" "tests/test_create_food_prayer.s" "0400 0402" 3 500000000
 run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 500000000
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000

@@ -3,6 +3,19 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [x] SPELL-POISON-CURE-ROW-COVERAGE
+ - [x] Reported Failure Gate:
+   - Coverage-only gap: mage `Cure Poison` and priest `Neutralize Poison` share implemented `eff_cure_poison`, but lack dedicated row-level C64/C128 runtime tests
+ - [x] add C64 row tests for mage `Cure Poison` and priest `Neutralize Poison`
+ - [x] add C128 row tests and register them in C128 focused/batch test lists
+ - [x] verify focused rows on both platforms plus relevant broad regression gates
+ - [x] review:
+   - Added dedicated C64 and C128 row-level tests for mage `Cure Poison` and priest `Neutralize Poison`.
+   - Each row now proves successful poisoned casts clear `zp_eff_poison`, already-clear casts stay silent while marking the row worked, and failure preserves poison while charging mana and printing `HSTR_PM_FAIL`.
+   - Registered the new C64 rows in `run_tests.sh`, the new C128 rows in `run_tests128.sh`, and the C128 fast batch registry.
+   - Verification passed: `make -C commodore test64`, focused C128 `cure_poison128|neutralize_poison_prayer128`, `make test128-fast`, and assembler diff hygiene.
+
+## Recently Completed Task
  - [x] BUG-HOLY-WORD-DISK128-LAYOUT
  - [x] Reported Failure Gate:
    - `make disk128` fails with `banked_payload_start above overlay ceiling=true (true)` and `DeathOverlay` memoryblock `$e000-$f001` out of bounds `$e000-$efff`
