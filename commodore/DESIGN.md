@@ -366,6 +366,11 @@ impactful and iconic spells. Cuts code size and spell table data in half.
 +--------------------------------------+
 ```
 
+Gameplay messages use the two top rows as a small queue. The `-more-` marker is
+normally placed after the row-1 message; if row 1 is too long to leave room for
+the marker, the marker is placed on row 0 instead so long monster/spell feedback
+keeps its tail.
+
 ### 7. Unshifted Character Set (Uppercase + Graphics)
 
 The C64 has two character sets: unshifted (uppercase + box-drawing graphics) and

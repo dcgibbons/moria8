@@ -3,6 +3,23 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+- [x] BUG-LONG-MESSAGE-HANDLING
+- [x] Reported Failure Gate:
+  - Long spell/combat messages can clip or combine poorly, especially when a prior failure/status message is already visible and a long monster feedback line would later collide with `-more-`
+- [x] fix the shared message row policy so long row-1 messages do not lose their tail to the `-more-` prompt
+- [x] add focused C64/C128 message coverage using a long monster-style line
+- [x] verify:
+  - focused C64 message test
+  - focused C128 message test
+  - `make -C commodore test64`
+  - `make -C commodore test128-fast-smoke`
+- [x] review:
+  - Root cause was the shared `msg_show_more` placement policy: when row 1 was already near/full width, `-more-` was clamped onto row 1 at column `SCREEN_COLS - 7`, overwriting the tail of long monster/spell feedback.
+  - `msg_show_more` now keeps the normal row-1 prompt for short row-1 messages, but moves the prompt to row 0 when row 1 is too long to leave room. That preserves the long, newer feedback line and only marks the older row.
+  - C64 now has a focused `msg_long` runtime suite using `The ancient multi-hued dragon shudders.`; C128 `msg_prompt128` now covers the same placement rule with an 80-column long monster-style line.
+  - Boundary follow-up: the first preflight-length design pushed C64 over `MAP_BASE`; the final collision-site fix keeps C64 `program_end <= MAP_BASE` and C128 banked staged source ending at `$DFFF`.
+  - Verification passed: C64 `msg_long`, C128 `msg_prompt128` outside sandbox, `make -C commodore test64` (`113 passed, 0 failed`), and `make -C commodore test128-fast-smoke` (`8 passed, 0 failed`).
+
 - [x] BUG-PRAYER-GLYPH-LOOK-COPY
 - [x] Reported Failure Gate:
   - Live Glyph of Warding look/inspect now says `You see a trap.`; it must identify the warding mark as a glyph/rune instead of a generic trap
@@ -5477,7 +5494,7 @@ The section below is retained only as historical context for the earlier dual-en
 
 - [ ] BUG-LONG-MESSAGE-TRUNCATION-POLISH
 - [ ] backlog:
-  - long combat/status messages can clip instead of wrapping across the 2-line message area, e.g. `Your spell fails.` followed by a long monster effect line like `the Ancient Multi-Hued Dragon confuses yo`
+  - remaining polish: long combat/status messages still do not wrap across the 2-line message area; the fixed contract only prevents `-more-` from overwriting the tail of a long row-1 message
   - current implementation clamps live message rendering to one row width and stores only one `SCREEN_COLS` slice per history entry in `commodore/common/ui_messages.s`, `commodore/c64/screen.s`, and `commodore/c128/screen_vdc.s`
   - priority: low polish; rare on normal play, more visible on deeper levels with long monster names/effects
   - desired future fix: wrap across rows 0-1 cleanly, preserve sensible `-more-` behavior, and decide whether history should keep wrapped/continued lines or widened entries

@@ -28,6 +28,7 @@ c128_restore_runtime_vectors:
 
 // Stubbed dependency from ui_messages.s (only needed for -MORE- path)
 input_get_key:
+    inc test_key_calls
     lda #0
     rts
 
@@ -91,6 +92,10 @@ test_start:
 
     // Case C: LOOK-style compound render ("You see a " + name append)
     jsr assert_compound_look_stable
+    bcc test_fail
+
+    // Case D: long row-1 messages keep their tail when -MORE- is shown.
+    jsr assert_long_message_more_placement
     bcc test_fail
 
     jsr teardown_irq_clobber
@@ -272,6 +277,59 @@ assert_compound_look_stable:
     clc
     rts
 
+// assert_long_message_more_placement
+// A row-0 status/failure line followed by a very long monster feedback line
+// must not lose the long line's tail when a third message triggers -MORE-.
+assert_long_message_more_placement:
+    jsr msg_init
+    lda #MSG_ROW
+    jsr screen_clear_row
+    lda #MSG_ROW + 1
+    jsr screen_clear_row
+    lda #0
+    sta test_key_calls
+
+    lda #<short_msg
+    sta zp_ptr0
+    lda #>short_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    lda #<long_msg
+    sta zp_ptr0
+    lda #>long_msg
+    sta zp_ptr0_hi
+    jsr msg_print
+
+    jsr msg_show_more
+
+    lda test_key_calls
+    bne !bad+
+    lda zp_msg_flags
+    cmp #MSG_PENDING | MSG_FULL
+    bne !bad+
+    ldx #0
+    jsr read_msg_row0_char
+    cmp #$54                    // 'T'
+    bne !bad+
+    ldx #(SCREEN_COLS - 6)
+    jsr read_msg_row0_char
+    cmp #$2d                    // '-'
+    bne !bad+
+    ldx #0
+    jsr read_msg_row1_char
+    cmp #$54                    // 'T'
+    bne !bad+
+    ldx #77
+    jsr read_msg_row1_char
+    cmp #$2e                    // '.'
+    bne !bad+
+    sec
+    rts
+!bad:
+    clc
+    rts
+
 // capture_expected_prefix
 // Input: test_str_id set
 capture_expected_prefix:
@@ -316,6 +374,13 @@ compare_screen_prefix:
 read_msg_row0_char:
     stx read_col
     lda #MSG_ROW
+    jmp read_msg_char
+
+read_msg_row1_char:
+    stx read_col
+    lda #MSG_ROW + 1
+
+read_msg_char:
     sta zp_cursor_row
     lda read_col
     sta zp_cursor_col
@@ -407,6 +472,7 @@ irq_vec_save_hi:  .byte 0
 acl_iter:         .byte 0
 adl_expected_lo:  .byte 0
 adl_expected_hi:  .byte 0
+test_key_calls:   .byte 0
 expected_prefix:  .fill TEST_PREFIX_LEN, 0
 irq_garble:       .text "fsY0llffoBd"; .byte 0
 compound_name:    .text "Squint-Eyed Rogue."; .byte 0
@@ -415,6 +481,12 @@ expected_direction:
     .byte 0
 expected_takeoff:
     .text "Take off which item (a-h)?"
+    .byte 0
+short_msg:
+    .text "The spell fails."
+    .byte 0
+long_msg:
+    .text "The ancient multi-hued dragon shudders as the spell energy surrounds it fully."
     .byte 0
 
 compound_delay:

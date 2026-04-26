@@ -235,6 +235,9 @@ msg_show_more:
 !fits:
     sta zp_cursor_col
     lda #MSG_ROW + 1
+    bcc !set_row+
+    lda #MSG_ROW
+!set_row:
     sta zp_cursor_row
 
     lda zp_text_color
