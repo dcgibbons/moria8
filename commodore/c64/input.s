@@ -19,6 +19,8 @@
 
 // Keyboard/CIA registers
 .const KBDBUF_COUNT = $c6
+.const KERNAL_SHIFT_MODE = $0291
+.const KERNAL_CHARSET_SWITCH_LOCK = $80
 .const CIA1_PORTA   = $dc00
 .const CIA1_PORTB   = $dc01
 .const CIA1_DDRA    = $dc02
@@ -27,6 +29,15 @@
 // ============================================================
 // Subroutines
 // ============================================================
+
+// input_lock_charset_switch — Disable KERNAL Shift+C= charset switching.
+// The game owns the active C64 charset; the KERNAL scanner must not let
+// Commodore+Shift toggle $D018 while IRQ-backed input is active.
+// Preserves: X, Y
+input_lock_charset_switch:
+    lda #KERNAL_CHARSET_SWITCH_LOCK
+    sta KERNAL_SHIFT_MODE
+    rts
 
 // input_get_key — Wait for a keypress, return PETSCII code
 // Output: A = PETSCII code of key pressed
@@ -183,6 +194,7 @@ input_get_key:
     php                     // Save processor flags (preserves I flag)
     lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
     sta $01
+    jsr input_lock_charset_switch
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
     inc zp_entropy
@@ -227,6 +239,7 @@ input_wait_release:
     php                     // Save processor flags (preserves I flag)
     lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
     sta $01
+    jsr input_lock_charset_switch
     cli                     // Keep KERNAL keyboard IRQ scanning active
 
     // Drain any already-buffered keypresses.

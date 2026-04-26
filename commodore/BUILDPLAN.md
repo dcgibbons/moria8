@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (2026-04-24)
+## Current State (2026-04-26)
 
 - All core phases 1–9 are complete.
 - C128 split, extended-memory database path, larger dungeon, hardened execution boundary, and the current 80-column baseline are complete.
@@ -20,6 +20,10 @@
   - C64 uses `RUN/STOP` as the escape-equivalent dismiss key for help and other read-only modal screens
   - C128 keeps real `ESC` support and also accepts `STOP` so modal dismissal remains reliable under VICE host-key mapping quirks
   - the shared modal input helper layer now owns that escape-equivalent classification instead of open-coded raw key compares
+- C64 in-game input now locks the KERNAL Shift+C= charset toggle:
+  - startup and IRQ-backed input/release polling set `$0291` bit 7 before enabling keyboard IRQ scanning
+  - live C64 Commodore+Shift can no longer flip the active VIC charset while the game is running
+  - focused C64 input coverage and static contracts pin this before-`cli` input invariant
 - The current shipping-art baseline is split by platform:
   - C64 uses the shipped artist PNG through the bitmap boot-art pipeline.
   - C128 uses the tracked tile-native PNG through the VDC custom-charset boot-art pipeline.
@@ -81,7 +85,7 @@
   - `/` now uses VMS-style symbol identification instead of combat-earned monster recall
   - the glossary lives in `OVL.UI` so the feature fits the C64 resident layout without reopening the main-RAM overflow
   - detailed monster knowledge remains a future `look`/UX follow-up rather than a `/` responsibility
-- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, `BUG-HELP-ESC-CANCEL-CONTRACT`, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, `BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS`, `BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT`, `BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS`, `BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT`, `BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR`, `BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT`, `BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING`, `BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC`, `BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE`, `BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, `FEAT-BOOT-ART`, `FEAT1`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
+- Recent resolved items include BUG-1, BUG-LIT, BUG-M1, BUG-X, BUG-RECALL, BUG-EGO-NAME, BUG-DEEP-SPAWN, BUG-XP-PACE, BUG-GEN-CLEAR-C64, BUG-GEN-STALE-TOWN-C64, BUG-GAMEOVER-CLEAR-C64, BUG-DIG-SHIFT-D, BUG-PROMPT-FILTER, BUG-HAGGLE-UI, BUG-HELP-PAGING, `BUG-HELP-ESC-CANCEL-CONTRACT`, BUG-LOOK-HILITE, `BUG-LOOK-TRAP-DOOR`, `BUG-LOOK-WALL-GOLD`, `BUG-C128-LOOK-DOOR-RANGE`, BUG-TITLE-DUALDISK-FRAME, BUG-TOWN-KILL-DRAW, BUG-LOAD-C64, BUG-DESCENT-TOPROW-C64, BUG-INV-STATLINE-C64, `BUG-C128-TOWN-TOPROW-RECUR`, `BUG-TOWN-SIZE-DRIFT`, `BUG-C128-BOOTART-ORDER`, `BUG-C64-REGRESSIONS-FROM-WHOLE-MAP-OPT-PASS`, `BUG-CALL-LIGHT-FAIL-MAY-STILL-APPLY-VISUAL-EFFECT`, `BUG-C64-COMMODORE-SHIFT-CHARSET`, `BUG-C128-GLYPH-VDC-REDRAW-DROPS-OTHER-GLYPHS`, `BUG-C128-GLYPH-CAST-MESSAGE-CORRUPT`, `BUG-SENSE-SURROUNDINGS-UMORIA-MAP-BEHAVIOR`, `BUG-C128-EARTHQUAKE-BEEPS-WITH-NO-EFFECT`, `BUG-SANCTUARY-FEEDBACK-COLLAPSES-TO-NOTHING`, `BUG-C128-VISIBLE-ROOM-MONSTERS-DROP-FROM-VDC`, `BUG-TELEPORT-CAN-HIDE-PLAYER-ON-UNVISITED-TILE`, `BUG-C128-SPELL-LIST-RESTORE-DROPS-VISIBLE-MONSTER`, OPT-1, OPT-2, REF-1, `AUDIT-IO-C128`, `REF-INPUT-TABLES`, `REF-C128-TRAMP`, `REF-CONSTS`, the major C128 loader / banking stability repairs, the resident C128 banked combat relocation plus cached `OVL.UI`, 10.4 VDC threat/effect color work, the first `PERF-DG-C128` pass (faster dungeon generation plus visible `GENERATING...` feedback on dungeon transitions), the `dungeon_gen` BFS scratch cleanup, the high-value `TST-5` isolated coverage for disk swap plus renderer decision trees, `FEAT-WIZ`, `FEAT-SEARCH-MODE`, `FEAT-DISK`, `FEAT-BOOT-ART`, `FEAT1`, and `FEAT-UNIFIED-DISK` / `BUILD-UNIFY`.
 - C128 VDC optimization work is paused after the verified left-scroll rollback and subsequent stability regressions; any restart needs a fresh design pass.
 
 ## Open Phases / Display Work

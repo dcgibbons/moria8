@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-04-26 — `BUG-C64-COMMODORE-SHIFT-CHARSET` in-game charset switch lock ✅ COMPLETE
+
+### Scope Closed
+- Fixed the live C64-only bug where Commodore+Shift could change the active VIC character set during gameplay.
+- Kept the fix local to C64 input/startup; C128 input behavior is unchanged.
+- Added coverage for the KERNAL charset-switch lock and static contracts around the IRQ-enabled input seams.
+
+### What Shipped
+1. **C64 input now owns the KERNAL charset-switch lock**
+   - `commodore/c64/input.s`
+   - added `input_lock_charset_switch`, which sets bit 7 at `$0291`
+   - `input_get_key` and `input_wait_release` call the lock before `cli`, so KERNAL keyboard IRQ scanning cannot reopen the user charset toggle
+2. **Startup installs the same lock**
+   - `commodore/c64/main.s`
+   - C64 startup now sets the lock before selecting the game charset and entering normal flow
+3. **Regression coverage added**
+   - `commodore/c64/tests/test_input.s`
+   - `commodore/c64/run_tests.sh`
+   - the C64 input row now proves the lock helper sets the KERNAL flag
+   - static contracts pin the required `input_lock_charset_switch` call before IRQ-enabled key and release polling
+4. **Architecture docs updated**
+   - `commodore/DESIGN.md`
+   - the C64 character-set section now records the `$0291` / before-`cli` invariant
+
+### Root Cause / Notes
+- The game uses IRQ-backed KERNAL keyboard scanning on C64.
+- The KERNAL's default Shift+C= handling can toggle the VIC charset while those IRQs are active.
+- That broke the in-game display because gameplay assumes the game, not the user chord, owns the active C64 charset.
+
+### Verification
+- User confirmed the live C64 repro is fixed.
+- `make disk64`: PASS, including:
+  - `Program fits below MAP_BASE=true`
+  - banked payload below `$D000`
+  - all C64 overlays fit in `$E000-$EFFF`
+- `make -C commodore test64`: PASS (`120 passed, 0 failed`)
+- `git diff --check`: PASS
+
+---
+
 ## 2026-04-22 — C64 prompt-range corruption fix and spell UI regression hardening ✅ COMPLETE
 
 ### Scope Closed

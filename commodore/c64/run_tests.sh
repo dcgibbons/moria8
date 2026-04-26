@@ -1048,6 +1048,10 @@ check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s
     "pm_select_book:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_modal_dismiss_key|||jsr input_get_key|||jsr piw_pick_filtered_inv_key"
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
+check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "input.s" \
+    "input_get_key:|||lda #BANK_NO_BASIC|||sta \$01|||jsr input_lock_charset_switch|||cli|||!igk_poll:"
+check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "input.s" \
+    "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr input_get_key"
 check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
@@ -1071,7 +1075,7 @@ run_test "math"   "tests/test_math.s"   "0400 040f" 16
 run_test "rng"    "tests/test_rng.s"    "0400 0409" 10
 run_test "memory" "tests/test_memory.s" "0400 0402" 3
 run_test "config" "tests/test_config.s" "0400 0400" 1
-run_test "input"  "tests/test_input.s"  "0400 040c" 13
+run_test "input"  "tests/test_input.s"  "0400 040d" 14
 run_test "main_loop" "tests/test_main_loop.s" "0400 041f" 32 500000000
 run_test "turn" "tests/test_turn.s" "0400 0416" 23 500000000
 run_test "player" "tests/test_player.s" "0400 0409" 10

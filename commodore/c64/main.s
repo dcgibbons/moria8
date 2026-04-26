@@ -284,6 +284,7 @@ entry_main:
     jsr generation_busy_install
     jsr platform_services_install64
     jsr platform_services_assert_installed
+    jsr input_lock_charset_switch
 
     // Select lowercase/uppercase character set (52 letter symbols)
     // Bit 1 of $D018 selects character set: 0=uppercase+graphics, 1=lowercase+uppercase

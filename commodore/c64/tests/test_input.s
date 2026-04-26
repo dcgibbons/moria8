@@ -423,4 +423,22 @@ test_start:
     sta $040c
 !t13_done:
 
+    // ==========================================
+    // Test 14: input locks out KERNAL Shift+C= charset switching
+    // ==========================================
+    lda #0
+    sta KERNAL_SHIFT_MODE
+    jsr input_lock_charset_switch
+    lda KERNAL_SHIFT_MODE
+    and #KERNAL_CHARSET_SWITCH_LOCK
+    cmp #KERNAL_CHARSET_SWITCH_LOCK
+    bne !t14_fail+
+    lda #$01
+    sta $040d
+    jmp !t14_done+
+!t14_fail:
+    lda #$00
+    sta $040d
+!t14_done:
+
     brk

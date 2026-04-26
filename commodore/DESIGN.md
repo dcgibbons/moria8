@@ -380,6 +380,12 @@ time. The game uses **unshifted mode** to get box-drawing characters for walls.
 All text (messages, names, menus) is uppercase only. This matches the retro
 aesthetic and is standard for C64 games. No custom character set is loaded.
 
+The C64 KERNAL normally allows the user to toggle the active character set with
+Commodore+Shift while IRQ keyboard scanning is running. In-game input must keep
+that disabled by setting bit 7 at `$0291` before enabling keyboard IRQ polling.
+`input_lock_charset_switch` owns that policy and is installed at startup and
+before `input_get_key` / `input_wait_release` execute `cli`.
+
 ### 8. Color Palette
 
 The C64's 16 colors are used to improve map readability via color RAM ($D800+).

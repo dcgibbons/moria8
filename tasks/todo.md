@@ -3,6 +3,24 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [ ] None
+
+## Recently Completed Task
+ - [x] BUG-C64-COMMODORE-SHIFT-CHARSET
+ - [x] Reported Failure Gate:
+   - Live C64 in-game Commodore+Shift changes the active charset; it must not affect the in-game display
+ - [x] identify C64 KERNAL/VIC charset switch owner and the safest in-game clamp
+ - [x] implement C64-only charset-switch lock without changing C128 input behavior
+ - [x] add focused C64 coverage/static contract
+ - [x] verify focused input coverage, C64 build/boundary output, and `make -C commodore test64`
+ - [x] review:
+   - Root cause: the C64 game uses IRQ-backed KERNAL keyboard scanning for input; with the KERNAL Shift+C= charset switch left enabled, a physical Commodore+Shift chord can toggle the VIC charset register while the game is running.
+   - Fix: add `input_lock_charset_switch`, which sets bit 7 at `$0291`, call it during C64 startup, and reapply it before `input_get_key` / `input_wait_release` reopen IRQs for KERNAL scanning.
+   - C128 behavior is untouched; the change is confined to `commodore/c64`.
+   - Added C64 input coverage proving the lock helper sets the KERNAL flag, plus static contracts pinning the lock before IRQ-enabled input/release polling.
+   - Verification passed: focused `input` row inside `make -C commodore test64` (`14/14`), `make disk64` with C64 boundary asserts green, `make -C commodore test64` (`120 passed, 0 failed`), and `git diff --check`.
+
+## Recently Completed Task
  - [x] BUG-C64-EARTHQUAKE-HANG-121051
  - [x] Reported Failure Gate:
    - Fresh C64 live Earthquake prayer still hangs after the Death-overlay restore fix; snapshot `~/vice-snapshot-20260426121051.vsf`
