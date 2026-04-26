@@ -111,7 +111,6 @@ pmu_create_food:
 eff_dispel_flagged:
     lda #0
     sta pmu_dispel_targets
-    lda #0
     sta pmx_work_idx
 !edf_loop:
     jsr pmu_find_visible_flagged
@@ -141,6 +140,14 @@ eff_dispel_flagged:
     rts
 
 eff_turn_undead:
+    jsr eff_turn_undead_core
+    bne !etud_return+
+    ldx #HSTR_PIQ_NOTHING
+    jsr huff_print_msg
+!etud_return:
+    rts
+
+eff_turn_undead_core:
     lda #CF_UNDEAD
     sta pmx_work_flag
     lda #0
@@ -170,10 +177,6 @@ eff_turn_undead:
     jmp !etud_loop-
 !etud_done:
     lda pmu_dispel_targets
-    bne !etud_return+
-    ldx #HSTR_PIQ_NOTHING
-    jsr huff_print_msg
-!etud_return:
     rts
 
 eff_destroy_area:
@@ -204,7 +207,10 @@ eff_holy_word:
     asl
     asl
     sta pmx_work_damage
-    jmp eff_dispel_flagged
+    jsr eff_dispel_flagged
+    jsr eff_turn_undead_core
+    sec
+    rts
 
 eff_glyph_of_warding:
     lda zp_player_x

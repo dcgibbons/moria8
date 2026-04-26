@@ -3,6 +3,50 @@
 This file is a temporary working scratchpad.
 
 ## Current Task
+ - [x] BUG-HOLY-WORD-DISK128-LAYOUT
+ - [x] Reported Failure Gate:
+   - `make disk128` fails with `banked_payload_start above overlay ceiling=true (true)` and `DeathOverlay` memoryblock `$e000-$f001` out of bounds `$e000-$efff`
+ - [x] identify whether the Holy Word change or leaked split file moved C128 overlay/payload layout
+ - [x] recover C128 bytes without removing boundary assertions or changing unrelated behavior
+ - [x] rerun exact `make disk128` gate, then focused Holy Word tests
+ - [x] review:
+   - The Holy Word side-effect split pushed `DeathOverlay` to `$E000-$F002`; the exact reported `make disk128` gate failed correctly.
+   - The fix recovers two shared bytes by removing a duplicate `lda #0` in `eff_dispel_flagged`; `DeathOverlay` now builds exactly at `$E000-$EFFF` with the existing assert intact.
+   - Removed the stray untracked `commodore/common/player_magic_entry.s` file left from prior work.
+   - Verification passed: `make disk128`, focused C128 `holy_word_prayer128`, `make -C commodore test64`, and `git diff --check`.
+
+## Recently Completed Task
+- [x] HOLY-WORD-UMORIA-TURN-UNDEAD
+- [x] Reported Failure Gate:
+  - Strict `umoria` Holy Word also calls Turn Undead after dispelling evil; Commodore must add that separate side effect and update tests to prove the new behavior
+- [x] inspect current Holy Word / Turn Undead implementation and focused C64/C128 tests
+- [x] implement the Holy Word Turn Undead side effect with the smallest shared-code change
+- [x] update C64/C128 Holy Word tests and spell docs for the new strict-`umoria` contract
+- [x] verify focused C64/C128 Holy Word coverage and diff hygiene
+- [x] review:
+  - `eff_turn_undead` now has a message-free core used by Holy Word; the standalone prayer wrapper still owns `HSTR_PIQ_NOTHING` for no visible undead
+  - `eff_holy_word` now dispels visible evil targets, then runs the Turn Undead core, and explicitly returns success so the prayer path does not inherit the side-effect scan carry
+  - C64 shared utility coverage now seeds an evil target plus a separate visible undead target and asserts the undead target receives `MX_CONFUSE = player level` with sleep cleared
+  - C128 focused Holy Word coverage now proves the same strict-`umoria` side effect through the prayer row
+  - Verification passed: `make -C commodore test64`, `TEST_FILTER='holy_word_prayer128' bash commodore/c128/run_tests128.sh`, and `git diff --check`
+
+## Recently Completed Task
+- [x] SPELL-BACKLOG-AUDIT
+- [x] review active todo/task notes for stale spell backlog entries
+- [x] compare the shipped 31-spell mage catalog and 31-prayer priest catalog against local `umoria` / `vms-moria`
+- [x] scan shared spell execution paths for remaining missing spell effects
+- [x] update docs/task scratchpad so completed spell backlog items are not described as active
+- [x] audit findings:
+  - no active backlog remains for the previously tracked spell fixes: Detect Evil, flagged dispels, Turn Undead, slow/control feedback, ranged directional monster effects, sleep state semantics, Genocide, Resist Heat and Cold split storage, Glyph of Warding, mana exhaustion feedback, redraw-after-transform, and long-message `-more-` collision
+  - the full mage/priest catalogs are present; class level/mana/fail data still matches local `umoria` values for the supported 31-entry spell/prayer catalogs
+  - strict `umoria` Holy Word parity follow-up has since been completed: Commodore `Holy Word` heals, cleanses, restores stats, grants invulnerability, dispels evil, and separately runs the Turn Undead side effect
+  - remaining coverage-only follow-up: mage `Cure Poison` and priest `Neutralize Poison` both share the implemented poison-clear effect, but do not yet have dedicated row-level C64/C128 runtime tests
+  - `Resist Heat and Cold` is no longer a packed-timer spell backlog item; remaining differences are model scope, namely same-duration refresh for both timers and broader fire/cold consumers that do not exist yet
+  - long two-line wrapping remains a UI polish item, not a spell backlog item
+- [x] verification:
+  - docs/task-only audit; `git diff --check`
+
+## Recently Completed Task
 - [x] BUG-LONG-MESSAGE-HANDLING
 - [x] Reported Failure Gate:
   - Long spell/combat messages can clip or combine poorly, especially when a prior failure/status message is already visible and a long monster feedback line would later collide with `-more-`
@@ -308,7 +352,7 @@ This file is a temporary working scratchpad.
   - visible low-level undead get `MX_CONFUSE = player level`, `MX_SLEEP_CUR = 0`, and `The <monster> runs frantically!`; visible resistant undead remain unchanged and print `The <monster> is unaffected.`
   - C64 keeps the new scan/feedback helpers in the existing `$F000` banked payload to preserve resident and `$E000` overlay boundaries; C128 keeps turn feedback in `RuntimeCommonData`, leaves the visible scan in the spell overlay, and moves C128-only prompt/title strings into runtime-low RAM so the staged banked payload stays below `$E000`
   - verification passed: `make test64` (`110 passed, 0 failed`), `make test128-fast-smoke` (`8 passed, 0 failed`), and `make test128-fast` (cold + snapshot)
-- [ ] remaining prayer fixes after Turn Undead:
+- [x] remaining prayer fixes after Turn Undead:
   - `Slow Poison`
   - `Blind Creature` re-audit/fix if still divergent
 - [ ] FEAT-NEW-SPELL-HARDENING
@@ -669,7 +713,7 @@ This file is a temporary working scratchpad.
     - priest `Detect Doors/Stairs` now reveals both doors and stairs
     - priest `Remove Curse` now clears curses across carried/equipped items
     - priest `Glyph of Warding` is now mechanically active
-    - priest `Holy Word` now follows the VMS-style cure/full-heal/dispel-evil behavior already chosen for Commodore
+    - priest `Holy Word` now follows the strict `umoria` composite behavior: cure/full-heal/stat restore/invulnerability, dispel evil, then Turn Undead
   - documentation added at `commodore/SPELLS.md` with:
     - full 62-entry spell/prayer catalog
     - legacy vs added status

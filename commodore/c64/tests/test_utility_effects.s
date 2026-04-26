@@ -110,6 +110,7 @@ tpm_last_msg_hi:  .byte 0
 tpm_huff_calls:   .byte 0
 tpm_last_huff_id: .byte 0
 test_mon_slot:    .byte 0
+test_undead_slot: .byte 0
 test_expected_stat: .byte 0
 test_rng_idx:     .byte 0
 pmx_work_idx:     .byte 0
@@ -463,7 +464,8 @@ test_start:
     sta tc_results + 3
 
     // Test 5: Holy Word matches umoria: full heal, remove fear/poison,
-    // restore stats, grant invulnerability, and dispel an evil monster.
+    // restore stats, grant invulnerability, dispel evil, and separately
+    // turn undead.
 !t5:
     jsr tv_setup_dark_room
     :PatchJump(huff_print_msg, test_huff_print_msg)
@@ -503,6 +505,26 @@ test_start:
     ldy #MX_HP_HI
     lda #0
     sta (zp_ptr0),y
+    lda #21
+    sta ms_spawn_x
+    lda #12
+    sta ms_spawn_y
+    lda #0
+    jsr monster_spawn_one
+    bcs !t5_undead_spawn_ok+
+    lda #$1d
+    sta tc_results + 4
+    jmp test_finish
+!t5_undead_spawn_ok:
+    stx test_undead_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda #2
+    sta (zp_ptr0),y
+    lda #CF_UNDEAD
+    sta cr_mflags + 2
+    lda #0
+    sta cr_level + 2
     lda #5
     sta zp_player_hp_lo
     sta player_data + PL_HP_LO
@@ -600,6 +622,8 @@ test_start:
     lda tpm_msg_calls
     cmp #1
     beq !t5_huff_count_ok+
+    cmp #2
+    beq !t5_huff_count_ok+
     lda #$15
     sta tc_results + 4
     jmp test_finish
@@ -633,6 +657,24 @@ test_start:
     sta tc_results + 4
     jmp test_finish
 !t5_monster_ok:
+    ldx test_undead_slot
+    jsr monster_get_ptr
+    ldy #MX_TYPE
+    lda (zp_ptr0),y
+    cmp #2
+    bne !t5_undead_fail+
+    ldy #MX_CONFUSE
+    lda (zp_ptr0),y
+    cmp zp_player_lvl
+    bne !t5_undead_fail+
+    ldy #MX_SLEEP_CUR
+    lda (zp_ptr0),y
+    beq !t5_undead_ok+
+!t5_undead_fail:
+    lda #$1e
+    sta tc_results + 4
+    jmp test_finish
+!t5_undead_ok:
     lda #$01
     sta tc_results + 4
     jmp !t6+

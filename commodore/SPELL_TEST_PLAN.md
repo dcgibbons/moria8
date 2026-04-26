@@ -183,7 +183,7 @@ Negative-case priority for every row:
 | 28 | Heal | P4 | Heal | C64+C128 | Large heal while injured | HP increases by fixed heal path and caps at max | Shared seam + spell-id mapping | Yes | Required: full-HP cast stays no-op | strongest-heal success text when injured; silence at full HP; cast fail explicit | Heal family |
 | 29 | Dispel Evil | P4 | Dispel / Flagged Target | C64+C128 | Damage/remove visible evil target(s) | eligible visible/LOS evil targets take damage or die per current implementation | Shared seam + spell-id mapping | Yes | Required: no visible evil targets | damaged targets print `The <monster> shudders.`; killed targets print `The <monster> dissolves!`; no-evil outcome text required | Dispel / flagged-target |
 | 30 | Glyph of Warding | P4 | Placement | C64+C128 | Place glyph on eligible tile | glyph record/tile state is created and redraw updates | Shared seam + spell-id mapping | Yes | Required: blocked by object/occupancy | explicit success text; blocked text required | Placement/blocking |
-| 31 | Holy Word | P4 | Composite Utility | C64+C128 | Full composite cast with injured, poisoned, afraid player and evil target present | full heal, poison clear, fear clear, stat restore, invulnerability timer set, dispel effect applied | Shared seam + spell-id mapping | Yes | Required: no evil targets and/or already-clean/full state for unaffected subeffects | explicit high-end heal/success text plus any composite message policy must match current build | Heal family + dispel / flagged-target + timed buff/protection |
+| 31 | Holy Word | P4 | Composite Utility | C64+C128 | Full composite cast with injured, poisoned, afraid player, evil target, and undead target present | full heal, poison clear, fear clear, stat restore, invulnerability timer set, dispel effect applied, and separate Turn Undead side effect applied | Shared seam + spell-id mapping | Yes | Required: no evil/undead targets and/or already-clean/full state for unaffected subeffects | explicit high-end heal/success text plus any composite message policy must match current build | Heal family + dispel / flagged-target + timed buff/protection |
 
 ## Cross-Cutting Verification Rules
 
@@ -257,6 +257,7 @@ Negative-case priority for every row:
   - stat restore
   - invulnerability timer
   - dispel-on-evil effect
+  - separate Turn Undead side effect
   - message contract
 
 ## Acceptance Criteria

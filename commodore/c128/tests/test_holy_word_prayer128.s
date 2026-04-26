@@ -476,6 +476,36 @@ test_seed_evil_monster:
     sta cr_mflags + 1
     rts
 
+test_seed_undead_monster:
+    ldx #1
+    jsr monster_get_ptr
+    ldy #MX_X
+    lda #11
+    sta (zp_ptr0),y
+    iny
+    lda #8
+    sta (zp_ptr0),y
+    iny
+    lda #2
+    sta (zp_ptr0),y
+    iny
+    lda #5
+    sta (zp_ptr0),y
+    iny
+    lda #0
+    sta (zp_ptr0),y
+    ldy #MX_SLEEP_CUR
+    lda #9
+    sta (zp_ptr0),y
+    ldy #MX_CONFUSE
+    lda #0
+    sta (zp_ptr0),y
+    lda #CF_UNDEAD
+    sta cr_mflags + 2
+    lda #0
+    sta cr_level + 2
+    rts
+
 test_reset_holy_word_state:
     jsr test_clear_monsters
     lda #0
@@ -597,7 +627,8 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
     // Test 1: Holy Word heals to full, clears poison/fear, restores stats,
-    // grants 3 turns of invulnerability, dispels evil, and marks the prayer worked.
+    // grants 3 turns of invulnerability, dispels evil, separately turns
+    // undead, and marks the prayer worked.
     :PatchJump(calc_spell_failure, test_calc_spell_failure_success)
     jsr test_reset_holy_word_state
     lda #9
@@ -606,6 +637,7 @@ test_start:
     sta eff_fear_timer
     jsr test_mark_stats_drained
     jsr test_seed_evil_monster
+    jsr test_seed_undead_monster
     jsr player_pray
     bcc !t1_fail+
     lda test_spell_exec_calls
@@ -640,6 +672,14 @@ test_start:
     bne !t1_fail+
     lda test_mon_table + MX_TYPE
     cmp #EMPTY_SLOT
+    bne !t1_fail+
+    lda test_mon_table + MONSTER_ENTRY_SIZE + MX_TYPE
+    cmp #2
+    bne !t1_fail+
+    lda test_mon_table + MONSTER_ENTRY_SIZE + MX_CONFUSE
+    cmp zp_player_lvl
+    bne !t1_fail+
+    lda test_mon_table + MONSTER_ENTRY_SIZE + MX_SLEEP_CUR
     bne !t1_fail+
     lda zp_player_mp
     cmp #2

@@ -336,9 +336,9 @@
   - `commodore/c128/tests/test_phase_door128.s`
     - `Phase Door` validated-near-target teleport behavior
     - `Phase Door` spell-id mapping and cast-fail/success bookkeeping
-- Coverage still shallow or missing for:
-  - higher-end priest book 3/4 dispel and utility prayers
-  - area-effect spell families beyond the existing shared smokes and utility representatives above
+- Coverage audit notes:
+  - mage `Cure Poison` and priest `Neutralize Poison` share the implemented poison-clear effect but still lack dedicated row-level C64/C128 runtime tests
+  - long message wrapping across both message rows remains UI polish; the fixed spell/combat contract is the `-more-` prompt collision case
 
 ## Book Layout
 
@@ -368,7 +368,7 @@
 | 9 | Legacy | M2 | Lightning Bolt | 5/4/30 | -- | 9/7/40 | Directional lightning bolt `3d8` | Row-covered on `C64+C128`: shared bolt coverage proves the projectile hit/miss contract, and focused row coverage proves spell-id mapping, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
 | 10 | Legacy | M2 | Trap/Door Destruction | 5/5/30 | 17/7/80 | 9/8/45 | Destroy traps and doors | Row-covered on `C64+C128`: focused coverage proves adjacent secret/closed door opening, adjacent trap removal from map+table, message-light no-effect when only out-of-area fixtures remain, and cast-fail/success mana/worked bookkeeping |
 | 11 | Legacy | M2 | Sleep I | 5/5/30 | 19/8/85 | 11/8/40 | Put one monster to sleep | Row-covered on `C64+C128`: focused coverage proves directional single-target sleep mutation, current message-light no-target behavior, and cast-fail/success mana/worked bookkeeping |
-| 12 | Legacy | M2 | Cure Poison | 5/5/35 | 21/9/90 | 11/9/45 | Clear poison | - |
+| 12 | Legacy | M2 | Cure Poison | 5/5/35 | 21/9/90 | 11/9/45 | Clear poison | Implemented through the shared `eff_cure_poison` effect; still missing dedicated row-level C64/C128 runtime coverage |
 | 13 | Legacy | M2 | Teleport Self | 7/6/35 | -- | 13/10/45 | Long self-teleport | Row-covered on `C64+C128`: focused coverage proves deterministic long-range relocation, occupancy/visibility updates, message-light success, and cast-fail/success mana/worked bookkeeping |
 | 14 | Legacy | M2 | Remove Curse | 7/6/50 | 23/10/95 | 13/11/55 | Remove curse from equipped items | Row-covered on `C64+C128`: focused coverage proves equipped-only curse removal, carried curse preservation, current explicit `CLEANSED` feedback even with no cursed equipment, and cast-fail/success mana/worked bookkeeping; priest version remains broader |
 | 15 | Legacy | M2 | Frost Bolt | 7/6/40 | -- | 15/12/50 | Directional frost bolt `4d8` | Row-covered on `C64+C128`: shared bolt coverage proves the projectile hit/miss contract, and focused row coverage proves spell-id mapping, silent no-target behavior, and cast-fail/success mana/worked bookkeeping |
@@ -411,7 +411,7 @@
 | 14 | Legacy | P2 | Create Food | 7/5/38 | 13/10/45 | Create food on player tile | Row-covered on `C64+C128`: focused placement coverage proves prayer-id mapping, underfoot item replacement on success, current blocked semantics when no floor-item slot is free, explicit success/blocked feedback, and cast-fail/success mana/worked bookkeeping |
 | 15 | Legacy | P2 | Remove Curse | 7/6/38 | 13/11/45 | Remove curses from carried and equipped items | Row-covered on `C64+C128`: focused coverage proves the stronger priest all-items curse clear across carried and equipped slots, current explicit `CLEANSED` feedback even when nothing is cursed, and cast-fail/success mana/worked bookkeeping; broader than mage version |
 | 16 | Legacy | P2 | Resist Heat and Cold | 7/7/38 | 15/13/45 | Split heat/fire and cold resistance timers; reduce implemented fire-breath damage via heat/fire timer | Row-covered on `C64+C128`: focused `C128` coverage plus stable shared `C64` seam coverage prove prayer-id mapping, split heat/cold timer onset/refresh behavior, heat/fire-only hostile breath reduction under current Commodore semantics, and cast-fail/success mana/worked bookkeeping; broader fire/cold damage consumers are still not modeled |
-| 17 | Added | P3 | Neutralize Poison | 9/6/38 | 15/15/50 | Clear poison | - |
+| 17 | Added | P3 | Neutralize Poison | 9/6/38 | 15/15/50 | Clear poison | Implemented through the shared `eff_cure_poison` effect; still missing dedicated row-level C64/C128 runtime coverage |
 | 18 | Added | P3 | Orb of Draining | 9/7/38 | 17/15/50 | Holy ball damage `3d6 + level` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, shared ball-path kill behavior on target-area hits, current message-light empty-area success, and cast-fail/success mana/worked bookkeeping |
 | 19 | Added | P3 | Cure Serious Wounds | 9/7/40 | 17/15/50 | Heal `8d4` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, current `8d4` heal-tier behavior through the shared `ped_s18 -> heal_dice -> pmx_heal_and_report` seam, injured-heal mid-tier feedback, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |
 | 20 | Added | P3 | Sense Invisible | 11/8/42 | 19/15/50 | See invisible / invis sense | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, onset behavior that sets both `zp_eff_see_inv` and `zp_eff_invis` with explicit `HSTR_PIQ_EYES_TINGLE` feedback, current silent refresh behavior when either effect is already active, and cast-fail/success mana/worked bookkeeping |
@@ -425,7 +425,7 @@
 | 28 | Added | P4 | Heal | 21/16/60 | 33/28/60 | Heal `200` HP | Row-covered on `C64+C128`: focused heal-row coverage proves prayer-id mapping, the current fixed `200`-HP `ped_s27 -> pmx_heal_and_report` behavior, strongest-heal feedback while injured, full-HP silence/no-op behavior, and cast-fail/success mana/worked bookkeeping |
 | 29 | Added | P4 | Dispel Evil | 25/20/70 | 35/32/70 | Dispel evil for `3 * level` | Row-covered on `C64+C128`: focused flagged-dispel coverage proves prayer-id mapping, the shared `ped_s28 -> eff_dispel_flagged` semantics across visible/LOS `CF_EVIL` targets for `rng(3*level)+1` damage, per-target `shudders.` / `dissolves!` feedback, explicit `HSTR_PIQ_NOTHING` on no visible evil casts, and cast-fail/success mana/worked bookkeeping |
 | 30 | Added | P4 | Glyph of Warding | 33/24/90 | 37/36/90 | Place a blocking glyph on the player tile | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping and cast-fail/success mana/worked bookkeeping on both platforms; success creates a glyph record, prints `HSTR_PMU_GLYPH_OK` (`You see a strange rune.`), marks the scene for redraw, renders a visible `SC_GLYPH` `^` marker, look/inspect reports the rune before terrain beyond it, blocks monsters, and uses the upstream `randint(3000) < monster level` break odds; blocked-by-item casts print `HSTR_PMU_GLYPH_BLOCK` |
-| 31 | Added | P4 | Holy Word | 39/32/80 | 39/38/90 | Heal to full, remove fear/poison, restore stats, 3 turns invulnerability, dispel evil for `4 * level` | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, full heal, poison clear, fear clear, stat restore, invulnerability timer onset, visible/LOS evil-target dispel behavior with per-target feedback, the current explicit `HSTR_PIQ_VERY_GOOD` message contract, and cast-fail/success mana/worked bookkeeping; the `C64` shared composite seam remains covered in `test_utility_effects`, while `C128` focused row proof also proves the current no-visible-evil/already-clean-full success behavior |
+| 31 | Added | P4 | Holy Word | 39/32/80 | 39/38/90 | Heal to full, remove fear/poison, restore stats, 3 turns invulnerability, dispel evil for `4 * level`, then turn undead | Row-covered on `C64+C128`: focused prayer-path coverage proves prayer-id mapping, full heal, poison clear, fear clear, stat restore, invulnerability timer onset, visible/LOS evil-target dispel behavior with per-target feedback, the separate strict-`umoria` Turn Undead side effect, the current explicit `HSTR_PIQ_VERY_GOOD` message contract, and cast-fail/success mana/worked bookkeeping; the `C64` shared composite seam remains covered in `test_utility_effects`, while `C128` focused row proof also proves the current no-visible-evil/already-clean-full success behavior |
 
 ## Upstream Comparison Notes
 
@@ -437,12 +437,7 @@
 - VMS is the source of truth for the main semantic choices:
   - `Sleep II` and `Sanctuary` are local sleep effects, not the broader alternatives found in some later ports
   - priest `Remove Curse` is treated as the stronger all-items version
-- `umoria` is now the source of truth for `Holy Word`:
-  - full heal
-  - remove fear and poison
-  - restore all stats
-  - grant 3 turns of invulnerability
-  - dispel evil for `4 * level`
-- Remaining follow-up candidates if stricter parity is required:
-  - exact evil-only detection for `Detect Evil`
-  - exact timed handling for `Resist Heat and Cold`
+- `Holy Word` combines the local VMS cure/heal/dispel behavior with `umoria` stat restoration, invulnerability, and the strict-`umoria` separate Turn Undead side effect after the evil dispel.
+- Remaining follow-up candidates if stricter parity or coverage is required:
+  - add dedicated row-level C64/C128 tests for mage `Cure Poison` and priest `Neutralize Poison`
+  - make `Resist Heat and Cold` roll independent heat/fire and cold durations if exact `umoria` duration parity matters; broader fire/cold damage consumers remain outside the current modeled engine
