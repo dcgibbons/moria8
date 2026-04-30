@@ -6,6 +6,8 @@
 //  3. disk_prompt_save still prompts and re-inits the save drive before setup completes
 //  4. disk_prompt_save becomes a silent drive re-init after one-drive setup completes
 //  5. disk_prompt_game remains a no-op when disk_mode is unset
+//  6. initialized Disk Setup commit reports carry clear/success
+//  7. marker initialization does not trust X across KERNAL byte I/O
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -20,6 +22,9 @@
 .const STATUS_ROW = 23
 .const COL_WHITE = $01
 .const CMD_CHANNEL = 15
+.const C128_MEDIA_UNKNOWN = 0
+.const C128_MEDIA_PROGRAM = 1
+.const C128_MEDIA_SAVE    = 2
 
 .const KERNAL_SETNAM = w_setnam
 .const KERNAL_SETLFS = w_setlfs
@@ -50,12 +55,22 @@ w_setlfs_dev_seen:       .byte 0
 w_open_calls:            .byte 0
 w_close_calls:           .byte 0
 w_clrchn_calls:          .byte 0
+marker_write_count:      .byte 0
+marker_read_count:       .byte 0
+command_read_count:      .byte 0
+w_chkin_lfn_seen:        .byte 0
+c128_media_state:        .byte C128_MEDIA_UNKNOWN
+marker_write_buf:        .fill 6, 0
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+cmd_status_bytes:
+    .byte $30, $31, $30, $30, $30, $30
+
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
+#import "../../common/disk_setup_banked.s"
 
 test_fail:
     jmp test_fail
@@ -72,7 +87,7 @@ reset_harness_state:
     bpl !clr-
     rts
 .label state_start = screen_put_string_calls
-.label state_end = w_clrchn_calls + 1
+.label state_end = marker_write_buf + DISK_MARKER_MAGIC_LEN
 
 input_get_modal_dismiss_key:
     inc input_modal_calls
@@ -145,10 +160,20 @@ w_clrchn:
     rts
 
 w_readst:
+    lda w_chkin_lfn_seen
+    cmp #DISK_MARKER_FILE_NUM
+    bne !ok+
+    lda marker_read_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    bne !ok+
+    lda #$40
+    rts
+!ok:
     lda #0
     rts
 
 w_chkin:
+    stx w_chkin_lfn_seen
     clc
     rts
 
@@ -157,10 +182,34 @@ w_chkout:
     rts
 
 w_chrin:
-    lda #0
+    lda w_chkin_lfn_seen
+    cmp #CMD_CHANNEL
+    bne !marker+
+    ldx command_read_count
+    inc command_read_count
+    lda cmd_status_bytes,x
+    clc
+    rts
+!marker:
+    ldx marker_read_count
+    lda disk_marker_magic,x
+    inc marker_read_count
+    ldx #$a5
+    clc
     rts
 
 w_chrout:
+    ldx marker_write_count
+    sta marker_write_buf,x
+    inc marker_write_count
+    ldx #$5a
+    clc
+    rts
+
+tramp_disk_setup_ui_action:
+    lda #DISK_UI_RES_OK
+    sta disk_ui_result
+    clc
     rts
 
 test_start:
@@ -283,6 +332,72 @@ test_start:
     beq *+5
     jmp test_fail
     lda w_open_calls
+    beq *+5
+    jmp test_fail
+
+    // Test 6: initialized Disk Setup commit reports success. This path is
+    // reached after the marker has been written and verified.
+    jsr reset_harness_state
+    lda #0
+    sta disk_setup_done
+    lda #DISK_UI_RES_CANCEL
+    sta disk_ui_result
+    sec
+    jsr disk_setup_commit_initialized
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_ui_result
+    cmp #DISK_UI_RES_OK
+    beq *+5
+    jmp test_fail
+
+    // Test 7: marker init writes and verifies the marker even when KERNAL
+    // byte I/O clobbers X.
+    jsr reset_harness_state
+    lda #9
+    sta save_device
+    sec
+    jsr disk_marker_init
+    bcc *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda marker_read_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    ldx #0
+!check_marker_write:
+    lda marker_write_buf,x
+    cmp disk_marker_magic,x
+    beq *+5
+    jmp test_fail
+    inx
+    cpx #DISK_MARKER_MAGIC_LEN
+    bcc !check_marker_write-
+    lda disk_status
+    beq *+5
+    jmp test_fail
+    lda disk_diag_scratch_status0
+    cmp #$30
+    beq *+5
+    jmp test_fail
+    lda disk_diag_scratch_status1
+    cmp #$31
+    beq *+5
+    jmp test_fail
+    lda disk_diag_write_status0
+    cmp #$30
+    beq *+5
+    jmp test_fail
+    lda disk_diag_write_status1
+    cmp #$30
     beq *+5
     jmp test_fail
 

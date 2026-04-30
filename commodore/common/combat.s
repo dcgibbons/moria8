@@ -1210,6 +1210,21 @@ combat_append_str:
     sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
     rts
 
+// combat_append_char — Append one screen-code byte to combat_msg_buf
+// Input: A = screen code
+// Clobbers: X
+combat_append_char:
+    ldx cmb_buf_idx
+    cpx #41                     // Keep slot 41 reserved for null terminator
+    bcs !cac_done+
+    sta combat_msg_buf,x
+    inx
+    stx cmb_buf_idx
+!cac_done:
+    lda #0
+    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
+    rts
+
 // combat_append_monster_name — Append current monster's name to buffer
 // Uses cmb_type to look up cr_name_lo/hi
 // Clobbers: A, X, Y, zp_ptr1

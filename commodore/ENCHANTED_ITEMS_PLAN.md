@@ -1,30 +1,38 @@
 # Enchanted Items / Item Stats Plan
 
+> Status: Complete as of 2026-04-29. This is now an archived implementation
+> plan for `FEAT-ITEM-STATS`, not an active work queue. Current architecture
+> notes live in `DESIGN.md`; completion history lives in `BUILDPLAN_HISTORY.md`.
+
 ## Purpose
 
-This document is the implementation plan for `FEAT-ITEM-STATS`.
+This document records the completed implementation plan for `FEAT-ITEM-STATS`.
 
 The goal is to restore upstream-style item stat semantics and visibility across the Commodore port. This is not a UI-only suffix pass. The feature must make item-instance data, gameplay behavior, and displayed descriptions agree.
 
 This plan is decision-complete. It records the feature scope, the locked product decisions, the required data-model changes, the spell-system overlap, and the test contract.
 
-## Current Problem
+## Original Problem
 
-The current Commodore item model overloads a single per-instance numeric field:
+The pre-feature Commodore item model overloaded a single per-instance numeric
+field:
 
-- `inv_p1` is currently reused for:
+- `inv_p1` was reused for:
   - weapon enchantment
   - armor enchantment
   - wand/staff charges
   - light fuel
   - other type-specific payloads
-- UI currently prints base item names plus ego prefix/suffix text, but does not print stat-aware descriptions.
-- Gameplay behavior is simplified around the same overloading:
-  - weapon bonus currently acts as both `to_hit` and `to_dam`
-  - armor bonus currently shares the same storage model as non-combat `p1`
+- UI printed base item names plus ego prefix/suffix text, but did not print
+  stat-aware descriptions.
+- Gameplay behavior was simplified around the same overloading:
+  - weapon bonus acted as both `to_hit` and `to_dam`
+  - armor bonus shared the same storage model as non-combat `p1`
   - enchant flows mutate the old shared field directly
 
-That simplification is now the blocker. A UI-only exposure of `inv_p1` would preserve the wrong semantics, fight the requested upstream reveal rules, and make later correction more expensive.
+That simplification was the blocker. A UI-only exposure of `inv_p1` would have
+preserved the wrong semantics, fought the requested upstream reveal rules, and
+made later correction more expensive.
 
 ## Locked Product Decisions
 
@@ -39,9 +47,10 @@ The following choices are fixed for this feature:
 - Use exact upstream-style knowledge / reveal rules for unidentified, sensed, cursed, known, and identified items.
 - Fix behavior too, not display only.
 
-## Required Sequencing
+## Historical Required Sequencing
 
-Do not begin FEAT-ITEM-STATS implementation until the current spell-test branch based on `commodore/SPELL_TEST_PLAN.md` has landed.
+The feature was planned to start only after the spell-test branch based on
+`commodore/SPELL_TEST_PLAN.md` landed.
 
 Reason:
 
@@ -266,7 +275,7 @@ After the spell-test branch lands, update the affected spell/prayer tests so ite
 
 ### Cross-platform gates
 
-Minimum required gates before closure:
+Planned minimum required gates before closure:
 
 - `make test64`
 - `make test128-fast-smoke`
@@ -296,3 +305,20 @@ The feature is complete only when all of the following are true:
 - item-facing spell/prayer seams are updated on top of the landed spell-test baseline
 - old saves are intentionally unsupported and the new save format is coherent
 - the required C64/C128 verification gates are green
+
+## Completion Notes
+
+The implementation landed with split persistent item-stat fields for inventory,
+floor, and store/home instances; stat-aware descriptions; item-facing spell and
+scroll updates; save/load persistence; ammo stack visibility; and C64/C128
+runtime/layout fixes needed to keep the feature stable.
+
+Final verification for the feature included:
+
+- `make test64` passing 129/129 tests
+- `make test128-fast` passing cold and snapshot batches
+- `make test128-fast-smoke` passing 8/8 smokes
+- `make -C commodore build128` passing
+- manual C64/C128 verification of enchant display, save/load persistence for
+  equipped enchanted items, ammo stack counts, bolt consumption, and C128
+  boot/save/load/modal flows

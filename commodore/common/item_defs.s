@@ -11,6 +11,9 @@
 .const IF_TRIED      = $04    // Legacy pseudo-ID bit kept for save compatibility
 .const IF_SENSED     = $08    // Umoria-style auto-sensed "magik" marker
 .const EGO_TYPE_COUNT = 8
+.const ITEM_META_FLAGS_MASK = $0f
+.const ITEM_META_EGO_MASK   = $70
+.const ITEM_META_EGO_SHIFT  = 4
 
 // Floor Item Constants
 .const MAX_FLOOR_ITEMS = 42

@@ -136,6 +136,12 @@ tramp_store_enter:
 .label tramp_item_aim_wand = item_aim_wand
 .label tramp_item_use_staff = item_use_staff
 .label tramp_item_refuel = item_refuel
+.label tramp_ranged_fire = test_ranged_fire
+
+tramp_throw_item:
+tramp_bash_command:
+tramp_player_tunnel:
+    rts
 
 test_spell_list_display:
     rts
@@ -201,7 +207,7 @@ tramp_dig_ability:
 .segment Default
 #import "../../common/sound.s"
 #import "../../common/dungeon_data.s"
-#import "../../common/dungeon_gen.s"
+dg_idx: .byte 0
 #import "../../common/huffman.s"
 #import "../../common/dungeon_features.s"
 #import "../../common/monster.s"
@@ -211,6 +217,10 @@ tramp_dig_ability:
 #import "../../common/recall.s"
 #import "../../common/monster_magic.s"
 #import "../../common/item.s"
+random_floor_in_room:
+    lda #0
+    tay
+    rts
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
@@ -285,6 +295,8 @@ test_ui_step_0: .byte 0
 test_ui_step_1: .byte 0
 test_ui_step_2: .byte 0
 test_ui_step_3: .byte 0
+test_ui_step_4: .byte 0
+test_ui_step_5: .byte 0
 test_recall_ui_calls: .byte 0
 test_help_calls: .byte 0
 test_key_idx: .byte 0
@@ -414,6 +426,8 @@ reset_state:
     sta test_ui_step_1
     sta test_ui_step_2
     sta test_ui_step_3
+    sta test_ui_step_4
+    sta test_ui_step_5
     sta test_recall_ui_calls
     sta test_help_calls
     sta test_key_idx
@@ -662,7 +676,7 @@ test_generation_busy_end_api:
 
 test_record_ui_step:
     ldx test_ui_step_count
-    cpx #4
+    cpx #5
     bcs !done+
     sta test_ui_step_0,x
     inc test_ui_step_count
@@ -1206,8 +1220,8 @@ test_start:
     sta tc_results + 13
     jmp !t15+
 
-    // Test 15: generation busy UI blanks before clear/draw and only
-    // unblanks after the frame is fully prepared.
+    // Test 15: generation busy UI blanks before clear/draw and remains
+    // visible after the frame is fully prepared.
 !t15:
     jsr reset_state
     lda #14
@@ -1246,16 +1260,22 @@ test_start:
     jmp !t15_fail+
 !t15_chk_step2:
     lda test_ui_step_2
-    cmp #3
+    cmp #2
     beq !t15_chk_step3+
     jmp !t15_fail+
 !t15_chk_step3:
     lda test_ui_step_3
+    cmp #3
+    beq !t15_chk_step4+
+    jmp !t15_fail+
+!t15_chk_step4:
+    lda test_ui_step_4
     cmp #4
     beq !t15_chk_active+
     jmp !t15_fail+
 !t15_chk_active:
     lda test_screen_clear_calls
+    cmp #1
     bne !t15_fail+
     lda generation_busy_active_api
     cmp #1

@@ -66,6 +66,9 @@ eff_detect_timer:    .byte 0
 player_data:         .fill 80, 0
 inv_item_id:         .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:              .fill TOTAL_INV_SLOTS, 0
+inv_to_hit:          .fill TOTAL_INV_SLOTS, 0
+inv_to_dam:          .fill TOTAL_INV_SLOTS, 0
+inv_to_ac:           .fill TOTAL_INV_SLOTS, 0
 inv_flags:           .fill TOTAL_INV_SLOTS, 0
 inv_ego:             .fill TOTAL_INV_SLOTS, 0
 level_entry_dir:     .byte 0

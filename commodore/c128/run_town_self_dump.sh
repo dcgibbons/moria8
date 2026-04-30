@@ -42,7 +42,10 @@ if ! "$C1541_BIN" -format "moria128,m8" d64 "$diag_d64" \
         -write out/ovl.start "ovl.start" \
         -write out/ovl.death "ovl.death" \
         -write out/ovl.gen "ovl.gen" \
-        -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+        -write out/128.runtime.prg "128.runtime" \
+        -write out/128.input.prg "128.input" \
+        -write out/128.fdisk.prg "128.fdisk" \
+        -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
     echo "town_self_dump disk build failed"
     tail -20 "$build_log"
     exit 1

@@ -57,12 +57,15 @@ eff_heal:
 eff_detect_monsters:
 eff_light_room:
 eff_identify_prompt:
+eff_identify_scroll_resident:
 eff_teleport_self:
 eff_remove_curse:
 eff_aggravate:
 eff_bolt:
 eff_directional_monster:
     rts
+
+current_overlay: .byte 0
 
 combat_append_str:
     sta zp_ptr1
@@ -79,6 +82,16 @@ combat_append_str:
     bcc !loop-
 !done:
     stx cmb_buf_idx
+    rts
+
+combat_append_char:
+    ldx cmb_buf_idx
+    sta combat_msg_buf,x
+    inx
+    stx cmb_buf_idx
+    rts
+
+combat_append_decimal:
     rts
 
 magic_recalc_mana:
@@ -116,6 +129,7 @@ magic_check_new_spells:
 #import "../../common/item.s"
 #import "../../common/ego_items.s"
 #import "../../common/player_items.s"
+#import "../../common/spell_data.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
 #import "../../common/ui_recall.s"
@@ -128,6 +142,7 @@ magic_check_new_spells:
 #import "../../common/ui_help_data.s"
 #import "../../common/ui_help_page2_data.s"
 #import "../../common/ui_help.s"
+#define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../common/ui_trampoline_stubs.s"
 
 press_key_str:
@@ -232,6 +247,7 @@ test_start:
     jsr test_home_view
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
+    jsr test_inventory_identify_select_view_six_items
 
     jmp test_exit_trampoline
 
@@ -307,8 +323,7 @@ reset_shared_state:
 !clr_store_rest:
     sta si_qty,x
     sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
+    sta si_meta,x
     dex
     bpl !clr_store_rest-
 
@@ -1059,6 +1074,40 @@ test_screen_clear_forces_status_redraw:
     sta tc_results + 12
     rts
 
+test_inventory_identify_select_view_six_items:
+    jsr reset_shared_state
+
+    lda #$fd
+    sta piw_filter
+    ldx #0
+!fill_loop:
+    lda #4
+    sta inv_item_id,x
+    lda #1
+    sta inv_qty,x
+    inx
+    cpx #6
+    bcc !fill_loop-
+
+    jsr ui_inv_select_display
+
+    lda #<expected_identify_prompt_af
+    sta zp_ptr0
+    lda #>expected_identify_prompt_af
+    sta zp_ptr0_hi
+    lda #24
+    ldx #7
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 13
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -1167,6 +1216,8 @@ expected_filtered_eq_light:
     .text ") Light: " ; .byte 0
 expected_quaff_prompt_ab:
     .text "Quaff which potion (a-b)?" ; .byte 0
+expected_identify_prompt_af:
+    .text "Identify which item (a-" ; .byte $06 ; .text ")?" ; .byte 0
 expected_equip_line:
     .byte $01
     .text ") Weapon: Long Sword (Slay Evil) (mag" ; .byte 0

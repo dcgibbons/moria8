@@ -84,6 +84,7 @@ test_finish:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
+#define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../common/ui_trampoline_stubs.s"
 
 .segmentdef TestStoreOverlay [start=$d000, min=$d000, max=$ffff]

@@ -25,6 +25,11 @@
 // banked_payload runtime code is forced to start above the dungeon overlay
 // footprint so overlays ($E000-$EFFF) never overlap live banked routines.
 // ============================================================
+#define C128_PRODUCT_OVERLAY_RUNTIME
+#define C128_PRODUCT_MODAL_PERSIST
+.const C128_MEDIA_UNKNOWN = 0
+.const C128_MEDIA_PROGRAM = 1
+.const C128_MEDIA_SAVE    = 2
 .eval var OVL_OUT = "out"
 .segmentdef StartupOverlay    [outPrg=OVL_OUT + "/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg=OVL_OUT + "/ovl.town",  start=$e000, min=$e000, max=$efff]
@@ -34,8 +39,16 @@
 .segmentdef UiOverlay         [outPrg=OVL_OUT + "/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
+.segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
 .segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0ce3, min=$0ce3, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
+.segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
+.segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8d00, min=$8d00, max=$a7ff]
+.segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
+.segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
+.segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
+.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$cfff]
+.segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
 .const C128_REAL_BOOT_DIAG = 1
@@ -329,9 +342,6 @@ entry_real:
     lda $d030
     ora #$01
     sta $d030
-
-    // Copy banked payload BEFORE installing patches so it doesn't overwrite them
-    jsr init_copy_banked
 
     // Mirror KERNAL vectors/stubs into RAM underneath ROM ($FF05-$FFFF)
     // Skipping $FF00-$FF04 to avoid mid-loop MMU bank-switching.
@@ -699,49 +709,20 @@ safe_setbnk:
     :ExitKernal()
     jmp c128_wrapper_finish
 
-// init_copy_banked — Copy banked code payload to $F000
-// Uses $3F (NOIO) instead of $3E because source data crosses the I/O
-// range $D000-$DFFF. With $3E, reads from $D000+ return I/O register
-// garbage instead of game data.
-init_copy_banked:
-#if C128_TEST_OVERLAY_RELOAD_GUARD
-    lda c128_startup_overlay_executing
-    beq !guard_ok+
-    brk
-!guard_ok:
-#endif
-    sei
-    lda #<banked_payload
-    sta zp_ptr0
-    lda #>banked_payload
-    sta zp_ptr0_hi
-    ldy #$00
-    sty zp_ptr1
-    lda #$F0
-    sta zp_ptr1_hi
-    ldx #((banked_payload_end - banked_payload + 255) / 256)
-    // Switch to NOIO for the copy (source crosses $D000)
-    lda #$3f                // MMU_ALL_RAM but with I/O hidden (RAM at $D000)
-    sta $ff00
-!copy:
-    lda zp_ptr1_hi
-    cmp #$ff
-    bne !do_copy+
-    // Protect MMU/Vectors in page $FF ($FF00-$FF0D)
-    cpy #$0e
-    bcc !skip_copy+
-!do_copy:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-!skip_copy:
-    iny
-    bne !copy-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dex
-    bne !copy-
-    lda #MMU_ALL_RAM
-    sta $ff00
+c128_restore_vdc_rom_font:
+    pha
+    txa
+    pha
+    tya
+    pha
+    :EnterKernal()
+    jsr $ff62                   // C128 JDLCHR: reload standard VDC charset
+    :ExitKernal()
+    pla
+    tay
+    pla
+    tax
+    pla
     rts
 
 // Exit trampoline — MUST live below $A000
@@ -879,7 +860,7 @@ tramp_game_over:
     jmp score_death_screen
 
 tramp_store_init_all:
-    lda #2                      // OVL_TOWN
+    lda #7                      // OVL_ITEMS (transition-only store maintenance)
 #if C128_REAL_BOOT_DIAG
     ldx #$34
     jsr c128_stack_guard_begin
@@ -900,7 +881,7 @@ tramp_store_init_all:
     jmp store_init_all
 
 tramp_store_restock_all:
-    lda #2                      // OVL_TOWN
+    lda #7                      // OVL_ITEMS (transition-only store maintenance)
     jsr overlay_load
     bcc !tsra_loaded+
     jmp entry_main
@@ -1781,6 +1762,18 @@ tramp_player_cast_spell:
 tramp_player_pray:
     :C128BankedComputeTrampoline(player_pray)
 
+tramp_item_wear:
+    :C128BankedComputeTrampoline(item_wear)
+
+tramp_item_takeoff:
+    :C128BankedComputeTrampoline(item_takeoff)
+
+tramp_item_eat:
+    :C128BankedComputeTrampoline(item_eat)
+
+tramp_item_quaff:
+    :C128BankedComputeTrampoline(item_quaff)
+
 tramp_spell_list_display:
     :C128UIOverlayDisplayTrampoline(spell_list_display)
 
@@ -1810,16 +1803,16 @@ tramp_magic_check_new_spells:
     :C128BankedComputeTrampoline(magic_check_new_spells)
 
 tramp_ranged_fire:
-    :C128BankedComputeTrampoline(ranged_fire)
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, ranged_fire)
 
 tramp_player_tunnel:
-    :C128BankedComputeTrampoline(player_tunnel)
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, player_tunnel)
 
 tramp_throw_item:
-    :C128BankedComputeTrampoline(throw_item)
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, throw_item)
 
 tramp_bash_command:
-    :C128BankedComputeTrampoline(bash_command)
+    :C128OverlayComputeTrampoline(C128_ITEMS_OVERLAY_ID, bash_command)
 
 // tramp_dig_ability — Calculate digging ability.
 // Pinned low to avoid $D000 drift.
@@ -1883,7 +1876,7 @@ tramp_reu_show_status:
     :C128BankedStatusTrampoline(reu_show_status_banked)
 
 // ============================================================
-.const GAME_OVER_COL = (SCREEN_COLS - 18) / 2
+.const GAME_OVER_COL = (SCREEN_COLS - 23) / 2
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
@@ -1913,6 +1906,10 @@ game_over_prompt:
 !gop_restart:
     jmp game_restart
 game_over_prompt_end:
+
+game_over_str:
+    .text "R)eboot S)tart Q)uit" ; .byte 0
+game_over_str_end:
 
 // ============================================================
 // Entry point
@@ -1992,6 +1989,8 @@ entry_main:
     sta kernal_irq_vec_lo
     lda $0315
     sta kernal_irq_vec_hi
+    lda #0
+    sta c128_kernal_irq_tail_runtime_owned
     jsr init_common_mmu_helpers
     jsr generation_busy_install
     jsr platform_services_install128
@@ -2015,7 +2014,6 @@ restart_entry:
     sta reu_size_kb
     sta reu_size_kb + 1
 
-    jsr tier_init
     jsr sound_init
     jsr rng_seed
 
@@ -2053,26 +2051,47 @@ restart_entry:
     lda #COL_LGREY
     sta zp_text_color
 
-    lda c128_cache_enabled
-    beq !load_runtime_low+
-    lda #<runtime_low_display_str
-    sta zp_ptr0
-    lda #>runtime_low_display_str
-    sta zp_ptr0_hi
-    jsr reu_show_file
-!load_runtime_low:
+    lda #5
+    sta c128_runtime_load_stage
     jsr c128_load_runtime_low_prg
     bcc !runtime_low_loaded+
-    jmp entry_main
+    jmp runtime_load_failed
 !runtime_low_loaded:
+    lda #6
+    sta c128_runtime_load_stage
     jsr c128_load_runtime_input_prg
     bcc !runtime_input_loaded+
-    jmp entry_main
+    jmp runtime_load_failed
 !runtime_input_loaded:
+    lda #7
+    sta c128_runtime_load_stage
+    jsr c128_load_runtime_projectile_prg
+    bcc !runtime_projectile_loaded+
+    jmp runtime_load_failed
+!runtime_projectile_loaded:
+    lda #8
+    sta c128_runtime_load_stage
     jsr c128_load_runtime_common_prg
     bcc !runtime_common_loaded+
-    jmp entry_main
+    jmp runtime_load_failed
 !runtime_common_loaded:
+    lda #9
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_diskio_prg
+    bcc !runtime_diskio_loaded+
+    jmp runtime_load_failed
+!runtime_diskio_loaded:
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_runtime_banked_prg
+    bcc !runtime_banked_loaded+
+    jmp runtime_load_failed
+!runtime_banked_loaded:
+    jsr c128_load_core_residents
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    jsr c128_restore_vdc_rom_font
+    jsr tier_init
 title_enter_menu:
 #if C128_REAL_BOOT_DIAG
     ldx #$27
@@ -2135,12 +2154,11 @@ title_menu_ready:
     lda #$61
     jsr c128_town_dump_mark
 #endif
+    jsr c128_modal_require_play
     jmp game_new_start
 !not_n:
     cmp #$4c                // 'L' — load game
     bne !not_l+
-    jsr title_require_disk_setup
-    bcs title_enter_menu
     jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup
@@ -2153,15 +2171,36 @@ title_load_game:
     lda #SFX_PICKUP
     jsr sound_play
     jsr msg_init
-    jsr disk_prompt_save
+    jsr title_require_disk_setup
+    bcc !title_setup_ready+
+    jsr c128_require_program_media
+    jmp title_enter_menu
+!title_setup_ready:
+    jsr c128_modal_require_persist
+    jsr c128_require_save_media
     jsr load_game
-    bcc !title_load_fail+
-    jsr disk_prompt_game
-    jmp load_resume_game
+    lda #0
+    adc #0
+    sta c128_modal_result
+    lda c128_modal_result
+    lsr
+    bcs !title_load_ok+
 !title_load_fail:
     jsr input_get_modal_dismiss_key
-    jsr disk_prompt_game
+    jsr c128_require_program_media
     jmp title_enter_menu
+!title_load_ok:
+    jsr c128_modal_require_play
+    jmp load_resume_game
+
+runtime_load_failed:
+    sei
+    lda c128_runtime_load_stage
+    sta $d020
+    sta $d021
+!loop:
+    lda c128_runtime_load_stage
+    jmp !loop-
 
 // ============================================================
 // c128_load_runtime_low_prg — Load low-RAM resident runtime code to $1000 in Bank 0
@@ -2183,12 +2222,60 @@ runtime_input_filename:
 runtime_input_filename_end:
     .byte 0
 .const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename
-.const RUNTIME_COMMON_FILE_NUM = 4
+.const RUNTIME_PROJECTILE_FILE_NUM = 4
+runtime_projectile_filename:
+    .byte $31, $32, $38, $2e, $50, $52, $4f, $4a // "128.PROJ"
+runtime_projectile_filename_end:
+    .byte 0
+.const RUNTIME_PROJECTILE_FILENAME_LEN = runtime_projectile_filename_end - runtime_projectile_filename
+.const RUNTIME_COMMON_FILE_NUM = 5
 runtime_common_filename:
     .byte $31, $32, $38, $2e, $46, $44, $49, $53, $4b // "128.FDISK"
 runtime_common_filename_end:
     .byte 0
 .const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename
+.const RUNTIME_DISKIO_FILE_NUM = 6
+runtime_diskio_filename:
+    .byte $31, $32, $38, $2e, $44, $49, $53, $4b, $49, $4f // "128.DISKIO"
+runtime_diskio_filename_end:
+    .byte 0
+.const RUNTIME_DISKIO_FILENAME_LEN = runtime_diskio_filename_end - runtime_diskio_filename
+.const RESIDENT_WORLD_FILE_NUM = 7
+resident_world_filename:
+    .text "128.WORLD"
+resident_world_filename_end:
+    .byte 0
+.const RESIDENT_WORLD_FILENAME_LEN = resident_world_filename_end - resident_world_filename
+.const RESIDENT_ITEMS_FILE_NUM = 8
+resident_items_filename:
+    .text "128.ITEM"
+resident_items_filename_end:
+    .byte 0
+.const RESIDENT_ITEMS_FILENAME_LEN = resident_items_filename_end - resident_items_filename
+.const RESIDENT_SELECT_FILE_NUM = 9
+resident_select_filename:
+    .text "128.SELECT"
+resident_select_filename_end:
+    .byte 0
+.const RESIDENT_SELECT_FILENAME_LEN = resident_select_filename_end - resident_select_filename
+.const RESIDENT_PERSIST_FILE_NUM = 10
+resident_persist_filename:
+    .text "128.PERSIST"
+resident_persist_filename_end:
+    .byte 0
+.const RESIDENT_PERSIST_FILENAME_LEN = resident_persist_filename_end - resident_persist_filename
+.const RESIDENT_PLAY_FILE_NUM = 11
+resident_play_filename:
+    .text "128.PLAY"
+resident_play_filename_end:
+    .byte 0
+.const RESIDENT_PLAY_FILENAME_LEN = resident_play_filename_end - resident_play_filename
+.const RUNTIME_BANKED_FILE_NUM = 12
+runtime_banked_filename:
+    .byte $31, $32, $38, $2e, $42, $41, $4e, $4b // "128.BANK"
+runtime_banked_filename_end:
+    .byte 0
+.const RUNTIME_BANKED_FILENAME_LEN = runtime_banked_filename_end - runtime_banked_filename
 
 c128_load_runtime_prg:
     lda #0
@@ -2198,22 +2285,25 @@ c128_load_runtime_prg:
     lda disk_status
     ldx zp_ptr0
     ldy zp_ptr0_hi
-    jsr $ffbd
+    jsr w_setnam
 
     lda disk_temp
-    ldx save_device
+    ldx program_device
     ldy #1
-    jsr $ffba
+    jsr w_setlfs
 
     lda #0
     ldx zp_ptr1
     ldy zp_ptr1_hi
-    jsr kernal_load
+    jsr w_load
+    sta c128_runtime_load_result_a
     php
+    jsr w_readst
+    sta c128_runtime_load_readst
 
     lda disk_temp
-    jsr $ffc3
-    jsr $ffcc
+    jsr w_close
+    jsr w_clrchn
 
     lda #0
     ldx #0
@@ -2260,6 +2350,21 @@ c128_load_runtime_input_prg:
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
+c128_load_runtime_projectile_prg:
+    lda #RUNTIME_PROJECTILE_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_PROJECTILE_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_projectile_filename
+    sta zp_ptr0
+    lda #>runtime_projectile_filename
+    sta zp_ptr0_hi
+    lda #$80
+    sta zp_ptr1
+    lda #$0a
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
 c128_load_runtime_common_prg:
     lda #RUNTIME_COMMON_FILE_NUM
     sta disk_temp
@@ -2272,6 +2377,159 @@ c128_load_runtime_common_prg:
     lda #$20
     sta zp_ptr1
     lda #$0d
+    sta zp_ptr1_hi
+    lda #1
+    sta c128_kernal_irq_tail_runtime_owned
+    jmp c128_load_runtime_prg
+
+c128_load_resident_diskio_prg:
+    lda #RUNTIME_DISKIO_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_DISKIO_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_diskio_filename
+    sta zp_ptr0
+    lda #>runtime_diskio_filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$ab
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+
+.macro C128RuntimeLoadFile(file_num, filename_len, filename, load_hi) {
+    lda #file_num
+    sta disk_temp
+    lda #filename_len
+    sta disk_status
+    lda #<filename
+    sta zp_ptr0
+    lda #>filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #load_hi
+    sta zp_ptr1_hi
+    jmp c128_load_runtime_prg
+}
+
+c128_load_resident_world_prg:
+    :C128RuntimeLoadFile(RESIDENT_WORLD_FILE_NUM, RESIDENT_WORLD_FILENAME_LEN, resident_world_filename, $60)
+
+c128_load_resident_items_prg:
+    :C128RuntimeLoadFile(RESIDENT_ITEMS_FILE_NUM, RESIDENT_ITEMS_FILENAME_LEN, resident_items_filename, $8d)
+
+c128_load_resident_select_prg:
+    :C128RuntimeLoadFile(RESIDENT_SELECT_FILE_NUM, RESIDENT_SELECT_FILENAME_LEN, resident_select_filename, $a8)
+
+c128_load_core_residents:
+    lda #1
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_world_prg
+    bcc !resident_world_loaded+
+    jmp runtime_load_failed
+!resident_world_loaded:
+    lda #2
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_items_prg
+    bcc !resident_items_loaded+
+    jmp runtime_load_failed
+!resident_items_loaded:
+    lda #3
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_select_prg
+    bcc !resident_select_loaded+
+    jmp runtime_load_failed
+!resident_select_loaded:
+    rts
+
+c128_load_resident_persist_prg:
+    :C128RuntimeLoadFile(RESIDENT_PERSIST_FILE_NUM, RESIDENT_PERSIST_FILENAME_LEN, resident_persist_filename, $af)
+
+c128_load_resident_play_prg:
+    :C128RuntimeLoadFile(RESIDENT_PLAY_FILE_NUM, RESIDENT_PLAY_FILENAME_LEN, resident_play_filename, $af)
+
+.const C128_MODAL_UNKNOWN = 0
+.const C128_MODAL_PLAY    = 1
+.const C128_MODAL_PERSIST = 2
+
+c128_require_program_media:
+    jsr disk_prompt_game
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    rts
+
+c128_require_save_media:
+    jsr disk_prompt_save
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    rts
+
+c128_modal_require_persist:
+    lda c128_modal_slot_state
+    cmp #C128_MODAL_PERSIST
+    beq !persist_loaded+
+    jsr c128_require_program_media
+    lda #10
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_persist_prg
+    bcc !persist_loaded+
+    jmp runtime_load_failed
+!persist_loaded:
+    lda #C128_MODAL_PERSIST
+    sta c128_modal_slot_state
+    rts
+
+c128_modal_save_game:
+    jsr c128_modal_require_persist
+    jsr c128_require_save_media
+    jsr save_game
+    lda #0
+    adc #0
+    sta c128_modal_result
+    jsr c128_modal_require_play
+    lda c128_modal_result
+    lsr
+    rts
+
+c128_modal_load_game:
+    jsr c128_modal_require_persist
+    jsr c128_require_save_media
+    jsr load_game
+    lda #0
+    adc #0
+    sta c128_modal_result
+    lda c128_modal_result
+    lsr
+    rts
+
+c128_modal_require_play:
+    lda c128_modal_slot_state
+    cmp #C128_MODAL_PLAY
+    beq !play_loaded+
+    jsr c128_require_program_media
+    lda #11
+    sta c128_runtime_load_stage
+    jsr c128_load_resident_play_prg
+    bcc !play_loaded+
+    jmp runtime_load_failed
+!play_loaded:
+    lda #C128_MODAL_PLAY
+    sta c128_modal_slot_state
+    rts
+
+c128_load_runtime_banked_prg:
+    lda #RUNTIME_BANKED_FILE_NUM
+    sta disk_temp
+    lda #RUNTIME_BANKED_FILENAME_LEN
+    sta disk_status
+    lda #<runtime_banked_filename
+    sta zp_ptr0
+    lda #>runtime_banked_filename
+    sta zp_ptr0_hi
+    lda #$00
+    sta zp_ptr1
+    lda #$f0
     sta zp_ptr1_hi
     jmp c128_load_runtime_prg
 
@@ -2373,6 +2631,13 @@ c128_load_arg_x: .byte 0
 c128_load_arg_y: .byte 0
 kernal_irq_vec_lo: .byte 0
 kernal_irq_vec_hi: .byte 0
+c128_kernal_irq_tail_runtime_owned: .byte 0
+c128_runtime_load_stage: .byte 0
+c128_runtime_load_result_a: .byte 0
+c128_runtime_load_readst: .byte 0
+c128_modal_result: .byte 0
+c128_modal_slot_state: .byte C128_MODAL_UNKNOWN
+c128_media_state: .byte C128_MEDIA_UNKNOWN
 kernal_hw_irq_vec_lo: .byte 0
 kernal_hw_irq_vec_hi: .byte 0
 kernal_hw_nmi_vec_lo: .byte 0
@@ -2902,6 +3167,10 @@ c128_cache_state_end:
 #import "../common/io_kernal_consts.s"
 #import "../common/score_io.s"
 
+#import "../common/disk_swap.s"
+
+.segment C128ResidentWorld
+c128_resident_world_start:
 #import "../common/dungeon_data.s"
 #import "../common/dungeon_features.s"
 #import "../common/monster.s"
@@ -2911,29 +3180,63 @@ c128_cache_state_end:
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/spell_data.s"
+#define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #define C128_PRODUCT_RUNTIME_LOW_CURE
 #import "../common/spell_effects.s"
 #undef C128_PRODUCT_RUNTIME_LOW_CURE
+#undef SPELL_EFFECTS_INCLUDE_IDENTIFY
+c128_resident_world_end:
+
+.segment C128ResidentItems
+c128_resident_items_start:
 #import "../common/item.s"
 #import "../common/store_data.s"
+c128_resident_items_end:
 
+.segment C128ResidentSelect
+c128_resident_select_start:
+#define ITEM_ACTIONS_OVERLAY_EXTERNAL
+#define PLAYER_RECALC_EQUIPMENT_EXTERNAL
+#define PLAYER_ITEM_COMMANDS_EXTERNAL
+#import "../common/player_items.s"
+#undef PLAYER_ITEM_COMMANDS_EXTERNAL
+#undef PLAYER_RECALC_EQUIPMENT_EXTERNAL
+c128_resident_select_end:
+
+.segment C128ResidentPersist
+c128_resident_persist_start:
 #import "../common/save.s"
-#import "../common/disk_swap.s"
+c128_resident_persist_end:
+
+#define PRESS_KEY_STR_EXTERNAL
+.segment C128ResidentPlay
+c128_resident_play_start:
 #import "../common/dungeon_los.s"
 #import "../common/monster_attack.s"
 #define PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
-#import "../common/player_move.s"
 #import "../common/look_flash_target.s"
+#import "../common/player_move.s"
 #import "../common/ui_help_clear.s"
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
 #import "../common/turn.s"
-#define ITEM_ACTIONS_OVERLAY_EXTERNAL
-#import "../common/player_items.s"
 #import "../common/player_magic_state.s"
 #import "../common/perf_p1.s"
+#if C128
+ego_str_holy_avenger_common:
+    .text " (Holy Avenger)" ; .byte 0
+#endif
+c128_resident_play_end:
+
+.segment Default
+
+// Shared modal footer text must stay outside the C128 PLAY/PERSIST slot.
+// Disk Setup and one-drive swap prompts can run while either modal payload
+// owns $AF00, so overlay code must not point into that window for this string.
+press_key_str:
+    .text "Press any key" ; .byte 0
 
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
@@ -3066,7 +3369,7 @@ c128_test_snapshot_cache_probes:
     rts
 #endif
 
-#if C128
+#if C128_TEST_CACHE_SURVIVAL
 c128_test_expected_tier_bits:
     lda #%00001111
 #if C128_CACHE_TEST_SKIP_TIER
@@ -3159,7 +3462,6 @@ c128_vic40_boot_probe:
     bne !vic40_color_loop-
 
     jmp c128_vic40_boot_probe_pass_sym
-#endif
 
 c128_vic40_boot_probe_pass_sym:
     nop
@@ -3168,6 +3470,7 @@ c128_vic40_boot_probe_pass_sym:
 c128_vic40_boot_probe_fail_sym:
     nop
     jmp c128_vic40_boot_probe_fail_sym
+#endif
 
 #if C128_TEST_CACHE_SURVIVAL
 c128_test_verify_cache_survival:
@@ -3237,7 +3540,6 @@ c128_test_verify_cache_survival:
 .segment RuntimeCommonData
 .pseudopc $0ce3 {
 runtime_common_data_start:
-    #import "../common/disk_setup_runtime128.s"
     #import "../common/title_cache_runtime128.s"
     #import "restart128.s"
     #import "../common/player_magic_slow_runtime.s"
@@ -3245,6 +3547,25 @@ runtime_common_data_start:
     #import "../common/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
 runtime_common_data_end:
+}
+.segment Default
+
+// C128ResidentDiskIo segment — dedicated C128 save-media setup and disk-I/O
+// diagnostics owner. Kept below ROM-shadowed regions, with enough room for
+// product-path transaction evidence.
+.segment C128ResidentDiskIo
+c128_resident_diskio_start:
+    #import "../common/disk_setup_runtime128.s"
+c128_resident_diskio_end:
+.segment Default
+
+// RuntimeProjectileData segment — shared projectile helpers loaded below
+// runtime.input so the $F000 banked payload stays below the MMU register page.
+.segment RuntimeProjectileData
+.pseudopc $0a80 {
+runtime_projectile_data_start:
+    #import "../common/projectile.s"
+runtime_projectile_data_end:
 }
 .segment Default
 
@@ -3274,68 +3595,71 @@ pmx_cure_poison_msg:
     jmp huff_print_msg
 !pcpm_done:
     rts
-game_over_str:
-    .text "R)BOOT S)NEW Q)UIT" ; .byte 0
-game_over_str_end:
 runtime_low_data_end:
 }
 .segment Default
 
-#if C128
-ego_str_holy_avenger_common:
-    .text " (Holy Avenger)" ; .byte 0
-#endif
-
 // ============================================================
-// Banked code payload — stored inline here, copied to $F000
-// at startup by init_copy_banked. Runs in Bank 0 at $F000-$FFFA.
+// Banked code payload — external runtime PRG loaded directly to $F000.
+// Runs in Bank 0 at $F000-$FFFA.
 // Banked UI/logic functions live in Bank 0 and are accessible with
 // $FF00=$3E (MMU_ALL_RAM).
 //
 // Keep $E000-$EFFF reserved for OVL_* (overlays). Banked UI/logic
-// occupies the resident window at $F000-$FFFA; UI trampolines recopy
-// the payload before entry so overlay/cache activity cannot leave stale code
-// there.
+// occupies the resident window at $F000-$FFFA. The source bytes are not
+// staged inside the main PRG, so overlay loads cannot corrupt a recopy source.
 // ============================================================
+.segment RuntimeBankedCode
 banked_payload:
-.pseudopc $F000 {
 first_banked_function:
     #import "../common/ui_home.s"
+    #import "../common/item_desc_banked.s"
     #import "../common/player_magic_display.s"
     #import "../common/player_magic_state_ops.s"
     #import "../common/player_magic.s"
     #import "../common/player_magic_levelup.s"
     #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_tail.s"
-    #import "../common/projectile.s"
-    #import "../common/ranged_fire.s"
-    #import "../common/tunnel.s"
-    #import "../common/throw.s"
-    #import "../common/bash.s"
+    #import "../common/player_recalc_equipment.s"
+    #import "../common/player_item_commands.s"
 
 banked_code_end:
-}
 banked_payload_end:
+.segment Default
 
 .print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
-.assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
+.assert "Banked code fits below MMU register page", banked_code_end <= $FF00, true
 .assert "Banked payload starts above overlay window", first_banked_function >= $F000, true
-.assert "Banked payload staged source ends below overlay window", banked_payload_end <= $E000, true
+.assert "Banked payload is emitted as external runtime PRG", banked_payload == $F000, true
 
 // ============================================================
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
 .print "Program image: $" + toHexString($1c01) + "-$" + toHexString(program_end - 1)
 #if C128
-.assert "boot128 staged image reaches map region", program_end - 1 >= MAP_BASE, true
-.assert "boot128 staged image reaches Bank1 DB region", program_end - 1 >= BANK1_DB_BASE, true
+.assert "C128 main image stays below resident world payload", program_end <= c128_resident_world_start, true
+.assert "C128 resident world starts at $6000", c128_resident_world_start == $6000, true
+.assert "C128 resident world fits below items payload", c128_resident_world_end <= $8D00, true
+.assert "C128 resident items starts at $8D00", c128_resident_items_start == $8D00, true
+.assert "C128 resident items fits below selector payload", c128_resident_items_end <= $A800, true
+.assert "C128 resident selector starts at $A800", c128_resident_select_start == $A800, true
+.assert "C128 resident selector fits below disk-I/O payload", c128_resident_select_end <= $AB00, true
+.assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true
+.assert "C128 resident disk-I/O fits below modal payload window", c128_resident_diskio_end <= $AF00, true
+.assert "C128 Disk Setup lives in dedicated disk-I/O runtime", disk_marker_init >= c128_resident_diskio_start && disk_setup_run < c128_resident_diskio_end, true
+.assert "C128 modal persist starts at $AF00", c128_resident_persist_start == $AF00, true
+.assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
+.assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
+.assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
 .assert "Runtime common starts after MMU common helpers", runtime_common_data_start >= MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob), true
+.assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
+.assert "C128 disk marker logical file avoids runtime loader files", DISK_MARKER_FILE_NUM > RUNTIME_BANKED_FILE_NUM && DISK_MARKER_FILE_NUM < CMD_CHANNEL, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true
@@ -3360,6 +3684,10 @@ program_end:
 
 .macro C128AuditRuntimeInput(name, symbol) {
     .assert "AUDIT-IO-C128 " + name + " stays in runtime.input Bank 0 RAM", symbol >= runtime_input_data_start && symbol < runtime_input_data_end, true
+}
+
+.macro C128AuditRuntimeProjectile(name, symbol) {
+    .assert "AUDIT-IO-C128 " + name + " stays in runtime.projectile Bank 0 RAM", symbol >= runtime_projectile_data_start && symbol < runtime_projectile_data_end, true
 }
 
 .macro C128AuditStartupOverlay(name, symbol) {
@@ -3458,6 +3786,12 @@ ovl_help_end:
 .print "Help overlay: " + (ovl_help_end - $e000) + " bytes at $E000-$" + toHexString(ovl_help_end)
 .assert "Help overlay fits in $E000-$EFFF", ovl_help_end <= $f000, true
 
+// Title brand text is read by the UI-overlay title renderer, but it does not
+// need overlay ownership. Keeping it resident preserves UI overlay headroom for
+// scripted smoke instrumentation without changing displayed copy.
+title_str:
+    .text "MORIA8 C128" ; .byte 0
+
 // ============================================================
 // UI overlay — modal UI and symbol identify screens at $E000
 // ============================================================
@@ -3468,8 +3802,6 @@ ovl_help_end:
     #import "../common/spell_names.s"
     #import "../common/player_magic_select_overlay.s"
     #import "../common/player_gain_spell.s"
-title_str:
-    .text "MORIA8 C128" ; .byte 0
     #import "../common/title_screen.s"
 ovl_ui_end:
 .print "UI overlay: " + (ovl_ui_end - $e000) + " bytes at $E000-$" + toHexString(ovl_ui_end)
@@ -3483,7 +3815,12 @@ ovl_ui_end:
 .segment ItemActionsOverlay
     #define ITEM_ACTIONS_EARTHQUAKE_OWNER
     #define ITEM_ACTIONS_MAP_AREA_OWNER
+    #import "../common/store_restock_overlay.s"
     #import "../common/item_actions_overlay.s"
+    #import "../common/ranged_fire.s"
+    #import "../common/tunnel.s"
+    #import "../common/throw.s"
+    #import "../common/bash.s"
     #undef ITEM_ACTIONS_MAP_AREA_OWNER
     #undef ITEM_ACTIONS_EARTHQUAKE_OWNER
 ovl_items_end:

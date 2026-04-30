@@ -15,11 +15,11 @@
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
 #if C128
-.const SAVE_VERSION    = $0f
-.const OLDEST_SAVE_VERSION = $0d
+.const SAVE_VERSION    = $10
+.const OLDEST_SAVE_VERSION = SAVE_VERSION
 #else
-.const SAVE_VERSION    = $0e
-.const OLDEST_SAVE_VERSION = $0c
+.const SAVE_VERSION    = $0f
+.const OLDEST_SAVE_VERSION = SAVE_VERSION
 #endif
 .const SAVE_FLOOR42_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
@@ -295,6 +295,9 @@ save_return_fail:
     :save_block(inv_item_id, TOTAL_INV_SLOTS)
     :save_block(inv_qty, TOTAL_INV_SLOTS)
     :save_block(inv_p1, TOTAL_INV_SLOTS)
+    :save_block(inv_to_hit, TOTAL_INV_SLOTS)
+    :save_block(inv_to_dam, TOTAL_INV_SLOTS)
+    :save_block(inv_to_ac, TOTAL_INV_SLOTS)
     :save_block(inv_flags, TOTAL_INV_SLOTS)
     :save_block(inv_ego, TOTAL_INV_SLOTS)
 
@@ -308,12 +311,14 @@ save_return_fail:
     :save_block(wand_shuffle, 5)
     :save_block(staff_shuffle, 5)
 
-    // 8. Store inventory (5 × 96 = 480 bytes)
+    // 8. Store inventory
     :save_block(si_item_id, STORE_TOTAL_SLOTS)
     :save_block(si_qty, STORE_TOTAL_SLOTS)
     :save_block(si_p1, STORE_TOTAL_SLOTS)
-    :save_block(si_flags, STORE_TOTAL_SLOTS)
-    :save_block(si_ego, STORE_TOTAL_SLOTS)
+    :save_block(si_to_hit, STORE_TOTAL_SLOTS)
+    :save_block(si_to_dam, STORE_TOTAL_SLOTS)
+    :save_block(si_to_ac, STORE_TOTAL_SLOTS)
+    :save_block(si_meta, STORE_TOTAL_SLOTS)
 
     // 9. Stairs (6 bytes)
     :save_block(stairs_up_x, 6)
@@ -516,6 +521,9 @@ load_game:
     :load_block(inv_item_id, TOTAL_INV_SLOTS)
     :load_block(inv_qty, TOTAL_INV_SLOTS)
     :load_block(inv_p1, TOTAL_INV_SLOTS)
+    :load_block(inv_to_hit, TOTAL_INV_SLOTS)
+    :load_block(inv_to_dam, TOTAL_INV_SLOTS)
+    :load_block(inv_to_ac, TOTAL_INV_SLOTS)
     :load_block(inv_flags, TOTAL_INV_SLOTS)
     :load_block(inv_ego, TOTAL_INV_SLOTS)
 
@@ -533,8 +541,10 @@ load_game:
     :load_block(si_item_id, STORE_TOTAL_SLOTS)
     :load_block(si_qty, STORE_TOTAL_SLOTS)
     :load_block(si_p1, STORE_TOTAL_SLOTS)
-    :load_block(si_flags, STORE_TOTAL_SLOTS)
-    :load_block(si_ego, STORE_TOTAL_SLOTS)
+    :load_block(si_to_hit, STORE_TOTAL_SLOTS)
+    :load_block(si_to_dam, STORE_TOTAL_SLOTS)
+    :load_block(si_to_ac, STORE_TOTAL_SLOTS)
+    :load_block(si_meta, STORE_TOTAL_SLOTS)
 
     // 9. Stairs
     :load_block(stairs_up_x, 6)
@@ -576,10 +586,22 @@ load_game:
 #else
     :load_block(MAP_BASE, MAP_SIZE)
 #endif
+    lda save_io_error
+    beq !load_read_checksum+
+    jmp !load_corrupt_nocl+
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
+!load_read_checksum:
+    jsr SAVE_READST
+    beq !load_checksum_lo+
+    jmp !load_corrupt_nocl+
+!load_checksum_lo:
     jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
     sta zp_temp0
+    jsr SAVE_READST
+    beq !load_checksum_hi+
+    jmp !load_corrupt_nocl+
+!load_checksum_hi:
     jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
     sta zp_temp1
 
@@ -856,11 +878,16 @@ save_write_floor_items:
     ldx #0
 !swfi_ego:
     cpx #MAX_FLOOR_ITEMS
-    bcs !swfi_done+
+    bcs !swfi_to_hit_start+
     jsr floor_item_get_ego_x
     jsr save_write_byte
     inx
     jmp !swfi_ego-
+
+!swfi_to_hit_start:
+    :save_block(fi_to_hit, MAX_FLOOR_ITEMS)
+    :save_block(fi_to_dam, MAX_FLOOR_ITEMS)
+    :save_block(fi_to_ac, MAX_FLOOR_ITEMS)
 !swfi_done:
     rts
 
@@ -872,6 +899,8 @@ save_write_floor_items:
 // ============================================================
 load_read_block:
 !lrb_loop:
+    lda save_io_error
+    bne !lrb_done+
     // Check if count == 0
     lda save_count_lo
     ora save_count_hi
@@ -906,18 +935,31 @@ load_read_byte:
 #if C128
     txa
     pha
+    jsr SAVE_READST
+    beq !lrby_read+
+    inc save_io_error
+    pla
+    tax
+    lda #0
+    rts
+!lrby_read:
 #endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
-#if !C128
     jsr SAVE_READST
+#if C128
+    beq !lrby_status_ok+
+    inc save_io_error
+    jmp !lrby_status_done+
+#else
     and #$03
     beq !lrby_status_ok+
     inc save_io_error
+#endif
 !lrby_status_ok:
+!lrby_status_done:
     pla
     pha
-#endif
     // Accumulate checksum
     clc
     adc save_cksum_lo
@@ -1044,13 +1086,43 @@ load_read_floor_items:
     ldx #0
 !lrfi_ego:
     cpx load_floor_item_count
-    bcs !lrfi_done+
+    bcs !lrfi_stats+
     jsr load_read_byte
     and #FI_META_EGO_MASK
     ora fi_meta,x
     sta fi_meta,x
     inx
     jmp !lrfi_ego-
+!lrfi_stats:
+    lda #<fi_to_hit
+    sta zp_ptr0
+    lda #>fi_to_hit
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_to_dam
+    sta zp_ptr0
+    lda #>fi_to_dam
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
+
+    lda #<fi_to_ac
+    sta zp_ptr0
+    lda #>fi_to_ac
+    sta zp_ptr0_hi
+    lda load_floor_item_count
+    sta save_count_lo
+    lda #0
+    sta save_count_hi
+    jsr load_read_block
 !lrfi_done:
     rts
 
@@ -1108,8 +1180,6 @@ save_write_map_c128:
     ldy #0
     jsr mmu_safe_map_read_ptr0
     pha
-    lda #MMU_NORMAL
-    sta $ff00
     pla
     jsr save_write_byte
     inc zp_ptr0
@@ -1136,14 +1206,14 @@ load_read_map_c128:
     lda #>MAP_SIZE
     sta save_count_hi
 !lrm_loop:
+    lda save_io_error
+    bne !lrm_done+
     lda save_count_lo
     ora save_count_hi
     beq !lrm_done+
     jsr load_read_byte
     ldy #0
     jsr mmu_safe_map_write_ptr0
-    lda #MMU_NORMAL
-    sta $ff00
     inc zp_ptr0
     bne !lrm_no_hi+
     inc zp_ptr0_hi
@@ -1222,9 +1292,9 @@ save_file_exists:
 // ============================================================
 save_restore_channels:
 #if C128
-    // C128: avoid CHKIN/CHKOUT/CLRCHN vector paths entirely.
-    // Save/load code uses explicit channels and closes files directly.
-    rts
+    // Restore default channels through the resident C128 KERNAL wrapper before
+    // returning to runtime/program-file LOADs.
+    jmp w_clrchn
 #else
     jsr SAVE_CLRCHN
     rts

@@ -3,10 +3,10 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
-.pc = $E000 "Result Buffer"
+.pc = $0838 "Result Buffer"
 tc_results: .fill 3, $ff
 
-.pc = $080E "Bootstrap"
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
@@ -17,17 +17,18 @@ test_bootstrap:
 test_finish:
     sei
     :BankOutBasic()
-    :BankOutKernal()
     ldx #2
 !copy:
     lda tc_results,x
     sta $0400,x
     dex
     bpl !copy-
-    :BankInKernal()
     jmp test_done_break
 
-.pc = $0840 "Test Code"
+test_done_break:
+    brk
+
+.pc = $0840 "Main"
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -229,6 +230,9 @@ test_reset_turn_undead_prayer_state:
     lda #50
     sta zp_player_lvl
     sta player_data + PL_LEVEL
+    lda #1
+    sta zp_light_radius
+    sta player_data + PL_LIGHT_RAD
     lda #18
     sta player_data + PL_WIS_CUR
     lda #30
@@ -283,6 +287,9 @@ test_start:
     :MapWrite_ptr1_y()
     ldy #21
     lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED | FLAG_OCCUPIED
+    :MapWrite_ptr1_y()
+    ldy #25
+    lda #TILE_FLOOR | FLAG_VISITED | FLAG_OCCUPIED
     :MapWrite_ptr1_y()
     lda #1
     sta test_mon_table + (0 * MONSTER_ENTRY_SIZE) + MX_TYPE
@@ -466,6 +473,3 @@ test_start:
     lda #$00
     sta tc_results + 2
     jmp test_finish
-
-test_done_break:
-    brk

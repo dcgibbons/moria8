@@ -115,6 +115,9 @@ ol_check_disk:
 #endif
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
+#if !C128 && OVERLAY_LOAD_PROMPT_GAME
+    jsr disk_prompt_game
+#endif
 #if C128_CACHE_TEST_SKIP_OVERLAY
     lda ol_target
     cmp c128_cache_test_skip_overlay

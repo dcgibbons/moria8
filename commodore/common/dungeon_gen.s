@@ -1785,111 +1785,73 @@ verify_stairs:
     rts
 
 // ============================================================
-// verify_connectivity — BFS flood-fill to ensure all rooms reachable
-// Starts from stairs_up position, floods through passable tiles.
+// verify_connectivity — Flood-fill to ensure all rooms reachable
+// Starts from stairs_up position, propagates visited marks through passable
+// tiles. This deliberately uses repeated map scans instead of a queue so the
+// C64 can keep the visible generation screen in $0400-$07ff.
 // Checks that every room has at least one reachable interior tile.
 // Output: carry set = failed (unreachable room), carry clear = OK
-// Uses: platform-owned BFS queue scratch window from memory config.
 // ============================================================
 
 verify_connectivity:
     php                          // Save interrupt state — caller may already be in sei context
-    sei                          // Disable IRQ — cursor blink writes to $0400 (BFS queue)
     // --- Step 1: Clear FLAG_OCCUPIED on all map tiles ---
-    // We reuse bit 0 as "visited" marker for BFS
+    // We reuse bit 0 as the flood-fill visited marker.
     lda #~FLAG_OCCUPIED & $ff
     jsr map_bulk_and_all
 
-    // --- Step 2: BFS from stairs_up position ---
-    // Queue head/tail as 16-bit indices into the platform-owned BFS queue
-    lda #0
-    sta bfs_head_lo
-    sta bfs_head_hi
-    sta bfs_tail_lo
-    sta bfs_tail_hi
-
-    // Enqueue start position (stairs_up_x, stairs_up_y) and mark visited
-    lda stairs_up_x
-    sta bfs_cur_x
-    lda stairs_up_y
-    sta bfs_cur_y
-
     // Mark start tile as visited
+    ldx stairs_up_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy stairs_up_x
+    :MapRead_ptr0_y()
+    ora #FLAG_OCCUPIED
+    :MapWrite_ptr0_y()
+
+    // --- Step 2: Propagate visited marks until a full scan adds none. ---
+!vc_pass:
+    lda #0
+    sta vc_changed
+    sta bfs_cur_y
+!vc_row:
     ldx bfs_cur_y
     lda map_row_lo,x
     sta zp_ptr0
     lda map_row_hi,x
     sta zp_ptr0_hi
+    lda #0
+    sta bfs_cur_x
+!vc_col:
     ldy bfs_cur_x
     :MapRead_ptr0_y()
+    sta vc_tile
+    and #FLAG_OCCUPIED
+    bne !vc_next_col+
+    lda vc_tile
+    jsr vc_tile_is_passable
+    bcc !vc_next_col+
+    jsr vc_has_visited_neighbor
+    bcc !vc_next_col+
+    ldy bfs_cur_x
+    lda vc_tile
     ora #FLAG_OCCUPIED
     :MapWrite_ptr0_y()
-
-    jsr bfs_enqueue
-
-!bfs_loop:
-    // Check if queue empty: head == tail
-    lda bfs_head_lo
-    cmp bfs_tail_lo
-    bne !bfs_not_empty+
-    lda bfs_head_hi
-    cmp bfs_tail_hi
-    beq !bfs_done+
-!bfs_not_empty:
-
-    // Dequeue (x, y) from head
-    jsr bfs_dequeue
-
-    // Try 4 cardinal neighbors: N, S, W, E
-    // North (y-1)
-    lda bfs_cur_y
-    beq !bfs_skip_n+            // y=0, skip
-    sec
-    sbc #1
-    sta bfs_nb_y
+    inc vc_changed
+!vc_next_col:
+    inc bfs_cur_x
     lda bfs_cur_x
-    sta bfs_nb_x
-    jsr bfs_try_neighbor
-!bfs_skip_n:
-
-    // South (y+1)
+    cmp #MAP_COLS
+    bne !vc_col-
+    inc bfs_cur_y
     lda bfs_cur_y
-    cmp #MAP_ROWS - 1
-    bcs !bfs_skip_s+
-    clc
-    adc #1
-    sta bfs_nb_y
-    lda bfs_cur_x
-    sta bfs_nb_x
-    jsr bfs_try_neighbor
-!bfs_skip_s:
+    cmp #MAP_ROWS
+    bne !vc_row-
+    lda vc_changed
+    bne !vc_pass-
 
-    // West (x-1)
-    lda bfs_cur_x
-    beq !bfs_skip_w+
-    sec
-    sbc #1
-    sta bfs_nb_x
-    lda bfs_cur_y
-    sta bfs_nb_y
-    jsr bfs_try_neighbor
-!bfs_skip_w:
-
-    // East (x+1)
-    lda bfs_cur_x
-    cmp #MAP_COLS - 1
-    bcs !bfs_skip_e+
-    clc
-    adc #1
-    sta bfs_nb_x
-    lda bfs_cur_y
-    sta bfs_nb_y
-    jsr bfs_try_neighbor
-!bfs_skip_e:
-
-    jmp !bfs_loop-
-
-!bfs_done:
     // --- Step 3: Check each room has a reachable floor tile ---
     ldx #0
 !vc_check_room:
@@ -1929,6 +1891,84 @@ verify_connectivity:
 vc_cleanup:
     lda #~FLAG_OCCUPIED & $ff
     jmp map_bulk_and_all
+
+// vc_tile_is_passable — Carry set if A is a tile flood-fill may traverse.
+vc_tile_is_passable:
+    and #TILE_TYPE_MASK
+    cmp #TILE_FLOOR
+    beq !passable+
+    cmp #TILE_DOOR_OPEN
+    beq !passable+
+    cmp #TILE_DOOR_CLOSED
+    beq !passable+
+    cmp #TILE_STAIRS_DN
+    beq !passable+
+    cmp #TILE_STAIRS_UP
+    beq !passable+
+    cmp #TILE_RUBBLE
+    beq !passable+
+    cmp #TILE_TRAP
+    beq !passable+
+    cmp #TILE_SECRET
+    beq !passable+
+    clc
+    rts
+!passable:
+    sec
+    rts
+
+// vc_has_visited_neighbor — Carry set if the current cell has a cardinal
+// neighbor already marked with FLAG_OCCUPIED.
+vc_has_visited_neighbor:
+    lda bfs_cur_x
+    beq !check_east+
+    tay
+    dey
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !found+
+!check_east:
+    lda bfs_cur_x
+    cmp #MAP_COLS - 1
+    bcs !check_north+
+    tay
+    iny
+    lda (zp_ptr0),y
+    and #FLAG_OCCUPIED
+    bne !found+
+!check_north:
+    lda bfs_cur_y
+    beq !check_south+
+    tax
+    dex
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy bfs_cur_x
+    lda (zp_ptr1),y
+    and #FLAG_OCCUPIED
+    bne !found+
+!check_south:
+    lda bfs_cur_y
+    cmp #MAP_ROWS - 1
+    bcs !not_found+
+    tax
+    inx
+    lda map_row_lo,x
+    sta zp_ptr1
+    lda map_row_hi,x
+    sta zp_ptr1_hi
+    ldy bfs_cur_x
+    lda (zp_ptr1),y
+    and #FLAG_OCCUPIED
+    bne !found+
+!not_found:
+    clc
+    rts
+!found:
+    sec
+    rts
 
 // bfs_try_neighbor — Check neighbor tile, enqueue if passable and unvisited
 // Input: bfs_nb_x, bfs_nb_y = neighbor coordinates
@@ -2070,6 +2110,8 @@ bfs_cur_x:   .byte 0
 bfs_cur_y:   .byte 0
 bfs_nb_x:    .byte 0
 bfs_nb_y:    .byte 0
+vc_changed:  .byte 0
+vc_tile:     .byte 0
 
 // ============================================================
 // position_player_dungeon — Place player at appropriate stairs

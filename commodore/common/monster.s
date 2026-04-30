@@ -1151,6 +1151,15 @@ creature_get_name:
     bcs !+
     jmp !cgn_setup_normal+      // Normal RAM pointer — use directly
 !:  // Stale $E0xx pointer: tier was previously loaded but current_tier was reset.
+#if !C128
+    // If an overlay is currently executing from $E000, reloading tier names
+    // would overwrite the running overlay before the caller returns. Use a
+    // generic monster name for overlay-local combat messages instead.
+    lda current_overlay
+    beq !cgn_reload_allowed+
+    jmp !cgn_overlay_name+
+!cgn_reload_allowed:
+#endif
     // Reload the smallest tier that covers creature index X (e.g. recall in town).
     stx cgn_saved_x
     lda #1
@@ -1259,9 +1268,19 @@ creature_get_name:
     ldy #>creature_name_buf
     rts
 
+#if !C128
+!cgn_overlay_name:
+    lda #<cgn_monster_str
+    ldy #>cgn_monster_str
+    rts
+#endif
+
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 creature_name_buf: .fill 32, 0
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper
 cgn_saved_p01: .byte 0         // saved $01 for linear copy restore (stack-free)
+#if !C128
+cgn_monster_str: .text "monster" ; .byte 0
+#endif

@@ -316,14 +316,26 @@ item_drop:
 item_wear:
     rts
 
+tramp_item_wear:
+    jmp item_wear
+
 item_takeoff:
     rts
+
+tramp_item_takeoff:
+    jmp item_takeoff
 
 item_eat:
     rts
 
+tramp_item_eat:
+    jmp item_eat
+
 item_quaff:
     rts
+
+tramp_item_quaff:
+    jmp item_quaff
 
 item_read_scroll:
     rts
@@ -623,6 +635,7 @@ recall_kills: .fill MAX_CREATURES, 0
 recall_deaths: .fill MAX_CREATURES, 0
 recall_attacks: .fill MAX_CREATURES, 0
 recall_spells: .fill MAX_CREATURES, 0
+.label c128_kernal_irq_tail_runtime_owned = $03fd
 
 #import "../../common/zeropage.s"
 #import "../memory128.s"

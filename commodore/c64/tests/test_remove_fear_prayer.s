@@ -3,10 +3,7 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
-.pc = $E000 "Result Buffer"
-tc_results: .fill 3, $ff
-
-.pc = $080E "Bootstrap"
+.pc = $080E "Test Code"
 
 .encoding "screencode_mixed"
 
@@ -15,19 +12,18 @@ test_bootstrap:
     jmp test_start
 
 test_finish:
-    sei
-    :BankOutBasic()
-    :BankOutKernal()
     ldx #2
 !copy:
     lda tc_results,x
     sta $0400,x
     dex
     bpl !copy-
-    :BankInKernal()
-    jmp test_done_break
+test_done_break:
+    brk
 
-.pc = $0840 "Test Code"
+.pc = $0840 "Main"
+
+.const PIW_FILTER_MAGE_BOOK = $fc
 
 #import "../../common/zeropage.s"
 #import "../memory.s"
@@ -66,7 +62,6 @@ test_finish:
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
-#import "../../common/player_items.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/spell_data.s"
@@ -80,6 +75,8 @@ test_finish:
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #import "../../common/ui_trampoline_stubs.s"
+
+piw_filter: .byte 0
 
 store_init_all:
     rts
@@ -99,9 +96,17 @@ ui_inv_select_display:
 ui_equip_display:
     rts
 
+show_inv_and_select:
+piw_prompt_filtered_inv:
+piw_pick_filtered_inv_key:
+piw_print_prompt_with_count:
+player_recalc_equipment:
+    rts
+
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+tc_results: .fill 3, $ff
 trfp_spell_exec_calls: .byte 0
 trfp_huff_calls: .byte 0
 trfp_last_huff_id: .byte 0
@@ -320,6 +325,3 @@ test_start:
     lda #$00
     sta tc_results + 2
     jmp test_finish
-
-test_done_break:
-    brk

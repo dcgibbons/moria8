@@ -625,8 +625,17 @@ pid_item_enchanted:
     beq !pid_no+               // Brass lantern fuel is not pseudo-ID-worthy
     lda inv_ego,x
     bne !pid_yes+
+    lda inv_to_hit,x
+    bne !pid_check_positive_stat+
+    lda inv_to_dam,x
+    bne !pid_check_positive_stat+
+    lda inv_to_ac,x
+    bne !pid_check_positive_stat+
     lda inv_p1,x
     beq !pid_no+
+    bmi !pid_no+
+    bpl !pid_yes+
+!pid_check_positive_stat:
     bmi !pid_no+
 !pid_yes:
     sec

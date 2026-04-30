@@ -27,6 +27,9 @@
 // Only need enough entries to cover equipment slot indices (22-29).
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
+inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
+inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
+inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
 it_base_ac:  .fill 62, 0
 
 test_start:

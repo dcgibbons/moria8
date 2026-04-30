@@ -82,6 +82,10 @@ piw_filter: .byte 0
 id_known: .fill 64, 0
 inv_item_id: .fill 30, 0
 inv_flags: .fill 30, 0
+inv_to_hit: .fill 30, 0
+inv_to_dam: .fill 30, 0
+inv_to_ac: .fill 30, 0
+inv_ego: .fill 30, 0
 it_name_lo: .fill 64, 0
 it_name_hi: .fill 64, 0
 cmb_period:
@@ -92,6 +96,9 @@ trap_y: .fill 16, 0
 trap_type: .fill 16, 0
 cr_mflags: .fill 65, 0
 cr_level: .fill 65, 0
+
+.const EGO_FLAME_TONGUE = 4
+.const EGO_DEFENDER = 6
 
 test_huff_calls: .byte 0
 test_last_huff: .byte 0
@@ -265,11 +272,21 @@ test_reset_remove_curse_state:
 test_seed_equipped_and_carried_curses:
     lda #2
     sta inv_item_id + EQUIP_WEAPON
+    lda #$fe
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #6
+    sta inv_to_dam + EQUIP_WEAPON
+    lda #EGO_FLAME_TONGUE
+    sta inv_ego + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
     lda #7
     sta inv_item_id
+    lda #4
+    sta inv_to_ac
+    lda #EGO_DEFENDER
+    sta inv_ego
     lda #IF_CURSED
     sta inv_flags
     rts
@@ -325,9 +342,24 @@ test_start:
     lda inv_flags + EQUIP_WEAPON
     and #IF_CURSED
     bne !t1_fail+
+    lda inv_to_hit + EQUIP_WEAPON
+    cmp #$fe
+    bne !t1_fail+
+    lda inv_to_dam + EQUIP_WEAPON
+    cmp #6
+    bne !t1_fail+
+    lda inv_ego + EQUIP_WEAPON
+    cmp #EGO_FLAME_TONGUE
+    bne !t1_fail+
     lda inv_flags
     and #IF_CURSED
     beq !t1_fail+
+    lda inv_to_ac
+    cmp #4
+    bne !t1_fail+
+    lda inv_ego
+    cmp #EGO_DEFENDER
+    bne !t1_fail+
     lda test_huff_calls
     cmp #1
     bne !t1_fail+

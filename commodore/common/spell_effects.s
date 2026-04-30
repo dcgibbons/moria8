@@ -164,6 +164,7 @@ eff_teleport_apply_target:
 !ets_fail:
     rts
 
+#if !C128 || SPELL_EFFECTS_INCLUDE_IDENTIFY
 // ============================================================
 // eff_identify_prompt — Interactive item identification
 // Input: none (prompts user for slot)
@@ -219,10 +220,21 @@ eff_identify_prompt:
     jsr huff_append_combat
 
     pla
-    tax
-    lda it_name_lo,x
-    ldy it_name_hi,x
-    jsr combat_append_str
+    ldx eff_target_slot
+    lda inv_p1,x
+    sta fi_add_p1
+    lda inv_to_hit,x
+    sta fi_add_to_hit
+    lda inv_to_dam,x
+    sta fi_add_to_dam
+    lda inv_to_ac,x
+    sta fi_add_to_ac
+    lda inv_flags,x
+    sta fi_add_flags
+    lda inv_ego,x
+    sta fi_add_ego
+    lda inv_item_id,x
+    jsr item_append_name
 
     lda #<cmb_period
     ldy #>cmb_period
@@ -238,6 +250,23 @@ eff_identify_prompt:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     rts
+
+// Resident scroll-identify completion path. item_read_scroll dispatches here
+// with a tail jump so nested inventory/help overlays do not have to return to
+// item-overlay code after eff_identify_prompt finishes.
+eff_identify_scroll_resident:
+    jsr eff_identify_prompt
+    sec
+    rts
+#else
+eff_identify_prompt:
+    clc
+    rts
+
+eff_identify_scroll_resident:
+    sec
+    rts
+#endif
 
 // ============================================================
 // eff_cure_poison — Clear poison status

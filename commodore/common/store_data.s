@@ -19,14 +19,31 @@
 .const STORE_BM   = 6          // Black Market store index
 .const STORE_HOME = 7          // Player Home store index
 
+// Store category bitmasks (16-bit, bit N = ICAT N)
+// Store 0 General: FOOD(9), LIGHT(8)
+// Store 1 Armory: ARMOR(3), SHIELD(4), HELM(5), GLOVES(6), BOOTS(7)
+// Store 2 Weapon: WEAPON(2)
+// Store 3 Temple: SCROLL(11), POTION(10)
+// Store 4 Alchemy: POTION(10)
+// Store 5 Magic: WAND(14), STAFF(15), RING(12)
+store_cat_mask_lo:
+    .byte <$0301, <$00F8, <$0004, <$0C00, <$0400, <$F000, <$FFFF, <$FFFF
+store_cat_mask_hi:
+    .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000, >$FFFF, >$FFFF
+
+bit_mask_table:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
+
 // ============================================================
 // Store inventory arrays (Struct-of-Arrays, 288 bytes)
 // ============================================================
 si_item_id:     .fill STORE_TOTAL_SLOTS, $FF   // $FF = empty
 si_qty:         .fill STORE_TOTAL_SLOTS, 0
 si_p1:          .fill STORE_TOTAL_SLOTS, 0
-si_flags:       .fill STORE_TOTAL_SLOTS, 0
-si_ego:         .fill STORE_TOTAL_SLOTS, 0
+si_to_hit:      .fill STORE_TOTAL_SLOTS, 0
+si_to_dam:      .fill STORE_TOTAL_SLOTS, 0
+si_to_ac:       .fill STORE_TOTAL_SLOTS, 0
+si_meta:        .fill STORE_TOTAL_SLOTS, 0   // bits 0-3 flags, bits 4-6 ego
 
 // Base index into SoA arrays for each store (store * 12)
 store_base_idx:
@@ -90,5 +107,36 @@ check_player_on_store_door:
 !cpsd_next:
     dex
     bpl !cpsd_loop-
+    clc
+    rts
+
+// check_store_category — Test if item category matches store
+// Input: A = ICAT value (0-15), zp_store_idx = store index
+// Output: carry set = category sold here, carry clear = not
+// Clobbers: A, X
+check_store_category:
+    cmp #8
+    bcs !csc_hi+
+
+    tax
+    lda bit_mask_table,x
+    ldx zp_store_idx
+    and store_cat_mask_lo,x
+    beq !csc_no+
+    sec
+    rts
+
+!csc_hi:
+    sec
+    sbc #8
+    tax
+    lda bit_mask_table,x
+    ldx zp_store_idx
+    and store_cat_mask_hi,x
+    beq !csc_no+
+    sec
+    rts
+
+!csc_no:
     clc
     rts

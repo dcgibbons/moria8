@@ -3,7 +3,7 @@
 // Tests: floor items, inventory, pickup, drop (prompted), equip, remove, eat,
 //        player_recalc_equipment, combat weapon damage.
 //
-// Results at $0400-$0432: $01 = pass, $00 = fail per test
+// Results at $0400-$042e: $01 = pass, $00 = fail per test
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -17,7 +17,7 @@ test_bootstrap:
 test_exit_trampoline:
     sei                         // Disable IRQs during copy
     :BankOutBasic()             // Ensure BASIC ROM off (tc_results in $A000+)
-    ldx #44-1
+    ldx #47-1
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -82,6 +82,7 @@ test_exit_trampoline:
 #import "../../common/combat.s"
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
+#define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../common/ui_trampoline_stubs.s"
 
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap
@@ -97,7 +98,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 44, $ff
+tc_results: .fill 47, $ff
 tc_loop_ctr: .byte 0          // Loop counter (safe from ZP clobber)
 tc_valid_ctr: .byte 0         // Valid item counter for test 22
 t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
@@ -113,7 +114,7 @@ t16_base_ac: .byte 0          // Stable scratch for Test 16 across item_wear
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #44-1
+    ldx #47-1
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1621,13 +1622,14 @@ test_start:
     lda #0
     sta zp_msg_flags
 
-    // Equip a dagger (type 2) with p1=2 in weapon slot
+    // Equip a dagger (type 2) with +2 combat stats in weapon slot
     lda #2
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #2
-    sta inv_p1 + EQUIP_WEAPON
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
@@ -1649,8 +1651,11 @@ test_start:
 
     jsr item_read_scroll
 
-    // p1 at EQUIP_WEAPON should be 3
-    lda inv_p1 + EQUIP_WEAPON
+    // Weapon combat stats should be 3
+    lda inv_to_hit + EQUIP_WEAPON
+    cmp #3
+    bne !t35_fail+
+    lda inv_to_dam + EQUIP_WEAPON
     cmp #3
     bne !t35_fail+
 
@@ -1776,7 +1781,7 @@ test_start:
     sta tc_results + 37
 
     // ==========================================
-    // Test 39: Enchant Weapon on cursed item clears curse, sets p1=0
+    // Test 39: Enchant Weapon on cursed item clears curse and stat penalties
     // ==========================================
 !t39:
     jsr item_init_inventory
@@ -1785,13 +1790,14 @@ test_start:
     sta zp_msg_flags
     sta zp_eff_blind                 // Clear blindness from test 37
 
-    // Equip a cursed long sword (type 4) with p1=$FD (-3)
+    // Equip a cursed long sword (type 4) with combat stats=$FD (-3)
     lda #4
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #$fd                        // -3 enchantment
-    sta inv_p1 + EQUIP_WEAPON
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
@@ -1813,8 +1819,10 @@ test_start:
 
     jsr item_read_scroll
 
-    // p1 at EQUIP_WEAPON should be 0 (curse removed, reset)
-    lda inv_p1 + EQUIP_WEAPON
+    // Combat stats at EQUIP_WEAPON should be 0 (curse removed, reset)
+    lda inv_to_hit + EQUIP_WEAPON
+    bne !t39_fail+
+    lda inv_to_dam + EQUIP_WEAPON
     bne !t39_fail+
 
     // IF_CURSED should be cleared
@@ -1839,13 +1847,14 @@ test_start:
     sta zp_msg_flags
     sta zp_eff_blind                 // Ensure blindness is clear
 
-    // Equip dagger (type 2) with p1=5 (at cap)
+    // Equip dagger (type 2) with combat stats at cap
     lda #2
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
     lda #5
-    sta inv_p1 + EQUIP_WEAPON
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
     lda #0
     sta inv_flags + EQUIP_WEAPON
 
@@ -1867,8 +1876,11 @@ test_start:
 
     jsr item_read_scroll
 
-    // p1 should still be 5 (not 6)
-    lda inv_p1 + EQUIP_WEAPON
+    // Combat stats should still be 5 (not 6)
+    lda inv_to_hit + EQUIP_WEAPON
+    cmp #5
+    bne !t40_fail+
+    lda inv_to_dam + EQUIP_WEAPON
     cmp #5
     bne !t40_fail+
 
@@ -1889,13 +1901,13 @@ test_start:
     sta zp_msg_flags
     sta zp_eff_blind
 
-    // Equip cursed leather armor (type 7) at EQUIP_BODY with p1=$FD (-3)
+    // Equip cursed leather armor (type 7) at EQUIP_BODY with AC=$FD (-3)
     lda #7
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
     lda #$fd                        // -3 enchantment
-    sta inv_p1 + EQUIP_BODY
+    sta inv_to_ac + EQUIP_BODY
     lda #IF_CURSED
     sta inv_flags + EQUIP_BODY
 
@@ -1917,8 +1929,8 @@ test_start:
 
     jsr item_read_scroll
 
-    // p1 at EQUIP_BODY should be 0 (curse removed, reset)
-    lda inv_p1 + EQUIP_BODY
+    // AC at EQUIP_BODY should be 0 (curse removed, reset)
+    lda inv_to_ac + EQUIP_BODY
     bne !t41_fail+
 
     // IF_CURSED should be cleared
@@ -1943,13 +1955,13 @@ test_start:
     sta zp_msg_flags
     sta zp_eff_blind
 
-    // Equip leather armor (type 7) at EQUIP_BODY with p1=5 (at cap)
+    // Equip leather armor (type 7) at EQUIP_BODY with AC at cap
     lda #7
     sta inv_item_id + EQUIP_BODY
     lda #1
     sta inv_qty + EQUIP_BODY
     lda #5
-    sta inv_p1 + EQUIP_BODY
+    sta inv_to_ac + EQUIP_BODY
     lda #0
     sta inv_flags + EQUIP_BODY
 
@@ -1971,8 +1983,8 @@ test_start:
 
     jsr item_read_scroll
 
-    // p1 should still be 5 (not 6)
-    lda inv_p1 + EQUIP_BODY
+    // AC should still be 5 (not 6)
+    lda inv_to_ac + EQUIP_BODY
     cmp #5
     bne !t42_fail+
 
@@ -1984,9 +1996,62 @@ test_start:
     sta tc_results + 41
 
     // ==========================================
-    // Test 43: pick_item_type depth curve produces high-level items
+    // Test 43: Enchant Armor targets shield when body slot is empty
     // ==========================================
 !t43:
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+    sta zp_eff_blind
+
+    // Equip small leather shield (type 9) with room to enchant
+    lda #9
+    sta inv_item_id + EQUIP_SHIELD
+    lda #1
+    sta inv_qty + EQUIP_SHIELD
+    lda #2
+    sta inv_to_ac + EQUIP_SHIELD
+    lda #0
+    sta inv_flags + EQUIP_SHIELD
+
+    // Put Enchant Armor scroll (type 35) in inv slot 0
+    lda #35
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_flags
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_read_scroll
+
+    // Shield AC should increment; body slot should remain empty.
+    lda inv_to_ac + EQUIP_SHIELD
+    cmp #3
+    bne !t43_fail+
+    lda inv_item_id + EQUIP_BODY
+    cmp #FI_EMPTY
+    bne !t43_fail+
+
+    lda #$01
+    sta tc_results + 42
+    jmp !t44+
+!t43_fail:
+    lda #$00
+    sta tc_results + 42
+
+    // ==========================================
+    // Test 44: pick_item_type depth curve produces high-level items
+    // ==========================================
+!t44:
     lda #8
     sta zp_player_dlvl
 
@@ -1994,33 +2059,33 @@ test_start:
     sta tc_valid_ctr            // Count items with min_level >= 3
     lda #60
     sta tc_loop_ctr
-!t43_loop:
+!t44_loop:
     jsr pick_item_type
     tax
     lda it_min_level,x
     cmp #3
-    bcc !t43_under+
+    bcc !t44_under+
     inc tc_valid_ctr
-!t43_under:
+!t44_under:
     dec tc_loop_ctr
-    bne !t43_loop-
+    bne !t44_loop-
 
     // At least 15 of 60 should have min_level >= 3
     // (depth curve biases toward higher-level items)
     lda tc_valid_ctr
     cmp #15
-    bcs !t43_pass+
+    bcs !t44_pass+
     lda #$00
-    sta tc_results + 42
+    sta tc_results + 43
     jmp !tests_done+
-!t43_pass:
+!t44_pass:
     lda #$01
-    sta tc_results + 42
+    sta tc_results + 43
 
     // ==========================================
-    // Test 44: item_spawn_level skips placement when no floor exists
+    // Test 45: item_spawn_level skips placement when no floor exists
     // ==========================================
-!t44:
+!t45:
     jsr item_init_floor
     jsr fill_map_rock
 
@@ -2033,12 +2098,12 @@ test_start:
     jsr item_spawn_level
 
     lda zp_item_count
-    beq !t44_check_flag+
+    beq !t45_check_flag+
     lda #$00
-    sta tc_results + 43
-    jmp !tests_done+
+    sta tc_results + 44
+    jmp !t46+
 
-!t44_check_flag:
+!t45_check_flag:
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
@@ -2047,15 +2112,170 @@ test_start:
     ldy #20
     lda (zp_ptr0),y
     and #FLAG_HAS_ITEM
-    beq !t44_pass+
+    beq !t45_pass+
     lda #$00
-    sta tc_results + 43
-    jmp !tests_done+
+    sta tc_results + 44
+    jmp !t46+
 
-!t44_pass:
+!t45_pass:
     lda #$01
-    sta tc_results + 43
+    sta tc_results + 44
+    jmp !t46+
+
+    // ==========================================
+    // Test 46: pickup preserves split combat stats and metadata
+    // ==========================================
+!t46:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Place floor tile and player at (20, 12)
+    ldx #12
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #20
+    sta zp_player_x
+    lda #12
+    sta zp_player_y
+
+    lda #20
+    sta fi_add_x
+    lda #12
+    sta fi_add_y
+    lda #2                          // Dagger
+    sta fi_add_id
+    lda #1
+    sta fi_add_qty
+    lda #0
+    sta fi_add_p1
+    sta fi_add_to_ac
+    lda #2
+    sta fi_add_to_hit
+    lda #3
+    sta fi_add_to_dam
+    lda #IF_IDENTIFIED
+    sta fi_add_flags
+    lda #4
+    sta fi_add_ego
+    jsr floor_item_add
+
+    lda #1
+    sta $c6
+    lda #$20
+    sta $0277
+
+    jsr item_pickup
+    bcc !t46_fail+
+
+    lda inv_item_id
+    cmp #2
+    bne !t46_fail+
+    lda inv_to_hit
+    cmp #2
+    bne !t46_fail+
+    lda inv_to_dam
+    cmp #3
+    bne !t46_fail+
+    lda inv_flags
+    and #IF_IDENTIFIED
+    beq !t46_fail+
+    lda inv_ego
+    cmp #4
+    bne !t46_fail+
+
+    lda #$01
+    sta tc_results + 45
+    jmp !t47+
+!t46_fail:
+    lda #$00
+    sta tc_results + 45
+
+    // ==========================================
+    // Test 47: drop preserves split combat stats and metadata
+    // ==========================================
+!t47:
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    lda #0
+    sta zp_msg_flags
+
+    // Place floor tile and player at (10, 10)
+    ldx #10
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #10
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #10
+    sta zp_player_x
+    sta zp_player_y
+
+    lda #2                          // Dagger
+    sta inv_item_id
+    lda #1
+    sta inv_qty
+    lda #0
+    sta inv_p1
+    sta inv_to_ac
+    lda #4
+    sta inv_to_hit
+    lda #5
+    sta inv_to_dam
+    lda #IF_IDENTIFIED
+    sta inv_flags
+    lda #2
+    sta inv_ego
+
+    lda #2
+    sta $c6
+    lda #$41
+    sta $0277
+    lda #$20
+    sta $0278
+
+    jsr item_drop
+    bcc !t47_fail+
+
+    lda #10
+    ldy #10
+    jsr floor_item_find_at
+    bcc !t47_fail+
+
+    lda fi_item_id,x
+    cmp #2
+    bne !t47_fail+
+    lda fi_to_hit,x
+    cmp #4
+    bne !t47_fail+
+    lda fi_to_dam,x
+    cmp #5
+    bne !t47_fail+
+    jsr floor_item_get_flags_x
+    and #IF_IDENTIFIED
+    beq !t47_fail+
+    jsr floor_item_get_ego_x
+    cmp #2
+    bne !t47_fail+
+
+    lda #$01
+    sta tc_results + 46
     jmp !tests_done+
+!t47_fail:
+    lda #$00
+    sta tc_results + 46
 
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK

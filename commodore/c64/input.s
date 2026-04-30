@@ -189,11 +189,14 @@ input_get_key:
     stx c64_test_input_idx
     rts
 #else
+    php                     // Save processor flags (preserves I flag)
     lda $01
     pha
-    php                     // Save processor flags (preserves I flag)
     lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
     sta $01
+#if C64_PRODUCT_IRQ_VECTOR_RUNTIME
+    jsr c64_install_ram_irq_vectors
+#endif
     jsr input_lock_charset_switch
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
@@ -202,9 +205,13 @@ input_get_key:
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
     sta igk_key
-    plp                     // Restore original I flag (SEI if was SEI)
+    sei
     pla
     sta $01                 // Restore original banking state
+#if C64_PRODUCT_IRQ_VECTOR_RUNTIME
+    jsr c64_install_ram_irq_vectors
+#endif
+    plp                     // Restore original I flag (SEI if was SEI)
     lda igk_key
     rts
 #endif
@@ -234,11 +241,14 @@ input_wait_release:
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     rts
 #else
+    php                     // Save processor flags (preserves I flag)
     lda $01
     pha
-    php                     // Save processor flags (preserves I flag)
     lda #BANK_NO_BASIC      // $36 — KERNAL + I/O, no BASIC ROM
     sta $01
+#if C64_PRODUCT_IRQ_VECTOR_RUNTIME
+    jsr c64_install_ram_irq_vectors
+#endif
     jsr input_lock_charset_switch
     cli                     // Keep KERNAL keyboard IRQ scanning active
 
@@ -260,9 +270,13 @@ input_wait_release:
     lda KBDBUF_COUNT
     bne !iwr_drain-
 
-    plp                     // Restore original I flag
+    sei
     pla
     sta $01                 // Restore original banking state
+#if C64_PRODUCT_IRQ_VECTOR_RUNTIME
+    jsr c64_install_ram_irq_vectors
+#endif
+    plp                     // Restore original I flag
     rts
 #endif
 #endif

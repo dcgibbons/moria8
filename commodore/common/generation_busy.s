@@ -25,6 +25,7 @@ generation_busy_begin:
     jsr screen_blank
     lda #COL_WHITE
     sta zp_text_color
+    jsr screen_clear
     jsr ui_clear_full_screen_safe
     jsr generation_busy_draw_frame
     jsr screen_unblank

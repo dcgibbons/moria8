@@ -73,6 +73,7 @@ test_finish:
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/spell_data.s"
+#import "../../common/spell_names.s"
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"
@@ -84,6 +85,7 @@ test_finish:
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #import "../../common/item_actions_overlay.s"
+#define C64_TEST_NO_SPELL_NAME_STUBS
 #import "../../common/ui_trampoline_stubs.s"
 
 store_init_all:

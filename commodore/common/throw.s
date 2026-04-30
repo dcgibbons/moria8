@@ -18,6 +18,9 @@ tw_item_id:    .byte 0     // Item type ID
 tw_last_x:     .byte 0     // Last walkable position X (for floor drop)
 tw_last_y:     .byte 0     // Last walkable position Y
 tw_save_p1:    .byte 0     // Saved p1 before consumption
+tw_save_to_hit: .byte 0    // Saved split stats before consumption
+tw_save_to_dam: .byte 0
+tw_save_to_ac:  .byte 0
 tw_save_flags: .byte 0     // Saved flags before consumption
 tw_save_ego:   .byte 0     // Saved ego before consumption
 
@@ -68,6 +71,18 @@ throw_item:
     stx tw_slot
     lda inv_item_id,x
     sta tw_item_id
+    lda inv_p1,x
+    sta tw_save_p1
+    lda inv_to_hit,x
+    sta tw_save_to_hit
+    lda inv_to_dam,x
+    sta tw_save_to_dam
+    lda inv_to_ac,x
+    sta tw_save_to_ac
+    lda inv_flags,x
+    sta tw_save_flags
+    lda inv_ego,x
+    sta tw_save_ego
 
     // 2. Get direction
     jsr get_direction_target
@@ -263,19 +278,17 @@ tw_miss_darkness:
     jsr cmb_term_and_print
 
 tw_consume_item:
-    // Save item properties before consumption (inv_remove_item clears them)
+    // Item properties were saved at selection time; inv_remove_item clears them.
     ldx tw_slot
-    lda inv_p1,x
-    sta tw_save_p1
-    lda inv_flags,x
-    sta tw_save_flags
-    lda inv_ego,x
-    sta tw_save_ego
 
-    // Consume 1 from inventory
+    // Consume 1 from inventory. Zero-quantity singleton records can exist
+    // after older saves or bugs; remove them instead of underflowing to $ff.
+    lda inv_qty,x
+    cmp #2
+    bcc !tw_remove_slot+
     dec inv_qty,x
-    bne !tw_qty_ok+
-    // Qty reached 0 — clear slot
+    jmp !tw_qty_ok+
+!tw_remove_slot:
     jsr inv_remove_item
 !tw_qty_ok:
 
@@ -294,12 +307,7 @@ tw_consume_item:
     sta fi_add_id
     lda #1
     sta fi_add_qty
-    lda tw_save_p1
-    sta fi_add_p1
-    lda tw_save_flags
-    sta fi_add_flags
-    lda tw_save_ego
-    sta fi_add_ego
+    jsr tw_stage_saved_item_fields
     jsr floor_item_add
     bcc !tw_done+                  // Ignore failure (table full)
     inc turn_action_redraw_pending
@@ -345,8 +353,22 @@ tw_msg_item_prefix:
     lda #<(cmb_the_str + 1)         // Skip leading space: "THE " not " THE "
     ldy #>(cmb_the_str + 1)
     jsr combat_append_str
-    lda #0
-    sta fi_add_ego                  // Don't append ego suffix for thrown item name
+    jsr tw_stage_saved_item_fields
     lda tw_item_id
-    jsr item_append_name
+    jsr item_append_desc
+    rts
+
+tw_stage_saved_item_fields:
+    lda tw_save_p1
+    sta fi_add_p1
+    lda tw_save_to_hit
+    sta fi_add_to_hit
+    lda tw_save_to_dam
+    sta fi_add_to_dam
+    lda tw_save_to_ac
+    sta fi_add_to_ac
+    lda tw_save_flags
+    sta fi_add_flags
+    lda tw_save_ego
+    sta fi_add_ego
     rts

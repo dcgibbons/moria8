@@ -37,6 +37,28 @@ banked payload window. Persistent overlay metadata/state must live in resident
 Bank 0 RAM, not adjacent to overlay code. No startup-overlay routine may trigger
 `init_copy_banked` while startup overlay execution is active.
 
+**C128 Bank 0 resident ownership:** The product C128 runtime uses explicit
+runtime-loaded PRGs below the I/O hole. The current ownership map is:
+
+| Region | Range | Owner |
+|---|---:|---|
+| Default | `$1C01-$5FFF` | Boot, loaders, trampolines, KERNAL/MMU wrappers, cache state |
+| `128.world` | `$6000-$8CFF` | Dungeon/world data, monsters, tier/overlay substrate, spell/effect substrate |
+| `128.item` | `$8D00-$A7FF` | Item and store data/logic |
+| `128.select` | `$A800-$AAFF` | Inventory/equipment selector substrate (`show_inv_and_select`, `piw_*`) |
+| `128.diskio` | `$AB00-$AEFF` | Disk Setup, save-disk marker init/readback, live disk diagnostics |
+| Modal slot | `$AF00-$CFFF` | `128.play` during gameplay, or `128.persist` during save/load |
+| I/O hole | `$D000-$DFFF` | Forbidden for ordinary executable/readable runtime payloads |
+| Overlays | `$E000-$EFFF` | Startup/town/death/generation/help/UI/item-action overlays |
+| Banked runtime | `$F000-$FEFF` | Reloadable banked payload, ending below `$FF00` MMU registers |
+
+The modal slot is mutually exclusive. Normal gameplay loads `128.play`.
+Save/load enters through resident broker routines, loads `128.persist`, calls the
+persist routine, then reloads `128.play` before returning to gameplay or
+resuming a loaded game. Code in `$AF00-$CFFF` must not initiate a modal swap
+unless the resident broker reloads the active payload before any return into the
+modal slot.
+
 **C128 runtime-loaded code rule:** For any copied or disk-loaded runtime code,
 the linked address, PRG load header, load destination bank, visible execution
 bank, and recopy source span must all agree. A callable symbol is not enough.
@@ -121,10 +143,12 @@ scan the corresponding runtime table for a position match:
 - **Active monster table:** Up to 32 entries x 12 bytes (position, creature type
   index, current HP, status flags, speed counter) = 384 bytes. Stored in main
   RAM ($0801–$9FFF). Linear scan of 32 entries per tile lookup is fast.
-- **Floor item table:** Up to 32 entries x 8 bytes (position, item template index,
-  enchantment, quantity) = 256 bytes. Stored at $CF00–$CFFF (remainder of the
-  $C000 region after the map). 32 floor items per level is sufficient given
-  the 80x48 map size — items beyond this limit are not spawned.
+- **Floor item table:** Up to 42 floor slots. The fixed 256-byte table stores
+  structure-of-arrays fields for item id, x, y, quantity, p1/gold-high, and
+  packed flags+ego metadata (`fi_meta`). It lives at $CF00-$CFFF on C64 and
+  $1A00-$1AFF on C128. Split magic-stat sidecars (`fi_to_hit`, `fi_to_dam`,
+  `fi_to_ac`) are resident arrays outside the fixed floor table and are
+  saved/loaded with it.
 
 ### Creature Data
 
@@ -487,7 +511,7 @@ tests/
 ├── test_monster_attack.s   Monster melee, effect application
 ├── test_monster_magic.s    Monster spellcasting, bolt/breath
 ├── test_effects.s          Status effects, regen, Word of Recall (21 tests)
-├── test_item.s             Item lifecycle, identification, enchant (40 tests)
+├── test_item.s             Item lifecycle, identification, enchant, floor metadata
 ├── test_wands_staves.s     Wand/staff charge tracking
 ├── test_store.s            Store buy/sell, pricing (17 tests)
 ├── test_save.s             Save/load RLE compression, checksum (10 tests)
@@ -545,7 +569,7 @@ After OPT-1.2–1.7 optimizations. `program_end` = $BF41. PRG file = 48,060 byte
 | `$0801`–`$BF41` | 46,912 | Main code + data |
 | `$BF42`–`$C01F` | 223 | **Free** (headroom before CREATURE_BASE) |
 | `$C000`–`$CEFF` | 3,840 | Dungeon map (64×60 tiles, always RAM) |
-| `$CF00`–`$CFFF` | 256 | Floor item table (32 slots × 8 arrays) |
+| `$CF00`–`$CFFF` | 256 | Floor item table (42 slots; id/x/y/qty/p1/meta arrays) |
 | `$D000`–`$DFFF` | 4,096 | I/O region (VIC-II, SID, CIA, color RAM) |
 | `$E000`–`$EFFF` | — | KERNAL ROM (banked in by default) |
 | `$F000`–`$F44C` | 1,101 | Banked code (copied here at startup, under KERNAL ROM) |

@@ -1,9 +1,10 @@
 // test_save.s — Runtime tests for save/load system
 //
 // Tests: RLE round-trip (uniform, alternating, mixed), checksum complement,
-// recount_monsters, recount_floor_items, save-version compatibility helpers.
+// recount_monsters, recount_floor_items, save-version compatibility helpers,
+// split item stat save/load persistence.
 //
-// Results at $0400-$040b: $01 = pass, $00 = fail per test (12 tests)
+// Results at $0400-$040c: $01 = pass, $00 = fail per test (13 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -24,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #11
+    ldx #12
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -67,7 +68,7 @@ ui_help_display:
 .segment Default
 #import "../../common/sound.s"
 #import "../../common/dungeon_data.s"
-#import "../../common/dungeon_gen.s"
+dg_idx: .byte 0
 #import "../../common/huffman.s"
 #import "../../common/dungeon_features.s"
 #import "../../common/monster.s"
@@ -77,6 +78,10 @@ ui_help_display:
 #import "../../common/recall.s"
 #import "../../common/monster_magic.s"
 #import "../../common/item.s"
+random_floor_in_room:
+    lda #0
+    tay
+    rts
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
@@ -102,19 +107,36 @@ ui_help_display:
 #import "../../common/ui_store.s"
 .segment Default
 
+#define C64_TEST_NO_SPELL_NAME_STUBS
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/runtime_ui_strings.s"
-#import "../../common/io_kernal_consts.s"
-.label c64_disk_setnam = KERNAL_SETNAM
-.label c64_disk_setlfs = KERNAL_SETLFS
-.label c64_disk_open   = KERNAL_OPEN
-.label c64_disk_close  = KERNAL_CLOSE
-.label c64_disk_clrchn = KERNAL_CLRCHN
-.label c64_disk_readst = KERNAL_READST
-.label c64_disk_chkin  = KERNAL_CHKIN
-.label c64_disk_chkout = KERNAL_CHKOUT
-.label c64_disk_chrin  = KERNAL_CHRIN
-.label c64_disk_chrout = KERNAL_CHROUT
+.const SAVE_FILE_NUM  = 2
+.const CHECK_FILE_NUM = 3
+.const SAVE_DEVICE    = 8
+.const SAVE_SEC_ADDR  = 2
+.const LOAD_SEC_ADDR  = 2
+.const CHECK_SEC_ADDR = LOAD_SEC_ADDR
+.const CMD_CHANNEL    = 15
+.const KERNAL_SETNAM = test_save_setnam
+.const KERNAL_SETLFS = test_save_setlfs
+.const KERNAL_OPEN   = test_save_open
+.const KERNAL_CLOSE  = test_save_close
+.const KERNAL_CHKOUT = test_save_chkout
+.const KERNAL_CHKIN  = test_save_chkin
+.const KERNAL_CLRCHN = test_save_clrchn
+.const KERNAL_CHROUT = test_save_chrout
+.const KERNAL_CHRIN  = test_save_chrin
+.const KERNAL_READST = test_save_readst
+.label c64_disk_setnam = test_save_setnam
+.label c64_disk_setlfs = test_save_setlfs
+.label c64_disk_open   = test_save_open
+.label c64_disk_close  = test_save_close
+.label c64_disk_clrchn = test_save_clrchn
+.label c64_disk_readst = test_save_readst
+.label c64_disk_chkin  = test_save_chkin
+.label c64_disk_chkout = test_save_chkout
+.label c64_disk_chrin  = test_save_chrin
+.label c64_disk_chrout = test_save_chrout
 c64_disk_marker_present:
     sec
     rts
@@ -202,16 +224,152 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 12, $ff
+tc_results: .fill 13, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
 .const VERIFY_BUF = $CF00
 
+// Memory-backed save stream used by persistence tests. MAP_BASE is unused
+// after the RLE tests and gives enough room for the item save blocks.
+.const SAVE_STREAM_BUF = MAP_BASE
+
 // RLE workspace for the round-trip tests.
 // $0500-$07ff is free in this test image and gives 768 bytes, which is enough
 // for the mixed-pattern streams used here while staying below MAP_BASE.
 .const RLE_TEST_BUF = $0500
+
+test_save_last_lfn:   .byte 0
+test_save_last_dev:   .byte 0
+test_save_last_sec:   .byte 0
+test_save_tmp_y:      .byte 0
+
+test_save_setnam:
+    clc
+    rts
+
+test_save_setlfs:
+    sta test_save_last_lfn
+    stx test_save_last_dev
+    sty test_save_last_sec
+    clc
+    rts
+
+test_save_open:
+test_save_close:
+test_save_chkout:
+test_save_chkin:
+test_save_clrchn:
+    clc
+    rts
+
+test_save_readst:
+    lda #0
+    clc
+    rts
+
+test_save_chrout:
+    sty test_save_tmp_y
+    ldy #0
+    sta (zp_ptr1),y
+    inc zp_ptr1
+    bne !+
+    inc zp_ptr1_hi
+!:  ldy test_save_tmp_y
+    clc
+    rts
+
+test_save_chrin:
+    sty test_save_tmp_y
+    ldy #0
+    lda (zp_ptr1),y
+    inc zp_ptr1
+    bne !+
+    inc zp_ptr1_hi
+!:  ldy test_save_tmp_y
+    clc
+    rts
+
+test_stream_reset_write:
+    lda #<SAVE_STREAM_BUF
+    sta zp_ptr1
+    lda #>SAVE_STREAM_BUF
+    sta zp_ptr1_hi
+    rts
+
+test_stream_reset_read:
+    lda #<SAVE_STREAM_BUF
+    sta zp_ptr1
+    lda #>SAVE_STREAM_BUF
+    sta zp_ptr1_hi
+    rts
+
+test_clear_store_items:
+    ldx #STORE_TOTAL_SLOTS - 1
+    lda #FI_EMPTY
+!ids:
+    sta si_item_id,x
+    dex
+    bpl !ids-
+    ldx #STORE_TOTAL_SLOTS - 1
+    lda #0
+!fields:
+    sta si_qty,x
+    sta si_p1,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
+    dex
+    bpl !fields-
+    rts
+
+test_save_item_state_blocks:
+    :save_block(inv_item_id, TOTAL_INV_SLOTS)
+    :save_block(inv_qty, TOTAL_INV_SLOTS)
+    :save_block(inv_p1, TOTAL_INV_SLOTS)
+    :save_block(inv_to_hit, TOTAL_INV_SLOTS)
+    :save_block(inv_to_dam, TOTAL_INV_SLOTS)
+    :save_block(inv_to_ac, TOTAL_INV_SLOTS)
+    :save_block(inv_flags, TOTAL_INV_SLOTS)
+    :save_block(inv_ego, TOTAL_INV_SLOTS)
+    :save_block(si_item_id, STORE_TOTAL_SLOTS)
+    :save_block(si_qty, STORE_TOTAL_SLOTS)
+    :save_block(si_p1, STORE_TOTAL_SLOTS)
+    :save_block(si_to_hit, STORE_TOTAL_SLOTS)
+    :save_block(si_to_dam, STORE_TOTAL_SLOTS)
+    :save_block(si_to_ac, STORE_TOTAL_SLOTS)
+    :save_block(si_meta, STORE_TOTAL_SLOTS)
+    jsr save_write_floor_items
+    rts
+
+test_load_item_state_blocks:
+    :load_block(inv_item_id, TOTAL_INV_SLOTS)
+    :load_block(inv_qty, TOTAL_INV_SLOTS)
+    :load_block(inv_p1, TOTAL_INV_SLOTS)
+    :load_block(inv_to_hit, TOTAL_INV_SLOTS)
+    :load_block(inv_to_dam, TOTAL_INV_SLOTS)
+    :load_block(inv_to_ac, TOTAL_INV_SLOTS)
+    :load_block(inv_flags, TOTAL_INV_SLOTS)
+    :load_block(inv_ego, TOTAL_INV_SLOTS)
+    :load_block(si_item_id, STORE_TOTAL_SLOTS)
+    :load_block(si_qty, STORE_TOTAL_SLOTS)
+    :load_block(si_p1, STORE_TOTAL_SLOTS)
+    :load_block(si_to_hit, STORE_TOTAL_SLOTS)
+    :load_block(si_to_dam, STORE_TOTAL_SLOTS)
+    :load_block(si_to_ac, STORE_TOTAL_SLOTS)
+    :load_block(si_meta, STORE_TOTAL_SLOTS)
+    lda #SAVE_VERSION
+    sta load_save_version
+    jsr load_read_floor_items
+    rts
+
+.macro t13_expect(value) {
+    cmp #value
+    beq !ok+
+    jmp t13_fail
+!ok:
+}
 
 test_start:
     // BASIC ROM already banked out by bootstrap above
@@ -803,15 +961,9 @@ t7_set_slot31:
     sta tc_results + 9
 
     // ============================================================
-    // Test 11: save_version_supported accepts all historical C64 save versions.
+    // Test 11: save_version_supported accepts the current C64 save version.
     // ============================================================
-    lda #$0c
-    jsr save_version_supported
-    bcc !t11_fail+
-    lda #$0d
-    jsr save_version_supported
-    bcc !t11_fail+
-    lda #$0e
+    lda #SAVE_VERSION
     jsr save_version_supported
     bcc !t11_fail+
     lda #$01
@@ -822,22 +974,18 @@ t7_set_slot31:
     sta tc_results + 10
 
     // ============================================================
-    // Test 12: unsupported/floor-layout helpers reject future versions and
-    // treat pre-$0e saves as the legacy 32-slot floor layout.
+    // Test 12: unsupported/floor-layout helpers reject non-current versions.
     // ============================================================
-    lda #$0b
+    lda #(SAVE_VERSION - 1)
     jsr save_version_supported
     bcs !t12_fail+
-    lda #$0f
+    lda #(SAVE_VERSION + 1)
     jsr save_version_supported
     bcs !t12_fail+
-    lda #$0c
+    lda #(SAVE_VERSION - 1)
     jsr save_version_uses_legacy_floor_layout
     bcc !t12_fail+
-    lda #$0d
-    jsr save_version_uses_legacy_floor_layout
-    bcc !t12_fail+
-    lda #$0e
+    lda #SAVE_VERSION
     jsr save_version_uses_legacy_floor_layout
     bcs !t12_fail+
     lda #$01
@@ -846,6 +994,158 @@ t7_set_slot31:
     lda #$00
 !t12_store:
     sta tc_results + 11
+
+    // ============================================================
+    // Test 13: split item stats and metadata persist through the
+    // real save/load block representation for inventory/equipment,
+    // store/home slots, and packed floor items.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+
+    jsr item_init_inventory
+    jsr item_init_floor
+    jsr test_clear_store_items
+
+    // Inventory slot 2: weapon-like item with split combat stats.
+    lda #2
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #$44
+    sta inv_p1 + 2
+    lda #$fb
+    sta inv_to_hit + 2
+    lda #7
+    sta inv_to_dam + 2
+    lda #0
+    sta inv_to_ac + 2
+    lda #(IF_IDENTIFIED | IF_CURSED)
+    sta inv_flags + 2
+    lda #EGO_FLAME_TONGUE
+    sta inv_ego + 2
+
+    // Equipment body slot: armor AC must persist independently.
+    lda #7
+    sta inv_item_id + EQUIP_BODY
+    lda #1
+    sta inv_qty + EQUIP_BODY
+    lda #5
+    sta inv_to_ac + EQUIP_BODY
+    lda #IF_IDENTIFIED
+    sta inv_flags + EQUIP_BODY
+
+    // Store/home slot 10: packed flags+ego plus split stat sidecars.
+    lda #1
+    sta si_item_id + 10
+    sta si_qty + 10
+    lda #$33
+    sta si_p1 + 10
+    lda #3
+    sta si_to_hit + 10
+    lda #$fe
+    sta si_to_dam + 10
+    lda #6
+    sta si_to_ac + 10
+    lda #((EGO_DEFENDER << ITEM_META_EGO_SHIFT) | IF_IDENTIFIED | IF_SENSED)
+    sta si_meta + 10
+
+    // Floor slot 3: packed floor metadata uses flags<<3 plus low ego bits.
+    lda #2
+    sta fi_item_id + 3
+    lda #11
+    sta fi_x + 3
+    lda #12
+    sta fi_y + 3
+    lda #2
+    sta fi_qty + 3
+    lda #$55
+    sta fi_p1 + 3
+    lda #(((IF_IDENTIFIED | IF_CURSED) << 3) | EGO_FROST_BRAND)
+    sta fi_meta + 3
+    lda #$82
+    sta fi_to_hit + 3
+    lda #9
+    sta fi_to_dam + 3
+    lda #4
+    sta fi_to_ac + 3
+
+    jsr test_stream_reset_write
+    jsr test_save_item_state_blocks
+
+    jsr item_init_inventory
+    jsr item_init_floor
+    jsr test_clear_store_items
+    jsr test_stream_reset_read
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    jsr test_load_item_state_blocks
+
+    lda inv_item_id + 2
+    :t13_expect(2)
+    lda inv_p1 + 2
+    :t13_expect($44)
+    lda inv_to_hit + 2
+    :t13_expect($fb)
+    lda inv_to_dam + 2
+    :t13_expect(7)
+    lda inv_flags + 2
+    :t13_expect(IF_IDENTIFIED | IF_CURSED)
+    lda inv_ego + 2
+    :t13_expect(EGO_FLAME_TONGUE)
+
+    lda inv_item_id + EQUIP_BODY
+    :t13_expect(7)
+    lda inv_to_ac + EQUIP_BODY
+    :t13_expect(5)
+    lda inv_flags + EQUIP_BODY
+    :t13_expect(IF_IDENTIFIED)
+
+    lda si_item_id + 10
+    :t13_expect(1)
+    lda si_p1 + 10
+    :t13_expect($33)
+    lda si_to_hit + 10
+    :t13_expect(3)
+    lda si_to_dam + 10
+    :t13_expect($fe)
+    lda si_to_ac + 10
+    :t13_expect(6)
+    lda si_meta + 10
+    :t13_expect((EGO_DEFENDER << ITEM_META_EGO_SHIFT) | IF_IDENTIFIED | IF_SENSED)
+
+    lda fi_item_id + 3
+    :t13_expect(2)
+    lda fi_x + 3
+    :t13_expect(11)
+    lda fi_y + 3
+    :t13_expect(12)
+    lda fi_qty + 3
+    :t13_expect(2)
+    lda fi_p1 + 3
+    :t13_expect($55)
+    lda fi_meta + 3
+    :t13_expect(((IF_IDENTIFIED | IF_CURSED) << 3) | EGO_FROST_BRAND)
+    lda fi_to_hit + 3
+    :t13_expect($82)
+    lda fi_to_dam + 3
+    :t13_expect(9)
+    lda fi_to_ac + 3
+    :t13_expect(4)
+    lda save_io_error
+    beq !t13_no_io_error+
+    jmp t13_fail
+!t13_no_io_error:
+    lda #$01
+    bne !t13_store+
+t13_fail:
+    lda #$00
+!t13_store:
+    sta tc_results + 12
 
     jmp test_finish
 

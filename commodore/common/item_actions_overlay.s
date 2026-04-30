@@ -126,9 +126,7 @@ irs_effect_light:
     rts
 
 irs_effect_identify:
-    jsr eff_identify_prompt
-    sec
-    rts
+    jmp eff_identify_scroll_resident
 
 irs_effect_teleport:
     jsr eff_teleport_self
@@ -175,13 +173,17 @@ irs_effect_enchant_weapon:
     and #~IF_CURSED & $ff
     sta inv_flags + EQUIP_WEAPON
     lda #0
-    sta inv_p1 + EQUIP_WEAPON
+    sta inv_to_hit + EQUIP_WEAPON
+    sta inv_to_dam + EQUIP_WEAPON
     jsr player_recalc_equipment
     jmp !irs_ew_msg+
 
 !irs_ew_not_cursed:
     ldx #EQUIP_WEAPON
-    lda inv_p1,x
+    lda inv_to_hit,x
+    cmp #5
+    bcc !irs_ew_inc+
+    lda inv_to_dam,x
     cmp #5
     bcc !irs_ew_inc+
     ldx #HSTR_PIQ_NOTHING
@@ -190,7 +192,8 @@ irs_effect_enchant_weapon:
     rts
 
 !irs_ew_inc:
-    inc inv_p1 + EQUIP_WEAPON
+    inc inv_to_hit + EQUIP_WEAPON
+    inc inv_to_dam + EQUIP_WEAPON
     jsr player_recalc_equipment
 
 !irs_ew_msg:
@@ -201,30 +204,44 @@ irs_effect_enchant_weapon:
 
 irs_effect_enchant_armor:
     ldx #EQUIP_BODY
+!irs_ea_scan:
+    cpx #EQUIP_FEET + 1
+    bcs !irs_ea_none+
     lda inv_item_id,x
     cmp #FI_EMPTY
+    beq !irs_ea_next+
+    lda inv_flags,x
+    and #IF_CURSED
     bne !irs_ea_has+
+    lda inv_to_ac,x
+    cmp #5
+    bcc !irs_ea_has+
+!irs_ea_next:
+    inx
+    jmp !irs_ea_scan-
+
+!irs_ea_none:
     ldx #HSTR_PIQ_VIBRATION
     jsr huff_print_msg
     sec
     rts
 
 !irs_ea_has:
-    ldx #EQUIP_BODY
+    stx piw_slot
     lda inv_flags,x
     and #IF_CURSED
     beq !irs_ea_not_cursed+
-    lda inv_flags + EQUIP_BODY
+    lda inv_flags,x
     and #~IF_CURSED & $ff
-    sta inv_flags + EQUIP_BODY
+    sta inv_flags,x
     lda #0
-    sta inv_p1 + EQUIP_BODY
+    sta inv_to_ac,x
     jsr player_recalc_equipment
     jmp !irs_ea_msg+
 
 !irs_ea_not_cursed:
-    ldx #EQUIP_BODY
-    lda inv_p1,x
+    ldx piw_slot
+    lda inv_to_ac,x
     cmp #5
     bcc !irs_ea_inc+
     ldx #HSTR_PIQ_NOTHING
@@ -233,7 +250,7 @@ irs_effect_enchant_armor:
     rts
 
 !irs_ea_inc:
-    inc inv_p1 + EQUIP_BODY
+    inc inv_to_ac,x
     jsr player_recalc_equipment
 
 !irs_ea_msg:

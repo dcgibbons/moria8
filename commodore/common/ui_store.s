@@ -5,6 +5,7 @@
 // Player enters by stepping on a store door tile in town.
 
 #import "input_ui_helpers.s"
+#import "store_meta_macros.s"
 
 // ============================================================
 // PETSCII key constants for store UI
@@ -194,25 +195,11 @@ store_draw_screen:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name — check for tool ego prefix (R14)
+    // Item description
     lda #COL_LGREY
     sta zp_text_color
-    ldy sb_abs_slot
-    lda si_item_id,y
-    sta sd_save_item_id
-    tax
-    lda it_category,x
-    bne !sds_normal_name+
-    ldy sb_abs_slot
-    lda si_ego,y
-    beq !sds_normal_name+
-    // Tool ego prefix
-    ldx sd_save_item_id
-    jsr put_tool_ego_prefix
-!sds_normal_name:
-    lda sd_save_item_id
-    jsr item_get_name_ptr
-    jsr screen_put_string
+    ldx sb_abs_slot
+    jsr itemdesc_put_store_slot
 
     // Skip price display for Home (no prices)
     lda zp_store_idx
@@ -228,10 +215,16 @@ store_draw_screen:
     sta zp_text_color
 
     ldy sb_abs_slot
-    lda si_ego,y
+    :LoadStoreEgoY()
     sta sb_item_ego             // Pass ego for pricing (R14)
     lda si_p1,y
-    sta sb_item_p1              // Pass enchantment/charges for pricing
+    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
+    lda si_to_hit,y
+    sta sb_item_to_hit
+    lda si_to_dam,y
+    sta sb_item_to_dam
+    lda si_to_ac,y
+    sta sb_item_to_ac
     lda si_item_id,y
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
@@ -359,10 +352,16 @@ store_buy:
 
     // Calculate buy price
     ldx sb_abs_slot
-    lda si_ego,x
+    :LoadStoreEgoX()
     sta sb_item_ego             // Pass ego for pricing (R14)
     lda si_p1,x
-    sta sb_item_p1              // Pass enchantment/charges for pricing
+    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
+    lda si_to_hit,x
+    sta sb_item_to_hit
+    lda si_to_dam,x
+    sta sb_item_to_dam
+    lda si_to_ac,x
+    sta sb_item_to_ac
     lda si_item_id,x
     jsr calc_store_buy_price    // Dispatches to BM or normal pricing
 
@@ -426,9 +425,15 @@ sbuy_execute:
     sta fi_add_qty
     lda si_p1,x
     sta fi_add_p1
-    lda si_flags,x
+    lda si_to_hit,x
+    sta fi_add_to_hit
+    lda si_to_dam,x
+    sta fi_add_to_dam
+    lda si_to_ac,x
+    sta fi_add_to_ac
+    :LoadStoreFlagsX()
     sta fi_add_flags
-    lda si_ego,x
+    :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
 
@@ -439,8 +444,10 @@ sbuy_execute:
     lda #0
     sta si_qty,x
     sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
 
     // Success message
     jsr store_clear_msg_area
@@ -556,11 +563,9 @@ store_sell:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name
+    // Item description
     ldx sd_save_x
-    lda inv_item_id,x
-    jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr itemdesc_put_inv_slot
 
     inc sd_row
 
@@ -635,7 +640,13 @@ store_sell:
     lda inv_ego,x
     sta sb_item_ego             // Pass ego for pricing (R14)
     lda inv_p1,x
-    sta sb_item_p1              // Pass enchantment/charges for pricing
+    sta sb_item_p1              // Pass charges/type-specific p1 for pricing
+    lda inv_to_hit,x
+    sta sb_item_to_hit
+    lda inv_to_dam,x
+    sta sb_item_to_dam
+    lda inv_to_ac,x
+    sta sb_item_to_ac
     lda ss_item_id
     jsr calc_store_sell_price   // Dispatches to BM or normal pricing
 
@@ -708,10 +719,13 @@ ssell_execute:
     sta si_qty,y
     lda inv_p1,x
     sta si_p1,y
-    lda inv_flags,x
-    sta si_flags,y
-    lda inv_ego,x
-    sta si_ego,y
+    lda inv_to_hit,x
+    sta si_to_hit,y
+    lda inv_to_dam,x
+    sta si_to_dam,y
+    lda inv_to_ac,x
+    sta si_to_ac,y
+    :StoreStoreMetaYFromInvX()
 
     // Remove from inventory
     ldx ss_inv_slot
@@ -1093,6 +1107,12 @@ haggle_buy:
     ldx sb_abs_slot
     lda si_p1,x
     sta sb_item_p1
+    lda si_to_hit,x
+    sta sb_item_to_hit
+    lda si_to_dam,x
+    sta sb_item_to_dam
+    lda si_to_ac,x
+    sta sb_item_to_ac
     lda si_item_id,x
     jsr calc_buy_min_price
     lda sb_price_lo

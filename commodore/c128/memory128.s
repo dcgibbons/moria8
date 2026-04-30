@@ -293,8 +293,9 @@ EnterKernal_sub:
     sta $d506
     :MachineRestoreDefault() // Set MMU/IO for Kernal use
     
-    // Hand control of IRQ vector back to KERNAL so its ROM handler
-    // can safely pop its own MMU byte from the stack.
+    // In KERNAL mode $0314 is the KERNAL software IRQ vector. Keep it on the
+    // captured KERNAL target; mmu_common_irq is a hardware-vector entry used
+    // only by the all-RAM runtime path and has a different calling convention.
     lda kernal_irq_vec_lo
     sta $0314
     lda kernal_irq_vec_hi

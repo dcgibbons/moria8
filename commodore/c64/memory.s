@@ -38,6 +38,7 @@
 .const DUNGEON_GEN_BFS_QUEUE_BASE = SCREEN_RAM
 .const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
 .const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
+.const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
 
 // ZP save buffer — stores $02–$8F during game, restored on exit
 // Allocated as program data so it can't collide with code.
@@ -210,5 +211,6 @@ mmu_select_bank0:
 .assert "Floor items fit", FLOOR_ITEM_END - FLOOR_ITEM_BASE + 1, 256
 .assert "Dungeon-gen BFS queue remains page-aligned", <DUNGEON_GEN_BFS_QUEUE_BASE, 0
 .assert "Dungeon-gen BFS queue stays in screen scratch window", DUNGEON_GEN_BFS_QUEUE_END <= $07ff, true
+.assert "Dungeon-gen door scan stays in cassette buffer", DUNGEON_GEN_DOOR_SCAN_BASE >= $033c && DUNGEON_GEN_DOOR_SCAN_BASE + 65 <= $0400, true
 .assert "ZP save buffer doesn't overlap CREATURE_BASE", zp_save_buf + ZP_SAVE_SIZE <= CREATURE_BASE, true
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142

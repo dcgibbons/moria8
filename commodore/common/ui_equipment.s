@@ -103,10 +103,10 @@ ui_equip_display:
     cmp #FI_EMPTY
     beq !ueq_none+
 
-    // Print item name with ego prefix/suffix (R14)
+    // Print item description with ego/status/stat suffixes
     lda #COL_WHITE
     sta zp_text_color
-    jsr put_inv_name_with_ego
+    jsr itemdesc_put_inv_slot
     jmp !ueq_next+
 
 !ueq_none:

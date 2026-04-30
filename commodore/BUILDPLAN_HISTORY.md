@@ -14571,3 +14571,153 @@ cancels on keypress.
 **Verification**
 - `make -B -C commodore/c128 build128`
   - passed with `238 asserts, 0 failed`
+
+## FEAT-ITEM-STATS - Enchanted Item Stats and Descriptions ✅ COMPLETE (2026-04-29)
+
+**Goal**
+- Restore upstream-style visible item stats for enchanted weapons, armor, ammo,
+  and charge-bearing items without shortening or degrading user-facing strings.
+
+**Implemented**
+- Added separate per-instance magic-stat fields:
+  - inventory/equipment: `inv_to_hit`, `inv_to_dam`, `inv_to_ac`,
+    `inv_flags`, `inv_ego`
+  - floor items: `fi_to_hit`, `fi_to_dam`, `fi_to_ac`, plus packed
+    `fi_meta` flags+ego storage
+  - store/home items: `si_to_hit`, `si_to_dam`, `si_to_ac`, plus packed
+    `si_meta` flags+ego storage
+- Threaded those fields through item creation, pickup/drop, throw/fire,
+  store/home movement, save/load, identify, remove curse, recharge, and
+  enchant weapon/armor effects.
+- Updated item descriptions to show the relevant stat form:
+  - weapons/ammo: `(+to_hit,+to_dam)`
+  - armor: `[base_ac,+to_ac]`
+  - ammo stacks: visible quantities such as `6 Bolt`
+- Preserved unidentified behavior: enchanted armor can glow before the stat
+  suffix is visible, and identified items reveal their exact stats.
+
+**Regression fixes completed during the feature**
+- Throwing spellbooks and other zero-quantity items now removes the source
+  inventory item correctly.
+- Firing bolts consumes one shot at a time and leaves visible stack counts.
+- Ranged attacks at monsters no longer hang on C64.
+- C64 dungeon-generation and identify prompts no longer leak scratch bytes into
+  screen RAM.
+- C128 identify/read prompts, inventory modal display, save/load return paths,
+  and town-return centering were stabilized after the item-stat storage changes.
+
+**Verification**
+- `make test64`
+  - passed, 129/129 tests
+- `make test128-fast`
+  - passed cold and snapshot batches after the C128 runtime/modal fixes
+- `make test128-fast-smoke`
+  - passed, 8/8 smokes
+- `make -C commodore build128`
+  - passed
+- Manual verification:
+  - C64 and C128 enchant armor display
+  - C64 and C128 save/load persistence with equipped enchanted items
+  - C64 and C128 ammo stack display and bolt consumption
+  - C64 crossbow/bolt enchant and firing flow
+  - C128 quit/new/load flow after save/load modal repairs
+
+## C128 Resident Runtime and Modal Ownership Stabilization ✅ COMPLETE (2026-04-29)
+
+**Problem**
+- The item-stat feature pushed C128 memory pressure high enough that the prior
+  resident/runtime split became fragile. Symptoms included runtime load loops,
+  CPU `JAM`s after `128.RUNTIME`, hangs after unsupported-save/load flows,
+  save/load channel cleanup failures, and inventory/town-display corruption.
+
+**Implemented**
+- Split C128 resident runtime payloads into clearer ownership regions:
+  - `128.RUNTIME` for hot low-runtime support
+  - `128.INPUT` for input support
+  - `128.PROJ` for projectile support
+  - `128.FDISK` for disk setup support
+  - `128.BANK` for banked helpers
+  - `128.WORLD` for world/town helpers
+  - `128.ITEM` for item/description helpers
+  - `128.SELECT` for item selection helpers
+  - `128.PERSIST` for save/load modal handling
+  - `128.PLAY` for gameplay-resident modal/runtime support
+- Moved modal ownership away from ad hoc resident overlap and made save/load
+  return paths restore the expected runtime state before returning to title,
+  town, or gameplay.
+- Fixed IRQ/MMU state restoration around disk and modal transitions.
+- Kept C128 boot art visible through silent `128.RUNTIME` loading and cleared it
+  only when the normal `Preloading files:` screen appears.
+
+**Verification**
+- `make test128-fast`
+- `make test128-fast-smoke`
+- `make -C commodore build128`
+- Manual verification:
+  - C128 boots to title after runtime preload
+  - load unsupported save returns cleanly
+  - new game works after visiting load first
+  - save game returns cleanly
+  - saved game loads successfully
+  - quit -> new -> quit -> load flow works
+  - town display remains centered after dungeon return
+  - boot art remains until preload screen appears
+
+## Active Docs Audit and Cleanup ✅ COMPLETE (2026-04-29)
+
+**Updated**
+- Removed completed `FEAT-ITEM-STATS` from `commodore/BUILDPLAN.md`.
+- Rebuilt `tasks/todo.md` as an active-only scratchpad with no stale reported
+  failure gates.
+- Corrected `commodore/DESIGN.md` floor-item storage notes to match the current
+  42-slot fixed table plus magic-stat sidecar representation.
+- Archived the completed enchanted-item and C128 resident-runtime work here
+  instead of keeping resolved incidents in the active task queue.
+
+## C128 Blank Save-Disk Initialization Fix ✅ COMPLETE (2026-04-29)
+
+**Problem**
+- After the enchanted-item C128 resident/runtime refactor, initializing a blank
+  C128 save disk from the product Disk Setup path repeatedly failed with
+  `Could not initialize disk`, and no reliable helper-level test explained the
+  live behavior.
+
+**Implemented**
+- Added a dedicated `128.DISKIO` resident payload at `$AB00-$AEFF` for Disk
+  Setup, save-disk marker creation/readback, and live diagnostics.
+- Updated the C128 resident ownership map to keep `128.world`, `128.item`,
+  `128.select`, `128.diskio`, and the modal slot disjoint below the I/O hole.
+- Moved the C128 marker logical file number out of the runtime-loader range.
+- Made marker creation use the intended scratch-then-plain-create flow:
+  `S0:MORIA8.ID`, then `0:MORIA8.ID,S,W`.
+- Added stage-specific diagnostics for init, scratch, write-close, and
+  readback. The decisive live dump showed init/scratch/write-close all returned
+  `"00"` and readback reached final byte `$45` (`E`) at index 5 with
+  `READST=$40`.
+- Fixed marker validation to accept `READST=$40` only on the final expected
+  marker byte after comparing that byte. Earlier `$40` remains a short-read
+  failure.
+- Updated `disk_swap128` so the mock returns final-byte `READST=$40`, matching
+  the product sequential-read behavior that the old mock missed.
+
+**Root Cause**
+- The final live blocker was not disk readiness or marker creation. It was a
+  one-byte sequential-read status bug: the validator treated final-byte
+  `READST=$40` as failure before comparing the byte that had just been read.
+
+**Verification**
+- `make disk128`
+  - passed with 421 asserts
+- `TEST_FILTER='disk_swap128' TEST_JOBS=1 ./run_tests128.sh`
+  - passed with mocked final-byte `READST=$40`
+- `make test128-fast`
+  - passed cold and snapshot batches
+- Manual verification:
+  - C128 blank save-disk initialization succeeds
+  - C128 save succeeds after initialization
+  - C128 load succeeds from the newly saved game
+
+**Follow-Up**
+- Add `TEST-C128-BLANK-SAVE-DISK-SMOKE`: boot the product disk, attach a blank
+  drive-9 save disk, drive Disk Setup through initialization, and verify the
+  resulting disk image contains a valid sequential `MORIA8.ID`.

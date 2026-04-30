@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0424: $01 = pass, $00 = fail per test (37 tests)
+// Results at $0400-$0426: $01 = pass, $00 = fail per test (39 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #36
+    ldx #38
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -78,6 +78,7 @@ test_exit_trampoline:
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #import "../../common/store_data.s"
+#import "../../common/store_restock_overlay.s"
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
@@ -88,7 +89,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 37, $ff
+tc_results: .fill 39, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -102,7 +103,7 @@ tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #36
+    ldx #38
     lda #$ff
 !clr:
     sta tc_results,x
@@ -358,6 +359,9 @@ test_start:
     sta player_data + PL_CHR_CUR
     lda #0
     sta sb_item_p1              // No enchantment
+    sta sb_item_to_hit
+    sta sb_item_to_dam
+    sta sb_item_to_ac
     lda #2                      // Dagger (base 10)
     jsr calc_sell_price
     lda sb_price_lo
@@ -525,20 +529,24 @@ test_start:
     sta tc_results + 16
 
     // ============================================================
-    // Test 18: calc_buy_price with enchantment — dagger +2 at CHR 18
-    // base=10, p1=2, bonus=2×100=200, total=10+200=210
+    // Test 18: calc_buy_price with enchantment — dagger +2/+2 at CHR 18
+    // base=10, split stat bonus=(2+2)×100=400, total=410
     // ============================================================
     lda #18
     sta player_data + PL_CHR_CUR
     lda #2
-    sta sb_item_p1              // +2 enchantment
+    sta sb_item_to_hit          // +2 enchantment
+    sta sb_item_to_dam
+    lda #0
+    sta sb_item_p1
+    sta sb_item_to_ac
     lda #2                      // Dagger (base 10)
     jsr calc_buy_price
     lda sb_price_lo
-    cmp #<210
+    cmp #<410
     bne !t18_fail+
     lda sb_price_hi
-    cmp #>210
+    cmp #>410
     bne !t18_fail+
     lda #$01
     jmp !t18_store+
@@ -548,20 +556,24 @@ test_start:
     sta tc_results + 17
 
     // ============================================================
-    // Test 19: calc_sell_price with enchantment — dagger +2 at CHR 18
-    // base sell=10×50/100=5, p1=2, bonus=200, total=5+200=205
+    // Test 19: calc_sell_price with enchantment — dagger +2/+2 at CHR 18
+    // base sell=10×50/100=5, split stat bonus=400, total=405
     // ============================================================
     lda #18
     sta player_data + PL_CHR_CUR
     lda #2
-    sta sb_item_p1              // +2 enchantment
+    sta sb_item_to_hit          // +2 enchantment
+    sta sb_item_to_dam
+    lda #0
+    sta sb_item_p1
+    sta sb_item_to_ac
     lda #2                      // Dagger (base 10)
     jsr calc_sell_price
     lda sb_price_lo
-    cmp #<205
+    cmp #<405
     bne !t19_fail+
     lda sb_price_hi
-    cmp #>205
+    cmp #>405
     bne !t19_fail+
     lda #$01
     jmp !t19_store+
@@ -578,6 +590,9 @@ test_start:
     sta player_data + PL_CHR_CUR
     lda #0
     sta sb_item_p1
+    sta sb_item_to_hit
+    sta sb_item_to_dam
+    sta sb_item_to_ac
     lda #2                      // Dagger (base 10)
     jsr calc_buy_min_price
     lda sb_price_lo
@@ -594,20 +609,24 @@ test_start:
     sta tc_results + 19
 
     // ============================================================
-    // Test 21: calc_buy_min_price — dagger +2 (p1=2) → expect 210
-    // base=10 + 2×100=200 = 210
+    // Test 21: calc_buy_min_price — dagger +2/+2 → expect 410
+    // base=10 + (2+2)×100=400 = 410
     // ============================================================
     lda #3
     sta player_data + PL_CHR_CUR
     lda #2
+    sta sb_item_to_hit
+    sta sb_item_to_dam
+    lda #0
     sta sb_item_p1
+    sta sb_item_to_ac
     lda #2                      // Dagger
     jsr calc_buy_min_price
     lda sb_price_lo
-    cmp #<210
+    cmp #<410
     bne !t21_fail+
     lda sb_price_hi
-    cmp #>210
+    cmp #>410
     bne !t21_fail+
     lda #$01
     jmp !t21_store+
@@ -670,6 +689,9 @@ test_start:
     // ============================================================
     lda #0
     sta sb_item_p1              // No enchantment
+    sta sb_item_to_hit
+    sta sb_item_to_dam
+    sta sb_item_to_ac
     lda #2                      // Dagger (base 10)
     jsr calc_bm_buy_price
     lda sb_price_lo
@@ -829,7 +851,7 @@ test_start:
     lda #FI_EMPTY
     sta si_item_id,x
     lda #0
-    sta si_flags,x
+    sta si_meta,x
     inx
     jmp !t29_clr-
 !t29_clr_done:
@@ -845,7 +867,7 @@ test_start:
     lda si_item_id,x
     cmp #FI_EMPTY
     beq !t29_next+
-    lda si_flags,x
+    lda si_meta,x
     and #IF_IDENTIFIED
     bne !t29_pass+
     jmp !t29_fail+              // Occupied but flag not set
@@ -1119,6 +1141,111 @@ test_start:
 !t37_store:
     sta tc_results + 36
 
+    // ============================================================
+    // Test 38: store_buy preserves split combat stats and metadata
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #STORE_BM
+    sta zp_store_idx
+    lda #$ff
+    sta player_data + PL_GOLD_0
+    sta player_data + PL_GOLD_1
+    sta player_data + PL_GOLD_2
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda #2
+    sta si_item_id,x
+    lda #1
+    sta si_qty,x
+    lda #4
+    sta si_to_hit,x
+    lda #5
+    sta si_to_dam,x
+    lda #0
+    sta si_to_ac,x
+    lda #(IF_IDENTIFIED | (3 << ITEM_META_EGO_SHIFT))
+    sta si_meta,x
+    lda #<script_buy_yes
+    ldy #>script_buy_yes
+    jsr set_test_input_script
+    jsr store_buy
+    lda inv_item_id + 0
+    cmp #2
+    bne !t38_fail+
+    lda inv_to_hit + 0
+    cmp #4
+    bne !t38_fail+
+    lda inv_to_dam + 0
+    cmp #5
+    bne !t38_fail+
+    lda inv_flags + 0
+    and #IF_IDENTIFIED
+    beq !t38_fail+
+    lda inv_ego + 0
+    cmp #3
+    bne !t38_fail+
+    lda #$01
+    jmp !t38_store+
+!t38_fail:
+    lda #$00
+!t38_store:
+    sta tc_results + 37
+
+    // ============================================================
+    // Test 39: store_sell preserves split combat stats and metadata
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #STORE_BM
+    sta zp_store_idx
+    lda #2
+    sta inv_item_id + 0
+    lda #1
+    sta inv_qty + 0
+    lda #6
+    sta inv_to_hit + 0
+    lda #7
+    sta inv_to_dam + 0
+    lda #0
+    sta inv_to_ac + 0
+    lda #IF_IDENTIFIED
+    sta inv_flags + 0
+    lda #4
+    sta inv_ego + 0
+    lda #<script_sell_yes
+    ldy #>script_sell_yes
+    jsr set_test_input_script
+    jsr store_sell
+    ldx #STORE_BM
+    lda store_base_idx,x
+    tax
+    lda si_item_id,x
+    cmp #2
+    bne !t39_fail+
+    lda si_to_hit,x
+    cmp #6
+    bne !t39_fail+
+    lda si_to_dam,x
+    cmp #7
+    bne !t39_fail+
+    lda si_meta,x
+    and #ITEM_META_FLAGS_MASK
+    cmp #IF_IDENTIFIED
+    bne !t39_fail+
+    lda si_meta,x
+    and #ITEM_META_EGO_MASK
+    cmp #(4 << ITEM_META_EGO_SHIFT)
+    bne !t39_fail+
+    lda inv_item_id + 0
+    cmp #FI_EMPTY
+    bne !t39_fail+
+    lda #$01
+    jmp !t39_store+
+!t39_fail:
+    lda #$00
+!t39_store:
+    sta tc_results + 38
+
     jmp test_exit_trampoline
 
 reset_haggle_fixture:
@@ -1178,8 +1305,10 @@ reset_haggle_fixture:
 !clr_store_rest:
     sta si_qty,x
     sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
     dex
     bpl !clr_store_rest-
 
@@ -1195,6 +1324,9 @@ reset_haggle_fixture:
 !clr_inv_rest:
     sta inv_qty,x
     sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
+    sta inv_to_ac,x
     sta inv_flags,x
     sta inv_ego,x
     dex
@@ -1233,5 +1365,7 @@ script_sell_backwards:
     .byte '9', $0d, 'X', '1', '0', $0d, 'X', PETSCII_Q, 0
 script_buy_yes:
     .byte PETSCII_A, PETSCII_Y, 0
+script_sell_yes:
+    .byte PETSCII_A, PETSCII_Y, 'X', 0
 script_buy_kick:
     .byte '4', $0d, 'X', '4', $0d, 'X', '4', $0d, 'X', 0

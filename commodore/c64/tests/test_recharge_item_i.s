@@ -318,7 +318,14 @@ test_seed_wand:
     lda #1
     sta inv_qty
     lda #0
+    sta inv_to_ac
+    lda #$fe
+    sta inv_to_hit
+    lda #6
+    sta inv_to_dam
+    lda #IF_IDENTIFIED
     sta inv_flags
+    lda #EGO_FLAME_TONGUE
     sta inv_ego
     rts
 
@@ -354,6 +361,20 @@ test_start:
     bne !t1_fail+
     lda inv_p1
     cmp #5
+    bne !t1_fail+
+    lda inv_to_hit
+    cmp #$fe
+    bne !t1_fail+
+    lda inv_to_dam
+    cmp #6
+    bne !t1_fail+
+    lda inv_to_ac
+    bne !t1_fail+
+    lda inv_flags
+    cmp #IF_IDENTIFIED
+    bne !t1_fail+
+    lda inv_ego
+    cmp #EGO_FLAME_TONGUE
     bne !t1_fail+
     lda tri_success_msg_calls
     cmp #1

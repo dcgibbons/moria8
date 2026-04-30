@@ -10,11 +10,90 @@ disk_marker_scratch_cmd:
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
 .label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
 #if !C128
-c64_disk_marker_write:
-    lda #2
+.label c64_disk_marker_write_phys = c64_disk_marker_write_resident
+#else
+disk_diag_phase:       .byte 0
+disk_diag_carry:       .byte 0
+disk_diag_readst:      .byte 0
+disk_diag_device:      .byte 0
+disk_diag_lfn:         .byte 0
+disk_diag_sec:         .byte 0
+disk_diag_byte:        .byte 0
+disk_diag_index:       .byte 0
+disk_diag_cmd_status0: .byte 0
+disk_diag_cmd_status1: .byte 0
+disk_diag_init_status0:.byte 0
+disk_diag_init_status1:.byte 0
+disk_diag_scratch_status0:.byte 0
+disk_diag_scratch_status1:.byte 0
+disk_diag_write_status0:.byte 0
+disk_diag_write_status1:.byte 0
+#endif
+
+disk_marker_init:
+#if C128
+    lda #$90
+    sta disk_diag_phase
+    lda save_device
+    sta disk_diag_device
+    lda #DISK_MARKER_FILE_NUM
+    sta disk_diag_lfn
+    lda #DISK_MARKER_SEC_WR
+    sta disk_diag_sec
+    lda #$ff
+    sta disk_diag_readst
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
+    sta disk_diag_scratch_status0
+    sta disk_diag_scratch_status1
+    sta disk_diag_write_status0
+    sta disk_diag_write_status1
+
+    jsr disk_kernal_enter
+    lda #disk_marker_scratch_cmd_len
+    ldx #<disk_marker_scratch_cmd
+    ldy #>disk_marker_scratch_cmd
+    jsr KERNAL_SETNAM
+    lda #CMD_CHANNEL
+    ldx save_device
+    ldy #CMD_CHANNEL
+    jsr KERNAL_SETLFS
+    jsr KERNAL_OPEN
+    bcc !dmi_scratch_open_ok+
+    lda #1
+    sta disk_diag_carry
+    lda #$97
+    sta disk_diag_phase
     sta disk_status
-    lda #$36
-    sta $01
+    jmp !dmi_done+
+!dmi_scratch_open_ok:
+    lda #CMD_CHANNEL
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
+    jsr disk_diag_read_command_status
+    lda disk_diag_cmd_status0
+    sta disk_diag_scratch_status0
+    lda disk_diag_cmd_status1
+    sta disk_diag_scratch_status1
+    lda disk_diag_scratch_status0
+    cmp #$30
+    bne !dmi_scratch_fail+
+    lda disk_diag_scratch_status1
+    cmp #$30
+    beq !dmi_create+
+    cmp #$31
+    beq !dmi_create+
+!dmi_scratch_fail:
+    lda #$97
+    sta disk_diag_phase
+    sta disk_status
+    jmp !dmi_done+
+!dmi_create:
+    lda #$91
+    sta disk_diag_phase
+    lda #$91
+    sta disk_status
+
     lda #disk_marker_write_fname_len - 1
     ldx #<(disk_marker_write_fname + 1)
     ldy #>(disk_marker_write_fname + 1)
@@ -24,99 +103,140 @@ c64_disk_marker_write:
     ldy #DISK_MARKER_SEC_WR
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
-    bcs !cdmw_close+
+    bcc !dmi_open_ok+
+    lda #1
+    sta disk_diag_carry
+    lda #$92
+    sta disk_diag_phase
+    sta disk_status
+    jmp !dmi_done+
+!dmi_open_ok:
+    lda #0
+    sta disk_diag_carry
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    beq !dmi_chkout+
+    lda #$92
+    sta disk_diag_phase
+    sta disk_status
+    jmp !dmi_close+
+
+!dmi_chkout:
+    lda #$93
+    sta disk_diag_phase
     ldx #DISK_MARKER_FILE_NUM
     jsr KERNAL_CHKOUT
-    bcs !cdmw_close+
-    ldx #0
-!cdmw_write:
-    lda disk_marker_magic,x
-    jsr KERNAL_CHROUT
-    inx
-    cpx #DISK_MARKER_MAGIC_LEN
-    bcc !cdmw_write-
-    lda #0
-    sta disk_status
-!cdmw_close:
-    jsr KERNAL_CLRCHN
-    lda #DISK_MARKER_FILE_NUM
-    jsr KERNAL_CLOSE
-    lda #$34
-    sta $01
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-    lda disk_status
-    beq !cdmw_ok+
-    sec
-    rts
-!cdmw_ok:
-    clc
-    rts
-
-.label c64_disk_marker_write_phys = banked_payload + (c64_disk_marker_write - $F000)
-#endif
-
-disk_marker_init:
-#if C128
-    jsr disk_kernal_enter
-
-    lda #disk_marker_scratch_cmd_len
-    ldx #<disk_marker_scratch_cmd
-    ldy #>disk_marker_scratch_cmd
-    jsr FEAT_SETNAM
-    lda #CMD_CHANNEL
-    ldx save_device
-    ldy #CMD_CHANNEL
-    jsr FEAT_SETLFS
-    jsr FEAT_OPEN
-    bcs !dmi_create+
-    lda #CMD_CHANNEL
-    jsr FEAT_CLOSE
-    jsr FEAT_CLRCHN
-!dmi_create:
+    bcc !dmi_write_start+
     lda #1
+    sta disk_diag_carry
+    lda #$93
     sta disk_status
+    jmp !dmi_close+
 
-    lda #disk_marker_write_fname_len - 1
-    ldx #<(disk_marker_write_fname + 1)
-    ldy #>(disk_marker_write_fname + 1)
-    jsr FEAT_SETNAM
-    lda #DISK_MARKER_FILE_NUM
-    ldx save_device
-    ldy #DISK_MARKER_SEC_WR
-    jsr FEAT_SETLFS
-    jsr FEAT_OPEN
-    bcs !dmi_done+
-
-    ldx #DISK_MARKER_FILE_NUM
-    jsr FEAT_CHKOUT
-    bcs !dmi_close+
-
+!dmi_write_start:
+    lda #0
+    sta disk_diag_carry
     lda #0
     sta disk_temp
 !dmi_write:
+    lda #$94
+    sta disk_diag_phase
     ldx disk_temp
+    stx disk_diag_index
     lda disk_marker_magic,x
-    jsr FEAT_CHROUT
-    inx
-    stx disk_temp
-    cpx #DISK_MARKER_MAGIC_LEN
+    jsr KERNAL_CHROUT
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    beq !dmi_write_ok+
+    lda #$94
+    sta disk_status
+    jmp !dmi_close+
+!dmi_write_ok:
+    inc disk_temp
+    lda disk_temp
+    cmp #DISK_MARKER_MAGIC_LEN
     bcc !dmi_write-
     lda #0
     sta disk_status
 !dmi_close:
-    jsr FEAT_CLRCHN
+    lda #$95
+    sta disk_diag_phase
+    jsr KERNAL_CLRCHN
     lda #DISK_MARKER_FILE_NUM
-    jsr FEAT_CLOSE
+    jsr KERNAL_CLOSE
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    jsr disk_diag_read_command_status
+    lda disk_diag_cmd_status0
+    sta disk_diag_write_status0
+    lda disk_diag_cmd_status1
+    sta disk_diag_write_status1
+    lda disk_diag_write_status0
+    cmp #$30
+    bne !dmi_cmd_fail+
+    lda disk_diag_write_status1
+    cmp #$30
+    beq !dmi_done+
+!dmi_cmd_fail:
+    lda #$96
+    sta disk_diag_phase
+    sta disk_status
 !dmi_done:
     jsr disk_kernal_exit
+    lda disk_status
+    bne !dmi_fail+
     jsr disk_marker_present
     bcc !dmi_ok+
+!dmi_fail:
     sec
     rts
 !dmi_ok:
     clc
+    rts
+
+disk_diag_read_command_status:
+    lda #$ff
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
+    lda #0
+    ldx #0
+    ldy #0
+    jsr KERNAL_SETNAM
+    lda #CMD_CHANNEL
+    ldx save_device
+    ldy #CMD_CHANNEL
+    jsr KERNAL_SETLFS
+    jsr KERNAL_OPEN
+    bcs !ddrcs_done+
+    ldx #CMD_CHANNEL
+    jsr KERNAL_CHKIN
+    bcs !ddrcs_close+
+    jsr KERNAL_CHRIN
+    sta disk_diag_cmd_status0
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    jsr KERNAL_CHRIN
+    sta disk_diag_cmd_status1
+    jsr KERNAL_READST
+    sta disk_diag_readst
+!ddrcs_close:
+    jsr KERNAL_CLRCHN
+    lda #CMD_CHANNEL
+    jsr KERNAL_CLOSE
+!ddrcs_done:
+    rts
+
+disk_setup_capture_init_status:
+    lda #$ff
+    sta disk_diag_init_status0
+    sta disk_diag_init_status1
+    jsr disk_kernal_enter
+    jsr disk_diag_read_command_status
+    lda disk_diag_cmd_status0
+    sta disk_diag_init_status0
+    lda disk_diag_cmd_status1
+    sta disk_diag_init_status1
+    jsr disk_kernal_exit
     rts
 #else
     lda #2
@@ -165,7 +285,8 @@ disk_setup_call_ui:
 
 disk_setup_commit_ready:
 #if C128
-    inc disk_setup_done
+    lda #1
+    sta disk_setup_done
 #else
     lda #2
     sta disk_setup_done
@@ -175,12 +296,15 @@ disk_setup_commit_ready:
 
 disk_setup_commit_initialized:
 #if C128
-    inc disk_setup_done
+    lda #1
+    sta disk_setup_done
+    lda #DISK_UI_RES_OK
+    sta disk_ui_result
 #else
     lda #2
     sta disk_setup_done
 #endif
-    sec
+    clc
     rts
 
 disk_setup_prepare_selected:
@@ -188,6 +312,9 @@ disk_setup_prepare_selected:
     lda #DISK_UI_ACT_INSERT_DISK
     jsr disk_setup_call_ui
     jsr disk_init_drive
+#if C128
+    jsr disk_setup_capture_init_status
+#endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
     lda #DISK_UI_ACT_INIT_PROMPT

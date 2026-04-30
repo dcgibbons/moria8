@@ -41,6 +41,7 @@ test_exit_trampoline:
 #import "../../common/math.s"
 #import "../../common/tables.s"
 #import "../../common/item_defs.s"
+#import "../../common/spell_data.s"
 #import "../../common/player.s"
 #import "../../common/ui_messages.s"
 #import "../../common/ui_status.s"
@@ -757,7 +758,7 @@ test_start:
     lda #7                      // Leather armor
     sta inv_item_id + EQUIP_BODY
     lda #0
-    sta inv_p1 + EQUIP_BODY
+    sta inv_to_ac + EQUIP_BODY
 
     jsr player_calc_combat
 
@@ -793,11 +794,11 @@ test_start:
     lda #8                      // Chain mail
     sta inv_item_id + EQUIP_BODY
     lda #2                      // +2 enchantment
-    sta inv_p1 + EQUIP_BODY
+    sta inv_to_ac + EQUIP_BODY
     lda #10                     // Iron helm
     sta inv_item_id + EQUIP_HEAD
     lda #0
-    sta inv_p1 + EQUIP_HEAD
+    sta inv_to_ac + EQUIP_HEAD
 
     jsr player_calc_combat
 

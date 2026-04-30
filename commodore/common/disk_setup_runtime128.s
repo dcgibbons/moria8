@@ -1,7 +1,7 @@
 #importonce
 // disk_setup_runtime128.s — C128 FEAT-DISK coordinator and title/save entry
-// points loaded into common RAM so the main Default segment does not own the
-// modal disk-setup transaction.
+// points loaded into the dedicated disk-I/O runtime below ROM-shadowed regions
+// so title-time disk setup is callable regardless of the current C128 banking state.
 
 #if C128
 tramp_disk_setup_ui_action:
@@ -38,13 +38,8 @@ title_require_disk_setup:
     bne !trds_ready+
     jsr tramp_disk_setup
     bcs !trds_done+
-    lda disk_ui_value
-    bne !trds_cancel+
-    inc disk_setup_done
     clc
     rts
-!trds_cancel:
-    sec
 !trds_done:
     rts
 !trds_ready:

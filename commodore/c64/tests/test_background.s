@@ -60,6 +60,7 @@ test_exit_trampoline:
 #import "../../common/item.s"
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
+#import "../../common/spell_data.s"
 #import "../../common/special_rooms_stubs.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"

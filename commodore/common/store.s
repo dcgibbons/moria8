@@ -9,28 +9,6 @@
 
 // Constants defined in store_data.s (imported in main RAM before overlay)
 
-// ============================================================
-// Store category bitmasks (16-bit, bit N = ICAT N)
-// ============================================================
-// Store 0 General:  FOOD(9), LIGHT(8)         = $0300
-// Store 1 Armory:   ARMOR(3), SHIELD(4), HELM(5), GLOVES(6), BOOTS(7) = $00F8
-// Store 2 Weapon:   WEAPON(2)                 = $0004
-// Store 3 Temple:   SCROLL(11), POTION(10)    = $0C00
-// Store 4 Alchemy:  POTION(10)                = $0400
-// Store 5 Magic:    WAND(14), STAFF(15), RING(12) = $D000
-store_cat_mask_lo:
-    .byte <$0301, <$00F8, <$0004, <$0C00, <$0400, <$F000, <$FFFF, <$FFFF
-store_cat_mask_hi:
-    .byte >$0300, >$00F8, >$0004, >$0C00, >$0400, >$F000, >$FFFF, >$FFFF
-
-// Fallback items per store (used when rejection sampling fails)
-store_fallback:
-    .byte 15, 7, 2, 20, 17, 23, 2, 15  // food, leather, dagger, scroll, CLW potion, ring, dagger(BM), food(Home)
-
-// Bit mask table for category checking (bit 0-7)
-bit_mask_table:
-    .byte $01, $02, $04, $08, $10, $20, $40, $80
-
 // Store name/owner strings moved to store_data.s (main RAM)
 // to save overlay space. Labels are accessible from overlay code.
 
@@ -45,10 +23,10 @@ ss_item_id:    .byte 0     // Item type being sold
 sd_row:        .byte 0     // Current screen row during drawing
 sd_save_x:     .byte 0     // Saved index register
 sd_save_item_id: .byte 0   // Saved item type for prefix check (R14)
-sr_retry:      .byte 0     // Rejection sampling retry counter
-sr_store_idx:  .byte 0     // Store index for restock loop
-sro_count:     .byte 0     // Item count for variable restock probability
 sb_item_p1:    .byte 0     // Item enchantment/charges for pricing (RP14-3)
+sb_item_to_hit: .byte 0    // Split item stats for pricing
+sb_item_to_dam: .byte 0
+sb_item_to_ac:  .byte 0
 sb_item_type:  .byte 0     // Item type saved for p1 bonus lookup
 sb_item_ego:   .byte 0     // Ego byte for pricing (R14)
 
@@ -70,259 +48,6 @@ hg_kicked:     .fill 8, 0  // Per-store kicked flag (resets on town re-entry)
 hg_tmp0:       .byte 0     // Temp for gap/step calculation
 hg_tmp1:       .byte 0
 hg_digit_cnt:  .byte 0     // Digit count for number input
-
-// ============================================================
-// Subroutines
-// ============================================================
-
-// store_init_all — Clear all store slots and restock
-// Called once at game start.
-// Clobbers: everything
-store_init_all:
-    // Clear all 72 slots to empty
-    ldx #STORE_TOTAL_SLOTS - 1
-    lda #FI_EMPTY
-!sia_clr:
-    sta si_item_id,x
-    dex
-    bpl !sia_clr-
-
-    ldx #STORE_TOTAL_SLOTS - 1
-    lda #0
-!sia_clr2:
-    sta si_qty,x
-    sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
-    dex
-    bpl !sia_clr2-
-
-    jmp store_restock_all       // Tail call
-
-// store_restock_all — Restock all stores + reset kicked flags
-// Skips home (STORE_HOME) — player items persist, no restock.
-// Clobbers: everything
-store_restock_all:
-    // Reset haggling kicked flags for all stores
-    ldx #7
-    lda #0
-!sra_clr_kick:
-    sta hg_kicked,x
-    dex
-    bpl !sra_clr_kick-
-
-    sta sr_store_idx
-!sra_loop:
-    lda sr_store_idx
-    cmp #STORE_COUNT
-    bcs !sra_done+
-    cmp #STORE_HOME
-    beq !sra_skip+              // Skip home — player items persist
-    sta zp_store_idx
-    jsr store_restock_one
-!sra_skip:
-    inc sr_store_idx
-    jmp !sra_loop-
-!sra_done:
-    rts
-
-// store_restock_one — Restock empty slots in store zp_store_idx
-// Variable probability: 75% if <6 items, 50% if 6-10, 25% if >10.
-// Single-pass: counts items inline and adjusts probability dynamically.
-// After restocking, removes 1 random item if store has >10 items.
-// Clobbers: everything
-store_restock_one:
-    ldx zp_store_idx
-    lda store_base_idx,x
-    sta sb_abs_slot
-    lda #0
-    sta sro_count
-
-    ldx #0                      // Slot counter 0-11
-!sro_loop:
-    cpx #STORE_MAX_ITEMS
-    bcs !sro_done+
-    stx sd_save_x
-
-    // Check if slot is occupied or empty
-    ldy sb_abs_slot
-    lda si_item_id,y
-    cmp #FI_EMPTY
-    bne !sro_cnt_inc+           // Occupied → count it
-
-    // Empty slot: stock with variable probability
-    // sro_prob_tbl[count] = skip threshold (rng < threshold → skip)
-    jsr rng_byte
-    ldy sro_count
-    cmp sro_prob_tbl,y
-    bcc !sro_next+              // rng < threshold → don't stock
-
-    // Pick and stock an item
-    jsr store_pick_item         // Returns A = item type
-    ldy sb_abs_slot
-    sta si_item_id,y
-    lda #1
-    sta si_qty,y
-    lda si_item_id,y
-    tax
-    lda it_category,x
-    jsr sro_set_p1
-
-!sro_cnt_inc:
-    inc sro_count               // Count occupied + newly stocked
-
-!sro_next:
-    ldx sd_save_x
-    inc sb_abs_slot
-    inx
-    jmp !sro_loop-
-
-!sro_done:
-    rts
-
-// Skip threshold table: rng < value → don't stock
-// count 0-5: 64 (75% stock), 6-10: 128 (50%), 11-12: 192 (25%)
-sro_prob_tbl:
-    .byte 64, 64, 64, 64, 64, 64
-    .byte 128, 128, 128, 128, 128
-    .byte 192, 192
-
-// sro_set_p1 — Set p1 and flags for newly stocked item
-// Input: A = category, sb_abs_slot = target slot
-// Clobbers: A, X, Y
-sro_set_p1:
-    // Equipment categories (WEAPON=2 through BOOTS=7) get enchantment 0-2
-    cmp #ICAT_WEAPON
-    bcc !sro_default+
-    cmp #ICAT_BOOTS + 1
-    bcc !sro_enchant+
-    // ICAT_BOOK=13
-    cmp #ICAT_BOOK
-    beq !sro_book+
-    // Wands(14)/staffs(15) get charges 3-8
-    cmp #ICAT_WAND
-    bcc !sro_default+
-    cmp #ICAT_STAFF + 1
-    bcc !sro_charges+
-
-    cmp #ICAT_LIGHT
-    beq !sro_light+
-
-!sro_default:
-    // Default: p1 = 0, flags = 0
-    lda #0
-    jmp sro_store_p1
-
-!sro_charges:
-    lda #6
-    jsr rng_range               // 0-5
-    clc
-    adc #3
-    jmp sro_store_p1
-
-!sro_enchant:
-    lda #3
-    jsr rng_range               // 0-2
-    jmp sro_store_p1
-
-!sro_book:
-    // Books: p1=0 (spell range determined by book type)
-    lda #0
-    jmp sro_store_p1
-
-!sro_light:
-    // Light items: set charges based on type
-    ldy sb_abs_slot
-    lda si_item_id,y
-    cmp #13
-    beq !sro_light_torch+
-    // Lantern (14) and Flask of oil (61): 250 charges
-    lda #LANTERN_MAX_CHARGES
-    jmp sro_store_p1
-!sro_light_torch:
-    lda #134                    // 134 charges × 30 = 4,020 turns
-
-// Shared tail: store A → si_p1, set IF_IDENTIFIED in si_flags, clear si_ego
-// Input: A = p1 value, sb_abs_slot = target
-sro_store_p1:
-    ldy sb_abs_slot
-    sta si_p1,y
-    lda #IF_IDENTIFIED          // Store items are always identified
-    sta si_flags,y
-    lda #0
-    sta si_ego,y
-    rts
-
-// store_pick_item — Pick a random item suitable for store zp_store_idx
-// Output: A = item type ID
-// Uses rejection sampling with fallback.
-// Clobbers: A, X, Y
-store_pick_item:
-    lda #STORE_PICK_RETRIES
-    sta sr_retry
-
-!spi_loop:
-    // Random item type [2, 63] (skip gold types 0-1)
-    lda #62                     // 62 possible types (2..63)
-    jsr rng_range               // 0-61
-    clc
-    adc #2                      // 2-63
-
-    // Check if this item's category matches the store
-    pha                         // Save item type on stack
-    tax
-    lda it_category,x           // A = item category
-    jsr check_store_category    // Carry set = match (clobbers X)
-    bcc !spi_reject+
-
-    // Match — return item type
-    pla
-    rts
-
-!spi_reject:
-    pla                         // Discard saved item type
-    dec sr_retry
-    bne !spi_loop-
-
-    // Fallback — use guaranteed item for this store
-    ldx zp_store_idx
-    lda store_fallback,x
-    rts
-
-// check_store_category — Test if item category matches store
-// Input: A = ICAT value (0-15), zp_store_idx = store index
-// Output: carry set = category sold here, carry clear = not
-// Clobbers: A, X
-check_store_category:
-    // Category value determines which bit to test
-    // Low byte handles bits 0-7, high byte handles bits 8-15
-    cmp #8
-    bcs !csc_hi+
-
-    // Test low byte
-    tax
-    lda bit_mask_table,x
-    ldx zp_store_idx
-    and store_cat_mask_lo,x
-    beq !csc_no+
-    sec
-    rts
-
-!csc_hi:
-    // Test high byte (category 8-15, bit index = category - 8)
-    sec
-    sbc #8
-    tax
-    lda bit_mask_table,x
-    ldx zp_store_idx
-    and store_cat_mask_hi,x
-    beq !csc_no+
-    sec
-    rts
-
-!csc_no:
-    clc
-    rts
 
 // ============================================================
 // Price calculation helpers
@@ -527,23 +252,24 @@ calc_buy_min_price:
 // Input: sb_price_lo/hi = base adjusted price, sb_item_p1 = p1,
 //        sb_item_type = item type ID
 // Output: sb_price_lo/hi updated with bonus
-// Equipment (weapon/armor/shield/helm/gloves/boots/cloak): +100 GP per p1
+// Equipment: +100 GP per positive split stat
 // Wand/Staff: +10 GP per charge (p1)
 // Other: no bonus
 // Clobbers: A, X
 price_add_p1_bonus:
-    lda sb_item_p1
-    beq !pap_done+              // p1=0, no bonus
-
     // Look up category
     ldx sb_item_type
     lda it_category,x
 
     // Equipment range: WEAPON(2) through BOOTS(7)
     cmp #ICAT_WEAPON
-    bcc !pap_done+
+    bcc !pap_check_ring+
     cmp #ICAT_BOOTS + 1
     bcc !pap_equip+
+
+!pap_check_ring:
+    cmp #ICAT_RING
+    beq !pap_ring+
 
     // Wand(14)/Staff(15)
     cmp #ICAT_WAND
@@ -556,19 +282,24 @@ price_add_p1_bonus:
     rts
 
 !pap_equip:
-    // Add p1 × 100 to price
+    lda sb_item_to_hit
+    jsr price_add_signed_stat_100
+    lda sb_item_to_dam
+    jsr price_add_signed_stat_100
+    lda sb_item_to_ac
+    jsr price_add_signed_stat_100
+    rts
+
+!pap_ring:
+    lda sb_item_to_ac
+    jsr price_add_signed_stat_100
     lda sb_item_p1
-    ldx #100
-    jsr math_multiply           // A = lo, zp_math_b = hi
-    clc
-    adc sb_price_lo
-    sta sb_price_lo
-    lda zp_math_b
-    adc sb_price_hi
-    sta sb_price_hi
+    jsr price_add_signed_stat_100
     rts
 
 !pap_charges:
+    lda sb_item_p1
+    beq !pap_done-
     // Add p1 × 10 to price (max 8×10 = 80, fits in byte)
     lda sb_item_p1
     asl                         // ×2
@@ -582,6 +313,20 @@ price_add_p1_bonus:
     lda #0
     adc sb_price_hi
     sta sb_price_hi
+    rts
+
+price_add_signed_stat_100:
+    beq !passt_done+
+    bmi !passt_done+
+    ldx #100
+    jsr math_multiply           // A = lo, zp_math_b = hi
+    clc
+    adc sb_price_lo
+    sta sb_price_lo
+    lda zp_math_b
+    adc sb_price_hi
+    sta sb_price_hi
+!passt_done:
     rts
 
 // ============================================================

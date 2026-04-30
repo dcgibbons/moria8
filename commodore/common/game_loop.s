@@ -536,6 +536,11 @@ game_new_start:
     sta level_entry_dir
     lda #$ff
     sta zp_run_dir              // Not running
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
+    sta old_view_x
+    sta old_view_y
     lda #OVL_DUNGEON_GEN
 #if C128_REAL_BOOT_DIAG
     ldx #$21
@@ -892,12 +897,18 @@ c128_town_move_diag_after_input_get_command:
     lda disk_setup_done
     beq !save_return_view+
 !save_setup_ready:
+#if C128_PRODUCT_MODAL_PERSIST
+    jsr c128_modal_save_game
+#else
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr save_game
+#endif
     lda #0
     adc #0
     sta zp_temp0
+#if !C128_PRODUCT_MODAL_PERSIST
     jsr disk_prompt_game        // Swap back to game disk if dual
+#endif
     lda zp_temp0
     beq !save_return_main+
     jmp !quit+
@@ -1584,6 +1595,9 @@ level_change_generate_current:
     jsr update_visibility
     jsr generation_busy_end_if_dungeon_api
     jsr screen_clear
+    lda #0
+    sta zp_view_x
+    sta zp_view_y
     jsr viewport_update
     jsr render_viewport
     jsr screen_unblank
@@ -1690,22 +1704,38 @@ cmd_equipment:
 
 cmd_wear:
     jsr msg_clear
+#if C128
+    jsr tramp_item_wear
+#else
     jsr item_wear
+#endif
     jmp command_result_main_or_redraw_full
 
 cmd_takeoff:
     jsr msg_clear
+#if C128
+    jsr tramp_item_takeoff
+#else
     jsr item_takeoff
+#endif
     jmp command_result_main_or_redraw_full
 
 cmd_eat:
     jsr msg_clear
+#if C128
+    jsr tramp_item_eat
+#else
     jsr item_eat
+#endif
     jmp command_result_main_or_status_only
 
 cmd_quaff:
     jsr msg_clear
+#if C128
+    jsr tramp_item_quaff
+#else
     jsr item_quaff
+#endif
     jmp command_result_main_or_status_only
 
 cmd_read:
@@ -1749,20 +1779,12 @@ cmd_gain:
 
 cmd_fire:
     jsr msg_clear
-#if C128
     jsr tramp_ranged_fire
-#else
-    jsr ranged_fire
-#endif
     jmp command_result_main_or_update_visibility
 
 cmd_throw:
     jsr msg_clear
-#if C128
     jsr tramp_throw_item
-#else
-    jsr throw_item
-#endif
     jmp command_result_main_or_update_visibility
 
 cmd_refuel:
@@ -1772,20 +1794,12 @@ cmd_refuel:
 
 cmd_bash:
     jsr msg_clear
-#if C128
     jsr tramp_bash_command
-#else
-    jsr bash_command
-#endif
     jmp command_result_main_or_update_visibility
 
 cmd_tunnel:
     jsr msg_clear
-#if C128
     jsr tramp_player_tunnel
-#else
-    jsr player_tunnel
-#endif
     jmp command_result_main_or_update_visibility
 
 cmd_look:
@@ -2020,8 +2034,10 @@ exit:
 // String data — gameplay strings (MUST stay below $C000)
 // ============================================================
 
+#if !PRESS_KEY_STR_EXTERNAL
 press_key_str:
     .text "Press any key" ; .byte 0
+#endif
 
 welcome_str:
     .text "Welcome to Moria8! Shift+Q to quit." ; .byte 0
@@ -2307,62 +2323,3 @@ banked_ego_put_suffix:
 !beps_done:
     rts
 beps_save_y: .byte 0
-
-// ============================================================
-// put_inv_name_with_ego — Print item name with ego prefix/suffix
-// Input: X = inventory slot index
-// For ICAT_DIGGING + ego>0: prints "Gnomish Shovel" (prefix + name)
-// For other + ego>0: prints "Long Sword (Flame)"
-// For auto-sensed unidentified items, appends the persistent "(magik)" marker.
-// Clobbers: A, X, Y, zp_ptr0
-// ============================================================
-put_inv_name_with_ego:
-    lda inv_item_id,x
-    sta pinwe_item_id
-    stx pinwe_slot
-    tax
-    lda it_category,x
-    bne !pinwe_not_tool+
-    ldx pinwe_slot
-    lda inv_ego,x
-    beq !pinwe_not_tool+
-    cmp #EGO_TYPE_COUNT
-    bcs !pinwe_not_tool+
-    ldx pinwe_item_id
-    jsr put_tool_ego_prefix
-    lda pinwe_item_id
-    jsr item_get_name_ptr
-    jsr screen_put_string
-    jsr put_inv_sensed_suffix
-    rts
-!pinwe_not_tool:
-    lda pinwe_item_id
-    jsr item_get_name_ptr
-    jsr screen_put_string
-    ldx pinwe_slot
-    lda inv_ego,x
-    cmp #EGO_TYPE_COUNT
-    bcc !pinwe_valid_ego+
-    lda #0
-!pinwe_valid_ego:
-    jsr banked_ego_put_suffix
-    jsr put_inv_sensed_suffix
-    rts
-
-put_inv_sensed_suffix:
-    ldx pinwe_slot
-    lda inv_flags,x
-    and #IF_IDENTIFIED | IF_SENSED
-    cmp #IF_SENSED
-    bne !pinwe_done+
-    lda #<pinwe_sensed_suffix
-    sta zp_ptr0
-    lda #>pinwe_sensed_suffix
-    sta zp_ptr0_hi
-    jsr screen_put_string
-!pinwe_done:
-    rts
-
-pinwe_sensed_suffix: .text " (magik)" ; .byte 0
-pinwe_item_id: .byte 0
-pinwe_slot:    .byte 0

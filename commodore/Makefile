@@ -89,6 +89,7 @@ C64_OVL_GEN        = $(OUT64)/ovl.gen
 C64_OVL_HELP       = $(OUT64)/ovl.help
 C64_OVL_UI         = $(OUT64)/ovl.ui
 C64_OVL_ITEMS      = $(OUT64)/ovl.items
+C64_RUNTIME_BANKED = $(OUT64)/64.bank
 
 # ── C128 artifacts ────────────────────────────────────────
 C128_MAIN_PRG      = $(OUT128)/moria128.prg
@@ -104,8 +105,17 @@ C128_OVL_HELP      = $(OUT128)/ovl.help
 C128_OVL_UI        = $(OUT128)/ovl.ui
 C128_OVL_ITEMS     = $(OUT128)/ovl.items
 C128_RUNTIME_INPUT = $(OUT128)/128.input.prg
+C128_RUNTIME_PROJECTILE = $(OUT128)/128.proj.prg
 C128_RUNTIME_LOW   = $(OUT128)/128.runtime.prg
 C128_RUNTIME_COMMON = $(OUT128)/128.fdisk.prg
+C128_RUNTIME_DISKIO = $(OUT128)/128.diskio.prg
+C128_RESIDENT_WORLD = $(OUT128)/128.world.prg
+C128_RESIDENT_ITEMS = $(OUT128)/128.item.prg
+C128_RESIDENT_SELECT = $(OUT128)/128.select.prg
+C128_RESIDENT_PERSIST = $(OUT128)/128.persist.prg
+C128_RESIDENT_PLAY = $(OUT128)/128.play.prg
+C128_RUNTIME_BANKED = $(OUT128)/128.bank.prg
+C128_MAIN_STAMP   = $(OUT128)/.main.stamp
 C128_BOOTSECT_PRG  = $(OUT128)/bootsect128.prg
 C128_CHARSET_DEMO_PRG = $(OUT128)/vdc_charset_poster_demo.prg
 C128_BOOTART_DIAG_PRG = $(OUT128)/bootart128.prg
@@ -124,11 +134,18 @@ DISK128_LABEL      = "moria8 c128,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
-	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS)
+	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) \
+	$(C64_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
 	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
-	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON)
+		$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) $(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
+	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) $(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
+C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
+	$(C128_OVL_GEN) $(C128_OVL_HELP) $(C128_OVL_UI) $(C128_OVL_ITEMS) \
+		$(C128_RUNTIME_INPUT) $(C128_RUNTIME_PROJECTILE) $(C128_RUNTIME_LOW) $(C128_RUNTIME_COMMON) $(C128_RUNTIME_DISKIO) \
+	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) \
+	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
 .PHONY: all build build64 build128 disk disk64 disk128 run run64 run128 \
 	bootart128-charset-demo \
@@ -196,6 +213,7 @@ $(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT64)
 	mv -f c64/out/ovl.help $(C64_OVL_HELP)
 	mv -f c64/out/ovl.ui $(C64_OVL_UI)
 	mv -f c64/out/ovl.items $(C64_OVL_ITEMS)
+	mv -f c64/out/64.bank $(C64_RUNTIME_BANKED)
 
 $(C64_OVL_START): $(C64_MAIN_PRG)
 $(C64_OVL_TOWN): $(C64_MAIN_PRG)
@@ -204,6 +222,7 @@ $(C64_OVL_GEN): $(C64_MAIN_PRG)
 $(C64_OVL_HELP): $(C64_MAIN_PRG)
 $(C64_OVL_UI): $(C64_MAIN_PRG)
 $(C64_OVL_ITEMS): $(C64_MAIN_PRG)
+$(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
 
 $(C64_BOOT_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
 	$(JAVA) -jar $(KICKASS) $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
@@ -234,7 +253,7 @@ $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KIC
 	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier4_prg.s -o $@
 
 # ── C128 build rules ──────────────────────────────────────
-$(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
+$(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
 	mkdir -p "$(OUT128)" "c128/out"
 	mv -f "c128/out/ovl.start" "$(C128_OVL_START)"
@@ -245,19 +264,21 @@ $(C128_MAIN_PRG): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
 	mv -f "c128/out/ovl.ui" "$(C128_OVL_UI)"
 	mv -f "c128/out/ovl.items" "$(C128_OVL_ITEMS)"
 	mv -f "c128/out/128.input.prg" "$(C128_RUNTIME_INPUT)"
+	mv -f "c128/out/128.proj.prg" "$(C128_RUNTIME_PROJECTILE)"
 	mv -f "c128/out/128.runtime.prg" "$(C128_RUNTIME_LOW)"
 	mv -f "c128/out/128.fdisk.prg" "$(C128_RUNTIME_COMMON)"
+	mv -f "c128/out/128.diskio.prg" "$(C128_RUNTIME_DISKIO)"
+	mv -f "c128/out/128.world.prg" "$(C128_RESIDENT_WORLD)"
+	mv -f "c128/out/128.item.prg" "$(C128_RESIDENT_ITEMS)"
+	mv -f "c128/out/128.select.prg" "$(C128_RESIDENT_SELECT)"
+	mv -f "c128/out/128.persist.prg" "$(C128_RESIDENT_PERSIST)"
+	mv -f "c128/out/128.play.prg" "$(C128_RESIDENT_PLAY)"
+	mv -f "c128/out/128.bank.prg" "$(C128_RUNTIME_BANKED)"
+	touch "$(C128_MAIN_STAMP)"
 
-$(C128_OVL_START): $(C128_MAIN_PRG)
-$(C128_OVL_TOWN): $(C128_MAIN_PRG)
-$(C128_OVL_DEATH): $(C128_MAIN_PRG)
-$(C128_OVL_GEN): $(C128_MAIN_PRG)
-$(C128_OVL_HELP): $(C128_MAIN_PRG)
-$(C128_OVL_UI): $(C128_MAIN_PRG)
-$(C128_OVL_ITEMS): $(C128_MAIN_PRG)
-$(C128_RUNTIME_INPUT): $(C128_MAIN_PRG)
-$(C128_RUNTIME_LOW): $(C128_MAIN_PRG)
-$(C128_RUNTIME_COMMON): $(C128_MAIN_PRG)
+$(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
+	@test -f "$@" || { rm -f "$(C128_MAIN_STAMP)"; $(MAKE) "$(C128_MAIN_STAMP)"; }
+	@test -f "$@"
 
 $(C128_BOOT_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
 	$(JAVA) -jar $(KICKASS) $(C128_BOOT_SRC) -o $(C128_BOOT_PRG)
@@ -321,10 +342,11 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) | $(OUT)
 		-write $(C64_OVL_START) "64.start" \
 		-write $(C64_OVL_TOWN) "64.town" \
 		-write $(C64_OVL_DEATH) "64.death" \
-		-write $(C64_OVL_GEN) "64.gen" \
-		-write $(C64_OVL_HELP) "64.help" \
-		-write $(C64_OVL_UI) "64.ui" \
-		-write $(C64_OVL_ITEMS) "64.items"
+			-write $(C64_OVL_GEN) "64.gen" \
+			-write $(C64_OVL_HELP) "64.help" \
+			-write $(C64_OVL_UI) "64.ui" \
+			-write $(C64_OVL_ITEMS) "64.items" \
+			-write $(C64_RUNTIME_BANKED) "64.bank"
 	python3 $(DISKART) $(DISK64_IMAGE) c64
 	mkdir -p c64/out
 	cp -f $(DISK64_IMAGE) c64/out/moria8-c64.d64
@@ -357,8 +379,16 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 		-write $(C128_OVL_UI) "128.ui" \
 		-write $(C128_OVL_ITEMS) "128.items" \
 		-write $(C128_RUNTIME_INPUT) "128.input" \
-		-write $(C128_RUNTIME_LOW) "128.runtime" \
-		-write $(C128_RUNTIME_COMMON) "128.fdisk"
+			-write $(C128_RUNTIME_PROJECTILE) "128.proj" \
+				-write $(C128_RUNTIME_LOW) "128.runtime" \
+				-write $(C128_RUNTIME_COMMON) "128.fdisk" \
+				-write $(C128_RUNTIME_DISKIO) "128.diskio" \
+				-write $(C128_RESIDENT_WORLD) "128.world" \
+			-write $(C128_RESIDENT_ITEMS) "128.item" \
+			-write $(C128_RESIDENT_SELECT) "128.select" \
+			-write $(C128_RESIDENT_PERSIST) "128.persist" \
+			-write $(C128_RESIDENT_PLAY) "128.play" \
+			-write $(C128_RUNTIME_BANKED) "128.bank"
 	python3 $(PATCH_D64) $(DISK128_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
 	python3 $(DISKART) $(DISK128_IMAGE) c128
 	mkdir -p c128/out

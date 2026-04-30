@@ -297,6 +297,19 @@ player_calc_stats:
     cpy #STAT_COUNT
     bne !stat_loop-
 
+    // Ring of Strength uses p1 as a signed STR modifier.
+    ldx #EQUIP_RING
+    lda inv_item_id,x
+    cmp #24
+    bne !pcs_no_str_ring+
+    lda player_data + PL_STR_CUR
+    sta stat_work
+    lda inv_p1,x
+    jsr apply_modifier
+    lda stat_work
+    sta player_data + PL_STR_CUR
+!pcs_no_str_ring:
+
     // Update combat bonuses from stats
     jsr player_calc_combat
     rts
@@ -491,7 +504,7 @@ player_calc_combat:
     lda str_damage_bonus,x
     sta player_data + PL_TODMG
 
-    // AC = DEX bonus + equipment AC (base + enchantment)
+    // AC = DEX bonus + equipment AC (base + split to_ac)
     // Start with DEX AC bonus (signed)
     lda player_data + PL_DEX_CUR
     jsr stat_bonus_index
@@ -510,8 +523,8 @@ player_calc_combat:
     clc
     adc pcc_ac_accum
     sta pcc_ac_accum
-    // Add enchantment bonus (inv_p1, signed)
-    lda inv_p1,x
+    // Add split AC bonus (signed)
+    lda inv_to_ac,x
     clc
     adc pcc_ac_accum
     sta pcc_ac_accum

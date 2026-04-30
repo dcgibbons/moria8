@@ -206,6 +206,12 @@ test_seed_equipped_and_carried_curses:
     sta inv_item_id + EQUIP_WEAPON
     lda #1
     sta inv_qty + EQUIP_WEAPON
+    lda #$fe
+    sta inv_to_hit + EQUIP_WEAPON
+    lda #6
+    sta inv_to_dam + EQUIP_WEAPON
+    lda #EGO_FLAME_TONGUE
+    sta inv_ego + EQUIP_WEAPON
     lda #IF_CURSED
     sta inv_flags + EQUIP_WEAPON
 
@@ -213,6 +219,10 @@ test_seed_equipped_and_carried_curses:
     sta inv_item_id
     lda #1
     sta inv_qty
+    lda #4
+    sta inv_to_ac
+    lda #EGO_DEFENDER
+    sta inv_ego
     lda #IF_CURSED
     sta inv_flags
     rts
@@ -257,9 +267,24 @@ test_start:
     lda inv_flags + EQUIP_WEAPON
     and #IF_CURSED
     bne !t1_fail+
+    lda inv_to_hit + EQUIP_WEAPON
+    cmp #$fe
+    bne !t1_fail+
+    lda inv_to_dam + EQUIP_WEAPON
+    cmp #6
+    bne !t1_fail+
+    lda inv_ego + EQUIP_WEAPON
+    cmp #EGO_FLAME_TONGUE
+    bne !t1_fail+
     lda inv_flags
     and #IF_CURSED
     beq !t1_fail+
+    lda inv_to_ac
+    cmp #4
+    bne !t1_fail+
+    lda inv_ego
+    cmp #EGO_DEFENDER
+    bne !t1_fail+
     lda trc_huff_calls
     cmp #1
     bne !t1_fail+

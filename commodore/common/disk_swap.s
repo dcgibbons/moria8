@@ -15,6 +15,7 @@
 // Data
 // ============================================================
 disk_mode:         .byte 0             // 0=unset, 1=one-drive swap, 2=save drive
+program_device:    .byte 8             // Device# for program/runtime PRG I/O
 save_device:       .byte 8             // Device# for save/score I/O
 disk_setup_done:   .byte 0             // 0 until the session finishes Disk Setup
 disk_ui_result:    .byte 1             // 0=success, 1=cancel/failure
@@ -23,6 +24,7 @@ disk_ui_value:     .byte 0
 
 disk_temp:         .byte 0
 disk_status:       .byte 0
+disk_prompt_device:.byte 8
 
 // PETSCII command bytes / marker file contents
 disk_init_cmd:     .byte $49, $30      // "I0"
@@ -47,7 +49,11 @@ disk_marker_write_fname:
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
+#if C128
+.const DISK_MARKER_FILE_NUM = 13      // Keep clear of C128 runtime-loader logical files 2-12.
+#else
 .const DISK_MARKER_FILE_NUM = 6
+#endif
 .const DISK_MARKER_SEC_RD   = 2       // Match normal sequential file reads
 .const DISK_MARKER_SEC_WR   = 2       // Match normal sequential file writes
 .const DISK_PROGRAM_FILE_NUM = 7
@@ -105,7 +111,12 @@ disk_reset_session_state:
     lda #1
     sta disk_ui_result
     lda #8
+    sta program_device
     sta save_device
+#if C128
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+#endif
     rts
 
 disk_require_save_media:
@@ -126,15 +137,18 @@ disk_require_save_media:
 // Swap prompts
 // ============================================================
 disk_prompt_save:
+    lda save_device
+    sta disk_prompt_device
 #if C128
-    // After one-drive setup validates the save disk on C128, keep runtime
-    // on that media instead of re-prompting on every save/load transaction.
-    // Preserve the old prompt path's drive re-init side effect.
+    // In one-drive mode, setup completion does not prove which disk is
+    // currently mounted. Prompt only when the media-state owner says save
+    // media is not already current.
     lda disk_mode
     cmp #1
     bne !dps_prompt+
-    lda disk_setup_done
-    beq !dps_prompt+
+    lda c128_media_state
+    cmp #C128_MEDIA_SAVE
+    bne !dps_prompt+
     jsr input_prepare_modal_dismiss_key
     jsr disk_init_drive
     rts
@@ -163,12 +177,14 @@ disk_prompt_save:
     jmp disk_prompt
 
 disk_prompt_game:
+    lda program_device
+    sta disk_prompt_device
 #if C128
-    // C128 runtime/overlay assets are already resident after boot, so
-    // one-drive sessions never need to swap back to program media. This
-    // intentionally skips the legacy prompt and its drive re-init side effect.
     lda disk_mode
     cmp #1
+    bne !dpg_prompt+
+    lda c128_media_state
+    cmp #C128_MEDIA_PROGRAM
     bne !dpg_prompt+
     rts
 !dpg_prompt:
@@ -212,7 +228,7 @@ disk_prompt:
 #else
     jsr input_get_key
 #endif
-    jsr disk_init_drive
+    jsr disk_init_selected_drive
 
 #if !C128
     lda #BANK_NO_BASIC
@@ -223,6 +239,23 @@ disk_prompt:
     jsr screen_clear_row
     lda #11
     jsr screen_clear_row
+#if C128
+    lda disk_prompt_device
+    cmp program_device
+    bne !dp_not_program+
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
+    rts
+!dp_not_program:
+    cmp save_device
+    bne !dp_media_unknown+
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    rts
+!dp_media_unknown:
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+#endif
     rts
 
 #if C128
@@ -249,16 +282,19 @@ disk_kernal_exit:
     rts
 
 // ============================================================
-// disk_init_drive — Reinitialize current save drive after swap
+// disk_init_drive — Reinitialize current save drive
 // ============================================================
 disk_init_drive:
+    lda save_device
+    sta disk_prompt_device
+disk_init_selected_drive:
 #if C128
     lda #2
     ldx #<disk_init_cmd
     ldy #>disk_init_cmd
     jsr w_setnam
     lda #CMD_CHANNEL
-    ldx save_device
+    ldx disk_prompt_device
     ldy #CMD_CHANNEL
     jsr w_setlfs
     jsr w_open
@@ -275,7 +311,7 @@ disk_init_drive:
     ldy #>disk_init_cmd
     jsr FEAT_SETNAM
     lda #CMD_CHANNEL
-    ldx save_device
+    ldx disk_prompt_device
     ldy #CMD_CHANNEL
     jsr FEAT_SETLFS
     jsr FEAT_OPEN
@@ -354,8 +390,15 @@ disk_marker_present:
     jsr c64_disk_marker_present
     rts
 #else
-    lda #1
+    lda #$81
     sta disk_status
+    sta disk_diag_phase
+    lda save_device
+    sta disk_diag_device
+    lda #DISK_MARKER_FILE_NUM
+    sta disk_diag_lfn
+    lda #DISK_MARKER_SEC_RD
+    sta disk_diag_sec
     jsr disk_kernal_enter
 
     lda #disk_marker_read_fname_len
@@ -367,17 +410,61 @@ disk_marker_present:
     ldy #DISK_MARKER_SEC_RD
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
-    bcs !dmp_done+
+    bcc !dmp_open_ok+
+    lda #1
+    sta disk_diag_carry
+    lda #$81
+    sta disk_status
+    jmp !dmp_done+
+!dmp_open_ok:
+    lda #0
+    sta disk_diag_carry
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    beq !dmp_chkin+
+    lda #$81
+    sta disk_status
+    jmp !dmp_close+
 
+!dmp_chkin:
+    lda #$82
+    sta disk_diag_phase
     ldx #DISK_MARKER_FILE_NUM
     jsr KERNAL_CHKIN
-    bcs !dmp_close+
+    bcc !dmp_read_start+
+    lda #1
+    sta disk_diag_carry
+    lda #$82
+    sta disk_status
+    jmp !dmp_close+
 
+!dmp_read_start:
+    lda #0
+    sta disk_diag_carry
     lda #0
     sta disk_temp
 !dmp_read:
+    lda #$83
+    sta disk_diag_phase
+    lda disk_temp
+    sta disk_diag_index
     jsr KERNAL_CHRIN
+    sta disk_diag_byte
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    beq !dmp_cmp+
+    cmp #$40
+    bne !dmp_read_status_fail+
+    lda disk_temp
+    cmp #DISK_MARKER_MAGIC_LEN - 1
+    beq !dmp_cmp+
+!dmp_read_status_fail:
+    lda #$84
+    sta disk_status
+    jmp !dmp_close+
+!dmp_cmp:
     ldx disk_temp
+    lda disk_diag_byte
     cmp disk_marker_magic,x
     bne !dmp_fail+
     inx
@@ -388,7 +475,8 @@ disk_marker_present:
     sta disk_status
     jmp !dmp_close+
 !dmp_fail:
-    lda #1
+    sta disk_temp
+    lda #$83
     sta disk_status
 !dmp_close:
     jsr KERNAL_CLRCHN

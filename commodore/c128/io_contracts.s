@@ -9,6 +9,21 @@
 
 // Resident Bank 0 / common entrypoints that must remain below the I/O hole.
 :C128AuditBelowIo("c128_load_runtime_low_prg", c128_load_runtime_low_prg)
+:C128AuditBelowIo("c128_load_runtime_input_prg", c128_load_runtime_input_prg)
+:C128AuditBelowIo("c128_load_runtime_common_prg", c128_load_runtime_common_prg)
+:C128AuditBelowIo("c128_load_resident_diskio_prg", c128_load_resident_diskio_prg)
+:C128AuditBelowIo("c128_load_resident_world_prg", c128_load_resident_world_prg)
+:C128AuditBelowIo("c128_load_resident_items_prg", c128_load_resident_items_prg)
+:C128AuditBelowIo("c128_load_resident_select_prg", c128_load_resident_select_prg)
+:C128AuditBelowIo("c128_load_resident_persist_prg", c128_load_resident_persist_prg)
+:C128AuditBelowIo("c128_load_resident_play_prg", c128_load_resident_play_prg)
+:C128AuditBelowIo("c128_require_program_media", c128_require_program_media)
+:C128AuditBelowIo("c128_require_save_media", c128_require_save_media)
+:C128AuditBelowIo("c128_modal_require_persist", c128_modal_require_persist)
+:C128AuditBelowIo("c128_modal_save_game", c128_modal_save_game)
+:C128AuditBelowIo("c128_modal_load_game", c128_modal_load_game)
+:C128AuditBelowIo("c128_modal_require_play", c128_modal_require_play)
+:C128AuditBelowIo("c128_load_runtime_banked_prg", c128_load_runtime_banked_prg)
 :C128AuditBelowIo("title_show_sysinfo", title_show_sysinfo)
 :C128AuditBelowIo("tramp_reu_show_status", tramp_reu_show_status)
 :C128AuditBelowIo("tramp_player_create", tramp_player_create)
@@ -26,6 +41,10 @@
 :C128AuditBelowIo("tramp_ui_recall", tramp_ui_recall)
 :C128AuditBelowIo("tramp_ui_wizard_display", tramp_ui_wizard_display)
 :C128AuditBelowIo("tramp_item_gain_spell", tramp_item_gain_spell)
+:C128AuditBelowIo("tramp_item_wear", tramp_item_wear)
+:C128AuditBelowIo("tramp_item_takeoff", tramp_item_takeoff)
+:C128AuditBelowIo("tramp_item_eat", tramp_item_eat)
+:C128AuditBelowIo("tramp_item_quaff", tramp_item_quaff)
 :C128AuditBelowIo("tramp_player_cast_spell", tramp_player_cast_spell)
 :C128AuditBelowIo("tramp_player_pray", tramp_player_pray)
 :C128AuditBelowIo("tramp_spell_list_display", tramp_spell_list_display)
@@ -76,8 +95,10 @@
 :C128AuditBelowIo("look_flash_target", look_flash_target)
 :C128AuditBelowIo("game_over_prompt", game_over_prompt)
 
-// Runtime-low Bank 0 call surfaces loaded from 128.runtime.prg.
+// Runtime-loaded Bank 0 call surfaces.
 :C128AuditRuntimeInput("input_run_scan_held_raw", input_run_scan_held_raw)
+:C128AuditRuntimeProjectile("calc_direction_index", calc_direction_index)
+:C128AuditRuntimeProjectile("trace_step", trace_step)
 :C128AuditRuntimeLow("monster_get_threat_color", monster_get_threat_color)
 :C128AuditRuntimeLow("viewport_update", viewport_update)
 :C128AuditRuntimeLow("render_viewport", render_viewport)
@@ -87,6 +108,29 @@
 :C128AuditRuntimeLow("ego_get_suffix_ptr", ego_get_suffix_ptr)
 :C128AuditRuntimeLow("ego_apply_damage", ego_apply_damage)
 :C128AuditRuntimeLow("ego_ac_bonus", ego_ac_bonus)
+
+// Disk Setup lives in the dedicated disk-I/O runtime below ROM-shadowed regions
+// so title-time save-disk setup is callable regardless of C128 banking state.
+:C128AuditBelowIo("tramp_disk_setup", tramp_disk_setup)
+:C128AuditBelowIo("title_require_disk_setup", title_require_disk_setup)
+:C128AuditBelowIo("title_draw_save_disk_indicator", title_draw_save_disk_indicator)
+:C128AuditBelowIo("disk_marker_init", disk_marker_init)
+:C128AuditBelowIo("disk_setup_run", disk_setup_run)
+
+// Resident item-selection services. These are callable from overlays and
+// banked item/spell command paths, so they must stay in Bank 0 executable RAM
+// below the I/O hole rather than in an overlay window.
+:C128AuditBelowIo("show_inv_and_select", show_inv_and_select)
+:C128AuditBelowIo("show_equip_and_restore", show_equip_and_restore)
+:C128AuditBelowIo("piw_inv_slot_matches_filter", piw_inv_slot_matches_filter)
+:C128AuditBelowIo("piw_build_visible_inv_cache", piw_build_visible_inv_cache)
+:C128AuditBelowIo("piw_prompt_filtered_inv", piw_prompt_filtered_inv)
+:C128AuditBelowIo("piw_pick_filtered_inv_key", piw_pick_filtered_inv_key)
+:C128AuditBelowIo("piw_build_visible_equip_cache", piw_build_visible_equip_cache)
+:C128AuditBelowIo("piw_pick_visible_equip_key", piw_pick_visible_equip_key)
+:C128AuditBelowIo("piw_print_prompt_with_count", piw_print_prompt_with_count)
+:C128AuditBelowIo("piw_slot", piw_slot)
+:C128AuditBelowIo("piw_visible_slots", piw_visible_slots)
 
 // Overlay entrypoints.
 :C128AuditStartupOverlay("player_create", player_create)
@@ -132,10 +176,11 @@
 :C128AuditBanked("home_deposit", home_deposit)
 :C128AuditBanked("magic_recalc_mana", magic_recalc_mana)
 :C128AuditBanked("magic_check_new_spells", magic_check_new_spells)
-:C128AuditBanked("player_tunnel", player_tunnel)
-:C128AuditBanked("ranged_fire", ranged_fire)
-:C128AuditBanked("throw_item", throw_item)
-:C128AuditBanked("bash_command", bash_command)
+:C128AuditBanked("player_recalc_equipment", player_recalc_equipment)
+:C128AuditBanked("item_wear", item_wear)
+:C128AuditBanked("item_takeoff", item_takeoff)
+:C128AuditBanked("item_eat", item_eat)
+:C128AuditBanked("item_quaff", item_quaff)
 
 // Entry surfaces that may live either below the I/O hole or in the banked
 // window, but must never drift into $D000-$DFFF.
@@ -147,6 +192,10 @@
 :C128AuditItemsOverlay("item_aim_wand", item_aim_wand)
 :C128AuditItemsOverlay("item_use_staff", item_use_staff)
 :C128AuditItemsOverlay("item_refuel", item_refuel)
+:C128AuditItemsOverlay("player_tunnel", player_tunnel)
+:C128AuditItemsOverlay("ranged_fire", ranged_fire)
+:C128AuditItemsOverlay("throw_item", throw_item)
+:C128AuditItemsOverlay("bash_command", bash_command)
 :C128AuditItemsOverlay("eff_earthquake", eff_earthquake)
 // Spell UI display literals must stay with the UI overlay, not in low common RAM.
 .assert "AUDIT-IO-C128 pm_header_str stays in the UI overlay", pm_header_str >= $E000 && pm_header_str < $F000, true

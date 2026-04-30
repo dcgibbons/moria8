@@ -157,7 +157,9 @@ loader_start:
     lda #COL_BLACK
     sta $d020
     sei
-    jsr bootart_try_restore
+    // Leave boot art visible while the main program loads its runtime
+    // residents. The game restores the normal VDC text font immediately
+    // before it clears the screen for "Preloading files:".
     
     ldx #stub_end - stub_start
 !reloc:

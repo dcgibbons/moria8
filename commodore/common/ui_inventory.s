@@ -115,9 +115,9 @@ ui_inv_display_common:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name with ego prefix/suffix (R14)
+    // Item description with ego/status/stat suffixes
     ldx uinv_slot
-    jsr put_inv_name_with_ego
+    jsr itemdesc_put_inv_slot
 
     inc uinv_row
     lda #1
@@ -152,8 +152,7 @@ ui_inv_display_common:
     bne !uinv_footer_have_count+
     lda #1
 !uinv_footer_have_count:
-    clc
-    adc #$60                    // 1 -> 'a', 7 -> 'g'
+    // Screen-code mixed lowercase letters are 1-based: 1 -> 'a', 7 -> 'g'.
     sta uinv_identify_footer_last
 !uinv_footer_ready:
     lda #24

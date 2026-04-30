@@ -63,7 +63,9 @@ itn_30:
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/projectile.s"
+#define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../common/spell_effects.s"
+#undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../common/player_magic.s"
 
 .pc = $0801 "BASIC Stub"
@@ -77,6 +79,8 @@ tid_expected_identify:
 combat_msg_buf: .fill 42, 0
 tid_this_is_str:
     .text "This is a " ; .byte 0
+tid_item25_name:
+    .text "Cure Serious Wounds potion" ; .byte 0
 
 msg_row1_col: .byte 0
 cmb_slot: .byte 0
@@ -90,7 +94,16 @@ inv_item_id: .fill 30, 0
 inv_flags: .fill 30, 0
 inv_qty: .fill 30, 0
 inv_p1: .fill 30, 0
+inv_to_hit: .fill 30, 0
+inv_to_dam: .fill 30, 0
+inv_to_ac: .fill 30, 0
 inv_ego: .fill 30, 0
+fi_add_p1: .byte 0
+fi_add_to_hit: .byte 0
+fi_add_to_dam: .byte 0
+fi_add_to_ac: .byte 0
+fi_add_flags: .byte 0
+fi_add_ego: .byte 0
 it_name_lo: .fill 64, 0
 it_name_hi: .fill 64, 0
 cmb_period:
@@ -212,6 +225,15 @@ huff_append_combat:
     bne !done+
     lda #<tid_this_is_str
     ldy #>tid_this_is_str
+    jsr combat_append_str
+!done:
+    rts
+
+item_append_name:
+    cmp #25
+    bne !done+
+    lda #<tid_item25_name
+    ldy #>tid_item25_name
     jsr combat_append_str
 !done:
     rts
@@ -364,23 +386,37 @@ test_start:
     lda #0
     sta inv_p1 + 1
     sta inv_flags + 1
+    sta inv_to_ac + 1
+    lda #$fe
+    sta inv_to_hit + 1
+    lda #6
+    sta inv_to_dam + 1
+    lda #0
     sta inv_ego + 1
     jsr player_cast_spell
-    bcc !t1_fail+
+    bcc !t1_fail_pre+
     lda tid_spell_exec_calls
     cmp #1
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda tid_last_spell_idx
     cmp #20
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda tid_huff_calls
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda id_known + 25
     cmp #1
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda inv_flags + 1
     and #IF_IDENTIFIED
-    beq !t1_fail+
+    beq !t1_fail_pre+
+    lda inv_to_hit + 1
+    cmp #$fe
+    bne !t1_fail_pre+
+    lda inv_to_dam + 1
+    cmp #6
+    bne !t1_fail_pre+
+    lda inv_to_ac + 1
+    bne !t1_fail_pre+
     lda #<tid_expected_identify
     sta zp_ptr0
     lda #>tid_expected_identify
@@ -400,6 +436,8 @@ test_start:
     cpy #42
     bcc !cmp1-
     bcs !t1_fail+
+!t1_fail_pre:
+    jmp !t1_fail+
 !t1_msg_ok:
     lda zp_player_mp
     cmp #13

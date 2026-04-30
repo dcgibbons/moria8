@@ -3,7 +3,7 @@
 from pathlib import Path
 import sys
 
-SAVE_VERSION = 0x0F
+SAVE_VERSION = 0x10
 
 PL_STRUCT_SIZE = 111
 ITEM_TYPE_COUNT = 64

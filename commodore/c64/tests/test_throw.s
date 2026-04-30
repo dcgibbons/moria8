@@ -2,9 +2,9 @@
 //
 // Tests: range calculation (light/heavy/weightless), potion detection,
 //        item consumption, to-hit calculation, throw selector filtering,
-//        thrown-item redraw.
+//        thrown-item redraw and floor metadata preservation.
 //
-// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
+// Results at $0400-$040A: $01 = pass, $00 = fail per test (11 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -14,7 +14,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #9
+    ldx #10
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -91,7 +91,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 10, $ff
+tc_results: .fill 11, $ff
 
 test_start:
     // Seed RNG
@@ -338,7 +338,62 @@ test_start:
 !t9_done:
 
     // ==========================================
-    // Test 10: Thrown non-potion floor placement requests a scene redraw
+    // Test 10: Thrown zero-quantity spellbook is removed, not duplicated
+    // ==========================================
+    jsr item_init_floor
+    jsr item_init_inventory
+
+    ldx #15
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda #TILE_FLOOR | FLAG_LIT | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #0
+    sta turn_action_redraw_pending
+    sta inv_qty+0
+    sta inv_p1+0
+    sta inv_to_hit+0
+    sta inv_to_dam+0
+    sta inv_to_ac+0
+    sta inv_flags+0
+    sta inv_ego+0
+    sta tw_slot
+    lda #47                     // Beginner's Spellbook
+    sta inv_item_id+0
+    sta tw_item_id
+    lda #20
+    sta tw_last_x
+    lda #15
+    sta tw_last_y
+
+    jsr tw_consume_item
+    bcc !t10_fail+
+    lda inv_item_id+0
+    cmp #FI_EMPTY
+    bne !t10_fail+
+    lda inv_qty+0
+    bne !t10_fail+
+    lda #20
+    ldy #15
+    jsr floor_item_find_at
+    bcc !t10_fail+
+    lda fi_item_id,x
+    cmp #47
+    bne !t10_fail+
+    lda #$01
+    sta tc_results+9
+    jmp !t10_done+
+!t10_fail:
+    lda #$00
+    sta tc_results+9
+!t10_done:
+
+    // ==========================================
+    // Test 11: Thrown non-potion floor placement requests a scene redraw
     // ==========================================
     jsr item_init_floor
     jsr item_init_inventory
@@ -355,9 +410,22 @@ test_start:
     lda #0
     sta turn_action_redraw_pending
     sta inv_p1+0
-    sta inv_flags+0
-    sta inv_ego+0
+    sta tw_save_p1
+    sta inv_to_ac+0
+    sta tw_save_to_ac
     sta tw_slot
+    lda #$fe                    // -2 to-hit
+    sta inv_to_hit+0
+    sta tw_save_to_hit
+    lda #6
+    sta inv_to_dam+0
+    sta tw_save_to_dam
+    lda #IF_IDENTIFIED
+    sta inv_flags+0
+    sta tw_save_flags
+    lda #EGO_FLAME_TONGUE
+    sta inv_ego+0
+    sta tw_save_ego
     lda #2                      // Dagger
     sta inv_item_id+0
     sta tw_item_id
@@ -369,22 +437,36 @@ test_start:
     sta tw_last_y
 
     jsr tw_consume_item
-    bcc !t10_fail+
+    bcc !t11_fail+
     lda turn_action_redraw_pending
-    beq !t10_fail+
+    beq !t11_fail+
     lda #20
     ldy #15
     jsr floor_item_find_at
-    bcc !t10_fail+
+    bcc !t11_fail+
     lda fi_item_id,x
     cmp #2
-    bne !t10_fail+
+    bne !t11_fail+
+    lda fi_to_hit,x
+    cmp #$fe
+    bne !t11_fail+
+    lda fi_to_dam,x
+    cmp #6
+    bne !t11_fail+
+    lda fi_to_ac,x
+    bne !t11_fail+
+    jsr floor_item_get_flags_x
+    and #IF_IDENTIFIED
+    beq !t11_fail+
+    jsr floor_item_get_ego_x
+    cmp #EGO_FLAME_TONGUE
+    bne !t11_fail+
     lda #$01
-    sta tc_results+9
-    jmp !t10_done+
-!t10_fail:
+    sta tc_results+10
+    jmp !t11_done+
+!t11_fail:
     lda #$00
-    sta tc_results+9
-!t10_done:
+    sta tc_results+10
+!t11_done:
 
     jmp test_exit_trampoline

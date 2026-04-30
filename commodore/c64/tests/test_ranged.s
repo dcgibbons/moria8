@@ -3,7 +3,7 @@
 // Tests: item_get_missile, ammo matching, ammo depletion,
 //        melee unarmed fallback with bow, ranged_fire validation.
 //
-// Results at $0400-$0407: $01 = pass, $00 = fail per test (8 tests)
+// Results at $0400-$0409: $01 = pass, $00 = fail per test (10 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #7
+    ldx #9
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -89,7 +89,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test scratch
-tc_results: .fill 8, $ff
+tc_results: .fill 10, $ff
 tr_save: .byte 0
 
 test_start:
@@ -266,5 +266,68 @@ test_start:
     lda #$00
     sta tc_results+7
 !t8_done:
+
+    // ==========================================
+    // Test 9: C64 overlay-safe stale tier names.
+    // Item-overlay projectile commands execute from $E000; they must not
+    // reload tier names over the running overlay when formatting hit/miss
+    // messages for tier monsters whose cr_name pointer is stale.
+    // ==========================================
+    lda #7                    // OVL_ITEMS
+    sta current_overlay
+    lda #0
+    sta current_tier
+    ldx #30
+    lda #$00
+    sta cr_name_lo,x
+    lda #$e0
+    sta cr_name_hi,x
+    jsr creature_get_name
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    ldy #0
+    lda (zp_ptr0),y
+    cmp #'m'
+    bne !t9_fail+
+    iny
+    lda (zp_ptr0),y
+    cmp #'o'
+    bne !t9_fail+
+    lda current_tier
+    bne !t9_fail+
+    lda #$01
+    sta tc_results+8
+    jmp !t9_done+
+!t9_fail:
+    lda #$00
+    sta tc_results+8
+!t9_done:
+    lda #0
+    sta current_overlay
+
+    // ==========================================
+    // Test 10: Zero-quantity ammo is removed, not underflowed
+    // ==========================================
+    jsr item_init_inventory
+    lda #0
+    sta rf_ammo_slot
+    sta inv_qty
+    lda #53                   // Bolt
+    sta inv_item_id
+
+    jsr rf_consume_ammo
+
+    lda inv_item_id
+    cmp #FI_EMPTY
+    bne !t10_fail+
+    lda inv_qty
+    bne !t10_fail+
+    lda #$01
+    sta tc_results+9
+    jmp !t10_done+
+!t10_fail:
+    lda #$00
+    sta tc_results+9
+!t10_done:
 
     jmp test_exit_trampoline

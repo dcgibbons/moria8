@@ -513,10 +513,10 @@ describe_phase_token() {
             printf 'all\tAll suites\n'
             ;;
         guards)
-            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard\n'
+            printf 'guards\tmain128_asm,c128_artifact_budget,c128_symbol_placement,c128_user_visible_string_guard,c128_prompt_irq_guard,c128_item_overlay_key_guard,c128_input_run_guard,c128_80col_layout_guard,c128_ref_hal_guard,c128_save_load_guard\n'
             ;;
         units)
-            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
+            printf 'units\tminimal128,config128,memory128,db128,tier128,input128,disk_swap128,main_loop128,msg_prompt128,vdc_attr128,item_desc128,vdc_scroll_delta128,status_coherence128,dungeon128,soak128,monster128,detect_monsters128,detect_evil128,cure_light_wounds128,cure_poison128,cure_light_wounds_prayer128,bless_prayer128,remove_fear_prayer128,call_light_prayer128,find_traps_prayer128,detect_doors_stairs_prayer128,slow_poison_prayer128,blind_creature_prayer128,portal_prayer128,cure_medium_wounds_prayer128,cure_serious_wounds_prayer128,sense_invisible_prayer128,protection_from_evil_prayer128,earthquake_prayer128,sense_surroundings_prayer128,cure_critical_wounds_prayer128,turn_undead_prayer128,prayer_prayer128,dispel_undead_prayer128,dispel_evil_prayer128,glyph_of_warding_prayer128,holy_word_prayer128,heal_prayer128,chant_prayer128,sanctuary_prayer128,neutralize_poison_prayer128,create_food_prayer128,remove_curse_prayer128,resist_heat_cold_prayer128,orb_of_draining_prayer128,find_hidden_traps_doors128,stinking_cloud128,frost_ball128,teleport_other128,haste_self128,fire_ball128,word_of_destruction128,genocide128,confusion128,lightning_bolt128,trap_door_destruction128,sleep_i128,sleep_ii128,sleep_iii128,fire_bolt128,slow_monster128,polymorph_other128,identify128,teleport_self128,recharge_item_ii128\n'
             ;;
         smokes)
             printf 'smokes\tboot_d64_smoke,boot_title_idle_smoke,title_art_smoke,boot_title_load_missing_savefile_smoke,boot_title_load_mounted_save_smoke,vic40_clean_boot_smoke,new_key_stability_smoke,boot_title_newgame_smoke,boot_title_load_resume_smoke,boot_tier_transition_smoke,town_overlay_smoke,town_overlay_female_smoke,town_overlay_state_smoke,scripted_summary_to_town_smoke,scripted_spell_cast_smoke,scripted_book_overlay_smoke,scripted_spell_list_overlay_smoke,scripted_spell_list_cancel_smoke,scripted_prayer_cast_smoke,cache_survival_smoke,dungeon_attack_stability_smoke,death_overlay_smoke,restart_to_title_smoke,preload_partial_failure_smoke,overlay_partial_failure_smoke\n'
@@ -551,12 +551,12 @@ suite_matches_phase_token() {
             ;;
         guards)
             case "$suite_name" in
-                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard) return 0 ;;
+                main128_asm|c128_artifact_budget|c128_symbol_placement|c128_user_visible_string_guard|c128_prompt_irq_guard|c128_item_overlay_key_guard|c128_input_run_guard|c128_80col_layout_guard|c128_ref_hal_guard|c128_save_load_guard) return 0 ;;
             esac
             ;;
         units)
             case "$suite_name" in
-                minimal128|config128|memory128|db128|tier128|input128|disk_swap128|main_loop128|msg_prompt128|vdc_attr128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128|detect_monsters128|detect_evil128|cure_light_wounds128|cure_poison128|cure_light_wounds_prayer128|bless_prayer128|remove_fear_prayer128|call_light_prayer128|find_traps_prayer128|detect_doors_stairs_prayer128|slow_poison_prayer128|blind_creature_prayer128|portal_prayer128|cure_medium_wounds_prayer128|cure_serious_wounds_prayer128|sense_invisible_prayer128|protection_from_evil_prayer128|earthquake_prayer128|sense_surroundings_prayer128|cure_critical_wounds_prayer128|turn_undead_prayer128|prayer_prayer128|dispel_undead_prayer128|dispel_evil_prayer128|glyph_of_warding_prayer128|holy_word_prayer128|heal_prayer128|chant_prayer128|sanctuary_prayer128|neutralize_poison_prayer128|create_food_prayer128|remove_curse_prayer128|resist_heat_cold_prayer128|orb_of_draining_prayer128|find_hidden_traps_doors128|stinking_cloud128|frost_ball128|teleport_other128|haste_self128|fire_ball128|word_of_destruction128|genocide128|confusion128|lightning_bolt128|frost_bolt128|turn_stone_to_mud128|create_food128|recharge_item_i128|recharge_item_ii128|trap_door_destruction128|sleep_i128|sleep_ii128|sleep_iii128|fire_bolt128|slow_monster128|polymorph_other128|identify128|teleport_self128|remove_curse128) return 0 ;;
+                minimal128|config128|memory128|db128|tier128|input128|disk_swap128|main_loop128|msg_prompt128|vdc_attr128|item_desc128|vdc_scroll_delta128|status_coherence128|dungeon128|soak128|monster128|detect_monsters128|detect_evil128|cure_light_wounds128|cure_poison128|cure_light_wounds_prayer128|bless_prayer128|remove_fear_prayer128|call_light_prayer128|find_traps_prayer128|detect_doors_stairs_prayer128|slow_poison_prayer128|blind_creature_prayer128|portal_prayer128|cure_medium_wounds_prayer128|cure_serious_wounds_prayer128|sense_invisible_prayer128|protection_from_evil_prayer128|earthquake_prayer128|sense_surroundings_prayer128|cure_critical_wounds_prayer128|turn_undead_prayer128|prayer_prayer128|dispel_undead_prayer128|dispel_evil_prayer128|glyph_of_warding_prayer128|holy_word_prayer128|heal_prayer128|chant_prayer128|sanctuary_prayer128|neutralize_poison_prayer128|create_food_prayer128|remove_curse_prayer128|resist_heat_cold_prayer128|orb_of_draining_prayer128|find_hidden_traps_doors128|stinking_cloud128|frost_ball128|teleport_other128|haste_self128|fire_ball128|word_of_destruction128|genocide128|confusion128|lightning_bolt128|frost_bolt128|turn_stone_to_mud128|create_food128|recharge_item_i128|recharge_item_ii128|trap_door_destruction128|sleep_i128|sleep_ii128|sleep_iii128|fire_bolt128|slow_monster128|polymorph_other128|identify128|teleport_self128|remove_curse128) return 0 ;;
             esac
             ;;
         smokes)
@@ -842,6 +842,8 @@ contract_patterns = {
     "below_io_hole": re.compile(r':C128AuditBelowIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "out_of_io_hole": re.compile(r':C128AuditOutOfIo\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*\$(\w+)\s*\)'),
     "runtime_low_bank0": re.compile(r':C128AuditRuntimeLow\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "runtime_projectile_bank0": re.compile(r':C128AuditRuntimeProjectile\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
+    "runtime_input_bank0": re.compile(r':C128AuditRuntimeInput\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "startup_overlay": re.compile(r':C128AuditStartupOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "town_overlay": re.compile(r':C128AuditTownOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
     "death_overlay": re.compile(r':C128AuditDeathOverlay\("([^"]+)",\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)'),
@@ -872,6 +874,10 @@ if not contracts:
 
 required_labels = [
     "banked_code_end",
+    "runtime_projectile_data_start",
+    "runtime_projectile_data_end",
+    "runtime_input_data_start",
+    "runtime_input_data_end",
     "runtime_low_data_start",
     "runtime_low_data_end",
     "ovl_start_end",
@@ -919,17 +925,29 @@ for name in ("help_title_str", "help_lines"):
     if labels[name] < 0xE000 or labels[name] >= 0xF000:
         bad.append((name, labels[name], "overlay_window"))
 
-runtime_low_prg = Path("out/128.runtime.prg")
-if not runtime_low_prg.exists():
-    missing.append("out/128.runtime.prg")
-else:
-    data = runtime_low_prg.read_bytes()
+for runtime_name, expected_load in (
+    ("128.runtime.prg", 0x1000),
+    ("128.input.prg", 0x0B00),
+    ("128.proj.prg", 0x0A80),
+    ("128.fdisk.prg", 0x0CE3),
+    ("128.world.prg", 0x5F00),
+    ("128.item.prg", 0x8C00),
+    ("128.select.prg", 0xA700),
+    ("128.persist.prg", 0xAF00),
+    ("128.play.prg", 0xAF00),
+    ("128.bank.prg", 0xF000),
+):
+    runtime_prg = Path("out") / runtime_name
+    if not runtime_prg.exists():
+        missing.append(f"out/{runtime_name}")
+        continue
+    data = runtime_prg.read_bytes()
     if len(data) < 2:
-        bad.append(("128.runtime.prg", len(data), "short"))
-    else:
-        load = data[0] | (data[1] << 8)
-        if load != 0x1000:
-            bad.append(("128.runtime.prg header", load, "load_header"))
+        bad.append((runtime_name, len(data), "short"))
+        continue
+    load = data[0] | (data[1] << 8)
+    if load != expected_load:
+        bad.append((f"{runtime_name} header", load, "load_header"))
 
 if "runtime_low_data_start" in labels and labels["runtime_low_data_start"] != 0x1000:
     bad.append(("runtime_low_data_start", labels["runtime_low_data_start"], "runtime_low_base"))
@@ -959,6 +977,20 @@ for kind, _display, symbol, arg in contracts:
         end = labels.get("runtime_low_data_end")
         if start is None or end is None:
             missing.extend(name for name in ("runtime_low_data_start", "runtime_low_data_end") if name not in labels)
+        elif not (start <= addr < end):
+            bad.append((symbol, addr, kind))
+    elif kind == "runtime_projectile_bank0":
+        start = labels.get("runtime_projectile_data_start")
+        end = labels.get("runtime_projectile_data_end")
+        if start is None or end is None:
+            missing.extend(name for name in ("runtime_projectile_data_start", "runtime_projectile_data_end") if name not in labels)
+        elif not (start <= addr < end):
+            bad.append((symbol, addr, kind))
+    elif kind == "runtime_input_bank0":
+        start = labels.get("runtime_input_data_start")
+        end = labels.get("runtime_input_data_end")
+        if start is None or end is None:
+            missing.extend(name for name in ("runtime_input_data_start", "runtime_input_data_end") if name not in labels)
         elif not (start <= addr < end):
             bad.append((symbol, addr, kind))
     elif kind == "banked_window":
@@ -1032,6 +1064,7 @@ reu_text = (common / "reu.s").read_text()
 tier_text = (common / "tier_manager.s").read_text()
 overlay_text = (common / "overlay.s").read_text()
 required = {
+    "death/restart prompt exact copy": 'game_over_str:\n    .text "R)eboot S)tart Q)uit" ; .byte 0\ngame_over_str_end:',
     "runtime_low_filename/display alias": 'runtime_low_filename:\nruntime_low_display_str:\n    .text "128.RUNTIME"\nruntime_low_filename_end:\n    .byte 0\n.const RUNTIME_LOW_FILENAME_LEN = runtime_low_filename_end - runtime_low_filename',
     "runtime_input null-terminated load filename": 'runtime_input_filename_end:\n    .byte 0\n.const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename',
     "runtime_common null-terminated load filename": 'runtime_common_filename_end:\n    .byte 0\n.const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename',
@@ -1040,6 +1073,7 @@ required = {
 }
 
 sources = {
+    "death/restart prompt exact copy": main_text,
     "runtime_low_filename/display alias": main_text,
     "runtime_input null-terminated load filename": main_text,
     "runtime_common null-terminated load filename": main_text,
@@ -1697,6 +1731,67 @@ PY
     TOTAL=$((TOTAL + 1))
 }
 
+run_save_load_guard_check() {
+    echo -n "  save_load_guard: "
+
+    local check_out
+    check_out=$(python3 - <<'PY'
+from pathlib import Path
+
+save = Path("../common/save.s").read_text().splitlines()
+
+try:
+    start = next(i for i, line in enumerate(save) if line.strip() == "load_read_byte:")
+    end = next(i for i in range(start + 1, len(save)) if save[i].startswith("// ==="))
+except StopIteration:
+    print("could not locate load_read_byte body")
+    raise SystemExit(1)
+
+body = "\n".join(save[start:end])
+if body.count("jsr SAVE_READST") < 2:
+    print("load_read_byte must check SAVE_READST before and after SAVE_CHRIN")
+    raise SystemExit(1)
+if "jsr SAVE_READST\n    beq !lrby_read+" not in body:
+    print("load_read_byte must gate C128 SAVE_CHRIN with a pre-read status check")
+    raise SystemExit(1)
+if "jsr SAVE_CHRIN" not in body:
+    print("load_read_byte lost the sequential byte read")
+    raise SystemExit(1)
+if "inc save_io_error" not in body:
+    print("load_read_byte must flag save_io_error on read status failure")
+    raise SystemExit(1)
+
+required = [
+    ("load_read_block:", "lda save_io_error\n    bne !lrb_done+"),
+    ("load_read_map_c128:", "lda save_io_error\n    bne !lrm_done+"),
+]
+text = "\n".join(save)
+for label, chain in required:
+    idx = text.find(label)
+    if idx == -1:
+        print(f"could not locate {label}")
+        raise SystemExit(1)
+    window = text[idx:idx + 600]
+    if chain not in window:
+        print(f"{label} must stop once save_io_error is set")
+        raise SystemExit(1)
+
+print("ok")
+PY
+)
+    if [ $? -ne 0 ]; then
+        echo "FAIL"
+        echo "$check_out" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 build_boot_assets() {
     if [ "$BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "base"; then
         return
@@ -1710,7 +1805,7 @@ build_boot_assets() {
     if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg out/main.vs -- \
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg out/main.vs -- \
             main.s boot128.s bootart128.s bootsect128.s Makefile ../version.json \
             ../artwork/moria8_C128loadingart_tile_native.png \
             ../tools/png_to_ppm.py ../tools/make_version_include.py ../tools/ppm_to_c128_bootart.py \
@@ -1792,7 +1887,16 @@ run_vic40_clean_boot_smoke() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >"$(test128_tmp_file "test128_${name}_c1541.log")" 2>&1; then
         echo "FAIL (vic40 probe d64 creation failed)"
         tail -20 "$(test128_tmp_file "test128_${name}_c1541.log")" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1870,7 +1974,7 @@ build_real_boot_diag_assets() {
             out/moria128.realdiag.prg out/moria128_realdiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         REAL_BOOT_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -1904,7 +2008,16 @@ build_real_boot_diag_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (real-boot diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1928,7 +2041,7 @@ build_overlay_transition_diag_assets() {
             out/moria128.overlaydiag.prg out/moria128_overlaydiag.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_TRANSITION_DIAG_ASSETS_BUILT=1
         return 0
     fi
@@ -1962,7 +2075,16 @@ build_overlay_transition_diag_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-transition diag disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1986,7 +2108,7 @@ build_title_art_boot_assets() {
             out/moria128.titleart.prg out/moria128_titleart.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg ../common/*.s ../c64/*.s; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg ../common/*.s ../c64/*.s; then
         TITLE_ART_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2020,7 +2142,16 @@ build_title_art_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (title-art disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2038,7 +2169,7 @@ build_title_load_missing_save_assets() {
         return 0
     fi
 
-    build_title_art_boot_assets || return 1
+    build_boot_assets || return 1
 
     local build_log
     build_log="$(test128_tmp_file test128_title_missing_save_build.log)"
@@ -2199,7 +2330,7 @@ build_partial_failure_boot_assets() {
             out/moria128.skip1.prg out/moria128_skip1.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2231,7 +2362,16 @@ build_partial_failure_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (partial-failure disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2255,7 +2395,7 @@ build_overlay_partial_failure_boot_assets() {
             out/moria128.skipovl2.prg out/moria128_skipovl2.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2287,7 +2427,16 @@ build_overlay_partial_failure_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-partial disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2311,7 +2460,7 @@ build_death_overlay_boot_assets() {
             out/moria128.death.prg out/moria128_death.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         DEATH_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2343,7 +2492,16 @@ build_death_overlay_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (death-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2367,7 +2525,7 @@ build_overlay_state_boot_assets() {
             out/moria128.overlaystate.prg out/moria128_overlaystate.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         OVERLAY_STATE_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2399,7 +2557,16 @@ build_overlay_state_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (overlay-state disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2423,7 +2590,7 @@ build_scripted_input_boot_assets() {
             out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2456,7 +2623,16 @@ build_scripted_input_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-input disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2483,7 +2659,7 @@ build_scripted_spell_boot_assets() {
             out/moria128.prg out/moria128_scriptedspell.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2514,7 +2690,16 @@ build_scripted_spell_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2539,7 +2724,7 @@ build_scripted_spell_cancel_boot_assets() {
             out/moria128.prg out/moria128_scriptedspellcancel.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2570,7 +2755,16 @@ build_scripted_spell_cancel_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-cancel disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2595,7 +2789,7 @@ build_scripted_book_overlay_boot_assets() {
             out/moria128.prg out/moria128_scriptedbookoverlay.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2626,7 +2820,16 @@ build_scripted_book_overlay_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-book-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2651,7 +2854,7 @@ build_scripted_spell_list_overlay_boot_assets() {
             out/moria128.prg out/moria128_scriptedspelllistoverlay.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_SPELL_LIST_OVERLAY_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2682,7 +2885,16 @@ build_scripted_spell_list_overlay_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-spell-list-overlay disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2707,7 +2919,7 @@ build_scripted_prayer_boot_assets() {
             out/moria128.prg out/moria128_scriptedprayer.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         SCRIPTED_PRAYER_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2738,7 +2950,16 @@ build_scripted_prayer_boot_assets() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (scripted-prayer disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2764,7 +2985,7 @@ build_cache_survival_boot_assets() {
             out/moria128.prg out/moria128_cache_survival.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
-            out/ovl.gen out/128.runtime.prg; then
+            out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         CACHE_SURVIVAL_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2795,7 +3016,16 @@ build_cache_survival_boot_assets() {
             -write "$target_out/ovl.start" "ovl.start" \
             -write "$target_out/ovl.death" "ovl.death" \
             -write "$target_out/ovl.gen" "ovl.gen" \
-            -write "$target_out/128.runtime.prg" "128.runtime" >>"$build_log" 2>&1; then
+            -write "$target_out/128.runtime.prg" "128.runtime" \
+            -write "$target_out/128.input.prg" "128.input" \
+			-write "$target_out/128.proj.prg" "128.proj" \
+            -write "$target_out/128.fdisk.prg" "128.fdisk" \
+            -write "$target_out/128.world.prg" "128.world" \
+            -write "$target_out/128.item.prg" "128.item" \
+            -write "$target_out/128.select.prg" "128.select" \
+            -write "$target_out/128.persist.prg" "128.persist" \
+            -write "$target_out/128.play.prg" "128.play" \
+            -write "$target_out/128.bank.prg" "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (cache-survival disk build failed for $target_out)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2822,7 +3052,8 @@ build_load_resume_boot_assets() {
             out/THE.GAME out/moria128_loadresume.d64 -- \
             tests/make_load_resume_save.py out/boot128.prg out/moria128.prg out/title \
             out/monster.db.1 out/monster.db.2 out/monster.db.3 out/monster.db.4 \
-            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen out/128.runtime.prg; then
+            out/ovl.town out/ovl.start out/ovl.death out/ovl.gen \
+            out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg; then
         LOAD_RESUME_BOOT_ASSETS_BUILT=1
         return 0
     fi
@@ -2855,6 +3086,15 @@ build_load_resume_boot_assets() {
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
             -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" \
             -write "$save_blob" "THE.GAME" >>"$build_log" 2>&1; then
         echo "FAIL (load-resume disk build failed)"
         tail -20 "$build_log" | sed 's/^/    /'
@@ -2967,6 +3207,7 @@ run_parallel_unit_tests() {
         "main_loop128 tests/test_main_loop128.s 500000000"
         "msg_prompt128 tests/test_msg_prompt128.s 120000000"
         "vdc_attr128 tests/test_vdc_attr128.s 20000000"
+        "item_desc128 tests/test_item_desc128.s 20000000"
         "vdc_scroll_delta128 tests/test_vdc_scroll_delta128.s 30000000"
         "status_coherence128 tests/test_status_coherence128.s 20000000"
         "dungeon128 tests/test_dungeon128.s 50000000"
@@ -3414,7 +3655,16 @@ run_boot_d64_smoke() {
             -write out/ovl.start "ovl.start" \
             -write out/ovl.death "ovl.death" \
             -write out/ovl.gen "ovl.gen" \
-            -write out/128.runtime.prg "128.runtime" >>"$build_log" 2>&1; then
+            -write out/128.runtime.prg "128.runtime" \
+            -write out/128.input.prg "128.input" \
+			-write out/128.proj.prg "128.proj" \
+            -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.world.prg "128.world" \
+            -write out/128.item.prg "128.item" \
+            -write out/128.select.prg "128.select" \
+            -write out/128.persist.prg "128.persist" \
+            -write out/128.play.prg "128.play" \
+            -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
         echo "FAIL (disk build error)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -3658,43 +3908,23 @@ run_boot_title_load_missing_savefile_smoke() {
     fi
 
     local abs_boot_d64 abs_save_d64 abs_main_vs
-    abs_boot_d64="$(cd out && pwd)/moria128_titleart.d64"
+    abs_boot_d64="$(cd out && pwd)/moria128.d71"
     abs_save_d64="$(cd out && pwd)/moria128_missing_save.d64"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_${name}.mon")"
     abs_main_vs="$(cd out && pwd)/main.vs"
-    local vice_pid=""
-
-    {
-        echo "break \$${title_menu_ready}"
-        echo "g"
-    } > "$mon_file"
-
-    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
-        -moncommands "$mon_file" \
-        +sound -sounddev dummy \
-        -remotemonitor -binarymonitor >/dev/null 2>&1 &
-    vice_pid=$!
-    sleep 2
 
     if ! python3 -u tests/title_load_missing_save_smoke.py \
-            --attach-only \
-            --skip-initial-stop \
             --vice "$VICE" \
             --boot-d64 "$abs_boot_d64" \
             --save-d64 "$abs_save_d64" \
             --main-vs "$abs_main_vs" >"$log_file" 2>&1; then
-        boot_stop_vice_process "$vice_pid"
         echo "FAIL"
         tail -20 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
-
-    boot_stop_vice_process "$vice_pid"
 
     echo "PASS"
     PASS=$((PASS + 1))
@@ -3708,10 +3938,12 @@ run_boot_title_load_mounted_save_smoke() {
     build_title_load_mounted_save_assets || return
 
     local main_vs="out/main.vs"
-    local title_menu_ready load_resume_game
+    local title_menu_ready load_resume_game uds_show_insert_prompt disk_prompt_game
     title_menu_ready=$(awk '/\.title_menu_ready$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${title_menu_ready:-}" ] || [ -z "${load_resume_game:-}" ]; then
+    uds_show_insert_prompt=$(awk '/\.uds_show_insert_prompt$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    disk_prompt_game=$(awk '/\.disk_prompt_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${title_menu_ready:-}" ] || [ -z "${load_resume_game:-}" ] || [ -z "${uds_show_insert_prompt:-}" ] || [ -z "${disk_prompt_game:-}" ]; then
         echo "FAIL (missing mounted-save smoke symbols in out/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -3723,33 +3955,13 @@ run_boot_title_load_mounted_save_smoke() {
     abs_save_d64="$(cd out && pwd)/moria128_mounted_save.d64"
     local log_file
     log_file="$(test128_tmp_file "test128_${name}.log")"
-    local mon_file
-    mon_file="$(test128_tmp_file "test128_${name}.mon")"
-
-    {
-        echo "attach \"${abs_boot_d64}\" 9"
-        echo "until \$${title_menu_ready}"
-        echo "attach \"${abs_save_d64}\" 8"
-        echo "until \$${load_resume_game}"
-    } > "$mon_file"
-
-    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
-        -keybuf "LN1 " -keybuf-delay 8 \
-        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
-        -limitcycles 220000000 +sound -sounddev dummy \
-        +remotemonitor +binarymonitor >/dev/null 2>&1
-    local vice_rc=$?
-
-    if boot_log_has_crash "$log_file"; then
-        echo "FAIL (captured stop)"
-        boot_log_report_crash_context "$log_file"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
-        boot_log_report_failure "mounted-save title load did not reach load_resume_game" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
+    if ! python3 -u tests/title_load_mounted_save_smoke.py \
+            --vice "$VICE" \
+            --boot-d64 "$abs_boot_d64" \
+            --save-d64 "$abs_save_d64" \
+            --main-vs "$(cd out && pwd)/main.vs" >"$log_file" 2>&1; then
+        echo "FAIL"
+        tail -20 "$log_file" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -3768,7 +3980,6 @@ run_boot_title_load_resume_smoke() {
 
     local main_vs="out/main.vs"
     local load_resume_game
-    local disk_prompt_game_lc
     load_resume_game=$(awk '/\.load_resume_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${load_resume_game:-}" ]; then
         echo "FAIL (missing load_resume_game in out/main.vs)"
@@ -3776,16 +3987,6 @@ run_boot_title_load_resume_smoke() {
         TOTAL=$((TOTAL + 1))
         return
     fi
-    local disk_prompt_game
-    disk_prompt_game=$(awk '/\.disk_prompt_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${disk_prompt_game:-}" ]; then
-        echo "FAIL (missing disk_prompt_game in out/main.vs)"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-    disk_prompt_game_lc=$(printf '%s' "$disk_prompt_game" | tr '[:upper:]' '[:lower:]')
-
     local abs_d64
     abs_d64="$(cd out && pwd)/moria128_loadresume.d64"
     local mon_file
@@ -3795,7 +3996,6 @@ run_boot_title_load_resume_smoke() {
     : > "$log_file"
 
     {
-        echo "break \$${disk_prompt_game}"
         echo "until \$${load_resume_game}"
         echo "g"
     } > "$mon_file"
@@ -3806,13 +4006,6 @@ run_boot_title_load_resume_smoke() {
         -limitcycles 220000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
     local vice_rc=$?
-
-    if grep -qiE "Stop on  exec ${disk_prompt_game_lc}" "$log_file"; then
-        boot_log_report_failure "unexpected program-disk prompt during C128 title load flow" "$log_file" "disk_prompt_game" "$disk_prompt_game" "$vice_rc"
-        FAIL=$((FAIL + 1))
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
 
     if ! grep -qi "^UNTIL: .*C:\$${load_resume_game}" "$log_file"; then
         boot_log_report_failure "did not reach load_resume_game from title load flow" "$log_file" "load_resume_game" "$load_resume_game" "$vice_rc"
@@ -5454,6 +5647,7 @@ run_selected_suites() {
     run_named_suite c128_item_overlay_key_guard run_item_overlay_key_guard_check || return 1
     run_named_suite c128_input_run_guard run_input_run_guard_check || return 1
     run_named_suite c128_ref_hal_guard run_ref_hal_guard_check || return 1
+    run_named_suite c128_save_load_guard run_save_load_guard_check || return 1
     run_named_suite c128_80col_layout_guard run_80col_layout_guard_check || return 1
 
     run_parallel_unit_tests || return 1

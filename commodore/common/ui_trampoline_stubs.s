@@ -3,8 +3,6 @@
 //
 // In the game build, trampolines bank out KERNAL to call $F000/$E000 code.
 // In test builds, the code is at normal addresses so direct calls work.
-#import "spell_data.s"
-#import "spell_names.s"
 
 test_spell_list_display:
     jmp test_spell_list_display_impl
@@ -23,6 +21,14 @@ test_spell_execute_selected_impl:
 
 .assert "test_spell_list_display patch slot stays 3 bytes", test_spell_execute_selected - test_spell_list_display, 3
 .assert "test_spell_execute_selected patch slot stays 3 bytes", item_gain_spell - test_spell_execute_selected, 3
+
+#if !C64_TEST_NO_SPELL_NAME_STUBS
+stub_spell_name_empty: .byte 0
+mage_spell_name_lo:   .fill 31, <stub_spell_name_empty
+mage_spell_name_hi:   .fill 31, >stub_spell_name_empty
+priest_spell_name_lo: .fill 31, <stub_spell_name_empty
+priest_spell_name_hi: .fill 31, >stub_spell_name_empty
+#endif
 
 // $F000 UI screen trampolines
 .label tramp_ui_char_display = ui_char_display
@@ -56,18 +62,28 @@ level_change_generate_current:
     rts
 
 // $E000 store overlay trampolines
-.label tramp_store_init_all = store_init_all
-.label tramp_store_restock_all = store_restock_all
-.label tramp_store_enter = store_enter
+tramp_store_init_all:
+tramp_store_restock_all:
+tramp_store_enter:
+    rts
 
 // $E000 startup overlay trampolines
 .label tramp_player_create = player_create
+
+// Dungeon action trampolines
+tramp_ranged_fire:
+tramp_throw_item:
+tramp_bash_command:
+tramp_player_tunnel:
+    rts
 
 // ============================================================
 // R14 stubs — functions from main.s needed by ego_items.s,
 // ui_inventory.s, and ui_store.s in test context
 // ============================================================
 
+#if C64_TEST_FULL_ITEMDESC_STUB
+#import "store_meta_macros.s"
 // roll_tool_ego_check — Handle ego roll for digging tools
 // Called from roll_ego_type (ego_items.s) when category != ICAT_WEAPON.
 // A = category value from it_category lookup
@@ -96,7 +112,13 @@ roll_tool_ego_check:
 !rtc_ego1:
     lda #1
     rts
+#else
+roll_tool_ego_check:
+    lda #0
+    rts
+#endif
 
+#if C64_TEST_FULL_ITEMDESC_STUB
 // banked_ego_put_suffix — Write ego suffix to screen (no banking in tests)
 banked_ego_put_suffix:
     cmp #0
@@ -152,6 +174,7 @@ tool_ego_pfx_hi:
 
 // put_inv_name_with_ego — Print item name with ego prefix/suffix
 // Input: X = inventory slot index
+itemdesc_put_inv_slot:
 put_inv_name_with_ego:
     lda inv_item_id,x
     sta pinwe_id
@@ -202,3 +225,17 @@ put_inv_sensed_suffix:
 pinwe_sensed_suffix: .text " (magik)" ; .byte 0
 pinwe_id: .byte 0
 pinwe_sl: .byte 0
+
+itemdesc_put_store_slot:
+    lda si_item_id,x
+    jsr item_get_name_ptr
+    jsr screen_put_string
+    :LoadStoreEgoX()
+    jmp banked_ego_put_suffix
+#else
+banked_ego_put_suffix:
+itemdesc_put_inv_slot:
+put_inv_name_with_ego:
+itemdesc_put_store_slot:
+    rts
+#endif

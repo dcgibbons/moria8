@@ -1049,11 +1049,27 @@ check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
 check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "input.s" \
-    "input_get_key:|||lda #BANK_NO_BASIC|||sta \$01|||jsr input_lock_charset_switch|||cli|||!igk_poll:"
+    "input_get_key:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!igk_poll:"
 check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "input.s" \
-    "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
+    "input_wait_release:|||lda #BANK_NO_BASIC|||sta \$01|||jsr c64_install_ram_irq_vectors|||jsr input_lock_charset_switch|||cli|||!iwr_drain:"
+check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
+    "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr input_get_key"
+check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
+    "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||lda current_overlay|||cmp #OVL_ITEMS|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_ITEMS|||lda #OVL_ITEMS|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL|||sta \$01"
+check_static_contract "identify_scroll_resident_completion_contract" "../common/item_actions_overlay.s" \
+    "irs_effect_identify:|||jmp eff_identify_scroll_resident"
+check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../common/item_desc_banked.s" \
+    "!idps_armor:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code|||!idps_ring:|||lda #\$1b                    // '[' screen code|||lda #\$1d                    // ']' screen code"
+check_static_contract "save_split_item_stats_contract" "../common/save.s" \
+    ":save_block(inv_p1, TOTAL_INV_SLOTS)|||:save_block(inv_to_hit, TOTAL_INV_SLOTS)|||:save_block(inv_to_dam, TOTAL_INV_SLOTS)|||:save_block(inv_to_ac, TOTAL_INV_SLOTS)|||:save_block(si_p1, STORE_TOTAL_SLOTS)|||:save_block(si_to_hit, STORE_TOTAL_SLOTS)|||:save_block(si_to_dam, STORE_TOTAL_SLOTS)|||:save_block(si_to_ac, STORE_TOTAL_SLOTS)|||:load_block(inv_p1, TOTAL_INV_SLOTS)|||:load_block(inv_to_hit, TOTAL_INV_SLOTS)|||:load_block(inv_to_dam, TOTAL_INV_SLOTS)|||:load_block(inv_to_ac, TOTAL_INV_SLOTS)|||:load_block(si_p1, STORE_TOTAL_SLOTS)|||:load_block(si_to_hit, STORE_TOTAL_SLOTS)|||:load_block(si_to_dam, STORE_TOTAL_SLOTS)|||:load_block(si_to_ac, STORE_TOTAL_SLOTS)|||:save_block(fi_to_hit, MAX_FLOOR_ITEMS)|||:save_block(fi_to_dam, MAX_FLOOR_ITEMS)|||:save_block(fi_to_ac, MAX_FLOOR_ITEMS)|||lda #<fi_to_hit|||jsr load_read_block|||lda #<fi_to_dam|||jsr load_read_block|||lda #<fi_to_ac|||jsr load_read_block"
+check_static_contract "item_action_messages_stat_desc_contract" "../common/item.s" \
+    "Build message: \"You picked up a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||Build message: \"You drop a <name>.\"|||lda fi_add_id|||jsr item_append_desc|||item_append_desc:|||jsr item_append_name|||and #IF_IDENTIFIED"
+check_static_contract "equip_action_messages_stat_desc_contract" "../common/player_item_commands.s" \
+    "Build message: \"YOU ARE WIELDING A <name>.\"|||lda piw_item_id|||jsr item_append_desc|||Build message: \"YOU TAKE OFF THE <name>.\"|||lda piw_item_id|||jsr item_append_desc"
+check_static_contract "throw_action_messages_stat_desc_contract" "../common/throw.s" \
+    "tw_msg_item_prefix:|||jsr tw_stage_saved_item_fields|||lda tw_item_id|||jsr item_append_desc|||tw_stage_saved_item_fields:|||lda tw_save_to_hit|||sta fi_add_to_hit|||lda tw_save_to_dam|||sta fi_add_to_dam|||lda tw_save_flags|||sta fi_add_flags"
 check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
@@ -1067,7 +1083,7 @@ check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "ma
 check_static_contract "spell_execute_tier_restore_kernal_contract" "main.s" \
     "tramp_spell_execute_selected:|||lda #OVL_DEATH|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||lda #BANK_NO_BASIC|||sta \$01|||cli|||jsr tier_restore_after_overlay"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
-    "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe"
+    "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
@@ -1152,23 +1168,24 @@ run_test "remove_curse_prayer" "tests/test_remove_curse_prayer.s" "0400 0402" 3 
 run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 0402" 3 500000000
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
-run_test "item" "tests/test_item.s" "0400 042b" 44 1000000000
+run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 0403" 4 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 0424" 37 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 13 500000000
+run_test "store" "tests/test_store.s" "0400 0426" 39 1000000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 14 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 040b" 12 1000000000
+run_test "save"  "tests/test_save.s"  "0400 040c" 13 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
 run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
 run_test "render" "tests/test_render.s" "0400 0407" 8 500000000
-run_test "ranged" "tests/test_ranged.s" "0400 0407" 8 500000000
+run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000
-run_test "throw" "tests/test_throw.s" "0400 0409" 10 500000000
+run_test "throw" "tests/test_throw.s" "0400 040a" 11 500000000
 run_test "bash" "tests/test_bash.s" "0400 0407" 8 500000000
 run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8

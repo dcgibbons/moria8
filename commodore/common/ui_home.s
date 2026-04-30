@@ -5,6 +5,8 @@
 // Called directly from store_enter in town overlay ($E000).
 // No pricing — items are stored for free.
 
+#import "store_meta_macros.s"
+
 // ============================================================
 // PETSCII key constants (duplicated from ui_store.s — overlay segment not visible here)
 // ============================================================
@@ -130,7 +132,9 @@ home_retrieve:
     tax
     lda si_item_id,x
     cmp #FI_EMPTY
-    beq !hr_cancel+             // Empty slot (now close enough)
+    bne !hr_slot_occupied+
+    rts                         // Empty slot
+!hr_slot_occupied:
 
     // Check inventory room
     jsr inv_count_items
@@ -160,9 +164,15 @@ home_retrieve:
     sta fi_add_qty
     lda si_p1,x
     sta fi_add_p1
-    lda si_flags,x
+    lda si_to_hit,x
+    sta fi_add_to_hit
+    lda si_to_dam,x
+    sta fi_add_to_dam
+    lda si_to_ac,x
+    sta fi_add_to_ac
+    :LoadStoreFlagsX()
     sta fi_add_flags
-    lda si_ego,x
+    :LoadStoreEgoX()
     sta fi_add_ego
     jsr inv_add_item
 
@@ -173,8 +183,10 @@ home_retrieve:
     lda #0
     sta si_qty,x
     sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
 
     // Success message
     lda #COL_LGREEN
@@ -250,9 +262,9 @@ home_deposit:
     lda #$20                    // Space
     jsr screen_put_char
 
-    // Item name with ego prefix/suffix (R14)
+    // Item description with ego/status/stat suffixes
     ldx hm_save_x
-    jsr put_inv_name_with_ego
+    jsr itemdesc_put_inv_slot
 
     inc hm_row
 
@@ -302,7 +314,9 @@ home_deposit:
     tax
     lda inv_item_id,x
     cmp #FI_EMPTY
-    beq !hd_cancel+
+    bne !hd_slot_occupied+
+    jmp !hd_cancel+
+!hd_slot_occupied:
 
     // Find empty home slot
     jsr store_find_empty_slot
@@ -334,10 +348,13 @@ home_deposit:
     sta si_qty,y
     lda inv_p1,x
     sta si_p1,y
-    lda inv_flags,x
-    sta si_flags,y
-    lda inv_ego,x
-    sta si_ego,y
+    lda inv_to_hit,x
+    sta si_to_hit,y
+    lda inv_to_dam,x
+    sta si_to_dam,y
+    lda inv_to_ac,x
+    sta si_to_ac,y
+    :StoreStoreMetaYFromInvX()
 
     // Remove from inventory
     ldx hm_inv_slot

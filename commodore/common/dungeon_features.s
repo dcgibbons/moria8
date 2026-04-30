@@ -166,11 +166,22 @@ find_random_floor:
 // then picks 1-3 to convert to TILE_SECRET.
 // ============================================================
 
-// Temp buffer for door positions found during scan
+// Temp buffer for door positions found during scan.
+// Generation-only door scan scratch. This must not alias visible screen RAM:
+// the generation busy screen stays visible while secrets are placed.
 .const MAX_DOOR_SCAN = 32
-door_scan_x: .fill MAX_DOOR_SCAN, 0
-door_scan_y: .fill MAX_DOOR_SCAN, 0
-door_scan_count: .byte 0
+#if C128
+.label door_scan_x = DUNGEON_GEN_BFS_QUEUE_BASE
+#else
+.label door_scan_x = DUNGEON_GEN_DOOR_SCAN_BASE
+#endif
+.label door_scan_y = door_scan_x + MAX_DOOR_SCAN
+.label door_scan_count = door_scan_y + MAX_DOOR_SCAN
+#if C128
+.assert "Door scan scratch stays in dungeon-gen scratch window", door_scan_count <= DUNGEON_GEN_BFS_QUEUE_END, true
+#else
+.assert "Door scan scratch stays below visible screen RAM", door_scan_count < SCREEN_RAM, true
+#endif
 
 place_secrets:
     // Don't place secrets on town level

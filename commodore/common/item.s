@@ -60,8 +60,17 @@
 inv_item_id: .fill TOTAL_INV_SLOTS, FI_EMPTY
 inv_qty:     .fill TOTAL_INV_SLOTS, 0
 inv_p1:      .fill TOTAL_INV_SLOTS, 0
+inv_to_hit:  .fill TOTAL_INV_SLOTS, 0
+inv_to_dam:  .fill TOTAL_INV_SLOTS, 0
+inv_to_ac:   .fill TOTAL_INV_SLOTS, 0
 inv_flags:   .fill TOTAL_INV_SLOTS, 0
 inv_ego:     .fill TOTAL_INV_SLOTS, 0
+
+// Split stat sidecars for floor slots. The packed floor table intentionally
+// stays inside its fixed 256-byte page.
+fi_to_hit:   .fill MAX_FLOOR_ITEMS, 0
+fi_to_dam:   .fill MAX_FLOOR_ITEMS, 0
+fi_to_ac:    .fill MAX_FLOOR_ITEMS, 0
 
 glyph_x:      .fill MAX_GLYPHS, 0
 glyph_y:      .fill MAX_GLYPHS, 0
@@ -75,7 +84,10 @@ fi_add_y:   .byte 0
 fi_add_id:  .byte 0       // Item type ID
 fi_add_qty: .byte 0       // Quantity / gold amount
 fi_add_qty_hi: .byte 0    // Gold qty high byte (auto-reset after add)
-fi_add_p1:  .byte 0       // Enchantment / charges
+fi_add_p1:  .byte 0       // Charges/fuel/type-specific p1
+fi_add_to_hit: .byte 0    // Split item to-hit
+fi_add_to_dam: .byte 0    // Split item to-damage
+fi_add_to_ac:  .byte 0    // Split item to-AC
 fi_add_ego: .byte 0       // Ego type (0=none)
 isl_target: .byte 0       // item_spawn_level loop target
 isl_idx:    .byte 0       // item_spawn_level loop counter
@@ -92,6 +104,9 @@ fi_add_clear_plain_meta:
     lda #0
     sta fi_add_qty_hi
     sta fi_add_p1
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
     sta fi_add_flags
     sta fi_add_ego
     rts
@@ -170,6 +185,14 @@ item_init_floor:
     bpl !iif_loop-
     lda #0
     sta zp_item_count
+    ldx #MAX_FLOOR_ITEMS - 1
+    lda #0
+!iif_stat_loop:
+    sta fi_to_hit,x
+    sta fi_to_dam,x
+    sta fi_to_ac,x
+    dex
+    bpl !iif_stat_loop-
     jsr glyph_clear_all
     rts
 
@@ -182,10 +205,22 @@ item_init_inventory:
     sta inv_item_id,x
     dex
     bpl !iiv_loop-
+    ldx #TOTAL_INV_SLOTS - 1
+    lda #0
+!iiv_stat_loop:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
+    sta inv_to_ac,x
+    sta inv_flags,x
+    sta inv_ego,x
+    dex
+    bpl !iiv_stat_loop-
     rts
 
 // floor_item_add — Add an item to the floor item table
-// Input: fi_add_x, fi_add_y, fi_add_id, fi_add_qty, fi_add_p1, fi_add_flags
+// Input: fi_add_x/y/id/qty/p1/to_hit/to_dam/to_ac/flags/ego
 // Output: carry set = success (X = slot), carry clear = table full
 // Clobbers: A, X, Y, zp_ptr0
 floor_item_add:
@@ -223,6 +258,12 @@ floor_item_add:
 !fia_store_meta:
     jsr floor_item_pack_add_meta
     sta fi_meta,x
+    lda fi_add_to_hit
+    sta fi_to_hit,x
+    lda fi_add_to_dam
+    sta fi_to_dam,x
+    lda fi_add_to_ac
+    sta fi_to_ac,x
     lda #0
     sta fi_add_qty_hi       // Auto-reset for non-gold callers
 
@@ -267,6 +308,9 @@ floor_item_remove:
     sta fi_qty,x
     sta fi_p1,x
     sta fi_meta,x
+    sta fi_to_hit,x
+    sta fi_to_dam,x
+    sta fi_to_ac,x
 
     // Decrement count
     dec zp_item_count
@@ -399,7 +443,7 @@ glyph_remove:
     rts
 
 // inv_add_item — Add item to first empty carried slot (0-21)
-// Input: fi_add_id, fi_add_qty, fi_add_p1
+// Input: fi_add_id, fi_add_qty, fi_add_p1, fi_add_to_hit/dam/ac
 // Output: carry set = success (X = slot), carry clear = full
 // Clobbers: A, X
 inv_add_item:
@@ -419,6 +463,12 @@ inv_add_item:
     sta inv_qty,x
     lda fi_add_p1
     sta inv_p1,x
+    lda fi_add_to_hit
+    sta inv_to_hit,x
+    lda fi_add_to_dam
+    sta inv_to_dam,x
+    lda fi_add_to_ac
+    sta inv_to_ac,x
     lda fi_add_flags                // Copy flags (preserves IF_CURSED etc.)
     sta inv_flags,x
     lda fi_add_ego
@@ -443,6 +493,12 @@ inv_remove_item:
     sta inv_qty,x
     lda inv_p1 + 1,x
     sta inv_p1,x
+    lda inv_to_hit + 1,x
+    sta inv_to_hit,x
+    lda inv_to_dam + 1,x
+    sta inv_to_dam,x
+    lda inv_to_ac + 1,x
+    sta inv_to_ac,x
     lda inv_flags + 1,x
     sta inv_flags,x
     lda inv_ego + 1,x
@@ -456,6 +512,9 @@ inv_remove_item:
     lda #0
     sta inv_qty,x
     sta inv_p1,x
+    sta inv_to_hit,x
+    sta inv_to_dam,x
+    sta inv_to_ac,x
     sta inv_flags,x
     sta inv_ego,x
     rts
@@ -632,7 +691,7 @@ item_spawn_level:
     jsr roll_enchantment
     sta fi_add_p1
 
-    // fi_add_flags set by roll_enchantment (IF_CURSED for cursed items)
+    // fi_add_* stat fields and fi_add_flags set by roll_enchantment.
 
     // Roll ego type for weapons (0=none for non-weapons)
     lda fi_add_id
@@ -885,6 +944,12 @@ item_pickup:
     sta fi_add_qty
     jsr floor_item_get_p1_x
     sta fi_add_p1
+    lda fi_to_hit,x
+    sta fi_add_to_hit
+    lda fi_to_dam,x
+    sta fi_add_to_dam
+    lda fi_to_ac,x
+    sta fi_add_to_ac
     jsr floor_item_get_flags_x
     sta fi_add_flags                // Preserve floor item flags (IF_CURSED etc.)
     jsr floor_item_get_ego_x
@@ -899,7 +964,7 @@ item_pickup:
     jsr huff_append_combat
 
     lda fi_add_id
-    jsr item_append_name
+    jsr item_append_desc
 
     lda #<cmb_period
     ldy #>cmb_period
@@ -995,6 +1060,12 @@ item_drop:
     sta fi_add_qty
     lda inv_p1,x
     sta fi_add_p1
+    lda inv_to_hit,x
+    sta fi_add_to_hit
+    lda inv_to_dam,x
+    sta fi_add_to_dam
+    lda inv_to_ac,x
+    sta fi_add_to_ac
     lda inv_flags,x
     sta fi_add_flags
     lda inv_ego,x
@@ -1021,7 +1092,7 @@ item_drop:
     jsr huff_append_combat
 
     lda fi_add_id
-    jsr item_append_name
+    jsr item_append_desc
 
     lda #<cmb_period
     ldy #>cmb_period
@@ -1041,6 +1112,7 @@ item_drop:
 // Uses item_get_name_ptr for identification-aware name resolution.
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1
 item_append_name:
+    sta fi_add_id
     jsr item_get_name_ptr           // zp_ptr0 = name string
     lda zp_ptr0
     ldy zp_ptr0_hi
@@ -1049,6 +1121,150 @@ item_append_name:
     lda fi_add_ego
     jsr tramp_ego_append_suffix
     rts
+
+// item_append_desc — Append item name plus identified stat suffixes to
+// combat_msg_buf. Uses fi_add_* staging fields for the selected instance.
+// Input: A = item type ID
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1
+item_append_desc:
+    jsr item_append_name
+    lda fi_add_flags
+    and #IF_IDENTIFIED
+    bne !iad_identified+
+    rts
+!iad_identified:
+    ldx fi_add_id
+    lda it_category,x
+    cmp #ICAT_WEAPON
+    beq !iad_weapon+
+    cmp #ICAT_ARMOR
+    bcc !iad_done+
+    cmp #ICAT_BOOTS + 1
+    bcc !iad_armor+
+    cmp #ICAT_LIGHT
+    beq !iad_turns_tramp+
+    cmp #ICAT_RING
+    beq !iad_ring_tramp+
+    cmp #ICAT_WAND
+    beq !iad_charges_tramp+
+    cmp #ICAT_STAFF
+    beq !iad_charges_tramp+
+!iad_done:
+    rts
+!iad_ring_tramp:
+    jmp !iad_ring+
+!iad_charges_tramp:
+    jmp !iad_charges+
+!iad_turns_tramp:
+    jmp !iad_turns+
+!iad_weapon:
+    lda fi_add_to_hit
+    ora fi_add_to_dam
+    bne !iad_weapon_has_bonus+
+    rts
+!iad_weapon_has_bonus:
+    lda #$20
+    jsr combat_append_char
+    lda #$28
+    jsr combat_append_char
+    lda fi_add_to_hit
+    jsr item_append_signed_combat
+    lda #$2c
+    jsr combat_append_char
+    lda fi_add_to_dam
+    jsr item_append_signed_combat
+    lda #$29
+    jmp combat_append_char
+!iad_armor:
+    lda #$20
+    jsr combat_append_char
+    lda #$1b                    // '[' screen code
+    jsr combat_append_char
+    ldx fi_add_id
+    lda it_base_ac,x
+    jsr combat_append_decimal
+    lda #$2c
+    jsr combat_append_char
+    lda fi_add_to_ac
+    jsr item_append_signed_combat
+    lda #$1d                    // ']' screen code
+    jmp combat_append_char
+!iad_ring:
+    lda fi_add_id
+    cmp #23
+    beq !iad_ring_ac+
+    cmp #24
+    beq !iad_ring_p1+
+    rts
+!iad_ring_ac:
+    lda fi_add_to_ac
+    bne !iad_ring_ac_has_bonus+
+    rts
+!iad_ring_ac_has_bonus:
+    lda #$20
+    jsr combat_append_char
+    lda #$1b                    // '[' screen code
+    jsr combat_append_char
+    lda fi_add_to_ac
+    jsr item_append_signed_combat
+    lda #$1d                    // ']' screen code
+    jmp combat_append_char
+!iad_ring_p1:
+    lda fi_add_p1
+    bne !iad_ring_p1_has_bonus+
+    rts
+!iad_ring_p1_has_bonus:
+    lda #$20
+    jsr combat_append_char
+    lda #$28
+    jsr combat_append_char
+    lda fi_add_p1
+    jsr item_append_signed_combat
+    lda #$29
+    jmp combat_append_char
+!iad_charges:
+    lda #<item_append_charges_str
+    ldy #>item_append_charges_str
+    jmp item_append_count_suffix_combat
+!iad_turns:
+    lda #<item_append_turns_str
+    ldy #>item_append_turns_str
+item_append_count_suffix_combat:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    lda #$20
+    jsr combat_append_char
+    lda #$28
+    jsr combat_append_char
+    lda fi_add_p1
+    jsr combat_append_decimal
+    lda #$20
+    jsr combat_append_char
+    lda zp_ptr0
+    ldy zp_ptr0_hi
+    jsr combat_append_str
+    lda #$29
+    jmp combat_append_char
+
+item_append_signed_combat:
+    sta item_append_signed
+    bmi !iasc_negative+
+    lda #$2b
+    jsr combat_append_char
+    lda item_append_signed
+    jmp combat_append_decimal
+!iasc_negative:
+    lda #$2d
+    jsr combat_append_char
+    lda item_append_signed
+    eor #$ff
+    clc
+    adc #1
+    jmp combat_append_decimal
+
+item_append_signed: .byte 0
+item_append_charges_str: .text "charges" ; .byte 0
+item_append_turns_str: .text "turns" ; .byte 0
 
 // Scratch variables for pickup/drop
 ipu_slot: .byte 0              // Floor/inventory slot being processed
@@ -1222,18 +1438,30 @@ pick_item_type:
 // ============================================================
 // roll_enchantment — Roll enchantment value for a spawned item
 // Input: A = item type ID
-// Output: A = signed enchantment (p1 value)
+// Output: A = p1 value for charges/fuel/ring misc bonuses, 0 otherwise
+//         fi_add_to_hit/to_dam/to_ac set for combat/armor stats
 //         fi_add_flags scratch = IF_CURSED if cursed, else 0
 // For lights: returns charge count instead of enchantment.
 // For non-equipment: returns 0.
 // Clobbers: A, X, Y
 // ============================================================
 fi_add_flags: .byte 0          // Scratch: flags for floor_item_add
+re_bonus_hit: .byte 0
+re_bonus_dam: .byte 0
+re_bonus_ac:  .byte 0
+re_bonus_p1:  .byte 0
 
 roll_enchantment:
     sta zp_temp0                // Save item type
     lda #0
     sta fi_add_flags            // Default: not cursed
+    sta fi_add_to_hit
+    sta fi_add_to_dam
+    sta fi_add_to_ac
+    sta re_bonus_hit
+    sta re_bonus_dam
+    sta re_bonus_ac
+    sta re_bonus_p1
 
     // Check category — only equipment gets enchantment
     ldx zp_temp0
@@ -1354,6 +1582,87 @@ roll_enchantment:
     cmp zp_temp1
     bcs !re_zero-               // roll >= chance → no magic
 
+    jsr re_roll_bonus
+    sta re_bonus_hit
+    jsr re_roll_bonus
+    sta re_bonus_dam
+    jsr re_roll_bonus
+    sta re_bonus_ac
+    jsr re_roll_bonus
+    sta re_bonus_p1
+
+    // 1-in-13 chance of cursed
+    lda #13
+    jsr rng_range
+    bne !re_not_cursed+
+
+    lda #IF_CURSED
+    sta fi_add_flags
+    lda re_bonus_hit
+    jsr re_negate_a
+    sta re_bonus_hit
+    lda re_bonus_dam
+    jsr re_negate_a
+    sta re_bonus_dam
+    lda re_bonus_ac
+    jsr re_negate_a
+    sta re_bonus_ac
+    lda re_bonus_p1
+    jsr re_negate_a
+    sta re_bonus_p1
+
+!re_not_cursed:
+    ldx zp_temp0
+    lda it_category,x
+    cmp #ICAT_WEAPON
+    beq !re_weapon+
+    cmp #ICAT_RING
+    beq !re_ring+
+    cmp #ICAT_ARMOR
+    beq !re_armor+
+    cmp #ICAT_SHIELD
+    beq !re_armor+
+    cmp #ICAT_HELM
+    beq !re_armor+
+    cmp #ICAT_GLOVES
+    beq !re_armor+
+    cmp #ICAT_BOOTS
+    beq !re_armor+
+    lda #0
+    rts
+
+!re_weapon:
+    lda re_bonus_hit
+    sta fi_add_to_hit
+    lda re_bonus_dam
+    sta fi_add_to_dam
+    lda #0
+    rts
+
+!re_armor:
+    lda re_bonus_ac
+    sta fi_add_to_ac
+    lda #0
+    rts
+
+!re_ring:
+    lda zp_temp0
+    cmp #23                         // Ring of Protection
+    beq !re_ring_protection+
+    cmp #24                         // Ring of Strength
+    beq !re_ring_strength+
+    lda #0
+    rts
+!re_ring_protection:
+    lda re_bonus_ac
+    sta fi_add_to_ac
+    lda #0
+    rts
+!re_ring_strength:
+    lda re_bonus_p1
+    rts
+
+re_roll_bonus:
     // bonus = rng(1 + dlvl/5) + 1
     lda zp_player_dlvl
     lsr
@@ -1368,23 +1677,12 @@ roll_enchantment:
     jsr rng_range               // [0, dlvl/4]
     clc
     adc #1                      // [1, 1+dlvl/4]
-    sta zp_temp1                // zp_temp1 = bonus
+    rts
 
-    // 1-in-13 chance of cursed
-    lda #13
-    jsr rng_range
-    bne !re_not_cursed+
-
-    // Cursed: negate bonus (2's complement)
-    lda zp_temp1
+re_negate_a:
     eor #$ff
     clc
     adc #1
-    sta zp_temp1
-    lda #IF_CURSED
-    sta fi_add_flags
-!re_not_cursed:
-    lda zp_temp1
     rts
 
 #import "item_identification.s"

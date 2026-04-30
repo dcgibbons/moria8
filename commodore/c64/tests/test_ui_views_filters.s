@@ -42,8 +42,10 @@ recall_deaths:     .fill MAX_CREATURES, 0
 si_item_id: .fill STORE_TOTAL_SLOTS, $ff
 si_qty:     .fill STORE_TOTAL_SLOTS, 0
 si_p1:      .fill STORE_TOTAL_SLOTS, 0
-si_flags:   .fill STORE_TOTAL_SLOTS, 0
-si_ego:     .fill STORE_TOTAL_SLOTS, 0
+si_to_hit:  .fill STORE_TOTAL_SLOTS, 0
+si_to_dam:  .fill STORE_TOTAL_SLOTS, 0
+si_to_ac:   .fill STORE_TOTAL_SLOTS, 0
+si_meta:    .fill STORE_TOTAL_SLOTS, 0
 help_pages: .byte 0, 0
 .const MX_CONFUSE = 9
 
@@ -58,6 +60,7 @@ eff_heal:
 eff_detect_monsters:
 eff_light_room:
 eff_identify_prompt:
+eff_identify_scroll_resident:
 eff_teleport_self:
 eff_remove_curse:
 eff_aggravate:
@@ -85,6 +88,16 @@ combat_append_str:
     bcc !loop-
 !done:
     stx cmb_buf_idx
+    rts
+
+combat_append_char:
+    ldx cmb_buf_idx
+    sta combat_msg_buf,x
+    inx
+    stx cmb_buf_idx
+    rts
+
+combat_append_decimal:
     rts
 
 magic_recalc_mana:
@@ -121,8 +134,10 @@ magic_check_new_spells:
 #import "../../common/item.s"
 #import "../../common/ego_items.s"
 #import "../../common/player_items.s"
+#import "../../common/spell_data.s"
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
+#define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../common/ui_trampoline_stubs.s"
 
 press_key_str:
@@ -296,8 +311,10 @@ reset_shared_state:
 !clr_store_rest:
     sta si_qty,x
     sta si_p1,x
-    sta si_flags,x
-    sta si_ego,x
+    sta si_to_hit,x
+    sta si_to_dam,x
+    sta si_to_ac,x
+    sta si_meta,x
     dex
     bpl !clr_store_rest-
 

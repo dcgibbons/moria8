@@ -85,6 +85,7 @@ test_exit_trampoline:
 #import "../../common/store.s"
 #import "../../common/ui_store.s"
 #import "../../common/ui_help.s"
+#define C64_TEST_FULL_ITEMDESC_STUB
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/tunnel.s"
 

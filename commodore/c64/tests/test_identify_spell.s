@@ -32,6 +32,8 @@ test_finish:
 
 .pc = $0840 "Main"
 
+.const PIW_FILTER_MAGE_BOOK = $fc
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../../common/reu.s"
@@ -69,7 +71,6 @@ test_finish:
 #import "../../common/special_rooms.s"
 #import "../../common/ego_items.s"
 #import "../../common/special_rooms_stubs.s"
-#import "../../common/player_items.s"
 #import "../../common/projectile.s"
 #import "../../common/spell_effects.s"
 #import "../../common/spell_data.s"
@@ -100,6 +101,39 @@ help_draw_hborder:
 ui_inv_display:
 ui_inv_select_display:
 ui_equip_display:
+    rts
+
+piw_filter: .byte 0
+
+show_inv_and_select:
+    lda #$41
+    rts
+
+piw_prompt_filtered_inv:
+    lda inv_item_id + 1
+    cmp #FI_EMPTY
+    bne !have_item+
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_print_msg
+    clc
+    rts
+!have_item:
+    sec
+    rts
+
+piw_pick_filtered_inv_key:
+    cmp #$41
+    bne !bad+
+    ldx #1
+    lda inv_item_id + 1
+    sec
+    rts
+!bad:
+    clc
+    rts
+
+piw_print_prompt_with_count:
+player_recalc_equipment:
     rts
 
 press_key_str:
@@ -260,23 +294,37 @@ test_start:
     lda #0
     sta inv_p1 + 1
     sta inv_flags + 1
+    sta inv_to_ac + 1
+    lda #$fe
+    sta inv_to_hit + 1
+    lda #6
+    sta inv_to_dam + 1
+    lda #0
     sta inv_ego + 1
     jsr player_cast_spell
-    bcc !t1_fail+
+    bcc !t1_fail_pre+
     lda tid_spell_exec_calls
     cmp #1
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda tid_last_spell_idx
     cmp #20
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda tid_huff_calls
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda id_known + 25
     cmp #1
-    bne !t1_fail+
+    bne !t1_fail_pre+
     lda inv_flags + 1
     and #IF_IDENTIFIED
-    beq !t1_fail+
+    beq !t1_fail_pre+
+    lda inv_to_hit + 1
+    cmp #$fe
+    bne !t1_fail_pre+
+    lda inv_to_dam + 1
+    cmp #6
+    bne !t1_fail_pre+
+    lda inv_to_ac + 1
+    bne !t1_fail_pre+
     lda #<tid_expected_identify
     sta zp_ptr0
     lda #>tid_expected_identify
@@ -297,6 +345,8 @@ test_start:
     cpy #42
     bcc !cmp1-
     bcs !t1_fail_bank+
+!t1_fail_pre:
+    jmp !t1_fail+
 !t1_pass:
     :BankInKernal()
     lda zp_player_mp

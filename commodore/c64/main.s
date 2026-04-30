@@ -10,6 +10,8 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
+#define C64_PRODUCT_OVERLAY_RUNTIME
+#define C64_PRODUCT_IRQ_VECTOR_RUNTIME
 .segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]
 .segmentdef DeathOverlay      [outPrg="out/ovl.death", start=$e000, min=$e000, max=$efff]
@@ -17,6 +19,7 @@
 .segmentdef UiOverlay         [outPrg="out/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg="out/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
+.segmentdef RuntimeBanked     [outPrg="out/64.bank",   start=$f000, min=$f000, max=$fffa]
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
@@ -223,7 +226,9 @@ tramp_dig_ability:
 #import "../common/dungeon_features.s"
 #import "../common/monster.s"
 #import "../common/tier_manager.s"
+#define OVERLAY_LOAD_PROMPT_GAME
 #import "../common/overlay.s"
+#undef OVERLAY_LOAD_PROMPT_GAME
 #import "../common/monster_ai.s"
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
@@ -242,10 +247,6 @@ tramp_dig_ability:
 #import "../common/combat.s"
 #undef PMU_TURN_FEEDBACK_EXTERNAL
 #import "../common/projectile.s"
-#import "../common/ranged_fire.s"
-#import "../common/throw.s"
-#import "../common/bash.s"
-#import "../common/tunnel.s"
 #import "../common/monster_attack.s"
 #import "../common/turn.s"
 #import "../common/store_data.s"
@@ -258,6 +259,52 @@ tramp_dig_ability:
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
 
+// Resident helper for C64 save-disk marker creation. It must execute from
+// visible RAM while KERNAL is banked in; the $F000 runtime is hidden then.
+c64_disk_marker_write_resident:
+    lda #2
+    sta disk_status
+    lda #$36
+    sta $01
+    lda #disk_marker_write_fname_len - 1
+    ldx #<(disk_marker_write_fname + 1)
+    ldy #>(disk_marker_write_fname + 1)
+    jsr KERNAL_SETNAM
+    lda #DISK_MARKER_FILE_NUM
+    ldx save_device
+    ldy #DISK_MARKER_SEC_WR
+    jsr KERNAL_SETLFS
+    jsr KERNAL_OPEN
+    bcs !cdmw_close+
+    ldx #DISK_MARKER_FILE_NUM
+    jsr KERNAL_CHKOUT
+    bcs !cdmw_close+
+    ldx #0
+!cdmw_write:
+    lda disk_marker_magic,x
+    jsr KERNAL_CHROUT
+    inx
+    cpx #DISK_MARKER_MAGIC_LEN
+    bcc !cdmw_write-
+    lda #0
+    sta disk_status
+!cdmw_close:
+    jsr KERNAL_CLRCHN
+    lda #DISK_MARKER_FILE_NUM
+    jsr KERNAL_CLOSE
+    lda #$34
+    sta $01
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    lda disk_status
+    beq !cdmw_ok+
+    sec
+    rts
+!cdmw_ok:
+    clc
+    rts
+
 // ============================================================
 // Entry point
 // ============================================================
@@ -269,9 +316,8 @@ entry_main:
 
     // BASIC ROM already banked out by bootstrap above
 
-    // Copy banked code payload to $F000 (must happen before any
-    // trampoline calls — payload stored inline after program code)
-    jsr init_copy_banked
+    // Load banked runtime payload to $F000 before any $F000 trampoline calls.
+    jsr init_load_banked
 
     // Patch reu_show_status: RTS → JMP tramp_reu_show_status
     lda #$4c                    // JMP absolute opcode
@@ -684,9 +730,15 @@ platform_services_install64:
 // UI screen trampolines — help and modal UI load from $E000 overlays
 // ============================================================
 overlay_load_no_kernal:
+    pha
+    lda #BANK_NO_BASIC        // KERNAL visible for overlay disk LOAD
+    sta $01
+    cli
+    pla
     jsr overlay_load
     bcs !done+
     sei
+    jsr c64_install_ram_irq_vectors
     lda #BANK_NO_KERNAL       // $35 — I/O visible for color RAM writes
     sta $01
 !done:
@@ -791,6 +843,38 @@ tramp_item_refuel:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_ranged_fire:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr ranged_fire
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_throw_item:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr throw_item
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_bash_command:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr bash_command
+!done:
+    jmp tramp_sr_epilogue
+
+tramp_player_tunnel:
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr player_tunnel
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_spell_list_display:
     lda #OVL_UI
     jsr overlay_load_no_kernal
@@ -862,13 +946,19 @@ store_overlay_preamble:
     rts
 
 tramp_store_init_all:
-    jsr store_overlay_preamble
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
     jsr store_init_all
+!done:
     jmp tramp_sr_epilogue
 
 tramp_store_restock_all:
-    jsr store_overlay_preamble
+    lda #OVL_ITEMS
+    jsr overlay_load_no_kernal
+    bcs !done+
     jsr store_restock_all
+!done:
     jmp tramp_sr_epilogue
 
 tramp_store_enter:
@@ -1232,55 +1322,58 @@ program_end:
 // are used. Overwritten during normal gameplay.
 // ============================================================
 
-// init_copy_banked — Copy banked code payload to $F000
+// init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
-// Clobbers: A, X, Y, zp_ptr0/hi, zp_ptr1/hi
-init_copy_banked:
-    sei
-    lda #BANK_NO_ROMS           // $34 — bank out all ROMs to write $F000
-    sta $01
-    lda #<banked_payload
-    sta zp_ptr0
-    lda #>banked_payload
-    sta zp_ptr0_hi
-    lda #$00
-    sta zp_ptr1
-    lda #$F0
-    sta zp_ptr1_hi
-    ldx #((banked_payload_end - banked_payload + 255) / 256)
-    ldy #0
-!copy:
-    lda (zp_ptr0),y
-    sta (zp_ptr1),y
-    iny
-    bne !copy-
-    inc zp_ptr0_hi
-    inc zp_ptr1_hi
-    dex
-    bne !copy-
-    lda #BANK_NO_BASIC          // $36 — restore normal banking
+// Clobbers: A, X, Y
+init_load_banked:
+    lda #BANK_NO_BASIC          // $36 — KERNAL visible for LOAD
     sta $01
     cli
+    lda #c64_banked_fname_len
+    ldx #<c64_banked_fname
+    ldy #>c64_banked_fname
+    jsr KERNAL_SETNAM
+    lda #2
+    ldx #SAVE_DEVICE
+    ldy #1                      // Use PRG header address ($F000)
+    jsr KERNAL_SETLFS
+    lda #0
+    ldx #$00
+    ldy #$f0
+    jsr KERNAL_LOAD
+    php
+    lda #2
+    jsr KERNAL_CLOSE
+    jsr KERNAL_CLRCHN
+    sei
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    lda #BANK_NO_BASIC
+    sta $01
+    plp
+    bcs !load_failed+
     rts
+!load_failed:
+    lda #2
+    sta $d020
+    jmp !load_failed-
+
+c64_banked_fname:
+    .byte $36,$34,$2e,$42,$41,$4e,$4b  // "64.BANK" in PETSCII/ASCII bytes
+.label c64_banked_fname_len = * - c64_banked_fname
 
 // ============================================================
-// Banked code payload — stored inline here, copied to $F000
-// at startup by init_copy_banked.
-//
-// Using .pseudopc so labels resolve to $F000+ addresses (where
-// the code runs) but bytes are stored contiguously after the
-// main program. This avoids spanning $D000 (I/O registers) in
-// the PRG file, which would corrupt the serial bus during
-// KERNAL LOAD from disk.
+// Banked runtime payload — loadable PRG at $F000.
 // ============================================================
-banked_payload:
-.pseudopc $F000 {
+.segment RuntimeBanked
     #import "../common/special_rooms.s"
     #import "../common/ego_items.s"
     #import "../common/title_sysinfo_banked.s"
     #import "../common/reu_loading_banked.s"
     #import "../common/ui_home.s"
     #import "../common/ui_recall.s"
+    #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
     #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_map.s"
@@ -1291,11 +1384,8 @@ banked_payload:
     #undef PM_EQ_BANKED
 
 banked_code_end:
-}
-banked_payload_end:
 
-.print "Banked payload: " + (banked_payload_end - banked_payload) + " bytes at $" + toHexString(banked_payload) + "-$" + toHexString(banked_payload_end)
-.assert "Payload fits below I/O ($D000)", banked_payload_end < $D000, true
+.print "Banked runtime: " + (banked_code_end - $f000) + " bytes at $F000-$" + toHexString(banked_code_end)
 .assert "Banked code fits below CPU vectors", banked_code_end <= $FFFA, true
 
 // ============================================================
@@ -1374,7 +1464,12 @@ ovl_ui_end:
 // Item actions overlay — low-frequency read/aim/use/refuel commands
 // ============================================================
 .segment ItemActionsOverlay
+    #import "../common/store_restock_overlay.s"
     #import "../common/item_actions_overlay.s"
+    #import "../common/ranged_fire.s"
+    #import "../common/throw.s"
+    #import "../common/bash.s"
+    #import "../common/tunnel.s"
 ovl_items_end:
 .print "Items overlay: " + (ovl_items_end - $e000) + " bytes at $E000-$" + toHexString(ovl_items_end)
 .assert "Items overlay fits in $E000-$EFFF", ovl_items_end <= $F000, true
