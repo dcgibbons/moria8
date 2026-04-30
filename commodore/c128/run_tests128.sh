@@ -1748,11 +1748,14 @@ except StopIteration:
     raise SystemExit(1)
 
 body = "\n".join(save[start:end])
-if body.count("jsr SAVE_READST") < 2:
-    print("load_read_byte must check SAVE_READST before and after SAVE_CHRIN")
+if body.count("jsr SAVE_READST") < 1:
+    print("load_read_byte must check SAVE_READST after SAVE_CHRIN")
     raise SystemExit(1)
-if "jsr SAVE_READST\n    beq !lrby_read+" not in body:
-    print("load_read_byte must gate C128 SAVE_CHRIN with a pre-read status check")
+if "jsr SAVE_READST\n#if C128" not in body:
+    print("load_read_byte must read status immediately after SAVE_CHRIN")
+    raise SystemExit(1)
+if "beq !lrby_read+" in body:
+    print("load_read_byte must not use the old pre-read status gate")
     raise SystemExit(1)
 if "jsr SAVE_CHRIN" not in body:
     print("load_read_byte lost the sequential byte read")
@@ -1762,8 +1765,12 @@ if "inc save_io_error" not in body:
     raise SystemExit(1)
 
 required = [
-    ("load_read_block:", "lda save_io_error\n    bne !lrb_done+"),
+    ("load_read_block:", "lda save_io_error\n    bne !lrb_c128_done+"),
     ("load_read_map_c128:", "lda save_io_error\n    bne !lrm_done+"),
+    ("save_write_block:", "jsr c128_save_stream_chunk"),
+    ("load_read_block:", "jsr c128_load_stream_chunk"),
+    ("save_write_map_c128:", "jsr save_stage_map_c128"),
+    ("load_read_map_c128:", "jsr load_unstage_map_c128"),
 ]
 text = "\n".join(save)
 for label, chain in required:

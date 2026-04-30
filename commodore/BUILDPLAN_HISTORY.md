@@ -14721,3 +14721,43 @@ cancels on keypress.
 - Add `TEST-C128-BLANK-SAVE-DISK-SMOKE`: boot the product disk, attach a blank
   drive-9 save disk, drive Disk Setup through initialization, and verify the
   resulting disk image contains a valid sequential `MORIA8.ID`.
+
+## C128 Save/Load Transport Optimization ✅ COMPLETE (2026-04-29)
+
+**Problem**
+- C128 save/load worked after the blank save-disk fix, but the real save/load
+  flow was much slower than expected.
+- The measured path wrote 15,603 bytes per save: 2,533 non-map bytes,
+  13,068 C128 map bytes, and 2 checksum bytes.
+- The old C128 transport used per-byte KERNAL wrappers. Save performed about
+  31,206 KERNAL byte/status calls, while load performed about 46,805 because
+  each byte checked `READST` before and after `CHRIN`.
+
+**Implemented**
+- Added a 128-byte C128 staging buffer owned by `128.persist`.
+- Added low-memory C128 streaming helpers that keep the KERNAL window open for
+  a staged chunk instead of entering/exiting KERNAL mode for each byte.
+- Updated C128 non-map save/load blocks to stage bytes before streaming.
+- Updated C128 Bank 1 map save/load to copy chunks to/from the staging buffer,
+  keeping map MMU access separate from KERNAL streaming.
+- Removed the old C128 pre-`CHRIN` `READST` gate while preserving post-read
+  status checks and final-checksum EOI handling.
+- Updated the C128 save/load static guard to assert the new chunked transport
+  contract.
+
+**Preserved**
+- Save format is unchanged.
+- Save filenames and player-visible text are unchanged.
+- C64 save/load path is unchanged.
+
+**Verification**
+- `make disk128`
+  - passed with 423 asserts
+- `make test128-fast`
+  - passed cold and snapshot batches
+- `TEST_FILTER='c128_save_load_guard' TEST_JOBS=1 bash commodore/c128/run_tests128.sh`
+  - passed
+- `make disk64`
+  - passed with 180 asserts
+- Manual verification:
+  - C128 save/load speed is materially improved.

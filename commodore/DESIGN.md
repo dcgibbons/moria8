@@ -59,6 +59,11 @@ resuming a loaded game. Code in `$AF00-$CFFF` must not initiate a modal swap
 unless the resident broker reloads the active payload before any return into the
 modal slot.
 
+`128.persist` owns a 128-byte save/load staging buffer. C128 save/load streams
+staged chunks through low-memory KERNAL helpers so the KERNAL window is entered
+once per chunk instead of once per byte. Bank 1 map bytes are copied to/from the
+staging buffer before the KERNAL stream; the save-file format is unchanged.
+
 **C128 runtime-loaded code rule:** For any copied or disk-loaded runtime code,
 the linked address, PRG load header, load destination bank, visible execution
 bank, and recopy source span must all agree. A callable symbol is not enough.

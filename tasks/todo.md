@@ -17,19 +17,6 @@ None.
   - [ ] Verify the save image contains a valid sequential `MORIA8.ID` marker.
   - [ ] Treat mocked `disk_swap128` coverage as diagnostic only, not closure
         for the live disk transaction.
-- [ ] `PERF-C128-SAVE-LOAD-SLOW`: C128 save/load is far slower than expected;
-      measure the current path and identify whether the cost is byte I/O,
-      status polling, modal reloads, disk prompts, or channel/MMU wrappers.
-  - [x] Current save size estimate: 15,603 bytes total = 2,533 non-map bytes,
-        13,068 C128 map bytes, and 2 checksum bytes.
-  - [x] Current C128 byte path cost estimate: save performs about 31,206
-        KERNAL byte/status calls; load performs about 46,805 KERNAL
-        byte/status calls because each byte checks `READST` before and after
-        `CHRIN`.
-  - [ ] Design a faster C128-safe sequential I/O path. Candidate direction:
-        keep KERNAL mode across non-map blocks and add a map-specific loop that
-        avoids wrapper-managed enter/exit on every byte while preserving the
-        `READST` safety added for short/corrupt saves.
 - [ ] `BUG-TRAP-HP-UNDERFLOW`: reproduce the rockfall-trap HP corruption from
       the live gameplay path before attempting a product fix.
 - [ ] `C64-TITLE-LOAD-SMOKE`: add dedicated disk-backed C64 title-load smoke
@@ -51,3 +38,8 @@ None.
       helpers.
 - [ ] `OPT-OVERLAY-PRESSURE-RESERVE`: consider further magic/spell/UI overlays
       only if main-segment pressure returns.
+
+## Review Notes
+
+- 2026-04-29: C128 save/load transport optimization completed and archived in
+  `commodore/BUILDPLAN_HISTORY.md`.

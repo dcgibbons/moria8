@@ -581,6 +581,59 @@ w_load:
 #endif
     rts
 
+// c128_save_stream_chunk / c128_load_stream_chunk
+// Execute from low resident RAM while KERNAL ROM is visible. The C128 persist
+// save/load code stages bytes in Bank 0 RAM first, then calls these helpers so
+// KERNAL mode is entered once per chunk rather than once per byte.
+c128_save_stream_chunk:
+    :EnterKernal()
+    lda #0
+    sta save_chunk_idx
+!stream_loop:
+    ldx save_chunk_idx
+    cpx save_chunk_len
+    bcs !stream_done+
+    lda save_stage_buf,x
+    jsr $ffd2                   // CHROUT
+    jsr $ffb7                   // READST
+    and #$03
+    beq !stream_ok+
+    lda #1
+    sta save_io_error
+!stream_ok:
+    inc save_chunk_idx
+    jmp !stream_loop-
+!stream_done:
+    :ExitKernal()
+    rts
+
+c128_load_stream_chunk:
+    :EnterKernal()
+    lda #0
+    sta save_chunk_idx
+!stream_loop:
+    ldx save_chunk_idx
+    cpx save_chunk_len
+    bcs !stream_done+
+    jsr $ffcf                   // CHRIN
+    ldx save_chunk_idx
+    sta save_stage_buf,x
+    jsr $ffb7                   // READST
+    beq !stream_ok+
+    sta save_chunk_status
+    lda #1
+    sta save_io_error
+    inc save_chunk_idx
+    lda save_chunk_idx
+    sta save_chunk_len
+    jmp !stream_done+
+!stream_ok:
+    inc save_chunk_idx
+    jmp !stream_loop-
+!stream_done:
+    :ExitKernal()
+    rts
+
 // safe_irq and safe_nmi have been replaced by Common RAM trampolines
 // mmu_common_irq and mmu_common_nmi (see memory128.s).
 
@@ -3648,6 +3701,8 @@ program_end:
 .assert "C128 resident disk-I/O fits below modal payload window", c128_resident_diskio_end <= $AF00, true
 .assert "C128 Disk Setup lives in dedicated disk-I/O runtime", disk_marker_init >= c128_resident_diskio_start && disk_setup_run < c128_resident_diskio_end, true
 .assert "C128 modal persist starts at $AF00", c128_resident_persist_start == $AF00, true
+.assert "C128 save staging buffer is 128 bytes", save_stage_buf_end - save_stage_buf == 128, true
+.assert "C128 save staging buffer lives in persist payload", save_stage_buf >= c128_resident_persist_start && save_stage_buf_end <= c128_resident_persist_end, true
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true

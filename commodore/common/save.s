@@ -58,6 +58,10 @@
 .const SAVE_CHRIN  = KERNAL_CHRIN
 .const SAVE_READST = KERNAL_READST
 
+#if C128
+.const SAVE_IO_CHUNK_SIZE = 128
+#endif
+
 // ============================================================
 // Scratch variables (before code so BRK is last in tests)
 // ============================================================
@@ -79,6 +83,14 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+#if C128
+save_chunk_len: .byte 0
+save_chunk_idx: .byte 0
+save_chunk_status: .byte 0
+save_stage_buf:
+    .fill SAVE_IO_CHUNK_SIZE, 0
+save_stage_buf_end:
+#endif
 #if SAVE_TEST_RLE
 rle_work_lo:    .byte <CREATURE_BASE  // RLE workspace pointer lo (default CREATURE_BASE)
 rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
@@ -592,6 +604,22 @@ load_game:
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
 !load_read_checksum:
+#if C128
+    jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
+    sta zp_temp0
+    jsr SAVE_READST
+    beq !load_checksum_hi+
+    jmp !load_corrupt_nocl+
+!load_checksum_hi:
+    jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
+    sta zp_temp1
+    jsr SAVE_READST
+    beq !load_checksum_status_ok+
+    cmp #$40                // EOI after final expected byte is valid
+    beq !load_checksum_status_ok+
+    jmp !load_corrupt_nocl+
+!load_checksum_status_ok:
+#else
     jsr SAVE_READST
     beq !load_checksum_lo+
     jmp !load_corrupt_nocl+
@@ -604,6 +632,7 @@ load_game:
 !load_checksum_hi:
     jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
     sta zp_temp1
+#endif
 
     // Check for I/O errors during read
     lda save_io_error
@@ -720,6 +749,22 @@ load_close_file_restore:
     rts
 
 save_write_block:
+#if C128
+    lda save_block_lo
+    sta zp_ptr0
+    lda save_block_hi
+    sta zp_ptr0_hi
+!swb_c128_loop:
+    lda save_count_lo
+    ora save_count_hi
+    beq !swb_c128_done+
+    jsr save_prepare_chunk_len_c128
+    jsr save_stage_from_ptr0_c128
+    jsr c128_save_stream_chunk
+    jmp !swb_c128_loop-
+!swb_c128_done:
+    rts
+#else
     lda save_block_lo
     sta zp_ptr0
     lda save_block_hi
@@ -763,6 +808,7 @@ save_write_block:
     jmp !swb_loop-
 !swb_done:
     rts
+#endif
 
 // ============================================================
 // save_write_byte — Write single byte (in A) with checksum
@@ -898,6 +944,20 @@ save_write_floor_items:
 // Clobbers: A, X, Y
 // ============================================================
 load_read_block:
+#if C128
+!lrb_c128_loop:
+    lda save_io_error
+    bne !lrb_c128_done+
+    lda save_count_lo
+    ora save_count_hi
+    beq !lrb_c128_done+
+    jsr save_prepare_chunk_len_c128
+    jsr c128_load_stream_chunk
+    jsr load_unstage_to_ptr0_c128
+    jmp !lrb_c128_loop-
+!lrb_c128_done:
+    rts
+#else
 !lrb_loop:
     lda save_io_error
     bne !lrb_done+
@@ -925,6 +985,7 @@ load_read_block:
     jmp !lrb_loop-
 !lrb_done:
     rts
+#endif
 
 // ============================================================
 // load_read_byte — Read single byte from open sequential file with checksum
@@ -935,14 +996,6 @@ load_read_byte:
 #if C128
     txa
     pha
-    jsr SAVE_READST
-    beq !lrby_read+
-    inc save_io_error
-    pla
-    tax
-    lda #0
-    rts
-!lrby_read:
 #endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
@@ -975,6 +1028,85 @@ load_read_byte:
     lda zp_temp0
 #endif
     rts
+
+#if C128
+// ============================================================
+// C128 chunk staging helpers — keep game zero page out of open KERNAL windows.
+// The low-memory streaming helpers enter KERNAL once per staged chunk.
+// ============================================================
+save_prepare_chunk_len_c128:
+    lda save_count_hi
+    bne !full+
+    lda save_count_lo
+    cmp #SAVE_IO_CHUNK_SIZE
+    bcs !full+
+    sta save_chunk_len
+    rts
+!full:
+    lda #SAVE_IO_CHUNK_SIZE
+    sta save_chunk_len
+    rts
+
+save_stage_from_ptr0_c128:
+    ldy #0
+    ldx #0
+!stage_loop:
+    cpx save_chunk_len
+    bcs !stage_done+
+    lda (zp_ptr0),y
+    sta save_stage_buf,x
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !no_carry+
+    inc save_cksum_hi
+!no_carry:
+    inc zp_ptr0
+    bne !ptr_ok+
+    inc zp_ptr0_hi
+!ptr_ok:
+    lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !count_ok+
+    dec save_count_hi
+!count_ok:
+    inx
+    jmp !stage_loop-
+!stage_done:
+    rts
+
+load_unstage_to_ptr0_c128:
+    ldy #0
+    ldx #0
+!unstage_loop:
+    cpx save_chunk_len
+    bcs !unstage_done+
+    lda save_stage_buf,x
+    sta (zp_ptr0),y
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !no_carry+
+    inc save_cksum_hi
+!no_carry:
+    inc zp_ptr0
+    bne !ptr_ok+
+    inc zp_ptr0_hi
+!ptr_ok:
+    lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !count_ok+
+    dec save_count_hi
+!count_ok:
+    inx
+    jmp !unstage_loop-
+!unstage_done:
+    rts
+#endif
 
 // ============================================================
 // load_read_floor_items — Read floor items from savefile into the packed
@@ -1177,21 +1309,9 @@ save_write_map_c128:
     lda save_count_lo
     ora save_count_hi
     beq !swm_done+
-    ldy #0
-    jsr mmu_safe_map_read_ptr0
-    pha
-    pla
-    jsr save_write_byte
-    inc zp_ptr0
-    bne !swm_no_hi+
-    inc zp_ptr0_hi
-!swm_no_hi:
-    lda save_count_lo
-    sec
-    sbc #1
-    sta save_count_lo
-    bcs !swm_loop-
-    dec save_count_hi
+    jsr save_prepare_chunk_len_c128
+    jsr save_stage_map_c128
+    jsr c128_save_stream_chunk
     jmp !swm_loop-
 !swm_done:
     rts
@@ -1211,21 +1331,72 @@ load_read_map_c128:
     lda save_count_lo
     ora save_count_hi
     beq !lrm_done+
-    jsr load_read_byte
+    jsr save_prepare_chunk_len_c128
+    jsr c128_load_stream_chunk
+    jsr load_unstage_map_c128
+    jmp !lrm_loop-
+!lrm_done:
+    rts
+
+save_stage_map_c128:
     ldy #0
-    jsr mmu_safe_map_write_ptr0
+    ldx #0
+!stage_loop:
+    cpx save_chunk_len
+    bcs !stage_done+
+    jsr mmu_safe_map_read_ptr0
+    sta save_stage_buf,x
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !no_carry+
+    inc save_cksum_hi
+!no_carry:
     inc zp_ptr0
-    bne !lrm_no_hi+
+    bne !ptr_ok+
     inc zp_ptr0_hi
-!lrm_no_hi:
+!ptr_ok:
     lda save_count_lo
     sec
     sbc #1
     sta save_count_lo
-    bcs !lrm_loop-
+    bcs !count_ok+
     dec save_count_hi
-    jmp !lrm_loop-
-!lrm_done:
+!count_ok:
+    inx
+    jmp !stage_loop-
+!stage_done:
+    rts
+
+load_unstage_map_c128:
+    ldy #0
+    ldx #0
+!unstage_loop:
+    cpx save_chunk_len
+    bcs !unstage_done+
+    lda save_stage_buf,x
+    jsr mmu_safe_map_write_ptr0
+    lda save_stage_buf,x
+    clc
+    adc save_cksum_lo
+    sta save_cksum_lo
+    bcc !no_carry+
+    inc save_cksum_hi
+!no_carry:
+    inc zp_ptr0
+    bne !ptr_ok+
+    inc zp_ptr0_hi
+!ptr_ok:
+    lda save_count_lo
+    sec
+    sbc #1
+    sta save_count_lo
+    bcs !count_ok+
+    dec save_count_hi
+!count_ok:
+    inx
+    jmp !unstage_loop-
+!unstage_done:
     rts
 #endif
 
