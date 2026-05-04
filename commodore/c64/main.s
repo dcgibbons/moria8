@@ -18,6 +18,7 @@
 .segmentdef HelpOverlay       [outPrg="out/ovl.help",  start=$e000, min=$e000, max=$efff]
 .segmentdef UiOverlay         [outPrg="out/ovl.ui",    start=$e000, min=$e000, max=$efff]
 .segmentdef ItemActionsOverlay [outPrg="out/ovl.items", start=$e000, min=$e000, max=$efff]
+.segmentdef SpellOverlay      [outPrg="out/ovl.spell", start=$e000, min=$e000, max=$efff]
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg="out/64.bank",   start=$f000, min=$f000, max=$fffa]
 
@@ -884,14 +885,10 @@ tramp_spell_list_display:
     jmp tramp_sr_epilogue
 
 tramp_spell_execute_selected:
-    lda #OVL_DEATH
+    lda #OVL_SPELL
     jsr overlay_load_no_kernal
     bcs !done+
     jsr spell_execute_selected
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-    jsr tier_restore_after_overlay
 !done:
     jmp tramp_sr_epilogue
 
@@ -1422,6 +1419,14 @@ ovl_start_end:
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
     #import "../common/score.s"
+ovl_death_end:
+.print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
+.assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
+
+// ============================================================
+// Spell overlay — spell/prayer execution at $E000
+// ============================================================
+.segment SpellOverlay
     #define PMX_EARTHQUAKE_EXTERNAL
     #define PMX_MAP_AREA_EXTERNAL
     #define PMU_VISIBLE_FLAGGED_EXTERNAL
@@ -1429,9 +1434,9 @@ ovl_start_end:
     #undef PMU_VISIBLE_FLAGGED_EXTERNAL
     #undef PMX_MAP_AREA_EXTERNAL
     #undef PMX_EARTHQUAKE_EXTERNAL
-ovl_death_end:
-.print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)
-.assert "Death overlay fits in $E000-$EFFF", ovl_death_end <= $F000, true
+ovl_spell_end:
+.print "Spell overlay: " + (ovl_spell_end - $e000) + " bytes at $E000-$" + toHexString(ovl_spell_end)
+.assert "Spell overlay fits in $E000-$EFFF", ovl_spell_end <= $F000, true
 
 // ============================================================
 // Help overlay — dedicated help modal screen at $E000

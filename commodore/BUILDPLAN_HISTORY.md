@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-05-04 — `PERF-C64-NONREU-SPELL-CAST-DISK-CHURN` COMPLETE
+
+**Problem**
+- On stock C64 without REU, casting spells caused repeated disk access even
+  when casting in the same context.
+- Root cause: C64 spell execution lived in the `$E000` death overlay. Loading
+  that overlay overwrote the active monster tier image/name backing at `$E000`,
+  and the post-spell restore path reloaded `monster.db.N`.
+
+**Implemented**
+- Added a dedicated C64 spell overlay (`64.spell`, `OVL_SPELL`) for
+  `spell_execute_selected`; C128 keeps its existing overlay ownership.
+- C64 active tier activation now copies the tier name-string blob into hidden
+  RAM under I/O at `$D000-$D7FF` and remaps `cr_name_lo/hi` to that stable pool.
+- C64 overlay loads no longer invalidate active tier state just because `$E000`
+  changed; tier data needed for live monster names is no longer owned by `$E000`.
+- `creature_get_name` now resolves C64 active tier names from hidden RAM while
+  preserving caller IRQ and `$01` banking state.
+- Removed obsolete C64 stale `$E000` name reload recovery so old pointers fail
+  safely instead of silently reloading a tier during overlay-local messages.
+- Updated C64 disk packaging and scripted product-smoke disk assembly to include
+  `64.spell`.
+
+**Verification**
+- `make disk64`
+  - passed; `Program fits below MAP_BASE=true`; `Spell overlay fits in $E000-$EFFF=true`
+- `make disk128`
+  - passed; C128 overlay and runtime assertions remain green
+- Focused C64 tier regression
+  - passed, 14/14; now proves active C64 tier names survive `$E000` overlay
+    churn without calling `tier_load`
+- C64 static contract
+  - passed; `tramp_spell_execute_selected` loads `OVL_SPELL` and dispatches
+    `spell_execute_selected` without the old post-spell tier restore
+
 ## 2026-05-04 — `BUG-TRAP-HP-UNDERFLOW` COMPLETE
 
 **Problem**

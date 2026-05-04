@@ -1000,8 +1000,10 @@ ltb_dst_hi:
 // normal RAM, or copies via banking if under KERNAL ROM.
 // Clobbers: A, Y, zp_ptr1
 creature_get_name:
+#if C128
     lda #0
     sta cgn_src_banked
+#endif
 
     lda current_tier
     bne !cgn_has_tier+
@@ -1105,29 +1107,12 @@ creature_get_name:
 
 #if !C128
 !cgn_tier_c64:
-    // C64: bank/read ptr from tier name arrays at $E000.
-    txa
-    tay                         // Y = creature index (preserved across banking)
-    php
-    sei
-    lda $01
-    sta cgn_saved_p01
-    :BankOutKernal()            // Bank out KERNAL — $E000 accessible
-    lda tier_name_lo_addr
-    sta zp_ptr1
-    lda tier_name_lo_addr+1
-    sta zp_ptr1_hi
-    lda (zp_ptr1),y
-    pha
-    lda tier_name_hi_addr
-    sta zp_ptr1
-    lda tier_name_hi_addr+1
-    sta zp_ptr1_hi
-    lda (zp_ptr1),y
-    sta zp_ptr1_hi
-    pla
-    sta zp_ptr1
-    jmp !cgn_copy+
+    // C64 active tier names are copied to hidden RAM under I/O during tier
+    // activation. Use the resident cr_name pointer; do not depend on the
+    // transient $E000 tier staging image.
+    lda cr_name_hi,x
+    bne !cgn_setup_normal+
+    jmp !cgn_stale+
 #endif
 
 !cgn_do_bank_c64:
@@ -1160,6 +1145,11 @@ creature_get_name:
     jmp !cgn_overlay_name+
 !cgn_reload_allowed:
 #endif
+#if !C128
+    // C64 active tier names are no longer owned by $E000. A stale $E0xx
+    // pointer means old state, not a recoverable gameplay owner.
+    jmp !cgn_stale+
+#else
     // Reload the smallest tier that covers creature index X (e.g. recall in town).
     stx cgn_saved_x
     lda #1
@@ -1192,8 +1182,16 @@ creature_get_name:
 !cgn_reload_fail:
     ldx cgn_saved_x
     jmp !cgn_stale+
+#endif
 
 !cgn_setup_normal:
+#if !C128
+    cmp #>C64_TIER_NAME_POOL_BASE
+    bcc !cgn_setup_linear_c64+
+    cmp #>(C64_TIER_NAME_POOL_END + 1)
+    bcc !cgn_setup_hidden_c64+
+!cgn_setup_linear_c64:
+#endif
     // Valid pointer in normal RAM — set up and share copy loop
     sta zp_ptr1_hi
     lda cr_name_lo,x
@@ -1203,17 +1201,32 @@ creature_get_name:
     sei
     lda $01
     sta cgn_saved_p01           // Save bank config without using stack
+    jmp !cgn_copy+
 #endif
-    // Fall through to shared copy loop
+    // C128 falls through to shared copy loop.
+
+#if !C128
+!cgn_setup_hidden_c64:
+    // Hidden $D000-$D7FF RAM is only visible with I/O banked out.
+    sta zp_ptr1_hi
+    lda cr_name_lo,x
+    sta zp_ptr1
+    php
+    sei
+    lda $01
+    sta cgn_saved_p01
+    lda #BANK_ALL_RAM
+    sta $01
+    jmp !cgn_copy+
+#endif
 
 !cgn_copy:
+#if C128
     // C128 Bank 1 cache copy path (no $01 banking required).
     lda cgn_src_banked
     beq !cgn_copy_linear+
-#if C128
     php
     sei
-#endif
     ldx #0
 !cgn_copy_bank_lp:
     ldy #0
@@ -1230,12 +1243,11 @@ creature_get_name:
     lda #0
     sta creature_name_buf,x
 !cgn_copy_bank_done:
-#if C128
     plp
-#endif
     lda #<creature_name_buf
     ldy #>creature_name_buf
     rts
+#endif
 
 !cgn_copy_linear:
     ldy #0
@@ -1275,11 +1287,15 @@ creature_get_name:
     rts
 #endif
 
+#if C128
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
+#endif
 creature_name_buf: .fill 32, 0
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
+#if C128
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper
+#endif
 cgn_saved_p01: .byte 0         // saved $01 for linear copy restore (stack-free)
 #if !C128
 cgn_monster_str: .text "monster" ; .byte 0

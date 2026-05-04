@@ -400,56 +400,42 @@ test_start:
     sta tc_results + 9
 
     // ============================================================
-    // Test 11: creature_get_name for tier creature
-    // Write name pointer tables and name strings at $E000,
-    // configure tier state, call creature_get_name(X=1),
+    // Test 11: creature_get_name for active C64 tier creature
+    // Write active tier name strings to hidden RAM under I/O,
+    // configure cr_name pointers, call creature_get_name(X=1),
     // verify creature_name_buf contains expected bytes.
     // ============================================================
 
-    // Bank out KERNAL to write test data at $E000
+    // Bank out I/O to write test data at hidden $D000 RAM.
     sei
     lda $01
     pha
-    lda #$35                    // All RAM
+    lda #$30                    // All RAM, including RAM under I/O
     sta $01
 
-    // Name_lo table at $E000: lo bytes of name string addresses
-    lda #$10                    // lo($E010)
-    sta $e000
-    lda #$13                    // lo($E013)
-    sta $e001
-    lda #$16                    // lo($E016)
-    sta $e002
-
-    // Name_hi table at $E003: hi bytes of name string addresses
-    lda #$e0                    // hi($E0xx)
-    sta $e003
-    sta $e004
-    sta $e005
-
-    // Name string 0 at $E010: screen codes $01,$02 + null
+    // Name string 0 at hidden $D010: screen codes $01,$02 + null
     lda #$01
-    sta $e010
+    sta C64_TIER_NAME_POOL_BASE + $10
     lda #$02
-    sta $e011
+    sta C64_TIER_NAME_POOL_BASE + $11
     lda #$00
-    sta $e012
+    sta C64_TIER_NAME_POOL_BASE + $12
 
-    // Name string 1 at $E013: screen codes $03,$04 + null
+    // Name string 1 at hidden $D013: screen codes $03,$04 + null
     lda #$03
-    sta $e013
+    sta C64_TIER_NAME_POOL_BASE + $13
     lda #$04
-    sta $e014
+    sta C64_TIER_NAME_POOL_BASE + $14
     lda #$00
-    sta $e015
+    sta C64_TIER_NAME_POOL_BASE + $15
 
-    // Name string 2 at $E016: screen codes $05,$06 + null
+    // Name string 2 at hidden $D016: screen codes $05,$06 + null
     lda #$05
-    sta $e016
+    sta C64_TIER_NAME_POOL_BASE + $16
     lda #$06
-    sta $e017
+    sta C64_TIER_NAME_POOL_BASE + $17
     lda #$00
-    sta $e018
+    sta C64_TIER_NAME_POOL_BASE + $18
 
     // Restore KERNAL
     pla
@@ -462,16 +448,11 @@ test_start:
     lda #3
     sta active_dungeon_count    // 3 creatures
 
-    // Set tier name table pointers
-    lda #<$e000
-    sta tier_name_lo_addr
-    lda #>$e000
-    sta tier_name_lo_addr+1
-
-    lda #$03                    // lo($E003)
-    sta tier_name_hi_addr
-    lda #$e0                    // hi($E003)
-    sta tier_name_hi_addr+1
+    // Set active tier name pointers to hidden RAM.
+    lda #<(C64_TIER_NAME_POOL_BASE + $13)
+    sta cr_name_lo + 1
+    lda #>(C64_TIER_NAME_POOL_BASE + $13)
+    sta cr_name_hi + 1
 
     // Call creature_get_name(X=1) from the live spell-style C64 context:
     // KERNAL out ($35) with IRQs disabled. The helper must preserve both.
@@ -613,8 +594,9 @@ test_start:
     sta tc_results + 12
 
     // ============================================================
-    // Test 14: creature_get_name stale tier-name recovery loads silently
-    // and still resolves the name through the tier tables.
+    // Test 14: active C64 tier names survive $E000 overlay churn without
+    // calling tier_load. This protects non-REU spell casts from reloading
+    // monster.db.N after the spell overlay overwrites $E000.
     // ============================================================
     lda #$ad                    // LDA abs
     sta tier_load
@@ -641,23 +623,16 @@ test_start:
     lda #$60                    // RTS
     sta tier_load + 11
 
-    lda #$13                    // lo($E013)
+    lda #<(C64_TIER_NAME_POOL_BASE + $13)
     sta cr_name_lo + 1
-    lda #$e0
+    lda #>(C64_TIER_NAME_POOL_BASE + $13)
     sta cr_name_hi + 1
-    lda #<$e000
-    sta tier_name_lo_addr
-    lda #>$e000
-    sta tier_name_lo_addr + 1
-    lda #$03                    // lo($E003)
-    sta tier_name_hi_addr
-    lda #$e0
-    sta tier_name_hi_addr + 1
     lda #3
     sta active_dungeon_count
-    lda #0
+    lda #1
     sta current_tier
     sta tier_loaded
+    lda #0
     sta tier_silent_restore
     sta zp_temp0
 
@@ -665,7 +640,7 @@ test_start:
     jsr creature_get_name
 
     lda zp_temp0
-    cmp #1
+    cmp #0
     bne !t14_fail+
     lda tier_silent_restore
     bne !t14_fail+

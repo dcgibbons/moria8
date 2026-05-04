@@ -178,9 +178,14 @@ One dungeon tier active at a time. SoA layout: 22 arrays × up to 65 entries
 (57 dungeon + 8 town = MAX_CREATURES). ~20 bytes per creature + ~15 bytes
 for name string. Tier PRGs load to $E000 (RAM under KERNAL ROM), then
 `load_tier_to_buffer` copies SoA data to active creature buffers in program RAM.
-Name strings remain at $E000+ (read via `creature_get_name` with KERNAL banking).
+On C128, active tier names are read from the Bank 1 tier cache. On stock C64,
+activation copies the active tier's name-string blob into hidden RAM under I/O
+at `$D000-$D7FF` and rewrites `cr_name_lo/hi` to that stable pool. This keeps
+combat and spell messages independent of the `$E000` overlay window, so loading
+a spell/UI/items overlay does not force `monster.db.N` to be reloaded just to
+print a monster name.
 
-REU path: all 4 tiers + 3 overlays preloaded at startup → DMA fetch on transition
+REU path: all 4 tiers + reloadable overlays preloaded at startup → DMA fetch on transition
 (instant). Loading screen shows "LOADING INTO REU:" header with per-file progress
 (`X/YYYKB` used/total). Display routine lives in banked $F000 region
 (`reu_loading_banked.s`), called via self-modifying dispatch patched at startup.
@@ -209,8 +214,9 @@ original has several KB of strings.
 in program code using `.encoding "screencode_upper"` and `.text` directives.
 No compression — the reduced roster (120 creatures, 55 items) keeps total
 string data manageable (~3 KB). Creature name strings for tier data are stored
-at $E000+ in the tier PRG files and accessed via `creature_get_name` with
-KERNAL banking (SEI/$35 for reads).
+in the tier PRG files. C128 resolves them from the Bank 1 tier cache. C64 copies
+the active tier's name blob into hidden `$D000-$D7FF` RAM during tier activation,
+then `creature_get_name` temporarily banks out I/O when resolving those pointers.
 
 **Planned: Huffman compression + string banks (R7).** Two-tier approach:
 **Tier 1** — Huffman-compress strings into the ~3.7 KB free in main code area
@@ -723,7 +729,9 @@ These fit comfortably in the 2,989 free bytes. They can't be phase-overlayed bec
 
 **Region 3: Phase overlays at `$E000`–`$EFFF` — swapped per game phase**
 
-Four overlays share the same 4KB window, loaded at phase transitions:
+Reloadable overlays share the same 4KB window. C64 has one additional dedicated
+spell-effect execution overlay so stock non-REU spell casts do not evict active
+tier names and then reload `monster.db.N` after every cast.
 
 | Overlay | Phase | Modules | Est. bytes | Entry points |
 |---------|-------|---------|-----------|-------------|
@@ -731,6 +739,7 @@ Four overlays share the same 4KB window, loaded at phase transitions:
 | **Town** | In town | `store.s` + `ui_store.s` | ~2,300 | 4 (`store_init_all`, `store_restock_all`, `check_player_on_store_door`, `store_enter`) |
 | **Dungeon** | In dungeon | Creature tier data (tiers 1-4) | ~2,500 | Existing `load_tier_to_buffer` path |
 | **Death** | Game over | `score.s` | ~1,600 | 5 (`score_calculate`, `hiscore_load`, `hiscore_insert`, `hiscore_save`, `score_death_screen`) |
+| **Spell** | C64 cast/pray effect execution | `player_magic_execute_overlay.s` | ~2,600 | `spell_execute_selected` |
 
 All overlays fit well within the 4KB window.
 
@@ -743,6 +752,9 @@ All overlays fit well within the 4KB window.
 - Town overlay: loaded when ascending to town (already a "loading moment" if coming from dungeon)
 - Dungeon overlay: existing tier loading behavior (unchanged)
 - Death overlay: loaded once at game over
+- Spell overlay: loaded on first spell/prayer effect execution, then reused while
+  still current; active C64 tier names are stable in hidden RAM, so spell casts
+  do not reload monster tiers just for message rendering
 
 **REU memory map (128KB minimum):**
 

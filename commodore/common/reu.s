@@ -653,7 +653,11 @@ reu_stash_overlays:
     // Keep this local count explicit because reu.s is imported before overlay.s.
     // The filename tables below are asserted against it so overlay additions must
     // update this contract deliberately.
+#if C128
     .const REU_OVERLAY_COUNT = 7
+#else
+    .const REU_OVERLAY_COUNT = 8
+#endif
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
@@ -799,8 +803,16 @@ reu_show_status:
 // KERNAL filename literals; do not add separate display filename copies.
 reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
 reu_fn_tier_hi: .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
-reu_fn_ovl_lo:  .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
-reu_fn_ovl_hi:  .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
+reu_fn_ovl_lo:
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
+#if !C128
+    .byte <ovl_fn_spell
+#endif
+reu_fn_ovl_hi:
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
+#if !C128
+    .byte >ovl_fn_spell
+#endif
 .assert "REU overlay filename table count stays in sync", reu_fn_ovl_hi - reu_fn_ovl_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)

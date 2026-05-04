@@ -14,10 +14,11 @@
 //   OVL_HELP        = 5  Dedicated help screen overlay
 //   OVL_UI          = 6  Inventory/equipment/character/wizard modal UI
 //   OVL_ITEMS       = 7  Low-frequency item actions (read/aim/use/refuel)
+//   OVL_SPELL       = 8  Spell/prayer effect execution
 //
 // Disk filenames:
-//   C64  -> 64.START, 64.TOWN, 64.DEATH, 64.GEN, 64.HELP, 64.UI, 64.ITEMS
-//   C128 -> 128.START, 128.TOWN, 128.DEATH, 128.GEN, 128.HELP, 128.UI, 128.ITEMS
+//   C64  -> 64.START, 64.TOWN, 64.DEATH, 64.GEN, 64.HELP, 64.UI, 64.ITEMS, 64.SPELL
+//   C128 -> 128.START, 128.TOWN, 128.DEATH, 128.GEN, 128.HELP, 128.UI, 128.ITEMS, 128.SPELL
 // REU: stashed alongside creature tiers at startup
 
 // ============================================================
@@ -31,7 +32,12 @@
 .const OVL_HELP        = 5
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
+.const OVL_SPELL       = 8
+#if C128
 .const OVL_COUNT       = 7
+#else
+.const OVL_COUNT       = 8
+#endif
 
 // ============================================================
 // State
@@ -72,10 +78,11 @@ overlay_load:
     sta ol_target
 #endif
 
-    // When the active tier has no named Bank 1 tier-cache backing, overlays must invalidate
-    // the tier view because the runtime name pointers still reference $E000 data.
+    // C64 active tier names are copied to hidden RAM at activation time, so an
+    // overlay load no longer invalidates the logical tier. C128 keeps the
+    // existing cache-backed guard because its tier pointers may resolve through
+    // Bank 1 overlay/tier ownership.
 #if !C128
-    jsr tier_invalidate_state
 #else
     lda current_tier
     beq !ol_invalidate_tier+
@@ -412,23 +419,26 @@ ovl_fn_ui_end:
 ovl_fn_items: .byte $36,$34,$2e,$49,$54,$45,$4d,$53              // "64.ITEMS"
 ovl_fn_items_end:
 .byte 0
+ovl_fn_spell: .byte $36,$34,$2e,$53,$50,$45,$4c,$4c              // "64.SPELL"
+ovl_fn_spell_end:
+.byte 0
 
 ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
+    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items, <ovl_fn_spell
 ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
+    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items, >ovl_fn_spell
 ovl_fn_len:
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items
+    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items, ovl_fn_spell_end - ovl_fn_spell
 
 
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
 // ============================================================
-// Index 0 unused; indices 1-7 = overlay IDs
-ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0
-ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0
+// Index 0 unused; indices 1-8 = overlay IDs
+ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
+ovl_reu_size_hi:  .byte 0, 0, 0, 0, 0, 0, 0, 0, 0
 ol_target:        .byte 0
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
 c128_overlay_load_disk_index:  .byte 0

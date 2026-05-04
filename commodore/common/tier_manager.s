@@ -8,8 +8,9 @@
 // Tier data is stored as standalone PRG files on the d64 disk.
 // Files load to $E000 (RAM under KERNAL ROM). After loading, the
 // SoA arrays are copied into the active creature buffer via
-// load_tier_to_buffer. Name strings remain at $E000+ and are
-// accessed through creature_get_name (which handles banking).
+// load_tier_to_buffer. C64 copies active tier names into hidden RAM under
+// I/O so gameplay no longer depends on the $E000 staging window; C128 keeps
+// names in its Bank 1 tier cache.
 //
 // Tier ranges (overlapping for hysteresis):
 //   Tier 1: DL 1-8    (24 creatures)
@@ -37,6 +38,10 @@ c128_tier_cache_size_lo: .byte 0
 c128_tier_cache_size_hi: .byte 0
 c128_tier_soa_end_lo: .byte 0
 c128_tier_soa_end_hi: .byte 0
+#if !C128
+c64_tier_name_src_lo: .byte 0
+c64_tier_name_src_hi: .byte 0
+#endif
 
 // tier_invalidate_state — Clear active tier state + derived metadata
 // Safe to call from any module before loading an overlay/string bank.
@@ -48,10 +53,16 @@ tier_invalidate_state:
     sta tier_silent_restore
     sta c128_tier_cache_size_lo
     sta c128_tier_cache_size_hi
+#if C128
     sta tier_name_lo_addr
     sta tier_name_lo_addr+1
     sta tier_name_hi_addr
     sta tier_name_hi_addr+1
+#endif
+#if !C128
+    sta c64_tier_name_src_lo
+    sta c64_tier_name_src_hi
+#endif
     rts
 
 // ============================================================
@@ -349,6 +360,7 @@ tier_load:
     lda tier_count_table,x      // A = creature count for this tier
     jsr load_tier_to_buffer
 
+#if C128
     // Compute tier name table addresses in $E000 region.
     // After load_tier_to_buffer, zp_ptr0 is past all 22 arrays.
     // name_hi starts at zp_ptr0 - count, name_lo at zp_ptr0 - 2*count.
@@ -368,7 +380,6 @@ tier_load:
     sbc #0
     sta tier_name_lo_addr+1
 
-#if C128
     // Preserve end-of-SoA pointer before cache-base remap clobbers zp_ptr0.
     lda zp_ptr0
     sta c128_tier_soa_end_lo
@@ -385,6 +396,8 @@ tier_load:
     beq !tl_keep_e000_names+
     jsr c128_set_tier_name_tables_from_cache
 !tl_keep_e000_names:
+#else
+    jsr c64_copy_tier_names_to_pool
 #endif
 
 #if !C128
@@ -417,6 +430,78 @@ tier_load:
     // tier path which reads from $E000 (now invalid).
     jsr tier_invalidate_state
     rts
+
+#if !C128
+// c64_copy_tier_names_to_pool — Copy the contiguous active tier name block
+// from the staged $E000 tier PRG into hidden RAM under I/O, then rewrite
+// cr_name pointers. Called while interrupts are masked and $E000 RAM is visible.
+// Output: carry clear
+// Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_ptr2
+c64_copy_tier_names_to_pool:
+    lda zp_ptr0
+    sta c64_tier_name_src_lo
+    lda zp_ptr0_hi
+    sta c64_tier_name_src_hi
+
+    ldx current_tier
+    lda tier_size_lo,x
+    sta zp_ptr2
+    lda tier_size_hi,x
+    clc
+    adc #>BANKED_DATA_BASE
+    sta zp_ptr2_hi
+
+    lda #<C64_TIER_NAME_POOL_BASE
+    sta zp_ptr1
+    lda #>C64_TIER_NAME_POOL_BASE
+    sta zp_ptr1_hi
+
+    // Hide I/O so writes to $D000-$D7FF reach RAM, not registers.
+    lda #BANK_ALL_RAM
+    sta $01
+
+    ldy #0
+!ctnp_copy_loop:
+    lda zp_ptr0
+    cmp zp_ptr2
+    bne !ctnp_copy_byte+
+    lda zp_ptr0_hi
+    cmp zp_ptr2_hi
+    beq !ctnp_remap+
+!ctnp_copy_byte:
+    lda (zp_ptr0),y
+    sta (zp_ptr1),y
+    inc zp_ptr0
+    bne !ctnp_src_ok+
+    inc zp_ptr0_hi
+!ctnp_src_ok:
+    inc zp_ptr1
+    bne !ctnp_copy_loop-
+    inc zp_ptr1_hi
+    jmp !ctnp_copy_loop-
+
+!ctnp_remap:
+    ldx #0
+!ctnp_remap_loop:
+    cpx active_dungeon_count
+    bcs !ctnp_done+
+    lda cr_name_lo,x
+    sec
+    sbc c64_tier_name_src_lo
+    sta cr_name_lo,x
+    lda cr_name_hi,x
+    sbc c64_tier_name_src_hi
+    clc
+    adc #>C64_TIER_NAME_POOL_BASE
+    sta cr_name_hi,x
+    inx
+    jmp !ctnp_remap_loop-
+!ctnp_done:
+    clc
+    rts
+
+.assert "C64 tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (C64_TIER_NAME_POOL_END - C64_TIER_NAME_POOL_BASE + 1), true
+#endif
 
 #if C128
 c128_preload_all_tiers:

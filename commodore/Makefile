@@ -89,6 +89,7 @@ C64_OVL_GEN        = $(OUT64)/ovl.gen
 C64_OVL_HELP       = $(OUT64)/ovl.help
 C64_OVL_UI         = $(OUT64)/ovl.ui
 C64_OVL_ITEMS      = $(OUT64)/ovl.items
+C64_OVL_SPELL      = $(OUT64)/ovl.spell
 C64_RUNTIME_BANKED = $(OUT64)/64.bank
 
 # ── C128 artifacts ────────────────────────────────────────
@@ -134,7 +135,7 @@ DISK128_LABEL      = "moria8 c128,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
-	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) \
+	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) \
 	$(C64_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
@@ -213,6 +214,7 @@ $(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT64)
 	mv -f c64/out/ovl.help $(C64_OVL_HELP)
 	mv -f c64/out/ovl.ui $(C64_OVL_UI)
 	mv -f c64/out/ovl.items $(C64_OVL_ITEMS)
+	mv -f c64/out/ovl.spell $(C64_OVL_SPELL)
 	mv -f c64/out/64.bank $(C64_RUNTIME_BANKED)
 
 $(C64_OVL_START): $(C64_MAIN_PRG)
@@ -222,6 +224,7 @@ $(C64_OVL_GEN): $(C64_MAIN_PRG)
 $(C64_OVL_HELP): $(C64_MAIN_PRG)
 $(C64_OVL_UI): $(C64_MAIN_PRG)
 $(C64_OVL_ITEMS): $(C64_MAIN_PRG)
+$(C64_OVL_SPELL): $(C64_MAIN_PRG)
 $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
 
 $(C64_BOOT_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
@@ -346,6 +349,7 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) | $(OUT)
 			-write $(C64_OVL_HELP) "64.help" \
 			-write $(C64_OVL_UI) "64.ui" \
 			-write $(C64_OVL_ITEMS) "64.items" \
+			-write $(C64_OVL_SPELL) "64.spell" \
 			-write $(C64_RUNTIME_BANKED) "64.bank"
 	python3 $(DISKART) $(DISK64_IMAGE) c64
 	mkdir -p c64/out
