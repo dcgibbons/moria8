@@ -27,6 +27,8 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - If a test or harness talks to the VICE monitor on `127.0.0.1`, run it outside the sandbox when needed; sandboxed localhost failures are not product evidence.
 - Do not run a platform build target in parallel with that same platform's smoke/test target. They share generated overlay/runtime files and can race into false missing-file failures.
 - C128 unit runners must use one launch contract. If the Python harness monitor-loads PRGs and jumps to `test_start`, do not let the shell worker use ROM autostart for the same unit set; that creates divergent failures unrelated to the unit code.
+- C128 performance measurement harnesses may observe product behavior, but must not define a new boot, load, bank, disk, or runtime execution contract. If sampling work starts producing runtime-load failures, stop and move the sample back onto the trusted product/test launch path.
+- `xxd` takes an optional output filename as its second positional argument. Never pass multiple files to one `xxd` read command; inspect each file with a separate command so generated PRGs are not overwritten by a hexdump.
 
 ## Product Contracts
 
@@ -76,6 +78,15 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - A drive command status like `"74"` is not a complete root cause by itself. If the user says the save disk is ready, instrument the preceding C128 disk transaction stages separately instead of reinterpreting readiness or collapsing init/scratch/write-close status into one byte pair.
 - On C128 sequential reads, `READST=$40` after `CHRIN` can be a valid end-of-information indication for the byte just returned. Marker/read validators must compare the final expected byte before treating final-byte `$40` as failure; earlier `$40` is still a short read.
 - On C128, `$0314/$0315` has two distinct owners: KERNAL mode needs the captured KERNAL software IRQ vector, while all-RAM runtime needs `mmu_common_irq`. Do not install the all-RAM hardware IRQ bridge as the KERNAL software IRQ vector.
+- C128 preload file transactions must not reopen runtime IRQ windows between
+  related KERNAL calls. If the live stack shows repeated `IRQ -> mmu_common_irq`
+  during tier/overlay preload, defer runtime IRQ vector ownership until preload
+  completes and mask interrupts for the whole `LOAD`/`CLOSE`/`CLRCHN`/SETBNK
+  transaction.
+- C128 common helper symbols are not proof that the helper bytes were copied
+  into common RAM. If a common helper blob can grow past 256 bytes, the copy
+  routine must copy full pages plus the tail and assert the supported blob
+  bounds; otherwise valid symbols can jump into uncopied `BRK` space.
 - C128 runtime PRG load failures must not jump back to `entry_main`; that restarts `tier_init` and presents a missing/mixed runtime file as an infinite monster/overlay reload loop.
 - C128 boot-time calls into split resident domains must happen only after those resident PRGs are loaded. A symbol address in `128.world`/`128.item`/`128.select` is still filler bytes until the corresponding runtime file has been loaded.
 - C128 direct runtime LOADs to `$F000` must not cross `$FF00`; `$FF00-$FF0F` is MMU/register ownership, not ordinary payload space. If the `$F000` resident payload grows too high, split a small callable runtime PRG into safe low RAM and audit its ownership explicitly.

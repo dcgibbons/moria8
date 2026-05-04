@@ -334,6 +334,27 @@ c128_test_input_script:
     .byte $50              // P = pray
     .byte $41              // A = first visible prayer book
     .byte $43              // C = Bless
+#elif C128_TEST_PERF_P1_TRACE_MODAL
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $41              // A = class
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $49              // I = inventory modal
+    .byte $20              // SPACE = dismiss inventory
+#elif C128_TEST_PERF_P1_TRACE_COMMAND
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $41              // A = class
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $53              // S = search; consumes a turn and forces redraw
 #else
     .byte $4e              // N = New
     .byte $41              // A = race
@@ -641,17 +662,6 @@ input_get_command:
 !get_key:
     jsr input_get_key_fast
 !igc_got_key:
-#if PERF_P1
-    // Debug-only shortcut: 'V' dumps PERF_P1 counters in-game.
-    cmp #$56                    // PETSCII 'V'
-    beq !perf_dump+
-    cmp #$76                    // PETSCII 'v'
-    bne !perf_dump_done+
-!perf_dump:
-    lda #CMD_VERSION
-    jmp !got_cmd+
-!perf_dump_done:
-#endif
     jsr petscii_to_command
     cmp #CMD_NONE
     bne !got_cmd+

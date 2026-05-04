@@ -28,10 +28,18 @@ ui_view_restore_modal_overlay:
 #endif
     lda #COL_BLACK
     sta zp_text_color
-    jsr ui_help_clear_all
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+	    jsr ui_help_clear_all
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_modal_restore
+#endif
+#endif
+	    jsr render_viewport
+	    jsr status_draw
+#if C128_TEST_PERF_P1_TRACE_MODAL
+    jmp c128_test_perf_p1_trace_capture_sym
+#endif
     rts
 
 // ui_view_redraw_gameplay_view — rebuild the gameplay view after a full-screen modal
@@ -44,8 +52,13 @@ ui_view_redraw_gameplay_view:
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
 #endif
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+	    jsr screen_clear
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_modal_restore
+#endif
+#endif
+	    jsr render_viewport
+	    jsr status_draw
     rts

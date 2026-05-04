@@ -60,6 +60,7 @@ OVERLAY_PARTIAL_BOOT_ASSETS_BUILT=0
 DEATH_BOOT_ASSETS_BUILT=0
 OVERLAY_STATE_BOOT_ASSETS_BUILT=0
 SCRIPTED_INPUT_BOOT_ASSETS_BUILT=0
+PERF_P1_TRACE_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_BOOT_ASSETS_BUILT=0
 SCRIPTED_SPELL_CANCEL_BOOT_ASSETS_BUILT=0
 SCRIPTED_BOOK_OVERLAY_BOOT_ASSETS_BUILT=0
@@ -79,6 +80,9 @@ if [ "$PERF_P1_MODE" = "1" ]; then
 fi
 
 cleanup_test128_tmp() {
+    if [ "${TEST128_KEEP_TMP:-0}" = "1" ]; then
+        return
+    fi
     if [ -n "${TEST128_TMP_DIR:-}" ] && [ -d "$TEST128_TMP_DIR" ]; then
         rm -rf "$TEST128_TMP_DIR"
     fi
@@ -534,7 +538,7 @@ describe_phase_token() {
             printf 'diag\treal_input_town_move_diag,real_boot_crash_harness,overlay_data_transition_smoke,boot_diag_copy\n'
             ;;
         perf)
-            printf 'perf\tperf_p1\n'
+            printf 'perf\tperf_p1,perf_p1_trace_smoke\n'
             ;;
         *)
             printf '%s\t<unknown>\n' "$phase"
@@ -586,7 +590,7 @@ suite_matches_phase_token() {
             ;;
         perf)
             case "$suite_name" in
-                perf_p1) return 0 ;;
+                perf_p1|perf_p1_trace_smoke) return 0 ;;
             esac
             ;;
     esac
@@ -1808,8 +1812,11 @@ build_boot_assets() {
     if ! c128_active_variant_is "base"; then
         force_base_rebuild=1
     fi
+    if [ "$PERF_P1_MODE" = "1" ]; then
+        force_base_rebuild=1
+    fi
 
-    if c128_active_variant_is "base" && ! c128_outputs_need_refresh \
+    if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "base" && ! c128_outputs_need_refresh \
             out/boot128.prg out/boot128.chain.prg out/bootsect128.prg out/bootart128.prg out/moria128.prg out/moria128.d71 out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
             out/ovl.gen out/128.runtime.prg out/128.input.prg out/128.proj.prg out/128.fdisk.prg out/128.world.prg out/128.item.prg out/128.select.prg out/128.persist.prg out/128.play.prg out/128.bank.prg out/main.vs -- \
@@ -1829,14 +1836,14 @@ build_boot_assets() {
     kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
     ln -sf "$kickass_abs" "$make_kickass"
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL (build128/disk128 failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return 1
         fi
-    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2593,7 +2600,7 @@ build_scripted_input_boot_assets() {
 
     build_boot_assets || return 1
 
-    if c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
+    if [ "$PERF_P1_MODE" != "1" ] && c128_active_variant_is "scripted_input" && ! c128_outputs_need_refresh \
             out/moria128.prg out/moria128_scriptedinput.d64 out/main.vs -- \
             main.s out/boot128.prg out/title out/monster.db.1 out/monster.db.2 \
             out/monster.db.3 out/monster.db.4 out/ovl.town out/ovl.start out/ovl.death \
@@ -2606,10 +2613,14 @@ build_scripted_input_boot_assets() {
     build_log="$(test128_tmp_file test128_boot_scripted_input_build.log)"
     local c1541_bin="${C1541:-c1541}"
     local scripted_d64="out/moria128_scriptedinput.d64"
+    local perf_define=()
+    if [ "$PERF_P1_MODE" = "1" ]; then
+        perf_define=(-define PERF_P1)
+    fi
 
     # Compile to the standard out/moria128.prg target so KickAssembler also
     # refreshes the companion out/ovl.* overlay PRGs for this special build.
-    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -var OVL_OUT='"out"' -define C128_TEST_SCRIPTED_INPUT -o out/moria128.prg >"$build_log" 2>&1; then
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 ${perf_define[@]+"${perf_define[@]}"} -define C128_TEST_SCRIPTED_INPUT -o out/moria128.prg >"$build_log" 2>&1; then
         echo "FAIL (scripted-input main assembly failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -2652,6 +2663,182 @@ build_scripted_input_boot_assets() {
     BOOT_ASSETS_BUILT=0
     SCRIPTED_INPUT_BOOT_ASSETS_BUILT=1
     c128_set_active_variant "scripted_input"
+    return 0
+}
+
+validate_perf_p1_trace_variant() {
+    local suffix="$1"
+    local build_log="$2"
+    local expected_kind="$3"
+    if ! python3 - "$suffix" "$expected_kind" out/main.vs out/128.play.prg out/moria128.prg >>"$build_log" 2>&1 <<'PY'
+from pathlib import Path
+import sys
+
+suffix, expected_kind, vs_path, play_prg_path, main_prg_path = sys.argv[1:]
+symbols = {}
+for raw in Path(vs_path).read_text(encoding="utf-8").splitlines():
+    parts = raw.strip().split()
+    if len(parts) < 3 or ":" not in parts[1] or not parts[2].startswith("."):
+        continue
+    symbols[parts[2][1:]] = int(parts[1].split(":", 1)[1], 16)
+
+required = [
+    "c128_test_perf_p1_trace_pass_sym",
+    "c128_test_perf_p1_trace_capture_sym",
+    "c128_test_perf_p1_trace_export_sym",
+    "perf_p1_moves",
+    "perf_p1_decision",
+    "perf_p1_full_lo",
+    "perf_p1_local_lo",
+    "perf_p1_reason_lo",
+]
+missing = [name for name in required if name not in symbols]
+if missing:
+    raise SystemExit(f"missing symbols for PERF trace validation: {', '.join(missing)}")
+
+reason = symbols["perf_p1_reason_lo"]
+expected_symbols = {
+    "summary": [
+        symbols["perf_p1_decision"],
+        symbols["perf_p1_decision"],
+        symbols["perf_p1_decision"],
+    ],
+    "reasons_0_2": [reason + 0, reason + 1, reason + 2],
+    "reasons_3_5": [reason + 3, reason + 4, reason + 5],
+    "reasons_6_7": [symbols["perf_p1_moves"], reason + 6, reason + 7],
+}
+if expected_kind not in {"assert", "modal_assert", "command_assert", "transition_assert"} and expected_kind not in expected_symbols:
+    raise SystemExit(f"unknown PERF trace variant kind: {expected_kind}")
+
+play_prg = Path(play_prg_path).read_bytes()
+if len(play_prg) < 2:
+    raise SystemExit(f"{play_prg_path} is too small")
+play_load_addr = play_prg[0] | (play_prg[1] << 8)
+pass_addr = symbols["c128_test_perf_p1_trace_pass_sym"]
+capture_addr = symbols["c128_test_perf_p1_trace_capture_sym"]
+export_addr = symbols["c128_test_perf_p1_trace_export_sym"]
+export_start = export_addr - play_load_addr + 2
+export_end = export_addr + 3 - play_load_addr + 2
+if export_start < 2 or export_end > len(play_prg):
+    raise SystemExit(f"PERF trace export ${export_addr:04x} is outside {play_prg_path}")
+actual_export = play_prg[export_start:export_end]
+expected_export = bytes((0x4C, capture_addr & 0xFF, capture_addr >> 8))
+if actual_export != expected_export:
+    got = " ".join(f"{b:02x}" for b in actual_export)
+    want = " ".join(f"{b:02x}" for b in expected_export)
+    raise SystemExit(
+        f"PERF trace {suffix} export should jump to test-owned capture at ${capture_addr:04x}: "
+        f"got [{got}], expected [{want}]"
+    )
+
+if expected_kind in {"assert", "modal_assert", "command_assert", "transition_assert"}:
+    if "c128_test_perf_p1_trace_fail_sym" not in symbols:
+        raise SystemExit("missing c128_test_perf_p1_trace_fail_sym for PERF trace assert validation")
+    print(f"PERF trace {suffix}: validated resident jump to product-path assert capture")
+    raise SystemExit(0)
+
+main_prg = Path(main_prg_path).read_bytes()
+if len(main_prg) < 2:
+    raise SystemExit(f"{main_prg_path} is too small")
+main_load_addr = main_prg[0] | (main_prg[1] << 8)
+capture_start = capture_addr - main_load_addr + 2
+capture_end = capture_addr + 12 - main_load_addr + 2
+if capture_start < 2 or capture_end > len(main_prg):
+    raise SystemExit(f"PERF trace capture ${capture_addr:04x} is outside {main_prg_path}")
+
+actual = main_prg[capture_start:capture_end]
+expected = bytearray()
+for opcode, addr in zip((0xAD, 0xAE, 0xAC), expected_symbols[expected_kind]):
+    expected.extend((opcode, addr & 0xFF, addr >> 8))
+expected.extend((0x4C, pass_addr & 0xFF, pass_addr >> 8))
+
+if actual != expected:
+    got = " ".join(f"{b:02x}" for b in actual)
+    want = " ".join(f"{b:02x}" for b in expected)
+    raise SystemExit(
+        f"PERF trace {suffix} loads wrong symbols near capture ${capture_addr:04x}: "
+        f"got [{got}], expected [{want}]"
+    )
+
+print(f"PERF trace {suffix}: validated {expected_kind} resident jump and test-owned capture at ${capture_addr:04x}")
+PY
+    then
+        return 1
+    fi
+    return 0
+}
+
+build_perf_p1_trace_boot_assets() {
+    local suffix="${1:-summary}"
+    shift || true
+    local variant="perf_p1_trace_${suffix}"
+    if [ "$PERF_P1_TRACE_BOOT_ASSETS_BUILT" -eq 1 ] && c128_active_variant_is "$variant"; then
+        PERF_P1_TRACE_D64="out/moria128_${variant}.d64"
+        return
+    fi
+
+    build_boot_assets || return 1
+
+    local build_log
+    build_log="$(test128_tmp_file test128_perf_p1_trace_build.log)"
+    local c1541_bin="${C1541:-c1541}"
+    local trace_d64="out/moria128_${variant}.d64"
+    local -a extra_defines=()
+    local define_name
+    for define_name in "$@"; do
+        extra_defines+=(-define "$define_name")
+    done
+
+    if ! java -jar "$KICKASS" main.s -showmem -vicesymbols -libdir ../c64 -define C128 -define PERF_P1 -define C128_TEST_SCRIPTED_INPUT -define C128_TEST_PERF_P1_TRACE ${extra_defines[@]+"${extra_defines[@]}"} -o out/moria128.prg >"$build_log" 2>&1; then
+        echo "FAIL (PERF P1 trace main assembly failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+    if [ "$suffix" = "assert" ] || [ "$suffix" = "modal_assert" ] || [ "$suffix" = "command_assert" ] || [ "$suffix" = "transition_assert" ]; then
+        if ! "$c1541_bin" -format "moria128,m8" d64 "$trace_d64" \
+                -attach "$trace_d64" \
+                -write out/boot128.prg "moria8.128" \
+                -write out/moria128.prg "moria128" \
+                -write out/title "title" \
+                -write out/monster.db.1 "monster.db.1" \
+                -write out/monster.db.2 "monster.db.2" \
+                -write out/monster.db.3 "monster.db.3" \
+                -write out/monster.db.4 "monster.db.4" \
+                -write out/ovl.town "ovl.town" \
+                -write out/ovl.start "ovl.start" \
+                -write out/ovl.death "ovl.death" \
+                -write out/ovl.gen "ovl.gen" \
+                -write out/128.runtime.prg "128.runtime" \
+                -write out/128.input.prg "128.input" \
+                -write out/128.proj.prg "128.proj" \
+                -write out/128.fdisk.prg "128.fdisk" \
+                -write out/128.world.prg "128.world" \
+                -write out/128.item.prg "128.item" \
+                -write out/128.select.prg "128.select" \
+                -write out/128.persist.prg "128.persist" \
+                -write out/128.play.prg "128.play" \
+                -write out/128.bank.prg "128.bank" >>"$build_log" 2>&1; then
+            echo "FAIL (PERF P1 trace assert disk build failed)"
+            tail -20 "$build_log" | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return 1
+        fi
+    fi
+    if ! validate_perf_p1_trace_variant "$suffix" "$build_log" "$suffix"; then
+        echo "FAIL (PERF P1 trace register-export validation failed)"
+        tail -20 "$build_log" | sed 's/^/    /'
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return 1
+    fi
+
+    BOOT_ASSETS_BUILT=0
+    PERF_P1_TRACE_BOOT_ASSETS_BUILT=1
+    PERF_P1_TRACE_D64="$trace_d64"
+    c128_set_active_variant "$variant"
     return 0
 }
 
@@ -3649,6 +3836,9 @@ run_boot_d64_smoke() {
 
     local c1541_bin="${C1541:-c1541}"
     local scripted_d64="out/moria128_detectmonsters.d64"
+    local build_log
+    build_log="$(test128_tmp_file "test128_${name}_disk.log")"
+    : > "$build_log"
     if ! "$c1541_bin" -format "moria128,m8" d64 "$scripted_d64" \
             -attach "$scripted_d64" \
             -write out/boot128.prg "moria8.128" \
@@ -4406,7 +4596,7 @@ run_scripted_summary_to_town_smoke() {
         echo "g"
     } > "$mon_file"
 
-    "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_d64" \
+    "$VICE" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
         -limitcycles 700000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1
@@ -4434,6 +4624,261 @@ run_scripted_summary_to_town_smoke() {
     fi
 
     echo "PASS"
+    PASS=$((PASS + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
+PERF_P1_TRACE_FAIL_REASON=""
+PERF_P1_TRACE_VALUES=""
+PERF_P1_TRACE_D64=""
+perf_p1_trace_collect_variant() {
+    local suffix="$1"
+    shift
+    PERF_P1_TRACE_FAIL_REASON=""
+    PERF_P1_TRACE_D64=""
+
+    build_perf_p1_trace_boot_assets "$suffix" "$@" || return 2
+    return 0
+}
+
+perf_p1_trace_run_product_assert() {
+    perf_p1_trace_collect_variant "assert" C128_TEST_PERF_P1_TRACE_ASSERT || return 2
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ]; then
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace product assert pass symbol in out/main.vs"
+        return 1
+    fi
+
+    local abs_d64
+    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_perf_p1_trace_assert.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_perf_p1_trace_assert.log")"
+    : > "$log_file"
+
+    {
+        echo "until \$${pass_addr}"
+        echo "quit"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace product assert"
+        return 1
+    fi
+
+    local pass_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace product assert pass trap (vice rc ${vice_rc})"
+        return 1
+    fi
+
+    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}product first move local=1 full=0; "
+    return 0
+}
+
+perf_p1_trace_run_modal_assert() {
+    perf_p1_trace_collect_variant "modal_assert" C128_TEST_PERF_P1_TRACE_MODAL C128_TEST_PERF_P1_TRACE_MODAL_ASSERT || return 2
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ]; then
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace modal assert pass symbol in out/main.vs"
+        return 1
+    fi
+
+    local abs_d64
+    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_perf_p1_trace_modal_assert.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_perf_p1_trace_modal_assert.log")"
+    : > "$log_file"
+
+    {
+        echo "until \$${pass_addr}"
+        echo "quit"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace modal assert"
+        return 1
+    fi
+
+    local pass_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace modal assert pass trap (vice rc ${vice_rc})"
+        return 1
+    fi
+
+    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}modal restore full=1 reason=1; "
+    return 0
+}
+
+perf_p1_trace_run_command_assert() {
+    perf_p1_trace_collect_variant "command_assert" C128_TEST_PERF_P1_TRACE_COMMAND C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT || return 2
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ]; then
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace command assert pass symbol in out/main.vs"
+        return 1
+    fi
+
+    local abs_d64
+    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_perf_p1_trace_command_assert.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_perf_p1_trace_command_assert.log")"
+    : > "$log_file"
+
+    {
+        echo "until \$${pass_addr}"
+        echo "quit"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace command assert"
+        return 1
+    fi
+
+    local pass_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace command assert pass trap (vice rc ${vice_rc})"
+        return 1
+    fi
+
+    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}command forced full=1 reason=1; "
+    return 0
+}
+
+perf_p1_trace_run_transition_assert() {
+    perf_p1_trace_collect_variant "transition_assert" C128_TEST_PERF_P1_TRACE_TRANSITION C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT || return 2
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    pass_addr=$(awk '/\.c128_test_perf_p1_trace_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ]; then
+        PERF_P1_TRACE_FAIL_REASON="missing PERF trace transition assert pass symbol in out/main.vs"
+        return 1
+    fi
+
+    local abs_d64
+    abs_d64="$(cd "$(dirname "$PERF_P1_TRACE_D64")" && pwd)/$(basename "$PERF_P1_TRACE_D64")"
+    local mon_file
+    mon_file="$(test128_tmp_file "test128_perf_p1_trace_transition_assert.mon")"
+    local log_file
+    log_file="$(test128_tmp_file "test128_perf_p1_trace_transition_assert.log")"
+    : > "$log_file"
+
+    {
+        echo "until \$${pass_addr}"
+        echo "quit"
+    } > "$mon_file"
+
+    "$VICE" -console -nativemonitor -warp -80col -8 "$abs_d64" -9 "$abs_d64" -autostart "$abs_d64" \
+        -moncommands "$mon_file" -monlog -monlogname "$log_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor >/dev/null 2>&1
+    local vice_rc=$?
+
+    if grep -qi "JAM\\|Invalid opcode" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="jam during PERF trace transition assert"
+        return 1
+    fi
+
+    local pass_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    if ! grep -Fqi "C:\$${pass_addr}" "$log_file" && ! grep -qiE "Stop on  exec ${pass_lc}" "$log_file"; then
+        PERF_P1_TRACE_FAIL_REASON="did not reach PERF trace transition assert pass trap (vice rc ${vice_rc})"
+        return 1
+    fi
+
+    PERF_P1_TRACE_VALUES="${PERF_P1_TRACE_VALUES}transition full=1 reason=1; "
+    return 0
+}
+
+run_perf_p1_trace_smoke() {
+    local name="perf_p1_trace_smoke"
+    echo -n "  $name: "
+    PERF_P1_TRACE_VALUES=""
+
+    if ! perf_p1_trace_run_product_assert; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_run_modal_assert; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_run_command_assert; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_run_transition_assert; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_collect_variant "summary"; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_collect_variant "reasons_0_2" C128_TEST_PERF_P1_TRACE_REASONS_0_2; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_collect_variant "reasons_3_5" C128_TEST_PERF_P1_TRACE_REASONS_3_5; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    if ! perf_p1_trace_collect_variant "reasons_6_7" C128_TEST_PERF_P1_TRACE_REASONS_6_7; then
+        [ -n "$PERF_P1_TRACE_FAIL_REASON" ] && echo "FAIL (${PERF_P1_TRACE_FAIL_REASON})"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    echo "PASS (${PERF_P1_TRACE_VALUES}resident export variants validated)"
     PASS=$((PASS + 1))
     TOTAL=$((TOTAL + 1))
 }
@@ -5692,6 +6137,7 @@ run_selected_suites() {
 
     if [ "$PERF_P1_MODE" = "1" ]; then
         run_test "perf_p1" "tests/test_perf_p1.s" || return 1
+        run_named_suite perf_p1_trace_smoke run_perf_p1_trace_smoke || return 1
     fi
 }
 

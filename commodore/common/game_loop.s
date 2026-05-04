@@ -590,11 +590,16 @@ game_new_start:
     // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
     jsr sound_init
 
-    // Clear screen and do initial render
-    jsr screen_clear
-    jsr viewport_update
-    jsr render_viewport
-    jsr screen_unblank
+	    // Clear screen and do initial render
+	    jsr screen_clear
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_transition
+#endif
+#endif
+	    jsr render_viewport
+	    jsr screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$91
     jsr c128_stack_guard_begin
@@ -613,6 +618,7 @@ game_new_start:
     jsr msg_print
 
 #if C128_TEST_SCRIPTED_INPUT
+#if !C128_TEST_PERF_P1_TRACE
     lda c128_test_summary_seen
     bne !gns_script_pass+
     jmp c128_test_town_fail_sym
@@ -630,6 +636,8 @@ game_new_start:
     jmp c128_test_cache_survival_pass_sym
 #else
     jmp c128_test_town_pass_sym
+#endif
+
 #endif
 
 #elif C128_TEST_CACHE_SURVIVAL
@@ -650,7 +658,6 @@ game_new_start:
 #endif
 
     jmp main_loop
-
 // ============================================================
 // load_resume_game — Entry point after successful load
 // ============================================================
@@ -689,11 +696,16 @@ load_resume_game:
     sta zp_view_y
 
     // Clear screen and render the loaded level
-    jsr screen_clear
-    jsr update_visibility
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+	    jsr screen_clear
+	    jsr update_visibility
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_transition
+#endif
+#endif
+	    jsr render_viewport
+	    jsr status_draw
 
     // Welcome back message
     ldx #HSTR_SAVE_WELCOME
@@ -958,17 +970,6 @@ c128_town_move_diag_after_input_get_command:
     jmp cmd_search_mode
 !not_search_mode:
 
-#if C128
-#if PERF_P1
-    // PERF_P1 counter dump (debug key: 'V')
-    cmp #CMD_VERSION
-    bne !not_perf_dump+
-    jsr perf_p1_dump_overlay
-    jmp main_loop
-!not_perf_dump:
-#endif
-#endif
-
     // Monster recall?
     cmp #CMD_RECALL
     beq !+
@@ -1053,6 +1054,9 @@ c128_town_move_diag_after_turn_post_action:
     lda #$19
     jsr c128_town_dump_log
 #endif
+#if C128_TEST_PERF_P1_TRACE
+    jsr perf_p1_trace_reset_move_start
+#endif
     jsr update_visibility
     jsr viewport_update
 
@@ -1061,9 +1065,9 @@ c128_town_move_diag_after_turn_post_action:
     cmp old_view_x
 #if C128
 #if PERF_P1
-    beq !mv_chk_y+
-    jsr perf_p1_mark_scroll
-    jmp !full_redraw+
+	    beq !mv_chk_y+
+    jsr perf_p1_mark_scroll_reason_fallback
+	    jmp !full_redraw+
 !mv_chk_y:
 #else
     bne !full_redraw+
@@ -1075,9 +1079,9 @@ c128_town_move_diag_after_turn_post_action:
     cmp old_view_y
 #if C128
 #if PERF_P1
-    beq !mv_chk_reveal+
-    jsr perf_p1_mark_scroll
-    jmp !full_redraw+
+	    beq !mv_chk_reveal+
+    jsr perf_p1_mark_scroll_reason_fallback
+	    jmp !full_redraw+
 !mv_chk_reveal:
 #else
     bne !full_redraw+
@@ -1086,13 +1090,27 @@ c128_town_move_diag_after_turn_post_action:
     bne !full_redraw+
 #endif
 
-    // Did a room get revealed?
-    lda vis_room_revealed
-    bne !full_redraw+
+	    // Did a room get revealed?
+	    lda vis_room_revealed
+    beq !no_room_reveal+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_room_reveal
+#endif
+#endif
+	    jmp !full_redraw+
+!no_room_reveal:
 
-    // Did monsters or other scene elements move this turn?
-    lda turn_scene_dirty
-    bne !scene_dirty_redraw+
+	    // Did monsters or other scene elements move this turn?
+	    lda turn_scene_dirty
+    beq !no_scene_dirty+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scene_dirty
+#endif
+#endif
+	    jmp !scene_dirty_redraw+
+!no_scene_dirty:
 
     // No scroll, no room reveal, no remote scene changes — render local area around old+new position
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1110,16 +1128,21 @@ c128_town_move_diag_after_turn_post_action:
 
 !scene_dirty_redraw:
 #if C128
-    jmp !full_draw_fallback+
+	    jmp !full_draw_fallback+
 #else
-    jsr render_viewport
+	    jsr render_viewport
     jmp !post_move+
 #endif
 
 !full_redraw:
 #if C128
-    lda turn_scene_dirty
-    bne !full_draw_fallback+
+	    lda turn_scene_dirty
+    beq !full_not_scene_dirty+
+#if PERF_P1
+    jsr perf_p1_set_reason_scene_dirty
+#endif
+	    jmp !full_draw_fallback+
+!full_not_scene_dirty:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$1b
     jsr c128_town_dump_log
@@ -1145,11 +1168,11 @@ c128_town_move_diag_after_turn_post_action:
     lda #$1d
     jsr c128_town_dump_log
 #endif
-    jsr render_viewport
+	    jsr render_viewport
 #if C128
 #if PERF_P1
-    jsr perf_p1_mark_scroll_fallback
-    jsr perf_p1_move_end
+	    jsr perf_p1_mark_full_scroll_fallback_current_reason
+	    jsr perf_p1_move_end
 #endif
 #endif
 
@@ -1159,10 +1182,15 @@ c128_town_move_diag_after_turn_post_action:
     bne !not_store_entry+
     jsr check_player_on_store_door
     bcc !not_store_entry+
-    sta zp_store_idx
-    jsr tramp_store_enter
-    jsr viewport_update
-    jsr render_viewport
+	    sta zp_store_idx
+	    jsr tramp_store_enter
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_modal_restore
+#endif
+#endif
+	    jsr render_viewport
 !not_store_entry:
 #if C128
 c128_town_move_diag_before_status_draw:
@@ -1186,6 +1214,13 @@ c128_town_move_diag_before_status_draw:
 #endif
 #if C128
 c128_town_move_diag_after_status_draw:
+#endif
+#if C128_TEST_PERF_P1_TRACE
+    lda perf_p1_moves
+    beq !perf_trace_continue+
+c128_test_perf_p1_trace_export_sym:
+    jmp c128_test_perf_p1_trace_capture_sym
+!perf_trace_continue:
 #endif
     jmp main_loop
 
@@ -1595,12 +1630,17 @@ level_change_generate_current:
     jsr update_visibility
     jsr generation_busy_end_if_dungeon_api
     jsr screen_clear
-    lda #0
-    sta zp_view_x
-    sta zp_view_y
-    jsr viewport_update
-    jsr render_viewport
-    jsr screen_unblank
+	    lda #0
+	    sta zp_view_x
+	    sta zp_view_y
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_transition
+#endif
+#endif
+	    jsr render_viewport
+	    jsr screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$97
     jsr c128_stack_guard_begin
@@ -1609,6 +1649,9 @@ level_change_generate_current:
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$98
     jsr c128_stack_guard_check
+#endif
+#if C128_TEST_PERF_P1_TRACE_TRANSITION
+    jmp c128_test_perf_p1_trace_capture_sym
 #endif
     rts
 
@@ -1837,10 +1880,15 @@ run_step:
     stx old_player_y
     ldx zp_view_x
     stx old_view_x
-    ldx zp_view_y
-    stx old_view_y
+	    ldx zp_view_y
+	    stx old_view_y
+#if C128
+#if PERF_P1
+    jsr perf_p1_move_start
+#endif
+#endif
 
-    // Save current tile's lit status for room entry/exit detection
+	    // Save current tile's lit status for room entry/exit detection
     ldx zp_player_y
     lda map_row_lo,x
     sta zp_ptr0
@@ -1856,20 +1904,26 @@ run_step:
     clc
     adc #CMD_MOVE_N
 
-    // Try to move
-    jsr player_try_move
-    bcc !run_blocked+           // Wall → stop, no turn consumed
+	    // Try to move
+	    jsr player_try_move
+	    bcs !run_move_ok+
+    jmp !run_blocked+           // Wall → stop, no turn consumed
+!run_move_ok:
 
-    // Check trap
-    jsr msg_clear
-    jsr trap_check_at_player
-    bcs !run_trap_stop+         // Trap fired → stop, turn consumed
+	    // Check trap
+	    jsr msg_clear
+	    jsr trap_check_at_player
+	    bcc !run_no_trap+
+    jmp !run_trap_stop+         // Trap fired → stop, turn consumed
+!run_no_trap:
 
-    // Check other stop conditions
-    jsr run_check_stop
-    bcs !run_stop_move+         // Should stop → final move
+	    // Check other stop conditions
+	    jsr run_check_stop
+	    bcc !run_keep_step+
+    jmp !run_stop_move+         // Should stop → final move
+!run_keep_step:
 
-    // Continue running — run AI before render (BUG-17 fix)
+	    // Continue running — run AI before render (BUG-17 fix)
     jsr player_move_maybe_passive_search
     jsr turn_post_action_searchable_or_die
     bcc !not_dead+
@@ -1879,27 +1933,64 @@ run_step:
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
-    lda zp_view_x
-    cmp old_view_x
-    bne !run_full_redraw+
-    lda zp_view_y
-    cmp old_view_y
-    bne !run_full_redraw+
-    lda vis_room_revealed
-    bne !run_full_redraw+
+	    lda zp_view_x
+	    cmp old_view_x
+    beq !run_chk_y+
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_scroll_reason_fallback
+#endif
+#endif
+	    jmp !run_full_redraw+
+!run_chk_y:
+	    lda zp_view_y
+	    cmp old_view_y
+    beq !run_chk_reveal+
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_scroll_reason_fallback
+#endif
+#endif
+	    jmp !run_full_redraw+
+!run_chk_reveal:
+	    lda vis_room_revealed
+    beq !run_local+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_room_reveal
+#endif
+#endif
+	    jmp !run_full_redraw+
 
-    jsr render_local_area
-    jmp !run_post+
+!run_local:
+	    jsr render_local_area
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_local
+    jsr perf_p1_move_end
+#endif
+#endif
+	    jmp !run_post+
 
 !run_full_redraw:
 #if C128
-    jsr render_viewport_scroll_delta
-    bcc !run_full_fallback+
-    jsr render_local_area
-    jmp !run_post+
+	    jsr render_viewport_scroll_delta
+	    bcc !run_full_fallback+
+	    jsr render_local_area
+#if PERF_P1
+    jsr perf_p1_mark_scroll_delta
+    jsr perf_p1_move_end
+#endif
+	    jmp !run_post+
 !run_full_fallback:
 #endif
-    jsr render_viewport
+	    jsr render_viewport
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_scroll_fallback_current_reason
+    jsr perf_p1_move_end
+#endif
+#endif
 
 !run_post:
     jsr status_draw
@@ -1949,31 +2040,81 @@ run_step:
     jsr viewport_update
 
     // Check for viewport scroll or room reveal
-    lda zp_view_x
-    cmp old_view_x
-    bne !rsm_full+
-    lda zp_view_y
-    cmp old_view_y
-    bne !rsm_full+
-    lda vis_room_revealed
-    bne !rsm_full+
-    lda turn_scene_dirty
-    bne !rsm_scene_full+
+	    lda zp_view_x
+	    cmp old_view_x
+    beq !rsm_chk_y+
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_scroll_reason_fallback
+#endif
+#endif
+	    jmp !rsm_full+
+!rsm_chk_y:
+	    lda zp_view_y
+	    cmp old_view_y
+    beq !rsm_chk_reveal+
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_scroll_reason_fallback
+#endif
+#endif
+	    jmp !rsm_full+
+!rsm_chk_reveal:
+	    lda vis_room_revealed
+    beq !rsm_chk_scene+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_room_reveal
+#endif
+#endif
+	    jmp !rsm_full+
+!rsm_chk_scene:
+	    lda turn_scene_dirty
+    beq !rsm_local+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scene_dirty
+#endif
+#endif
+	    jmp !rsm_scene_full+
 
-    jsr render_local_area
-    jmp !rsm_post+
+!rsm_local:
+	    jsr render_local_area
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_local
+    jsr perf_p1_move_end
+#endif
+#endif
+	    jmp !rsm_post+
 !rsm_scene_full:
-    jsr render_viewport
-    jmp !rsm_post+
+	    jsr render_viewport
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_current_reason
+    jsr perf_p1_move_end
+#endif
+#endif
+	    jmp !rsm_post+
 !rsm_full:
 #if C128
-    jsr render_viewport_scroll_delta
-    bcc !rsm_full_fallback+
-    jsr render_local_area
-    jmp !rsm_post+
+	    jsr render_viewport_scroll_delta
+	    bcc !rsm_full_fallback+
+	    jsr render_local_area
+#if PERF_P1
+    jsr perf_p1_mark_scroll_delta
+    jsr perf_p1_move_end
+#endif
+	    jmp !rsm_post+
 !rsm_full_fallback:
 #endif
-    jsr render_viewport
+	    jsr render_viewport
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_scroll_fallback_current_reason
+    jsr perf_p1_move_end
+#endif
+#endif
 !rsm_post:
     jsr status_draw
     jmp main_loop
@@ -1985,9 +2126,14 @@ player_died:
 
     // Render current positions before showing death message (BUG-46 fix).
     // All death paths skip the normal post-AI render, leaving stale monster
-    // positions on screen. Render now so the killing blow is visible.
-    jsr viewport_update
-    jsr render_viewport
+	    // positions on screen. Render now so the killing blow is visible.
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_transition
+#endif
+#endif
+	    jsr render_viewport
 
     // Show "YOU HAVE BEEN SLAIN." with -more- BEFORE disk I/O
     // so the player isn't staring at a frozen screen during file ops

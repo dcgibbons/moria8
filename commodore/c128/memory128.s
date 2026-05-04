@@ -344,11 +344,14 @@ ExitKernal_sub:
     sta $01
     lda MMU_SAVE_FF00
     sta $ff00
+    lda c128_kernal_irq_tail_runtime_owned
+    beq !ex_skip_runtime_irq+
     // Software IRQ dispatch — lightweight, no I/O
     lda #<mmu_common_irq
     sta $0314
     lda #>mmu_common_irq
     sta $0315
+!ex_skip_runtime_irq:
 !ex_nest:
 #if C128_TEST_STACK_LOW_WATER
     lda #$a4
@@ -434,12 +437,20 @@ c128_stack_low_water_stack_7: .byte 0
 // fetched while Bank 1 is selected cannot rely on Bank 0 program space.
 init_common_mmu_helpers:
     ldx #0
-!copy:
+!copy_page0:
     lda mmu_common_helpers_blob,x
     sta MMU_COMMON_HELPERS_BASE,x
     inx
-    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob
-    bne !copy-
+    bne !copy_page0-
+    ldx #0
+!copy_tail:
+    cpx #mmu_common_helpers_blob_end - mmu_common_helpers_blob - $100
+    beq !done+
+    lda mmu_common_helpers_blob + $100,x
+    sta MMU_COMMON_HELPERS_BASE + $100,x
+    inx
+    jmp !copy_tail-
+!done:
     rts
 
 // mmu_save_p — Static storage for CPU status register during bank switches
@@ -657,6 +668,46 @@ mmu_common_map_write_ptr1:
     pla
     rts
 
+// Input: zp_ptr0 = Bank 1 map row, Y = first column, A = last column.
+//        mmu_common_row_mask = flags to OR into each tile.
+//        mmu_common_row_detect_new = 1 to report any newly visited tile.
+// Output: A = 1 if detect-new was enabled and any tile lacked FLAG_VISITED,
+//         0 otherwise.
+// Preserves: X. Clobbers Y and caller flags.
+mmu_common_mark_visited_row_ptr0:
+    sta mmu_common_row_end
+    lda #0
+    sta mmu_common_row_seen_new
+    php
+    sei
+    lda #MMU_RAM_BANK1
+    sta MMU_CR
+!mark:
+    lda (zp_ptr0),y
+    sta mmu_common_tile_tmp
+    lda mmu_common_row_detect_new
+    beq !write+
+    lda mmu_common_tile_tmp
+    and #$04                    // FLAG_VISITED; dungeon_data.s is imported later.
+    bne !already_visited+
+    lda #1
+    sta mmu_common_row_seen_new
+!already_visited:
+!write:
+    lda mmu_common_tile_tmp
+    ora mmu_common_row_mask
+    sta (zp_ptr0),y
+    cpy mmu_common_row_end
+    beq !done+
+    iny
+    jmp !mark-
+!done:
+    lda #MMU_ALL_RAM
+    sta MMU_CR
+    plp
+    lda mmu_common_row_seen_new
+    rts
+
 mmu_common_db_read_ptr0:
     jsr mmu_common_select_bank1
     lda (zp_ptr0),y
@@ -728,6 +779,16 @@ mmu_common_select_bank0:
     rts
 
 mmu_common_save_p:
+    .byte 0
+mmu_common_row_end:
+    .byte 0
+mmu_common_row_mask:
+    .byte 0
+mmu_common_row_detect_new:
+    .byte 0
+mmu_common_row_seen_new:
+    .byte 0
+mmu_common_tile_tmp:
     .byte 0
 }
 mmu_common_helpers_blob_end:
@@ -804,6 +865,8 @@ copy_to_e000:
 .assert "ZP save buffer size", ZP_SAVE_SIZE, 142
 .assert "mmu_common_irq begins with CLD", mmu_common_irq_after_cld == mmu_common_irq + 1, true
 .assert "mmu_common_nmi begins with CLD", mmu_common_nmi_after_cld == mmu_common_nmi + 1, true
+.assert "MMU common helper copy supports current blob lower bound", mmu_common_helpers_blob_end - mmu_common_helpers_blob > $100, true
+.assert "MMU common helper copy supports current blob upper bound", mmu_common_helpers_blob_end - mmu_common_helpers_blob <= $1ff, true
 :AssertRegionBefore("Bank1 common region ends below staged source span", BANK1_COMMON_END, BANK1_STAGE_SOURCE_BASE)
 :AssertRegionBefore("UI overlay cache ends before help overlay cache", BANK1_OVERLAY_UI_END, BANK1_OVERLAY_HELP_BASE)
 :AssertRegionBefore("Help overlay cache ends before items overlay cache", BANK1_OVERLAY_HELP_END, BANK1_OVERLAY_ITEMS_BASE)

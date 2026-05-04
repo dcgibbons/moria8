@@ -21,8 +21,13 @@ cmd_show_character_view:
     // full-screen redraw path, so it must also re-establish the active tier.
     jsr tier_restore_after_overlay
 #endif
-    jsr screen_clear
-    jmp vp_render_status_loop
+	    jsr screen_clear
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_modal_restore
+#endif
+#endif
+	    jmp vp_render_status_loop
 
 cmd_show_help_view:
     lda #0
@@ -80,8 +85,13 @@ cmd_recall_view:
     bcc !recall_done+
     jsr recall_show_matching_entry
 !recall_done:
-    jsr screen_clear
-    jmp vp_render_status_loop
+	    jsr screen_clear
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_modal_restore
+#endif
+#endif
+	    jmp vp_render_status_loop
 
 recall_key_to_screen_code:
     cmp #$41
@@ -160,8 +170,13 @@ recall_show_matching_entry:
 // Shared command-result helpers
 // ============================================================
 command_result_main_or_redraw_full:
-    bcc !crrf_no_turn+
-    jmp post_turn_redraw_full_or_die
+	    bcc !crrf_no_turn+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_command_forced
+#endif
+#endif
+	    jmp post_turn_redraw_full_or_die
 !crrf_no_turn:
     jmp main_loop
 
@@ -181,8 +196,13 @@ command_result_restore_view_or_update_visibility:
     bcc !crrv_no_turn+
     jmp post_turn_update_visibility_or_die
 !crrv_no_turn:
-    jsr screen_clear
-    jmp vp_render_status_loop
+	    jsr screen_clear
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_modal_restore
+#endif
+#endif
+	    jmp vp_render_status_loop
 
 // ============================================================
 // Shared post-turn tails and gameplay-view restore
@@ -217,20 +237,30 @@ turn_post_action_searchable_or_die:
     rts
 
 post_turn_redraw_full_or_die:
-    jsr turn_post_action_searchable_or_die
-    bcc !ptfds_alive+
-    jmp player_died
+	    jsr turn_post_action_searchable_or_die
+	    bcc !ptfds_alive+
+	    jmp player_died
 !ptfds_alive:
-    jmp vp_render_status_loop
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_command_forced_if_none
+#endif
+#endif
+	    jmp vp_render_status_loop
 
 post_turn_status_only_or_die:
     jsr turn_post_action_searchable_or_die
     bcc !ptsos_alive+
     jmp player_died
 !ptsos_alive:
-    lda turn_scene_dirty
-    beq !ptsos_status_only+
-    jmp vp_render_status_loop
+	    lda turn_scene_dirty
+	    beq !ptsos_status_only+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scene_dirty
+#endif
+#endif
+	    jmp vp_render_status_loop
 !ptsos_status_only:
     jsr status_draw
     jmp main_loop
@@ -246,25 +276,63 @@ post_turn_update_visibility_or_die:
     pla
     ora vis_room_revealed
     sta vis_room_revealed
-    jsr viewport_update
-    lda zp_view_x
-    cmp old_view_x
-    bne !ptuvs_full+
-    lda zp_view_y
-    cmp old_view_y
-    bne !ptuvs_full+
-    lda vis_room_revealed
-    bne !ptuvs_full+
-    lda turn_scene_dirty
-    bne !ptuvs_full+
-    jsr render_local_area
-    jsr status_draw
-    jmp main_loop
+	    jsr viewport_update
+	    lda zp_view_x
+	    cmp old_view_x
+    beq !ptuvs_chk_y+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scroll_fallback
+#endif
+#endif
+	    jmp !ptuvs_full+
+!ptuvs_chk_y:
+	    lda zp_view_y
+	    cmp old_view_y
+    beq !ptuvs_chk_reveal+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scroll_fallback
+#endif
+#endif
+	    jmp !ptuvs_full+
+!ptuvs_chk_reveal:
+	    lda vis_room_revealed
+    beq !ptuvs_chk_scene+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_room_reveal
+#endif
+#endif
+	    jmp !ptuvs_full+
+!ptuvs_chk_scene:
+	    lda turn_scene_dirty
+    beq !ptuvs_local+
+#if C128
+#if PERF_P1
+    jsr perf_p1_set_reason_scene_dirty
+#endif
+#endif
+	    jmp !ptuvs_full+
+!ptuvs_local:
+	    jsr render_local_area
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_local
+#endif
+#endif
+	    jsr status_draw
+	    jmp main_loop
 !ptuvs_full:
-    lda #INPUT_ROW
-    jsr screen_clear_row
-    jsr render_viewport
-    jsr status_draw
+	    lda #INPUT_ROW
+	    jsr screen_clear_row
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_update_visibility
+#endif
+#endif
+	    jsr render_viewport
+	    jsr status_draw
     jmp main_loop
 
 ui_view_return_to_gameplay_view:
@@ -277,10 +345,18 @@ ui_view_return_to_gameplay_view:
 // Shared tail — viewport update + render + status + main loop
 // ============================================================
 vp_render_status_loop:
-    lda #INPUT_ROW
-    jsr screen_clear_row
-    jsr viewport_update
-    jsr render_viewport
-    jsr status_draw
+	    lda #INPUT_ROW
+	    jsr screen_clear_row
+	    jsr viewport_update
+#if C128
+#if PERF_P1
+    jsr perf_p1_mark_full_default_transition
+#endif
+#endif
+	    jsr render_viewport
+	    jsr status_draw
+#if C128_TEST_PERF_P1_TRACE_COMMAND
+    jmp c128_test_perf_p1_trace_capture_sym
+#endif
     jmp main_loop
 ghl_saved_scene_dirty: .byte 0

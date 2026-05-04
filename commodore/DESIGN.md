@@ -64,6 +64,14 @@ staged chunks through low-memory KERNAL helpers so the KERNAL window is entered
 once per chunk instead of once per byte. Bank 1 map bytes are copied to/from the
 staging buffer before the KERNAL stream; the save-file format is unchanged.
 
+Bottom common RAM owns the MMU helper blob at `$0C06` and the `128.fdisk`
+runtime-common payload at `$0D60-$0FFF`. Hot map helpers that execute while
+Bank 1 is visible must live in the helper blob, not ordinary Bank 0 code. The
+C128 visibility/reveal row helper follows this rule: callers provide the row
+pointer, column range, OR mask, and optional "detect newly visited" mode. The
+helper switches to Bank 1 inside common RAM, updates the row, restores Bank 0,
+and returns whether a reveal row saw any previously unvisited tile.
+
 **C128 runtime-loaded code rule:** For any copied or disk-loaded runtime code,
 the linked address, PRG load header, load destination bank, visible execution
 bank, and recopy source span must all agree. A callable symbol is not enough.
@@ -431,8 +439,55 @@ The palette is defined in `color.s`:
 - Unlit/unknown tiles: black (not rendered)
 - C128 VDC renderer invariant: `render_viewport` and `render_single_tile` must
   apply the same overlay precedence for items, monsters, glyphs, and player.
-  Full redraws triggered by room reveal or modal restore are common enough that
-  any drift between those paths becomes a live disappearing-entity bug.
+  Full redraws triggered by room reveal, modal restore, or level transition are
+  common enough that any drift between those paths becomes a live
+  disappearing-entity bug.
+- C128 redraw performance audits use `PERF_P1` reason counters in
+  `perf_p1_reason_lo[]`. The current reason order is scroll fallback, room
+  reveal, scene dirty, command-forced redraw, update-visibility tail, modal
+  restore, transition, and direct-effect redraw. PERF helper code lives in the
+  runtime-common payload; PERF counter storage lives in `C128ResidentPlay` so
+  resident gameplay code updates the bank it is actually executing with.
+  Do not move PERF writable counters into `RuntimeCommonData` or ordinary
+  main-image RAM without re-proving the linked address, PRG load target, and
+  visible execution bank together; those placements can read back as unrelated
+  opcode or loader bytes under the C128 monitor/runtime bank view.
+  All of this instrumentation is absent from normal builds.
+  The PERF unit gate (`perf_p1`) owns direct decision semantics: helper calls
+  must set `perf_p1_decision` to the high-range `$80+` decision constants, and
+  movement start/reset must restore `PERF_P1_DECISION_NONE`. The trace smoke
+  (`perf_p1_trace_smoke`) has two layers. Its live assert variant drives the
+  scripted product path through the first movement and proves the result is
+  `local=1` and `full=0`; its modal assert variant opens and dismisses
+  inventory through the product path and proves modal restore records
+  `full=1` and `reason[modal_restore]=1`; its command assert variant drives
+  scripted search through the command redraw tail and proves command-forced
+  redraw records `full=1` and `reason[command_forced]=1`; its transition
+  assert variant captures the level-generation render tail and proves
+  transition records `full=1` and `reason[transition]=1`. Its grouped static
+  variants validate that the resident export hook jumps to the test-owned
+  capture routine and the
+  capture routine reads the intended PERF counter/reason symbols. It must not
+  claim broader gameplay rankings beyond the scripted scenarios it proves.
+  A direct-effect product-path trace was intentionally deferred: the trace-only
+  Fire Ball setup pulled scripted spell state into resident PLAY and exceeded
+  the C128 runtime-common/resident-play ceilings. That path needs a separate
+  ownership redesign before it is worth reviving.
+  Product-path PERF assertions must not live in `C128ResidentPlay`. Resident
+  PLAY owns only the counters, `perf_p1_decision`, and a tiny unique pass/fail
+  synchronization loop for trace builds; verifier logic lives in the test-owned
+  `Default` capture routine. This keeps monitor synchronization away from
+  C128 boot/main address collisions, runtime-load bytes, and bulk memory clears.
+  Monitor breakpoint/watchpoint setup echoes and loader stores are not evidence
+  of movement or render completion, and must not be reported as counter
+  rankings.
+  PERF C128 product-path test builds must force a fresh base build and pass
+  `PERF_P1=1` through to `commodore/Makefile`; otherwise the symbol file can
+  describe PERF code while the disk image still contains a non-PERF build.
+- `C128ResidentPlay` must stay below `$CF00`, where the runtime-low floor-item
+  page begins. The segment has a hard `$ceff` ceiling and an assert on
+  `c128_resident_play_end <= $CF00`; PERF-only helpers must not be allowed to
+  consume this boundary.
 
 ### 9. Variable Monster Speed
 

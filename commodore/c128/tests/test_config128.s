@@ -7,6 +7,7 @@ mmu_common_map_read_ptr0: rts
 mmu_common_map_write_ptr0: rts
 mmu_common_map_read_ptr1: rts
 mmu_common_map_write_ptr1: rts
+mmu_common_mark_visited_row_ptr0: rts
 mmu_common_db_read_ptr0: rts
 mmu_common_db_write_ptr0: rts
 mmu_common_db_read_ptr1: rts

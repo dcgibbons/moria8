@@ -290,6 +290,8 @@ reu_probe_xfer:
 //   carry set   = LOAD failed
 // Clobbers: A, X, Y
 c128_preload_asset_load:
+    php
+    sei
 #if C128_TEST_STACK_LOW_WATER
     lda #$a5
     jsr c128_stack_low_water_check
@@ -304,6 +306,8 @@ c128_preload_asset_load:
     sta c128_preload_fn_len
     stx c128_preload_fn_lo
     sty c128_preload_fn_hi
+    pla
+    sta c128_preload_saved_p
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
     ldx #$11
     jsr c128_stack_guard_begin
@@ -381,7 +385,6 @@ c128_preload_asset_load:
     lda #0
     ldx #0
     jsr safe_setbnk             // Restore default LOAD destination bank
-    jsr c128_restore_runtime_vectors
 #if C128_TEST_STACK_LOW_WATER
     lda #$a7
     jsr c128_stack_low_water_check
@@ -399,7 +402,7 @@ c128_preload_asset_load:
     jsr c128_stack_guard_check
 #endif
     sec
-    rts
+    jmp c128_preload_finish
 !c128_preload_ok:
 #if C128_TEST_STACK_LOW_WATER
     lda #$a8
@@ -410,9 +413,20 @@ c128_preload_asset_load:
     jsr c128_stack_guard_check
 #endif
     clc
+c128_preload_finish:
+    php
+    lda c128_preload_saved_p
+    and #$04
+    bne !restore_p+
+    pla
+    and #$fb
+    pha
+!restore_p:
+    plp
     rts
 c128_preload_fn_lo: .byte 0
 c128_preload_fn_hi: .byte 0
+c128_preload_saved_p: .byte 0
 #endif
 
 

@@ -54,6 +54,41 @@ mmu_safe_map_write_ptr1:
     pla
     rts
 
+mmu_safe_mark_visited_row_ptr0:
+    sta test_mark_visited_row_end
+    lda #0
+    sta test_mark_visited_seen_new
+    jsr mmu_select_bank1
+!mark:
+    lda (zp_ptr0),y
+    sta test_mark_visited_tile_tmp
+    lda mmu_common_row_detect_new
+    beq !write+
+    lda test_mark_visited_tile_tmp
+    and #FLAG_VISITED
+    bne !write+
+    lda #1
+    sta test_mark_visited_seen_new
+!write:
+    lda test_mark_visited_tile_tmp
+    ora mmu_common_row_mask
+    sta (zp_ptr0),y
+    cpy test_mark_visited_row_end
+    beq !done+
+    iny
+    jmp !mark-
+!done:
+    jsr mmu_select_bank0
+    lda test_mark_visited_seen_new
+    rts
+
+test_mark_visited_row_end:
+    .byte 0
+test_mark_visited_seen_new:
+    .byte 0
+test_mark_visited_tile_tmp:
+    .byte 0
+
 test_start:
     sei
     cld

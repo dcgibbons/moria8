@@ -103,6 +103,13 @@ update_visibility:
 !uv_maxy_ok:
     sta vis_max_y
 
+#if C128
+    lda #FLAG_VISITED
+    sta mmu_common_row_mask
+    lda #0
+    sta mmu_common_row_detect_new
+#endif
+
     // Iterate rows vis_min_y..vis_max_y
     ldx vis_min_y
 !uv_row:
@@ -111,6 +118,11 @@ update_visibility:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
+#if C128
+    lda vis_max_x
+    ldy vis_min_x
+    jsr mmu_safe_mark_visited_row_ptr0
+#else
     ldy vis_min_x
 !uv_col:
     :MapRead_ptr0_y()
@@ -121,6 +133,7 @@ update_visibility:
     iny
     jmp !uv_col-
 !uv_col_done:
+#endif
 
     // Also mark adjacent walls (1 tile beyond torch in each direction)
     // This ensures corridor walls are visible when standing next to them.
@@ -267,6 +280,13 @@ light_room_x:
     adc room_w,x
     sta vis_max_x
 
+#if C128
+    lda #(FLAG_LIT | FLAG_VISITED)
+    sta mmu_common_row_mask
+    lda #0
+    sta mmu_common_row_detect_new
+#endif
+
     ldx vis_min_y
 !lr_row:
     lda map_row_lo,x
@@ -274,6 +294,11 @@ light_room_x:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
+#if C128
+    lda vis_max_x
+    ldy vis_min_x
+    jsr mmu_safe_mark_visited_row_ptr0
+#else
     ldy vis_min_x
 !lr_col:
     :MapRead_ptr0_y()
@@ -284,6 +309,7 @@ light_room_x:
     iny
     jmp !lr_col-
 !lr_col_done:
+#endif
 
     cpx vis_max_y
     beq !lr_done+
@@ -321,6 +347,13 @@ reveal_room:
     adc room_w,x
     sta vis_max_x               // Right wall col
 
+#if C128
+    lda #FLAG_VISITED
+    sta mmu_common_row_mask
+    lda #1
+    sta mmu_common_row_detect_new
+#endif
+
     ldx vis_min_y
 !rr_row:
     lda map_row_lo,x
@@ -328,6 +361,15 @@ reveal_room:
     lda map_row_hi,x
     sta zp_ptr0_hi
 
+#if C128
+    lda vis_max_x
+    ldy vis_min_x
+    jsr mmu_safe_mark_visited_row_ptr0
+    beq !rr_row_done+
+    lda #1
+    sta vis_room_revealed       // Trigger full redraw only on first-time reveal
+    jmp !rr_row_done+
+#else
     ldy vis_min_x
 !rr_col:
     :MapRead_ptr0_y()
@@ -345,6 +387,8 @@ reveal_room:
     iny
     jmp !rr_col-
 !rr_col_done:
+#endif
+!rr_row_done:
 
     cpx vis_max_y
     beq !rr_done+

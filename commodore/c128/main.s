@@ -1,5 +1,6 @@
 #importonce
 #import "../common/zeropage.s"
+#import "../common/perf_p1_defs.s"
 // C128 operational layout:
 //   - Bank 0 main code = $1C01-$BFFF
 //   - Bank 1 map = $4000-$4EFF
@@ -40,14 +41,14 @@
 .segmentdef ItemActionsOverlay [outPrg=OVL_OUT + "/ovl.items", start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeInputData  [outPrg=OVL_OUT + "/128.input.prg", start=$0b00, min=$0b00, max=$0bff]
 .segmentdef RuntimeProjectileData [outPrg=OVL_OUT + "/128.proj.prg", start=$0a80, min=$0a80, max=$0aff]
-.segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0ce3, min=$0ce3, max=$0fff]
+.segmentdef RuntimeCommonData [outPrg=OVL_OUT + "/128.fdisk.prg", start=$0d60, min=$0d60, max=$0fff]
 .segmentdef RuntimeLowData    [outPrg=OVL_OUT + "/128.runtime.prg", start=$1000, min=$1000, max=$3fff]
 .segmentdef C128ResidentWorld [outPrg=OVL_OUT + "/128.world.prg", start=$6000, min=$6000, max=$8cff]
 .segmentdef C128ResidentItems [outPrg=OVL_OUT + "/128.item.prg", start=$8d00, min=$8d00, max=$a7ff]
 .segmentdef C128ResidentSelect [outPrg=OVL_OUT + "/128.select.prg", start=$a800, min=$a800, max=$aaff]
 .segmentdef C128ResidentDiskIo [outPrg=OVL_OUT + "/128.diskio.prg", start=$ab00, min=$ab00, max=$aeff]
 .segmentdef C128ResidentPersist [outPrg=OVL_OUT + "/128.persist.prg", start=$af00, min=$af00, max=$cfff]
-.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$cfff]
+.segmentdef C128ResidentPlay [outPrg=OVL_OUT + "/128.play.prg", start=$af00, min=$af00, max=$ceff]
 .segmentdef RuntimeBankedCode [outPrg=OVL_OUT + "/128.bank.prg", start=$f000, min=$f000, max=$fffa]
 
 #if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
@@ -439,17 +440,10 @@ entry_real:
     lda $fffb
     sta kernal_hw_nmi_vec_hi
 
-    // Patch hardware IRQ vector ($FFFE/$FFFF) in RAM to point to Common RAM Bridge.
-    // This ensures interrupts always find code even when Bank 1 is active.
-    lda #<mmu_common_irq
-    sta $fffe
-    lda #>mmu_common_irq
-    sta $ffff
-    // Patch hardware NMI vector ($FFFA/$FFFB) in RAM — same issue.
-    lda #<mmu_common_nmi
-    sta $fffa
-    lda #>mmu_common_nmi
-    sta $fffb
+    // Runtime IRQ/NMI vectors are installed only after preload completes.
+    // KERNAL LOADs during runtime/tier/overlay preload need the KERNAL
+    // interrupt regime; installing the all-RAM bridge here can send KERNAL
+    // disk I/O through the runtime IRQ handler.
     // Patch hardware RESET vector ($FFFC/$FFFD) in RAM for All-RAM safety.
     lda #<exit_trampoline
     sta $fffc
@@ -2086,15 +2080,7 @@ restart_entry:
     // VDC reg 10 only disables hardware cursor display; the Screen Editor
     // blink path still runs unless $CC is non-zero.
     stx zp_screen_editor_state
-    // Keep KERNAL IRQ tail dispatch off the Screen Editor path in runtime.
-    lda #<mmu_common_irq
-    sta $0314
-    lda #>mmu_common_irq
-    sta $0315
-
     stx zp_screen_editor_mode   // Screen Editor: 80-col mode
-
-    cli
 
     lda #<chrin_keyboard_stub
     sta $0302
@@ -2145,6 +2131,10 @@ restart_entry:
     sta c128_media_state
     jsr c128_restore_vdc_rom_font
     jsr tier_init
+    lda #1
+    sta c128_kernal_irq_tail_runtime_owned
+    jsr c128_restore_runtime_vectors
+    cli
 title_enter_menu:
 #if C128_REAL_BOOT_DIAG
     ldx #$27
@@ -2431,8 +2421,6 @@ c128_load_runtime_common_prg:
     sta zp_ptr1
     lda #$0d
     sta zp_ptr1_hi
-    lda #1
-    sta c128_kernal_irq_tail_runtime_owned
     jmp c128_load_runtime_prg
 
 c128_load_resident_diskio_prg:
@@ -3264,6 +3252,9 @@ c128_resident_persist_end:
 #define PRESS_KEY_STR_EXTERNAL
 .segment C128ResidentPlay
 c128_resident_play_start:
+#if PERF_P1
+#import "../common/perf_p1_data.s"
+#endif
 #import "../common/dungeon_los.s"
 #import "../common/monster_attack.s"
 #define PMU_TURN_FEEDBACK_EXTERNAL
@@ -3276,10 +3267,17 @@ c128_resident_play_start:
 #import "../common/game_loop.s"
 #import "../common/turn.s"
 #import "../common/player_magic_state.s"
-#import "../common/perf_p1.s"
 #if C128
 ego_str_holy_avenger_common:
     .text " (Holy Avenger)" ; .byte 0
+#endif
+#if C128_TEST_PERF_P1_TRACE
+perf_p1_decision:
+    .byte PERF_P1_DECISION_NONE
+c128_test_perf_p1_trace_fail_sym:
+    jmp c128_test_perf_p1_trace_fail_sym
+c128_test_perf_p1_trace_pass_sym:
+    jmp c128_test_perf_p1_trace_pass_sym
 #endif
 c128_resident_play_end:
 
@@ -3290,6 +3288,124 @@ c128_resident_play_end:
 // owns $AF00, so overlay code must not point into that window for this string.
 press_key_str:
     .text "Press any key" ; .byte 0
+
+#if C128_TEST_PERF_P1_TRACE
+c128_test_perf_p1_trace_capture_sym:
+#if C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT
+    lda perf_p1_moves
+    bne !perf_trace_assert_fail+
+    lda perf_p1_local_lo
+    ora perf_p1_local_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_lo
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_reason_lo + PERF_P1_REASON_TRANSITION
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_decision
+    cmp #PERF_P1_DECISION_TRANSITION
+    bne !perf_trace_assert_fail+
+    jmp c128_test_perf_p1_trace_pass_sym
+!perf_trace_assert_fail:
+    jmp c128_test_perf_p1_trace_fail_sym
+#else
+#if C128_TEST_PERF_P1_TRACE_COMMAND_ASSERT
+    lda perf_p1_moves
+    bne !perf_trace_assert_fail+
+    lda perf_p1_local_lo
+    ora perf_p1_local_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_lo
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_reason_lo + PERF_P1_REASON_COMMAND_FORCED
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_decision
+    cmp #PERF_P1_DECISION_COMMAND_FORCED
+    bne !perf_trace_assert_fail+
+    jmp c128_test_perf_p1_trace_pass_sym
+!perf_trace_assert_fail:
+    jmp c128_test_perf_p1_trace_fail_sym
+#else
+#if C128_TEST_PERF_P1_TRACE_MODAL_ASSERT
+    lda perf_p1_moves
+    bne !perf_trace_assert_fail+
+    lda perf_p1_local_lo
+    ora perf_p1_local_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_lo
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_reason_lo + PERF_P1_REASON_MODAL_RESTORE
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_decision
+    cmp #PERF_P1_DECISION_MODAL_RESTORE
+    bne !perf_trace_assert_fail+
+    jmp c128_test_perf_p1_trace_pass_sym
+!perf_trace_assert_fail:
+    jmp c128_test_perf_p1_trace_fail_sym
+#else
+#if C128_TEST_PERF_P1_TRACE_ASSERT
+    lda perf_p1_moves
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_decision
+    cmp #PERF_P1_DECISION_LOCAL
+    bne !perf_trace_assert_fail+
+    lda perf_p1_local_lo
+    cmp #1
+    bne !perf_trace_assert_fail+
+    lda perf_p1_local_hi
+    bne !perf_trace_assert_fail+
+    lda perf_p1_full_lo
+    ora perf_p1_full_hi
+    ora perf_p1_scroll_lo
+    ora perf_p1_scroll_hi
+    ora perf_p1_scroll_delta_lo
+    ora perf_p1_scroll_delta_hi
+    ora perf_p1_scroll_fallback_lo
+    ora perf_p1_scroll_fallback_hi
+    bne !perf_trace_assert_fail+
+    jmp c128_test_perf_p1_trace_pass_sym
+!perf_trace_assert_fail:
+    jmp c128_test_perf_p1_trace_fail_sym
+#else
+#if C128_TEST_PERF_P1_TRACE_REASONS_0_2
+    lda perf_p1_reason_lo + PERF_P1_REASON_SCROLL_FALLBACK
+    ldx perf_p1_reason_lo + PERF_P1_REASON_ROOM_REVEAL
+    ldy perf_p1_reason_lo + PERF_P1_REASON_SCENE_DIRTY
+#else
+#if C128_TEST_PERF_P1_TRACE_REASONS_3_5
+    lda perf_p1_reason_lo + PERF_P1_REASON_COMMAND_FORCED
+    ldx perf_p1_reason_lo + PERF_P1_REASON_UPDATE_VISIBILITY
+    ldy perf_p1_reason_lo + PERF_P1_REASON_MODAL_RESTORE
+#else
+#if C128_TEST_PERF_P1_TRACE_REASONS_6_7
+    lda perf_p1_moves
+    ldx perf_p1_reason_lo + PERF_P1_REASON_TRANSITION
+    ldy perf_p1_reason_lo + PERF_P1_REASON_EFFECT_DIRECT
+#else
+    lda perf_p1_decision
+    ldx perf_p1_decision
+    ldy perf_p1_decision
+#endif
+#endif
+#endif
+#endif
+#endif
+    jmp c128_test_perf_p1_trace_pass_sym
+#endif
+#endif
+#endif
 
 #if C128_TEST_TITLE_ART_CONTENT
 c128_test_title_art_assert:
@@ -3356,12 +3472,7 @@ c128_test_title_art_assert:
 title_key_trap_base:
     .fill 256, $00
 #endif
-#if C128_TEST_SCRIPTED_INPUT
-c128_test_summary_seen:
-    .byte 0
-c128_test_summary_count:
-    .byte 0
-#elif C128_TEST_CACHE_SURVIVAL
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_CACHE_SURVIVAL || C128_TEST_PERF_P1_TRACE
 c128_test_summary_seen:
     .byte 0
 c128_test_summary_count:
@@ -3591,7 +3702,7 @@ c128_test_verify_cache_survival:
 #endif
 
 .segment RuntimeCommonData
-.pseudopc $0ce3 {
+.pseudopc $0d60 {
 runtime_common_data_start:
     #import "../common/title_cache_runtime128.s"
     #import "restart128.s"
@@ -3599,6 +3710,7 @@ runtime_common_data_start:
     #define PMU_TURN_FEEDBACK_ONLY
     #import "../common/player_magic_turn_banked.s"
     #undef PMU_TURN_FEEDBACK_ONLY
+    #import "../common/perf_p1.s"
 runtime_common_data_end:
 }
 .segment Default
@@ -3706,10 +3818,14 @@ program_end:
 .assert "C128 modal persist stays below the I/O hole", c128_resident_persist_end <= $D000, true
 .assert "C128 resident play starts at $AF00", c128_resident_play_start == $AF00, true
 .assert "C128 resident play stays below the I/O hole", c128_resident_play_end <= $D000, true
+.assert "C128 resident play stays below floor-item table", c128_resident_play_end <= $CF00, true
 .assert "Staged Bank1 source span matches boot scrub ceiling", BANK1_STAGE_SOURCE_END == BANK1_RESERVED_TOP_END, true
 .assert "Tier cache window remains large enough for tier preload", BANK1_TIER_CACHE_SIZE >= TIER_PRELOAD_REQUIRED, true
 .assert "MMU helper page stays inside common RAM ownership", MMU_COMMON_HELPERS_BASE >= BANK1_COMMON_BASE, true
 .assert "MMU helper page ends inside common RAM ownership", MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob) - 1 <= BANK1_COMMON_END, true
+.assert "C128 visibility row helper lives in common RAM", mmu_common_mark_visited_row_ptr0 >= MMU_COMMON_HELPERS_BASE && mmu_common_mark_visited_row_ptr0 < runtime_common_data_start, true
+.assert "C128 visibility row helper flag literal matches FLAG_VISITED", FLAG_VISITED, $04
+.assert "C128 shared row helper room flags literal matches FLAG_LIT|FLAG_VISITED", FLAG_LIT | FLAG_VISITED, $0c
 .assert "Runtime common starts after MMU common helpers", runtime_common_data_start >= MMU_COMMON_HELPERS_BASE + (mmu_common_helpers_blob_end - mmu_common_helpers_blob), true
 .assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
