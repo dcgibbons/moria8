@@ -610,6 +610,10 @@ game_new_start:
     jsr c128_stack_guard_check
 #endif
 
+    // Loading/tier messages are transient. The screen redraw removed them
+    // visually; reset the message state before printing the real entry text.
+    jsr msg_clear
+
     // Welcome message
     lda #<welcome_str
     sta zp_ptr0
@@ -706,6 +710,10 @@ load_resume_game:
 #endif
 	    jsr render_viewport
 	    jsr status_draw
+
+    // Loading/tier messages are transient. The screen redraw removed them
+    // visually; reset the message state before printing the real resume text.
+    jsr msg_clear
 
     // Welcome back message
     ldx #HSTR_SAVE_WELCOME
@@ -1536,6 +1544,7 @@ cmd_stairs_dn:
     lda #0
     sta level_entry_dir         // 0 = descended
     jsr level_change_generate_current
+    jsr msg_clear
     lda #<descend_str
     sta zp_ptr0
     lda #>descend_str
@@ -1571,6 +1580,7 @@ cmd_stairs_up:
     lda #1
     sta level_entry_dir         // 1 = ascended
     jsr level_change_generate_current
+    jsr msg_clear
     lda #<ascend_str
     sta zp_ptr0
     lda #>ascend_str

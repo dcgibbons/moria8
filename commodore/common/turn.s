@@ -209,6 +209,8 @@ turn_tick_effects:
     jsr tier_invalidate_state
     jsr level_change_generate_current
 
+    // Drop transient generation/loading message state before recall arrival.
+    jsr msg_clear
     ldx #HSTR_RECALL_ARRIVE
     jsr huff_print_msg
 !no_recall:

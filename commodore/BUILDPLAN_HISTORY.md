@@ -6,6 +6,42 @@
 
 ---
 
+## 2026-05-04 — `BUG-C64-TRANSITION-MORE-PROMPT` COMPLETE
+
+**Problem**
+- C64 could show a stale `-more-` prompt after loading a save before
+  `Welcome back to Moria8!`.
+- The same message-state leak could appear around level transitions such as
+  stairs/recall after transient loading or generation messages.
+
+**Root Cause**
+- `msg_print` uses `zp_msg_flags` as a two-line message state machine.
+- Transition paths can print transient messages such as `Loading game...` or
+  tier `Loading...`, then redraw the screen. The redraw removes the visible
+  text but does not reset `zp_msg_flags`/`msg_row1_col`.
+- The next real transition message sees the old state as already full and
+  enters the `msg_show_more` path before printing the message the player
+  actually cares about.
+
+**Implemented**
+- Reset message state with `msg_clear` after transition redraws and before
+  printing:
+  - new-game welcome text
+  - save-load resume welcome text
+  - stair descent/ascent messages
+  - word-of-recall arrival text
+- Added focused C64 main-loop coverage that seeds a deliberately full message
+  state before load resume and stair descent, then proves the real transition
+  message prints without consuming a `-more-` key.
+
+**Verification**
+- `make disk64`
+  - passed; `Program fits below MAP_BASE=true`
+- `make disk128`
+  - passed; C128 runtime/overlay assertions remain green
+- Focused C64 `test_main_loop`
+  - passed, 32/32
+
 ## 2026-05-04 — `PERF-C64-NONREU-SPELL-CAST-DISK-CHURN` COMPLETE
 
 **Problem**

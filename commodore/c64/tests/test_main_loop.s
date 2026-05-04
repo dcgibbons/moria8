@@ -1445,11 +1445,23 @@ test_start:
     sta test_cmd_len
     lda #2
     sta test_cmd_budget
+    lda #MSG_PENDING | MSG_FULL
+    sta zp_msg_flags
+    lda #1
+    sta test_msg_clear_clears_state
+    sta test_key_len
+    lda #$20
+    sta test_key_script
     jsr load_resume_game
     lda player_data + PL_FLAGS
     and #PLF_SEARCHING
     bne !t20_fail+
     lda zp_search_count
+    bne !t20_fail+
+    lda test_key_idx
+    bne !t20_fail+
+    lda zp_msg_flags
+    cmp #MSG_PENDING
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
@@ -1657,11 +1669,23 @@ test_start:
     sta test_cmd_script
     lda #1
     sta test_cmd_len
+    lda #MSG_PENDING | MSG_FULL
+    sta zp_msg_flags
+    lda #1
+    sta test_msg_clear_clears_state
+    sta test_key_len
+    lda #$20
+    sta test_key_script
     jsr run_case
     lda zp_player_dlvl
     cmp #2
     bne !t25_fail+
     lda eff_detect_timer
+    bne !t25_fail+
+    lda test_key_idx
+    bne !t25_fail+
+    lda zp_msg_flags
+    cmp #MSG_PENDING
     bne !t25_fail+
     lda #$01
     sta tc_results + 24
