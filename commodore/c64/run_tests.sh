@@ -1047,6 +1047,10 @@ TOTAL=$((TOTAL + 1))
 
 check_static_contract "wizard_heal_contract" "../common/wizard.s" \
     "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
+check_static_contract "wizard_footer_full_copy_contract" "../common/wizard.s" \
+    "wiz_footer_str:|||.text \"Press any key\""
+check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
+    "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
 check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s" \

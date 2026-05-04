@@ -6,6 +6,57 @@
 
 ---
 
+## 2026-05-04 — `BUG-C64-WIZARD-MENU-ALIGNMENT` COMPLETE
+
+**Problem**
+- The C64 Wizard Mode command menu rendered the command labels in uneven
+  columns.
+
+**Root Cause**
+- The menu uses full-row literals. The first column labels have different
+  lengths (`jump`, `ident`, `summon`), so single/few-space separators made the
+  second and third command columns drift by row.
+
+**Implemented**
+- Kept all command labels intact.
+- Adjusted the C64 wizard row literals so the command starts line up at fixed
+  columns.
+- Added a C64 static guard for the aligned row copy.
+
+**Verification**
+- `make disk64`
+  - passed; C64 banked runtime and overlay assertions remain green.
+- `make disk128`
+  - passed; C128 overlay/runtime assertions remain green.
+
+## 2026-05-04 — `BUG-C64-WIZARD-FOOTER-ABBREVIATED` COMPLETE
+
+**Problem**
+- The C64 Wizard Mode menu displayed only `Key` as its footer prompt.
+- That was bad user-facing copy and looked like another text-shortening
+  regression.
+
+**Root Cause**
+- The footer string in both Wizard UI owners was literally `Key`.
+- This was old source text, not a new compression pass, but the render column
+  was still hard-coded to column 14, which is the centered position for the
+  13-character `Press any key` prompt.
+
+**Implemented**
+- Restored the C64 Wizard Mode footer to `Press any key`.
+- Left the existing column 14 placement intact because it centers the restored
+  13-character prompt.
+- Added a C64 static guard requiring the full footer copy in
+  `commodore/c64/run_tests.sh`.
+- Recorded the lesson that short modal/footer placeholders must be treated as
+  suspect when the layout is sized for longer copy.
+
+**Verification**
+- `make disk64`
+  - passed; C64 banked runtime still fits below CPU vectors.
+- `make disk128`
+  - passed; C128 overlay/runtime assertions remain green.
+
 ## 2026-05-04 — `BUG-C64-TRANSITION-MORE-PROMPT` COMPLETE
 
 **Problem**

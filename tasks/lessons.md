@@ -96,6 +96,7 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 
 - The user-visible path outranks source-level plausibility. For modal/render corruption, assert while the target screen is still painted; post-dismiss checks are usually too weak.
 - Shared C64/C128 UI code must emit display-safe bytes for both backends. Do not pass raw mixed-case screen-code or PETSCII assumptions through shared `screen_put_char` paths without tests.
+- If a centered UI footer has a hard-coded column sized for longer copy, treat a short word there as suspect and add a text guard when restoring it. Modal footer copy is user-facing text and must not collapse to placeholders like `Key`.
 - On C64, `screen_put_char` takes screen codes, not PETSCII/ASCII. Brackets are `$1B/$1D`, not `$5B/$5D`; punctuation constants in shared item/UI formatters need rendered-output or static guards.
 - On C128 VDC, keep full-frame and single-tile overlay precedence in lockstep; glyphs/items/monsters/player must render consistently across redraw paths.
 - For title/boot art, do not call a build green enough. Require a poster-validating runtime check, and preserve actual product composition before platform-specific hacks.

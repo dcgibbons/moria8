@@ -623,13 +623,13 @@ wiz_bad_value_str:
 wiz_title_str:
     .text "WIZARD MODE" ; .byte 0
 wiz_row1_str:
-    .text "L jump  A reveal  H heal" ; .byte 0
+    .text "L jump    A reveal    H heal" ; .byte 0
 wiz_row2_str:
-    .text "I ident X level   G item" ; .byte 0
+    .text "I ident   X level     G item" ; .byte 0
 wiz_row3_str:
-    .text "S summon T tele   W wall" ; .byte 0
+    .text "S summon  T tele      W wall" ; .byte 0
 wiz_row4_str:
     .text "Q cancel" ; .byte 0
 wiz_footer_str:
-    .text "Key" ; .byte 0
+    .text "Press any key" ; .byte 0
 #endif
