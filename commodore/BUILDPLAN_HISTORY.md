@@ -6,6 +6,41 @@
 
 ---
 
+## 2026-05-04 — `BUG-TRAP-HP-UNDERFLOW` COMPLETE
+
+**Problem**
+- Live C64 trap damage could underflow HP after lethal trap hits, producing
+  wrapped values such as `65535/9` instead of entering the death path.
+- Trap deaths also needed explicit non-monster death-source ownership so the
+  death screen would not try to treat trap source IDs as creature indexes.
+
+**Implemented**
+- Added reserved `DEATH_TRAP_*` source codes for open pit, arrow, poison dart,
+  and rockfall trap damage on both C64 and C128.
+- Updated direct trap damage to clamp lethal HP to zero, sync the player
+  struct, pre-resolve trap death text into `creature_name_buf`, and enter the
+  normal `player_death_check` path.
+- Updated C64/C128 game-over trampolines so trap death sources skip
+  `creature_get_name`; `score.s` now prints pre-resolved trap death causes.
+- Aligned rockfall death text with local VMS Moria:
+  `take_hit(dam, 'falling rock.')`, rendering as `Killed by a falling rock.`
+- Kept the port's accepted poison-dart death wording as
+  `Killed by a poison dart`; adding VMS's separate `a dart trap.` string was
+  tested and rejected for now because it overflows the C64 main segment.
+
+**Verification**
+- `make disk128`
+  - passed; C128 death overlay remains inside `$E000-$EFFF`
+- `make disk64`
+  - passed; C64 main segment fits below `MAP_BASE`
+- `make test128-fast-smoke`
+  - passed, 8/8
+- Focused C64 dungeon regression
+  - passed, 39/39, including lethal rockfall HP clamp/source/VMS text and
+    non-lethal arrow source preservation
+- Manual C128 verification:
+  - rockfall trap death rendered `Killed by a falling rock.`
+
 ## 2026-04-26 - Active Planning Docs Cleanup COMPLETE
 
 ### Scope
@@ -825,10 +860,11 @@ This file is a temporary working scratchpad.
 - [x] Reported Failure Gate:
   - C64 in-dungeon `Detect Evil` cast must not crash back to BASIC from the live gameplay path
 - [x] reproduce the live C64 in-dungeon `Detect Evil` crash in an automated scripted smoke before attempting any product fix
-- [ ] BUG-TRAP-HP-UNDERFLOW
-- [ ] Reported Failure Gate:
+- [x] BUG-TRAP-HP-UNDERFLOW
+- [x] Reported Failure Gate:
   - C64 live gameplay trap damage must not corrupt HP to wrapped values like `65535/9` after a rockfall hit
-- [ ] reproduce the rockfall-trap HP corruption from the live gameplay path before attempting any product fix
+- [x] reproduce the rockfall-trap HP corruption from the live gameplay path before attempting any product fix
+- [x] closed 2026-05-04 with trap-specific death sources, HP clamp, VMS rockfall death text, and C64/C128 build/smoke verification
 - [x] BUG-C64-SPELL-CAST-FFFF
 - [ ] Reported Failure Gate:
   - C64 live gameplay spell cast must not leave `$01=$35` with IRQs enabled or hang at `PC=$FFFF` after the cast path returns

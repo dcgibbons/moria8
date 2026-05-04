@@ -438,48 +438,47 @@ sds_print_death_source:
     beq !sds_poison+
     cmp #DEATH_STARVE
     beq !sds_starve+
+    cmp #DEATH_TRAP_PIT
+    bcc !sds_monster+
     cmp #DEATH_CURSED
-    beq !sds_cursed+
+    bcs !sds_cursed+
     // Monster: print "A " + pre-resolved creature name
+!sds_monster:
     lda #<sds_a_str
     sta zp_ptr0
     lda #>sds_a_str
     sta zp_ptr0_hi
     jsr screen_put_string
+!sds_preresolved:
     lda #<creature_name_buf
     sta zp_ptr0
     lda #>creature_name_buf
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 !sds_poison:
     lda #<sds_src_poison
     sta zp_ptr0
     lda #>sds_src_poison
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 !sds_starve:
     lda #<sds_src_starve
     sta zp_ptr0
     lda #>sds_src_starve
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 !sds_cursed:
     lda #<sds_src_cursed
     sta zp_ptr0
     lda #>sds_src_cursed
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 !sds_unknown:
     lda #<sds_src_unknown
     sta zp_ptr0
     lda #>sds_src_unknown
     sta zp_ptr0_hi
-    jsr screen_put_string
-    rts
+    jmp screen_put_string
 
 // ============================================================
 // hiscore_insert — Insert current player into high score table

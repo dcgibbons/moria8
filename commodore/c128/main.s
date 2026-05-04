@@ -845,9 +845,9 @@ tramp_game_over:
     lda death_source_saved
     sta zp_death_source
 
-    // 1. Resolve creature name while tier data still at $E000
+    // 1. Resolve death source text while tier data still at $E000
     lda zp_death_source
-    cmp #$fd                    // DEATH_CURSED
+    cmp #DEATH_TRAP_PIT         // Special sources ($F9-$FF) don't need name
     bcs !tgo_load_overlay+
     tax
     jsr creature_get_name

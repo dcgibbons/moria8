@@ -36,6 +36,8 @@ df_target_y: .byte 0   // Target tile Y for door commands
 df_dir_idx:  .byte 0   // Direction index from get_direction_target
 df_found:    .byte 0   // Search found-something flag
 df_search_chance: .byte 0
+df_death_source: .byte 0 // Trap death source for lethal trap damage
+df_death_hstr:   .byte 0 // Trap death cause string for lethal trap damage
 
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
@@ -396,6 +398,10 @@ trap_trigger:
 trap_do_pit:
     ldx #HSTR_DF_YOU_FELL
     jsr huff_print_msg
+    lda #DEATH_TRAP_PIT
+    sta df_death_source
+    lda #HSTR_DF_TRAP_0
+    sta df_death_hstr
     lda #1              // 1 die
     ldx #4              // d4
     ldy #0              // +0
@@ -406,6 +412,10 @@ trap_do_pit:
 trap_do_arrow:
     ldx #HSTR_DF_ARROW_HITS
     jsr huff_print_msg
+    lda #DEATH_TRAP_ARROW
+    sta df_death_source
+    lda #HSTR_DF_TRAP_1
+    sta df_death_hstr
     lda #1
     ldx #8
     ldy #0
@@ -438,6 +448,10 @@ trap_do_teleport:
 trap_do_dart:
     ldx #HSTR_DF_DART_HITS
     jsr huff_print_msg
+    lda #DEATH_TRAP_DART
+    sta df_death_source
+    lda #HSTR_DF_TRAP_4
+    sta df_death_hstr
     lda #1
     ldx #4
     ldy #0
@@ -462,6 +476,10 @@ trap_do_dart:
 trap_do_rockfall:
     ldx #HSTR_DF_ROCKFALL
     jsr huff_print_msg
+    lda #DEATH_TRAP_ROCKFALL
+    sta df_death_source
+    lda #HSTR_DF_DEATH_ROCKFALL
+    sta df_death_hstr
     lda #2              // 2 dice
     ldx #8              // d8
     ldy #0              // +0
@@ -489,6 +507,21 @@ trap_apply_damage:
     sbc zp_math_b
     sta zp_player_hp_hi
 
+    // Clamp lethal trap damage before syncing the player struct.
+    lda zp_player_hp_hi
+    bmi !trap_lethal+
+    ora zp_player_hp_lo
+    bne !trap_sync+
+
+!trap_lethal:
+    lda #0
+    sta zp_player_hp_lo
+    sta zp_player_hp_hi
+    lda df_death_source
+    sta zp_death_source
+    jsr trap_resolve_death_name
+
+!trap_sync:
     // Sync to player struct
     lda zp_player_hp_lo
     sta player_data + PL_HP_LO
@@ -517,10 +550,39 @@ trap_apply_damage:
     pla
     sta zp_text_color
 
-    // Play hit sound
+    // Play hit sound for surviving hits; lethal trap damage uses the
+    // standard death path so the death sound is not overwritten.
+    lda zp_player_hp_hi
+    ora zp_player_hp_lo
+    beq !trap_death+
+
     lda #SFX_HIT
     jsr sound_play
 
+    rts
+
+!trap_death:
+    jmp player_death_check
+
+// ============================================================
+// trap_resolve_death_name — Resolve lethal trap cause text
+// ============================================================
+// Copies the existing trap name string into creature_name_buf so the death
+// overlay can display it after tier/overlay memory has been replaced.
+trap_resolve_death_name:
+    ldx df_death_hstr
+    jsr huff_decode_string
+    ldy #0
+!trdn_copy:
+    lda hd_decode_buf,y
+    sta creature_name_buf,y
+    beq !trdn_done+
+    iny
+    cpy #31
+    bne !trdn_copy-
+    lda #0
+    sta creature_name_buf,y
+!trdn_done:
     rts
 
 // ============================================================

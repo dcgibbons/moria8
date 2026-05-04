@@ -39,6 +39,10 @@ detect_machine:
 }
 
 .const DEATH_ALIVE   = $00    // Player is alive
+.const DEATH_TRAP_PIT      = $F9    // Killed by an open pit
+.const DEATH_TRAP_ARROW    = $FA    // Killed by an arrow trap
+.const DEATH_TRAP_DART     = $FB    // Killed by a poison dart
+.const DEATH_TRAP_ROCKFALL = $FC    // Killed by falling rock
 .const DEATH_CURSED  = $FD    // Killed by cursed item
 .const DEATH_POISON  = $FE    // Killed by poison
 .const DEATH_STARVE  = $FF    // Killed by starvation

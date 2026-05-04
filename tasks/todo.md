@@ -5,10 +5,23 @@ archived in `commodore/BUILDPLAN_HISTORY.md`.
 
 ## Reported Failure Gate
 
-C128 product boot hangs while loading `monster.db.1` from the shipping disk.
-Live monitor dump stops inside `mmu_common_irq` at `$0C27`, with repeated
-`IRQ -> $0C06` frames and stack corruption. Closure requires a C128 product
-boot/preload path that reaches title/town without this IRQ/vector failure.
+No active reported failure gate.
+
+Last closed exact reported command:
+
+```sh
+make disk128
+```
+
+2026-05-04 closure: restored the missing tracked source file, moved trap-death
+cause rendering out of the death overlay, aligned rockfall trap death text with
+VMS `take_hit(..., 'falling rock.')`, and verified the exact `make disk128`
+gate passes.
+
+Previous C128 product boot failure, now closed: product boot hung while loading
+`monster.db.1` from the shipping disk. Live monitor dump stopped inside
+`mmu_common_irq` at `$0C27`, with repeated `IRQ -> $0C06` frames and stack
+corruption.
 
 2026-05-04 diagnostic/fix status: actual root was the C128 common MMU helper
 blob growing past 256 bytes while `init_common_mmu_helpers` still used an
@@ -24,8 +37,8 @@ tier cache stage, tier cache verify, overlay preload, runtime vector restore,
 and title entry. Also verified with `make build128`, `make disk128`,
 `boot_title_idle_smoke`, `boot_d64_smoke`, `cache_survival_smoke`,
 `make test128-fast-smoke` (8/8), and `make test128-fast` cold/snapshot
-compare batches. Pending live confirmation on the user's `make run128`/GUI
-product launch path.
+compare batches. User live-smoked the product paths afterward and confirmed
+both C128 and C64 boot/gameplay reached stable operation.
 
 ## Active Backlog
 
@@ -37,8 +50,10 @@ product launch path.
   - [ ] Verify the save image contains a valid sequential `MORIA8.ID` marker.
   - [ ] Treat mocked `disk_swap128` coverage as diagnostic only, not closure
         for the live disk transaction.
-- [ ] `BUG-TRAP-HP-UNDERFLOW`: reproduce the rockfall-trap HP corruption from
-      the live gameplay path before attempting a product fix.
+- [ ] `BUILD-MAKEFILE-KICKASS-CLEANUP`: clean up Makefile target behavior so
+      normal builds, forced rebuilds, and platform-directory invocations handle
+      KickAssembler bootstrap consistently and do not send agents down the
+      wrong diagnostic path.
 - [ ] `C64-TITLE-LOAD-SMOKE`: add dedicated disk-backed C64 title-load smoke
       coverage for the real `L` path.
 - [ ] `FEAT-VMS-LOOK-SEMANTICS`: decide whether to keep the compact VMS-style

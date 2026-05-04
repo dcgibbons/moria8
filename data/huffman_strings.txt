@@ -78,6 +78,7 @@ Sorry, what was that again?
 @DF_TRAP_3 a teleport trap
 @DF_TRAP_4 a poison dart
 @DF_TRAP_5 a rockfall trap
+@DF_DEATH_ROCKFALL falling rock.
 @DF_DIRECTION Direction?
 @DF_DOOR_STUCK The door is stuck.
 @DF_FOUND_TRAP You found a trap!

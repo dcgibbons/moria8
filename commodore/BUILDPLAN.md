@@ -5,10 +5,10 @@
 
 ---
 
-## Active Scope (2026-04-29)
+## Active Scope (2026-05-04)
 
 - Keep this file limited to open phases, cleanup work, and features.
-- Completed current-state details and resolved task notes through 2026-04-29 are archived in [BUILDPLAN_HISTORY.md](BUILDPLAN_HISTORY.md).
+- Completed current-state details and resolved task notes through 2026-05-04 are archived in [BUILDPLAN_HISTORY.md](BUILDPLAN_HISTORY.md).
 
 ## Open Phases / Display Work
 

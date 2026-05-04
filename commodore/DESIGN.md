@@ -304,6 +304,31 @@ game_loop.s               Shared main loop orchestration, movement/running core,
 
 ---
 
+### Trap Death Source Ownership
+
+Trap damage is not represented as a monster attack. When direct trap damage is
+lethal, `dungeon_features.s` assigns a reserved `DEATH_TRAP_*` source code,
+clamps player HP to zero, pre-resolves the trap death text into
+`creature_name_buf`, and then enters the normal `player_death_check` path.
+`score.s` treats those reserved trap source codes as already-resolved death
+causes, so the death overlay does not call `creature_get_name` for them.
+
+Current direct trap death causes are:
+
+| Trap | Death text |
+|---|---|
+| Open pit | `an open pit` |
+| Arrow trap | `an arrow trap` |
+| Poison dart | `a poison dart` |
+| Rockfall | `falling rock.` |
+
+The rockfall string follows VMS Moria's `take_hit(..., 'falling rock.')`
+contract. Poison dart deliberately keeps the compact port wording
+`a poison dart`; adding VMS's separate `a dart trap.` death-only string exceeds
+the current C64 main segment budget without a separate memory-budget decision.
+
+---
+
 ## Implementation Priorities and Dependencies
 
 ```

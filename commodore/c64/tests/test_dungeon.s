@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #36
+    ldx #38
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -127,11 +127,12 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 37, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 39, $ff              // Test results buffer (copied to $0400 before brk)
+t38_rockfall_name: .text "falling rock." ; .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #31
+    ldx #38
     lda #$ff
 !clr:
     sta tc_results,x
@@ -2170,6 +2171,101 @@ test_start:
     lda #$00
     sta tc_results + 36
 !t37_done:
+
+    // ============================================================
+    // Test 38: lethal rockfall trap clamps HP and records source
+    // ============================================================
+    lda #1
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_game_flags
+    sta zp_msg_flags
+    sta zp_death_source
+    lda #4
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+
+    jsr trap_do_rockfall
+
+    lda zp_player_hp_lo
+    bne !t38_fail+
+    lda zp_player_hp_hi
+    bne !t38_fail+
+    lda player_data + PL_HP_LO
+    bne !t38_fail+
+    lda player_data + PL_HP_HI
+    bne !t38_fail+
+    lda zp_game_flags
+    and #$01
+    beq !t38_fail+
+    lda zp_death_source
+    cmp #DEATH_TRAP_ROCKFALL
+    bne !t38_fail+
+    ldy #0
+!t38_name_loop:
+    lda creature_name_buf,y
+    cmp t38_rockfall_name,y
+    bne !t38_fail+
+    lda t38_rockfall_name,y
+    beq !t38_name_done+
+    iny
+    jmp !t38_name_loop-
+!t38_name_done:
+    lda #$01
+    sta tc_results + 37
+    jmp !t38_done+
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
+!t38_done:
+
+    // ============================================================
+    // Test 39: non-lethal trap damage does not overwrite death source
+    // ============================================================
+    lda #50
+    sta zp_player_hp_lo
+    sta player_data + PL_HP_LO
+    lda #0
+    sta zp_player_hp_hi
+    sta player_data + PL_HP_HI
+    sta zp_game_flags
+    sta zp_msg_flags
+    lda #$33
+    sta zp_death_source
+    lda #4
+    sta $c6
+    lda #$20
+    sta $0277
+    sta $0278
+    sta $0279
+    sta $027a
+
+    jsr trap_do_arrow
+
+    lda zp_game_flags
+    and #$01
+    bne !t39_fail+
+    lda zp_player_hp_hi
+    bne !t39_fail+
+    lda zp_player_hp_lo
+    beq !t39_fail+
+    lda zp_death_source
+    cmp #$33
+    bne !t39_fail+
+    lda #$01
+    sta tc_results + 38
+    jmp !t39_done+
+!t39_fail:
+    lda #$00
+    sta tc_results + 38
+!t39_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline
