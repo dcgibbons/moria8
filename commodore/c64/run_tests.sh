@@ -4,7 +4,27 @@
 # Usage: ./run_tests.sh
 # Requires: Kick Assembler, VICE (x64sc)
 
-KICKASS="${KICKASS:-../../tools/kickass/KickAss.jar}"
+REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+RUN_TESTS64_DIR="${RUN_TESTS64_DIR:-$REPO_ROOT/commodore/c64}"
+cd "$RUN_TESTS64_DIR"
+COMMODORE_MAKE=(make -s -C "$REPO_ROOT/commodore")
+KICKASS_WAS_SET="${KICKASS+x}"
+KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
+case "$KICKASS" in
+    /*) ;;
+    *) KICKASS="$(pwd)/$KICKASS" ;;
+esac
+if [ -n "$KICKASS_WAS_SET" ]; then
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" ensure-kickass || kickass_status=$?
+else
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" ensure-kickass || kickass_status=$?
+fi
+if [ "$kickass_status" -ne 0 ]; then
+    exit 1
+fi
+KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
 DEBUG_FEAT_DISK_TRACE="${DEBUG_FEAT_DISK_TRACE:-0}"
 if [ "$DEBUG_FEAT_DISK_TRACE" = "1" ]; then
     KICKASS_TRACE_DEFINE=(-define DEBUG_FEAT_DISK_TRACE)
@@ -1032,7 +1052,7 @@ echo ""
 
 # Build main program first (compile-time asserts)
 echo -n "  main.s assembly: "
-cd "$(dirname "$0")"
+cd "$RUN_TESTS64_DIR"
 asm_out=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -o moria.prg 2>&1)
 assert_info=$(echo "$asm_out" | grep "asserts")
 if echo "$asm_out" | grep -q "0 failed"; then

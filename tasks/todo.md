@@ -85,10 +85,21 @@ both C128 and C64 boot/gameplay reached stable operation.
   - [x] Preserve C128 modal-wrapper transition behavior.
   - [x] Verify C64 main ends below `$C000` with `make disk64`, then verify
         `make disk128` remains green.
-- [ ] `BUILD-MAKEFILE-KICKASS-CLEANUP`: clean up Makefile target behavior so
+- [x] `BUILD-MAKEFILE-KICKASS-CLEANUP`: clean up Makefile target behavior so
       normal builds, forced rebuilds, and platform-directory invocations handle
       KickAssembler bootstrap consistently and do not send agents down the
       wrong diagnostic path.
+  - [x] Add canonical Makefile `ensure-kickass` / `kickass` bootstrap targets.
+  - [x] Make normal and forced Makefile builds depend on phony bootstrap rather
+        than treating the jar as a rebuildable source prerequisite.
+  - [x] Make main C64/C128 test targets use the same resolved KickAssembler
+        path and bootstrap contract.
+  - [x] Remove C128 temp-jar symlink rebuild workarounds in favor of explicit
+        source `-W` rebuild triggers.
+  - [x] Make `test128-fast` reassemble selected tests by default while keeping
+        opt-in reuse for manual fast iteration.
+  - [x] Verify default bootstrap, custom-path failure, forced rebuild, and main
+        test entrypoints.
 - [ ] `FEAT-VMS-LOOK-SEMANTICS`: decide whether to keep the compact VMS-style
       baseline or fund a larger parity push later.
   - [ ] Add C128 unit/smoke coverage for shared `look` changes.
@@ -203,6 +214,27 @@ both C128 and C64 boot/gameplay reached stable operation.
       only if main-segment pressure returns.
 
 ## Review Notes
+
+- 2026-05-05: `BUILD-MAKEFILE-KICKASS-CLEANUP` completed. The root wrapper now
+  exposes `ensure-kickass` / `kickass`, and `commodore/Makefile` owns a phony
+  bootstrap contract instead of using `KickAss.jar` as a normal rebuildable
+  source prerequisite. Build recipes and main test targets pass a quoted
+  resolved jar path so this repo's space-containing iCloud path is safe.
+  C64/C128 test scripts now self-locate, call the shared bootstrap check, and
+  use absolute jar paths; C128 `run_tests128.sh` no longer creates temp jar
+  symlinks for Makefile rebuilds. `harness128_batch.py` now honors `KICKASS` /
+  `--kickass`, bootstraps through Make, reassembles selected tests by default,
+  and keeps `--reuse-assembled` as an explicit manual fast path. The default
+  reassembly exposed a stale C128 `main_loop128` test contract, fixed by adding
+  the missing `tier_restore_after_overlay` stub.
+  Verification: `make -s -C commodore ensure-kickass` passed; missing custom
+  `KICKASS=/definitely/missing/KickAss.jar` fails with the intended clear
+  custom-path error; `make build64` passed; `make build128` with a custom jar
+  path passed; `make -B -C commodore build128` passed with 429 asserts and 0
+  failed; `TEST_FILTER='main128_asm' bash commodore/c128/run_tests128.sh`
+  passed; `cd commodore/c128 && TEST_FILTER='main128_asm' ./run_tests128.sh`
+  passed; `make test128-fast` passed cold and snapshot batches; and `bash
+  commodore/c64/run_tests.sh` passed 135/135 suites.
 - 2026-05-04: `BUG-C128-WIZARD-CONFIRM-CLEAR` completed. Root cause: the C128
   first-time wizard confirmation path called `ui_wizard_restore_gameplay_view`
   before printing `WIZARD? (Y/N)`, forcing a full gameplay clear/redraw before

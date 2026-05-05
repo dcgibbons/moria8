@@ -8,7 +8,23 @@ RUN_TESTS128_DIR="${RUN_TESTS128_DIR:-$REPO_ROOT/commodore/c128}"
 cd "$RUN_TESTS128_DIR"
 COMMODORE_MAKE=(make -s -C "$REPO_ROOT/commodore")
 
+KICKASS_WAS_SET="${KICKASS+x}"
 KICKASS="${KICKASS:-$REPO_ROOT/tools/kickass/KickAss.jar}"
+case "$KICKASS" in
+    /*) ;;
+    *) KICKASS="$(pwd)/$KICKASS" ;;
+esac
+if [ -n "$KICKASS_WAS_SET" ]; then
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" ensure-kickass || kickass_status=$?
+else
+    kickass_status=0
+    "${COMMODORE_MAKE[@]}" ensure-kickass || kickass_status=$?
+fi
+if [ "$kickass_status" -ne 0 ]; then
+    exit 1
+fi
+KICKASS="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
 if [ -n "${VICE128:-}" ]; then
     VICE="$VICE128"
 elif command -v x128 >/dev/null 2>&1; then
@@ -693,12 +709,6 @@ run_main_assembly_check() {
     local build_log
     build_log="$(test128_tmp_file test128_main_build.log)"
     local force_base_rebuild=0
-    local make_kickass
-    make_kickass="$(test128_tmp_file moria128-kickass.jar)"
-    local kickass_abs
-    kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
-    ln -sf "$kickass_abs" "$make_kickass"
-
     if ! c128_active_variant_is "base"; then
         force_base_rebuild=1
     fi
@@ -706,14 +716,14 @@ run_main_assembly_check() {
     # KickAssembler can return 0 even when .assert fails, so gate on both
     # process status and emitted failure markers.
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$KICKASS" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL"
             grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return
         fi
-    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" build128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL"
         grep -E "assert|FAILED|ERROR" "$build_log" | tail -5 | sed 's/^/    /'
         FAIL=$((FAIL + 1))
@@ -1853,20 +1863,15 @@ build_boot_assets() {
 
     local build_log
     build_log="$(test128_tmp_file test128_boot_build.log)"
-    local make_kickass
-    make_kickass="$(test128_tmp_file moria128-kickass.jar)"
-    local kickass_abs
-    kickass_abs="$(cd "$(dirname "$KICKASS")" && pwd)/$(basename "$KICKASS")"
-    ln -sf "$kickass_abs" "$make_kickass"
     if [ "$force_base_rebuild" -eq 1 ]; then
-        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$make_kickass" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+        if ! "${COMMODORE_MAKE[@]}" -W c128/main.s -W c128/boot128.s KICKASS="$KICKASS" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
             echo "FAIL (build128/disk128 failed)"
             tail -20 "$build_log" | sed 's/^/    /'
             FAIL=$((FAIL + 1))
             TOTAL=$((TOTAL + 1))
             return 1
         fi
-    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$make_kickass" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
+    elif ! "${COMMODORE_MAKE[@]}" KICKASS="$KICKASS" PERF_P1="$PERF_P1_MODE" build128 disk128 >"$build_log" 2>&1 || grep -q "FAILED!" "$build_log"; then
         echo "FAIL (build128/disk128 failed)"
         tail -20 "$build_log" | sed 's/^/    /'
         FAIL=$((FAIL + 1))

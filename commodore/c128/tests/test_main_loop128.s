@@ -435,6 +435,9 @@ tier_invalidate_state:
     sta tier_loaded
     rts
 
+tier_restore_after_overlay:
+    rts
+
 tier_check_transition:
     inc test_tier_transition_calls
     lda zp_player_dlvl

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -29,7 +30,7 @@ from harness128 import (
 from vice_connector import extract_test_symbols, run_test_case
 
 REPO_ROOT = SCRIPT_DIR.parent.parent
-KICKASS_JAR = REPO_ROOT / "tools" / "kickass" / "KickAss.jar"
+DEFAULT_KICKASS_JAR = REPO_ROOT / "tools" / "kickass" / "KickAss.jar"
 IMPORT_RE = re.compile(r'^\s*#import\s+"([^"]+)"')
 
 
@@ -202,12 +203,33 @@ DEFAULT_BATCH_TESTS = [
 ]
 
 
-def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path, Path]:
+def ensure_kickass(kickass: Path, custom_path: bool) -> None:
+    command = [
+        "make",
+        "-s",
+        "-C",
+        str(REPO_ROOT / "commodore"),
+        "ensure-kickass",
+    ]
+    if custom_path:
+        command.insert(-1, f"KICKASS={kickass}")
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout or "KickAssembler bootstrap failed").strip()
+        raise RuntimeError(message)
+
+
+def assemble_if_stale(
+    test_case: TestCase,
+    kickass: Path,
+    verbose: bool = False,
+    reuse_assembled: bool = False,
+) -> tuple[Path, Path]:
     source = test_case.source
     prg_path = source.with_suffix(".prg")
     vs_path = source.with_suffix(".vs")
     source_stamp = compute_source_stamp(source)
-    if (
+    if reuse_assembled and (
         prg_path.exists()
         and vs_path.exists()
         and prg_path.stat().st_mtime >= source_stamp
@@ -218,7 +240,7 @@ def assemble_if_stale(test_case: TestCase, verbose: bool = False) -> tuple[Path,
     command = [
         "java",
         "-jar",
-        str(KICKASS_JAR),
+        str(kickass),
         str(source),
         "-libdir",
         str(REPO_ROOT / "commodore" / "c64"),
@@ -310,7 +332,12 @@ def run_cold_mode(base_args: argparse.Namespace, tests: list[TestCase]) -> list[
         if not test_case.cold_ready:
             results.append((test_case.name, False, "not cold-batch-ready", 0.0))
             continue
-        prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
+        prg_path, vs_path = assemble_if_stale(
+            test_case,
+            base_args.kickass_path,
+            verbose=base_args.verbose,
+            reuse_assembled=base_args.reuse_assembled,
+        )
         symbols = extract_test_symbols(vs_path)
         if symbols_need_moncommands(symbols):
                 passed, reason, duration = run_one_test(
@@ -369,7 +396,12 @@ def run_snapshot_mode(base_args: argparse.Namespace, tests: list[TestCase], snap
             results.append((test_case.name, False, "not snapshot-ready", 0.0))
             continue
 
-        prg_path, vs_path = assemble_if_stale(test_case, verbose=base_args.verbose)
+        prg_path, vs_path = assemble_if_stale(
+            test_case,
+            base_args.kickass_path,
+            verbose=base_args.verbose,
+            reuse_assembled=base_args.reuse_assembled,
+        )
         symbols = extract_test_symbols(vs_path)
         if test_case.force_moncommands or symbols_need_moncommands(symbols):
             passed, reason, duration = run_one_test(
@@ -459,12 +491,32 @@ def build_batch_parser() -> argparse.ArgumentParser:
         default=",".join(DEFAULT_BATCH_TESTS),
         help="Comma-separated test ids; defaults to the stable snapshot-friendly Gate C.4 batch set",
     )
+    parser.add_argument(
+        "--kickass",
+        default=None,
+        help="KickAssembler jar path; defaults to KICKASS or the repo-local jar",
+    )
+    parser.add_argument(
+        "--reuse-assembled",
+        action="store_true",
+        help="Reuse fresh .prg/.vs artifacts instead of assembling selected tests every run",
+    )
     return parser
 
 
 def main() -> int:
     parser = build_batch_parser()
     args = parser.parse_args()
+    raw_kickass = args.kickass if args.kickass is not None else os.environ.get("KICKASS")
+    custom_kickass = raw_kickass is not None
+    if raw_kickass is None:
+        raw_kickass = str(DEFAULT_KICKASS_JAR)
+    args.kickass_path = Path(raw_kickass).expanduser().resolve()
+    try:
+        ensure_kickass(args.kickass_path, custom_kickass)
+    except RuntimeError as exc:
+        parser.error(str(exc))
+
     selected_tests: list[TestCase] = []
     for test_name in [item.strip() for item in args.tests.split(",") if item.strip()]:
         if test_name not in BATCH_TESTS:

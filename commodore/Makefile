@@ -21,6 +21,16 @@
 KICKASS_DIR ?= ../tools/kickass
 KICKASS     ?= $(KICKASS_DIR)/KickAss.jar
 KICKASS_URL  = https://theweb.dk/KickAssembler/KickAssembler.zip
+ifeq ($(filter /%,$(KICKASS)),)
+KICKASS_RESOLVED = $(CURDIR)/$(KICKASS)
+else
+KICKASS_RESOLVED = $(KICKASS)
+endif
+ifeq ($(filter /%,$(KICKASS_DIR)),)
+KICKASS_DIR_RESOLVED = $(CURDIR)/$(KICKASS_DIR)
+else
+KICKASS_DIR_RESOLVED = $(KICKASS_DIR)
+endif
 JAVA        ?= java
 C1541       ?= c1541
 VICE64      ?= x64sc
@@ -151,7 +161,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 .PHONY: all build build64 build128 disk disk64 disk128 run run64 run128 \
 	bootart128-charset-demo \
 	test test64 test128 test128-fast test128-fast-smoke clean \
-	check-zp check-6502-lint
+	check-zp check-6502-lint ensure-kickass kickass
 
 all: build
 
@@ -183,17 +193,17 @@ bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
 test: test64 test128-fast test128-fast-smoke
 
-test64:
-	cd c64 && ./run_tests.sh
+test64: ensure-kickass
+	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
 
-test128:
-	cd c128 && ./run_tests128.sh
+test128: ensure-kickass
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests128.sh
 
-test128-fast:
-	cd c128 && python3 -u ./harness128_batch.py --mode compare --snapshot-path out/ready.vsf --vice $(VICE128) --connect-timeout 12
+test128-fast: ensure-kickass
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" python3 -u ./harness128_batch.py --mode compare --snapshot-path out/ready.vsf --vice $(VICE128) --connect-timeout 12
 
-test128-fast-smoke:
-	cd c128 && TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
+test128-fast-smoke: ensure-kickass
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
 
 check-zp:
 	python3 ../tools/check_zp_usage.py
@@ -205,8 +215,8 @@ check-6502-lint:
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
 	python3 $(VERSION_INC_TOOL) $(VERSION_FILE) $(VERSION_INC)
 
-$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_MAIN_SRC) $(KA_FLAGS64) -o $(C64_MAIN_PRG)
+$(C64_MAIN_PRG): $(C64_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_MAIN_SRC) $(KA_FLAGS64) -o $(C64_MAIN_PRG)
 	mv -f c64/out/ovl.start $(C64_OVL_START)
 	mv -f c64/out/ovl.town $(C64_OVL_TOWN)
 	mv -f c64/out/ovl.death $(C64_OVL_DEATH)
@@ -227,8 +237,8 @@ $(C64_OVL_ITEMS): $(C64_MAIN_PRG)
 $(C64_OVL_SPELL): $(C64_MAIN_PRG)
 $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
 
-$(C64_BOOT_PRG): $(C64_SOURCES) $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
+$(C64_BOOT_PRG): $(C64_SOURCES) | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
 
 $(C64_BOOTART_PNG):
 	@echo "Missing source art: $@"
@@ -240,24 +250,24 @@ $(C64_BOOTART_PPM): $(C64_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUT64)
 $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
 	python3 $(C64_BOOTART_TOOL) $(C64_BOOTART_PPM) $(C64_BOOTART_PRG)
 
-$(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -o $(C64_TITLE_PRG)
+$(C64_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(TITLE_SRC) -o $(C64_TITLE_PRG)
 
-$(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier1_prg.s -o $@
+$(OUT64)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier1_prg.s -o $@
 
-$(OUT64)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier2_prg.s -o $@
+$(OUT64)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier2_prg.s -o $@
 
-$(OUT64)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier3_prg.s -o $@
+$(OUT64)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier3_prg.s -o $@
 
-$(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KICKASS) | $(OUT64)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier4_prg.s -o $@
+$(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier4_prg.s -o $@
 
 # ── C128 build rules ──────────────────────────────────────
-$(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
+$(C128_MAIN_STAMP): $(C128_SOURCES) $(VERSION_INC) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_MAIN_SRC) $(KA_FLAGS128) -o $(C128_MAIN_PRG)
 	mkdir -p "$(OUT128)" "c128/out"
 	mv -f "c128/out/ovl.start" "$(C128_OVL_START)"
 	mv -f "c128/out/ovl.town" "$(C128_OVL_TOWN)"
@@ -283,14 +293,14 @@ $(C128_MAIN_OUTPUTS): $(C128_MAIN_STAMP)
 	@test -f "$@" || { rm -f "$(C128_MAIN_STAMP)"; $(MAKE) "$(C128_MAIN_STAMP)"; }
 	@test -f "$@"
 
-$(C128_BOOT_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_BOOT_SRC) -o $(C128_BOOT_PRG)
+$(C128_BOOT_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_BOOT_SRC) -o $(C128_BOOT_PRG)
 
-$(C128_BOOT_CHAIN_PRG): $(C128_SOURCES) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_BOOT_SRC) -define BOOT128_CHAIN -o $(C128_BOOT_CHAIN_PRG)
+$(C128_BOOT_CHAIN_PRG): $(C128_SOURCES) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_BOOT_SRC) -define BOOT128_CHAIN -o $(C128_BOOT_CHAIN_PRG)
 
-$(C128_CHARSET_DEMO_PRG): $(C128_CHARSET_DEMO_SRC) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_CHARSET_DEMO_SRC) $(KA_FLAGS128) -o $(C128_CHARSET_DEMO_PRG)
+$(C128_CHARSET_DEMO_PRG): $(C128_CHARSET_DEMO_SRC) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_CHARSET_DEMO_SRC) $(KA_FLAGS128) -o $(C128_CHARSET_DEMO_PRG)
 
 $(C128_BOOTART_PPM): $(C128_BOOTART_PNG) $(C128_BOOTART_SRC_TOOL) | $(OUT128)
 	python3 $(C128_BOOTART_SRC_TOOL) $(C128_BOOTART_PNG) 640 200 $@
@@ -298,26 +308,26 @@ $(C128_BOOTART_PPM): $(C128_BOOTART_PNG) $(C128_BOOTART_SRC_TOOL) | $(OUT128)
 $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C128_BOOTART_ATTR_BIN) $(C128_BOOTART_PREVIEW_PPM): $(C128_BOOTART_PPM) $(C128_BOOTART_TOOL) | $(OUT128)
 	python3 $(C128_BOOTART_TOOL) $(C128_BOOTART_PPM) $(OUT128)/bootart128
 
-$(C128_BOOTART_DIAG_PRG): $(C128_BOOTART_SRC) $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C128_BOOTART_ATTR_BIN) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_BOOTART_SRC) $(KA_FLAGS128) -o $(C128_BOOTART_DIAG_PRG)
+$(C128_BOOTART_DIAG_PRG): $(C128_BOOTART_SRC) $(C128_BOOTART_INC) $(C128_BOOTART_CHARSET_BIN) $(C128_BOOTART_SCREEN_BIN) $(C128_BOOTART_ATTR_BIN) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_BOOTART_SRC) $(KA_FLAGS128) -o $(C128_BOOTART_DIAG_PRG)
 
-$(C128_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(TITLE_SRC) -define C128 -o $(C128_TITLE_PRG)
+$(C128_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(TITLE_SRC) -define C128 -o $(C128_TITLE_PRG)
 
-$(OUT128)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier1_prg.s -o $@
+$(OUT128)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier1_prg.s -o $@
 
-$(OUT128)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier2_prg.s -o $@
+$(OUT128)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier2_prg.s -o $@
 
-$(OUT128)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier3_prg.s -o $@
+$(OUT128)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier3_prg.s -o $@
 
-$(OUT128)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C64_TIER_DIR)/tier4_prg.s -o $@
+$(OUT128)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier4_prg.s -o $@
 
-$(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) $(KICKASS) | $(OUT128)
-	$(JAVA) -jar $(KICKASS) $(C128_BOOTSECT_SRC) -o $(C128_BOOTSECT_PRG)
+$(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) | ensure-kickass $(OUT128)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C128_BOOTSECT_SRC) -o $(C128_BOOTSECT_PRG)
 
 # ── Disk recipes ──────────────────────────────────────────
 $(EMPTY_PRG): | $(OUT)
@@ -400,14 +410,22 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 	rm -f $(EMPTY_PRG)
 
 # ── Tool bootstrap / directories ──────────────────────────
-$(KICKASS):
-	@echo "Downloading KickAssembler..."
-	@mkdir -p $(KICKASS_DIR)
-	@curl -sL $(KICKASS_URL) -o $(KICKASS_DIR)/KickAssembler.zip
-	@unzip -qo $(KICKASS_DIR)/KickAssembler.zip -d $(KICKASS_DIR)
-	@rm -f $(KICKASS_DIR)/KickAssembler.zip
-	@test -f $(KICKASS) || { echo "ERROR: KickAss.jar not found after download"; exit 1; }
-	@echo "KickAssembler ready at $(KICKASS)"
+kickass: ensure-kickass
+
+ensure-kickass:
+ifeq ($(origin KICKASS),file)
+	@if [ ! -f "$(KICKASS_RESOLVED)" ]; then \
+		echo "Downloading KickAssembler..."; \
+		mkdir -p "$(KICKASS_DIR_RESOLVED)"; \
+		curl -sL "$(KICKASS_URL)" -o "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" || { echo "ERROR: failed to download KickAssembler"; exit 1; }; \
+		unzip -qo "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip" -d "$(KICKASS_DIR_RESOLVED)" || { echo "ERROR: failed to unpack KickAssembler"; rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; exit 1; }; \
+		rm -f "$(KICKASS_DIR_RESOLVED)/KickAssembler.zip"; \
+		test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: KickAss.jar not found after download at $(KICKASS_RESOLVED)"; exit 1; }; \
+		echo "KickAssembler ready at $(KICKASS_RESOLVED)"; \
+	fi
+else
+	@test -f "$(KICKASS_RESOLVED)" || { echo "ERROR: custom KICKASS path does not exist: $(KICKASS_RESOLVED)"; exit 1; }
+endif
 
 $(OUT):
 	mkdir -p $(OUT)
