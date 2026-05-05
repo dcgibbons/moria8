@@ -106,6 +106,9 @@ magic_recalc_mana:
 magic_check_new_spells:
     rts
 
+player_death_check:
+    rts
+
 #import "../../common/zeropage.s"
 #import "../memory.s"
 #import "../screen.s"

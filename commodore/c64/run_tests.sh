@@ -1051,6 +1051,12 @@ check_static_contract "wizard_footer_full_copy_contract" "../common/wizard.s" \
     "wiz_footer_str:|||.text \"Press any key\""
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
+check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
+    "disk_prompt:|||jsr input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr disk_init_selected_drive"
+check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../common/ui_disk_setup.s" \
+    "uds_show_insert_prompt:|||jsr input_get_modal_dismiss_key|||lda #DISK_UI_RES_OK|||sta disk_ui_result|||jsr uds_clear_after_modal"
+check_static_contract "load_resume_suppresses_tier_loading_message_contract" "../common/game_loop.s" \
+    "load_resume_game:|||jsr tier_invalidate_state|||jsr tier_restore_after_overlay"
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
 check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s" \
@@ -1190,7 +1196,7 @@ run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000
 run_test "tier" "tests/test_tier.s" "0400 040d" 14 500000000
-run_test "disk_swap" "tests/test_disk_swap.s" "0400 040b" 12 500000000
+run_test "disk_swap" "tests/test_disk_swap.s" "0400 040d" 14 500000000
 run_test "render" "tests/test_render.s" "0400 0407" 8 500000000
 run_test "ranged" "tests/test_ranged.s" "0400 0409" 10 500000000
 run_test "ego" "tests/test_ego.s" "0400 0409" 10 500000000

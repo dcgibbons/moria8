@@ -199,20 +199,18 @@ save_select_output_name_c64:
 !save_select_loop:
     jsr input_get_key
     cmp #$59                // Y
-    beq !save_select_ok+
+    beq !save_select_yes+
     cmp #$4e                // N
     bne !save_select_loop-
     clc
     rts
+!save_select_yes:
 !save_select_ok:
     sec
     rts
 #endif
 
 save_game:
-#if C128
-    jsr ui_prepare_fullscreen_transition
-#endif
     jsr disk_require_save_media
     bcc !save_media_ok+
     lda disk_setup_done
@@ -425,9 +423,6 @@ save_return_fail:
 // ============================================================
 
 load_game:
-#if C128
-    jsr ui_prepare_fullscreen_transition
-#endif
     lda #LOAD_RESULT_IOERR
     sta load_result
     jsr disk_require_save_media

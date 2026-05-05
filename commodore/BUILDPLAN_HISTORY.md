@@ -6,6 +6,68 @@
 
 ---
 
+## 2026-05-04 — `BUG-C64-DISK-IO-MODAL-CLEAR` COMPLETE
+
+**Problem**
+- On C64 one-drive disk I/O flows, dismissing `Insert save/game disk` with
+  `Press any key` could leave the modal context visible during the next disk
+  operation.
+- A visible `Loading game...` plus the dismissed prompt made it look like the
+  user still needed to press a key.
+
+**Root Cause**
+- The shared C64 `disk_prompt` owner only cleared rows 10 and 11, and it did
+  that after drive initialization.
+- Rows outside the prompt itself, such as `Loading game...`, were not owned by
+  the row clear and could remain on screen.
+- The Disk Setup UI had the same ownership bug on a separate path: its
+  `Insert a Save Disk in drive 9` prompt cleared before drawing, but did not
+  clear after `Press any key`, so later load/save status text could be printed
+  over the dismissed prompt.
+- After the save file finished loading, `load_resume_game` invalidated tier
+  state and reloaded the correct monster tier without the normal generation
+  transition owner. That leaked tier_load's fallback `Loading...` message even
+  though ordinary gameplay hides tier loads behind generation/transition UI.
+
+**Implemented**
+- C64 `disk_prompt` now clears the full modal screen immediately after
+  `input_get_key`, before `disk_init_selected_drive`.
+- The clear is in the shared disk prompt owner, so save-disk and game-disk
+  prompts inherit the same behavior.
+- Disk Setup insert/confirm/error modal exits now clear the full modal before
+  returning to disk setup, save, or load work.
+- `load_resume_game` now routes resume-time tier reload through the same silent
+  restore helper used after overlays, matching overlay restore behavior and
+  suppressing the internal `Loading...` message.
+- Follow-up ownership refactor removed the generic save/load clear helper from
+  `save.s`. Disk/modal producers own their cleanup, C64 title/gameplay callers
+  own save/load entry transitions, and C128 modal wrappers preserve the
+  fullscreen transition prep.
+- Added a C64 static contract requiring the post-key clear before drive init.
+- Added a static contract for the Disk Setup insert-prompt dismissal clear.
+- Added a static contract for load-resume tier-message suppression.
+- Extended `test_disk_swap` with a focused ordering check proving the full
+  clear occurs after key dismissal and before command-channel open.
+
+**Verification**
+- `make disk64`
+  - passed; C64 main reports `Program fits below MAP_BASE=true`, and banked
+    runtime and overlays still fit.
+- `make disk128`
+  - passed; C128 shared-code build remains green.
+- Focused `disk_swap` suite
+  - passed; 14/14 tests.
+- Disk Setup insert-dismiss static contract
+  - passed.
+- Load-resume tier-message suppression contract
+  - passed.
+- C64/C128 main-loop test assembly
+  - passed.
+- Full C64 regression suite
+  - passed: `bash commodore/c64/run_tests.sh` reported 134/134 suites green.
+  - The first broad rerun exposed current-work regressions in layout-sensitive
+    C64 test fixtures/contracts; those were fixed before closure.
+
 ## 2026-05-04 — `BUG-C64-WIZARD-MENU-ALIGNMENT` COMPLETE
 
 **Problem**

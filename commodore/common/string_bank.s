@@ -23,6 +23,10 @@ bank_fn_recall:
     .byte $42,$4e,$4b,$2e,$52,$43,$4c  // "BNK.RCL"
 .const BANK_FN_RECALL_LEN = * - bank_fn_recall
 
+#if !C128
+bank_load_save_p: .byte 0
+#endif
+
 // ============================================================
 // bank_load_recall — Load recall string bank to $E000
 // Uses KERNAL LOAD (KERNAL must be banked in, $01=$36).
@@ -71,6 +75,12 @@ bank_load_recall:
 !bl_done:
     plp                     // Restore carry
 #if !C128
+    php
+    pla
+    sta bank_load_save_p
     :ExitKernal()
+    lda bank_load_save_p
+    pha
+    plp
 #endif
     rts

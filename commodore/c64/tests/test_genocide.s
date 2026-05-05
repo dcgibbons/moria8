@@ -77,8 +77,6 @@ test_finish:
 #import "../../common/player_magic_feedback.s"
 #import "../../common/player_magic_slow_runtime.s"
 #import "../../common/player_magic_execute_overlay.s"
-#import "../../common/ui_inventory.s"
-#import "../../common/ui_equipment.s"
 #import "../dungeon_render.s"
 #import "../../common/dungeon_los.s"
 #import "../../common/player_move.s"
@@ -99,6 +97,9 @@ ui_help_show_paged:
 ui_help_display:
 help_draw_line:
 help_draw_hborder:
+ui_inv_display:
+ui_inv_select_display:
+ui_equip_display:
     rts
 #import "../../common/ui_trampoline_stubs.s"
 

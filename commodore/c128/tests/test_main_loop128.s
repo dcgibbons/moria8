@@ -271,6 +271,8 @@ current_tier:
     .byte 0
 tier_loaded:
     .byte 0
+tier_silent_restore:
+    .byte 0
 
 screen_blank:
     rts

@@ -229,6 +229,9 @@ msg_print:
     sta test_last_msg_hi
     rts
 
+msg_clear:
+    rts
+
 player_death_check:
     inc test_player_death_calls
     rts

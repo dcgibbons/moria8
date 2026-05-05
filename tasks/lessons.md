@@ -97,6 +97,25 @@ Move incident-specific postmortems and older detail into `tasks/lessons_archive.
 - The user-visible path outranks source-level plausibility. For modal/render corruption, assert while the target screen is still painted; post-dismiss checks are usually too weak.
 - Shared C64/C128 UI code must emit display-safe bytes for both backends. Do not pass raw mixed-case screen-code or PETSCII assumptions through shared `screen_put_char` paths without tests.
 - If a centered UI footer has a hard-coded column sized for longer copy, treat a short word there as suspect and add a text guard when restoring it. Modal footer copy is user-facing text and must not collapse to placeholders like `Key`.
+- C64 disk-swap prompts are full-screen modals, not two-row messages. After a
+  `Press any key` dismissal, clear the full modal before drive init or later
+  save/load work so stale `Loading game...` and insert-disk copy cannot remain
+  visible.
+- Disk Setup insert/confirm/error screens are independent disk I/O modals, not
+  just setup menus. If they return directly into save/load/init work, they must
+  clear after the final key/choice too; clearing only before drawing the prompt
+  still leaves stale prompt text under later status messages.
+- Resume-time monster tier reloads should use the same silent/outer-owner UI
+  contract as overlay restore and generation. Do not let tier_load's generic
+  `Loading...` fallback leak after `Loading game...`; the save/load transition
+  already owns that status surface.
+- Save/load file code is not the owner of full-screen modal cleanup. If C64
+  memory pressure appears after a UI fix, keep cleanup at the modal producer or
+  save/load entry caller; do not add a generic clear helper to `save.s`.
+- Do not call broader regression failures "pre-existing" or "unrelated" unless
+  there is a verified green baseline from immediately before the current work
+  or a concrete diff/root-cause proof. If the full suite goes red after a
+  patch, own the failures as current-work regressions until proven otherwise.
 - On C64, `screen_put_char` takes screen codes, not PETSCII/ASCII. Brackets are `$1B/$1D`, not `$5B/$5D`; punctuation constants in shared item/UI formatters need rendered-output or static guards.
 - On C128 VDC, keep full-frame and single-tile overlay precedence in lockstep; glyphs/items/monsters/player must render consistently across redraw paths.
 - For title/boot art, do not call a build green enough. Require a poster-validating runtime check, and preserve actual product composition before platform-specific hacks.

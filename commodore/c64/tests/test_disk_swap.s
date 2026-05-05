@@ -15,6 +15,7 @@
 // 11. disk_require_save_media succeeds for configured marker media
 // 12. FEAT KERNAL wrappers keep caller-safe ZP intact while using KERNAL-volatiles
 // 13. disk_prompt_save consumes the fresh C64 one-drive setup state once
+// 14. disk_prompt clears the full modal immediately after key dismiss
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -44,6 +45,7 @@
 screen_put_string_calls: .byte 0
 screen_clear_calls:      .byte 0
 ui_clear_calls:          .byte 0
+post_key_pre_init_clear_calls: .byte 0
 screen_clear_row_calls:  .byte 0
 input_get_key_calls:     .byte 0
 save_prompt_count:       .byte 0
@@ -121,7 +123,7 @@ c64_disk_marker_present:
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 
-tc_results: .fill 13, $ff
+tc_results: .fill 14, $ff
 
 zp_save_ptr0:       .byte 0
 zp_save_ptr0_hi:    .byte 0
@@ -202,6 +204,13 @@ msg_init:
 
 ui_clear_full_screen_safe:
     inc ui_clear_calls
+    lda input_get_key_calls
+    cmp #1
+    bne !done+
+    lda kernal_open_calls
+    bne !done+
+    inc post_key_pre_init_clear_calls
+!done:
     rts
 
 screen_clear:
@@ -328,7 +337,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #11
+    ldx #13
     lda #$ff
 !init_results:
     sta tc_results,x
@@ -394,6 +403,9 @@ test_start:
     cmp #1
     bne !t3_fail+
     lda ui_clear_calls
+    cmp #2
+    bne !t3_fail+
+    lda post_key_pre_init_clear_calls
     cmp #1
     bne !t3_fail+
     lda press_prompt_count
@@ -409,7 +421,7 @@ test_start:
     cmp #9
     bne !t3_fail+
     lda screen_clear_row_calls
-    cmp #2
+    cmp #0
     bne !t3_fail+
     lda #1
     bne !t3_store+
@@ -433,7 +445,7 @@ test_start:
     cmp #BANK_NO_BASIC
     bne !t4_fail+
     lda ui_clear_calls
-    cmp #1
+    cmp #2
     bne !t4_fail+
     lda #1
     bne !t4_store+
@@ -643,7 +655,6 @@ test_start:
     lda kernal_open_calls
     bne !t13_fail+
     lda ui_clear_calls
-    cmp #1
     bne !t13_fail+
     lda disk_setup_done
     cmp #1
@@ -655,8 +666,30 @@ test_start:
 !t13_store:
     sta tc_results + 12
 
+    // Test 14: prompted C64 disk swap clears the full modal after the key
+    // and before drive initialization opens the command channel.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    lda #1
+    sta input_len
+    lda #$20
+    sta input_stream
+    jsr disk_prompt_game
+    lda post_key_pre_init_clear_calls
+    cmp #1
+    bne !t14_fail+
+    lda screen_clear_row_calls
+    bne !t14_fail+
+    lda #1
+    bne !t14_store+
+!t14_fail:
+    lda #0
+!t14_store:
+    sta tc_results + 13
+
 test_finish:
-    ldx #12
+    ldx #13
 !copy:
     lda tc_results,x
     sta $0400,x

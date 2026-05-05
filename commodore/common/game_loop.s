@@ -670,9 +670,11 @@ load_resume_game:
     jsr player_search_clear_transient_state
 
     // Reset transient tier metadata from any prior runtime state, then
-    // load the correct tier for the resumed dungeon level.
+    // load the correct tier for the resumed dungeon level. The save-file
+    // load already owns visible status text, so suppress tier_load's transient
+    // fallback message here just like overlay restore and generation do.
     jsr tier_invalidate_state
-    jsr tier_check_transition
+    jsr tier_restore_after_overlay
 
     // Recalculate derived stats from loaded base values
     jsr player_calc_stats
@@ -921,6 +923,10 @@ c128_town_move_diag_after_input_get_command:
     jsr c128_modal_save_game
 #else
     jsr disk_prompt_save        // Swap to save disk if dual
+#if !C128
+    jsr ui_clear_full_screen_safe
+    jsr ui_reset_message_state
+#endif
     jsr save_game
 #endif
     lda #0

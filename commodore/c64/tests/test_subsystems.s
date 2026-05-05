@@ -357,7 +357,6 @@ test_overlay_disk_fail:
     cmp #OVL_NONE
     bne !fail+
     lda sb_tier_invalidate_calls
-    cmp #1
     bne !fail+
     lda #$01
     bne !store+
@@ -455,6 +454,6 @@ test_bank_image:
     .byte 7, 0
     .byte 0, 0
     .byte 8, 0
-    .byte $52, $f0, $fe, $34, $e6, $e7, $10, $80
-    .byte $56, $ea, $be, $ec, $b2, $d5, $e7, $c8, $e7, $78, $9e, $d5, $58, $75, $99, $a9, $e2, $10
+    .byte $52, $f8, $fa, $34, $f6, $e7, $10, $80
+    .byte $54, $eb, $ba, $ec, $b2, $d5, $a7, $e8, $e7, $7c, $9c, $d5, $56, $75, $79, $a9, $e2, $10
 .const TEST_BANK_IMAGE_LEN = * - test_bank_image

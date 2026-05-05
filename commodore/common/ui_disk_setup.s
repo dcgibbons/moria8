@@ -149,10 +149,12 @@ uds_confirm_drive9:
     bne !cfm_key-
     lda #DISK_UI_RES_NO
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 !cfm_yes:
     lda #DISK_UI_RES_YES
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_show_insert_prompt:
@@ -184,6 +186,7 @@ uds_show_insert_prompt:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_OK
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_show_init_prompt:
@@ -199,10 +202,12 @@ uds_show_init_prompt:
     bne !prep_init_key-
     lda #DISK_UI_RES_NO
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 !prep_init_yes:
     lda #DISK_UI_RES_YES
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_enter_device:
@@ -317,6 +322,7 @@ uds_show_no_drive9:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_show_no_device:
@@ -327,6 +333,7 @@ uds_show_no_device:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_show_program_disk:
@@ -337,6 +344,7 @@ uds_show_program_disk:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
 
 uds_show_init_fail:
@@ -348,7 +356,12 @@ uds_show_init_fail:
     jsr input_get_modal_dismiss_key
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
+    jsr uds_clear_after_modal
     rts
+
+uds_clear_after_modal:
+    jsr ui_clear_full_screen_safe
+    jmp msg_init
 
 uds_show_init_detail:
     lda disk_status

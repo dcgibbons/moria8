@@ -426,6 +426,8 @@ title_load_game:
     lda #SFX_PICKUP
     jsr sound_play
     jsr disk_prompt_save        // Swap to save disk if dual
+    jsr ui_clear_full_screen_safe
+    jsr ui_reset_message_state
     jsr load_game
     php
     jsr disk_prompt_game        // Swap back for tier loading

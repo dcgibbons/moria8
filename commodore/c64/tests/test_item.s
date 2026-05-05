@@ -53,7 +53,6 @@ test_exit_trampoline:
 .segment Default
 #import "../../common/ui_inventory.s"
 #import "../../common/ui_equipment.s"
-#import "../../common/ui_help.s"
 #import "../../common/sound.s"
 #import "../../common/dungeon_data.s"
 #import "../../common/dungeon_gen.s"
@@ -83,6 +82,8 @@ test_exit_trampoline:
 #import "../../common/monster_attack.s"
 #import "../../common/turn.s"
 #define C64_TEST_FULL_ITEMDESC_STUB
+ui_help_display:
+    rts
 #import "../../common/ui_trampoline_stubs.s"
 
 // Store/huffman imports in dummy segment to avoid MAP_BASE ($C000) overlap

@@ -164,8 +164,6 @@ disk_prompt_save:
     lda disk_setup_done
     cmp #2
     bne !dps_prompt+
-    jsr ui_clear_full_screen_safe
-    jsr msg_init
     dec disk_setup_done
     rts
 #endif
@@ -227,19 +225,20 @@ disk_prompt:
     jsr input_get_modal_dismiss_key
 #else
     jsr input_get_key
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
 #endif
     jsr disk_init_selected_drive
 
 #if !C128
     lda #BANK_NO_BASIC
     sta $01
-#endif
-
+    rts
+#else
     lda #10
     jsr screen_clear_row
     lda #11
     jsr screen_clear_row
-#if C128
     lda disk_prompt_device
     cmp program_device
     bne !dp_not_program+

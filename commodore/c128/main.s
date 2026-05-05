@@ -2221,6 +2221,7 @@ title_load_game:
 !title_setup_ready:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    jsr ui_prepare_fullscreen_transition
     jsr load_game
     lda #0
     adc #0
@@ -2524,6 +2525,7 @@ c128_modal_require_persist:
 c128_modal_save_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    jsr ui_prepare_fullscreen_transition
     jsr save_game
     lda #0
     adc #0
@@ -2536,6 +2538,7 @@ c128_modal_save_game:
 c128_modal_load_game:
     jsr c128_modal_require_persist
     jsr c128_require_save_media
+    jsr ui_prepare_fullscreen_transition
     jsr load_game
     lda #0
     adc #0

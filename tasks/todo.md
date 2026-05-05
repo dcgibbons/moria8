@@ -42,6 +42,35 @@ both C128 and C64 boot/gameplay reached stable operation.
 
 ## Active Backlog
 
+- [x] `BUG-C64-DISK-IO-MODAL-CLEAR`: C64 disk I/O save/load swap prompts
+      must clear the whole modal screen immediately after the user dismisses
+      `Press any key`, so stale `Loading game...`, save/load prompts, or
+      insert-disk copy cannot remain visible during the following disk work.
+  - [x] Patch the shared C64 disk prompt owner, not individual save/load
+        callsites.
+  - [x] Patch Disk Setup insert/confirm/error modal exits too; those can run
+        immediately before save/load work and are separate from `disk_prompt`.
+  - [x] Suppress the internal monster-tier `Loading...` fallback during
+        load-resume; the save-file load already owns the visible loading UI,
+        and normal gameplay hides tier loads behind generation/transition UI.
+  - [x] Add focused C64 unit/static coverage that dismissal does a full clear.
+  - [x] Verify `make disk64`.
+  - [x] Verify `make disk128` stays green.
+- [x] `REFACTOR-C64-DISK-IO-CLEAR-OWNERSHIP`: remove the C64 main-image
+      growth caused by treating `save.s` as the generic full-screen transition
+      owner. Consultant consensus: disk/modal producers should clear their own
+      residue; save/load should own file I/O and status text only.
+  - [x] Remove the new generic `save_prepare_io_screen` clear path from
+        `save.s`.
+  - [x] Keep `disk_swap.s` clearing immediately after a C64 disk-swap prompt is
+        dismissed, before drive re-init.
+  - [x] Keep `ui_disk_setup.s` clearing after Disk Setup full-screen modal
+        exits; this code lives in overlay ownership rather than C64 main.
+  - [x] Move any remaining C64 save/load transition clearing to the caller that
+        enters the full-screen save/load flow, not the save-file subsystem.
+  - [x] Preserve C128 modal-wrapper transition behavior.
+  - [x] Verify C64 main ends below `$C000` with `make disk64`, then verify
+        `make disk128` remains green.
 - [ ] `TEST-C128-BLANK-SAVE-DISK-SMOKE`: add a real C128 product-path blank
       save-disk initialization smoke.
   - [ ] Boot the product disk.
@@ -171,6 +200,26 @@ both C128 and C64 boot/gameplay reached stable operation.
 
 ## Review Notes
 
+- 2026-05-04: `BUG-C64-DISK-IO-MODAL-CLEAR` completed. C64 one-drive
+  save/load/game-disk prompts and Disk Setup insert/confirm/error modals now
+  clear the full modal screen immediately after the user dismisses
+  `Press any key` or answers the prompt, before drive init and subsequent disk
+  work. Verification: `make disk64` passed, `make disk128` passed, focused
+  `test_disk_swap` monitor run returned 14/14 pass bytes, and the Disk Setup
+  insert-dismiss static contract passed. Follow-up: load-resume now suppresses
+  the internal monster-tier `Loading...` message so restored games match the
+  regular gameplay transition behavior. Verified `make disk64`, `make
+  disk128`, the load-resume static contract, and C64/C128 main-loop test
+  assembly. The initial broad C64 rerun exposed current-work regressions in
+  several C64 test fixtures/contracts; those were corrected and the full
+  `bash commodore/c64/run_tests.sh` gate now passes, 134/134 suites.
+- 2026-05-04: Consultant-backed ownership refactor completed after the first
+  save/load clear attempt pushed C64 main past `MAP_BASE`. `save.s` no longer
+  owns generic full-screen transition cleanup; C64 title/gameplay callers own
+  the save/load entry transition, Disk Setup owns its modal exits, and C128
+  modal wrappers preserve the existing fullscreen prep. `make disk64` now
+  reports `Program fits below MAP_BASE=true` with 0 failed asserts, and
+  `make disk128` reports 0 failed asserts.
 - 2026-04-29: C128 save/load transport optimization completed and archived in
   `commodore/BUILDPLAN_HISTORY.md`.
 - 2026-04-29: `PERF-C128-VISIBILITY-MMU` completed. C128 torch-radius
