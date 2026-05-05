@@ -1231,7 +1231,7 @@ game_over_prompt:
     sta zp_text_color
     lda #12                     // Row 12 (center)
     sta zp_cursor_row
-    lda #9                      // Col 9: (40-22)/2 = 9
+    lda #8                      // Col 8: (40-24)/2 = 8
     sta zp_cursor_col
     lda #<game_over_str
     sta zp_ptr0
@@ -1261,7 +1261,7 @@ game_over_prompt:
     jmp game_restart
 
 game_over_str:
-    .text "R)EBOOT S)TART  Q)UIT" ; .byte 0
+    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
 
 // ============================================================
 // game_restart — reset game state, return to title screen
