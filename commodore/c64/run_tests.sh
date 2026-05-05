@@ -1119,6 +1119,8 @@ check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "ma
     "tramp_eff_earthquake:|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jsr eff_earthquake_banked|||rts|||tramp_item_refuel:"
 check_static_contract "spell_execute_dedicated_overlay_contract" "main.s" \
     "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
+check_static_contract "wizard_reveal_uses_spell_overlay_contract" "main.s" \
+    "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 

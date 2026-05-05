@@ -895,7 +895,7 @@ tramp_spell_execute_selected:
     jmp tramp_sr_epilogue
 
 tramp_reveal_floorplan:
-    lda #OVL_DEATH
+    lda #OVL_SPELL
     jsr overlay_load_no_kernal
     bcs !done+
     jsr eff_reveal_floorplan
