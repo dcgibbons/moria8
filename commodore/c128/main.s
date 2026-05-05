@@ -2164,7 +2164,7 @@ title_menu_draw:
     // --- Show title menu ---
     lda #COL_WHITE
     sta zp_text_color
-    lda #17
+    lda #18
     sta zp_cursor_row
     lda #TITLE_MENU_COL
     sta zp_cursor_col

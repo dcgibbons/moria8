@@ -194,10 +194,11 @@
 .byte 12, 1, TC_LGREY
 .byte $21
 .byte $00
-.byte 12, 10, TC_CYAN
 #if C128
+.byte 12, 9, TC_CYAN
 .text "Commodore 128 Edition"
 #else
+.byte 12, 10, TC_CYAN
 .text "Commodore 64 Edition"
 #endif
 .byte $00
@@ -227,21 +228,30 @@
 .byte $21
 .byte $00
 
-// ── Row 15: divider ──
+// ── Row 15: port credit ──
 .byte 15, 1, TC_LGREY
+.byte $21
+.byte $00
+#if C128
+.byte 15, 7, TC_DGREY
+.text "C128 port by Chad Gibbons"
+#else
+.byte 15, 8, TC_DGREY
+.text "C64 port by Chad Gibbons"
+#endif
+.byte $00
+.byte 15, 38, TC_LGREY
+.byte $21
+.byte $00
+
+// ── Row 16: divider ──
+.byte 16, 1, TC_LGREY
 .byte $2b  // +
 .fill 36, $2d  // - × 36
 .byte $2b  // +
 .byte $00
 
-// ── Rows 16-18: menu area (left empty for main.s to fill) ──
-.byte 16, 1, TC_LGREY
-.byte $21
-.byte $00
-.byte 16, 38, TC_LGREY
-.byte $21
-.byte $00
-
+// ── Rows 17-18: menu area (left empty for main.s to fill) ──
 .byte 17, 1, TC_LGREY
 .byte $21
 .byte $00

@@ -4,6 +4,9 @@ Moria8 is a Commodore 64 and Commodore 128 port of the classic roguelike
 Moria, based on the Umoria code line. The game is written in 6502 assembly and
 built with Kick Assembler.
 
+Original Moria was created by Robert Alan Koeneke. Moria8 is a Commodore 64/128
+port based on the Umoria line, with this port by Chad Gibbons.
+
 The port targets real hardware and VICE. Gameplay uses PETSCII character
 display; the loading and title paths use platform-specific assets for each
 machine.

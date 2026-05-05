@@ -410,9 +410,9 @@ title_draw_menu:
     // --- Show title menu: N)EW  L)OAD  D)ISK SETUP ---
     lda #COL_WHITE
     sta zp_text_color
-    lda #17
+    lda #18
     sta zp_cursor_row
-    lda #7                  // Center: (40-25)/2 ≈ 7
+    lda #7                  // Center: (40-25)/2 ~= 7
     sta zp_cursor_col
     lda #<title_menu_str
     sta zp_ptr0
