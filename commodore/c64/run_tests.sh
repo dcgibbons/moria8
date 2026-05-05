@@ -1048,7 +1048,9 @@ TOTAL=$((TOTAL + 1))
 check_static_contract "wizard_heal_contract" "../common/wizard.s" \
     "wizard_cmd_heal_cure:|||lda player_data + PL_MAX_MANA|||sta player_data + PL_MANA|||sta zp_player_mp|||sta zp_player_mmp"
 check_static_contract "wizard_footer_full_copy_contract" "../common/wizard.s" \
-    "wiz_footer_str:|||.text \"Press any key\""
+    "wiz_footer_str:|||.text \"Q to cancel\""
+check_static_contract "wizard_cancel_text_contract" "../common/wizard.s" \
+    "wiz_row4_str:|||.text \"Q to cancel\""
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \

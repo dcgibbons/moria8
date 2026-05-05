@@ -629,7 +629,7 @@ wiz_row2_str:
 wiz_row3_str:
     .text "S summon  T tele      W wall" ; .byte 0
 wiz_row4_str:
-    .text "Q cancel" ; .byte 0
+    .text "Q to cancel" ; .byte 0
 wiz_footer_str:
-    .text "Press any key" ; .byte 0
+    .text "Q to cancel" ; .byte 0
 #endif

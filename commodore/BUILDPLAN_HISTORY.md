@@ -6,6 +6,50 @@
 
 ---
 
+## 2026-05-04 — `BUG-WIZARD-CANCEL-COPY-PARITY` COMPLETE
+
+**Problem**
+- C128 Wizard Mode had an odd pre-prompt clear before `WIZARD? (Y/N)`.
+- Wizard cancel copy drifted between platforms:
+  - C128 footer used `Q cancels`.
+  - C64 rendered `Q cancel` in the command row.
+  - C64 rendered `Press any key` in the bottom footer.
+- The desired rendered cancel instruction on both platforms is `Q to cancel`.
+
+**Root Cause**
+- C128 first-time wizard entry called `ui_wizard_restore_gameplay_view` before
+  printing the confirmation prompt, treating an ordinary message prompt like a
+  full-screen modal restore.
+- C64 and C128 use different Wizard UI owners:
+  - C128 uses `commodore/common/ui_wizard.s`.
+  - C64 uses `commodore/common/wizard.s` through `wizard_c64_menu_display`.
+- The C64 menu row and footer are separate strings, and both are rendered.
+  Earlier source checks covered the wrong owner and then only one of the two
+  C64 strings.
+
+**Implemented**
+- Removed the C128 gameplay redraw before the first-time wizard confirmation
+  prompt.
+- Set the C128 Wizard Mode footer text to `Q to cancel`.
+- Set the actual C64 Wizard Mode row and footer text in `wizard.s` to
+  `Q to cancel`.
+- Removed the stale `Press any key` wizard footer from the unused C64 branch
+  in `ui_wizard.s` too, so wizard UI sources consistently use `Q to cancel`.
+- Updated C128 static checks to reject `Q cancel` / `Q cancels` and require
+  the `ui_wizard.s` cancel/footer text.
+- Updated C64 static checks to require both the rendered row and footer text
+  in `wizard.s`.
+
+**Verification**
+- `make disk64`
+  - passed; C64 main/overlay/banked-runtime assertions remain green.
+- `make disk128`
+  - passed; C128 overlay/runtime assertions remain green.
+- `make test128-fast-smoke`
+  - passed; 8/8 suites green.
+- `git diff --check`
+  - passed.
+
 ## 2026-05-04 — `BUG-C64-DISK-IO-MODAL-CLEAR` COMPLETE
 
 **Problem**

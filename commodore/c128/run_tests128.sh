@@ -1217,6 +1217,7 @@ store_mod = (root / "common" / "ui_store.s").read_text().splitlines()
 loop_helpers = (root / "common" / "game_loop_helpers.s").read_text().splitlines()
 player_magic_mod = (root / "common" / "player_magic.s").read_text().splitlines()
 spell_effects_mod = (root / "common" / "spell_effects.s").read_text().splitlines()
+ui_wizard_mod = (root / "common" / "ui_wizard.s").read_text().splitlines()
 
 def first_instructions_after(label: str, lines: list[str], count: int) -> list[str]:
     in_block = False
@@ -1288,6 +1289,21 @@ if not has_ordered_chain(items, [
     "jsr msg_print_cached",
 ], window=8):
     print("piw_print_prompt_with_count is not preserving IRQ state around cached Huffman prompt rendering")
+    raise SystemExit(1)
+
+ui_wizard_confirm_prefix = first_instructions_after("ui_wizard_display:", ui_wizard_mod, 14)
+if any("ui_wizard_restore_gameplay_view" in line for line in ui_wizard_confirm_prefix):
+    print("C128 wizard confirmation must not redraw gameplay before WIZARD? prompt")
+    raise SystemExit(1)
+if not any('.text "Q to cancel"' in line for line in ui_wizard_mod):
+    print("Wizard cancel text should be explicit: Q to cancel")
+    raise SystemExit(1)
+for bad_wizard_cancel_text in ('.text "Q cancel"', '.text "Q cancels"'):
+    if any(bad_wizard_cancel_text in line for line in ui_wizard_mod):
+        print(f"Wizard cancel text must not use inconsistent wording: {bad_wizard_cancel_text}")
+        raise SystemExit(1)
+if sum(1 for line in ui_wizard_mod if '.text "Q to cancel"' in line) != 3:
+    print("All ui_wizard cancel/footer strings should say: Q to cancel")
     raise SystemExit(1)
 
 required_chains = [
@@ -1443,7 +1459,14 @@ required_chains = [
         "jsr tramp_spell_list_display",
         "jsr input_get_key",
     ]),
-    ("wizard_heal_choice", (root / "common" / "ui_wizard.s").read_text().splitlines(), [
+    ("wizard_confirm_prompt", ui_wizard_mod, [
+        "ui_wizard_display:",
+        "lda #<wiz_confirm_str",
+        "jsr msg_print",
+        "jsr input_prepare_followup_key",
+        "jsr input_get_key",
+    ]),
+    ("wizard_heal_choice", ui_wizard_mod, [
         "ui_wizard_cmd_heal_cure:",
         "lda player_data + PL_MAX_MANA",
         "sta player_data + PL_MANA",

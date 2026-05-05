@@ -6,7 +6,7 @@
 
 .const UWIZ_TITLE_COL  = (SCREEN_COLS - 6) / 2
 .const UWIZ_MENU_COL   = (SCREEN_COLS - 20) / 2
-.const UWIZ_FOOTER_COL = (SCREEN_COLS - 13) / 2
+.const UWIZ_FOOTER_COL = (SCREEN_COLS - 11) / 2
 
 ui_wizard_msg_lo: .byte 0
 ui_wizard_msg_hi: .byte 0
@@ -15,7 +15,6 @@ ui_wizard_display:
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
     bne !wiz_menu+
-    jsr ui_wizard_restore_gameplay_view
     lda #<wiz_confirm_str
     sta zp_ptr0
     lda #>wiz_confirm_str
@@ -605,7 +604,7 @@ wiz_t_str:
 wiz_w_str:
     .text "W) Wall walk" ; .byte 0
 wiz_footer_str:
-    .text "Q cancels" ; .byte 0
+    .text "Q to cancel" ; .byte 0
 #else
 wiz_title_str:
     .text "WIZARD MODE" ; .byte 0
@@ -616,9 +615,9 @@ wiz_row2_str:
 wiz_row3_str:
     .text "S summon  T tele      W wall" ; .byte 0
 wiz_row4_str:
-    .text "Q cancel" ; .byte 0
+    .text "Q to cancel" ; .byte 0
 wiz_footer_str:
-    .text "Press any key" ; .byte 0
+    .text "Q to cancel" ; .byte 0
 #endif
 wiz_max_level_str:
     .text "MAX" ; .byte 0

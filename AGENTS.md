@@ -13,11 +13,12 @@ This file provides foundational mandates and technical guidance for AI agents (G
 - Offload research, exploration, and parallel analysis to subagents
 - For complex problems, throw more compute at it via subagents
 - One tack per subagent for focused execution
-### 3. Self-Improvement Loop
-- After ANY correction from the user: update "tasks/lessons.md' with the pattern
-- Write rules for yourself that prevent the same mistake
-- Ruthlessly iterate on these lessons until mistake rate drops
-- Review lessons at session start for relevant project
+### 3. Regression-Prevention Loop
+- After any correction from the user, prefer a mechanical prevention step:
+  update the relevant test, static contract, build assertion, or task/review doc.
+- Do not rely on a free-form lessons file as protection against repeated mistakes.
+- For UI text corrections, verify the actual rendered/source path for each
+  platform and add a guard where practical.
 ### 4. Verification Before Done
 - Never mark a task complete without proving it works
 - Diff behavior between main and your changes when relevant
@@ -45,7 +46,8 @@ This file provides foundational mandates and technical guidance for AI agents (G
 3. **Track Progress**: Mark items complete as you go
 4. **Explain Changes**: High-level summary at each step
 5. **Document Results**: Add review section to 'tasks/todo.md"
-6. **Capture Lessons**: Update 'tasks/lessons.md' after corrections
+6. **Capture Prevention**: After corrections, update tests/static contracts or
+   the task review notes with the concrete prevention mechanism.
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.

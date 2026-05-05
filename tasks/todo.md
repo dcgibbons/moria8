@@ -42,6 +42,20 @@ both C128 and C64 boot/gameplay reached stable operation.
 
 ## Active Backlog
 
+- [x] `BUG-C128-WIZARD-CONFIRM-CLEAR`: first-time C128 wizard-mode entry
+      should print the `WIZARD? (Y/N)` confirmation as an ordinary gameplay
+      message, without clearing/redrawing the gameplay screen before the
+      prompt.
+  - [x] Remove the C128 UI-overlay restore call from the not-yet-wizard
+        confirmation path.
+  - [x] Align rendered wizard cancel strings to explicit wording: C128
+        `ui_wizard.s` footer uses `Q to cancel`; C64 `wizard.s` menu row and
+        footer both use `Q to cancel`.
+  - [x] Remove stale `Press any key` wizard-footer copy from the unused
+        `ui_wizard.s` C64 branch too, so wizard UI sources consistently use
+        `Q to cancel`.
+  - [x] Add a focused C128 static contract for prompt ordering.
+  - [x] Verify C128 build/tests after the UI-overlay change.
 - [x] `BUG-C64-DISK-IO-MODAL-CLEAR`: C64 disk I/O save/load swap prompts
       must clear the whole modal screen immediately after the user dismisses
       `Press any key`, so stale `Loading game...`, save/load prompts, or
@@ -200,6 +214,17 @@ both C128 and C64 boot/gameplay reached stable operation.
 
 ## Review Notes
 
+- 2026-05-04: `BUG-C128-WIZARD-CONFIRM-CLEAR` completed. Root cause: the C128
+  first-time wizard confirmation path called `ui_wizard_restore_gameplay_view`
+  before printing `WIZARD? (Y/N)`, forcing a full gameplay clear/redraw before
+  an ordinary message prompt. The confirm path now prints directly, and
+  C128 `ui_wizard.s` and the actual rendered C64 `wizard.s` menu row/footer
+  now use explicit wording, `Q to cancel`. `run_tests128.sh` guards the C128
+  overlay text and the remaining shared wizard strings, and `run_tests.sh`
+  guards both actual C64 wizard strings, so the obsolete `Q cancel`,
+  `Q cancels`, and wizard-footer `Press any key` wording cannot come back
+  through either path.
+  Verified with `make disk128`, `make test128-fast-smoke`, and `make disk64`.
 - 2026-05-04: `BUG-C64-DISK-IO-MODAL-CLEAR` completed. C64 one-drive
   save/load/game-disk prompts and Disk Setup insert/confirm/error modals now
   clear the full modal screen immediately after the user dismisses
