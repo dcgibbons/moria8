@@ -85,20 +85,10 @@ both C128 and C64 boot/gameplay reached stable operation.
   - [x] Preserve C128 modal-wrapper transition behavior.
   - [x] Verify C64 main ends below `$C000` with `make disk64`, then verify
         `make disk128` remains green.
-- [ ] `TEST-C128-BLANK-SAVE-DISK-SMOKE`: add a real C128 product-path blank
-      save-disk initialization smoke.
-  - [ ] Boot the product disk.
-  - [ ] Attach a blank drive-9 save disk.
-  - [ ] Drive Disk Setup through initialization.
-  - [ ] Verify the save image contains a valid sequential `MORIA8.ID` marker.
-  - [ ] Treat mocked `disk_swap128` coverage as diagnostic only, not closure
-        for the live disk transaction.
 - [ ] `BUILD-MAKEFILE-KICKASS-CLEANUP`: clean up Makefile target behavior so
       normal builds, forced rebuilds, and platform-directory invocations handle
       KickAssembler bootstrap consistently and do not send agents down the
       wrong diagnostic path.
-- [ ] `C64-TITLE-LOAD-SMOKE`: add dedicated disk-backed C64 title-load smoke
-      coverage for the real `L` path.
 - [ ] `FEAT-VMS-LOOK-SEMANTICS`: decide whether to keep the compact VMS-style
       baseline or fund a larger parity push later.
   - [ ] Add C128 unit/smoke coverage for shared `look` changes.
@@ -213,7 +203,6 @@ both C128 and C64 boot/gameplay reached stable operation.
       only if main-segment pressure returns.
 
 ## Review Notes
-
 - 2026-05-04: `BUG-C128-WIZARD-CONFIRM-CLEAR` completed. Root cause: the C128
   first-time wizard confirmation path called `ui_wizard_restore_gameplay_view`
   before printing `WIZARD? (Y/N)`, forcing a full gameplay clear/redraw before

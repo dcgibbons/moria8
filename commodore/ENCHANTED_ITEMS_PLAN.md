@@ -49,13 +49,14 @@ The following choices are fixed for this feature:
 
 ## Historical Required Sequencing
 
-The feature was planned to start only after the spell-test branch based on
-`commodore/SPELL_TEST_PLAN.md` landed.
+The feature was planned to start only after the completed spell-test baseline
+landed.
 
 Reason:
 
 - FEAT-ITEM-STATS directly overlaps the item-facing spell/prayer seams and their new tests.
-- If the spell-test branch is still moving, FEAT-ITEM-STATS will force duplicate expectation churn on:
+- While the spell-test baseline was still moving, FEAT-ITEM-STATS would have
+  forced duplicate expectation churn on:
   - `Identify`
   - `Remove Curse`
   - `Enchant Weapon`
@@ -63,9 +64,9 @@ Reason:
   - `Recharge Item I`
   - `Recharge Item II`
 
-Correct order:
+Correct historical order:
 
-1. land the spell-test branch
+1. land the spell-test baseline
 2. rebase FEAT-ITEM-STATS on that baseline
 3. update the affected item-facing spell/prayer expectations once
 
@@ -221,7 +222,7 @@ Most non-item spells are unaffected. The conflict surface is specifically the it
 
 Implement in this order:
 
-1. land the current spell-test branch
+1. start from the completed spell-test baseline
 2. add split item-instance fields for inventory, floor items, and stores
 3. update item copy/move/save/load seams so the new fields persist correctly
 4. update combat/equipment/enchant behavior to use the split fields
@@ -265,7 +266,8 @@ Add or update tests for:
 
 ### Spell/item overlap
 
-After the spell-test branch lands, update the affected spell/prayer tests so item-facing expectations match the new item model and description contract for:
+Update the affected spell/prayer tests so item-facing expectations match the
+new item model and description contract for:
 
 - `Identify`
 - `Remove Curse`

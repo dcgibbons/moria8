@@ -188,7 +188,8 @@ Most exposed categories:
 - mana/status redraw expectations
 - study visibility after learning/recalculation
 
-Examples of overlapping rows from [SPELL_TEST_PLAN.md](SPELL_TEST_PLAN.md):
+Examples of overlapping spell/prayer rows from the completed spell-test
+baseline:
 
 - `Cure Poison`
 - `Slow Poison`
@@ -205,8 +206,8 @@ What changes:
 
 Required sequencing:
 
-1. land the current spell-test branch first
-2. treat that branch as the baseline for spell mechanics and message contracts
+1. start from the completed spell-test baseline
+2. treat that baseline as the source of truth for spell mechanics and message contracts
 3. during the HUD redesign, update only the spell tests whose assertions include visible status/render expectations
 
 ## Verification Contract

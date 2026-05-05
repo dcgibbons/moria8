@@ -20,7 +20,6 @@
 
 | Priority | Item | Difficulty | Benefit | Needed Before C128 -> `main` Merge? | Notes |
 |---|---|---|---|---|---|
-| High | `TEST-C128-BLANK-SAVE-DISK-SMOKE` add a real C128 product-path blank save-disk initialization smoke | Medium | High | Yes | Boot the product disk, attach a blank drive-9 save disk, drive Disk Setup through initialization, and verify the save image contains a valid sequential `MORIA8.ID`. The `disk_swap128` unit is useful but cannot be the closure gate for live disk transactions. |
 | Medium | `OPT-STATUS-ROW23` split the bottom status row into field-level redraws | Medium | Medium | No | The current status renderer now redraws only dirty rows, but row 23 still clears and repaints `HP`, `MP`, `AC`, `AU`, and hunger/state as a unit. A later optimization pass should keep the forced full-repaint contract for screen/status clears while giving row 23 fixed-width field redraw helpers so single-field changes like mana ticks do not visibly flash the whole bottom row. |
 | Low | `OPT-OVERLAY-PRESSURE-RESERVE` further magic/spell/UI overlays only if memory pressure returns | High | Low | No | Conditional reserve item only; do not proactively move more product paths into overlays unless main-segment pressure returns. |
 
