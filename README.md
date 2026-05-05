@@ -1,29 +1,83 @@
-# Moria8 for the Commodore 64 and 128
+# Moria8
 
-This is a port of the rogue-like game Moria8 for the Commodore 64 and 128
-platforms.
+Moria8 is a Commodore 64 and Commodore 128 port of the classic roguelike
+Moria, based on the Umoria code line. The game is written in 6502 assembly and
+built with Kick Assembler.
 
-This game is written entirely in 6502 assembly language using the Kick
-Assembler suite of tools.
+The port targets real hardware and VICE. Gameplay uses PETSCII character
+display; the loading and title paths use platform-specific assets for each
+machine.
 
-Source code is organized into a number of small modules specific to a single
-purpose to keep program structure clean and well organized. The main.s file
-represents the main program file.
+## Targets
 
-The program utilizes a BASIC stub program that runs the machine code that
-follows it directly to ensure easy loading from disk. A cartridge version of the
-program is also available.
+- Commodore 64: 40-column VIC-II display, `.d64` disk image.
+- Commodore 128: 40/80-column capable runtime, VDC support, `.d71` disk image.
 
-Gameplay uses PETSCII character display only. The shipped boot/loading art uses
-platform-specific pre-title assets: a bitmap boot-art image on C64 and a custom-
-charset poster helper on C128.
+The C64 target is the constrained baseline. The C128 target shares gameplay
+logic where practical and uses C128-specific boot, MMU, VDC, and loader code.
 
-This game is based upon the umoria version of the Moria game (which was
-originally written in PASCAL for the VAX/VMS plataform). The source code for the
-umoria project can be found at https://github.com/dungeons-of-moria/umoria and
-the source code for the original VMS version in PASCAL is found at
-https://github.com/dungeons-of-moria/vms-moria
+## Requirements
 
-Unlike the original Moria / umoria implementation, the C64 only has a 40 column
-display so the game will target that screen resolution. On the C128, the game
-can run in either 40 column or 80 column mode and it should be selectable.
+- `make`
+- Java, for Kick Assembler
+- VICE (`x64sc`, `x128`, and `c1541`)
+- Python 3 for build and test helper scripts
+
+Kick Assembler is downloaded into `tools/kickass/` by the makefiles on first
+use. To use an existing jar, pass `KICKASS=/path/to/KickAss.jar`.
+
+VICE tool paths can be overridden through make variables when needed, for
+example `make run VICE=/path/to/x64sc`.
+
+## Build
+
+```sh
+make
+make build
+make disk
+make disk64
+make disk128
+```
+
+Disk images are emitted under `commodore/out/`:
+
+- `commodore/out/moria8-c64.d64`
+- `commodore/out/moria8-c128.d71`
+
+## Run
+
+```sh
+make run
+make run64
+make run128
+```
+
+`make run` and `make run64` launch the C64 disk. `make run128` launches the
+C128 disk.
+
+## Test
+
+```sh
+make test
+make test128-fast
+make test128-fast-smoke
+make test128
+```
+
+`make test` runs the default regression mix. `make test128-fast` is the fast
+C128 unit batch, `make test128-fast-smoke` covers high-value C128 runtime boot
+and town paths, and `make test128` is the broader C128 shell harness.
+
+## Documentation
+
+- [Design Reference](docs/DESIGN.md)
+- [Architecture Reference](docs/ARCHITECTURE.md)
+- [Internal Mandates](docs/INTERNAL_MANDATES.md)
+- [Release Checklist](docs/RELEASE_CHECKLIST.md)
+
+## Current Launch State
+
+This repository is a buildable source snapshot of an in-progress port. The core
+build, disk, boot, and regression harnesses are maintained, but gameplay parity
+with Umoria is not complete. Known deferred areas include monster recall depth,
+some original content breadth, and long-term polish work.

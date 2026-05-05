@@ -10,10 +10,12 @@ commodore/*/out/
 
 # Disk images
 *.d64
+*.d71
 *.d81
 
 # VICE state
 *.vsf
+**/monitor.log
 
 # KickAssembler (auto-downloaded by make)
 tools/kickass/
@@ -25,3 +27,6 @@ __pycache__/
 *~
 *.swp
 .aider*
+
+# Local assistant/editor state
+.claude/
