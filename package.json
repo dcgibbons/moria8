@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "lint:docs": "markdownlint-cli2 README.md docs/MANUAL.md docs/SPELLS.md docs/MONSTERS.md docs/PLAYER_GUIDE.md"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "^0.22.1"
+  }
+}

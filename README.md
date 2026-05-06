@@ -56,7 +56,7 @@ make disk64
 make disk128
 ```
 
-`make` and `make build` will build the entire project for all platforms. 
+`make` and `make build` will build the entire project for all platforms.
 `make disk64` and `make disk128` will build the disk images for c64 and c128,
 respectively.
 
@@ -91,6 +91,10 @@ and town paths, and `make test128` is the broader C128 shell harness.
 
 ## Documentation
 
+- [Player Manual](docs/MANUAL.md)
+- [Monster Reference](docs/MONSTERS.md)
+- [Spell And Prayer Reference](docs/SPELLS.md)
+- [Player Guide](docs/PLAYER_GUIDE.md)
 - [Development Process](docs/DEVELOPMENT_PROCESS.md)
 - [Design Reference](docs/DESIGN.md)
 - [Architecture Reference](docs/ARCHITECTURE.md)

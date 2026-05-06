@@ -23,6 +23,9 @@ tools/kickass/
 # Python cache
 __pycache__/
 
+# Node tooling
+node_modules/
+
 # Editor backups
 *~
 *.swp
