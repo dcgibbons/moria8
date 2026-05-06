@@ -44,7 +44,7 @@ def load_versions():
     if not isinstance(raw, dict):
         raise ValueError("version.json must be a JSON object")
     versions = {}
-    for platform in ("c64", "c128"):
+    for platform in ("c64", "c128", "plus4"):
         value = raw.get(platform)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"version.json missing string version for {platform}")
@@ -90,8 +90,8 @@ def main():
         sys.exit(1)
 
     platform = sys.argv[2].lower()
-    if platform not in ("c64", "c128"):
-        print(f"Unknown platform '{platform}' (expected c64 or c128)")
+    if platform not in ("c64", "c128", "plus4"):
+        print(f"Unknown platform '{platform}' (expected c64, c128, or plus4)")
         sys.exit(1)
 
     versions = load_versions()

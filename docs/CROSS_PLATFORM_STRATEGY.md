@@ -84,7 +84,22 @@ Moria8 uses architectural tiers based on available address space and memory spee
 * **128K+ 8-bit (Apple IIe, IIgs, CX16, BBC Master 128):** All game overlays and
   tier data are pre-loaded into extended/paged memory.
 
-## 5. Current Codebase Assessment & Next Steps
+## 5. Plus/4 Release Track
+
+The Plus/4 port is being implemented pragmatically in the current Commodore
+tree rather than waiting for the future `core/`/`platforms/` migration.
+
+* Source lives under `commodore/plus4/` and reuses `commodore/common/` plus the
+  C64 40-column gameplay layout.
+* The release target is stock 64K Plus/4 with a 1551-class drive path. The disk
+  artifact is still a 35-track D64 image because the 1551 uses the same CBM DOS
+  disk geometry family.
+* TED owns screen, color/attribute, sound, and ROM/RAM switching. C64 VIC-II,
+  SID, CIA, REU, and `$01` banking assumptions must not leak into Plus/4 code.
+* Plus/4 uses disk-loaded overlays like C64, but its low memory screen/attribute
+  ownership moves the main-map window upward for this target.
+
+## 6. Current Codebase Assessment & Next Steps
 
 Moria8 is currently well-positioned because the 8-bit logic is increasingly platform-agnostic.
 

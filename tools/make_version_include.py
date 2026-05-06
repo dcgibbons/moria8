@@ -8,12 +8,12 @@ import sys
 from pathlib import Path
 
 
-def load_versions(path: Path) -> tuple[str, str]:
+def load_versions(path: Path) -> tuple[str, str, str]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("version.json must be a JSON object")
     values: list[str] = []
-    for platform in ("c64", "c128"):
+    for platform in ("c64", "c128", "plus4"):
         value = raw.get(platform)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"version.json missing string version for {platform}")
@@ -21,15 +21,20 @@ def load_versions(path: Path) -> tuple[str, str]:
         if not version.lower().startswith("v"):
             version = f"v{version}"
         values.append(version)
-    return values[0], values[1]
+    return values[0], values[1], values[2]
 
 
-def emit_include(dst: Path, c64_version: str, c128_version: str) -> None:
+def emit_include(dst: Path, c64_version: str, c128_version: str, plus4_version: str) -> None:
     text = f"""// Auto-generated from version.json. Do not edit by hand.
 #if C128
 .const TITLE_VERSION_LEN = {len(c128_version)}
 .macro EmitTitleVersion() {{
     .text "{c128_version}"
+}}
+#elif PLUS4
+.const TITLE_VERSION_LEN = {len(plus4_version)}
+.macro EmitTitleVersion() {{
+    .text "{plus4_version}"
 }}
 #else
 .const TITLE_VERSION_LEN = {len(c64_version)}
@@ -47,8 +52,8 @@ def main() -> int:
         return 1
     version_path = Path(sys.argv[1])
     out_path = Path(sys.argv[2])
-    c64_version, c128_version = load_versions(version_path)
-    emit_include(out_path, c64_version, c128_version)
+    c64_version, c128_version, plus4_version = load_versions(version_path)
+    emit_include(out_path, c64_version, c128_version, plus4_version)
     return 0
 
 

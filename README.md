@@ -1,8 +1,8 @@
 # Moria8
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
-written in platform-specific assembly. Current releases target the Commodore 64
-and Commodore 128, with additional 8-bit ports planned.
+written in platform-specific assembly. Current releases target the Commodore 64,
+Commodore 128, and Commodore Plus/4, with additional 8-bit ports planned.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -12,7 +12,7 @@ and Commodore 128, with additional 8-bit ports planned.
 | -------- | ------ | -------- |
 | Commodore 64 (C64) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c64.d64) |
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c128.d71) |
-| Commodore Plus/4 | Planned | |
+| Commodore Plus/4 | In development | |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
@@ -38,7 +38,7 @@ details on upcoming ports.
 - macOS or Linux host
 - `make`
 - Java, for Kick Assembler
-- VICE (`x64sc`, `x128`, and `c1541`)
+- VICE (`x64sc`, `x128`, `xplus4`, and `c1541`)
 - Python 3 for build and test helper scripts
 
 Kick Assembler is downloaded into `tools/kickass/` by the makefiles on first
@@ -54,16 +54,18 @@ make
 make build
 make disk64
 make disk128
+make diskplus4
 ```
 
 `make` and `make build` will build the entire project for all platforms.
-`make disk64` and `make disk128` will build the disk images for c64 and c128,
-respectively.
+`make disk64`, `make disk128`, and `make diskplus4` build the individual disk
+images.
 
 Disk images are emitted under `commodore/out/`:
 
 - `commodore/out/moria8-c64.d64`
 - `commodore/out/moria8-c128.d71`
+- `commodore/out/moria8-plus4.d64`
 
 ### Run
 
@@ -71,10 +73,12 @@ Disk images are emitted under `commodore/out/`:
 make run
 make run64
 make run128
+make runplus4
 ```
 
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
-C128 disk.
+C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with drive 8
+configured as a 1551.
 
 ### Test
 
@@ -83,6 +87,7 @@ make test
 make test128-fast
 make test128-fast-smoke
 make test128
+make testplus4
 ```
 
 `make test` runs the default regression mix. `make test128-fast` is the fast

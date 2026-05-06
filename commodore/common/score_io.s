@@ -228,18 +228,30 @@ hiscore_save:
 // ============================================================
 hi_read_fname:
     .byte $30, $3a              // "0:"
+#if PLUS4
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
+#else
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
+#endif
     .byte $2c, $53, $2c, $52   // ",S,R"
 .label hi_read_fname_len = * - hi_read_fname
 
 hi_write_fname:
     .byte $40                   // "@"
     .byte $30, $3a              // "0:"
+#if PLUS4
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
+#else
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
+#endif
     .byte $2c, $53, $2c, $57   // ",S,W"
 .label hi_write_fname_len = * - hi_write_fname
 
 hi_scratch_cmd:
     .byte $53, $30, $3a         // "S0:"
+#if PLUS4
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
+#else
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
+#endif
 .label hi_scratch_len = * - hi_scratch_cmd

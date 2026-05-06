@@ -35,11 +35,13 @@ JAVA        ?= java
 C1541       ?= c1541
 VICE64      ?= x64sc
 VICE128     ?= x128
+VICEPLUS4   ?= xplus4
 
 # ── Output layout ─────────────────────────────────────────
 OUT         ?= out
 OUT64        = $(OUT)/c64
 OUT128       = $(OUT)/c128
+OUTPLUS4     = $(OUT)/plus4
 
 # ── Shared tooling ────────────────────────────────────────
 DISKART      = ../tools/diskart.py
@@ -50,8 +52,10 @@ LICENSE_FILE = ../LICENSE
 SOURCE_NOTICE = $(OUT)/SOURCE.txt
 RUN_FLAGS64  = -autostartprgmode 1 -sound -sounddev coreaudio
 RUN_FLAGS128 = -80col -sound -sounddev coreaudio
+RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound -sounddev coreaudio
 KA_FLAGS     = -showmem -vicesymbols
 KA_FLAGS64   = $(KA_FLAGS) -libdir c64
+KA_FLAGSPLUS4 = $(KA_FLAGS) -libdir c64 -define PLUS4
 DEBUG_FEAT_DISK_TRACE ?= 0
 ifeq ($(DEBUG_FEAT_DISK_TRACE),1)
 KA_FLAGS64   += -define DEBUG_FEAT_DISK_TRACE
@@ -77,6 +81,9 @@ C128_BOOTART_PNG   = ../artwork/moria8_C128loadingart_tile_native.png
 C128_BOOTART_PPM   = $(OUT128)/bootart128.ppm
 C128_BOOTART_TOOL  = ../tools/ppm_to_c128_bootart.py
 C128_BOOTART_SRC_TOOL = ../tools/png_to_ppm.py
+PLUS4_BOOTART_PNG  = ../artwork/moria8_loading_art_c64.png
+PLUS4_BOOTART_PPM  = $(OUTPLUS4)/bootart4.ppm
+PLUS4_BOOTART_TOOL = ../tools/ppm_to_plus4_bootart.py
 C128_MAIN_SRC      = c128/main.s
 C128_BOOT_SRC      = c128/boot128.s
 C128_BOOTSECT_SRC  = c128/bootsect128.s
@@ -84,9 +91,12 @@ C128_CHARSET_DEMO_SRC = c128/vdc_charset_poster_demo.s
 C128_BOOTART_SRC   = c128/bootart128.s
 TITLE_SRC          = common/title_data.s
 C64_TIER_DIR       = c64/creature_data
+PLUS4_MAIN_SRC     = plus4/main.s
+PLUS4_BOOT_SRC     = plus4/boot.s
 
 C64_SOURCES        := $(shell find c64 common -type f -name '*.s')
 C128_SOURCES       := $(shell find c128 common c64 -type f -name '*.s')
+PLUS4_SOURCES      := $(shell find plus4 common -type f -name '*.s')
 
 # ── C64 artifacts ─────────────────────────────────────────
 C64_MAIN_PRG       = $(OUT64)/moria8.prg
@@ -103,6 +113,22 @@ C64_OVL_UI         = $(OUT64)/ovl.ui
 C64_OVL_ITEMS      = $(OUT64)/ovl.items
 C64_OVL_SPELL      = $(OUT64)/ovl.spell
 C64_RUNTIME_BANKED = $(OUT64)/64.bank
+
+# ── Plus/4 artifacts ──────────────────────────────────────
+PLUS4_MAIN_PRG       = $(OUTPLUS4)/moria4.prg
+PLUS4_BOOT_PRG       = $(OUTPLUS4)/boot4.prg
+PLUS4_BOOTART_PRG    = $(OUTPLUS4)/bootart4.prg
+PLUS4_TITLE_PRG      = $(OUTPLUS4)/title
+PLUS4_TIER_PRGS      = $(OUTPLUS4)/monster.db.1 $(OUTPLUS4)/monster.db.2 $(OUTPLUS4)/monster.db.3 $(OUTPLUS4)/monster.db.4
+PLUS4_OVL_START      = $(OUTPLUS4)/ovl.start
+PLUS4_OVL_TOWN       = $(OUTPLUS4)/ovl.town
+PLUS4_OVL_DEATH      = $(OUTPLUS4)/ovl.death
+PLUS4_OVL_GEN        = $(OUTPLUS4)/ovl.gen
+PLUS4_OVL_HELP       = $(OUTPLUS4)/ovl.help
+PLUS4_OVL_UI         = $(OUTPLUS4)/ovl.ui
+PLUS4_OVL_ITEMS      = $(OUTPLUS4)/ovl.items
+PLUS4_OVL_SPELL      = $(OUTPLUS4)/ovl.spell
+PLUS4_RUNTIME_BANKED = $(OUTPLUS4)/4.bank
 
 # ── C128 artifacts ────────────────────────────────────────
 C128_MAIN_PRG      = $(OUT128)/moria128.prg
@@ -141,14 +167,19 @@ C128_BOOTART_PREVIEW_PPM = $(OUT128)/bootart128_preview.ppm
 # ── Disk artifacts ────────────────────────────────────────
 DISK64_IMAGE       = $(OUT)/moria8-c64.d64
 DISK128_IMAGE      = $(OUT)/moria8-c128.d71
+DISKPLUS4_IMAGE    = $(OUT)/moria8-plus4.d64
 EMPTY_PRG          = $(OUT)/empty.prg
 DISK64_LABEL       = "moria8 c64,m8"
 DISK128_LABEL      = "moria8 c128,m8"
+DISKPLUS4_LABEL    = "moria8 plus4,m8"
 
 # ── Aggregate groups ──────────────────────────────────────
 C64_BUILD_ARTIFACTS  = $(C64_MAIN_PRG) $(C64_BOOT_PRG) $(C64_BOOTART_PRG) $(C64_TITLE_PRG) $(C64_TIER_PRGS) \
 	$(C64_OVL_START) $(C64_OVL_TOWN) $(C64_OVL_DEATH) $(C64_OVL_GEN) $(C64_OVL_HELP) $(C64_OVL_UI) $(C64_OVL_ITEMS) $(C64_OVL_SPELL) \
 	$(C64_RUNTIME_BANKED)
+PLUS4_BUILD_ARTIFACTS  = $(PLUS4_MAIN_PRG) $(PLUS4_BOOT_PRG) $(PLUS4_BOOTART_PRG) $(PLUS4_TITLE_PRG) $(PLUS4_TIER_PRGS) \
+	$(PLUS4_OVL_START) $(PLUS4_OVL_TOWN) $(PLUS4_OVL_DEATH) $(PLUS4_OVL_GEN) $(PLUS4_OVL_HELP) $(PLUS4_OVL_UI) $(PLUS4_OVL_ITEMS) $(PLUS4_OVL_SPELL) \
+	$(PLUS4_RUNTIME_BANKED)
 C128_BUILD_ARTIFACTS = $(C128_MAIN_PRG) $(C128_BOOT_PRG) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) \
 	$(C128_BOOTART_DIAG_PRG) \
 	$(C128_TITLE_PRG) $(C128_TIER_PRGS) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_OVL_DEATH) \
@@ -160,14 +191,14 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
-.PHONY: all build build64 build128 disk disk64 disk128 run run64 run128 \
+.PHONY: all build build64 build128 buildplus4 disk disk64 disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
-	test test64 test128 test128-fast test128-fast-smoke clean \
+	test test64 test128 test128-fast test128-fast-smoke testplus4 clean \
 	check-zp check-6502-lint ensure-kickass kickass
 
 all: build
 
-build: build64 build128
+build: build64 build128 buildplus4
 
 build64: $(C64_BUILD_ARTIFACTS)
 	mkdir -p c64/out
@@ -177,11 +208,17 @@ build128: $(C128_BUILD_ARTIFACTS)
 	mkdir -p c128/out
 	cp -f $(OUT128)/* c128/out/
 
-disk: $(DISK64_IMAGE) $(DISK128_IMAGE)
+buildplus4: $(PLUS4_BUILD_ARTIFACTS)
+	mkdir -p plus4/out
+	cp -f $(OUTPLUS4)/* plus4/out/
+
+disk: $(DISK64_IMAGE) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
 
 disk64: $(DISK64_IMAGE)
 
 disk128: $(DISK128_IMAGE)
+
+diskplus4: $(DISKPLUS4_IMAGE)
 
 run: $(DISK64_IMAGE)
 	$(VICE64) -drive8truedrive -drive8type 1541 +busdevice8 $(RUN_FLAGS64) -autostart $(DISK64_IMAGE)
@@ -191,9 +228,12 @@ run64: run
 run128: $(DISK128_IMAGE)
 	$(VICE128) -drive8truedrive -drive8type 1571 +busdevice8 $(RUN_FLAGS128) $(DISK128_IMAGE)
 
+runplus4: $(DISKPLUS4_IMAGE)
+	$(VICEPLUS4) -drive8truedrive -drive8type 1551 $(RUN_FLAGSPLUS4) -autostart $(DISKPLUS4_IMAGE)
+
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 
-test: test64 test128-fast test128-fast-smoke
+test: test64 test128-fast test128-fast-smoke testplus4
 
 test64: ensure-kickass
 	cd c64 && KICKASS="$(KICKASS_RESOLVED)" ./run_tests.sh
@@ -206,6 +246,9 @@ test128-fast: ensure-kickass
 
 test128-fast-smoke: ensure-kickass
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
+
+testplus4: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
+	@echo "Plus/4 build artifacts assembled; runtime gate is make runplus4 under xplus4/1551."
 
 check-zp:
 	python3 ../tools/check_zp_usage.py
@@ -265,6 +308,53 @@ $(OUT64)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ens
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier3_prg.s -o $@
 
 $(OUT64)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUT64)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier4_prg.s -o $@
+
+# ── Plus/4 build rules ────────────────────────────────────
+$(PLUS4_MAIN_PRG): $(PLUS4_SOURCES) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(PLUS4_MAIN_SRC) $(KA_FLAGSPLUS4) -o $(PLUS4_MAIN_PRG)
+	mv -f plus4/out/ovl.start $(PLUS4_OVL_START)
+	mv -f plus4/out/ovl.town $(PLUS4_OVL_TOWN)
+	mv -f plus4/out/ovl.death $(PLUS4_OVL_DEATH)
+	mv -f plus4/out/ovl.gen $(PLUS4_OVL_GEN)
+	mv -f plus4/out/ovl.help $(PLUS4_OVL_HELP)
+	mv -f plus4/out/ovl.ui $(PLUS4_OVL_UI)
+	mv -f plus4/out/ovl.items $(PLUS4_OVL_ITEMS)
+	mv -f plus4/out/ovl.spell $(PLUS4_OVL_SPELL)
+	mv -f plus4/out/4.bank $(PLUS4_RUNTIME_BANKED)
+
+$(PLUS4_OVL_START): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_TOWN): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_DEATH): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_GEN): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_HELP): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_UI): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_ITEMS): $(PLUS4_MAIN_PRG)
+$(PLUS4_OVL_SPELL): $(PLUS4_MAIN_PRG)
+$(PLUS4_RUNTIME_BANKED): $(PLUS4_MAIN_PRG)
+
+$(PLUS4_BOOT_PRG): $(PLUS4_SOURCES) | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(PLUS4_BOOT_SRC) $(KA_FLAGSPLUS4) -o $(PLUS4_BOOT_PRG)
+
+$(PLUS4_BOOTART_PPM): $(PLUS4_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUTPLUS4)
+	python3 $(C64_BOOTART_SRC_TOOL) $(PLUS4_BOOTART_PNG) 160 200 $@
+
+$(PLUS4_BOOTART_PRG): $(PLUS4_BOOTART_PPM) $(PLUS4_BOOTART_TOOL) | $(OUTPLUS4)
+	python3 $(PLUS4_BOOTART_TOOL) $(PLUS4_BOOTART_PPM) $(PLUS4_BOOTART_PRG)
+
+$(PLUS4_TITLE_PRG): $(TITLE_SRC) $(VERSION_INC) | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(TITLE_SRC) -define PLUS4 -o $(PLUS4_TITLE_PRG)
+
+$(OUTPLUS4)/monster.db.1: $(C64_TIER_DIR)/tier1_prg.s $(C64_TIER_DIR)/tier1.s | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier1_prg.s -o $@
+
+$(OUTPLUS4)/monster.db.2: $(C64_TIER_DIR)/tier2_prg.s $(C64_TIER_DIR)/tier2.s | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier2_prg.s -o $@
+
+$(OUTPLUS4)/monster.db.3: $(C64_TIER_DIR)/tier3_prg.s $(C64_TIER_DIR)/tier3.s | ensure-kickass $(OUTPLUS4)
+	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier3_prg.s -o $@
+
+$(OUTPLUS4)/monster.db.4: $(C64_TIER_DIR)/tier4_prg.s $(C64_TIER_DIR)/tier4.s | ensure-kickass $(OUTPLUS4)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_TIER_DIR)/tier4_prg.s -o $@
 
 # ── C128 build rules ──────────────────────────────────────
@@ -373,6 +463,41 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FIL
 	cp -f $(DISK64_IMAGE) c64/out/moria8-c64.d64
 	rm -f $(EMPTY_PRG)
 
+$(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_NOTICE) | $(OUT)
+	printf '\x01\x08' > $(EMPTY_PRG)
+	rm -f $(DISKPLUS4_IMAGE)
+	$(C1541) -format $(DISKPLUS4_LABEL) d64 $(DISKPLUS4_IMAGE) \
+		-attach $(DISKPLUS4_IMAGE) \
+		-write $(EMPTY_PRG) "art1" \
+		-write $(EMPTY_PRG) "art2" \
+		-write $(EMPTY_PRG) "art3" \
+		-write $(EMPTY_PRG) "art4" \
+		-write $(EMPTY_PRG) "art5" \
+		-write $(PLUS4_BOOT_PRG) "moria8" \
+		-write $(PLUS4_BOOT_PRG) "boot4" \
+		-write $(PLUS4_BOOTART_PRG) "bootart4" \
+		-write $(PLUS4_MAIN_PRG) "moria4" \
+		-write $(PLUS4_TITLE_PRG) "t64" \
+		-write $(OUTPLUS4)/monster.db.1 "monster.db.1" \
+		-write $(OUTPLUS4)/monster.db.2 "monster.db.2" \
+		-write $(OUTPLUS4)/monster.db.3 "monster.db.3" \
+		-write $(OUTPLUS4)/monster.db.4 "monster.db.4" \
+		-write $(PLUS4_OVL_START) "4.start" \
+		-write $(PLUS4_OVL_TOWN) "4.town" \
+		-write $(PLUS4_OVL_DEATH) "4.death" \
+		-write $(PLUS4_OVL_GEN) "4.gen" \
+		-write $(PLUS4_OVL_HELP) "4.help" \
+		-write $(PLUS4_OVL_UI) "4.ui" \
+		-write $(PLUS4_OVL_ITEMS) "4.items" \
+		-write $(PLUS4_OVL_SPELL) "4.spell" \
+		-write $(PLUS4_RUNTIME_BANKED) "4.bank" \
+		-write $(LICENSE_FILE) "license,s" \
+		-write $(SOURCE_NOTICE) "source,s"
+	python3 $(DISKART) $(DISKPLUS4_IMAGE) plus4
+	mkdir -p plus4/out
+	cp -f $(DISKPLUS4_IMAGE) plus4/out/moria8-plus4.d64
+	rm -f $(EMPTY_PRG)
+
 $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_NOTICE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK128_IMAGE)
@@ -445,8 +570,11 @@ $(OUT64):
 $(OUT128):
 	mkdir -p $(OUT128)
 
+$(OUTPLUS4):
+	mkdir -p $(OUTPLUS4)
+
 clean:
 	rm -rf $(OUT)
-	rm -rf c64/out c128/out
+	rm -rf c64/out c128/out plus4/out
 	rm -f c64/tests/*.prg c64/tests/*.vs c64/tests/*.sym
 	rm -f /tmp/test_*.mon

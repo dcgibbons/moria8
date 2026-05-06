@@ -17,6 +17,9 @@
 #if C128
 .const SAVE_VERSION    = $10
 .const OLDEST_SAVE_VERSION = SAVE_VERSION
+#elif PLUS4
+.const SAVE_VERSION    = $01
+.const OLDEST_SAVE_VERSION = SAVE_VERSION
 #else
 .const SAVE_VERSION    = $0f
 .const OLDEST_SAVE_VERSION = SAVE_VERSION
@@ -106,7 +109,11 @@ rle_lit_buf:    .fill 128, 0
 // Use raw byte values to avoid screencode encoding.
 save_replace_filename:
     .byte $40, $30, $3a     // "@0:"
+#if PLUS4
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
+#else
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
+#endif
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
 .label save_replace_filename_len = * - save_replace_filename
 .label save_filename = save_replace_filename + 1
@@ -114,12 +121,20 @@ save_replace_filename:
 
 load_filename:
     .byte $30, $3a          // "0:"
+#if PLUS4
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
+#else
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
+#endif
     .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
 .label load_filename_len = * - load_filename
 
 save_magic:
+#if PLUS4
+    .byte $4d, $4f, $52, $49, $41, $2b, $34  // "MORIA+4"
+#else
     .byte $4d, $4f, $52, $49, $41, $30, $31  // "MORIA01"
+#endif
     .byte SAVE_VERSION                          // Version byte
 .assert "Magic is 8 bytes", * - save_magic, SAVE_MAGIC_SIZE
 

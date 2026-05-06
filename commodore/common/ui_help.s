@@ -52,7 +52,11 @@
 .const BOX_BL = $2b  // +
 .const BOX_BR = $2b  // +
 .const BOX_H  = $2d  // -
+#if PLUS4
+.const BOX_V  = $5d  // TED locked charset side rule
+#else
 .const BOX_V  = $21  // !
+#endif
 
 // ============================================================
 // Subroutines
@@ -251,10 +255,17 @@ help_draw_line:
     inc zp_temp0
     jmp !hdl_loop-
 #else
-    // C64/VIC-II: direct screen/color RAM stores.
+    // C64/VIC-II and Plus/4/TED: direct screen/color RAM stores.
     ldy #0
     sta (zp_screen_lo),y
+#if PLUS4
     lda zp_text_color
+    and #$0f
+    tax
+    lda plus4_color_attr,x
+#else
+    lda zp_text_color
+#endif
     sta (zp_color_lo),y
     inc zp_screen_lo
     bne !+

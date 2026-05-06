@@ -456,9 +456,11 @@ c64_copy_tier_names_to_pool:
     lda #>C64_TIER_NAME_POOL_BASE
     sta zp_ptr1_hi
 
-    // Hide I/O so writes to $D000-$D7FF reach RAM, not registers.
+    // C64 only: hide I/O so writes to $D000-$D7FF reach RAM, not registers.
+#if !PLUS4
     lda #BANK_ALL_RAM
     sta $01
+#endif
 
     ldy #0
 !ctnp_copy_loop:

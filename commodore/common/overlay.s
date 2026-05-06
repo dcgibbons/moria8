@@ -72,6 +72,11 @@ overlay_load:
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_entry_target
 #endif
+#elif PLUS4
+    // Plus/4 shares $E000 between overlays, tier staging, and KERNAL-loaded
+    // assets. Until the port has a stronger ownership guard, prefer a fresh
+    // 1551 reload over trusting stale overlay state.
+    sta ol_target
 #else
     cmp current_overlay
     beq !ol_skip+           // Already loaded — skip
@@ -398,6 +403,32 @@ overlay_fetch_reu:
 // Overlay filename data (PETSCII for KERNAL — NOT screen codes)
 // ============================================================
 #if !C128
+#if PLUS4
+ovl_fn_start: .byte $34,$2e,$53,$54,$41,$52,$54                  // "4.START"
+ovl_fn_start_end:
+.byte 0
+ovl_fn_town:  .byte $34,$2e,$54,$4f,$57,$4e                      // "4.TOWN"
+ovl_fn_town_end:
+.byte 0
+ovl_fn_death: .byte $34,$2e,$44,$45,$41,$54,$48                  // "4.DEATH"
+ovl_fn_death_end:
+.byte 0
+ovl_fn_gen:   .byte $34,$2e,$47,$45,$4e                          // "4.GEN"
+ovl_fn_gen_end:
+.byte 0
+ovl_fn_help:  .byte $34,$2e,$48,$45,$4c,$50                      // "4.HELP"
+ovl_fn_help_end:
+.byte 0
+ovl_fn_ui:    .byte $34,$2e,$55,$49                              // "4.UI"
+ovl_fn_ui_end:
+.byte 0
+ovl_fn_items: .byte $34,$2e,$49,$54,$45,$4d,$53                  // "4.ITEMS"
+ovl_fn_items_end:
+.byte 0
+ovl_fn_spell: .byte $34,$2e,$53,$50,$45,$4c,$4c                  // "4.SPELL"
+ovl_fn_spell_end:
+.byte 0
+#else
 ovl_fn_start: .byte $36,$34,$2e,$53,$54,$41,$52,$54              // "64.START"
 ovl_fn_start_end:
 .byte 0
@@ -422,6 +453,7 @@ ovl_fn_items_end:
 ovl_fn_spell: .byte $36,$34,$2e,$53,$50,$45,$4c,$4c              // "64.SPELL"
 ovl_fn_spell_end:
 .byte 0
+#endif
 
 ovl_fn_addr_lo:
     .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items, <ovl_fn_spell

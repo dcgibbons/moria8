@@ -10,10 +10,17 @@
 // State stored in zp_rng_0..zp_rng_3 (4 bytes, ZP for speed).
 
 // CIA Timer A registers (free-running, read for entropy)
+#if PLUS4
+.const CIA1_TIMER_A_LO = $ff02
+.const CIA1_TIMER_A_HI = $ff03
+.const CIA2_TIMER_A_LO = $ff04
+.const CIA2_TIMER_A_HI = $ff05
+#else
 .const CIA1_TIMER_A_LO = $dc04
 .const CIA1_TIMER_A_HI = $dc05
 .const CIA2_TIMER_A_LO = $dd04
 .const CIA2_TIMER_A_HI = $dd05
+#endif
 
 // Galois LFSR feedback polynomial
 .const LFSR_POLY = $ed

@@ -28,19 +28,31 @@ disk_prompt_device:.byte 8
 
 // PETSCII command bytes / marker file contents
 disk_init_cmd:     .byte $49, $30      // "I0"
+#if PLUS4
+disk_marker_magic: .byte $4d, $38, $50, $34, $53, $56  // "M8P4SV"
+#else
 disk_marker_magic: .byte $4d, $38, $53, $41, $56, $45  // "M8SAVE"
+#endif
 .const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
 
 disk_marker_read_fname:
     .byte $30, $3a                      // "0:"
+#if PLUS4
+    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
+#else
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
+#endif
     .byte $2c, $53, $2c, $52            // ",S,R"
 .label disk_marker_read_fname_len = * - disk_marker_read_fname
 
 disk_marker_write_fname:
     .byte $40                           // "@"
     .byte $30, $3a                      // "0:"
+#if PLUS4
+    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
+#else
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
+#endif
     .byte $2c, $53, $2c, $57            // ",S,W"
 .label disk_marker_write_fname_len = * - disk_marker_write_fname
 
