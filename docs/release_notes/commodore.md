@@ -86,6 +86,8 @@ This matrix summarizes broad player-visible capability areas for the initial
 Commodore release. It is not a command-by-command or data-by-data parity claim
 against VMS Moria or Umoria.
 
+<!-- markdownlint-disable MD013 -->
+
 | Feature Area | C64 | C128 | Notes |
 | ------------ | --- | ---- | ----- |
 | Bootable disk image | Yes | Yes | C64 ships as `.d64`; C128 ships as `.d71`. |
@@ -105,3 +107,5 @@ against VMS Moria or Umoria.
 | 40-column display | Yes | No | C64 PETSCII display path. |
 | 80-column display | No | Yes | C128 VDC display path. |
 | REU-assisted loading | Yes | Not applicable | C64 can use REU-backed creature tier loading; C128 uses its own banked memory model. |
+
+<!-- markdownlint-enable MD013 -->

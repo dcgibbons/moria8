@@ -2,9 +2,9 @@
 
 Moria8 adapts Umoria to machines with far less directly usable memory and a
 different display model than the original 80-column terminal game. The C64
-target defines the tightest budget; the C128 target adds banked memory, 80-column
-VDC rendering, and a more involved boot/load model while preserving shared game
-logic where practical.
+target defines the tightest budget; the C128 target adds banked memory,
+80-column VDC rendering, and a more involved boot/load model while preserving
+shared game logic where practical.
 
 ## Core Constraints
 
@@ -21,14 +21,14 @@ respect 40-column-era text and layout constraints where shared code is used.
 ## C64 Memory Budget
 
 | Region | Address | Use |
-|---|---:|---|
-| Zero page | `$02-$8F` | Game-owned hot variables, with KERNAL caller-save discipline where needed |
-| Program | `$0801-$BFFF` | BASIC stub, resident code, resident data, RAM under BASIC ROM |
+| --- | ---: | --- |
+| Zero page | `$02-$8F` | Hot variables; KERNAL caller-save discipline |
+| Program | `$0801-$BFFF` | BASIC stub, resident data, RAM under BASIC ROM |
 | Map | `$C000-$CEFF` | 80x48 compact dungeon map |
 | Floor items | `$CF00-$CFFF` | Fixed floor-item table |
-| I/O | `$D000-$DFFF` | Device window; not ordinary executable/readable RAM with I/O visible |
+| I/O | `$D000-$DFFF` | Device window; not ordinary executable RAM |
 | Overlays | `$E000-$EFFF` | Runtime overlay window |
-| Banked runtime | `$F000-$FFFA` | Permanent banked code/data below CPU vectors |
+| Banked runtime | `$F000-$FFFA` | Banked code/data below CPU vectors |
 
 The main segment must stay below `$C000`. The banked payload must stay below
 `$FFFA`. Overlay segments must fit in `$E000-$EFFF`.

@@ -114,12 +114,13 @@ that turned out not to be possible, yet, then at least it was only on a game
 and not a "real" project, right?
 
 Over the course of the project I've used the following:
-  - Anthropic's [Claude][claude] with [Opus 4.5+][claude-opus-4-5] and
+
+- Anthropic's [Claude][claude] with [Opus 4.5+][claude-opus-4-5] and
     [Sonnet 4.5+][claude-sonnet-4-5]
-  - Google's [Antigravity][google-antigravity] and [Gemini CLI][gemini-cli],
+- Google's [Antigravity][google-antigravity] and [Gemini CLI][gemini-cli],
     with [Gemini 3.0+][gemini-3]
-  - OpenAI's [Codex][openai-codex] with [GPT-5.2+][gpt-5-2]
-  - A variety of open-source models using [Ollama][ollama], such as
+- OpenAI's [Codex][openai-codex] with [GPT-5.2+][gpt-5-2]
+- A variety of open-source models using [Ollama][ollama], such as
     [`qwen3-coder-next`][qwen3-coder-next]
 
 Most of the early code development was done with Claude, but at a certain
@@ -210,8 +211,9 @@ is memory constraints. Not only total memory availability, but how it is
 structured on each platform.
 
 On the C64 in particular, RAM and ROM share overlapping address spaces and a
-custom (to the [6510][mos-6510] variant of the CPU) processor port register selects the
-different memory map arrangements. Even so, this still limits you to a maximum
+processor port register, custom to the [6510][mos-6510] variant of the CPU,
+selects the different memory map arrangements. Even so, this still limits you
+to a maximum
 of slightly less than 64KB of RAM - far too small for Moria8. Swapping in code
 dynamically from disk using overlays (i.e. different code sections that share
 the same address space but only one can be loaded at a time) is the standard
@@ -250,7 +252,7 @@ effort.
 The classic limitation of almost any game, and especially in the 8-bit era:
 you just don't have enough CPU cycles to be naive about what is happening.
 Even for a turn-based terminal UI game like Moria8, certain game operations
-are _expensive_. For example, generating a new dungeon level, or casting the
+are *expensive*. For example, generating a new dungeon level, or casting the
 spell to find all doors and traps on a level results in full memory scans for
 the size of a dungeon.
 
@@ -291,7 +293,7 @@ While I absolutely have loved coding directly over my career, it is even more
 fun to build something fast and focus more on the architecture, design, and
 features than the tedium of typing in code. What a time to be alive.
 
-_Written by [Chad Gibbons](https://github.com/dcgibbons), May 2026._
+*Written by [Chad Gibbons](https://github.com/dcgibbons), May 2026.*
 
 [original-readme]: https://github.com/dcgibbons/moria8/blob/26067eabef4b8bd51be13e606542893077576b5e/README.md
 [original-buildplan]: https://github.com/dcgibbons/moria8/blob/26067eabef4b8bd51be13e606542893077576b5e/BUILDPLAN.md

@@ -3,11 +3,11 @@
 ## Source Layout
 
 | Path | Purpose |
-|---|---|
+| --- | --- |
 | `Makefile` | Thin root wrapper around `commodore/Makefile` |
 | `commodore/Makefile` | Main build, disk, run, and test orchestration |
-| `commodore/c64/` | C64 entry point, platform code, tests, and harness scripts |
-| `commodore/c128/` | C128 boot, platform code, VDC/MMU code, tests, and harness scripts |
+| `commodore/c64/` | C64 entry, platform code, tests, and harness scripts |
+| `commodore/c128/` | C128 boot, VDC/MMU code, tests, and harness scripts |
 | `commodore/common/` | Shared gameplay, UI, data, and utility modules |
 | `data/` | Source data used by generators |
 | `tools/` | Build-time conversion, generation, lint, and disk helpers |
@@ -48,7 +48,7 @@ helpers, VDC display code, and fixed overlay/cache ownership.
 ### Bank 0
 
 | Range | Owner |
-|---:|---|
+| ---: | --- |
 | `$0000-$03FF` | Zero page, stack, vectors |
 | `$0400-$07FF` | Scratch/test/BFS path area |
 | `$0A80-$0AFF` | `128.proj` projectile runtime payload |
@@ -76,7 +76,7 @@ returning to gameplay.
 ### Bank 1
 
 | Range | Owner |
-|---:|---|
+| ---: | --- |
 | `$0000-$0FFF` | 4 KB common RAM; not cache-safe |
 | `$1000-$1FFF` | Overlay cache slot for `OVL_UI` |
 | `$2000-$2FFF` | Overlay cache slot for `OVL_HELP` |
