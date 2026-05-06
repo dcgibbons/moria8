@@ -51,8 +51,12 @@ helpers, VDC display code, and fixed overlay/cache ownership.
 |---:|---|
 | `$0000-$03FF` | Zero page, stack, vectors |
 | `$0400-$07FF` | Scratch/test/BFS path area |
+| `$0A80-$0AFF` | `128.proj` projectile runtime payload |
+| `$0B00-$0BFF` | `128.input` raw-input runtime payload |
+| `$0C00-$0C05` | MMU/KERNAL save bytes |
 | `$0C06` | MMU helper blob in common RAM |
 | `$0D60-$0FFF` | Runtime-common payload |
+| `$1000-$3FFF` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
 | `$1C01-$5FFF` | Boot, loaders, trampolines, wrappers, cache state |
@@ -63,7 +67,7 @@ helpers, VDC display code, and fixed overlay/cache ownership.
 | `$AF00-$CFFF` | Modal slot: `128.play` or `128.persist` |
 | `$D000-$DFFF` | I/O hole; forbidden for ordinary runtime payloads |
 | `$E000-$EFFF` | Overlay execution window |
-| `$F000-$FEFF` | Reloadable banked runtime payload |
+| `$F000-$FFFA` | Reloadable banked runtime payload, asserted below `$FF00` |
 
 The modal slot is mutually exclusive. Save/load uses resident broker routines
 to load `128.persist`, perform the operation, then restore `128.play` before
@@ -75,11 +79,12 @@ returning to gameplay.
 |---:|---|
 | `$0000-$0FFF` | 4 KB common RAM; not cache-safe |
 | `$1000-$1FFF` | Overlay cache slot for `OVL_UI` |
-| `$2000-$3FFF` | Reclaimed low Bank 1 RAM, currently unassigned |
+| `$2000-$2FFF` | Overlay cache slot for `OVL_HELP` |
+| `$3000-$3FFF` | Overlay cache slot for `OVL_ITEMS` |
 | `$4000-$730B` | Live dungeon/town map |
 | `$7400-$7FFF` | Bank 1 DB/data region |
 | `$8000-$94F7` | Active monster tier-cache window |
-| `$94F8-$9FFF` | Reserved gap |
+| `$94F8-$9FFF` | C128 title cache / reserved gap |
 | `$A000-$AFFF` | Overlay cache slot for `OVL_STARTUP` |
 | `$B000-$BFFF` | Overlay cache slot for `OVL_TOWN` |
 | `$C000-$CFFF` | Overlay cache slot for `OVL_DEATH` |
