@@ -46,6 +46,8 @@ DISKART      = ../tools/diskart.py
 PATCH_D64    = ../tools/patch_d64_sector.py
 RESERVE_SECTOR = ../tools/reserve_cbm_sector.py
 VERSION_FILE = ../version.json
+LICENSE_FILE = ../LICENSE
+SOURCE_NOTICE = $(OUT)/SOURCE.txt
 RUN_FLAGS64  = -autostartprgmode 1 -sound -sounddev coreaudio
 RUN_FLAGS128 = -80col -sound -sounddev coreaudio
 KA_FLAGS     = -showmem -vicesymbols
@@ -333,7 +335,10 @@ $(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) | ensure-kickass $(OUT128)
 $(EMPTY_PRG): | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 
-$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) | $(OUT)
+$(SOURCE_NOTICE): | $(OUT)
+	printf 'Moria8 source code:\nhttps://github.com/dcgibbons/moria8\n' > $(SOURCE_NOTICE)
+
+$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_NOTICE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK64_IMAGE)
 	$(C1541) -format $(DISK64_LABEL) d64 $(DISK64_IMAGE) \
@@ -360,13 +365,15 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) | $(OUT)
 			-write $(C64_OVL_UI) "64.ui" \
 			-write $(C64_OVL_ITEMS) "64.items" \
 			-write $(C64_OVL_SPELL) "64.spell" \
-			-write $(C64_RUNTIME_BANKED) "64.bank"
+			-write $(C64_RUNTIME_BANKED) "64.bank" \
+			-write $(LICENSE_FILE) "license,s" \
+			-write $(SOURCE_NOTICE) "source,s"
 	python3 $(DISKART) $(DISK64_IMAGE) c64
 	mkdir -p c64/out
 	cp -f $(DISK64_IMAGE) c64/out/moria8-c64.d64
 	rm -f $(EMPTY_PRG)
 
-$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) | $(OUT)
+$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_NOTICE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK128_IMAGE)
 	$(C1541) -format $(DISK128_LABEL) d71 $(DISK128_IMAGE)
@@ -402,7 +409,9 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 			-write $(C128_RESIDENT_SELECT) "128.select" \
 			-write $(C128_RESIDENT_PERSIST) "128.persist" \
 			-write $(C128_RESIDENT_PLAY) "128.play" \
-			-write $(C128_RUNTIME_BANKED) "128.bank"
+			-write $(C128_RUNTIME_BANKED) "128.bank" \
+			-write $(LICENSE_FILE) "license,s" \
+			-write $(SOURCE_NOTICE) "source,s"
 	python3 $(PATCH_D64) $(DISK128_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
 	python3 $(DISKART) $(DISK128_IMAGE) c128
 	mkdir -p c128/out
