@@ -193,8 +193,8 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 
 .PHONY: all build build64 build128 buildplus4 disk disk64 disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
-	test test64 test128 test128-fast test128-fast-smoke testplus4 clean \
-	check-zp check-6502-lint ensure-kickass kickass
+	test test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-runtime clean \
+	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass
 
 all: build
 
@@ -248,13 +248,19 @@ test128-fast-smoke: ensure-kickass
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
 
 testplus4: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
-	@echo "Plus/4 build artifacts assembled; runtime gate is make runplus4 under xplus4/1551."
+	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."
+
+testplus4-runtime: ensure-kickass
+	cd plus4 && KICKASS="$(KICKASS_RESOLVED)" VICEPLUS4="$(VICEPLUS4)" ./run_testsplus4.sh
 
 check-zp:
 	python3 ../tools/check_zp_usage.py
 
 check-6502-lint:
 	python3 ../tools/check_6502_lint.py
+
+check-hal-boundaries:
+	cd .. && python3 tools/check_hal_boundaries.py
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)

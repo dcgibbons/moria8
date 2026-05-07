@@ -382,8 +382,69 @@ uds_show_init_detail:
     :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
     rts
 !fallback:
+#if PLUS4
+    lda disk_error_dos0
+    beq !check_phase+
+    jmp uds_show_plus4_disk_error
+!check_phase:
+    lda disk_error_phase
+    ora disk_error_readst
+    beq !generic+
+    jmp uds_show_plus4_status_error
+!generic:
+#endif
     :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
     rts
+
+#if PLUS4
+uds_show_plus4_disk_error:
+    lda #4
+    sta zp_cursor_row
+    lda #UDS_LINE_COL
+    sta zp_cursor_col
+    lda #<uds_disk_error_str
+    sta zp_ptr0
+    lda #>uds_disk_error_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_error_dos0
+    jsr screen_put_char
+    lda disk_error_dos1
+    jsr screen_put_char
+    lda #<uds_on_drive_str
+    sta zp_ptr0
+    lda #>uds_on_drive_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_error_device
+    jsr screen_put_decimal_rj2
+    lda #$2e
+    jsr screen_put_char
+    rts
+
+uds_show_plus4_status_error:
+    lda #4
+    sta zp_cursor_row
+    lda #UDS_LINE_COL
+    sta zp_cursor_col
+    lda #<uds_disk_status_str
+    sta zp_ptr0
+    lda #>uds_disk_status_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_error_readst
+    jsr screen_put_hex
+    lda #<uds_phase_str
+    sta zp_ptr0
+    lda #>uds_phase_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_error_phase
+    jsr screen_put_hex
+    lda #$2e
+    jsr screen_put_char
+    rts
+#endif
 
 uds_draw_current_indicator:
     lda #COL_CYAN
@@ -426,6 +487,12 @@ uds_dos_write_protect_str: .text "Disk is write-protected." ; .byte 0
 uds_dos_full_str:          .text "Disk is full." ; .byte 0
 uds_dos_not_ready_str:     .text "Drive is not ready." ; .byte 0
 uds_dos_generic_str:       .text "Check the disk and try again." ; .byte 0
+#if PLUS4
+uds_disk_error_str:        .text "Disk error " ; .byte 0
+uds_on_drive_str:          .text " on drive " ; .byte 0
+uds_disk_status_str:       .text "Disk code $" ; .byte 0
+uds_phase_str:             .text " phase $" ; .byte 0
+#endif
 uds_device_prompt_str:     .text "Save drive (8-30): " ; .byte 0
 uds_no_device_str:         .text "Drive not found." ; .byte 0
 uds_program_disk_str:      .text "Program disk cannot hold saves." ; .byte 0

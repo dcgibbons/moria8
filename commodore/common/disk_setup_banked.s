@@ -5,10 +5,12 @@
 // resident code. In both cases the overlay remains display/input only and
 // all disk transactions stay outside the live overlay frame.
 
+#if !PLUS4
 disk_marker_scratch_cmd:
     .byte $53, $30, $3a                 // "S0:"
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
 .label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
+#endif
 #if !C128
 .label c64_disk_marker_write_phys = c64_disk_marker_write_resident
 #else
@@ -183,15 +185,45 @@ disk_marker_init:
     sta disk_status
 !dmi_done:
     jsr disk_kernal_exit
+#if PLUS4
     lda disk_status
     bne !dmi_fail+
+#endif
     jsr disk_marker_present
     bcc !dmi_ok+
 !dmi_fail:
+    jsr disk_error_capture_c128
     sec
     rts
 !dmi_ok:
     clc
+    rts
+
+disk_error_capture_c128:
+    lda disk_diag_cmd_status0
+    cmp #$32                    // "2"
+    bne !check_72+
+    lda disk_diag_cmd_status1
+    cmp #$36                    // "6"
+    bne !done+
+    lda #26
+    sta disk_status
+    rts
+!check_72:
+    cmp #$37                    // "7"
+    bne !done+
+    lda disk_diag_cmd_status1
+    cmp #$32                    // "2"
+    bne !check_74+
+    lda #72
+    sta disk_status
+    rts
+!check_74:
+    cmp #$34                    // "4"
+    bne !done+
+    lda #74
+    sta disk_status
+!done:
     rts
 
 disk_diag_read_command_status:
@@ -260,6 +292,10 @@ disk_setup_capture_init_status:
     jsr c64_disk_marker_write_phys
 !dmi_done:
     jsr disk_kernal_exit
+#if PLUS4
+    lda disk_status
+    bne !dmi_fail+
+#endif
     jsr disk_marker_present
     bcs !dmi_fail+
 !dmi_ok:
@@ -274,6 +310,11 @@ disk_setup_call_ui:
 #if C128
     sta disk_ui_action
     jsr tramp_disk_setup_ui_action
+    rts
+#elif PLUS4
+    sta disk_ui_action
+    jsr plus4_bank_ram
+    jsr ui_disk_setup_dispatch
     rts
 #else
     sta disk_ui_action

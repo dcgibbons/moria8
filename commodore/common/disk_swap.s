@@ -25,36 +25,36 @@ disk_ui_value:     .byte 0
 disk_temp:         .byte 0
 disk_status:       .byte 0
 disk_prompt_device:.byte 8
+#if PLUS4
+disk_error_phase:  .byte 0
+disk_error_readst: .byte 0
+disk_error_dos0:   .byte 0
+disk_error_dos1:   .byte 0
+disk_error_device: .byte 8
+#endif
 
 // PETSCII command bytes / marker file contents
+// Plus/4 defines these in low resident RAM because KERNAL OPEN reads filename
+// bytes while BASIC/KERNAL ROM is visible over $8000-$BFFF.
+#if !PLUS4
 disk_init_cmd:     .byte $49, $30      // "I0"
-#if PLUS4
-disk_marker_magic: .byte $4d, $38, $50, $34, $53, $56  // "M8P4SV"
-#else
 disk_marker_magic: .byte $4d, $38, $53, $41, $56, $45  // "M8SAVE"
-#endif
 .const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
 
 disk_marker_read_fname:
     .byte $30, $3a                      // "0:"
-#if PLUS4
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
-#else
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
-#endif
     .byte $2c, $53, $2c, $52            // ",S,R"
 .label disk_marker_read_fname_len = * - disk_marker_read_fname
 
 disk_marker_write_fname:
     .byte $40                           // "@"
     .byte $30, $3a                      // "0:"
-#if PLUS4
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
-#else
     .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
-#endif
     .byte $2c, $53, $2c, $57            // ",S,W"
 .label disk_marker_write_fname_len = * - disk_marker_write_fname
+
+#endif
 
 .const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2
 .const DS_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
@@ -70,6 +70,27 @@ disk_marker_write_fname:
 .const DISK_MARKER_SEC_WR   = 2       // Match normal sequential file writes
 .const DISK_PROGRAM_FILE_NUM = 7
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
+
+#if C128 || PLUS4
+.const DISK_ERR_NONE              = $00
+.const DISK_ERR_MARKER_OPEN       = $81
+.const DISK_ERR_MARKER_CHKIN      = $82
+.const DISK_ERR_MARKER_READ       = $83
+.const DISK_ERR_SCRATCH           = $97
+.const DISK_ERR_MARKER_WRITE_OPEN = $92
+.const DISK_ERR_MARKER_CHKOUT     = $93
+.const DISK_ERR_MARKER_WRITE      = $94
+.const DISK_ERR_MARKER_CLOSE      = $95
+.const DISK_ERR_MARKER_DOS        = $96
+.const DISK_ERR_SAVE_OPEN         = $a1
+.const DISK_ERR_SAVE_CHKOUT       = $a2
+.const DISK_ERR_SAVE_WRITE        = $a3
+.const DISK_ERR_LOAD_OPEN         = $b1
+.const DISK_ERR_LOAD_CHKIN        = $b2
+.const DISK_ERR_LOAD_READ         = $b3
+.const DISK_ERR_HISCORE_LOAD      = $c1
+.const DISK_ERR_HISCORE_SAVE      = $c2
+#endif
 
 #if C128
 .const FEAT_SETNAM = KERNAL_SETNAM
@@ -125,11 +146,54 @@ disk_reset_session_state:
     lda #8
     sta program_device
     sta save_device
+#if PLUS4
+    sta disk_error_device
+    lda #0
+    sta disk_error_phase
+    sta disk_error_readst
+    sta disk_error_dos0
+    sta disk_error_dos1
+#endif
 #if C128
     lda #C128_MEDIA_UNKNOWN
     sta c128_media_state
 #endif
     rts
+
+#if PLUS4
+disk_error_clear:
+    lda #0
+    sta disk_error_phase
+    sta disk_error_readst
+    sta disk_error_dos0
+    sta disk_error_dos1
+    lda save_device
+    sta disk_error_device
+    rts
+
+disk_error_set_phase:
+    sta disk_error_phase
+    lda save_device
+    sta disk_error_device
+    lda #0
+    sta disk_error_readst
+    sta disk_error_dos0
+    sta disk_error_dos1
+    rts
+
+disk_error_set_readst:
+    sta disk_error_readst
+    lda save_device
+    sta disk_error_device
+    rts
+
+disk_error_set_dos_status:
+    sta disk_error_dos0
+    stx disk_error_dos1
+    lda save_device
+    sta disk_error_device
+    rts
+#endif
 
 disk_require_save_media:
     lda disk_setup_done

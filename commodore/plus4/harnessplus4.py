@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+C128_TESTS_DIR = REPO_ROOT / "commodore" / "c128" / "tests"
+if str(C128_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(C128_TESTS_DIR))
+
+from vice_connector import VICEConnector, extract_test_symbols, run_test_case
+
+
+def build_vice_command(args: argparse.Namespace) -> list[str]:
+    command = [
+        args.vice,
+        "-console",
+        "-nativemonitor",
+        "-warp",
+        "+sound",
+        "-sounddev",
+        "dummy",
+        "-remotemonitor",
+        "-binarymonitor",
+    ]
+    if args.monitor_address:
+        command.extend(["-remotemonitoraddress", args.monitor_address])
+    for extra_arg in args.vice_arg:
+        command.append(extra_arg)
+    return command
+
+
+def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=2.0)
+        return
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=2.0)
+
+
+def run_monitor_test(args: argparse.Namespace) -> int:
+    prg_path = Path(args.prg).resolve()
+    vs_path = Path(args.vs).resolve() if args.vs else prg_path.with_suffix(".vs")
+    symbols = extract_test_symbols(vs_path)
+
+    vice_process: subprocess.Popen[bytes] | None = None
+    if not args.attach_only:
+        vice_process = subprocess.Popen(
+            build_vice_command(args),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
+    try:
+        connector.connect(
+            retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
+            retry_delay=args.connect_retry_delay,
+            debug=args.verbose,
+        )
+        result = run_test_case(
+            connector,
+            prg_path=prg_path,
+            start_addr=symbols.start_addr,
+            pass_addr=symbols.pass_addr,
+            fail_addr=symbols.fail_addr,
+            timeout=args.timeout,
+            reset_environment=False,
+            debug=args.verbose,
+        )
+    finally:
+        connector.close()
+        terminate_vice(vice_process)
+
+    if result.passed:
+        print(f"PASS: {args.name}")
+        return 0
+
+    if args.verbose and result.last_status:
+        print(result.last_status)
+    print(f"FAIL: {args.name} ({result.reason})")
+    return result.exit_code
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Plus/4 Python monitor harness")
+    parser.add_argument("--name", required=True)
+    parser.add_argument("--prg", required=True)
+    parser.add_argument("--vs", help="Path to the companion .vs file; defaults to <prg>.vs")
+    parser.add_argument("--vice", default="xplus4")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=6510)
+    parser.add_argument("--monitor-address", help="Optional raw VICE -remotemonitoraddress value")
+    parser.add_argument("--timeout", type=float, default=5.0)
+    parser.add_argument("--socket-timeout", type=float, default=0.5)
+    parser.add_argument("--connect-timeout", type=float, default=5.0)
+    parser.add_argument("--connect-retry-delay", type=float, default=0.1)
+    parser.add_argument("--attach-only", action="store_true")
+    parser.add_argument("--vice-arg", action="append", default=[])
+    parser.add_argument("-v", "--verbose", action="store_true")
+    return parser
+
+
+def main() -> int:
+    args = build_arg_parser().parse_args()
+    return run_monitor_test(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

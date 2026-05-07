@@ -50,6 +50,18 @@
 .const RLE_REPEAT_MIN  = 3     // Minimum repeat run
 .const RLE_REPEAT_MAX  = 130    // Max repeat run length
 
+#if PLUS4
+.const SAVE_SETNAM = c64_disk_setnam
+.const SAVE_SETLFS = c64_disk_setlfs
+.const SAVE_OPEN   = c64_disk_open
+.const SAVE_CLOSE  = c64_disk_close
+.const SAVE_CHKOUT = c64_disk_chkout
+.const SAVE_CHKIN  = c64_disk_chkin
+.const SAVE_CLRCHN = c64_disk_clrchn
+.const SAVE_CHROUT = c64_disk_chrout
+.const SAVE_CHRIN  = c64_disk_chrin
+.const SAVE_READST = c64_disk_readst
+#else
 .const SAVE_SETNAM = KERNAL_SETNAM
 .const SAVE_SETLFS = KERNAL_SETLFS
 .const SAVE_OPEN   = KERNAL_OPEN
@@ -60,6 +72,7 @@
 .const SAVE_CHROUT = KERNAL_CHROUT
 .const SAVE_CHRIN  = KERNAL_CHRIN
 .const SAVE_READST = KERNAL_READST
+#endif
 
 #if C128
 .const SAVE_IO_CHUNK_SIZE = 128
@@ -107,13 +120,12 @@ rle_lit_buf:    .fill 128, 0
 // ============================================================
 // Note: KERNAL SETNAM needs PETSCII filenames.
 // Use raw byte values to avoid screencode encoding.
+// Plus/4 defines these in low resident RAM because KERNAL SETNAM/OPEN reads
+// filename bytes while BASIC/KERNAL ROM is visible over this segment.
+#if !PLUS4
 save_replace_filename:
     .byte $40, $30, $3a     // "@0:"
-#if PLUS4
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
-#else
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-#endif
     .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
 .label save_replace_filename_len = * - save_replace_filename
 .label save_filename = save_replace_filename + 1
@@ -121,13 +133,10 @@ save_replace_filename:
 
 load_filename:
     .byte $30, $3a          // "0:"
-#if PLUS4
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
-#else
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-#endif
     .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
 .label load_filename_len = * - load_filename
+#endif
 
 save_magic:
 #if PLUS4
@@ -237,7 +246,7 @@ save_game:
 !save_media_fail:
     jsr huff_print_msg
 save_return_fail:
-#if !C128
+#if !C128 && !PLUS4
     lda #BANK_NO_BASIC
     sta $01
 #endif
@@ -402,14 +411,16 @@ save_return_fail:
     jsr save_restore_channels
     lda #SAVE_FILE_NUM
     jsr SAVE_CLOSE
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
+#endif
 
     // Show success
     ldx #HSTR_SAVE_DONE
     jsr huff_print_msg
-#if !C128
+#if !C128 && !PLUS4
     lda #BANK_NO_BASIC
     sta $01
 #endif
@@ -420,9 +431,11 @@ save_return_fail:
     jsr save_restore_channels
     lda #SAVE_FILE_NUM
     jsr SAVE_CLOSE
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
+#endif
 !save_error:
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
@@ -476,9 +489,11 @@ load_game:
     jsr SAVE_OPEN
     bcc !load_open_ok+
     // OPEN failed — file not found is the most common cause
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011
     sta $dd00
+#endif
     jmp !load_notfound+
 !load_open_ok:
     ldx #SAVE_FILE_NUM
@@ -487,9 +502,11 @@ load_game:
     // CHKIN failed — close and bail
     lda #SAVE_FILE_NUM
     jsr SAVE_CLOSE
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011
     sta $dd00
+#endif
     jmp !load_fail+
 !load_chkin_ok:
 
@@ -739,8 +756,10 @@ load_game:
 !load_return_ok:
     sec                     // Success
 !load_return_done:
+#if !PLUS4
     lda #BANK_NO_BASIC
     sta $01
+#endif
     rts
 #endif
 
@@ -753,9 +772,11 @@ load_close_file_restore:
     jsr save_restore_channels
     lda #SAVE_FILE_NUM
     jsr SAVE_CLOSE
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011
     sta $dd00
+#endif
     rts
 
 save_write_block:

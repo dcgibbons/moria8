@@ -97,12 +97,19 @@ c64_disk_call:
     tax
     pla
     jsr plus4_bank_rom
+    cli
 !cdc_jsr:
     jsr $ffff
+    php
     pha
+    tsx
+    lda $0102,x
+    ora #$04                    // Return to all-RAM game code with IRQs disabled.
+    sta $0102,x
     sei
     jsr plus4_bank_ram
     pla
+    plp
     rts
 
 c64_disk_setnam:
@@ -130,9 +137,19 @@ c64_disk_chkout:
     .word $ffc9
     rts
 
+c64_disk_chkin:
+    jsr c64_disk_call
+    .word $ffc6
+    rts
+
 c64_disk_clrchn:
     jsr c64_disk_call
     .word $ffcc
+    rts
+
+c64_disk_chrin:
+    jsr c64_disk_call
+    .word $ffcf
     rts
 
 c64_disk_chrout:
@@ -140,54 +157,121 @@ c64_disk_chrout:
     .word $ffd2
     rts
 
+c64_disk_readst:
+    jsr c64_disk_call
+    .word $ffb7
+    rts
+
 c64_disk_load:
     jsr c64_disk_call
     .word $ffd5
     rts
+
+// KERNAL filename/command bytes must live below BASIC ROM. The Plus/4 KERNAL
+// reads these pointers while ROM is visible over $8000-$BFFF.
+disk_init_cmd:     .byte $49, $30      // "I0"
+disk_marker_magic: .byte $4d, $38, $50, $34, $53, $56  // "M8P4SV"
+.const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
+
+disk_marker_read_fname:
+    .byte $30, $3a                      // "0:"
+    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
+    .byte $2c, $53, $2c, $52            // ",S,R"
+.label disk_marker_read_fname_len = * - disk_marker_read_fname
+
+disk_marker_write_fname:
+    .byte $40                           // "@"
+    .byte $30, $3a                      // "0:"
+    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
+    .byte $2c, $53, $2c, $57            // ",S,W"
+.label disk_marker_write_fname_len = * - disk_marker_write_fname
+
+disk_marker_scratch_cmd:
+    .byte $53, $30, $3a                 // "S0:"
+    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
+.label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
+
+save_replace_filename:
+    .byte $40, $30, $3a                 // "@0:"
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
+    .byte $2c, $53, $2c, $57            // ",S,W"
+.label save_replace_filename_len = * - save_replace_filename
+.label save_filename = save_replace_filename + 1
+.label save_filename_len = save_replace_filename_len - 1
+
+load_filename:
+    .byte $30, $3a                      // "0:"
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
+    .byte $2c, $53, $2c, $52            // ",S,R"
+.label load_filename_len = * - load_filename
 
 c64_disk_marker_present:
     .const C64_DISK_MARKER_FILE_NUM = 6
     .const C64_DISK_MARKER_SEC_RD = 2
     lda #1
     sta disk_status
-    php
-    lda $01
-    pha
-    jsr plus4_bank_rom
+    lda #$81                    // DISK_ERR_MARKER_OPEN
+    jsr disk_error_set_phase
+    jsr c64_disk_clrchn
+    lda #C64_DISK_MARKER_FILE_NUM
+    jsr c64_disk_close
     lda #disk_marker_read_fname_len
     ldx #<disk_marker_read_fname
     ldy #>disk_marker_read_fname
-    jsr $ffbd
+    jsr c64_disk_setnam
     lda #C64_DISK_MARKER_FILE_NUM
     ldx save_device
     ldy #C64_DISK_MARKER_SEC_RD
-    jsr $ffba
-    jsr $ffc0
-    bcs !cdmp_done+
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcc !cdmp_open_ok+
+    sta disk_error_readst
+    jmp !cdmp_done+
+!cdmp_open_ok:
+    lda #$82                    // DISK_ERR_MARKER_CHKIN
+    jsr disk_error_set_phase
     ldx #C64_DISK_MARKER_FILE_NUM
-    jsr $ffc6
-    bcs !cdmp_close+
-    jsr $ffcf
-    cmp #$4d
+    jsr c64_disk_chkin
+    bcc !cdmp_chkin_ok+
+    sta disk_error_readst
+    jmp !cdmp_close+
+!cdmp_chkin_ok:
+    lda #$83                    // DISK_ERR_MARKER_READ
+    jsr disk_error_set_phase
+    ldx #0
+!cdmp_read:
+    jsr c64_disk_chrin
+    cmp disk_marker_magic,x
     bne !cdmp_close+
-    jsr $ffcf
-    cmp #$38
+    jsr c64_disk_readst
+    sta disk_error_readst
+    beq !cdmp_byte_ok+
+    cmp #$40
     bne !cdmp_close+
+    cpx #DISK_MARKER_MAGIC_LEN - 1
+    bne !cdmp_close+
+!cdmp_byte_ok:
+    inx
+    cpx #DISK_MARKER_MAGIC_LEN
+    bcc !cdmp_read-
     dec disk_status
 !cdmp_close:
     lda #C64_DISK_MARKER_FILE_NUM
-    jsr $ffc3
-    jsr $ffcc
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
 !cdmp_done:
-    sei
-    pla
-    jsr plus4_bank_ram
-    plp
+    lda disk_status
+    beq !cdmp_status_done+
+    lda disk_error_readst
+    bne !cdmp_status_done+
+    jsr plus4_disk_read_command_status
+!cdmp_status_done:
     lda disk_status
     beq !cdmp_ok+
     sec
     rts
 !cdmp_ok:
+    jsr disk_error_clear
     clc
     rts
 
@@ -261,6 +345,11 @@ tramp_dig_ability:
 c64_disk_marker_write_resident:
     lda #2
     sta disk_status
+    lda #DISK_ERR_MARKER_WRITE_OPEN
+    jsr disk_error_set_phase
+    jsr c64_disk_clrchn
+    lda #DISK_MARKER_FILE_NUM
+    jsr c64_disk_close
     lda #disk_marker_write_fname_len - 1
     ldx #<(disk_marker_write_fname + 1)
     ldy #>(disk_marker_write_fname + 1)
@@ -270,14 +359,27 @@ c64_disk_marker_write_resident:
     ldy #DISK_MARKER_SEC_WR
     jsr c64_disk_setlfs
     jsr c64_disk_open
-    bcs !cdmw_close+
+    bcc !cdmw_open_ok+
+    sta disk_error_readst
+    jmp !cdmw_close+
+!cdmw_open_ok:
+    lda #DISK_ERR_MARKER_CHKOUT
+    jsr disk_error_set_phase
     ldx #DISK_MARKER_FILE_NUM
     jsr c64_disk_chkout
-    bcs !cdmw_close+
+    bcc !cdmw_chkout_ok+
+    sta disk_error_readst
+    jmp !cdmw_close+
+!cdmw_chkout_ok:
+    lda #DISK_ERR_MARKER_WRITE
+    jsr disk_error_set_phase
     ldx #0
 !cdmw_write:
     lda disk_marker_magic,x
     jsr c64_disk_chrout
+    jsr c64_disk_readst
+    sta disk_error_readst
+    bne !cdmw_close+
     inx
     cpx #DISK_MARKER_MAGIC_LEN
     bcc !cdmw_write-
@@ -288,11 +390,86 @@ c64_disk_marker_write_resident:
     lda #DISK_MARKER_FILE_NUM
     jsr c64_disk_close
     lda disk_status
+    bne !cdmw_status_done+
+    jsr plus4_disk_read_command_status
+!cdmw_status_done:
+    lda disk_status
     beq !cdmw_ok+
     sec
     rts
 !cdmw_ok:
+    jsr disk_error_clear
     clc
+    rts
+
+plus4_disk_read_command_status:
+    lda #0
+    sta disk_error_dos0
+    sta disk_error_dos1
+    ldx #0
+    ldy #0
+    jsr c64_disk_setnam
+    lda #CMD_CHANNEL
+    ldx save_device
+    ldy #CMD_CHANNEL
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcs !p4dcs_done+
+    ldx #CMD_CHANNEL
+    jsr c64_disk_chkin
+    bcs !p4dcs_close+
+    jsr c64_disk_chrin
+    sta disk_error_dos0
+    jsr c64_disk_readst
+    sta disk_error_readst
+    jsr c64_disk_chrin
+    sta disk_error_dos1
+    jsr c64_disk_readst
+    sta disk_error_readst
+    jsr plus4_disk_status_to_disk_status
+!p4dcs_close:
+    jsr c64_disk_clrchn
+    lda #CMD_CHANNEL
+    jsr c64_disk_close
+!p4dcs_done:
+    rts
+
+plus4_disk_status_to_disk_status:
+    lda disk_error_dos0
+    cmp #$30                    // "0"
+    bne !check_26+
+    lda disk_error_dos1
+    cmp #$30                    // "0"
+    bne !done+
+    lda #0
+    sta disk_error_dos0
+    sta disk_error_dos1
+    rts
+!check_26:
+    lda disk_error_dos0
+    cmp #$32                    // "2"
+    bne !check_72+
+    lda disk_error_dos1
+    cmp #$36                    // "6"
+    bne !done+
+    lda #26
+    sta disk_status
+    rts
+!check_72:
+    cmp #$37                    // "7"
+    bne !done+
+    lda disk_error_dos1
+    cmp #$32                    // "2"
+    bne !check_74+
+    lda #72
+    sta disk_status
+    rts
+!check_74:
+    cmp #$34                    // "4"
+    bne !done+
+    lda #74
+    sta disk_status
+!done:
     rts
 
 // ============================================================

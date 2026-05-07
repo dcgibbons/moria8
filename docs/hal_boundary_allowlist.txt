@@ -1,0 +1,205 @@
+# Current common-code HAL boundary violations.
+# Format: path<TAB>rule<TAB>token
+# Do not add entries casually; remove entries as code migrates behind HAL.
+
+commodore/common/bank_port_consts.s	raw-c64-bank-port	$01
+commodore/common/bank_port_consts.s	target-conditional	#if PLUS4
+commodore/common/combat.s	target-conditional	#if C128
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CHKIN
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CHKOUT
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CHRIN
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CHROUT
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CLOSE
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_CLRCHN
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_OPEN
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_READST
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/disk_setup_banked.s	raw-c64-bank-port	$01
+commodore/common/disk_setup_banked.s	target-conditional	#if !C128
+commodore/common/disk_setup_banked.s	target-conditional	#if !PLUS4
+commodore/common/disk_setup_banked.s	target-conditional	#if C128
+commodore/common/disk_setup_banked.s	target-conditional	#if PLUS4
+commodore/common/disk_setup_runtime128.s	target-conditional	#if C128
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHKIN
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHKOUT
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHRIN
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHROUT
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CLOSE
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_CLRCHN
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_ERR_DEVICE_NOT_PRESENT
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_OPEN
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_READST
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/disk_swap.s	raw-c64-bank-port	$01
+commodore/common/disk_swap.s	target-conditional	#if !C128
+commodore/common/disk_swap.s	target-conditional	#if !PLUS4
+commodore/common/disk_swap.s	target-conditional	#if C128
+commodore/common/disk_swap.s	target-conditional	#if C128 || PLUS4
+commodore/common/disk_swap.s	target-conditional	#if PLUS4
+commodore/common/dungeon_data.s	raw-c64-bank-port	$01
+commodore/common/dungeon_data.s	target-conditional	#if C128
+commodore/common/dungeon_features.s	target-conditional	#if C128
+commodore/common/dungeon_los.s	target-conditional	#if C128
+commodore/common/ego_items.s	target-conditional	#if !C128
+commodore/common/ego_items.s	target-conditional	#if C128
+commodore/common/game_loop.s	raw-c64-bank-port	$01
+commodore/common/game_loop.s	target-conditional	#if !C128
+commodore/common/game_loop.s	target-conditional	#if C128
+commodore/common/game_loop_helpers.s	raw-c64-bank-port	$01
+commodore/common/game_loop_helpers.s	target-conditional	#if !C128
+commodore/common/game_loop_helpers.s	target-conditional	#if C128
+commodore/common/huffman.s	target-conditional	#if C128
+commodore/common/huffman_data.s	raw-c64-bank-port	$01
+commodore/common/input_contract.s	raw-c64-bank-port	$01
+commodore/common/input_ui_helpers.s	target-conditional	#if !C128
+commodore/common/input_ui_helpers.s	target-conditional	#if C128
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKIN
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKOUT
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHRIN
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHROUT
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CLOSE
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CLRCHN
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_LOAD
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_OPEN
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_READST
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/item.s	target-conditional	#if C128
+commodore/common/item_actions_overlay.s	raw-c64-bank-port	$01
+commodore/common/item_actions_overlay.s	target-conditional	#if C128
+commodore/common/item_defs.s	raw-c64-bank-port	$01
+commodore/common/monster.s	raw-c64-bank-port	$01
+commodore/common/monster.s	target-conditional	#if !C128
+commodore/common/monster.s	target-conditional	#if C128
+commodore/common/monster_ai.s	raw-c64-bank-port	$01
+commodore/common/monster_attack.s	raw-c64-bank-port	$01
+commodore/common/monster_magic.s	raw-c64-bank-port	$01
+commodore/common/overlay.s	raw-c64-bank-port	$01
+commodore/common/overlay.s	raw-vic-cia-sid-ted-vdc-address	$dd00
+commodore/common/overlay.s	target-conditional	#if !C128
+commodore/common/overlay.s	target-conditional	#if C128
+commodore/common/overlay.s	target-conditional	#if PLUS4
+commodore/common/player.s	raw-c64-bank-port	$01
+commodore/common/player.s	target-conditional	#if C128
+commodore/common/player_create.s	raw-c64-bank-port	$01
+commodore/common/player_create.s	target-conditional	#if !C128
+commodore/common/player_create.s	target-conditional	#if C128
+commodore/common/player_item_commands.s	raw-c64-bank-port	$01
+commodore/common/player_items.s	raw-c64-bank-port	$01
+commodore/common/player_items.s	target-conditional	#if !C128
+commodore/common/player_items.s	target-conditional	#if (!C128 && C64_PRODUCT_OVERLAY_RUNTIME) || (C128
+commodore/common/player_items.s	target-conditional	#if C128
+commodore/common/player_magic.s	target-conditional	#if !C128
+commodore/common/player_magic.s	target-conditional	#if C128
+commodore/common/player_magic_ball.s	raw-c64-bank-port	$01
+commodore/common/player_magic_ball.s	target-conditional	#if C128
+commodore/common/player_magic_execute_overlay.s	raw-c64-bank-port	$01
+commodore/common/player_magic_select_overlay.s	raw-c64-bank-port	$01
+commodore/common/player_magic_state.s	target-conditional	#if C128
+commodore/common/player_move.s	target-conditional	#if !C128
+commodore/common/player_move.s	target-conditional	#if C128
+commodore/common/reu.s	platform-name	REU
+commodore/common/reu.s	raw-c64-bank-port	$01
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$d501
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df00
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df01
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df02
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df03
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df04
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df05
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df06
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df07
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df08
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df09
+commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df0a
+commodore/common/reu.s	target-conditional	#if !C128
+commodore/common/reu.s	target-conditional	#if C128
+commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc04
+commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc05
+commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd04
+commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd05
+commodore/common/rng.s	target-conditional	#if PLUS4
+commodore/common/save.s	kernal-symbol	KERNAL_CHKIN
+commodore/common/save.s	kernal-symbol	KERNAL_CHKOUT
+commodore/common/save.s	kernal-symbol	KERNAL_CHRIN
+commodore/common/save.s	kernal-symbol	KERNAL_CHROUT
+commodore/common/save.s	kernal-symbol	KERNAL_CLOSE
+commodore/common/save.s	kernal-symbol	KERNAL_CLRCHN
+commodore/common/save.s	kernal-symbol	KERNAL_OPEN
+commodore/common/save.s	kernal-symbol	KERNAL_READST
+commodore/common/save.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/save.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/save.s	raw-c64-bank-port	$01
+commodore/common/save.s	raw-vic-cia-sid-ted-vdc-address	$dd00
+commodore/common/save.s	target-conditional	#if !C128
+commodore/common/save.s	target-conditional	#if !C128 && !PLUS4
+commodore/common/save.s	target-conditional	#if !PLUS4
+commodore/common/save.s	target-conditional	#if C128
+commodore/common/save.s	target-conditional	#if PLUS4
+commodore/common/score_io.s	kernal-symbol	KERNAL_CHKIN
+commodore/common/score_io.s	kernal-symbol	KERNAL_CHKOUT
+commodore/common/score_io.s	kernal-symbol	KERNAL_CHRIN
+commodore/common/score_io.s	kernal-symbol	KERNAL_CHROUT
+commodore/common/score_io.s	kernal-symbol	KERNAL_CLOSE
+commodore/common/score_io.s	kernal-symbol	KERNAL_CLRCHN
+commodore/common/score_io.s	kernal-symbol	KERNAL_OPEN
+commodore/common/score_io.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/score_io.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/score_io.s	raw-c64-bank-port	$01
+commodore/common/score_io.s	target-conditional	#if PLUS4
+commodore/common/sound.s	raw-c64-bank-port	$01
+commodore/common/sound.s	raw-vic-cia-sid-ted-vdc-address	$d400
+commodore/common/spell_data.s	raw-c64-bank-port	$01
+commodore/common/spell_effects.s	target-conditional	#if !C128
+commodore/common/spell_effects.s	target-conditional	#if (C128
+commodore/common/store_data.s	raw-c64-bank-port	$01
+commodore/common/string_bank.s	raw-vic-cia-sid-ted-vdc-address	$dd00
+commodore/common/string_bank.s	target-conditional	#if !C128
+commodore/common/tier_manager.s	raw-c64-bank-port	$01
+commodore/common/tier_manager.s	raw-vic-cia-sid-ted-vdc-address	$dd00
+commodore/common/tier_manager.s	target-conditional	#if !C128
+commodore/common/tier_manager.s	target-conditional	#if !PLUS4
+commodore/common/tier_manager.s	target-conditional	#if C128
+commodore/common/title_cache_runtime128.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/title_cache_runtime128.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/title_cache_runtime128.s	target-conditional	#if C128
+commodore/common/title_data.s	raw-c64-bank-port	$01
+commodore/common/title_data.s	target-conditional	#if C128
+commodore/common/title_screen.s	kernal-symbol	KERNAL_SETLFS
+commodore/common/title_screen.s	kernal-symbol	KERNAL_SETNAM
+commodore/common/title_screen.s	target-conditional	#if C128
+commodore/common/title_screen.s	target-conditional	#if PLUS4
+commodore/common/title_sysinfo_banked.s	platform-name	REU
+commodore/common/title_sysinfo_banked.s	raw-c64-bank-port	$01
+commodore/common/title_sysinfo_banked.s	target-conditional	#if !C128
+commodore/common/title_sysinfo_banked.s	target-conditional	#if C128
+commodore/common/turn.s	raw-c64-bank-port	$01
+commodore/common/ui_character.s	target-conditional	#if C128
+commodore/common/ui_disk_setup.s	target-conditional	#if C128
+commodore/common/ui_disk_setup.s	target-conditional	#if PLUS4
+commodore/common/ui_equipment.s	raw-c64-bank-port	$01
+commodore/common/ui_equipment.s	target-conditional	#if C128
+commodore/common/ui_help.s	target-conditional	#if C128
+commodore/common/ui_help.s	target-conditional	#if PLUS4
+commodore/common/ui_help_clear.s	target-conditional	#if C128
+commodore/common/ui_home.s	raw-c64-bank-port	$01
+commodore/common/ui_inventory.s	raw-c64-bank-port	$01
+commodore/common/ui_inventory.s	target-conditional	#if C128
+commodore/common/ui_messages.s	raw-c64-bank-port	$01
+commodore/common/ui_messages.s	target-conditional	#if C128
+commodore/common/ui_recall.s	target-conditional	#if C128
+commodore/common/ui_restore.s	target-conditional	#if !C128
+commodore/common/ui_restore.s	target-conditional	#if C128
+commodore/common/ui_status.s	raw-c64-bank-port	$01
+commodore/common/ui_status.s	target-conditional	#if !C128
+commodore/common/ui_status.s	target-conditional	#if C128
+commodore/common/ui_store.s	raw-c64-bank-port	$01
+commodore/common/ui_store.s	target-conditional	#if C128
+commodore/common/ui_wizard.s	target-conditional	#if !C128
+commodore/common/ui_wizard.s	target-conditional	#if C128
+commodore/common/vic_palette_consts.s	raw-c64-bank-port	$01
+commodore/common/wizard.s	target-conditional	#if !C128
+commodore/common/wizard.s	target-conditional	#if C128
+commodore/common/zeropage.s	raw-c64-bank-port	$01
