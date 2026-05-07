@@ -11,15 +11,39 @@ code should own hardware execution.
 
 ## Current Failure Context
 
-- [ ] Plus/4 disk setup/save is not trustworthy yet.
-- [ ] `make testplus4` is currently only an assembly/build artifact gate.
+- [x] Plus/4 disk setup/save/load has one manual success pass after commit
+      `bd43365 Fix Plus/4 save disk marker validation`.
+- [ ] Plus/4 disk setup/save/load is not yet covered by an automated runtime
+      gate.
+- [ ] `make testplus4` is currently only an assembly/build artifact gate;
+      `make testplus4-runtime` has one minimal runtime smoke.
 - [ ] Manual screenshots and VICE monitor traces are diagnostic evidence, not
       release gates.
-- [ ] Current known Plus/4 disk failure: `Disk code $00 phase $83` during save
-      disk initialization/readback.
+- [x] Resolved Plus/4 disk failure: `Disk code $00 phase $83` during save disk
+      initialization/readback. Root cause was Plus/4 KERNAL calls clobbering
+      `X` while marker read/write loops used `X` as the persistent marker
+      index.
 - [ ] Previous Plus/4 failures included C64 leakage through `$01` banking,
       `$dd00` VIC/CIA assumptions, raw KERNAL calls, hidden filename buffers,
       IRQ state drift, TED color mapping, and input repeat/release behavior.
+
+## Current HAL Position
+
+- [x] HAL contract skeleton exists in `commodore/hal/`.
+- [x] Platform HAL placeholder directories exist for C64, C128, and Plus/4.
+- [x] Static HAL boundary audit exists and passes against the current
+      allowlist.
+- [x] Storage HAL adapter labels exist for C64, C128, and Plus/4 and are
+      checked by `tools/check_hal_storage_exports.py`.
+- [x] Plus/4 storage has been stabilized enough for manual disk initialize,
+      save, and load.
+- [ ] Storage is still the highest-risk platform boundary because common code
+      and platform code still share too much disk state, filename policy,
+      logical file policy, status reporting, and platform-specific KERNAL
+      assumptions.
+- [ ] Next concrete HAL step: define and enforce the storage HAL adapter layer
+      first, then add automated Plus/4 disk runtime gates before migrating more
+      storage behavior out of common code.
 
 ## Target Directory Structure
 
@@ -213,11 +237,12 @@ Required services:
 
 ### Phase 0: Baseline Safety
 
-- [ ] Record current build commands:
+- [x] Record current build commands:
       `make build`, `make disk`, `make test64`, `make test128-fast`,
-      `make test128-fast-smoke`, `make testplus4`.
-- [ ] Record that `make testplus4` is not yet a runtime gate.
-- [ ] Record current known Plus/4 failure: `Disk code $00 phase $83`.
+      `make test128-fast-smoke`, `make testplus4`, `make testplus4-runtime`,
+      `make diskplus4`.
+- [x] Record that `make testplus4` is not yet a runtime gate.
+- [x] Record resolved Plus/4 failure: `Disk code $00 phase $83`.
 - [ ] Ensure no HAL migration starts before C64/C128 baseline gates are named.
 - [ ] Preserve current C64/C128 behavior unless a test proves an existing bug.
 
@@ -241,6 +266,15 @@ Required services:
 - [ ] Change `make testplus4` to run real runtime smoke after the harness is
       reliable.
 
+Gate to leave Phase 1:
+
+- [ ] `make testplus4-runtime` covers boot/title plus at least one disk setup
+      success and one disk setup failure.
+- [ ] A valid-save-disk fixture can be created deterministically by the test
+      harness.
+- [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
+      disk error return.
+
 ### Phase 2: HAL Contract Skeleton
 
 - [x] Add `commodore/hal/` contract files.
@@ -248,10 +282,32 @@ Required services:
 - [ ] Add platform capability/layout manifests.
 - [ ] Document register, clobber, carry, IRQ, and ROM/RAM contracts for each
       service.
-- [ ] Wire C64 with thin adapters first.
-- [ ] Wire C128 with thin adapters second.
+- [x] Wire C64 with thin adapters first.
+- [x] Wire C128 with thin adapters second.
 - [ ] Wire Plus/4 independently; do not use `c64_*` aliases for storage,
       banking, input, sound, or TED display services.
+
+Phase 2 next task:
+
+- [x] Write `commodore/hal/hal_storage.s` as the authoritative storage ABI:
+      status codes, phase bands, required labels, register conventions,
+      clobbers, residency/banking rules, and command-channel expectations.
+- [x] Add platform storage adapter files under `commodore/{c64,c128,plus4}/hal/`
+      without changing existing behavior yet.
+- [x] Add a completeness/static check that fails if any platform does not
+      provide each required storage label.
+
+Storage adapter note:
+
+- [x] The first storage adapter pass uses zero-byte `.label` aliases to avoid
+      changing C64/C128/Plus4 memory layout or behavior. This is intentional:
+      C64 default memory is already close enough to `$C000` that resident
+      adapter code caused a layout assertion failure during implementation.
+- [x] Plus/4 storage adapters point at `plus4_kernal_*` wrapper names for the
+      low-level ROM/RAM + KERNAL boundary. Transitional `c64_disk_*` aliases
+      remain inside Plus/4 only until old call sites migrate.
+- [ ] Replace aliases with real platform-owned routines only one slice at a
+      time, with C64/C128/Plus4 runtime gates named before each migration.
 
 ### Phase 3: Non-Storage HAL Migration
 
@@ -267,7 +323,9 @@ Required services:
 
 ### Phase 4: Storage HAL Migration
 
-- [ ] Define normalized storage error ABI.
+- [x] Define first-pass normalized storage error ABI.
+- [ ] Confirm normalized storage error ABI against C64, C128, and Plus/4
+      runtime behavior.
 - [ ] Move filenames into platform storage implementations.
 - [ ] Move logical file numbers and secondary addresses into platform storage.
 - [ ] Move command channel reads into platform storage.
@@ -313,17 +371,18 @@ Required services:
 
 ### Disk Setup/Save/Load Changes
 
-- [ ] Clean boot.
-- [ ] Valid save disk setup.
+- [x] Plus/4 clean boot manually verified during save/load testing.
+- [x] Plus/4 valid save disk setup manually verified.
 - [ ] Wrong/missing media behavior.
-- [ ] Save disk initialization.
-- [ ] Save write.
-- [ ] Load resume.
-- [ ] Friendly disk error reporting.
-- [ ] No hang.
-- [ ] No reset.
-- [ ] No BRK escape.
-- [ ] No CPU JAM.
+- [x] Plus/4 save disk initialization manually verified.
+- [x] Plus/4 save write manually verified.
+- [x] Plus/4 load resume manually verified.
+- [ ] Friendly disk error reporting across all platforms.
+- [x] No hang in the manually verified Plus/4 happy path.
+- [x] No reset in the manually verified Plus/4 happy path.
+- [x] No BRK escape in the manually verified Plus/4 happy path.
+- [x] No CPU JAM in the manually verified Plus/4 happy path.
+- [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
 
 ## Normalized Storage Error ABI
 

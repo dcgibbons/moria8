@@ -65,9 +65,9 @@ exit_trampoline:
 
 #import "../common/zeropage.s"
 
-c64_disk_call_saved_bank: .byte 0
+plus4_kernal_call_saved_bank: .byte 0
 
-c64_disk_call:
+plus4_kernal_call:
     pha
     txa
     pha
@@ -112,60 +112,75 @@ c64_disk_call:
     plp
     rts
 
-c64_disk_setnam:
-    jsr c64_disk_call
+plus4_kernal_setnam:
+    jsr plus4_kernal_call
     .word $ffbd
     rts
 
-c64_disk_setlfs:
-    jsr c64_disk_call
+plus4_kernal_setlfs:
+    jsr plus4_kernal_call
     .word $ffba
     rts
 
-c64_disk_open:
-    jsr c64_disk_call
+plus4_kernal_open:
+    jsr plus4_kernal_call
     .word $ffc0
     rts
 
-c64_disk_close:
-    jsr c64_disk_call
+plus4_kernal_close:
+    jsr plus4_kernal_call
     .word $ffc3
     rts
 
-c64_disk_chkout:
-    jsr c64_disk_call
+plus4_kernal_chkout:
+    jsr plus4_kernal_call
     .word $ffc9
     rts
 
-c64_disk_chkin:
-    jsr c64_disk_call
+plus4_kernal_chkin:
+    jsr plus4_kernal_call
     .word $ffc6
     rts
 
-c64_disk_clrchn:
-    jsr c64_disk_call
+plus4_kernal_clrchn:
+    jsr plus4_kernal_call
     .word $ffcc
     rts
 
-c64_disk_chrin:
-    jsr c64_disk_call
+plus4_kernal_chrin:
+    jsr plus4_kernal_call
     .word $ffcf
     rts
 
-c64_disk_chrout:
-    jsr c64_disk_call
+plus4_kernal_chrout:
+    jsr plus4_kernal_call
     .word $ffd2
     rts
 
-c64_disk_readst:
-    jsr c64_disk_call
+plus4_kernal_readst:
+    jsr plus4_kernal_call
     .word $ffb7
     rts
 
-c64_disk_load:
-    jsr c64_disk_call
+plus4_kernal_load:
+    jsr plus4_kernal_call
     .word $ffd5
     rts
+
+// Transitional compatibility names for shared code that has not migrated to
+// HAL storage labels yet. Do not add new Plus/4 call sites using c64_disk_*.
+.label c64_disk_call = plus4_kernal_call
+.label c64_disk_setnam = plus4_kernal_setnam
+.label c64_disk_setlfs = plus4_kernal_setlfs
+.label c64_disk_open = plus4_kernal_open
+.label c64_disk_close = plus4_kernal_close
+.label c64_disk_chkout = plus4_kernal_chkout
+.label c64_disk_chkin = plus4_kernal_chkin
+.label c64_disk_clrchn = plus4_kernal_clrchn
+.label c64_disk_chrin = plus4_kernal_chrin
+.label c64_disk_chrout = plus4_kernal_chrout
+.label c64_disk_readst = plus4_kernal_readst
+.label c64_disk_load = plus4_kernal_load
 
 // KERNAL filename/command bytes must live below BASIC ROM. The Plus/4 KERNAL
 // reads these pointers while ROM is visible over $8000-$BFFF.
@@ -205,25 +220,25 @@ load_filename:
     .byte $2c, $53, $2c, $52            // ",S,R"
 .label load_filename_len = * - load_filename
 
-c64_disk_marker_present:
+plus4_storage_marker_present:
     .const C64_DISK_MARKER_FILE_NUM = 6
     .const C64_DISK_MARKER_SEC_RD = 2
     lda #1
     sta disk_status
     lda #$81                    // DISK_ERR_MARKER_OPEN
     jsr disk_error_set_phase
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_clrchn
     lda #C64_DISK_MARKER_FILE_NUM
-    jsr c64_disk_close
+    jsr plus4_kernal_close
     lda #disk_marker_read_fname_len
     ldx #<disk_marker_read_fname
     ldy #>disk_marker_read_fname
-    jsr c64_disk_setnam
+    jsr plus4_kernal_setnam
     lda #C64_DISK_MARKER_FILE_NUM
     ldx save_device
     ldy #C64_DISK_MARKER_SEC_RD
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
     bcc !cdmp_open_ok+
     sta disk_error_readst
     jmp !cdmp_done+
@@ -231,7 +246,7 @@ c64_disk_marker_present:
     lda #$82                    // DISK_ERR_MARKER_CHKIN
     jsr disk_error_set_phase
     ldx #C64_DISK_MARKER_FILE_NUM
-    jsr c64_disk_chkin
+    jsr plus4_kernal_chkin
     bcc !cdmp_chkin_ok+
     sta disk_error_readst
     jmp !cdmp_close+
@@ -241,7 +256,7 @@ c64_disk_marker_present:
     lda #0
     sta disk_temp
 !cdmp_read:
-    jsr c64_disk_chrin
+    jsr plus4_kernal_chrin
     sta disk_error_actual
     ldx disk_temp
     lda disk_marker_magic,x
@@ -249,7 +264,7 @@ c64_disk_marker_present:
     stx disk_error_index
     cmp disk_error_actual
     bne !cdmp_close+
-    jsr c64_disk_readst
+    jsr plus4_kernal_readst
     sta disk_error_readst
     beq !cdmp_byte_ok+
     cmp #$40
@@ -265,8 +280,8 @@ c64_disk_marker_present:
     dec disk_status
 !cdmp_close:
     lda #C64_DISK_MARKER_FILE_NUM
-    jsr c64_disk_close
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_close
+    jsr plus4_kernal_clrchn
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
@@ -282,6 +297,8 @@ c64_disk_marker_present:
     jsr disk_error_clear
     clc
     rts
+
+.label c64_disk_marker_present = plus4_storage_marker_present
 
 // tramp_dig_ability — pinned low for common tunnel code.
 tramp_dig_ability:
@@ -347,29 +364,30 @@ tramp_dig_ability:
 #import "../common/title_screen.s"
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
+#import "hal/storage.s"
 
-// Resident helper for C64 save-disk marker creation. It must execute from
+// Resident helper for Plus/4 save-disk marker creation. It must execute from
 // visible RAM while KERNAL is banked in; the $F000 runtime is hidden then.
-c64_disk_marker_write_resident:
+plus4_storage_marker_write_resident:
     lda #2
     sta disk_status
     lda #DISK_ERR_MARKER_WRITE_OPEN
     jsr disk_error_set_phase
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_clrchn
     lda #DISK_MARKER_FILE_NUM
-    jsr c64_disk_close
+    jsr plus4_kernal_close
     // Use DOS replace syntax here. The preceding scratch is still useful for
     // compatibility, but a stale marker file must not survive if scratch fails
     // silently on a particular IEC drive implementation.
     lda #disk_marker_write_fname_len
     ldx #<disk_marker_write_fname
     ldy #>disk_marker_write_fname
-    jsr c64_disk_setnam
+    jsr plus4_kernal_setnam
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
     ldy #DISK_MARKER_SEC_WR
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
     bcc !cdmw_open_ok+
     sta disk_error_readst
     jmp !cdmw_close+
@@ -377,7 +395,7 @@ c64_disk_marker_write_resident:
     lda #DISK_ERR_MARKER_CHKOUT
     jsr disk_error_set_phase
     ldx #DISK_MARKER_FILE_NUM
-    jsr c64_disk_chkout
+    jsr plus4_kernal_chkout
     bcc !cdmw_chkout_ok+
     sta disk_error_readst
     jmp !cdmw_close+
@@ -390,8 +408,8 @@ c64_disk_marker_write_resident:
     ldx disk_temp
     lda disk_marker_magic,x
     stx disk_error_index
-    jsr c64_disk_chrout
-    jsr c64_disk_readst
+    jsr plus4_kernal_chrout
+    jsr plus4_kernal_readst
     sta disk_error_readst
     bne !cdmw_close+
     inc disk_temp
@@ -401,9 +419,9 @@ c64_disk_marker_write_resident:
     lda #0
     sta disk_status
 !cdmw_close:
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_clrchn
     lda #DISK_MARKER_FILE_NUM
-    jsr c64_disk_close
+    jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
     jsr plus4_disk_read_command_status
@@ -417,35 +435,37 @@ c64_disk_marker_write_resident:
     clc
     rts
 
+.label c64_disk_marker_write_resident = plus4_storage_marker_write_resident
+
 plus4_disk_read_command_status:
     lda #0
     sta disk_error_dos0
     sta disk_error_dos1
     ldx #0
     ldy #0
-    jsr c64_disk_setnam
+    jsr plus4_kernal_setnam
     lda #CMD_CHANNEL
     ldx save_device
     ldy #CMD_CHANNEL
-    jsr c64_disk_setlfs
-    jsr c64_disk_open
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
     bcs !p4dcs_done+
     ldx #CMD_CHANNEL
-    jsr c64_disk_chkin
+    jsr plus4_kernal_chkin
     bcs !p4dcs_close+
-    jsr c64_disk_chrin
+    jsr plus4_kernal_chrin
     sta disk_error_dos0
-    jsr c64_disk_readst
+    jsr plus4_kernal_readst
     sta disk_error_readst
-    jsr c64_disk_chrin
+    jsr plus4_kernal_chrin
     sta disk_error_dos1
-    jsr c64_disk_readst
+    jsr plus4_kernal_readst
     sta disk_error_readst
     jsr plus4_disk_status_to_disk_status
 !p4dcs_close:
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_clrchn
     lda #CMD_CHANNEL
-    jsr c64_disk_close
+    jsr plus4_kernal_close
 !p4dcs_done:
     rts
 
@@ -664,10 +684,10 @@ c64_install_ram_irq_vectors:
     rts
 
 // ============================================================
-// kernal_load_safe — KERNAL LOAD wrapper for C64
+// kernal_load_safe — KERNAL LOAD wrapper for Plus/4
 // ============================================================
 kernal_load_safe:
-    jsr c64_disk_load       // KERNAL LOAD — carry set on error
+    jsr plus4_kernal_load   // KERNAL LOAD — carry set on error
     php                     // Preserve carry for caller
     jsr platform_runtime_resync_c64
     plp
@@ -1432,19 +1452,19 @@ init_load_banked:
     lda #plus4_banked_fname_len
     ldx #<plus4_banked_fname
     ldy #>plus4_banked_fname
-    jsr c64_disk_setnam
+    jsr plus4_kernal_setnam
     lda #2
     ldx #SAVE_DEVICE
     ldy #1                      // Use PRG header address ($F000)
-    jsr c64_disk_setlfs
+    jsr plus4_kernal_setlfs
     lda #0
     ldx #$00
     ldy #$f0
-    jsr c64_disk_load
+    jsr plus4_kernal_load
     php
     lda #2
-    jsr c64_disk_close
-    jsr c64_disk_clrchn
+    jsr plus4_kernal_close
+    jsr plus4_kernal_clrchn
     plp
     bcs !load_failed+
     rts

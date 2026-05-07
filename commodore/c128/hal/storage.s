@@ -1,0 +1,27 @@
+#importonce
+// C128 storage HAL adapter.
+//
+// Zero-byte aliases over the current C128 storage implementation. Raw
+// KERNAL-style labels expect the caller to use hal_storage_enter_os/exit_os
+// when ROM visibility is required, matching the current disk runtime pattern.
+
+.label hal_storage_enter_os = disk_kernal_enter
+.label hal_storage_exit_os = disk_kernal_exit
+.label hal_storage_probe_media = probe_device
+.label hal_storage_require_program_media = c128_require_program_media
+.label hal_storage_require_save_media = disk_require_save_media
+.label hal_storage_marker_present = disk_marker_present
+.label hal_storage_marker_init = disk_marker_init
+.label hal_storage_setnam = KERNAL_SETNAM
+.label hal_storage_setlfs = KERNAL_SETLFS
+.label hal_storage_open = KERNAL_OPEN
+.label hal_storage_close = KERNAL_CLOSE
+.label hal_storage_chkin = KERNAL_CHKIN
+.label hal_storage_chkout = KERNAL_CHKOUT
+.label hal_storage_chrin = KERNAL_CHRIN
+.label hal_storage_chrout = KERNAL_CHROUT
+.label hal_storage_clrchn = KERNAL_CLRCHN
+.label hal_storage_readst = KERNAL_READST
+.label hal_storage_load = KERNAL_LOAD
+.label hal_storage_save_record = save_game
+.label hal_storage_load_record = load_game

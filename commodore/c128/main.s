@@ -3250,6 +3250,7 @@ c128_resident_select_end:
 .segment C128ResidentPersist
 c128_resident_persist_start:
 #import "../common/save.s"
+#import "hal/storage.s"
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL

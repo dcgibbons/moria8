@@ -259,6 +259,7 @@ tramp_dig_ability:
 #import "../common/title_screen.s"
 #import "../common/wizard.s"
 #import "../common/game_loop.s"
+#import "hal/storage.s"
 
 // Resident helper for C64 save-disk marker creation. It must execute from
 // visible RAM while KERNAL is banked in; the $F000 runtime is hidden then.

@@ -261,6 +261,7 @@ check-6502-lint:
 
 check-hal-boundaries:
 	cd .. && python3 tools/check_hal_boundaries.py
+	cd .. && python3 tools/check_hal_storage_exports.py
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)
