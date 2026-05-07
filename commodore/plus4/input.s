@@ -23,6 +23,18 @@ input_run_cancel_check:
     jmp input_run_process_sample
 
 input_get_key:
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT
+    ldx plus4_test_key_index
+    lda plus4_test_key_script,x
+    beq !wait+
+    inc plus4_test_key_index
+    rts
+!wait:
+    jmp !wait-
+plus4_test_key_index: .byte 0
+plus4_test_key_script:
+    .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
+#else
     php
     sei
 !poll:
@@ -45,6 +57,7 @@ input_get_key:
     rts
 
 igk_key: .byte 0
+#endif
 
 input_wait_release:
     php

@@ -5,6 +5,29 @@ unreleased for release notes.
 
 ## Commodore Ports
 
+### Friendlier Commodore I/O error messages
+
+The current storage HAL diagnostics preserve useful raw data, but the in-game
+error text is still too developer-oriented on space-constrained targets. For
+example, `Disk error! 74` correctly reports the drive status code, but it should
+also tell a player that the drive is not ready and what to check.
+
+Required work:
+
+- Keep raw diagnostic bytes available: DOS status, KERNAL `$ST`, phase, and
+  device number.
+- Add a compact platform-owned classifier that maps common storage failures to
+  player-facing text.
+- Preserve the raw fallback for unmapped failures so debugging does not regress.
+- Avoid bloating resident code or destabilizing C64/C128 storage behavior.
+- Cover C64, C128, and Plus/4 with storage-error tests or smoke cases.
+
+Acceptance target:
+
+- Common failures such as no disk/drive not ready, write protect, disk full,
+  missing file, and wrong save disk show clear end-user messages while retaining
+  enough diagnostic detail for debugging.
+
 ### Expand monster catalog toward full Umoria roster
 
 Moria8 currently ships with 120 selected creatures from Umoria's 279-creature

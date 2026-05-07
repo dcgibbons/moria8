@@ -242,9 +242,17 @@ save_game:
     ldx #HSTR_SAVE_NEED_SAVE
     bne !save_media_fail+
 !save_wrong_media:
+#if PLUS4
+    jsr save_select_media_error_msg_plus4
+    jmp !save_media_fail+
+#endif
     ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
     jsr huff_print_msg
+#if PLUS4
+    jsr save_append_disk_detail_plus4
+    jsr input_get_modal_dismiss_key
+#endif
 save_return_fail:
 #if !C128 && !PLUS4
     lda #BANK_NO_BASIC
@@ -252,6 +260,29 @@ save_return_fail:
 #endif
     clc
     rts
+
+#if PLUS4
+save_select_media_error_msg_plus4:
+    lda disk_status
+    cmp #74
+    beq !ioerr+
+    lda disk_error_readst
+    bne !ioerr+
+    lda disk_error_dos0
+    beq !wrong+
+    lda disk_error_dos0
+    cmp #$36                    // Missing marker file: 62,FILE NOT FOUND.
+    bne !ioerr+
+    lda disk_error_dos1
+    cmp #$32
+    bne !ioerr+
+!wrong:
+    ldx #HSTR_SAVE_BAD_SAVE
+    rts
+!ioerr:
+    ldx #HSTR_SAVE_IOERR
+    rts
+#endif
 !save_media_ok:
 #if C128
     jsr save_confirm_overwrite
@@ -275,6 +306,9 @@ save_return_fail:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
+#if PLUS4
+    jsr disk_error_clear
+#endif
 
     // Open file for writing
     // SETNAM
@@ -295,6 +329,13 @@ save_return_fail:
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !save_open_ok+
+#if PLUS4
+    pha
+    lda #$a1
+    jsr disk_error_set_phase
+    pla
+    sta disk_error_readst
+#endif
     jmp !save_error+
 !save_open_ok:
 
@@ -302,6 +343,13 @@ save_return_fail:
     ldx #SAVE_FILE_NUM
     jsr SAVE_CHKOUT
     bcc !save_chkout_ok+
+#if PLUS4
+    pha
+    lda #$a2
+    jsr disk_error_set_phase
+    pla
+    sta disk_error_readst
+#endif
     jmp !save_error_close+
 !save_chkout_ok:
 
@@ -439,6 +487,10 @@ save_return_fail:
 !save_error:
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
+#if PLUS4
+    jsr save_append_disk_detail_plus4
+    jsr input_get_modal_dismiss_key
+#endif
     jmp save_return_fail
 
 // ============================================================
@@ -460,6 +512,10 @@ load_game:
     ldx #HSTR_SAVE_NEED_SAVE
     bne !load_media_fail+
 !load_wrong_media:
+#if PLUS4
+    jsr save_select_media_error_msg_plus4
+    jmp !load_media_fail+
+#endif
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
     jsr huff_print_msg
@@ -820,9 +876,16 @@ save_write_block:
     jsr SAVE_CHROUT
     // Check status
     jsr SAVE_READST
+    sta zp_temp0
     and #$03                // Timeout or error bits
     beq !swb_ok+
     inc save_io_error
+#if PLUS4
+    lda #$a3
+    jsr disk_error_set_phase
+    lda zp_temp0
+    sta disk_error_readst
+#endif
 !swb_ok:
     // Advance pointer
     iny
@@ -870,9 +933,16 @@ save_write_byte:
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
+    sta zp_temp0
     and #$03
     beq !swby_ok+
     inc save_io_error
+#if PLUS4
+    lda #$a3
+    jsr disk_error_set_phase
+    lda zp_temp0
+    sta disk_error_readst
+#endif
 !swby_ok:
     pla
 #if C128
@@ -897,9 +967,16 @@ save_write_byte_raw:
     jsr SAVE_CHROUT
     pha
     jsr SAVE_READST
+    sta zp_temp0
     and #$03
     beq !swbr_ok+
     inc save_io_error
+#if PLUS4
+    lda #$a3
+    jsr disk_error_set_phase
+    lda zp_temp0
+    sta disk_error_readst
+#endif
 !swbr_ok:
     pla
 #if C128

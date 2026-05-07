@@ -1486,6 +1486,33 @@ plus4_banked_fname:
     #import "../common/ui_home.s"
     #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
+
+save_append_disk_detail_plus4:
+    lda #$20
+    jsr screen_put_char
+    lda disk_error_dos0
+    bne !dos+
+    lda disk_error_phase
+    ora disk_error_readst
+    bne !status+
+    rts
+!dos:
+    lda disk_error_dos0
+    jsr screen_put_char
+    lda disk_error_dos1
+    jmp screen_put_char
+!status:
+    lda #$24                    // $
+    jsr screen_put_char
+    lda disk_error_readst
+    jsr screen_put_hex
+    lda #$2f                    // /
+    jsr screen_put_char
+    lda #$24                    // $
+    jsr screen_put_char
+    lda disk_error_phase
+    jmp screen_put_hex
+
     #import "../common/player_magic_learn_op.s"
     #import "../common/player_magic_map.s"
     #import "../common/player_magic_turn_banked.s"

@@ -14,8 +14,9 @@ code should own hardware execution.
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
 - [ ] Plus/4 disk setup/save/load is only partially covered by automated
-      runtime gates. `make testplus4-runtime` now covers the marker-init
-      storage path against a real product disk and freshly formatted save disk.
+      runtime gates. `make testplus4-runtime` now covers marker initialization
+      directly and a scripted product Disk Setup success path against a freshly
+      formatted drive-9 save disk.
 - [ ] `make testplus4` is currently only an assembly/build artifact gate;
       `make testplus4-runtime` has minimal runtime and marker-init storage
       smokes.
@@ -258,7 +259,7 @@ Required services:
 - [ ] Add new-game-to-town smoke.
 - [ ] Add dungeon-entry smoke.
 - [ ] Add overlay-load smoke.
-- [ ] Add disk-setup smoke with valid save disk.
+- [x] Add disk-setup smoke with valid save disk.
 - [ ] Add missing/wrong save media smoke.
 - [x] Add save-disk initialization smoke for the marker create/readback path.
 - [ ] Add save-write smoke.
@@ -273,6 +274,9 @@ Gate to leave Phase 1:
       success and one disk setup failure.
 - [x] A valid-save-disk fixture can be created deterministically by the test
       harness for marker initialization.
+- [x] A scripted Plus/4 product Disk Setup smoke boots from a D64, initializes
+      a drive-9 save disk, reaches the real initialized-commit path, and checks
+      the resulting `MORIA4.ID` marker on the host disk image.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 
