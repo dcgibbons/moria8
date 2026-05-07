@@ -238,21 +238,29 @@ c64_disk_marker_present:
 !cdmp_chkin_ok:
     lda #$83                    // DISK_ERR_MARKER_READ
     jsr disk_error_set_phase
-    ldx #0
+    lda #0
+    sta disk_temp
 !cdmp_read:
     jsr c64_disk_chrin
-    cmp disk_marker_magic,x
+    sta disk_error_actual
+    ldx disk_temp
+    lda disk_marker_magic,x
+    sta disk_error_expect
+    stx disk_error_index
+    cmp disk_error_actual
     bne !cdmp_close+
     jsr c64_disk_readst
     sta disk_error_readst
     beq !cdmp_byte_ok+
     cmp #$40
     bne !cdmp_close+
+    ldx disk_temp
     cpx #DISK_MARKER_MAGIC_LEN - 1
     bne !cdmp_close+
 !cdmp_byte_ok:
-    inx
-    cpx #DISK_MARKER_MAGIC_LEN
+    inc disk_temp
+    lda disk_temp
+    cmp #DISK_MARKER_MAGIC_LEN
     bcc !cdmp_read-
     dec disk_status
 !cdmp_close:
@@ -350,9 +358,12 @@ c64_disk_marker_write_resident:
     jsr c64_disk_clrchn
     lda #DISK_MARKER_FILE_NUM
     jsr c64_disk_close
-    lda #disk_marker_write_fname_len - 1
-    ldx #<(disk_marker_write_fname + 1)
-    ldy #>(disk_marker_write_fname + 1)
+    // Use DOS replace syntax here. The preceding scratch is still useful for
+    // compatibility, but a stale marker file must not survive if scratch fails
+    // silently on a particular IEC drive implementation.
+    lda #disk_marker_write_fname_len
+    ldx #<disk_marker_write_fname
+    ldy #>disk_marker_write_fname
     jsr c64_disk_setnam
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
@@ -373,15 +384,19 @@ c64_disk_marker_write_resident:
 !cdmw_chkout_ok:
     lda #DISK_ERR_MARKER_WRITE
     jsr disk_error_set_phase
-    ldx #0
+    lda #0
+    sta disk_temp
 !cdmw_write:
+    ldx disk_temp
     lda disk_marker_magic,x
+    stx disk_error_index
     jsr c64_disk_chrout
     jsr c64_disk_readst
     sta disk_error_readst
     bne !cdmw_close+
-    inx
-    cpx #DISK_MARKER_MAGIC_LEN
+    inc disk_temp
+    lda disk_temp
+    cmp #DISK_MARKER_MAGIC_LEN
     bcc !cdmw_write-
     lda #0
     sta disk_status

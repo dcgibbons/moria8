@@ -31,6 +31,9 @@ disk_error_readst: .byte 0
 disk_error_dos0:   .byte 0
 disk_error_dos1:   .byte 0
 disk_error_device: .byte 8
+disk_error_actual: .byte 0
+disk_error_expect: .byte 0
+disk_error_index:  .byte 0
 #endif
 
 // PETSCII command bytes / marker file contents
@@ -153,6 +156,9 @@ disk_reset_session_state:
     sta disk_error_readst
     sta disk_error_dos0
     sta disk_error_dos1
+    sta disk_error_actual
+    sta disk_error_expect
+    sta disk_error_index
 #endif
 #if C128
     lda #C128_MEDIA_UNKNOWN
@@ -167,6 +173,9 @@ disk_error_clear:
     sta disk_error_readst
     sta disk_error_dos0
     sta disk_error_dos1
+    sta disk_error_actual
+    sta disk_error_expect
+    sta disk_error_index
     lda save_device
     sta disk_error_device
     rts
@@ -179,6 +188,9 @@ disk_error_set_phase:
     sta disk_error_readst
     sta disk_error_dos0
     sta disk_error_dos1
+    sta disk_error_actual
+    sta disk_error_expect
+    sta disk_error_index
     rts
 
 disk_error_set_readst:
