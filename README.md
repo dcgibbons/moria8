@@ -12,7 +12,7 @@ and Commodore 128, with additional 8-bit ports planned.
 | -------- | ------ | -------- |
 | Commodore 64 (C64) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c64.d64) |
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c128.d71) |
-| Commodore Plus/4 | Planned | |
+| Commodore Plus/4 | In Progress | |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
