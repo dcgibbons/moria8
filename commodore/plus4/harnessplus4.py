@@ -12,7 +12,7 @@ C128_TESTS_DIR = REPO_ROOT / "commodore" / "c128" / "tests"
 if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
-from vice_connector import VICEConnector, extract_test_symbols, run_test_case
+from vice_connector import VICEConnector, extract_test_symbols, parse_vs_symbols, run_test_case
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
@@ -44,6 +44,97 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2.0)
+
+
+def write_bytes(connector: VICEConnector, start_addr: int, data: list[int], *, debug: bool = False) -> None:
+    for offset, value in enumerate(data):
+        connector.poke(start_addr + offset, value, debug=debug)
+
+
+def run_marker_init_smoke(args: argparse.Namespace) -> int:
+    symbols = parse_vs_symbols(args.main_vs)
+    required = [
+        ".title_menu_loop",
+        ".save_device",
+        ".disk_marker_init",
+        ".disk_marker_present",
+    ]
+    missing = [name for name in required if name not in symbols]
+    if missing:
+        print(f"FAIL: {args.name} (missing symbols: {', '.join(missing)})")
+        return 2
+
+    stub_addr = args.stub_addr
+    fail_addr = stub_addr + 0x12
+    pass_addr = stub_addr + 0x15
+
+    def lo(name: str) -> int:
+        return int(symbols[name], 16) & 0xFF
+
+    def hi(name: str) -> int:
+        return (int(symbols[name], 16) >> 8) & 0xFF
+
+    stub = [
+        0xA9, args.save_device,                         # lda #save_device
+        0x8D, lo(".save_device"), hi(".save_device"),   # sta save_device
+        0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
+        0xB0, 0x08,                                     # bcs fail
+        0x20, lo(".disk_marker_present"), hi(".disk_marker_present"),
+        0xB0, 0x03,                                     # bcs fail
+        0x4C, pass_addr & 0xFF, pass_addr >> 8,         # jmp pass
+        0x4C, fail_addr & 0xFF, fail_addr >> 8,         # fail: jmp fail
+        0x4C, pass_addr & 0xFF, pass_addr >> 8,         # pass: jmp pass
+    ]
+
+    command = build_vice_command(args)
+    command.extend([
+        "-8",
+        str(Path(args.boot_d64).resolve()),
+        "-9",
+        str(Path(args.save_d64).resolve()),
+        "-autostart",
+        str(Path(args.boot_d64).resolve()),
+    ])
+
+    vice_process = subprocess.Popen(
+        command,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
+    try:
+        connector.connect(
+            retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
+            retry_delay=args.connect_retry_delay,
+            debug=args.verbose,
+        )
+        try:
+            connector.run_until(symbols[".title_menu_loop"], timeout=args.timeout, debug=args.verbose)
+        except TimeoutError:
+            print(f"FAIL: {args.name} (timeout before title menu)")
+            return 2
+
+        connector.send_command("bank ram", debug=args.verbose)
+        write_bytes(connector, stub_addr, stub, debug=args.verbose)
+        connector.clear_breakpoints(debug=args.verbose)
+        connector.break_at(pass_addr, debug=args.verbose)
+        connector.break_at(fail_addr, debug=args.verbose)
+        connector.set_register("pc", stub_addr, debug=args.verbose)
+        connector.go()
+        result = connector.wait_for_stop(pass_addr=pass_addr, fail_addr=fail_addr, timeout=args.timeout)
+    finally:
+        connector.close()
+        terminate_vice(vice_process)
+
+    if result.passed:
+        print(f"PASS: {args.name}")
+        return 0
+
+    if args.verbose and result.last_status:
+        print(result.last_status)
+    print(f"FAIL: {args.name} ({result.reason})")
+    return result.exit_code
 
 
 def run_monitor_test(args: argparse.Namespace) -> int:
@@ -92,9 +183,15 @@ def run_monitor_test(args: argparse.Namespace) -> int:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plus/4 Python monitor harness")
+    parser.add_argument("--mode", choices=("prg", "marker-init-smoke"), default="prg")
     parser.add_argument("--name", required=True)
-    parser.add_argument("--prg", required=True)
+    parser.add_argument("--prg")
     parser.add_argument("--vs", help="Path to the companion .vs file; defaults to <prg>.vs")
+    parser.add_argument("--main-vs", help="Product main.vs for disk smoke modes")
+    parser.add_argument("--boot-d64", help="Product boot disk image for disk smoke modes")
+    parser.add_argument("--save-d64", help="Save disk fixture for disk smoke modes")
+    parser.add_argument("--save-device", type=int, default=9)
+    parser.add_argument("--stub-addr", type=lambda value: int(value, 0), default=0x0800)
     parser.add_argument("--vice", default="xplus4")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=6510)
@@ -111,6 +208,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_arg_parser().parse_args()
+    if args.mode == "marker-init-smoke":
+        if not args.main_vs or not args.boot_d64 or not args.save_d64:
+            raise SystemExit("--main-vs, --boot-d64, and --save-d64 are required for marker-init-smoke")
+        return run_marker_init_smoke(args)
+    if not args.prg:
+        raise SystemExit("--prg is required for prg mode")
     return run_monitor_test(args)
 
 

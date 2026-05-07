@@ -13,10 +13,12 @@ code should own hardware execution.
 
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
-- [ ] Plus/4 disk setup/save/load is not yet covered by an automated runtime
-      gate.
+- [ ] Plus/4 disk setup/save/load is only partially covered by automated
+      runtime gates. `make testplus4-runtime` now covers the marker-init
+      storage path against a real product disk and freshly formatted save disk.
 - [ ] `make testplus4` is currently only an assembly/build artifact gate;
-      `make testplus4-runtime` has one minimal runtime smoke.
+      `make testplus4-runtime` has minimal runtime and marker-init storage
+      smokes.
 - [ ] Manual screenshots and VICE monitor traces are diagnostic evidence, not
       release gates.
 - [x] Resolved Plus/4 disk failure: `Disk code $00 phase $83` during save disk
@@ -41,9 +43,8 @@ code should own hardware execution.
       and platform code still share too much disk state, filename policy,
       logical file policy, status reporting, and platform-specific KERNAL
       assumptions.
-- [ ] Next concrete HAL step: define and enforce the storage HAL adapter layer
-      first, then add automated Plus/4 disk runtime gates before migrating more
-      storage behavior out of common code.
+- [ ] Next concrete HAL step: broaden automated Plus/4 disk runtime gates
+      before migrating more storage behavior out of common code.
 
 ## Target Directory Structure
 
@@ -259,7 +260,7 @@ Required services:
 - [ ] Add overlay-load smoke.
 - [ ] Add disk-setup smoke with valid save disk.
 - [ ] Add missing/wrong save media smoke.
-- [ ] Add save-disk initialization smoke.
+- [x] Add save-disk initialization smoke for the marker create/readback path.
 - [ ] Add save-write smoke.
 - [ ] Add load-resume smoke.
 - [ ] Add command-channel status/error smoke.
@@ -270,8 +271,8 @@ Gate to leave Phase 1:
 
 - [ ] `make testplus4-runtime` covers boot/title plus at least one disk setup
       success and one disk setup failure.
-- [ ] A valid-save-disk fixture can be created deterministically by the test
-      harness.
+- [x] A valid-save-disk fixture can be created deterministically by the test
+      harness for marker initialization.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 
