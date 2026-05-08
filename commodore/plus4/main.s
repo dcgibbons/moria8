@@ -577,7 +577,7 @@ title_enter_menu:
     jsr title_draw_menu
     jsr plus4_title_clear_lower_rows
 
-#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
     jsr probe_device
     lda #9

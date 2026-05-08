@@ -23,7 +23,7 @@ input_run_cancel_check:
     jmp input_run_process_sample
 
 input_get_key:
-#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx plus4_test_key_index
     lda plus4_test_key_script,x
     beq !wait+
@@ -37,6 +37,8 @@ plus4_test_key_script:
     .byte $4c, 0                                 // L
 #elif PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     .byte $4c, $d3, 0                            // L, SHIFT+S
+#elif PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
+    .byte $4c, 0                                 // L
 #else
     .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
 #endif

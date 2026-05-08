@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,8 @@ if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
 from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
+
+MEM_DUMP_RE = re.compile(r">\S+:\S+\s+([0-9a-fA-F]{2})")
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
@@ -63,10 +66,19 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
         process.wait(timeout=2.0)
 
 
-def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> MonitorTestResult:
+def read_byte(connector: VICEConnector, addr: str) -> int:
+    dump = connector.send_command(f"m {addr} {addr}")
+    match = MEM_DUMP_RE.search(dump)
+    if not match:
+        raise ValueError(f"could not parse memory dump for ${addr}: {dump!r}")
+    return int(match.group(1), 16)
+
+
+def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[MonitorTestResult, dict[str, int]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
     result = MonitorTestResult(False, "not run", "")
+    diagnostics: dict[str, int] = {}
     try:
         process = subprocess.Popen(
             build_vice_command(args),
@@ -91,7 +103,12 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> MonitorTestR
             fail_addr=fail_addr,
             timeout=args.timeout,
         )
-        return result
+        if result.passed:
+            for key in ("disk_error_phase", "disk_error_readst", "disk_error_dos0", "disk_error_dos1", "disk_status"):
+                addr = resolved.get(key)
+                if addr:
+                    diagnostics[key] = read_byte(connector, addr)
+        return result, diagnostics
     finally:
         if process is not None and process.poll() is None:
             try:
@@ -110,6 +127,10 @@ def main() -> int:
     parser.add_argument("--save-d64", type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--expect", choices=("initialized", "init-fail"), default="initialized")
+    parser.add_argument("--expect-dos-code")
+    parser.add_argument("--expect-phase")
+    parser.add_argument("--expect-disk-status")
+    parser.add_argument("--print-diagnostics", action="store_true")
     parser.add_argument("--limitcycles", type=int, default=0)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--drive9-type", default="1541")
@@ -126,6 +147,13 @@ def main() -> int:
         "commit_initialized": ".disk_setup_commit_initialized",
         "init_fail": ".uds_show_init_fail",
     }
+    optional = {
+        "disk_error_phase": ".disk_error_phase",
+        "disk_error_readst": ".disk_error_readst",
+        "disk_error_dos0": ".disk_error_dos0",
+        "disk_error_dos1": ".disk_error_dos1",
+        "disk_status": ".disk_status",
+    }
     resolved: dict[str, str] = {}
     for key, symbol in required.items():
         addr = symbols.get(symbol)
@@ -133,9 +161,35 @@ def main() -> int:
             print(f"FAIL: missing symbol {symbol} in {args.main_vs}")
             return 2
         resolved[key] = normalize_addr(addr)
+    for key, symbol in optional.items():
+        addr = symbols.get(symbol)
+        if addr:
+            resolved[key] = normalize_addr(addr)
 
-    result = run_vice(args, resolved)
+    result, diagnostics = run_vice(args, resolved)
     if result.passed:
+        if args.print_diagnostics:
+            print(f"diagnostics: {diagnostics}")
+        if args.expect_dos_code:
+            if len(args.expect_dos_code) != 2 or "disk_error_dos0" not in diagnostics or "disk_error_dos1" not in diagnostics:
+                print("FAIL: --expect-dos-code requires two digits and disk error symbols")
+                return 2
+            actual = f"{diagnostics['disk_error_dos0'] - 0x30}{diagnostics['disk_error_dos1'] - 0x30}"
+            if actual != args.expect_dos_code:
+                print(f"FAIL: expected DOS code {args.expect_dos_code}, got {actual} ({diagnostics})")
+                return 2
+        if args.expect_phase:
+            actual_phase = diagnostics.get("disk_error_phase")
+            expected_phase = int(args.expect_phase, 0)
+            if actual_phase != expected_phase:
+                print(f"FAIL: expected phase ${expected_phase:02x}, got ${actual_phase or 0:02x} ({diagnostics})")
+                return 2
+        if args.expect_disk_status:
+            actual_status = diagnostics.get("disk_status")
+            expected_status = int(args.expect_disk_status, 0)
+            if actual_status != expected_status:
+                print(f"FAIL: expected disk status ${expected_status:02x}, got ${actual_status or 0:02x} ({diagnostics})")
+                return 2
         if args.expect == "init-fail":
             print("PASS: disk_setup_missing_save_plus4")
         else:

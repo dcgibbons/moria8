@@ -259,7 +259,10 @@ run_disk_setup_missing_save_smoke() {
         --vice "$VICE" \
         --boot-d64 "$boot_d64" \
         --main-vs "$main_vs" \
-        --expect init-fail; then
+        --expect init-fail \
+        --expect-dos-code 74 \
+        --expect-phase 0x83 \
+        --expect-disk-status 74; then
         PASS=$((PASS + 1))
     else
         FAIL=$((FAIL + 1))
@@ -361,6 +364,94 @@ run_save_write_product_smoke() {
     fi
 }
 
+run_load_wrong_media_product_smoke() {
+    local name="load_wrong_media_product_plus4"
+    local out_dir="$PLUS4_DIR/out"
+    local smoke_out_rel="plus4/out/product-load-wrong-media-smoke"
+    local smoke_out="$PLUS4_DIR/out/product-load-wrong-media-smoke"
+    local smoke_plus4="$smoke_out/plus4"
+    local save_d64="$out_dir/test-load-wrong-media-product-save.d64"
+    local marker_blob="$out_dir/WRONG.MORIA4.ID"
+    local main_vs="$smoke_out/plus4/main.vs"
+    local boot_d64="$smoke_out/moria8-plus4.d64"
+    local build_log="$out_dir/$name.build.log"
+
+    if [ -n "$TEST_FILTER" ] && [[ ! "$name" =~ $TEST_FILTER ]]; then
+        return
+    fi
+
+    TOTAL=$((TOTAL + 1))
+    mkdir -p "$out_dir"
+
+    if ! make -s -B -C "$REPO_ROOT/commodore" \
+        KICKASS="$KICKASS" \
+        OUT="$smoke_out_rel" \
+        KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT" \
+        "$smoke_out_rel/plus4/moria4.prg" \
+        "$smoke_out_rel/plus4/title" \
+        "$smoke_out_rel/plus4/monster.db.1" \
+        "$smoke_out_rel/plus4/monster.db.2" \
+        "$smoke_out_rel/plus4/monster.db.3" \
+        "$smoke_out_rel/plus4/monster.db.4" >"$build_log" 2>&1; then
+        echo "FAIL: $name (product disk build)"
+        tail -80 "$build_log"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$boot_d64"
+    if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
+        -attach "$boot_d64" \
+        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/moria4.prg" "moria4" \
+        -write "$smoke_plus4/title" "t64" \
+        -write "$smoke_plus4/monster.db.1" "monster.db.1" \
+        -write "$smoke_plus4/monster.db.2" "monster.db.2" \
+        -write "$smoke_plus4/monster.db.3" "monster.db.3" \
+        -write "$smoke_plus4/monster.db.4" "monster.db.4" \
+        -write "$smoke_plus4/ovl.start" "4.start" \
+        -write "$smoke_plus4/ovl.town" "4.town" \
+        -write "$smoke_plus4/ovl.death" "4.death" \
+        -write "$smoke_plus4/ovl.gen" "4.gen" \
+        -write "$smoke_plus4/ovl.help" "4.help" \
+        -write "$smoke_plus4/ovl.ui" "4.ui" \
+        -write "$smoke_plus4/ovl.items" "4.items" \
+        -write "$smoke_plus4/ovl.spell" "4.spell" \
+        -write "$smoke_plus4/4.bank" "4.bank" >/dev/null; then
+        echo "FAIL: $name (product disk image)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if ! python3 -c 'from pathlib import Path; import sys; Path(sys.argv[1]).write_bytes(b"BADP4!")' "$marker_blob"; then
+        echo "FAIL: $name (wrong marker generation)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    rm -f "$save_d64"
+    if ! "$C1541" -format "wrong save,m8" d64 "$save_d64" \
+        -attach "$save_d64" \
+        -write "$marker_blob" "moria4.id,seq" >/dev/null; then
+        echo "FAIL: $name (wrong save disk fixture)"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+
+    if python3 -u tests/product_scripted_smoke.py \
+        --name "$name" \
+        --pass-symbol ".plus4_test_load_media_fail" \
+        --fail-symbol ".main_loop" \
+        --main-vs "$main_vs" \
+        --boot-d64 "$boot_d64" \
+        --save-d64 "$save_d64" \
+        --vice "$VICE"; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 run_load_resume_product_smoke() {
     local name="load_resume_product_plus4"
     local out_dir="$PLUS4_DIR/out"
@@ -454,6 +545,7 @@ run_load_resume_product_smoke() {
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_disk_setup_product_smoke
 run_disk_setup_missing_save_smoke
+run_load_wrong_media_product_smoke
 run_save_write_product_smoke
 run_load_resume_product_smoke
 

@@ -536,6 +536,9 @@ load_game:
 #endif
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
+#if PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
+plus4_test_load_media_fail:
+#endif
     jsr huff_print_msg
     clc
     rts

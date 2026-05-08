@@ -266,7 +266,7 @@ Required services:
 - [ ] Add overlay-load smoke.
 - [x] Add disk-setup smoke with valid save disk.
 - [x] Add missing save media smoke.
-- [ ] Add wrong save media smoke.
+- [x] Add wrong save media smoke.
 - [x] Add product Disk Setup smoke for the marker create/readback path.
 - [ ] Restore or replace the direct marker-init smoke. The product Disk Setup
       smoke currently covers the real path; the direct `$F000` call harness is
@@ -277,7 +277,7 @@ Required services:
       generated Plus/4-format save and prove `load_game` accepts it.
 - [x] Add load-resume smoke using the product `load_game` plus
       `load_resume_game`, with the boot disk still mounted for tier restore.
-- [ ] Add command-channel status/error smoke.
+- [x] Add command-channel status/error smoke for Plus/4 missing save media.
 - [ ] Change `make testplus4` to run real runtime smoke after the harness is
       reliable.
 
@@ -292,7 +292,8 @@ Gate to leave Phase 1:
       the resulting `MORIA4.ID` marker on the host disk image.
 - [x] A scripted Plus/4 product Disk Setup smoke with no drive-9 disk attached
       reaches the real initialization-failure path instead of hanging,
-      resetting, or falsely committing setup.
+      resetting, or falsely committing setup. It now asserts DOS code `74`,
+      disk status `74`, and diagnostic phase `$83`.
 - [x] Plus/4 resident size pressure is cleared for the next runtime gate work:
       the product build now ends at `$C50E`, below `MAP_BASE=$C800`, after
       removing accidental C64 REU linkage from the Plus/4 resident image.
@@ -308,6 +309,8 @@ Gate to leave Phase 1:
 - [x] Save/load gate scaffolding is enabled in the default Plus/4 runtime
       suite. The generated fixture includes the Plus/4 marker file and uses the
       currently observed Plus/4 product load payload length.
+- [x] A scripted Plus/4 product load smoke with a wrong `MORIA4.ID` marker
+      reaches the load media-failure path instead of entering gameplay.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 
@@ -419,8 +422,9 @@ Storage adapter note:
 - [x] No BRK escape in the manually verified Plus/4 happy path.
 - [x] No CPU JAM in the manually verified Plus/4 happy path.
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
-      Plus/4 now has product setup, missing-media, save-write, and load-resume
-      runtime gates; C64/C128 parity gates remain open.
+      Plus/4 now has product setup, missing-media with command-channel
+      diagnostics, wrong-media, save-write, and load-resume runtime gates;
+      C64/C128 parity gates remain open.
 
 ## Normalized Storage Error ABI
 
