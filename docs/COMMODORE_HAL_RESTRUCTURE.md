@@ -16,7 +16,8 @@ code should own hardware execution.
 - [ ] Plus/4 disk setup/save/load is only partially covered by automated
       runtime gates. `make testplus4-runtime` now covers marker initialization
       directly and a scripted product Disk Setup success path against a freshly
-      formatted drive-9 save disk.
+      formatted drive-9 save disk, plus the missing drive-9 save-media failure
+      path.
 - [ ] `make testplus4` is currently only an assembly/build artifact gate;
       `make testplus4-runtime` has minimal runtime and marker-init storage
       smokes.
@@ -44,7 +45,8 @@ code should own hardware execution.
       and platform code still share too much disk state, filename policy,
       logical file policy, status reporting, and platform-specific KERNAL
       assumptions.
-- [ ] Next concrete HAL step: broaden automated Plus/4 disk runtime gates
+- [ ] Next concrete HAL step: reclaim enough Plus/4 resident space for product
+      runtime test variants, then add save-write/load-resume runtime gates
       before migrating more storage behavior out of common code.
 
 ## Target Directory Structure
@@ -260,9 +262,11 @@ Required services:
 - [ ] Add dungeon-entry smoke.
 - [ ] Add overlay-load smoke.
 - [x] Add disk-setup smoke with valid save disk.
-- [ ] Add missing/wrong save media smoke.
+- [x] Add missing save media smoke.
+- [ ] Add wrong save media smoke.
 - [x] Add save-disk initialization smoke for the marker create/readback path.
 - [ ] Add save-write smoke.
+- [ ] Add save-load record smoke.
 - [ ] Add load-resume smoke.
 - [ ] Add command-channel status/error smoke.
 - [ ] Change `make testplus4` to run real runtime smoke after the harness is
@@ -277,6 +281,14 @@ Gate to leave Phase 1:
 - [x] A scripted Plus/4 product Disk Setup smoke boots from a D64, initializes
       a drive-9 save disk, reaches the real initialized-commit path, and checks
       the resulting `MORIA4.ID` marker on the host disk image.
+- [x] A scripted Plus/4 product Disk Setup smoke with no drive-9 disk attached
+      reaches the real initialization-failure path instead of hanging,
+      resetting, or falsely committing setup.
+- [ ] Save/load product runtime smoke is currently blocked by Plus/4 resident
+      size pressure. The attempted save/load variant logged
+      `Program fits below MAP_BASE=false`, so it must not be accepted as a
+      valid gate until bytes are reclaimed or the test hook is made zero-cost
+      in resident code.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 

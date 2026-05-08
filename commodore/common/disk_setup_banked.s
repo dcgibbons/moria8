@@ -358,6 +358,10 @@ disk_setup_prepare_selected:
 #endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
+#if PLUS4
+    jsr disk_setup_plus4_marker_missing
+    bcs !show_marker_probe_fail+
+#endif
     lda #DISK_UI_ACT_INIT_PROMPT
     jsr disk_setup_call_ui
     lda disk_ui_result
@@ -370,6 +374,26 @@ disk_setup_prepare_selected:
 !fail:
     sec
     rts
+#if PLUS4
+!show_marker_probe_fail:
+    lda #DISK_UI_ACT_SHOW_INIT_FAIL
+    jsr disk_setup_call_ui
+    sec
+    rts
+
+disk_setup_plus4_marker_missing:
+    lda disk_error_dos0
+    cmp #$36                    // 62,FILE NOT FOUND.
+    bne !not_missing+
+    lda disk_error_dos1
+    cmp #$32
+    bne !not_missing+
+    clc
+    rts
+!not_missing:
+    sec
+    rts
+#endif
 
 disk_setup_use_drive9:
     lda #9

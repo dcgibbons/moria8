@@ -35,12 +35,17 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-attach8rw",
         "-8",
         str(args.boot_d64),
-        "-attach9rw",
-        "-9",
-        str(args.save_d64),
+    ]
+    if args.save_d64:
+        command.extend([
+            "-attach9rw",
+            "-9",
+            str(args.save_d64),
+        ])
+    command.extend([
         "-autostart",
         str(args.boot_d64),
-    ]
+    ])
     if args.limitcycles > 0:
         command.extend(["-limitcycles", str(args.limitcycles)])
     return command
@@ -76,9 +81,14 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> MonitorTestR
         connector.break_at(resolved["commit_initialized"])
         connector.break_at(resolved["init_fail"])
         connector.go()
+        pass_addr = resolved["commit_initialized"]
+        fail_addr = resolved["init_fail"]
+        if args.expect == "init-fail":
+            pass_addr = resolved["init_fail"]
+            fail_addr = resolved["commit_initialized"]
         result = connector.wait_for_stop(
-            pass_addr=resolved["commit_initialized"],
-            fail_addr=resolved["init_fail"],
+            pass_addr=pass_addr,
+            fail_addr=fail_addr,
             timeout=args.timeout,
         )
         return result
@@ -97,8 +107,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Plus/4 product Disk Setup smoke")
     parser.add_argument("--vice", required=True)
     parser.add_argument("--boot-d64", required=True, type=Path)
-    parser.add_argument("--save-d64", required=True, type=Path)
+    parser.add_argument("--save-d64", type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
+    parser.add_argument("--expect", choices=("initialized", "init-fail"), default="initialized")
     parser.add_argument("--limitcycles", type=int, default=0)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--drive9-type", default="1541")
@@ -125,13 +136,18 @@ def main() -> int:
 
     result = run_vice(args, resolved)
     if result.passed:
-        print("PASS: disk_setup_product_plus4")
+        if args.expect == "init-fail":
+            print("PASS: disk_setup_missing_save_plus4")
+        else:
+            print("PASS: disk_setup_product_plus4")
         return 0
 
-    if result.reason == f"reached test_fail label at ${resolved['init_fail']}":
+    if args.expect == "initialized" and result.reason == f"reached test_fail label at ${resolved['init_fail']}":
         print(f"FAIL: Disk Setup reached init failure at ${resolved['init_fail']}")
+    elif args.expect == "init-fail" and result.reason == f"reached test_fail label at ${resolved['commit_initialized']}":
+        print(f"FAIL: Disk Setup unexpectedly initialized at ${resolved['commit_initialized']}")
     else:
-        print(f"FAIL: Disk Setup smoke did not reach initialized commit ({result.reason})")
+        print(f"FAIL: Disk Setup smoke did not reach expected {args.expect} path ({result.reason})")
     if result.last_status:
         print(result.last_status[-2000:])
     return result.exit_code
