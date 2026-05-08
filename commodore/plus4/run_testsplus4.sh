@@ -274,6 +274,7 @@ run_save_write_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-save-write-product-save.d64"
     local save_blob="$out_dir/P4.THE.GAME"
+    local marker_blob="$out_dir/MORIA4.ID"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
@@ -325,7 +326,7 @@ run_save_write_product_smoke() {
         return
     fi
 
-    if ! python3 tests/make_load_resume_save_plus4.py "$save_blob" >"$build_log" 2>&1; then
+    if ! python3 tests/make_load_resume_save_plus4.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL: $name (save generation)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -335,7 +336,8 @@ run_save_write_product_smoke() {
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
         -attach "$save_d64" \
-        -write "$save_blob" "P4.THE.GAME,seq" >/dev/null; then
+        -write "$save_blob" "p4.the.game,seq" \
+        -write "$marker_blob" "moria4.id,seq" >/dev/null; then
         echo "FAIL: $name (save disk fixture)"
         FAIL=$((FAIL + 1))
         return
@@ -367,6 +369,7 @@ run_load_resume_product_smoke() {
     local smoke_plus4="$smoke_out/plus4"
     local save_d64="$out_dir/test-load-resume-product-save.d64"
     local save_blob="$out_dir/P4.THE.GAME"
+    local marker_blob="$out_dir/MORIA4.ID"
     local main_vs="$smoke_out/plus4/main.vs"
     local boot_d64="$smoke_out/moria8-plus4.d64"
     local build_log="$out_dir/$name.build.log"
@@ -418,7 +421,7 @@ run_load_resume_product_smoke() {
         return
     fi
 
-    if ! python3 tests/make_load_resume_save_plus4.py "$save_blob" >"$build_log" 2>&1; then
+    if ! python3 tests/make_load_resume_save_plus4.py "$save_blob" "$marker_blob" >"$build_log" 2>&1; then
         echo "FAIL: $name (save generation)"
         tail -20 "$build_log"
         FAIL=$((FAIL + 1))
@@ -428,7 +431,8 @@ run_load_resume_product_smoke() {
     rm -f "$save_d64"
     if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" \
         -attach "$save_d64" \
-        -write "$save_blob" "P4.THE.GAME,seq" >/dev/null; then
+        -write "$save_blob" "p4.the.game,seq" \
+        -write "$marker_blob" "moria4.id,seq" >/dev/null; then
         echo "FAIL: $name (save disk fixture)"
         FAIL=$((FAIL + 1))
         return
@@ -450,6 +454,8 @@ run_load_resume_product_smoke() {
 run_test "minimalplus4" "tests/test_minimalplus4.s"
 run_disk_setup_product_smoke
 run_disk_setup_missing_save_smoke
+run_save_write_product_smoke
+run_load_resume_product_smoke
 
 echo "=== Plus/4 runtime summary: $PASS passed, $FAIL failed, $TOTAL total ==="
 if [ "$FAIL" -ne 0 ]; then

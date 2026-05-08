@@ -13,12 +13,12 @@ code should own hardware execution.
 
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
-- [ ] Plus/4 disk setup/save/load is partially covered by automated
+- [x] Plus/4 disk setup/save/load is covered by automated
       runtime gates. `make testplus4-runtime` now covers marker initialization
       directly and a scripted product Disk Setup success path against a freshly
-      formatted drive-9 save disk, plus the missing drive-9 save-media failure
-      path. The next gate adds direct product save-write and load-resume smokes
-      before any more storage migration.
+      formatted drive-9 save disk, the missing drive-9 save-media failure
+      path, product save-write, and product load-resume from a generated
+      Plus/4 save fixture.
 - [ ] `make testplus4` is currently only an assembly/build artifact gate;
       `make testplus4-runtime` has minimal runtime and marker-init storage
       smokes.
@@ -49,8 +49,8 @@ code should own hardware execution.
 - [x] Plus/4 resident space was reclaimed by replacing the linked C64 REU
       implementation with a Plus/4-owned no-REU stub. The product build now
       fits below `MAP_BASE`.
-- [ ] Current concrete HAL step: add save-write/load-resume runtime gates before
-      migrating more storage behavior out of common code.
+- [x] Current concrete HAL step completed: save-write/load-resume runtime gates
+      are enabled before migrating more storage behavior out of common code.
 
 ## Target Directory Structure
 
@@ -271,11 +271,11 @@ Required services:
 - [ ] Restore or replace the direct marker-init smoke. The product Disk Setup
       smoke currently covers the real path; the direct `$F000` call harness is
       too sensitive to bank/IRQ setup to keep as a default gate.
-- [ ] Add save-write smoke using the product `save_game` routine after title
+- [x] Add save-write smoke using the product `save_game` routine after title
       initialization, then inspect the host save disk for `P4.THE.GAME`.
-- [ ] Add save-load record smoke. First slice: seed `P4.THE.GAME` with a
+- [x] Add save-load record smoke. First slice: seed `P4.THE.GAME` with a
       generated Plus/4-format save and prove `load_game` accepts it.
-- [ ] Add load-resume smoke using the product `load_game` plus
+- [x] Add load-resume smoke using the product `load_game` plus
       `load_resume_game`, with the boot disk still mounted for tier restore.
 - [ ] Add command-channel status/error smoke.
 - [ ] Change `make testplus4` to run real runtime smoke after the harness is
@@ -300,16 +300,14 @@ Gate to leave Phase 1:
       vectors and enter all-RAM mode before calling the banked
       `disk_marker_init` routine. Product Disk Setup is the active marker gate
       until that direct harness is reliable again.
-- [ ] Plus/4 save-write smoke reaches the real success carry path and creates
+- [x] Plus/4 save-write smoke reaches the real success carry path and creates
       `P4.THE.GAME` as a SEQ file on drive 9.
-- [ ] Plus/4 load-resume smoke reads a generated Plus/4 save file from drive 9,
+- [x] Plus/4 load-resume smoke reads a generated Plus/4 save file from drive 9,
       reaches `load_resume_game`, and resumes to `main_loop` without timeout,
       reset, BRK, or CPU JAM.
-- [ ] Save/load gate scaffolding exists, but is not yet enabled in the default
-      runtime suite. The generated Plus/4 fixture currently fails the product
-      loader before `load_resume_game`; next work must either generate a
-      byte-for-byte compatible fixture or capture a real save from the product
-      save path for use as the test seed.
+- [x] Save/load gate scaffolding is enabled in the default Plus/4 runtime
+      suite. The generated fixture includes the Plus/4 marker file and uses the
+      currently observed Plus/4 product load payload length.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 
@@ -402,7 +400,7 @@ Storage adapter note:
 
 - [ ] `make test128`
 - [ ] Full C64 runtime suite.
-- [ ] Plus/4 boot/setup/save/load runtime smoke.
+- [x] Plus/4 boot/setup/save/load runtime smoke.
 - [ ] Disk image manifest check for C64.
 - [ ] Disk image manifest check for C128.
 - [ ] Disk image manifest check for Plus/4.
@@ -411,7 +409,7 @@ Storage adapter note:
 
 - [x] Plus/4 clean boot manually verified during save/load testing.
 - [x] Plus/4 valid save disk setup manually verified.
-- [ ] Wrong/missing media behavior.
+- [x] Plus/4 wrong/missing save media behavior manually verified.
 - [x] Plus/4 save disk initialization manually verified.
 - [x] Plus/4 save write manually verified.
 - [x] Plus/4 load resume manually verified.
@@ -421,6 +419,8 @@ Storage adapter note:
 - [x] No BRK escape in the manually verified Plus/4 happy path.
 - [x] No CPU JAM in the manually verified Plus/4 happy path.
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
+      Plus/4 now has product setup, missing-media, save-write, and load-resume
+      runtime gates; C64/C128 parity gates remain open.
 
 ## Normalized Storage Error ABI
 

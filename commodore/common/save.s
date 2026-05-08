@@ -99,6 +99,12 @@ save_io_error:  .byte 0         // I/O error flag
 load_result:    .byte LOAD_RESULT_IOERR
 load_save_version: .byte 0
 load_floor_item_count: .byte 0
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_file_cksum_lo: .byte 0
+plus4_test_file_cksum_hi: .byte 0
+plus4_test_read_count_lo: .byte 0
+plus4_test_read_count_hi: .byte 0
+#endif
 #if C128
 save_chunk_len: .byte 0
 save_chunk_idx: .byte 0
@@ -314,6 +320,10 @@ save_select_media_error_msg_plus4:
     sta save_cksum_lo
     sta save_cksum_hi
     sta save_io_error
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    sta plus4_test_read_count_lo
+    sta plus4_test_read_count_hi
+#endif
 #if PLUS4
     jsr disk_error_clear
 #endif
@@ -541,6 +551,12 @@ load_game:
     sta save_cksum_hi
     sta save_io_error
 
+#if PLUS4
+    jsr SAVE_CLRCHN
+    lda #SAVE_FILE_NUM
+    jsr SAVE_CLOSE
+#endif
+
     // Open save file for sequential read via CHKIN/CHRIN
     lda #load_filename_len
     ldx #<load_filename
@@ -577,10 +593,16 @@ load_game:
     // --- Read and verify magic header ---
     // Read 8 bytes to temp area and compare
     :load_block(save_magic_buf, SAVE_MAGIC_SIZE)
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_after_load_magic:
+#endif
     // Check STATUS after reading magic: file-not-found on 1541 causes OPEN to
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
     // Any non-zero STATUS this early means the file doesn't exist.
     jsr SAVE_READST
+#if PLUS4
+    and #$fe                // Plus/4 KERNAL may leave write-timeout bit set after CHRIN
+#endif
     beq !load_magic_check+
     jmp !load_close_notfound+   // STATUS non-zero → file not found
 !load_magic_check:
@@ -712,17 +734,31 @@ load_game:
 !load_checksum_status_ok:
 #else
     jsr SAVE_READST
+#if PLUS4
+    sta disk_error_readst
+    and #$fe
+#endif
     beq !load_checksum_lo+
     jmp !load_corrupt_nocl+
 !load_checksum_lo:
     jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
     sta zp_temp0
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    sta plus4_test_file_cksum_lo
+#endif
     jsr SAVE_READST
+#if PLUS4
+    sta disk_error_readst
+    and #$fe
+#endif
     beq !load_checksum_hi+
     jmp !load_corrupt_nocl+
 !load_checksum_hi:
     jsr SAVE_CHRIN        // Stored checksum hi (not accumulated)
     sta zp_temp1
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    sta plus4_test_file_cksum_hi
+#endif
 #endif
 
     // Check for I/O errors during read
@@ -741,6 +777,9 @@ load_game:
 !load_cksum_bad:
     jmp !load_corrupt_nocl+
 !load_cksum_ok:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_load_success:
+#endif
     // Close file after successful read
     jsr load_close_file_restore
 
@@ -763,6 +802,9 @@ load_game:
 
 !load_corrupt:
 !load_corrupt_nocl:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_load_corrupt:
+#endif
     lda #LOAD_RESULT_CORRUPT
     sta load_result
     // Close file (may still be open if corruption detected mid-read)
@@ -777,6 +819,9 @@ load_game:
 #endif
 
 !load_unsupported:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_load_unsupported:
+#endif
     lda #LOAD_RESULT_UNSUPPORTED
     sta load_result
     jsr load_close_file_restore
@@ -793,6 +838,9 @@ load_game:
     // File was opened but returned no data — close before showing message
     jsr load_close_file_restore
 !load_notfound:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_load_notfound:
+#endif
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
@@ -806,6 +854,9 @@ load_game:
 #endif
 
 !load_fail:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_load_ioerr:
+#endif
     lda #LOAD_RESULT_IOERR
     sta load_result
     ldx #HSTR_SAVE_IOERR
@@ -1115,13 +1166,24 @@ load_read_byte:
 #endif
     jsr SAVE_CHRIN        // Read next byte from open sequential file
     pha
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    inc plus4_test_read_count_lo
+    bne !lrby_count_ok+
+    inc plus4_test_read_count_hi
+!lrby_count_ok:
+#endif
     jsr SAVE_READST
 #if C128
     beq !lrby_status_ok+
     inc save_io_error
     jmp !lrby_status_done+
 #else
+#if PLUS4
+    sta disk_error_readst
+    and #$02
+#else
     and #$03
+#endif
     beq !lrby_status_ok+
     inc save_io_error
 #endif

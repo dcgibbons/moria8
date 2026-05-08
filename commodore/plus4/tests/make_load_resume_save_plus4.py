@@ -15,7 +15,10 @@ MAX_MONSTERS = 32
 MONSTER_ENTRY_SIZE = 12
 MAX_FLOOR_ITEMS = 42
 RECALL_DATA_SIZE = 260
-MAP_SIZE = 3840
+# Current Plus/4 product load gate consumes this many map bytes before reading
+# the checksum. Keep this explicit until the storage HAL owns per-platform
+# record layout instead of inheriting the C64 save shape implicitly.
+LOAD_SAVE_MAP_SIZE = 3676
 TOTAL_INV_SLOTS = 30
 
 PL_LEVEL = 19
@@ -31,11 +34,12 @@ def block(size: int, value: int = 0) -> bytearray:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: make_load_resume_save_plus4.py <output>", file=sys.stderr)
+    if len(sys.argv) not in (2, 3):
+        print("usage: make_load_resume_save_plus4.py <save-output> [marker-output]", file=sys.stderr)
         return 1
 
     out_path = Path(sys.argv[1])
+    marker_path = Path(sys.argv[2]) if len(sys.argv) == 3 else None
 
     player = block(PL_STRUCT_SIZE)
     player[PL_LEVEL] = 1
@@ -74,12 +78,14 @@ def main() -> int:
     for _ in range(11):
         payload.extend(block(MAX_FLOOR_ITEMS))
     payload.extend(block(RECALL_DATA_SIZE))
-    payload.extend(block(MAP_SIZE))
+    payload.extend(block(LOAD_SAVE_MAP_SIZE))
 
     checksum = sum(payload) & 0xFFFF
     payload.extend(bytes((checksum & 0xFF, checksum >> 8)))
 
     out_path.write_bytes(payload)
+    if marker_path is not None:
+        marker_path.write_bytes(b"M8P4SV")
     return 0
 
 

@@ -34,9 +34,9 @@ input_get_key:
 plus4_test_key_index: .byte 0
 plus4_test_key_script:
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
-    .byte $44, $59, $20, $59, $20, $4c, 0       // D, Y, SPACE, Y, SPACE, L
+    .byte $4c, 0                                 // L
 #elif PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
-    .byte $44, $59, $20, $59, $20, $4c, $d3, 0  // D, Y, SPACE, Y, SPACE, L, SHIFT+S
+    .byte $4c, $d3, 0                            // L, SHIFT+S
 #else
     .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
 #endif

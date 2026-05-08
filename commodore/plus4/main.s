@@ -217,6 +217,7 @@ save_replace_filename:
 load_filename:
     .byte $30, $3a                      // "0:"
     .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
+    .byte $2c, $53, $2c, $52            // ",S,R"
 .label load_filename_len = * - load_filename
 
 plus4_storage_marker_present:
@@ -575,6 +576,17 @@ title_enter_menu:
 
     jsr title_draw_menu
     jsr plus4_title_clear_lower_rows
+
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    ldx #9
+    jsr probe_device
+    lda #9
+    sta save_device
+    lda #2
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+#endif
 
 title_menu_loop:
     jsr input_get_key

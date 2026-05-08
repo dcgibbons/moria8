@@ -57,7 +57,7 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
         process.wait(timeout=2.0)
 
 
-def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_addrs: list[str]) -> tuple[MonitorTestResult, list[str]]:
+def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
     connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
     dumps: list[str] = []
@@ -84,11 +84,11 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             timeout=args.timeout,
         )
         if not result.passed:
-            for addr in dump_addrs:
+            for start, end in dump_ranges:
                 try:
-                    dumps.append(connector.send_command(f"m {addr} {addr}"))
+                    dumps.append(connector.send_command(f"m {start} {end}"))
                 except Exception as exc:
-                    dumps.append(f"{addr}: {exc}")
+                    dumps.append(f"{start}: {exc}")
         return result, dumps
     finally:
         connector.close()
@@ -135,14 +135,34 @@ def main() -> int:
             return 2
         args.start_addr = normalize_addr(args.start_addr)
 
-    dump_addrs: list[str] = []
-    dump_symbols = (".load_result", ".save_io_error", ".save_magic_buf", ".load_save_version", ".disk_error_phase", ".disk_error_readst", ".disk_error_dos0", ".disk_error_dos1")
+    dump_ranges: list[tuple[str, str]] = []
+    dump_symbols = (
+        ".load_result",
+        ".save_io_error",
+        ".save_magic_buf",
+        ".load_save_version",
+        ".save_device",
+        ".save_cksum_lo",
+        ".save_cksum_hi",
+        ".zp_temp0",
+        ".zp_temp1",
+        ".plus4_test_file_cksum_lo",
+        ".plus4_test_file_cksum_hi",
+        ".plus4_test_read_count_lo",
+        ".plus4_test_read_count_hi",
+        ".disk_error_phase",
+        ".disk_error_readst",
+        ".disk_error_dos0",
+        ".disk_error_dos1",
+    )
     for symbol in dump_symbols:
         addr = symbols.get(symbol)
         if addr:
-            dump_addrs.append(normalize_addr(addr))
+            start = int(normalize_addr(addr), 16)
+            length = 8 if symbol == ".save_magic_buf" else 1
+            dump_ranges.append((normalize_addr(start), normalize_addr(start + length - 1)))
 
-    result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_addrs)
+    result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
     if result.passed:
         print(f"PASS: {args.name}")
         return 0
