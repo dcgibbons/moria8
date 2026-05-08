@@ -23,7 +23,7 @@ input_run_cancel_check:
     jmp input_run_process_sample
 
 input_get_key:
-#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     ldx plus4_test_key_index
     lda plus4_test_key_script,x
     beq !wait+
@@ -33,7 +33,13 @@ input_get_key:
     jmp !wait-
 plus4_test_key_index: .byte 0
 plus4_test_key_script:
+#if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+    .byte $44, $59, $20, $59, $20, $4c, 0       // D, Y, SPACE, Y, SPACE, L
+#elif PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    .byte $44, $59, $20, $59, $20, $4c, $d3, 0  // D, Y, SPACE, Y, SPACE, L, SHIFT+S
+#else
     .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
+#endif
 #else
     php
     sei

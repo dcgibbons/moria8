@@ -78,10 +78,10 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
 
     stub = [
         0x78,                                           # sei
+        0x20, lo(".plus4_bank_ram"), hi(".plus4_bank_ram"),
         0xA9, args.save_device,                         # lda #save_device
         0x8D, lo(".save_device"), hi(".save_device"),   # sta save_device
         0x20, lo(".c64_install_ram_irq_vectors"), hi(".c64_install_ram_irq_vectors"),
-        0x20, lo(".plus4_bank_ram"), hi(".plus4_bank_ram"),
         0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
         0xB0, 0x08,                                     # bcs fail
         0x20, lo(".disk_marker_present"), hi(".disk_marker_present"),
@@ -127,6 +127,133 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
         connector.set_register("pc", stub_addr, debug=args.verbose)
         connector.go()
         result = connector.wait_for_stop(pass_addr=pass_addr, fail_addr=fail_addr, timeout=args.timeout)
+    finally:
+        connector.close()
+        terminate_vice(vice_process)
+
+    if result.passed:
+        print(f"PASS: {args.name}")
+        return 0
+
+    if args.verbose and result.last_status:
+        print(result.last_status)
+    print(f"FAIL: {args.name} ({result.reason})")
+    return result.exit_code
+
+
+def run_storage_record_smoke(args: argparse.Namespace) -> int:
+    symbols = parse_vs_symbols(args.main_vs)
+    required = [
+        ".title_menu_loop",
+        ".c64_install_ram_irq_vectors",
+        ".plus4_bank_ram",
+        ".save_device",
+        ".disk_mode",
+        ".disk_setup_done",
+        ".save_game",
+        ".load_game",
+        ".disk_marker_init",
+        ".load_resume_game",
+        ".main_loop",
+        ".input_get_key",
+    ]
+    missing = [name for name in required if name not in symbols]
+    if missing:
+        print(f"FAIL: {args.name} (missing symbols: {', '.join(missing)})")
+        return 2
+
+    stub_addr = args.stub_addr
+    fail_addr = stub_addr + 0x40
+    pass_addr = stub_addr + 0x43
+
+    def lo(name: str) -> int:
+        return int(symbols[name], 16) & 0xFF
+
+    def hi(name: str) -> int:
+        return (int(symbols[name], 16) >> 8) & 0xFF
+
+    def jmp(addr: int) -> list[int]:
+        return [0x4C, addr & 0xFF, addr >> 8]
+
+    prefix = [
+        0x78,                                           # sei
+        0x20, lo(".plus4_bank_ram"), hi(".plus4_bank_ram"),
+        0xA9, args.save_device,                         # lda #save_device
+        0x8D, lo(".save_device"), hi(".save_device"),   # sta save_device
+        0xA9, 0x02,                                     # lda #2 (separate save drive)
+        0x8D, lo(".disk_mode"), hi(".disk_mode"),       # sta disk_mode
+        0xA9, 0x01,                                     # lda #1
+        0x8D, lo(".disk_setup_done"), hi(".disk_setup_done"),
+        0x20, lo(".c64_install_ram_irq_vectors"), hi(".c64_install_ram_irq_vectors"),
+        0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
+        0x90, 0x03,                                     # bcc marker ok
+        *jmp(fail_addr),
+    ]
+    if args.storage_op == "save":
+        body = [
+            0x20, lo(".load_game"), hi(".load_game"),
+            0x90, 0x08,                                 # bcc fail
+            0x20, lo(".save_game"), hi(".save_game"),
+            0x90, 0x03,                                 # bcc fail
+            *jmp(pass_addr),
+            *jmp(fail_addr),
+        ]
+        pass_break = pass_addr
+        fail_break = fail_addr
+    else:
+        body = [
+            0x20, lo(".load_game"), hi(".load_game"),
+            0x90, 0x03,                                 # bcc fail
+            *jmp(int(symbols[".load_resume_game"], 16)),
+            *jmp(fail_addr),
+        ]
+        pass_break = int(symbols[".main_loop"], 16)
+        fail_break = fail_addr
+
+    stub = prefix + body
+    if len(stub) > fail_addr - stub_addr:
+        print(f"FAIL: {args.name} (storage stub too large)")
+        return 2
+    stub.extend([0xEA] * ((fail_addr - stub_addr) - len(stub)))
+    stub.extend(jmp(fail_addr))
+    stub.extend(jmp(pass_addr))
+
+    command = build_vice_command(args)
+    command.extend([
+        "-8",
+        str(Path(args.boot_d64).resolve()),
+        "-9",
+        str(Path(args.save_d64).resolve()),
+        "-autostart",
+        str(Path(args.boot_d64).resolve()),
+    ])
+
+    vice_process = subprocess.Popen(
+        command,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    connector = VICEConnector(host=args.host, port=args.port, timeout=args.socket_timeout)
+    try:
+        connector.connect(
+            retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
+            retry_delay=args.connect_retry_delay,
+            debug=args.verbose,
+        )
+        try:
+            connector.run_until(symbols[".title_menu_loop"], timeout=args.timeout, debug=args.verbose)
+        except TimeoutError:
+            print(f"FAIL: {args.name} (timeout before title menu)")
+            return 2
+
+        write_bytes(connector, stub_addr, stub, debug=args.verbose)
+        connector.clear_breakpoints(debug=args.verbose)
+        connector.break_at(pass_break, debug=args.verbose)
+        connector.break_at(fail_break, debug=args.verbose)
+        connector.set_register("pc", stub_addr, debug=args.verbose)
+        connector.go()
+        result = connector.wait_for_stop(pass_addr=pass_break, fail_addr=fail_break, timeout=args.timeout)
     finally:
         connector.close()
         terminate_vice(vice_process)
@@ -187,7 +314,7 @@ def run_monitor_test(args: argparse.Namespace) -> int:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Plus/4 Python monitor harness")
-    parser.add_argument("--mode", choices=("prg", "marker-init-smoke"), default="prg")
+    parser.add_argument("--mode", choices=("prg", "marker-init-smoke", "storage-record-smoke"), default="prg")
     parser.add_argument("--name", required=True)
     parser.add_argument("--prg")
     parser.add_argument("--vs", help="Path to the companion .vs file; defaults to <prg>.vs")
@@ -195,6 +322,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--boot-d64", help="Product boot disk image for disk smoke modes")
     parser.add_argument("--save-d64", help="Save disk fixture for disk smoke modes")
     parser.add_argument("--save-device", type=int, default=9)
+    parser.add_argument("--storage-op", choices=("save", "load-resume"), default="save")
     parser.add_argument("--stub-addr", type=lambda value: int(value, 0), default=0x0800)
     parser.add_argument("--vice", default="xplus4")
     parser.add_argument("--host", default="127.0.0.1")
@@ -216,6 +344,10 @@ def main() -> int:
         if not args.main_vs or not args.boot_d64 or not args.save_d64:
             raise SystemExit("--main-vs, --boot-d64, and --save-d64 are required for marker-init-smoke")
         return run_marker_init_smoke(args)
+    if args.mode == "storage-record-smoke":
+        if not args.main_vs or not args.boot_d64 or not args.save_d64:
+            raise SystemExit("--main-vs, --boot-d64, and --save-d64 are required for storage-record-smoke")
+        return run_storage_record_smoke(args)
     if not args.prg:
         raise SystemExit("--prg is required for prg mode")
     return run_monitor_test(args)

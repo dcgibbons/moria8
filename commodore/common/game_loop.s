@@ -928,6 +928,9 @@ c128_town_move_diag_after_input_get_command:
     jsr ui_reset_message_state
 #endif
     jsr save_game
+#if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_after_save_game:
+#endif
 #endif
     lda #0
     adc #0

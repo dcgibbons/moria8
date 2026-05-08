@@ -216,6 +216,13 @@ save_confirm_overwrite:
     rts
 #else
 save_select_output_name_c64:
+#if PLUS4
+    // Plus/4 saves always use @0:P4.THE.GAME,S,W. Avoid the C64-style
+    // existence probe: on this KERNAL/drive path, probing a missing SEQ can
+    // block before returning useful status.
+    sec
+    rts
+#else
     jsr save_file_exists
     bcc !save_select_ok+
     ldx #HSTR_SAVE_OVERWRITE
@@ -232,6 +239,7 @@ save_select_output_name_c64:
 !save_select_ok:
     sec
     rts
+#endif
 #endif
 
 save_game:

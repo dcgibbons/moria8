@@ -217,7 +217,6 @@ save_replace_filename:
 load_filename:
     .byte $30, $3a                      // "0:"
     .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
-    .byte $2c, $53, $2c, $52            // ",S,R"
 .label load_filename_len = * - load_filename
 
 plus4_storage_marker_present:

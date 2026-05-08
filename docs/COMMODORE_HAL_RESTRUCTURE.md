@@ -13,11 +13,12 @@ code should own hardware execution.
 
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
-- [ ] Plus/4 disk setup/save/load is only partially covered by automated
+- [ ] Plus/4 disk setup/save/load is partially covered by automated
       runtime gates. `make testplus4-runtime` now covers marker initialization
       directly and a scripted product Disk Setup success path against a freshly
       formatted drive-9 save disk, plus the missing drive-9 save-media failure
-      path.
+      path. The next gate adds direct product save-write and load-resume smokes
+      before any more storage migration.
 - [ ] `make testplus4` is currently only an assembly/build artifact gate;
       `make testplus4-runtime` has minimal runtime and marker-init storage
       smokes.
@@ -48,7 +49,7 @@ code should own hardware execution.
 - [x] Plus/4 resident space was reclaimed by replacing the linked C64 REU
       implementation with a Plus/4-owned no-REU stub. The product build now
       fits below `MAP_BASE`.
-- [ ] Next concrete HAL step: add save-write/load-resume runtime gates before
+- [ ] Current concrete HAL step: add save-write/load-resume runtime gates before
       migrating more storage behavior out of common code.
 
 ## Target Directory Structure
@@ -266,10 +267,16 @@ Required services:
 - [x] Add disk-setup smoke with valid save disk.
 - [x] Add missing save media smoke.
 - [ ] Add wrong save media smoke.
-- [x] Add save-disk initialization smoke for the marker create/readback path.
-- [ ] Add save-write smoke.
-- [ ] Add save-load record smoke.
-- [ ] Add load-resume smoke.
+- [x] Add product Disk Setup smoke for the marker create/readback path.
+- [ ] Restore or replace the direct marker-init smoke. The product Disk Setup
+      smoke currently covers the real path; the direct `$F000` call harness is
+      too sensitive to bank/IRQ setup to keep as a default gate.
+- [ ] Add save-write smoke using the product `save_game` routine after title
+      initialization, then inspect the host save disk for `P4.THE.GAME`.
+- [ ] Add save-load record smoke. First slice: seed `P4.THE.GAME` with a
+      generated Plus/4-format save and prove `load_game` accepts it.
+- [ ] Add load-resume smoke using the product `load_game` plus
+      `load_resume_game`, with the boot disk still mounted for tier restore.
 - [ ] Add command-channel status/error smoke.
 - [ ] Change `make testplus4` to run real runtime smoke after the harness is
       reliable.
@@ -289,10 +296,20 @@ Gate to leave Phase 1:
 - [x] Plus/4 resident size pressure is cleared for the next runtime gate work:
       the product build now ends at `$C50E`, below `MAP_BASE=$C800`, after
       removing accidental C64 REU linkage from the Plus/4 resident image.
-- [x] Plus/4 marker-initialization smoke explicitly installs RAM IRQ vectors
-      and enters all-RAM mode before calling the banked `disk_marker_init`
-      routine. This documents the bank/IRQ precondition for direct HAL storage
-      tests.
+- [ ] Direct Plus/4 marker-initialization smoke must explicitly install RAM IRQ
+      vectors and enter all-RAM mode before calling the banked
+      `disk_marker_init` routine. Product Disk Setup is the active marker gate
+      until that direct harness is reliable again.
+- [ ] Plus/4 save-write smoke reaches the real success carry path and creates
+      `P4.THE.GAME` as a SEQ file on drive 9.
+- [ ] Plus/4 load-resume smoke reads a generated Plus/4 save file from drive 9,
+      reaches `load_resume_game`, and resumes to `main_loop` without timeout,
+      reset, BRK, or CPU JAM.
+- [ ] Save/load gate scaffolding exists, but is not yet enabled in the default
+      runtime suite. The generated Plus/4 fixture currently fails the product
+      loader before `load_resume_game`; next work must either generate a
+      byte-for-byte compatible fixture or capture a real save from the product
+      save path for use as the test seed.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 
