@@ -45,9 +45,11 @@ code should own hardware execution.
       and platform code still share too much disk state, filename policy,
       logical file policy, status reporting, and platform-specific KERNAL
       assumptions.
-- [ ] Next concrete HAL step: reclaim enough Plus/4 resident space for product
-      runtime test variants, then add save-write/load-resume runtime gates
-      before migrating more storage behavior out of common code.
+- [x] Plus/4 resident space was reclaimed by replacing the linked C64 REU
+      implementation with a Plus/4-owned no-REU stub. The product build now
+      fits below `MAP_BASE`.
+- [ ] Next concrete HAL step: add save-write/load-resume runtime gates before
+      migrating more storage behavior out of common code.
 
 ## Target Directory Structure
 
@@ -284,11 +286,13 @@ Gate to leave Phase 1:
 - [x] A scripted Plus/4 product Disk Setup smoke with no drive-9 disk attached
       reaches the real initialization-failure path instead of hanging,
       resetting, or falsely committing setup.
-- [ ] Save/load product runtime smoke is currently blocked by Plus/4 resident
-      size pressure. The attempted save/load variant logged
-      `Program fits below MAP_BASE=false`, so it must not be accepted as a
-      valid gate until bytes are reclaimed or the test hook is made zero-cost
-      in resident code.
+- [x] Plus/4 resident size pressure is cleared for the next runtime gate work:
+      the product build now ends at `$C50E`, below `MAP_BASE=$C800`, after
+      removing accidental C64 REU linkage from the Plus/4 resident image.
+- [x] Plus/4 marker-initialization smoke explicitly installs RAM IRQ vectors
+      and enters all-RAM mode before calling the banked `disk_marker_init`
+      routine. This documents the bank/IRQ precondition for direct HAL storage
+      tests.
 - [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
       disk error return.
 

@@ -312,7 +312,7 @@ tramp_dig_ability:
 
 #import "../common/zeropage.s"
 #import "memory.s"
-#import "../common/reu.s"
+#import "reu_stub.s"
 #import "screen.s"
 #import "../common/color.s"
 #import "config.s"

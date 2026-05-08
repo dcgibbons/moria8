@@ -55,6 +55,8 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
     symbols = parse_vs_symbols(args.main_vs)
     required = [
         ".title_menu_loop",
+        ".c64_install_ram_irq_vectors",
+        ".plus4_bank_ram",
         ".save_device",
         ".disk_marker_init",
         ".disk_marker_present",
@@ -65,8 +67,8 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
         return 2
 
     stub_addr = args.stub_addr
-    fail_addr = stub_addr + 0x12
-    pass_addr = stub_addr + 0x15
+    fail_addr = stub_addr + 0x19
+    pass_addr = stub_addr + 0x1C
 
     def lo(name: str) -> int:
         return int(symbols[name], 16) & 0xFF
@@ -75,8 +77,11 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
         return (int(symbols[name], 16) >> 8) & 0xFF
 
     stub = [
+        0x78,                                           # sei
         0xA9, args.save_device,                         # lda #save_device
         0x8D, lo(".save_device"), hi(".save_device"),   # sta save_device
+        0x20, lo(".c64_install_ram_irq_vectors"), hi(".c64_install_ram_irq_vectors"),
+        0x20, lo(".plus4_bank_ram"), hi(".plus4_bank_ram"),
         0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
         0xB0, 0x08,                                     # bcs fail
         0x20, lo(".disk_marker_present"), hi(".disk_marker_present"),
@@ -115,7 +120,6 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
             print(f"FAIL: {args.name} (timeout before title menu)")
             return 2
 
-        connector.send_command("bank ram", debug=args.verbose)
         write_bytes(connector, stub_addr, stub, debug=args.verbose)
         connector.clear_breakpoints(debug=args.verbose)
         connector.break_at(pass_addr, debug=args.verbose)
