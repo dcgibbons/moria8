@@ -185,22 +185,20 @@ plus4_kernal_load:
 #import "hal/storage.s"
 
 plus4_storage_marker_present:
-    .const C64_DISK_MARKER_FILE_NUM = 6
-    .const C64_DISK_MARKER_SEC_RD = 2
     lda #1
     sta disk_status
     lda #$81                    // DISK_ERR_MARKER_OPEN
     jsr disk_error_set_phase
     jsr plus4_kernal_clrchn
-    lda #C64_DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr plus4_kernal_close
     lda #hal_storage_marker_read_name_len
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
     jsr plus4_kernal_setnam
-    lda #C64_DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #C64_DISK_MARKER_SEC_RD
+    ldy #hal_storage_marker_sec_read
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
     bcc !cdmp_open_ok+
@@ -209,7 +207,7 @@ plus4_storage_marker_present:
 !cdmp_open_ok:
     lda #$82                    // DISK_ERR_MARKER_CHKIN
     jsr disk_error_set_phase
-    ldx #C64_DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr plus4_kernal_chkin
     bcc !cdmp_chkin_ok+
     sta disk_error_readst
@@ -243,7 +241,7 @@ plus4_storage_marker_present:
     bcc !cdmp_read-
     dec disk_status
 !cdmp_close:
-    lda #C64_DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr plus4_kernal_close
     jsr plus4_kernal_clrchn
 !cdmp_done:
@@ -338,7 +336,7 @@ plus4_storage_marker_write_resident:
     lda #DISK_ERR_MARKER_WRITE_OPEN
     jsr disk_error_set_phase
     jsr plus4_kernal_clrchn
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr plus4_kernal_close
     // Use DOS replace syntax here. The preceding scratch is still useful for
     // compatibility, but a stale marker file must not survive if scratch fails
@@ -347,9 +345,9 @@ plus4_storage_marker_write_resident:
     ldx #<hal_storage_marker_write_name
     ldy #>hal_storage_marker_write_name
     jsr plus4_kernal_setnam
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #DISK_MARKER_SEC_WR
+    ldy #hal_storage_marker_sec_write
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
     bcc !cdmw_open_ok+
@@ -358,7 +356,7 @@ plus4_storage_marker_write_resident:
 !cdmw_open_ok:
     lda #DISK_ERR_MARKER_CHKOUT
     jsr disk_error_set_phase
-    ldx #DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr plus4_kernal_chkout
     bcc !cdmw_chkout_ok+
     sta disk_error_readst
@@ -384,7 +382,7 @@ plus4_storage_marker_write_resident:
     sta disk_status
 !cdmw_close:
     jsr plus4_kernal_clrchn
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr plus4_kernal_close
     lda disk_status
     bne !cdmw_status_done+
@@ -408,13 +406,13 @@ plus4_disk_read_command_status:
     ldx #0
     ldy #0
     jsr plus4_kernal_setnam
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
     bcs !p4dcs_done+
-    ldx #CMD_CHANNEL
+    ldx #hal_storage_cmd_channel
     jsr plus4_kernal_chkin
     bcs !p4dcs_close+
     jsr plus4_kernal_chrin
@@ -428,7 +426,7 @@ plus4_disk_read_command_status:
     jsr plus4_disk_status_to_disk_status
 !p4dcs_close:
     jsr plus4_kernal_clrchn
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr plus4_kernal_close
 !p4dcs_done:
     rts

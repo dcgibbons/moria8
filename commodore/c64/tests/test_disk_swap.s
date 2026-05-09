@@ -29,7 +29,11 @@
 .const SCREEN_COLS = 40
 .const STATUS_ROW = 21
 .const COL_WHITE = $01
-.const CMD_CHANNEL = 15
+.const hal_storage_cmd_channel = 15
+.const hal_storage_marker_file_num = 6
+.const hal_storage_marker_sec_read = 2
+.const hal_storage_marker_sec_write = 2
+.const hal_storage_program_file_num = 7
 
 .const KERNAL_SETNAM = kernal_setnam
 .const KERNAL_SETLFS = kernal_setlfs

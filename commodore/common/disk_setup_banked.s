@@ -32,9 +32,9 @@ disk_marker_init:
     sta disk_diag_phase
     lda save_device
     sta disk_diag_device
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     sta disk_diag_lfn
-    lda #DISK_MARKER_SEC_WR
+    lda #hal_storage_marker_sec_write
     sta disk_diag_sec
     lda #$ff
     sta disk_diag_readst
@@ -50,9 +50,9 @@ disk_marker_init:
     ldx #<hal_storage_marker_scratch_name
     ldy #>hal_storage_marker_scratch_name
     jsr KERNAL_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcc !dmi_scratch_open_ok+
@@ -63,7 +63,7 @@ disk_marker_init:
     sta disk_status
     jmp !dmi_done+
 !dmi_scratch_open_ok:
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr KERNAL_CLOSE
     jsr KERNAL_CLRCHN
     jsr disk_diag_read_command_status
@@ -94,9 +94,9 @@ disk_marker_init:
     ldx #<(hal_storage_marker_write_name + 1)
     ldy #>(hal_storage_marker_write_name + 1)
     jsr KERNAL_SETNAM
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #DISK_MARKER_SEC_WR
+    ldy #hal_storage_marker_sec_write
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcc !dmi_open_ok+
@@ -120,7 +120,7 @@ disk_marker_init:
 !dmi_chkout:
     lda #$93
     sta disk_diag_phase
-    ldx #DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr KERNAL_CHKOUT
     bcc !dmi_write_start+
     lda #1
@@ -158,7 +158,7 @@ disk_marker_init:
     lda #$95
     sta disk_diag_phase
     jsr KERNAL_CLRCHN
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr KERNAL_CLOSE
     jsr KERNAL_READST
     sta disk_diag_readst
@@ -179,10 +179,8 @@ disk_marker_init:
     sta disk_status
 !dmi_done:
     jsr disk_kernal_exit
-#if PLUS4
     lda disk_status
     bne !dmi_fail+
-#endif
     jsr disk_marker_present
     bcc !dmi_ok+
 !dmi_fail:
@@ -228,13 +226,13 @@ disk_diag_read_command_status:
     ldx #0
     ldy #0
     jsr KERNAL_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcs !ddrcs_done+
-    ldx #CMD_CHANNEL
+    ldx #hal_storage_cmd_channel
     jsr KERNAL_CHKIN
     bcs !ddrcs_close+
     jsr KERNAL_CHRIN
@@ -247,7 +245,7 @@ disk_diag_read_command_status:
     sta disk_diag_readst
 !ddrcs_close:
     jsr KERNAL_CLRCHN
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr KERNAL_CLOSE
 !ddrcs_done:
     rts
@@ -273,13 +271,13 @@ disk_setup_capture_init_status:
     ldx #<hal_storage_marker_scratch_name
     ldy #>hal_storage_marker_scratch_name
     jsr FEAT_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr FEAT_SETLFS
     jsr FEAT_OPEN
     bcs !dmi_create+
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
 !dmi_create:

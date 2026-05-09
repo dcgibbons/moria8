@@ -139,13 +139,13 @@ hiscore_save:
     ldx #<hi_scratch_cmd
     ldy #>hi_scratch_cmd
     jsr KERNAL_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx save_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcs !hs_scratch_done+
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr KERNAL_CLOSE
 !hs_scratch_done:
     jsr KERNAL_CLRCHN

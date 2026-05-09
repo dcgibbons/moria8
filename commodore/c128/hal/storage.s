@@ -5,6 +5,8 @@
 // KERNAL-style labels expect the caller to use hal_storage_enter_os/exit_os
 // when ROM visibility is required, matching the current disk runtime pattern.
 
+#import "storage_policy.s"
+
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit
 .label hal_storage_probe_media = probe_device

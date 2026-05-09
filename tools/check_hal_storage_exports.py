@@ -30,6 +30,16 @@ REQUIRED_LABELS = (
     "hal_storage_load",
     "hal_storage_save_record",
     "hal_storage_load_record",
+    "hal_storage_save_file_num",
+    "hal_storage_check_file_num",
+    "hal_storage_save_sec_write",
+    "hal_storage_save_sec_read",
+    "hal_storage_check_sec_read",
+    "hal_storage_cmd_channel",
+    "hal_storage_marker_file_num",
+    "hal_storage_marker_sec_read",
+    "hal_storage_marker_sec_write",
+    "hal_storage_program_file_num",
     "hal_storage_save_probe_name",
     "hal_storage_save_probe_name_len",
     "hal_storage_save_read_name",
@@ -57,9 +67,15 @@ PLATFORM_FILES = {
 def exported_labels(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8", errors="replace")
     labels: set[str] = set()
+    for match in re.finditer(r'(?m)^#import\s+"([^"]+)"', text):
+        imported = path.parent / match.group(1)
+        if imported.exists():
+            labels.update(exported_labels(imported))
     for match in re.finditer(r"(?m)^([A-Za-z_][A-Za-z0-9_]*):", text):
         labels.add(match.group(1))
     for match in re.finditer(r"(?m)^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text):
+        labels.add(match.group(1))
+    for match in re.finditer(r"(?m)^\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text):
         labels.add(match.group(1))
     return labels
 

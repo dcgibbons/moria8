@@ -318,9 +318,9 @@ save_select_media_error_msg_plus4:
 #endif
     jsr SAVE_SETNAM
     // SETLFS: file#2, device 8/9, secondary 2
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     ldx save_device
-    ldy #SAVE_SEC_ADDR
+    ldy #hal_storage_save_sec_write
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !save_open_ok+
@@ -335,7 +335,7 @@ save_select_media_error_msg_plus4:
 !save_open_ok:
 
     // Direct output to file
-    ldx #SAVE_FILE_NUM
+    ldx #hal_storage_save_file_num
     jsr SAVE_CHKOUT
     bcc !save_chkout_ok+
 #if PLUS4
@@ -452,7 +452,7 @@ save_select_media_error_msg_plus4:
 
     // Close and clean up
     jsr save_restore_channels
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
     lda $dd00
@@ -472,7 +472,7 @@ save_select_media_error_msg_plus4:
 
 !save_error_close:
     jsr save_restore_channels
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
     lda $dd00
@@ -533,7 +533,7 @@ plus4_test_load_media_fail:
 
 #if PLUS4
     jsr SAVE_CLRCHN
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #endif
 
@@ -542,9 +542,9 @@ plus4_test_load_media_fail:
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
     jsr SAVE_SETNAM
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     ldx save_device
-    ldy #LOAD_SEC_ADDR
+    ldy #hal_storage_save_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !load_open_ok+
@@ -556,11 +556,11 @@ plus4_test_load_media_fail:
 #endif
     jmp !load_notfound+
 !load_open_ok:
-    ldx #SAVE_FILE_NUM
+    ldx #hal_storage_save_file_num
     jsr SAVE_CHKIN
     bcc !load_chkin_ok+
     // CHKIN failed — close and bail
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
     lda $dd00
@@ -865,7 +865,7 @@ plus4_test_load_ioerr:
 // ============================================================
 load_close_file_restore:
     jsr save_restore_channels
-    lda #SAVE_FILE_NUM
+    lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
     lda $dd00
@@ -1568,9 +1568,9 @@ save_file_exists:
     ldx #<hal_storage_save_read_name
     ldy #>hal_storage_save_read_name
     jsr SAVE_SETNAM
-    lda #CHECK_FILE_NUM
+    lda #hal_storage_check_file_num
     ldx save_device
-    ldy #CHECK_SEC_ADDR
+    ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
 #if !C128
@@ -1578,7 +1578,7 @@ save_file_exists:
     clc
     rts
 !sfe_exists:
-    lda #CHECK_FILE_NUM
+    lda #hal_storage_check_file_num
     jsr SAVE_CLOSE
     sec
     rts
@@ -1587,7 +1587,7 @@ save_file_exists:
     clc
     bcc !sfe_cleanup+
 !sfe_open_ok:
-    ldx #CHECK_FILE_NUM
+    ldx #hal_storage_check_file_num
     jsr SAVE_CHKIN
     bcs !sfe_cleanup+
 !sfe_chkin_ok:
@@ -1602,7 +1602,7 @@ save_file_exists:
 !sfe_close:
 !sfe_cleanup:
     php
-    lda #CHECK_FILE_NUM
+    lda #hal_storage_check_file_num
     jsr SAVE_CLOSE
     jsr save_restore_channels
 #if C128

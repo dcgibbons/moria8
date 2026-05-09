@@ -412,6 +412,9 @@ Storage adapter note:
       platform-owned via `hal_storage_marker_*` labels. Common disk setup and
       marker validation no longer own `MORIA8.ID`/`MORIA4.ID` filename bytes or
       marker magic bytes.
+- [x] First numeric policy slice: storage logical file numbers, secondary
+      addresses, command channel number, marker file number, and program load
+      file number are platform-owned constants exported by each storage HAL.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -436,7 +439,7 @@ Storage adapter note:
       Save-record filenames are done; save-disk marker filenames, title/overlay
       marker filenames are done; title/overlay asset filenames, tier data
       filenames, and score filenames remain.
-- [ ] Move logical file numbers and secondary addresses into platform storage.
+- [x] Move logical file numbers and secondary addresses into platform storage.
 - [ ] Move command channel reads into platform storage.
 - [ ] Move drive probing and drive-specific behavior into platform storage.
 - [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.

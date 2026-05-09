@@ -22,6 +22,8 @@
 .segmentdef DungeonGenOverlay [outPrg="out/ovl.gen",   start=$e000, min=$e000, max=$efff]
 .segmentdef RuntimeBanked     [outPrg="out/64.bank",   start=$f000, min=$f000, max=$fffa]
 
+#import "hal/storage_policy.s"
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(entry)
 
@@ -145,8 +147,6 @@ c64_disk_clrchn:
     rts
 
 c64_disk_marker_present:
-    .const C64_DISK_MARKER_FILE_NUM = 6
-    .const C64_DISK_MARKER_SEC_RD = 2
     lda #1
     sta disk_status
     php
@@ -159,13 +159,13 @@ c64_disk_marker_present:
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
     jsr $ffbd
-    lda #C64_DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #C64_DISK_MARKER_SEC_RD
+    ldy #hal_storage_marker_sec_read
     jsr $ffba
     jsr $ffc0
     bcs !cdmp_done+
-    ldx #C64_DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr $ffc6
     bcs !cdmp_close+
     jsr $ffcf
@@ -176,7 +176,7 @@ c64_disk_marker_present:
     bne !cdmp_close+
     dec disk_status
 !cdmp_close:
-    lda #C64_DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr $ffc3
     jsr $ffcc
 !cdmp_done:
@@ -272,13 +272,13 @@ c64_disk_marker_write_resident:
     ldx #<(hal_storage_marker_write_name + 1)
     ldy #>(hal_storage_marker_write_name + 1)
     jsr KERNAL_SETNAM
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #DISK_MARKER_SEC_WR
+    ldy #hal_storage_marker_sec_write
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcs !cdmw_close+
-    ldx #DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr KERNAL_CHKOUT
     bcs !cdmw_close+
     ldx #0
@@ -292,7 +292,7 @@ c64_disk_marker_write_resident:
     sta disk_status
 !cdmw_close:
     jsr KERNAL_CLRCHN
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr KERNAL_CLOSE
     lda #$34
     sta $01

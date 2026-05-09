@@ -382,6 +382,20 @@ uds_show_init_detail:
     :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
     rts
 !fallback:
+#if C128
+    lda disk_diag_cmd_status0
+    cmp #$ff
+    beq !generic+
+    cmp #$30
+    bne !show_c128_status_error+
+    lda disk_diag_cmd_status1
+    cmp #$30
+    bne !show_c128_status_error+
+    jmp !generic+
+!show_c128_status_error:
+    jmp uds_show_c128_status_error
+!generic:
+#endif
 #if PLUS4
     lda disk_error_dos0
     beq !check_phase+
@@ -395,6 +409,33 @@ uds_show_init_detail:
 #endif
     :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
     rts
+
+#if C128
+uds_show_c128_status_error:
+    lda #4
+    sta zp_cursor_row
+    lda #UDS_LINE_COL
+    sta zp_cursor_col
+    lda #<uds_disk_code_str
+    sta zp_ptr0
+    lda #>uds_disk_code_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_diag_cmd_status0
+    jsr screen_put_char
+    lda disk_diag_cmd_status1
+    jsr screen_put_char
+    lda #<uds_phase_str
+    sta zp_ptr0
+    lda #>uds_phase_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda disk_diag_phase
+    jsr screen_put_hex
+    lda #$2e
+    jsr screen_put_char
+    rts
+#endif
 
 #if PLUS4
 uds_show_plus4_disk_error:
@@ -490,7 +531,17 @@ uds_dos_generic_str:       .text "Check the disk and try again." ; .byte 0
 #if PLUS4
 uds_disk_error_str:        .text "Disk error " ; .byte 0
 uds_on_drive_str:          .text " on drive " ; .byte 0
+#endif
+#if C128
+uds_disk_code_str:         .text "Disk code " ; .byte 0
+#endif
+#if PLUS4
 uds_disk_status_str:       .text "Disk code $" ; .byte 0
+#endif
+#if C128
+uds_phase_str:             .text " phase $" ; .byte 0
+#endif
+#if PLUS4
 uds_phase_str:             .text " phase $" ; .byte 0
 #endif
 uds_device_prompt_str:     .text "Save drive (8-30): " ; .byte 0

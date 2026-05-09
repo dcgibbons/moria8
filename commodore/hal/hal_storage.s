@@ -25,6 +25,16 @@
 //   hal_storage_load
 //   hal_storage_save_record
 //   hal_storage_load_record
+//   hal_storage_save_file_num
+//   hal_storage_check_file_num
+//   hal_storage_save_sec_write
+//   hal_storage_save_sec_read
+//   hal_storage_check_sec_read
+//   hal_storage_cmd_channel
+//   hal_storage_marker_file_num
+//   hal_storage_marker_sec_read
+//   hal_storage_marker_sec_write
+//   hal_storage_program_file_num
 //   hal_storage_save_probe_name
 //   hal_storage_save_probe_name_len
 //   hal_storage_save_read_name

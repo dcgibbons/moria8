@@ -3209,6 +3209,7 @@ c128_cache_state_end:
 #import "../common/huffman.s"
 #import "../common/runtime_ui_strings.s"
 #import "../common/io_kernal_consts.s"
+#import "hal/storage_policy.s"
 #import "../common/score_io.s"
 
 #import "../common/disk_swap.s"
@@ -3250,7 +3251,6 @@ c128_resident_select_end:
 .segment C128ResidentPersist
 c128_resident_persist_start:
 #import "../common/save.s"
-#import "hal/storage.s"
 c128_resident_persist_end:
 
 #define PRESS_KEY_STR_EXTERNAL
@@ -3724,6 +3724,7 @@ runtime_common_data_end:
 // product-path transaction evidence.
 .segment C128ResidentDiskIo
 c128_resident_diskio_start:
+    #import "hal/storage.s"
     #import "../common/disk_setup_runtime128.s"
 c128_resident_diskio_end:
 .segment Default
@@ -3834,7 +3835,7 @@ program_end:
 .assert "Runtime projectile helpers stay in pre-input low page", runtime_projectile_data_start >= $0a80 && runtime_projectile_data_end <= $0b00, true
 .assert "Runtime input code stays inside boot-sector page ownership", runtime_input_data_start >= $0b00 && runtime_input_data_end <= $0c00, true
 .assert "C128 FEAT-DISK common runtime stays in common RAM", runtime_common_data_end <= $1000, true
-.assert "C128 disk marker logical file avoids runtime loader files", DISK_MARKER_FILE_NUM > RUNTIME_BANKED_FILE_NUM && DISK_MARKER_FILE_NUM < CMD_CHANNEL, true
+.assert "C128 disk marker logical file avoids runtime loader files", hal_storage_marker_file_num > RUNTIME_BANKED_FILE_NUM && hal_storage_marker_file_num < hal_storage_cmd_channel, true
 .assert "Low runtime code stays below floor-item table", runtime_low_data_end <= FLOOR_ITEM_BASE, true
 .assert "Ego roll routine stays in low runtime RAM", roll_ego_type < FLOOR_ITEM_BASE, true
 .assert "Ego damage routine stays in low runtime RAM", ego_apply_damage < FLOOR_ITEM_BASE, true

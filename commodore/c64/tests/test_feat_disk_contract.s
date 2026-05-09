@@ -25,7 +25,7 @@ test_exit_trampoline:
 .const SCREEN_COLS = 40
 .const STATUS_ROW = 21
 .const COL_WHITE = $01
-.const CMD_CHANNEL = 15
+.const hal_storage_cmd_channel = 15
 
 .const KERNAL_SETNAM = kernal_setnam
 .const KERNAL_SETLFS = kernal_setlfs

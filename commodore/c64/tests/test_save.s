@@ -110,13 +110,17 @@ random_floor_in_room:
 #define C64_TEST_NO_SPELL_NAME_STUBS
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/runtime_ui_strings.s"
-.const SAVE_FILE_NUM  = 2
-.const CHECK_FILE_NUM = 3
 .const SAVE_DEVICE    = 8
-.const SAVE_SEC_ADDR  = 2
-.const LOAD_SEC_ADDR  = 2
-.const CHECK_SEC_ADDR = LOAD_SEC_ADDR
-.const CMD_CHANNEL    = 15
+.const hal_storage_save_file_num  = 2
+.const hal_storage_check_file_num = 3
+.const hal_storage_save_sec_write = 2
+.const hal_storage_save_sec_read  = 2
+.const hal_storage_check_sec_read = hal_storage_save_sec_read
+.const hal_storage_cmd_channel    = 15
+.const hal_storage_marker_file_num = 6
+.const hal_storage_marker_sec_read = 2
+.const hal_storage_marker_sec_write = 2
+.const hal_storage_program_file_num = 7
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
 .const KERNAL_OPEN   = test_save_open

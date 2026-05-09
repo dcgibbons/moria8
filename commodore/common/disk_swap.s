@@ -41,14 +41,6 @@ disk_error_index:  .byte 0
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
-#if C128
-.const DISK_MARKER_FILE_NUM = 13      // Keep clear of C128 runtime-loader logical files 2-12.
-#else
-.const DISK_MARKER_FILE_NUM = 6
-#endif
-.const DISK_MARKER_SEC_RD   = 2       // Match normal sequential file reads
-.const DISK_MARKER_SEC_WR   = 2       // Match normal sequential file writes
-.const DISK_PROGRAM_FILE_NUM = 7
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 
 #if C128 || PLUS4
@@ -357,13 +349,13 @@ disk_init_selected_drive:
     ldx #<hal_storage_init_command
     ldy #>hal_storage_init_command
     jsr w_setnam
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx disk_prompt_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr w_setlfs
     jsr w_open
     bcs !did_close+
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr w_close
 !did_close:
     jsr w_clrchn
@@ -374,13 +366,13 @@ disk_init_selected_drive:
     ldx #<hal_storage_init_command
     ldy #>hal_storage_init_command
     jsr FEAT_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx disk_prompt_device
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr FEAT_SETLFS
     jsr FEAT_OPEN
     bcs !did_close+
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr FEAT_CLOSE
 !did_close:
     jsr FEAT_CLRCHN
@@ -401,14 +393,14 @@ probe_device:
     ldx #0
     ldy #0
     jsr w_setnam
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx disk_temp
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr w_setlfs
     jsr w_open
     bcs !pd_absent+
 !pd_close:
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr w_close
     jsr w_clrchn
     clc
@@ -425,14 +417,14 @@ probe_device:
     ldx #0
     ldy #0
     jsr FEAT_SETNAM
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     ldx disk_temp
-    ldy #CMD_CHANNEL
+    ldy #hal_storage_cmd_channel
     jsr FEAT_SETLFS
     jsr FEAT_OPEN
     bcs !pd_absent+
 !pd_close:
-    lda #CMD_CHANNEL
+    lda #hal_storage_cmd_channel
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
     jsr disk_kernal_exit
@@ -459,9 +451,9 @@ disk_marker_present:
     sta disk_diag_phase
     lda save_device
     sta disk_diag_device
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     sta disk_diag_lfn
-    lda #DISK_MARKER_SEC_RD
+    lda #hal_storage_marker_sec_read
     sta disk_diag_sec
     jsr disk_kernal_enter
 
@@ -469,9 +461,9 @@ disk_marker_present:
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
     jsr KERNAL_SETNAM
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     ldx save_device
-    ldy #DISK_MARKER_SEC_RD
+    ldy #hal_storage_marker_sec_read
     jsr KERNAL_SETLFS
     jsr KERNAL_OPEN
     bcc !dmp_open_ok+
@@ -493,7 +485,7 @@ disk_marker_present:
 !dmp_chkin:
     lda #$82
     sta disk_diag_phase
-    ldx #DISK_MARKER_FILE_NUM
+    ldx #hal_storage_marker_file_num
     jsr KERNAL_CHKIN
     bcc !dmp_read_start+
     lda #1
@@ -544,7 +536,7 @@ disk_marker_present:
     sta disk_status
 !dmp_close:
     jsr KERNAL_CLRCHN
-    lda #DISK_MARKER_FILE_NUM
+    lda #hal_storage_marker_file_num
     jsr KERNAL_CLOSE
 !dmp_done:
     jsr disk_kernal_exit

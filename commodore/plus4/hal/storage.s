@@ -5,6 +5,8 @@
 // low-level plus4_kernal_* names wrap Plus/4 ROM/RAM visibility around KERNAL
 // calls; new shared storage work should target these HAL labels instead.
 
+#import "storage_policy.s"
+
 .label hal_storage_enter_os = plus4_bank_rom
 .label hal_storage_exit_os = plus4_bank_ram
 .label hal_storage_probe_media = probe_device
