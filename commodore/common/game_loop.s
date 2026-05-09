@@ -921,6 +921,9 @@ c128_town_move_diag_after_input_get_command:
 !save_setup_ready:
 #if C128_PRODUCT_MODAL_PERSIST
     jsr c128_modal_save_game
+#if C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c128_test_after_save_game:
+#endif
 #else
     jsr disk_prompt_save        // Swap to save disk if dual
 #if !C128

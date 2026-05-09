@@ -245,7 +245,7 @@ test128-fast: ensure-kickass
 	cd c128 && KICKASS="$(KICKASS_RESOLVED)" python3 -u ./harness128_batch.py --mode compare --snapshot-path out/ready.vsf --vice $(VICE128) --connect-timeout 12
 
 test128-fast-smoke: ensure-kickass
-	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
+	cd c128 && KICKASS="$(KICKASS_RESOLVED)" TEST_FILTER='boot_title_idle_smoke|boot_title_save_write_product_smoke|scripted_summary_to_town_smoke|scripted_spell_cast_smoke|scripted_book_overlay_smoke|scripted_spell_list_overlay_smoke|scripted_spell_list_cancel_smoke|scripted_prayer_cast_smoke|town_overlay_smoke' ./run_tests128.sh
 
 testplus4: ensure-kickass $(PLUS4_BUILD_ARTIFACTS)
 	@echo "Plus/4 build artifacts assembled; runtime smoke is make testplus4-runtime."

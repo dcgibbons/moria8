@@ -52,6 +52,62 @@ code should own hardware execution.
 - [x] Current concrete HAL step completed: save-write/load-resume runtime gates
       are enabled before migrating more storage behavior out of common code.
 
+## C64/C128 Storage Baseline Gates
+
+These are the protected storage baselines before Phase 4 moves more common
+save/load behavior behind platform storage adapters.
+
+C64 baseline:
+
+- [x] `make test64` runs `save` (`commodore/c64/tests/test_save.s`) for save
+      record layout, checksums, and floor-item persistence.
+- [x] `make test64` runs `disk_swap`
+      (`commodore/c64/tests/test_disk_swap.s`) for save-media prompt policy,
+      marker handling, and one-drive/two-drive disk setup state.
+- [x] `make test64` runs `main_loop`
+      (`commodore/c64/tests/test_main_loop.s`) for title/game save-load
+      dispatch behavior and disk setup failure/success branches.
+- [x] `make test64` runs `score` (`commodore/c64/tests/test_score.s`) for the
+      score-storage path.
+- [ ] C64 still needs a product-level save-write/load-resume smoke comparable
+      to the Plus/4 product runtime gates before common storage behavior is
+      migrated aggressively.
+
+C128 baseline:
+
+- [x] `make test128-fast` runs `disk_swap128`
+      (`commodore/c128/tests/test_disk_swap128.s`) for C128 disk setup and
+      save-media prompt policy.
+- [x] `make test128-fast` runs `main_loop128`
+      (`commodore/c128/tests/test_main_loop128.s`) for C128 title/game
+      save-load dispatch behavior and disk setup failure/success branches.
+- [x] `make test128-fast-smoke` includes
+      `boot_title_load_missing_savefile_smoke`, proving the title load path
+      reports a missing save file instead of entering gameplay.
+- [x] `make test128-fast-smoke` includes
+      `boot_title_load_mounted_save_smoke`, proving mounted save media reaches
+      the load/resume path from the title menu.
+- [x] `make test128-fast-smoke` includes `boot_title_load_resume_smoke`,
+      proving a generated C128 save can reach `load_resume_game`.
+- [x] `make test128-fast-smoke` includes `boot_title_save_write_product_smoke`,
+      proving the product save path can create/update `THE.GAME` on a mounted
+      save disk and leave a SEQ save file visible in the host disk image.
+
+Plus/4 baseline:
+
+- [x] `make testplus4-runtime` runs `disk_setup_product_plus4` for real product
+      save-disk marker creation/readback.
+- [x] `make testplus4-runtime` runs `disk_setup_missing_save_plus4` for missing
+      drive-9 media and asserts DOS code `74`, disk status `74`, and diagnostic
+      phase `$83`.
+- [x] `make testplus4-runtime` runs `load_wrong_media_product_plus4` for wrong
+      `MORIA4.ID` marker handling.
+- [x] `make testplus4-runtime` runs `save_write_product_plus4`, proving the
+      product save path creates `P4.THE.GAME` as a SEQ file on drive 9.
+- [x] `make testplus4-runtime` runs `load_resume_product_plus4`, proving a
+      generated Plus/4 save resumes gameplay without timeout, reset, BRK, or
+      CPU JAM.
+
 ## Target Directory Structure
 
 Use this structure inside the current `commodore/` tree first. Do not start
@@ -250,7 +306,7 @@ Required services:
       `make diskplus4`.
 - [x] Record that `make testplus4` is not yet a runtime gate.
 - [x] Record resolved Plus/4 failure: `Disk code $00 phase $83`.
-- [ ] Ensure no HAL migration starts before C64/C128 baseline gates are named.
+- [x] Ensure no HAL migration starts before C64/C128 baseline gates are named.
 - [ ] Preserve current C64/C128 behavior unless a test proves an existing bug.
 
 ### Phase 1: Plus/4 Runtime Harness
@@ -424,7 +480,8 @@ Storage adapter note:
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
-      C64/C128 parity gates remain open.
+      C128 now has product title load, load-resume, and save-write smokes; C64
+      product save-write/load-resume parity remains open.
 
 ## Normalized Storage Error ABI
 
