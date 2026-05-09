@@ -931,6 +931,9 @@ c128_test_after_save_game:
     jsr ui_reset_message_state
 #endif
     jsr save_game
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c64_test_after_save_game:
+#endif
 #if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_after_save_game:
 #endif

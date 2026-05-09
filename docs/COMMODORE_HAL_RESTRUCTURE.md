@@ -69,9 +69,12 @@ C64 baseline:
       dispatch behavior and disk setup failure/success branches.
 - [x] `make test64` runs `score` (`commodore/c64/tests/test_score.s`) for the
       score-storage path.
-- [ ] C64 still needs a product-level save-write/load-resume smoke comparable
-      to the Plus/4 product runtime gates before common storage behavior is
-      migrated aggressively.
+- [x] `make test64` runs `save_write_product_smoke`, proving the product load
+      path can resume from a generated save, run the product save command, and
+      leave `THE.GAME` visible as a SEQ file in the host save disk image.
+- [ ] C64 still needs a product-level load-resume smoke that explicitly stops
+      at `load_resume_game`/`main_loop` before the save command; the save-write
+      product smoke covers load-resume as a prerequisite.
 
 C128 baseline:
 
@@ -480,8 +483,8 @@ Storage adapter note:
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
-      C128 now has product title load, load-resume, and save-write smokes; C64
-      product save-write/load-resume parity remains open.
+      C64 and C128 now have product save-write smokes; C64 still needs an
+      explicit standalone product load-resume gate.
 
 ## Normalized Storage Error ABI
 

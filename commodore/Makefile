@@ -292,11 +292,8 @@ $(C64_RUNTIME_BANKED): $(C64_MAIN_PRG)
 $(C64_BOOT_PRG): $(C64_SOURCES) | ensure-kickass $(OUT64)
 	$(JAVA) -jar "$(KICKASS_RESOLVED)" $(C64_BOOT_SRC) -o $(C64_BOOT_PRG)
 
-$(C64_BOOTART_PNG):
-	@echo "Missing source art: $@"
-	@false
-
 $(C64_BOOTART_PPM): $(C64_BOOTART_PNG) $(C64_BOOTART_SRC_TOOL) | $(OUT64)
+	@test -f "$(C64_BOOTART_PNG)" || { echo "Missing source art: $(C64_BOOTART_PNG)"; false; }
 	python3 $(C64_BOOTART_SRC_TOOL) $(C64_BOOTART_PNG) 160 200 $@
 
 $(C64_BOOTART_PRG): $(C64_BOOTART_PPM) $(C64_BOOTART_TOOL) | $(OUT64)
