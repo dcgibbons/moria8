@@ -182,29 +182,7 @@ plus4_kernal_load:
 .label c64_disk_readst = plus4_kernal_readst
 .label c64_disk_load = plus4_kernal_load
 
-// KERNAL filename/command bytes must live below BASIC ROM. The Plus/4 KERNAL
-// reads these pointers while ROM is visible over $8000-$BFFF.
-disk_init_cmd:     .byte $49, $30      // "I0"
-disk_marker_magic: .byte $4d, $38, $50, $34, $53, $56  // "M8P4SV"
-.const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
-
-disk_marker_read_fname:
-    .byte $30, $3a                      // "0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
-    .byte $2c, $53, $2c, $52            // ",S,R"
-.label disk_marker_read_fname_len = * - disk_marker_read_fname
-
-disk_marker_write_fname:
-    .byte $40                           // "@"
-    .byte $30, $3a                      // "0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
-    .byte $2c, $53, $2c, $57            // ",S,W"
-.label disk_marker_write_fname_len = * - disk_marker_write_fname
-
-disk_marker_scratch_cmd:
-    .byte $53, $30, $3a                 // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
-.label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
+#import "hal/storage.s"
 
 plus4_storage_marker_present:
     .const C64_DISK_MARKER_FILE_NUM = 6
@@ -216,9 +194,9 @@ plus4_storage_marker_present:
     jsr plus4_kernal_clrchn
     lda #C64_DISK_MARKER_FILE_NUM
     jsr plus4_kernal_close
-    lda #disk_marker_read_fname_len
-    ldx #<disk_marker_read_fname
-    ldy #>disk_marker_read_fname
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
     jsr plus4_kernal_setnam
     lda #C64_DISK_MARKER_FILE_NUM
     ldx save_device
@@ -245,7 +223,7 @@ plus4_storage_marker_present:
     jsr plus4_kernal_chrin
     sta disk_error_actual
     ldx disk_temp
-    lda disk_marker_magic,x
+    lda hal_storage_marker_magic,x
     sta disk_error_expect
     stx disk_error_index
     cmp disk_error_actual
@@ -256,12 +234,12 @@ plus4_storage_marker_present:
     cmp #$40
     bne !cdmp_close+
     ldx disk_temp
-    cpx #DISK_MARKER_MAGIC_LEN - 1
+    cpx #hal_storage_marker_magic_len - 1
     bne !cdmp_close+
 !cdmp_byte_ok:
     inc disk_temp
     lda disk_temp
-    cmp #DISK_MARKER_MAGIC_LEN
+    cmp #hal_storage_marker_magic_len
     bcc !cdmp_read-
     dec disk_status
 !cdmp_close:
@@ -365,9 +343,9 @@ plus4_storage_marker_write_resident:
     // Use DOS replace syntax here. The preceding scratch is still useful for
     // compatibility, but a stale marker file must not survive if scratch fails
     // silently on a particular IEC drive implementation.
-    lda #disk_marker_write_fname_len
-    ldx #<disk_marker_write_fname
-    ldy #>disk_marker_write_fname
+    lda #hal_storage_marker_write_name_len
+    ldx #<hal_storage_marker_write_name
+    ldy #>hal_storage_marker_write_name
     jsr plus4_kernal_setnam
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
@@ -392,7 +370,7 @@ plus4_storage_marker_write_resident:
     sta disk_temp
 !cdmw_write:
     ldx disk_temp
-    lda disk_marker_magic,x
+    lda hal_storage_marker_magic,x
     stx disk_error_index
     jsr plus4_kernal_chrout
     jsr plus4_kernal_readst
@@ -400,7 +378,7 @@ plus4_storage_marker_write_resident:
     bne !cdmw_close+
     inc disk_temp
     lda disk_temp
-    cmp #DISK_MARKER_MAGIC_LEN
+    cmp #hal_storage_marker_magic_len
     bcc !cdmw_write-
     lda #0
     sta disk_status

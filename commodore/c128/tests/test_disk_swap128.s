@@ -68,6 +68,28 @@ press_key_str:
 cmd_status_bytes:
     .byte $30, $31, $30, $30, $30, $30
 
+hal_storage_init_command:
+    .byte $49, $30
+hal_storage_marker_magic:
+    .byte $4d, $38, $53, $41, $56, $45
+.label hal_storage_marker_magic_len = * - hal_storage_marker_magic
+hal_storage_marker_read_name:
+    .byte $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+    .byte $2c, $53, $2c, $52
+.label hal_storage_marker_read_name_len = * - hal_storage_marker_read_name
+hal_storage_marker_write_name:
+    .byte $40, $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+    .byte $2c, $53, $2c, $57
+.label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
+hal_storage_marker_scratch_name:
+    .byte $53, $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+.label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+.label disk_marker_magic = hal_storage_marker_magic
+.label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
+
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 #import "../../common/disk_setup_banked.s"

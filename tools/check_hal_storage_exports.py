@@ -36,6 +36,15 @@ REQUIRED_LABELS = (
     "hal_storage_save_read_name_len",
     "hal_storage_save_write_name",
     "hal_storage_save_write_name_len",
+    "hal_storage_init_command",
+    "hal_storage_marker_magic",
+    "hal_storage_marker_magic_len",
+    "hal_storage_marker_read_name",
+    "hal_storage_marker_read_name_len",
+    "hal_storage_marker_write_name",
+    "hal_storage_marker_write_name_len",
+    "hal_storage_marker_scratch_name",
+    "hal_storage_marker_scratch_name_len",
 )
 
 PLATFORM_FILES = {

@@ -5,12 +5,6 @@
 // resident code. In both cases the overlay remains display/input only and
 // all disk transactions stay outside the live overlay frame.
 
-#if !PLUS4
-disk_marker_scratch_cmd:
-    .byte $53, $30, $3a                 // "S0:"
-    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
-.label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
-#endif
 #if !C128
 .label c64_disk_marker_write_phys = c64_disk_marker_write_resident
 #else
@@ -52,9 +46,9 @@ disk_marker_init:
     sta disk_diag_write_status1
 
     jsr disk_kernal_enter
-    lda #disk_marker_scratch_cmd_len
-    ldx #<disk_marker_scratch_cmd
-    ldy #>disk_marker_scratch_cmd
+    lda #hal_storage_marker_scratch_name_len
+    ldx #<hal_storage_marker_scratch_name
+    ldy #>hal_storage_marker_scratch_name
     jsr KERNAL_SETNAM
     lda #CMD_CHANNEL
     ldx save_device
@@ -96,9 +90,9 @@ disk_marker_init:
     lda #$91
     sta disk_status
 
-    lda #disk_marker_write_fname_len - 1
-    ldx #<(disk_marker_write_fname + 1)
-    ldy #>(disk_marker_write_fname + 1)
+    lda #hal_storage_marker_write_name_len - 1
+    ldx #<(hal_storage_marker_write_name + 1)
+    ldy #>(hal_storage_marker_write_name + 1)
     jsr KERNAL_SETNAM
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
@@ -145,7 +139,7 @@ disk_marker_init:
     sta disk_diag_phase
     ldx disk_temp
     stx disk_diag_index
-    lda disk_marker_magic,x
+    lda hal_storage_marker_magic,x
     jsr KERNAL_CHROUT
     jsr KERNAL_READST
     sta disk_diag_readst
@@ -156,7 +150,7 @@ disk_marker_init:
 !dmi_write_ok:
     inc disk_temp
     lda disk_temp
-    cmp #DISK_MARKER_MAGIC_LEN
+    cmp #hal_storage_marker_magic_len
     bcc !dmi_write-
     lda #0
     sta disk_status
@@ -275,9 +269,9 @@ disk_setup_capture_init_status:
     sta disk_status
     lda #0
     sta disk_ui_value
-    lda #disk_marker_scratch_cmd_len
-    ldx #<disk_marker_scratch_cmd
-    ldy #>disk_marker_scratch_cmd
+    lda #hal_storage_marker_scratch_name_len
+    ldx #<hal_storage_marker_scratch_name
+    ldy #>hal_storage_marker_scratch_name
     jsr FEAT_SETNAM
     lda #CMD_CHANNEL
     ldx save_device

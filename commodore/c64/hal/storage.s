@@ -26,6 +26,34 @@
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 
+// Platform-owned save-disk marker filenames and marker bytes. PETSCII bytes
+// for KERNAL SETNAM / sequential marker contents.
+hal_storage_init_command:
+    .byte $49, $30                              // "I0"
+
+hal_storage_marker_magic:
+    .byte $4d, $38, $53, $41, $56, $45          // "M8SAVE"
+.label hal_storage_marker_magic_len = * - hal_storage_marker_magic
+
+hal_storage_marker_read_name:
+    .byte $30, $3a                              // "0:"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
+    .byte $2c, $53, $2c, $52                    // ",S,R"
+.label hal_storage_marker_read_name_len = * - hal_storage_marker_read_name
+
+hal_storage_marker_write_name:
+    .byte $40, $30, $3a                         // "@0:"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
+    .byte $2c, $53, $2c, $57                    // ",S,W"
+.label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
+
+.segment RuntimeBanked
+hal_storage_marker_scratch_name:
+    .byte $53, $30, $3a                         // "S0:"
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44 // "MORIA8.ID"
+.label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+.segment Default
+
 // Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
 hal_storage_save_write_name:
     .byte $40, $30, $3a                         // "@0:"

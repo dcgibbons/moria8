@@ -155,9 +155,9 @@ c64_disk_marker_present:
     lda #$36
     sta $01
     cli
-    lda #disk_marker_read_fname_len
-    ldx #<disk_marker_read_fname
-    ldy #>disk_marker_read_fname
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
     jsr $ffbd
     lda #C64_DISK_MARKER_FILE_NUM
     ldx save_device
@@ -268,9 +268,9 @@ c64_disk_marker_write_resident:
     sta disk_status
     lda #$36
     sta $01
-    lda #disk_marker_write_fname_len - 1
-    ldx #<(disk_marker_write_fname + 1)
-    ldy #>(disk_marker_write_fname + 1)
+    lda #hal_storage_marker_write_name_len - 1
+    ldx #<(hal_storage_marker_write_name + 1)
+    ldy #>(hal_storage_marker_write_name + 1)
     jsr KERNAL_SETNAM
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
@@ -283,10 +283,10 @@ c64_disk_marker_write_resident:
     bcs !cdmw_close+
     ldx #0
 !cdmw_write:
-    lda disk_marker_magic,x
+    lda hal_storage_marker_magic,x
     jsr KERNAL_CHROUT
     inx
-    cpx #DISK_MARKER_MAGIC_LEN
+    cpx #hal_storage_marker_magic_len
     bcc !cdmw_write-
     lda #0
     sta disk_status

@@ -408,6 +408,10 @@ Storage adapter note:
 - [x] First non-alias slice: save-record filename policy is platform-owned via
       `hal_storage_save_{probe,read,write}_name` labels. Common save/load code
       no longer owns `THE.GAME`/`P4.THE.GAME` filename bytes.
+- [x] Second filename slice: save-disk marker filename/magic policy is
+      platform-owned via `hal_storage_marker_*` labels. Common disk setup and
+      marker validation no longer own `MORIA8.ID`/`MORIA4.ID` filename bytes or
+      marker magic bytes.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -430,7 +434,8 @@ Storage adapter note:
       runtime behavior.
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
-      asset filenames, tier data filenames, and score filenames remain.
+      marker filenames are done; title/overlay asset filenames, tier data
+      filenames, and score filenames remain.
 - [ ] Move logical file numbers and secondary addresses into platform storage.
 - [ ] Move command channel reads into platform storage.
 - [ ] Move drive probing and drive-specific behavior into platform storage.

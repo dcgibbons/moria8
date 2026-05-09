@@ -78,15 +78,39 @@ input_stream:            .fill 8, 0
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
+hal_storage_init_command:
+    .byte $49, $30
+hal_storage_marker_magic:
+    .byte $4d, $38, $53, $41, $56, $45
+.label hal_storage_marker_magic_len = * - hal_storage_marker_magic
+hal_storage_marker_read_name:
+    .byte $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+    .byte $2c, $53, $2c, $52
+.label hal_storage_marker_read_name_len = * - hal_storage_marker_read_name
+hal_storage_marker_write_name:
+    .byte $40, $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+    .byte $2c, $53, $2c, $57
+.label hal_storage_marker_write_name_len = * - hal_storage_marker_write_name
+hal_storage_marker_scratch_name:
+    .byte $53, $30, $3a
+    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44
+.label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
+.label disk_marker_magic = hal_storage_marker_magic
+.label disk_marker_read_fname = hal_storage_marker_read_name
+.label disk_marker_read_fname_len = hal_storage_marker_read_name_len
+.label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
+
 c64_disk_marker_present:
     .const TEST_DISK_MARKER_FILE_NUM = 6
     .const TEST_DISK_MARKER_SEC_RD = 9
     .const TEST_DISK_MARKER_MAGIC_LEN = 6
     lda #1
     sta disk_status
-    lda #disk_marker_read_fname_len
-    ldx #<disk_marker_read_fname
-    ldy #>disk_marker_read_fname
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
     jsr kernal_setnam
     lda #TEST_DISK_MARKER_FILE_NUM
     ldx save_device
@@ -100,7 +124,7 @@ c64_disk_marker_present:
     ldx #0
 !read:
     jsr kernal_chrin
-    cmp disk_marker_magic,x
+    cmp hal_storage_marker_magic,x
     bne !close+
     inx
     cpx #TEST_DISK_MARKER_MAGIC_LEN

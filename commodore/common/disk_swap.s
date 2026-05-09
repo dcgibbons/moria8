@@ -36,29 +36,6 @@ disk_error_expect: .byte 0
 disk_error_index:  .byte 0
 #endif
 
-// PETSCII command bytes / marker file contents
-// Plus/4 defines these in low resident RAM because KERNAL OPEN reads filename
-// bytes while BASIC/KERNAL ROM is visible over $8000-$BFFF.
-#if !PLUS4
-disk_init_cmd:     .byte $49, $30      // "I0"
-disk_marker_magic: .byte $4d, $38, $53, $41, $56, $45  // "M8SAVE"
-.const DISK_MARKER_MAGIC_LEN = * - disk_marker_magic
-
-disk_marker_read_fname:
-    .byte $30, $3a                      // "0:"
-    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
-    .byte $2c, $53, $2c, $52            // ",S,R"
-.label disk_marker_read_fname_len = * - disk_marker_read_fname
-
-disk_marker_write_fname:
-    .byte $40                           // "@"
-    .byte $30, $3a                      // "0:"
-    .byte $4d, $4f, $52, $49, $41, $38, $2e, $49, $44  // "MORIA8.ID"
-    .byte $2c, $53, $2c, $57            // ",S,W"
-.label disk_marker_write_fname_len = * - disk_marker_write_fname
-
-#endif
-
 .const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2
 .const DS_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
@@ -377,8 +354,8 @@ disk_init_drive:
 disk_init_selected_drive:
 #if C128
     lda #2
-    ldx #<disk_init_cmd
-    ldy #>disk_init_cmd
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
     jsr w_setnam
     lda #CMD_CHANNEL
     ldx disk_prompt_device
@@ -394,8 +371,8 @@ disk_init_selected_drive:
 #else
     jsr disk_kernal_enter
     lda #2
-    ldx #<disk_init_cmd
-    ldy #>disk_init_cmd
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
     jsr FEAT_SETNAM
     lda #CMD_CHANNEL
     ldx disk_prompt_device
@@ -488,9 +465,9 @@ disk_marker_present:
     sta disk_diag_sec
     jsr disk_kernal_enter
 
-    lda #disk_marker_read_fname_len
-    ldx #<disk_marker_read_fname
-    ldy #>disk_marker_read_fname
+    lda #hal_storage_marker_read_name_len
+    ldx #<hal_storage_marker_read_name
+    ldy #>hal_storage_marker_read_name
     jsr KERNAL_SETNAM
     lda #DISK_MARKER_FILE_NUM
     ldx save_device
@@ -543,7 +520,7 @@ disk_marker_present:
     cmp #$40
     bne !dmp_read_status_fail+
     lda disk_temp
-    cmp #DISK_MARKER_MAGIC_LEN - 1
+    cmp #hal_storage_marker_magic_len - 1
     beq !dmp_cmp+
 !dmp_read_status_fail:
     lda #$84
@@ -552,11 +529,11 @@ disk_marker_present:
 !dmp_cmp:
     ldx disk_temp
     lda disk_diag_byte
-    cmp disk_marker_magic,x
+    cmp hal_storage_marker_magic,x
     bne !dmp_fail+
     inx
     stx disk_temp
-    cpx #DISK_MARKER_MAGIC_LEN
+    cpx #hal_storage_marker_magic_len
     bcc !dmp_read-
     lda #0
     sta disk_status

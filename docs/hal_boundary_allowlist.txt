@@ -17,7 +17,6 @@ commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/disk_setup_banked.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/disk_setup_banked.s	raw-c64-bank-port	$01
 commodore/common/disk_setup_banked.s	target-conditional	#if !C128
-commodore/common/disk_setup_banked.s	target-conditional	#if !PLUS4
 commodore/common/disk_setup_banked.s	target-conditional	#if C128
 commodore/common/disk_setup_banked.s	target-conditional	#if PLUS4
 commodore/common/disk_setup_runtime128.s	target-conditional	#if C128
@@ -34,7 +33,6 @@ commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/disk_swap.s	raw-c64-bank-port	$01
 commodore/common/disk_swap.s	target-conditional	#if !C128
-commodore/common/disk_swap.s	target-conditional	#if !PLUS4
 commodore/common/disk_swap.s	target-conditional	#if C128
 commodore/common/disk_swap.s	target-conditional	#if C128 || PLUS4
 commodore/common/disk_swap.s	target-conditional	#if PLUS4

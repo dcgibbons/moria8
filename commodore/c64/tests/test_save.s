@@ -140,6 +140,8 @@ random_floor_in_room:
 c64_disk_marker_present:
     sec
     rts
+hal_storage_init_command:
+    .byte $49, $30
 hal_storage_save_write_name:
     .byte $40, $30, $3a
     .byte $54, $45, $53, $54
