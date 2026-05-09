@@ -121,29 +121,6 @@ rle_work_hi:    .byte >CREATURE_BASE  // RLE workspace pointer hi
 rle_lit_buf:    .fill 128, 0
 #endif
 
-// ============================================================
-// String data (PETSCII for KERNAL I/O — NOT screen codes)
-// ============================================================
-// Note: KERNAL SETNAM needs PETSCII filenames.
-// Use raw byte values to avoid screencode encoding.
-// Plus/4 defines these in low resident RAM because KERNAL SETNAM/OPEN reads
-// filename bytes while BASIC/KERNAL ROM is visible over this segment.
-#if !PLUS4
-save_replace_filename:
-    .byte $40, $30, $3a     // "@0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-    .byte $2c, $53, $2c, $57  // ",S,W" (sequential, write)
-.label save_replace_filename_len = * - save_replace_filename
-.label save_filename = save_replace_filename + 1
-.label save_filename_len = save_replace_filename_len - 1
-
-load_filename:
-    .byte $30, $3a          // "0:"
-    .byte $54, $48, $45, $2e, $47, $41, $4d, $45  // "THE.GAME"
-    .byte $2c, $53, $2c, $52  // ",S,R" (sequential, read)
-.label load_filename_len = * - load_filename
-#endif
-
 save_magic:
 #if PLUS4
     .byte $4d, $4f, $52, $49, $41, $2b, $34  // "MORIA+4"
@@ -187,11 +164,11 @@ save_magic:
 // ============================================================
 #if C128
 save_confirm_overwrite:
-    lda #save_filename_len
+    lda #hal_storage_save_probe_name_len
     sta save_count_lo
-    lda #<save_filename
+    lda #<hal_storage_save_probe_name
     sta save_block_lo
-    lda #>save_filename
+    lda #>hal_storage_save_probe_name
     sta save_block_hi
     jsr save_file_exists
     bcc !save_confirm_done+
@@ -208,11 +185,11 @@ save_confirm_overwrite:
     beq !save_confirm_no+
     bne !save_confirm_loop-
 !save_confirm_yes:
-    lda #save_replace_filename_len
+    lda #hal_storage_save_write_name_len
     sta save_count_lo
-    lda #<save_replace_filename
+    lda #<hal_storage_save_write_name
     sta save_block_lo
-    lda #>save_replace_filename
+    lda #>hal_storage_save_write_name
     sta save_block_hi
 !save_confirm_done:
     sec
@@ -223,7 +200,7 @@ save_confirm_overwrite:
 #else
 save_select_output_name_c64:
 #if PLUS4
-    // Plus/4 saves always use @0:P4.THE.GAME,S,W. Avoid the C64-style
+    // Plus/4 save output names are platform-owned. Avoid the C64-style
     // existence probe: on this KERNAL/drive path, probing a missing SEQ can
     // block before returning useful status.
     sec
@@ -335,9 +312,9 @@ save_select_media_error_msg_plus4:
     ldx save_block_lo
     ldy save_block_hi
 #else
-    lda #save_replace_filename_len
-    ldx #<save_replace_filename
-    ldy #>save_replace_filename
+    lda #hal_storage_save_write_name_len
+    ldx #<hal_storage_save_write_name
+    ldy #>hal_storage_save_write_name
 #endif
     jsr SAVE_SETNAM
     // SETLFS: file#2, device 8/9, secondary 2
@@ -561,9 +538,9 @@ plus4_test_load_media_fail:
 #endif
 
     // Open save file for sequential read via CHKIN/CHRIN
-    lda #load_filename_len
-    ldx #<load_filename
-    ldy #>load_filename
+    lda #hal_storage_save_read_name_len
+    ldx #<hal_storage_save_read_name
+    ldy #>hal_storage_save_read_name
     jsr SAVE_SETNAM
     lda #SAVE_FILE_NUM
     ldx save_device
@@ -1582,14 +1559,14 @@ load_unstage_map_c128:
 #endif
 
 // ============================================================
-// save_file_exists — Probe whether THE.GAME exists on save_device.
+// save_file_exists — Probe whether the platform save record exists.
 // Output: carry set = file exists, carry clear = file not present
 // Clobbers: A, X, Y
 // ============================================================
 save_file_exists:
-    lda #load_filename_len
-    ldx #<load_filename
-    ldy #>load_filename
+    lda #hal_storage_save_read_name_len
+    ldx #<hal_storage_save_read_name
+    ldy #>hal_storage_save_read_name
     jsr SAVE_SETNAM
     lda #CHECK_FILE_NUM
     ldx save_device

@@ -25,6 +25,12 @@
 //   hal_storage_load
 //   hal_storage_save_record
 //   hal_storage_load_record
+//   hal_storage_save_probe_name
+//   hal_storage_save_probe_name_len
+//   hal_storage_save_read_name
+//   hal_storage_save_read_name_len
+//   hal_storage_save_write_name
+//   hal_storage_save_write_name_len
 //
 // Raw KERNAL-like calls preserve the platform's existing low-level carry and
 // register behavior. Higher-level HAL calls use this error convention:
@@ -42,6 +48,8 @@
 //   runtime visibility.
 // - Filename, command, and transfer buffers passed to KERNAL-like services must
 //   be visible to the OS/device implementation while the call executes.
+// - Save-record filename labels are platform-owned PETSCII/KERNAL strings.
+//   Common save/load code must not hardcode save-record filenames.
 // - Callers may not assume that A/X/Y survive any OS/device call unless that
 //   specific adapter documents it.
 //

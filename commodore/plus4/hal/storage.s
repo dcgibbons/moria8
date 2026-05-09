@@ -25,3 +25,20 @@
 .label hal_storage_load = plus4_kernal_load
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
+
+// Platform-owned save-record filenames. PETSCII bytes for KERNAL SETNAM.
+// These must live in resident RAM below BASIC/KERNAL ROM because the Plus/4
+// KERNAL reads filename bytes while ROM is visible over $8000-$BFFF.
+hal_storage_save_write_name:
+    .byte $40, $30, $3a                         // "@0:"
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45 // "P4.THE.GAME"
+    .byte $2c, $53, $2c, $57                    // ",S,W"
+.label hal_storage_save_write_name_len = * - hal_storage_save_write_name
+.label hal_storage_save_probe_name = hal_storage_save_write_name + 1
+.label hal_storage_save_probe_name_len = hal_storage_save_write_name_len - 1
+
+hal_storage_save_read_name:
+    .byte $30, $3a                              // "0:"
+    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45 // "P4.THE.GAME"
+    .byte $2c, $53, $2c, $52                    // ",S,R"
+.label hal_storage_save_read_name_len = * - hal_storage_save_read_name

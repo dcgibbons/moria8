@@ -206,20 +206,6 @@ disk_marker_scratch_cmd:
     .byte $4d, $4f, $52, $49, $41, $34, $2e, $49, $44  // "MORIA4.ID"
 .label disk_marker_scratch_cmd_len = * - disk_marker_scratch_cmd
 
-save_replace_filename:
-    .byte $40, $30, $3a                 // "@0:"
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
-    .byte $2c, $53, $2c, $57            // ",S,W"
-.label save_replace_filename_len = * - save_replace_filename
-.label save_filename = save_replace_filename + 1
-.label save_filename_len = save_replace_filename_len - 1
-
-load_filename:
-    .byte $30, $3a                      // "0:"
-    .byte $50, $34, $2e, $54, $48, $45, $2e, $47, $41, $4d, $45  // "P4.THE.GAME"
-    .byte $2c, $53, $2c, $52            // ",S,R"
-.label load_filename_len = * - load_filename
-
 plus4_storage_marker_present:
     .const C64_DISK_MARKER_FILE_NUM = 6
     .const C64_DISK_MARKER_SEC_RD = 2

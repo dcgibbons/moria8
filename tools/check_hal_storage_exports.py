@@ -30,6 +30,12 @@ REQUIRED_LABELS = (
     "hal_storage_load",
     "hal_storage_save_record",
     "hal_storage_load_record",
+    "hal_storage_save_probe_name",
+    "hal_storage_save_probe_name_len",
+    "hal_storage_save_read_name",
+    "hal_storage_save_read_name_len",
+    "hal_storage_save_write_name",
+    "hal_storage_save_write_name_len",
 )
 
 PLATFORM_FILES = {

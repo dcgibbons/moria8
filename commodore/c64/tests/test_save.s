@@ -140,6 +140,18 @@ random_floor_in_room:
 c64_disk_marker_present:
     sec
     rts
+hal_storage_save_write_name:
+    .byte $40, $30, $3a
+    .byte $54, $45, $53, $54
+    .byte $2c, $53, $2c, $57
+.label hal_storage_save_write_name_len = * - hal_storage_save_write_name
+.label hal_storage_save_probe_name = hal_storage_save_write_name + 1
+.label hal_storage_save_probe_name_len = hal_storage_save_write_name_len - 1
+hal_storage_save_read_name:
+    .byte $30, $3a
+    .byte $54, $45, $53, $54
+    .byte $2c, $53, $2c, $52
+.label hal_storage_save_read_name_len = * - hal_storage_save_read_name
 #import "../../common/save.s"
 #import "../../common/disk_swap.s"
 

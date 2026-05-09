@@ -405,7 +405,10 @@ Storage adapter note:
 - [x] Plus/4 storage adapters point at `plus4_kernal_*` wrapper names for the
       low-level ROM/RAM + KERNAL boundary. Transitional `c64_disk_*` aliases
       remain inside Plus/4 only until old call sites migrate.
-- [ ] Replace aliases with real platform-owned routines only one slice at a
+- [x] First non-alias slice: save-record filename policy is platform-owned via
+      `hal_storage_save_{probe,read,write}_name` labels. Common save/load code
+      no longer owns `THE.GAME`/`P4.THE.GAME` filename bytes.
+- [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
 ### Phase 3: Non-Storage HAL Migration
@@ -426,6 +429,8 @@ Storage adapter note:
 - [ ] Confirm normalized storage error ABI against C64, C128, and Plus/4
       runtime behavior.
 - [ ] Move filenames into platform storage implementations.
+      Save-record filenames are done; save-disk marker filenames, title/overlay
+      asset filenames, tier data filenames, and score filenames remain.
 - [ ] Move logical file numbers and secondary addresses into platform storage.
 - [ ] Move command channel reads into platform storage.
 - [ ] Move drive probing and drive-specific behavior into platform storage.
