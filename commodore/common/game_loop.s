@@ -721,6 +721,9 @@ load_resume_game:
     ldx #HSTR_SAVE_WELCOME
     jsr huff_print_msg
 
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+c64_test_after_load_resume_game:
+#endif
 main_loop:
 #if C128
 c128_town_move_diag_loop_top:

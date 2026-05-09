@@ -1143,6 +1143,11 @@ c64_test_save_write_fail_input_sym:
     brk
 #endif
 
+#if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+c64_test_load_resume_fail_input_sym:
+    brk
+#endif
+
 // ============================================================
 // Startup overlay trampoline — load overlay, bank out KERNAL, call $E000+
 // ============================================================

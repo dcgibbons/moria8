@@ -72,9 +72,10 @@ C64 baseline:
 - [x] `make test64` runs `save_write_product_smoke`, proving the product load
       path can resume from a generated save, run the product save command, and
       leave `THE.GAME` visible as a SEQ file in the host save disk image.
-- [ ] C64 still needs a product-level load-resume smoke that explicitly stops
-      at `load_resume_game`/`main_loop` before the save command; the save-write
-      product smoke covers load-resume as a prerequisite.
+- [x] `make test64` runs `load_resume_product_smoke`, proving a generated C64
+      save can enter `load_resume_game`, redraw the resumed state, print the
+      welcome-back message, and reach the playable `main_loop` boundary before
+      any follow-up save command.
 
 C128 baseline:
 
@@ -483,8 +484,7 @@ Storage adapter note:
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
-      C64 and C128 now have product save-write smokes; C64 still needs an
-      explicit standalone product load-resume gate.
+      C64 and C128 now have product load-resume and save-write smokes.
 
 ## Normalized Storage Error ABI
 
