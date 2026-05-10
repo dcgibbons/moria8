@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$040c: $01 = pass, $00 = fail per test (13 tests)
+// Results at $0400-$0410: $01 = pass, $00 = fail per test (17 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #12
+    ldx #16
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -142,6 +142,22 @@ random_floor_in_room:
 .label c64_disk_chrin  = test_save_chrin
 .label c64_disk_chrout = test_save_chrout
 c64_disk_marker_present:
+    lda test_save_marker_present
+    beq !missing+
+    clc
+    rts
+!missing:
+    lda test_save_marker_status
+    bne !store_status+
+    lda #1
+!store_status:
+    sta disk_status
+    lda test_save_marker_lsr_return
+    beq !return_sec+
+    lda disk_status
+    lsr
+    rts
+!return_sec:
     sec
     rts
 hal_storage_init_command:
@@ -242,7 +258,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 13, $ff
+tc_results: .fill 17, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -261,6 +277,27 @@ test_save_last_lfn:   .byte 0
 test_save_last_dev:   .byte 0
 test_save_last_sec:   .byte 0
 test_save_tmp_y:      .byte 0
+test_save_close_arms_readst: .byte 0
+test_save_readst_value: .byte 0
+test_save_last_msg: .byte 0
+test_save_dismiss_calls: .byte 0
+test_save_marker_present: .byte 0
+test_save_marker_status: .byte 0
+test_save_marker_lsr_return: .byte 0
+test_save_sink_writes: .byte 0
+test_save_file_exists_calls: .byte 0
+test_save_open_calls: .byte 0
+test_save_chkout_calls: .byte 0
+test_save_chrout_calls: .byte 0
+
+.macro PatchJump(target, replacement) {
+    lda #$4c
+    sta target
+    lda #<replacement
+    sta target + 1
+    lda #>replacement
+    sta target + 2
+}
 
 test_save_setnam:
     clc
@@ -273,27 +310,56 @@ test_save_setlfs:
     clc
     rts
 
-test_save_open:
 test_save_close:
+    lda test_save_close_arms_readst
+    beq !close_ok+
+    lda #$42
+    sta test_save_readst_value
+!close_ok:
+    clc
+    rts
+
 test_save_chkout:
+    inc test_save_chkout_calls
+    clc
+    rts
+
+test_save_open:
+    inc test_save_open_calls
+    clc
+    rts
+
 test_save_chkin:
 test_save_clrchn:
     clc
     rts
 
 test_save_readst:
+    lda test_save_readst_value
+    pha
     lda #0
+    sta test_save_readst_value
+    pla
     clc
     rts
 
 test_save_chrout:
+    pha
+    inc test_save_chrout_calls
+    lda test_save_sink_writes
+    bne !sink+
     sty test_save_tmp_y
     ldy #0
+    pla
     sta (zp_ptr1),y
     inc zp_ptr1
     bne !+
     inc zp_ptr1_hi
 !:  ldy test_save_tmp_y
+    clc
+    rts
+!sink:
+    pla
     clc
     rts
 
@@ -306,6 +372,19 @@ test_save_chrin:
     inc zp_ptr1_hi
 !:  ldy test_save_tmp_y
     clc
+    rts
+
+test_save_file_not_exists:
+    inc test_save_file_exists_calls
+    clc
+    rts
+
+test_huff_print_msg:
+    stx test_save_last_msg
+    rts
+
+test_modal_dismiss_key:
+    inc test_save_dismiss_calls
     rts
 
 test_stream_reset_write:
@@ -391,6 +470,9 @@ test_load_item_state_blocks:
 
 test_start:
     // BASIC ROM already banked out by bootstrap above
+    :PatchJump(save_file_exists, test_save_file_not_exists)
+    :PatchJump(huff_print_msg, test_huff_print_msg)
+    :PatchJump(input_get_modal_dismiss_key, test_modal_dismiss_key)
 
     // Point RLE workspace to safe buffer (not CREATURE_BASE which overlaps code)
     lda #<RLE_TEST_BUF
@@ -399,7 +481,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #11
+    ldx #16
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1164,6 +1246,248 @@ t13_fail:
     lda #$00
 !t13_store:
     sta tc_results + 12
+
+    // ============================================================
+    // Test 14: C64 save reports a close-time KERNAL status error.
+    // Writes and write-time READST succeed, but CLOSE arms a late
+    // $42 status. save_game must return failure through Disk error!.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_sink_writes
+    lda #1
+    sta test_save_marker_present
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr test_stream_reset_write
+    jsr save_game
+    bcc !t14_carry_ok+
+    lda #2
+    jmp t14_fail_code
+!t14_carry_ok:
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    beq !t14_msg_ok+
+    lda #3
+    jmp t14_fail_code
+!t14_msg_ok:
+    lda test_save_dismiss_calls
+    cmp #1
+    beq !t14_dismiss_ok+
+    lda #4
+    jmp t14_fail_code
+!t14_dismiss_ok:
+    lda #0
+    sta test_save_close_arms_readst
+    sta test_save_marker_present
+    sta test_save_sink_writes
+    lda #$01
+    bne !t14_store+
+t14_fail_code:
+    pha
+    sta test_save_close_arms_readst
+    sta test_save_marker_present
+    sta test_save_sink_writes
+    pla
+!t14_store:
+    sta tc_results + 13
+
+    // ============================================================
+    // Test 15: C64 save-media validation failures are modal.
+    // Otherwise the caller can immediately redraw gameplay and erase
+    // the error before the user sees it.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    sta test_save_marker_present
+    sta test_save_marker_lsr_return
+    sta test_save_file_exists_calls
+    sta test_save_open_calls
+    sta test_save_chkout_calls
+    sta test_save_chrout_calls
+    sta test_save_marker_status
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr save_game
+    bcc !t15_carry_ok+
+    lda #2
+    jmp t15_fail_code
+!t15_carry_ok:
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_BAD_SAVE
+    beq !t15_msg_ok+
+    lda #3
+    jmp t15_fail_code
+!t15_msg_ok:
+    lda test_save_dismiss_calls
+    cmp #1
+    beq !t15_dismiss_ok+
+    lda #4
+    jmp t15_fail_code
+!t15_dismiss_ok:
+    lda #0
+    sta test_save_marker_present
+    sta test_save_marker_status
+    sta test_save_marker_lsr_return
+    sta test_save_sink_writes
+    lda #$01
+    bne !t15_store+
+t15_fail_code:
+    pha
+    sta test_save_marker_present
+    sta test_save_marker_status
+    sta test_save_marker_lsr_return
+    sta test_save_sink_writes
+    pla
+!t15_store:
+    sta tc_results + 14
+
+    // ============================================================
+    // Test 16: C64 save-media I/O failures report Disk error!,
+    // not Wrong Save Disk. disk_status=1 means marker mismatch;
+    // other nonzero values are hardware/media I/O status.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    sta test_save_marker_present
+    sta test_save_marker_lsr_return
+    sta test_save_file_exists_calls
+    sta test_save_open_calls
+    sta test_save_chkout_calls
+    sta test_save_chrout_calls
+    lda #$42
+    sta test_save_marker_status
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr save_game
+    bcc !t16_carry_ok+
+    lda #2
+    jmp t16_fail_code
+!t16_carry_ok:
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    beq !t16_msg_ok+
+    lda #3
+    jmp t16_fail_code
+!t16_msg_ok:
+    lda test_save_dismiss_calls
+    cmp #1
+    beq !t16_dismiss_ok+
+    lda #4
+    jmp t16_fail_code
+!t16_dismiss_ok:
+    lda #0
+    sta test_save_marker_status
+    sta test_save_marker_lsr_return
+    lda #$01
+    bne !t16_store+
+t16_fail_code:
+    pha
+    sta test_save_marker_status
+    pla
+!t16_store:
+    sta tc_results + 15
+
+    // ============================================================
+    // Test 17: Media I/O failure is terminal for the save path.
+    // The real product smoke covers c64_disk_marker_present's carry
+    // convention; this unit guards common save_game from entering
+    // overwrite/file-output after the media gate fails.
+    // ============================================================
+    lda #0
+    sta save_cksum_lo
+    sta save_cksum_hi
+    sta save_io_error
+    sta test_save_last_msg
+    sta test_save_dismiss_calls
+    sta test_save_readst_value
+    sta test_save_close_arms_readst
+    sta test_save_sink_writes
+    sta test_save_marker_present
+    sta test_save_file_exists_calls
+    sta test_save_open_calls
+    sta test_save_chkout_calls
+    sta test_save_chrout_calls
+    lda #1
+    sta test_save_sink_writes
+    lda #2
+    sta test_save_marker_status
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #8
+    sta save_device
+    jsr save_game
+    bcc !t17_carry_ok+
+    lda #2
+    jmp t17_fail_code
+!t17_carry_ok:
+    lda test_save_last_msg
+    cmp #HSTR_SAVE_IOERR
+    beq !t17_msg_ok+
+    lda #3
+    jmp t17_fail_code
+!t17_msg_ok:
+    lda test_save_dismiss_calls
+    cmp #1
+    beq !t17_dismiss_ok+
+    lda #4
+    jmp t17_fail_code
+!t17_dismiss_ok:
+    lda test_save_file_exists_calls
+    ora test_save_open_calls
+    ora test_save_chkout_calls
+    ora test_save_chrout_calls
+    beq !t17_no_io+
+    lda #5
+    jmp t17_fail_code
+!t17_no_io:
+    lda #0
+    sta test_save_marker_status
+    sta test_save_marker_lsr_return
+    lda #$01
+    bne !t17_store+
+t17_fail_code:
+    pha
+    lda #0
+    sta test_save_marker_status
+    sta test_save_marker_lsr_return
+    pla
+!t17_store:
+    sta tc_results + 16
 
     jmp test_finish
 

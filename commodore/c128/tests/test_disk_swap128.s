@@ -8,6 +8,7 @@
 //  5. disk_prompt_game remains a no-op when disk_mode is unset
 //  6. initialized Disk Setup commit reports carry clear/success
 //  7. marker initialization does not trust X across KERNAL byte I/O
+//  8. save-media failure classifier separates wrong media from drive errors
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -57,6 +58,7 @@ game_prompt_count:       .byte 0
 press_prompt_count:      .byte 0
 w_setnam_calls:          .byte 0
 w_setlfs_calls:          .byte 0
+w_setlfs_lfn_seen:       .byte 0
 w_setlfs_dev_seen:       .byte 0
 w_open_calls:            .byte 0
 w_close_calls:           .byte 0
@@ -64,6 +66,9 @@ w_clrchn_calls:          .byte 0
 marker_write_count:      .byte 0
 marker_read_count:       .byte 0
 command_read_count:      .byte 0
+marker_readst_override:  .byte 0
+marker_bad_byte:         .byte 0
+command_open_fail:       .byte 0
 w_chkin_lfn_seen:        .byte 0
 c128_media_state:        .byte C128_MEDIA_UNKNOWN
 marker_write_buf:        .fill 6, 0
@@ -95,6 +100,7 @@ hal_storage_marker_scratch_name:
 .label hal_storage_marker_scratch_name_len = * - hal_storage_marker_scratch_name
 .label disk_marker_magic = hal_storage_marker_magic
 .label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
+.label hal_storage_read_command_status = test_storage_read_command_status
 
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
@@ -171,12 +177,22 @@ w_setnam:
 
 w_setlfs:
     inc w_setlfs_calls
+    sta w_setlfs_lfn_seen
     stx w_setlfs_dev_seen
     rts
 
 w_open:
     inc w_open_calls
+    lda w_setlfs_lfn_seen
+    cmp #CMD_CHANNEL
+    bne !check_marker+
+    lda command_open_fail
+    beq !ok+
+    sec
+    rts
+!check_marker:
     clc
+!ok:
     rts
 
 w_close:
@@ -191,6 +207,10 @@ w_readst:
     lda w_chkin_lfn_seen
     cmp #DISK_MARKER_FILE_NUM
     bne !ok+
+    lda marker_readst_override
+    beq !marker_default+
+    rts
+!marker_default:
     lda marker_read_count
     cmp #DISK_MARKER_MAGIC_LEN
     bne !ok+
@@ -221,6 +241,10 @@ w_chrin:
 !marker:
     ldx marker_read_count
     lda disk_marker_magic,x
+    ldx marker_bad_byte
+    beq !marker_ok+
+    eor #$ff
+!marker_ok:
     inc marker_read_count
     ldx #$a5
     clc
@@ -232,6 +256,38 @@ w_chrout:
     inc marker_write_count
     ldx #$5a
     clc
+    rts
+
+test_storage_read_command_status:
+    lda #$ff
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
+    lda #0
+    ldx #0
+    ldy #0
+    jsr w_setnam
+    lda #hal_storage_cmd_channel
+    ldx save_device
+    ldy #hal_storage_cmd_channel
+    jsr w_setlfs
+    jsr w_open
+    bcs !done+
+    ldx #hal_storage_cmd_channel
+    jsr w_chkin
+    bcs !close+
+    jsr w_chrin
+    sta disk_diag_cmd_status0
+    jsr w_readst
+    sta disk_diag_readst
+    jsr w_chrin
+    sta disk_diag_cmd_status1
+    jsr w_readst
+    sta disk_diag_readst
+!close:
+    jsr w_clrchn
+    lda #hal_storage_cmd_channel
+    jsr w_close
+!done:
     rts
 
 tramp_disk_setup_ui_action:
@@ -427,6 +483,105 @@ test_start:
     lda disk_diag_write_status1
     cmp #$30
     beq *+5
+    jmp test_fail
+
+    // Test 8: C128 save-media failures must report detached/unready media as
+    // disk errors, not as "Wrong Save Disk."; readable media with a mismatched
+    // or missing marker remains wrong-save-disk.
+    jsr reset_harness_state
+    lda #$81                    // Marker OPEN failed: drive/device I/O.
+    sta disk_status
+    lda #0
+    sta disk_diag_readst
+    jsr disk_save_media_error_is_io
+    bcs *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$83                    // Marker contents mismatch on readable media.
+    sta disk_status
+    lda #0
+    sta disk_diag_readst
+    jsr disk_save_media_error_is_io
+    bcc *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$84                    // Ambiguous READST failure is I/O by default.
+    sta disk_status
+    lda #$42
+    sta disk_diag_readst
+    jsr disk_save_media_error_is_io
+    bcs *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$84                    // DOS 62 proves readable media, missing marker.
+    sta disk_status
+    lda #$42
+    sta disk_diag_readst
+    lda #$36
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    jsr disk_save_media_error_is_io
+    bcc *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$84                    // Non-missing read status is I/O.
+    sta disk_status
+    lda #$02
+    sta disk_diag_readst
+    jsr disk_save_media_error_is_io
+    bcs *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$42
+    sta marker_readst_override
+    lda #1
+    sta command_open_fail
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_error_is_io
+    bcs *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    lda #$42
+    sta marker_readst_override
+    lda #$36
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_error_is_io
+    bcc *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #1
+    sta disk_setup_done
+    lda #2
+    sta disk_mode
+    sta marker_bad_byte
+    jsr disk_require_save_media
+    bcs *+5
+    jmp test_fail
+    jsr disk_save_media_error_is_io
+    bcc *+5
     jmp test_fail
 
     jmp test_pass

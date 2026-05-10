@@ -14,6 +14,7 @@
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = disk_marker_present
 .label hal_storage_marker_init = disk_marker_init
+.label hal_storage_save_media_error_is_io = disk_save_media_error_is_io
 .label hal_storage_setnam = plus4_kernal_setnam
 .label hal_storage_setlfs = plus4_kernal_setlfs
 .label hal_storage_open = plus4_kernal_open
@@ -25,6 +26,7 @@
 .label hal_storage_clrchn = plus4_kernal_clrchn
 .label hal_storage_readst = plus4_kernal_readst
 .label hal_storage_load = plus4_kernal_load
+.label hal_storage_read_command_status = plus4_disk_read_command_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 

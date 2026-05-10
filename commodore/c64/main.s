@@ -74,6 +74,9 @@ exit_trampoline:
 #import "../common/zeropage.s"
 
 c64_disk_call_saved_bank: .byte 0
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+c64_test_save_media_fail_armed: .byte 0
+#endif
 
 c64_disk_call:
     pha
@@ -155,6 +158,14 @@ c64_disk_marker_present:
     lda #$36
     sta $01
     cli
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda c64_test_save_media_fail_armed
+    beq !cdmp_test_normal+
+    lda #2
+    sta disk_status
+    jmp !cdmp_done+
+!cdmp_test_normal:
+#endif
     lda #hal_storage_marker_read_name_len
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
@@ -164,21 +175,40 @@ c64_disk_marker_present:
     ldy #hal_storage_marker_sec_read
     jsr $ffba
     jsr $ffc0
-    bcs !cdmp_done+
+    bcs !cdmp_open_fail+
     ldx #hal_storage_marker_file_num
     jsr $ffc6
-    bcs !cdmp_close+
+    bcs !cdmp_read_fail+
     jsr $ffcf
     cmp #$4d
-    bne !cdmp_close+
+    bne !cdmp_marker_fail+
     jsr $ffcf
     cmp #$38
-    bne !cdmp_close+
+    bne !cdmp_marker_fail+
     dec disk_status
 !cdmp_close:
     lda #hal_storage_marker_file_num
     jsr $ffc3
     jsr $ffcc
+    jmp !cdmp_done+
+!cdmp_read_fail:
+    lda #hal_storage_marker_file_num
+    jsr $ffc3
+    jsr $ffcc
+    lda #2
+    sta disk_status
+    jmp !cdmp_status_done+
+!cdmp_marker_fail:
+    lda #hal_storage_marker_file_num
+    jsr $ffc3
+    jsr $ffcc
+    jsr c64_storage_read_command_status
+    jmp !cdmp_status_done+
+!cdmp_open_fail:
+    jsr $ffcc
+    lda #2
+    sta disk_status
+!cdmp_status_done:
 !cdmp_done:
     sei
     lda $dd00
@@ -188,11 +218,7 @@ c64_disk_marker_present:
     sta $01
     plp
     lda disk_status
-    beq !cdmp_ok+
-    sec
-    rts
-!cdmp_ok:
-    clc
+    cmp #1
     rts
 
 // tramp_dig_ability — pinned low for common tunnel code.
@@ -302,6 +328,38 @@ c64_disk_marker_write_resident:
     lda disk_status
     beq !cdmw_ok+
     sec
+    rts
+c64_storage_read_command_status:
+    lda #2
+    sta disk_status
+    lda #0
+    tax
+    tay
+    jsr KERNAL_SETNAM
+    lda #15
+    ldx save_device
+    tay
+    jsr KERNAL_SETLFS
+    jsr KERNAL_OPEN
+    bcs !cdrs_close+
+    ldx #15
+    jsr KERNAL_CHKIN
+    bcs !cdrs_close+
+    jsr KERNAL_CHRIN
+    cmp #$30
+    beq !cdrs_wrong_media+
+    cmp #$36
+    bne !cdrs_close+
+    jsr KERNAL_CHRIN
+    cmp #$32
+    bne !cdrs_close+
+!cdrs_wrong_media:
+    lda #1
+    sta disk_status
+!cdrs_close:
+    jsr KERNAL_CLRCHN
+    lda #15
+    jsr KERNAL_CLOSE
     rts
 !cdmw_ok:
     clc
@@ -1138,7 +1196,7 @@ c64_test_spell_pass_sym:
 #endif
 #endif
 
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_write_fail_input_sym:
     brk
 #endif
@@ -1232,95 +1290,13 @@ tramp_game_over:
 // Q falls through; R and S branch internally.
 // ============================================================
 game_over_prompt:
-    // Hide the previous gameplay/death frame before preparing the full-screen
-    // quit/restart prompt so stale status rows do not remain visible.
-    jsr screen_blank
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #12                     // Row 12 (center)
-    sta zp_cursor_row
-    lda #8                      // Col 8: (40-24)/2 = 8
-    sta zp_cursor_col
-    lda #<game_over_str
-    sta zp_ptr0
-    lda #>game_over_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    jsr screen_unblank
-    lda #0
-    sta zp_kbdbuf_count         // Flush keyboard buffer
-    lda #BANK_NO_BASIC
+    lda #OVL_DEATH
+    jsr overlay_load
+    sei
+    lda #BANK_NO_KERNAL
     sta $01
-!gop_loop:
-    jsr input_get_key
-    cmp #$52                    // 'R' — reboot (reload from disk)
-    beq !gop_reboot+
-    cmp #$53                    // 'S' — start over (restart to title)
-    beq !gop_restart+
-    cmp #$51                    // 'Q' — quit to BASIC
-    bne !gop_loop-
-    rts                         // Q: fall through to exit_trampoline
-!gop_reboot:
-    // Hard reset — jump through the C64 cold-start vector.
-    // KERNAL ROM is readable ($01=$36, HIRAM set), so $FFFC/$FFFD
-    // contain the reset vector ($FCE2). Equivalent to pressing reset.
-    jmp ($fffc)
-!gop_restart:
-    jmp game_restart
-
-game_over_str:
-    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
-
-// ============================================================
-// game_restart — reset game state, return to title screen
-// Clears mutable state (ZP vars, inventory, tier), then jumps
-// to restart_entry (skipping one-time init_copy_banked etc.).
-// ============================================================
-game_restart:
-    // Clear ZP game variables $2B–$8F (player stats, turn counter,
-    // effect timers, monster counts, etc.)
-    lda #0
-    ldx #0
-!clr_zp:
-    sta zp_player_x,x
-    inx
-    cpx #(zp_entropy - zp_player_x + 1) // 101 bytes
-    bne !clr_zp-
-
-    // Clear static game-state variables in data segments
-    lda #0
-    sta eff_fear_timer
-    ldx #3
-!clr_recall:
-    sta recall_query_sc,x
-    dex
-    bpl !clr_recall-
-
-    // Clear inventory: inv_item_id[] = FI_EMPTY ($FF), qty/p1/flags = $00
-    lda #$ff
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_id:
-    sta inv_item_id,x
-    dex
-    bpl !clr_inv_id-
-
-    lda #0
-    ldx #TOTAL_INV_SLOTS - 1
-!clr_inv_rest:
-    sta inv_qty,x
-    sta inv_p1,x
-    sta inv_flags,x
-    dex
-    bpl !clr_inv_rest-
-
-    // Reset tier state (zp_current_tier already zeroed above)
-    sta current_tier
-    sta tier_loaded
-
-    jmp restart_entry
+    jsr game_over_prompt_overlay
+    jmp tramp_sr_epilogue
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
@@ -1431,6 +1407,88 @@ ovl_start_end:
 // Used once at game over. Contains scoring math, death screen display,
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
+game_over_prompt_overlay:
+    // Hide the previous gameplay/death frame before preparing the full-screen
+    // quit/restart prompt so stale status rows do not remain visible.
+    jsr screen_blank
+    lda #COL_BLACK
+    sta zp_text_color
+    jsr ui_help_clear_all
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #12                     // Row 12 (center)
+    sta zp_cursor_row
+    lda #8                      // Col 8: (40-24)/2 = 8
+    sta zp_cursor_col
+    lda #<game_over_str
+    sta zp_ptr0
+    lda #>game_over_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    jsr screen_unblank
+    lda #0
+    sta zp_kbdbuf_count         // Flush keyboard buffer
+!gop_loop:
+    jsr input_get_key
+    cmp #$52                    // 'R' — reboot (reload from disk)
+    beq !gop_reboot+
+    cmp #$53                    // 'S' — start over (restart to title)
+    beq !gop_restart+
+    cmp #$51                    // 'Q' — quit to BASIC
+    bne !gop_loop-
+    rts                         // Q: fall through to exit_trampoline
+!gop_reboot:
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    jmp ($fffc)
+!gop_restart:
+    jmp game_restart_overlay
+
+game_over_str:
+    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
+
+// game_restart_overlay — reset game state, return to title screen.
+game_restart_overlay:
+    lda #0
+    ldx #0
+!clr_zp:
+    sta zp_player_x,x
+    inx
+    cpx #(zp_entropy - zp_player_x + 1)
+    bne !clr_zp-
+
+    lda #0
+    sta eff_fear_timer
+    ldx #3
+!clr_recall:
+    sta recall_query_sc,x
+    dex
+    bpl !clr_recall-
+
+    lda #$ff
+    ldx #TOTAL_INV_SLOTS - 1
+!clr_inv_id:
+    sta inv_item_id,x
+    dex
+    bpl !clr_inv_id-
+
+    lda #0
+    ldx #TOTAL_INV_SLOTS - 1
+!clr_inv_rest:
+    sta inv_qty,x
+    sta inv_p1,x
+    sta inv_flags,x
+    dex
+    bpl !clr_inv_rest-
+
+    sta current_tier
+    sta tier_loaded
+    lda #BANK_NO_BASIC
+    sta $01
+    cli
+    jmp restart_entry
+
     #import "../common/score.s"
 ovl_death_end:
 .print "Death overlay: " + (ovl_death_end - $e000) + " bytes at $E000-$" + toHexString(ovl_death_end)

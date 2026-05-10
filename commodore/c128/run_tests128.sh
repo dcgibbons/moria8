@@ -1811,6 +1811,23 @@ required = [
     ("load_read_map_c128:", "jsr load_unstage_map_c128"),
 ]
 text = "\n".join(save)
+save_fail = text[text.find("!save_media_fail:"):text.find("save_return_fail:")]
+if "jsr huff_print_msg" not in save_fail:
+    print("save media failure must display a message")
+    raise SystemExit(1)
+if "jsr input_get_modal_dismiss_key" not in save_fail:
+    print("save media failure must wait for modal dismiss on C128")
+    raise SystemExit(1)
+if "#if !C128" in save_fail:
+    print("save media failure must not compile out the C128 modal dismiss")
+    raise SystemExit(1)
+save_error = text[text.find("!save_error:"):text.find("    jmp save_return_fail", text.find("!save_error:"))]
+if "jsr input_get_modal_dismiss_key" not in save_error:
+    print("save write error must wait for modal dismiss on C128")
+    raise SystemExit(1)
+if "#if !C128" in save_error:
+    print("save write error must not compile out the C128 modal dismiss")
+    raise SystemExit(1)
 for label, chain in required:
     idx = text.find(label)
     if idx == -1:

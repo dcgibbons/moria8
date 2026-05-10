@@ -66,7 +66,7 @@ disk_marker_init:
     lda #hal_storage_cmd_channel
     jsr KERNAL_CLOSE
     jsr KERNAL_CLRCHN
-    jsr disk_diag_read_command_status
+    jsr hal_storage_read_command_status
     lda disk_diag_cmd_status0
     sta disk_diag_scratch_status0
     lda disk_diag_cmd_status1
@@ -162,7 +162,7 @@ disk_marker_init:
     jsr KERNAL_CLOSE
     jsr KERNAL_READST
     sta disk_diag_readst
-    jsr disk_diag_read_command_status
+    jsr hal_storage_read_command_status
     lda disk_diag_cmd_status0
     sta disk_diag_write_status0
     lda disk_diag_cmd_status1
@@ -218,44 +218,12 @@ disk_error_capture_c128:
 !done:
     rts
 
-disk_diag_read_command_status:
-    lda #$ff
-    sta disk_diag_cmd_status0
-    sta disk_diag_cmd_status1
-    lda #0
-    ldx #0
-    ldy #0
-    jsr KERNAL_SETNAM
-    lda #hal_storage_cmd_channel
-    ldx save_device
-    ldy #hal_storage_cmd_channel
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
-    bcs !ddrcs_done+
-    ldx #hal_storage_cmd_channel
-    jsr KERNAL_CHKIN
-    bcs !ddrcs_close+
-    jsr KERNAL_CHRIN
-    sta disk_diag_cmd_status0
-    jsr KERNAL_READST
-    sta disk_diag_readst
-    jsr KERNAL_CHRIN
-    sta disk_diag_cmd_status1
-    jsr KERNAL_READST
-    sta disk_diag_readst
-!ddrcs_close:
-    jsr KERNAL_CLRCHN
-    lda #hal_storage_cmd_channel
-    jsr KERNAL_CLOSE
-!ddrcs_done:
-    rts
-
 disk_setup_capture_init_status:
     lda #$ff
     sta disk_diag_init_status0
     sta disk_diag_init_status1
     jsr disk_kernal_enter
-    jsr disk_diag_read_command_status
+    jsr hal_storage_read_command_status
     lda disk_diag_cmd_status0
     sta disk_diag_init_status0
     lda disk_diag_cmd_status1

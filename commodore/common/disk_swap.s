@@ -176,6 +176,58 @@ disk_error_set_dos_status:
     rts
 #endif
 
+#if C128 || PLUS4
+// disk_save_media_error_is_io
+// Output: carry set = media check failed because of disk I/O/device status
+//         carry clear = media is readable but not the expected save disk
+disk_save_media_error_is_io:
+#if PLUS4
+    lda disk_status
+    cmp #74
+    beq !ioerr+
+    lda disk_error_readst
+    bne !ioerr+
+    lda disk_error_dos0
+    beq !wrong+
+    lda disk_error_dos0
+    cmp #$36                    // Missing marker file: 62,FILE NOT FOUND.
+    bne !ioerr+
+    lda disk_error_dos1
+    cmp #$32
+    bne !ioerr+
+!wrong:
+    clc
+    rts
+!ioerr:
+    sec
+    rts
+#elif C128
+    lda disk_status
+    cmp #$83                    // Marker bytes read, but contents mismatch.
+    beq !wrong+
+    cmp #$81                    // Marker OPEN failed; DOS status may say 62.
+    beq !check_dos+
+    cmp #$84                    // Marker READ failed; READST alone is ambiguous.
+    bne !ioerr+
+!check_dos:
+    jsr disk_kernal_enter
+    jsr hal_storage_read_command_status
+    jsr disk_kernal_exit
+    lda disk_diag_cmd_status0
+    cmp #$36                    // 62,FILE NOT FOUND = readable wrong media.
+    bne !ioerr+
+    lda disk_diag_cmd_status1
+    cmp #$32
+    beq !wrong+
+!ioerr:
+    sec
+    rts
+!wrong:
+    clc
+    rts
+#endif
+#endif
+
 disk_require_save_media:
     lda disk_setup_done
     bne !drsm_check+

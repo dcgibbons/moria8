@@ -14,6 +14,7 @@
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = disk_marker_present
 .label hal_storage_marker_init = disk_marker_init
+.label hal_storage_save_media_error_is_io = disk_save_media_error_is_io
 .label hal_storage_setnam = KERNAL_SETNAM
 .label hal_storage_setlfs = KERNAL_SETLFS
 .label hal_storage_open = KERNAL_OPEN
@@ -25,8 +26,41 @@
 .label hal_storage_clrchn = KERNAL_CLRCHN
 .label hal_storage_readst = KERNAL_READST
 .label hal_storage_load = KERNAL_LOAD
+.label hal_storage_read_command_status = c128_storage_read_command_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
+
+c128_storage_read_command_status:
+    lda #$ff
+    sta disk_diag_cmd_status0
+    sta disk_diag_cmd_status1
+    lda #0
+    ldx #0
+    ldy #0
+    jsr KERNAL_SETNAM
+    lda #hal_storage_cmd_channel
+    ldx save_device
+    ldy #hal_storage_cmd_channel
+    jsr KERNAL_SETLFS
+    jsr KERNAL_OPEN
+    bcs !cs_done+
+    ldx #hal_storage_cmd_channel
+    jsr KERNAL_CHKIN
+    bcs !cs_close+
+    jsr KERNAL_CHRIN
+    sta disk_diag_cmd_status0
+    jsr KERNAL_READST
+    sta disk_diag_readst
+    jsr KERNAL_CHRIN
+    sta disk_diag_cmd_status1
+    jsr KERNAL_READST
+    sta disk_diag_readst
+!cs_close:
+    jsr KERNAL_CLRCHN
+    lda #hal_storage_cmd_channel
+    jsr KERNAL_CLOSE
+!cs_done:
+    rts
 
 // Platform-owned save-disk marker filenames and marker bytes. PETSCII bytes
 // for KERNAL SETNAM / sequential marker contents.

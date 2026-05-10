@@ -162,7 +162,7 @@ save_magic:
 // Syncs ZP→struct, writes all blocks + raw map + checksum, closes
 // Clobbers: A, X, Y, all scratch
 // ============================================================
-#if C128
+#if C128 || PLUS4
 save_confirm_overwrite:
     lda #hal_storage_save_probe_name_len
     sta save_count_lo
@@ -174,6 +174,9 @@ save_confirm_overwrite:
     bcc !save_confirm_done+
     ldx #HSTR_SAVE_OVERWRITE
     jsr huff_print_msg
+#if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+plus4_test_save_overwrite_prompt:
+#endif
 #if C128
     jsr input_prepare_followup_key
 #endif
@@ -199,13 +202,6 @@ save_confirm_overwrite:
     rts
 #else
 save_select_output_name_c64:
-#if PLUS4
-    // Plus/4 save output names are platform-owned. Avoid the C64-style
-    // existence probe: on this KERNAL/drive path, probing a missing SEQ can
-    // block before returning useful status.
-    sec
-    rts
-#else
     jsr save_file_exists
     bcc !save_select_ok+
     ldx #HSTR_SAVE_OVERWRITE
@@ -223,7 +219,6 @@ save_select_output_name_c64:
     sec
     rts
 #endif
-#endif
 
 save_game:
     jsr disk_require_save_media
@@ -233,17 +228,26 @@ save_game:
     ldx #HSTR_SAVE_NEED_SAVE
     bne !save_media_fail+
 !save_wrong_media:
-#if PLUS4
-    jsr save_select_media_error_msg_plus4
+#if C128 || PLUS4
+    jsr hal_storage_save_media_error_is_io
+    bcc !wrong_save_disk+
+    ldx #HSTR_SAVE_IOERR
     jmp !save_media_fail+
 #endif
+!wrong_save_disk:
     ldx #HSTR_SAVE_BAD_SAVE
+#if !C128 && !PLUS4
+    lda disk_status
+    cmp #1
+    beq !save_media_fail+
+    ldx #HSTR_SAVE_IOERR
+#endif
 !save_media_fail:
     jsr huff_print_msg
 #if PLUS4
     jsr save_append_disk_detail_plus4
-    jsr input_get_modal_dismiss_key
 #endif
+    jsr input_get_modal_dismiss_key
 save_return_fail:
 #if !C128 && !PLUS4
     lda #BANK_NO_BASIC
@@ -252,30 +256,8 @@ save_return_fail:
     clc
     rts
 
-#if PLUS4
-save_select_media_error_msg_plus4:
-    lda disk_status
-    cmp #74
-    beq !ioerr+
-    lda disk_error_readst
-    bne !ioerr+
-    lda disk_error_dos0
-    beq !wrong+
-    lda disk_error_dos0
-    cmp #$36                    // Missing marker file: 62,FILE NOT FOUND.
-    bne !ioerr+
-    lda disk_error_dos1
-    cmp #$32
-    bne !ioerr+
-!wrong:
-    ldx #HSTR_SAVE_BAD_SAVE
-    rts
-!ioerr:
-    ldx #HSTR_SAVE_IOERR
-    rts
-#endif
 !save_media_ok:
-#if C128
+#if C128 || PLUS4
     jsr save_confirm_overwrite
     bcc save_return_fail
 #else
@@ -455,6 +437,11 @@ save_select_media_error_msg_plus4:
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
+    jsr SAVE_READST
+    and #$83
+    bne !save_error+
+#endif
+#if !C128 && !PLUS4
     lda $dd00
     ora #%00000011              // Restore VIC-II bank 0 after serial I/O
     sta $dd00
@@ -484,8 +471,8 @@ save_select_media_error_msg_plus4:
     jsr huff_print_msg
 #if PLUS4
     jsr save_append_disk_detail_plus4
-    jsr input_get_modal_dismiss_key
 #endif
+    jsr input_get_modal_dismiss_key
     jmp save_return_fail
 
 // ============================================================
@@ -507,10 +494,13 @@ load_game:
     ldx #HSTR_SAVE_NEED_SAVE
     bne !load_media_fail+
 !load_wrong_media:
-#if PLUS4
-    jsr save_select_media_error_msg_plus4
+#if C128 || PLUS4
+    jsr hal_storage_save_media_error_is_io
+    bcc !load_wrong_save_disk+
+    ldx #HSTR_SAVE_IOERR
     jmp !load_media_fail+
 #endif
+!load_wrong_save_disk:
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
 #if PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
@@ -1573,7 +1563,7 @@ save_file_exists:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
-#if !C128
+#if !C128 && !PLUS4
     bcc !sfe_exists+
     clc
     rts

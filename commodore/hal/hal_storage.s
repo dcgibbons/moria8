@@ -23,6 +23,7 @@
 //   hal_storage_clrchn
 //   hal_storage_readst
 //   hal_storage_load
+//   hal_storage_read_command_status
 //   hal_storage_save_record
 //   hal_storage_load_record
 //   hal_storage_save_file_num
@@ -70,6 +71,10 @@
 // - Save-record and save-disk marker filename labels are platform-owned
 //   PETSCII/KERNAL strings. Common save/load/setup code must not hardcode
 //   save-record or marker filenames.
+// - `hal_storage_read_command_status` reads the active save device's command
+//   channel status and stores platform diagnostics in the platform-owned disk
+//   error/status bytes. It is callable after `hal_storage_enter_os`; callers
+//   that are not already in OS-visible state must enter/exit around it.
 // - Callers may not assume that A/X/Y survive any OS/device call unless that
 //   specific adapter documents it.
 //

@@ -55,7 +55,7 @@ input_lock_charset_switch:
 // Output: A = nonzero if any key held, 0 if no key
 // Preserves: X, Y
 input_run_key_held:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     lda #0
     rts
 #else
@@ -139,17 +139,21 @@ irk_save_ddrb: .byte 0
 irk_result: .byte 0
 
 input_get_key:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     ldx c64_test_input_idx
     lda c64_test_input_script,x
     bne !igk_script_ok+
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     jmp c64_test_save_write_fail_input_sym
 #else
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    jmp c64_test_save_write_fail_input_sym
+#else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     jmp c64_test_load_resume_fail_input_sym
 #else
     jmp c64_test_spell_fail_input_sym
+#endif
 #endif
 #endif
 !igk_script_ok:
@@ -234,7 +238,7 @@ igk_key: .byte 0
 // not auto-dismiss the next screen.
 // Preserves: X, Y
 input_wait_release:
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     rts
 #else
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
@@ -292,7 +296,7 @@ input_wait_release:
 #endif
 #endif
 
-#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 c64_test_input_idx: .byte 0
 c64_test_input_script:
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
@@ -300,6 +304,18 @@ c64_test_input_script:
     .byte $59              // Y = use drive 9 if Disk Setup prompts
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
+#else
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $d3              // SHIFT+S = save in gameplay
+    .byte $20              // SPACE = dismiss disk error
 #else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c              // L = load from title
@@ -339,6 +355,7 @@ c64_test_input_script:
     .byte $4d, $41, $41, $4c, $20
 #endif
     .byte $00
+#endif
 #endif
 #endif
 #endif

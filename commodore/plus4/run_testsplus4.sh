@@ -348,6 +348,7 @@ run_save_write_product_smoke() {
 
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
+        --start-symbol ".plus4_test_save_overwrite_prompt" \
         --pass-symbol ".plus4_test_after_save_game" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \

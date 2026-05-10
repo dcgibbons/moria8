@@ -621,6 +621,16 @@ game_new_start:
     sta zp_ptr0_hi
     jsr msg_print
 
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #2
+    sta disk_setup_done
+    sta disk_mode
+    lda #9
+    sta save_device
+    lda #1
+    sta c64_test_save_media_fail_armed
+#endif
+
 #if C128_TEST_SCRIPTED_INPUT
 #if !C128_TEST_PERF_P1_TRACE
     lda c128_test_summary_seen
@@ -720,6 +730,11 @@ load_resume_game:
     // Welcome back message
     ldx #HSTR_SAVE_WELCOME
     jsr huff_print_msg
+
+#if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda #1
+    sta c64_test_save_media_fail_armed
+#endif
 
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 c64_test_after_load_resume_game:
@@ -934,7 +949,7 @@ c128_test_after_save_game:
     jsr ui_reset_message_state
 #endif
     jsr save_game
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_after_save_game:
 #endif
 #if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT

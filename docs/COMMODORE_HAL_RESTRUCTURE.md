@@ -415,6 +415,9 @@ Storage adapter note:
 - [x] First numeric policy slice: storage logical file numbers, secondary
       addresses, command channel number, marker file number, and program load
       file number are platform-owned constants exported by each storage HAL.
+- [x] First command-status slice: command-channel status reads are exported as
+      `hal_storage_read_command_status`; C128 Disk Setup no longer owns the
+      command-channel read routine in common code.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -435,15 +438,21 @@ Storage adapter note:
 - [x] Define first-pass normalized storage error ABI.
 - [ ] Confirm normalized storage error ABI against C64, C128, and Plus/4
       runtime behavior.
+      C128 unit coverage now requires positive DOS `62` evidence before a
+      failed marker read is classified as wrong save media; ambiguous/no-disk
+      marker failures classify as disk I/O errors.
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
       marker filenames are done; title/overlay asset filenames, tier data
       filenames, and score filenames remain.
 - [x] Move logical file numbers and secondary addresses into platform storage.
-- [ ] Move command channel reads into platform storage.
+- [x] Move command channel reads into platform storage.
 - [ ] Move drive probing and drive-specific behavior into platform storage.
 - [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.
 - [ ] Make common save/load branch only on normalized storage errors.
+      In progress: C128/Plus4 save/load now call the platform storage adapter
+      for save-media failure classification. C64 remains on its existing
+      resident-size-safe branch until the broader storage ABI is finished.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
