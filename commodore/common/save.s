@@ -50,29 +50,16 @@
 .const RLE_REPEAT_MIN  = 3     // Minimum repeat run
 .const RLE_REPEAT_MAX  = 130    // Max repeat run length
 
-#if PLUS4
-.const SAVE_SETNAM = c64_disk_setnam
-.const SAVE_SETLFS = c64_disk_setlfs
-.const SAVE_OPEN   = c64_disk_open
-.const SAVE_CLOSE  = c64_disk_close
-.const SAVE_CHKOUT = c64_disk_chkout
-.const SAVE_CHKIN  = c64_disk_chkin
-.const SAVE_CLRCHN = c64_disk_clrchn
-.const SAVE_CHROUT = c64_disk_chrout
-.const SAVE_CHRIN  = c64_disk_chrin
-.const SAVE_READST = c64_disk_readst
-#else
-.const SAVE_SETNAM = KERNAL_SETNAM
-.const SAVE_SETLFS = KERNAL_SETLFS
-.const SAVE_OPEN   = KERNAL_OPEN
-.const SAVE_CLOSE  = KERNAL_CLOSE
-.const SAVE_CHKOUT = KERNAL_CHKOUT
-.const SAVE_CHKIN  = KERNAL_CHKIN
-.const SAVE_CLRCHN = KERNAL_CLRCHN
-.const SAVE_CHROUT = KERNAL_CHROUT
-.const SAVE_CHRIN  = KERNAL_CHRIN
-.const SAVE_READST = KERNAL_READST
-#endif
+.const SAVE_SETNAM = hal_storage_setnam
+.const SAVE_SETLFS = hal_storage_setlfs
+.const SAVE_OPEN   = hal_storage_open
+.const SAVE_CLOSE  = hal_storage_close
+.const SAVE_CHKOUT = hal_storage_chkout
+.const SAVE_CHKIN  = hal_storage_chkin
+.const SAVE_CLRCHN = hal_storage_clrchn
+.const SAVE_CHROUT = hal_storage_chrout
+.const SAVE_CHRIN  = hal_storage_chrin
+.const SAVE_READST = hal_storage_readst
 
 #if C128
 .const SAVE_IO_CHUNK_SIZE = 128
@@ -223,25 +210,16 @@ save_select_output_name_c64:
 save_game:
     jsr disk_require_save_media
     bcc !save_media_ok+
-    lda disk_setup_done
-    bne !save_wrong_media+
     ldx #HSTR_SAVE_NEED_SAVE
-    bne !save_media_fail+
+    lda disk_setup_done
+    beq !save_media_fail+
 !save_wrong_media:
-#if C128 || PLUS4
     jsr hal_storage_save_media_error_is_io
     bcc !wrong_save_disk+
     ldx #HSTR_SAVE_IOERR
     jmp !save_media_fail+
-#endif
 !wrong_save_disk:
     ldx #HSTR_SAVE_BAD_SAVE
-#if !C128 && !PLUS4
-    lda disk_status
-    cmp #1
-    beq !save_media_fail+
-    ldx #HSTR_SAVE_IOERR
-#endif
 !save_media_fail:
     jsr huff_print_msg
 #if PLUS4
@@ -250,13 +228,21 @@ save_game:
     jsr input_get_modal_dismiss_key
 save_return_fail:
 #if !C128 && !PLUS4
+    clc
+save_return_c64_with_carry:
+    lda #BANK_NO_BASIC
+    sta $01
+    rts
+#else
+    clc
+    rts
+#endif
+
+!save_media_ok:
+#if !C128 && !PLUS4
     lda #BANK_NO_BASIC
     sta $01
 #endif
-    clc
-    rts
-
-!save_media_ok:
 #if C128 || PLUS4
     jsr save_confirm_overwrite
     bcc save_return_fail
@@ -442,9 +428,7 @@ save_return_fail:
     bne !save_error+
 #endif
 #if !C128 && !PLUS4
-    lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
 #endif
 
     // Show success
@@ -462,9 +446,7 @@ save_return_fail:
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
-    lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
 #endif
 !save_error:
     ldx #HSTR_SAVE_IOERR
@@ -489,17 +471,14 @@ load_game:
     sta load_result
     jsr disk_require_save_media
     bcc !load_media_ok+
-    lda disk_setup_done
-    bne !load_wrong_media+
     ldx #HSTR_SAVE_NEED_SAVE
-    bne !load_media_fail+
+    lda disk_setup_done
+    beq !load_media_fail+
 !load_wrong_media:
-#if C128 || PLUS4
     jsr hal_storage_save_media_error_is_io
     bcc !load_wrong_save_disk+
     ldx #HSTR_SAVE_IOERR
     jmp !load_media_fail+
-#endif
 !load_wrong_save_disk:
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
@@ -510,6 +489,10 @@ plus4_test_load_media_fail:
     clc
     rts
 !load_media_ok:
+#if !C128 && !PLUS4
+    lda #BANK_NO_BASIC
+    sta $01
+#endif
 
     // Show "LOADING GAME..." message
     ldx #HSTR_SAVE_LOADING
@@ -540,9 +523,7 @@ plus4_test_load_media_fail:
     bcc !load_open_ok+
     // OPEN failed — file not found is the most common cause
 #if !C128 && !PLUS4
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
 #endif
     jmp !load_notfound+
 !load_open_ok:
@@ -553,9 +534,7 @@ plus4_test_load_media_fail:
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
 #endif
     jmp !load_fail+
 !load_chkin_ok:
@@ -836,16 +815,19 @@ plus4_test_load_ioerr:
     rts
 #else
 !load_return_fail:
+#if !PLUS4
+    jmp save_return_fail
+!load_return_ok:
+    sec
+    jmp save_return_c64_with_carry
+#else
     clc                     // Failure
     bcc !load_return_done+
 !load_return_ok:
     sec                     // Success
 !load_return_done:
-#if !PLUS4
-    lda #BANK_NO_BASIC
-    sta $01
-#endif
     rts
+#endif
 #endif
 
 // ============================================================
@@ -858,11 +840,17 @@ load_close_file_restore:
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
 #if !C128 && !PLUS4
+    jsr c64_restore_vic_bank0_after_serial
+#endif
+    rts
+
+#if !C128 && !PLUS4
+c64_restore_vic_bank0_after_serial:
     lda $dd00
     ora #%00000011
     sta $dd00
-#endif
     rts
+#endif
 
 save_write_block:
 #if C128

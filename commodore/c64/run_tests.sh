@@ -1151,7 +1151,7 @@ run_save_write_product_smoke() {
 
     local main_vs="out/main.vs"
     local pass_addr fail_addr
-    pass_addr=$(awk '/\.c64_test_after_save_game$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    pass_addr=$(awk '/\.c64_test_after_save_restart_start$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     fail_addr=$(awk '/\.c64_test_save_write_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
     if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
         echo "FAIL (missing save-write smoke symbols in out/main.vs)"
@@ -1177,7 +1177,7 @@ run_save_write_product_smoke() {
 
     script -q "$tty_log" \
         "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
-        -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
+        -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1358,7 +1358,7 @@ run_save_media_fail_product_smoke() {
 
     script -q "$tty_log" \
         "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
-        -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
+        -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1529,7 +1529,7 @@ run_load_resume_product_smoke() {
 
     script -q "$tty_log" \
         "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
-        -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
+        -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
         -moncommands "$mon_file" \
         -limitcycles 900000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor > /dev/null 2>&1
@@ -1649,6 +1649,18 @@ check_static_contract "c64_game_over_prompt_spacing_contract" "main.s" \
     "game_over_prompt:|||lda #8                      // Col 8: (40-24)/2 = 8|||game_over_str:|||.text \"R)EBOOT  S)TART  Q)UIT\""
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
+check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
+    "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
+check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
+    "!gop_restart:|||jmp game_restart_overlay|||game_restart_overlay:|||lda #>(restart_entry - 1)|||pha|||lda #<(restart_entry - 1)|||pha|||jmp platform_runtime_resync_c64"
+check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
+    "!save_wrong_media:|||jsr hal_storage_save_media_error_is_io|||bcc !wrong_save_disk+|||ldx #HSTR_SAVE_IOERR"
+check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
+    ".label hal_storage_save_media_error_is_io = disk_save_media_error_is_io"
+check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s" \
+    "!save_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||jsr save_select_output_name_c64"
+check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
+    "!load_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||ldx #HSTR_SAVE_LOADING"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count

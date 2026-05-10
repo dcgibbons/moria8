@@ -141,6 +141,17 @@ random_floor_in_room:
 .label c64_disk_chkout = test_save_chkout
 .label c64_disk_chrin  = test_save_chrin
 .label c64_disk_chrout = test_save_chrout
+.label hal_storage_setnam = test_save_setnam
+.label hal_storage_setlfs = test_save_setlfs
+.label hal_storage_open   = test_save_open
+.label hal_storage_close  = test_save_close
+.label hal_storage_chkin  = test_save_chkin
+.label hal_storage_chkout = test_save_chkout
+.label hal_storage_chrin  = test_save_chrin
+.label hal_storage_chrout = test_save_chrout
+.label hal_storage_clrchn = test_save_clrchn
+.label hal_storage_readst = test_save_readst
+.label hal_storage_save_media_error_is_io = disk_save_media_error_is_io
 c64_disk_marker_present:
     lda test_save_marker_present
     beq !missing+

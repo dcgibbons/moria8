@@ -304,6 +304,7 @@ c64_test_input_script:
     .byte $59              // Y = use drive 9 if Disk Setup prompts
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
+    .byte $53              // S = start over from save/quit prompt
 #else
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     .byte $4e              // N = New
@@ -320,6 +321,7 @@ c64_test_input_script:
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c              // L = load from title
     .byte $59              // Y = use drive 9 if Disk Setup prompts
+    .byte $32              // 2 = two-drive fallback if setup returns to menu
     .byte $00
 #else
     .byte $4e              // N = New

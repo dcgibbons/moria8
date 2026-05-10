@@ -176,12 +176,15 @@ disk_error_set_dos_status:
     rts
 #endif
 
-#if C128 || PLUS4
 // disk_save_media_error_is_io
 // Output: carry set = media check failed because of disk I/O/device status
 //         carry clear = media is readable but not the expected save disk
 disk_save_media_error_is_io:
-#if PLUS4
+#if !C128 && !PLUS4
+    lda disk_status
+    cmp #2                      // 0/1 = wrong media; >=2 = I/O/device.
+    rts
+#elif PLUS4
     lda disk_status
     cmp #74
     beq !ioerr+
@@ -225,7 +228,6 @@ disk_save_media_error_is_io:
 !wrong:
     clc
     rts
-#endif
 #endif
 
 disk_require_save_media:

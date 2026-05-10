@@ -77,6 +77,9 @@ c64_disk_call_saved_bank: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+c64_test_restart_after_save_armed: .byte 0
+#endif
 
 c64_disk_call:
     pha
@@ -102,16 +105,16 @@ c64_disk_call:
     iny
     lda (zp_vol_2),y
     sta !cdc_jsr+ + 2
-    pla
-    tay
-    pla
-    tax
-    pla
     lda $01
     sta c64_disk_call_saved_bank
     lda #$36
     sta $01
     cli
+    pla
+    tay
+    pla
+    tax
+    pla
 !cdc_jsr:
     jsr $ffff
     pha
@@ -187,21 +190,21 @@ c64_disk_marker_present:
     bne !cdmp_marker_fail+
     dec disk_status
 !cdmp_close:
+    jsr $ffcc
     lda #hal_storage_marker_file_num
     jsr $ffc3
-    jsr $ffcc
     jmp !cdmp_done+
 !cdmp_read_fail:
+    jsr $ffcc
     lda #hal_storage_marker_file_num
     jsr $ffc3
-    jsr $ffcc
     lda #2
     sta disk_status
     jmp !cdmp_status_done+
 !cdmp_marker_fail:
+    jsr $ffcc
     lda #hal_storage_marker_file_num
     jsr $ffc3
-    jsr $ffcc
     jsr c64_storage_read_command_status
     jmp !cdmp_status_done+
 !cdmp_open_fail:
@@ -406,6 +409,14 @@ entry_main:
     sta $d021               // Background
 
 restart_entry:
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda c64_test_restart_after_save_armed
+    beq !restart_test_done+
+c64_test_after_save_restart_start:
+    lda #0
+    sta c64_test_restart_after_save_armed
+!restart_test_done:
+#endif
     // --- Initialize subsystems ---
     jsr detect_machine
     jsr reu_detect
@@ -1273,9 +1284,7 @@ tramp_game_over:
     // Defensive: restore VIC-II bank 0 after KERNAL serial I/O
     // KERNAL uses CIA2 ($DD00) bits 3-5 for serial bus;
     // bits 0-1 select VIC bank. Ensure bank 0 ($0000-$3FFF).
-    lda $dd00
-    ora #%00000011              // Bits 0-1 = %11 → bank 0
-    sta $dd00
+    jsr c64_restore_vic_bank0_after_serial
     sei
     lda #BANK_NO_KERNAL         // $35 — I/O visible for color RAM
     sta $01
@@ -1484,10 +1493,15 @@ game_restart_overlay:
 
     sta current_tier
     sta tier_loaded
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-    jmp restart_entry
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda #1
+    sta c64_test_restart_after_save_armed
+#endif
+    lda #>(restart_entry - 1)
+    pha
+    lda #<(restart_entry - 1)
+    pha
+    jmp platform_runtime_resync_c64
 
     #import "../common/score.s"
 ovl_death_end:

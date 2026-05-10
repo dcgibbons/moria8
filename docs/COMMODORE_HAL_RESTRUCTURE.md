@@ -429,6 +429,10 @@ Storage adapter note:
 - [ ] Migrate input/key repeat/text input.
 - [ ] Migrate sound/SFX.
 - [ ] Migrate overlay/asset loading.
+      Backlog: C64 `S)TART` should match C128 by preserving valid REU overlay
+      cache contents across start-over. Restart should reset session/game state
+      without reloading all overlays from program media unless the REU cache is
+      missing or invalid.
 - [ ] Migrate entropy/timers.
 - [ ] After each migrated slice, remove the corresponding common-code hardware
       access and add a static audit rule.
@@ -447,12 +451,26 @@ Storage adapter note:
       filenames, and score filenames remain.
 - [x] Move logical file numbers and secondary addresses into platform storage.
 - [x] Move command channel reads into platform storage.
+- [x] Move save/load sequential I/O call binding to storage HAL adapter labels.
+      This removed the raw `KERNAL_*` save/load bindings from
+      `commodore/common/save.s`; `docs/hal_boundary_allowlist.txt` now tracks
+      the smaller baseline.
+      C64 save/load now explicitly banks in `BANK_NO_BASIC` before sequential
+      stream I/O because its current adapter still exposes raw `CHKIN`, `CHRIN`,
+      `CHROUT`, and `READST` vectors for resident-size reasons.
+      C64 adapter wrappers must bank KERNAL in before restoring A/X/Y and
+      calling the target routine; otherwise argument-sensitive calls such as
+      `SETNAM` and `SETLFS` receive the bank-control value instead of the
+      caller's arguments. The C64 product save/load smokes now force drive 9
+      online with `-drive9type 1541` so the two-drive path is actually tested.
 - [ ] Move drive probing and drive-specific behavior into platform storage.
 - [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.
 - [ ] Make common save/load branch only on normalized storage errors.
-      In progress: C128/Plus4 save/load now call the platform storage adapter
-      for save-media failure classification. C64 remains on its existing
-      resident-size-safe branch until the broader storage ABI is finished.
+      In progress: C64, C128, and Plus/4 save/load now call the platform
+      storage adapter for save-media failure classification. The current
+      adapter still returns only the wrong-media-vs-I/O split used by the
+      existing UI; the full normalized numeric ABI remains the next storage
+      target.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.

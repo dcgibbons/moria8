@@ -31,6 +31,7 @@ commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/disk_swap.s	raw-c64-bank-port	$01
 commodore/common/disk_swap.s	target-conditional	#if !C128
+commodore/common/disk_swap.s	target-conditional	#if !C128 && !PLUS4
 commodore/common/disk_swap.s	target-conditional	#if C128
 commodore/common/disk_swap.s	target-conditional	#if C128 || PLUS4
 commodore/common/disk_swap.s	target-conditional	#if PLUS4
@@ -117,22 +118,12 @@ commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc05
 commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd04
 commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd05
 commodore/common/rng.s	target-conditional	#if PLUS4
-commodore/common/save.s	kernal-symbol	KERNAL_CHKIN
-commodore/common/save.s	kernal-symbol	KERNAL_CHKOUT
-commodore/common/save.s	kernal-symbol	KERNAL_CHRIN
-commodore/common/save.s	kernal-symbol	KERNAL_CHROUT
-commodore/common/save.s	kernal-symbol	KERNAL_CLOSE
-commodore/common/save.s	kernal-symbol	KERNAL_CLRCHN
-commodore/common/save.s	kernal-symbol	KERNAL_OPEN
-commodore/common/save.s	kernal-symbol	KERNAL_READST
-commodore/common/save.s	kernal-symbol	KERNAL_SETLFS
-commodore/common/save.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/save.s	raw-c64-bank-port	$01
 commodore/common/save.s	raw-vic-cia-sid-ted-vdc-address	$dd00
-commodore/common/save.s	target-conditional	#if !C128
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4
 commodore/common/save.s	target-conditional	#if !PLUS4
 commodore/common/save.s	target-conditional	#if C128
+commodore/common/save.s	target-conditional	#if C128 || PLUS4
 commodore/common/save.s	target-conditional	#if PLUS4
 commodore/common/score_io.s	kernal-symbol	KERNAL_CHKIN
 commodore/common/score_io.s	kernal-symbol	KERNAL_CHKOUT
