@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0414: $01 = pass, $00 = fail per test (21 tests)
+// Results at $0400-$0415: $01 = pass, $00 = fail per test (22 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #20
+    ldx #21
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -283,7 +283,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 21, $ff
+tc_results: .fill 22, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -506,7 +506,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #20
+    ldx #21
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1705,6 +1705,44 @@ t20_fail_code:
 t21_fail_code:
 !t21_store:
     sta tc_results + 20
+
+    // ============================================================
+    // Test 22: Stream status message selectors map semantic HAL
+    // statuses to existing user-facing save/load messages.
+    // ============================================================
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    jsr save_stream_status_message
+    cpx #HSTR_SAVE_IOERR
+    beq !t22_save_ioerr_ok+
+    lda #2
+    jmp t22_fail_code
+!t22_save_ioerr_ok:
+    lda #HAL_STORAGE_STATUS_NOT_FOUND
+    jsr load_stream_status_message
+    cpx #HSTR_SAVE_NOTFOUND
+    beq !t22_load_notfound_ok+
+    lda #3
+    jmp t22_fail_code
+!t22_load_notfound_ok:
+    lda #HAL_STORAGE_STATUS_UNSUPPORTED
+    jsr load_stream_status_message
+    cpx #HSTR_SAVE_UNSUPPORTED
+    beq !t22_load_unsupported_ok+
+    lda #4
+    jmp t22_fail_code
+!t22_load_unsupported_ok:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    jsr load_stream_status_message
+    cpx #HSTR_SAVE_IOERR
+    beq !t22_load_ioerr_ok+
+    lda #5
+    jmp t22_fail_code
+!t22_load_ioerr_ok:
+    lda #$01
+    bne !t22_store+
+t22_fail_code:
+!t22_store:
+    sta tc_results + 21
 
     jmp test_finish
 

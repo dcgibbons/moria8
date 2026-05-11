@@ -556,9 +556,14 @@ Storage adapter note:
       expose the current save/load record stream result as `HAL_STORAGE_STATUS_*`
       without changing the underlying sequential I/O path. C64 unit coverage
       verifies OK, not-found, unsupported, and generic I/O classifications.
+- [x] Consume save/load stream classifications for message selection.
+      C128 and Plus/4 save/load stream failure exits now select existing
+      user-facing messages from semantic `HAL_STORAGE_STATUS_*` values. C64
+      keeps the product path byte-neutral while unit tests cover the shared
+      status-to-message selectors.
 - [ ] Extend normalized status coverage to remaining command-channel failures
-      and consume save/load stream classifications in richer user-facing
-      diagnostics.
+      and richer save/load diagnostics beyond the current compressed message
+      set.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.

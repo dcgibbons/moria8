@@ -152,6 +152,30 @@ load_stream_status:
 !unknown:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
+
+// save_stream_status_message
+// Input: A = HAL_STORAGE_STATUS_*.
+// Output: X = HSTR_* message id for the save stream failure.
+save_stream_status_message:
+    ldx #HSTR_SAVE_IOERR
+    rts
+
+// load_stream_status_message
+// Input: A = HAL_STORAGE_STATUS_*.
+// Output: X = HSTR_* message id for the load stream failure.
+load_stream_status_message:
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    bne !unsupported+
+    ldx #HSTR_SAVE_NOTFOUND
+    rts
+!unsupported:
+    cmp #HAL_STORAGE_STATUS_UNSUPPORTED
+    bne !ioerr+
+    ldx #HSTR_SAVE_UNSUPPORTED
+    rts
+!ioerr:
+    ldx #HSTR_SAVE_IOERR
+    rts
 #endif
 
 // ============================================================
@@ -490,8 +514,10 @@ save_return_c64_with_carry:
 !save_error:
 #if C128 || PLUS4
     jsr hal_storage_save_stream_status
-#endif
+    jsr save_stream_status_message
+#else
     ldx #HSTR_SAVE_IOERR
+#endif
     jsr huff_print_msg
 #if PLUS4
     jsr save_append_disk_detail_plus4
@@ -817,7 +843,12 @@ plus4_test_load_unsupported:
     lda #LOAD_RESULT_UNSUPPORTED
     sta load_result
     jsr load_close_file_restore
+#if C128 || PLUS4
+    jsr hal_storage_load_stream_status
+    jsr load_stream_status_message
+#else
     ldx #HSTR_SAVE_UNSUPPORTED
+#endif
     jsr huff_print_msg
 #if C128
     clc
@@ -836,7 +867,12 @@ plus4_test_load_notfound:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
+#if C128 || PLUS4
+    jsr hal_storage_load_stream_status
+    jsr load_stream_status_message
+#else
     ldx #HSTR_SAVE_NOTFOUND
+#endif
     jsr huff_print_msg
 #if C128
     clc
@@ -853,8 +889,10 @@ plus4_test_load_ioerr:
     sta load_result
 #if C128 || PLUS4
     jsr hal_storage_load_stream_status
-#endif
+    jsr load_stream_status_message
+#else
     ldx #HSTR_SAVE_IOERR
+#endif
     jsr huff_print_msg
 #if C128
     clc
