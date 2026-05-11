@@ -11,6 +11,7 @@
 //  8. save-media failure classifier separates wrong media from drive errors
 //  9. Disk Setup init status capture maps normalized DOS statuses
 // 10. Disk Setup status classifier returns normalized HAL statuses
+// 11. Storage HAL command-status classifier maps captured DOS statuses
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -105,6 +106,7 @@ hal_storage_marker_scratch_name:
 .label disk_marker_magic = hal_storage_marker_magic
 .label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
 .label hal_storage_read_command_status = test_storage_read_command_status
+.label hal_storage_command_status = disk_command_status
 
 hal_storage_probe_media:
     stx disk_temp
@@ -730,6 +732,68 @@ test_start:
     sta disk_status
     jsr disk_setup_status
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq *+5
+    jmp test_fail
+
+    // Test 11: Storage HAL command-status classification is the canonical
+    // path for raw command-channel DOS digits after capture.
+    jsr reset_harness_state
+    lda #$30
+    sta disk_diag_cmd_status0
+    lda #$30
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_OK
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$32
+    sta disk_diag_cmd_status0
+    lda #$36
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$36
+    sta disk_diag_cmd_status0
+    lda #$32
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$32
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$34
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$33
+    sta disk_diag_cmd_status0
+    lda #$31
+    sta disk_diag_cmd_status1
+    jsr hal_storage_command_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
     beq *+5
     jmp test_fail
 

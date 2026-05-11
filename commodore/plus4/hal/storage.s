@@ -30,6 +30,7 @@
 .label hal_storage_readst = plus4_kernal_readst
 .label hal_storage_load = plus4_kernal_load
 .label hal_storage_read_command_status = plus4_disk_read_command_status
+.label hal_storage_command_status = disk_command_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 

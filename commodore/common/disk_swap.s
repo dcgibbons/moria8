@@ -151,6 +151,28 @@ disk_error_set_dos_status:
     rts
 #endif
 
+#if C128 || PLUS4
+// disk_command_status
+// Output: A = HAL_STORAGE_STATUS_* for the most recently captured DOS command
+// channel status. Raw diagnostic bytes remain platform-owned.
+disk_command_status:
+#if C128
+    lda disk_diag_cmd_status0
+    ldx disk_diag_cmd_status1
+    jmp storage_status_from_dos_digits
+#elif PLUS4
+    lda disk_error_dos0
+    bne !digits+
+    ldx disk_error_dos1
+    bne !digits+
+    lda #HAL_STORAGE_STATUS_OK
+    rts
+!digits:
+    ldx disk_error_dos1
+    jmp storage_status_from_dos_digits
+#endif
+#endif
+
 // disk_save_media_status
 // Output: A = HAL_STORAGE_STATUS_* for the most recent save-media failure.
 //         Raw platform diagnostics remain in disk_status/disk_error_*.
@@ -175,9 +197,7 @@ disk_save_media_status:
     bne !unknown+
     lda disk_error_dos0
     beq !wrong+
-    lda disk_error_dos0
-    ldx disk_error_dos1
-    jsr storage_status_from_dos_digits
+    jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_NOT_FOUND
     bne !unknown+
 !wrong:
@@ -196,9 +216,7 @@ disk_save_media_status:
     jsr disk_kernal_enter
     jsr hal_storage_read_command_status
     jsr disk_kernal_exit
-    lda disk_diag_cmd_status0
-    ldx disk_diag_cmd_status1
-    jsr storage_status_from_dos_digits
+    jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_NOT_FOUND
     bne !ioerr+
     jmp !wrong+
@@ -216,9 +234,7 @@ disk_save_media_status:
 //         Raw platform diagnostics remain in disk_status/disk_error_*.
 disk_setup_status:
 #if C128
-    lda disk_diag_cmd_status0
-    ldx disk_diag_cmd_status1
-    jsr storage_status_from_dos_digits
+    jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_UNKNOWN
     bne !done+
     jmp disk_setup_status_from_raw
@@ -227,8 +243,7 @@ disk_setup_status:
 #elif PLUS4
     lda disk_error_dos0
     beq !raw+
-    ldx disk_error_dos1
-    jsr storage_status_from_dos_digits
+    jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_UNKNOWN
     bne !done+
 !raw:

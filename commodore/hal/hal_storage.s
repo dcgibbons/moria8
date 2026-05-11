@@ -29,6 +29,7 @@
 //   hal_storage_readst
 //   hal_storage_load
 //   hal_storage_read_command_status
+//   hal_storage_command_status
 //   hal_storage_save_record
 //   hal_storage_load_record
 //   hal_storage_save_file_num
@@ -126,6 +127,8 @@
 //   channel status and stores platform diagnostics in the platform-owned disk
 //   error/status bytes. It is callable after `hal_storage_enter_os`; callers
 //   that are not already in OS-visible state must enter/exit around it.
+// - `hal_storage_command_status` classifies the most recently captured command
+//   channel status. It returns A = HAL_STORAGE_STATUS_*.
 // - `hal_storage_save_media_status` classifies the most recent save-media probe
 //   failure. It returns A = HAL_STORAGE_STATUS_*. Platform diagnostics remain
 //   in the platform-owned disk status bytes.

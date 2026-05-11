@@ -196,9 +196,7 @@ disk_marker_init:
     rts
 
 disk_error_capture_c128:
-    lda disk_diag_cmd_status0
-    ldx disk_diag_cmd_status1
-    jsr storage_status_from_dos_digits
+    jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_72+
     lda #26

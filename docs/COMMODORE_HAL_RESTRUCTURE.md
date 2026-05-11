@@ -420,6 +420,11 @@ Storage adapter note:
 - [x] First command-status slice: command-channel status reads are exported as
       `hal_storage_read_command_status`; C128 Disk Setup no longer owns the
       command-channel read routine in common code.
+- [x] Second command-status slice: command-channel status classification is
+      exported as `hal_storage_command_status`. C128 and Plus/4 consumers now
+      classify the latest captured command-channel DOS digits through the
+      storage HAL instead of reading platform diagnostic bytes directly; C64
+      exports the contract without growing the byte-tight product image.
 - [x] First normalized save-media status slice: `hal_storage_save_media_status`
       is the required adapter entry point for classifying the most recent
       save-media validation failure. The older boolean
@@ -561,9 +566,15 @@ Storage adapter note:
       user-facing messages from semantic `HAL_STORAGE_STATUS_*` values. C64
       keeps the product path byte-neutral while unit tests cover the shared
       status-to-message selectors.
-- [ ] Extend normalized status coverage to remaining command-channel failures
-      and richer save/load diagnostics beyond the current compressed message
-      set.
+- [x] Add command-channel status classification adapter.
+      `hal_storage_command_status` exposes the most recently captured command
+      channel DOS digits as `HAL_STORAGE_STATUS_*`. C128 Disk Setup capture,
+      C128 setup-status classification, and C128/Plus/4 save-media
+      classification now call this adapter instead of decoding raw diagnostic
+      bytes in common control flow. `disk_swap128` directly covers the adapter
+      mappings for `00`, `26`, `62`, `72`, `74`, and an unmapped status.
+- [ ] Extend richer save/load diagnostics beyond the current compressed
+      message set.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.

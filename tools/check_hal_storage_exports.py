@@ -34,6 +34,7 @@ REQUIRED_LABELS = (
     "hal_storage_readst",
     "hal_storage_load",
     "hal_storage_read_command_status",
+    "hal_storage_command_status",
     "hal_storage_save_record",
     "hal_storage_load_record",
     "hal_storage_save_file_num",
