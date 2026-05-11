@@ -418,6 +418,10 @@ Storage adapter note:
 - [x] First command-status slice: command-channel status reads are exported as
       `hal_storage_read_command_status`; C128 Disk Setup no longer owns the
       command-channel read routine in common code.
+- [x] First normalized save-media status slice: `hal_storage_save_media_status`
+      is the required adapter entry point for classifying the most recent
+      save-media validation failure. The older boolean
+      `hal_storage_save_media_error_is_io` transition surface has been removed.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -440,11 +444,18 @@ Storage adapter note:
 ### Phase 4: Storage HAL Migration
 
 - [x] Define first-pass normalized storage error ABI.
-- [ ] Confirm normalized storage error ABI against C64, C128, and Plus/4
-      runtime behavior.
+- [x] Confirm normalized save-media wrong-media-vs-I/O classification against
+      C64, C128, and Plus/4 runtime behavior.
+      Common save/load now branches on `HAL_STORAGE_STATUS_WRONG_MEDIA` from
+      `hal_storage_save_media_status`; all other normalized statuses take the
+      disk-error path.
       C128 unit coverage now requires positive DOS `62` evidence before a
       failed marker read is classified as wrong save media; ambiguous/no-disk
       marker failures classify as disk I/O errors.
+      C64 and C128 currently report readable wrong media as
+      `HAL_STORAGE_STATUS_WRONG_MEDIA` and other save-media failures as
+      `HAL_STORAGE_STATUS_UNKNOWN`; richer device-status normalization
+      remains future work because the resident image is byte-tight.
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
       marker filenames are done; title/overlay asset filenames, tier data
@@ -465,12 +476,13 @@ Storage adapter note:
       online with `-drive9type 1541` so the two-drive path is actually tested.
 - [ ] Move drive probing and drive-specific behavior into platform storage.
 - [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.
-- [ ] Make common save/load branch only on normalized storage errors.
-      In progress: C64, C128, and Plus/4 save/load now call the platform
-      storage adapter for save-media failure classification. The current
-      adapter still returns only the wrong-media-vs-I/O split used by the
-      existing UI; the full normalized numeric ABI remains the next storage
-      target.
+- [x] Make common save/load branch only on normalized save-media errors.
+      C64 unit coverage now checks `save_game` error-message selection and the
+      normalized classifier directly; C128 unit coverage checks ambiguous,
+      wrong-media, and command-channel-backed marker failures; Plus/4 runtime
+      gates cover setup, wrong-media, save-write, and load-resume behavior.
+- [ ] Extend normalized status coverage beyond save-media validation to setup,
+      save stream, load stream, and command-channel failures.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.

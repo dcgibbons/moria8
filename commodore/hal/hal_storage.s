@@ -12,7 +12,7 @@
 //   hal_storage_require_save_media
 //   hal_storage_marker_present
 //   hal_storage_marker_init
-//   hal_storage_save_media_error_is_io
+//   hal_storage_save_media_status
 //   hal_storage_setnam
 //   hal_storage_setlfs
 //   hal_storage_open
@@ -76,10 +76,9 @@
 //   channel status and stores platform diagnostics in the platform-owned disk
 //   error/status bytes. It is callable after `hal_storage_enter_os`; callers
 //   that are not already in OS-visible state must enter/exit around it.
-// - `hal_storage_save_media_error_is_io` classifies the most recent save-media
-//   probe failure. Carry set means device/media I/O failure; carry clear means
-//   readable media that is not the expected save disk. Platform diagnostics
-//   remain in the platform-owned disk status bytes.
+// - `hal_storage_save_media_status` classifies the most recent save-media probe
+//   failure. It returns A = HAL_STORAGE_STATUS_*. Platform diagnostics remain
+//   in the platform-owned disk status bytes.
 // - Callers may not assume that A/X/Y survive any OS/device call unless that
 //   specific adapter documents it.
 //

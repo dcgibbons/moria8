@@ -1654,9 +1654,9 @@ check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
     "!gop_restart:|||jmp game_restart_overlay|||game_restart_overlay:|||lda #>(restart_entry - 1)|||pha|||lda #<(restart_entry - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
-    "!save_wrong_media:|||jsr hal_storage_save_media_error_is_io|||bcc !wrong_save_disk+|||ldx #HSTR_SAVE_IOERR"
+    "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||beq !save_bad_media+|||ldx #HSTR_SAVE_IOERR"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
-    ".label hal_storage_save_media_error_is_io = disk_save_media_error_is_io"
+    ".label hal_storage_save_media_status = disk_save_media_status"
 check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s" \
     "!save_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||jsr save_select_output_name_c64"
 check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
@@ -1753,7 +1753,7 @@ run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 14 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test
-run_test "save"  "tests/test_save.s"  "0400 0410" 17 1000000000
+run_test "save"  "tests/test_save.s"  "0400 0411" 18 1000000000
 run_test "score" "tests/test_score.s" "0400 040b" 12 500000000
 run_test "wands_staves" "tests/test_wands_staves.s" "0400 0406" 7 100000000
 run_test "monster_magic" "tests/test_monster_magic.s" "0400 040a" 11 500000000

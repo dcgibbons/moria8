@@ -493,8 +493,9 @@ test_start:
     sta disk_status
     lda #0
     sta disk_diag_readst
-    jsr disk_save_media_error_is_io
-    bcs *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -502,8 +503,9 @@ test_start:
     sta disk_status
     lda #0
     sta disk_diag_readst
-    jsr disk_save_media_error_is_io
-    bcc *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -511,8 +513,9 @@ test_start:
     sta disk_status
     lda #$42
     sta disk_diag_readst
-    jsr disk_save_media_error_is_io
-    bcs *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -524,8 +527,9 @@ test_start:
     sta cmd_status_bytes
     lda #$32
     sta cmd_status_bytes + 1
-    jsr disk_save_media_error_is_io
-    bcc *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -533,8 +537,9 @@ test_start:
     sta disk_status
     lda #$02
     sta disk_diag_readst
-    jsr disk_save_media_error_is_io
-    bcs *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -549,8 +554,9 @@ test_start:
     jsr disk_require_save_media
     bcs *+5
     jmp test_fail
-    jsr disk_save_media_error_is_io
-    bcs *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -567,8 +573,9 @@ test_start:
     jsr disk_require_save_media
     bcs *+5
     jmp test_fail
-    jsr disk_save_media_error_is_io
-    bcc *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
     jmp test_fail
 
     jsr reset_harness_state
@@ -580,8 +587,9 @@ test_start:
     jsr disk_require_save_media
     bcs *+5
     jmp test_fail
-    jsr disk_save_media_error_is_io
-    bcc *+5
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
     jmp test_fail
 
     jmp test_pass

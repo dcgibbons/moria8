@@ -10,6 +10,7 @@
 // The guided setup UI lives in the UI overlay so resident code stays small.
 
 #import "bank_port_consts.s"
+#import "storage_status.s"
 
 // ============================================================
 // Data
@@ -176,40 +177,46 @@ disk_error_set_dos_status:
     rts
 #endif
 
-// disk_save_media_error_is_io
-// Output: carry set = media check failed because of disk I/O/device status
-//         carry clear = media is readable but not the expected save disk
-disk_save_media_error_is_io:
+// disk_save_media_status
+// Output: A = HAL_STORAGE_STATUS_* for the most recent save-media failure.
+//         Raw platform diagnostics remain in disk_status/disk_error_*.
+disk_save_media_status:
 #if !C128 && !PLUS4
     lda disk_status
     cmp #2                      // 0/1 = wrong media; >=2 = I/O/device.
+    bcs !ioerr+
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
+    rts
+!ioerr:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
 #elif PLUS4
     lda disk_status
     cmp #74
-    beq !ioerr+
+    bne !check_readst+
+    lda #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    rts
+!check_readst:
     lda disk_error_readst
-    bne !ioerr+
+    bne !unknown+
     lda disk_error_dos0
     beq !wrong+
     lda disk_error_dos0
     cmp #$36                    // Missing marker file: 62,FILE NOT FOUND.
-    bne !ioerr+
+    bne !unknown+
     lda disk_error_dos1
     cmp #$32
-    bne !ioerr+
+    bne !unknown+
 !wrong:
-    clc
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
     rts
-!ioerr:
-    sec
+!unknown:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
 #elif C128
     lda disk_status
     cmp #$83                    // Marker bytes read, but contents mismatch.
     beq !wrong+
-    cmp #$81                    // Marker OPEN failed; DOS status may say 62.
-    beq !check_dos+
     cmp #$84                    // Marker READ failed; READST alone is ambiguous.
     bne !ioerr+
 !check_dos:
@@ -223,10 +230,10 @@ disk_save_media_error_is_io:
     cmp #$32
     beq !wrong+
 !ioerr:
-    sec
+    lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
 !wrong:
-    clc
+    lda #HAL_STORAGE_STATUS_WRONG_MEDIA
     rts
 #endif
 

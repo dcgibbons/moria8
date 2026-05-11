@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0410: $01 = pass, $00 = fail per test (17 tests)
+// Results at $0400-$0411: $01 = pass, $00 = fail per test (18 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #16
+    ldx #17
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -151,7 +151,7 @@ random_floor_in_room:
 .label hal_storage_chrout = test_save_chrout
 .label hal_storage_clrchn = test_save_clrchn
 .label hal_storage_readst = test_save_readst
-.label hal_storage_save_media_error_is_io = disk_save_media_error_is_io
+.label hal_storage_save_media_status = disk_save_media_status
 c64_disk_marker_present:
     lda test_save_marker_present
     beq !missing+
@@ -269,7 +269,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 17, $ff
+tc_results: .fill 18, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -1499,6 +1499,40 @@ t17_fail_code:
     pla
 !t17_store:
     sta tc_results + 16
+
+    // ============================================================
+    // Test 18: C64 save-media classifier returns normalized HAL
+    // status codes. Common save/load branches on this semantic value.
+    // ============================================================
+    lda #1
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq !t18_wrong_ok+
+    lda #2
+    jmp t18_fail_code
+!t18_wrong_ok:
+    lda #KERNAL_ERR_DEVICE_NOT_PRESENT
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t18_io_ok+
+    lda #3
+    jmp t18_fail_code
+!t18_io_ok:
+    lda #$42
+    sta disk_status
+    jsr disk_save_media_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t18_status_ok+
+    lda #4
+    jmp t18_fail_code
+!t18_status_ok:
+    lda #$01
+    bne !t18_store+
+t18_fail_code:
+!t18_store:
+    sta tc_results + 17
 
     jmp test_finish
 

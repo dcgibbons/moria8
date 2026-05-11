@@ -120,6 +120,8 @@ save_magic:
 // ============================================================
 // Macros for concise block I/O
 // ============================================================
+#import "storage_status.s"
+
 .macro save_block(addr, size) {
     lda #<addr
     sta save_block_lo
@@ -214,11 +216,12 @@ save_game:
     lda disk_setup_done
     beq !save_media_fail+
 !save_wrong_media:
-    jsr hal_storage_save_media_error_is_io
-    bcc !wrong_save_disk+
+    jsr hal_storage_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq !save_bad_media+
     ldx #HSTR_SAVE_IOERR
     jmp !save_media_fail+
-!wrong_save_disk:
+!save_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
     jsr huff_print_msg
@@ -475,11 +478,12 @@ load_game:
     lda disk_setup_done
     beq !load_media_fail+
 !load_wrong_media:
-    jsr hal_storage_save_media_error_is_io
-    bcc !load_wrong_save_disk+
+    jsr hal_storage_save_media_status
+    cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq !load_bad_media+
     ldx #HSTR_SAVE_IOERR
     jmp !load_media_fail+
-!load_wrong_save_disk:
+!load_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
 !load_media_fail:
 #if PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT

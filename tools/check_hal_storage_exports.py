@@ -17,7 +17,7 @@ REQUIRED_LABELS = (
     "hal_storage_require_save_media",
     "hal_storage_marker_present",
     "hal_storage_marker_init",
-    "hal_storage_save_media_error_is_io",
+    "hal_storage_save_media_status",
     "hal_storage_setnam",
     "hal_storage_setlfs",
     "hal_storage_open",
