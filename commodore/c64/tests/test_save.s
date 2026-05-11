@@ -121,6 +121,7 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
+.const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs
 .const KERNAL_OPEN   = test_save_open
@@ -152,6 +153,8 @@ random_floor_in_room:
 .label hal_storage_clrchn = test_save_clrchn
 .label hal_storage_readst = test_save_readst
 .label hal_storage_save_media_status = disk_save_media_status
+hal_storage_init_selected_drive:
+    rts
 c64_disk_marker_present:
     lda test_save_marker_present
     beq !missing+

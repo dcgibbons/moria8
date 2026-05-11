@@ -6,12 +6,12 @@
 // when ROM visibility is required, matching the current disk runtime pattern.
 
 #import "storage_policy.s"
+#import "storage_drive.s"
 #import "storage_overlay_names.s"
 #import "storage_tier_names.s"
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit
-.label hal_storage_probe_media = probe_device
 .label hal_storage_require_program_media = c128_require_program_media
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = disk_marker_present

@@ -102,6 +102,45 @@ hal_storage_marker_scratch_name:
 .label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
 .label hal_storage_read_command_status = test_storage_read_command_status
 
+hal_storage_probe_media:
+    stx disk_temp
+    lda #0
+    ldx #0
+    ldy #0
+    jsr w_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_temp
+    ldy #hal_storage_cmd_channel
+    jsr w_setlfs
+    jsr w_open
+    bcs !absent+
+    lda #hal_storage_cmd_channel
+    jsr w_close
+    jsr w_clrchn
+    clc
+    rts
+!absent:
+    jsr w_clrchn
+    sec
+    rts
+
+hal_storage_init_selected_drive:
+    lda #2
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
+    jsr w_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_prompt_device
+    ldy #hal_storage_cmd_channel
+    jsr w_setlfs
+    jsr w_open
+    bcs !done+
+    lda #hal_storage_cmd_channel
+    jsr w_close
+!done:
+    jsr w_clrchn
+    rts
+
 #import "../../common/runtime_ui_strings.s"
 #import "../../common/disk_swap.s"
 #import "../../common/disk_setup_banked.s"

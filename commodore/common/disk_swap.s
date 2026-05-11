@@ -3,7 +3,7 @@
 //
 // Keeps the resident disk contract intentionally small:
 //   - swap prompts for one-drive mode
-//   - device probing / drive init
+//   - swap/init state for platform-owned device probing / drive init
 //   - save-disk marker validation and initialization
 //   - tiny shared state used by title/setup/save/load/hiscore paths
 //
@@ -42,8 +42,6 @@ disk_error_index:  .byte 0
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
-.const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
-
 #if C128 || PLUS4
 .const DISK_ERR_NONE              = $00
 .const DISK_ERR_MARKER_OPEN       = $81
@@ -63,30 +61,6 @@ disk_error_index:  .byte 0
 .const DISK_ERR_LOAD_READ         = $b3
 .const DISK_ERR_HISCORE_LOAD      = $c1
 .const DISK_ERR_HISCORE_SAVE      = $c2
-#endif
-
-#if C128
-.const FEAT_SETNAM = KERNAL_SETNAM
-.const FEAT_SETLFS = KERNAL_SETLFS
-.const FEAT_OPEN   = KERNAL_OPEN
-.const FEAT_CLOSE  = KERNAL_CLOSE
-.const FEAT_CLRCHN = KERNAL_CLRCHN
-.const FEAT_READST = KERNAL_READST
-.const FEAT_CHKIN  = KERNAL_CHKIN
-.const FEAT_CHKOUT = KERNAL_CHKOUT
-.const FEAT_CHRIN  = KERNAL_CHRIN
-.const FEAT_CHROUT = KERNAL_CHROUT
-#else
-.const FEAT_SETNAM = c64_disk_setnam
-.const FEAT_SETLFS = c64_disk_setlfs
-.const FEAT_OPEN   = c64_disk_open
-.const FEAT_CLOSE  = c64_disk_close
-.const FEAT_CLRCHN = c64_disk_clrchn
-.const FEAT_READST = KERNAL_READST
-.const FEAT_CHKIN  = KERNAL_CHKIN
-.const FEAT_CHKOUT = KERNAL_CHKOUT
-.const FEAT_CHRIN  = KERNAL_CHRIN
-.const FEAT_CHROUT = KERNAL_CHROUT
 #endif
 
 .const DISK_UI_ACT_MENU            = 0
@@ -346,7 +320,7 @@ disk_prompt:
     jsr ui_clear_full_screen_safe
     jsr msg_init
 #endif
-    jsr disk_init_selected_drive
+    jsr hal_storage_init_selected_drive
 
 #if !C128
     lda #BANK_NO_BASIC
@@ -404,99 +378,7 @@ disk_kernal_exit:
 disk_init_drive:
     lda save_device
     sta disk_prompt_device
-disk_init_selected_drive:
-#if C128
-    lda #2
-    ldx #<hal_storage_init_command
-    ldy #>hal_storage_init_command
-    jsr w_setnam
-    lda #hal_storage_cmd_channel
-    ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr w_setlfs
-    jsr w_open
-    bcs !did_close+
-    lda #hal_storage_cmd_channel
-    jsr w_close
-!did_close:
-    jsr w_clrchn
-    rts
-#else
-    jsr disk_kernal_enter
-    lda #2
-    ldx #<hal_storage_init_command
-    ldy #>hal_storage_init_command
-    jsr FEAT_SETNAM
-    lda #hal_storage_cmd_channel
-    ldx disk_prompt_device
-    ldy #hal_storage_cmd_channel
-    jsr FEAT_SETLFS
-    jsr FEAT_OPEN
-    bcs !did_close+
-    lda #hal_storage_cmd_channel
-    jsr FEAT_CLOSE
-!did_close:
-    jsr FEAT_CLRCHN
-    jsr disk_kernal_exit
-    rts
-#endif
-
-// ============================================================
-// probe_device — Check whether an IEC device responds
-// Input:  X = device number (8-30)
-// Output: carry clear = present, carry set = absent
-// ============================================================
-probe_device:
-#if C128
-    stx disk_temp
-
-    lda #0
-    ldx #0
-    ldy #0
-    jsr w_setnam
-    lda #hal_storage_cmd_channel
-    ldx disk_temp
-    ldy #hal_storage_cmd_channel
-    jsr w_setlfs
-    jsr w_open
-    bcs !pd_absent+
-!pd_close:
-    lda #hal_storage_cmd_channel
-    jsr w_close
-    jsr w_clrchn
-    clc
-    rts
-!pd_absent:
-    jsr w_clrchn
-    sec
-    rts
-#else
-    stx disk_temp
-    jsr disk_kernal_enter
-
-    lda #0
-    ldx #0
-    ldy #0
-    jsr FEAT_SETNAM
-    lda #hal_storage_cmd_channel
-    ldx disk_temp
-    ldy #hal_storage_cmd_channel
-    jsr FEAT_SETLFS
-    jsr FEAT_OPEN
-    bcs !pd_absent+
-!pd_close:
-    lda #hal_storage_cmd_channel
-    jsr FEAT_CLOSE
-    jsr FEAT_CLRCHN
-    jsr disk_kernal_exit
-    clc
-    rts
-!pd_absent:
-    jsr FEAT_CLRCHN
-    jsr disk_kernal_exit
-    sec
-    rts
-#endif
+    jmp hal_storage_init_selected_drive
 
 // ============================================================
 // disk_marker_present — Validate the configured save-disk marker file

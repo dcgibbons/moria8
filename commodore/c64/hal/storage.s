@@ -9,7 +9,6 @@
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit
-.label hal_storage_probe_media = probe_device
 .label hal_storage_require_program_media = disk_prompt_game
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = disk_marker_present
@@ -29,6 +28,55 @@
 .label hal_storage_read_command_status = c64_storage_read_command_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
+
+// Check whether an IEC device responds.
+// Input: X = device number (8-30)
+// Output: carry clear = present, carry set = absent/unusable
+hal_storage_probe_media:
+    stx disk_temp
+    jsr disk_kernal_enter
+
+    lda #0
+    ldx #0
+    ldy #0
+    jsr c64_disk_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_temp
+    ldy #hal_storage_cmd_channel
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcs !absent+
+    lda #hal_storage_cmd_channel
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    clc
+    rts
+!absent:
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    sec
+    rts
+
+// Best-effort drive init for the selected prompt device.
+hal_storage_init_selected_drive:
+    jsr disk_kernal_enter
+    lda #2
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
+    jsr c64_disk_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_prompt_device
+    ldy #hal_storage_cmd_channel
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcs !done+
+    lda #hal_storage_cmd_channel
+    jsr c64_disk_close
+!done:
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    rts
 
 // Platform-owned save-disk marker filenames and marker bytes. PETSCII bytes
 // for KERNAL SETNAM / sequential marker contents.

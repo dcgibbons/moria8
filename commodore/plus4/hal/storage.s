@@ -9,7 +9,6 @@
 
 .label hal_storage_enter_os = plus4_bank_rom
 .label hal_storage_exit_os = plus4_bank_ram
-.label hal_storage_probe_media = probe_device
 .label hal_storage_require_program_media = disk_prompt_game
 .label hal_storage_require_save_media = disk_require_save_media
 .label hal_storage_marker_present = disk_marker_present
@@ -29,6 +28,55 @@
 .label hal_storage_read_command_status = plus4_disk_read_command_status
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
+
+// Check whether an IEC device responds.
+// Input: X = device number (8-30)
+// Output: carry clear = present, carry set = absent/unusable
+hal_storage_probe_media:
+    stx disk_temp
+    jsr plus4_bank_rom
+
+    lda #0
+    ldx #0
+    ldy #0
+    jsr plus4_kernal_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_temp
+    ldy #hal_storage_cmd_channel
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
+    bcs !absent+
+    lda #hal_storage_cmd_channel
+    jsr plus4_kernal_close
+    jsr plus4_kernal_clrchn
+    jsr plus4_bank_ram
+    clc
+    rts
+!absent:
+    jsr plus4_kernal_clrchn
+    jsr plus4_bank_ram
+    sec
+    rts
+
+// Best-effort drive init for the selected prompt device.
+hal_storage_init_selected_drive:
+    jsr plus4_bank_rom
+    lda #2
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
+    jsr plus4_kernal_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_prompt_device
+    ldy #hal_storage_cmd_channel
+    jsr plus4_kernal_setlfs
+    jsr plus4_kernal_open
+    bcs !done+
+    lda #hal_storage_cmd_channel
+    jsr plus4_kernal_close
+!done:
+    jsr plus4_kernal_clrchn
+    jsr plus4_bank_ram
+    rts
 
 // Platform-owned save-disk marker filenames and marker bytes. These must live
 // in resident RAM below BASIC/KERNAL ROM because the Plus/4 KERNAL reads

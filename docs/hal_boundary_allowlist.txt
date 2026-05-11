@@ -19,12 +19,9 @@ commodore/common/disk_setup_banked.s	target-conditional	#if C128
 commodore/common/disk_setup_banked.s	target-conditional	#if PLUS4
 commodore/common/disk_setup_runtime128.s	target-conditional	#if C128
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHKIN
-commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHKOUT
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHRIN
-commodore/common/disk_swap.s	kernal-symbol	KERNAL_CHROUT
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_CLOSE
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_CLRCHN
-commodore/common/disk_swap.s	kernal-symbol	KERNAL_ERR_DEVICE_NOT_PRESENT
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_OPEN
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_READST
 commodore/common/disk_swap.s	kernal-symbol	KERNAL_SETLFS

@@ -508,7 +508,13 @@ Storage adapter note:
       `SETNAM` and `SETLFS` receive the bank-control value instead of the
       caller's arguments. The C64 product save/load smokes now force drive 9
       online with `-drive9type 1541` so the two-drive path is actually tested.
-- [ ] Move drive probing and drive-specific behavior into platform storage.
+- [x] Move drive probing and selected-drive init into platform storage.
+      Common Disk Setup now calls `hal_storage_probe_media`, and the one-drive
+      prompt path calls `hal_storage_init_selected_drive`; C64, C128, and
+      Plus/4 own the KERNAL/ROM-visible command-channel implementation.
+      C128 keeps the drive-probe/init helper in resident-world space through
+      `hal/storage_drive.s` so the byte-tight resident disk-I/O payload does
+      not grow past `$AEFF`.
 - [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.
 - [x] Make common save/load branch only on normalized save-media errors.
       C64 unit coverage now checks `save_game` error-message selection and the

@@ -7,6 +7,12 @@
 
 #if !C128
 .label c64_disk_marker_write_phys = c64_disk_marker_write_resident
+
+.const FEAT_SETNAM = c64_disk_setnam
+.const FEAT_SETLFS = c64_disk_setlfs
+.const FEAT_OPEN   = c64_disk_open
+.const FEAT_CLOSE  = c64_disk_close
+.const FEAT_CLRCHN = c64_disk_clrchn
 #else
 disk_diag_phase:       .byte 0
 disk_diag_carry:       .byte 0
@@ -367,10 +373,10 @@ disk_setup_run:
     bne !menu+
 #if C128
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
 #else
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
 #endif
     bcs !menu+
     lda #DISK_UI_ACT_CONFIRM_DRIVE9
@@ -405,7 +411,7 @@ disk_setup_run:
 
 !two_drive:
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
     bcc !drive9_present+
     lda #DISK_UI_ACT_SHOW_NO_DRIVE9
     jsr disk_setup_call_ui
@@ -424,7 +430,7 @@ disk_setup_run:
     cmp #DISK_UI_RES_OK
     bne !menu-
     ldx disk_ui_value
-    jsr probe_device
+    jsr hal_storage_probe_media
     bcc !other_probe_ok+
     lda #DISK_UI_ACT_SHOW_NO_DEVICE
     jsr disk_setup_call_ui

@@ -13,6 +13,7 @@ REQUIRED_LABELS = (
     "hal_storage_enter_os",
     "hal_storage_exit_os",
     "hal_storage_probe_media",
+    "hal_storage_init_selected_drive",
     "hal_storage_require_program_media",
     "hal_storage_require_save_media",
     "hal_storage_marker_present",

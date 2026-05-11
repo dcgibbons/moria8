@@ -1598,7 +1598,7 @@ check_static_contract "wizard_cancel_text_contract" "../common/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
-    "disk_prompt:|||jsr input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr disk_init_selected_drive"
+    "disk_prompt:|||jsr input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
 check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../common/ui_disk_setup.s" \
     "uds_show_insert_prompt:|||jsr input_get_modal_dismiss_key|||lda #DISK_UI_RES_OK|||sta disk_ui_result|||jsr uds_clear_after_modal"
 check_static_contract "load_resume_suppresses_tier_loading_message_contract" "../common/game_loop.s" \

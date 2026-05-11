@@ -8,6 +8,7 @@
 //   hal_storage_enter_os
 //   hal_storage_exit_os
 //   hal_storage_probe_media
+//   hal_storage_init_selected_drive
 //   hal_storage_require_program_media
 //   hal_storage_require_save_media
 //   hal_storage_marker_present
@@ -112,6 +113,12 @@
 // - Save-record, high-score, save-disk marker, title-art, tier-data, and
 //   overlay filename labels are platform-owned PETSCII/KERNAL strings. Common
 //   code must not hardcode those asset filenames.
+// - `hal_storage_probe_media` checks whether the device in X responds.
+//   Carry clear means present; carry set means absent/unusable. The drive
+//   model is intentionally invisible to common code.
+// - `hal_storage_init_selected_drive` sends the platform's drive init command
+//   to `disk_prompt_device`. Carry is not meaningful; this is a best-effort
+//   media-change synchronization.
 // - `hal_storage_read_command_status` reads the active save device's command
 //   channel status and stores platform diagnostics in the platform-owned disk
 //   error/status bytes. It is callable after `hal_storage_enter_os`; callers

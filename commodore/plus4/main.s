@@ -541,7 +541,7 @@ title_enter_menu:
 
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
     lda #9
     sta save_device
     lda #2

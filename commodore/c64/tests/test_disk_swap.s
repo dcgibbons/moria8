@@ -7,8 +7,8 @@
 //  4. disk_prompt restores normal C64 banking after prompt/input recovery
 //  5. disk_kernal wrapper preserves caller bank + interrupt state while FEAT
 //     KERNAL calls are handled by per-vector wrappers
-//  6. probe_device present path
-//  7. probe_device OPEN-fail path
+//  6. hal_storage_probe_media present path
+//  7. hal_storage_probe_media OPEN-fail path
 //  8. disk_marker_present accepts valid marker bytes
 //  9. disk_marker_present rejects invalid marker bytes
 // 10. disk_require_save_media fails when setup is incomplete
@@ -359,6 +359,50 @@ kernal_chrout:
 .label c64_disk_chrin  = kernal_chrin
 .label c64_disk_chrout = kernal_chrout
 
+hal_storage_probe_media:
+    stx disk_temp
+    jsr disk_kernal_enter
+    lda #0
+    ldx #0
+    ldy #0
+    jsr c64_disk_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_temp
+    ldy #hal_storage_cmd_channel
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcs !absent+
+    lda #hal_storage_cmd_channel
+    jsr c64_disk_close
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    clc
+    rts
+!absent:
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    sec
+    rts
+
+hal_storage_init_selected_drive:
+    jsr disk_kernal_enter
+    lda #2
+    ldx #<hal_storage_init_command
+    ldy #>hal_storage_init_command
+    jsr c64_disk_setnam
+    lda #hal_storage_cmd_channel
+    ldx disk_prompt_device
+    ldy #hal_storage_cmd_channel
+    jsr c64_disk_setlfs
+    jsr c64_disk_open
+    bcs !done+
+    lda #hal_storage_cmd_channel
+    jsr c64_disk_close
+!done:
+    jsr c64_disk_clrchn
+    jsr disk_kernal_exit
+    rts
+
 test_start:
     sei
     cld
@@ -529,10 +573,10 @@ test_start:
 !t5_store:
     sta tc_results + 4
 
-    // Test 6: probe_device present path
+    // Test 6: hal_storage_probe_media present path
     jsr reset_harness_state
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
     bcs !t6_fail+
     lda kernal_readst_calls
     bne !t6_fail+
@@ -546,12 +590,12 @@ test_start:
 !t6_store:
     sta tc_results + 5
 
-    // Test 7: probe_device OPEN-fail path
+    // Test 7: hal_storage_probe_media OPEN-fail path
     jsr reset_harness_state
     lda #5
     sta kernal_open_fail
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
     bcc !t7_fail+
     lda kernal_close_calls
     bne !t7_fail+
@@ -648,7 +692,7 @@ test_start:
     lda #$07
     sta zp_text_color
     ldx #9
-    jsr probe_device
+    jsr hal_storage_probe_media
     bcs !t12_fail+
     lda zp_ptr0
     cmp #$12
