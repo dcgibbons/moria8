@@ -33,6 +33,12 @@
 .label hal_storage_load = KERNAL_LOAD
 .label hal_storage_read_command_status = c128_storage_read_command_status
 .label hal_storage_command_status = disk_command_status
+.label hal_storage_diag_code = disk_status
+.label hal_storage_diag_phase = disk_diag_phase
+.label hal_storage_diag_readst = disk_diag_readst
+.label hal_storage_diag_device = disk_diag_device
+.label hal_storage_diag_dos0 = disk_diag_cmd_status0
+.label hal_storage_diag_dos1 = disk_diag_cmd_status1
 .label hal_storage_save_record = save_game
 .label hal_storage_load_record = load_game
 

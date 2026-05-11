@@ -12,6 +12,7 @@
 //  9. Disk Setup init status capture maps normalized DOS statuses
 // 10. Disk Setup status classifier returns normalized HAL statuses
 // 11. Storage HAL command-status classifier maps captured DOS statuses
+// 12. Storage HAL diagnostic labels expose platform diagnostic bytes
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -107,6 +108,12 @@ hal_storage_marker_scratch_name:
 .label DISK_MARKER_MAGIC_LEN = hal_storage_marker_magic_len
 .label hal_storage_read_command_status = test_storage_read_command_status
 .label hal_storage_command_status = disk_command_status
+.label hal_storage_diag_code = disk_status
+.label hal_storage_diag_phase = disk_diag_phase
+.label hal_storage_diag_readst = disk_diag_readst
+.label hal_storage_diag_device = disk_diag_device
+.label hal_storage_diag_dos0 = disk_diag_cmd_status0
+.label hal_storage_diag_dos1 = disk_diag_cmd_status1
 
 hal_storage_probe_media:
     stx disk_temp
@@ -794,6 +801,46 @@ test_start:
     sta disk_diag_cmd_status1
     jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq *+5
+    jmp test_fail
+
+    // Test 12: Storage HAL diagnostic labels expose the current raw C128
+    // storage diagnostic bytes without common code knowing their native names.
+    jsr reset_harness_state
+    lda #$a5
+    sta disk_status
+    lda #$91
+    sta disk_diag_phase
+    lda #$40
+    sta disk_diag_readst
+    lda #9
+    sta disk_diag_device
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$34
+    sta disk_diag_cmd_status1
+    lda hal_storage_diag_code
+    cmp #$a5
+    beq *+5
+    jmp test_fail
+    lda hal_storage_diag_phase
+    cmp #$91
+    beq *+5
+    jmp test_fail
+    lda hal_storage_diag_readst
+    cmp #$40
+    beq *+5
+    jmp test_fail
+    lda hal_storage_diag_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    lda hal_storage_diag_dos0
+    cmp #$37
+    beq *+5
+    jmp test_fail
+    lda hal_storage_diag_dos1
+    cmp #$34
     beq *+5
     jmp test_fail
 

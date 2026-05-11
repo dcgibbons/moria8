@@ -425,6 +425,12 @@ Storage adapter note:
       classify the latest captured command-channel DOS digits through the
       storage HAL instead of reading platform diagnostic bytes directly; C64
       exports the contract without growing the byte-tight product image.
+- [x] First raw-diagnostics slice: platform storage implementations export
+      read-only `hal_storage_diag_{code,phase,readst,device,dos0,dos1}` byte
+      labels. C128 maps these to `disk_diag_*`; Plus/4 maps them to
+      `disk_error_*`; C64 maps the currently available compact fields without
+      growing resident code. This is an ABI surface only; it does not change
+      player-facing error text yet.
 - [x] First normalized save-media status slice: `hal_storage_save_media_status`
       is the required adapter entry point for classifying the most recent
       save-media validation failure. The older boolean
@@ -573,9 +579,15 @@ Storage adapter note:
       classification now call this adapter instead of decoding raw diagnostic
       bytes in common control flow. `disk_swap128` directly covers the adapter
       mappings for `00`, `26`, `62`, `72`, `74`, and an unmapped status.
+- [x] Preserve raw platform diagnostics behind storage HAL labels.
+      `hal_storage_diag_code`, `hal_storage_diag_phase`,
+      `hal_storage_diag_readst`, `hal_storage_diag_device`,
+      `hal_storage_diag_dos0`, and `hal_storage_diag_dos1` are now required
+      storage exports. C128 unit coverage verifies the labels expose the native
+      diagnostic bytes; C64 has a static no-growth contract for the compact
+      aliases; Plus/4 exports its existing diagnostic byte set.
 - [ ] Extend richer save/load diagnostics beyond the current compressed
       message set.
-- [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
 

@@ -1657,6 +1657,8 @@ check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
     "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||beq !save_bad_media+|||ldx #HSTR_SAVE_IOERR"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
     ".label hal_storage_save_media_status = disk_save_media_status"
+check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \
+    ".label hal_storage_diag_code = disk_status|||.label hal_storage_diag_device = save_device"
 check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s" \
     "!save_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||jsr save_select_output_name_c64"
 check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \

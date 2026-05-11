@@ -30,6 +30,12 @@
 //   hal_storage_load
 //   hal_storage_read_command_status
 //   hal_storage_command_status
+//   hal_storage_diag_code
+//   hal_storage_diag_phase
+//   hal_storage_diag_readst
+//   hal_storage_diag_device
+//   hal_storage_diag_dos0
+//   hal_storage_diag_dos1
 //   hal_storage_save_record
 //   hal_storage_load_record
 //   hal_storage_save_file_num
@@ -129,6 +135,14 @@
 //   that are not already in OS-visible state must enter/exit around it.
 // - `hal_storage_command_status` classifies the most recently captured command
 //   channel status. It returns A = HAL_STORAGE_STATUS_*.
+// - `hal_storage_diag_*` labels are read-only platform-owned diagnostic bytes.
+//   `diag_code` is the platform's compact raw storage status byte,
+//   `diag_phase` is the platform's current setup/save/load phase when
+//   available, `diag_readst` is the last KERNAL READST byte when available,
+//   `diag_device` is the relevant Commodore device number when available, and
+//   `diag_dos0`/`diag_dos1` are the first two ASCII DOS status-code digits
+//   when available. If a platform cannot preserve one field yet, its adapter
+//   must still export the label and document the alias it uses.
 // - `hal_storage_save_media_status` classifies the most recent save-media probe
 //   failure. It returns A = HAL_STORAGE_STATUS_*. Platform diagnostics remain
 //   in the platform-owned disk status bytes.
