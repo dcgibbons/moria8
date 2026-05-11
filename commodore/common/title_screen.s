@@ -24,11 +24,7 @@ title_load_and_draw:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
     ldy #>hal_storage_title_name
-#if PLUS4
-    jsr c64_disk_setnam
-#else
-    jsr KERNAL_SETNAM
-#endif
+    jsr hal_storage_setnam
 
     // SETLFS: logical file 2, device 8.
     // C64 title PRG is linked for MAP_BASE already, so use the file header.
@@ -40,11 +36,7 @@ title_load_and_draw:
 #else
     ldy #0
 #endif
-#if PLUS4
-    jsr c64_disk_setlfs
-#else
-    jsr KERNAL_SETLFS
-#endif
+    jsr hal_storage_setlfs
 
     // LOAD: 0 = load, X/Y = destination (MAP_BASE)
     lda #0
@@ -61,10 +53,8 @@ title_load_and_draw:
     lda #2
 #if C128
     jsr w_close             // C128: force ROM mapping around CLOSE
-#elif PLUS4
-    jsr c64_disk_close
 #else
-    jsr $FFC3               // KERNAL CLOSE file 2 — LOAD doesn't remove from file table
+    jsr hal_storage_close   // KERNAL LOAD doesn't remove file 2 from the table
 #endif
 
 #if C128

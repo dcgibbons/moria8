@@ -1,9 +1,9 @@
 #importonce
 // C64 storage HAL adapter.
 //
-// Zero-byte aliases over the current C64 storage implementation. Common call
-// sites are intentionally not migrated in this step, and C64 default memory is
-// too tight for resident adapter code.
+// Zero-byte aliases over the current C64 storage implementation. C64 default
+// memory is too tight for resident adapter code, so the HAL binds directly to
+// the platform-owned KERNAL/banking helpers.
 
 #import "storage_policy.s"
 
@@ -11,8 +11,9 @@
 .label hal_storage_exit_os = disk_kernal_exit
 .label hal_storage_require_program_media = disk_prompt_game
 .label hal_storage_require_save_media = disk_require_save_media
-.label hal_storage_marker_present = disk_marker_present
+.label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_init = disk_marker_init
+.label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 .label hal_storage_save_media_status = disk_save_media_status
 .label hal_storage_setnam = c64_disk_setnam
 .label hal_storage_setlfs = c64_disk_setlfs

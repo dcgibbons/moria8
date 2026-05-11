@@ -167,21 +167,6 @@ plus4_kernal_load:
     .word $ffd5
     rts
 
-// Transitional compatibility names for shared code that has not migrated to
-// HAL storage labels yet. Do not add new Plus/4 call sites using c64_disk_*.
-.label c64_disk_call = plus4_kernal_call
-.label c64_disk_setnam = plus4_kernal_setnam
-.label c64_disk_setlfs = plus4_kernal_setlfs
-.label c64_disk_open = plus4_kernal_open
-.label c64_disk_close = plus4_kernal_close
-.label c64_disk_chkout = plus4_kernal_chkout
-.label c64_disk_chkin = plus4_kernal_chkin
-.label c64_disk_clrchn = plus4_kernal_clrchn
-.label c64_disk_chrin = plus4_kernal_chrin
-.label c64_disk_chrout = plus4_kernal_chrout
-.label c64_disk_readst = plus4_kernal_readst
-.label c64_disk_load = plus4_kernal_load
-
 #import "hal/storage.s"
 
 plus4_storage_marker_present:
@@ -259,8 +244,6 @@ plus4_storage_marker_present:
     jsr disk_error_clear
     clc
     rts
-
-.label c64_disk_marker_present = plus4_storage_marker_present
 
 // tramp_dig_ability — pinned low for common tunnel code.
 tramp_dig_ability:
@@ -396,8 +379,6 @@ plus4_storage_marker_write_resident:
     jsr disk_error_clear
     clc
     rts
-
-.label c64_disk_marker_write_resident = plus4_storage_marker_write_resident
 
 plus4_disk_read_command_status:
     lda #0

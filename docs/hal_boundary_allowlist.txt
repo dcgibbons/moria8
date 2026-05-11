@@ -150,10 +150,7 @@ commodore/common/title_cache_runtime128.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/title_cache_runtime128.s	target-conditional	#if C128
 commodore/common/title_data.s	raw-c64-bank-port	$01
 commodore/common/title_data.s	target-conditional	#if C128
-commodore/common/title_screen.s	kernal-symbol	KERNAL_SETLFS
-commodore/common/title_screen.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/title_screen.s	target-conditional	#if C128
-commodore/common/title_screen.s	target-conditional	#if PLUS4
 commodore/common/title_sysinfo_banked.s	platform-name	REU
 commodore/common/title_sysinfo_banked.s	raw-c64-bank-port	$01
 commodore/common/title_sysinfo_banked.s	target-conditional	#if !C128

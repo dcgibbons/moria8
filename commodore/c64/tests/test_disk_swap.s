@@ -358,6 +358,8 @@ kernal_chrout:
 .label c64_disk_chkout = kernal_chkout
 .label c64_disk_chrin  = kernal_chrin
 .label c64_disk_chrout = kernal_chrout
+.label hal_storage_marker_present = c64_disk_marker_present
+.label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 
 hal_storage_probe_media:
     stx disk_temp
@@ -401,6 +403,10 @@ hal_storage_init_selected_drive:
 !done:
     jsr c64_disk_clrchn
     jsr disk_kernal_exit
+    rts
+
+c64_disk_marker_write_resident:
+    clc
     rts
 
 test_start:

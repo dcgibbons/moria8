@@ -153,6 +153,8 @@ random_floor_in_room:
 .label hal_storage_clrchn = test_save_clrchn
 .label hal_storage_readst = test_save_readst
 .label hal_storage_save_media_status = disk_save_media_status
+.label hal_storage_marker_present = c64_disk_marker_present
+.label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 hal_storage_init_selected_drive:
     rts
 c64_disk_marker_present:
@@ -173,6 +175,9 @@ c64_disk_marker_present:
     rts
 !return_sec:
     sec
+    rts
+c64_disk_marker_write_resident:
+    clc
     rts
 hal_storage_init_command:
     .byte $49, $30

@@ -386,7 +386,7 @@ disk_init_drive:
 // ============================================================
 disk_marker_present:
 #if !C128
-    jsr c64_disk_marker_present
+    jsr hal_storage_marker_present
     rts
 #else
     lda #$81

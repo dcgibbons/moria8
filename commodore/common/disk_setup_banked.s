@@ -6,13 +6,11 @@
 // all disk transactions stay outside the live overlay frame.
 
 #if !C128
-.label c64_disk_marker_write_phys = c64_disk_marker_write_resident
-
-.const FEAT_SETNAM = c64_disk_setnam
-.const FEAT_SETLFS = c64_disk_setlfs
-.const FEAT_OPEN   = c64_disk_open
-.const FEAT_CLOSE  = c64_disk_close
-.const FEAT_CLRCHN = c64_disk_clrchn
+.const FEAT_SETNAM = hal_storage_setnam
+.const FEAT_SETLFS = hal_storage_setlfs
+.const FEAT_OPEN   = hal_storage_open
+.const FEAT_CLOSE  = hal_storage_close
+.const FEAT_CLRCHN = hal_storage_clrchn
 #else
 disk_diag_phase:       .byte 0
 disk_diag_carry:       .byte 0
@@ -255,7 +253,7 @@ disk_setup_capture_init_status:
     jsr FEAT_CLOSE
     jsr FEAT_CLRCHN
 !dmi_create:
-    jsr c64_disk_marker_write_phys
+    jsr hal_storage_marker_write_resident
 !dmi_done:
     jsr disk_kernal_exit
 #if PLUS4

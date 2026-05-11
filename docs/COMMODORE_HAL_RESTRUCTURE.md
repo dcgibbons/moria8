@@ -403,8 +403,10 @@ Storage adapter note:
       C64 default memory is already close enough to `$C000` that resident
       adapter code caused a layout assertion failure during implementation.
 - [x] Plus/4 storage adapters point at `plus4_kernal_*` wrapper names for the
-      low-level ROM/RAM + KERNAL boundary. Transitional `c64_disk_*` aliases
-      remain inside Plus/4 only until old call sites migrate.
+      low-level ROM/RAM + KERNAL boundary. Transitional `c64_disk_*` storage
+      aliases have been removed from the Plus/4 port; common title loading,
+      Disk Setup marker writes, and marker validation now call storage HAL
+      labels instead of C64-named helpers.
 - [x] First non-alias slice: save-record filename policy is platform-owned via
       `hal_storage_save_{probe,read,write}_name` labels. Common save/load code
       no longer owns `THE.GAME`/`P4.THE.GAME` filename bytes.
@@ -455,6 +457,10 @@ Storage adapter note:
       stale `score_io.s` `#if PLUS4` entry, and
       `tools/check_hal_storage_exports.py` now requires the score filename
       labels for all three platforms.
+- [x] Replace remaining Plus/4 storage aliases with platform-owned routines.
+      C64 keeps C64-named routines inside its own implementation and C64 unit
+      fixtures; Plus/4 no longer exports C64-shaped storage compatibility
+      labels.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -515,7 +521,12 @@ Storage adapter note:
       C128 keeps the drive-probe/init helper in resident-world space through
       `hal/storage_drive.s` so the byte-tight resident disk-I/O payload does
       not grow past `$AEFF`.
-- [ ] Keep C64, C128, and Plus/4 storage implementations independently owned.
+- [x] Keep C64, C128, and Plus/4 storage implementations independently owned.
+      The last Plus/4 `c64_disk_*` compatibility labels were removed. Shared
+      title loading, marker validation, and non-C128 Disk Setup now bind
+      through `hal_storage_*`; remaining `c64_disk_*` names are confined to
+      the C64 implementation, its adapter aliases, and C64 test fixtures.
+      Manual smoke on C64, C128, and Plus/4 passed after this slice.
 - [x] Make common save/load branch only on normalized save-media errors.
       C64 unit coverage now checks `save_game` error-message selection and the
       normalized classifier directly; C128 unit coverage checks ambiguous,
