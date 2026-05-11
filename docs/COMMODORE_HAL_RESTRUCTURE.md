@@ -545,6 +545,12 @@ Storage adapter note:
       capture preserves write-protect, disk-full, and drive-not-ready codes
       through the shared DOS-status normalizer while leaving unknown statuses
       alone.
+- [x] Add a setup-status classification adapter.
+      `hal_storage_setup_status` now exposes the most recent Disk Setup
+      initialization failure as `HAL_STORAGE_STATUS_*`, and the Disk Setup
+      failure overlay uses that semantic status for write-protect, disk-full,
+      and drive-not-ready messages while preserving raw diagnostic bytes for
+      debug/status detail.
 - [ ] Extend normalized status coverage beyond save-media validation to setup,
       save stream, load stream, and command-channel failures.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.

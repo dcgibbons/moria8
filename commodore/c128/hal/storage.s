@@ -17,6 +17,7 @@
 .label hal_storage_marker_present = disk_marker_present
 .label hal_storage_marker_init = disk_marker_init
 .label hal_storage_save_media_status = disk_save_media_status
+.label hal_storage_setup_status = disk_setup_status
 .label hal_storage_setnam = KERNAL_SETNAM
 .label hal_storage_setlfs = KERNAL_SETLFS
 .label hal_storage_open = KERNAL_OPEN

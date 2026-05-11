@@ -10,6 +10,7 @@
 //  7. marker initialization does not trust X across KERNAL byte I/O
 //  8. save-media failure classifier separates wrong media from drive errors
 //  9. Disk Setup init status capture maps normalized DOS statuses
+// 10. Disk Setup status classifier returns normalized HAL statuses
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -685,6 +686,50 @@ test_start:
     jsr disk_error_capture_c128
     lda disk_status
     cmp #$99
+    beq *+5
+    jmp test_fail
+
+    // Test 10: Disk Setup status classification should return semantic HAL
+    // statuses from the same DOS-status source used by setup diagnostics.
+    jsr reset_harness_state
+    lda #$32
+    sta disk_diag_cmd_status0
+    lda #$36
+    sta disk_diag_cmd_status1
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$32
+    sta disk_diag_cmd_status1
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$34
+    sta disk_diag_cmd_status1
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$33
+    sta disk_diag_cmd_status0
+    lda #$31
+    sta disk_diag_cmd_status1
+    lda #26
+    sta disk_status
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     beq *+5
     jmp test_fail
 

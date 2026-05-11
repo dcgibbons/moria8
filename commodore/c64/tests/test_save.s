@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0412: $01 = pass, $00 = fail per test (19 tests)
+// Results at $0400-$0413: $01 = pass, $00 = fail per test (20 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #18
+    ldx #19
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -37,6 +37,7 @@ test_finish:
 
 #define SAVE_TEST_RLE
 #define STORAGE_STATUS_HELPER
+#define STORAGE_SETUP_STATUS_HELPER
 
 player_cast_spell:
 player_pray:
@@ -154,6 +155,7 @@ random_floor_in_room:
 .label hal_storage_clrchn = test_save_clrchn
 .label hal_storage_readst = test_save_readst
 .label hal_storage_save_media_status = disk_save_media_status
+.label hal_storage_setup_status = disk_setup_status
 .label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 hal_storage_init_selected_drive:
@@ -278,7 +280,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 19, $ff
+tc_results: .fill 20, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -1600,6 +1602,48 @@ t18_fail_code:
 t19_fail_code:
 !t19_store:
     sta tc_results + 18
+
+    // ============================================================
+    // Test 20: Disk Setup classifier maps raw setup status bytes to
+    // normalized HAL storage statuses.
+    // ============================================================
+    lda #26
+    sta disk_status
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq !t20_ok_26+
+    lda #2
+    jmp t20_fail_code
+!t20_ok_26:
+    lda #72
+    sta disk_status
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq !t20_ok_72+
+    lda #3
+    jmp t20_fail_code
+!t20_ok_72:
+    lda #74
+    sta disk_status
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq !t20_ok_74+
+    lda #4
+    jmp t20_fail_code
+!t20_ok_74:
+    lda #2
+    sta disk_status
+    jsr disk_setup_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t20_ok_unknown+
+    lda #5
+    jmp t20_fail_code
+!t20_ok_unknown:
+    lda #$01
+    bne !t20_store+
+t20_fail_code:
+!t20_store:
+    sta tc_results + 19
 
     jmp test_finish
 

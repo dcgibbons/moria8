@@ -364,20 +364,18 @@ uds_clear_after_modal:
     jmp msg_init
 
 uds_show_init_detail:
-    lda disk_status
-    cmp #26
+    jsr hal_storage_setup_status
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_full+
     :UDSPrint(4, UDS_LINE_COL, uds_dos_write_protect_str)
     rts
 !check_full:
-    lda disk_status
-    cmp #72
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
     bne !check_ready+
     :UDSPrint(4, UDS_LINE_COL, uds_dos_full_str)
     rts
 !check_ready:
-    lda disk_status
-    cmp #74
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
     bne !fallback+
     :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
     rts

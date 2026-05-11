@@ -15,6 +15,7 @@
 .label hal_storage_marker_init = disk_marker_init
 .label hal_storage_marker_write_resident = plus4_storage_marker_write_resident
 .label hal_storage_save_media_status = disk_save_media_status
+.label hal_storage_setup_status = disk_setup_status
 .label hal_storage_setnam = plus4_kernal_setnam
 .label hal_storage_setlfs = plus4_kernal_setlfs
 .label hal_storage_open = plus4_kernal_open

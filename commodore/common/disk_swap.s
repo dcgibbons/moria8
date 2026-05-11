@@ -210,6 +210,56 @@ disk_save_media_status:
     rts
 #endif
 
+#if C128 || PLUS4 || STORAGE_SETUP_STATUS_HELPER
+// disk_setup_status
+// Output: A = HAL_STORAGE_STATUS_* for the most recent Disk Setup init failure.
+//         Raw platform diagnostics remain in disk_status/disk_error_*.
+disk_setup_status:
+#if C128
+    lda disk_diag_cmd_status0
+    ldx disk_diag_cmd_status1
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    bne !done+
+    jmp disk_setup_status_from_raw
+!done:
+    rts
+#elif PLUS4
+    lda disk_error_dos0
+    beq !raw+
+    ldx disk_error_dos1
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    bne !done+
+!raw:
+    jsr disk_setup_status_from_raw
+!done:
+    rts
+#elif STORAGE_SETUP_STATUS_HELPER
+    jmp disk_setup_status_from_raw
+#endif
+
+disk_setup_status_from_raw:
+    lda disk_status
+    cmp #26
+    bne !check_full+
+    lda #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    rts
+!check_full:
+    cmp #72
+    bne !check_ready+
+    lda #HAL_STORAGE_STATUS_DISK_FULL
+    rts
+!check_ready:
+    cmp #74
+    bne !unknown+
+    lda #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    rts
+!unknown:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    rts
+#endif
+
 disk_require_save_media:
     lda disk_setup_done
     bne !drsm_check+
