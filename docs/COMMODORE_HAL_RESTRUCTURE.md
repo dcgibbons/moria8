@@ -551,8 +551,14 @@ Storage adapter note:
       failure overlay uses that semantic status for write-protect, disk-full,
       and drive-not-ready messages while preserving raw diagnostic bytes for
       debug/status detail.
-- [ ] Extend normalized status coverage beyond save-media validation to setup,
-      save stream, load stream, and command-channel failures.
+- [x] Add save/load stream status classification adapters.
+      `hal_storage_save_stream_status` and `hal_storage_load_stream_status`
+      expose the current save/load record stream result as `HAL_STORAGE_STATUS_*`
+      without changing the underlying sequential I/O path. C64 unit coverage
+      verifies OK, not-found, unsupported, and generic I/O classifications.
+- [ ] Extend normalized status coverage to remaining command-channel failures
+      and consume save/load stream classifications in richer user-facing
+      diagnostics.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.

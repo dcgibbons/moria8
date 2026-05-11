@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0413: $01 = pass, $00 = fail per test (20 tests)
+// Results at $0400-$0414: $01 = pass, $00 = fail per test (21 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #19
+    ldx #20
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -38,6 +38,7 @@ test_finish:
 #define SAVE_TEST_RLE
 #define STORAGE_STATUS_HELPER
 #define STORAGE_SETUP_STATUS_HELPER
+#define STORAGE_STREAM_STATUS_HELPER
 
 player_cast_spell:
 player_pray:
@@ -156,6 +157,8 @@ random_floor_in_room:
 .label hal_storage_readst = test_save_readst
 .label hal_storage_save_media_status = disk_save_media_status
 .label hal_storage_setup_status = disk_setup_status
+.label hal_storage_save_stream_status = save_stream_status
+.label hal_storage_load_stream_status = load_stream_status
 .label hal_storage_marker_present = c64_disk_marker_present
 .label hal_storage_marker_write_resident = c64_disk_marker_write_resident
 hal_storage_init_selected_drive:
@@ -280,7 +283,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 20, $ff
+tc_results: .fill 21, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -503,7 +506,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #18
+    ldx #20
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1644,6 +1647,64 @@ t19_fail_code:
 t20_fail_code:
 !t20_store:
     sta tc_results + 19
+
+    // ============================================================
+    // Test 21: Save/load stream classifiers expose semantic HAL
+    // status codes over the existing stream result bytes.
+    // ============================================================
+    lda #0
+    sta save_io_error
+    jsr hal_storage_save_stream_status
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t21_save_ok+
+    lda #2
+    jmp t21_fail_code
+!t21_save_ok:
+    lda #1
+    sta save_io_error
+    jsr hal_storage_save_stream_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t21_save_err_ok+
+    lda #3
+    jmp t21_fail_code
+!t21_save_err_ok:
+    lda #LOAD_RESULT_NOTFOUND
+    sta load_result
+    jsr hal_storage_load_stream_status
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    beq !t21_load_notfound_ok+
+    lda #4
+    jmp t21_fail_code
+!t21_load_notfound_ok:
+    lda #LOAD_RESULT_UNSUPPORTED
+    sta load_result
+    jsr hal_storage_load_stream_status
+    cmp #HAL_STORAGE_STATUS_UNSUPPORTED
+    beq !t21_load_unsupported_ok+
+    lda #5
+    jmp t21_fail_code
+!t21_load_unsupported_ok:
+    lda #LOAD_RESULT_IOERR
+    sta load_result
+    jsr hal_storage_load_stream_status
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t21_load_ioerr_ok+
+    lda #6
+    jmp t21_fail_code
+!t21_load_ioerr_ok:
+    lda #LOAD_RESULT_OK
+    sta load_result
+    jsr hal_storage_load_stream_status
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t21_status_ok+
+    lda #7
+    jmp t21_fail_code
+!t21_status_ok:
+    lda #$01
+    bne !t21_store+
+t21_fail_code:
+!t21_store:
+    sta tc_results + 20
 
     jmp test_finish
 

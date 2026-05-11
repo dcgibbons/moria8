@@ -117,10 +117,46 @@ save_magic:
     .byte SAVE_VERSION                          // Version byte
 .assert "Magic is 8 bytes", * - save_magic, SAVE_MAGIC_SIZE
 
+#import "storage_status.s"
+
+#if C128 || PLUS4 || STORAGE_STREAM_STATUS_HELPER
+// save_stream_status
+// Output: A = HAL_STORAGE_STATUS_* for the most recent save-record stream.
+save_stream_status:
+    lda save_io_error
+    beq !ok+
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    rts
+!ok:
+    lda #HAL_STORAGE_STATUS_OK
+    rts
+
+// load_stream_status
+// Output: A = HAL_STORAGE_STATUS_* for the most recent load-record stream.
+load_stream_status:
+    lda load_result
+    cmp #LOAD_RESULT_OK
+    bne !not_ok+
+    lda #HAL_STORAGE_STATUS_OK
+    rts
+!not_ok:
+    cmp #LOAD_RESULT_NOTFOUND
+    bne !unsupported+
+    lda #HAL_STORAGE_STATUS_NOT_FOUND
+    rts
+!unsupported:
+    cmp #LOAD_RESULT_UNSUPPORTED
+    bne !unknown+
+    lda #HAL_STORAGE_STATUS_UNSUPPORTED
+    rts
+!unknown:
+    lda #HAL_STORAGE_STATUS_UNKNOWN
+    rts
+#endif
+
 // ============================================================
 // Macros for concise block I/O
 // ============================================================
-#import "storage_status.s"
 
 .macro save_block(addr, size) {
     lda #<addr
@@ -452,6 +488,9 @@ save_return_c64_with_carry:
     jsr c64_restore_vic_bank0_after_serial
 #endif
 !save_error:
+#if C128 || PLUS4
+    jsr hal_storage_save_stream_status
+#endif
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
 #if PLUS4
@@ -812,6 +851,9 @@ plus4_test_load_ioerr:
 #endif
     lda #LOAD_RESULT_IOERR
     sta load_result
+#if C128 || PLUS4
+    jsr hal_storage_load_stream_status
+#endif
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
 #if C128

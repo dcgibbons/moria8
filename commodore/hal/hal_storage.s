@@ -15,6 +15,8 @@
 //   hal_storage_marker_init
 //   hal_storage_save_media_status
 //   hal_storage_setup_status
+//   hal_storage_save_stream_status
+//   hal_storage_load_stream_status
 //   hal_storage_setnam
 //   hal_storage_setlfs
 //   hal_storage_open
@@ -130,6 +132,10 @@
 // - `hal_storage_setup_status` classifies the most recent Disk Setup
 //   initialization failure. It returns A = HAL_STORAGE_STATUS_*. Platform
 //   diagnostics remain in the platform-owned disk status bytes.
+// - `hal_storage_save_stream_status` classifies the most recent save-record
+//   stream result. It returns A = HAL_STORAGE_STATUS_*.
+// - `hal_storage_load_stream_status` classifies the most recent load-record
+//   stream result. It returns A = HAL_STORAGE_STATUS_*.
 // - Callers may not assume that A/X/Y survive any OS/device call unless that
 //   specific adapter documents it.
 //
