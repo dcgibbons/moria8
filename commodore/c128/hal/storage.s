@@ -7,6 +7,7 @@
 
 #import "storage_policy.s"
 #import "storage_overlay_names.s"
+#import "storage_tier_names.s"
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit

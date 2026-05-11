@@ -15,11 +15,11 @@ c128_restore_runtime_state:
     rts
 
 // Minimal symbols required by tier_manager.s
+#import "../hal/storage_tier_names.s"
+
 reu_present: .byte 0
 reu_loading_row: .byte 0
 reu_loading_hdr: .byte 0
-reu_fn_tier_lo: .byte 0, 0, 0, 0
-reu_fn_tier_hi: .byte 0, 0, 0, 0
 c128_cache_enabled: .byte 0
 c128_cache_tiers_ready: .byte 0
 c128_cache_overlays_ready: .byte 0

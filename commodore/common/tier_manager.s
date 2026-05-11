@@ -1,5 +1,6 @@
 #importonce
 #import "generation_busy_api.s"
+#import "hal_storage_tier_test_stub.s"
 // tier_manager.s — Creature tier loading and transition management
 //
 // Manages the active creature tier. Detects tier boundaries on stair
@@ -518,21 +519,23 @@ c128_preload_all_tiers:
 
 !cpat_show_file:
     dex
-    lda reu_fn_tier_lo,x
+    lda hal_storage_tier_name_lo,x
     sta zp_ptr0
-    lda reu_fn_tier_hi,x
+    lda hal_storage_tier_name_hi,x
     sta zp_ptr0_hi
     jsr reu_show_file
 
     ldx current_tier
     dex
-    lda tier_fn_addr_lo,x
+    lda hal_storage_tier_name_len,x
     pha
-    lda tier_fn_addr_hi,x
+    lda hal_storage_tier_name_lo,x
+    pha
+    lda hal_storage_tier_name_hi,x
     tay
     pla
     tax
-    lda #12
+    pla
     jsr c128_preload_asset_load
     bcs !cpat_next+
 
@@ -622,15 +625,17 @@ tier_load_disk:
     // Select filename from table
     ldx current_tier
     dex                         // 0-based index (tier 1 → index 0)
-    lda tier_fn_addr_lo,x
+    lda hal_storage_tier_name_len,x
     pha
-    lda tier_fn_addr_hi,x
+    lda hal_storage_tier_name_lo,x
+    pha
+    lda hal_storage_tier_name_hi,x
     tay
     pla
     tax                         // X = filename addr lo, Y = hi
+    pla                         // A = filename length
 
-    // SETNAM: 12-character filename
-    lda #12
+    // SETNAM: platform-owned tier filename
     jsr $ffbd                   // KERNAL SETNAM
 
     // SETLFS: file 2, device 8, secondary 1 (load to header address)
@@ -660,24 +665,6 @@ tier_load_disk:
 #endif
     rts
 
-
-// ============================================================
-// Filename data (PETSCII — NOT screen codes)
-// ============================================================
-// "MONSTER.DB.1" through "MONSTER.DB.4" — matches d64 directory entries
-tier_fn_1:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $31  // "MONSTER.DB.1"
-tier_fn_1_end: .byte 0
-tier_fn_2:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $32  // "MONSTER.DB.2"
-tier_fn_2_end: .byte 0
-tier_fn_3:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $33  // "MONSTER.DB.3"
-tier_fn_3_end: .byte 0
-tier_fn_4:  .byte $4d, $4f, $4e, $53, $54, $45, $52, $2e, $44, $42, $2e, $34  // "MONSTER.DB.4"
-tier_fn_4_end: .byte 0
-
-tier_fn_addr_lo:
-    .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
-tier_fn_addr_hi:
-    .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
 
 tier_loading_str:
     .text "Loading..." ; .byte 0

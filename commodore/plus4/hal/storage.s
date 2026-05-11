@@ -80,6 +80,33 @@ hal_storage_title_name:
     .byte $54, $36, $34                         // "T64"
 .label hal_storage_title_name_len = * - hal_storage_title_name
 
+// Platform-owned tier data filenames. PETSCII bytes for KERNAL LOAD.
+// Lengths exclude the trailing zero; display paths use the same labels as
+// zero-terminated strings.
+hal_storage_tier_1_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$44,$42,$2e,$31 // "MONSTER.DB.1"
+.label hal_storage_tier_1_name_len = * - hal_storage_tier_1_name
+    .byte 0
+hal_storage_tier_2_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$44,$42,$2e,$32 // "MONSTER.DB.2"
+.label hal_storage_tier_2_name_len = * - hal_storage_tier_2_name
+    .byte 0
+hal_storage_tier_3_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$44,$42,$2e,$33 // "MONSTER.DB.3"
+.label hal_storage_tier_3_name_len = * - hal_storage_tier_3_name
+    .byte 0
+hal_storage_tier_4_name:
+    .byte $4d,$4f,$4e,$53,$54,$45,$52,$2e,$44,$42,$2e,$34 // "MONSTER.DB.4"
+.label hal_storage_tier_4_name_len = * - hal_storage_tier_4_name
+    .byte 0
+
+hal_storage_tier_name_lo:
+    .byte <hal_storage_tier_1_name, <hal_storage_tier_2_name, <hal_storage_tier_3_name, <hal_storage_tier_4_name
+hal_storage_tier_name_hi:
+    .byte >hal_storage_tier_1_name, >hal_storage_tier_2_name, >hal_storage_tier_3_name, >hal_storage_tier_4_name
+hal_storage_tier_name_len:
+    .byte hal_storage_tier_1_name_len, hal_storage_tier_2_name_len, hal_storage_tier_3_name_len, hal_storage_tier_4_name_len
+
 // Platform-owned overlay asset filenames. PETSCII bytes for KERNAL LOAD.
 hal_storage_overlay_start_name:
     .byte $34,$2e,$53,$54,$41,$52,$54           // "4.START"

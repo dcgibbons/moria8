@@ -3193,6 +3193,7 @@ c128_resident_world_start:
 #import "../common/dungeon_data.s"
 #import "../common/dungeon_features.s"
 #import "../common/monster.s"
+#import "hal/storage_tier_names.s"
 #import "../common/tier_manager.s"
 #import "../common/overlay.s"
 #import "../common/monster_ai.s"

@@ -59,6 +59,17 @@ REQUIRED_LABELS = (
     "hal_storage_marker_scratch_name_len",
     "hal_storage_title_name",
     "hal_storage_title_name_len",
+    "hal_storage_tier_name_lo",
+    "hal_storage_tier_name_hi",
+    "hal_storage_tier_name_len",
+    "hal_storage_tier_1_name",
+    "hal_storage_tier_1_name_len",
+    "hal_storage_tier_2_name",
+    "hal_storage_tier_2_name_len",
+    "hal_storage_tier_3_name",
+    "hal_storage_tier_3_name_len",
+    "hal_storage_tier_4_name",
+    "hal_storage_tier_4_name_len",
     "hal_storage_overlay_name_lo",
     "hal_storage_overlay_name_hi",
     "hal_storage_overlay_name_len",
@@ -90,6 +101,8 @@ OVERLAY_NAMES = {
     "plus4": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
 }
 
+TIER_NAMES = ("1", "2", "3", "4")
+
 
 def expanded_source(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -113,15 +126,15 @@ def exported_labels(path: Path) -> set[str]:
     return labels
 
 
-def missing_overlay_terminators(platform: str, path: Path) -> list[str]:
+def missing_length_terminators(path: Path, prefix: str, names: tuple[str, ...], table_label: str) -> list[str]:
     text = expanded_source(path)
     missing: list[str] = []
-    for name in OVERLAY_NAMES[platform]:
-        label = f"hal_storage_overlay_{name}_name"
+    for name in names:
+        label = f"{prefix}_{name}_name"
         pattern = (
             rf"(?ms)^{label}:\s*"
             rf".*?^\.label\s+{label}_len\s*=\s*\*\s*-\s*{label}\s*"
-            rf"(?P<after>.*?)(?=^hal_storage_overlay_[A-Za-z0-9_]+_name:|^hal_storage_overlay_name_lo:)"
+            rf"(?P<after>.*?)(?=^{prefix}_[A-Za-z0-9_]+_name:|^{table_label}:)"
         )
         match = re.search(pattern, text)
         if not match:
@@ -147,7 +160,23 @@ def main() -> int:
             for label in missing:
                 print(f"  {label}")
             failed = True
-        terminator_missing = missing_overlay_terminators(platform, path)
+        terminator_missing = missing_length_terminators(
+            path,
+            "hal_storage_tier",
+            TIER_NAMES,
+            "hal_storage_tier_name_lo",
+        )
+        if terminator_missing:
+            print(f"{platform}: tier filename display terminator errors in {path.relative_to(ROOT)}")
+            for item in terminator_missing:
+                print(f"  {item}")
+            failed = True
+        terminator_missing = missing_length_terminators(
+            path,
+            "hal_storage_overlay",
+            OVERLAY_NAMES[platform],
+            "hal_storage_overlay_name_lo",
+        )
         if terminator_missing:
             print(f"{platform}: overlay filename display terminator errors in {path.relative_to(ROOT)}")
             for item in terminator_missing:

@@ -436,6 +436,18 @@ Storage adapter note:
       Overlay filename labels are length-based for KERNAL calls, but each
       filename must also carry a trailing zero for REU preload display.
       `tools/check_hal_storage_exports.py` now gates that terminator contract.
+- [x] Fifth filename slice: tier data filename policy is platform-owned via
+      `hal_storage_tier_name_{lo,hi,len}` and per-tier
+      `hal_storage_tier_{1,2,3,4}_name` labels. Common tier loading, C64 REU
+      preload display, and C128 cache preload no longer own
+      `MONSTER.DB.1` through `MONSTER.DB.4` filename bytes. C128 keeps the
+      tier filename bytes in the resident-world payload through
+      `hal/storage_tier_names.s`; putting those bytes in the Bank 0 startup
+      image would cross the resident-world boundary. Isolated C64 unit
+      assemblies use `common/hal_storage_tier_test_stub.s`. Tier filename
+      lengths are KERNAL length labels, and each tier filename must also carry
+      a trailing zero for preload display; `tools/check_hal_storage_exports.py`
+      gates that contract.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -473,7 +485,8 @@ Storage adapter note:
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
       marker filenames are done; title-art asset filenames are done; overlay
-      asset filenames are done. Tier data filenames and score filenames remain.
+      asset filenames are done; tier data filenames are done. Score filenames
+      remain.
 - [x] Move logical file numbers and secondary addresses into platform storage.
 - [x] Move command channel reads into platform storage.
 - [x] Move save/load sequential I/O call binding to storage HAL adapter labels.

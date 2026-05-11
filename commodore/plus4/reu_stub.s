@@ -48,8 +48,8 @@ reu_show_file:
 reu_show_status:
     rts
 
-reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
-reu_fn_tier_hi: .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
+.label reu_fn_tier_lo = hal_storage_tier_name_lo
+.label reu_fn_tier_hi = hal_storage_tier_name_hi
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
 
