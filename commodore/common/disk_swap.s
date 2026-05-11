@@ -176,10 +176,9 @@ disk_save_media_status:
     lda disk_error_dos0
     beq !wrong+
     lda disk_error_dos0
-    cmp #$36                    // Missing marker file: 62,FILE NOT FOUND.
-    bne !unknown+
-    lda disk_error_dos1
-    cmp #$32
+    ldx disk_error_dos1
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
     bne !unknown+
 !wrong:
     lda #HAL_STORAGE_STATUS_WRONG_MEDIA
@@ -198,11 +197,11 @@ disk_save_media_status:
     jsr hal_storage_read_command_status
     jsr disk_kernal_exit
     lda disk_diag_cmd_status0
-    cmp #$36                    // 62,FILE NOT FOUND = readable wrong media.
+    ldx disk_diag_cmd_status1
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
     bne !ioerr+
-    lda disk_diag_cmd_status1
-    cmp #$32
-    beq !wrong+
+    jmp !wrong+
 !ioerr:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts

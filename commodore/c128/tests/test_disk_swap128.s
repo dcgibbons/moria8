@@ -17,6 +17,8 @@
 
 .encoding "screencode_mixed"
 
+#define STORAGE_STATUS_HELPER
+
 #import "../../common/zeropage.s"
 
 .const SCREEN_COLS = 80

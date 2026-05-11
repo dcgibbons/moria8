@@ -28,6 +28,7 @@
 // ============================================================
 #define C128_PRODUCT_OVERLAY_RUNTIME
 #define C128_PRODUCT_MODAL_PERSIST
+#define STORAGE_STATUS_HELPER
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2

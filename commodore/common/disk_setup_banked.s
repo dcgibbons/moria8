@@ -197,25 +197,21 @@ disk_marker_init:
 
 disk_error_capture_c128:
     lda disk_diag_cmd_status0
-    cmp #$32                    // "2"
+    ldx disk_diag_cmd_status1
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_72+
-    lda disk_diag_cmd_status1
-    cmp #$36                    // "6"
-    bne !done+
     lda #26
     sta disk_status
     rts
 !check_72:
-    cmp #$37                    // "7"
-    bne !done+
-    lda disk_diag_cmd_status1
-    cmp #$32                    // "2"
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
     bne !check_74+
     lda #72
     sta disk_status
     rts
 !check_74:
-    cmp #$34                    // "4"
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
     bne !done+
     lda #74
     sta disk_status

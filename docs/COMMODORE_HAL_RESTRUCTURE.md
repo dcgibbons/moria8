@@ -532,6 +532,14 @@ Storage adapter note:
       normalized classifier directly; C128 unit coverage checks ambiguous,
       wrong-media, and command-channel-backed marker failures; Plus/4 runtime
       gates cover setup, wrong-media, save-write, and load-resume behavior.
+- [x] Add the first shared DOS-status normalization primitive.
+      `storage_status_from_dos_digits` maps command-channel status digits for
+      `00`, `26`, `62`, `72`, and `74` into `HAL_STORAGE_STATUS_*` values.
+      C64 unit coverage exercises the mapping table directly; C128 setup
+      status capture and C128/Plus/4 save-media classification now use the
+      shared semantic helper where they already have command-channel status
+      digits. The helper is opt-in via `STORAGE_STATUS_HELPER` and is not
+      linked into the byte-tight C64 product image.
 - [ ] Extend normalized status coverage beyond save-media validation to setup,
       save stream, load stream, and command-channel failures.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.

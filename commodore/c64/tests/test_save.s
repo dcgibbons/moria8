@@ -4,7 +4,7 @@
 // recount_monsters, recount_floor_items, save-version compatibility helpers,
 // split item stat save/load persistence.
 //
-// Results at $0400-$0411: $01 = pass, $00 = fail per test (18 tests)
+// Results at $0400-$0412: $01 = pass, $00 = fail per test (19 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(bootstrap)
@@ -25,7 +25,7 @@ bootstrap:
 // Must be in low memory (before imports) so BRK address is below $A000.
 // VICE breakpoint on $A000+ can false-trigger during BASIC ROM execution.
 test_finish:
-    ldx #17
+    ldx #18
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -36,6 +36,7 @@ test_finish:
 .pc = * "Test Body"
 
 #define SAVE_TEST_RLE
+#define STORAGE_STATUS_HELPER
 
 player_cast_spell:
 player_pray:
@@ -277,7 +278,7 @@ rle_decompress_map:
 !:  rts
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 18, $ff
+tc_results: .fill 19, $ff
 tc_count: .byte 0
 
 // Verification buffer — 256 bytes at $CF00 (floor item area, safe during tests 2-3)
@@ -500,7 +501,7 @@ test_start:
     sta rle_work_hi
 
     // Initialize result area to $ff (untested)
-    ldx #16
+    ldx #18
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1541,6 +1542,64 @@ t17_fail_code:
 t18_fail_code:
 !t18_store:
     sta tc_results + 17
+
+    // ============================================================
+    // Test 19: DOS command-channel digits normalize to semantic
+    // HAL storage statuses.
+    // ============================================================
+    lda #$30
+    ldx #$30
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !t19_ok_00+
+    lda #2
+    jmp t19_fail_code
+!t19_ok_00:
+    lda #$32
+    ldx #$36
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    beq !t19_ok_26+
+    lda #3
+    jmp t19_fail_code
+!t19_ok_26:
+    lda #$36
+    ldx #$32
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_NOT_FOUND
+    beq !t19_ok_62+
+    lda #4
+    jmp t19_fail_code
+!t19_ok_62:
+    lda #$37
+    ldx #$32
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    beq !t19_ok_72+
+    lda #5
+    jmp t19_fail_code
+!t19_ok_72:
+    lda #$37
+    ldx #$34
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    beq !t19_ok_74+
+    lda #6
+    jmp t19_fail_code
+!t19_ok_74:
+    lda #$33
+    ldx #$31
+    jsr storage_status_from_dos_digits
+    cmp #HAL_STORAGE_STATUS_UNKNOWN
+    beq !t19_ok_unknown+
+    lda #7
+    jmp t19_fail_code
+!t19_ok_unknown:
+    lda #$01
+    bne !t19_store+
+t19_fail_code:
+!t19_store:
+    sta tc_results + 18
 
     jmp test_finish
 
