@@ -43,6 +43,12 @@
 //   hal_storage_save_read_name_len
 //   hal_storage_save_write_name
 //   hal_storage_save_write_name_len
+//   hal_storage_score_read_name
+//   hal_storage_score_read_name_len
+//   hal_storage_score_write_name
+//   hal_storage_score_write_name_len
+//   hal_storage_score_scratch_name
+//   hal_storage_score_scratch_name_len
 //   hal_storage_init_command
 //   hal_storage_marker_magic
 //   hal_storage_marker_magic_len
@@ -103,9 +109,9 @@
 //   runtime visibility.
 // - Filename, command, and transfer buffers passed to KERNAL-like services must
 //   be visible to the OS/device implementation while the call executes.
-// - Save-record, save-disk marker, title-art, tier-data, and overlay filename
-//   labels are platform-owned PETSCII/KERNAL strings. Common code must not
-//   hardcode those asset filenames.
+// - Save-record, high-score, save-disk marker, title-art, tier-data, and
+//   overlay filename labels are platform-owned PETSCII/KERNAL strings. Common
+//   code must not hardcode those asset filenames.
 // - `hal_storage_read_command_status` reads the active save device's command
 //   channel status and stores platform diagnostics in the platform-owned disk
 //   error/status bytes. It is callable after `hal_storage_enter_os`; callers

@@ -74,6 +74,26 @@ hal_storage_save_read_name:
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
 
+// Platform-owned high-score filenames. PETSCII bytes for KERNAL SETNAM.
+// These must live in resident RAM below BASIC/KERNAL ROM because the Plus/4
+// KERNAL reads filename bytes while ROM is visible over $8000-$BFFF.
+hal_storage_score_read_name:
+    .byte $30, $3a                              // "0:"
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45 // "P4.HALL.FAME"
+    .byte $2c, $53, $2c, $52                    // ",S,R"
+.label hal_storage_score_read_name_len = * - hal_storage_score_read_name
+
+hal_storage_score_write_name:
+    .byte $40, $30, $3a                         // "@0:"
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45 // "P4.HALL.FAME"
+    .byte $2c, $53, $2c, $57                    // ",S,W"
+.label hal_storage_score_write_name_len = * - hal_storage_score_write_name
+
+hal_storage_score_scratch_name:
+    .byte $53, $30, $3a                         // "S0:"
+    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45 // "P4.HALL.FAME"
+.label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
+
 // Platform-owned title-art filename. PETSCII bytes for KERNAL LOAD.
 // The Plus/4 port currently reuses the C64 title asset.
 hal_storage_title_name:

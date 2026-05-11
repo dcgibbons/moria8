@@ -135,7 +135,6 @@ commodore/common/score_io.s	kernal-symbol	KERNAL_OPEN
 commodore/common/score_io.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/score_io.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/score_io.s	raw-c64-bank-port	$01
-commodore/common/score_io.s	target-conditional	#if PLUS4
 commodore/common/sound.s	raw-c64-bank-port	$01
 commodore/common/sound.s	raw-vic-cia-sid-ted-vdc-address	$d400
 commodore/common/spell_data.s	raw-c64-bank-port	$01

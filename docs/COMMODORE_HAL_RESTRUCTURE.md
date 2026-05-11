@@ -448,6 +448,13 @@ Storage adapter note:
       lengths are KERNAL length labels, and each tier filename must also carry
       a trailing zero for preload display; `tools/check_hal_storage_exports.py`
       gates that contract.
+- [x] Sixth filename slice: high-score filename policy is platform-owned via
+      `hal_storage_score_{read,write,scratch}_name` labels. Common high-score
+      I/O no longer owns `HALL.OF.FAME`/`P4.HALL.FAME` filename bytes or the
+      Plus/4-specific filename branch. The HAL boundary allowlist dropped the
+      stale `score_io.s` `#if PLUS4` entry, and
+      `tools/check_hal_storage_exports.py` now requires the score filename
+      labels for all three platforms.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -482,11 +489,11 @@ Storage adapter note:
       `HAL_STORAGE_STATUS_WRONG_MEDIA` and other save-media failures as
       `HAL_STORAGE_STATUS_UNKNOWN`; richer device-status normalization
       remains future work because the resident image is byte-tight.
-- [ ] Move filenames into platform storage implementations.
+- [x] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
       marker filenames are done; title-art asset filenames are done; overlay
-      asset filenames are done; tier data filenames are done. Score filenames
-      remain.
+      asset filenames are done; tier data filenames are done; score filenames
+      are done.
 - [x] Move logical file numbers and secondary addresses into platform storage.
 - [x] Move command channel reads into platform storage.
 - [x] Move save/load sequential I/O call binding to storage HAL adapter labels.

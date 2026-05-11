@@ -44,9 +44,9 @@ hiscore_load:
     bne !hl_clear-
 
     // Open file for reading
-    lda #hi_read_fname_len
-    ldx #<hi_read_fname
-    ldy #>hi_read_fname
+    lda #hal_storage_score_read_name_len
+    ldx #<hal_storage_score_read_name
+    ldy #>hal_storage_score_read_name
     jsr KERNAL_SETNAM
     lda #HISCORE_FILE_NUM
     ldx save_device
@@ -135,9 +135,9 @@ hiscore_save:
     rts
 !hs_ready:
     // Scratch existing file (ignore errors)
-    lda #hi_scratch_len
-    ldx #<hi_scratch_cmd
-    ldy #>hi_scratch_cmd
+    lda #hal_storage_score_scratch_name_len
+    ldx #<hal_storage_score_scratch_name
+    ldy #>hal_storage_score_scratch_name
     jsr KERNAL_SETNAM
     lda #hal_storage_cmd_channel
     ldx save_device
@@ -151,9 +151,9 @@ hiscore_save:
     jsr KERNAL_CLRCHN
 
     // Open for writing
-    lda #hi_write_fname_len
-    ldx #<hi_write_fname
-    ldy #>hi_write_fname
+    lda #hal_storage_score_write_name_len
+    ldx #<hal_storage_score_write_name
+    ldy #>hal_storage_score_write_name
     jsr KERNAL_SETNAM
     lda #HISCORE_FILE_NUM
     ldx save_device
@@ -222,36 +222,3 @@ hiscore_save:
     jsr KERNAL_CLOSE
 !hs_fail:
     rts
-
-// ============================================================
-// High score file I/O strings (PETSCII for KERNAL)
-// ============================================================
-hi_read_fname:
-    .byte $30, $3a              // "0:"
-#if PLUS4
-    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
-#else
-    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
-#endif
-    .byte $2c, $53, $2c, $52   // ",S,R"
-.label hi_read_fname_len = * - hi_read_fname
-
-hi_write_fname:
-    .byte $40                   // "@"
-    .byte $30, $3a              // "0:"
-#if PLUS4
-    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
-#else
-    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
-#endif
-    .byte $2c, $53, $2c, $57   // ",S,W"
-.label hi_write_fname_len = * - hi_write_fname
-
-hi_scratch_cmd:
-    .byte $53, $30, $3a         // "S0:"
-#if PLUS4
-    .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45  // "P4.HALL.FAME"
-#else
-    .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45  // "HALL.OF.FAME"
-#endif
-.label hi_scratch_len = * - hi_scratch_cmd
