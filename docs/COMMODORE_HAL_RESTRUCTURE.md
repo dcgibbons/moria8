@@ -422,6 +422,9 @@ Storage adapter note:
       is the required adapter entry point for classifying the most recent
       save-media validation failure. The older boolean
       `hal_storage_save_media_error_is_io` transition surface has been removed.
+- [x] Third filename slice: title-art filename policy is platform-owned via
+      `hal_storage_title_name`. Common title loading and C128 title-cache
+      loading no longer own `T64`/`T128` filename bytes.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -458,8 +461,8 @@ Storage adapter note:
       remains future work because the resident image is byte-tight.
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
-      marker filenames are done; title/overlay asset filenames, tier data
-      filenames, and score filenames remain.
+      marker filenames are done; title-art asset filenames are done. Overlay
+      asset filenames, tier data filenames, and score filenames remain.
 - [x] Move logical file numbers and secondary addresses into platform storage.
 - [x] Move command channel reads into platform storage.
 - [x] Move save/load sequential I/O call binding to storage HAL adapter labels.

@@ -12,8 +12,6 @@
 #if C128
 .const TITLE_ART_COL_OFFSET = (SCREEN_COLS - 40) / 2
 #endif
-.const TITLE_FILENAME_LEN = title_filename_end - title_filename
-
 // ============================================================
 // title_load_and_draw — Load and render the title screen
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
@@ -23,9 +21,9 @@ title_load_and_draw:
     jmp c128_title_load_and_draw_cached
 #else
     // SETNAM: platform-specific title asset filename
-    lda #TITLE_FILENAME_LEN
-    ldx #<title_filename
-    ldy #>title_filename
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
 #if PLUS4
     jsr c64_disk_setnam
 #else
@@ -251,13 +249,3 @@ title_put_block_char:
     rts
 tbc_save_x: .byte 0
 #endif
-
-// Filename for KERNAL LOAD (PETSCII, NOT null-terminated — KERNAL uses length)
-// Must use explicit PETSCII bytes — .text produces screen codes under screencode_upper
-title_filename:
-#if C128
-    .byte $54, $31, $32, $38                       // "T128"
-#else
-    .byte $54, $36, $34                             // "T64"
-#endif
-title_filename_end:

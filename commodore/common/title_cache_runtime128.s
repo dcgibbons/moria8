@@ -20,9 +20,9 @@ c128_title_load_and_draw_cached:
     ldx #0
     jsr safe_setbnk
 
-    lda #title_filename_end - title_filename
-    ldx #<title_filename
-    ldy #>title_filename
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
     jsr KERNAL_SETNAM
 
     lda #2

@@ -72,3 +72,8 @@ hal_storage_save_read_name:
     .byte $54, $48, $45, $2e, $47, $41, $4d, $45 // "THE.GAME"
     .byte $2c, $53, $2c, $52                    // ",S,R"
 .label hal_storage_save_read_name_len = * - hal_storage_save_read_name
+
+// Platform-owned title-art filename. PETSCII bytes for KERNAL LOAD.
+hal_storage_title_name:
+    .byte $54, $36, $34                         // "T64"
+.label hal_storage_title_name_len = * - hal_storage_title_name
