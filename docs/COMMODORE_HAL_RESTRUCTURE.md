@@ -540,6 +540,11 @@ Storage adapter note:
       shared semantic helper where they already have command-channel status
       digits. The helper is opt-in via `STORAGE_STATUS_HELPER` and is not
       linked into the byte-tight C64 product image.
+- [x] Add C128 unit coverage for setup-status capture.
+      `disk_swap128` now verifies that Disk Setup's C128 init-failure status
+      capture preserves write-protect, disk-full, and drive-not-ready codes
+      through the shared DOS-status normalizer while leaving unknown statuses
+      alone.
 - [ ] Extend normalized status coverage beyond save-media validation to setup,
       save stream, load stream, and command-channel failures.
 - [ ] Preserve raw platform diagnostics in debug/status bytes.

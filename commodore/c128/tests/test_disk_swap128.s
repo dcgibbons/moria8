@@ -9,6 +9,7 @@
 //  6. initialized Disk Setup commit reports carry clear/success
 //  7. marker initialization does not trust X across KERNAL byte I/O
 //  8. save-media failure classifier separates wrong media from drive errors
+//  9. Disk Setup init status capture maps normalized DOS statuses
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -630,6 +631,60 @@ test_start:
     jmp test_fail
     jsr disk_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
+    beq *+5
+    jmp test_fail
+
+    // Test 9: Disk Setup init status capture should use the shared DOS
+    // normalizer for the friendly setup-status codes it preserves.
+    jsr reset_harness_state
+    lda #$32                    // 26, WRITE PROTECT ON
+    sta disk_diag_cmd_status0
+    lda #$36
+    sta disk_diag_cmd_status1
+    lda #0
+    sta disk_status
+    jsr disk_error_capture_c128
+    lda disk_status
+    cmp #26
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37                    // 72, DISK FULL
+    sta disk_diag_cmd_status0
+    lda #$32
+    sta disk_diag_cmd_status1
+    lda #0
+    sta disk_status
+    jsr disk_error_capture_c128
+    lda disk_status
+    cmp #72
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$37                    // 74, DRIVE NOT READY
+    sta disk_diag_cmd_status0
+    lda #$34
+    sta disk_diag_cmd_status1
+    lda #0
+    sta disk_status
+    jsr disk_error_capture_c128
+    lda disk_status
+    cmp #74
+    beq *+5
+    jmp test_fail
+
+    jsr reset_harness_state
+    lda #$33                    // 31 remains unmapped for setup capture.
+    sta disk_diag_cmd_status0
+    lda #$31
+    sta disk_diag_cmd_status1
+    lda #$99
+    sta disk_status
+    jsr disk_error_capture_c128
+    lda disk_status
+    cmp #$99
     beq *+5
     jmp test_fail
 
