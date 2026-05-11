@@ -586,8 +586,14 @@ Storage adapter note:
       storage exports. C128 unit coverage verifies the labels expose the native
       diagnostic bytes; C64 has a static no-growth contract for the compact
       aliases; Plus/4 exports its existing diagnostic byte set.
-- [ ] Extend richer save/load diagnostics beyond the current compressed
-      message set.
+- [x] First richer save/load diagnostics slice.
+      C128 and Plus/4 save/load message selection now maps semantic
+      write-protect, disk-full, and drive-not-ready storage statuses to
+      friendly direct messages instead of always falling back to `Disk error!`.
+      C64 remains product byte-neutral and continues to use the existing
+      compressed generic save/load messages.
+- [ ] Continue richer save/load diagnostics beyond the first friendly-message
+      mappings, especially raw diagnostic display for still-unknown failures.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
 

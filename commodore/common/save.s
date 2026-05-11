@@ -178,6 +178,50 @@ load_stream_status_message:
     rts
 #endif
 
+#if C128 || PLUS4
+// save_print_storage_status
+// Input: A = HAL_STORAGE_STATUS_*.
+// Prints a friendly direct storage-status message when the semantic status is
+// known; otherwise prints the existing compressed generic disk error.
+save_print_storage_status:
+    cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
+    bne !disk_full+
+    lda #<save_write_protected_str
+    ldy #>save_write_protected_str
+    jmp save_print_direct_status
+!disk_full:
+    cmp #HAL_STORAGE_STATUS_DISK_FULL
+    bne !not_ready+
+    lda #<save_disk_full_str
+    ldy #>save_disk_full_str
+    jmp save_print_direct_status
+!not_ready:
+    cmp #HAL_STORAGE_STATUS_DEVICE_NOT_READY
+    bne !generic+
+    lda #<save_drive_not_ready_str
+    ldy #>save_drive_not_ready_str
+    jmp save_print_direct_status
+!generic:
+    ldx #HSTR_SAVE_IOERR
+    jsr huff_print_msg
+#if PLUS4
+    jsr save_append_disk_detail_plus4
+#endif
+    rts
+
+save_print_direct_status:
+    sta zp_ptr0
+    sty zp_ptr0_hi
+    jmp msg_print
+
+save_write_protected_str:
+    .text "Disk is write-protected." ; .byte 0
+save_disk_full_str:
+    .text "Disk is full." ; .byte 0
+save_drive_not_ready_str:
+    .text "Drive is not ready." ; .byte 0
+#endif
+
 // ============================================================
 // Macros for concise block I/O
 // ============================================================
@@ -279,15 +323,30 @@ save_game:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !save_bad_media+
+#if C128 || PLUS4
+    jsr save_print_storage_status
+    jmp !save_media_after_print+
+#else
     ldx #HSTR_SAVE_IOERR
+#endif
     jmp !save_media_fail+
 !save_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
+#if PLUS4
+    txa
+    pha
+#endif
     jsr huff_print_msg
 #if PLUS4
+    pla
+    tax
+    cpx #HSTR_SAVE_IOERR
+    bne !save_media_no_detail+
     jsr save_append_disk_detail_plus4
+!save_media_no_detail:
 #endif
+!save_media_after_print:
     jsr input_get_modal_dismiss_key
 save_return_fail:
 #if !C128 && !PLUS4
@@ -514,14 +573,25 @@ save_return_c64_with_carry:
 !save_error:
 #if C128 || PLUS4
     jsr hal_storage_save_stream_status
-    jsr save_stream_status_message
+    jsr save_print_storage_status
+    jmp !save_error_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
 #endif
+#if PLUS4
+    txa
+    pha
+#endif
     jsr huff_print_msg
 #if PLUS4
+    pla
+    tax
+    cpx #HSTR_SAVE_IOERR
+    bne !save_error_no_detail+
     jsr save_append_disk_detail_plus4
+!save_error_no_detail:
 #endif
+!save_error_after_print:
     jsr input_get_modal_dismiss_key
     jmp save_return_fail
 
@@ -546,7 +616,12 @@ load_game:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !load_bad_media+
+#if C128 || PLUS4
+    jsr save_print_storage_status
+    jmp !load_media_after_print+
+#else
     ldx #HSTR_SAVE_IOERR
+#endif
     jmp !load_media_fail+
 !load_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
@@ -555,6 +630,7 @@ load_game:
 plus4_test_load_media_fail:
 #endif
     jsr huff_print_msg
+!load_media_after_print:
     clc
     rts
 !load_media_ok:
@@ -889,11 +965,13 @@ plus4_test_load_ioerr:
     sta load_result
 #if C128 || PLUS4
     jsr hal_storage_load_stream_status
-    jsr load_stream_status_message
+    jsr save_print_storage_status
+    jmp !load_fail_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
 #endif
     jsr huff_print_msg
+!load_fail_after_print:
 #if C128
     clc
     rts
