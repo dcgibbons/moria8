@@ -47,6 +47,7 @@ commodore/common/game_loop.s	target-conditional	#if C128
 commodore/common/game_loop_helpers.s	raw-c64-bank-port	$01
 commodore/common/game_loop_helpers.s	target-conditional	#if !C128
 commodore/common/game_loop_helpers.s	target-conditional	#if C128
+commodore/common/hal_storage_overlay_test_stub.s	target-conditional	#if !C64_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4
 commodore/common/huffman.s	target-conditional	#if C128
 commodore/common/huffman_data.s	raw-c64-bank-port	$01
 commodore/common/input_contract.s	raw-c64-bank-port	$01
@@ -77,7 +78,6 @@ commodore/common/overlay.s	raw-c64-bank-port	$01
 commodore/common/overlay.s	raw-vic-cia-sid-ted-vdc-address	$dd00
 commodore/common/overlay.s	target-conditional	#if !C128
 commodore/common/overlay.s	target-conditional	#if C128
-commodore/common/overlay.s	target-conditional	#if PLUS4
 commodore/common/player.s	raw-c64-bank-port	$01
 commodore/common/player.s	target-conditional	#if C128
 commodore/common/player_create.s	raw-c64-bank-port	$01
@@ -111,7 +111,6 @@ commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df07
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df08
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df09
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df0a
-commodore/common/reu.s	target-conditional	#if !C128
 commodore/common/reu.s	target-conditional	#if C128
 commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc04
 commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc05

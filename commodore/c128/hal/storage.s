@@ -6,6 +6,7 @@
 // when ROM visibility is required, matching the current disk runtime pattern.
 
 #import "storage_policy.s"
+#import "storage_overlay_names.s"
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit

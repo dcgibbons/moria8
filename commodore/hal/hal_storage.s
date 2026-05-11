@@ -54,6 +54,27 @@
 //   hal_storage_marker_scratch_name_len
 //   hal_storage_title_name
 //   hal_storage_title_name_len
+//   hal_storage_overlay_name_lo
+//   hal_storage_overlay_name_hi
+//   hal_storage_overlay_name_len
+//   hal_storage_overlay_start_name
+//   hal_storage_overlay_start_name_len
+//   hal_storage_overlay_town_name
+//   hal_storage_overlay_town_name_len
+//   hal_storage_overlay_death_name
+//   hal_storage_overlay_death_name_len
+//   hal_storage_overlay_gen_name
+//   hal_storage_overlay_gen_name_len
+//   hal_storage_overlay_help_name
+//   hal_storage_overlay_help_name_len
+//   hal_storage_overlay_ui_name
+//   hal_storage_overlay_ui_name_len
+//   hal_storage_overlay_items_name
+//   hal_storage_overlay_items_name_len
+//
+// Overlay filename lengths exclude the trailing zero. The zero is still part
+// of the storage-HAL data contract because REU preload display prints these
+// same filename labels as zero-terminated strings.
 //
 // Raw KERNAL-like calls preserve the platform's existing low-level carry and
 // register behavior. Higher-level HAL calls use this error convention:
@@ -73,7 +94,7 @@
 //   be visible to the OS/device implementation while the call executes.
 // - Save-record and save-disk marker filename labels are platform-owned
 //   PETSCII/KERNAL strings. Common save/load/setup code must not hardcode
-//   save-record, marker, or title-art filenames.
+//   save-record, marker, title-art, or overlay asset filenames.
 // - `hal_storage_read_command_status` reads the active save device's command
 //   channel status and stores platform diagnostics in the platform-owned disk
 //   error/status bytes. It is callable after `hal_storage_enter_os`; callers

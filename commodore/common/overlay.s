@@ -16,9 +16,8 @@
 //   OVL_ITEMS       = 7  Low-frequency item actions (read/aim/use/refuel)
 //   OVL_SPELL       = 8  Spell/prayer effect execution
 //
-// Disk filenames:
-//   C64  -> 64.START, 64.TOWN, 64.DEATH, 64.GEN, 64.HELP, 64.UI, 64.ITEMS, 64.SPELL
-//   C128 -> 128.START, 128.TOWN, 128.DEATH, 128.GEN, 128.HELP, 128.UI, 128.ITEMS, 128.SPELL
+// Disk filenames are platform-owned by the storage HAL:
+// `hal_storage_overlay_name_{lo,hi,len}`.
 // REU: stashed alongside creature tiers at startup
 
 // ============================================================
@@ -38,6 +37,8 @@
 #else
 .const OVL_COUNT       = 8
 #endif
+
+#import "hal_storage_overlay_test_stub.s"
 
 // ============================================================
 // State
@@ -193,11 +194,11 @@ c128_overlay_fn_guard_check:
     ldx #0
 !fn_loop:
     lda ovl_fn_guard_expected,x
-    cmp ovl_fn_start,x
+    cmp hal_storage_overlay_start_name,x
     beq !next+
     sta c128_overlay_fn_guard_expect
     stx c128_overlay_fn_guard_index
-    lda ovl_fn_start,x
+    lda hal_storage_overlay_start_name,x
     sta c128_overlay_fn_guard_actual
     brk
 !next:
@@ -227,9 +228,9 @@ ovl_fn_guard_expected:
     .byte $36,$34,$2e,$55,$49,$00
     .byte $36,$34,$2e,$49,$54,$45,$4d,$53,$00
 #endif
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items
+    .byte <hal_storage_overlay_start_name, <hal_storage_overlay_town_name, <hal_storage_overlay_death_name, <hal_storage_overlay_gen_name, <hal_storage_overlay_help_name, <hal_storage_overlay_ui_name, <hal_storage_overlay_items_name
+    .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name
+    .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len
 ovl_fn_guard_expected_end:
 #if !C128
 c128_overlay_fn_guard_stage:   .byte 0
@@ -262,17 +263,17 @@ overlay_load_disk:
     lda ol_target
     sta c128_overlay_load_disk_target
 #endif
-    lda ovl_fn_len,x
+    lda hal_storage_overlay_name_len,x
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_disk_len
 #endif
     pha
-    lda ovl_fn_addr_lo,x
+    lda hal_storage_overlay_name_lo,x
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_disk_lo
 #endif
     pha
-    lda ovl_fn_addr_hi,x
+    lda hal_storage_overlay_name_hi,x
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_disk_hi
 #endif
@@ -287,11 +288,11 @@ overlay_load_disk:
     ldx #$1b
     jsr c128_stack_guard_snapshot_banking
 #endif
-    lda ovl_fn_len,x
+    lda hal_storage_overlay_name_len,x
     pha                     // Save filename length
-    lda ovl_fn_addr_lo,x
+    lda hal_storage_overlay_name_lo,x
     pha
-    lda ovl_fn_addr_hi,x
+    lda hal_storage_overlay_name_hi,x
     tay
     pla
     tax                     // X = filename addr lo, Y = hi
@@ -398,70 +399,7 @@ overlay_fetch_reu:
     plp
     rts
 
-
-// ============================================================
-// Overlay filename data (PETSCII for KERNAL — NOT screen codes)
-// ============================================================
 #if !C128
-#if PLUS4
-ovl_fn_start: .byte $34,$2e,$53,$54,$41,$52,$54                  // "4.START"
-ovl_fn_start_end:
-.byte 0
-ovl_fn_town:  .byte $34,$2e,$54,$4f,$57,$4e                      // "4.TOWN"
-ovl_fn_town_end:
-.byte 0
-ovl_fn_death: .byte $34,$2e,$44,$45,$41,$54,$48                  // "4.DEATH"
-ovl_fn_death_end:
-.byte 0
-ovl_fn_gen:   .byte $34,$2e,$47,$45,$4e                          // "4.GEN"
-ovl_fn_gen_end:
-.byte 0
-ovl_fn_help:  .byte $34,$2e,$48,$45,$4c,$50                      // "4.HELP"
-ovl_fn_help_end:
-.byte 0
-ovl_fn_ui:    .byte $34,$2e,$55,$49                              // "4.UI"
-ovl_fn_ui_end:
-.byte 0
-ovl_fn_items: .byte $34,$2e,$49,$54,$45,$4d,$53                  // "4.ITEMS"
-ovl_fn_items_end:
-.byte 0
-ovl_fn_spell: .byte $34,$2e,$53,$50,$45,$4c,$4c                  // "4.SPELL"
-ovl_fn_spell_end:
-.byte 0
-#else
-ovl_fn_start: .byte $36,$34,$2e,$53,$54,$41,$52,$54              // "64.START"
-ovl_fn_start_end:
-.byte 0
-ovl_fn_town:  .byte $36,$34,$2e,$54,$4f,$57,$4e                  // "64.TOWN"
-ovl_fn_town_end:
-.byte 0
-ovl_fn_death: .byte $36,$34,$2e,$44,$45,$41,$54,$48              // "64.DEATH"
-ovl_fn_death_end:
-.byte 0
-ovl_fn_gen:   .byte $36,$34,$2e,$47,$45,$4e                      // "64.GEN"
-ovl_fn_gen_end:
-.byte 0
-ovl_fn_help:  .byte $36,$34,$2e,$48,$45,$4c,$50                  // "64.HELP"
-ovl_fn_help_end:
-.byte 0
-ovl_fn_ui:    .byte $36,$34,$2e,$55,$49                          // "64.UI"
-ovl_fn_ui_end:
-.byte 0
-ovl_fn_items: .byte $36,$34,$2e,$49,$54,$45,$4d,$53              // "64.ITEMS"
-ovl_fn_items_end:
-.byte 0
-ovl_fn_spell: .byte $36,$34,$2e,$53,$50,$45,$4c,$4c              // "64.SPELL"
-ovl_fn_spell_end:
-.byte 0
-#endif
-
-ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items, <ovl_fn_spell
-ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items, >ovl_fn_spell
-ovl_fn_len:
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items, ovl_fn_spell_end - ovl_fn_spell
-
 
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
@@ -512,11 +450,11 @@ c128_preload_all_overlays:
 
     ldx ol_target
     dex
-    lda ovl_fn_len,x
+    lda hal_storage_overlay_name_len,x
     pha
-    lda ovl_fn_addr_lo,x
+    lda hal_storage_overlay_name_lo,x
     pha
-    lda ovl_fn_addr_hi,x
+    lda hal_storage_overlay_name_hi,x
     tay
     pla
     tax

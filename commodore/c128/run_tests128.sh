@@ -1078,13 +1078,14 @@ common = Path("..") / "common"
 reu_text = (common / "reu.s").read_text()
 tier_text = (common / "tier_manager.s").read_text()
 overlay_text = (common / "overlay.s").read_text()
+storage_overlay_text = (Path("hal") / "storage_overlay_names.s").read_text()
 required = {
     "death/restart prompt exact copy": 'game_over_str:\n    .text "R)eboot S)tart Q)uit" ; .byte 0\ngame_over_str_end:',
     "runtime_low_filename/display alias": 'runtime_low_filename:\nruntime_low_display_str:\n    .text "128.RUNTIME"\nruntime_low_filename_end:\n    .byte 0\n.const RUNTIME_LOW_FILENAME_LEN = runtime_low_filename_end - runtime_low_filename',
     "runtime_input null-terminated load filename": 'runtime_input_filename_end:\n    .byte 0\n.const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename',
     "runtime_common null-terminated load filename": 'runtime_common_filename_end:\n    .byte 0\n.const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename',
     "REU tier display points at load filenames": 'reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4',
-    "REU overlay display points at load filenames": 'reu_fn_ovl_lo:  .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items',
+    "REU overlay display points at HAL load filenames": '.label reu_fn_ovl_lo = hal_storage_overlay_name_lo',
 }
 
 sources = {
@@ -1093,7 +1094,7 @@ sources = {
     "runtime_input null-terminated load filename": main_text,
     "runtime_common null-terminated load filename": main_text,
     "REU tier display points at load filenames": reu_text,
-    "REU overlay display points at load filenames": reu_text,
+    "REU overlay display points at HAL load filenames": reu_text,
 }
 
 missing = [name for name, token in required.items() if token not in sources[name]]
@@ -1115,9 +1116,9 @@ for name in ("tier_fn_1_end", "tier_fn_2_end", "tier_fn_3_end", "tier_fn_4_end")
         print(f"{name} must terminate the shared tier filename literal")
         raise SystemExit(1)
 
-for name in ("ovl_fn_start_end", "ovl_fn_town_end", "ovl_fn_death_end", "ovl_fn_gen_end", "ovl_fn_help_end", "ovl_fn_ui_end", "ovl_fn_items_end"):
-    if f"{name}:\n.byte 0" not in main_text or f"{name}:\n.byte 0" not in overlay_text:
-        print(f"{name} must terminate the shared C64/C128 overlay filename literal")
+for name in ("hal_storage_overlay_start_name", "hal_storage_overlay_town_name", "hal_storage_overlay_death_name", "hal_storage_overlay_gen_name", "hal_storage_overlay_help_name", "hal_storage_overlay_ui_name", "hal_storage_overlay_items_name"):
+    if f"{name}:" not in storage_overlay_text or f"{name}_len" not in storage_overlay_text:
+        print(f"{name} must be a platform-owned C128 overlay filename literal with explicit length")
         raise SystemExit(1)
 
 print("ok")

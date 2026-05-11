@@ -50,9 +50,7 @@ reu_show_status:
 
 reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
 reu_fn_tier_hi: .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
-reu_fn_ovl_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items, <ovl_fn_spell
-reu_fn_ovl_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items, >ovl_fn_spell
+.label reu_fn_ovl_lo = hal_storage_overlay_name_lo
+.label reu_fn_ovl_hi = hal_storage_overlay_name_hi
 
 reu_loading_hdr: .text "Loading into REU:" ; .byte 0

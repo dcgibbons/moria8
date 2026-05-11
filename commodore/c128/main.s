@@ -2714,33 +2714,7 @@ c128_startup_overlay_executing: .byte 0
 // to overlay code, which was getting trampled before startup overlay loads.
 overlay_state_block_start:
 current_overlay: .byte 0
-ovl_fn_start: .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54              // "128.START"
-ovl_fn_start_end:
-.byte 0
-ovl_fn_town:  .byte $31,$32,$38,$2e,$54,$4f,$57,$4e                  // "128.TOWN"
-ovl_fn_town_end:
-.byte 0
-ovl_fn_death: .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48              // "128.DEATH"
-ovl_fn_death_end:
-.byte 0
-ovl_fn_gen:   .byte $31,$32,$38,$2e,$47,$45,$4e                      // "128.GEN"
-ovl_fn_gen_end:
-.byte 0
-ovl_fn_help:  .byte $31,$32,$38,$2e,$48,$45,$4c,$50                  // "128.HELP"
-ovl_fn_help_end:
-.byte 0
-ovl_fn_ui:    .byte $31,$32,$38,$2e,$55,$49                          // "128.UI"
-ovl_fn_ui_end:
-.byte 0
-ovl_fn_items: .byte $31,$32,$38,$2e,$49,$54,$45,$4d,$53              // "128.ITEMS"
-ovl_fn_items_end:
-.byte 0
-ovl_fn_addr_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
-ovl_fn_addr_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
-ovl_fn_len:
-    .byte ovl_fn_start_end - ovl_fn_start, ovl_fn_town_end - ovl_fn_town, ovl_fn_death_end - ovl_fn_death, ovl_fn_gen_end - ovl_fn_gen, ovl_fn_help_end - ovl_fn_help, ovl_fn_ui_end - ovl_fn_ui, ovl_fn_items_end - ovl_fn_items
+#import "hal/storage_overlay_names.s"
 ovl_reu_start_lo: .byte 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_start_hi: .byte 0, 0, 0, 0, 0, 0, 0, 0
 ovl_reu_size_lo:  .byte 0, 0, 0, 0, 0, 0, 0, 0

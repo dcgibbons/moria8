@@ -425,6 +425,17 @@ Storage adapter note:
 - [x] Third filename slice: title-art filename policy is platform-owned via
       `hal_storage_title_name`. Common title loading and C128 title-cache
       loading no longer own `T64`/`T128` filename bytes.
+- [x] Fourth filename slice: overlay asset filename policy is platform-owned
+      via `hal_storage_overlay_name_{lo,hi,len}`. Common overlay loading and
+      REU preload display no longer own `64.*`/`4.*`/`128.*` overlay filename
+      bytes. C128 keeps the bytes in the overlay-state area through
+      `hal/storage_overlay_names.s` so the byte-tight Disk I/O resident payload
+      does not grow. Isolated C64 unit assemblies that intentionally omit the
+      storage HAL use `common/hal_storage_overlay_test_stub.s`; product builds
+      are guarded out of that shim and must export the real platform labels.
+      Overlay filename labels are length-based for KERNAL calls, but each
+      filename must also carry a trailing zero for REU preload display.
+      `tools/check_hal_storage_exports.py` now gates that terminator contract.
 - [ ] Replace remaining aliases with real platform-owned routines only one slice at a
       time, with C64/C128/Plus4 runtime gates named before each migration.
 
@@ -461,8 +472,8 @@ Storage adapter note:
       remains future work because the resident image is byte-tight.
 - [ ] Move filenames into platform storage implementations.
       Save-record filenames are done; save-disk marker filenames, title/overlay
-      marker filenames are done; title-art asset filenames are done. Overlay
-      asset filenames, tier data filenames, and score filenames remain.
+      marker filenames are done; title-art asset filenames are done; overlay
+      asset filenames are done. Tier data filenames and score filenames remain.
 - [x] Move logical file numbers and secondary addresses into platform storage.
 - [x] Move command channel reads into platform storage.
 - [x] Move save/load sequential I/O call binding to storage HAL adapter labels.

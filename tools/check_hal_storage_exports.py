@@ -59,6 +59,23 @@ REQUIRED_LABELS = (
     "hal_storage_marker_scratch_name_len",
     "hal_storage_title_name",
     "hal_storage_title_name_len",
+    "hal_storage_overlay_name_lo",
+    "hal_storage_overlay_name_hi",
+    "hal_storage_overlay_name_len",
+    "hal_storage_overlay_start_name",
+    "hal_storage_overlay_start_name_len",
+    "hal_storage_overlay_town_name",
+    "hal_storage_overlay_town_name_len",
+    "hal_storage_overlay_death_name",
+    "hal_storage_overlay_death_name_len",
+    "hal_storage_overlay_gen_name",
+    "hal_storage_overlay_gen_name_len",
+    "hal_storage_overlay_help_name",
+    "hal_storage_overlay_help_name_len",
+    "hal_storage_overlay_ui_name",
+    "hal_storage_overlay_ui_name_len",
+    "hal_storage_overlay_items_name",
+    "hal_storage_overlay_items_name_len",
 )
 
 PLATFORM_FILES = {
@@ -67,14 +84,26 @@ PLATFORM_FILES = {
     "plus4": ROOT / "commodore/plus4/hal/storage.s",
 }
 
+OVERLAY_NAMES = {
+    "c64": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
+    "c128": ("start", "town", "death", "gen", "help", "ui", "items"),
+    "plus4": ("start", "town", "death", "gen", "help", "ui", "items", "spell"),
+}
 
-def exported_labels(path: Path) -> set[str]:
+
+def expanded_source(path: Path) -> str:
     text = path.read_text(encoding="utf-8", errors="replace")
-    labels: set[str] = set()
+    chunks = [text]
     for match in re.finditer(r'(?m)^#import\s+"([^"]+)"', text):
         imported = path.parent / match.group(1)
         if imported.exists():
-            labels.update(exported_labels(imported))
+            chunks.append(expanded_source(imported))
+    return "\n".join(chunks)
+
+
+def exported_labels(path: Path) -> set[str]:
+    text = expanded_source(path)
+    labels: set[str] = set()
     for match in re.finditer(r"(?m)^([A-Za-z_][A-Za-z0-9_]*):", text):
         labels.add(match.group(1))
     for match in re.finditer(r"(?m)^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text):
@@ -82,6 +111,26 @@ def exported_labels(path: Path) -> set[str]:
     for match in re.finditer(r"(?m)^\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text):
         labels.add(match.group(1))
     return labels
+
+
+def missing_overlay_terminators(platform: str, path: Path) -> list[str]:
+    text = expanded_source(path)
+    missing: list[str] = []
+    for name in OVERLAY_NAMES[platform]:
+        label = f"hal_storage_overlay_{name}_name"
+        pattern = (
+            rf"(?ms)^{label}:\s*"
+            rf".*?^\.label\s+{label}_len\s*=\s*\*\s*-\s*{label}\s*"
+            rf"(?P<after>.*?)(?=^hal_storage_overlay_[A-Za-z0-9_]+_name:|^hal_storage_overlay_name_lo:)"
+        )
+        match = re.search(pattern, text)
+        if not match:
+            missing.append(f"{label}: missing length block")
+            continue
+        after = match.group("after")
+        if not re.search(r"(?m)^\s*\.byte\s+0\s*(?://.*)?$", after):
+            missing.append(f"{label}: missing display terminator after length label")
+    return missing
 
 
 def main() -> int:
@@ -97,6 +146,12 @@ def main() -> int:
             print(f"{platform}: missing storage HAL exports in {path.relative_to(ROOT)}")
             for label in missing:
                 print(f"  {label}")
+            failed = True
+        terminator_missing = missing_overlay_terminators(platform, path)
+        if terminator_missing:
+            print(f"{platform}: overlay filename display terminator errors in {path.relative_to(ROOT)}")
+            for item in terminator_missing:
+                print(f"  {item}")
             failed = True
 
     if failed:

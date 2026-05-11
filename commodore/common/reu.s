@@ -658,6 +658,7 @@ reu_stash_overlays:
 #else
     .const REU_OVERLAY_COUNT = 8
 #endif
+#import "hal_storage_overlay_test_stub.s"
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
@@ -800,20 +801,12 @@ reu_show_status:
     .byte 0, 0                  // Operand bytes filled by init patch
 
 // Display pointer tables (0-based index). These intentionally point at the
-// KERNAL filename literals; do not add separate display filename copies.
+// platform-owned KERNAL filename literals; do not add separate display copies.
 reu_fn_tier_lo: .byte <tier_fn_1, <tier_fn_2, <tier_fn_3, <tier_fn_4
 reu_fn_tier_hi: .byte >tier_fn_1, >tier_fn_2, >tier_fn_3, >tier_fn_4
-reu_fn_ovl_lo:
-    .byte <ovl_fn_start, <ovl_fn_town, <ovl_fn_death, <ovl_fn_gen, <ovl_fn_help, <ovl_fn_ui, <ovl_fn_items
-#if !C128
-    .byte <ovl_fn_spell
-#endif
-reu_fn_ovl_hi:
-    .byte >ovl_fn_start, >ovl_fn_town, >ovl_fn_death, >ovl_fn_gen, >ovl_fn_help, >ovl_fn_ui, >ovl_fn_items
-#if !C128
-    .byte >ovl_fn_spell
-#endif
-.assert "REU overlay filename table count stays in sync", reu_fn_ovl_hi - reu_fn_ovl_lo, REU_OVERLAY_COUNT
+.label reu_fn_ovl_lo = hal_storage_overlay_name_lo
+.label reu_fn_ovl_hi = hal_storage_overlay_name_hi
+.assert "REU overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)
 reu_loading_hdr: .text "Loading into REU:" ; .byte 0
