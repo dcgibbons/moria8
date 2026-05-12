@@ -75,10 +75,16 @@ marker_read_count:       .byte 0
 command_read_count:      .byte 0
 marker_readst_override:  .byte 0
 marker_bad_byte:         .byte 0
+marker_missing_until_write:.byte 0
 command_open_fail:       .byte 0
 w_chkin_lfn_seen:        .byte 0
 c128_media_state:        .byte C128_MEDIA_UNKNOWN
 marker_write_buf:        .fill 6, 0
+ui_action_count:         .byte 0
+ui_action_log:           .fill 8, 0
+ui_menu_result:          .byte 3      // DISK_UI_RES_TWO_DRIVE
+ui_confirm_result:       .byte 5      // DISK_UI_RES_YES
+ui_init_result:          .byte 5      // DISK_UI_RES_YES
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
@@ -174,7 +180,7 @@ reset_harness_state:
     bpl !clr-
     rts
 .label state_start = screen_put_string_calls
-.label state_end = marker_write_buf + DISK_MARKER_MAGIC_LEN
+.label state_end = ui_init_result + 1
 
 input_get_modal_dismiss_key:
     inc input_modal_calls
@@ -294,6 +300,13 @@ w_chrin:
 !marker:
     ldx marker_read_count
     lda disk_marker_magic,x
+    ldx marker_missing_until_write
+    beq !check_bad+
+    ldx marker_write_count
+    bne !check_bad+
+    eor #$ff
+    jmp !marker_ok+
+!check_bad:
     ldx marker_bad_byte
     beq !marker_ok+
     eor #$ff
@@ -344,6 +357,36 @@ test_storage_read_command_status:
     rts
 
 tramp_disk_setup_ui_action:
+    ldx ui_action_count
+    cpx #8
+    bcs !skip_log+
+    lda disk_ui_action
+    sta ui_action_log,x
+!skip_log:
+    inc ui_action_count
+
+    lda disk_ui_action
+    cmp #DISK_UI_ACT_MENU
+    bne !not_menu+
+    lda ui_menu_result
+    sta disk_ui_result
+    clc
+    rts
+!not_menu:
+    cmp #DISK_UI_ACT_CONFIRM_DRIVE9
+    bne !not_confirm+
+    lda ui_confirm_result
+    sta disk_ui_result
+    clc
+    rts
+!not_confirm:
+    cmp #DISK_UI_ACT_INIT_PROMPT
+    bne !not_init+
+    lda ui_init_result
+    sta disk_ui_result
+    clc
+    rts
+!not_init:
     lda #DISK_UI_RES_OK
     sta disk_ui_result
     clc
@@ -864,6 +907,109 @@ test_start:
     jmp test_fail
     lda hal_storage_diag_dos1
     cmp #$34
+    beq *+5
+    jmp test_fail
+
+    // Test 13: Disk Setup's initial drive-9 confirmation path initializes a
+    // missing marker and commits drive 9 as the save device.
+    jsr reset_harness_state
+    lda #1
+    sta marker_missing_until_write
+    lda #DISK_UI_RES_YES
+    sta ui_confirm_result
+    sta ui_init_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_mode
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda save_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda disk_status
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #3
+    beq *+5
+    jmp test_fail
+    lda ui_action_log
+    cmp #DISK_UI_ACT_CONFIRM_DRIVE9
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 2
+    cmp #DISK_UI_ACT_INIT_PROMPT
+    beq *+5
+    jmp test_fail
+
+    // Test 14: if the initial drive-9 prompt is declined, the menu path can
+    // still choose the separate save drive and initialize the marker.
+    jsr reset_harness_state
+    lda #1
+    sta marker_missing_until_write
+    lda #DISK_UI_RES_NO
+    sta ui_confirm_result
+    lda #DISK_UI_RES_TWO_DRIVE
+    sta ui_menu_result
+    lda #DISK_UI_RES_YES
+    sta ui_init_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_mode
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda save_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda disk_status
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #4
+    beq *+5
+    jmp test_fail
+    lda ui_action_log
+    cmp #DISK_UI_ACT_CONFIRM_DRIVE9
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 2
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INIT_PROMPT
     beq *+5
     jmp test_fail
 

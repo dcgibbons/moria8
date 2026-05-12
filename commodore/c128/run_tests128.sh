@@ -1953,6 +1953,7 @@ run_vic40_clean_boot_smoke() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2074,6 +2075,7 @@ build_real_boot_diag_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2141,6 +2143,7 @@ build_overlay_transition_diag_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2208,6 +2211,7 @@ build_title_art_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2425,6 +2429,7 @@ build_save_write_product_assets() {
             -write out/128.input.prg "128.input" \
             -write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2531,6 +2536,7 @@ build_save_media_fail_product_assets() {
             -write out/128.input.prg "128.input" \
             -write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2639,6 +2645,7 @@ build_partial_failure_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2704,6 +2711,7 @@ build_overlay_partial_failure_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2769,6 +2777,7 @@ build_death_overlay_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2834,6 +2843,7 @@ build_overlay_state_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -2904,6 +2914,7 @@ build_scripted_input_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3073,6 +3084,7 @@ build_perf_p1_trace_boot_assets() {
                 -write out/128.input.prg "128.input" \
                 -write out/128.proj.prg "128.proj" \
                 -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
                 -write out/128.world.prg "128.world" \
                 -write out/128.item.prg "128.item" \
                 -write out/128.select.prg "128.select" \
@@ -3147,6 +3159,7 @@ build_scripted_spell_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3212,6 +3225,7 @@ build_scripted_spell_cancel_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3277,6 +3291,7 @@ build_scripted_book_overlay_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3342,6 +3357,7 @@ build_scripted_spell_list_overlay_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3407,6 +3423,7 @@ build_scripted_prayer_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -3542,6 +3559,7 @@ build_load_resume_boot_assets() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -4115,6 +4133,7 @@ run_boot_d64_smoke() {
             -write out/128.input.prg "128.input" \
 			-write out/128.proj.prg "128.proj" \
             -write out/128.fdisk.prg "128.fdisk" \
+            -write out/128.diskio.prg "128.diskio" \
             -write out/128.world.prg "128.world" \
             -write out/128.item.prg "128.item" \
             -write out/128.select.prg "128.select" \
@@ -4453,12 +4472,12 @@ run_boot_title_save_write_product_smoke() {
     : > "$log_file"
 
     {
-        printf 'attach "%s" 9\n' "$abs_save_d64"
         echo "until \$${pass_addr}"
-        echo "g"
+        echo "quit"
     } > "$mon_file"
 
     "$VICE" -console -nativemonitor -warp -80col -autostart "$abs_boot_d64" \
+        -drive9type 1541 -attach9rw -9 "$abs_save_d64" \
         -moncommands "$mon_file" -monlog -monlogname "$log_file" \
         -limitcycles 320000000 +sound -sounddev dummy \
         +remotemonitor +binarymonitor >/dev/null 2>&1

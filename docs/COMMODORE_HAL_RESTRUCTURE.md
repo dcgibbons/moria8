@@ -85,6 +85,10 @@ C128 baseline:
 - [x] `make test128-fast` runs `disk_swap128`
       (`commodore/c128/tests/test_disk_swap128.s`) for C128 disk setup and
       save-media prompt policy.
+- [x] `disk_swap128` directly covers the C128 Disk Setup coordinator paths
+      that confirm drive 9, handle a missing marker, initialize the marker,
+      and commit the selected save drive without relying on product monitor
+      choreography.
 - [x] `make test128-fast` runs `main_loop128`
       (`commodore/c128/tests/test_main_loop128.s`) for C128 title/game
       save-load dispatch behavior and disk setup failure/success branches.
@@ -99,6 +103,10 @@ C128 baseline:
 - [x] `make test128-fast-smoke` includes `boot_title_save_write_product_smoke`,
       proving the product save path can create/update `THE.GAME` on a mounted
       save disk and leave a SEQ save file visible in the host disk image.
+- [ ] C128 still needs a product-level Disk Setup success smoke equivalent to
+      the C64 and Plus/4 gates. Do not reintroduce the previous breakpoint /
+      remote-monitor runner; this gate needs a deterministic in-product pass
+      signal or another self-terminating harness boundary.
 
 Plus/4 baseline:
 
