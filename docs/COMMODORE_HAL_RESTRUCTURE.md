@@ -103,10 +103,14 @@ C128 baseline:
 - [x] `make test128-fast-smoke` includes `boot_title_save_write_product_smoke`,
       proving the product save path can create/update `THE.GAME` on a mounted
       save disk and leave a SEQ save file visible in the host disk image.
+- [x] `make test128-fast-smoke` includes `marker_init_d64_smoke`, a minimal
+      real-D64 storage smoke that runs the C128 marker-init path against a
+      freshly formatted drive-9 save disk and verifies the persistent
+      `MORIA8.ID` contents are exactly `M8SAVE`.
 - [ ] C128 still needs a product-level Disk Setup success smoke equivalent to
-      the C64 and Plus/4 gates. Do not reintroduce the previous breakpoint /
-      remote-monitor runner; this gate needs a deterministic in-product pass
-      signal or another self-terminating harness boundary.
+      the C64 and Plus/4 gates if we want UI-level coverage of that exact
+      path. The lower-level real-D64 marker-init smoke is the current storage
+      setup proof; do not treat monitor stops alone as semantic proof.
 
 Plus/4 baseline:
 
@@ -611,13 +615,15 @@ Storage adapter note:
       save continue into the overwrite probe.
 - [ ] Continue richer save/load diagnostics beyond the first friendly-message
       mappings, especially raw diagnostic display for still-unknown failures.
-- [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
+- [x] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
       Current C128 runtime coverage protects title load missing/mounted save,
       product save-write, save-media failure display, and load-resume. The
       save-media failure smoke uses a deterministic test-only marker-read
       failure after the loaded game reaches the command loop; the lower-level
-      `disk_swap128` unit owns the media-state assertion.
+      `disk_swap128` unit owns the media-state assertion. C128 setup now has a
+      real-D64 marker-init smoke that verifies the host disk image contains a
+      valid `MORIA8.ID` marker after the C128 storage path runs.
 
 ### Phase 5: Common-Code Purity Ratchet
 
@@ -669,8 +675,9 @@ Storage adapter note:
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
       C64 now has product setup, save-media-fail, load-resume, and save-write smokes;
-      C128 now has product title-load missing/mounted-save, save-media-fail,
-      load-resume, and save-write smokes.
+      C128 now has real-D64 marker initialization, product title-load
+      missing/mounted-save, save-media-fail, load-resume, and save-write
+      smokes.
 
 ## Normalized Storage Error ABI
 
