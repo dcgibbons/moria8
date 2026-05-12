@@ -77,7 +77,14 @@ disk_marker_init:
     sta disk_diag_scratch_status1
     lda disk_diag_scratch_status0
     cmp #$30
+    beq !dmi_scratch_check_00_01+
+    cmp #$36
     bne !dmi_scratch_fail+
+    lda disk_diag_scratch_status1
+    cmp #$32
+    beq !dmi_create+
+    jmp !dmi_scratch_fail+
+!dmi_scratch_check_00_01:
     lda disk_diag_scratch_status1
     cmp #$30
     beq !dmi_create+

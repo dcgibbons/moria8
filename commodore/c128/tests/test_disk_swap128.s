@@ -603,6 +603,53 @@ test_start:
     beq *+5
     jmp test_fail
 
+    // Test 8b: scratching a missing marker on a fresh save disk can report
+    // DOS 62,FILE NOT FOUND. That is nonfatal for the scratch phase; creation
+    // and verification must still proceed.
+    jsr reset_harness_state
+    lda #9
+    sta save_device
+    lda #1
+    sta marker_missing_until_write
+    lda #$36                    // 62 after scratch
+    sta cmd_status_bytes
+    lda #$32
+    sta cmd_status_bytes + 1
+    lda #$30                    // 00 after write/close
+    sta cmd_status_bytes + 2
+    sta cmd_status_bytes + 3
+    sec
+    jsr disk_marker_init
+    bcc *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda marker_read_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda disk_status
+    beq *+5
+    jmp test_fail
+    lda disk_diag_scratch_status0
+    cmp #$36
+    beq *+5
+    jmp test_fail
+    lda disk_diag_scratch_status1
+    cmp #$32
+    beq *+5
+    jmp test_fail
+    lda disk_diag_write_status0
+    cmp #$30
+    beq *+5
+    jmp test_fail
+    lda disk_diag_write_status1
+    cmp #$30
+    beq *+5
+    jmp test_fail
+
     // Test 8: C128 save-media failures must report detached/unready media as
     // disk errors, not as "Wrong Save Disk."; readable media with a mismatched
     // or missing marker remains wrong-save-disk.

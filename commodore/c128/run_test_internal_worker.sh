@@ -109,7 +109,16 @@ log_file="$(test128_tmp_file "test128_${NAME}.log")"
     -limitcycles "$CYCLES" +sound -sounddev dummy \
     +remotemonitor +binarymonitor >/dev/null 2>&1
 
-if grep -qi "^UNTIL: .*C:\$${pass_addr}" "$log_file"; then
+pass_addr_lc="$(printf '%s' "$pass_addr" | tr '[:upper:]' '[:lower:]')"
+if [ -n "${fail_addr:-}" ]; then
+    fail_addr_lc="$(printf '%s' "$fail_addr" | tr '[:upper:]' '[:lower:]')"
+    if grep -qiE "Stop on[[:space:]]+exec[[:space:]]+${fail_addr_lc}" "$log_file"; then
+        printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "hit test_fail" >> "$RESULT_FILE"
+        exit 0
+    fi
+fi
+
+if grep -qiE "Stop on[[:space:]]+exec[[:space:]]+${pass_addr_lc}" "$log_file"; then
     printf 'PASS\t%s\t%s\t\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" >> "$RESULT_FILE"
 else
     printf 'FAIL\t%s\t%s\t%s\n' "$NAME" "$(( $(test128_now_ms) - start_ms ))" "execution failed" >> "$RESULT_FILE"
