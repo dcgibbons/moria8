@@ -1052,6 +1052,161 @@ run_scripted_detect_evil_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_disk_setup_product_smoke() {
+    local name="disk_setup_product_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT \
+            -o out/moria_disk_setup_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_disk_setup_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_disk_setup_smoke.prg "moria64" \
+            -write out/64.bank "64.bank" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" \
+            -write out/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local save_d64="out/moria_disk_setup_save.d64"
+    rm -f "$save_d64"
+    if ! "$C1541" -format "moria8 save,m8" d64 "$save_d64" >"$build_log" 2>&1; then
+        echo "FAIL (save disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr fail_addr
+    pass_addr=$(awk '/\.disk_setup_commit_initialized$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    fail_addr=$(awk '/\.c64_test_disk_setup_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+        echo "FAIL (missing disk-setup smoke symbols in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc fail_lc
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+    fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        echo "break \$${fail_addr}"
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -drive9type 1541 -8 "$scripted_d64" -attach9rw -9 "$save_d64" -autostart "$scripted_d64" \
+        -moncommands "$mon_file" \
+        -limitcycles 900000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    local run_log
+    run_log=$(mktemp -t "test_${name}_runlog")
+    awk 'seen { print } /Monitor playback command: g/ { seen=1 }' "$tty_log" > "$run_log"
+
+    if grep -qiE "Stop on  exec ${pass_lc}" "$run_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$run_log"; then
+        local dir_list
+        if ! dir_list=$("$C1541" -attach "$save_d64" -list 2>&1); then
+            echo "FAIL (save disk listing error)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        if echo "$dir_list" | grep -qi '"MORIA8.ID".*SEQ'; then
+            echo "PASS"
+            PASS=$((PASS + 1))
+        else
+            echo "FAIL (save marker not present as SEQ)"
+            echo "$dir_list" | tail -20 | sed 's/^/    /'
+            FAIL=$((FAIL + 1))
+        fi
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qiE "Stop on  exec ${fail_lc}" "$run_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$run_log"; then
+        echo "FAIL (scripted input exhausted)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (disk-setup flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (disk-setup flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach disk-setup initialized trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_save_write_product_smoke() {
     local name="save_write_product_smoke"
     echo -n "  $name: "
@@ -1772,6 +1927,7 @@ run_scripted_spell_cast_smoke
 run_scripted_book_overlay_smoke
 run_scripted_spell_list_overlay_smoke
 run_scripted_dungeon_target_spell_smoke
+run_disk_setup_product_smoke
 run_load_resume_product_smoke
 run_save_media_fail_product_smoke
 run_save_write_product_smoke

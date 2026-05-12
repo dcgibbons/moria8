@@ -69,6 +69,9 @@ C64 baseline:
       dispatch behavior and disk setup failure/success branches.
 - [x] `make test64` runs `score` (`commodore/c64/tests/test_score.s`) for the
       score-storage path.
+- [x] `make test64` runs `disk_setup_product_smoke`, proving the product title
+      Disk Setup path initializes an empty save disk on drive 9 and leaves
+      `MORIA8.ID` visible as a SEQ file in the host save disk image.
 - [x] `make test64` runs `save_write_product_smoke`, proving the product load
       path can resume from a generated save, run the product save command, and
       leave `THE.GAME` visible as a SEQ file in the host save disk image.
@@ -657,7 +660,7 @@ Storage adapter note:
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
-      C64 now has product save-media-fail, load-resume, and save-write smokes;
+      C64 now has product setup, save-media-fail, load-resume, and save-write smokes;
       C128 now has product title-load missing/mounted-save, save-media-fail,
       load-resume, and save-write smokes.
 

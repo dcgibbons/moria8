@@ -1207,6 +1207,11 @@ c64_test_spell_pass_sym:
 #endif
 #endif
 
+#if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
+c64_test_disk_setup_fail_input_sym:
+    brk
+#endif
+
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_write_fail_input_sym:
     brk
