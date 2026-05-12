@@ -603,10 +603,10 @@ Storage adapter note:
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
       Current C128 runtime coverage protects title load missing/mounted save,
-      product save-write, and load-resume. A monitor-level detached-drive smoke
-      was attempted but is not accepted as a gate until it can model the same
-      media state as manual disk detachment without false overwrite-prompt
-      stops.
+      product save-write, save-media failure display, and load-resume. The
+      save-media failure smoke uses a deterministic test-only marker-read
+      failure after the loaded game reaches the command loop; the lower-level
+      `disk_swap128` unit owns the media-state assertion.
 
 ### Phase 5: Common-Code Purity Ratchet
 
@@ -657,7 +657,9 @@ Storage adapter note:
 - [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
-      C64 and C128 now have product load-resume and save-write smokes.
+      C64 now has product save-media-fail, load-resume, and save-write smokes;
+      C128 now has product title-load missing/mounted-save, save-media-fail,
+      load-resume, and save-write smokes.
 
 ## Normalized Storage Error ABI
 

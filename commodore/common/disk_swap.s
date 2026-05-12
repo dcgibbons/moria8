@@ -482,6 +482,22 @@ disk_marker_present:
     sta disk_diag_lfn
     lda #hal_storage_marker_sec_read
     sta disk_diag_sec
+#if C128_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
+    lda c128_test_input_idx
+    cmp #3
+    bcc !dmp_test_normal+
+    lda #74
+    sta disk_status
+    lda #$81
+    sta disk_diag_phase
+    lda #$37
+    sta disk_diag_cmd_status0
+    lda #$34
+    sta disk_diag_cmd_status1
+    sec
+    rts
+!dmp_test_normal:
+#endif
     jsr disk_kernal_enter
 
     lda #hal_storage_marker_read_name_len
