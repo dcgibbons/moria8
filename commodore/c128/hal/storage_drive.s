@@ -28,6 +28,7 @@ hal_storage_probe_media:
     rts
 
 // Best-effort drive init for the selected prompt device.
+// Output: carry clear = drive reported OK, carry set = init/status failure.
 hal_storage_init_selected_drive:
     lda #2
     ldx #<hal_storage_init_command
@@ -38,9 +39,25 @@ hal_storage_init_selected_drive:
     ldy #hal_storage_cmd_channel
     jsr w_setlfs
     jsr w_open
-    bcs !done+
+    bcs !fail_open+
     lda #hal_storage_cmd_channel
     jsr w_close
-!done:
     jsr w_clrchn
+    jsr c128_storage_read_command_status
+    jsr disk_command_status
+    cmp #HAL_STORAGE_STATUS_OK
+    beq !ok+
+    jsr disk_error_capture_c128
+    sec
+    rts
+!fail_open:
+    lda #74
+    sta disk_status
+    jsr w_clrchn
+    sec
+    rts
+!ok:
+    lda #0
+    sta disk_status
+    clc
     rts

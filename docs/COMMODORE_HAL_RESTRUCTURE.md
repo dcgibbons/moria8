@@ -592,10 +592,21 @@ Storage adapter note:
       friendly direct messages instead of always falling back to `Disk error!`.
       C64 remains product byte-neutral and continues to use the existing
       compressed generic save/load messages.
+- [x] Tighten C128 save-media ownership after drive re-init failures.
+      The C128 storage drive-init adapter now returns carry from the command
+      channel status, and C128 media ownership is only updated to program/save
+      media after a successful init. `disk_swap128` covers the failure case so
+      a failed save-drive re-init clears `c128_media_state` instead of letting
+      save continue into the overwrite probe.
 - [ ] Continue richer save/load diagnostics beyond the first friendly-message
       mappings, especially raw diagnostic display for still-unknown failures.
 - [ ] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
+      Current C128 runtime coverage protects title load missing/mounted save,
+      product save-write, and load-resume. A monitor-level detached-drive smoke
+      was attempted but is not accepted as a gate until it can model the same
+      media state as manual disk detachment without false overwrite-prompt
+      stops.
 
 ### Phase 5: Common-Code Purity Ratchet
 

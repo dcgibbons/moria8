@@ -307,6 +307,15 @@ disk_prompt_save:
     bne !dps_prompt+
     jsr input_prepare_modal_dismiss_key
     jsr disk_init_drive
+    bcc !dps_save_ready+
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+    sec
+    rts
+!dps_save_ready:
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    clc
     rts
 !dps_prompt:
 #else
@@ -391,25 +400,36 @@ disk_prompt:
     sta $01
     rts
 #else
+    php
     lda #10
     jsr screen_clear_row
     lda #11
     jsr screen_clear_row
+    plp
+    bcc !dp_init_ok+
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+    sec
+    rts
+!dp_init_ok:
     lda disk_prompt_device
     cmp program_device
     bne !dp_not_program+
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    clc
     rts
 !dp_not_program:
     cmp save_device
     bne !dp_media_unknown+
     lda #C128_MEDIA_SAVE
     sta c128_media_state
+    clc
     rts
 !dp_media_unknown:
     lda #C128_MEDIA_UNKNOWN
     sta c128_media_state
+    clc
 #endif
     rts
 

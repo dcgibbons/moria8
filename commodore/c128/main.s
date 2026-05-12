@@ -2498,14 +2498,28 @@ c128_load_resident_play_prg:
 
 c128_require_program_media:
     jsr disk_prompt_game
+    bcs !program_fail+
     lda #C128_MEDIA_PROGRAM
     sta c128_media_state
+    clc
+    rts
+!program_fail:
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+    sec
     rts
 
 c128_require_save_media:
     jsr disk_prompt_save
+    bcs !save_fail+
     lda #C128_MEDIA_SAVE
     sta c128_media_state
+    clc
+    rts
+!save_fail:
+    lda #C128_MEDIA_UNKNOWN
+    sta c128_media_state
+    sec
     rts
 
 c128_modal_require_persist:

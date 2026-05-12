@@ -5,14 +5,15 @@
 //  2. disk_prompt_game is a no-op in C128 one-drive mode
 //  3. disk_prompt_save still prompts and re-inits the save drive before setup completes
 //  4. disk_prompt_save becomes a silent drive re-init after one-drive setup completes
-//  5. disk_prompt_game remains a no-op when disk_mode is unset
-//  6. initialized Disk Setup commit reports carry clear/success
-//  7. marker initialization does not trust X across KERNAL byte I/O
-//  8. save-media failure classifier separates wrong media from drive errors
-//  9. Disk Setup init status capture maps normalized DOS statuses
-// 10. Disk Setup status classifier returns normalized HAL statuses
-// 11. Storage HAL command-status classifier maps captured DOS statuses
-// 12. Storage HAL diagnostic labels expose platform diagnostic bytes
+//  5. failed C128 save-drive re-init clears current-save media ownership
+//  6. disk_prompt_game remains a no-op when disk_mode is unset
+//  7. initialized Disk Setup commit reports carry clear/success
+//  8. marker initialization does not trust X across KERNAL byte I/O
+//  9. save-media failure classifier separates wrong media from drive errors
+// 10. Disk Setup init status capture maps normalized DOS statuses
+// 11. Disk Setup status classifier returns normalized HAL statuses
+// 12. Storage HAL command-status classifier maps captured DOS statuses
+// 13. Storage HAL diagnostic labels expose platform diagnostic bytes
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
@@ -456,7 +457,29 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 5: unset mode still leaves disk_prompt_game as a no-op.
+    // Test 5: a failed C128 save-drive re-init does not keep claiming that
+    // save media is current.
+    jsr reset_harness_state
+    lda #1
+    sta disk_mode
+    lda #1
+    sta disk_setup_done
+    lda #9
+    sta save_device
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
+    lda #1
+    sta command_open_fail
+    clc
+    jsr disk_prompt_save
+    bcs *+5
+    jmp test_fail
+    lda c128_media_state
+    cmp #C128_MEDIA_UNKNOWN
+    beq *+5
+    jmp test_fail
+
+    // Test 6: unset mode still leaves disk_prompt_game as a no-op.
     jsr reset_harness_state
     lda #0
     sta disk_mode
@@ -471,7 +494,7 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 6: initialized Disk Setup commit reports success. This path is
+    // Test 7: initialized Disk Setup commit reports success. This path is
     // reached after the marker has been written and verified.
     jsr reset_harness_state
     lda #0
@@ -491,7 +514,7 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 7: marker init writes and verifies the marker even when KERNAL
+    // Test 8: marker init writes and verifies the marker even when KERNAL
     // byte I/O clobbers X.
     jsr reset_harness_state
     lda #9
