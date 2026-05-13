@@ -14,11 +14,11 @@ code should own hardware execution.
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
 - [x] Plus/4 disk setup/save/load is covered by automated
-      runtime gates. `make testplus4-runtime` now covers marker initialization
-      directly and a scripted product Disk Setup success path against a freshly
-      formatted drive-9 save disk, the missing drive-9 save-media failure
-      path, product save-write, and product load-resume from a generated
-      Plus/4 save fixture.
+      runtime gates. `make testplus4-runtime` now covers boot/title reachability,
+      marker initialization directly, a scripted product Disk Setup success path
+      against a freshly formatted drive-9 save disk, the missing drive-9
+      save-media failure path, product save-write, and product load-resume from
+      a generated Plus/4 save fixture.
 - [x] `make testplus4` runs the Plus/4 runtime smoke gate. The old build-only
       target is preserved as `make testplus4-build`.
 - [ ] Manual screenshots and VICE monitor traces are diagnostic evidence, not
@@ -336,7 +336,7 @@ Required services:
 - [x] Detect monitor connection reset/closure explicitly. Product smokes now
       report reset/closed monitor transport as structured failures instead of
       Python tracebacks; `test_vice_connector.py` covers the connector behavior.
-- [ ] Add boot/title smoke.
+- [x] Add boot/title smoke.
 - [x] Add minimal PRG runtime smoke proving xplus4 monitor harness plumbing.
 - [ ] Add new-game-to-town smoke.
 - [ ] Add dungeon-entry smoke.
@@ -360,7 +360,7 @@ Required services:
 
 Gate to leave Phase 1:
 
-- [ ] `make testplus4-runtime` covers boot/title plus at least one disk setup
+- [x] `make testplus4-runtime` covers boot/title plus at least one disk setup
       success and one disk setup failure.
 - [x] A valid-save-disk fixture can be created deterministically by the test
       harness for marker initialization.
