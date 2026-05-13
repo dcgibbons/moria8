@@ -85,24 +85,27 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        connector.connect(
-            retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
-            retry_delay=args.connect_retry_delay,
-        )
-        connector.clear_breakpoints()
-        connector.break_at(resolved["commit_initialized"])
-        connector.break_at(resolved["init_fail"])
-        connector.go()
-        pass_addr = resolved["commit_initialized"]
-        fail_addr = resolved["init_fail"]
-        if args.expect == "init-fail":
-            pass_addr = resolved["init_fail"]
-            fail_addr = resolved["commit_initialized"]
-        result = connector.wait_for_stop(
-            pass_addr=pass_addr,
-            fail_addr=fail_addr,
-            timeout=args.timeout,
-        )
+        try:
+            connector.connect(
+                retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
+                retry_delay=args.connect_retry_delay,
+            )
+            connector.clear_breakpoints()
+            connector.break_at(resolved["commit_initialized"])
+            connector.break_at(resolved["init_fail"])
+            connector.go()
+            pass_addr = resolved["commit_initialized"]
+            fail_addr = resolved["init_fail"]
+            if args.expect == "init-fail":
+                pass_addr = resolved["init_fail"]
+                fail_addr = resolved["commit_initialized"]
+            result = connector.wait_for_stop(
+                pass_addr=pass_addr,
+                fail_addr=fail_addr,
+                timeout=args.timeout,
+            )
+        except ConnectionError as exc:
+            result = MonitorTestResult(False, str(exc), "")
         if result.passed:
             for key in ("disk_error_phase", "disk_error_readst", "disk_error_dos0", "disk_error_dos1", "disk_status"):
                 addr = resolved.get(key)

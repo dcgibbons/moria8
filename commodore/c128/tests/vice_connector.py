@@ -147,8 +147,10 @@ class VICEConnector:
                 if PROMPT_RE.search(data) or allow_partial:
                     break
                 continue
+            except ConnectionResetError as exc:
+                raise ConnectionError("monitor connection reset") from exc
             if not chunk:
-                break
+                raise ConnectionError("monitor connection closed")
             data += chunk
             if PROMPT_RE.search(data):
                 data = self._drain_after_prompt(data)
@@ -240,6 +242,8 @@ class VICEConnector:
             last_status = self.read_until_prompt(deadline=deadline)
         except TimeoutError:
             return MonitorTestResult(False, f"timeout after {timeout}s", "")
+        except ConnectionError as exc:
+            return MonitorTestResult(False, str(exc), "")
 
         upper_status = last_status.upper()
         if pass_marker in upper_status:

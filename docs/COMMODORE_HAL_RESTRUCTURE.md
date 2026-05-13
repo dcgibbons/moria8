@@ -333,7 +333,9 @@ Required services:
 - [x] Add `xplus4` monitor connector modeled after the C128 VICE harness.
 - [x] Add pass/fail symbol support from `.vs` files.
 - [x] Detect timeout, hang, BRK, and CPU JAM.
-- [ ] Detect reset explicitly.
+- [x] Detect monitor connection reset/closure explicitly. Product smokes now
+      report reset/closed monitor transport as structured failures instead of
+      Python tracebacks; `test_vice_connector.py` covers the connector behavior.
 - [ ] Add boot/title smoke.
 - [x] Add minimal PRG runtime smoke proving xplus4 monitor harness plumbing.
 - [ ] Add new-game-to-town smoke.
@@ -386,8 +388,8 @@ Gate to leave Phase 1:
       currently observed Plus/4 product load payload length.
 - [x] A scripted Plus/4 product load smoke with a wrong `MORIA4.ID` marker
       reaches the load media-failure path instead of entering gameplay.
-- [ ] Runtime tests can distinguish timeout, reset, BRK, CPU JAM, and friendly
-      disk error return.
+- [x] Runtime tests can distinguish timeout, monitor reset/close, BRK, CPU JAM,
+      and friendly disk error return.
 
 ### Phase 2: HAL Contract Skeleton
 

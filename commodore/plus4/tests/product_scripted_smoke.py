@@ -67,22 +67,25 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        connector.connect(
-            retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
-            retry_delay=args.connect_retry_delay,
-        )
-        if args.start_symbol:
-            connector.run_until(args.start_addr, timeout=args.timeout)
-        connector.clear_breakpoints()
-        connector.break_at(pass_addr)
-        if fail_addr:
-            connector.break_at(fail_addr)
-        connector.go()
-        result = connector.wait_for_stop(
-            pass_addr=pass_addr,
-            fail_addr=fail_addr,
-            timeout=args.timeout,
-        )
+        try:
+            connector.connect(
+                retries=max(1, int(args.connect_timeout / args.connect_retry_delay)),
+                retry_delay=args.connect_retry_delay,
+            )
+            if args.start_symbol:
+                connector.run_until(args.start_addr, timeout=args.timeout)
+            connector.clear_breakpoints()
+            connector.break_at(pass_addr)
+            if fail_addr:
+                connector.break_at(fail_addr)
+            connector.go()
+            result = connector.wait_for_stop(
+                pass_addr=pass_addr,
+                fail_addr=fail_addr,
+                timeout=args.timeout,
+            )
+        except ConnectionError as exc:
+            result = MonitorTestResult(False, str(exc), "")
         if not result.passed:
             for start, end in dump_ranges:
                 try:
