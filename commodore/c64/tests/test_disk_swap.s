@@ -46,6 +46,17 @@
 .const KERNAL_CHRIN  = kernal_chrin
 .const KERNAL_CHROUT = kernal_chrout
 
+.label hal_storage_setnam = kernal_setnam
+.label hal_storage_setlfs = kernal_setlfs
+.label hal_storage_open = kernal_open
+.label hal_storage_close = kernal_close
+.label hal_storage_chkin = kernal_chkin
+.label hal_storage_chkout = kernal_chkout
+.label hal_storage_chrin = kernal_chrin
+.label hal_storage_chrout = kernal_chrout
+.label hal_storage_clrchn = kernal_clrchn
+.label hal_storage_readst = kernal_readst
+
 screen_put_string_calls: .byte 0
 screen_clear_calls:      .byte 0
 ui_clear_calls:          .byte 0

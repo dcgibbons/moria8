@@ -12,6 +12,15 @@
 #import "bank_port_consts.s"
 #import "storage_status.s"
 
+.const SWAP_SETNAM = hal_storage_setnam
+.const SWAP_SETLFS = hal_storage_setlfs
+.const SWAP_OPEN   = hal_storage_open
+.const SWAP_CLOSE  = hal_storage_close
+.const SWAP_CHKIN  = hal_storage_chkin
+.const SWAP_CHRIN  = hal_storage_chrin
+.const SWAP_CLRCHN = hal_storage_clrchn
+.const SWAP_READST = hal_storage_readst
+
 // ============================================================
 // Data
 // ============================================================
@@ -503,12 +512,12 @@ disk_marker_present:
     lda #hal_storage_marker_read_name_len
     ldx #<hal_storage_marker_read_name
     ldy #>hal_storage_marker_read_name
-    jsr KERNAL_SETNAM
+    jsr SWAP_SETNAM
     lda #hal_storage_marker_file_num
     ldx save_device
     ldy #hal_storage_marker_sec_read
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SWAP_SETLFS
+    jsr SWAP_OPEN
     bcc !dmp_open_ok+
     lda #1
     sta disk_diag_carry
@@ -518,7 +527,7 @@ disk_marker_present:
 !dmp_open_ok:
     lda #0
     sta disk_diag_carry
-    jsr KERNAL_READST
+    jsr SWAP_READST
     sta disk_diag_readst
     beq !dmp_chkin+
     lda #$81
@@ -529,7 +538,7 @@ disk_marker_present:
     lda #$82
     sta disk_diag_phase
     ldx #hal_storage_marker_file_num
-    jsr KERNAL_CHKIN
+    jsr SWAP_CHKIN
     bcc !dmp_read_start+
     lda #1
     sta disk_diag_carry
@@ -547,9 +556,9 @@ disk_marker_present:
     sta disk_diag_phase
     lda disk_temp
     sta disk_diag_index
-    jsr KERNAL_CHRIN
+    jsr SWAP_CHRIN
     sta disk_diag_byte
-    jsr KERNAL_READST
+    jsr SWAP_READST
     sta disk_diag_readst
     beq !dmp_cmp+
     cmp #$40
@@ -578,9 +587,9 @@ disk_marker_present:
     lda #$83
     sta disk_status
 !dmp_close:
-    jsr KERNAL_CLRCHN
+    jsr SWAP_CLRCHN
     lda #hal_storage_marker_file_num
-    jsr KERNAL_CLOSE
+    jsr SWAP_CLOSE
 !dmp_done:
     jsr disk_kernal_exit
     lda disk_status

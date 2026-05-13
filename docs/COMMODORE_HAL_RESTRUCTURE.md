@@ -554,6 +554,12 @@ Storage adapter note:
       aliases for `SETNAM`, `SETLFS`, `OPEN`, `CLOSE`, `CLRCHN`, `READST`,
       `CHKOUT`, and `CHROUT`; the C128 path still owns its explicit
       KERNAL-visible entry/exit around those calls.
+- [x] Move Disk Setup save-marker validation sequential I/O call binding to
+      storage HAL adapter labels. `disk_swap.s` now uses local `SWAP_*`
+      aliases for marker `SETNAM`, `SETLFS`, `OPEN`, `CLOSE`, `CLRCHN`,
+      `READST`, `CHKIN`, and `CHRIN`; remaining `disk_swap.s` boundary entries
+      are target-conditionals and C64 bank visibility, not raw KERNAL symbol
+      use.
 - [x] Move drive probing and selected-drive init into platform storage.
       Common Disk Setup now calls `hal_storage_probe_media`, and the one-drive
       prompt path calls `hal_storage_init_selected_drive`; C64, C128, and
