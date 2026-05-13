@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_LABELS = (
     "hal_asset_load",
+    "hal_asset_load_prg_header",
 )
 
 PLATFORM_FILES = {

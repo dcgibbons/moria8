@@ -3,6 +3,7 @@
 //
 // Required exports per platform:
 //   hal_asset_load
+//   hal_asset_load_prg_header
 //
 // `hal_asset_load` wraps the platform's KERNAL LOAD equivalent.
 //
@@ -17,3 +18,18 @@
 //
 // Platform code owns banking, OS visibility, target-bank setup, and any
 // post-load runtime resync required after the ROM call.
+//
+// `hal_asset_load_prg_header` wraps the common PRG-header load transaction for
+// runtime assets.
+//
+// Input:
+//   A = filename length
+//   X = filename pointer lo
+//   Y = filename pointer hi
+//
+// Output:
+//   Carry clear = success
+//   Carry set = failure
+//
+// Platform code owns SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, destination-bank
+// setup, OS visibility, and post-load display/runtime cleanup.

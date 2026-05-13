@@ -74,6 +74,36 @@ kernal_load:
     jsr hal_asset_load
 }
 
+hal_asset_load_prg_header:
+    php
+    jsr $ffbd               // SETNAM
+    lda #2
+    ldx #8
+    ldy #1                  // Use PRG header address
+    jsr $ffba               // SETLFS
+    lda #0
+    ldx #$00
+    ldy #$e0
+    jsr hal_asset_load
+    php
+    lda #2
+    jsr $ffc3               // CLOSE
+    jsr $ffcc               // CLRCHN
+    lda $dd00
+    ora #%00000011          // Restore VIC-II bank 0 after serial I/O
+    sta $dd00
+    plp
+    php
+    pla
+    sta asset_load_save_p
+    plp
+    lda asset_load_save_p
+    pha
+    plp
+    rts
+
+asset_load_save_p: .byte 0
+
 .const DEATH_ALIVE   = $00    // Player is alive
 .const DEATH_TRAP_PIT      = $F9    // Killed by an open pit
 .const DEATH_TRAP_ARROW    = $FA    // Killed by an arrow trap

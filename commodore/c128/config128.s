@@ -34,6 +34,13 @@ detect_machine:
 // kernal_load — Platform LOAD entry (expects EnterKernal() context)
 .label kernal_load = $ffd5
 .label hal_asset_load = kernal_load
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.label hal_asset_load_prg_header = c128_preload_asset_load
+#else
+hal_asset_load_prg_header:
+    sec
+    rts
+#endif
 
 .macro AssetLoad() {
     jsr hal_asset_load          // LOAD (via patched KERNAL jump table)

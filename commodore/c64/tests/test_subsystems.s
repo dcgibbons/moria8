@@ -63,6 +63,9 @@ msg_print:
     jsr kernal_load
 }
 
+hal_asset_load_prg_header:
+    jmp kernal_load
+
 reu_overlays_stashed: .byte 0
 sb_tier_invalidate_calls: .byte 0
 sb_load_arg_a: .byte 0
