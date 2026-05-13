@@ -1,7 +1,7 @@
 #importonce
 // score_io.s — High score disk I/O (main RAM)
 //
-// hiscore_load and hiscore_save use KERNAL I/O and must stay in main RAM.
+// hiscore_load and hiscore_save use storage HAL I/O and must stay in main RAM.
 // Score calculation and death screen display live in the death overlay
 // at $E000 (score.s).
 
@@ -14,6 +14,15 @@
 .const HISCORE_ENTRY_SIZE = 23
 .const HISCORE_MAX_ENTRIES = 10
 .const HISCORE_HEADER_SIZE = 4
+.const SCORE_SETNAM = hal_storage_setnam
+.const SCORE_SETLFS = hal_storage_setlfs
+.const SCORE_OPEN   = hal_storage_open
+.const SCORE_CLOSE  = hal_storage_close
+.const SCORE_CHKIN  = hal_storage_chkin
+.const SCORE_CHKOUT = hal_storage_chkout
+.const SCORE_CHRIN  = hal_storage_chrin
+.const SCORE_CHROUT = hal_storage_chrout
+.const SCORE_CLRCHN = hal_storage_clrchn
 
 // ============================================================
 // Shared state (must be readable from main RAM with KERNAL banked in)
@@ -47,29 +56,29 @@ hiscore_load:
     lda #hal_storage_score_read_name_len
     ldx #<hal_storage_score_read_name
     ldy #>hal_storage_score_read_name
-    jsr KERNAL_SETNAM
+    jsr SCORE_SETNAM
     lda #HISCORE_FILE_NUM
     ldx save_device
     ldy #HISCORE_SEC_RD
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SCORE_SETLFS
+    jsr SCORE_OPEN
     bcs !hl_fail+
 
     ldx #HISCORE_FILE_NUM
-    jsr KERNAL_CHKIN
+    jsr SCORE_CHKIN
     bcs !hl_fail_close+
 
     // Read header: 'M' 'H' version count
-    jsr KERNAL_CHRIN
+    jsr SCORE_CHRIN
     cmp #$4d                    // 'M'
     bne !hl_fail_close+
-    jsr KERNAL_CHRIN
+    jsr SCORE_CHRIN
     cmp #$48                    // 'H'
     bne !hl_fail_close+
-    jsr KERNAL_CHRIN
+    jsr SCORE_CHRIN
     cmp #$01                    // Version 1
     bne !hl_fail_close+
-    jsr KERNAL_CHRIN
+    jsr SCORE_CHRIN
     cmp #HISCORE_MAX_ENTRIES + 1
     bcs !hl_fail_close+         // Invalid count
     sta hiscore_count
@@ -96,7 +105,7 @@ hiscore_load:
     lda save_count_lo
     ora save_count_hi
     beq !hl_close_ok+
-    jsr KERNAL_CHRIN
+    jsr SCORE_CHRIN
     sta (zp_ptr0),y
     iny
     bne !hl_no_page+
@@ -111,15 +120,15 @@ hiscore_load:
     jmp !hl_read-
 
 !hl_close_ok:
-    jsr KERNAL_CLRCHN
+    jsr SCORE_CLRCHN
     lda #HISCORE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SCORE_CLOSE
     rts
 
 !hl_fail_close:
-    jsr KERNAL_CLRCHN
+    jsr SCORE_CLRCHN
     lda #HISCORE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SCORE_CLOSE
 !hl_fail:
     lda #0
     sta hiscore_count
@@ -138,43 +147,43 @@ hiscore_save:
     lda #hal_storage_score_scratch_name_len
     ldx #<hal_storage_score_scratch_name
     ldy #>hal_storage_score_scratch_name
-    jsr KERNAL_SETNAM
+    jsr SCORE_SETNAM
     lda #hal_storage_cmd_channel
     ldx save_device
     ldy #hal_storage_cmd_channel
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SCORE_SETLFS
+    jsr SCORE_OPEN
     bcs !hs_scratch_done+
     lda #hal_storage_cmd_channel
-    jsr KERNAL_CLOSE
+    jsr SCORE_CLOSE
 !hs_scratch_done:
-    jsr KERNAL_CLRCHN
+    jsr SCORE_CLRCHN
 
     // Open for writing
     lda #hal_storage_score_write_name_len
     ldx #<hal_storage_score_write_name
     ldy #>hal_storage_score_write_name
-    jsr KERNAL_SETNAM
+    jsr SCORE_SETNAM
     lda #HISCORE_FILE_NUM
     ldx save_device
     ldy #HISCORE_SEC_WR
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr SCORE_SETLFS
+    jsr SCORE_OPEN
     bcs !hs_fail+
 
     ldx #HISCORE_FILE_NUM
-    jsr KERNAL_CHKOUT
+    jsr SCORE_CHKOUT
     bcs !hs_fail_close+
 
     // Write header
     lda #$4d                    // 'M'
-    jsr KERNAL_CHROUT
+    jsr SCORE_CHROUT
     lda #$48                    // 'H'
-    jsr KERNAL_CHROUT
+    jsr SCORE_CHROUT
     lda #$01                    // Version
-    jsr KERNAL_CHROUT
+    jsr SCORE_CHROUT
     lda hiscore_count
-    jsr KERNAL_CHROUT
+    jsr SCORE_CHROUT
 
     // Write entries
     lda hiscore_count
@@ -197,7 +206,7 @@ hiscore_save:
     ora save_count_hi
     beq !hs_close_ok+
     lda (zp_ptr0),y
-    jsr KERNAL_CHROUT
+    jsr SCORE_CHROUT
     iny
     bne !hs_no_page+
     inc zp_ptr0_hi
@@ -211,14 +220,14 @@ hiscore_save:
     jmp !hs_write-
 
 !hs_close_ok:
-    jsr KERNAL_CLRCHN
+    jsr SCORE_CLRCHN
     lda #HISCORE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SCORE_CLOSE
     rts
 
 !hs_fail_close:
-    jsr KERNAL_CLRCHN
+    jsr SCORE_CLRCHN
     lda #HISCORE_FILE_NUM
-    jsr KERNAL_CLOSE
+    jsr SCORE_CLOSE
 !hs_fail:
     rts

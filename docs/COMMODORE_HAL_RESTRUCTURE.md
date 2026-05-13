@@ -483,6 +483,11 @@ Storage adapter note:
       stale `score_io.s` `#if PLUS4` entry, and
       `tools/check_hal_storage_exports.py` now requires the score filename
       labels for all three platforms.
+- [x] High-score sequential I/O call binding now goes through storage HAL
+      labels. `score_io.s` no longer has raw `KERNAL_*` calls; the remaining
+      platform-specific KERNAL/banking behavior lives behind each platform's
+      `hal_storage_*` exports and existing caller-owned KERNAL visibility
+      setup.
 - [x] Replace remaining Plus/4 storage aliases with platform-owned routines.
       C64 keeps C64-named routines inside its own implementation and C64 unit
       fixtures; Plus/4 no longer exports C64-shaped storage compatibility
@@ -540,6 +545,10 @@ Storage adapter note:
       `SETNAM` and `SETLFS` receive the bank-control value instead of the
       caller's arguments. The C64 product save/load smokes now force drive 9
       online with `-drive9type 1541` so the two-drive path is actually tested.
+- [x] Move high-score sequential I/O call binding to storage HAL adapter labels.
+      `score_io.s` now uses local `SCORE_*` aliases to the platform
+      `hal_storage_*` routines and no longer needs raw KERNAL entries in the
+      common HAL boundary allowlist.
 - [x] Move drive probing and selected-drive init into platform storage.
       Common Disk Setup now calls `hal_storage_probe_media`, and the one-drive
       prompt path calls `hal_storage_init_selected_drive`; C64, C128, and
