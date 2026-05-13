@@ -87,6 +87,10 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
         except ConnectionError as exc:
             result = MonitorTestResult(False, str(exc), "")
         if not result.passed:
+            try:
+                dumps.append(connector.send_command("bt"))
+            except Exception as exc:
+                dumps.append(f"bt: {exc}")
             for start, end in dump_ranges:
                 try:
                     dumps.append(connector.send_command(f"m {start} {end}"))

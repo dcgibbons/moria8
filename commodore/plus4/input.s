@@ -23,7 +23,7 @@ input_run_cancel_check:
     jmp input_run_process_sample
 
 input_get_key:
-#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
+#if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT
     ldx plus4_test_key_index
     lda plus4_test_key_script,x
     beq !wait+
@@ -39,6 +39,8 @@ plus4_test_key_script:
     .byte $4c, $d3, $59, $20, 0                  // L, SHIFT+S, Y overwrite, dismiss saved message
 #elif PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     .byte $4c, 0                                 // L
+#elif PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT
+    .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, 0 // N, race A, accept stats, class A, name A, gender A, dismiss summary
 #else
     .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
 #endif

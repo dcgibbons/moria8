@@ -338,7 +338,7 @@ Required services:
       Python tracebacks; `test_vice_connector.py` covers the connector behavior.
 - [x] Add boot/title smoke.
 - [x] Add minimal PRG runtime smoke proving xplus4 monitor harness plumbing.
-- [ ] Add new-game-to-town smoke.
+- [x] Add new-game-to-town smoke.
 - [ ] Add dungeon-entry smoke.
 - [ ] Add overlay-load smoke.
 - [x] Add disk-setup smoke with valid save disk.
@@ -380,6 +380,10 @@ Gate to leave Phase 1:
       until that direct harness is reliable again.
 - [x] Plus/4 save-write smoke reaches the real success carry path and creates
       `P4.THE.GAME` as a SEQ file on drive 9.
+- [x] Plus/4 new-game-to-town smoke boots the product disk, enters the real
+      title `N)ew` flow through deterministic scripted input, completes character
+      creation, loads the town/start overlays, and reaches the first gameplay
+      loop.
 - [x] Plus/4 load-resume smoke reads a generated Plus/4 save file from drive 9,
       reaches `load_resume_game`, and resumes to `main_loop` without timeout,
       reset, BRK, or CPU JAM.
