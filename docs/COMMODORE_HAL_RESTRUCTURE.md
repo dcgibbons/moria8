@@ -648,13 +648,44 @@ Storage adapter note:
       `disk_swap128` unit owns the media-state assertion. C128 setup now has a
       real-D64 marker-init smoke that verifies the host disk image contains a
       valid `MORIA8.ID` marker after the C128 storage path runs.
+- [x] Declare structural storage HAL migration complete.
+      Save/load, high-score I/O, Disk Setup marker init/validation, selected
+      drive probing/init, storage filename ownership, logical file numbers,
+      secondary addresses, command-channel status reads, diagnostic exports,
+      and C128 title-cache filename setup now bind through `hal_storage_*`
+      instead of raw common-code storage KERNAL calls.
+      Remaining storage-phase work is backlog quality/policy work: richer
+      diagnostics for still-unknown failures and the `io_kernal_consts.s`
+      ABI-constant exception tracked by the common-code purity ratchet.
+
+### Phase 4A: Asset Loader HAL Boundary
+
+This is explicitly not part of the structural storage HAL closeout. Storage HAL
+owns record/file/session semantics for saves, scores, disk setup, markers, and
+storage diagnostics. Asset Loader HAL should own runtime asset loading policy:
+overlay PRGs, string banks, title-art bytes, cache restore/fallback behavior,
+target-bank setup, and post-load channel cleanup.
+
+- [ ] Define asset-loader HAL entry points for platform-owned KERNAL LOAD setup,
+      destination-bank setup, cleanup, and error/status reporting.
+- [ ] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
+- [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
+      HAL.
+- [ ] Revisit title-art loading so C64/C128/Plus4 all use one explicit
+      asset-loader contract while preserving C128 Bank 1 cache behavior.
+- [ ] Keep `hal_storage_*` filename tables available as data inputs until a
+      separate asset-name namespace is justified by real duplication or policy
+      differences.
 
 ### Phase 5: Common-Code Purity Ratchet
 
 - [x] Add forbidden-symbol audit.
 - [x] Record current violations as a shrinking migration allowlist.
 - [ ] Remove hardware literals from `commodore/common/`.
-- [ ] Remove raw KERNAL calls from common storage paths.
+- [x] Remove raw KERNAL calls from common storage paths.
+      The remaining common `KERNAL_*` allowlist entries are
+      `io_kernal_consts.s` ABI constants, not active storage behavior.
+      Raw/common LOAD orchestration remains an Asset Loader HAL concern.
 - [ ] Reduce platform `#if C64/C128/PLUS4` branches in common game logic.
 - [ ] Keep temporary exceptions only in `commodore/common/compat/` or explicitly
       named transition files.
@@ -695,7 +726,7 @@ Storage adapter note:
 - [x] No reset in the manually verified Plus/4 happy path.
 - [x] No BRK escape in the manually verified Plus/4 happy path.
 - [x] No CPU JAM in the manually verified Plus/4 happy path.
-- [ ] Automated C64/C128/Plus4 disk setup/save/load gates.
+- [x] Automated C64/C128/Plus4 disk setup/save/load gates.
       Plus/4 now has product setup, missing-media with command-channel
       diagnostics, wrong-media, save-write, and load-resume runtime gates;
       C64 now has product setup, save-media-fail, load-resume, and save-write smokes;
