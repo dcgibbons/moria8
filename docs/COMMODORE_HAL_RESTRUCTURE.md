@@ -668,17 +668,19 @@ target-bank setup, and post-load channel cleanup.
 
 - [x] Define the first asset-loader HAL entry point.
       `hal_asset_load` is now a required platform export for the platform's
-      KERNAL LOAD equivalent. `hal_asset_load_prg_header` owns the common
-      PRG-header load transaction: SETNAM, SETLFS, LOAD, CLOSE, CLRCHN,
-      destination-bank setup, OS visibility, and post-load cleanup. The
+      KERNAL LOAD equivalent. `hal_asset_load_prg_header` is the planned
+      platform-owned PRG-header load transaction boundary: SETNAM, SETLFS,
+      LOAD, CLOSE, CLRCHN, destination-bank setup, OS visibility, and post-load
+      cleanup. The
       existing `AssetLoad()` macro routes through the raw-load HAL label on
       C64, C128, and Plus/4, and `tools/check_hal_asset_exports.py` verifies
       both asset-loader exports.
 - [ ] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
       setup, destination-bank setup, cleanup, and error/status reporting.
-- [x] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
-      `overlay_load_disk` now only resolves the platform-owned overlay filename
-      and calls `hal_asset_load_prg_header`.
+- [ ] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
+      C64 and C128 use platform asset-load transactions. Plus/4 is temporarily
+      back on the known-good inline KERNAL transaction after the first common
+      delegation regressed Plus/4 runtime save-load resume.
 - [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
       HAL.
 - [ ] Revisit title-art loading so C64/C128/Plus4 all use one explicit

@@ -19,28 +19,41 @@ detect_machine:
 kernal_load:
     jmp $ffd5
 
-.label hal_asset_load = plus4_kernal_load
+.label hal_asset_load = kernal_load
 
 .macro AssetLoad() {
     jsr hal_asset_load
 }
 
 hal_asset_load_prg_header:
-    jsr plus4_kernal_setnam
+    :EnterKernal()
+    jsr $ffbd               // SETNAM
     lda #2
     ldx #8
     ldy #1                  // Use PRG header address
-    jsr plus4_kernal_setlfs
+    jsr $ffba               // SETLFS
     lda #0
     ldx #$00
     ldy #$e0
     jsr hal_asset_load
     php
     lda #2
-    jsr plus4_kernal_close
-    jsr plus4_kernal_clrchn
+    jsr $ffc3               // CLOSE
+    jsr $ffcc               // CLRCHN
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    plp
+    php
+    pla
+    sta asset_load_save_p
+    :ExitKernal()
+    lda asset_load_save_p
+    pha
     plp
     rts
+
+asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00
 .const DEATH_TRAP_PIT      = $F9

@@ -56,6 +56,7 @@ commodore/common/monster_ai.s	raw-c64-bank-port	$01
 commodore/common/monster_attack.s	raw-c64-bank-port	$01
 commodore/common/monster_magic.s	raw-c64-bank-port	$01
 commodore/common/overlay.s	raw-c64-bank-port	$01
+commodore/common/overlay.s	raw-vic-cia-sid-ted-vdc-address	$dd00
 commodore/common/overlay.s	target-conditional	#if !C128
 commodore/common/overlay.s	target-conditional	#if C128
 commodore/common/player.s	raw-c64-bank-port	$01
