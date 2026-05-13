@@ -33,9 +33,10 @@ detect_machine:
 // ============================================================
 // kernal_load — Platform LOAD entry (expects EnterKernal() context)
 .label kernal_load = $ffd5
+.label hal_asset_load = kernal_load
 
 .macro AssetLoad() {
-    jsr $ffd5                   // LOAD (via patched KERNAL jump table)
+    jsr hal_asset_load          // LOAD (via patched KERNAL jump table)
 }
 
 .const DEATH_ALIVE   = $00    // Player is alive

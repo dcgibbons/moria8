@@ -666,8 +666,13 @@ storage diagnostics. Asset Loader HAL should own runtime asset loading policy:
 overlay PRGs, string banks, title-art bytes, cache restore/fallback behavior,
 target-bank setup, and post-load channel cleanup.
 
-- [ ] Define asset-loader HAL entry points for platform-owned KERNAL LOAD setup,
-      destination-bank setup, cleanup, and error/status reporting.
+- [x] Define the first asset-loader HAL entry point.
+      `hal_asset_load` is now a required platform export for the platform's
+      KERNAL LOAD equivalent. The existing `AssetLoad()` macro routes through
+      that HAL label on C64, C128, and Plus/4, and
+      `tools/check_hal_asset_exports.py` verifies the export.
+- [ ] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
+      setup, destination-bank setup, cleanup, and error/status reporting.
 - [ ] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
 - [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
       HAL.

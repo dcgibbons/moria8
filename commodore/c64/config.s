@@ -68,8 +68,10 @@ detect_machine:
 kernal_load:
     jmp $ffd5
 
+.label hal_asset_load = kernal_load
+
 .macro AssetLoad() {
-    jsr kernal_load
+    jsr hal_asset_load
 }
 
 .const DEATH_ALIVE   = $00    // Player is alive
