@@ -51,6 +51,17 @@
 .const KERNAL_CHRIN  = w_chrin
 .const KERNAL_CHROUT = w_chrout
 
+.label hal_storage_setnam = w_setnam
+.label hal_storage_setlfs = w_setlfs
+.label hal_storage_open = w_open
+.label hal_storage_close = w_close
+.label hal_storage_chkin = w_chkin
+.label hal_storage_chkout = w_chkout
+.label hal_storage_chrin = w_chrin
+.label hal_storage_chrout = w_chrout
+.label hal_storage_clrchn = w_clrchn
+.label hal_storage_readst = w_readst
+
 .macro EnterKernal() {
 }
 

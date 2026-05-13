@@ -5,13 +5,16 @@
 // resident code. In both cases the overlay remains display/input only and
 // all disk transactions stay outside the live overlay frame.
 
-#if !C128
 .const FEAT_SETNAM = hal_storage_setnam
 .const FEAT_SETLFS = hal_storage_setlfs
 .const FEAT_OPEN   = hal_storage_open
 .const FEAT_CLOSE  = hal_storage_close
 .const FEAT_CLRCHN = hal_storage_clrchn
-#else
+.const FEAT_READST = hal_storage_readst
+.const FEAT_CHKOUT = hal_storage_chkout
+.const FEAT_CHROUT = hal_storage_chrout
+
+#if C128
 disk_diag_phase:       .byte 0
 disk_diag_carry:       .byte 0
 disk_diag_readst:      .byte 0
@@ -53,12 +56,12 @@ disk_marker_init:
     lda #hal_storage_marker_scratch_name_len
     ldx #<hal_storage_marker_scratch_name
     ldy #>hal_storage_marker_scratch_name
-    jsr KERNAL_SETNAM
+    jsr FEAT_SETNAM
     lda #hal_storage_cmd_channel
     ldx save_device
     ldy #hal_storage_cmd_channel
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr FEAT_SETLFS
+    jsr FEAT_OPEN
     bcc !dmi_scratch_open_ok+
     lda #1
     sta disk_diag_carry
@@ -68,8 +71,8 @@ disk_marker_init:
     jmp !dmi_done+
 !dmi_scratch_open_ok:
     lda #hal_storage_cmd_channel
-    jsr KERNAL_CLOSE
-    jsr KERNAL_CLRCHN
+    jsr FEAT_CLOSE
+    jsr FEAT_CLRCHN
     jsr hal_storage_read_command_status
     lda disk_diag_cmd_status0
     sta disk_diag_scratch_status0
@@ -104,12 +107,12 @@ disk_marker_init:
     lda #hal_storage_marker_write_name_len - 1
     ldx #<(hal_storage_marker_write_name + 1)
     ldy #>(hal_storage_marker_write_name + 1)
-    jsr KERNAL_SETNAM
+    jsr FEAT_SETNAM
     lda #hal_storage_marker_file_num
     ldx save_device
     ldy #hal_storage_marker_sec_write
-    jsr KERNAL_SETLFS
-    jsr KERNAL_OPEN
+    jsr FEAT_SETLFS
+    jsr FEAT_OPEN
     bcc !dmi_open_ok+
     lda #1
     sta disk_diag_carry
@@ -120,7 +123,7 @@ disk_marker_init:
 !dmi_open_ok:
     lda #0
     sta disk_diag_carry
-    jsr KERNAL_READST
+    jsr FEAT_READST
     sta disk_diag_readst
     beq !dmi_chkout+
     lda #$92
@@ -132,7 +135,7 @@ disk_marker_init:
     lda #$93
     sta disk_diag_phase
     ldx #hal_storage_marker_file_num
-    jsr KERNAL_CHKOUT
+    jsr FEAT_CHKOUT
     bcc !dmi_write_start+
     lda #1
     sta disk_diag_carry
@@ -151,8 +154,8 @@ disk_marker_init:
     ldx disk_temp
     stx disk_diag_index
     lda hal_storage_marker_magic,x
-    jsr KERNAL_CHROUT
-    jsr KERNAL_READST
+    jsr FEAT_CHROUT
+    jsr FEAT_READST
     sta disk_diag_readst
     beq !dmi_write_ok+
     lda #$94
@@ -168,10 +171,10 @@ disk_marker_init:
 !dmi_close:
     lda #$95
     sta disk_diag_phase
-    jsr KERNAL_CLRCHN
+    jsr FEAT_CLRCHN
     lda #hal_storage_marker_file_num
-    jsr KERNAL_CLOSE
-    jsr KERNAL_READST
+    jsr FEAT_CLOSE
+    jsr FEAT_READST
     sta disk_diag_readst
     jsr hal_storage_read_command_status
     lda disk_diag_cmd_status0

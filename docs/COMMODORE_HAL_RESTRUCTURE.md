@@ -549,6 +549,11 @@ Storage adapter note:
       `score_io.s` now uses local `SCORE_*` aliases to the platform
       `hal_storage_*` routines and no longer needs raw KERNAL entries in the
       common HAL boundary allowlist.
+- [x] Move C128 Disk Setup marker-init sequential I/O call binding to storage
+      HAL adapter labels. `disk_setup_banked.s` now uses local `FEAT_*`
+      aliases for `SETNAM`, `SETLFS`, `OPEN`, `CLOSE`, `CLRCHN`, `READST`,
+      `CHKOUT`, and `CHROUT`; the C128 path still owns its explicit
+      KERNAL-visible entry/exit around those calls.
 - [x] Move drive probing and selected-drive init into platform storage.
       Common Disk Setup now calls `hal_storage_probe_media`, and the one-drive
       prompt path calls `hal_storage_init_selected_drive`; C64, C128, and
