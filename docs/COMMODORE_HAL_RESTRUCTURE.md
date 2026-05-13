@@ -19,9 +19,8 @@ code should own hardware execution.
       formatted drive-9 save disk, the missing drive-9 save-media failure
       path, product save-write, and product load-resume from a generated
       Plus/4 save fixture.
-- [ ] `make testplus4` is currently only an assembly/build artifact gate;
-      `make testplus4-runtime` has minimal runtime and marker-init storage
-      smokes.
+- [x] `make testplus4` runs the Plus/4 runtime smoke gate. The old build-only
+      target is preserved as `make testplus4-build`.
 - [ ] Manual screenshots and VICE monitor traces are diagnostic evidence, not
       release gates.
 - [x] Resolved Plus/4 disk failure: `Disk code $00 phase $83` during save disk
@@ -323,7 +322,8 @@ Required services:
       `make build`, `make disk`, `make test64`, `make test128-fast`,
       `make test128-fast-smoke`, `make testplus4`, `make testplus4-runtime`,
       `make diskplus4`.
-- [x] Record that `make testplus4` is not yet a runtime gate.
+- [x] Make `make testplus4` a runtime gate and preserve `make testplus4-build`
+      for build-only artifact assembly.
 - [x] Record resolved Plus/4 failure: `Disk code $00 phase $83`.
 - [x] Ensure no HAL migration starts before C64/C128 baseline gates are named.
 - [ ] Preserve current C64/C128 behavior unless a test proves an existing bug.
@@ -353,7 +353,7 @@ Required services:
 - [x] Add load-resume smoke using the product `load_game` plus
       `load_resume_game`, with the boot disk still mounted for tier restore.
 - [x] Add command-channel status/error smoke for Plus/4 missing save media.
-- [ ] Change `make testplus4` to run real runtime smoke after the harness is
+- [x] Change `make testplus4` to run real runtime smoke after the harness is
       reliable.
 
 Gate to leave Phase 1:
@@ -712,7 +712,7 @@ target-bank setup, and post-load channel cleanup.
 - [ ] `make test64`
 - [ ] `make test128-fast`
 - [ ] `make test128-fast-smoke`
-- [ ] `make testplus4` once it is a real runtime smoke gate.
+- [x] `make testplus4` once it is a real runtime smoke gate.
 - [x] HAL boundary/static audit.
 - [ ] `git diff --check`
 
