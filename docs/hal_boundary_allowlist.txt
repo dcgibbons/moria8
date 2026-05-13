@@ -119,8 +119,6 @@ commodore/common/tier_manager.s	raw-vic-cia-sid-ted-vdc-address	$dd00
 commodore/common/tier_manager.s	target-conditional	#if !C128
 commodore/common/tier_manager.s	target-conditional	#if !PLUS4
 commodore/common/tier_manager.s	target-conditional	#if C128
-commodore/common/title_cache_runtime128.s	kernal-symbol	KERNAL_SETLFS
-commodore/common/title_cache_runtime128.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/title_cache_runtime128.s	target-conditional	#if C128
 commodore/common/title_data.s	raw-c64-bank-port	$01
 commodore/common/title_data.s	target-conditional	#if C128

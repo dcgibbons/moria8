@@ -23,12 +23,12 @@ c128_title_load_and_draw_cached:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
     ldy #>hal_storage_title_name
-    jsr KERNAL_SETNAM
+    jsr hal_storage_setnam
 
     lda #2
     ldx #SAVE_DEVICE
     ldy #1
-    jsr KERNAL_SETLFS
+    jsr hal_storage_setlfs
 
     lda #0
     ldx #<MAP_BASE

@@ -560,6 +560,10 @@ Storage adapter note:
       `READST`, `CHKIN`, and `CHRIN`; remaining `disk_swap.s` boundary entries
       are target-conditionals and C64 bank visibility, not raw KERNAL symbol
       use.
+- [x] Move C128 title-cache filename setup call binding to storage HAL adapter
+      labels. `title_cache_runtime128.s` now uses `hal_storage_setnam` and
+      `hal_storage_setlfs`; the remaining C128-specific title-cache boundary
+      is its Bank 1 cache/runtime behavior, not raw storage KERNAL symbols.
 - [x] Move drive probing and selected-drive init into platform storage.
       Common Disk Setup now calls `hal_storage_probe_media`, and the one-drive
       prompt path calls `hal_storage_init_selected_drive`; C64, C128, and
