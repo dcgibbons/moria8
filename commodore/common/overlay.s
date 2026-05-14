@@ -253,7 +253,7 @@ overlay_load_disk:
     jsr c128_overlay_fn_guard_check
 #endif
 #if C128
-    // C128: delegate to c128_preload_asset_load which handles the full
+    // C128: delegate to hal_asset_load_prg_header which handles the full
     // KERNAL environment setup (SETBNK Bank 0, ROM banking, IRQ enable,
     // SETNAM/SETLFS/LOAD/CLOSE/CLRCHN, and runtime restore).
     // Without proper SETBNK, KERNAL LOAD puts data in the wrong bank.
@@ -281,77 +281,7 @@ overlay_load_disk:
     pla
     tax
     pla
-    jmp c128_preload_asset_load
-#elif PLUS4
-    :EnterKernal()
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$1b
-    jsr c128_stack_guard_snapshot_banking
-#endif
-    lda hal_storage_overlay_name_len,x
-    pha                     // Save filename length
-    lda hal_storage_overlay_name_lo,x
-    pha
-    lda hal_storage_overlay_name_hi,x
-    tay
-    pla
-    tax                     // X = filename addr lo, Y = hi
-    pla                     // A = filename length
-
-    jsr $ffbd               // KERNAL SETNAM
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$1c
-    jsr c128_stack_guard_snapshot_banking
-#endif
-
-    lda #2                  // Logical file number
-    ldx #8                  // Device 8
-    ldy #1                  // Secondary 1 = use PRG header address ($E000)
-    jsr $ffba               // KERNAL SETLFS
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$1d
-    jsr c128_stack_guard_snapshot_banking
-#endif
-
-    lda #0                  // 0 = LOAD
-    ldx #$00                // Load address low ($E000 low byte = $00)
-    ldy #$e0                // Load address high ($E000)
-
-!ol_do_load:
-    :AssetLoad()            // Platform asset LOAD (handles C128 Bank 1)
-#if C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG
-    ldx #$1e
-    jsr c128_stack_guard_snapshot_banking
-#endif
-    // Carry clear = success, carry set = error
-    php                     // Save carry (load result)
-    lda #2
-    jsr $ffc3               // KERNAL CLOSE — release file #2
-    jsr $ffcc               // KERNAL CLRCHN — restore default I/O
-
-    // Restore VIC-II bank 0 — KERNAL serial I/O uses CIA2 ($DD00)
-    // bits 3-5 for the serial bus; bits 0-1 select VIC bank.
-    // Ensure bank 0 ($0000-$3FFF) so VIC sees screen RAM at $0400.
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-!ol_done:
-    plp                     // Restore carry from LOAD result
-    // ExitKernal clobbers carry (init_common_mmu_helpers leaves carry SET
-    // via its CPX loop termination). Save the LOAD result to a byte so the
-    // caller sees the real success/failure status.
-    php
-    pla
-    sta ol_save_p
-    :ExitKernal()
-#if C128 && (C128_TEST_REAL_BOOT_DIAG || C128_TEST_OVERLAY_TRANSITION_DIAG)
-    ldx #$1f
-    jsr c128_diag_validate_runtime_invariants
-#endif
-    lda ol_save_p
-    pha
-    plp                     // Restore true LOAD result carry
-    rts
+    jmp hal_asset_load_prg_header
 #else
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     stx c128_overlay_load_disk_index
@@ -442,7 +372,6 @@ c128_overlay_load_disk_len:    .byte 0
 c128_overlay_load_disk_lo:     .byte 0
 c128_overlay_load_disk_hi:     .byte 0
 #endif
-ol_save_p:        .byte 0
 #if C128
 ol_status_p:      .byte 0
 #endif
@@ -484,7 +413,7 @@ c128_preload_all_overlays:
     pla
     tax
     pla
-    jsr c128_preload_asset_load
+    jsr hal_asset_load_prg_header
     bcs !cpao_fail+
 
     ldx ol_target

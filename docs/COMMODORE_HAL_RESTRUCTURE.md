@@ -766,10 +766,19 @@ target-bank setup, and post-load channel cleanup.
       both asset-loader exports.
 - [ ] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
       setup, destination-bank setup, cleanup, and error/status reporting.
-- [ ] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
-      C64 and C128 use platform asset-load transactions. Plus/4 is temporarily
-      back on the known-good inline KERNAL transaction after the first common
-      delegation regressed Plus/4 runtime save-load resume.
+      First gate: `check_hal_asset_exports.py` now verifies that each platform
+      exports the raw LOAD and PRG-header transaction labels, that
+      `AssetLoad()` routes through `hal_asset_load`, and that the current
+      PRG-header transaction body owns SETNAM, SETLFS, LOAD, CLOSE, CLRCHN,
+      plus C128 destination-bank setup.
+- [x] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
+      `overlay_load_disk` routes C64, C128, and Plus/4 through
+      `hal_asset_load_prg_header`; the C128 overlay-cache preload path also
+      calls that HAL label instead of the C128 implementation name directly.
+      `check_hal_asset_exports.py` prevents raw KERNAL LOAD transactions,
+      direct `AssetLoad()`, and direct `c128_preload_asset_load` calls from
+      returning to `overlay_load_disk`. The targeted Plus/4
+      `overlay_load_plus4` runtime smoke passed after this slice.
 - [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
       HAL.
       First slice: the actual string-bank LOAD call now routes through the
