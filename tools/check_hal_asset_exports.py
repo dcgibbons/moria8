@@ -115,6 +115,14 @@ TIER_INIT_FORBIDDEN_TOKENS = (
     "$ffc3",
     "$ffcc",
 )
+ASSEMBLY_ROOTS = (
+    ROOT / "commodore/common",
+    ROOT / "commodore/c64",
+    ROOT / "commodore/c128",
+    ROOT / "commodore/plus4",
+    ROOT / "commodore/hal",
+)
+ASSET_NAME_NAMESPACE_RE = re.compile(r"\bhal_asset_[A-Za-z0-9_]*name[A-Za-z0-9_]*\b")
 
 
 def exported_labels(path: Path) -> set[str]:
@@ -154,6 +162,9 @@ def check_common_overlay_loader() -> list[str]:
         return ["overlay.s: missing overlay_load_disk body"]
     if "hal_asset_load_prg_header" not in body:
         errors.append("overlay.s: overlay_load_disk does not call hal_asset_load_prg_header")
+    for token in ("hal_storage_overlay_name_len", "hal_storage_overlay_name_lo", "hal_storage_overlay_name_hi"):
+        if token not in body:
+            errors.append(f"overlay.s: overlay_load_disk no longer uses {token}")
     for token in OVERLAY_FORBIDDEN_TOKENS:
         if token in body:
             errors.append(f"overlay.s: overlay_load_disk still contains {token}")
@@ -213,9 +224,25 @@ def check_common_tier_loader() -> list[str]:
         return ["tier_manager.s: missing tier_load_disk body"]
     if "hal_asset_load_prg_header" not in load_body:
         errors.append("tier_manager.s: tier_load_disk does not call hal_asset_load_prg_header")
+    for token in ("hal_storage_tier_name_len", "hal_storage_tier_name_lo", "hal_storage_tier_name_hi"):
+        if token not in load_body:
+            errors.append(f"tier_manager.s: tier_load_disk no longer uses {token}")
     for token in TIER_LOAD_FORBIDDEN_TOKENS:
         if token in load_body:
             errors.append(f"tier_manager.s: tier_load_disk still contains {token}")
+    return errors
+
+
+def check_asset_name_namespace() -> list[str]:
+    errors: list[str] = []
+    for root in ASSEMBLY_ROOTS:
+        for source in sorted(root.rglob("*.s")):
+            text = source.read_text(encoding="utf-8", errors="replace")
+            matches = sorted(set(ASSET_NAME_NAMESPACE_RE.findall(text)))
+            for match in matches:
+                errors.append(
+                    f"{source.relative_to(ROOT)}: premature asset-name namespace {match}"
+                )
     return errors
 
 
@@ -319,6 +346,11 @@ def main() -> int:
         for error in tier_errors:
             print(error)
         failed = True
+    namespace_errors = check_asset_name_namespace()
+    if namespace_errors:
+        for error in namespace_errors:
+            print(error)
+        failed = True
 
     if failed:
         return 1
@@ -329,7 +361,8 @@ def main() -> int:
         f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
         f"{len(TITLE_TRANSACTION_BODIES)} title transactions, "
         f"{len(CLOSE_TRANSACTION_BODIES)} standalone close transactions, "
-        "common overlay/string-bank/title/tier HAL paths)."
+        "common overlay/string-bank/title/tier HAL paths, "
+        "storage-owned asset filename namespace)."
     )
     return 0
 

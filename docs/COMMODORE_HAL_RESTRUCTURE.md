@@ -764,13 +764,15 @@ target-bank setup, and post-load channel cleanup.
       existing `AssetLoad()` macro routes through the raw-load HAL label on
       C64, C128, and Plus/4, and `tools/check_hal_asset_exports.py` verifies
       both asset-loader exports.
-- [ ] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
+- [x] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
       setup, destination-bank setup, cleanup, and error/status reporting.
       First gate: `check_hal_asset_exports.py` now verifies that each platform
       exports the raw LOAD, PRG-header transaction, title-load transaction,
       and asset-channel cleanup labels, that `AssetLoad()` routes through
       `hal_asset_load`, and that the current PRG-header transaction body owns
       SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, plus C128 destination-bank setup.
+      Runtime asset errors still use carry status only; richer user-facing
+      diagnostics remain a backlog item until a concrete failure requires it.
 - [x] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
       `overlay_load_disk` routes C64, C128, and Plus/4 through
       `hal_asset_load_prg_header`; the C128 overlay-cache preload path also
@@ -808,9 +810,13 @@ target-bank setup, and post-load channel cleanup.
       C64/Plus4 standalone close transactions plus the common call site. C128
       keeps close/CLRCHN inside `c128_preload_asset_load`; its exported cleanup
       label is a zero-byte no-op because the common caller is non-C128-only.
-- [ ] Keep `hal_storage_*` filename tables available as data inputs until a
+- [x] Keep `hal_storage_*` filename tables available as data inputs until a
       separate asset-name namespace is justified by real duplication or policy
       differences.
+      No `hal_asset_*name*` namespace exists yet. `check_hal_asset_exports.py`
+      now rejects premature asset-name labels and verifies overlay/tier common
+      asset paths still consume the existing platform-owned `hal_storage_*`
+      filename inputs.
 
 ### Phase 5: Common-Code Purity Ratchet
 
