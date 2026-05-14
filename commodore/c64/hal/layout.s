@@ -10,3 +10,5 @@
 .const hal_layout_msg_row = 0
 .const hal_layout_status_row = 21
 .const hal_layout_input_row = 24
+.const hal_layout_map_cols = 80
+.const hal_layout_map_rows = 48

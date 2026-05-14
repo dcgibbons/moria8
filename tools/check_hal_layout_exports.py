@@ -25,15 +25,26 @@ PLATFORMS = {
     "c64": {
         "layout": ROOT / "commodore/c64/hal/layout.s",
         "screen": ROOT / "commodore/c64/screen.s",
+        "map_cols": "MAP40_COLS",
+        "map_rows": "MAP40_ROWS",
     },
     "c128": {
         "layout": ROOT / "commodore/c128/hal/layout.s",
         "screen": ROOT / "commodore/c128/screen_vdc.s",
+        "map_cols": "C128_MAP_COLS",
+        "map_rows": "C128_MAP_ROWS",
     },
     "plus4": {
         "layout": ROOT / "commodore/plus4/hal/layout.s",
         "screen": ROOT / "commodore/plus4/screen.s",
+        "map_cols": "MAP40_COLS",
+        "map_rows": "MAP40_ROWS",
     },
+}
+
+MAP_CONSTANTS = {
+    "hal_layout_map_cols": "map_cols",
+    "hal_layout_map_rows": "map_rows",
 }
 
 
@@ -68,6 +79,7 @@ def resolve_const(constants: dict[str, str], name: str) -> int | None:
 
 def main() -> int:
     errors: list[str] = []
+    dungeon_consts = parse_consts(ROOT / "commodore/common/dungeon_data.s")
     for platform, paths in PLATFORMS.items():
         layout_path = paths["layout"]
         screen_path = paths["screen"]
@@ -96,6 +108,27 @@ def main() -> int:
                     f"{platform}: {hal_name}={hal_value} differs from "
                     f"{screen_name}={screen_value}"
                 )
+        for hal_name, map_key in MAP_CONSTANTS.items():
+            map_name = paths[map_key]
+            if hal_name not in layout_consts:
+                errors.append(f"{platform}: missing {hal_name} in {layout_path.relative_to(ROOT)}")
+                continue
+            if map_name not in dungeon_consts:
+                errors.append(f"{platform}: missing {map_name} in commodore/common/dungeon_data.s")
+                continue
+            hal_value = resolve_const(layout_consts, hal_name)
+            map_value = resolve_const(dungeon_consts, map_name)
+            if hal_value is None:
+                errors.append(f"{platform}: cannot resolve {hal_name} in {layout_path.relative_to(ROOT)}")
+                continue
+            if map_value is None:
+                errors.append(f"{platform}: cannot resolve {map_name} in commodore/common/dungeon_data.s")
+                continue
+            if hal_value != map_value:
+                errors.append(
+                    f"{platform}: {hal_name}={hal_value} differs from "
+                    f"{map_name}={map_value}"
+                )
 
     if errors:
         print("HAL layout export check failed:")
@@ -103,7 +136,8 @@ def main() -> int:
             print(f"  {error}")
         return 1
 
-    print(f"HAL layout export check passed ({len(REQUIRED_CONSTANTS)} constants x {len(PLATFORMS)} platforms).")
+    total_constants = len(REQUIRED_CONSTANTS) + len(MAP_CONSTANTS)
+    print(f"HAL layout export check passed ({total_constants} constants x {len(PLATFORMS)} platforms).")
     return 0
 
 

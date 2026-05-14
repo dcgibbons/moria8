@@ -11,6 +11,8 @@
 //   hal_layout_msg_row
 //   hal_layout_status_row
 //   hal_layout_input_row
+//   hal_layout_map_cols
+//   hal_layout_map_rows
 //
 // These constants describe common layout intent. They are not hardware
 // addresses and must match the platform's screen implementation. Platform code

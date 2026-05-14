@@ -491,6 +491,9 @@ Phase 2 next task:
 - [x] Legacy `SCREEN_*`, `VIEWPORT_*`, and row constants are now aliases to
       the layout HAL constants in each platform screen backend. Existing
       common callers keep their names while the source of truth moves to HAL.
+- [x] Layout HAL now includes platform map dimensions. The static layout
+      checker verifies them against the current `dungeon_data.s` map constants
+      without making `dungeon_data.s` depend on screen/layout import order.
 
 Storage adapter note:
 
