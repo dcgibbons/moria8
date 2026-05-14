@@ -485,6 +485,9 @@ Phase 2 next task:
       viewport, message, status, and input rows. The new
       `check_hal_layout_exports.py` gate verifies those constants against the
       existing platform screen implementations without changing runtime code.
+- [x] Each platform screen backend now imports its layout HAL constants and
+      asserts that legacy `SCREEN_*`, `VIEWPORT_*`, and row constants match
+      the HAL contract. Runtime code is unchanged.
 
 Storage adapter note:
 

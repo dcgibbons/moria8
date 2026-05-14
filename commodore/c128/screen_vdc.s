@@ -16,6 +16,8 @@
 // ============================================================
 // VDC Constants
 // ============================================================
+#import "hal/layout.s"
+
 .const VDC_ADDR_REG    = $d600    // VDC address/status register
 .const VDC_DATA_REG    = $d601    // VDC data register
 
@@ -34,6 +36,16 @@
 .const MSG_ROW     = 0      // Message line row
 .const STATUS_ROW  = 21     // Status bar first row
 .const INPUT_ROW   = 24     // Input prompt row
+
+.assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
+.assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows
+.assert "HAL layout viewport x", VIEWPORT_X, hal_layout_viewport_x
+.assert "HAL layout viewport y", VIEWPORT_Y, hal_layout_viewport_y
+.assert "HAL layout viewport width", VIEWPORT_W, hal_layout_viewport_w
+.assert "HAL layout viewport height", VIEWPORT_H, hal_layout_viewport_h
+.assert "HAL layout message row", MSG_ROW, hal_layout_msg_row
+.assert "HAL layout status row", STATUS_ROW, hal_layout_status_row
+.assert "HAL layout input row", INPUT_ROW, hal_layout_input_row
 
 // Screen code for space
 .const SC_SPACE     = $20
