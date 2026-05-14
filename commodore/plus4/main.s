@@ -663,6 +663,8 @@ plus4_install_ram_irq_vectors:
     plp
     rts
 
+.label hal_irq_install_runtime = plus4_install_ram_irq_vectors
+
 // ============================================================
 // kernal_load_safe — KERNAL LOAD wrapper for Plus/4
 // ============================================================

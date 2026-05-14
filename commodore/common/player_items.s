@@ -130,7 +130,7 @@ show_inv_and_select:
 #endif
     sei
 #if !C128 && C64_PRODUCT_IRQ_VECTOR_RUNTIME
-    jsr c64_install_ram_irq_vectors
+    jsr hal_irq_install_runtime
 #endif
     lda #BANK_NO_KERNAL
     sta $01

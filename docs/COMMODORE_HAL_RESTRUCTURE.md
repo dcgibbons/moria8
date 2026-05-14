@@ -446,6 +446,11 @@ Phase 2 next task:
       `C64_TIER_NAME_POOL_*` constants only for C64 tests; Plus/4 no longer
       defines the C64-shaped pool names, and the Plus/4 independence checker
       prevents them from returning.
+- [x] Third Plus/4 independence slice: common inventory overlay restore now
+      calls `hal_irq_install_runtime` instead of the C64 IRQ-vector installer
+      name. C64 and Plus/4 export their platform-owned installers through that
+      HAL label, and the Plus/4 independence checker prevents the common path
+      from regressing to `c64_install_ram_irq_vectors`.
 
 Storage adapter note:
 

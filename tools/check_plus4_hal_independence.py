@@ -29,6 +29,12 @@ CHECKS = (
             ".c64_install_ram_irq_vectors",
         ),
     ),
+    (
+        ROOT / "commodore" / "common" / "player_items.s",
+        (
+            "c64_install_ram_irq_vectors",
+        ),
+    ),
 )
 
 
