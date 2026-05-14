@@ -481,6 +481,10 @@ Phase 2 next task:
 - [x] Platform manifests now record and statically verify visible rows and
       viewport geometry against each platform's screen implementation before
       screen code moves behind HAL calls.
+- [x] Added assembler-visible layout HAL constants for screen dimensions,
+      viewport, message, status, and input rows. The new
+      `check_hal_layout_exports.py` gate verifies those constants against the
+      existing platform screen implementations without changing runtime code.
 
 Storage adapter note:
 
