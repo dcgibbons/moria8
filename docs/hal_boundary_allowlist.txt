@@ -92,11 +92,6 @@ commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df08
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df09
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df0a
 commodore/common/reu.s	target-conditional	#if C128
-commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc04
-commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dc05
-commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd04
-commodore/common/rng.s	raw-vic-cia-sid-ted-vdc-address	$dd05
-commodore/common/rng.s	target-conditional	#if PLUS4
 commodore/common/save.s	raw-c64-bank-port	$01
 commodore/common/save.s	raw-vic-cia-sid-ted-vdc-address	$dd00
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4

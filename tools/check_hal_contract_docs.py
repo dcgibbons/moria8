@@ -17,8 +17,9 @@ CONTRACTS = (
     "hal_input.s",
     "hal_sound.s",
     "hal_overlay.s",
+    "hal_entropy.s",
 )
-CONSTANT_CONTRACTS = {"hal_layout.s"}
+CONSTANT_CONTRACTS = {"hal_layout.s", "hal_entropy.s"}
 
 
 def required_exports(text: str) -> list[str]:

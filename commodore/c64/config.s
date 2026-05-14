@@ -17,6 +17,11 @@
 // C128 40/80 column flag (only valid on C128 native mode)
 .const C128_MODE_FLAG = $d7
 
+.label hal_entropy_timer0_lo = $dc04
+.label hal_entropy_timer0_hi = $dc05
+.label hal_entropy_timer1_lo = $dd04
+.label hal_entropy_timer1_hi = $dd05
+
 // Machine type constants (stored in zp_machine_type)
 .const MACHINE_C64  = $00
 .const MACHINE_C128 = $80

@@ -823,6 +823,11 @@ target-bank setup, and post-load channel cleanup.
 - [x] Add forbidden-symbol audit.
 - [x] Record current violations as a shrinking migration allowlist.
 - [ ] Remove hardware literals from `commodore/common/`.
+      First slice: common RNG no longer owns CIA/TED timer register literals or
+      a Plus/4 target branch. `hal_entropy_timer{0,1}_{lo,hi}` are now
+      platform-owned HAL constants exported from each platform config, and
+      `check_hal_entropy_exports.py` verifies both the exports and the common
+      RNG call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

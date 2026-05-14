@@ -2,25 +2,12 @@
 // rng.s — 32-bit Galois LFSR random number generator
 //
 // Polynomial: $ED (taps at bits 7,6,5,3,2,0 — period 2^32-1)
-// Seeded from CIA #1 Timer A ($DC04/$DC05) which free-runs.
+// Seeded from platform-owned free-running timer bytes.
 //
 // Galois LFSR is used instead of Fibonacci because it only
 // needs a single XOR per feedback bit (faster on 6502).
 //
 // State stored in zp_rng_0..zp_rng_3 (4 bytes, ZP for speed).
-
-// CIA Timer A registers (free-running, read for entropy)
-#if PLUS4
-.const CIA1_TIMER_A_LO = $ff02
-.const CIA1_TIMER_A_HI = $ff03
-.const CIA2_TIMER_A_LO = $ff04
-.const CIA2_TIMER_A_HI = $ff05
-#else
-.const CIA1_TIMER_A_LO = $dc04
-.const CIA1_TIMER_A_HI = $dc05
-.const CIA2_TIMER_A_LO = $dd04
-.const CIA2_TIMER_A_HI = $dd05
-#endif
 
 // Galois LFSR feedback polynomial
 .const LFSR_POLY = $ed
@@ -34,20 +21,20 @@
 // (for additional entropy from timing).
 // Preserves: nothing
 rng_seed:
-    // Read CIA timers and mix with input jitter and prior state
-    lda CIA1_TIMER_A_LO
+    // Read platform timer entropy and mix with input jitter and prior state
+    lda hal_entropy_timer0_lo
     eor zp_entropy
     eor zp_rng_0
     sta zp_rng_0
-    lda CIA1_TIMER_A_HI
+    lda hal_entropy_timer0_hi
     eor zp_entropy
     eor zp_rng_1
     sta zp_rng_1
-    lda CIA2_TIMER_A_LO
+    lda hal_entropy_timer1_lo
     eor zp_entropy
     eor zp_rng_2
     sta zp_rng_2
-    lda CIA2_TIMER_A_HI
+    lda hal_entropy_timer1_hi
     eor zp_entropy
     eor zp_rng_3
     sta zp_rng_3

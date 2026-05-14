@@ -14,6 +14,7 @@
 #import "hal_sound.s"
 #import "hal_storage.s"
 #import "hal_overlay.s"
+#import "hal_entropy.s"
 
 .const HAL_STATUS_OK = 0
 .const HAL_STATUS_ERR_NOT_FOUND = 1

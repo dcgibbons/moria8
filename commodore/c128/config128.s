@@ -28,6 +28,11 @@ detect_machine:
 // KERNAL revision byte address (same location as C64, different value)
 .const KERNAL_REV = $ff80
 
+.label hal_entropy_timer0_lo = $dc04
+.label hal_entropy_timer0_hi = $dc05
+.label hal_entropy_timer1_lo = $dd04
+.label hal_entropy_timer1_hi = $dd05
+
 // ============================================================
 // Death source constants (used by turn.s, player_items.s, score.s)
 // ============================================================
