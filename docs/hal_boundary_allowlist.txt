@@ -99,7 +99,6 @@ commodore/common/save.s	target-conditional	#if C128 || PLUS4
 commodore/common/save.s	target-conditional	#if PLUS4
 commodore/common/score_io.s	raw-c64-bank-port	$01
 commodore/common/sound.s	raw-c64-bank-port	$01
-commodore/common/sound.s	raw-vic-cia-sid-ted-vdc-address	$d400
 commodore/common/spell_data.s	raw-c64-bank-port	$01
 commodore/common/spell_effects.s	target-conditional	#if !C128
 commodore/common/spell_effects.s	target-conditional	#if (C128

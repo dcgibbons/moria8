@@ -833,6 +833,9 @@ target-bank setup, and post-load channel cleanup.
       `hal_memory_bank_*` constants from `commodore/{c64,c128,plus4}/hal/`,
       `common/bank_port_consts.s` is now an alias shim, and
       `check_hal_memory_bank_exports.py` gates that boundary.
+      Third slice: common SID sound code no longer owns the SID base literal.
+      C64 and C128 export `hal_sound_sid_base` from platform HAL files, and
+      `check_hal_sound_exports.py` verifies the exports and common sound use.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

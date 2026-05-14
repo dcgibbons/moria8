@@ -7,6 +7,9 @@
 //   hal_sound_stop
 //   hal_sound_update
 //
+// Required sound constants per SID platform:
+//   hal_sound_sid_base
+//
 // A = semantic sound effect ID on hal_sound_play. Platform code owns SID/TED
 // register programming and any stuck-tone cleanup.
 //

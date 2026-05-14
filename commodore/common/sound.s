@@ -12,7 +12,7 @@
 // short envelopes that self-release.
 
 // SID registers
-.const SID_BASE     = $d400
+.const SID_BASE     = hal_sound_sid_base
 
 // Voice 3 registers (offset +14 from SID base)
 .const SID_V3_FREQ_LO  = SID_BASE + 14
