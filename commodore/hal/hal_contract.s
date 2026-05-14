@@ -8,6 +8,7 @@
 #import "hal_lifecycle.s"
 #import "hal_memory.s"
 #import "hal_irq.s"
+#import "hal_layout.s"
 #import "hal_screen.s"
 #import "hal_input.s"
 #import "hal_sound.s"

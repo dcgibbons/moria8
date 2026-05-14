@@ -144,6 +144,7 @@ commodore/
 │   ├── hal_lifecycle.s
 │   ├── hal_memory.s
 │   ├── hal_irq.s
+│   ├── hal_layout.s
 │   ├── hal_screen.s
 │   ├── hal_input.s
 │   ├── hal_sound.s
@@ -494,6 +495,10 @@ Phase 2 next task:
 - [x] Layout HAL now includes platform map dimensions. The static layout
       checker verifies them against the current `dungeon_data.s` map constants
       without making `dungeon_data.s` depend on screen/layout import order.
+- [x] Layout is now part of the top-level HAL contract aggregator. The
+      contract-doc checker recognizes constant-only contracts, so layout stays
+      documented as platform constants instead of being forced into a fake
+      service ABI.
 
 Storage adapter note:
 
