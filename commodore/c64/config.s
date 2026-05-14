@@ -102,6 +102,29 @@ hal_asset_load_prg_header:
     plp
     rts
 
+hal_asset_load_title:
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr $ffbd               // SETNAM
+    lda #2
+    ldx #8
+    ldy #0                  // Use caller destination at MAP_BASE
+    jsr $ffba               // SETLFS
+    lda #0
+    ldx #<MAP_BASE
+    ldy #>MAP_BASE
+    jsr kernal_load_safe
+    php
+    lda #2
+    jsr $ffc3               // CLOSE
+    jsr $ffcc               // CLRCHN
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    plp
+    rts
+
 asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00    // Player is alive

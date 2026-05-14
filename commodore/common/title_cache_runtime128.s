@@ -14,6 +14,17 @@ c128_title_load_and_draw_cached:
     jmp title_render_data
 
 !ctld_disk:
+    jsr hal_asset_load_title
+    bcc !ctld_loaded+
+    jmp title_fallback_render
+!ctld_loaded:
+    lda #0
+    sta zp_kernal_status
+    jsr c128_title_cache_store_from_map
+    jsr screen_clear
+    jmp title_render_data
+
+c128_title_asset_load:
     // C128: TITLE art must load into Bank 1 MAP_BASE ($4000-$4EFF).
     // SETBNK controls LOAD destination bank; keep filename in Bank 0.
     lda #1
@@ -45,15 +56,7 @@ c128_title_load_and_draw_cached:
     jsr safe_setbnk
 
     plp
-    bcc !ctld_loaded+
-    jmp title_fallback_render
-!ctld_loaded:
-
-    lda #0
-    sta zp_kernal_status
-    jsr c128_title_cache_store_from_map
-    jsr screen_clear
-    jmp title_render_data
+    rts
 
 c128_title_cache_is_valid:
     php

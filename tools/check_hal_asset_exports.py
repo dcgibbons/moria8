@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_LABELS = (
     "hal_asset_load",
     "hal_asset_load_prg_header",
+    "hal_asset_load_title",
 )
 
 PLATFORM_FILES = {
@@ -37,8 +38,27 @@ TRANSACTION_BODIES = {
         ("$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
     ),
 }
+TITLE_TRANSACTION_BODIES = {
+    "c64": (
+        ROOT / "commodore/c64/config.s",
+        "hal_asset_load_title",
+        ("hal_storage_title_name", "$ffbd", "$ffba", "kernal_load_safe", "$ffc3", "$ffcc", "$dd00"),
+    ),
+    "c128": (
+        ROOT / "commodore/common/title_cache_runtime128.s",
+        "c128_title_asset_load",
+        ("safe_setbnk", "hal_storage_title_name", "hal_storage_setnam", "hal_storage_setlfs", "kernal_load", "w_close"),
+    ),
+    "plus4": (
+        ROOT / "commodore/plus4/config.s",
+        "hal_asset_load_title",
+        ("hal_storage_title_name", "$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
+    ),
+}
 OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
 STRING_BANK_COMMON = ROOT / "commodore/common/string_bank.s"
+TITLE_SCREEN_COMMON = ROOT / "commodore/common/title_screen.s"
+TITLE_CACHE_COMMON = ROOT / "commodore/common/title_cache_runtime128.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
     "$ffba",
@@ -56,6 +76,15 @@ STRING_BANK_FORBIDDEN_TOKENS = (
     "$ffcc",
     "$dd00",
     ":AssetLoad()",
+)
+TITLE_SCREEN_FORBIDDEN_TOKENS = (
+    "hal_storage_setnam",
+    "hal_storage_setlfs",
+    "hal_storage_close",
+    "kernal_load",
+    "kernal_load_safe",
+    "w_close",
+    "safe_setbnk",
 )
 
 
@@ -117,6 +146,27 @@ def check_common_string_bank_loader() -> list[str]:
     return errors
 
 
+def check_common_title_loader() -> list[str]:
+    errors: list[str] = []
+    body = label_body(TITLE_SCREEN_COMMON, "title_load_and_draw")
+    if body is None:
+        return ["title_screen.s: missing title_load_and_draw body"]
+    if "hal_asset_load_title" not in body:
+        errors.append("title_screen.s: title_load_and_draw does not call hal_asset_load_title")
+    for token in TITLE_SCREEN_FORBIDDEN_TOKENS:
+        if token in body:
+            errors.append(f"title_screen.s: title_load_and_draw still contains {token}")
+
+    cache_body = label_body(TITLE_CACHE_COMMON, "c128_title_load_and_draw_cached")
+    if cache_body is None:
+        errors.append("title_cache_runtime128.s: missing c128_title_load_and_draw_cached body")
+    elif "hal_asset_load_title" not in cache_body:
+        errors.append(
+            "title_cache_runtime128.s: c128_title_load_and_draw_cached does not call hal_asset_load_title"
+        )
+    return errors
+
+
 def main() -> int:
     failed = False
     for platform, path in PLATFORM_FILES.items():
@@ -154,6 +204,27 @@ def main() -> int:
                 print(f"  {token}")
             failed = True
 
+        title_body_path, title_label, title_required_tokens = TITLE_TRANSACTION_BODIES[platform]
+        title_body = label_body(title_body_path, title_label)
+        if title_body is None:
+            print(
+                f"{platform}: missing title transaction body {title_label} in "
+                f"{title_body_path.relative_to(ROOT)}"
+            )
+            failed = True
+            continue
+        title_missing_tokens = [
+            token for token in title_required_tokens if token not in title_body
+        ]
+        if title_missing_tokens:
+            print(
+                f"{platform}: {title_label} is missing title transaction operations in "
+                f"{title_body_path.relative_to(ROOT)}"
+            )
+            for token in title_missing_tokens:
+                print(f"  {token}")
+            failed = True
+
     overlay_errors = check_common_overlay_loader()
     if overlay_errors:
         for error in overlay_errors:
@@ -164,6 +235,11 @@ def main() -> int:
         for error in string_bank_errors:
             print(error)
         failed = True
+    title_errors = check_common_title_loader()
+    if title_errors:
+        for error in title_errors:
+            print(error)
+        failed = True
 
     if failed:
         return 1
@@ -172,7 +248,8 @@ def main() -> int:
         "Asset-loader HAL export check passed "
         f"({len(REQUIRED_LABELS)} label x {len(PLATFORM_FILES)} platforms, "
         f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
-        "common overlay/string-bank HAL paths)."
+        f"{len(TITLE_TRANSACTION_BODIES)} title transactions, "
+        "common overlay/string-bank/title HAL paths)."
     )
     return 0
 

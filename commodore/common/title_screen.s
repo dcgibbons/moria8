@@ -20,50 +20,7 @@ title_load_and_draw:
 #if C128
     jmp c128_title_load_and_draw_cached
 #else
-    // SETNAM: platform-specific title asset filename
-    lda #hal_storage_title_name_len
-    ldx #<hal_storage_title_name
-    ldy #>hal_storage_title_name
-    jsr hal_storage_setnam
-
-    // SETLFS: logical file 2, device 8.
-    // C64 title PRG is linked for MAP_BASE already, so use the file header.
-    // C128 MAP_BASE is Bank 1 $4000, so force caller-supplied X/Y destination.
-    lda #2
-    ldx #SAVE_DEVICE
-#if C128
-    ldy #1
-#else
-    ldy #0
-#endif
-    jsr hal_storage_setlfs
-
-    // LOAD: 0 = load, X/Y = destination (MAP_BASE)
-    lda #0
-    ldx #<MAP_BASE
-    ldy #>MAP_BASE
-#if C128
-    jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
-#else
-    jsr kernal_load_safe
-#endif
-
-    php                     // Save carry (LOAD success/failure)
-    sei
-    lda #2
-#if C128
-    jsr w_close             // C128: force ROM mapping around CLOSE
-#else
-    jsr hal_storage_close   // KERNAL LOAD doesn't remove file 2 from the table
-#endif
-
-#if C128
-    // Restore default LOAD destination to Bank 0 for subsequent file I/O.
-    lda #0
-    ldx #0
-    jsr safe_setbnk         // SETBNK (handles Enter/Exit internally)
-#endif
-    plp                     // Restore carry from LOAD
+    jsr hal_asset_load_title
     bcs title_fallback_render    // Carry set = error
 
     // Clear KERNAL status byte — LOAD leaves EOI (bit 6) set from the last file byte.

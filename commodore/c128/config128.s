@@ -36,8 +36,12 @@ detect_machine:
 .label hal_asset_load = kernal_load
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .label hal_asset_load_prg_header = c128_preload_asset_load
+.label hal_asset_load_title = c128_title_asset_load
 #else
 hal_asset_load_prg_header:
+    sec
+    rts
+hal_asset_load_title:
     sec
     rts
 #endif

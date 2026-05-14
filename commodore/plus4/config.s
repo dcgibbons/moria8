@@ -53,6 +53,34 @@ hal_asset_load_prg_header:
     plp
     rts
 
+hal_asset_load_title:
+    :EnterKernal()
+    lda #hal_storage_title_name_len
+    ldx #<hal_storage_title_name
+    ldy #>hal_storage_title_name
+    jsr $ffbd               // SETNAM
+    lda #2
+    ldx #8
+    ldy #0                  // Use caller destination at MAP_BASE
+    jsr $ffba               // SETLFS
+    lda #0
+    ldx #<MAP_BASE
+    ldy #>MAP_BASE
+    jsr hal_asset_load
+    php
+    lda #2
+    jsr $ffc3               // CLOSE
+    jsr $ffcc               // CLRCHN
+    plp
+    php
+    pla
+    sta asset_load_save_p
+    :ExitKernal()
+    lda asset_load_save_p
+    pha
+    plp
+    rts
+
 asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00

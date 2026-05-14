@@ -787,8 +787,14 @@ target-bank setup, and post-load channel cleanup.
       The C64 subsystem test stub now models that transaction cleanup, and
       `check_hal_asset_exports.py` prevents raw KERNAL LOAD orchestration from
       returning to `string_bank.s`.
-- [ ] Revisit title-art loading so C64/C128/Plus4 all use one explicit
+- [x] Revisit title-art loading so C64/C128/Plus4 all use one explicit
       asset-loader contract while preserving C128 Bank 1 cache behavior.
+      `hal_asset_load_title` is now required on every platform. C64 and
+      Plus/4 own their MAP_BASE title-load transaction in platform config;
+      C128 keeps the Bank 1 title cache wrapper and delegates disk load to the
+      same HAL label. `check_hal_asset_exports.py` verifies the platform
+      title transactions and prevents common title code from returning to raw
+      storage/load choreography.
 - [ ] Keep `hal_storage_*` filename tables available as data inputs until a
       separate asset-name namespace is justified by real duplication or policy
       differences.

@@ -4,6 +4,7 @@
 // Required exports per platform:
 //   hal_asset_load
 //   hal_asset_load_prg_header
+//   hal_asset_load_title
 //
 // Service contracts:
 // - hal_asset_load: wraps the platform's KERNAL LOAD equivalent.
@@ -34,3 +35,15 @@
 //
 // Platform code owns SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, destination-bank
 // setup, OS visibility, and post-load display/runtime cleanup.
+//
+// - hal_asset_load_title: loads the platform title-art asset into MAP_BASE.
+//
+// Input:
+//   none
+//
+// Output:
+//   Carry clear = success
+//   Carry set = failure
+//
+// Platform code owns title filename selection, SETNAM, SETLFS, LOAD, CLOSE,
+// CLRCHN, destination-bank setup, OS visibility, and post-load cleanup.
