@@ -59,6 +59,7 @@ OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
 STRING_BANK_COMMON = ROOT / "commodore/common/string_bank.s"
 TITLE_SCREEN_COMMON = ROOT / "commodore/common/title_screen.s"
 TITLE_CACHE_COMMON = ROOT / "commodore/common/title_cache_runtime128.s"
+TIER_MANAGER_COMMON = ROOT / "commodore/common/tier_manager.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
     "$ffba",
@@ -85,6 +86,17 @@ TITLE_SCREEN_FORBIDDEN_TOKENS = (
     "kernal_load_safe",
     "w_close",
     "safe_setbnk",
+)
+TIER_LOAD_FORBIDDEN_TOKENS = (
+    "$ffbd",
+    "$ffba",
+    "$ffd5",
+    "$ffc3",
+    "$ffcc",
+    "$dd00",
+    ":AssetLoad()",
+    ":EnterKernal()",
+    ":ExitKernal()",
 )
 
 
@@ -167,6 +179,19 @@ def check_common_title_loader() -> list[str]:
     return errors
 
 
+def check_common_tier_loader() -> list[str]:
+    errors: list[str] = []
+    body = label_body(TIER_MANAGER_COMMON, "tier_load_disk")
+    if body is None:
+        return ["tier_manager.s: missing tier_load_disk body"]
+    if "hal_asset_load_prg_header" not in body:
+        errors.append("tier_manager.s: tier_load_disk does not call hal_asset_load_prg_header")
+    for token in TIER_LOAD_FORBIDDEN_TOKENS:
+        if token in body:
+            errors.append(f"tier_manager.s: tier_load_disk still contains {token}")
+    return errors
+
+
 def main() -> int:
     failed = False
     for platform, path in PLATFORM_FILES.items():
@@ -240,6 +265,11 @@ def main() -> int:
         for error in title_errors:
             print(error)
         failed = True
+    tier_errors = check_common_tier_loader()
+    if tier_errors:
+        for error in tier_errors:
+            print(error)
+        failed = True
 
     if failed:
         return 1
@@ -249,7 +279,7 @@ def main() -> int:
         f"({len(REQUIRED_LABELS)} label x {len(PLATFORM_FILES)} platforms, "
         f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
         f"{len(TITLE_TRANSACTION_BODIES)} title transactions, "
-        "common overlay/string-bank/title HAL paths)."
+        "common overlay/string-bank/title/tier HAL paths)."
     )
     return 0
 

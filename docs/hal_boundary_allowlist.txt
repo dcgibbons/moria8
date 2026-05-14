@@ -113,7 +113,6 @@ commodore/common/spell_effects.s	target-conditional	#if (C128
 commodore/common/store_data.s	raw-c64-bank-port	$01
 commodore/common/string_bank.s	target-conditional	#if !C128
 commodore/common/tier_manager.s	raw-c64-bank-port	$01
-commodore/common/tier_manager.s	raw-vic-cia-sid-ted-vdc-address	$dd00
 commodore/common/tier_manager.s	target-conditional	#if !C128
 commodore/common/tier_manager.s	target-conditional	#if !PLUS4
 commodore/common/tier_manager.s	target-conditional	#if C128

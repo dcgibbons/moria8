@@ -619,9 +619,6 @@ c128_select_tier_cache_slot:
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 tier_load_disk:
-#if !C128
-    :EnterKernal()
-#endif
     // Select filename from table
     ldx current_tier
     dex                         // 0-based index (tier 1 → index 0)
@@ -635,35 +632,7 @@ tier_load_disk:
     tax                         // X = filename addr lo, Y = hi
     pla                         // A = filename length
 
-    // SETNAM: platform-owned tier filename
-    jsr $ffbd                   // KERNAL SETNAM
-
-    // SETLFS: file 2, device 8, secondary 1 (load to header address)
-    lda #2                      // Logical file number
-    ldx #8                      // Device 8
-    ldy #1                      // Secondary 1 = load to PRG header address ($E000)
-    jsr $ffba                   // KERNAL SETLFS
-
-    // LOAD
-    lda #0                      // 0 = LOAD (not VERIFY)
-    ldx #$00                    // Ignored with secondary 1
-    ldy #$e0
-    :AssetLoad()                // Platform asset LOAD (handles C128 Bank 1)
-    // Carry clear = success, carry set = error
-    php                         // Save carry (load result)
-    lda #2
-    jsr $ffc3                   // KERNAL CLOSE — release file #2
-    jsr $ffcc                   // KERNAL CLRCHN — restore default I/O
-#if !C128
-    lda $dd00
-    ora #%00000011              // Restore VIC-II bank 0 after serial I/O
-    sta $dd00
-#endif
-    plp                         // Restore carry
-#if !C128
-    :ExitKernal()
-#endif
-    rts
+    jmp hal_asset_load_prg_header
 
 
 tier_loading_str:

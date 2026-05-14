@@ -795,6 +795,12 @@ target-bank setup, and post-load channel cleanup.
       same HAL label. `check_hal_asset_exports.py` verifies the platform
       title transactions and prevents common title code from returning to raw
       storage/load choreography.
+- [x] Move tier-data disk loading behind Asset Loader HAL.
+      `tier_load_disk` now selects the platform-owned tier filename and calls
+      `hal_asset_load_prg_header`; common tier code no longer performs
+      SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, KERNAL entry/exit, or serial-bus
+      bank cleanup. `check_hal_asset_exports.py` now guards the tier disk-load
+      path alongside overlay, string-bank, and title paths.
 - [ ] Keep `hal_storage_*` filename tables available as data inputs until a
       separate asset-name namespace is justified by real duplication or policy
       differences.
