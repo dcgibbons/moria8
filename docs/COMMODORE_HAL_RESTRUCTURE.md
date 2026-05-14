@@ -406,7 +406,7 @@ Gate to leave Phase 1:
 - [x] Add `commodore/hal/` contract files.
 - [x] Add fail-loud missing-service stubs.
 - [x] Add platform capability/layout manifests.
-- [ ] Document register, clobber, carry, IRQ, and ROM/RAM contracts for each
+- [x] Document register, clobber, carry, IRQ, and ROM/RAM contracts for each
       service.
 - [x] Wire C64 with thin adapters first.
 - [x] Wire C128 with thin adapters second.
@@ -431,6 +431,11 @@ Phase 2 next task:
       `check_hal_manifests.py` gate verifies required platform facts, including
       display class, banking mechanism, default device numbers, compatible
       drive assumptions, and capability flags.
+- [x] Add enforceable contract documentation for lifecycle, memory, IRQ,
+      screen, input, sound, and asset-loader services. The
+      `check_hal_contract_docs.py` gate verifies every non-storage required
+      export has an explicit contract entry; storage remains covered by the
+      dedicated ABI text and storage export checker.
 
 Storage adapter note:
 

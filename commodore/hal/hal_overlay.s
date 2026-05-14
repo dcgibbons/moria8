@@ -5,7 +5,8 @@
 //   hal_asset_load
 //   hal_asset_load_prg_header
 //
-// `hal_asset_load` wraps the platform's KERNAL LOAD equivalent.
+// Service contracts:
+// - hal_asset_load: wraps the platform's KERNAL LOAD equivalent.
 //
 // Input:
 //   A = 0 for LOAD, nonzero for VERIFY
@@ -19,8 +20,8 @@
 // Platform code owns banking, OS visibility, target-bank setup, and any
 // post-load runtime resync required after the ROM call.
 //
-// `hal_asset_load_prg_header` wraps the common PRG-header load transaction for
-// runtime assets.
+// - hal_asset_load_prg_header: wraps the common PRG-header load transaction
+//   for runtime assets.
 //
 // Input:
 //   A = filename length
