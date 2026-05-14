@@ -405,7 +405,7 @@ Gate to leave Phase 1:
 
 - [x] Add `commodore/hal/` contract files.
 - [x] Add fail-loud missing-service stubs.
-- [ ] Add platform capability/layout manifests.
+- [x] Add platform capability/layout manifests.
 - [ ] Document register, clobber, carry, IRQ, and ROM/RAM contracts for each
       service.
 - [x] Wire C64 with thin adapters first.
@@ -426,6 +426,11 @@ Phase 2 next task:
       `commodore/common/hal_missing_service_stubs.s` for non-storage contracts.
       Product builds do not import these stubs; `check_hal_missing_stubs.py`
       gates stub coverage against the contract files.
+- [x] Add machine-readable capability/layout manifests at
+      `commodore/{c64,c128,plus4}/hal/manifest.json`. The static
+      `check_hal_manifests.py` gate verifies required platform facts, including
+      display class, banking mechanism, default device numbers, compatible
+      drive assumptions, and capability flags.
 
 Storage adapter note:
 

@@ -266,6 +266,7 @@ check-hal-boundaries:
 	cd .. && python3 tools/check_hal_storage_exports.py
 	cd .. && python3 tools/check_hal_asset_exports.py
 	cd .. && python3 tools/check_hal_missing_stubs.py
+	cd .. && python3 tools/check_hal_manifests.py
 
 # ── C64 build rules ───────────────────────────────────────
 $(VERSION_INC): $(VERSION_FILE) $(VERSION_INC_TOOL) | $(OUT)

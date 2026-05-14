@@ -1,0 +1,38 @@
+{
+  "platform": "c128",
+  "machine": {
+    "cpu": "8502",
+    "ram_kb": 128
+  },
+  "display": {
+    "hardware": "vdc",
+    "columns": 80,
+    "screen_ram": "vdc:$0000",
+    "color_ram": "vdc:$0800"
+  },
+  "storage": {
+    "bus": "commodore_serial",
+    "program_media": "d71",
+    "save_media": "d64",
+    "default_program_device": 8,
+    "default_save_device": 9,
+    "compatible_drives": ["1541", "1571", "1581", "sd2iec", "pi1541"]
+  },
+  "memory": {
+    "banking": "$ff00+$01",
+    "map_base": "$4000",
+    "map_end": "$730b",
+    "banked_data_base": "$7400",
+    "banked_data_end": "$94f7",
+    "io_hole_base": "$d000",
+    "io_hole_end": "$dfff"
+  },
+  "capabilities": {
+    "reu_overlay_cache": false,
+    "vdc_80_column": true,
+    "ted_display": false,
+    "sid_sound": true,
+    "ted_sound": false,
+    "two_drive_save": true
+  }
+}
