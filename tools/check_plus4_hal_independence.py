@@ -14,6 +14,10 @@ CHECKS = (
         (
             "c64_irq_hidden_rom",
             "c64_install_ram_irq_vectors",
+            "platform_main_loop_begin_c64",
+            "platform_vector_reassert_c64",
+            "platform_runtime_resync_c64",
+            "platform_services_install64",
         ),
     ),
     (

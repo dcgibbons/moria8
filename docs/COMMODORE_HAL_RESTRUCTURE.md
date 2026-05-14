@@ -460,6 +460,10 @@ Phase 2 next task:
       legacy `C64_PRODUCT_IRQ_VECTOR_RUNTIME` name for C64-owned input code,
       but common inventory overlay restore no longer depends on a C64-shaped
       product define.
+- [x] Sixth Plus/4 independence slice: Plus/4 lifecycle/runtime-service install
+      and resync labels are Plus/4-owned (`plus4_platform_*`) instead of
+      reusing C64-shaped `platform_*_c64` names. The installed shared service
+      vectors and runtime behavior are unchanged.
 
 Storage adapter note:
 

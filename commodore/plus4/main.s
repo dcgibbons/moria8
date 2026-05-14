@@ -466,7 +466,7 @@ entry_main:
     jsr init_load_banked
 
     jsr generation_busy_install
-    jsr platform_services_install64
+    jsr plus4_platform_services_install
     jsr platform_services_assert_installed
     jsr input_lock_charset_switch
 
@@ -671,7 +671,7 @@ plus4_install_ram_irq_vectors:
 kernal_load_safe:
     jsr plus4_kernal_load   // KERNAL LOAD — carry set on error
     php                     // Preserve carry for caller
-    jsr platform_runtime_resync_c64
+    jsr plus4_platform_runtime_resync
     plp
     rts
 
@@ -734,7 +734,7 @@ tramp_find_special_room:
     jmp tramp_sr_epilogue
 
 tramp_sr_epilogue:
-    jmp platform_runtime_resync_c64
+    jmp plus4_platform_runtime_resync
 
 // ============================================================
 // Ego item trampolines — SEI + bank out KERNAL, call $F000+
@@ -826,32 +826,32 @@ tsi_krev_cached: .byte 0
 tramp_reu_show_status:
     rts
 
-platform_main_loop_begin_c64:
-platform_vector_reassert_c64:
-platform_runtime_resync_c64:
+plus4_platform_main_loop_begin:
+plus4_platform_vector_reassert:
+plus4_platform_runtime_resync:
     sei
     jsr plus4_bank_ram
     jmp plus4_display_resync
 
-platform_services_install64:
+plus4_platform_services_install:
     lda #$4c
     sta platform_main_loop_begin_api
     sta platform_vector_reassert_api
     sta platform_runtime_resync_api
 
-    lda #<platform_main_loop_begin_c64
+    lda #<plus4_platform_main_loop_begin
     sta platform_main_loop_begin_api + 1
-    lda #>platform_main_loop_begin_c64
+    lda #>plus4_platform_main_loop_begin
     sta platform_main_loop_begin_api + 2
 
-    lda #<platform_vector_reassert_c64
+    lda #<plus4_platform_vector_reassert
     sta platform_vector_reassert_api + 1
-    lda #>platform_vector_reassert_c64
+    lda #>plus4_platform_vector_reassert
     sta platform_vector_reassert_api + 2
 
-    lda #<platform_runtime_resync_c64
+    lda #<plus4_platform_runtime_resync
     sta platform_runtime_resync_api + 1
-    lda #>platform_runtime_resync_c64
+    lda #>plus4_platform_runtime_resync
     sta platform_runtime_resync_api + 2
 
     jmp platform_services_mark_installed
