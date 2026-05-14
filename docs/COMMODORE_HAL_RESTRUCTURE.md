@@ -471,6 +471,10 @@ Phase 2 next task:
       call `platform_runtime_resync_api` instead of naming C128 runtime guard
       helpers directly. C128 keeps `c128_restore_runtime_guards` as a
       platform-owned implementation detail.
+- [x] Second lifecycle/runtime-resync cleanup: the C128-only generation overlay
+      restore helper in common code now has a platform-neutral name,
+      `platform_restore_generation_overlay`, instead of a C128-shaped helper
+      name.
 
 Storage adapter note:
 
