@@ -441,6 +441,11 @@ Phase 2 next task:
       `c64_*` compatibility names. The Plus/4 runtime harness calls the
       renamed symbol, and `check_plus4_hal_independence.py` prevents those IRQ
       compatibility labels from returning.
+- [x] Second Plus/4 independence slice: the non-C128 hidden-RAM tier-name pool
+      contract is now `PLATFORM_TIER_NAME_POOL_*`. C64 keeps legacy
+      `C64_TIER_NAME_POOL_*` constants only for C64 tests; Plus/4 no longer
+      defines the C64-shaped pool names, and the Plus/4 independence checker
+      prevents them from returning.
 
 Storage adapter note:
 

@@ -17,6 +17,13 @@ CHECKS = (
         ),
     ),
     (
+        ROOT / "commodore" / "plus4" / "memory.s",
+        (
+            "C64_TIER_NAME_POOL_BASE",
+            "C64_TIER_NAME_POOL_END",
+        ),
+    ),
+    (
         ROOT / "commodore" / "plus4" / "harnessplus4.py",
         (
             ".c64_install_ram_irq_vectors",

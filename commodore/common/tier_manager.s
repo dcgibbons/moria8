@@ -40,8 +40,8 @@ c128_tier_cache_size_hi: .byte 0
 c128_tier_soa_end_lo: .byte 0
 c128_tier_soa_end_hi: .byte 0
 #if !C128
-c64_tier_name_src_lo: .byte 0
-c64_tier_name_src_hi: .byte 0
+platform_tier_name_src_lo: .byte 0
+platform_tier_name_src_hi: .byte 0
 #endif
 
 // tier_invalidate_state — Clear active tier state + derived metadata
@@ -61,8 +61,8 @@ tier_invalidate_state:
     sta tier_name_hi_addr+1
 #endif
 #if !C128
-    sta c64_tier_name_src_lo
-    sta c64_tier_name_src_hi
+    sta platform_tier_name_src_lo
+    sta platform_tier_name_src_hi
 #endif
     rts
 
@@ -398,7 +398,7 @@ tier_load:
     jsr c128_set_tier_name_tables_from_cache
 !tl_keep_e000_names:
 #else
-    jsr c64_copy_tier_names_to_pool
+    jsr platform_copy_tier_names_to_pool
 #endif
 
 #if !C128
@@ -433,16 +433,16 @@ tier_load:
     rts
 
 #if !C128
-// c64_copy_tier_names_to_pool — Copy the contiguous active tier name block
+// platform_copy_tier_names_to_pool — Copy the active tier name block
 // from the staged $E000 tier PRG into hidden RAM under I/O, then rewrite
 // cr_name pointers. Called while interrupts are masked and $E000 RAM is visible.
 // Output: carry clear
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_ptr2
-c64_copy_tier_names_to_pool:
+platform_copy_tier_names_to_pool:
     lda zp_ptr0
-    sta c64_tier_name_src_lo
+    sta platform_tier_name_src_lo
     lda zp_ptr0_hi
-    sta c64_tier_name_src_hi
+    sta platform_tier_name_src_hi
 
     ldx current_tier
     lda tier_size_lo,x
@@ -452,9 +452,9 @@ c64_copy_tier_names_to_pool:
     adc #>BANKED_DATA_BASE
     sta zp_ptr2_hi
 
-    lda #<C64_TIER_NAME_POOL_BASE
+    lda #<PLATFORM_TIER_NAME_POOL_BASE
     sta zp_ptr1
-    lda #>C64_TIER_NAME_POOL_BASE
+    lda #>PLATFORM_TIER_NAME_POOL_BASE
     sta zp_ptr1_hi
 
     // C64 only: hide I/O so writes to $D000-$D7FF reach RAM, not registers.
@@ -490,12 +490,12 @@ c64_copy_tier_names_to_pool:
     bcs !ctnp_done+
     lda cr_name_lo,x
     sec
-    sbc c64_tier_name_src_lo
+    sbc platform_tier_name_src_lo
     sta cr_name_lo,x
     lda cr_name_hi,x
-    sbc c64_tier_name_src_hi
+    sbc platform_tier_name_src_hi
     clc
-    adc #>C64_TIER_NAME_POOL_BASE
+    adc #>PLATFORM_TIER_NAME_POOL_BASE
     sta cr_name_hi,x
     inx
     jmp !ctnp_remap_loop-
@@ -503,7 +503,7 @@ c64_copy_tier_names_to_pool:
     clc
     rts
 
-.assert "C64 tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (C64_TIER_NAME_POOL_END - C64_TIER_NAME_POOL_BASE + 1), true
+.assert "Platform tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1), true
 #endif
 
 #if C128

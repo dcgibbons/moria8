@@ -1186,9 +1186,9 @@ creature_get_name:
 
 !cgn_setup_normal:
 #if !C128
-    cmp #>C64_TIER_NAME_POOL_BASE
+    cmp #>PLATFORM_TIER_NAME_POOL_BASE
     bcc !cgn_setup_linear_c64+
-    cmp #>(C64_TIER_NAME_POOL_END + 1)
+    cmp #>(PLATFORM_TIER_NAME_POOL_END + 1)
     bcc !cgn_setup_hidden_c64+
 !cgn_setup_linear_c64:
 #endif

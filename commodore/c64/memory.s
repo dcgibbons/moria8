@@ -28,8 +28,10 @@
 .const FLOOR_ITEM_END   = $cfff
 .const CREATURE_BASE    = $c020 // Runtime scratch area (RLE, hiscore) — overlaps map but only used at save/game-over
 .const CREATURE_END     = $c0ff
-.const C64_TIER_NAME_POOL_BASE = $d000 // Hidden RAM under I/O; active tier names
-.const C64_TIER_NAME_POOL_END  = $d7ff
+.const PLATFORM_TIER_NAME_POOL_BASE = $d000 // Hidden RAM under I/O; active tier names
+.const PLATFORM_TIER_NAME_POOL_END  = $d7ff
+.const C64_TIER_NAME_POOL_BASE = PLATFORM_TIER_NAME_POOL_BASE // Legacy C64 tests
+.const C64_TIER_NAME_POOL_END  = PLATFORM_TIER_NAME_POOL_END
 .const BANKED_DATA_BASE = $e000 // Item tiers, recall, spells (under KERNAL ROM)
 .const BANKED_DATA_END  = $ffff
 // C128-only constant used by shared tier_manager staging metadata.
