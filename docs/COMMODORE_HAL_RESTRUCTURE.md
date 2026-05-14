@@ -436,6 +436,11 @@ Phase 2 next task:
       `check_hal_contract_docs.py` gate verifies every non-storage required
       export has an explicit contract entry; storage remains covered by the
       dedicated ABI text and storage export checker.
+- [x] First Plus/4 independence slice after storage closeout: the Plus/4
+      all-RAM IRQ vector installer now uses Plus/4-owned labels instead of
+      `c64_*` compatibility names. The Plus/4 runtime harness calls the
+      renamed symbol, and `check_plus4_hal_independence.py` prevents those IRQ
+      compatibility labels from returning.
 
 Storage adapter note:
 

@@ -458,7 +458,7 @@ entry_main:
     // Save BASIC's zero page state so we can restore on exit
     jsr save_zp
     jsr disk_reset_session_state
-    jsr c64_install_ram_irq_vectors
+    jsr plus4_install_ram_irq_vectors
 
     // BASIC ROM already banked out by bootstrap above
 
@@ -637,16 +637,16 @@ irq_no_blink:
 irq_no_blink_after_cld:
     rti
 
-// c64_irq_hidden_rom — IRQ/NMI handler for all-RAM mode.
+// plus4_irq_hidden_rom — IRQ/NMI handler for all-RAM mode.
 // If an interrupt leaks through while Plus/4 ROM is hidden, CPU vectors read
 // RAM at $FFFA/$FFFE. Return without touching KERNAL ROM, which is not visible
 // in that banking mode.
-c64_irq_hidden_rom:
+plus4_irq_hidden_rom:
     lda TED_IRQ_STATUS
     sta TED_IRQ_STATUS
     rti
 
-c64_install_ram_irq_vectors:
+plus4_install_ram_irq_vectors:
     php
     sei
     jsr plus4_bank_ram
@@ -654,10 +654,10 @@ c64_install_ram_irq_vectors:
     sta TED_IRQ_ENABLE
     lda TED_IRQ_STATUS
     sta TED_IRQ_STATUS
-    lda #<c64_irq_hidden_rom
+    lda #<plus4_irq_hidden_rom
     sta $fffa
     sta $fffe
-    lda #>c64_irq_hidden_rom
+    lda #>plus4_irq_hidden_rom
     sta $fffb
     sta $ffff
     plp
@@ -865,7 +865,7 @@ overlay_load_no_kernal:
     jsr overlay_load
     bcs !done+
     sei
-    jsr c64_install_ram_irq_vectors
+    jsr plus4_install_ram_irq_vectors
     jsr plus4_bank_ram
 !done:
     rts

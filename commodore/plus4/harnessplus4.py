@@ -55,7 +55,7 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
     symbols = parse_vs_symbols(args.main_vs)
     required = [
         ".title_menu_loop",
-        ".c64_install_ram_irq_vectors",
+        ".plus4_install_ram_irq_vectors",
         ".plus4_bank_ram",
         ".save_device",
         ".disk_marker_init",
@@ -81,7 +81,7 @@ def run_marker_init_smoke(args: argparse.Namespace) -> int:
         0x20, lo(".plus4_bank_ram"), hi(".plus4_bank_ram"),
         0xA9, args.save_device,                         # lda #save_device
         0x8D, lo(".save_device"), hi(".save_device"),   # sta save_device
-        0x20, lo(".c64_install_ram_irq_vectors"), hi(".c64_install_ram_irq_vectors"),
+        0x20, lo(".plus4_install_ram_irq_vectors"), hi(".plus4_install_ram_irq_vectors"),
         0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
         0xB0, 0x08,                                     # bcs fail
         0x20, lo(".disk_marker_present"), hi(".disk_marker_present"),
@@ -145,7 +145,7 @@ def run_storage_record_smoke(args: argparse.Namespace) -> int:
     symbols = parse_vs_symbols(args.main_vs)
     required = [
         ".title_menu_loop",
-        ".c64_install_ram_irq_vectors",
+        ".plus4_install_ram_irq_vectors",
         ".plus4_bank_ram",
         ".save_device",
         ".disk_mode",
@@ -184,7 +184,7 @@ def run_storage_record_smoke(args: argparse.Namespace) -> int:
         0x8D, lo(".disk_mode"), hi(".disk_mode"),       # sta disk_mode
         0xA9, 0x01,                                     # lda #1
         0x8D, lo(".disk_setup_done"), hi(".disk_setup_done"),
-        0x20, lo(".c64_install_ram_irq_vectors"), hi(".c64_install_ram_irq_vectors"),
+        0x20, lo(".plus4_install_ram_irq_vectors"), hi(".plus4_install_ram_irq_vectors"),
         0x20, lo(".disk_marker_init"), hi(".disk_marker_init"),
         0x90, 0x03,                                     # bcc marker ok
         *jmp(fail_addr),
