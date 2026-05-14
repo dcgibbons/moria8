@@ -339,7 +339,7 @@ Required services:
 - [x] Add boot/title smoke.
 - [x] Add minimal PRG runtime smoke proving xplus4 monitor harness plumbing.
 - [x] Add new-game-to-town smoke.
-- [ ] Add dungeon-entry smoke.
+- [x] Add dungeon-entry smoke.
 - [ ] Add overlay-load smoke.
 - [x] Add disk-setup smoke with valid save disk.
 - [x] Add missing save media smoke.
@@ -384,6 +384,9 @@ Gate to leave Phase 1:
       title `N)ew` flow through deterministic scripted input, completes character
       creation, loads the town/start overlays, and reaches the first gameplay
       loop.
+- [x] Plus/4 dungeon-entry smoke continues from the product new-game flow,
+      moves onto the town down-stairs, issues `>`, and reaches
+      `dungeon_generate`.
 - [x] Plus/4 load-resume smoke reads a generated Plus/4 save file from drive 9,
       reaches `load_resume_game`, and resumes to `main_loop` without timeout,
       reset, BRK, or CPU JAM.
