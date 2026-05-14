@@ -404,7 +404,7 @@ Gate to leave Phase 1:
 ### Phase 2: HAL Contract Skeleton
 
 - [x] Add `commodore/hal/` contract files.
-- [ ] Add fail-loud missing-service stubs.
+- [x] Add fail-loud missing-service stubs.
 - [ ] Add platform capability/layout manifests.
 - [ ] Document register, clobber, carry, IRQ, and ROM/RAM contracts for each
       service.
@@ -422,6 +422,10 @@ Phase 2 next task:
       without changing existing behavior yet.
 - [x] Add a completeness/static check that fails if any platform does not
       provide each required storage label.
+- [x] Add opt-in common fail-loud stubs in
+      `commodore/common/hal_missing_service_stubs.s` for non-storage contracts.
+      Product builds do not import these stubs; `check_hal_missing_stubs.py`
+      gates stub coverage against the contract files.
 
 Storage adapter note:
 
