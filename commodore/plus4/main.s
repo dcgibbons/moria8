@@ -521,6 +521,10 @@ title_enter_menu:
     jsr title_draw_menu
     jsr plus4_title_clear_lower_rows
 
+#if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
+    jsr plus4_test_overlay_load_all
+#endif
+
 #if PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT
     ldx #9
     jsr hal_storage_probe_media
@@ -582,6 +586,27 @@ plus4_title_clear_lower_rows:
     rts
 
 plus4_title_clear_row: .byte 0
+
+#if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
+plus4_test_overlay_load_all:
+    lda #OVL_STARTUP
+    sta plus4_test_overlay_id
+!loop:
+    lda plus4_test_overlay_id
+    jsr overlay_load
+    bcs plus4_test_overlay_load_fail_sym
+    inc plus4_test_overlay_id
+    lda plus4_test_overlay_id
+    cmp #(OVL_COUNT + 1)
+    bcc !loop-
+plus4_test_overlay_load_pass_sym:
+    jmp plus4_test_overlay_load_pass_sym
+plus4_test_overlay_load_fail_sym:
+    jmp plus4_test_overlay_load_fail_sym
+
+plus4_test_overlay_id:
+    .byte 0
+#endif
 
 title_load_game:
     jsr rng_seed
