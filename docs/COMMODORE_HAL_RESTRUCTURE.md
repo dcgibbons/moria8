@@ -733,6 +733,10 @@ target-bank setup, and post-load channel cleanup.
       delegation regressed Plus/4 runtime save-load resume.
 - [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
       HAL.
+      First slice: the actual string-bank LOAD call now routes through the
+      existing `AssetLoad()`/`hal_asset_load` boundary. SETNAM, SETLFS, CLOSE,
+      CLRCHN, and non-C128 OS-visibility setup remain common until a tested
+      full transaction boundary replaces them.
 - [ ] Revisit title-art loading so C64/C128/Plus4 all use one explicit
       asset-loader contract while preserving C128 Bank 1 cache behavior.
 - [ ] Keep `hal_storage_*` filename tables available as data inputs until a

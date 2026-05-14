@@ -59,7 +59,7 @@ bank_load_recall:
     lda #0                  // 0 = LOAD
     ldx #$00
     ldy #$e0
-    jsr kernal_load         // Platform LOAD (C128: safe IRQ swap)
+    :AssetLoad()            // Platform asset LOAD (handles C128 Bank 1)
     // Carry clear = success, carry set = error
     php                     // Save carry (load result)
     lda #2
