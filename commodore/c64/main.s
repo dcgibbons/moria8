@@ -989,7 +989,7 @@ tramp_ui_identify:
     jmp tramp_sr_epilogue
 
 tramp_ui_wizard_display:
-    jmp wizard_c64_menu_display
+    jmp wizard_40col_menu_display
 
 tramp_disk_setup:
     lda #OVL_HELP

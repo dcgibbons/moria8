@@ -18,6 +18,7 @@ CHECKS = (
             "platform_vector_reassert_c64",
             "platform_runtime_resync_c64",
             "platform_services_install64",
+            "wizard_c64_menu_display",
         ),
     ),
     (

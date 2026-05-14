@@ -464,6 +464,9 @@ Phase 2 next task:
       and resync labels are Plus/4-owned (`plus4_platform_*`) instead of
       reusing C64-shaped `platform_*_c64` names. The installed shared service
       vectors and runtime behavior are unchanged.
+- [x] Seventh Plus/4 independence slice: the shared 40-column wizard menu
+      helper is named `wizard_40col_menu_display` instead of
+      `wizard_c64_menu_display`; C64 and Plus/4 both call the neutral helper.
 
 Storage adapter note:
 

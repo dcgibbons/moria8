@@ -195,7 +195,7 @@ cmd_wizard_entry:
     jmp main_loop
 
 !wizard_open:
-    jsr wizard_c64_menu_display
+    jsr wizard_40col_menu_display
     jsr input_get_key
     cmp #$51                    // Q
     beq !wiz_cancel+
@@ -537,7 +537,7 @@ wizard_restore_gameplay_view:
     jsr ui_view_redraw_gameplay_view
     rts
 
-wizard_c64_menu_display:
+wizard_40col_menu_display:
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all
