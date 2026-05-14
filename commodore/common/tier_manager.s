@@ -191,9 +191,7 @@ tier_init:
     // Clean up KERNAL file table — LOAD's internal close is unreliable
     // across multiple calls. Stale file #2 entry would cause load_game's
     // OPEN to fail with "FILE ALREADY OPEN".
-    lda #2
-    jsr $ffc3               // KERNAL CLOSE — release file #2
-    jsr $ffcc               // KERNAL CLRCHN — restore default I/O
+    jsr hal_asset_close_channel
 
 !ti_done:
     rts

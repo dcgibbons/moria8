@@ -424,6 +424,7 @@ c128_preload_finish:
 !restore_p:
     plp
     rts
+
 c128_preload_fn_lo: .byte 0
 c128_preload_fn_hi: .byte 0
 c128_preload_saved_p: .byte 0

@@ -37,12 +37,15 @@ detect_machine:
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .label hal_asset_load_prg_header = c128_preload_asset_load
 .label hal_asset_load_title = c128_title_asset_load
+.label hal_asset_close_channel = chrin_keyboard_stub
 #else
 hal_asset_load_prg_header:
     sec
     rts
 hal_asset_load_title:
     sec
+    rts
+hal_asset_close_channel:
     rts
 #endif
 

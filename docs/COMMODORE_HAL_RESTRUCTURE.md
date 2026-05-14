@@ -767,10 +767,10 @@ target-bank setup, and post-load channel cleanup.
 - [ ] Extend asset-loader HAL entry points for platform-owned KERNAL LOAD
       setup, destination-bank setup, cleanup, and error/status reporting.
       First gate: `check_hal_asset_exports.py` now verifies that each platform
-      exports the raw LOAD and PRG-header transaction labels, that
-      `AssetLoad()` routes through `hal_asset_load`, and that the current
-      PRG-header transaction body owns SETNAM, SETLFS, LOAD, CLOSE, CLRCHN,
-      plus C128 destination-bank setup.
+      exports the raw LOAD, PRG-header transaction, title-load transaction,
+      and asset-channel cleanup labels, that `AssetLoad()` routes through
+      `hal_asset_load`, and that the current PRG-header transaction body owns
+      SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, plus C128 destination-bank setup.
 - [x] Move common `overlay.s` disk-load orchestration behind Asset Loader HAL.
       `overlay_load_disk` routes C64, C128, and Plus/4 through
       `hal_asset_load_prg_header`; the C128 overlay-cache preload path also
@@ -801,6 +801,13 @@ target-bank setup, and post-load channel cleanup.
       SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, KERNAL entry/exit, or serial-bus
       bank cleanup. `check_hal_asset_exports.py` now guards the tier disk-load
       path alongside overlay, string-bank, and title paths.
+- [x] Move asset channel cleanup behind Asset Loader HAL.
+      `hal_asset_close_channel` is now required on every platform. The common
+      REU preload cleanup in `tier_init` calls that HAL service instead of raw
+      CLOSE/CLRCHN vectors, and `check_hal_asset_exports.py` verifies the
+      C64/Plus4 standalone close transactions plus the common call site. C128
+      keeps close/CLRCHN inside `c128_preload_asset_load`; its exported cleanup
+      label is a zero-byte no-op because the common caller is non-C128-only.
 - [ ] Keep `hal_storage_*` filename tables available as data inputs until a
       separate asset-name namespace is justified by real duplication or policy
       differences.

@@ -125,6 +125,12 @@ hal_asset_load_title:
     plp
     rts
 
+hal_asset_close_channel:
+    lda #2
+    jsr $ffc3               // CLOSE
+    jsr $ffcc               // CLRCHN
+    rts
+
 asset_load_save_p: .byte 0
 
 .const DEATH_ALIVE   = $00    // Player is alive

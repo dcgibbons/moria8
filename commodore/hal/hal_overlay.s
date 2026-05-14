@@ -5,6 +5,7 @@
 //   hal_asset_load
 //   hal_asset_load_prg_header
 //   hal_asset_load_title
+//   hal_asset_close_channel
 //
 // Service contracts:
 // - hal_asset_load: wraps the platform's KERNAL LOAD equivalent.
@@ -47,3 +48,15 @@
 //
 // Platform code owns title filename selection, SETNAM, SETLFS, LOAD, CLOSE,
 // CLRCHN, destination-bank setup, OS visibility, and post-load cleanup.
+//
+// - hal_asset_close_channel: closes the platform asset-load logical channel
+//   and restores default I/O channels.
+//
+// Input:
+//   none
+//
+// Output:
+//   none
+//
+// Platform code owns OS visibility and whichever KERNAL/wrapper close and
+// CLRCHN sequence is valid for the target.

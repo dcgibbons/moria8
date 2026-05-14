@@ -13,6 +13,7 @@ REQUIRED_LABELS = (
     "hal_asset_load",
     "hal_asset_load_prg_header",
     "hal_asset_load_title",
+    "hal_asset_close_channel",
 )
 
 PLATFORM_FILES = {
@@ -53,6 +54,18 @@ TITLE_TRANSACTION_BODIES = {
         ROOT / "commodore/plus4/config.s",
         "hal_asset_load_title",
         ("hal_storage_title_name", "$ffbd", "$ffba", "hal_asset_load", "$ffc3", "$ffcc"),
+    ),
+}
+CLOSE_TRANSACTION_BODIES = {
+    "c64": (
+        ROOT / "commodore/c64/config.s",
+        "hal_asset_close_channel",
+        ("$ffc3", "$ffcc"),
+    ),
+    "plus4": (
+        ROOT / "commodore/plus4/config.s",
+        "hal_asset_close_channel",
+        ("$ffc3", "$ffcc", ":EnterKernal()", ":ExitKernal()"),
     ),
 }
 OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
@@ -97,6 +110,10 @@ TIER_LOAD_FORBIDDEN_TOKENS = (
     ":AssetLoad()",
     ":EnterKernal()",
     ":ExitKernal()",
+)
+TIER_INIT_FORBIDDEN_TOKENS = (
+    "$ffc3",
+    "$ffcc",
 )
 
 
@@ -181,13 +198,23 @@ def check_common_title_loader() -> list[str]:
 
 def check_common_tier_loader() -> list[str]:
     errors: list[str] = []
-    body = label_body(TIER_MANAGER_COMMON, "tier_load_disk")
-    if body is None:
+    init_body = label_body(TIER_MANAGER_COMMON, "tier_init")
+    load_body = label_body(TIER_MANAGER_COMMON, "tier_load_disk")
+    if init_body is None:
+        errors.append("tier_manager.s: missing tier_init body")
+    elif "hal_asset_close_channel" not in init_body:
+        errors.append("tier_manager.s: tier_init does not call hal_asset_close_channel")
+    elif any(token in init_body for token in TIER_INIT_FORBIDDEN_TOKENS):
+        for token in TIER_INIT_FORBIDDEN_TOKENS:
+            if token in init_body:
+                errors.append(f"tier_manager.s: tier_init still contains {token}")
+
+    if load_body is None:
         return ["tier_manager.s: missing tier_load_disk body"]
-    if "hal_asset_load_prg_header" not in body:
+    if "hal_asset_load_prg_header" not in load_body:
         errors.append("tier_manager.s: tier_load_disk does not call hal_asset_load_prg_header")
     for token in TIER_LOAD_FORBIDDEN_TOKENS:
-        if token in body:
+        if token in load_body:
             errors.append(f"tier_manager.s: tier_load_disk still contains {token}")
     return errors
 
@@ -250,6 +277,28 @@ def main() -> int:
                 print(f"  {token}")
             failed = True
 
+        if platform in CLOSE_TRANSACTION_BODIES:
+            close_body_path, close_label, close_required_tokens = CLOSE_TRANSACTION_BODIES[platform]
+            close_body = label_body(close_body_path, close_label)
+            if close_body is None:
+                print(
+                    f"{platform}: missing close transaction body {close_label} in "
+                    f"{close_body_path.relative_to(ROOT)}"
+                )
+                failed = True
+                continue
+            close_missing_tokens = [
+                token for token in close_required_tokens if token not in close_body
+            ]
+            if close_missing_tokens:
+                print(
+                    f"{platform}: {close_label} is missing close transaction operations in "
+                    f"{close_body_path.relative_to(ROOT)}"
+                )
+                for token in close_missing_tokens:
+                    print(f"  {token}")
+                failed = True
+
     overlay_errors = check_common_overlay_loader()
     if overlay_errors:
         for error in overlay_errors:
@@ -279,6 +328,7 @@ def main() -> int:
         f"({len(REQUIRED_LABELS)} label x {len(PLATFORM_FILES)} platforms, "
         f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
         f"{len(TITLE_TRANSACTION_BODIES)} title transactions, "
+        f"{len(CLOSE_TRANSACTION_BODIES)} standalone close transactions, "
         "common overlay/string-bank/title/tier HAL paths)."
     )
     return 0
