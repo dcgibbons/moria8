@@ -9,6 +9,7 @@
 //   "bootart64" = bitmap boot-art asset staged at $A000
 //   "moria64"   = game binary (loaded by this bootloader)
 
+#import "hal/memory_bank_consts.s"
 #import "../common/bank_port_consts.s"
 
 // ============================================================

@@ -828,6 +828,11 @@ target-bank setup, and post-load channel cleanup.
       platform-owned HAL constants exported from each platform config, and
       `check_hal_entropy_exports.py` verifies both the exports and the common
       RNG call site.
+      Second slice: common bank-port constants no longer own C64/C128 versus
+      Plus/4 policy values or a Plus/4 target branch. Each platform exports
+      `hal_memory_bank_*` constants from `commodore/{c64,c128,plus4}/hal/`,
+      `common/bank_port_consts.s` is now an alias shim, and
+      `check_hal_memory_bank_exports.py` gates that boundary.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

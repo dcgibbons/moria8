@@ -7,6 +7,7 @@
 // Unlike C64 $01 banking, this is all-or-nothing for the enabled ROM ranges
 // except the always-visible $FC00-$FCFF banking helper page and I/O page.
 
+#import "hal/memory_bank_consts.s"
 #import "../common/bank_port_consts.s"
 
 // Memory region bases

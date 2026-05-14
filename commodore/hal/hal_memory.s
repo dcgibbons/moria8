@@ -9,6 +9,13 @@
 //   hal_memory_read_byte
 //   hal_memory_write_byte
 //
+// Required memory-bank constants per platform:
+//   hal_memory_bank_all_ram
+//   hal_memory_bank_all_rom
+//   hal_memory_bank_no_basic
+//   hal_memory_bank_no_kernal
+//   hal_memory_bank_no_roms
+//
 // Entry/return ROM and RAM visibility must be documented by the platform
 // implementation. Common code must not write hardware banking registers.
 //

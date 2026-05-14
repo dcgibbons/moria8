@@ -35,6 +35,7 @@
 //     IRQ/NMI vectors at $FFFE/$FFFF will read from RAM when
 //     KERNAL is banked out.
 
+#import "hal/memory_bank_consts.s"
 #import "../common/bank_port_consts.s"
 #import "../common/vic_palette_consts.s"
 
