@@ -124,7 +124,7 @@ show_inv_and_select:
     jsr overlay_load
     bcs !sias_no_items_reload+
 #if C128
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
     lda #MMU_ALL_RAM
     sta $ff00
 #endif

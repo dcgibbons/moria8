@@ -1691,11 +1691,9 @@ common = root / "common"
 helper = common / "input_ui_helpers.s"
 
 runtime_exclusions = {
-    "game_loop.s": {"c128_restore_runtime_guards": 1},
     "reu.s": {"c128_restore_runtime_vectors": 1},
 }
 runtime_counts = {
-    "game_loop.s": {"c128_restore_runtime_guards": 0},
     "reu.s": {"c128_restore_runtime_vectors": 0},
 }
 runtime_leaks: list[str] = []

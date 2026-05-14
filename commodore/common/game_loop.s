@@ -1711,7 +1711,7 @@ c128_restore_generation_overlay:
     bcc !crgo_loaded+
     jmp entry_main
 !crgo_loaded:
-    jsr c128_restore_runtime_guards
+    jsr platform_runtime_resync_api
 !crgo_done:
     rts
 #endif

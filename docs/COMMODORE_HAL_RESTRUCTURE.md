@@ -467,6 +467,10 @@ Phase 2 next task:
 - [x] Seventh Plus/4 independence slice: the shared 40-column wizard menu
       helper is named `wizard_40col_menu_display` instead of
       `wizard_c64_menu_display`; C64 and Plus/4 both call the neutral helper.
+- [x] First lifecycle/runtime-resync cleanup: common overlay-return paths now
+      call `platform_runtime_resync_api` instead of naming C128 runtime guard
+      helpers directly. C128 keeps `c128_restore_runtime_guards` as a
+      platform-owned implementation detail.
 
 Storage adapter note:
 
