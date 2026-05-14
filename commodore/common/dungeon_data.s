@@ -12,8 +12,8 @@
 // ============================================================
 // Map constants
 // ============================================================
-.const C64_MAP_COLS = 80
-.const C64_MAP_ROWS = 48
+.const MAP40_COLS = 80
+.const MAP40_ROWS = 48
 .const C128_MAP_COLS = 198
 .const C128_MAP_ROWS = 66
 .const TOWN_MAP_COLS = 66
@@ -27,8 +27,8 @@
 .const MAP_COLS     = C128_MAP_COLS
 .const MAP_ROWS     = C128_MAP_ROWS
 #else
-.const MAP_COLS     = C64_MAP_COLS
-.const MAP_ROWS     = C64_MAP_ROWS
+.const MAP_COLS     = MAP40_COLS
+.const MAP_ROWS     = MAP40_ROWS
 #endif
 .const MAP_SIZE     = MAP_COLS * MAP_ROWS
 
@@ -165,7 +165,7 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 #if C128
 .assert "C128 map size = 13068", MAP_SIZE, 13068
 #else
-.assert "C64 map size = 3840", MAP_SIZE, 3840
+.assert "40-column map size = 3840", MAP_SIZE, 3840
 #endif
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 8

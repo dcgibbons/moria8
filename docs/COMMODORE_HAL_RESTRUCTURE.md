@@ -475,6 +475,9 @@ Phase 2 next task:
       restore helper in common code now has a platform-neutral name,
       `platform_restore_generation_overlay`, instead of a C128-shaped helper
       name.
+- [x] First capabilities/layout cleanup: the shared 40-column dungeon map
+      dimensions are named `MAP40_*` instead of `C64_MAP_*`, so Plus/4 no
+      longer inherits C64-shaped map-size constants.
 
 Storage adapter note:
 

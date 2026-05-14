@@ -22,6 +22,13 @@ CHECKS = (
         ),
     ),
     (
+        ROOT / "commodore" / "common" / "dungeon_data.s",
+        (
+            "C64_MAP_COLS",
+            "C64_MAP_ROWS",
+        ),
+    ),
+    (
         ROOT / "commodore" / "plus4" / "memory.s",
         (
             "C64_TIER_NAME_POOL_BASE",
