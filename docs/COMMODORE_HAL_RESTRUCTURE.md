@@ -488,6 +488,9 @@ Phase 2 next task:
 - [x] Each platform screen backend now imports its layout HAL constants and
       asserts that legacy `SCREEN_*`, `VIEWPORT_*`, and row constants match
       the HAL contract. Runtime code is unchanged.
+- [x] Legacy `SCREEN_*`, `VIEWPORT_*`, and row constants are now aliases to
+      the layout HAL constants in each platform screen backend. Existing
+      common callers keep their names while the source of truth moves to HAL.
 
 Storage adapter note:
 

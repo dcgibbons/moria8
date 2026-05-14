@@ -19,15 +19,15 @@
 // ============================================================
 // Constants
 // ============================================================
-.const SCREEN_COLS = 40
-.const SCREEN_ROWS = 25
-.const VIEWPORT_X  = 1      // Viewport starts at column 1
-.const VIEWPORT_Y  = 2      // Viewport starts at row 2 (below 2-line message area)
-.const VIEWPORT_W  = 38     // Viewport width
-.const VIEWPORT_H  = 19     // Viewport height
-.const MSG_ROW     = 0      // Message line row
-.const STATUS_ROW  = 21     // Status bar first row
-.const INPUT_ROW   = 24     // Input prompt row (row 23 now used by status bar)
+.const SCREEN_COLS = hal_layout_screen_cols
+.const SCREEN_ROWS = hal_layout_screen_rows
+.const VIEWPORT_X  = hal_layout_viewport_x
+.const VIEWPORT_Y  = hal_layout_viewport_y
+.const VIEWPORT_W  = hal_layout_viewport_w
+.const VIEWPORT_H  = hal_layout_viewport_h
+.const MSG_ROW     = hal_layout_msg_row
+.const STATUS_ROW  = hal_layout_status_row
+.const INPUT_ROW   = hal_layout_input_row
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
 .assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows

@@ -1166,9 +1166,10 @@ def must_not_contain(text: str, snippet: str, err: str):
         print(err)
         raise SystemExit(1)
 
-must_contain(screen, ".const SCREEN_COLS = 80", "screen_vdc must keep SCREEN_COLS=80")
-must_contain(screen, ".const VIEWPORT_X  = 1", "screen_vdc must use explicit VIEWPORT_X=1")
-must_contain(screen, ".const VIEWPORT_W  = 78", "screen_vdc must use explicit VIEWPORT_W=78")
+must_contain(screen, '#import "hal/layout.s"', "screen_vdc must import layout HAL constants")
+must_contain(screen, ".const SCREEN_COLS = hal_layout_screen_cols", "screen_vdc must alias SCREEN_COLS to layout HAL")
+must_contain(screen, ".const VIEWPORT_X  = hal_layout_viewport_x", "screen_vdc must alias VIEWPORT_X to layout HAL")
+must_contain(screen, ".const VIEWPORT_W  = hal_layout_viewport_w", "screen_vdc must alias VIEWPORT_W to layout HAL")
 must_contain(screen, ".const VDC_ATTR_MODE = $80", "screen_vdc must keep VDC_ATTR_MODE=$80 (Set 1 charset)")
 must_not_contain(screen, "SCREEN_COL_OFFSET", "screen_vdc must not use implicit SCREEN_COL_OFFSET")
 must_not_contain(render, "VIEWPORT_X + SCREEN_COL_OFFSET", "dungeon_render_vdc must use explicit VIEWPORT_X only")

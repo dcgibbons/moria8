@@ -37,22 +37,33 @@ PLATFORMS = {
 }
 
 
-def parse_consts(path: Path) -> dict[str, int]:
-    constants: dict[str, int] = {}
+def parse_consts(path: Path) -> dict[str, str]:
+    constants: dict[str, str] = {}
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         match = re.match(r"\s*\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^/]+)", line)
         if not match:
             continue
         name = match.group(1)
         value = match.group(2).strip().lower()
-        try:
-            if value.startswith("$"):
-                constants[name] = int(value[1:], 16)
-            else:
-                constants[name] = int(value, 10)
-        except ValueError:
-            pass
+        constants[name] = value
     return constants
+
+
+def resolve_const(constants: dict[str, str], name: str) -> int | None:
+    seen: set[str] = set()
+    value = constants.get(name)
+    while value is not None:
+        if value.startswith("$"):
+            return int(value[1:], 16)
+        if re.fullmatch(r"[0-9]+", value):
+            return int(value, 10)
+        if not re.fullmatch(r"[a-z_][a-z0-9_]*", value):
+            return None
+        if value in seen:
+            return None
+        seen.add(value)
+        value = constants.get(value)
+    return None
 
 
 def main() -> int:
@@ -64,7 +75,7 @@ def main() -> int:
             errors.append(f"{platform}: missing {layout_path.relative_to(ROOT)}")
             continue
         layout_consts = parse_consts(layout_path)
-        screen_consts = parse_consts(screen_path)
+        screen_consts = layout_consts | parse_consts(screen_path)
         for hal_name, screen_name in REQUIRED_CONSTANTS.items():
             if hal_name not in layout_consts:
                 errors.append(f"{platform}: missing {hal_name} in {layout_path.relative_to(ROOT)}")
@@ -72,10 +83,18 @@ def main() -> int:
             if screen_name not in screen_consts:
                 errors.append(f"{platform}: missing {screen_name} in {screen_path.relative_to(ROOT)}")
                 continue
-            if layout_consts[hal_name] != screen_consts[screen_name]:
+            hal_value = resolve_const(layout_consts, hal_name)
+            screen_value = resolve_const(screen_consts, screen_name)
+            if hal_value is None:
+                errors.append(f"{platform}: cannot resolve {hal_name} in {layout_path.relative_to(ROOT)}")
+                continue
+            if screen_value is None:
+                errors.append(f"{platform}: cannot resolve {screen_name} in {screen_path.relative_to(ROOT)}")
+                continue
+            if hal_value != screen_value:
                 errors.append(
-                    f"{platform}: {hal_name}={layout_consts[hal_name]} differs from "
-                    f"{screen_name}={screen_consts[screen_name]}"
+                    f"{platform}: {hal_name}={hal_value} differs from "
+                    f"{screen_name}={screen_value}"
                 )
 
     if errors:
