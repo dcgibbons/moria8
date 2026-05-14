@@ -2,7 +2,8 @@
 // reu.s — REU (RAM Expansion Unit) detection and DMA routines
 //
 // The REU provides fast DMA transfers between C64 RAM and expansion RAM.
-// Registers at $DF00-$DF0A. Standard sizes: 128KB (1700), 256KB (1764),
+// Register addresses are exported by each REU-capable platform HAL.
+// Standard sizes: 128KB (1700), 256KB (1764),
 // 512KB (1750). Also emulated in VICE with configurable sizes up to 16MB.
 //
 // Exports:
@@ -16,17 +17,17 @@
 // ============================================================
 // REU hardware registers
 // ============================================================
-.const REU_STATUS   = $df00   // (R)   Status register
-.const REU_COMMAND  = $df01   // (R/W) Command register
-.const REU_C64LO    = $df02   // (R/W) C64 base address low
-.const REU_C64HI    = $df03   // (R/W) C64 base address high
-.const REU_REULO    = $df04   // (R/W) REU address low
-.const REU_REUHI    = $df05   // (R/W) REU address high
-.const REU_BANK     = $df06   // (R/W) REU bank (bits 2-0)
-.const REU_LENLO    = $df07   // (R/W) Transfer length low
-.const REU_LENHI    = $df08   // (R/W) Transfer length high
-.const REU_IRQMASK  = $df09   // (R/W) Interrupt mask
-.const REU_CONTROL  = $df0a   // (R/W) Address control
+.const REU_STATUS   = hal_memory_reu_status   // (R)   Status register
+.const REU_COMMAND  = hal_memory_reu_command  // (R/W) Command register
+.const REU_C64LO    = hal_memory_reu_c64lo    // (R/W) C64 base address low
+.const REU_C64HI    = hal_memory_reu_c64hi    // (R/W) C64 base address high
+.const REU_REULO    = hal_memory_reu_reulo    // (R/W) REU address low
+.const REU_REUHI    = hal_memory_reu_reuhi    // (R/W) REU address high
+.const REU_BANK     = hal_memory_reu_bank     // (R/W) REU bank (bits 2-0)
+.const REU_LENLO    = hal_memory_reu_lenlo    // (R/W) Transfer length low
+.const REU_LENHI    = hal_memory_reu_lenhi    // (R/W) Transfer length high
+.const REU_IRQMASK  = hal_memory_reu_irqmask  // (R/W) Interrupt mask
+.const REU_CONTROL  = hal_memory_reu_control  // (R/W) Address control
 
 // Command byte values
 .const REU_CMD_STASH     = $90  // Execute + immediate + C64→REU

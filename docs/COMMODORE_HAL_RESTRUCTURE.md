@@ -840,6 +840,11 @@ target-bank setup, and post-load channel cleanup.
       select register literal. C64 and C128 export `hal_memory_vic_bank_select`
       and `hal_memory_vic_bank0_mask`, and `check_hal_vic_bank_exports.py`
       verifies the exports and common save use.
+      Fifth slice: common REU code no longer owns `$DF00-$DF0A` register
+      address literals. C64 and C128 export `hal_memory_reu_*` constants, and
+      `check_hal_reu_exports.py` verifies the exports and common REU use. The
+      remaining `$D501` C128 diagnostic read is intentionally left for a
+      separate C128 memory boundary pass.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

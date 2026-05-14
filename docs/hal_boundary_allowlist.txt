@@ -78,17 +78,6 @@ commodore/common/player_move.s	target-conditional	#if C128
 commodore/common/reu.s	platform-name	REU
 commodore/common/reu.s	raw-c64-bank-port	$01
 commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$d501
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df00
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df01
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df02
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df03
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df04
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df05
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df06
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df07
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df08
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df09
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$df0a
 commodore/common/reu.s	target-conditional	#if C128
 commodore/common/save.s	raw-c64-bank-port	$01
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4
