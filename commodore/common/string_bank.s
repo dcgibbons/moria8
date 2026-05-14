@@ -23,21 +23,14 @@ bank_fn_recall:
     .byte $42,$4e,$4b,$2e,$52,$43,$4c  // "BNK.RCL"
 .const BANK_FN_RECALL_LEN = * - bank_fn_recall
 
-#if !C128
-bank_load_save_p: .byte 0
-#endif
-
 // ============================================================
 // bank_load_recall — Load recall string bank to $E000
-// Uses KERNAL LOAD (KERNAL must be banked in, $01=$36).
+// Uses the platform asset-loader HAL PRG-header transaction.
 // Invalidates any overlay or tier data at $E000.
 // Output: carry clear = success, carry set = error
 // Clobbers: A, X, Y
 // ============================================================
 bank_load_recall:
-#if !C128
-    :EnterKernal()
-#endif
     // Invalidate overlay before loading into $E000.
     // Tier invalidation is C64-only: C128 tier metadata points to Bank 1 DB.
     lda #OVL_NONE
@@ -49,38 +42,4 @@ bank_load_recall:
     lda #BANK_FN_RECALL_LEN
     ldx #<bank_fn_recall
     ldy #>bank_fn_recall
-    jsr $ffbd               // KERNAL SETNAM
-
-    lda #2                  // Logical file number
-    ldx #8                  // Device 8
-    ldy #1                  // Secondary 1 = load to PRG header address ($E000)
-    jsr $ffba               // KERNAL SETLFS
-
-    lda #0                  // 0 = LOAD
-    ldx #$00
-    ldy #$e0
-    :AssetLoad()            // Platform asset LOAD (handles C128 Bank 1)
-    // Carry clear = success, carry set = error
-    php                     // Save carry (load result)
-    lda #2
-    jsr $ffc3               // KERNAL CLOSE
-    jsr $ffcc               // KERNAL CLRCHN
-
-#if !C128
-    // C64: restore VIC-II bank 0 after serial I/O.
-    lda $dd00
-    ora #%00000011
-    sta $dd00
-#endif
-!bl_done:
-    plp                     // Restore carry
-#if !C128
-    php
-    pla
-    sta bank_load_save_p
-    :ExitKernal()
-    lda bank_load_save_p
-    pha
-    plp
-#endif
-    rts
+    jmp hal_asset_load_prg_header

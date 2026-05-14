@@ -38,6 +38,7 @@ TRANSACTION_BODIES = {
     ),
 }
 OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
+STRING_BANK_COMMON = ROOT / "commodore/common/string_bank.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
     "$ffba",
@@ -45,6 +46,15 @@ OVERLAY_FORBIDDEN_TOKENS = (
     "$ffc3",
     "$ffcc",
     "c128_preload_asset_load",
+    ":AssetLoad()",
+)
+STRING_BANK_FORBIDDEN_TOKENS = (
+    "$ffbd",
+    "$ffba",
+    "$ffd5",
+    "$ffc3",
+    "$ffcc",
+    "$dd00",
     ":AssetLoad()",
 )
 
@@ -94,6 +104,19 @@ def check_common_overlay_loader() -> list[str]:
     return errors
 
 
+def check_common_string_bank_loader() -> list[str]:
+    errors: list[str] = []
+    body = label_body(STRING_BANK_COMMON, "bank_load_recall")
+    if body is None:
+        return ["string_bank.s: missing bank_load_recall body"]
+    if "hal_asset_load_prg_header" not in body:
+        errors.append("string_bank.s: bank_load_recall does not call hal_asset_load_prg_header")
+    for token in STRING_BANK_FORBIDDEN_TOKENS:
+        if token in body:
+            errors.append(f"string_bank.s: bank_load_recall still contains {token}")
+    return errors
+
+
 def main() -> int:
     failed = False
     for platform, path in PLATFORM_FILES.items():
@@ -136,6 +159,11 @@ def main() -> int:
         for error in overlay_errors:
             print(error)
         failed = True
+    string_bank_errors = check_common_string_bank_loader()
+    if string_bank_errors:
+        for error in string_bank_errors:
+            print(error)
+        failed = True
 
     if failed:
         return 1
@@ -143,7 +171,8 @@ def main() -> int:
     print(
         "Asset-loader HAL export check passed "
         f"({len(REQUIRED_LABELS)} label x {len(PLATFORM_FILES)} platforms, "
-        f"{len(TRANSACTION_BODIES)} PRG-header transactions, common overlay HAL path)."
+        f"{len(TRANSACTION_BODIES)} PRG-header transactions, "
+        "common overlay/string-bank HAL paths)."
     )
     return 0
 

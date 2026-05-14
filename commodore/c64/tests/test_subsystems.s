@@ -64,7 +64,13 @@ msg_print:
 }
 
 hal_asset_load_prg_header:
-    jmp kernal_load
+    jsr kernal_load
+    php
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    plp
+    rts
 
 reu_overlays_stashed: .byte 0
 sb_tier_invalidate_calls: .byte 0
@@ -303,13 +309,13 @@ test_bank_load_recall_error_path:
     cmp #1
     bne !fail+
     lda sb_load_arg_a
-    cmp #0
+    cmp #BANK_FN_RECALL_LEN
     bne !fail+
     lda sb_load_arg_x
-    cmp #0
+    cmp #<bank_fn_recall
     bne !fail+
     lda sb_load_arg_y
-    cmp #$e0
+    cmp #>bank_fn_recall
     bne !fail+
     lda $dd00
     and #%00000011

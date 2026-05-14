@@ -779,12 +779,14 @@ target-bank setup, and post-load channel cleanup.
       direct `AssetLoad()`, and direct `c128_preload_asset_load` calls from
       returning to `overlay_load_disk`. The targeted Plus/4
       `overlay_load_plus4` runtime smoke passed after this slice.
-- [ ] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
+- [x] Move common `string_bank.s` KERNAL LOAD orchestration behind Asset Loader
       HAL.
-      First slice: the actual string-bank LOAD call now routes through the
-      existing `AssetLoad()`/`hal_asset_load` boundary. SETNAM, SETLFS, CLOSE,
-      CLRCHN, and non-C128 OS-visibility setup remain common until a tested
-      full transaction boundary replaces them.
+      `bank_load_recall` now passes the recall-bank filename to
+      `hal_asset_load_prg_header`; SETNAM, SETLFS, LOAD, CLOSE, CLRCHN, and
+      serial-bus display-bank cleanup belong to the platform transaction.
+      The C64 subsystem test stub now models that transaction cleanup, and
+      `check_hal_asset_exports.py` prevents raw KERNAL LOAD orchestration from
+      returning to `string_bank.s`.
 - [ ] Revisit title-art loading so C64/C128/Plus4 all use one explicit
       asset-loader contract while preserving C128 Bank 1 cache behavior.
 - [ ] Keep `hal_storage_*` filename tables available as data inputs until a
