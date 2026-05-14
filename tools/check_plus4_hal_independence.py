@@ -33,6 +33,13 @@ CHECKS = (
         ROOT / "commodore" / "common" / "player_items.s",
         (
             "c64_install_ram_irq_vectors",
+            "C64_PRODUCT_OVERLAY_RUNTIME",
+        ),
+    ),
+    (
+        ROOT / "commodore" / "plus4" / "main.s",
+        (
+            "C64_PRODUCT_OVERLAY_RUNTIME",
         ),
     ),
 )

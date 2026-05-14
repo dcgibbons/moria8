@@ -11,6 +11,7 @@
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
 #define C64_PRODUCT_OVERLAY_RUNTIME
+#define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define C64_PRODUCT_IRQ_VECTOR_RUNTIME
 .segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]
 .segmentdef TownOverlay       [outPrg="out/ovl.town",  start=$e000, min=$e000, max=$efff]

@@ -40,7 +40,7 @@ piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
 piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
-#if (!C128 && C64_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
 piw_return_overlay: .byte 0    // Product overlay to restore after prompt-time modal UI
 #endif
 
@@ -80,7 +80,7 @@ equip_slot_for_cat:
 // Preserves: nothing
 show_inv_and_select:
     sta piw_filter
-#if (!C128 && C64_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
     lda #OVL_NONE
     sta piw_return_overlay
     // Only restore an overlay when the immediate return target is inside the
@@ -114,7 +114,7 @@ show_inv_and_select:
 #endif
     pha
     jsr ui_view_restore_modal_overlay
-#if (!C128 && C64_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
     // Prompt-time inventory can be opened from OVL.ITEMS command handlers.
     // Reload the caller overlay before returning to code in the $E000 window.
     lda piw_return_overlay

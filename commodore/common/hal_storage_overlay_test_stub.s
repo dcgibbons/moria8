@@ -2,7 +2,7 @@
 // Test-only storage HAL overlay filename symbols for isolated C64 unit
 // assemblies. Product/platform builds must provide these from their storage HAL.
 
-#if !C64_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4
+#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4
 hal_storage_overlay_start_name:
     .text "64.START"
 .label hal_storage_overlay_start_name_len = * - hal_storage_overlay_start_name

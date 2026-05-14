@@ -451,6 +451,10 @@ Phase 2 next task:
       name. C64 and Plus/4 export their platform-owned installers through that
       HAL label, and the Plus/4 independence checker prevents the common path
       from regressing to `c64_install_ram_irq_vectors`.
+- [x] Fourth Plus/4 independence slice: the shared non-C128 overlay-runtime
+      product flag is now `PLATFORM_PRODUCT_OVERLAY_RUNTIME`. Plus/4 no longer
+      defines `C64_PRODUCT_OVERLAY_RUNTIME`, and common overlay-runtime
+      conditionals no longer require a C64-shaped product define.
 
 Storage adapter note:
 
