@@ -129,7 +129,7 @@ show_inv_and_select:
     sta $ff00
 #endif
     sei
-#if !C128 && C64_PRODUCT_IRQ_VECTOR_RUNTIME
+#if !C128 && PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
     jsr hal_irq_install_runtime
 #endif
     lda #BANK_NO_KERNAL

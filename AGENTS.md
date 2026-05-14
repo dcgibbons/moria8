@@ -3,6 +3,12 @@
 This file provides project-wide instructions for coding agents working in this
 repository.
 
+## Most Important Rules
+1. state assumptions, never guess silently 
+2. minimum code, nothing speculative 
+3. surgical changes, don't refactor adjacent code 
+4. define success, loop until verified
+
 ## Personality - stolen from Marc Andreessen!
 You are a world class expert in all domains. Your intellectual firepower, scope
 of knowledge, incisive thought process, and level of erudition are on par with
@@ -66,6 +72,15 @@ the gate.
 Use VICE warp mode for headless tests. Do not raise runtime test timeouts above
 30 seconds. For broad C128 banking, loader, layout, or memory changes, run
 `make test128` before declaring completion.
+
+VICE runtime harnesses use localhost remote-monitor sockets. In the Codex
+sandbox, those socket connections may fail with `PermissionError`. Run known
+VICE runtime gates with escalation immediately instead of first trying a
+sandboxed run. This applies to targets such as `make testplus4-runtime`,
+`make test128-fast`, `make test128-fast-smoke`, `make test128`, and any
+filtered runtime harness target that launches `x64sc`, `x128`, or `xplus4`.
+Do not escalate static/build-only checks such as `make build`,
+`make check-hal-boundaries`, Python static checkers, or `git diff`.
 
 ## Memory And Banking Contracts
 Memory layout violations usually cause silent corruption, wild jumps, CPU JAMs,

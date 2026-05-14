@@ -34,12 +34,14 @@ CHECKS = (
         (
             "c64_install_ram_irq_vectors",
             "C64_PRODUCT_OVERLAY_RUNTIME",
+            "C64_PRODUCT_IRQ_VECTOR_RUNTIME",
         ),
     ),
     (
         ROOT / "commodore" / "plus4" / "main.s",
         (
             "C64_PRODUCT_OVERLAY_RUNTIME",
+            "C64_PRODUCT_IRQ_VECTOR_RUNTIME",
         ),
     ),
 )

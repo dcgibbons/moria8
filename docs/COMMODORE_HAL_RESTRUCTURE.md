@@ -455,6 +455,11 @@ Phase 2 next task:
       product flag is now `PLATFORM_PRODUCT_OVERLAY_RUNTIME`. Plus/4 no longer
       defines `C64_PRODUCT_OVERLAY_RUNTIME`, and common overlay-runtime
       conditionals no longer require a C64-shaped product define.
+- [x] Fifth Plus/4 independence slice: the shared non-C128 IRQ-vector runtime
+      product flag is now `PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME`. C64 keeps the
+      legacy `C64_PRODUCT_IRQ_VECTOR_RUNTIME` name for C64-owned input code,
+      but common inventory overlay restore no longer depends on a C64-shaped
+      product define.
 
 Storage adapter note:
 
