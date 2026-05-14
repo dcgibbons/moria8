@@ -31,29 +31,38 @@ REQUIRED_MEMORY_KEYS = (
 EXPECTED = {
     "c64": {
         "columns": 40,
+        "rows": 25,
+        "viewport": {"x": 1, "y": 2, "width": 38, "height": 19},
         "display": "vic_ii",
         "banking": "$01",
         "map_base": "$c000",
         "requires_drives": {"1541"},
         "memory_file": "commodore/c64/memory.s",
+        "screen_file": "commodore/c64/screen.s",
         "direct_display_consts": True,
     },
     "c128": {
         "columns": 80,
+        "rows": 25,
+        "viewport": {"x": 1, "y": 2, "width": 78, "height": 19},
         "display": "vdc",
         "banking": "$ff00+$01",
         "map_base": "$4000",
         "requires_drives": {"1541", "1571"},
         "memory_file": "commodore/c128/memory128.s",
+        "screen_file": "commodore/c128/screen_vdc.s",
         "direct_display_consts": False,
     },
     "plus4": {
         "columns": 40,
+        "rows": 25,
+        "viewport": {"x": 1, "y": 2, "width": 38, "height": 19},
         "display": "ted",
         "banking": "$ff3e/$ff3f",
         "map_base": "$c800",
         "requires_drives": {"1541", "1551"},
         "memory_file": "commodore/plus4/memory.s",
+        "screen_file": "commodore/plus4/screen.s",
         "direct_display_consts": True,
     },
 }
@@ -75,6 +84,22 @@ def source_const(path: Path, name: str) -> str | None:
     return None
 
 
+def source_const_int(path: Path, name: str) -> int | None:
+    prefix = f".const {name}"
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(prefix):
+            continue
+        value = stripped.split("=", 1)[1].split("//", 1)[0].strip().lower()
+        try:
+            if value.startswith("$"):
+                return int(value[1:], 16)
+            return int(value, 10)
+        except ValueError:
+            return None
+    return None
+
+
 def validate_manifest(platform: str, data: dict) -> list[str]:
     errors: list[str] = []
     for key in REQUIRED_TOP_KEYS:
@@ -92,9 +117,35 @@ def validate_manifest(platform: str, data: dict) -> list[str]:
         fail(errors, platform, f"display.hardware must be {expected['display']}")
     if display.get("columns") != expected["columns"]:
         fail(errors, platform, f"display.columns must be {expected['columns']}")
+    if display.get("rows") != expected["rows"]:
+        fail(errors, platform, f"display.rows must be {expected['rows']}")
     for key in ("screen_ram", "color_ram"):
         if key not in display:
             fail(errors, platform, f"display missing {key}")
+    viewport = display.get("viewport")
+    if not isinstance(viewport, dict):
+        fail(errors, platform, "display.viewport must be an object")
+    else:
+        for key, expected_value in expected["viewport"].items():
+            if viewport.get(key) != expected_value:
+                fail(errors, platform, f"display.viewport.{key} must be {expected_value}")
+    screen_file = ROOT / expected["screen_file"]
+    source_columns = source_const_int(screen_file, "SCREEN_COLS")
+    if source_columns is not None and display.get("columns") != source_columns:
+        fail(errors, platform, f"display.columns differs from {expected['screen_file']} SCREEN_COLS")
+    source_rows = source_const_int(screen_file, "SCREEN_ROWS")
+    if source_rows is not None and display.get("rows") != source_rows:
+        fail(errors, platform, f"display.rows differs from {expected['screen_file']} SCREEN_ROWS")
+    if isinstance(viewport, dict):
+        source_viewport = {
+            "x": source_const_int(screen_file, "VIEWPORT_X"),
+            "y": source_const_int(screen_file, "VIEWPORT_Y"),
+            "width": source_const_int(screen_file, "VIEWPORT_W"),
+            "height": source_const_int(screen_file, "VIEWPORT_H"),
+        }
+        for key, source_value in source_viewport.items():
+            if source_value is not None and viewport.get(key) != source_value:
+                fail(errors, platform, f"display.viewport.{key} differs from {expected['screen_file']}")
 
     storage = data["storage"]
     for key in ("bus", "program_media", "save_media", "default_program_device", "default_save_device", "compatible_drives"):

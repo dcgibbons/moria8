@@ -478,6 +478,9 @@ Phase 2 next task:
 - [x] First capabilities/layout cleanup: the shared 40-column dungeon map
       dimensions are named `MAP40_*` instead of `C64_MAP_*`, so Plus/4 no
       longer inherits C64-shaped map-size constants.
+- [x] Platform manifests now record and statically verify visible rows and
+      viewport geometry against each platform's screen implementation before
+      screen code moves behind HAL calls.
 
 Storage adapter note:
 

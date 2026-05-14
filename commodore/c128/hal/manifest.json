@@ -7,6 +7,13 @@
   "display": {
     "hardware": "vdc",
     "columns": 80,
+    "rows": 25,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 78,
+      "height": 19
+    },
     "screen_ram": "vdc:$0000",
     "color_ram": "vdc:$0800"
   },

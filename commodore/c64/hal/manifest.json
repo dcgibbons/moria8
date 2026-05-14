@@ -7,6 +7,13 @@
   "display": {
     "hardware": "vic_ii",
     "columns": 40,
+    "rows": 25,
+    "viewport": {
+      "x": 1,
+      "y": 2,
+      "width": 38,
+      "height": 19
+    },
     "screen_ram": "$0400",
     "color_ram": "$d800"
   },
