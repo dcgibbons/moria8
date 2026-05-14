@@ -1008,9 +1008,9 @@ load_close_file_restore:
 
 #if !C128 && !PLUS4
 c64_restore_vic_bank0_after_serial:
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    lda hal_memory_vic_bank_select
+    ora #hal_memory_vic_bank0_mask
+    sta hal_memory_vic_bank_select
     rts
 #endif
 
@@ -1746,9 +1746,9 @@ save_file_exists:
     jsr SAVE_CLOSE
     jsr save_restore_channels
 #if C128
-    lda $dd00
-    ora #%00000011
-    sta $dd00
+    lda hal_memory_vic_bank_select
+    ora #hal_memory_vic_bank0_mask
+    sta hal_memory_vic_bank_select
 #endif
     plp
     rts

@@ -836,6 +836,10 @@ target-bank setup, and post-load channel cleanup.
       Third slice: common SID sound code no longer owns the SID base literal.
       C64 and C128 export `hal_sound_sid_base` from platform HAL files, and
       `check_hal_sound_exports.py` verifies the exports and common sound use.
+      Fourth slice: common save/load cleanup no longer owns the VIC-II bank
+      select register literal. C64 and C128 export `hal_memory_vic_bank_select`
+      and `hal_memory_vic_bank0_mask`, and `check_hal_vic_bank_exports.py`
+      verifies the exports and common save use.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

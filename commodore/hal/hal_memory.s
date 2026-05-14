@@ -16,6 +16,10 @@
 //   hal_memory_bank_no_kernal
 //   hal_memory_bank_no_roms
 //
+// Required VIC-bank constants per VIC platform:
+//   hal_memory_vic_bank_select
+//   hal_memory_vic_bank0_mask
+//
 // Entry/return ROM and RAM visibility must be documented by the platform
 // implementation. Common code must not write hardware banking registers.
 //
