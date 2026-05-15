@@ -33,6 +33,10 @@
 //   hal_memory_reu_irqmask
 //   hal_memory_reu_control
 //
+// Required C128 MMU diagnostic constants per C128 platform:
+//   hal_memory_mmu_config_register
+//   hal_memory_mmu_preconfig_a
+//
 // Entry/return ROM and RAM visibility must be documented by the platform
 // implementation. Common code must not write hardware banking registers.
 //

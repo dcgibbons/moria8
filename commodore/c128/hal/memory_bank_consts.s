@@ -21,3 +21,6 @@
 .const hal_memory_reu_lenhi   = $df08
 .const hal_memory_reu_irqmask = $df09
 .const hal_memory_reu_control = $df0a
+
+.const hal_memory_mmu_config_register = $ff00
+.const hal_memory_mmu_preconfig_a     = $d501

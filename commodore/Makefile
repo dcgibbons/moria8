@@ -270,6 +270,7 @@ check-hal-boundaries:
 	cd .. && python3 tools/check_hal_memory_bank_exports.py
 	cd .. && python3 tools/check_hal_vic_bank_exports.py
 	cd .. && python3 tools/check_hal_reu_exports.py
+	cd .. && python3 tools/check_hal_c128_mmu_diag_exports.py
 	cd .. && python3 tools/check_hal_sound_exports.py
 	cd .. && python3 tools/check_hal_missing_stubs.py
 	cd .. && python3 tools/check_hal_manifests.py

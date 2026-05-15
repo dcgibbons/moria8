@@ -77,7 +77,6 @@ commodore/common/player_move.s	target-conditional	#if !C128
 commodore/common/player_move.s	target-conditional	#if C128
 commodore/common/reu.s	platform-name	REU
 commodore/common/reu.s	raw-c64-bank-port	$01
-commodore/common/reu.s	raw-vic-cia-sid-ted-vdc-address	$d501
 commodore/common/reu.s	target-conditional	#if C128
 commodore/common/save.s	raw-c64-bank-port	$01
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4

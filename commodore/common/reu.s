@@ -372,9 +372,9 @@ c128_preload_asset_load:
     sta c128_preload_diag_readst
     lda $01
     sta c128_preload_diag_port1
-    lda $ff00
+    lda hal_memory_mmu_config_register
     sta c128_preload_diag_mmu
-    lda $d501
+    lda hal_memory_mmu_preconfig_a
     sta c128_preload_diag_pcra
     lda #$c5
     sta c128_preload_diag_stage
