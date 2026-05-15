@@ -854,6 +854,11 @@ target-bank setup, and post-load channel cleanup.
       value, palette value, or `$0101` address. `check_hal_boundaries_selftest.py`
       gates that scanner precision, and the allowlist now tracks only real
       common `$01` access forms.
+      Eighth slice: common Disk Setup no longer owns the C64-only processor
+      port operand used to enter/leave the banked UI dispatch. C64 and C128
+      export `hal_memory_cpu_port`, the C64 branch uses that name instead of
+      `inc/dec $01`, and `check_hal_cpu_port_exports.py` gates the export and
+      call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

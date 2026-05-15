@@ -286,9 +286,9 @@ disk_setup_call_ui:
     rts
 #else
     sta disk_ui_action
-    inc $01
+    inc hal_memory_cpu_port
     jsr ui_disk_setup_dispatch
-    dec $01
+    dec hal_memory_cpu_port
     rts
 #endif
 

@@ -3,8 +3,6 @@
 # Do not add entries casually; remove entries as code migrates behind HAL.
 
 commodore/common/combat.s	target-conditional	#if C128
-commodore/common/disk_setup_banked.s	raw-c64-bank-port	dec $01
-commodore/common/disk_setup_banked.s	raw-c64-bank-port	inc $01
 commodore/common/disk_setup_banked.s	target-conditional	#if C128
 commodore/common/disk_setup_banked.s	target-conditional	#if PLUS4
 commodore/common/disk_setup_runtime128.s	target-conditional	#if C128

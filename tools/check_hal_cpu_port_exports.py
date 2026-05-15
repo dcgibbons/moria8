@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Verify C64-family CPU-port constants and common disk setup use."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+REQUIRED_CONSTANTS = ("hal_memory_cpu_port",)
+
+PLATFORM_FILES = {
+    "c64": ROOT / "commodore/c64/hal/memory_bank_consts.s",
+    "c128": ROOT / "commodore/c128/hal/memory_bank_consts.s",
+}
+
+COMMON_DISK_SETUP = ROOT / "commodore/common/disk_setup_banked.s"
+
+
+def exported_constants(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return {
+        match.group(1)
+        for match in re.finditer(r"(?m)^\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text)
+    }
+
+
+def main() -> int:
+    errors: list[str] = []
+    for platform, path in PLATFORM_FILES.items():
+        constants = exported_constants(path)
+        for constant in REQUIRED_CONSTANTS:
+            if constant not in constants:
+                errors.append(f"{platform}: missing {constant} in {path.relative_to(ROOT)}")
+
+    common_text = COMMON_DISK_SETUP.read_text(encoding="utf-8", errors="replace")
+    common_lower = common_text.lower()
+    for token in ("inc $01", "dec $01"):
+        if token in common_lower:
+            errors.append(f"disk_setup_banked.s: common disk setup still contains {token}")
+    if "hal_memory_cpu_port" not in common_text:
+        errors.append("disk_setup_banked.s: common disk setup does not consume hal_memory_cpu_port")
+
+    if errors:
+        print("HAL CPU-port export check failed:")
+        for error in errors:
+            print(f"  {error}")
+        return 1
+
+    print("HAL CPU-port export check passed (1 constant x 2 platforms).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

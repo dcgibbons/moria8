@@ -16,6 +16,9 @@
 //   hal_memory_bank_no_kernal
 //   hal_memory_bank_no_roms
 //
+// Required C64-family CPU-port constant per CPU-port platform:
+//   hal_memory_cpu_port
+//
 // Required VIC-bank constants per VIC platform:
 //   hal_memory_vic_bank_select
 //   hal_memory_vic_bank0_mask
