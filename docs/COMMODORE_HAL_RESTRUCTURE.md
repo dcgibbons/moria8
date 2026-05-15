@@ -848,6 +848,12 @@ target-bank setup, and post-load channel cleanup.
       and `hal_memory_mmu_preconfig_a`, and
       `check_hal_c128_mmu_diag_exports.py` verifies the C128 export plus common
       REU use.
+      Seventh slice: the HAL boundary scanner now treats `$01` as a raw C64
+      bank-port violation only when it is used as a zero-page instruction
+      operand, not when it appears as an immediate value, table byte, enum
+      value, palette value, or `$0101` address. `check_hal_boundaries_selftest.py`
+      gates that scanner precision, and the allowlist now tracks only real
+      common `$01` access forms.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

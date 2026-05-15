@@ -22,8 +22,14 @@ class Finding:
         return f"{self.path}\t{self.rule}\t{self.token}"
 
 
+RAW_C64_BANK_PORT_RE = re.compile(
+    r"\b(?:adc|and|asl|bit|cmp|dec|eor|inc|lda|ldx|ldy|lsr|ora|rol|ror|sbc|sta|stx|sty)\s+\$0*01\b",
+    re.IGNORECASE,
+)
+
+
 RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("raw-c64-bank-port", re.compile(r"\$0*01\b", re.IGNORECASE)),
+    ("raw-c64-bank-port", RAW_C64_BANK_PORT_RE),
     ("raw-vic-cia-sid-ted-vdc-address", re.compile(r"\$(?:d[0-9a-f]{3}|dd00|ff3e|ff3f)\b", re.IGNORECASE)),
     ("platform-name", re.compile(r"\b(?:VIC|VDC|TED|SID|CIA|REU|MMU)\b", re.IGNORECASE)),
     ("drive-model", re.compile(r"\b(?:1541|1551|1571|1581|SD2IEC)\b", re.IGNORECASE)),

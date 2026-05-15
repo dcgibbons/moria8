@@ -262,6 +262,7 @@ check-6502-lint:
 	python3 ../tools/check_6502_lint.py
 
 check-hal-boundaries:
+	cd .. && python3 tools/check_hal_boundaries_selftest.py
 	cd .. && python3 tools/check_hal_boundaries.py
 	cd .. && python3 tools/check_hal_storage_exports.py
 	cd .. && python3 tools/check_hal_asset_exports.py
