@@ -11,11 +11,11 @@
 
 // input_prepare_followup_key — Ensure the next read consumes a fresh follow-up
 // key when the initiating command key should not leak into a secondary prompt.
-input_prepare_followup_key:
 #if C128
-input_prepare_modal_dismiss_key:
-    jmp hal_input_modal_prepare
+.label input_prepare_followup_key = hal_input_modal_prepare
+.label input_prepare_modal_dismiss_key = hal_input_modal_prepare
 #else
+input_prepare_followup_key:
     rts
 #endif
 

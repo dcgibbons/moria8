@@ -62,10 +62,8 @@
 // physically down. Running arming/cancel phase policy stays shared.
 // Output: A = nonzero if key pressed, 0 if no key
 // Destroys: A, X, Y
-input_run_key_held:
-    jmp input_run_scan_held_raw
-input_run_key_check:
-    jmp input_run_key_held
+.label input_run_key_held = input_run_scan_held_raw
+.label input_run_key_check = input_run_key_held
 
 // input_run_cancel_check — Non-blocking: returns nonzero only on a new key-down edge
 // after running cancel has been armed. This avoids cancelling on lingering held state.
@@ -82,10 +80,14 @@ input_run_cancel_check:
 .label hal_input_any_key_held = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
 .label hal_input_modal_prepare = input_wait_release
+#if C128_PRODUCT_OVERLAY_RUNTIME
+.label hal_input_modal_finish = screen_noop
+#else
 .label hal_input_modal_finish = input_noop
 
 input_noop:
     rts
+#endif
 
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
