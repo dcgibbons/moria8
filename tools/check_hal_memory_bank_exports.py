@@ -16,11 +16,18 @@ REQUIRED_CONSTANTS = (
     "hal_memory_bank_no_basic",
     "hal_memory_bank_no_kernal",
     "hal_memory_bank_no_roms",
+    "hal_huffman_lock_irq_during_decode",
+    "hal_huffman_print_uses_cached_msg",
 )
 COMMON_ALIAS_CONSTANTS = tuple(
     constant
     for constant in REQUIRED_CONSTANTS
-    if constant != "hal_memory_has_cpu_port"
+    if constant
+    not in (
+        "hal_memory_has_cpu_port",
+        "hal_huffman_lock_irq_during_decode",
+        "hal_huffman_print_uses_cached_msg",
+    )
 )
 
 PLATFORM_FILES = {
@@ -30,6 +37,7 @@ PLATFORM_FILES = {
 }
 
 COMMON_ALIAS_FILE = ROOT / "commodore/common/bank_port_consts.s"
+COMMON_HUFFMAN_FILE = ROOT / "commodore/common/huffman.s"
 FORBIDDEN_COMMON_TOKENS = (
     "#if",
     "$30",
@@ -66,6 +74,14 @@ def main() -> int:
     for constant in COMMON_ALIAS_CONSTANTS:
         if constant not in common_text:
             errors.append(f"bank_port_consts.s: common alias file does not consume {constant}")
+
+    huffman_text = COMMON_HUFFMAN_FILE.read_text(encoding="utf-8", errors="replace")
+    if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", huffman_text):
+        errors.append("huffman.s: common decoder still branches directly on C128")
+    if "hal_huffman_lock_irq_during_decode" not in huffman_text:
+        errors.append("huffman.s: common decoder does not consume hal_huffman_lock_irq_during_decode")
+    if "hal_huffman_print_uses_cached_msg" not in huffman_text:
+        errors.append("huffman.s: common decoder does not consume hal_huffman_print_uses_cached_msg")
 
     if errors:
         print("HAL memory bank export check failed:")

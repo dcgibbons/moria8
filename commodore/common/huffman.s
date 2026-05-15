@@ -55,8 +55,9 @@ huff_decode_string:
 // Clobbers: A, X, Y
 // ============================================================
 huff_decode_from_ptr:
-#if C128
-    // C128: KERNAL/IRQ can clobber low ZP pointer bytes during decode.
+#if hal_huffman_lock_irq_during_decode
+    // Platform policy: mask IRQs when IRQ/KERNAL activity can clobber low ZP
+    // pointer bytes during decode.
     // Lock IRQs for the short decode window to keep pointer traversal stable.
     php
     sei
@@ -124,8 +125,8 @@ hd_cur_node_smc:
     lda #>hd_decode_buf
     sta zp_ptr0_hi
 
-#if C128
-    // Restore prior IRQ state on C128.
+#if hal_huffman_lock_irq_during_decode
+    // Restore prior IRQ state on platforms that masked it above.
     plp
 #endif
     rts
@@ -162,8 +163,8 @@ huff_append_combat:
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 huff_print_msg:
-#if C128
-    // C128: keep decode + pointer handoff atomic. We cache the decoded
+#if hal_huffman_print_uses_cached_msg
+    // Platform policy: keep decode + pointer handoff atomic. We cache the decoded
     // pointer in msg_src_* under SEI, then print from that cached source.
     php
     sei

@@ -960,6 +960,10 @@ target-bank setup, and post-load channel cleanup.
       Sixteenth slice: common REU preload, tier DMA, overlay DMA, and C128
       preload diagnostics no longer read or write raw `$01`. C64/C128 REU code
       now uses `hal_memory_cpu_port`, and the CPU-port checker gates `reu.s`.
+      Seventeenth slice: common Huffman decoding no longer branches directly on
+      `C128` to decide whether to mask IRQs. Each platform exports
+      `hal_huffman_lock_irq_during_decode`, and the memory-bank HAL checker
+      verifies both the platform constants and the common decoder call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
