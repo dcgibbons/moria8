@@ -104,7 +104,7 @@ create_select_race:
     sta zp_ptr0
     lda #>create_race_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // List races with letter keys a-h
     ldx #0                  // Race index
@@ -126,13 +126,13 @@ create_select_race:
     pha
     clc
     adc #$01                // A=01, B=02, etc.
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // ") "
     lda #$29                // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                // space
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Race name
     lda #COL_WHITE
@@ -144,7 +144,7 @@ create_select_race:
     sta zp_ptr0
     lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     pla
     tax
@@ -163,7 +163,7 @@ create_select_race:
     sta zp_ptr0
     lda #>create_choose_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     // Append final letter and closing paren
     lda #RACE_COUNT         // 8 options → last letter = 'H'
     jsr put_choose_suffix
@@ -184,7 +184,7 @@ create_select_race:
 // Class selection (filtered by race)
 // ============================================================
 create_select_class:
-    jsr screen_clear
+    jsr hal_screen_clear
 
     lda #COL_WHITE
     sta zp_text_color
@@ -196,7 +196,7 @@ create_select_class:
     sta zp_ptr0
     lda #>create_class_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Get race class restriction bitmask
     ldx player_data + PL_RACE
@@ -242,11 +242,11 @@ create_select_class:
     lda zp_temp4
     clc
     adc #$01                // A, B, C...
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Class name
     lda #COL_WHITE
@@ -256,7 +256,7 @@ create_select_class:
     sta zp_ptr0
     lda class_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     inc zp_temp4            // Next display row
 
@@ -280,7 +280,7 @@ create_select_class:
     sta zp_ptr0
     lda #>create_choose_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda zp_temp4            // Number of valid classes
     jsr put_choose_suffix
 
@@ -308,7 +308,7 @@ create_class_map:
 // ============================================================
 create_roll_stats:
 !reroll:
-    jsr screen_clear
+    jsr hal_screen_clear
 
     lda #COL_WHITE
     sta zp_text_color
@@ -320,7 +320,7 @@ create_roll_stats:
     sta zp_ptr0
     lda #>create_stats_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Roll stats using umoria algorithm:
     // Per stat: d3 + d4 + d5 + 5 (range 8-17)
@@ -417,11 +417,11 @@ create_roll_stats:
     sta zp_ptr0
     lda stat_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // ":"
     lda #$3a
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Base value (right-justified, always 8-17)
     lda #COL_WHITE
@@ -440,9 +440,9 @@ create_roll_stats:
     pha                     // Save modified stat
 
     lda #$20                // space
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$28                // '('
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     lda #COL_CYAN
     sta zp_text_color
@@ -452,7 +452,7 @@ create_roll_stats:
     lda #COL_LGREY
     sta zp_text_color
     lda #$29                // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     pla
     tax
@@ -471,7 +471,7 @@ create_roll_stats:
     sta zp_ptr0
     lda #>create_reroll_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 !stat_key:
     jsr input_get_key
@@ -517,7 +517,7 @@ create_calc_modified_stat:
 // Name entry
 // ============================================================
 create_enter_name:
-    jsr screen_clear
+    jsr hal_screen_clear
 
     lda #COL_WHITE
     sta zp_text_color
@@ -529,7 +529,7 @@ create_enter_name:
     sta zp_ptr0
     lda #>create_name_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -541,7 +541,7 @@ create_enter_name:
     sta zp_ptr0
     lda #>create_name_prompt
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Input cursor on row 4
     lda #4
@@ -576,7 +576,7 @@ create_enter_name:
     // Erase char on screen
     dec zp_cursor_col
     lda #$20                // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dec zp_cursor_col        // Move back again
     jmp !name_loop-
 !not_del:
@@ -623,7 +623,7 @@ create_enter_name:
     // Store screen code in player name
     sta player_data + PL_NAME,x
     // Display it
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inx
     stx cen_count
     jmp !name_loop-
@@ -831,9 +831,9 @@ put_choose_suffix:
     sbc #1
     clc
     adc #$01                // A=$01, B=$02, ..., H=$08
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     rts
 
 // ============================================================
@@ -880,7 +880,7 @@ create_select_gender:
     sta zp_ptr0
     lda #>create_gender_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Option A) Male
     lda #COL_LGREY
@@ -893,7 +893,7 @@ create_select_gender:
     sta zp_ptr0
     lda #>create_gender_m
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Option B) Female
     lda #3
@@ -904,7 +904,7 @@ create_select_gender:
     sta zp_ptr0
     lda #>create_gender_f
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 !gender_key:
     jsr input_get_key

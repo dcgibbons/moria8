@@ -817,7 +817,7 @@ ui_char_draw_background:
     sta zp_ptr0
     lda #>char_sex_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -835,7 +835,7 @@ ui_char_draw_background:
     lda #>char_sex_female
     sta zp_ptr0_hi
 !udb_print_sex:
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -843,7 +843,7 @@ ui_char_draw_background:
     sta zp_ptr0
     lda #>char_sc_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda player_data + PL_SOCIAL_CLASS
@@ -868,7 +868,7 @@ ui_char_draw_background:
     sta zp_ptr0
     lda udb_line_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     pla
     tax
     inx

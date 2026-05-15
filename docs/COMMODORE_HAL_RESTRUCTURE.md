@@ -601,7 +601,18 @@ Storage adapter note:
       patch slots remain the implementation detail. `check_hal_lifecycle_exports.py`
       verifies the HAL labels and rejects direct common-code calls to the
       service-vector internals.
-- [ ] Migrate screen clear/text/color.
+- [x] Migrate screen clear/text/color.
+      Common UI/text code now calls `hal_screen_clear`,
+      `hal_screen_clear_row`, `hal_screen_put_char`,
+      `hal_screen_put_string`, `hal_screen_put_char_at`,
+      `hal_screen_set_color`, `hal_screen_blank`, and
+      `hal_screen_unblank` instead of the legacy `screen_*` text entry
+      points. C64, C128, and Plus/4 screen backends export the required
+      screen HAL aliases plus no-op `hal_screen_init`/bulk hooks where no
+      platform behavior exists yet. `check_hal_screen_exports.py` verifies the
+      exports and rejects direct common-code calls to the migrated legacy
+      names. Cursor recomputation and flash helpers remain explicit follow-up
+      work outside this clear/text/color slice.
 - [ ] Migrate input/key repeat/text input.
 - [x] Migrate sound/SFX.
       First slice: SID and Plus/4 TED sound implementations now export the

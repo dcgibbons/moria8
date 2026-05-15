@@ -130,6 +130,21 @@ screen_vectors:
     jmp screen_set_color    // +9: set current text color
     jmp screen_clear_row    // +12: clear a single row
 
+.label hal_screen_init = screen_noop
+.label hal_screen_clear = screen_clear
+.label hal_screen_clear_row = screen_clear_row
+.label hal_screen_put_char = screen_put_char
+.label hal_screen_put_string = screen_put_string
+.label hal_screen_put_char_at = screen_put_char_at
+.label hal_screen_set_color = screen_set_color
+.label hal_screen_blank = screen_blank
+.label hal_screen_unblank = screen_unblank
+.label hal_screen_begin_bulk = screen_noop
+.label hal_screen_end_bulk = screen_noop
+
+screen_noop:
+    rts
+
 // ============================================================
 // Row address lookup tables (80-column: row * 80)
 // ============================================================

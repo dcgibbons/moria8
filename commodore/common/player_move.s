@@ -732,10 +732,10 @@ dl_print_you_see:
     sta zp_ptr0
     lda dl_name_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     // Append "."
     lda #$2e
-    jsr screen_put_char
+    jsr hal_screen_put_char
     pla
     sta zp_text_color
 #if C128

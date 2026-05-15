@@ -43,7 +43,7 @@ home_enter:
     sta zp_ptr0
     lda #>hm_menu_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 !he_loop:
     jsr input_get_key
@@ -95,7 +95,7 @@ home_retrieve:
     sta zp_ptr0
     lda #>hm_retrieve_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     jsr input_get_key
 
@@ -152,7 +152,7 @@ home_retrieve:
     sta zp_ptr0
     lda #>hm_inv_full_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jmp input_get_key           // Wait, tail call
 
 !hr_has_room:
@@ -199,7 +199,7 @@ home_retrieve:
     sta zp_ptr0
     lda #>hm_retrieved_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #SFX_PICKUP
     jsr hal_sound_play
@@ -225,7 +225,7 @@ home_deposit:
     sta zp_ptr0
     lda #>hm_deposit_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // List inventory items
     lda #2
@@ -256,11 +256,11 @@ home_deposit:
     lda hm_save_x
     clc
     adc #$01                    // Screen code 'A'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                    // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Item description with ego/status/stat suffixes
     ldx hm_save_x
@@ -284,7 +284,7 @@ home_deposit:
     sta zp_ptr0
     lda #>hm_which_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     jsr input_get_key
 
@@ -333,7 +333,7 @@ home_deposit:
     sta zp_ptr0
     lda #>hm_home_full_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jmp input_get_key           // Wait, tail call
 
 !hd_has_slot:
@@ -371,7 +371,7 @@ home_deposit:
     sta zp_ptr0
     lda #>hm_deposited_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #SFX_PICKUP
     jsr hal_sound_play

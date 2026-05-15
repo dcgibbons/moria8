@@ -131,7 +131,7 @@ banked_ego_put_suffix:
     lda (zp_ptr0),y
     beq !beps_done+
     sty beps_save_y2
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldy beps_save_y2
     iny
     jmp !beps_loop-
@@ -156,7 +156,7 @@ put_tool_ego_prefix:
     sta zp_ptr0
     lda tool_ego_pfx_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 
 ptep_temp2: .byte 0
@@ -191,13 +191,13 @@ put_inv_name_with_ego:
     jsr put_tool_ego_prefix
     lda pinwe_id
     jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr put_inv_sensed_suffix
     rts
 !pinwe_not_tool:
     lda pinwe_id
     jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr hal_screen_put_string
     ldx pinwe_sl
     lda inv_ego,x
     cmp #EGO_TYPE_COUNT
@@ -218,7 +218,7 @@ put_inv_sensed_suffix:
     sta zp_ptr0
     lda #>pinwe_sensed_suffix
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !pinwe_done:
     rts
 
@@ -229,7 +229,7 @@ pinwe_sl: .byte 0
 itemdesc_put_store_slot:
     lda si_item_id,x
     jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr hal_screen_put_string
     :LoadStoreEgoX()
     jmp banked_ego_put_suffix
 #else

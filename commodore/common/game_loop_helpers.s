@@ -21,7 +21,7 @@ cmd_show_character_view:
     // full-screen redraw path, so it must also re-establish the active tier.
     jsr tier_restore_after_overlay
 #endif
-	    jsr screen_clear
+	    jsr hal_screen_clear
 #if C128
 #if PERF_P1
     jsr perf_p1_set_reason_modal_restore
@@ -78,14 +78,14 @@ cmd_recall_view:
     sta zp_ptr0
     lda #>recall_prompt_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr input_prepare_followup_key
     jsr input_get_key
     jsr recall_key_to_screen_code
     bcc !recall_done+
     jsr recall_show_matching_entry
 !recall_done:
-	    jsr screen_clear
+	    jsr hal_screen_clear
 #if C128
 #if PERF_P1
     jsr perf_p1_set_reason_modal_restore
@@ -196,7 +196,7 @@ command_result_restore_view_or_update_visibility:
     bcc !crrv_no_turn+
     jmp post_turn_update_visibility_or_die
 !crrv_no_turn:
-	    jsr screen_clear
+	    jsr hal_screen_clear
 #if C128
 #if PERF_P1
     jsr perf_p1_set_reason_modal_restore
@@ -325,7 +325,7 @@ post_turn_update_visibility_or_die:
 	    jmp main_loop
 !ptuvs_full:
 	    lda #INPUT_ROW
-	    jsr screen_clear_row
+	    jsr hal_screen_clear_row
 #if C128
 #if PERF_P1
     jsr perf_p1_mark_full_reason_update_visibility
@@ -338,7 +338,7 @@ post_turn_update_visibility_or_die:
 ui_view_return_to_gameplay_view:
     jsr ui_view_restore_modal_overlay
     lda #INPUT_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     jmp main_loop
 
 // ============================================================
@@ -346,7 +346,7 @@ ui_view_return_to_gameplay_view:
 // ============================================================
 vp_render_status_loop:
 	    lda #INPUT_ROW
-	    jsr screen_clear_row
+	    jsr hal_screen_clear_row
 	    jsr viewport_update
 #if C128
 #if PERF_P1

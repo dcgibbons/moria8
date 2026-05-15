@@ -142,7 +142,7 @@ tier_init:
     sta zp_screen_editor_state  // Suppress cursor blink during loading
     lda #COL_LGREY
     sta zp_text_color
-    jsr screen_clear
+    jsr hal_screen_clear
     lda #1
     sta zp_cursor_row
     lda #1
@@ -151,7 +151,7 @@ tier_init:
     sta zp_ptr0
     lda #>c128_cache_loading_hdr
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #4
     sta reu_loading_row
     jsr c128_preload_all_tiers
@@ -170,7 +170,7 @@ tier_init:
     sta zp_screen_editor_state  // Suppress cursor blink during loading
     lda #COL_LGREY
     sta zp_text_color
-    jsr screen_clear
+    jsr hal_screen_clear
     lda #1
     sta zp_cursor_row
     lda #1
@@ -179,7 +179,7 @@ tier_init:
     sta zp_ptr0
     lda #>reu_loading_hdr
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr reu_show_status         // Show initial "0/XXXKB"
     lda #4
     sta reu_loading_row

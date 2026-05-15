@@ -403,14 +403,14 @@ wizard_cmd_level_jump:
 
 wizard_prompt_two_digit:
     sta wizard_prompt_max
-    jsr screen_clear
+    jsr hal_screen_clear
     lda #COL_WHITE
     sta zp_text_color
     lda #5
     sta zp_cursor_row
     lda #8
     sta zp_cursor_col
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
@@ -442,7 +442,7 @@ wizard_prompt_two_digit:
     dec wizard_num_digits
     dec zp_cursor_col
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dec zp_cursor_col
     jmp !wiz_num_loop-
 !wiz_num_not_del:
@@ -454,7 +454,7 @@ wizard_prompt_two_digit:
     cpx #2
     bcs !wiz_num_loop-
     sta wizard_num_buf0,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc wizard_num_digits
     jmp !wiz_num_loop-
 !wiz_num_cancel:
@@ -549,7 +549,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_LGREY
     sta zp_text_color
     lda #2
@@ -560,7 +560,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_row1_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #3
     sta zp_cursor_row
     lda #4
@@ -569,7 +569,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_row2_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #4
     sta zp_cursor_row
     lda #4
@@ -578,7 +578,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_row3_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #5
     sta zp_cursor_row
     lda #4
@@ -587,7 +587,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_row4_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #18
     sta zp_cursor_row
     lda #14
@@ -596,7 +596,7 @@ wizard_40col_menu_display:
     sta zp_ptr0
     lda #>wiz_footer_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 
 .encoding "screencode_mixed"

@@ -48,7 +48,7 @@ spell_list_display:
     lda #>pm_title_prayer_str
     sta zp_ptr0_hi
 !sld_title_ready:
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -60,7 +60,7 @@ spell_list_display:
     sta zp_ptr0
     lda #>pm_header_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #0
     sta pm_row_counter
@@ -102,11 +102,11 @@ spell_list_display:
     lda pm_row_counter
     clc
     adc #$01
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     lda pm_name_lo_lo
     sta zp_ptr0
@@ -126,7 +126,7 @@ spell_list_display:
     sta zp_ptr0
     lda zp_ptr2_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #30
     sta zp_cursor_col
@@ -175,18 +175,18 @@ spell_list_display:
     lda #>pm_footer_pray_prefix
     sta zp_ptr0_hi
 !sld_footer_prefix:
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda pm_spell_count
     sec
     sbc #1
     clc
     adc #$01
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     lda #<pm_footer_suffix
     sta zp_ptr0
     lda #>pm_footer_suffix
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts

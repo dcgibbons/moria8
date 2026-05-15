@@ -41,7 +41,7 @@ ui_recall_display:
     sta zp_ptr0
     lda #>rcl_s_title
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // --- Creature char + name (row 2) ---
     lda #2
@@ -49,23 +49,23 @@ ui_recall_display:
     lda #2
     sta zp_cursor_col
     lda #$1b                    // '[' screen code
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldx recall_found_type
     lda cr_color,x
     sta zp_text_color
     lda cr_display,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
     lda #$1d                    // ']' screen code
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #<creature_name_buf
     sta zp_ptr0
     lda #>creature_name_buf
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // --- LV / AC / HP (row 4) ---
     ldx recall_found_type
@@ -104,7 +104,7 @@ ui_recall_display:
     lda cr_hd_num,x
     jsr screen_put_decimal
     lda #$44                    // PETSCII 'D' — portable across C64/C128 backends
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldx recall_found_type
     lda cr_hd_sides,x
     jsr screen_put_decimal
@@ -154,9 +154,9 @@ ui_recall_display:
     lda rcl_any_atk
     beq !rcl_print_atk1+
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !rcl_print_atk1:
     lda rcl_atk_type
     jsr rcl_print_atk
@@ -229,7 +229,7 @@ ui_recall_display:
     sta zp_ptr0
     lda #>press_key_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     rts
 
@@ -241,7 +241,7 @@ ui_recall_display:
 rcl_put_str:
     sta zp_ptr0
     sty zp_ptr0_hi
-    jmp screen_put_string       // Tail call
+    jmp hal_screen_put_string       // Tail call
 
 // rcl_grey / rcl_white — Set text color
 rcl_grey:
@@ -268,20 +268,20 @@ rcl_print_atk:
     adc rcl_scratch             // *3
     tax
     lda rcl_atk_3,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inx
     lda rcl_atk_3,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inx
     lda rcl_atk_3,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !rpa_dice:
     lda rcl_dice
     jsr screen_put_decimal
     lda #$44                    // PETSCII 'D' — portable across C64/C128 backends
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda rcl_sides
     jmp screen_put_decimal      // Tail call
 

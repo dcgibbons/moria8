@@ -238,6 +238,10 @@ screen_clear_row:
     inc screen_clear_row_calls
     rts
 
+.label hal_screen_put_string = screen_put_string
+.label hal_screen_put_char = screen_put_char
+.label hal_screen_clear_row = screen_clear_row
+
 screen_put_decimal_rj2:
     rts
 

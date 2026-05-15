@@ -164,14 +164,14 @@ screen_put_decimal_24:
     sta zp_temp2                // No more leading zeros
     lda zp_temp3
     ora #$30                    // Digit → screen code
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !sd24_next_digit:
     dex
     bne !sd24_digit_loop-
     // Always print ones digit
     lda sd24_work_0
     ora #$30
-    jmp screen_put_char
+    jmp hal_screen_put_char
 
 // Powers of 10 for 24-bit decimal (8 entries × 3 bytes)
 // Index: 0=1, 1=10, 2=100, 3=1000, 4=10000, 5=100000, 6=1000000, 7=10000000
@@ -207,7 +207,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_died_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Row 3: Player name
     lda #3
@@ -220,7 +220,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>player_data
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Row 4: "<race> <class>  LEVEL <lvl>"
     lda #4
@@ -235,22 +235,22 @@ score_death_screen:
     sta zp_ptr0
     lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
     // Print class name
     ldx player_data + PL_CLASS
     lda class_name_ptrs_lo,x
     sta zp_ptr0
     lda class_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     // "  LEVEL "
     lda #<sds_level_str
     sta zp_ptr0
     lda #>sds_level_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda player_data + PL_LEVEL
     jsr screen_put_decimal
 
@@ -263,7 +263,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_dungeon_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda player_data + PL_MAX_DLVL
     jsr screen_put_decimal
 
@@ -278,7 +278,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_killed_by_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr sds_print_death_source
 
     // Row 9: "EXPERIENCE:" + value
@@ -292,7 +292,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_xp_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_WHITE
@@ -316,7 +316,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_gold_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_YELLOW
@@ -340,7 +340,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_depth_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_WHITE
@@ -368,7 +368,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_total_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #SDS_VALUE_COL
     sta zp_cursor_col
     lda #COL_GREEN
@@ -390,7 +390,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_wizard_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !sds_not_wizard:
 
     // Row 14: High score header
@@ -404,7 +404,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_hiscore_hdr
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Display high score table
     jsr hiscore_display
@@ -420,7 +420,7 @@ score_death_screen:
     sta zp_ptr0
     lda #>sds_anykey_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     rts
 
@@ -448,37 +448,37 @@ sds_print_death_source:
     sta zp_ptr0
     lda #>sds_a_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !sds_preresolved:
     lda #<creature_name_buf
     sta zp_ptr0
     lda #>creature_name_buf
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 !sds_poison:
     lda #<sds_src_poison
     sta zp_ptr0
     lda #>sds_src_poison
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 !sds_starve:
     lda #<sds_src_starve
     sta zp_ptr0
     lda #>sds_src_starve
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 !sds_cursed:
     lda #<sds_src_cursed
     sta zp_ptr0
     lda #>sds_src_cursed
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 !sds_unknown:
     lda #<sds_src_unknown
     sta zp_ptr0
     lda #>sds_src_unknown
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 
 // ============================================================
 // hiscore_insert — Insert current player into high score table
@@ -709,9 +709,9 @@ hiscore_display:
     adc #1
     jsr screen_put_decimal_rj2
     lda #$2e                    // '.'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                    // ' '
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Print score (24-bit)
     ldx hd_offset
@@ -723,7 +723,7 @@ hiscore_display:
     sta score_accum_2
     jsr screen_put_decimal_24
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Print name (up to 12 chars to fit)
     ldx hd_offset
@@ -732,7 +732,7 @@ hiscore_display:
     lda hiscore_table,x
     cmp #$20
     beq !hd_name_end+           // Stop at first space/pad (truncate)
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inx
     iny
     cpy #12
@@ -744,7 +744,7 @@ hiscore_display:
     cmp #SDS_HISCORE_PAD_COL
     bcs !hd_pad_done+
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     jmp !hd_pad-
 !hd_pad_done:
 
@@ -753,7 +753,7 @@ hiscore_display:
     sta zp_ptr0
     lda #>sds_lv_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     ldx hd_offset
     lda hiscore_table + 19,x
     jsr screen_put_decimal_rj2

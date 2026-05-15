@@ -11,7 +11,7 @@
 reu_show_status_banked:
     // Clear row 2 to avoid leftover digits
     lda #2
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     // Compute used KB = ceiling(offset / 1024)
     // = (offset + 1023) >> 10
@@ -35,7 +35,7 @@ reu_show_status_banked:
 
     // Print "/"
     lda #$2f                    // Screen code for '/'
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Print total REU size in KB (16-bit)
     lda reu_size_kb
@@ -49,7 +49,7 @@ reu_show_status_banked:
     sta zp_ptr0
     lda #>rlb_kb_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 
 rlb_kb_str: .text "KB" ; .byte 0

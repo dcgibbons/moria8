@@ -15,7 +15,7 @@ numeric_format_emit_screen:
     ldx #0
 !loop:
     lda nf_digit_buf,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inx
     cpx zp_temp2
     bne !loop-
@@ -30,11 +30,11 @@ screen_put_hex:
     lsr
     lsr
     jsr !hex_digit+
-    jsr screen_put_char
+    jsr hal_screen_put_char
     pla
     and #$0f
     jsr !hex_digit+
-    jmp screen_put_char
+    jmp hal_screen_put_char
 !hex_digit:
     cmp #$0a
     bcc !digit+
@@ -107,7 +107,7 @@ screen_put_decimal_rj2:
     cmp #1
     bne !emit+
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !emit:
     jmp numeric_format_emit_screen
 
@@ -118,7 +118,7 @@ screen_put_decimal_lz2:
     cmp #1
     bne !emit+
     lda #$30
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !emit:
     jmp numeric_format_emit_screen
 

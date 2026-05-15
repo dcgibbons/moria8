@@ -23,7 +23,7 @@ put_stat_val:
     lda #18
     jsr screen_put_decimal  // Print "18"
     lda #$2f                // '/'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     pla
     cmp #118                // 18/100?
     bne !not_100+

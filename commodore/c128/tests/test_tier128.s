@@ -35,6 +35,8 @@ cr_name_hi: .fill MAX_DUNGEON_CREATURES, 0
 
 screen_clear: rts
 screen_put_string: rts
+.label hal_screen_clear = screen_clear
+.label hal_screen_put_string = screen_put_string
 reu_show_status: rts
 reu_show_file: rts
 reu_load_all_tiers: rts

@@ -54,7 +54,9 @@ w_chrout:
     jmp KERNAL_CHROUT
 
 screen_put_string:
+.label hal_screen_put_string = screen_put_string
 screen_clear_row:
+.label hal_screen_clear_row = screen_clear_row
 input_prepare_modal_dismiss_key:
 input_get_modal_dismiss_key:
 c128_require_program_media:

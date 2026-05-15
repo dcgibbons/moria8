@@ -48,9 +48,9 @@ title_require_disk_setup:
 
 title_draw_save_disk_indicator:
     lda #STATUS_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #STATUS_ROW + 1
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #COL_CYAN
     sta zp_text_color
     lda #STATUS_ROW
@@ -61,11 +61,11 @@ title_draw_save_disk_indicator:
     sta zp_ptr0
     lda #>ds_ind_pfx
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda save_device
     jsr screen_put_decimal_rj2
     lda #$1d
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
     rts

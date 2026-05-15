@@ -125,9 +125,9 @@ msg_print_cached:
 
     // --- State 0: both rows empty → print on row 0 ---
     lda #MSG_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #MSG_ROW + 1
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     lda #MSG_ROW
     sta zp_cursor_row
@@ -142,7 +142,7 @@ msg_print_cached:
     sta zp_ptr0
     lda msg_src_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     pla
     sta zp_text_color
 
@@ -158,7 +158,7 @@ msg_print_cached:
 !use_row1:
     // --- State 1: row 0 used → print on row 1 ---
     lda #MSG_ROW + 1
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     lda #MSG_ROW + 1
     sta zp_cursor_row
@@ -173,7 +173,7 @@ msg_print_cached:
     sta zp_ptr0
     lda msg_src_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     pla
     sta zp_text_color
 
@@ -211,9 +211,9 @@ msg_clear:
     beq !done+
 
     lda #MSG_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #MSG_ROW + 1
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     lda #0
     sta zp_msg_flags
@@ -249,7 +249,7 @@ msg_show_more:
     sta zp_ptr0
     lda #>more_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     pla
     sta zp_text_color

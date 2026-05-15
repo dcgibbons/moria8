@@ -67,14 +67,14 @@ itemdesc_put_staged:
     jsr put_tool_ego_prefix
     lda itemdesc_item_id
     jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr itemdesc_put_stats
     jsr itemdesc_put_sensed_suffix
     rts
 !idps_not_tool:
     lda itemdesc_item_id
     jsr item_get_name_ptr
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda itemdesc_ego
     cmp #EGO_TYPE_COUNT
     bcc !idps_valid_ego+
@@ -97,7 +97,7 @@ itemdesc_put_qty_prefix:
     lda itemdesc_qty
     jsr screen_put_decimal
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !idqp_done:
     rts
 
@@ -110,7 +110,7 @@ itemdesc_put_sensed_suffix:
     sta zp_ptr0
     lda #>itemdesc_sensed_suffix
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !idps_done:
     rts
 
@@ -156,31 +156,31 @@ itemdesc_put_stats:
     rts
 !idps_weapon_has_bonus:
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$28
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_to_hit
     jsr itemdesc_put_signed
     lda #$2c
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_to_dam
     jsr itemdesc_put_signed
     lda #$29
-    jmp screen_put_char
+    jmp hal_screen_put_char
 !idps_armor:
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$1b                    // '[' screen code
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldx itemdesc_item_id
     lda it_base_ac,x
     jsr screen_put_decimal
     lda #$2c
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_to_ac
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
-    jmp screen_put_char
+    jmp hal_screen_put_char
 !idps_ring:
     lda itemdesc_item_id
     cmp #23
@@ -194,26 +194,26 @@ itemdesc_put_stats:
     rts
 !idps_ring_ac_has_bonus:
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$1b                    // '[' screen code
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_to_ac
     jsr itemdesc_put_signed
     lda #$1d                    // ']' screen code
-    jmp screen_put_char
+    jmp hal_screen_put_char
 !idps_ring_p1:
     lda itemdesc_p1
     bne !idps_ring_p1_has_bonus+
     rts
 !idps_ring_p1_has_bonus:
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$28
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_p1
     jsr itemdesc_put_signed
     lda #$29
-    jmp screen_put_char
+    jmp hal_screen_put_char
 !idps_charges:
     lda #<itemdesc_charges_str
     ldy #>itemdesc_charges_str
@@ -225,27 +225,27 @@ itemdesc_put_count_suffix:
     sta zp_ptr0
     sty zp_ptr0_hi
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$28
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_p1
     jsr screen_put_decimal
     lda #$20
-    jsr screen_put_char
-    jsr screen_put_string
+    jsr hal_screen_put_char
+    jsr hal_screen_put_string
     lda #$29
-    jmp screen_put_char
+    jmp hal_screen_put_char
 
 itemdesc_put_signed:
     sta itemdesc_signed
     bmi !idps_negative+
     lda #$2b
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_signed
     jmp screen_put_decimal
 !idps_negative:
     lda #$2d
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda itemdesc_signed
     eor #$ff
     clc

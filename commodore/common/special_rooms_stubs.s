@@ -48,7 +48,7 @@ tramp_ego_put_suffix:
     lda (zp_ptr0),y
     beq !teps_stub_done+
     sty teps_stub_y
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldy teps_stub_y
     iny
     jmp !teps_stub_loop-

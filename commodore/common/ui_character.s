@@ -74,7 +74,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda zp_game_flags
     and #GAME_FLAG_WIZARD
@@ -89,7 +89,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_wizard_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !ucd_not_wizard:
 
     lda #COL_LGREY
@@ -104,7 +104,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_name_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -114,7 +114,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>(player_data + PL_NAME)
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // --- Race / Class ---
     lda #COL_LGREY
@@ -127,7 +127,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_race_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -136,7 +136,7 @@ ui_char_display:
     sta zp_ptr0
     lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -146,7 +146,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_class_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -155,7 +155,7 @@ ui_char_display:
     sta zp_ptr0
     lda class_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // --- Level / AC ---
     lda #COL_LGREY
@@ -168,7 +168,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_level_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -183,7 +183,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>status_ac_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -204,7 +204,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>status_hp_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -215,7 +215,7 @@ ui_char_display:
     jsr screen_put_decimal_16
 
     lda #$2f                // '/'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda player_data + PL_MHP_LO
     sta zp_temp0
     lda player_data + PL_MHP_HI
@@ -230,14 +230,14 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_mana_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
     lda player_data + PL_MANA
     jsr screen_put_decimal
     lda #$2f
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda player_data + PL_MAX_MANA
     jsr screen_put_decimal
 
@@ -252,7 +252,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_gold_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_YELLOW
     sta zp_text_color
@@ -270,7 +270,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>status_exp_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -294,14 +294,14 @@ ui_char_display:
     sta zp_ptr0
     lda #>char_spells_label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
     jsr count_spells_known       // Returns count in A
     jsr screen_put_decimal
     lda #$2f                     // '/'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldx player_data + PL_CLASS
     lda class_spell_total,x
     jsr screen_put_decimal
@@ -321,7 +321,7 @@ ui_char_display:
     sta zp_ptr0
     lda #>press_key_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     rts
 
@@ -372,11 +372,11 @@ ui_char_draw_stats:
     sta zp_ptr0
     lda stat_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // ":"
     lda #$3a
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Print stat value (right-justified, 18/xx aware)
     pla                     // Restore stat index

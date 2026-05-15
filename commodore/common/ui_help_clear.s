@@ -13,13 +13,13 @@
 // Clobbers: A, X, Y, zp_screen_lo/hi, zp_color_lo/hi
 ui_clear_full_screen_safe:
 #if C128
-    jmp screen_clear
+    jmp hal_screen_clear
 #else
     lda #0
     sta help_line_idx
 !hca_loop:
     lda help_line_idx
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     inc help_line_idx
     lda help_line_idx
     cmp #SCREEN_ROWS

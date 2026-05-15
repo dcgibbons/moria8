@@ -57,7 +57,7 @@ title_show_sysinfo_banked:
     lda #$3f                    // '?' screen code
     bne !kp+                    // always taken (A != 0)
 !kf: lda tsi_krev_chars,x
-!kp: jsr screen_put_char
+!kp: jsr hal_screen_put_char
 
     // REU info if present
     lda reu_present
@@ -79,7 +79,7 @@ title_show_sysinfo_banked:
 tsi_print:
     sta zp_ptr0
     sty zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 
 #if !C128
 tsi_mach_lo:    .byte <tsi_c64_str, <tsi_sx64_str

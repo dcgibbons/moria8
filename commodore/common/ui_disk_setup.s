@@ -17,7 +17,7 @@
     sta zp_ptr0
     lda #>label
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 }
 
 uds_digits: .byte 0, 0
@@ -176,11 +176,11 @@ uds_show_insert_prompt:
     sta zp_ptr0
     lda #>uds_drive_prefix_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda save_device
     jsr screen_put_decimal_rj2
     lda #$2e                    // '.'
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !prep_wait:
     :UDSPrint(6, UDS_PROMPT_COL, press_key_str)
     jsr input_get_modal_dismiss_key
@@ -234,7 +234,7 @@ uds_enter_device:
     lda #3
     sta zp_cursor_row
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     jmp !de_key-
 !de_not_del:
     cmp #$0d                    // RETURN
@@ -259,7 +259,7 @@ uds_enter_device:
     lda #3
     sta zp_cursor_row
     pla
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc uds_count
     jmp !de_key-
 
@@ -418,20 +418,20 @@ uds_show_c128_status_error:
     sta zp_ptr0
     lda #>uds_disk_code_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_diag_cmd_status0
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda disk_diag_cmd_status1
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #<uds_phase_str
     sta zp_ptr0
     lda #>uds_phase_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_diag_phase
     jsr screen_put_hex
     lda #$2e
-    jsr screen_put_char
+    jsr hal_screen_put_char
     rts
 #endif
 
@@ -445,20 +445,20 @@ uds_show_plus4_disk_error:
     sta zp_ptr0
     lda #>uds_disk_error_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_error_dos0
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda disk_error_dos1
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #<uds_on_drive_str
     sta zp_ptr0
     lda #>uds_on_drive_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_error_device
     jsr screen_put_decimal_rj2
     lda #$2e
-    jsr screen_put_char
+    jsr hal_screen_put_char
     rts
 
 uds_show_plus4_status_error:
@@ -470,18 +470,18 @@ uds_show_plus4_status_error:
     sta zp_ptr0
     lda #>uds_disk_status_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_error_readst
     jsr screen_put_hex
     lda #<uds_phase_str
     sta zp_ptr0
     lda #>uds_phase_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda disk_error_phase
     jsr screen_put_hex
     lda #$2e
-    jsr screen_put_char
+    jsr hal_screen_put_char
     rts
 #endif
 
@@ -496,11 +496,11 @@ uds_draw_current_indicator:
     sta zp_ptr0
     lda #>ds_ind_pfx
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda save_device
     jsr screen_put_decimal_rj2
     lda #$1d
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
     rts

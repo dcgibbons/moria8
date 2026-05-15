@@ -186,7 +186,7 @@ status_draw:
 
     // Clear input row (row 24) — many code paths bypass vp_render_status_loop
     lda #INPUT_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     // ========== Row 21: Name / Race / Level / Dungeon Level ==========
     lda status_dirty_rows
@@ -197,7 +197,7 @@ status_draw:
     lda #STATUS_ROW
     sta zp_cursor_row
     lda #STATUS_ROW
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
 
     // Player name
     lda #COL_WHITE
@@ -208,11 +208,11 @@ status_draw:
     sta zp_ptr0
     lda #>(player_data + PL_NAME)
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Space separator
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Race name
     lda #COL_STATUS
@@ -222,7 +222,7 @@ status_draw:
     sta zp_ptr0
     lda race_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 #if !C128
     lda player_data + PL_FLAGS
@@ -236,7 +236,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_searching_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !sd_row21_state_done:
 #endif
 
@@ -246,7 +246,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_lv_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -262,7 +262,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_dl_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -279,7 +279,7 @@ status_draw:
     lda #STATUS_ROW + 1
     sta zp_cursor_row
     lda #STATUS_ROW + 1
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
 
@@ -289,7 +289,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_st_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_str
@@ -304,7 +304,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_in_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_int
@@ -319,7 +319,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_wi_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_wis
@@ -334,7 +334,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_dx_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_dex
@@ -349,7 +349,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_co_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_con
@@ -364,7 +364,7 @@ status_draw:
     sta zp_ptr0
     lda #>stat_ch_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_chr
@@ -380,7 +380,7 @@ status_draw:
     lda #STATUS_ROW + 2
     sta zp_cursor_row
     lda #STATUS_ROW + 2
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #COL_STATUS
     sta zp_text_color
 
@@ -390,7 +390,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_hp_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Color HP by percentage
     jsr status_hp_color
@@ -406,7 +406,7 @@ status_draw:
     lda #COL_STATUS
     sta zp_text_color
     lda #$2f
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Max HP
     lda zp_player_mhp_lo
@@ -424,7 +424,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_mp_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -433,7 +433,7 @@ status_draw:
     lda #COL_STATUS
     sta zp_text_color
     lda #$2f
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
     lda zp_player_mmp
@@ -448,7 +448,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_ac_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -464,7 +464,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_au_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda player_data + PL_GOLD_0
     sta zp_temp0
@@ -498,7 +498,7 @@ status_draw:
     sta zp_ptr0
     lda hunger_name_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 #if C128
     lda player_data + PL_FLAGS
@@ -512,7 +512,7 @@ status_draw:
     sta zp_ptr0
     lda #>status_searching_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 !sd_row23_state_done:
 #endif
 

@@ -29,7 +29,7 @@ title_load_and_draw:
     sta zp_kernal_status
 
     // Clear screen after KERNAL LOAD (removes "SEARCHING..." messages)
-    jsr screen_clear
+    jsr hal_screen_clear
 
     // Render the loaded art data
     jsr title_render_data
@@ -38,7 +38,7 @@ title_load_and_draw:
 
 title_fallback_render:
     // Simple text title (no disk art available)
-    jsr screen_clear        // Clear KERNAL residue from failed load too
+    jsr hal_screen_clear        // Clear KERNAL residue from failed load too
     lda #0
     sta zp_cursor_col
     lda #10
@@ -51,7 +51,7 @@ title_fallback_render:
     sta zp_ptr0_hi
     lda #TITLE_FALLBACK_COL
     sta zp_cursor_col
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 
 // ============================================================
@@ -120,7 +120,7 @@ title_render_data:
     jsr title_put_block_char
     jmp !trd_advance+
 !trd_put_normal:
-    jsr screen_put_char
+    jsr hal_screen_put_char
 !trd_advance:
     inc zp_ptr1
     bne !trd_draw_bank1-
@@ -139,7 +139,7 @@ title_render_data:
     sta zp_ptr0
     lda zp_ptr1_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Scan forward in ptr1 to find null terminator.
     ldy #0

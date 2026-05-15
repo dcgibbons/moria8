@@ -11,7 +11,7 @@ ui_reset_message_state:
 // ui_prepare_fullscreen_transition — clear the screen and reset message-row
 // state before a full-screen prompt or status transition.
 ui_prepare_fullscreen_transition:
-    jsr screen_clear
+    jsr hal_screen_clear
     jsr ui_reset_message_state
     rts
 #endif
@@ -52,7 +52,7 @@ ui_view_redraw_gameplay_view:
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
 #endif
-	    jsr screen_clear
+	    jsr hal_screen_clear
 	    jsr viewport_update
 #if C128
 #if PERF_P1

@@ -1012,6 +1012,13 @@ screen_put_string:
 screen_put_char:
     rts
 
+.label hal_screen_blank = screen_blank
+.label hal_screen_clear = screen_clear
+.label hal_screen_clear_row = screen_clear_row
+.label hal_screen_put_string = screen_put_string
+.label hal_screen_put_char = screen_put_char
+.label hal_screen_unblank = screen_unblank
+
 test_entry:
     sei
     cld

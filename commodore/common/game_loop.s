@@ -429,7 +429,7 @@ game_new_start:
     // key release on C128 so the summary is not dismissed immediately.
     jsr tramp_ui_char_display
     jsr input_get_modal_dismiss_key
-    jsr screen_clear
+    jsr hal_screen_clear
 
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c128_test_seed_scripted_spell_state
@@ -591,7 +591,7 @@ game_new_start:
     jsr hal_sound_init
 
 	    // Clear screen and do initial render
-	    jsr screen_clear
+	    jsr hal_screen_clear
 	    jsr viewport_update
 #if C128
 #if PERF_P1
@@ -599,7 +599,7 @@ game_new_start:
 #endif
 #endif
 	    jsr render_viewport
-	    jsr screen_unblank
+	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$91
     jsr c128_stack_guard_begin
@@ -712,7 +712,7 @@ load_resume_game:
     sta zp_view_y
 
     // Clear screen and render the loaded level
-	    jsr screen_clear
+	    jsr hal_screen_clear
 	    jsr update_visibility
 	    jsr viewport_update
 #if C128
@@ -1672,7 +1672,7 @@ level_change_generate_current:
 #endif
     jsr update_visibility
     jsr generation_busy_end_if_dungeon_api
-    jsr screen_clear
+    jsr hal_screen_clear
 	    lda #0
 	    sta zp_view_x
 	    sta zp_view_y
@@ -1683,7 +1683,7 @@ level_change_generate_current:
 #endif
 #endif
 	    jsr render_viewport
-	    jsr screen_unblank
+	    jsr hal_screen_unblank
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$97
     jsr c128_stack_guard_begin
@@ -2466,7 +2466,7 @@ put_tool_ego_prefix:
     sta zp_ptr0
     lda tool_ego_prefix_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string       // Print prefix (e.g., "Dwarven ")
+    jsr hal_screen_put_string       // Print prefix (e.g., "Dwarven ")
     rts
 
 ptep_temp: .byte 0
@@ -2505,7 +2505,7 @@ banked_ego_put_suffix:
     lda (zp_ptr0),y
     beq !beps_done+
     sty beps_save_y
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldy beps_save_y
     iny
     jmp !beps_loop-

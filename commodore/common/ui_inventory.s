@@ -63,7 +63,7 @@ ui_inv_display_common:
     sta zp_ptr0
     lda #>uinv_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Separator
     lda #1
@@ -74,7 +74,7 @@ ui_inv_display_common:
     sta zp_ptr0
     lda #>uinv_sep_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -106,14 +106,14 @@ ui_inv_display_common:
     lda uinv_visible
     clc
     adc #$01                    // Screen code 'A'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc uinv_visible
 
     // ") "
     lda #$29                    // Screen code ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Item description with ego/status/stat suffixes
     ldx uinv_slot
@@ -140,7 +140,7 @@ ui_inv_display_common:
     sta zp_ptr0
     lda #>uinv_nothing_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 !uinv_footer:
     lda #COL_WHITE
@@ -163,7 +163,7 @@ ui_inv_display_common:
     sta zp_ptr0
     lda uinv_footer_hi
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     rts
 

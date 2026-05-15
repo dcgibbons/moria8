@@ -763,7 +763,7 @@ reu_show_file:
     lda #2
     sta zp_cursor_col
 #if C128
-    jsr screen_put_string
+    jsr hal_screen_put_string
 #else
     jsr screen_set_cursor
     ldy #0

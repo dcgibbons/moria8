@@ -102,7 +102,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -115,7 +115,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_row1_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #3
     sta zp_cursor_row
@@ -125,7 +125,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_row2_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #4
     sta zp_cursor_row
@@ -135,7 +135,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_row3_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #5
     sta zp_cursor_row
@@ -145,7 +145,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_row4_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #18
     sta zp_cursor_row
@@ -155,7 +155,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_footer_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 #else
     lda #0
@@ -166,7 +166,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_LGREY
     sta zp_text_color
@@ -179,7 +179,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_l_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #3
     sta zp_cursor_row
@@ -189,7 +189,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_a_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #4
     sta zp_cursor_row
@@ -199,7 +199,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_h_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #5
     sta zp_cursor_row
@@ -209,7 +209,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_i_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #6
     sta zp_cursor_row
@@ -219,7 +219,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_x_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #7
     sta zp_cursor_row
@@ -229,7 +229,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_g_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #8
     sta zp_cursor_row
@@ -239,7 +239,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_s_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #9
     sta zp_cursor_row
@@ -249,7 +249,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_t_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #10
     sta zp_cursor_row
@@ -259,7 +259,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_w_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #COL_WHITE
     sta zp_text_color
@@ -271,7 +271,7 @@ ui_wizard_draw_menu:
     sta zp_ptr0
     lda #>wiz_footer_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     rts
 #endif
 
@@ -439,14 +439,14 @@ ui_wizard_cmd_level_jump:
 
 ui_wizard_prompt_two_digit:
     sta wizard_prompt_max
-    jsr screen_clear
+    jsr hal_screen_clear
     lda #COL_WHITE
     sta zp_text_color
     lda #5
     sta zp_cursor_row
     lda #(SCREEN_COLS - 24) / 2
     sta zp_cursor_col
-    jsr screen_put_string
+    jsr hal_screen_put_string
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
@@ -485,7 +485,7 @@ ui_wizard_prompt_two_digit:
     dec wizard_num_digits
     dec zp_cursor_col
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dec zp_cursor_col
     jmp !wiz_num_loop-
 !wiz_num_not_del:
@@ -497,7 +497,7 @@ ui_wizard_prompt_two_digit:
     cpx #2
     bcs !wiz_num_loop-
     sta wizard_num_buf0,x
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc wizard_num_digits
     jmp !wiz_num_loop-
 !wiz_num_cancel:

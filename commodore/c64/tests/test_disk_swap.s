@@ -239,6 +239,11 @@ screen_put_string:
 screen_put_char:
     rts
 
+.label hal_screen_put_string = screen_put_string
+.label hal_screen_put_char = screen_put_char
+.label hal_screen_clear = screen_clear
+.label hal_screen_clear_row = screen_clear_row
+
 msg_init:
     rts
 

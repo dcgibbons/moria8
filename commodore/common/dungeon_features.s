@@ -545,7 +545,7 @@ trap_apply_damage:
 
     ldx #HSTR_DF_DAMAGE_POST
     jsr huff_decode_string
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     pla
     sta zp_text_color

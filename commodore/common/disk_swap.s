@@ -383,7 +383,7 @@ disk_prompt:
     sta zp_cursor_row
     lda #DS_PROMPT_COL
     sta zp_cursor_col
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     lda #11
     sta zp_cursor_row
@@ -393,7 +393,7 @@ disk_prompt:
     sta zp_ptr0
     lda #>press_key_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 #if C128
     jsr input_get_modal_dismiss_key
@@ -411,9 +411,9 @@ disk_prompt:
 #else
     php
     lda #10
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     lda #11
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     plp
     bcc !dp_init_ok+
     lda #C128_MEDIA_UNKNOWN

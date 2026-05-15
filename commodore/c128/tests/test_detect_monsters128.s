@@ -107,6 +107,7 @@ test_mon_ptr_hi:
 }
 
 screen_clear:
+.label hal_screen_clear = screen_clear
 ui_help_clear_all:
 viewport_update:
 render_viewport:

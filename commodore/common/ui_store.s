@@ -127,7 +127,7 @@ store_draw_screen:
     sta zp_ptr0
     lda store_name_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Row 1: Owner name (light grey)
     lda #COL_LGREY
@@ -141,7 +141,7 @@ store_draw_screen:
     sta zp_ptr0
     lda store_owner_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Row 2: Separator
     lda #COL_DGREY
@@ -189,11 +189,11 @@ store_draw_screen:
     lda sd_save_x
     clc
     adc #$01                    // Screen code 'A'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                    // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Item description
     lda #COL_LGREY
@@ -236,11 +236,11 @@ store_draw_screen:
 
     // "GP" label
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$07                    // Screen code 'G'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$10                    // Screen code 'P'
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     jmp !sds_next_slot+
 
@@ -251,9 +251,9 @@ store_draw_screen:
     lda sd_save_x
     clc
     adc #$01
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                    // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
 !sds_next_slot:
     lda #COL_LGREY
@@ -557,11 +557,11 @@ store_sell:
     lda sd_save_x
     clc
     adc #$01                    // Screen code 'A'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                    // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                    // Space
-    jsr screen_put_char
+    jsr hal_screen_put_char
 
     // Item description
     ldx sd_save_x
@@ -754,7 +754,7 @@ ssell_show_error_ptr:
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jmp input_get_key           // Tail call
 
 // ssell_show_offer — Display sell offer with price
@@ -795,12 +795,12 @@ show_msg:
     sta zp_ptr0
     lda msg_tbl_hi,x
     sta zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 
 uis_screen_put_inline:
     sta zp_ptr0
     sty zp_ptr0_hi
-    jmp screen_put_string
+    jmp hal_screen_put_string
 
 // check_cancel — Check if A is a cancel key (Q, escape-equivalent, SPACE)
 // Input: A = key code
@@ -824,7 +824,7 @@ draw_separator:
     ldx #SCREEN_COLS
 !ds_loop:
     lda #$2d                    // Screen code '-'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dex
     bne !ds_loop-
     rts
@@ -835,7 +835,7 @@ store_clear_msg_area:
     lda #20
 !scma_loop:
     pha
-    jsr screen_clear_row
+    jsr hal_screen_clear_row
     pla
     clc
     adc #1
@@ -897,7 +897,7 @@ input_read_number:
     // Erase char on screen
     dec zp_cursor_col
     lda #$20
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dec zp_cursor_col
     dec hg_digit_cnt
     jmp !irn_loop-
@@ -947,7 +947,7 @@ input_read_number:
     // Display digit (screen code $30-$39 same as PETSCII)
     lda hg_tmp0
     ora #$30
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc hg_digit_cnt
     jmp !irn_loop-
 
@@ -1058,7 +1058,7 @@ hg_show_retry_msg:
     sta zp_ptr0
     lda #>hg_retry_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr hg_wait_for_ack
     rts
 
@@ -1558,7 +1558,7 @@ hg_show_insult_msg:
     jsr rng_range
     tax
     jsr huff_decode_string
-    jsr screen_put_string
+    jsr hal_screen_put_string
     jsr input_prepare_followup_key
     jmp input_get_key           // Tail call
 

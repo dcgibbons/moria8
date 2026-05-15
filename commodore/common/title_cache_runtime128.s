@@ -10,7 +10,7 @@ c128_title_load_and_draw_cached:
     bne !ctld_disk+
     jsr c128_title_cache_restore_to_map
     bcs !ctld_disk+
-    jsr screen_clear
+    jsr hal_screen_clear
     jmp title_render_data
 
 !ctld_disk:
@@ -21,7 +21,7 @@ c128_title_load_and_draw_cached:
     lda #0
     sta zp_kernal_status
     jsr c128_title_cache_store_from_map
-    jsr screen_clear
+    jsr hal_screen_clear
     jmp title_render_data
 
 c128_title_asset_load:

@@ -28,7 +28,7 @@ ui_equip_display:
     sta zp_ptr0
     lda #>ueq_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Separator
     lda #1
@@ -39,7 +39,7 @@ ui_equip_display:
     sta zp_ptr0
     lda #>ueq_sep_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Iterate 8 equipment slots
     lda #0
@@ -74,11 +74,11 @@ ui_equip_display:
     lda ueq_visible
     clc
     adc #$01                   // Screen code 'A'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$29                   // ')'
-    jsr screen_put_char
+    jsr hal_screen_put_char
     lda #$20                   // space
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc ueq_visible
     jmp !ueq_prefix_done+
 
@@ -95,7 +95,7 @@ ui_equip_display:
     sta zp_ptr0
     lda ueq_label_ptrs_hi,x
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // Check if slot has an item
     ldx ueq_equip_idx
@@ -116,7 +116,7 @@ ui_equip_display:
     sta zp_ptr0
     lda #>ueq_none_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
 !ueq_next:
     inc ueq_slot
@@ -133,7 +133,7 @@ ui_equip_display:
     sta zp_ptr0
     lda #>press_key_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     rts
 

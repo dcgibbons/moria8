@@ -81,11 +81,11 @@ ui_help_display:
     lda #BOX_V                  // │
     ldx #0                      // col 0
     ldy zp_temp0                // row
-    jsr screen_put_char_at
+    jsr hal_screen_put_char_at
     lda #BOX_V
     ldx #HELP_FRAME_RIGHT_COL
     ldy zp_temp0
-    jsr screen_put_char_at
+    jsr hal_screen_put_char_at
     inc zp_temp0
     lda zp_temp0
     cmp #24
@@ -106,7 +106,7 @@ ui_help_display:
     sta zp_ptr0
     lda #>uh_title_str
     sta zp_ptr0_hi
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // 4. Draw bottom border (row 24): +---...---+
     lda #24
@@ -137,7 +137,7 @@ ui_help_display:
     lda #>uh_next_key_str
     sta zp_ptr0_hi
 !footer_draw:
-    jsr screen_put_string
+    jsr hal_screen_put_string
 
     // 5. Draw content lines for the selected page.
     lda zp_ptr1
@@ -251,7 +251,7 @@ help_draw_line:
     // Regular character
 #if C128
     // C128/VDC: must write through screen API (no CPU-mapped screen RAM).
-    jsr screen_put_char
+    jsr hal_screen_put_char
     inc zp_temp0
     jmp !hdl_loop-
 #else
@@ -321,15 +321,15 @@ help_draw_hborder:
     lda #0
     sta zp_cursor_col
     lda #BOX_TL                     // + (corner)
-    jsr screen_put_char
+    jsr hal_screen_put_char
     ldx #HELP_FRAME_HSEG_COUNT
 !hb_dash:
     lda #BOX_H                      // - (horizontal)
-    jsr screen_put_char
+    jsr hal_screen_put_char
     dex
     bne !hb_dash-
     lda #BOX_TR                     // + (corner)
-    jmp screen_put_char             // tail call
+    jmp hal_screen_put_char             // tail call
 
 // Local footer strings remain in the overlay.
 #if C128
