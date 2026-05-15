@@ -804,7 +804,7 @@ player_search_work: .byte 0
 
 ui_char_draw_background:
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
     // --- Sex / Social Class (row 12) ---
     lda #12

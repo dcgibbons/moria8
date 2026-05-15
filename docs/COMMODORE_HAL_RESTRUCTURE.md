@@ -594,7 +594,13 @@ Storage adapter note:
       is verified directly against the HAL layout constants, while
       `check_hal_layout_exports.py` continues to verify platform screen aliases
       and map dimensions against the HAL contract.
-- [ ] Migrate lifecycle/runtime resync.
+- [x] Migrate lifecycle/runtime resync.
+      Common gameplay now calls lifecycle HAL labels for main-loop begin,
+      vector reassertion, and runtime resync instead of the internal
+      `platform_*_api` service-vector names. The existing per-platform startup
+      patch slots remain the implementation detail. `check_hal_lifecycle_exports.py`
+      verifies the HAL labels and rejects direct common-code calls to the
+      service-vector internals.
 - [ ] Migrate screen clear/text/color.
 - [ ] Migrate input/key repeat/text input.
 - [x] Migrate sound/SFX.

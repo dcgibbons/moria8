@@ -27,11 +27,14 @@ platform_services_missing_required:
     brk
     rts
 
+hal_platform_main_loop_begin:
 platform_main_loop_begin_api:
     jmp platform_services_missing_required
 
+hal_platform_vector_reassert:
 platform_vector_reassert_api:
     jmp platform_services_missing_required
 
+hal_platform_runtime_resync:
 platform_runtime_resync_api:
     jmp platform_services_missing_required

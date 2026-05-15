@@ -50,7 +50,7 @@
 // Preserves: nothing
 ui_char_display:
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #if C128_TEST_SCRIPTED_INPUT || C128_TEST_PERF_P1_TRACE
     lda #1
     sta c128_test_summary_seen

@@ -113,7 +113,7 @@ msg_print_cached:
     // Message rendering is hit constantly during live gameplay; reassert
     // the RAM-side vectors/stubs here so leaked KERNAL state can't persist
     // into the screen write path between overlay transitions.
-    jsr platform_vector_reassert_api
+    jsr hal_platform_vector_reassert
 #endif
 
     lda zp_msg_flags

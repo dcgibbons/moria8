@@ -51,7 +51,7 @@ player_create:
     jsr create_select_gender
     .if (C128_CHARGEN_CUTPOINT == 5) { rts }
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
     .if (C128_CHARGEN_CUTPOINT == 6) { rts }
     jsr create_gen_background
@@ -59,7 +59,7 @@ player_create:
     :C128StackSlotGuardCheck($89)
 #endif
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
     .if (C128_CHARGEN_CUTPOINT == 7) { rts }
     jsr create_init_character
@@ -70,7 +70,7 @@ player_create:
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($92)
 #endif
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #if C128_TEST_FINAL_RETURN_DIAG
     :C128FinalReturnCapture($93)
 #endif

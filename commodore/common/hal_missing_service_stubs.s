@@ -9,6 +9,12 @@ hal_platform_init_early:
 hal_platform_init_runtime:
     lda #2
     jmp hal_missing_service
+hal_platform_main_loop_begin:
+    lda #6
+    jmp hal_missing_service
+hal_platform_vector_reassert:
+    lda #7
+    jmp hal_missing_service
 hal_platform_runtime_resync:
     lda #3
     jmp hal_missing_service

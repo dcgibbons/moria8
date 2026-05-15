@@ -421,7 +421,7 @@ game_new_start:
     :C128StackSlotGuardCheck($86)
 #endif
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
 
     // Show the post-chargen summary sheet and wait for a fresh dismiss key.
@@ -520,7 +520,7 @@ game_new_start:
     :C128StackSlotGuardCheck($87)
 #endif
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
 
     // --- Main game loop ---
@@ -558,7 +558,7 @@ game_new_start:
     :C128StackSlotGuardCheck($88)
 #endif
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
 #if C128_REAL_BOOT_DIAG
     ldx #$23
@@ -742,7 +742,7 @@ c64_test_after_load_resume_game:
 main_loop:
 #if C128
 c128_town_move_diag_loop_top:
-    jsr platform_main_loop_begin_api
+    jsr hal_platform_main_loop_begin
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
     lda c128_town_dump_countdown
@@ -967,7 +967,7 @@ plus4_test_after_save_game:
     jmp !quit+
 !save_return_main:
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
     jsr input_wait_release
     jmp ui_view_return_to_gameplay_view
 #else
@@ -976,7 +976,7 @@ plus4_test_after_save_game:
 #endif
 !save_return_view:
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
     jsr input_wait_release
 #endif
     jmp ui_view_return_to_gameplay_view
@@ -1652,7 +1652,7 @@ level_change_generate_current:
     jmp entry_main
 !lcgc_ovl_ok:
 #if C128
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 #endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
@@ -1711,7 +1711,7 @@ platform_restore_generation_overlay:
     bcc !crgo_loaded+
     jmp entry_main
 !crgo_loaded:
-    jsr platform_runtime_resync_api
+    jsr hal_platform_runtime_resync
 !crgo_done:
     rts
 #endif
