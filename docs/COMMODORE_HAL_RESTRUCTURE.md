@@ -942,6 +942,11 @@ target-bank setup, and post-load channel cleanup.
       Twelfth slice: common disk-swap prompt return no longer writes raw `$01`
       after selected-drive initialization. The non-C128 branch now stores to
       `hal_memory_cpu_port`, and the CPU-port checker gates `disk_swap.s`.
+      Thirteenth slice: common monster-name copy logic no longer reads or
+      writes raw `$01` while saving, changing, or restoring C64-family banking
+      around hidden-RAM and `$E0xx` name copies. Those accesses now use
+      `hal_memory_cpu_port`, and the CPU-port checker rejects both raw reads and
+      writes in `monster.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

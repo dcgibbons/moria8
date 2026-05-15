@@ -1120,7 +1120,7 @@ creature_get_name:
     // C64: bank out KERNAL for $E0xx pointer reads
     php
     sei
-    lda $01
+    lda hal_memory_cpu_port
     sta cgn_saved_p01
     :BankOutKernal()
     jmp !cgn_copy+
@@ -1199,7 +1199,7 @@ creature_get_name:
 #if !C128
     php
     sei
-    lda $01
+    lda hal_memory_cpu_port
     sta cgn_saved_p01           // Save bank config without using stack
     jmp !cgn_copy+
 #endif
@@ -1213,10 +1213,10 @@ creature_get_name:
     sta zp_ptr1
     php
     sei
-    lda $01
+    lda hal_memory_cpu_port
     sta cgn_saved_p01
     lda #BANK_ALL_RAM
-    sta $01
+    sta hal_memory_cpu_port
     jmp !cgn_copy+
 #endif
 
@@ -1263,7 +1263,7 @@ creature_get_name:
 !cgn_done:
 #if !C128
     lda cgn_saved_p01
-    sta $01
+    sta hal_memory_cpu_port
     plp
 #endif
     lda #<creature_name_buf

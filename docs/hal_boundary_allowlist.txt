@@ -38,8 +38,6 @@ commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/item.s	target-conditional	#if C128
 commodore/common/item_actions_overlay.s	target-conditional	#if C128
-commodore/common/monster.s	raw-c64-bank-port	lda $01
-commodore/common/monster.s	raw-c64-bank-port	sta $01
 commodore/common/monster.s	target-conditional	#if !C128
 commodore/common/monster.s	target-conditional	#if C128
 commodore/common/overlay.s	raw-c64-bank-port	lda $01

@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_CONSTANTS = ("hal_memory_cpu_port",)
+RAW_CPU_PORT_RE = re.compile(r"\b(?:inc|dec|lda|sta)\s+\$0*01\b", re.IGNORECASE)
 
 PLATFORM_FILES = {
     "c64": ROOT / "commodore/c64/hal/memory_bank_consts.s",
@@ -20,6 +21,7 @@ COMMON_CPU_PORT_USERS = {
     "disk_swap.s": ROOT / "commodore/common/disk_swap.s",
     "disk_setup_banked.s": ROOT / "commodore/common/disk_setup_banked.s",
     "item_actions_overlay.s": ROOT / "commodore/common/item_actions_overlay.s",
+    "monster.s": ROOT / "commodore/common/monster.s",
     "player_items.s": ROOT / "commodore/common/player_items.s",
     "save.s": ROOT / "commodore/common/save.s",
 }
@@ -43,10 +45,8 @@ def main() -> int:
 
     for name, path in COMMON_CPU_PORT_USERS.items():
         common_text = path.read_text(encoding="utf-8", errors="replace")
-        common_lower = common_text.lower()
-        for token in ("inc $01", "dec $01", "sta $01"):
-            if token in common_lower:
-                errors.append(f"{name}: common CPU-port user still contains {token}")
+        for match in RAW_CPU_PORT_RE.finditer(common_text):
+            errors.append(f"{name}: common CPU-port user still contains {match.group(0)}")
         if "hal_memory_cpu_port" not in common_text:
             errors.append(f"{name}: common CPU-port user does not consume hal_memory_cpu_port")
 
