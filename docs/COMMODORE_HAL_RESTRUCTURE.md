@@ -939,6 +939,9 @@ target-bank setup, and post-load channel cleanup.
       longer write raw `$01`. The C64-only branches now store to
       `hal_memory_cpu_port`, and `check_hal_cpu_port_exports.py` gates
       `save.s` with the other common CPU-port users.
+      Twelfth slice: common disk-swap prompt return no longer writes raw `$01`
+      after selected-drive initialization. The non-C128 branch now stores to
+      `hal_memory_cpu_port`, and the CPU-port checker gates `disk_swap.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

@@ -406,7 +406,7 @@ disk_prompt:
 
 #if !C128
     lda #BANK_NO_BASIC
-    sta $01
+    sta hal_memory_cpu_port
     rts
 #else
     php
