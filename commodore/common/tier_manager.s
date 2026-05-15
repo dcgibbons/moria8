@@ -346,8 +346,10 @@ tier_load:
 #if !C128
     php
     sei
-    lda $01
+#if !PLUS4
+    lda hal_memory_cpu_port
     pha                         // Save bank config
+#endif
     :BankOutKernal()
 #endif
 
@@ -400,8 +402,10 @@ tier_load:
 #endif
 
 #if !C128
+#if !PLUS4
     pla
-    sta $01                     // Restore bank config
+    sta hal_memory_cpu_port     // Restore bank config
+#endif
     plp
 #endif
 
@@ -458,7 +462,7 @@ platform_copy_tier_names_to_pool:
     // C64 only: hide I/O so writes to $D000-$D7FF reach RAM, not registers.
 #if !PLUS4
     lda #BANK_ALL_RAM
-    sta $01
+    sta hal_memory_cpu_port
 #endif
 
     ldy #0

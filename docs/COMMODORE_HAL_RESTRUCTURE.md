@@ -952,6 +952,11 @@ target-bank setup, and post-load channel cleanup.
       `$01` when banking out KERNAL for C64 DMA into `$E000`. The C64-only path
       uses `hal_memory_cpu_port`; Plus/4 remains outside that CPU-port path; and
       the CPU-port checker gates `overlay.s`.
+      Fifteenth slice: common tier activation no longer reads or writes raw
+      `$01` while exposing `$E000` tier data or copying C64 hidden-RAM tier
+      names. C64 CPU-port access uses `hal_memory_cpu_port`; Plus/4 stays on
+      its ROM/RAM macro path without a CPU-port dependency; and the CPU-port
+      checker gates `tier_manager.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

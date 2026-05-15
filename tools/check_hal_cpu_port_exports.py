@@ -25,6 +25,7 @@ COMMON_CPU_PORT_USERS = {
     "overlay.s": ROOT / "commodore/common/overlay.s",
     "player_items.s": ROOT / "commodore/common/player_items.s",
     "save.s": ROOT / "commodore/common/save.s",
+    "tier_manager.s": ROOT / "commodore/common/tier_manager.s",
 }
 
 
