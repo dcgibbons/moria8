@@ -586,7 +586,14 @@ Storage adapter note:
 
 ### Phase 3: Non-Storage HAL Migration
 
-- [ ] Migrate platform capabilities/layout.
+- [x] Migrate platform capabilities/layout.
+      Platform capability/layout manifests already live in
+      `commodore/{c64,c128,plus4}/hal/manifest.json`, and assembler-visible
+      layout constants live in each platform's `hal/layout.s`. The Phase 3
+      closure tightened `check_hal_manifests.py` so manifest display geometry
+      is verified directly against the HAL layout constants, while
+      `check_hal_layout_exports.py` continues to verify platform screen aliases
+      and map dimensions against the HAL contract.
 - [ ] Migrate lifecycle/runtime resync.
 - [ ] Migrate screen clear/text/color.
 - [ ] Migrate input/key repeat/text input.

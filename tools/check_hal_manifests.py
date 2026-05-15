@@ -37,6 +37,7 @@ EXPECTED = {
         "banking": "$01",
         "map_base": "$c000",
         "requires_drives": {"1541"},
+        "layout_file": "commodore/c64/hal/layout.s",
         "memory_file": "commodore/c64/memory.s",
         "screen_file": "commodore/c64/screen.s",
         "direct_display_consts": True,
@@ -49,6 +50,7 @@ EXPECTED = {
         "banking": "$ff00+$01",
         "map_base": "$4000",
         "requires_drives": {"1541", "1571"},
+        "layout_file": "commodore/c128/hal/layout.s",
         "memory_file": "commodore/c128/memory128.s",
         "screen_file": "commodore/c128/screen_vdc.s",
         "direct_display_consts": False,
@@ -61,6 +63,7 @@ EXPECTED = {
         "banking": "$ff3e/$ff3f",
         "map_base": "$c800",
         "requires_drives": {"1541", "1551"},
+        "layout_file": "commodore/plus4/hal/layout.s",
         "memory_file": "commodore/plus4/memory.s",
         "screen_file": "commodore/plus4/screen.s",
         "direct_display_consts": True,
@@ -130,6 +133,29 @@ def validate_manifest(platform: str, data: dict) -> list[str]:
             if viewport.get(key) != expected_value:
                 fail(errors, platform, f"display.viewport.{key} must be {expected_value}")
     screen_file = ROOT / expected["screen_file"]
+    layout_file = ROOT / expected["layout_file"]
+    layout_columns = source_const_int(layout_file, "hal_layout_screen_cols")
+    if layout_columns is None:
+        fail(errors, platform, f"missing hal_layout_screen_cols in {expected['layout_file']}")
+    elif display.get("columns") != layout_columns:
+        fail(errors, platform, f"display.columns differs from {expected['layout_file']} hal_layout_screen_cols")
+    layout_rows = source_const_int(layout_file, "hal_layout_screen_rows")
+    if layout_rows is None:
+        fail(errors, platform, f"missing hal_layout_screen_rows in {expected['layout_file']}")
+    elif display.get("rows") != layout_rows:
+        fail(errors, platform, f"display.rows differs from {expected['layout_file']} hal_layout_screen_rows")
+    if isinstance(viewport, dict):
+        layout_viewport = {
+            "x": source_const_int(layout_file, "hal_layout_viewport_x"),
+            "y": source_const_int(layout_file, "hal_layout_viewport_y"),
+            "width": source_const_int(layout_file, "hal_layout_viewport_w"),
+            "height": source_const_int(layout_file, "hal_layout_viewport_h"),
+        }
+        for key, layout_value in layout_viewport.items():
+            if layout_value is None:
+                fail(errors, platform, f"missing layout viewport {key} in {expected['layout_file']}")
+            elif viewport.get(key) != layout_value:
+                fail(errors, platform, f"display.viewport.{key} differs from {expected['layout_file']}")
     source_columns = source_const_int(screen_file, "SCREEN_COLS")
     if source_columns is not None and display.get("columns") != source_columns:
         fail(errors, platform, f"display.columns differs from {expected['screen_file']} SCREEN_COLS")
