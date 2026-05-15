@@ -635,7 +635,16 @@ Storage adapter note:
       unit-test stubs now use `hal_sound_play`/`hal_sound_init`; the checker
       rejects direct `sound_play`/`sound_init` calls outside the sound
       implementation compatibility labels.
-- [ ] Migrate overlay/asset loading.
+- [x] Migrate overlay/asset loading.
+      Phase 4A completed the actual Asset Loader HAL boundary used by this
+      Phase 3 slice. Common overlay, string-bank, title-art, and tier asset
+      load paths now route through `hal_asset_load_prg_header`,
+      `hal_asset_load_title`, or `hal_asset_close_channel`; platform code owns
+      the raw KERNAL LOAD transaction, destination-bank setup, OS visibility,
+      CLOSE/CLRCHN cleanup, and post-load runtime cleanup. The common
+      overlay/tier paths still consume the existing platform-owned
+      `hal_storage_*` filename tables by design; no separate asset-name
+      namespace exists until duplication or policy differences justify it.
       Backlog: C64 `S)TART` should match C128 by preserving valid REU overlay
       cache contents across start-over. Restart should reset session/game state
       without reloading all overlays from program media unless the REU cache is
@@ -647,8 +656,15 @@ Storage adapter note:
       memory, and display imports expose those constants to both product builds
       and isolated unit fixtures; `check_hal_entropy_exports.py` verifies the
       platform exports plus the common RNG call site.
-- [ ] After each migrated slice, remove the corresponding common-code hardware
+- [x] After each migrated slice, remove the corresponding common-code hardware
       access and add a static audit rule.
+      Phase 3 migrated-slice regressions are guarded by
+      `check_hal_layout_exports.py`, `check_hal_lifecycle_exports.py`,
+      `check_hal_screen_exports.py`, `check_hal_input_exports.py`,
+      `check_hal_sound_exports.py`, `check_hal_entropy_exports.py`, and
+      `check_hal_asset_exports.py`. Broader residual common-code hardware
+      references remain tracked by the HAL boundary allowlist and later
+      cleanup phases, not by this Phase 3 closure item.
 
 ### Phase 4: Storage HAL Migration
 
