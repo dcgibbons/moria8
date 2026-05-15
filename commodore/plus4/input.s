@@ -8,6 +8,11 @@
 .const KERNAL_GETIN  = $ffe4
 .const TED_KEY_LATCH = $ff08
 .const PLUS4_KEY_SELECT = $fd30
+.const hal_input_kbdbuf_count = $c6
+.const hal_input_modal_dismiss_uses_fast_key = false
+.const hal_input_modal_escape_primary = $03
+.const hal_input_modal_escape_secondary = $1b
+.const hal_input_flush_run_cancel_buffer = true
 
 input_lock_charset_switch:
     jmp plus4_display_resync
@@ -28,6 +33,7 @@ input_run_cancel_check:
 .label hal_input_wait_release = input_wait_release
 .label hal_input_any_key_held = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_followup_prepare = input_noop
 .label hal_input_modal_prepare = input_modal_prepare
 .label hal_input_modal_finish = input_noop
 

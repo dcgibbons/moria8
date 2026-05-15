@@ -3,34 +3,20 @@
 // keyboard policy. These keep raw platform details such as KBDBUF_COUNT out of
 // common gameplay code.
 
-#if C128
-.const INPUT_UI_HELPER_KBDBUF_COUNT = $d0
-#else
-.const INPUT_UI_HELPER_KBDBUF_COUNT = $c6
-#endif
-
 // input_prepare_followup_key — Ensure the next read consumes a fresh follow-up
 // key when the initiating command key should not leak into a secondary prompt.
-#if C128
-.label input_prepare_followup_key = hal_input_modal_prepare
-.label input_prepare_modal_dismiss_key = hal_input_modal_prepare
-#else
-input_prepare_followup_key:
-    rts
-#endif
+.label input_prepare_followup_key = hal_input_followup_prepare
 
 // input_prepare_modal_dismiss_key — Prepare for a read-only overlay/modal
 // dismiss key. The platform HAL owns buffer flushing and physical-key release.
-#if !C128
 input_prepare_modal_dismiss_key:
     jmp hal_input_modal_prepare
-#endif
 
 // input_get_modal_dismiss_key — Read a dismiss key for a read-only modal.
 // C128 keeps the existing fast-path get-key behavior after the release wait.
 input_get_modal_dismiss_key:
-#if C128
     jsr input_prepare_modal_dismiss_key
+#if hal_input_modal_dismiss_uses_fast_key
     jmp input_get_key_fast
 #else
     jmp hal_input_get_key
@@ -42,24 +28,17 @@ input_get_modal_dismiss_key:
 // Output: Z set when the key is the platform escape-equivalent, Z clear otherwise
 // Preserves: A
 input_is_modal_escape_key:
-#if C128
-    cmp #KEY_ESC
+    cmp #hal_input_modal_escape_primary
     beq !yes+
-    cmp #$03                    // STOP key raw code on C128
+    cmp #hal_input_modal_escape_secondary
 !yes:
-#else
-    cmp #$03                    // RUN/STOP raw cancel on C64
-    beq !yes+
-    cmp #$1b                    // Synthetic/test ESC fallback
-!yes:
-#endif
     rts
 
 // input_flush_run_cancel_buffer — Hide the raw keyboard-buffer flush needed
 // when cancelling a run on C64. C128 direct-scan input does not use it.
 input_flush_run_cancel_buffer:
-#if !C128
+#if hal_input_flush_run_cancel_buffer
     lda #0
-    sta INPUT_UI_HELPER_KBDBUF_COUNT
+    sta hal_input_kbdbuf_count
 #endif
     rts

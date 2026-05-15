@@ -51,6 +51,12 @@
 .const KEY_ESC      = $ae
 .const KEY_LF       = $af
 
+.const hal_input_kbdbuf_count = KBDBUF_COUNT
+.const hal_input_modal_dismiss_uses_fast_key = true
+.const hal_input_modal_escape_primary = KEY_ESC
+.const hal_input_modal_escape_secondary = $03
+.const hal_input_flush_run_cancel_buffer = false
+
 // C128 runtime MMU mode used by game loop (all RAM, I/O visible)
 .const INPUT_MMU_ALL_RAM  = $3e
 
@@ -79,6 +85,7 @@ input_run_cancel_check:
 .label hal_input_wait_release = input_wait_release
 .label hal_input_any_key_held = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_followup_prepare = input_wait_release
 .label hal_input_modal_prepare = input_wait_release
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .label hal_input_modal_finish = screen_noop

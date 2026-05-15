@@ -8,6 +8,7 @@
 //   hal_input_wait_release
 //   hal_input_any_key_held
 //   hal_input_run_cancel_check
+//   hal_input_followup_prepare
 //   hal_input_modal_prepare
 //   hal_input_modal_finish
 //
@@ -27,6 +28,8 @@
 //   clobbers X/Y allowed; does not consume key events.
 // - hal_input_run_cancel_check: input none; output C=1 cancel requested;
 //   clobbers A/X/Y allowed; maps platform RUN/STOP or equivalent.
+// - hal_input_followup_prepare: input none; output C=status; clobbers A/X/Y
+//   allowed; prepares a secondary prompt after the initiating command key.
 // - hal_input_modal_prepare: input none; output C=status; clobbers A/X/Y
 //   allowed; enters modal prompt input policy.
 // - hal_input_modal_finish: input none; output C=status; clobbers A/X/Y

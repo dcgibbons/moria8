@@ -23,8 +23,17 @@ REQUIRED_LABELS = (
     "hal_input_wait_release",
     "hal_input_any_key_held",
     "hal_input_run_cancel_check",
+    "hal_input_followup_prepare",
     "hal_input_modal_prepare",
     "hal_input_modal_finish",
+)
+
+REQUIRED_CONSTANTS = (
+    "hal_input_kbdbuf_count",
+    "hal_input_modal_dismiss_uses_fast_key",
+    "hal_input_modal_escape_primary",
+    "hal_input_modal_escape_secondary",
+    "hal_input_flush_run_cancel_buffer",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -35,11 +44,14 @@ FORBIDDEN_COMMON_CALLS = (
     "input_run_cancel_check",
 )
 
+COMMON_HELPER_FILE = COMMON_DIR / "input_ui_helpers.s"
+
 
 def exported_symbols(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8", errors="replace")
     symbols: set[str] = set(re.findall(r"(?m)^([A-Za-z_][A-Za-z0-9_]*):", text))
     symbols.update(re.findall(r"(?m)^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text))
+    symbols.update(re.findall(r"(?m)^\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text))
     return symbols
 
 
@@ -58,6 +70,27 @@ def common_call_violations() -> list[str]:
     return violations
 
 
+def helper_policy_violations() -> list[str]:
+    text = COMMON_HELPER_FILE.read_text(encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    target_if = re.compile(r"(?m)^\s*#(?:if|elif|ifdef)\b.*\b(?:C64|C128|PLUS4)\b")
+    for match in target_if.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"{COMMON_HELPER_FILE.relative_to(ROOT)}:{line} uses target conditional in input helper"
+        )
+    for const in REQUIRED_CONSTANTS:
+        if const not in text:
+            errors.append(
+                f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume {const}"
+            )
+    if "hal_input_followup_prepare" not in text:
+        errors.append(
+            f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume hal_input_followup_prepare"
+        )
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     for platform, path in PLATFORM_FILES.items():
@@ -65,8 +98,12 @@ def main() -> int:
         for label in REQUIRED_LABELS:
             if label not in symbols:
                 errors.append(f"{platform}: missing {label} in {path.relative_to(ROOT)}")
+        for const in REQUIRED_CONSTANTS:
+            if const not in symbols:
+                errors.append(f"{platform}: missing {const} in {path.relative_to(ROOT)}")
 
     errors.extend(common_call_violations())
+    errors.extend(helper_policy_violations())
 
     if errors:
         print("HAL input export check failed:")
@@ -76,7 +113,8 @@ def main() -> int:
 
     print(
         "HAL input export check passed "
-        f"({len(REQUIRED_LABELS)} labels x {len(PLATFORM_FILES)} platforms, "
+        f"({len(REQUIRED_LABELS)} labels and {len(REQUIRED_CONSTANTS)} constants "
+        f"x {len(PLATFORM_FILES)} platforms, "
         "common input call-site audit)."
     )
     return 0

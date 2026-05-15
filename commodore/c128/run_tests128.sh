@@ -1746,11 +1746,11 @@ if kbdbuf_leaks:
     raise SystemExit(1)
 
 if helper_raw_kbdbuf != 0:
-    print(f"{helper.name} must keep KBDBUF_COUNT wrapped behind INPUT_UI_HELPER_KBDBUF_COUNT, found {helper_raw_kbdbuf} raw use(s)")
+    print(f"{helper.name} must keep KBDBUF_COUNT wrapped behind hal_input_kbdbuf_count, found {helper_raw_kbdbuf} raw use(s)")
     raise SystemExit(1)
 
 helper_text = helper.read_text()
-if "INPUT_UI_HELPER_KBDBUF_COUNT" not in helper_text:
+if "hal_input_kbdbuf_count" not in helper_text:
     print("input_ui_helpers.s must own the wrapped keyboard-buffer alias")
     raise SystemExit(1)
 

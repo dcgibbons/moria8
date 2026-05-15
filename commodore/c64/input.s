@@ -19,6 +19,11 @@
 
 // Keyboard/CIA registers
 .const KBDBUF_COUNT = $c6
+.const hal_input_kbdbuf_count = KBDBUF_COUNT
+.const hal_input_modal_dismiss_uses_fast_key = false
+.const hal_input_modal_escape_primary = $03
+.const hal_input_modal_escape_secondary = $1b
+.const hal_input_flush_run_cancel_buffer = true
 .const KERNAL_SHIFT_MODE = $0291
 .const KERNAL_CHARSET_SWITCH_LOCK = $80
 .const CIA1_PORTA   = $dc00
@@ -144,6 +149,7 @@ irk_result: .byte 0
 .label hal_input_wait_release = input_wait_release
 .label hal_input_any_key_held = input_run_key_held
 .label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_followup_prepare = input_noop
 .label hal_input_modal_prepare = input_modal_prepare
 .label hal_input_modal_finish = input_noop
 

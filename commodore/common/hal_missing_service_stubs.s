@@ -124,6 +124,9 @@ hal_input_modal_prepare:
 hal_input_modal_finish:
     lda #71
     jmp hal_missing_service
+hal_input_followup_prepare:
+    lda #72
+    jmp hal_missing_service
 
 hal_sound_init:
     lda #80

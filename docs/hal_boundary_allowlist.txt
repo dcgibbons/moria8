@@ -22,8 +22,6 @@ commodore/common/game_loop_helpers.s	target-conditional	#if !C128
 commodore/common/game_loop_helpers.s	target-conditional	#if C128
 commodore/common/hal_storage_overlay_test_stub.s	target-conditional	#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4
 commodore/common/hal_storage_tier_test_stub.s	target-conditional	#if !PLATFORM_PRODUCT_OVERLAY_RUNTIME && !C128 && !PLUS4
-commodore/common/input_ui_helpers.s	target-conditional	#if !C128
-commodore/common/input_ui_helpers.s	target-conditional	#if C128
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKIN
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKOUT
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHRIN

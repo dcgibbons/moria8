@@ -964,6 +964,13 @@ target-bank setup, and post-load channel cleanup.
       `C128` to decide whether to mask IRQs. Each platform exports
       `hal_huffman_lock_irq_during_decode`, and the memory-bank HAL checker
       verifies both the platform constants and the common decoder call site.
+      Eighteenth slice: common modal input helpers no longer branch directly on
+      `C128` for follow-up key preparation, modal dismiss reads, escape-key
+      classification, or keyboard-buffer flushing. Each platform input backend
+      exports `hal_input_followup_prepare` plus the small `hal_input_*` policy
+      constants consumed by `input_ui_helpers.s`, and
+      `check_hal_input_exports.py` verifies both platform exports and the
+      common helper call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
