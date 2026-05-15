@@ -404,9 +404,11 @@ disk_prompt:
 #endif
     jsr hal_storage_init_selected_drive
 
-#if !C128
+#if !C128 && !PLUS4
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
+    rts
+#elif PLUS4
     rts
 #else
     php

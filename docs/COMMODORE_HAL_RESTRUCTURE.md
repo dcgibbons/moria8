@@ -940,13 +940,18 @@ target-bank setup, and post-load channel cleanup.
       `hal_memory_cpu_port`, and `check_hal_cpu_port_exports.py` gates
       `save.s` with the other common CPU-port users.
       Twelfth slice: common disk-swap prompt return no longer writes raw `$01`
-      after selected-drive initialization. The non-C128 branch now stores to
-      `hal_memory_cpu_port`, and the CPU-port checker gates `disk_swap.s`.
+      after selected-drive initialization. The C64-only branch now stores to
+      `hal_memory_cpu_port`; Plus/4 has no CPU-port dependency there; and the
+      CPU-port checker gates `disk_swap.s`.
       Thirteenth slice: common monster-name copy logic no longer reads or
       writes raw `$01` while saving, changing, or restoring C64-family banking
       around hidden-RAM and `$E0xx` name copies. Those accesses now use
       `hal_memory_cpu_port`, and the CPU-port checker rejects both raw reads and
       writes in `monster.s`.
+      Fourteenth slice: common overlay REU fetch no longer reads or writes raw
+      `$01` when banking out KERNAL for C64 DMA into `$E000`. The C64-only path
+      uses `hal_memory_cpu_port`; Plus/4 remains outside that CPU-port path; and
+      the CPU-port checker gates `overlay.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

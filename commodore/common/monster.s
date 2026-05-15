@@ -1117,11 +1117,13 @@ creature_get_name:
 
 !cgn_do_bank_c64:
 #if !C128
-    // C64: bank out KERNAL for $E0xx pointer reads
+    // C64/Plus4: bank out KERNAL for $E0xx pointer reads.
     php
     sei
+#if !PLUS4
     lda hal_memory_cpu_port
     sta cgn_saved_p01
+#endif
     :BankOutKernal()
     jmp !cgn_copy+
 #endif
@@ -1199,8 +1201,10 @@ creature_get_name:
 #if !C128
     php
     sei
+#if !PLUS4
     lda hal_memory_cpu_port
     sta cgn_saved_p01           // Save bank config without using stack
+#endif
     jmp !cgn_copy+
 #endif
     // C128 falls through to shared copy loop.
@@ -1213,10 +1217,12 @@ creature_get_name:
     sta zp_ptr1
     php
     sei
+#if !PLUS4
     lda hal_memory_cpu_port
     sta cgn_saved_p01
     lda #BANK_ALL_RAM
     sta hal_memory_cpu_port
+#endif
     jmp !cgn_copy+
 #endif
 
@@ -1262,8 +1268,10 @@ creature_get_name:
     sta creature_name_buf,y
 !cgn_done:
 #if !C128
+#if !PLUS4
     lda cgn_saved_p01
     sta hal_memory_cpu_port
+#endif
     plp
 #endif
     lda #<creature_name_buf

@@ -319,11 +319,11 @@ overlay_load_disk:
 overlay_fetch_reu:
     php
     sei
-#if !C128
-    lda $01
+#if !C128 && !PLUS4
+    lda hal_memory_cpu_port
     pha
     lda #$35                // Bank out KERNAL for DMA to write RAM at $E000
-    sta $01
+    sta hal_memory_cpu_port
 #endif
 
     lda #<$e000
@@ -347,9 +347,9 @@ overlay_fetch_reu:
     lda #REU_CMD_FETCH
     sta REU_COMMAND         // DMA completes before next instruction
 
-#if !C128
+#if !C128 && !PLUS4
     pla
-    sta $01
+    sta hal_memory_cpu_port
 #endif
     plp
     rts
