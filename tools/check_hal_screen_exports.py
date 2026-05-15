@@ -30,6 +30,10 @@ REQUIRED_LABELS = (
     "hal_screen_end_bulk",
 )
 
+REQUIRED_CONSTANTS = (
+    "hal_screen_full_clear_uses_bulk",
+)
+
 FORBIDDEN_COMMON_CALLS = (
     "screen_clear",
     "screen_clear_row",
@@ -41,11 +45,14 @@ FORBIDDEN_COMMON_CALLS = (
     "screen_unblank",
 )
 
+COMMON_HELP_CLEAR_FILE = COMMON_DIR / "ui_help_clear.s"
+
 
 def exported_symbols(path: Path) -> set[str]:
     text = path.read_text(encoding="utf-8", errors="replace")
     symbols: set[str] = set(re.findall(r"(?m)^([A-Za-z_][A-Za-z0-9_]*):", text))
     symbols.update(re.findall(r"(?m)^\.label\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text))
+    symbols.update(re.findall(r"(?m)^\.const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", text))
     return symbols
 
 
@@ -65,6 +72,23 @@ def common_call_violations() -> list[str]:
     return violations
 
 
+def common_policy_violations() -> list[str]:
+    text = COMMON_HELP_CLEAR_FILE.read_text(encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    target_if = re.compile(r"(?m)^\s*#(?:if|elif|ifdef)\b.*\b(?:C64|C128|PLUS4)\b")
+    for match in target_if.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)}:{line} uses target conditional in screen helper"
+        )
+    for const in REQUIRED_CONSTANTS:
+        if const not in text:
+            errors.append(
+                f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume {const}"
+            )
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     for platform, path in PLATFORM_FILES.items():
@@ -72,8 +96,12 @@ def main() -> int:
         for label in REQUIRED_LABELS:
             if label not in symbols:
                 errors.append(f"{platform}: missing {label} in {path.relative_to(ROOT)}")
+        for const in REQUIRED_CONSTANTS:
+            if const not in symbols:
+                errors.append(f"{platform}: missing {const} in {path.relative_to(ROOT)}")
 
     errors.extend(common_call_violations())
+    errors.extend(common_policy_violations())
 
     if errors:
         print("HAL screen export check failed:")
@@ -83,7 +111,8 @@ def main() -> int:
 
     print(
         "HAL screen export check passed "
-        f"({len(REQUIRED_LABELS)} labels x {len(PLATFORM_FILES)} platforms, "
+        f"({len(REQUIRED_LABELS)} labels and {len(REQUIRED_CONSTANTS)} constants "
+        f"x {len(PLATFORM_FILES)} platforms, "
         "common text/clear/color call-site audit)."
     )
     return 0

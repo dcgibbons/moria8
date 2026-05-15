@@ -78,7 +78,6 @@ commodore/common/ui_disk_setup.s	target-conditional	#if PLUS4
 commodore/common/ui_equipment.s	target-conditional	#if C128
 commodore/common/ui_help.s	target-conditional	#if C128
 commodore/common/ui_help.s	target-conditional	#if PLUS4
-commodore/common/ui_help_clear.s	target-conditional	#if C128
 commodore/common/ui_inventory.s	target-conditional	#if C128
 commodore/common/ui_messages.s	target-conditional	#if C128
 commodore/common/ui_recall.s	target-conditional	#if C128

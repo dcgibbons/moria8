@@ -3278,12 +3278,6 @@ c128_resident_play_end:
 
 .segment Default
 
-// Shared modal footer text must stay outside the C128 PLAY/PERSIST slot.
-// Disk Setup and one-drive swap prompts can run while either modal payload
-// owns $AF00, so overlay code must not point into that window for this string.
-press_key_str:
-    .text "Press any key" ; .byte 0
-
 #if C128_TEST_PERF_P1_TRACE
 c128_test_perf_p1_trace_capture_sym:
 #if C128_TEST_PERF_P1_TRACE_TRANSITION_ASSERT
@@ -3717,6 +3711,13 @@ runtime_common_data_end:
 c128_resident_diskio_start:
     #import "hal/storage.s"
     #import "../common/disk_setup_runtime128.s"
+
+// Shared modal footer text must stay outside the C128 PLAY/PERSIST slot.
+// Disk Setup and one-drive swap prompts can run while either modal payload
+// owns $AF00, so overlay code must not point into that window for this string.
+press_key_str:
+    .text "Press any key" ; .byte 0
+press_key_str_end:
 c128_resident_diskio_end:
 .segment Default
 
@@ -3808,6 +3809,8 @@ program_end:
 .assert "C128 resident disk-I/O starts at $AB00", c128_resident_diskio_start == $AB00, true
 .assert "C128 resident disk-I/O fits below modal payload window", c128_resident_diskio_end <= $AF00, true
 .assert "C128 Disk Setup lives in dedicated disk-I/O runtime", disk_marker_init >= c128_resident_diskio_start && disk_setup_run < c128_resident_diskio_end, true
+.assert "C128 press-key footer lives in resident disk-I/O payload", press_key_str >= c128_resident_diskio_start && press_key_str_end <= c128_resident_diskio_end, true
+.assert "C128 press-key footer stays below modal payload window", press_key_str_end <= $AF00, true
 .assert "C128 modal persist starts at $AF00", c128_resident_persist_start == $AF00, true
 .assert "C128 save staging buffer is 128 bytes", save_stage_buf_end - save_stage_buf == 128, true
 .assert "C128 save staging buffer lives in persist payload", save_stage_buf >= c128_resident_persist_start && save_stage_buf_end <= c128_resident_persist_end, true

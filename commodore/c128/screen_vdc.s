@@ -37,6 +37,7 @@
 .const MSG_ROW     = hal_layout_msg_row
 .const STATUS_ROW  = hal_layout_status_row
 .const INPUT_ROW   = hal_layout_input_row
+.const hal_screen_full_clear_uses_bulk = true
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
 .assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows

@@ -971,6 +971,11 @@ target-bank setup, and post-load channel cleanup.
       constants consumed by `input_ui_helpers.s`, and
       `check_hal_input_exports.py` verifies both platform exports and the
       common helper call site.
+      Nineteenth slice: common full-screen modal clearing no longer branches
+      directly on `C128` to choose bulk clear versus row clear. Each platform
+      screen backend exports `hal_screen_full_clear_uses_bulk`, and
+      `check_hal_screen_exports.py` verifies both the platform constant and the
+      `ui_help_clear.s` call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
