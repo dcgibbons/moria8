@@ -957,6 +957,9 @@ target-bank setup, and post-load channel cleanup.
       names. C64 CPU-port access uses `hal_memory_cpu_port`; Plus/4 stays on
       its ROM/RAM macro path without a CPU-port dependency; and the CPU-port
       checker gates `tier_manager.s`.
+      Sixteenth slice: common REU preload, tier DMA, overlay DMA, and C128
+      preload diagnostics no longer read or write raw `$01`. C64/C128 REU code
+      now uses `hal_memory_cpu_port`, and the CPU-port checker gates `reu.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

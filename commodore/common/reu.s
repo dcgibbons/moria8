@@ -370,7 +370,7 @@ c128_preload_asset_load:
     sta c128_preload_diag_status
     lda zp_kernal_status
     sta c128_preload_diag_readst
-    lda $01
+    lda hal_memory_cpu_port
     sta c128_preload_diag_port1
     lda hal_memory_mmu_config_register
     sta c128_preload_diag_mmu
@@ -523,10 +523,10 @@ reu_load_all_tiers:
 
     // Stash from $E000 to REU at current offset
     sei
-    lda $01
+    lda hal_memory_cpu_port
     pha
     lda #$35                    // Bank out KERNAL (so REU DMA reads RAM at $E000)
-    sta $01
+    sta hal_memory_cpu_port
 
     lda #<$e000
     sta REU_C64LO
@@ -549,7 +549,7 @@ reu_load_all_tiers:
     sta REU_COMMAND             // Execute DMA
 
     pla
-    sta $01                     // Restore bank config
+    sta hal_memory_cpu_port     // Restore bank config
     cli
 
 !rlt_skip:
@@ -611,10 +611,10 @@ reu_fetch_tier:
     // Set up DMA: REU → $E000
     php
     sei
-    lda $01
+    lda hal_memory_cpu_port
     pha
     lda #$35                    // Bank out KERNAL for DMA to read/write RAM
-    sta $01
+    sta hal_memory_cpu_port
 
     lda #<$e000
     sta REU_C64LO
@@ -639,7 +639,7 @@ reu_fetch_tier:
     sta REU_COMMAND             // Execute DMA
 
     pla
-    sta $01                     // Restore bank config
+    sta hal_memory_cpu_port     // Restore bank config
     plp
     rts
 
@@ -687,10 +687,10 @@ reu_stash_overlays:
 
     // Stash $E000 (4KB) to REU at current offset
     sei
-    lda $01
+    lda hal_memory_cpu_port
     pha
     lda #$35                    // Bank out KERNAL for DMA to read RAM at $E000
-    sta $01
+    sta hal_memory_cpu_port
 
     lda #<$e000
     sta REU_C64LO
@@ -712,7 +712,7 @@ reu_stash_overlays:
     sta REU_COMMAND             // Execute DMA
 
     pla
-    sta $01
+    sta hal_memory_cpu_port
     cli
 
 !rso_skip:

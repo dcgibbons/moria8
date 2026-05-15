@@ -24,6 +24,7 @@ COMMON_CPU_PORT_USERS = {
     "monster.s": ROOT / "commodore/common/monster.s",
     "overlay.s": ROOT / "commodore/common/overlay.s",
     "player_items.s": ROOT / "commodore/common/player_items.s",
+    "reu.s": ROOT / "commodore/common/reu.s",
     "save.s": ROOT / "commodore/common/save.s",
     "tier_manager.s": ROOT / "commodore/common/tier_manager.s",
 }
