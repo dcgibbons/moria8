@@ -15,7 +15,7 @@
 cmd_show_character_view:
     jsr tramp_ui_char_display
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
 #if !C128
     // C64 character view is overlay-backed and returns through a custom
     // full-screen redraw path, so it must also re-establish the active tier.
@@ -36,7 +36,7 @@ cmd_show_help_view:
     jsr tramp_ui_help_display
 !help_key_loop:
     jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #HELP_KEY_Q
     beq !help_done+
     jsr input_is_modal_escape_key
@@ -60,13 +60,13 @@ cmd_show_help_view:
 cmd_show_inventory_view:
     jsr tramp_ui_inv_display
     jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+    jsr hal_input_get_key
     jmp ui_view_return_to_gameplay_view
 
 cmd_show_equipment_view:
     jsr tramp_ui_equip_display
     jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+    jsr hal_input_get_key
     jmp ui_view_return_to_gameplay_view
 
 cmd_recall_view:
@@ -80,7 +80,7 @@ cmd_recall_view:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     jsr recall_key_to_screen_code
     bcc !recall_done+
     jsr recall_show_matching_entry
@@ -163,7 +163,7 @@ recall_show_matching_entry:
     jsr creature_get_name
     jsr tramp_ui_recall
     jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+    jsr hal_input_get_key
     rts
 
 // ============================================================

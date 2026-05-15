@@ -192,7 +192,7 @@ msg_print_cached:
 !show_more:
     // --- State 2: both rows full, 3rd message arriving ---
     jsr msg_show_more
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Clear state and restart from the cached source pointer.
     lda #0

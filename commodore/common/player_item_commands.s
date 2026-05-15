@@ -19,7 +19,7 @@ item_wear:
     jsr input_prepare_followup_key
 
     // Wait for keypress
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // '?' shows inventory (wearable items only) and re-prompts
     cmp #$3f
@@ -194,7 +194,7 @@ item_takeoff:
     jsr input_prepare_followup_key
 
     // Wait for keypress
-    jsr input_get_key
+    jsr hal_input_get_key
     and #$7f                    // Accept shifted/unshifted letter selections
 
     // '?' shows equipment and re-prompts
@@ -464,7 +464,7 @@ item_quaff:
     jsr input_prepare_followup_key
 
     // Wait for keypress
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // '?' shows inventory (potions only) and re-prompts
     cmp #$3f

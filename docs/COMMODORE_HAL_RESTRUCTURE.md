@@ -613,7 +613,19 @@ Storage adapter note:
       exports and rejects direct common-code calls to the migrated legacy
       names. Cursor recomputation and flash helpers remain explicit follow-up
       work outside this clear/text/color slice.
-- [ ] Migrate input/key repeat/text input.
+- [x] Migrate input/key repeat/text input.
+      C64, C128, and Plus/4 input backends now export
+      `hal_input_get_key`, `hal_input_get_command`,
+      `hal_input_get_text_char`, `hal_input_wait_release`,
+      `hal_input_any_key_held`, `hal_input_run_cancel_check`,
+      `hal_input_modal_prepare`, and `hal_input_modal_finish`.
+      Common command, prompt, release-wait, modal-prepare, and run-cancel
+      call sites now use the HAL labels for the migrated base services.
+      `check_hal_input_exports.py` verifies the exports and rejects direct
+      common-code calls to the migrated raw input labels. C128-only
+      `input_get_key_fast` remains an explicit follow-up because it is a
+      latency policy variant, not part of the current cross-platform input
+      contract.
 - [x] Migrate sound/SFX.
       First slice: SID and Plus/4 TED sound implementations now export the
       required `hal_sound_{init,play,stop,update}` service labels, and product

@@ -148,6 +148,8 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 input_wait_release:
+.label hal_input_wait_release = input_wait_release
+.label hal_input_modal_prepare = input_wait_release
 input_get_key_fast:
 show_inv_and_select:
 tramp_spell_list_display:
@@ -191,6 +193,8 @@ get_direction_target:
     rts
 
 input_get_key:
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
     ldx tid_key_idx
     lda tid_key_script,x
     inx

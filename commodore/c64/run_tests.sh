@@ -1753,15 +1753,15 @@ check_static_contract "wizard_cancel_text_contract" "../common/wizard.s" \
 check_static_contract "wizard_menu_aligned_rows_contract" "../common/wizard.s" \
     "wiz_row1_str:|||.text \"L jump    A reveal    H heal\"|||wiz_row2_str:|||.text \"I ident   X level     G item\"|||wiz_row3_str:|||.text \"S summon  T tele      W wall\""
 check_static_contract "c64_disk_prompt_dismiss_clears_full_modal_contract" "../common/disk_swap.s" \
-    "disk_prompt:|||jsr input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
+    "disk_prompt:|||jsr hal_input_get_key|||jsr ui_clear_full_screen_safe|||jsr msg_init|||jsr hal_storage_init_selected_drive"
 check_static_contract "disk_setup_insert_dismiss_clears_modal_contract" "../common/ui_disk_setup.s" \
     "uds_show_insert_prompt:|||jsr input_get_modal_dismiss_key|||lda #DISK_UI_RES_OK|||sta disk_ui_result|||jsr uds_clear_after_modal"
 check_static_contract "load_resume_suppresses_tier_loading_message_contract" "../common/game_loop.s" \
     "load_resume_game:|||jsr tier_invalidate_state|||jsr tier_restore_after_overlay"
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
-    "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr input_get_key|||jsr pm_pick_visible_spell"
+    "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr hal_input_get_key|||jsr pm_pick_visible_spell"
 check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s" \
-    "pm_select_book:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_modal_dismiss_key|||jsr input_get_key|||jsr piw_pick_filtered_inv_key"
+    "pm_select_book:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_modal_dismiss_key|||jsr hal_input_get_key|||jsr piw_pick_filtered_inv_key"
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
 check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "input.s" \
@@ -1771,7 +1771,7 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
-    "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr input_get_key"
+    "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr hal_input_get_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
     "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||lda current_overlay|||cmp #OVL_ITEMS|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_ITEMS|||lda #OVL_ITEMS|||jsr overlay_load|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "identify_scroll_resident_completion_contract" "../common/item_actions_overlay.s" \
@@ -1789,9 +1789,9 @@ check_static_contract "throw_action_messages_stat_desc_contract" "../common/thro
 check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
-    "!pm_psc_show_list:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_spell_list_display|||jsr input_get_key"
+    "!pm_psc_show_list:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_spell_list_display|||jsr hal_input_get_key"
 check_static_contract "overcast_faint_more_contract" "../common/player_magic.s" \
-    "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr input_get_key"
+    "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr hal_input_get_key"
 check_static_contract "paralysis_final_tick_message_contract" "../common/game_loop.s" \
     "lda zp_eff_paralyze|||beq !not_paralyzed+|||cmp #1|||bne !paralyzed_tick+|||jsr msg_clear|||!paralyzed_tick:|||jsr turn_post_action"
 check_static_contract "earthquake_trampoline_no_hidden_kernal_load_contract" "main.s" \

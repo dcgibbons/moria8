@@ -21,7 +21,7 @@ ui_wizard_display:
     sta zp_ptr0_hi
     jsr msg_print
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$59                    // Y
     beq !wiz_enable+
     cmp #$D9                    // SHIFT+Y fallback
@@ -40,7 +40,7 @@ ui_wizard_display:
 !wiz_menu:
     jsr ui_wizard_draw_menu
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$51                    // Q
     beq !wiz_cancel+
 #if C128
@@ -451,7 +451,7 @@ ui_wizard_prompt_two_digit:
     sta wizard_num_digits
 !wiz_num_loop:
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$0d
     bne !wiz_num_not_ret+
     lda wizard_num_digits

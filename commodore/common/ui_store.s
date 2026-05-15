@@ -68,7 +68,7 @@ store_enter:
     jsr store_draw_screen
 
 !se_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // B = buy
     cmp #PETSCII_B
@@ -314,7 +314,7 @@ store_buy:
 
     // Get key
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Q/ESC/space = cancel
     jsr check_cancel
@@ -379,7 +379,7 @@ store_buy:
     // --- Y/N confirm (cheap item or BM) ---
     jsr sbuy_show_price
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #PETSCII_Y
     beq sbuy_execute
     rts
@@ -392,7 +392,7 @@ store_buy:
     jsr store_clear_msg_area
     ldx #MSG_KICKED
     jsr show_msg
-    jmp input_get_key           // Wait for key, tail call returns
+    jmp hal_input_get_key           // Wait for key, tail call returns
 
 !sb_do_haggle:
     jsr haggle_buy
@@ -580,7 +580,7 @@ store_sell:
 
     // Get key
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Q/ESC/space = cancel
     jsr check_cancel
@@ -675,7 +675,7 @@ store_sell:
     // --- Y/N confirm (cheap item or BM) ---
     jsr ssell_show_offer
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #PETSCII_Y
     beq ssell_execute
     rts
@@ -740,7 +740,7 @@ ssell_execute:
 
     lda #SFX_PICKUP
     jsr hal_sound_play
-    jsr input_get_key
+    jsr hal_input_get_key
     rts
 
 // ssell_show_error_ptr — Show error message on row 22, wait for key
@@ -755,7 +755,7 @@ ssell_show_error_ptr:
     lda #1
     sta zp_cursor_col
     jsr hal_screen_put_string
-    jmp input_get_key           // Tail call
+    jmp hal_input_get_key           // Tail call
 
 // ssell_show_offer — Display sell offer with price
 ssell_show_offer:
@@ -859,7 +859,7 @@ input_read_number:
 
 !irn_loop:
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // RETURN ($0D) = accept (if at least 1 digit)
     cmp #$0d
@@ -985,7 +985,7 @@ hg_increment_insults:
 // hg_wait_for_ack — Wait for an acknowledgement key.
 hg_wait_for_ack:
     jsr input_prepare_followup_key
-    jmp input_get_key
+    jmp hal_input_get_key
 
 // hg_div_mul_result_24x8 — Divide mul_result_0/1/2 by X, quotient in-place.
 hg_div_mul_result_24x8:
@@ -1527,7 +1527,7 @@ hg_do_kick:
     ldx #MSG_KICKED
     jsr show_msg
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     clc
     rts
 
@@ -1560,7 +1560,7 @@ hg_show_insult_msg:
     jsr huff_decode_string
     jsr hal_screen_put_string
     jsr input_prepare_followup_key
-    jmp input_get_key           // Tail call
+    jmp hal_input_get_key           // Tail call
 
 // ============================================================
 // Haggle display helpers (R6.1)

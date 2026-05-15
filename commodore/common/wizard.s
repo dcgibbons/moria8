@@ -177,7 +177,7 @@ cmd_wizard_entry:
     lda #>wiz_confirm_str
     sta zp_ptr0_hi
     jsr msg_print
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$59                    // Y
     beq !wiz_enable+
     cmp #$D9                    // SHIFT+Y fallback
@@ -196,7 +196,7 @@ cmd_wizard_entry:
 
 !wizard_open:
     jsr wizard_40col_menu_display
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$51                    // Q
     beq !wiz_cancel+
     cmp #$48                    // H
@@ -414,7 +414,7 @@ wizard_prompt_two_digit:
     lda #0
     sta wizard_num_digits
 !wiz_num_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$0d
     bne !wiz_num_not_ret+
     lda wizard_num_digits

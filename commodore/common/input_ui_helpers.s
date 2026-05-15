@@ -14,19 +14,16 @@
 input_prepare_followup_key:
 #if C128
 input_prepare_modal_dismiss_key:
-    jmp input_wait_release
+    jmp hal_input_modal_prepare
 #else
     rts
 #endif
 
 // input_prepare_modal_dismiss_key — Prepare for a read-only overlay/modal
-// dismiss key. C64 needs the explicit keyboard-buffer flush before waiting for
-// release; C128 only needs the release wait.
+// dismiss key. The platform HAL owns buffer flushing and physical-key release.
 #if !C128
 input_prepare_modal_dismiss_key:
-    lda #0
-    sta INPUT_UI_HELPER_KBDBUF_COUNT
-    jmp input_wait_release
+    jmp hal_input_modal_prepare
 #endif
 
 // input_get_modal_dismiss_key — Read a dismiss key for a read-only modal.
@@ -36,7 +33,7 @@ input_get_modal_dismiss_key:
     jsr input_prepare_modal_dismiss_key
     jmp input_get_key_fast
 #else
-    jmp input_get_key
+    jmp hal_input_get_key
 #endif
 
 // input_is_modal_escape_key — classify the platform's escape-equivalent key

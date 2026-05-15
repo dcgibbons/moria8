@@ -170,7 +170,7 @@ create_select_race:
 
     // Wait for valid key (A-H = PETSCII $41-$48)
 !race_key:
-    jsr input_get_key
+    jsr hal_input_get_key
     sec
     sbc #$41                // Convert PETSCII 'A' to index 0
     bmi !race_key-          // < 'A'
@@ -286,7 +286,7 @@ create_select_class:
 
     // Wait for valid key
 !class_key:
-    jsr input_get_key
+    jsr hal_input_get_key
     sec
     sbc #$41                // Convert to index
     bmi !class_key-
@@ -474,7 +474,7 @@ create_roll_stats:
     jsr hal_screen_put_string
 
 !stat_key:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$52                // 'R' — reroll
     bne !not_reroll+
     jmp !reroll-            // Too far for beq, use JMP
@@ -555,7 +555,7 @@ create_enter_name:
     lda #0
     sta cen_count           // Character count (X clobbered by GETIN)
 !name_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
     ldx cen_count           // Restore count after GETIN
 
     // RETURN = accept (if at least 1 char)
@@ -907,7 +907,7 @@ create_select_gender:
     jsr hal_screen_put_string
 
 !gender_key:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$41                // 'A' — male
     beq !gender_male+
     cmp #$61                // 'a' — male (lowercase PETSCII, e.g. C64 lowercase mode)
@@ -920,12 +920,12 @@ create_select_gender:
 !gender_male:
     lda #PLF_MALE
     sta player_data + PL_FLAGS
-    jsr input_wait_release
+    jsr hal_input_wait_release
     rts
 !gender_female:
     lda #0
     sta player_data + PL_FLAGS
-    jsr input_wait_release
+    jsr hal_input_wait_release
     rts
 
 // ============================================================

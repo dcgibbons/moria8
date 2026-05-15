@@ -398,7 +398,7 @@ disk_prompt:
 #if C128
     jsr input_get_modal_dismiss_key
 #else
-    jsr input_get_key
+    jsr hal_input_get_key
     jsr ui_clear_full_screen_safe
     jsr msg_init
 #endif

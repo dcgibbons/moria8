@@ -274,7 +274,7 @@ plus4_test_save_overwrite_prompt:
     jsr input_prepare_followup_key
 #endif
 !save_confirm_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$59                // Y
     beq !save_confirm_yes+
     cmp #$4e                // N
@@ -300,7 +300,7 @@ save_select_output_name_c64:
     ldx #HSTR_SAVE_OVERWRITE
     jsr huff_print_msg
 !save_select_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$59                // Y
     beq !save_select_yes+
     cmp #$4e                // N

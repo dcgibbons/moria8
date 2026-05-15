@@ -199,6 +199,7 @@ input_get_modal_dismiss_key:
     rts
 
 input_prepare_modal_dismiss_key:
+.label hal_input_modal_prepare = input_prepare_modal_dismiss_key
     rts
 
 screen_put_string:

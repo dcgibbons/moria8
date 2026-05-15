@@ -204,6 +204,8 @@ reset_harness_state:
 .label state_end = input_stream + 8
 
 input_get_key:
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
     inc input_get_key_calls
     ldx input_idx
     cpx input_len

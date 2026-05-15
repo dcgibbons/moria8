@@ -651,7 +651,7 @@ get_direction_target:
     jsr input_prepare_followup_key
 
     // Wait for a keypress
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Convert PETSCII to command ID
     jsr petscii_to_command

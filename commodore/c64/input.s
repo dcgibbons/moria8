@@ -138,6 +138,23 @@ irk_save_ddra: .byte 0
 irk_save_ddrb: .byte 0
 irk_result: .byte 0
 
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
+.label hal_input_get_command = input_get_command
+.label hal_input_wait_release = input_wait_release
+.label hal_input_any_key_held = input_run_key_held
+.label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_modal_prepare = input_modal_prepare
+.label hal_input_modal_finish = input_noop
+
+input_modal_prepare:
+    lda #0
+    sta KBDBUF_COUNT
+    jmp input_wait_release
+
+input_noop:
+    rts
+
 input_get_key:
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     ldx c64_test_input_idx

@@ -110,7 +110,7 @@ show_inv_and_select:
 #if C128
     jsr input_get_key_fast
 #else
-    jsr input_get_key
+    jsr hal_input_get_key
 #endif
     pha
     jsr ui_view_restore_modal_overlay
@@ -151,7 +151,7 @@ show_equip_and_restore:
     jsr tramp_ui_equip_display
     jsr input_get_modal_dismiss_key
     jsr ui_view_restore_modal_overlay
-    jmp input_wait_release
+    jmp hal_input_wait_release
 
 // piw_inv_slot_matches_filter — check whether a carried slot is visible
 // Input: X = carried slot index, piw_filter = active filter

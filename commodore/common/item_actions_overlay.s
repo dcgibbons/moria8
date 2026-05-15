@@ -23,7 +23,7 @@ eff_item_overlay_dispatch:
 #endif
 
 item_action_get_key:
-    jsr input_get_key
+    jsr hal_input_get_key
 #if C128
     sta iagk_key
     lda #MMU_ALL_RAM

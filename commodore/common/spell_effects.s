@@ -182,7 +182,7 @@ eff_identify_prompt:
 !eip_have_choices:
     jsr input_prepare_followup_key
 !eip_retry:
-    jsr input_get_key
+    jsr hal_input_get_key
 
     cmp #$3f
     bne !eip_not_inv+

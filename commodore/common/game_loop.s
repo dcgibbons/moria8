@@ -849,7 +849,7 @@ c128_town_move_diag_loop_top:
     // the keyboard returns to neutral once, then any new keypress cancels.
     lda run_input_armed
     bne !run_cancel_check+
-    jsr input_run_key_held
+    jsr hal_input_any_key_held
     beq !run_arm_cancel+
     jmp run_step                // Still holding initiating key: keep running
 !run_arm_cancel:
@@ -858,7 +858,7 @@ c128_town_move_diag_loop_top:
     jsr input_run_cancel_reset
     jmp run_step
 !run_cancel_check:
-    jsr input_run_cancel_check  // Returns nonzero on a new cancel key edge
+    jsr hal_input_run_cancel_check  // Returns nonzero on a new cancel key edge
     bne !run_cancel+
     jmp run_step
 
@@ -917,7 +917,7 @@ c128_town_move_diag_loop_top:
     stx old_view_x
     ldx zp_view_y
     stx old_view_y
-    jsr input_get_command
+    jsr hal_input_get_command
 #if C128
 c128_town_move_diag_after_input_get_command:
 #endif
@@ -968,7 +968,7 @@ plus4_test_after_save_game:
 !save_return_main:
 #if C128
     jsr hal_platform_runtime_resync
-    jsr input_wait_release
+    jsr hal_input_wait_release
     jmp ui_view_return_to_gameplay_view
 #else
     jsr ui_view_redraw_gameplay_view
@@ -977,7 +977,7 @@ plus4_test_after_save_game:
 !save_return_view:
 #if C128
     jsr hal_platform_runtime_resync
-    jsr input_wait_release
+    jsr hal_input_wait_release
 #endif
     jmp ui_view_return_to_gameplay_view
 !not_save:
@@ -2186,7 +2186,7 @@ player_died:
     sta zp_ptr0_hi
     jsr msg_print
     jsr msg_show_more
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Now do disk I/O (player sees -more- prompt, knows they died)
     lda disk_setup_done

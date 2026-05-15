@@ -75,6 +75,18 @@ input_run_cancel_check:
     jsr input_run_scan_held_raw
     jmp input_run_process_sample
 
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
+.label hal_input_get_command = input_get_command
+.label hal_input_wait_release = input_wait_release
+.label hal_input_any_key_held = input_run_key_held
+.label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_modal_prepare = input_wait_release
+.label hal_input_modal_finish = input_noop
+
+input_noop:
+    rts
+
 // input_get_key — Wait for a keypress via direct CIA1 scan
 // Does not invoke SCNKEY, GETIN, or the Screen Editor.
 // Uses strict 2-sample press/release stabilization because this entry point is

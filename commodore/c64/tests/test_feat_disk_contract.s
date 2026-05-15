@@ -89,6 +89,8 @@ screen_put_char:
 screen_clear_row:
 screen_put_decimal_rj2:
 input_get_key:
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
     rts
 
 tier_invalidate_state:

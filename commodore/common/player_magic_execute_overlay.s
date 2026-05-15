@@ -69,7 +69,7 @@ pmx_pick_recharge_item:
     sta zp_ptr0_hi
     jsr msg_print
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$3f
     bne !pmx_recharge_not_inv+
     lda #$ff
@@ -655,7 +655,7 @@ eff_genocide:
     ldx #HSTR_PM_TITLE_PRAY
     jsr huff_print_msg
     jsr input_prepare_followup_key
-    jsr input_get_key
+    jsr hal_input_get_key
     jsr input_is_modal_escape_key
     beq !egeno_done+
     jsr recall_key_to_screen_code

@@ -332,7 +332,7 @@ pm_select_book:
     bcc !pm_book_cancel+
 !pm_have_books:
     jsr input_prepare_modal_dismiss_key
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$3f
     bne !pm_not_inv+
     lda piw_filter
@@ -497,7 +497,7 @@ pm_prompt_visible_spell_choice:
 #if C128
     jsr input_get_key_fast
 #else
-    jsr input_get_key
+    jsr hal_input_get_key
 #endif
     cmp #$3f
     beq !pm_psc_show_list+
@@ -524,7 +524,7 @@ pm_prompt_visible_spell_choice:
 #if C128
     jsr input_get_key_fast
 #else
-    jsr input_get_key
+    jsr hal_input_get_key
 #endif
     pha
     jsr ui_view_restore_modal_overlay
@@ -603,7 +603,7 @@ pm_consume_mana:
     // The faint reason is important feedback; acknowledge it during the
     // initiating action so forced paralysis turns never enter -MORE-.
     jsr msg_show_more
-    jsr input_get_key
+    jsr hal_input_get_key
 
     lda #5
     ldx zp_temp0

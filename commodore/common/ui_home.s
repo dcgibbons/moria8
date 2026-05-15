@@ -46,7 +46,7 @@ home_enter:
     jsr hal_screen_put_string
 
 !he_loop:
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // D = deposit
     cmp #PETSCII_HM_D
@@ -97,7 +97,7 @@ home_retrieve:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Q/ESC/space = cancel
     cmp #PETSCII_HM_Q
@@ -153,7 +153,7 @@ home_retrieve:
     lda #>hm_inv_full_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    jmp input_get_key           // Wait, tail call
+    jmp hal_input_get_key           // Wait, tail call
 
 !hr_has_room:
     // Copy item from store to inventory
@@ -286,7 +286,7 @@ home_deposit:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // Q/escape-equivalent/space = cancel
     cmp #PETSCII_HM_Q
@@ -334,7 +334,7 @@ home_deposit:
     lda #>hm_home_full_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    jmp input_get_key           // Wait, tail call
+    jmp hal_input_get_key           // Wait, tail call
 
 !hd_has_slot:
     // X = empty absolute slot
@@ -375,6 +375,6 @@ home_deposit:
 
     lda #SFX_PICKUP
     jsr hal_sound_play
-    jsr input_get_key
+    jsr hal_input_get_key
 !hd_cancel:
     rts

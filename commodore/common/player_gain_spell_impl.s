@@ -45,7 +45,7 @@ item_gain_spell:
     // through a resident trampoline.
     jsr input_prepare_modal_dismiss_key
     jsr spell_list_display
-    jsr input_get_key
+    jsr hal_input_get_key
     jsr pm_pick_visible_spell
     bcc !igs_cancel_restore+
     jsr ui_view_restore_modal_overlay

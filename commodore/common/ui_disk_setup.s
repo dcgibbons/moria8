@@ -109,7 +109,7 @@ uds_menu_only:
     beq !menu_key+
     jsr uds_draw_current_indicator
 !menu_key:
-    jsr input_get_key
+    jsr hal_input_get_key
     cmp #$31                    // '1'
     bne !menu_not_one+
     lda #DISK_UI_RES_ONE_DRIVE

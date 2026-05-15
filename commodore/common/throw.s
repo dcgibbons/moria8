@@ -43,7 +43,7 @@ throw_item:
 
     jsr input_prepare_followup_key
 
-    jsr input_get_key
+    jsr hal_input_get_key
 
     // '?' shows inventory (all items) and re-prompts
     cmp #$3f

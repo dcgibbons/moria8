@@ -22,6 +22,23 @@ input_run_cancel_check:
     jsr input_run_key_held
     jmp input_run_process_sample
 
+.label hal_input_get_key = input_get_key
+.label hal_input_get_text_char = input_get_key
+.label hal_input_get_command = input_get_command
+.label hal_input_wait_release = input_wait_release
+.label hal_input_any_key_held = input_run_key_held
+.label hal_input_run_cancel_check = input_run_cancel_check
+.label hal_input_modal_prepare = input_modal_prepare
+.label hal_input_modal_finish = input_noop
+
+input_modal_prepare:
+    lda #0
+    sta zp_kbdbuf_count
+    jmp input_wait_release
+
+input_noop:
+    rts
+
 input_get_key:
 #if PLUS4_TEST_SCRIPTED_DISK_SETUP_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_RESUME_PRODUCT || PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || PLUS4_TEST_SCRIPTED_LOAD_WRONG_MEDIA_PRODUCT || PLUS4_TEST_SCRIPTED_NEW_GAME_PRODUCT || PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT
     ldx plus4_test_key_index

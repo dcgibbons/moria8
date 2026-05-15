@@ -1324,161 +1324,161 @@ required_chains = [
     ("item_wear", items, [
         "ldx #HSTR_PIW_WEAR_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("item_takeoff", items, [
         "ldx #HSTR_PIW_TAKEOFF_PROMPT",
         "jsr piw_print_prompt_with_count",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("item_quaff", items, [
         "ldx #HSTR_PIQ_QUAFF_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("item_read_scroll", items, [
         "ldx #HSTR_PIQ_READ_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
+        "jsr hal_input_wait_release",
         "jsr item_action_get_key",
     ]),
     ("item_aim_wand", items, [
         "ldx #HSTR_PIW_AIM_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
+        "jsr hal_input_wait_release",
         "jsr item_action_get_key",
     ]),
     ("item_use_staff", items, [
         "ldx #HSTR_PIW_USE_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
+        "jsr hal_input_wait_release",
         "jsr item_action_get_key",
     ]),
     ("item_gain_spell", items, [
         "ldx #HSTR_IGS_PROMPT",
         "jsr piw_prompt_filtered_inv",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("item_drop", item_mod, [
         "ldx #HSTR_IDR_PROMPT",
         "jsr huff_print_msg",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("throw_item", throw_mod, [
         "ldx #HSTR_TW_PROMPT",
         "jsr huff_print_msg",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("get_direction_target", dfeat, [
         "ldx #HSTR_DF_DIRECTION",
         "jsr huff_print_msg",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_inventory_dismiss", loop_helpers, [
         "cmd_show_inventory_view:",
         "jsr tramp_ui_inv_display",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_equipment_dismiss", loop_helpers, [
         "cmd_show_equipment_view:",
         "jsr tramp_ui_equip_display",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_help_dismiss", loop_helpers, [
         "cmd_show_help_view:",
         "jsr tramp_ui_help_display",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_char_info_dismiss", loop_helpers, [
         "cmd_show_character_view:",
         "jsr tramp_ui_char_display",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_recall_prompt", loop_helpers, [
         "cmd_recall_view:",
         "jsr screen_put_string",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("cmd_recall_dismiss", loop_helpers, [
         "jsr tramp_ui_recall",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("store_buy_prompt", store_mod, [
         "ldx #MSG_BUY_WHICH",
         "jsr show_msg",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("store_buy_confirm", store_mod, [
         "jsr sbuy_show_price",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("store_sell_prompt", store_mod, [
         "ldx #MSG_SELL_WHICH",
         "jsr show_msg",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("store_sell_confirm", store_mod, [
         "jsr ssell_show_offer",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("store_haggle_number", store_mod, [
         "input_read_number:",
-        "jsr input_wait_release",
-        "jsr input_get_key",
+        "jsr hal_input_wait_release",
+        "jsr hal_input_get_key",
     ]),
     ("spell_prompt_choice", player_magic_mod, [
         "pm_prompt_visible_spell_choice:",
         "jsr piw_print_prompt_with_count",
         "jsr input_prepare_followup_key",
-        "jsr input_get_key",
+        "jsr hal_input_get_key",
     ]),
     ("identify_prompt_choice", spell_effects_mod, [
         "eff_identify_prompt:",
         "jsr huff_print_msg",
         "jsr input_prepare_followup_key",
-        "jsr input_get_key",
+        "jsr hal_input_get_key",
     ]),
     ("inventory_overlay_select", (root / "common" / "player_items.s").read_text().splitlines(), [
         "show_inv_and_select:",
         "jsr input_prepare_followup_key",
         "jsr tramp_ui_inv_select_display",
-        "jsr input_get_key_fast",
+        "jsr hal_input_get_key_fast",
     ]),
     ("spell_list_overlay_select", player_magic_mod, [
         "!pm_psc_show_list:",
         "jsr input_prepare_followup_key",
         "jsr tramp_spell_list_display",
-        "jsr input_get_key_fast",
+        "jsr hal_input_get_key_fast",
     ]),
     ("study_list_overlay_select", (root / "common" / "player_gain_spell_impl.s").read_text().splitlines(), [
         "!igs_have_choices:",
         "jsr input_prepare_followup_key",
         "jsr tramp_spell_list_display",
-        "jsr input_get_key",
+        "jsr hal_input_get_key",
     ]),
     ("wizard_confirm_prompt", ui_wizard_mod, [
         "ui_wizard_display:",
         "lda #<wiz_confirm_str",
         "jsr msg_print",
         "jsr input_prepare_followup_key",
-        "jsr input_get_key",
+        "jsr hal_input_get_key",
     ]),
     ("wizard_heal_choice", ui_wizard_mod, [
         "ui_wizard_cmd_heal_cure:",
@@ -1496,7 +1496,7 @@ for name, lines, chain in required_chains:
 
 if not has_ordered_chain(items, [
     "item_action_get_key:",
-    "jsr input_get_key",
+    "jsr hal_input_get_key",
     "#if C128",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
@@ -1510,7 +1510,7 @@ if not has_ordered_chain(items, [
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
     body = section_after(name, items)
-    if any("jsr input_get_key" in line for line in body):
+    if any("jsr hal_input_get_key" in line for line in body):
         print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
         raise SystemExit(1)
 
@@ -1585,7 +1585,7 @@ def section_after(label: str, lines: list[str]) -> list[str]:
 
 if not has_ordered_chain(items, [
     "item_action_get_key:",
-    "jsr input_get_key",
+    "jsr hal_input_get_key",
     "#if C128",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
@@ -1599,7 +1599,7 @@ if not has_ordered_chain(items, [
 
 for name in ("item_read_scroll:", "item_aim_wand:", "item_use_staff:"):
     body = section_after(name, items)
-    if any("jsr input_get_key" in line for line in body):
+    if any("jsr hal_input_get_key" in line for line in body):
         print(f"{name[:-1]} must use item_action_get_key, not direct input_get_key")
         raise SystemExit(1)
     if not any("jsr item_action_get_key" in line for line in body):

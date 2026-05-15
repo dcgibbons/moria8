@@ -58,6 +58,7 @@ screen_put_string:
 screen_clear_row:
 .label hal_screen_clear_row = screen_clear_row
 input_prepare_modal_dismiss_key:
+.label hal_input_modal_prepare = input_prepare_modal_dismiss_key
 input_get_modal_dismiss_key:
 c128_require_program_media:
 tramp_disk_setup_ui_action:
