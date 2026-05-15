@@ -126,14 +126,16 @@ show_inv_and_select:
 #if C128
     jsr platform_runtime_resync_api
     lda #MMU_ALL_RAM
-    sta $ff00
+    sta hal_memory_mmu_config_register
 #endif
     sei
 #if !C128 && PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
     jsr hal_irq_install_runtime
 #endif
+#if hal_memory_has_cpu_port
     lda #BANK_NO_KERNAL
-    sta $01
+    sta hal_memory_cpu_port
+#endif
 !sias_no_items_reload:
 #endif
     pla

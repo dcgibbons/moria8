@@ -17,6 +17,7 @@ REQUIRED_CONSTANTS = (
 C128_MEMORY_CONSTS = ROOT / "commodore/c128/hal/memory_bank_consts.s"
 COMMON_REU = ROOT / "commodore/common/reu.s"
 COMMON_ITEM_ACTIONS = ROOT / "commodore/common/item_actions_overlay.s"
+COMMON_PLAYER_ITEMS = ROOT / "commodore/common/player_items.s"
 FORBIDDEN_COMMON_TOKENS = ("$ff00", "$d501")
 
 
@@ -51,6 +52,16 @@ def main() -> int:
     if "hal_memory_mmu_config_register" not in item_text:
         errors.append(
             "item_actions_overlay.s: common item actions do not consume "
+            "hal_memory_mmu_config_register"
+        )
+
+    player_items_text = COMMON_PLAYER_ITEMS.read_text(encoding="utf-8", errors="replace")
+    player_items_lower = player_items_text.lower()
+    if "$ff00" in player_items_lower:
+        errors.append("player_items.s: common player items still contain $ff00")
+    if "hal_memory_mmu_config_register" not in player_items_text:
+        errors.append(
+            "player_items.s: common player items do not consume "
             "hal_memory_mmu_config_register"
         )
 

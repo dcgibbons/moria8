@@ -10,11 +10,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_CONSTANTS = (
+    "hal_memory_has_cpu_port",
     "hal_memory_bank_all_ram",
     "hal_memory_bank_all_rom",
     "hal_memory_bank_no_basic",
     "hal_memory_bank_no_kernal",
     "hal_memory_bank_no_roms",
+)
+COMMON_ALIAS_CONSTANTS = tuple(
+    constant
+    for constant in REQUIRED_CONSTANTS
+    if constant != "hal_memory_has_cpu_port"
 )
 
 PLATFORM_FILES = {
@@ -57,7 +63,7 @@ def main() -> int:
     for token in FORBIDDEN_COMMON_TOKENS:
         if token.lower() in common_lower:
             errors.append(f"bank_port_consts.s: common alias file still contains {token}")
-    for constant in REQUIRED_CONSTANTS:
+    for constant in COMMON_ALIAS_CONSTANTS:
         if constant not in common_text:
             errors.append(f"bank_port_consts.s: common alias file does not consume {constant}")
 

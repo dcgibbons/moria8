@@ -19,6 +19,7 @@ PLATFORM_FILES = {
 COMMON_CPU_PORT_USERS = {
     "disk_setup_banked.s": ROOT / "commodore/common/disk_setup_banked.s",
     "item_actions_overlay.s": ROOT / "commodore/common/item_actions_overlay.s",
+    "player_items.s": ROOT / "commodore/common/player_items.s",
 }
 
 

@@ -863,6 +863,12 @@ target-bank setup, and post-load channel cleanup.
       runtime-restore `$FF00` or `$01` operands. The C128-only block uses
       `hal_memory_mmu_config_register` and `hal_memory_cpu_port`; the existing
       CPU-port and C128 MMU register checkers gate the call site.
+      Tenth slice: common inventory prompt overlay reload no longer owns the
+      C128 runtime-restore `$FF00` or raw `$01` operands. The C128 path uses
+      `hal_memory_mmu_config_register`, CPU-port platforms use
+      `hal_memory_cpu_port`, and Plus/4 explicitly reports that no C64-family
+      CPU port exists. The CPU-port and C128 MMU register checkers gate the call
+      site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

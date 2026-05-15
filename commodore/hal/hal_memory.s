@@ -10,13 +10,14 @@
 //   hal_memory_write_byte
 //
 // Required memory-bank constants per platform:
+//   hal_memory_has_cpu_port
 //   hal_memory_bank_all_ram
 //   hal_memory_bank_all_rom
 //   hal_memory_bank_no_basic
 //   hal_memory_bank_no_kernal
 //   hal_memory_bank_no_roms
 //
-// Required C64-family CPU-port constant per CPU-port platform:
+// Required only when hal_memory_has_cpu_port is true:
 //   hal_memory_cpu_port
 //
 // Required VIC-bank constants per VIC platform:

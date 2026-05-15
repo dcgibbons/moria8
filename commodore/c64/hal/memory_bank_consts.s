@@ -1,6 +1,7 @@
 #importonce
 // C64 processor-port bank policy exported for common compatibility aliases.
 
+.const hal_memory_has_cpu_port     = true
 .const hal_memory_cpu_port         = $01
 .const hal_memory_bank_all_ram     = $30
 .const hal_memory_bank_all_rom     = $37
