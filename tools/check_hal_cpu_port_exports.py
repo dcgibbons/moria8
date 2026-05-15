@@ -16,7 +16,10 @@ PLATFORM_FILES = {
     "c128": ROOT / "commodore/c128/hal/memory_bank_consts.s",
 }
 
-COMMON_DISK_SETUP = ROOT / "commodore/common/disk_setup_banked.s"
+COMMON_CPU_PORT_USERS = {
+    "disk_setup_banked.s": ROOT / "commodore/common/disk_setup_banked.s",
+    "item_actions_overlay.s": ROOT / "commodore/common/item_actions_overlay.s",
+}
 
 
 def exported_constants(path: Path) -> set[str]:
@@ -35,13 +38,14 @@ def main() -> int:
             if constant not in constants:
                 errors.append(f"{platform}: missing {constant} in {path.relative_to(ROOT)}")
 
-    common_text = COMMON_DISK_SETUP.read_text(encoding="utf-8", errors="replace")
-    common_lower = common_text.lower()
-    for token in ("inc $01", "dec $01"):
-        if token in common_lower:
-            errors.append(f"disk_setup_banked.s: common disk setup still contains {token}")
-    if "hal_memory_cpu_port" not in common_text:
-        errors.append("disk_setup_banked.s: common disk setup does not consume hal_memory_cpu_port")
+    for name, path in COMMON_CPU_PORT_USERS.items():
+        common_text = path.read_text(encoding="utf-8", errors="replace")
+        common_lower = common_text.lower()
+        for token in ("inc $01", "dec $01", "sta $01"):
+            if token in common_lower:
+                errors.append(f"{name}: common CPU-port user still contains {token}")
+        if "hal_memory_cpu_port" not in common_text:
+            errors.append(f"{name}: common CPU-port user does not consume hal_memory_cpu_port")
 
     if errors:
         print("HAL CPU-port export check failed:")

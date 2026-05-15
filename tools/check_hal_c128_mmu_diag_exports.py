@@ -16,6 +16,7 @@ REQUIRED_CONSTANTS = (
 
 C128_MEMORY_CONSTS = ROOT / "commodore/c128/hal/memory_bank_consts.s"
 COMMON_REU = ROOT / "commodore/common/reu.s"
+COMMON_ITEM_ACTIONS = ROOT / "commodore/common/item_actions_overlay.s"
 FORBIDDEN_COMMON_TOKENS = ("$ff00", "$d501")
 
 
@@ -42,6 +43,16 @@ def main() -> int:
     for constant in REQUIRED_CONSTANTS:
         if constant not in common_text:
             errors.append(f"reu.s: common REU does not consume {constant}")
+
+    item_text = COMMON_ITEM_ACTIONS.read_text(encoding="utf-8", errors="replace")
+    item_lower = item_text.lower()
+    if "$ff00" in item_lower:
+        errors.append("item_actions_overlay.s: common item actions still contain $ff00")
+    if "hal_memory_mmu_config_register" not in item_text:
+        errors.append(
+            "item_actions_overlay.s: common item actions do not consume "
+            "hal_memory_mmu_config_register"
+        )
 
     if errors:
         print("HAL C128 MMU diagnostic export check failed:")

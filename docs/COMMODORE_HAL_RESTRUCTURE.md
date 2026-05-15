@@ -859,6 +859,10 @@ target-bank setup, and post-load channel cleanup.
       export `hal_memory_cpu_port`, the C64 branch uses that name instead of
       `inc/dec $01`, and `check_hal_cpu_port_exports.py` gates the export and
       call site.
+      Ninth slice: common item action key handling no longer owns the C128
+      runtime-restore `$FF00` or `$01` operands. The C128-only block uses
+      `hal_memory_mmu_config_register` and `hal_memory_cpu_port`; the existing
+      CPU-port and C128 MMU register checkers gate the call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

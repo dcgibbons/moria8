@@ -27,9 +27,9 @@ item_action_get_key:
 #if C128
     sta iagk_key
     lda #MMU_ALL_RAM
-    sta $ff00
+    sta hal_memory_mmu_config_register
     lda #BANK_NO_ROMS
-    sta $01
+    sta hal_memory_cpu_port
     lda iagk_key
 #endif
     rts
