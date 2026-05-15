@@ -590,14 +590,15 @@ Storage adapter note:
 - [ ] Migrate lifecycle/runtime resync.
 - [ ] Migrate screen clear/text/color.
 - [ ] Migrate input/key repeat/text input.
-- [ ] Migrate sound/SFX.
+- [x] Migrate sound/SFX.
       First slice: SID and Plus/4 TED sound implementations now export the
       required `hal_sound_{init,play,stop,update}` service labels, and product
       startup/title-load sound entry points call through those HAL labels.
       `check_hal_sound_exports.py` verifies both the SID-base constants and
-      the sound service exports. Remaining work: migrate common game-rule
-      `sound_play`/`sound_init` call sites and their unit-test stubs to the HAL
-      names.
+      the sound service exports. Second slice: common game-rule call sites and
+      unit-test stubs now use `hal_sound_play`/`hal_sound_init`; the checker
+      rejects direct `sound_play`/`sound_init` calls outside the sound
+      implementation compatibility labels.
 - [ ] Migrate overlay/asset loading.
       Backlog: C64 `S)TART` should match C128 by preserving valid REU overlay
       cache contents across start-over. Restart should reset session/game state
@@ -605,8 +606,10 @@ Storage adapter note:
       missing or invalid.
 - [x] Migrate entropy/timers.
       Common RNG owns only the deterministic LFSR algorithm. C64, C128, and
-      Plus/4 export `hal_entropy_timer{0,1}_{lo,hi}` for their safe
-      free-running timer bytes, and `check_hal_entropy_exports.py` verifies the
+      Plus/4 export `hal_entropy_timer{0,1}_{lo,hi}` from platform HAL entropy
+      constant files for their safe free-running timer bytes. Platform config,
+      memory, and display imports expose those constants to both product builds
+      and isolated unit fixtures; `check_hal_entropy_exports.py` verifies the
       platform exports plus the common RNG call site.
 - [ ] After each migrated slice, remove the corresponding common-code hardware
       access and add a static audit rule.

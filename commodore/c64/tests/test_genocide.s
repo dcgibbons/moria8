@@ -317,7 +317,7 @@ test_start:
     :PatchJump(pm_validate_selected_spell, test_pm_validate_selected_spell)
 
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
 
     // Test 1: successful cast reaches spell slot 30, prompts for a glyph,
     // removes all matching monsters, leaves nonmatches alive, spends 25 mana,

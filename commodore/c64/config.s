@@ -17,10 +17,8 @@
 // C128 40/80 column flag (only valid on C128 native mode)
 .const C128_MODE_FLAG = $d7
 
-.label hal_entropy_timer0_lo = $dc04
-.label hal_entropy_timer0_hi = $dc05
-.label hal_entropy_timer1_lo = $dd04
-.label hal_entropy_timer1_hi = $dd05
+#import "hal/entropy_consts.s"
+#import "hal/storage_title_name.s"
 
 // Machine type constants (stored in zp_machine_type)
 .const MACHINE_C64  = $00
@@ -107,6 +105,7 @@ hal_asset_load_prg_header:
     plp
     rts
 
+#if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 hal_asset_load_title:
     lda #hal_storage_title_name_len
     ldx #<hal_storage_title_name
@@ -129,6 +128,11 @@ hal_asset_load_title:
     sta $dd00
     plp
     rts
+#else
+hal_asset_load_title:
+    sec
+    rts
+#endif
 
 hal_asset_close_channel:
     lda #2

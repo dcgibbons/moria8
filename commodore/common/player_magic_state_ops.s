@@ -7,7 +7,7 @@
 pm_finish_success_common:
     jsr pm_mark_worked
     lda #SFX_SPELL
-    jsr sound_play
+    jsr hal_sound_play
     jmp pm_consume_mana
 pm_finish_success_common_end:
 

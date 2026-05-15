@@ -42,7 +42,7 @@ c128_restore_runtime_guards:
 rng_seed:
     rts
 
-sound_play:
+hal_sound_play:
     rts
 
 huff_print_msg:
@@ -152,7 +152,7 @@ load_game:
 title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jsr msg_init
     jsr disk_prompt_save
     jsr load_game
@@ -394,7 +394,7 @@ item_get_name_ptr:
     tay
     rts
 
-sound_init:
+hal_sound_init:
     rts
 
 input_run_scan_held_raw:

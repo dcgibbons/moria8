@@ -2,10 +2,8 @@
 
 .const KERNAL_REV = $ff80
 
-.label hal_entropy_timer0_lo = $ff02
-.label hal_entropy_timer0_hi = $ff03
-.label hal_entropy_timer1_lo = $ff04
-.label hal_entropy_timer1_hi = $ff05
+#import "hal/entropy_consts.s"
+#import "hal/storage_title_name.s"
 
 .const MACHINE_C64  = $00
 .const MACHINE_C128 = $80

@@ -353,7 +353,7 @@ mm_apply_spell_damage:
     jsr mon_atk_apply_damage
     bcs !masd_dead+
     lda #SFX_HIT
-    jmp sound_play
+    jmp hal_sound_play
 !masd_dead:
     ldx zp_mon_type
     inc recall_deaths,x

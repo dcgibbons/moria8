@@ -17,9 +17,9 @@ REQUIRED_CONSTANTS = (
 )
 
 PLATFORM_FILES = {
-    "c64": ROOT / "commodore/c64/config.s",
-    "c128": ROOT / "commodore/c128/config128.s",
-    "plus4": ROOT / "commodore/plus4/config.s",
+    "c64": ROOT / "commodore/c64/hal/entropy_consts.s",
+    "c128": ROOT / "commodore/c128/hal/entropy_consts.s",
+    "plus4": ROOT / "commodore/plus4/hal/entropy_consts.s",
 }
 
 RNG_COMMON = ROOT / "commodore/common/rng.s"

@@ -109,7 +109,7 @@ test_start:
 
     // Initialize message system and sound
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
 
     // ============================================================
     // Test 1: roll_ego_type returns 0 for non-weapons

@@ -557,7 +557,7 @@ trap_apply_damage:
     beq !trap_death+
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
 
     rts
 
@@ -739,7 +739,7 @@ door_try_open:
     ldx #HSTR_DF_DOOR_STUCK
     jsr huff_print_msg
     lda #SFX_BUMP
-    jsr sound_play
+    jsr hal_sound_play
     sec                     // Turn consumed (attempted)
     rts
 

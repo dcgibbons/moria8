@@ -25,6 +25,7 @@
 .encoding "screencode_mixed"
 
 #import "../../common/zeropage.s"
+#import "../hal/memory_bank_consts.s"
 
 .const SCREEN_COLS = 40
 .const STATUS_ROW = 21

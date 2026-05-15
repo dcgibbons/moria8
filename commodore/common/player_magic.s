@@ -318,7 +318,7 @@ pm_handle_fail_roll:
     ldx #HSTR_PM_FAIL
     jsr huff_print_msg
     lda #SFX_SPELL_FAIL
-    jsr sound_play
+    jsr hal_sound_play
     jsr pm_consume_mana
     rts
 

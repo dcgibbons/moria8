@@ -56,10 +56,10 @@ turn_maybe_play_hunger_alert:
     beq !faint+
 
     lda #SFX_HUNGER_WARN
-    jmp sound_play
+    jmp hal_sound_play
 !faint:
     lda #SFX_HUNGER_FAINT
-    jmp sound_play
+    jmp hal_sound_play
 !done:
     rts
 

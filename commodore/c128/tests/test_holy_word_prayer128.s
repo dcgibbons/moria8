@@ -225,7 +225,7 @@ monster_remove:
     sta (zp_ptr0),y
     rts
 
-sound_play:
+hal_sound_play:
     rts
 
 tier_restore_after_overlay:

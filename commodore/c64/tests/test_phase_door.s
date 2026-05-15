@@ -285,7 +285,7 @@ test_start:
     sta zp_rng_3
 
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
 
     lda #8
     sta $c6

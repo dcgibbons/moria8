@@ -17,6 +17,7 @@
 // VDC Constants
 // ============================================================
 #import "hal/layout.s"
+#import "hal/entropy_consts.s"
 
 .const VDC_ADDR_REG    = $d600    // VDC address/status register
 .const VDC_DATA_REG    = $d601    // VDC data register

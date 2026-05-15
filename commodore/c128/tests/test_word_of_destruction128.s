@@ -162,7 +162,7 @@ tunnel_spawn_gold:
 combat_award_xp:
 combat_check_levelup:
 find_random_floor:
-sound_play:
+hal_sound_play:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
 piw_print_prompt_with_count:

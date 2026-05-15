@@ -51,7 +51,7 @@ item_gain_spell:
     jsr ui_view_restore_modal_overlay
     jsr pm_learn_selected_spell
     lda #SFX_LEVELUP
-    jsr sound_play
+    jsr hal_sound_play
     sec
     rts
 
@@ -64,7 +64,7 @@ item_gain_spell:
     sta pm_spell_idx
     jsr pm_learn_selected_spell
     lda #SFX_LEVELUP
-    jsr sound_play
+    jsr hal_sound_play
     sec
     rts
 

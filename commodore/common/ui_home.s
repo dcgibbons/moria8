@@ -202,7 +202,7 @@ home_retrieve:
     jsr screen_put_string
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 !hr_cancel:
     rts
 
@@ -374,7 +374,7 @@ home_deposit:
     jsr screen_put_string
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jsr input_get_key
 !hd_cancel:
     rts

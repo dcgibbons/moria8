@@ -160,7 +160,7 @@ test_start:
 
     // Initialize message system and sound
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
 
     // Pre-stuff keyboard buffer for -more- prompts
     lda #8
@@ -1876,6 +1876,8 @@ test_start:
 
     jsr monster_wake_check
 
+    ldx #0
+    jsr monster_get_ptr
     ldy #MX_SLEEP_CUR
     lda (zp_ptr0),y
     bne !t23_fail+

@@ -693,7 +693,7 @@ eff_bolt:
     ldx #HSTR_EB_SPELL_HITS
     jsr projectile_msg_suffix
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     rts
 
 // ============================================================
@@ -924,7 +924,7 @@ eff_wall_to_mud:
     ldx #HSTR_TUN_FOUND
     jsr huff_print_msg
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 !ewtm_no_treasure:
 
     lda #1

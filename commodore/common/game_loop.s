@@ -387,7 +387,7 @@ game_new_start:
 
     // Play sound as acknowledgment
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     // Initialize message system
     jsr msg_init
@@ -588,7 +588,7 @@ game_new_start:
 #endif
 
     // Re-init SID after lengthy init sequence (defensive — ensures volume is set)
-    jsr sound_init
+    jsr hal_sound_init
 
 	    // Clear screen and do initial render
 	    jsr screen_clear
@@ -695,7 +695,7 @@ load_resume_game:
     sta zp_run_dir
 
     // Re-init SID
-    jsr sound_init
+    jsr hal_sound_init
 
 #if C128
 #if PERF_P1

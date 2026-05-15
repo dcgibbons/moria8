@@ -177,7 +177,7 @@ combat_check_levelup:
 find_random_floor:
 monster_find_at:
 combat_apply_damage_16:
-sound_play:
+hal_sound_play:
 msg_build_action:
 cmb_print_buf:
 piw_prompt_filtered_inv:

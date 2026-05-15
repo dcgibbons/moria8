@@ -154,7 +154,7 @@ screen_flash_set_color:
 screen_flash_reset_color:
 screen_flash_at:
 msg_clear:
-sound_play:
+hal_sound_play:
 combat_append_str:
 cmb_term_and_print:
 huff_decode_to_ptr2:

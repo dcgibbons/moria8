@@ -34,90 +34,90 @@ test_start:
     txs
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
 sound_stage_init:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_NONE
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_none:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #$0a
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_invalid:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_BUMP
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_bump:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_hit:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_MISS
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_miss:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_pickup:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_DEATH
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_death:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_LEVELUP
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_levelup:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_SPELL
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_spell:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_SPELL_FAIL
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_spell_fail:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_HUNGER_WARN
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_hunger_warn:
     nop
 
     jsr reset_sid_window
-    jsr sound_init
+    jsr hal_sound_init
     lda #SFX_HUNGER_FAINT
-    jsr sound_play
+    jsr hal_sound_play
 sound_stage_hunger_faint:
     brk

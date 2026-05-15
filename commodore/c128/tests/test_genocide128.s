@@ -205,7 +205,7 @@ floor_item_add:
     sec
     rts
 
-sound_play:
+hal_sound_play:
     rts
 
 input_get_key:

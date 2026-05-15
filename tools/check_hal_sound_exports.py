@@ -27,7 +27,14 @@ SOUND_IMPL_FILES = {
 }
 
 COMMON_SOUND = ROOT / "commodore/common/sound.s"
+COMMON_SOURCE_ROOT = ROOT / "commodore/common"
 FORBIDDEN_COMMON_TOKENS = ("$d400",)
+FORBIDDEN_COMMON_CALLS = (
+    "jsr sound_init",
+    "jmp sound_init",
+    "jsr sound_play",
+    "jmp sound_play",
+)
 
 
 def exported_constants(path: Path) -> set[str]:
@@ -70,6 +77,15 @@ def main() -> int:
     for constant in REQUIRED_CONSTANTS:
         if constant not in common_text:
             errors.append(f"sound.s: common sound does not consume {constant}")
+    for path in sorted(COMMON_SOURCE_ROOT.glob("*.s")):
+        if path == COMMON_SOUND:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+        for token in FORBIDDEN_COMMON_CALLS:
+            if token in text:
+                errors.append(
+                    f"{path.relative_to(ROOT)}: common gameplay still calls {token}"
+                )
 
     if errors:
         print("HAL sound export check failed:")

@@ -6,6 +6,7 @@
 // the platform-owned KERNAL/banking helpers.
 
 #import "storage_policy.s"
+#import "storage_title_name.s"
 
 .label hal_storage_enter_os = disk_kernal_enter
 .label hal_storage_exit_os = disk_kernal_exit
@@ -149,11 +150,6 @@ hal_storage_score_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $48, $41, $4c, $4c, $2e, $4f, $46, $2e, $46, $41, $4d, $45 // "HALL.OF.FAME"
 .label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
-
-// Platform-owned title-art filename. PETSCII bytes for KERNAL LOAD.
-hal_storage_title_name:
-    .byte $54, $36, $34                         // "T64"
-.label hal_storage_title_name_len = * - hal_storage_title_name
 
 // Platform-owned tier data filenames. PETSCII bytes for KERNAL LOAD.
 // Lengths exclude the trailing zero; REU preload display uses the same labels

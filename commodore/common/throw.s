@@ -247,7 +247,7 @@ throw_item:
     ldx #HSTR_RF_HITS
     jsr projectile_msg_suffix
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     jmp tw_consume_item
 
 tw_miss_monster:
@@ -256,7 +256,7 @@ tw_miss_monster:
     ldx #HSTR_RF_MISSES
     jsr projectile_msg_suffix
     lda #SFX_MISS
-    jsr sound_play
+    jsr hal_sound_play
     jmp tw_consume_item
 
 tw_miss_darkness:

@@ -154,7 +154,7 @@ test_start:
     jsr msg_init
 
     // Initialize sound (needed to avoid crash on sound_play)
-    jsr sound_init
+    jsr hal_sound_init
 
     // ==========================================
     // Test 1: combat_calc_tohit for Warrior level 1, TOHIT=0

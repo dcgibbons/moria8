@@ -49,7 +49,7 @@ si_meta:    .fill STORE_TOTAL_SLOTS, 0
 help_pages: .byte 0, 0
 .const MX_CONFUSE = 9
 
-sound_play:
+hal_sound_play:
 combat_append_decimal_16:
 cmb_term_and_print:
 tier_restore_after_overlay:

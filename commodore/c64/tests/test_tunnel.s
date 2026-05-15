@@ -197,7 +197,7 @@ test_start:
 
     // Initialize message system and sound
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
 
     // ============================================================
     // Test 1: Bare hands (no weapon) → tun_dig_ability = 0

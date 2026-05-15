@@ -162,7 +162,7 @@ monster_attack_player:
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_HIT
-    jmp sound_play
+    jmp hal_sound_play
 
 !map_miss_msg:
     // Miss message: "THE <name> MISSES YOU."
@@ -170,7 +170,7 @@ monster_attack_player:
     jsr huff_decode_to_ptr2
     jsr mon_atk_build_effect_msg
     lda #SFX_MISS
-    jmp sound_play
+    jmp hal_sound_play
 
 !map_do_aggravate:
     jsr mon_atk_effect_aggravate
@@ -569,7 +569,7 @@ player_death_check:
     ora #$01                    // Set GF_DEAD (bit 0)
     sta zp_game_flags
     lda #SFX_DEATH
-    jmp sound_play
+    jmp hal_sound_play
 
 // ============================================================
 // Message builders

@@ -318,7 +318,7 @@ player_tunnel_resolved_target:
     ldx #HSTR_TUN_FOUND
     jsr huff_print_msg
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jmp !tun_success_done+
 
 !tun_no_treasure:

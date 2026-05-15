@@ -141,7 +141,7 @@ player_attack_monster:
     jsr combat_check_levelup
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     jmp !pam_done+
 
 !pam_not_dead:
@@ -155,7 +155,7 @@ player_attack_monster:
     jsr cmb_print_buf
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     jmp !pam_done+
 
 !pam_all_miss:
@@ -166,7 +166,7 @@ player_attack_monster:
     jsr cmb_print_buf
 
     lda #SFX_MISS
-    jsr sound_play
+    jsr hal_sound_play
 
 !pam_done:
     sec                         // Turn consumed
@@ -994,7 +994,7 @@ combat_apply_levelup:
 
     // Play level-up sound
     lda #SFX_LEVELUP
-    jsr sound_play
+    jsr hal_sound_play
 
     // Print level-up message: "Welcome to level N."
     jsr msg_build_levelup
@@ -1082,7 +1082,7 @@ combat_kill_message:
     jsr msg_build_action
     jsr cmb_print_buf
     lda #SFX_HIT
-    jmp sound_play
+    jmp hal_sound_play
 
 // cmb_term_and_print — Null-terminate combat_msg_buf and print it
 // Clobbers: A, X

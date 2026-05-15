@@ -917,7 +917,7 @@ item_pickup:
     jsr floor_item_remove
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     sec
     rts
@@ -978,7 +978,7 @@ item_pickup:
     jsr floor_item_remove
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     sec
     rts
@@ -1102,7 +1102,7 @@ item_drop:
     jsr cmb_term_and_print
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     sec
     rts

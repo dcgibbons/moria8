@@ -253,7 +253,7 @@ tramp_ego_apply_damage: rts
 tier_load: rts
 item_get_missile: rts
 floor_item_find_at: rts
-sound_play: rts
+hal_sound_play: rts
 msg_build_action: rts
 cmb_print_buf: rts
 

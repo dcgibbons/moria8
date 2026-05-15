@@ -146,7 +146,7 @@ test_combat_kill_message:
 
 test_start:
     jsr msg_init
-    jsr sound_init
+    jsr hal_sound_init
     jsr tv_setup_dark_room
     :PatchJump(get_direction_target, test_get_direction_target_east)
     :PatchJump(screen_flash_at, test_screen_flash_at)

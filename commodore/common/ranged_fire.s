@@ -167,7 +167,7 @@ ranged_fire:
     ldx #HSTR_RF_HITS
     jsr projectile_msg_suffix
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     jmp rf_consume_ammo
 
 rf_miss_monster:
@@ -176,7 +176,7 @@ rf_miss_monster:
     ldx #HSTR_RF_MISSES
     jsr projectile_msg_suffix
     lda #SFX_MISS
-    jsr sound_play
+    jsr hal_sound_play
     jmp rf_consume_ammo
 
 rf_miss_darkness:

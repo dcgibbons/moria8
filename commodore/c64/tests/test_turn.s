@@ -236,7 +236,7 @@ player_death_check:
     inc test_player_death_calls
     rts
 
-sound_play:
+hal_sound_play:
     inc test_sound_calls
     sta test_last_sound
     rts

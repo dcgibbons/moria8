@@ -6,6 +6,7 @@
 // calls; new shared storage work should target these HAL labels instead.
 
 #import "storage_policy.s"
+#import "storage_title_name.s"
 
 .label hal_storage_enter_os = plus4_bank_rom
 .label hal_storage_exit_os = plus4_bank_ram
@@ -152,12 +153,6 @@ hal_storage_score_scratch_name:
     .byte $53, $30, $3a                         // "S0:"
     .byte $50, $34, $2e, $48, $41, $4c, $4c, $2e, $46, $41, $4d, $45 // "P4.HALL.FAME"
 .label hal_storage_score_scratch_name_len = * - hal_storage_score_scratch_name
-
-// Platform-owned title-art filename. PETSCII bytes for KERNAL LOAD.
-// The Plus/4 port currently reuses the C64 title asset.
-hal_storage_title_name:
-    .byte $54, $36, $34                         // "T64"
-.label hal_storage_title_name_len = * - hal_storage_title_name
 
 // Platform-owned tier data filenames. PETSCII bytes for KERNAL LOAD.
 // Lengths exclude the trailing zero; display paths use the same labels as

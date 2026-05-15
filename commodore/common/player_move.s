@@ -188,7 +188,7 @@ c128_town_move_diag_move_blocked:
     cmp #$ff
     bne !no_bump+
     lda #SFX_BUMP
-    jsr sound_play
+    jsr hal_sound_play
 !no_bump:
     clc                     // Carry clear = blocked
     rts

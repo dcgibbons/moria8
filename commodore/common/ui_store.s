@@ -455,7 +455,7 @@ sbuy_execute:
     jsr show_msg
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     rts
 
 // sbuy_show_price — Display price confirmation for buy
@@ -739,7 +739,7 @@ ssell_execute:
     jsr show_msg
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jsr input_get_key
     rts
 

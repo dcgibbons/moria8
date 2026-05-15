@@ -166,7 +166,7 @@ item_wear:
     jsr cmb_term_and_print
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     sec                         // Turn consumed
     rts
@@ -306,7 +306,7 @@ item_takeoff:
     jsr cmb_term_and_print
 
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
 
     sec                         // Turn consumed
     rts

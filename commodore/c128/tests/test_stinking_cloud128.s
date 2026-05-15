@@ -160,7 +160,7 @@ piw_print_prompt_with_count:
     clc
     rts
 
-sound_play:
+hal_sound_play:
     rts
 
 huff_print_msg:

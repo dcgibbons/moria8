@@ -176,7 +176,7 @@ test_start:
     jsr msg_init
 
     // Initialize sound (needed to avoid crash on sound_play)
-    jsr sound_init
+    jsr hal_sound_init
 
     // Pre-stuff keyboard buffer for -more- prompts
     lda #8

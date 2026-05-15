@@ -1773,7 +1773,7 @@ check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr input_get_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
-    "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||lda current_overlay|||cmp #OVL_ITEMS|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_ITEMS|||lda #OVL_ITEMS|||jsr overlay_load|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta \$01"
+    "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||lda current_overlay|||cmp #OVL_ITEMS|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_ITEMS|||lda #OVL_ITEMS|||jsr overlay_load|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "identify_scroll_resident_completion_contract" "../common/item_actions_overlay.s" \
     "irs_effect_identify:|||jmp eff_identify_scroll_resident"
 check_static_contract "itemdesc_armor_brackets_screen_code_contract" "../common/item_desc_banked.s" \

@@ -165,7 +165,7 @@ bash_door:
     jsr huff_print_msg
     jsr bash_off_balance
     lda #SFX_BUMP
-    jsr sound_play
+    jsr hal_sound_play
     sec                         // Turn consumed
     rts
 
@@ -187,7 +187,7 @@ bash_door:
     jsr huff_print_msg
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     sec                         // Turn consumed
     rts
 
@@ -248,7 +248,7 @@ bash_monster:
     jsr msg_build_action
     jsr cmb_print_buf
     lda #SFX_MISS
-    jsr sound_play
+    jsr hal_sound_play
     jmp bash_monster_done
 
 !bash_hit:
@@ -301,7 +301,7 @@ bash_monster:
     jsr combat_check_levelup
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
     jmp bash_monster_done
 
 !bash_hit_alive:
@@ -312,7 +312,7 @@ bash_monster:
     jsr cmb_print_buf
 
     lda #SFX_HIT
-    jsr sound_play
+    jsr hal_sound_play
 
     // Check for stun
     jsr bash_stun_check

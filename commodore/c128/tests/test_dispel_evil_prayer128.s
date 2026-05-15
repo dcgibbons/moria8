@@ -187,7 +187,7 @@ fi_add_clear_plain_meta:
     clc
     rts
 
-sound_play:
+hal_sound_play:
     rts
 
 combat_append_monster_name:
