@@ -30,6 +30,8 @@ sound_init:
     lda #SFX_NONE
     sta zp_snd_effect
     rts
+.label hal_sound_init = sound_init
+.label hal_sound_stop = sound_init
 
 sound_play:
     lda #0
@@ -43,6 +45,11 @@ sound_play:
     jsr plus4_display_resync
     lda #SFX_NONE
     sta zp_snd_effect
+    rts
+.label hal_sound_play = sound_play
+
+hal_sound_update:
+    clc
     rts
 
 ted_sfx_freq:

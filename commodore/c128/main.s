@@ -2062,7 +2062,7 @@ restart_entry:
     sta reu_size_kb
     sta reu_size_kb + 1
 
-    jsr sound_init
+    jsr hal_sound_init
     jsr rng_seed
 
     // Runtime switches to an all-RAM IRQ regime only after preload/KERNAL I/O
@@ -2213,7 +2213,7 @@ title_menu_ready:
 title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jsr msg_init
     jsr title_require_disk_setup
     bcc !title_setup_ready+

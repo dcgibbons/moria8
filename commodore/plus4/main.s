@@ -485,7 +485,7 @@ restart_entry:
     sta reu_size_kb
     sta reu_size_kb + 1
     jsr tier_init
-    jsr sound_init
+    jsr hal_sound_init
     jsr rng_seed
 
 title_enter_menu:
@@ -611,7 +611,7 @@ plus4_test_overlay_id:
 title_load_game:
     jsr rng_seed
     lda #SFX_PICKUP
-    jsr sound_play
+    jsr hal_sound_play
     jsr disk_prompt_save        // Swap to save disk if dual
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
