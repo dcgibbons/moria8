@@ -935,6 +935,10 @@ target-bank setup, and post-load channel cleanup.
       `hal_memory_cpu_port`, and Plus/4 explicitly reports that no C64-family
       CPU port exists. The CPU-port and C128 MMU register checkers gate the call
       site.
+      Eleventh slice: common C64 save/load return and load-media paths no
+      longer write raw `$01`. The C64-only branches now store to
+      `hal_memory_cpu_port`, and `check_hal_cpu_port_exports.py` gates
+      `save.s` with the other common CPU-port users.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

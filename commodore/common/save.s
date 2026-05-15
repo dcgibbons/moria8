@@ -353,7 +353,7 @@ save_return_fail:
     clc
 save_return_c64_with_carry:
     lda #BANK_NO_BASIC
-    sta $01
+    sta hal_memory_cpu_port
     rts
 #else
     clc
@@ -363,7 +363,7 @@ save_return_c64_with_carry:
 !save_media_ok:
 #if !C128 && !PLUS4
     lda #BANK_NO_BASIC
-    sta $01
+    sta hal_memory_cpu_port
 #endif
 #if C128 || PLUS4
     jsr save_confirm_overwrite
@@ -558,7 +558,7 @@ save_return_c64_with_carry:
     jsr huff_print_msg
 #if !C128 && !PLUS4
     lda #BANK_NO_BASIC
-    sta $01
+    sta hal_memory_cpu_port
 #endif
     sec
     rts
@@ -636,7 +636,7 @@ plus4_test_load_media_fail:
 !load_media_ok:
 #if !C128 && !PLUS4
     lda #BANK_NO_BASIC
-    sta $01
+    sta hal_memory_cpu_port
 #endif
 
     // Show "LOADING GAME..." message

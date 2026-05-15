@@ -1815,9 +1815,9 @@ check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \
 check_static_contract "c64_storage_diag_export_contract" "hal/storage.s" \
     ".label hal_storage_diag_code = disk_status|||.label hal_storage_diag_device = save_device"
 check_static_contract "c64_save_stream_banks_kernal_contract" "../common/save.s" \
-    "!save_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||jsr save_select_output_name_c64"
+    "!save_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||jsr save_select_output_name_c64"
 check_static_contract "c64_load_stream_banks_kernal_contract" "../common/save.s" \
-    "!load_media_ok:|||lda #BANK_NO_BASIC|||sta \$01|||ldx #HSTR_SAVE_LOADING"
+    "!load_media_ok:|||lda #BANK_NO_BASIC|||sta hal_memory_cpu_port|||ldx #HSTR_SAVE_LOADING"
 
 # Runtime tests
 # Args: name, source, result memory range, expected pass count
