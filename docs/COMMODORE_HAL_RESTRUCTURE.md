@@ -1008,6 +1008,11 @@ target-bank setup, and post-load channel cleanup.
       backend exports `hal_layout_equipment_title_col` and
       `hal_layout_equipment_footer_col`, preserving the existing 40-column
       footer placement instead of deriving a subtly different centered value.
+      Twenty-seventh slice: common inventory screen placement no longer
+      branches on `C128` to choose title, footer, selection footer, or identify
+      footer columns. Each platform layout backend exports the corresponding
+      `hal_layout_inventory_*_col` policy constants, preserving the existing
+      40-column footer positions exactly.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

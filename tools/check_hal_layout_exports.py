@@ -51,6 +51,10 @@ POLICY_CONSTANTS = (
     "hal_layout_store_price_col",
     "hal_layout_equipment_title_col",
     "hal_layout_equipment_footer_col",
+    "hal_layout_inventory_title_col",
+    "hal_layout_inventory_footer_col",
+    "hal_layout_inventory_select_col",
+    "hal_layout_inventory_identify_col",
 )
 
 

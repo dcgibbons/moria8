@@ -4,17 +4,10 @@
 // Full-screen inventory view.
 // CMD_INVENTORY shows carried items (slots 0-21).
 
-#if C128
-.const UINV_TITLE_COL = (SCREEN_COLS - 9) / 2
-.const UINV_FOOTER_COL = (SCREEN_COLS - 13) / 2
-.const UINV_SELECT_COL = (SCREEN_COLS - 11) / 2
-.const UINV_IDENTIFY_COL = (SCREEN_COLS - 26) / 2
-#else
-.const UINV_TITLE_COL = 15
-.const UINV_FOOTER_COL = 12
-.const UINV_SELECT_COL = 14
-.const UINV_IDENTIFY_COL = 7
-#endif
+.const UINV_TITLE_COL = hal_layout_inventory_title_col
+.const UINV_FOOTER_COL = hal_layout_inventory_footer_col
+.const UINV_SELECT_COL = hal_layout_inventory_select_col
+.const UINV_IDENTIFY_COL = hal_layout_inventory_identify_col
 
 // ============================================================
 // Subroutines
