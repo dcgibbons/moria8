@@ -3,6 +3,7 @@
 .const KERNAL_REV = $ff80
 
 #import "hal/entropy_consts.s"
+#import "hal/lifecycle_policy.s"
 #import "hal/storage_title_name.s"
 
 .const MACHINE_C64  = $00

@@ -28,3 +28,7 @@
 //   returns platform to a safe OS-visible state when possible.
 // - hal_platform_panic: input A=status; output does not promise return;
 //   clobbers all volatile state; may force OS-visible diagnostics.
+//
+// Policy constants:
+// - hal_platform_reassert_before_message_render: boolean; true when the
+//   platform must reassert runtime vectors/state before message rendering.

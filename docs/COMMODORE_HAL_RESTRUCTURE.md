@@ -1013,6 +1013,12 @@ target-bank setup, and post-load channel cleanup.
       footer columns. Each platform layout backend exports the corresponding
       `hal_layout_inventory_*_col` policy constants, preserving the existing
       40-column footer positions exactly.
+      Twenty-eighth slice: common message rendering no longer branches on
+      `C128` to decide whether runtime vectors must be reasserted before
+      screen output. Each platform lifecycle backend exports
+      `hal_platform_reassert_before_message_render`, with C128 preserving the
+      existing reassertion path and C64/Plus/4 preserving the previous no-op
+      behavior at that call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

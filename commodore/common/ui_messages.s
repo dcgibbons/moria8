@@ -109,9 +109,9 @@ msg_print_cached:
     lda #$21
     jsr c128_town_dump_log
 #endif
-#if C128
+#if hal_platform_reassert_before_message_render
     // Message rendering is hit constantly during live gameplay; reassert
-    // the RAM-side vectors/stubs here so leaked KERNAL state can't persist
+    // platform-selected runtime state here so leaked OS state can't persist
     // into the screen write path between overlay transitions.
     jsr hal_platform_vector_reassert
 #endif

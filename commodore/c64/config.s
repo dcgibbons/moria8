@@ -18,6 +18,7 @@
 .const C128_MODE_FLAG = $d7
 
 #import "hal/entropy_consts.s"
+#import "hal/lifecycle_policy.s"
 #import "hal/storage_title_name.s"
 
 // Machine type constants (stored in zp_machine_type)
