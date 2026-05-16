@@ -765,7 +765,7 @@ reu_show_file:
 #if C128
     jsr hal_screen_put_string
 #else
-    jsr screen_set_cursor
+    jsr hal_screen_set_cursor
     ldy #0
 !rsf_loop:
     lda (zp_ptr0),y

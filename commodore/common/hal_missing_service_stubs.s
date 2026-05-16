@@ -84,6 +84,9 @@ hal_screen_put_string:
 hal_screen_put_char_at:
     lda #53
     jmp hal_missing_service
+hal_screen_set_cursor:
+    lda #59
+    jmp hal_missing_service
 hal_screen_set_color:
     lda #54
     jmp hal_missing_service

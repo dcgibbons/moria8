@@ -229,7 +229,7 @@ help_select_page:
 // On exit: zp_ptr0/hi advanced past the string + null terminator
 // Preserves: nothing
 help_draw_line:
-    jsr screen_set_cursor
+    jsr hal_screen_set_cursor
     ldy #0
     sty zp_temp0                // string offset
 !hdl_loop:
@@ -293,7 +293,7 @@ help_draw_line:
     ldy zp_temp0
     lda (zp_ptr0),y             // read target column
     sta zp_cursor_col
-    jsr screen_set_cursor       // recompute screen/color pointers
+    jsr hal_screen_set_cursor   // recompute screen/color pointers
     inc zp_temp0                // skip past column byte
     jmp !hdl_loop-
 !hdl_done:

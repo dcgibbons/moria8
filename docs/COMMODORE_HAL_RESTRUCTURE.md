@@ -981,6 +981,12 @@ target-bank setup, and post-load channel cleanup.
       the TED locked-charset side-rule glyph via `hal_screen_box_vertical_char`,
       and `check_hal_screen_exports.py` verifies the common help screen consumes
       that HAL constant instead of branching directly on `PLUS4`.
+      Twenty-first slice: common help-line rendering no longer calls the
+      backend-local `screen_set_cursor` routine directly. Each platform screen
+      backend exports `hal_screen_set_cursor`; common help rendering, REU
+      preload filename display, and C128 title block drawing use that HAL entry;
+      and `check_hal_screen_exports.py` rejects direct common calls to the
+      backend-local cursor helper.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

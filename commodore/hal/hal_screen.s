@@ -8,11 +8,14 @@
 //   hal_screen_put_char
 //   hal_screen_put_string
 //   hal_screen_put_char_at
+//   hal_screen_set_cursor
 //   hal_screen_set_color
 //   hal_screen_blank
 //   hal_screen_unblank
 //   hal_screen_begin_bulk
 //   hal_screen_end_bulk
+//
+// Required constants per platform:
 //   hal_screen_full_clear_uses_bulk
 //   hal_screen_box_vertical_char
 //
@@ -32,6 +35,9 @@
 //   output C=status; clobbers A/X/Y allowed; zero terminator ends string.
 // - hal_screen_put_char_at: input A=char, X=column, Y=row; output C=status;
 //   clobbers A/X/Y allowed; writes one cell and matching attribute if needed.
+// - hal_screen_set_cursor: input zp_cursor_row/zp_cursor_col; output
+//   platform cursor/write pointers updated; clobbers A/X allowed, preserves Y
+//   only where the platform backend documents that behavior.
 // - hal_screen_set_color: input A=logical color; output C=status; clobbers A
 //   allowed; maps logical color to platform attribute state.
 // - hal_screen_blank: input none; output C=status; clobbers A allowed; hides

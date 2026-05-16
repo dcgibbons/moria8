@@ -138,6 +138,7 @@ screen_vectors:
 .label hal_screen_put_char = screen_put_char
 .label hal_screen_put_string = screen_put_string
 .label hal_screen_put_char_at = screen_put_char_at
+.label hal_screen_set_cursor = screen_set_cursor
 .label hal_screen_set_color = screen_set_color
 .label hal_screen_blank = screen_blank
 .label hal_screen_unblank = screen_unblank

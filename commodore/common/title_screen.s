@@ -173,7 +173,7 @@ title_render_data:
 title_put_block_char:
     php
     stx tbc_save_x
-    jsr screen_set_cursor
+    jsr hal_screen_set_cursor
 
     sei
     lda zp_screen_hi
