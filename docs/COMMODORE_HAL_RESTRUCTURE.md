@@ -991,6 +991,11 @@ target-bank setup, and post-load channel cleanup.
       `C128`. `dungeon_data.s` now defines `MAP_COLS`/`MAP_ROWS` from
       `hal_layout_map_cols`/`hal_layout_map_rows`, leaving the platform layout
       files as the owner of map geometry policy.
+      Twenty-third slice: common help footer text no longer branches on `C128`.
+      Each platform input backend exports `hal_input_help_footer_uses_esc_stop`
+      so the platform input policy owns whether help footers advertise
+      ESC/STOP dismissal, and `check_hal_input_exports.py` verifies both the
+      platform constants and the common help screen call site.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

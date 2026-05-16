@@ -56,6 +56,7 @@
 .const hal_input_modal_escape_primary = KEY_ESC
 .const hal_input_modal_escape_secondary = $03
 .const hal_input_flush_run_cancel_buffer = false
+.const hal_input_help_footer_uses_esc_stop = true
 
 // C128 runtime MMU mode used by game loop (all RAM, I/O visible)
 .const INPUT_MMU_ALL_RAM  = $3e

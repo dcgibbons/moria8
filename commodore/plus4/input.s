@@ -13,6 +13,7 @@
 .const hal_input_modal_escape_primary = $03
 .const hal_input_modal_escape_secondary = $1b
 .const hal_input_flush_run_cancel_buffer = true
+.const hal_input_help_footer_uses_esc_stop = false
 
 input_lock_charset_switch:
     jmp plus4_display_resync

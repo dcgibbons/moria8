@@ -34,6 +34,15 @@ REQUIRED_CONSTANTS = (
     "hal_input_modal_escape_primary",
     "hal_input_modal_escape_secondary",
     "hal_input_flush_run_cancel_buffer",
+    "hal_input_help_footer_uses_esc_stop",
+)
+
+HELPER_POLICY_CONSTANTS = (
+    "hal_input_kbdbuf_count",
+    "hal_input_modal_dismiss_uses_fast_key",
+    "hal_input_modal_escape_primary",
+    "hal_input_modal_escape_secondary",
+    "hal_input_flush_run_cancel_buffer",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -79,7 +88,7 @@ def helper_policy_violations() -> list[str]:
         errors.append(
             f"{COMMON_HELPER_FILE.relative_to(ROOT)}:{line} uses target conditional in input helper"
         )
-    for const in REQUIRED_CONSTANTS:
+    for const in HELPER_POLICY_CONSTANTS:
         if const not in text:
             errors.append(
                 f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume {const}"
@@ -87,6 +96,11 @@ def helper_policy_violations() -> list[str]:
     if "hal_input_followup_prepare" not in text:
         errors.append(
             f"{COMMON_HELPER_FILE.relative_to(ROOT)} does not consume hal_input_followup_prepare"
+        )
+    help_text = (COMMON_DIR / "ui_help.s").read_text(encoding="utf-8", errors="replace")
+    if "hal_input_help_footer_uses_esc_stop" not in help_text:
+        errors.append(
+            "commodore/common/ui_help.s does not consume hal_input_help_footer_uses_esc_stop"
         )
     return errors
 

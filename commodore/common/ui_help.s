@@ -24,7 +24,7 @@
 .const HELP_FRAME_RIGHT_COL = SCREEN_COLS - 1
 .const HELP_FRAME_HSEG_COUNT = SCREEN_COLS - 2
 .const HELP_TITLE_COL = (SCREEN_COLS - 17) / 2
-#if C128
+#if hal_input_help_footer_uses_esc_stop
 .const HELP_FOOTER_LEN = 28
 .const HELP_FOOTER_MORE_LEN = 33
 #else
@@ -328,7 +328,7 @@ help_draw_hborder:
     jmp hal_screen_put_char             // tail call
 
 // Local footer strings remain in the overlay.
-#if C128
+#if hal_input_help_footer_uses_esc_stop
 uh_press_key_str: .text "SPACE/RETURN/Q/ESC/STOP done" ; .byte 0
 uh_next_key_str: .text "SPACE/RETURN next Q/ESC/STOP quit" ; .byte 0
 #else

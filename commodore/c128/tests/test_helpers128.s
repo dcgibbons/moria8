@@ -14,6 +14,7 @@
 .const hal_input_modal_escape_primary = $ae
 .const hal_input_modal_escape_secondary = $03
 .const hal_input_flush_run_cancel_buffer = false
+.const hal_input_help_footer_uses_esc_stop = true
 
 hal_input_followup_prepare:
     rts
