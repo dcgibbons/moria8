@@ -999,6 +999,10 @@ target-bank setup, and post-load channel cleanup.
       Twenty-fourth slice: common monster-recall title/footer placement no
       longer branches on `C128`; the shared centering expressions now derive
       from `SCREEN_COLS`, which is already backed by the layout HAL.
+      Twenty-fifth slice: common store rendering no longer branches on `C128`
+      to choose the price column. Each platform layout backend exports
+      `hal_layout_store_price_col`, and `check_hal_layout_exports.py` verifies
+      the policy constant is present and resolvable.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

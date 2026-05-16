@@ -12,3 +12,4 @@
 .const hal_layout_input_row = 24
 .const hal_layout_map_cols = 198
 .const hal_layout_map_rows = 66
+.const hal_layout_store_price_col = 68

@@ -20,11 +20,7 @@
 .const HG_MIN_CONCESSION = 5
 .const HG_MAX_CONCESSION = 15
 
-#if C128
-.const USTORE_PRICE_COL = SCREEN_COLS - 12
-#else
-.const USTORE_PRICE_COL = 31
-#endif
+.const USTORE_PRICE_COL = hal_layout_store_price_col
 
 // Message table indices for show_msg
 .const MSG_GOLD       = 0

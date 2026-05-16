@@ -47,6 +47,10 @@ MAP_CONSTANTS = {
     "hal_layout_map_rows": "map_rows",
 }
 
+POLICY_CONSTANTS = (
+    "hal_layout_store_price_col",
+)
+
 
 def parse_consts(path: Path) -> dict[str, str]:
     constants: dict[str, str] = {}
@@ -129,6 +133,12 @@ def main() -> int:
                     f"{platform}: {hal_name}={hal_value} differs from "
                     f"{map_name}={map_value}"
                 )
+        for hal_name in POLICY_CONSTANTS:
+            if hal_name not in layout_consts:
+                errors.append(f"{platform}: missing {hal_name} in {layout_path.relative_to(ROOT)}")
+                continue
+            if resolve_const(layout_consts, hal_name) is None:
+                errors.append(f"{platform}: cannot resolve {hal_name} in {layout_path.relative_to(ROOT)}")
 
     if errors:
         print("HAL layout export check failed:")
@@ -136,7 +146,7 @@ def main() -> int:
             print(f"  {error}")
         return 1
 
-    total_constants = len(REQUIRED_CONSTANTS) + len(MAP_CONSTANTS)
+    total_constants = len(REQUIRED_CONSTANTS) + len(MAP_CONSTANTS) + len(POLICY_CONSTANTS)
     print(f"HAL layout export check passed ({total_constants} constants x {len(PLATFORMS)} platforms).")
     return 0
 
