@@ -29,6 +29,7 @@
 .const STATUS_ROW  = hal_layout_status_row
 .const INPUT_ROW   = hal_layout_input_row
 .const hal_screen_full_clear_uses_bulk = false
+.const hal_screen_box_vertical_char = $21
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
 .assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows

@@ -52,11 +52,7 @@
 .const BOX_BL = $2b  // +
 .const BOX_BR = $2b  // +
 .const BOX_H  = $2d  // -
-#if PLUS4
-.const BOX_V  = $5d  // TED locked charset side rule
-#else
-.const BOX_V  = $21  // !
-#endif
+.const BOX_V  = hal_screen_box_vertical_char
 
 // ============================================================
 // Subroutines

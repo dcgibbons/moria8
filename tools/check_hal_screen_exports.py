@@ -32,6 +32,7 @@ REQUIRED_LABELS = (
 
 REQUIRED_CONSTANTS = (
     "hal_screen_full_clear_uses_bulk",
+    "hal_screen_box_vertical_char",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -81,11 +82,13 @@ def common_policy_violations() -> list[str]:
         errors.append(
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)}:{line} uses target conditional in screen helper"
         )
-    for const in REQUIRED_CONSTANTS:
-        if const not in text:
-            errors.append(
-                f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume {const}"
-            )
+    if "hal_screen_full_clear_uses_bulk" not in text:
+        errors.append(
+            f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume hal_screen_full_clear_uses_bulk"
+        )
+    help_text = (COMMON_DIR / "ui_help.s").read_text(encoding="utf-8", errors="replace")
+    if "hal_screen_box_vertical_char" not in help_text:
+        errors.append("commodore/common/ui_help.s does not consume hal_screen_box_vertical_char")
     return errors
 
 

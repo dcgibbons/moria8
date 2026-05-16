@@ -13,6 +13,8 @@
 //   hal_screen_unblank
 //   hal_screen_begin_bulk
 //   hal_screen_end_bulk
+//   hal_screen_full_clear_uses_bulk
+//   hal_screen_box_vertical_char
 //
 // Common code passes logical colors and screen intent. Platform code maps them
 // to VIC-II, VDC, TED, or other display hardware.

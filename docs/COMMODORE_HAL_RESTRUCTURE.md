@@ -976,6 +976,11 @@ target-bank setup, and post-load channel cleanup.
       screen backend exports `hal_screen_full_clear_uses_bulk`, and
       `check_hal_screen_exports.py` verifies both the platform constant and the
       `ui_help_clear.s` call site.
+      Twentieth slice: the help-screen vertical frame glyph is now
+      platform-owned screen policy. C64/C128 export `!` while Plus/4 exports
+      the TED locked-charset side-rule glyph via `hal_screen_box_vertical_char`,
+      and `check_hal_screen_exports.py` verifies the common help screen consumes
+      that HAL constant instead of branching directly on `PLUS4`.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
