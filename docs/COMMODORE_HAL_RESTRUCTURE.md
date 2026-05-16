@@ -1024,6 +1024,11 @@ target-bank setup, and post-load channel cleanup.
       printed. Each platform layout backend exports `hal_layout_status_*`
       policy constants, preserving the 40-column row-21 marker and C128 row-23
       marker behavior exactly.
+      Thirtieth slice: common modal gameplay-view restore no longer branches on
+      non-C128 tier-restore or C128 perf-marker policy. Each platform lifecycle
+      backend exports `hal_platform_restore_tier_after_overlay` and
+      `hal_platform_mark_modal_restore_perf`, preserving tier restoration on
+      C64/Plus/4 and PERF_P1 modal-restore marking on C128.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

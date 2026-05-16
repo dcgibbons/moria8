@@ -21,7 +21,7 @@ ui_prepare_fullscreen_transition:
 // Preserves: nothing
 ui_view_restore_modal_overlay:
     jsr ui_reset_message_state
-#if !C128
+#if hal_platform_restore_tier_after_overlay
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
@@ -30,10 +30,8 @@ ui_view_restore_modal_overlay:
     sta zp_text_color
 	    jsr ui_help_clear_all
 	    jsr viewport_update
-#if C128
-#if PERF_P1
+#if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore
-#endif
 #endif
 	    jsr render_viewport
 	    jsr status_draw
@@ -47,17 +45,15 @@ ui_view_restore_modal_overlay:
 // Preserves: nothing
 ui_view_redraw_gameplay_view:
     jsr ui_reset_message_state
-#if !C128
+#if hal_platform_restore_tier_after_overlay
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
 #endif
 	    jsr hal_screen_clear
 	    jsr viewport_update
-#if C128
-#if PERF_P1
+#if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore
-#endif
 #endif
 	    jsr render_viewport
 	    jsr status_draw

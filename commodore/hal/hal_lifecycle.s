@@ -32,3 +32,7 @@
 // Policy constants:
 // - hal_platform_reassert_before_message_render: boolean; true when the
 //   platform must reassert runtime vectors/state before message rendering.
+// - hal_platform_restore_tier_after_overlay: boolean; true when modal overlay
+//   dismissal must restore the live dungeon tier before gameplay redraw.
+// - hal_platform_mark_modal_restore_perf: boolean; true when modal restore
+//   should mark the PERF_P1 modal-restore reason before viewport rendering.

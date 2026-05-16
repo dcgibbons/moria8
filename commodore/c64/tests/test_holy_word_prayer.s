@@ -3,9 +3,6 @@
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
 
-.pc = $E000 "Result Buffer"
-thw_results: .fill 2, $ff
-
 .pc = $080E "Bootstrap"
 
 .encoding "screencode_mixed"
@@ -272,6 +269,8 @@ test_start:
     lda #$00
     sta thw_results + 1
     jmp test_finish
+
+thw_results: .fill 2, $ff
 
 test_done_break:
     brk

@@ -30,6 +30,8 @@ FORBIDDEN_COMMON_CALLS = (
 
 REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_reassert_before_message_render",
+    "hal_platform_restore_tier_after_overlay",
+    "hal_platform_mark_modal_restore_perf",
 )
 
 
@@ -70,10 +72,15 @@ def main() -> int:
         for name in REQUIRED_POLICY_CONSTANTS:
             if name not in constants:
                 policy_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
-    ui_messages_text = (COMMON_DIR / "ui_messages.s").read_text(encoding="utf-8", errors="replace")
-    for name in REQUIRED_POLICY_CONSTANTS:
-        if name not in ui_messages_text:
-            policy_missing.append(f"commodore/common/ui_messages.s does not consume {name}")
+    policy_consumers = {
+        "hal_platform_reassert_before_message_render": COMMON_DIR / "ui_messages.s",
+        "hal_platform_restore_tier_after_overlay": COMMON_DIR / "ui_restore.s",
+        "hal_platform_mark_modal_restore_perf": COMMON_DIR / "ui_restore.s",
+    }
+    for name, consumer_path in policy_consumers.items():
+        consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")
+        if name not in consumer_text:
+            policy_missing.append(f"{consumer_path.relative_to(ROOT)} does not consume {name}")
 
     if missing or violations or policy_missing:
         if missing:
