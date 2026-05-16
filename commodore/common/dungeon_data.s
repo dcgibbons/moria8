@@ -23,13 +23,8 @@
 .const TOWN_START_X = 31
 .const TOWN_START_Y = 18
 
-#if C128
-.const MAP_COLS     = C128_MAP_COLS
-.const MAP_ROWS     = C128_MAP_ROWS
-#else
-.const MAP_COLS     = MAP40_COLS
-.const MAP_ROWS     = MAP40_ROWS
-#endif
+.const MAP_COLS     = hal_layout_map_cols
+.const MAP_ROWS     = hal_layout_map_rows
 .const MAP_SIZE     = MAP_COLS * MAP_ROWS
 
 // Tile type values (upper nibble)
@@ -162,11 +157,7 @@ level_entry_dir: .byte 0  // 0=descended (place at stairs_up), 1=ascended (place
 // Compile-time validation
 // ============================================================
 .assert "Map row table size", map_row_hi - map_row_lo, MAP_ROWS
-#if C128
-.assert "C128 map size = 13068", MAP_SIZE, 13068
-#else
-.assert "40-column map size = 3840", MAP_SIZE, 3840
-#endif
+.assert "Platform map size matches HAL layout", MAP_SIZE, hal_layout_map_cols * hal_layout_map_rows
 .assert "Town flags = $0C", TOWN_FLAGS, $0c
 .assert "Store count", STORE_COUNT, 8
 .assert "Town map width", TOWN_MAP_COLS, 66

@@ -987,6 +987,10 @@ target-bank setup, and post-load channel cleanup.
       preload filename display, and C128 title block drawing use that HAL entry;
       and `check_hal_screen_exports.py` rejects direct common calls to the
       backend-local cursor helper.
+      Twenty-second slice: common dungeon map dimensions no longer branch on
+      `C128`. `dungeon_data.s` now defines `MAP_COLS`/`MAP_ROWS` from
+      `hal_layout_map_cols`/`hal_layout_map_rows`, leaving the platform layout
+      files as the owner of map geometry policy.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
