@@ -55,6 +55,24 @@ POLICY_CONSTANTS = (
     "hal_layout_inventory_footer_col",
     "hal_layout_inventory_select_col",
     "hal_layout_inventory_identify_col",
+    "hal_layout_status_row21_name_col",
+    "hal_layout_status_row21_state_col",
+    "hal_layout_status_row21_lv_col",
+    "hal_layout_status_row21_dl_col",
+    "hal_layout_status_row22_st_col",
+    "hal_layout_status_row22_in_col",
+    "hal_layout_status_row22_wi_col",
+    "hal_layout_status_row22_dx_col",
+    "hal_layout_status_row22_co_col",
+    "hal_layout_status_row22_ch_col",
+    "hal_layout_status_row23_hp_col",
+    "hal_layout_status_row23_mp_col",
+    "hal_layout_status_row23_ac_col",
+    "hal_layout_status_row23_au_col",
+    "hal_layout_status_row23_hunger_col",
+    "hal_layout_status_row23_state_col",
+    "hal_layout_status_searching_on_row21",
+    "hal_layout_status_searching_on_row23",
 )
 
 
@@ -74,6 +92,10 @@ def resolve_const(constants: dict[str, str], name: str) -> int | None:
     seen: set[str] = set()
     value = constants.get(name)
     while value is not None:
+        if value == "true":
+            return 1
+        if value == "false":
+            return 0
         if value.startswith("$"):
             return int(value[1:], 16)
         if re.fullmatch(r"[0-9]+", value):

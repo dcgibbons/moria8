@@ -8,39 +8,22 @@
 //
 // Only redraws when zp_ui_dirty bit 0 is set (dirty flag).
 
-#if C128
-.const STS_ROW21_NAME_COL = 1
-.const STS_ROW21_LV_COL = 58
-.const STS_ROW21_DL_COL = 66
-.const STS_ROW22_ST_COL = 1
-.const STS_ROW22_IN_COL = 14
-.const STS_ROW22_WI_COL = 27
-.const STS_ROW22_DX_COL = 40
-.const STS_ROW22_CO_COL = 53
-.const STS_ROW22_CH_COL = 66
-.const STS_ROW23_HP_COL = 1
-.const STS_ROW23_MP_COL = 16
-.const STS_ROW23_AC_COL = 31
-.const STS_ROW23_AU_COL = 44
-.const STS_ROW23_HUNGER_COL = 63
-.const STS_ROW23_STATE_COL = 70
-#else
-.const STS_ROW21_NAME_COL = 0
-.const STS_ROW21_STATE_COL = 19
-.const STS_ROW21_LV_COL = 28
-.const STS_ROW21_DL_COL = 34
-.const STS_ROW22_ST_COL = 0
-.const STS_ROW22_IN_COL = 7
-.const STS_ROW22_WI_COL = 14
-.const STS_ROW22_DX_COL = 21
-.const STS_ROW22_CO_COL = 28
-.const STS_ROW22_CH_COL = 35
-.const STS_ROW23_HP_COL = 0
-.const STS_ROW23_MP_COL = 10
-.const STS_ROW23_AC_COL = 19
-.const STS_ROW23_AU_COL = 25
-.const STS_ROW23_HUNGER_COL = 34
-#endif
+.const STS_ROW21_NAME_COL = hal_layout_status_row21_name_col
+.const STS_ROW21_STATE_COL = hal_layout_status_row21_state_col
+.const STS_ROW21_LV_COL = hal_layout_status_row21_lv_col
+.const STS_ROW21_DL_COL = hal_layout_status_row21_dl_col
+.const STS_ROW22_ST_COL = hal_layout_status_row22_st_col
+.const STS_ROW22_IN_COL = hal_layout_status_row22_in_col
+.const STS_ROW22_WI_COL = hal_layout_status_row22_wi_col
+.const STS_ROW22_DX_COL = hal_layout_status_row22_dx_col
+.const STS_ROW22_CO_COL = hal_layout_status_row22_co_col
+.const STS_ROW22_CH_COL = hal_layout_status_row22_ch_col
+.const STS_ROW23_HP_COL = hal_layout_status_row23_hp_col
+.const STS_ROW23_MP_COL = hal_layout_status_row23_mp_col
+.const STS_ROW23_AC_COL = hal_layout_status_row23_ac_col
+.const STS_ROW23_AU_COL = hal_layout_status_row23_au_col
+.const STS_ROW23_HUNGER_COL = hal_layout_status_row23_hunger_col
+.const STS_ROW23_STATE_COL = hal_layout_status_row23_state_col
 
 // ============================================================
 // Subroutines
@@ -224,7 +207,7 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-#if !C128
+#if hal_layout_status_searching_on_row21
     lda player_data + PL_FLAGS
     and #PLF_SEARCHING
     beq !sd_row21_state_done+
@@ -500,7 +483,7 @@ status_draw:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-#if C128
+#if hal_layout_status_searching_on_row23
     lda player_data + PL_FLAGS
     and #PLF_SEARCHING
     beq !sd_row23_state_done+

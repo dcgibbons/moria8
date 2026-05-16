@@ -78,8 +78,6 @@ commodore/common/ui_help.s	target-conditional	#if C128
 commodore/common/ui_help.s	target-conditional	#if PLUS4
 commodore/common/ui_restore.s	target-conditional	#if !C128
 commodore/common/ui_restore.s	target-conditional	#if C128
-commodore/common/ui_status.s	target-conditional	#if !C128
-commodore/common/ui_status.s	target-conditional	#if C128
 commodore/common/ui_wizard.s	target-conditional	#if !C128
 commodore/common/ui_wizard.s	target-conditional	#if C128
 commodore/common/wizard.s	target-conditional	#if !C128

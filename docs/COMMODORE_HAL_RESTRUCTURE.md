@@ -1019,6 +1019,11 @@ target-bank setup, and post-load channel cleanup.
       `hal_platform_reassert_before_message_render`, with C128 preserving the
       existing reassertion path and C64/Plus/4 preserving the previous no-op
       behavior at that call site.
+      Twenty-ninth slice: common status-bar rendering no longer branches on
+      `C128` to choose column placement or where the searching marker is
+      printed. Each platform layout backend exports `hal_layout_status_*`
+      policy constants, preserving the 40-column row-21 marker and C128 row-23
+      marker behavior exactly.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
