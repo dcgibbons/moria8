@@ -1033,6 +1033,10 @@ target-bank setup, and post-load channel cleanup.
       branches directly on `C128`. The C128-only helper now lives in the C128
       resident-select payload beside the C128 modal callers; C64/Plus/4 continue
       to omit the unused helper.
+      Thirty-second slice: common character-sheet column placement no longer
+      branches on `C128`. Each platform layout backend exports the
+      `hal_layout_character_*` column policy constants, preserving the exact
+      existing 40-column and C128 80-column placements.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

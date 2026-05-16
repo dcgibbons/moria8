@@ -18,29 +18,16 @@
 //   Row 12: Depth: Town   Hunger: Full
 //   Row 14: [PRESS ANY KEY]
 
-#if C128
-.const UCHAR_TITLE_COL = (SCREEN_COLS - 14) / 2
-.const UCHAR_WIZARD_COL = SCREEN_COLS - 9
-.const UCHAR_FOOTER_COL = (SCREEN_COLS - 13) / 2
-.const UCHAR_COL_L = (SCREEN_COLS - 36) / 2
-.const UCHAR_COL_NAME = UCHAR_COL_L + 6
-.const UCHAR_COL_MID = UCHAR_COL_L + 17
-.const UCHAR_COL_R = UCHAR_COL_L + 21
-.const UCHAR_STAT_COL0 = UCHAR_COL_L
-.const UCHAR_STAT_COL1 = UCHAR_COL_L + 13
-.const UCHAR_STAT_COL2 = UCHAR_COL_L + 26
-#else
-.const UCHAR_TITLE_COL = 12
-.const UCHAR_WIZARD_COL = 32
-.const UCHAR_FOOTER_COL = 10
-.const UCHAR_COL_L = 1
-.const UCHAR_COL_NAME = 7
-.const UCHAR_COL_MID = 18
-.const UCHAR_COL_R = 22
-.const UCHAR_STAT_COL0 = 1
-.const UCHAR_STAT_COL1 = 14
-.const UCHAR_STAT_COL2 = 27
-#endif
+.const UCHAR_TITLE_COL = hal_layout_character_title_col
+.const UCHAR_WIZARD_COL = hal_layout_character_wizard_col
+.const UCHAR_FOOTER_COL = hal_layout_character_footer_col
+.const UCHAR_COL_L = hal_layout_character_col_l
+.const UCHAR_COL_NAME = hal_layout_character_col_name
+.const UCHAR_COL_MID = hal_layout_character_col_mid
+.const UCHAR_COL_R = hal_layout_character_col_r
+.const UCHAR_STAT_COL0 = hal_layout_character_stat_col0
+.const UCHAR_STAT_COL1 = hal_layout_character_stat_col1
+.const UCHAR_STAT_COL2 = hal_layout_character_stat_col2
 
 // ============================================================
 // Subroutines
