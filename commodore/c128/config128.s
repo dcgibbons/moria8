@@ -12,6 +12,10 @@
 .const COLUMNS_40 = $00
 .const COLUMNS_80 = $80
 
+#import "hal/entropy_consts.s"
+#import "hal/lifecycle_policy.s"
+#import "hal/storage_title_name.s"
+
 // detect_machine — Set C128/80-col flags (hardcoded)
 // Output: zp_machine_type = MACHINE_C128
 //         zp_column_mode  = COLUMNS_80
@@ -27,10 +31,6 @@ detect_machine:
 // ============================================================
 // KERNAL revision byte address (same location as C64, different value)
 .const KERNAL_REV = $ff80
-
-#import "hal/entropy_consts.s"
-#import "hal/lifecycle_policy.s"
-#import "hal/storage_title_name.s"
 
 // ============================================================
 // Death source constants (used by turn.s, player_items.s, score.s)

@@ -1029,6 +1029,10 @@ target-bank setup, and post-load channel cleanup.
       backend exports `hal_platform_restore_tier_after_overlay` and
       `hal_platform_mark_modal_restore_perf`, preserving tier restoration on
       C64/Plus/4 and PERF_P1 modal-restore marking on C128.
+      Thirty-first slice: common fullscreen transition preparation no longer
+      branches directly on `C128`. The C128-only helper now lives in the C128
+      resident-select payload beside the C128 modal callers; C64/Plus/4 continue
+      to omit the unused helper.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

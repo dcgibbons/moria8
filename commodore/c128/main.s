@@ -3231,6 +3231,13 @@ c128_resident_items_end:
 
 .segment C128ResidentSelect
 c128_resident_select_start:
+// ui_prepare_fullscreen_transition — clear the screen and reset message-row
+// state before a C128 full-screen prompt or status transition.
+ui_prepare_fullscreen_transition:
+    jsr hal_screen_clear
+    jsr ui_reset_message_state
+    rts
+
 #define ITEM_ACTIONS_OVERLAY_EXTERNAL
 #define PLAYER_RECALC_EQUIPMENT_EXTERNAL
 #define PLAYER_ITEM_COMMANDS_EXTERNAL

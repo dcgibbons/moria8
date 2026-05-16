@@ -65,9 +65,6 @@ detect_machine:
 !done:
     rts
 
-// ============================================================
-// Death source constants (used by turn.s, player_items.s, score.s)
-// ============================================================
 // kernal_load — Platform LOAD wrapper (C64: direct KERNAL call)
 kernal_load:
     jmp $ffd5
