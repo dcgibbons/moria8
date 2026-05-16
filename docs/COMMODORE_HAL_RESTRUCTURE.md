@@ -1042,6 +1042,12 @@ target-bank setup, and post-load channel cleanup.
       `hal_platform_character_sheet_begin` only when the lifecycle policy
       enables it; C128 owns the existing resync and summary counters, while
       C64/Plus/4 preserve the previous no-op behavior.
+      Thirty-fourth slice: common wizard menu layout no longer branches on
+      `C128`. Each platform layout backend exports `hal_layout_wizard_*`
+      policy constants for compact-menu selection and placement, preserving
+      the existing 40-column and C128 placements. Wizard cancel handling is
+      intentionally normalized to the shared modal escape classifier instead of
+      keeping a wizard-specific escape-key special case.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
