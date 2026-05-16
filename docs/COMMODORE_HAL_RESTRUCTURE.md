@@ -1037,6 +1037,11 @@ target-bank setup, and post-load channel cleanup.
       branches on `C128`. Each platform layout backend exports the
       `hal_layout_character_*` column policy constants, preserving the exact
       existing 40-column and C128 80-column placements.
+      Thirty-third slice: common character-sheet entry no longer branches on
+      `C128` for runtime resync or C128 test bookkeeping. Common code now calls
+      `hal_platform_character_sheet_begin` only when the lifecycle policy
+      enables it; C128 owns the existing resync and summary counters, while
+      C64/Plus/4 preserve the previous no-op behavior.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

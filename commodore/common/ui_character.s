@@ -36,17 +36,8 @@
 // ui_char_display — Show character sheet
 // Preserves: nothing
 ui_char_display:
-#if C128
-    jsr hal_platform_runtime_resync
-#if C128_TEST_SCRIPTED_INPUT || C128_TEST_PERF_P1_TRACE
-    lda #1
-    sta c128_test_summary_seen
-    inc c128_test_summary_count
-#elif C128_TEST_CACHE_SURVIVAL
-    lda #1
-    sta c128_test_summary_seen
-    inc c128_test_summary_count
-#endif
+#if hal_platform_character_sheet_begin_enabled
+    jsr hal_platform_character_sheet_begin
 #endif
     lda #COL_WHITE
     sta zp_text_color

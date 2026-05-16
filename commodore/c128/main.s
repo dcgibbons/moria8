@@ -711,6 +711,19 @@ c128_return_to_runtime_after_kernal:
     pla
     rts
 
+hal_platform_character_sheet_begin:
+    jsr c128_restore_runtime_guards
+#if C128_TEST_SCRIPTED_INPUT || C128_TEST_PERF_P1_TRACE
+    lda #1
+    sta c128_test_summary_seen
+    inc c128_test_summary_count
+#elif C128_TEST_CACHE_SURVIVAL
+    lda #1
+    sta c128_test_summary_seen
+    inc c128_test_summary_count
+#endif
+    rts
+
 platform_services_install128:
     lda #$4c
     sta platform_main_loop_begin_api

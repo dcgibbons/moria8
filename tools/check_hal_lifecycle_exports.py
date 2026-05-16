@@ -15,11 +15,20 @@ PLATFORMS = {
     "c128": ROOT / "commodore/c128/hal/lifecycle_policy.s",
     "plus4": ROOT / "commodore/plus4/hal/lifecycle_policy.s",
 }
+PLATFORM_MAINS = {
+    "c64": ROOT / "commodore/c64/main.s",
+    "c128": ROOT / "commodore/c128/main.s",
+    "plus4": ROOT / "commodore/plus4/main.s",
+}
 
 REQUIRED_EXPORTS = (
     "hal_platform_main_loop_begin",
     "hal_platform_vector_reassert",
     "hal_platform_runtime_resync",
+)
+
+REQUIRED_DIRECT_EXPORTS = (
+    "hal_platform_character_sheet_begin",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -32,6 +41,7 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_reassert_before_message_render",
     "hal_platform_restore_tier_after_overlay",
     "hal_platform_mark_modal_restore_perf",
+    "hal_platform_character_sheet_begin_enabled",
 )
 
 
@@ -64,6 +74,7 @@ def main() -> int:
     missing = [name for name in REQUIRED_EXPORTS if name not in labels]
     violations = common_call_violations()
     policy_missing: list[str] = []
+    direct_missing: list[str] = []
     for platform, path in PLATFORMS.items():
         if not path.exists():
             policy_missing.append(f"{platform}: missing {path.relative_to(ROOT)}")
@@ -72,6 +83,13 @@ def main() -> int:
         for name in REQUIRED_POLICY_CONSTANTS:
             if name not in constants:
                 policy_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
+    for platform, path in PLATFORM_MAINS.items():
+        if platform != "c128":
+            continue
+        labels = exported_labels(path)
+        for name in REQUIRED_DIRECT_EXPORTS:
+            if name not in labels:
+                direct_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
     policy_consumers = {
         "hal_platform_reassert_before_message_render": COMMON_DIR / "ui_messages.s",
         "hal_platform_restore_tier_after_overlay": COMMON_DIR / "ui_restore.s",
@@ -82,10 +100,23 @@ def main() -> int:
         if name not in consumer_text:
             policy_missing.append(f"{consumer_path.relative_to(ROOT)} does not consume {name}")
 
-    if missing or violations or policy_missing:
+    character_text = (COMMON_DIR / "ui_character.s").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if "hal_platform_character_sheet_begin" not in character_text:
+        policy_missing.append(
+            "commodore/common/ui_character.s does not consume "
+            "hal_platform_character_sheet_begin"
+        )
+
+    if missing or violations or policy_missing or direct_missing:
         if missing:
             print("Missing lifecycle HAL service exports:")
             for name in missing:
+                print(f"  {name}")
+        if direct_missing:
+            print("Missing direct lifecycle HAL exports:")
+            for name in direct_missing:
                 print(f"  {name}")
         if policy_missing:
             print("Missing lifecycle HAL policy constants:")
@@ -100,6 +131,7 @@ def main() -> int:
     print(
         "HAL lifecycle export check passed "
         f"({len(REQUIRED_EXPORTS)} runtime services, "
+        f"{len(REQUIRED_DIRECT_EXPORTS)} direct services, "
         f"{len(REQUIRED_POLICY_CONSTANTS)} policy constants, common call-site audit)."
     )
     return 0

@@ -7,6 +7,7 @@
 //   hal_platform_main_loop_begin
 //   hal_platform_vector_reassert
 //   hal_platform_runtime_resync
+//   hal_platform_character_sheet_begin
 //   hal_platform_shutdown
 //   hal_platform_panic
 //
@@ -24,6 +25,9 @@
 //   clobbers A/X/Y allowed; reasserts runtime vectors after OS-visible paths.
 // - hal_platform_runtime_resync: input none; output C=0 success/C=1 A=status;
 //   clobbers A/X/Y allowed; restores display/banking state after OS calls.
+// - hal_platform_character_sheet_begin: input none; output C=0 success/C=1
+//   A=status; clobbers A/X/Y allowed; reasserts platform state needed before
+//   character-sheet rendering and owns platform-specific test instrumentation.
 // - hal_platform_shutdown: input none; output ignored; clobbers A/X/Y allowed;
 //   returns platform to a safe OS-visible state when possible.
 // - hal_platform_panic: input A=status; output does not promise return;
@@ -36,3 +40,6 @@
 //   dismissal must restore the live dungeon tier before gameplay redraw.
 // - hal_platform_mark_modal_restore_perf: boolean; true when modal restore
 //   should mark the PERF_P1 modal-restore reason before viewport rendering.
+// - hal_platform_character_sheet_begin_enabled: boolean; true when the
+//   platform exports and requires hal_platform_character_sheet_begin before
+//   character-sheet rendering.

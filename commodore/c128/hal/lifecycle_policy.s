@@ -4,3 +4,4 @@
 .const hal_platform_reassert_before_message_render = true
 .const hal_platform_restore_tier_after_overlay = false
 .const hal_platform_mark_modal_restore_perf = true
+.const hal_platform_character_sheet_begin_enabled = true

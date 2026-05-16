@@ -18,6 +18,9 @@ hal_platform_vector_reassert:
 hal_platform_runtime_resync:
     lda #3
     jmp hal_missing_service
+hal_platform_character_sheet_begin:
+    lda #8
+    jmp hal_missing_service
 hal_platform_shutdown:
     lda #4
     jmp hal_missing_service
