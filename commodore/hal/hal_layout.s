@@ -14,6 +14,8 @@
 //   hal_layout_map_cols
 //   hal_layout_map_rows
 //   hal_layout_store_price_col
+//   hal_layout_equipment_title_col
+//   hal_layout_equipment_footer_col
 //
 // These constants describe common layout intent. They are not hardware
 // addresses and must match the platform's screen implementation. Platform code

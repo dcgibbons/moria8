@@ -1003,6 +1003,11 @@ target-bank setup, and post-load channel cleanup.
       to choose the price column. Each platform layout backend exports
       `hal_layout_store_price_col`, and `check_hal_layout_exports.py` verifies
       the policy constant is present and resolvable.
+      Twenty-sixth slice: common equipment screen placement no longer branches
+      on `C128` to choose title and footer columns. Each platform layout
+      backend exports `hal_layout_equipment_title_col` and
+      `hal_layout_equipment_footer_col`, preserving the existing 40-column
+      footer placement instead of deriving a subtly different centered value.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

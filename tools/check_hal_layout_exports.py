@@ -49,6 +49,8 @@ MAP_CONSTANTS = {
 
 POLICY_CONSTANTS = (
     "hal_layout_store_price_col",
+    "hal_layout_equipment_title_col",
+    "hal_layout_equipment_footer_col",
 )
 
 

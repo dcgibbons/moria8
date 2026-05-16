@@ -13,3 +13,5 @@
 .const hal_layout_map_cols = 198
 .const hal_layout_map_rows = 66
 .const hal_layout_store_price_col = 68
+.const hal_layout_equipment_title_col = 35
+.const hal_layout_equipment_footer_col = 33

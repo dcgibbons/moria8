@@ -3,13 +3,8 @@
 //
 // Full-screen equipment view for slots 22-29.
 
-#if C128
-.const UEQ_TITLE_COL = (SCREEN_COLS - 9) / 2
-.const UEQ_FOOTER_COL = (SCREEN_COLS - 13) / 2
-#else
-.const UEQ_TITLE_COL = 15
-.const UEQ_FOOTER_COL = 12
-#endif
+.const UEQ_TITLE_COL = hal_layout_equipment_title_col
+.const UEQ_FOOTER_COL = hal_layout_equipment_footer_col
 
 // ui_equip_display — Show equipped items (slots 22-29)
 // 8 slots: WEAPON, BODY, SHIELD, HEAD, HANDS, FEET, LIGHT, RING
