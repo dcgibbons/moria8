@@ -16,13 +16,8 @@
 
 #importonce
 
-#if C128
 .const URCL_TITLE_COL = (SCREEN_COLS - 14) / 2
 .const URCL_FOOTER_COL = (SCREEN_COLS - 13) / 2
-#else
-.const URCL_TITLE_COL = 13
-.const URCL_FOOTER_COL = 13
-#endif
 
 // ============================================================
 // ui_recall_display — Show recall screen for one creature

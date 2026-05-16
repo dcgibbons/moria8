@@ -996,6 +996,9 @@ target-bank setup, and post-load channel cleanup.
       so the platform input policy owns whether help footers advertise
       ESC/STOP dismissal, and `check_hal_input_exports.py` verifies both the
       platform constants and the common help screen call site.
+      Twenty-fourth slice: common monster-recall title/footer placement no
+      longer branches on `C128`; the shared centering expressions now derive
+      from `SCREEN_COLS`, which is already backed by the layout HAL.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
