@@ -1113,6 +1113,12 @@ target-bank setup, and post-load channel cleanup.
       `hal_platform_string_bank_load_invalidates_tier`, preserving tier
       invalidation on C64/Plus/4 and the previous Bank-1 metadata behavior on
       C128.
+      Forty-seventh slice: common spell/prayer command code no longer branches
+      on `C128` to decide whether helper implementation files are imported
+      in-place or supplied externally by the platform runtime-banked payload.
+      Each lifecycle backend exports `hal_platform_player_magic_helpers_external`,
+      preserving separate C128 runtime-banked placement and C64/Plus/4 local
+      helper imports.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
