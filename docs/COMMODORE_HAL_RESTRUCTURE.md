@@ -1048,6 +1048,12 @@ target-bank setup, and post-load channel cleanup.
       the existing 40-column and C128 placements. Wizard cancel handling is
       intentionally normalized to the shared modal escape classifier instead of
       keeping a wizard-specific escape-key special case.
+      Thirty-fifth slice: common Wizard-mode execution no longer branches on
+      `C128` to choose the overlay entry path, resident 40-column command
+      bodies, or reveal-level implementation. Each platform lifecycle backend
+      exports the corresponding `hal_platform_wizard_*` policy constants,
+      preserving C128's overlay/inline reveal path and C64/Plus/4's resident
+      40-column/trampoline path.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

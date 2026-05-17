@@ -127,7 +127,7 @@ wizard_generate_item_execute:
 // marking every solid-rock tile as explored. Reveals lit room geometry plus
 // traversable/special features, then exposes hidden doors.
 wizard_reveal_level:
-#if !C128
+#if HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
     jmp tramp_reveal_floorplan
 #else
     ldx #0
@@ -164,7 +164,7 @@ wizard_reveal_level:
 #endif
 
 cmd_wizard_entry:
-#if C128
+#if HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
     jsr tramp_ui_wizard_display
     jmp main_loop
 #else
@@ -239,7 +239,7 @@ cmd_wizard_entry:
     jmp wizard_cmd_level_jump
 #endif
 
-#if !C128
+#if HAL_PLATFORM_WIZARD_40COL_RESIDENT
 wizard_cmd_heal_cure:
     lda player_data + PL_MHP_LO
     sta player_data + PL_HP_LO

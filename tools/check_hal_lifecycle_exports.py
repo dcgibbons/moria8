@@ -42,6 +42,9 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_restore_tier_after_overlay",
     "hal_platform_mark_modal_restore_perf",
     "hal_platform_character_sheet_begin_enabled",
+    "hal_platform_wizard_entry_uses_overlay",
+    "hal_platform_wizard_40col_resident_enabled",
+    "hal_platform_wizard_reveal_uses_trampoline",
 )
 
 
@@ -99,6 +102,18 @@ def main() -> int:
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")
         if name not in consumer_text:
             policy_missing.append(f"{consumer_path.relative_to(ROOT)} does not consume {name}")
+
+    wizard_text = (COMMON_DIR / "wizard.s").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    wizard_policy_consumers = (
+        "HAL_PLATFORM_WIZARD_ENTRY_OVERLAY",
+        "HAL_PLATFORM_WIZARD_40COL_RESIDENT",
+        "HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE",
+    )
+    for name in wizard_policy_consumers:
+        if name not in wizard_text:
+            policy_missing.append(f"commodore/common/wizard.s does not consume {name}")
 
     character_text = (COMMON_DIR / "ui_character.s").read_text(
         encoding="utf-8", errors="replace"
