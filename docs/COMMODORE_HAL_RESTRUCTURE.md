@@ -1119,6 +1119,11 @@ target-bank setup, and post-load channel cleanup.
       Each lifecycle backend exports `hal_platform_player_magic_helpers_external`,
       preserving separate C128 runtime-banked placement and C64/Plus/4 local
       helper imports.
+      Forty-eighth slice: common item-action key reads no longer branch on
+      `C128` to restore overlay banking after input. Each lifecycle backend
+      exports `hal_platform_item_action_key_restores_bank`, preserving the C128
+      all-RAM/no-ROM restore after `hal_input_get_key` and the previous direct
+      return path on C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

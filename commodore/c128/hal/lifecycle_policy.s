@@ -10,6 +10,7 @@
 .const hal_platform_character_sheet_begin_enabled = true
 .const hal_platform_character_background_resync = true
 .const hal_platform_player_magic_helpers_external = true
+.const hal_platform_item_action_key_restores_bank = true
 .const hal_platform_wizard_entry_uses_overlay = 1
 .const hal_platform_wizard_40col_resident_enabled = 0
 .const hal_platform_wizard_reveal_uses_trampoline = 0

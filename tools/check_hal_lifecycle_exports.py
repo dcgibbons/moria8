@@ -47,6 +47,7 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_character_sheet_begin_enabled",
     "hal_platform_character_background_resync",
     "hal_platform_player_magic_helpers_external",
+    "hal_platform_item_action_key_restores_bank",
     "hal_platform_wizard_entry_uses_overlay",
     "hal_platform_wizard_40col_resident_enabled",
     "hal_platform_wizard_reveal_uses_trampoline",
@@ -109,6 +110,7 @@ def main() -> int:
         "hal_platform_levelup_magic_uses_trampoline": COMMON_DIR / "combat.s",
         "hal_platform_character_background_resync": COMMON_DIR / "player.s",
         "hal_platform_player_magic_helpers_external": COMMON_DIR / "player_magic.s",
+        "hal_platform_item_action_key_restores_bank": COMMON_DIR / "item_actions_overlay.s",
     }
     for name, consumer_path in policy_consumers.items():
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")

@@ -1497,7 +1497,7 @@ for name, lines, chain in required_chains:
 if not has_ordered_chain(items, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
-    "#if C128",
+    "#if hal_platform_item_action_key_restores_bank",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
     "sta $ff00",
@@ -1586,7 +1586,7 @@ def section_after(label: str, lines: list[str]) -> list[str]:
 if not has_ordered_chain(items, [
     "item_action_get_key:",
     "jsr hal_input_get_key",
-    "#if C128",
+    "#if hal_platform_item_action_key_restores_bank",
     "sta iagk_key",
     "lda #MMU_ALL_RAM",
     "sta $ff00",

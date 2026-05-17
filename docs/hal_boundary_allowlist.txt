@@ -28,7 +28,6 @@ commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_OPEN
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_READST
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETLFS
 commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETNAM
-commodore/common/item_actions_overlay.s	target-conditional	#if C128
 commodore/common/monster.s	target-conditional	#if !C128
 commodore/common/monster.s	target-conditional	#if !PLUS4
 commodore/common/monster.s	target-conditional	#if C128
