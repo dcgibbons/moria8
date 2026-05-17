@@ -9,7 +9,7 @@ tid_msg_buf: .fill 42, 0
 tid_expected_identify:
     .text "This is a Cure Serious Wounds potion." ; .byte 0
 
-.pc = $080E "Test Code"
+.pc = $080E "Bootstrap"
 
 .encoding "screencode_mixed"
 
@@ -28,6 +28,10 @@ test_finish:
     dex
     bpl !copy-
     :BankInKernal()
+    jmp test_done_break
+
+.pc = $083F "Test Code"
+test_done_break:
     brk
 
 .pc = $0840 "Main"

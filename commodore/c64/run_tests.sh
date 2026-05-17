@@ -75,9 +75,12 @@ run_test() {
 
     echo -n "  $name: "
 
+    local prg_file
+    prg_file=$(mktemp -t "test_${name}_prg")
+
     # Assemble and capture output
     local asm_output
-    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -showmem -o "${src%.s}.prg" 2>&1)
+    asm_output=$(java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" "$src" -showmem -o "$prg_file" 2>&1)
 
     if ! echo "$asm_output" | grep -q "0 failed"; then
         echo "FAIL (assembly error)"
@@ -87,13 +90,48 @@ run_test() {
         return
     fi
 
-    local end_addr
-    # Extract end address from "Test Code" segment in assembler output
-    # Format: "$0810-$0B10 Test Code" — the end address is where BRK sits
-    end_addr=$(echo "$asm_output" | grep "Test Code" | sed 's/.*\$\([0-9A-Fa-f]*\) Test Code/\1/')
+    local test_code_line
+    local test_code_count
+    # Extract the stop address from exactly one "Test Code" memory-map segment.
+    # Format: "$0810-$0B10 Test Code" — the end address is where BRK sits.
+    test_code_line=$(echo "$asm_output" | grep -E '^[[:space:]]+\$[0-9A-Fa-f]+-\$[0-9A-Fa-f]+[[:space:]]+Test Code$')
+    test_code_count=$(echo "$test_code_line" | grep -c .)
 
-    if [ -z "$end_addr" ]; then
-        echo "FAIL (could not determine BRK address)"
+    if [ "$test_code_count" -ne 1 ]; then
+        echo "FAIL (expected one Test Code segment, found $test_code_count)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local start_addr
+    local end_addr
+    start_addr=$(echo "$test_code_line" | sed 's/.*$\([0-9A-Fa-f]*\)-$\([0-9A-Fa-f]*\).*/\1/')
+    end_addr=$(echo "$test_code_line" | sed 's/.*$\([0-9A-Fa-f]*\)-$\([0-9A-Fa-f]*\).*/\2/')
+
+    local start_dec=$((16#$start_addr))
+    local end_dec=$((16#$end_addr))
+    if [ "$end_dec" -lt "$start_dec" ] || [ "$end_dec" -lt $((16#0801)) ] || [ "$end_dec" -ge $((16#C000)) ]; then
+        echo "FAIL (invalid Test Code BRK address: \$$end_addr)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local load_lo load_hi load_addr offset brk_byte
+    load_lo=$(od -An -N1 -tx1 -v "$prg_file" | tr -d ' \n')
+    load_hi=$(od -An -j1 -N1 -tx1 -v "$prg_file" | tr -d ' \n')
+    load_addr=$((16#$load_hi$load_lo))
+    offset=$((end_dec - load_addr + 2))
+    if [ "$offset" -lt 2 ]; then
+        echo "FAIL (Test Code BRK address precedes PRG load address: \$$end_addr)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+    brk_byte=$(dd if="$prg_file" bs=1 skip="$offset" count=1 2>/dev/null | od -An -tx1 -v | tr -d ' \n')
+    if [ "$brk_byte" != "00" ]; then
+        echo "FAIL (Test Code stop address is not BRK: \$$end_addr)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
@@ -117,7 +155,7 @@ run_test() {
         local log_path="$1"
         script -q "$log_path" \
             "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
-            -autostart "${src%.s}.prg" -moncommands "$mon_file" \
+            -autostart "$prg_file" -moncommands "$mon_file" \
             -limitcycles "$cycles" +sound -sounddev dummy \
             +remotemonitor +binarymonitor > /dev/null 2>&1
     }
