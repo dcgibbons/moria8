@@ -35,6 +35,7 @@ REQUIRED_CONSTANTS = (
     "hal_input_modal_escape_secondary",
     "hal_input_flush_run_cancel_buffer",
     "hal_input_help_footer_uses_esc_stop",
+    "hal_input_inventory_letter_normalize_shifted",
 )
 
 HELPER_POLICY_CONSTANTS = (
@@ -43,6 +44,7 @@ HELPER_POLICY_CONSTANTS = (
     "hal_input_modal_escape_primary",
     "hal_input_modal_escape_secondary",
     "hal_input_flush_run_cancel_buffer",
+    "hal_input_inventory_letter_normalize_shifted",
 )
 
 FORBIDDEN_COMMON_CALLS = (

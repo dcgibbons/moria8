@@ -1071,6 +1071,10 @@ target-bank setup, and post-load channel cleanup.
       calls. Each platform lifecycle policy exports
       `hal_platform_levelup_magic_uses_trampoline`, preserving C128's
       bank-safe trampoline path and C64/Plus/4's direct calls.
+      Thirty-ninth slice: common item-drop slot selection no longer branches
+      on `C128` to normalize shifted inventory letters. Each platform input
+      backend exports `hal_input_inventory_letter_normalize_shifted`, and
+      `input_ui_helpers.s` owns the target-neutral normalization helper.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

@@ -42,3 +42,18 @@ input_flush_run_cancel_buffer:
     sta hal_input_kbdbuf_count
 #endif
     rts
+
+// input_normalize_inventory_letter_key — Normalize platform-specific shifted
+// letter encodings before common inventory slot math consumes A-V.
+// Input/Output: A = PETSCII key
+// Preserves: X, Y
+input_normalize_inventory_letter_key:
+#if hal_input_inventory_letter_normalize_shifted
+    cmp #$c1
+    bcc !done+
+    cmp #$db
+    bcs !done+
+    and #$7f
+!done:
+#endif
+    rts

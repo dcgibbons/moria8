@@ -1009,14 +1009,7 @@ item_drop:
     jsr show_inv_and_select
 
 !idr_direct_pick:
-#if C128
-    cmp #$c1
-    bcc !idr_norm_done+
-    cmp #$db
-    bcs !idr_norm_done+
-    and #$7f                    // Shifted lowercase PETSCII -> uppercase
-!idr_norm_done:
-#endif
+    jsr input_normalize_inventory_letter_key
 
     // Convert PETSCII letter to slot index (A-V = $41-$56 -> 0-21)
     sec
