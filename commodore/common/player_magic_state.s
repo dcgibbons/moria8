@@ -48,7 +48,6 @@ c64_test_spell_return_count: .byte 0
 #endif
 #endif
 
-#if C128
 pm_book_prompt_huff_id:
     ldx #HSTR_IGS_PROMPT
     lda pm_mode
@@ -61,4 +60,3 @@ pm_book_prompt_huff_id:
 !pm_prompt_done:
     rts
 pm_book_prompt_huff_id_end:
-#endif

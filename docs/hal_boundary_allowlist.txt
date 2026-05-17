@@ -46,7 +46,6 @@ commodore/common/player_items.s	target-conditional	#if C128
 commodore/common/player_magic.s	target-conditional	#if !C128
 commodore/common/player_magic.s	target-conditional	#if C128
 commodore/common/player_magic_ball.s	target-conditional	#if C128
-commodore/common/player_magic_state.s	target-conditional	#if C128
 commodore/common/player_move.s	target-conditional	#if !C128
 commodore/common/player_move.s	target-conditional	#if C128
 commodore/common/reu.s	platform-name	REU

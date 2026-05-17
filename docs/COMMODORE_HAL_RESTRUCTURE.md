@@ -1080,6 +1080,11 @@ target-bank setup, and post-load channel cleanup.
       layout backend exports `hal_layout_dungeon_door_scan_base` and
       `hal_layout_dungeon_door_scan_limit`, preserving C128's VIC scratch
       window and the 40-column ports' cassette-buffer scratch window.
+      Forty-first slice: common spell/prayer book prompt selection no longer
+      carries separate C128 and non-C128 implementations. The shared resident
+      spell state now owns the single `pm_book_prompt_huff_id` helper because
+      all three platforms select the same prompt IDs from the same spell mode
+      and spell type state.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

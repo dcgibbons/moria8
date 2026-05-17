@@ -370,23 +370,6 @@ pm_select_book:
     sec
     rts
 
-#if !C128
-pm_book_prompt_huff_id:
-    lda pm_mode
-    beq !pm_prompt_not_study+
-    ldx #HSTR_IGS_PROMPT
-    rts
-!pm_prompt_not_study:
-    lda pm_spell_type
-    cmp #SPELL_MAGE
-    bne !pm_prompt_pray+
-    ldx #HSTR_PM_BOOK_CAST
-    rts
-!pm_prompt_pray:
-    ldx #HSTR_PM_BOOK_PRAY
-    rts
-#endif
-
 pm_build_known_list_from_book:
     lda #0
     sta pm_spell_count
