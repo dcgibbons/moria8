@@ -9,3 +9,4 @@
 .const hal_memory_bank_no_roms     = $00
 .const hal_huffman_lock_irq_during_decode = false
 .const hal_huffman_print_uses_cached_msg  = false
+.const hal_memory_map_row_helper_enabled  = false

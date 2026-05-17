@@ -18,6 +18,7 @@ REQUIRED_CONSTANTS = (
     "hal_memory_bank_no_roms",
     "hal_huffman_lock_irq_during_decode",
     "hal_huffman_print_uses_cached_msg",
+    "hal_memory_map_row_helper_enabled",
 )
 COMMON_ALIAS_CONSTANTS = tuple(
     constant
@@ -27,6 +28,7 @@ COMMON_ALIAS_CONSTANTS = tuple(
         "hal_memory_has_cpu_port",
         "hal_huffman_lock_irq_during_decode",
         "hal_huffman_print_uses_cached_msg",
+        "hal_memory_map_row_helper_enabled",
     )
 )
 
@@ -82,6 +84,14 @@ def main() -> int:
         errors.append("huffman.s: common decoder does not consume hal_huffman_lock_irq_during_decode")
     if "hal_huffman_print_uses_cached_msg" not in huffman_text:
         errors.append("huffman.s: common decoder does not consume hal_huffman_print_uses_cached_msg")
+
+    dungeon_los_text = (ROOT / "commodore/common/dungeon_los.s").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", dungeon_los_text):
+        errors.append("dungeon_los.s: common visibility code still branches directly on C128")
+    if "hal_memory_map_row_helper_enabled" not in dungeon_los_text:
+        errors.append("dungeon_los.s: common visibility code does not consume hal_memory_map_row_helper_enabled")
 
     if errors:
         print("HAL memory bank export check failed:")

@@ -1124,6 +1124,10 @@ target-bank setup, and post-load channel cleanup.
       exports `hal_platform_item_action_key_restores_bank`, preserving the C128
       all-RAM/no-ROM restore after `hal_input_get_key` and the previous direct
       return path on C64/Plus/4.
+      Forty-ninth slice: common visibility updates no longer branch on `C128`
+      to choose the MMU row-mark helper. Each memory HAL backend exports
+      `hal_memory_map_row_helper_enabled`, preserving the C128 helper path and
+      the direct map read/write loops on C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
