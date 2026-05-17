@@ -32,6 +32,7 @@
 .const hal_layout_character_stat_col0 = 1
 .const hal_layout_character_stat_col1 = 14
 .const hal_layout_character_stat_col2 = 27
+.const hal_layout_title_art_col_offset = 0
 .const hal_layout_wizard_compact_menu = 0
 .const hal_layout_wizard_40col_menu = 1
 .const hal_layout_wizard_title_col = 14

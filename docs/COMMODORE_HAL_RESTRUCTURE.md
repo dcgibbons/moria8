@@ -1143,6 +1143,11 @@ target-bank setup, and post-load channel cleanup.
       around late chargen stages. Each lifecycle backend exports
       `hal_platform_chargen_runtime_resync`, preserving the C128 guard-resync
       path and the previous no-op behavior on C64/Plus/4.
+      Fifty-third slice: the static title-art column offset value is now owned
+      by the layout HAL via `hal_layout_title_art_col_offset`. The C128 static
+      title renderer still applies that offset only inside its existing C128
+      Bank-1 title-art path; dynamic title-menu positioning remains separate
+      and unchanged.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

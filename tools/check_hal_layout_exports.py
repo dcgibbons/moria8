@@ -66,6 +66,7 @@ POLICY_CONSTANTS = (
     "hal_layout_character_stat_col0",
     "hal_layout_character_stat_col1",
     "hal_layout_character_stat_col2",
+    "hal_layout_title_art_col_offset",
     "hal_layout_wizard_compact_menu",
     "hal_layout_wizard_40col_menu",
     "hal_layout_wizard_title_col",

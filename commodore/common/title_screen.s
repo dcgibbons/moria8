@@ -10,7 +10,7 @@
 
 .const TITLE_FALLBACK_COL = (SCREEN_COLS - 10) / 2
 #if C128
-.const TITLE_ART_COL_OFFSET = (SCREEN_COLS - 40) / 2
+.const TITLE_ART_COL_OFFSET = hal_layout_title_art_col_offset
 #endif
 // ============================================================
 // title_load_and_draw — Load and render the title screen
