@@ -981,12 +981,12 @@ combat_apply_levelup:
     jsr player_calc_combat
 
     // Recalculate mana and learn new spells
- #if C128
+#if hal_platform_levelup_magic_uses_trampoline
     jsr tramp_magic_recalc_mana
 #else
     jsr magic_recalc_mana
 #endif
-#if C128
+#if hal_platform_levelup_magic_uses_trampoline
     jsr tramp_magic_check_new_spells
 #else
     jsr magic_check_new_spells

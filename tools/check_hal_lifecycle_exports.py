@@ -45,6 +45,7 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_wizard_entry_uses_overlay",
     "hal_platform_wizard_40col_resident_enabled",
     "hal_platform_wizard_reveal_uses_trampoline",
+    "hal_platform_levelup_magic_uses_trampoline",
 )
 
 
@@ -97,6 +98,7 @@ def main() -> int:
         "hal_platform_reassert_before_message_render": COMMON_DIR / "ui_messages.s",
         "hal_platform_restore_tier_after_overlay": COMMON_DIR / "ui_restore.s",
         "hal_platform_mark_modal_restore_perf": COMMON_DIR / "ui_restore.s",
+        "hal_platform_levelup_magic_uses_trampoline": COMMON_DIR / "combat.s",
     }
     for name, consumer_path in policy_consumers.items():
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")

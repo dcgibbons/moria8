@@ -8,4 +8,5 @@
 .const hal_platform_wizard_entry_uses_overlay = 1
 .const hal_platform_wizard_40col_resident_enabled = 0
 .const hal_platform_wizard_reveal_uses_trampoline = 0
+.const hal_platform_levelup_magic_uses_trampoline = true
 #define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY

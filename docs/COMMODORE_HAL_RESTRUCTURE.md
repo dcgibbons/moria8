@@ -1066,6 +1066,11 @@ target-bank setup, and post-load channel cleanup.
       `hal_storage_disk_setup_*` UI policy constants, and the shared Disk Setup
       UI reads diagnostics through `hal_storage_diag_*` labels instead of
       platform-owned status buffers.
+      Thirty-eighth slice: common combat level-up handling no longer branches
+      on `C128` to choose direct magic recomputation versus C128 trampoline
+      calls. Each platform lifecycle policy exports
+      `hal_platform_levelup_magic_uses_trampoline`, preserving C128's
+      bank-safe trampoline path and C64/Plus/4's direct calls.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
