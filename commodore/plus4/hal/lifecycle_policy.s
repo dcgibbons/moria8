@@ -11,9 +11,12 @@
 .const hal_platform_character_background_resync = false
 .const hal_platform_player_magic_helpers_external = false
 .const hal_platform_item_action_key_restores_bank = false
+.const hal_platform_ego_holy_avenger_string_external = false
+.const hal_platform_ego_ac_bonus_external = false
 .const hal_platform_wizard_entry_uses_overlay = 0
 .const hal_platform_wizard_40col_resident_enabled = 1
 .const hal_platform_wizard_reveal_uses_trampoline = 1
 .const hal_platform_levelup_magic_uses_trampoline = false
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
+#define HAL_PLATFORM_EGO_AC_BONUS_LOCAL

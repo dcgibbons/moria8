@@ -109,7 +109,7 @@ ego_str_slay_undead:  .text " (Slay Undead)" ; .byte 0
 ego_str_flame:        .text " (Flame)" ; .byte 0
 ego_str_frost:        .text " (Frost)" ; .byte 0
 ego_str_defender:     .text " (Defender)" ; .byte 0
-#if C128
+#if HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
 .label ego_str_holy_avenger = ego_str_holy_avenger_common
 #else
 ego_str_holy_avenger: .text " (Holy Avenger)" ; .byte 0
@@ -212,7 +212,7 @@ ead_ego_type: .byte 0
 // Output: A = AC bonus (0 if none)
 // Clobbers: X
 // ============================================================
-#if !C128
+#if HAL_PLATFORM_EGO_AC_BONUS_LOCAL
 ego_get_ac_bonus:
     tax
     lda ego_ac_bonus,x

@@ -1128,6 +1128,11 @@ target-bank setup, and post-load channel cleanup.
       to choose the MMU row-mark helper. Each memory HAL backend exports
       `hal_memory_map_row_helper_enabled`, preserving the C128 helper path and
       the direct map read/write loops on C64/Plus/4.
+      Fiftieth slice: common ego-item data no longer branches on `C128` for
+      Holy Avenger suffix placement or AC-bonus helper ownership. Each
+      lifecycle backend exports `hal_platform_ego_holy_avenger_string_external`
+      and `hal_platform_ego_ac_bonus_external`, preserving C128's external
+      resident placements and the local common definitions on C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

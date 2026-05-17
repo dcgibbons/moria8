@@ -48,6 +48,8 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_character_background_resync",
     "hal_platform_player_magic_helpers_external",
     "hal_platform_item_action_key_restores_bank",
+    "hal_platform_ego_holy_avenger_string_external",
+    "hal_platform_ego_ac_bonus_external",
     "hal_platform_wizard_entry_uses_overlay",
     "hal_platform_wizard_40col_resident_enabled",
     "hal_platform_wizard_reveal_uses_trampoline",
@@ -129,6 +131,17 @@ def main() -> int:
         if name not in wizard_text:
             policy_missing.append(f"commodore/common/wizard.s does not consume {name}")
 
+    ego_policy_consumers = (
+        "HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL",
+        "HAL_PLATFORM_EGO_AC_BONUS_LOCAL",
+    )
+    ego_text = (COMMON_DIR / "ego_items.s").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    for name in ego_policy_consumers:
+        if name not in ego_text:
+            policy_missing.append(f"commodore/common/ego_items.s does not consume {name}")
+
     character_text = (COMMON_DIR / "ui_character.s").read_text(
         encoding="utf-8", errors="replace"
     )
@@ -137,6 +150,9 @@ def main() -> int:
             "commodore/common/ui_character.s does not consume "
             "hal_platform_character_sheet_begin"
         )
+
+    if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", ego_text):
+        policy_missing.append("commodore/common/ego_items.s still branches directly on C128")
 
     if missing or violations or policy_missing or direct_missing:
         if missing:
