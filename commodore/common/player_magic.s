@@ -477,11 +477,7 @@ pm_prompt_visible_spell_choice:
 !pm_psc_prompt_ready:
     lda pm_spell_count
     jsr piw_print_prompt_with_count
-#if C128
-    jsr input_get_key_fast
-#else
-    jsr hal_input_get_key
-#endif
+    jsr input_get_followup_key
     cmp #$3f
     beq !pm_psc_show_list+
     jsr pm_pick_visible_spell
@@ -495,20 +491,12 @@ pm_prompt_visible_spell_choice:
 !pm_psc_show_list:
     // Match other selectable overlays: release-gate before drawing the list
     // so a quick first selection/cancel key is not swallowed by the gate.
-#if C128
-    jsr input_prepare_followup_key
-#else
-    jsr input_prepare_modal_dismiss_key
-#endif
+    jsr input_prepare_selectable_overlay_key
     jsr tramp_spell_list_display
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jmp test_assert_spell_list_overlay
 #endif
-#if C128
-    jsr input_get_key_fast
-#else
-    jsr hal_input_get_key
-#endif
+    jsr input_get_followup_key
     pha
     jsr ui_view_restore_modal_overlay
     pla

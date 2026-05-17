@@ -1090,6 +1090,12 @@ target-bank setup, and post-load channel cleanup.
       lifecycle policy exports `hal_platform_render_ball_effect_direct_perf`,
       preserving C128's PERF_P1 direct effect render and the normal viewport
       redraw on C64/Plus/4.
+      Forty-third slice: common spell-list prompt input no longer branches on
+      `C128` to choose fast follow-up key reads or selectable-overlay release
+      preparation. Each platform input backend exports
+      `hal_input_followup_uses_fast_key` and
+      `hal_input_selectable_overlay_prepare_followup`, preserving C128's fast
+      direct-scan follow-up behavior and the 40-column modal-dismiss policy.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

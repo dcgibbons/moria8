@@ -53,6 +53,8 @@
 
 .const hal_input_kbdbuf_count = KBDBUF_COUNT
 .const hal_input_modal_dismiss_uses_fast_key = true
+.const hal_input_followup_uses_fast_key = true
+.const hal_input_selectable_overlay_prepare_followup = true
 .const hal_input_modal_escape_primary = KEY_ESC
 .const hal_input_modal_escape_secondary = $03
 .const hal_input_flush_run_cancel_buffer = false

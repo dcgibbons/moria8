@@ -22,6 +22,25 @@ input_get_modal_dismiss_key:
     jmp hal_input_get_key
 #endif
 
+// input_get_followup_key — Read a key for a secondary selectable prompt after
+// input_prepare_followup_key has already applied the platform's release policy.
+input_get_followup_key:
+#if hal_input_followup_uses_fast_key
+    jmp input_get_key_fast
+#else
+    jmp hal_input_get_key
+#endif
+
+// input_prepare_selectable_overlay_key — Prepare for a selectable overlay that
+// follows an initiating key. C128 keeps the follow-up policy; 40-column ports
+// keep the modal-dismiss policy they historically used for spell-list overlays.
+input_prepare_selectable_overlay_key:
+#if hal_input_selectable_overlay_prepare_followup
+    jmp input_prepare_followup_key
+#else
+    jmp input_prepare_modal_dismiss_key
+#endif
+
 // input_is_modal_escape_key — classify the platform's escape-equivalent key
 // for read-only modal dismissal.
 // Input: A = raw key from input_get_key/input_get_key_fast

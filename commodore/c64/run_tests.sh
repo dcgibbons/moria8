@@ -1789,7 +1789,7 @@ check_static_contract "throw_action_messages_stat_desc_contract" "../common/thro
 check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
     "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
-    "!pm_psc_show_list:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_spell_list_display|||jsr hal_input_get_key"
+    "!pm_psc_show_list:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_spell_list_display|||jsr input_get_followup_key"
 check_static_contract "overcast_faint_more_contract" "../common/player_magic.s" \
     "ldx #HSTR_PM_NO_MANA|||jsr huff_print_msg|||jsr msg_show_more|||jsr hal_input_get_key"
 check_static_contract "paralysis_final_tick_message_contract" "../common/game_loop.s" \

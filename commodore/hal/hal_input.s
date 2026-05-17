@@ -18,6 +18,8 @@
 // Required constants per platform:
 //   hal_input_kbdbuf_count
 //   hal_input_modal_dismiss_uses_fast_key
+//   hal_input_followup_uses_fast_key
+//   hal_input_selectable_overlay_prepare_followup
 //   hal_input_modal_escape_primary
 //   hal_input_modal_escape_secondary
 //   hal_input_flush_run_cancel_buffer
