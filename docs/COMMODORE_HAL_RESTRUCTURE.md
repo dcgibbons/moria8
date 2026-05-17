@@ -1096,6 +1096,12 @@ target-bank setup, and post-load channel cleanup.
       `hal_input_followup_uses_fast_key` and
       `hal_input_selectable_overlay_prepare_followup`, preserving C128's fast
       direct-scan follow-up behavior and the 40-column modal-dismiss policy.
+      Forty-fourth slice: common game-loop helper PERF_P1 bookkeeping no
+      longer branches on `C128`. Each platform lifecycle backend exports
+      `hal_platform_perf_p1_command_instrumentation`, preserving C128's PERF_P1
+      command/update-visibility counters and the previous no-op behavior on
+      C64/Plus/4. The existing modal-restore and tier-restore lifecycle policy
+      constants also now cover the character/recall view helper paths.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

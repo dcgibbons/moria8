@@ -41,6 +41,7 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_reassert_before_message_render",
     "hal_platform_restore_tier_after_overlay",
     "hal_platform_mark_modal_restore_perf",
+    "hal_platform_perf_p1_command_instrumentation",
     "hal_platform_render_ball_effect_direct_perf",
     "hal_platform_character_sheet_begin_enabled",
     "hal_platform_wizard_entry_uses_overlay",
@@ -99,6 +100,7 @@ def main() -> int:
         "hal_platform_reassert_before_message_render": COMMON_DIR / "ui_messages.s",
         "hal_platform_restore_tier_after_overlay": COMMON_DIR / "ui_restore.s",
         "hal_platform_mark_modal_restore_perf": COMMON_DIR / "ui_restore.s",
+        "hal_platform_perf_p1_command_instrumentation": COMMON_DIR / "game_loop_helpers.s",
         "hal_platform_render_ball_effect_direct_perf": COMMON_DIR / "player_magic_ball.s",
         "hal_platform_levelup_magic_uses_trampoline": COMMON_DIR / "combat.s",
     }

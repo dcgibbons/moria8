@@ -16,16 +16,14 @@ cmd_show_character_view:
     jsr tramp_ui_char_display
     jsr input_prepare_followup_key
     jsr hal_input_get_key
-#if !C128
+#if hal_platform_restore_tier_after_overlay
     // C64 character view is overlay-backed and returns through a custom
     // full-screen redraw path, so it must also re-establish the active tier.
     jsr tier_restore_after_overlay
 #endif
 	    jsr hal_screen_clear
-#if C128
-#if PERF_P1
+#if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_set_reason_modal_restore
-#endif
 #endif
 	    jmp vp_render_status_loop
 
@@ -86,10 +84,8 @@ cmd_recall_view:
     jsr recall_show_matching_entry
 !recall_done:
 	    jsr hal_screen_clear
-#if C128
-#if PERF_P1
+#if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_set_reason_modal_restore
-#endif
 #endif
 	    jmp vp_render_status_loop
 
@@ -171,10 +167,8 @@ recall_show_matching_entry:
 // ============================================================
 command_result_main_or_redraw_full:
 	    bcc !crrf_no_turn+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_command_forced
-#endif
 #endif
 	    jmp post_turn_redraw_full_or_die
 !crrf_no_turn:
@@ -197,10 +191,8 @@ command_result_restore_view_or_update_visibility:
     jmp post_turn_update_visibility_or_die
 !crrv_no_turn:
 	    jsr hal_screen_clear
-#if C128
-#if PERF_P1
+#if hal_platform_mark_modal_restore_perf && PERF_P1
     jsr perf_p1_set_reason_modal_restore
-#endif
 #endif
 	    jmp vp_render_status_loop
 
@@ -241,10 +233,8 @@ post_turn_redraw_full_or_die:
 	    bcc !ptfds_alive+
 	    jmp player_died
 !ptfds_alive:
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_command_forced_if_none
-#endif
 #endif
 	    jmp vp_render_status_loop
 
@@ -255,10 +245,8 @@ post_turn_status_only_or_die:
 !ptsos_alive:
 	    lda turn_scene_dirty
 	    beq !ptsos_status_only+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_scene_dirty
-#endif
 #endif
 	    jmp vp_render_status_loop
 !ptsos_status_only:
@@ -280,56 +268,44 @@ post_turn_update_visibility_or_die:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !ptuvs_chk_y+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_scroll_fallback
-#endif
 #endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_y:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !ptuvs_chk_reveal+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_scroll_fallback
-#endif
 #endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_reveal:
 	    lda vis_room_revealed
     beq !ptuvs_chk_scene+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_room_reveal
-#endif
 #endif
 	    jmp !ptuvs_full+
 !ptuvs_chk_scene:
 	    lda turn_scene_dirty
     beq !ptuvs_local+
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_set_reason_scene_dirty
-#endif
 #endif
 	    jmp !ptuvs_full+
 !ptuvs_local:
 	    jsr render_local_area
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_mark_local
-#endif
 #endif
 	    jsr status_draw
 	    jmp main_loop
 !ptuvs_full:
 	    lda #INPUT_ROW
 	    jsr hal_screen_clear_row
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_mark_full_reason_update_visibility
-#endif
 #endif
 	    jsr render_viewport
 	    jsr status_draw
@@ -348,10 +324,8 @@ vp_render_status_loop:
 	    lda #INPUT_ROW
 	    jsr hal_screen_clear_row
 	    jsr viewport_update
-#if C128
-#if PERF_P1
+#if hal_platform_perf_p1_command_instrumentation && PERF_P1
     jsr perf_p1_mark_full_default_transition
-#endif
 #endif
 	    jsr render_viewport
 	    jsr status_draw
