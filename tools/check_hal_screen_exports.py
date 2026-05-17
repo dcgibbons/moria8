@@ -36,6 +36,7 @@ REQUIRED_CONSTANTS = (
     "hal_screen_box_vertical_char",
     "hal_screen_help_line_uses_api",
     "hal_screen_help_line_uses_color_map",
+    "hal_screen_spell_bolt_flash_sets_color",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -52,6 +53,7 @@ FORBIDDEN_COMMON_CALLS = (
 
 COMMON_HELP_CLEAR_FILE = COMMON_DIR / "ui_help_clear.s"
 COMMON_HELP_FILE = COMMON_DIR / "ui_help.s"
+COMMON_SPELL_EFFECTS_FILE = COMMON_DIR / "spell_effects.s"
 
 
 def exported_symbols(path: Path) -> set[str]:
@@ -81,6 +83,9 @@ def common_call_violations() -> list[str]:
 def common_policy_violations() -> list[str]:
     text = COMMON_HELP_CLEAR_FILE.read_text(encoding="utf-8", errors="replace")
     help_text = COMMON_HELP_FILE.read_text(encoding="utf-8", errors="replace")
+    spell_effects_text = COMMON_SPELL_EFFECTS_FILE.read_text(
+        encoding="utf-8", errors="replace"
+    )
     errors: list[str] = []
     target_if = re.compile(r"(?m)^\s*#(?:if|elif|ifdef)\b.*\b(?:C64|C128|PLUS4)\b")
     for match in target_if.finditer(text):
@@ -104,6 +109,33 @@ def common_policy_violations() -> list[str]:
     if "HAL_SCREEN_HELP_LINE_USES_COLOR_MAP" not in help_text:
         errors.append(
             "commodore/common/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
+        )
+    if "hal_screen_spell_bolt_flash_sets_color" not in spell_effects_text:
+        errors.append(
+            "commodore/common/spell_effects.s does not consume hal_screen_spell_bolt_flash_sets_color"
+        )
+    flash_policy = re.compile(
+        r"(?s)#if\s+hal_screen_spell_bolt_flash_sets_color.*?"
+        r"jsr\s+screen_flash_set_color.*?"
+        r"jsr\s+screen_flash_at.*?"
+        r"#if\s+hal_screen_spell_bolt_flash_sets_color.*?"
+        r"jsr\s+screen_flash_reset_color"
+    )
+    if not flash_policy.search(spell_effects_text):
+        errors.append(
+            "commodore/common/spell_effects.s does not gate bolt flash color with "
+            "hal_screen_spell_bolt_flash_sets_color"
+        )
+    c128_flash_policy = re.compile(
+        r"(?s)#if\s+\(?\s*C128\s*\)?.{0,120}?"
+        r"jsr\s+screen_flash_(?:set_color|reset_color)"
+    )
+    match = c128_flash_policy.search(spell_effects_text)
+    if match:
+        line = spell_effects_text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"{COMMON_SPELL_EFFECTS_FILE.relative_to(ROOT)}:{line} uses target conditional "
+            "for bolt flash color"
         )
     return errors
 

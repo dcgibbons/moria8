@@ -1133,6 +1133,11 @@ target-bank setup, and post-load channel cleanup.
       lifecycle backend exports `hal_platform_ego_holy_avenger_string_external`
       and `hal_platform_ego_ac_bonus_external`, preserving C128's external
       resident placements and the local common definitions on C64/Plus/4.
+      Fifty-first slice: common spell bolt animation no longer branches on
+      `C128` to choose whether the transient flash color is set/reset around
+      `screen_flash_at`. Each screen backend exports
+      `hal_screen_spell_bolt_flash_sets_color`, preserving the C128 cyan VDC
+      flash override and the default 40-column flash behavior.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

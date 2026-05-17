@@ -41,6 +41,7 @@
 .const hal_screen_box_vertical_char = $21
 .const hal_screen_help_line_uses_api = true
 .const hal_screen_help_line_uses_color_map = false
+.const hal_screen_spell_bolt_flash_sets_color = true
 #define HAL_SCREEN_HELP_LINE_USES_API
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
