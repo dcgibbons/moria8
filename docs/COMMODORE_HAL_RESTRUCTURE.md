@@ -1054,6 +1054,12 @@ target-bank setup, and post-load channel cleanup.
       exports the corresponding `hal_platform_wizard_*` policy constants,
       preserving C128's overlay/inline reveal path and C64/Plus/4's resident
       40-column/trampoline path.
+      Thirty-sixth slice: common help-line rendering no longer branches on
+      `C128` or `PLUS4` to choose VDC API output, direct mapped screen/color
+      writes, or TED color attribute conversion. Each platform screen backend
+      exports the corresponding `hal_screen_help_line_*` policy constants and
+      target-neutral compile symbols, preserving C128's API-rendered path,
+      C64's direct color writes, and Plus/4's TED color mapping.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

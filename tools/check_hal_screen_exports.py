@@ -34,6 +34,8 @@ REQUIRED_LABELS = (
 REQUIRED_CONSTANTS = (
     "hal_screen_full_clear_uses_bulk",
     "hal_screen_box_vertical_char",
+    "hal_screen_help_line_uses_api",
+    "hal_screen_help_line_uses_color_map",
 )
 
 FORBIDDEN_COMMON_CALLS = (
@@ -49,6 +51,7 @@ FORBIDDEN_COMMON_CALLS = (
 )
 
 COMMON_HELP_CLEAR_FILE = COMMON_DIR / "ui_help_clear.s"
+COMMON_HELP_FILE = COMMON_DIR / "ui_help.s"
 
 
 def exported_symbols(path: Path) -> set[str]:
@@ -77,6 +80,7 @@ def common_call_violations() -> list[str]:
 
 def common_policy_violations() -> list[str]:
     text = COMMON_HELP_CLEAR_FILE.read_text(encoding="utf-8", errors="replace")
+    help_text = COMMON_HELP_FILE.read_text(encoding="utf-8", errors="replace")
     errors: list[str] = []
     target_if = re.compile(r"(?m)^\s*#(?:if|elif|ifdef)\b.*\b(?:C64|C128|PLUS4)\b")
     for match in target_if.finditer(text):
@@ -84,13 +88,23 @@ def common_policy_violations() -> list[str]:
         errors.append(
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)}:{line} uses target conditional in screen helper"
         )
+    for match in target_if.finditer(help_text):
+        line = help_text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"{COMMON_HELP_FILE.relative_to(ROOT)}:{line} uses target conditional in screen helper"
+        )
     if "hal_screen_full_clear_uses_bulk" not in text:
         errors.append(
             f"{COMMON_HELP_CLEAR_FILE.relative_to(ROOT)} does not consume hal_screen_full_clear_uses_bulk"
         )
-    help_text = (COMMON_DIR / "ui_help.s").read_text(encoding="utf-8", errors="replace")
     if "hal_screen_box_vertical_char" not in help_text:
         errors.append("commodore/common/ui_help.s does not consume hal_screen_box_vertical_char")
+    if "HAL_SCREEN_HELP_LINE_USES_API" not in help_text:
+        errors.append("commodore/common/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_API")
+    if "HAL_SCREEN_HELP_LINE_USES_COLOR_MAP" not in help_text:
+        errors.append(
+            "commodore/common/ui_help.s does not consume HAL_SCREEN_HELP_LINE_USES_COLOR_MAP"
+        )
     return errors
 
 

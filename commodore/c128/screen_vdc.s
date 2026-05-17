@@ -39,6 +39,9 @@
 .const INPUT_ROW   = hal_layout_input_row
 .const hal_screen_full_clear_uses_bulk = true
 .const hal_screen_box_vertical_char = $21
+.const hal_screen_help_line_uses_api = true
+.const hal_screen_help_line_uses_color_map = false
+#define HAL_SCREEN_HELP_LINE_USES_API
 
 .assert "HAL layout screen cols", SCREEN_COLS, hal_layout_screen_cols
 .assert "HAL layout screen rows", SCREEN_ROWS, hal_layout_screen_rows

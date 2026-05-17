@@ -245,16 +245,14 @@ help_draw_line:
     cmp #CT
     beq !hdl_tab+
     // Regular character
-#if C128
-    // C128/VDC: must write through screen API (no CPU-mapped screen RAM).
+#if HAL_SCREEN_HELP_LINE_USES_API
     jsr hal_screen_put_char
     inc zp_temp0
     jmp !hdl_loop-
 #else
-    // C64/VIC-II and Plus/4/TED: direct screen/color RAM stores.
     ldy #0
     sta (zp_screen_lo),y
-#if PLUS4
+#if HAL_SCREEN_HELP_LINE_USES_COLOR_MAP
     lda zp_text_color
     and #$0f
     tax
