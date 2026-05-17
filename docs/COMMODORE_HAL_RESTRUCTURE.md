@@ -1075,6 +1075,11 @@ target-bank setup, and post-load channel cleanup.
       on `C128` to normalize shifted inventory letters. Each platform input
       backend exports `hal_input_inventory_letter_normalize_shifted`, and
       `input_ui_helpers.s` owns the target-neutral normalization helper.
+      Fortieth slice: common dungeon feature generation no longer branches on
+      `C128` to choose the secret-door scan scratch window. Each platform
+      layout backend exports `hal_layout_dungeon_door_scan_base` and
+      `hal_layout_dungeon_door_scan_limit`, preserving C128's VIC scratch
+      window and the 40-column ports' cassette-buffer scratch window.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

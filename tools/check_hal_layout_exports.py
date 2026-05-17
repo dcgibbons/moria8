@@ -88,6 +88,8 @@ POLICY_CONSTANTS = (
     "hal_layout_status_row23_state_col",
     "hal_layout_status_searching_on_row21",
     "hal_layout_status_searching_on_row23",
+    "hal_layout_dungeon_door_scan_base",
+    "hal_layout_dungeon_door_scan_limit",
 )
 
 

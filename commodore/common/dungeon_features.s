@@ -172,18 +172,10 @@ find_random_floor:
 // Generation-only door scan scratch. This must not alias visible screen RAM:
 // the generation busy screen stays visible while secrets are placed.
 .const MAX_DOOR_SCAN = 32
-#if C128
-.label door_scan_x = DUNGEON_GEN_BFS_QUEUE_BASE
-#else
-.label door_scan_x = DUNGEON_GEN_DOOR_SCAN_BASE
-#endif
+.label door_scan_x = hal_layout_dungeon_door_scan_base
 .label door_scan_y = door_scan_x + MAX_DOOR_SCAN
 .label door_scan_count = door_scan_y + MAX_DOOR_SCAN
-#if C128
-.assert "Door scan scratch stays in dungeon-gen scratch window", door_scan_count <= DUNGEON_GEN_BFS_QUEUE_END, true
-#else
-.assert "Door scan scratch stays below visible screen RAM", door_scan_count < SCREEN_RAM, true
-#endif
+.assert "Door scan scratch stays inside platform scratch window", door_scan_count < hal_layout_dungeon_door_scan_limit, true
 
 place_secrets:
     // Don't place secrets on town level
