@@ -13,6 +13,7 @@
 .const hal_platform_item_action_key_restores_bank = false
 .const hal_platform_ego_holy_avenger_string_external = false
 .const hal_platform_ego_ac_bonus_external = false
+.const hal_platform_chargen_runtime_resync = false
 .const hal_platform_wizard_entry_uses_overlay = 0
 .const hal_platform_wizard_40col_resident_enabled = 1
 .const hal_platform_wizard_reveal_uses_trampoline = 1

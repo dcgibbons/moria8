@@ -1138,6 +1138,11 @@ target-bank setup, and post-load channel cleanup.
       `screen_flash_at`. Each screen backend exports
       `hal_screen_spell_bolt_flash_sets_color`, preserving the C128 cyan VDC
       flash override and the default 40-column flash behavior.
+      Fifty-second slice: common character creation no longer branches on
+      `C128` to decide whether runtime banking/display state must be resynced
+      around late chargen stages. Each lifecycle backend exports
+      `hal_platform_chargen_runtime_resync`, preserving the C128 guard-resync
+      path and the previous no-op behavior on C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
