@@ -1085,6 +1085,11 @@ target-bank setup, and post-load channel cleanup.
       spell state now owns the single `pm_book_prompt_huff_id` helper because
       all three platforms select the same prompt IDs from the same spell mode
       and spell type state.
+      Forty-second slice: common ball-spell rendering no longer branches on
+      `C128` to choose the PERF_P1 direct viewport-effect tail. Each platform
+      lifecycle policy exports `hal_platform_render_ball_effect_direct_perf`,
+      preserving C128's PERF_P1 direct effect render and the normal viewport
+      redraw on C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

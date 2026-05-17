@@ -141,13 +141,8 @@ eff_ball:
     inc ball_work_idx
     jmp !eball_loop-
 !eball_done:
-#if C128
-#if PERF_P1
+#if hal_platform_render_ball_effect_direct_perf && PERF_P1
     jmp perf_p1_render_viewport_effect_direct
-#else
-    jsr render_viewport
-    rts
-#endif
 #else
     jsr render_viewport
     rts
