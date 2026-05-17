@@ -1102,6 +1102,17 @@ target-bank setup, and post-load channel cleanup.
       command/update-visibility counters and the previous no-op behavior on
       C64/Plus/4. The existing modal-restore and tier-restore lifecycle policy
       constants also now cover the character/recall view helper paths.
+      Forty-fifth slice: common character-background rendering no longer
+      branches on `C128` for its background column or C128 runtime resync. Each
+      platform layout backend exports `hal_layout_character_background_col`,
+      each lifecycle backend exports `hal_platform_character_background_resync`,
+      and the layout/lifecycle checkers verify the common `player.s` call site.
+      Forty-sixth slice: common recall string-bank loading no longer branches
+      on `C128` to decide whether loading into `$E000` invalidates live tier
+      state. Each lifecycle backend exports
+      `hal_platform_string_bank_load_invalidates_tier`, preserving tier
+      invalidation on C64/Plus/4 and the previous Bank-1 metadata behavior on
+      C128.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

@@ -3,10 +3,12 @@
 
 .const hal_platform_reassert_before_message_render = false
 .const hal_platform_restore_tier_after_overlay = true
+.const hal_platform_string_bank_load_invalidates_tier = true
 .const hal_platform_mark_modal_restore_perf = false
 .const hal_platform_perf_p1_command_instrumentation = false
 .const hal_platform_render_ball_effect_direct_perf = false
 .const hal_platform_character_sheet_begin_enabled = false
+.const hal_platform_character_background_resync = false
 .const hal_platform_wizard_entry_uses_overlay = 0
 .const hal_platform_wizard_40col_resident_enabled = 1
 .const hal_platform_wizard_reveal_uses_trampoline = 1

@@ -24,6 +24,7 @@
 .const hal_layout_character_title_col = 12
 .const hal_layout_character_wizard_col = 32
 .const hal_layout_character_footer_col = 10
+.const hal_layout_character_background_col = 1
 .const hal_layout_character_col_l = 1
 .const hal_layout_character_col_name = 7
 .const hal_layout_character_col_mid = 18

@@ -58,6 +58,7 @@ POLICY_CONSTANTS = (
     "hal_layout_character_title_col",
     "hal_layout_character_wizard_col",
     "hal_layout_character_footer_col",
+    "hal_layout_character_background_col",
     "hal_layout_character_col_l",
     "hal_layout_character_col_name",
     "hal_layout_character_col_mid",

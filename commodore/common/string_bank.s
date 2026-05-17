@@ -32,10 +32,10 @@ bank_fn_recall:
 // ============================================================
 bank_load_recall:
     // Invalidate overlay before loading into $E000.
-    // Tier invalidation is C64-only: C128 tier metadata points to Bank 1 DB.
+    // 40-column ports use the $E000 tier window; C128 tier metadata points to Bank 1 DB.
     lda #OVL_NONE
     sta current_overlay
-#if !C128
+#if hal_platform_string_bank_load_invalidates_tier
     jsr tier_invalidate_state
 #endif
 

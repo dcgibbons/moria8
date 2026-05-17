@@ -796,14 +796,10 @@ player_search_work: .byte 0
 // Renders rows 12-16 of the character sheet.
 // Preserves: nothing
 // ============================================================
-#if C128
-.const UDBG_COL = (SCREEN_COLS - 36) / 2
-#else
-.const UDBG_COL = 1
-#endif
+.const UDBG_COL = hal_layout_character_background_col
 
 ui_char_draw_background:
-#if C128
+#if hal_platform_character_background_resync
     jsr hal_platform_runtime_resync
 #endif
     // --- Sex / Social Class (row 12) ---
