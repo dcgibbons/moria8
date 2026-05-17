@@ -71,5 +71,3 @@ commodore/common/title_screen.s	target-conditional	#if C128
 commodore/common/title_sysinfo_banked.s	platform-name	REU
 commodore/common/title_sysinfo_banked.s	target-conditional	#if !C128
 commodore/common/title_sysinfo_banked.s	target-conditional	#if C128
-commodore/common/ui_disk_setup.s	target-conditional	#if C128
-commodore/common/ui_disk_setup.s	target-conditional	#if PLUS4

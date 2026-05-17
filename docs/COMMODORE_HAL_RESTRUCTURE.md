@@ -1060,6 +1060,12 @@ target-bank setup, and post-load channel cleanup.
       exports the corresponding `hal_screen_help_line_*` policy constants and
       target-neutral compile symbols, preserving C128's API-rendered path,
       C64's direct color writes, and Plus/4's TED color mapping.
+      Thirty-seventh slice: common Disk Setup UI no longer branches on `C128`
+      or `PLUS4` to choose Other-drive menu support or platform-specific disk
+      diagnostic formatting. Each platform storage policy exports the
+      `hal_storage_disk_setup_*` UI policy constants, and the shared Disk Setup
+      UI reads diagnostics through `hal_storage_diag_*` labels instead of
+      platform-owned status buffers.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

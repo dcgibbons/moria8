@@ -53,6 +53,10 @@ REQUIRED_LABELS = (
     "hal_storage_marker_sec_read",
     "hal_storage_marker_sec_write",
     "hal_storage_program_file_num",
+    "hal_storage_disk_setup_supports_other_drive",
+    "hal_storage_disk_setup_detail_command_status",
+    "hal_storage_disk_setup_detail_dos_drive",
+    "hal_storage_disk_setup_detail_status_phase",
     "hal_storage_save_probe_name",
     "hal_storage_save_probe_name_len",
     "hal_storage_save_read_name",
@@ -119,6 +123,13 @@ OVERLAY_NAMES = {
 }
 
 TIER_NAMES = ("1", "2", "3", "4")
+COMMON_DISK_SETUP_UI_FILE = ROOT / "commodore/common/ui_disk_setup.s"
+COMMON_DISK_SETUP_UI_POLICIES = (
+    "hal_storage_disk_setup_supports_other_drive",
+    "hal_storage_disk_setup_detail_command_status",
+    "hal_storage_disk_setup_detail_dos_drive",
+    "hal_storage_disk_setup_detail_status_phase",
+)
 
 
 def expanded_source(path: Path) -> str:
@@ -199,6 +210,36 @@ def main() -> int:
             for item in terminator_missing:
                 print(f"  {item}")
             failed = True
+
+    ui_text = COMMON_DISK_SETUP_UI_FILE.read_text(encoding="utf-8", errors="replace")
+    target_if = re.compile(r"(?m)^\s*#(?:if|elif|ifdef)\b.*\b(?:C64|C128|PLUS4)\b")
+    ui_errors: list[str] = []
+    for match in target_if.finditer(ui_text):
+        line = ui_text.count("\n", 0, match.start()) + 1
+        ui_errors.append(
+            f"{COMMON_DISK_SETUP_UI_FILE.relative_to(ROOT)}:{line} uses target conditional"
+        )
+    for policy in COMMON_DISK_SETUP_UI_POLICIES:
+        if policy not in ui_text:
+            ui_errors.append(
+                f"{COMMON_DISK_SETUP_UI_FILE.relative_to(ROOT)} does not consume {policy}"
+            )
+    for diag in (
+        "hal_storage_diag_dos0",
+        "hal_storage_diag_dos1",
+        "hal_storage_diag_phase",
+        "hal_storage_diag_readst",
+        "hal_storage_diag_device",
+    ):
+        if diag not in ui_text:
+            ui_errors.append(
+                f"{COMMON_DISK_SETUP_UI_FILE.relative_to(ROOT)} does not consume {diag}"
+            )
+    if ui_errors:
+        print("Common Disk Setup UI storage HAL errors:")
+        for item in ui_errors:
+            print(f"  {item}")
+        failed = True
 
     if failed:
         return 1

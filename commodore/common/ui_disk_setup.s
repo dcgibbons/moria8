@@ -52,7 +52,7 @@ ui_disk_setup_dispatch:
     cmp #DISK_UI_ACT_SHOW_INIT_FAIL
     beq !dispatch_init_fail+
     cmp #DISK_UI_ACT_ENTER_DEVICE
-#if C128
+#if hal_storage_disk_setup_supports_other_drive
     beq !dispatch_enter_device+
 #endif
     lda #DISK_UI_RES_CANCEL
@@ -83,7 +83,7 @@ ui_disk_setup_dispatch:
 !dispatch_init_fail:
     jsr uds_show_init_fail
     jmp !dispatch_done+
-#if C128
+#if hal_storage_disk_setup_supports_other_drive
 !dispatch_enter_device:
     jsr uds_enter_device
     jmp !dispatch_done+
@@ -97,7 +97,7 @@ uds_menu_only:
     :UDSPrint(2, UDS_LINE_COL, uds_menu_head_str)
     :UDSPrint(4, UDS_LINE_COL, uds_one_drive_str)
     :UDSPrint(5, UDS_LINE_COL, uds_two_drive_str)
-#if C128
+#if hal_storage_disk_setup_supports_other_drive
     :UDSPrint(6, UDS_LINE_COL, uds_other_drive_str)
     :UDSPrint(7, UDS_LINE_COL, uds_back_str)
     :UDSPrint(9, UDS_NOTE_COL, uds_note_str)
@@ -122,7 +122,7 @@ uds_menu_only:
     sta disk_ui_result
     rts
 !menu_not_two:
-#if C128
+#if hal_storage_disk_setup_supports_other_drive
     cmp #$4f                    // 'O'
     bne !menu_not_other+
     lda #DISK_UI_RES_OTHER_DRIVE
@@ -210,6 +210,7 @@ uds_show_init_prompt:
     jsr uds_clear_after_modal
     rts
 
+#if hal_storage_disk_setup_supports_other_drive
 uds_enter_device:
     jsr ui_clear_full_screen_safe
     :UDSPrint(0, UDS_TITLE_COL, uds_title_str)
@@ -313,6 +314,7 @@ uds_enter_device:
     sta disk_ui_result
     sec
     rts
+#endif
 
 uds_show_no_drive9:
     jsr ui_clear_full_screen_safe
@@ -380,13 +382,13 @@ uds_show_init_detail:
     :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
     rts
 !fallback:
-#if C128
-    lda disk_diag_cmd_status0
+#if hal_storage_disk_setup_detail_command_status
+    lda hal_storage_diag_dos0
     cmp #$ff
     beq !generic+
     cmp #$30
     bne !show_c128_status_error+
-    lda disk_diag_cmd_status1
+    lda hal_storage_diag_dos1
     cmp #$30
     bne !show_c128_status_error+
     jmp !generic+
@@ -394,21 +396,23 @@ uds_show_init_detail:
     jmp uds_show_c128_status_error
 !generic:
 #endif
-#if PLUS4
-    lda disk_error_dos0
+#if hal_storage_disk_setup_detail_dos_drive
+    lda hal_storage_diag_dos0
     beq !check_phase+
     jmp uds_show_plus4_disk_error
 !check_phase:
-    lda disk_error_phase
-    ora disk_error_readst
+#if hal_storage_disk_setup_detail_status_phase
+    lda hal_storage_diag_phase
+    ora hal_storage_diag_readst
     beq !generic+
     jmp uds_show_plus4_status_error
+#endif
 !generic:
 #endif
     :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
     rts
 
-#if C128
+#if hal_storage_disk_setup_detail_command_status
 uds_show_c128_status_error:
     lda #4
     sta zp_cursor_row
@@ -419,23 +423,23 @@ uds_show_c128_status_error:
     lda #>uds_disk_code_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_diag_cmd_status0
+    lda hal_storage_diag_dos0
     jsr hal_screen_put_char
-    lda disk_diag_cmd_status1
+    lda hal_storage_diag_dos1
     jsr hal_screen_put_char
     lda #<uds_phase_str
     sta zp_ptr0
     lda #>uds_phase_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_diag_phase
+    lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
     jsr hal_screen_put_char
     rts
 #endif
 
-#if PLUS4
+#if hal_storage_disk_setup_detail_dos_drive
 uds_show_plus4_disk_error:
     lda #4
     sta zp_cursor_row
@@ -446,21 +450,24 @@ uds_show_plus4_disk_error:
     lda #>uds_disk_error_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_error_dos0
+    lda hal_storage_diag_dos0
     jsr hal_screen_put_char
-    lda disk_error_dos1
+    lda hal_storage_diag_dos1
     jsr hal_screen_put_char
     lda #<uds_on_drive_str
     sta zp_ptr0
     lda #>uds_on_drive_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_error_device
+    lda hal_storage_diag_device
     jsr screen_put_decimal_rj2
     lda #$2e
     jsr hal_screen_put_char
     rts
 
+#endif
+
+#if hal_storage_disk_setup_detail_status_phase
 uds_show_plus4_status_error:
     lda #4
     sta zp_cursor_row
@@ -471,14 +478,14 @@ uds_show_plus4_status_error:
     lda #>uds_disk_status_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_error_readst
+    lda hal_storage_diag_readst
     jsr screen_put_hex
     lda #<uds_phase_str
     sta zp_ptr0
     lda #>uds_phase_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
-    lda disk_error_phase
+    lda hal_storage_diag_phase
     jsr screen_put_hex
     lda #$2e
     jsr hal_screen_put_char
@@ -526,20 +533,17 @@ uds_dos_write_protect_str: .text "Disk is write-protected." ; .byte 0
 uds_dos_full_str:          .text "Disk is full." ; .byte 0
 uds_dos_not_ready_str:     .text "Drive is not ready." ; .byte 0
 uds_dos_generic_str:       .text "Check the disk and try again." ; .byte 0
-#if PLUS4
+#if hal_storage_disk_setup_detail_dos_drive
 uds_disk_error_str:        .text "Disk error " ; .byte 0
 uds_on_drive_str:          .text " on drive " ; .byte 0
 #endif
-#if C128
+#if hal_storage_disk_setup_detail_command_status
 uds_disk_code_str:         .text "Disk code " ; .byte 0
 #endif
-#if PLUS4
+#if hal_storage_disk_setup_detail_status_phase
 uds_disk_status_str:       .text "Disk code $" ; .byte 0
 #endif
-#if C128
-uds_phase_str:             .text " phase $" ; .byte 0
-#endif
-#if PLUS4
+#if hal_storage_disk_setup_detail_command_status || hal_storage_disk_setup_detail_status_phase
 uds_phase_str:             .text " phase $" ; .byte 0
 #endif
 uds_device_prompt_str:     .text "Save drive (8-30): " ; .byte 0
