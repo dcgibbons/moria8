@@ -14,7 +14,7 @@
 #define STORAGE_STATUS_HELPER
 
 #import "../../common/zeropage.s"
-#import "../../common/io_kernal_consts.s"
+#import "../../common/compat/io_kernal_consts.s"
 #import "../hal/memory_bank_consts.s"
 #import "../hal/storage_policy.s"
 

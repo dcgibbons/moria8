@@ -283,7 +283,7 @@ tramp_dig_ability:
 #import "../common/turn.s"
 #import "../common/store_data.s"
 #import "../common/runtime_ui_strings.s"
-#import "../common/io_kernal_consts.s"
+#import "../common/compat/io_kernal_consts.s"
 #import "../common/save.s"
 #import "../common/disk_swap.s"
 #import "../common/score_io.s"

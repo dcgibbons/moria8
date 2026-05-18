@@ -1,5 +1,5 @@
 #importonce
-// io_kernal_consts.s — Shared KERNAL constants
+// io_kernal_consts.s — Shared KERNAL constants for platform/test adapters.
 
 .const SAVE_DEVICE    = 8       // Device 8 = first disk drive
 

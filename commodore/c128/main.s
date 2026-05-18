@@ -3210,7 +3210,7 @@ c128_cache_state_end:
 #import "../common/stat_display.s"
 #import "../common/huffman.s"
 #import "../common/runtime_ui_strings.s"
-#import "../common/io_kernal_consts.s"
+#import "../common/compat/io_kernal_consts.s"
 #import "hal/storage_policy.s"
 #import "../common/score_io.s"
 

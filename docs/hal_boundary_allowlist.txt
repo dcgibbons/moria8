@@ -12,17 +12,6 @@ commodore/common/disk_swap.s	target-conditional	#if C128 || PLUS4
 commodore/common/disk_swap.s	target-conditional	#if PLUS4
 commodore/common/game_loop.s	target-conditional	#if !C128
 commodore/common/game_loop.s	target-conditional	#if C128
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKIN
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHKOUT
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHRIN
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CHROUT
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CLOSE
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_CLRCHN
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_LOAD
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_OPEN
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_READST
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETLFS
-commodore/common/io_kernal_consts.s	kernal-symbol	KERNAL_SETNAM
 commodore/common/monster.s	target-conditional	#if !C128
 commodore/common/monster.s	target-conditional	#if !PLUS4
 commodore/common/monster.s	target-conditional	#if C128

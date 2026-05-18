@@ -1173,10 +1173,14 @@ target-bank setup, and post-load channel cleanup.
       `commodore/common/compat/`, matching the Phase 5 rule that temporary
       compatibility exceptions live in the explicit compat area instead of
       ordinary common game code.
+      Fifty-ninth slice: shared KERNAL ABI constants moved under
+      `commodore/common/compat/`. Platform code and tests still import the
+      same constants, but ordinary common game code no longer carries raw
+      `KERNAL_*` symbols in the boundary audit.
 - [x] Remove raw KERNAL calls from common storage paths.
-      The remaining common `KERNAL_*` allowlist entries are
-      `io_kernal_consts.s` ABI constants, not active storage behavior.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
+      Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside
+      ordinary common game code.
 - [ ] Reduce platform `#if C64/C128/PLUS4` branches in common game logic.
 - [ ] Keep temporary exceptions only in `commodore/common/compat/` or explicitly
       named transition files.

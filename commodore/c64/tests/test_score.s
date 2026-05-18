@@ -92,7 +92,7 @@ test_finish:
 #import "../../common/ui_store.s"
 #import "../../common/ui_trampoline_stubs.s"
 #import "../../common/runtime_ui_strings.s"
-#import "../../common/io_kernal_consts.s"
+#import "../../common/compat/io_kernal_consts.s"
 
 // Help rendering is not under test here. Keep a tiny stub so the score suite
 // does not pull the full paged-help UI into its resident test image.
