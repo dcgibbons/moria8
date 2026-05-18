@@ -1165,6 +1165,10 @@ target-bank setup, and post-load channel cleanup.
       `input_prepare_selectable_overlay_key` and `input_get_followup_key`,
       preserving C128's release/fast-key path and the 40-column modal/GETIN
       path.
+      Fifty-seventh slice: common filtered-inventory prompt printing no longer
+      branches on `C128` to choose cached message printing. `player_items.s`
+      now calls `msg_print_current_ptr`, and the message subsystem applies the
+      existing `hal_huffman_print_uses_cached_msg` memory-bank policy.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

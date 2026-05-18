@@ -329,6 +329,10 @@ piw_pick_visible_equip_key:
 // Output: message printed via the message-line path
 piw_print_prompt_with_count:
     sta piw_p1
+#if hal_huffman_print_uses_cached_msg
+    php
+    sei
+#endif
     jsr huff_decode_string
 
     lda piw_p1
@@ -356,15 +360,10 @@ piw_print_prompt_with_count:
     bcc !piw_prompt_patch_loop-
 
 !piw_prompt_print:
-#if C128
-    lda zp_ptr0
-    sta msg_src_lo
-    lda zp_ptr0_hi
-    sta msg_src_hi
-    jmp msg_print_cached
-#else
-    jmp msg_print
+#if hal_huffman_print_uses_cached_msg
+    plp
 #endif
+    jmp msg_print_current_ptr
 
 // Wear/takeoff/eat/quaff command bodies live separately so C128 can
 // place the callable code outside the I/O hole.

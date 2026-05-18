@@ -1300,7 +1300,7 @@ if not has_ordered_chain(items, [
 ], window=8) or not has_ordered_chain(items, [
     "!piw_prompt_print:",
     "plp",
-    "jsr msg_print_cached",
+    "jmp msg_print_current_ptr",
 ], window=8):
     print("piw_print_prompt_with_count is not preserving IRQ state around cached Huffman prompt rendering")
     raise SystemExit(1)

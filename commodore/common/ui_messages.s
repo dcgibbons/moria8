@@ -199,6 +199,23 @@ msg_print_cached:
     sta zp_msg_flags
     jmp msg_print_cached
 
+// msg_print_current_ptr — Print the string currently addressed by zp_ptr0.
+// Platforms whose message rendering can be interrupted by pointer-clobbering
+// work cache the pointer first, using the same policy as Huffman printing.
+msg_print_current_ptr:
+#if hal_huffman_print_uses_cached_msg
+    php
+    sei
+    lda zp_ptr0
+    sta msg_src_lo
+    lda zp_ptr0_hi
+    sta msg_src_hi
+    plp
+    jmp msg_print_cached
+#else
+    jmp msg_print
+#endif
+
 // msg_clear — Clear the message area and reset flags
 // Called at the start of each player turn.
 // Preserves: X, Y
