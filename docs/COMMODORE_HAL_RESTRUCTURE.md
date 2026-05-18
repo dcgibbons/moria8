@@ -716,7 +716,7 @@ Storage adapter note:
       are target-conditionals and C64 bank visibility, not raw KERNAL symbol
       use.
 - [x] Move C128 title-cache filename setup call binding to storage HAL adapter
-      labels. `title_cache_runtime128.s` now uses `hal_storage_setnam` and
+      labels. `c128/title_cache_runtime.s` now uses `hal_storage_setnam` and
       `hal_storage_setlfs`; the remaining C128-specific title-cache boundary
       is its Bank 1 cache/runtime behavior, not raw storage KERNAL symbols.
 - [x] Move drive probing and selected-drive init into platform storage.
@@ -1192,6 +1192,10 @@ target-bank setup, and post-load channel cleanup.
       path, Bank-1 title-art source reads, and reverse-space VDC attribute
       rendering needed by the C128 title path while C64/Plus4 keep the direct
       RAM/string rendering path.
+      Sixty-third slice: the C128 title-art session cache moved out of
+      `commodore/common/` into the C128 platform tree. The implementation is
+      still C128-only, but it no longer needs a target conditional in common
+      code just to protect a platform-owned runtime helper.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

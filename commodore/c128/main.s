@@ -3709,7 +3709,7 @@ c128_test_verify_cache_survival:
 .segment RuntimeCommonData
 .pseudopc $0d60 {
 runtime_common_data_start:
-    #import "../common/title_cache_runtime128.s"
+    #import "title_cache_runtime.s"
     #import "restart128.s"
     #import "../common/player_magic_slow_runtime.s"
     #define PMU_TURN_FEEDBACK_ONLY

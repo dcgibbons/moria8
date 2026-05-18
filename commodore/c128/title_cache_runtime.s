@@ -1,10 +1,9 @@
 #importonce
-// title_cache_runtime128.s — C128 title-art session cache in Bank 1
+// title_cache_runtime.s — C128 title-art session cache in Bank 1
 //
 // Keeps title returns independent from the currently-mounted disk after the
 // first successful title load. The cache lives in Bank 1 reserved gap 0.
 
-#if C128
 c128_title_load_and_draw_cached:
     jsr c128_title_cache_is_valid
     bne !ctld_disk+
@@ -172,4 +171,3 @@ c128_title_cache_advance_cache_ptr:
 !room:
     clc
     rts
-#endif

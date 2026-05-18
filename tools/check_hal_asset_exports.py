@@ -46,7 +46,7 @@ TITLE_TRANSACTION_BODIES = {
         ("hal_storage_title_name", "$ffbd", "$ffba", "kernal_load_safe", "$ffc3", "$ffcc", "$dd00"),
     ),
     "c128": (
-        ROOT / "commodore/common/title_cache_runtime128.s",
+        ROOT / "commodore/c128/title_cache_runtime.s",
         "c128_title_asset_load",
         ("safe_setbnk", "hal_storage_title_name", "hal_storage_setnam", "hal_storage_setlfs", "kernal_load", "w_close"),
     ),
@@ -71,7 +71,7 @@ CLOSE_TRANSACTION_BODIES = {
 OVERLAY_COMMON = ROOT / "commodore/common/overlay.s"
 STRING_BANK_COMMON = ROOT / "commodore/common/string_bank.s"
 TITLE_SCREEN_COMMON = ROOT / "commodore/common/title_screen.s"
-TITLE_CACHE_COMMON = ROOT / "commodore/common/title_cache_runtime128.s"
+C128_TITLE_CACHE = ROOT / "commodore/c128/title_cache_runtime.s"
 TIER_MANAGER_COMMON = ROOT / "commodore/common/tier_manager.s"
 OVERLAY_FORBIDDEN_TOKENS = (
     "$ffbd",
@@ -197,12 +197,12 @@ def check_common_title_loader() -> list[str]:
         if token in body:
             errors.append(f"title_screen.s: title_load_and_draw still contains {token}")
 
-    cache_body = label_body(TITLE_CACHE_COMMON, "c128_title_load_and_draw_cached")
+    cache_body = label_body(C128_TITLE_CACHE, "c128_title_load_and_draw_cached")
     if cache_body is None:
-        errors.append("title_cache_runtime128.s: missing c128_title_load_and_draw_cached body")
+        errors.append("title_cache_runtime.s: missing c128_title_load_and_draw_cached body")
     elif "hal_asset_load_title" not in cache_body:
         errors.append(
-            "title_cache_runtime128.s: c128_title_load_and_draw_cached does not call hal_asset_load_title"
+            "title_cache_runtime.s: c128_title_load_and_draw_cached does not call hal_asset_load_title"
         )
     return errors
 
