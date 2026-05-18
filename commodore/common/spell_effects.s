@@ -164,7 +164,6 @@ eff_teleport_apply_target:
 !ets_fail:
     rts
 
-#if !C128 || SPELL_EFFECTS_INCLUDE_IDENTIFY
 // ============================================================
 // eff_identify_prompt — Interactive item identification
 // Input: none (prompts user for slot)
@@ -258,15 +257,6 @@ eff_identify_scroll_resident:
     jsr eff_identify_prompt
     sec
     rts
-#else
-eff_identify_prompt:
-    clc
-    rts
-
-eff_identify_scroll_resident:
-    sec
-    rts
-#endif
 
 // ============================================================
 // eff_cure_poison — Clear poison status
@@ -279,7 +269,8 @@ eff_cure_poison:
     sta zp_eff_poison
     rts
 
-#if !C128_PRODUCT_RUNTIME_LOW_CURE
+#if HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL
+#else
 pmx_cure_poison_msg:
     lda zp_eff_poison
     beq !pcpm_done+

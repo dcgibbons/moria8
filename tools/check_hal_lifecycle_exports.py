@@ -146,6 +146,15 @@ def main() -> int:
         if name not in ego_text:
             policy_missing.append(f"commodore/common/ego_items.s does not consume {name}")
 
+    spell_effects_text = (COMMON_DIR / "spell_effects.s").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL" not in spell_effects_text:
+        policy_missing.append(
+            "commodore/common/spell_effects.s does not consume "
+            "HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL"
+        )
+
     character_text = (COMMON_DIR / "ui_character.s").read_text(
         encoding="utf-8", errors="replace"
     )
@@ -173,6 +182,9 @@ def main() -> int:
         policy_missing.append(
             "commodore/common/player_create.s still owns the C128 chargen cutpoint name"
         )
+
+    if re.search(r"(?m)^\s*#if[^\n]*\bC128\b", spell_effects_text):
+        policy_missing.append("commodore/common/spell_effects.s still branches directly on C128")
 
     if missing or violations or policy_missing or direct_missing:
         if missing:

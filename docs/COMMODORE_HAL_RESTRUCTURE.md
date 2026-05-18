@@ -1153,6 +1153,12 @@ target-bank setup, and post-load channel cleanup.
       backend exports `hal_platform_chargen_cutpoint`, preserving C128's
       `C128_TEST_CHARGEN_CUTPOINT` diagnostic knob and the disabled default on
       C64/Plus/4.
+      Fifty-fifth slice: common spell effects no longer branch on C128 to
+      choose identify-prompt inclusion or cure-poison message helper ownership.
+      Identify prompt code is included by the single product import path on all
+      platforms, and the lifecycle backend compile-time policy
+      `HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL` preserves C128's low-runtime
+      helper placement and C64/Plus/4's local common helper.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

@@ -3229,11 +3229,7 @@ c128_resident_world_start:
 #import "../common/recall.s"
 #import "../common/monster_magic.s"
 #import "../common/spell_data.s"
-#define SPELL_EFFECTS_INCLUDE_IDENTIFY
-#define C128_PRODUCT_RUNTIME_LOW_CURE
 #import "../common/spell_effects.s"
-#undef C128_PRODUCT_RUNTIME_LOW_CURE
-#undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 c128_resident_world_end:
 
 .segment C128ResidentItems
