@@ -21,6 +21,8 @@
 .const hal_platform_levelup_magic_uses_trampoline = false
 .const hal_platform_title_sysinfo_80col = false
 .const hal_platform_title_sysinfo_sx64_probe = false
+.const hal_platform_player_move_diag_labels = false
+.const hal_platform_describe_look_masks_irq = false
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL

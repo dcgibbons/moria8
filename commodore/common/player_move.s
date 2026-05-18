@@ -4,9 +4,7 @@
 // Handles 8-direction movement, tile walkability checks,
 // and player position updates.
 
-#if !C128
 #import "look_flash_target.s"
-#endif
 
 // ============================================================
 // Walkable tile table
@@ -98,11 +96,11 @@ player_try_move:
     lda map_row_hi,x
     sta zp_ptr0_hi
     ldy zp_temp3            // map column
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_after_map_ptr_setup:
 #endif
     :MapRead_ptr0_y()
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_after_map_read:
 #endif
 
@@ -113,11 +111,11 @@ c128_town_move_diag_after_map_read:
     lsr
 
     // Check walkability (closed doors are blocked — use 'o' to open)
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_before_walkable:
 #endif
     jsr tile_is_walkable
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_after_walkable:
 #endif
     bcs !walkable+
@@ -127,12 +125,12 @@ c128_town_move_diag_after_walkable:
 
     // Check FLAG_OCCUPIED (monster present)
     ldy zp_temp3                // target_x (column offset)
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_before_occupied_read:
 #endif
     :MapRead_ptr0_y()             // Re-read map byte (zp_ptr0 still valid)
     and #FLAG_OCCUPIED
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_after_occupied_read:
 #endif
     beq !not_occupied+          // No monster → continue to move
@@ -162,7 +160,7 @@ c128_town_move_diag_after_occupied_read:
     rts
 
 !not_occupied:
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_move_success:
 #endif
     // Move succeeded — update player position
@@ -180,7 +178,7 @@ c128_town_move_diag_move_success:
     rts
 
 !blocked:
-#if C128
+#if hal_platform_player_move_diag_labels
 c128_town_move_diag_move_blocked:
 #endif
     // Suppress bump sound during running
@@ -717,7 +715,7 @@ do_look:
 // Input: dl_name_lo/hi = name string pointer
 dl_print_you_see:
     jsr look_flash_target
-#if C128
+#if hal_platform_describe_look_masks_irq
     php
     sei
 #endif
@@ -738,7 +736,7 @@ dl_print_you_see:
     jsr hal_screen_put_char
     pla
     sta zp_text_color
-#if C128
+#if hal_platform_describe_look_masks_irq
     plp
 #endif
     rts

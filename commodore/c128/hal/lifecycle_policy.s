@@ -25,6 +25,8 @@
 .const hal_platform_levelup_magic_uses_trampoline = true
 .const hal_platform_title_sysinfo_80col = true
 .const hal_platform_title_sysinfo_sx64_probe = false
+.const hal_platform_player_move_diag_labels = true
+.const hal_platform_describe_look_masks_irq = true
 #define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
 #define HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
 #define HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL

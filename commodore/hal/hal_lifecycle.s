@@ -49,3 +49,7 @@
 //   the 80-column machine-label/centering path.
 // - hal_platform_title_sysinfo_sx64_probe: boolean; true when title sysinfo
 //   should classify SX-64 by the cached KERNAL revision byte.
+// - hal_platform_player_move_diag_labels: boolean; true when movement emits
+//   product runtime diagnostic labels for platform smoke tests.
+// - hal_platform_describe_look_masks_irq: boolean; true when the look/describe
+//   message path must mask IRQs while printing the inline object description.

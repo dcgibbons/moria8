@@ -1196,6 +1196,12 @@ target-bank setup, and post-load channel cleanup.
       `commodore/common/` into the C128 platform tree. The implementation is
       still C128-only, but it no longer needs a target conditional in common
       code just to protect a platform-owned runtime helper.
+      Sixty-fourth slice: common player movement no longer branches directly
+      on `C128` for movement diagnostic labels or the look/describe IRQ
+      masking path. Lifecycle policy constants now preserve the existing C128
+      behavior while C64 and Plus/4 keep the previous unmasked describe path;
+      the look-flash helper is imported unconditionally through its
+      `#importonce` guard.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside
