@@ -34,4 +34,3 @@ commodore/common/tier_manager.s	target-conditional	#if !C128
 commodore/common/tier_manager.s	target-conditional	#if !PLUS4
 commodore/common/tier_manager.s	target-conditional	#if C128
 commodore/common/title_cache_runtime128.s	target-conditional	#if C128
-commodore/common/title_screen.s	target-conditional	#if C128

@@ -56,3 +56,6 @@
 .const hal_layout_status_row23_state_col = 70
 .const hal_layout_status_searching_on_row21 = false
 .const hal_layout_status_searching_on_row23 = true
+.const hal_layout_title_load_uses_cache = true
+.const hal_layout_title_art_bank1_source = true
+.const hal_layout_title_reverse_space_attr = true

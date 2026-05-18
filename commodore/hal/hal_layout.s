@@ -38,6 +38,9 @@
 //   hal_layout_status_row23_state_col
 //   hal_layout_status_searching_on_row21
 //   hal_layout_status_searching_on_row23
+//   hal_layout_title_load_uses_cache
+//   hal_layout_title_art_bank1_source
+//   hal_layout_title_reverse_space_attr
 //
 // These constants describe common layout intent. They are not hardware
 // addresses and must match the platform's screen implementation. Platform code

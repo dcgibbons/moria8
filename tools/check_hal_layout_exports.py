@@ -92,6 +92,9 @@ POLICY_CONSTANTS = (
     "hal_layout_status_searching_on_row23",
     "hal_layout_dungeon_door_scan_base",
     "hal_layout_dungeon_door_scan_limit",
+    "hal_layout_title_load_uses_cache",
+    "hal_layout_title_art_bank1_source",
+    "hal_layout_title_reverse_space_attr",
 )
 
 

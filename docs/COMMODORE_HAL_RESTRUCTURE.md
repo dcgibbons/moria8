@@ -1187,6 +1187,11 @@ target-bank setup, and post-load channel cleanup.
       label/centering path and the SX-64 KERNAL-revision probe, preserving
       C128 and C64 title sysinfo behavior while shrinking the common boundary
       allowlist.
+      Sixty-second slice: title screen rendering no longer branches directly
+      on `C128`. Layout policy constants now select the cached title-load
+      path, Bank-1 title-art source reads, and reverse-space VDC attribute
+      rendering needed by the C128 title path while C64/Plus4 keep the direct
+      RAM/string rendering path.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside
