@@ -1169,6 +1169,10 @@ target-bank setup, and post-load channel cleanup.
       branches on `C128` to choose cached message printing. `player_items.s`
       now calls `msg_print_current_ptr`, and the message subsystem applies the
       existing `hal_huffman_print_uses_cached_msg` memory-bank policy.
+      Fifty-eighth slice: test-only storage HAL filename stubs moved under
+      `commodore/common/compat/`, matching the Phase 5 rule that temporary
+      compatibility exceptions live in the explicit compat area instead of
+      ordinary common game code.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

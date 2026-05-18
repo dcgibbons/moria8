@@ -38,7 +38,7 @@
 .const OVL_COUNT       = 8
 #endif
 
-#import "hal_storage_overlay_test_stub.s"
+#import "compat/hal_storage_overlay_test_stub.s"
 
 // ============================================================
 // State

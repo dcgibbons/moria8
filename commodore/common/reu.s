@@ -660,7 +660,7 @@ reu_stash_overlays:
 #else
     .const REU_OVERLAY_COUNT = 8
 #endif
-#import "hal_storage_overlay_test_stub.s"
+#import "compat/hal_storage_overlay_test_stub.s"
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
