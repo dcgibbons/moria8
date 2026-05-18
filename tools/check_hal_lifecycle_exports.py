@@ -56,6 +56,8 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_wizard_40col_resident_enabled",
     "hal_platform_wizard_reveal_uses_trampoline",
     "hal_platform_levelup_magic_uses_trampoline",
+    "hal_platform_title_sysinfo_80col",
+    "hal_platform_title_sysinfo_sx64_probe",
 )
 
 
@@ -117,6 +119,8 @@ def main() -> int:
         "hal_platform_item_action_key_restores_bank": COMMON_DIR / "item_actions_overlay.s",
         "hal_platform_chargen_runtime_resync": COMMON_DIR / "player_create.s",
         "hal_platform_chargen_cutpoint": COMMON_DIR / "player_create.s",
+        "hal_platform_title_sysinfo_80col": COMMON_DIR / "title_sysinfo_banked.s",
+        "hal_platform_title_sysinfo_sx64_probe": COMMON_DIR / "title_sysinfo_banked.s",
     }
     for name, consumer_path in policy_consumers.items():
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")

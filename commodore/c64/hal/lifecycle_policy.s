@@ -19,6 +19,8 @@
 .const hal_platform_wizard_40col_resident_enabled = 1
 .const hal_platform_wizard_reveal_uses_trampoline = 1
 .const hal_platform_levelup_magic_uses_trampoline = false
+.const hal_platform_title_sysinfo_80col = false
+.const hal_platform_title_sysinfo_sx64_probe = true
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL

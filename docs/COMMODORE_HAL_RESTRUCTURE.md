@@ -1182,6 +1182,11 @@ target-bank setup, and post-load channel cleanup.
       selectors for the title PRG, preserving the emitted platform-specific
       title text and C128 load address while removing target-name conditionals
       from `title_data.s`.
+      Sixty-first slice: title sysinfo rendering no longer branches directly
+      on `C128`. Lifecycle policy constants now select the 80-column machine
+      label/centering path and the SX-64 KERNAL-revision probe, preserving
+      C128 and C64 title sysinfo behavior while shrinking the common boundary
+      allowlist.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

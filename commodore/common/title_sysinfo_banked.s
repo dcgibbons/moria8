@@ -11,7 +11,7 @@ title_show_sysinfo_banked:
     lda #23
     sta zp_cursor_row
     // Start column: centered baseline; shift left when REU info is shown.
-#if C128
+#if hal_platform_title_sysinfo_80col
     ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
 #else
     ldx #12
@@ -26,17 +26,19 @@ title_show_sysinfo_banked:
 !:  stx zp_cursor_col
 
     // Machine type
-#if C128
+#if hal_platform_title_sysinfo_80col
     lda #<tsi_c128_str
     ldy #>tsi_c128_str
 #else
     ldx #0                      // C64 default; check for SX-64
+#if hal_platform_title_sysinfo_sx64_probe
     // C64 — check for SX-64 (KERNAL_REV = $43)
     lda tsi_krev_cached         // Cached by trampoline before banking
     cmp #$43
     bne !pm+
     ldx #1                      // SX-64
 !pm:
+#endif
     lda tsi_mach_lo,x
     ldy tsi_mach_hi,x
 #endif
@@ -62,8 +64,8 @@ title_show_sysinfo_banked:
     // REU info if present
     lda reu_present
     beq !done+
-    lda #<tsi_reu_str
-    ldy #>tsi_reu_str
+    lda #<tsi_expansion_str
+    ldy #>tsi_expansion_str
     jsr tsi_print
     lda reu_size_kb
     sta zp_temp0
@@ -81,17 +83,14 @@ tsi_print:
     sty zp_ptr0_hi
     jmp hal_screen_put_string
 
-#if !C128
 tsi_mach_lo:    .byte <tsi_c64_str, <tsi_sx64_str
 tsi_mach_hi:    .byte >tsi_c64_str, >tsi_sx64_str
-#endif
 tsi_c64_str:    .text "C64" ; .byte 0
-#if C128
 tsi_c128_str:   .text "C128" ; .byte 0
-#endif
 tsi_sx64_str:   .text "SX-64" ; .byte 0
 tsi_kernal_str: .text "  KERNAL R" ; .byte 0
-tsi_reu_str:    .text "  REU " ; .byte 0
+tsi_expansion_str:
+    .byte $20, $20, $52, $45, $55, $20, 0
 tsi_kb_str:     .text "KB" ; .byte 0
 tsi_krev_table: .byte $aa, $00, $03, $43, $01
 tsi_krev_chars: .byte $31, $32, $33, $31, $31

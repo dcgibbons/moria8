@@ -45,3 +45,7 @@
 // - hal_platform_character_sheet_begin_enabled: boolean; true when the
 //   platform exports and requires hal_platform_character_sheet_begin before
 //   character-sheet rendering.
+// - hal_platform_title_sysinfo_80col: boolean; true when title sysinfo uses
+//   the 80-column machine-label/centering path.
+// - hal_platform_title_sysinfo_sx64_probe: boolean; true when title sysinfo
+//   should classify SX-64 by the cached KERNAL revision byte.
