@@ -9,7 +9,74 @@ The immediate goal is to stop treating the Plus/4 as a slightly modified C64
 port. Common code should express game intent. C64, C128, and Plus/4 platform
 code should own hardware execution.
 
-## Current Failure Context
+## How To Use This Document
+
+The sections above `Historical Detail` are the current state tracker. Use them
+to decide what to do next.
+
+The historical phase notes are intentionally retained because they explain why
+some boundaries and tests exist, but they are not the primary task list. If a
+historical checkbox appears to conflict with the phase table below, update the
+historical note or move it to backlog before continuing.
+
+## Current Phase State
+
+| Phase | Status | Remaining work |
+| --- | --- | --- |
+| Phase 0: Baseline Safety | Done | Ongoing behavior preservation only. |
+| Phase 1: Plus/4 Runtime Harness | Done | Optional direct marker-init smoke replacement. Product-level setup/save/load smokes are the active gates. |
+| Phase 2: HAL Contract Skeleton | Done | No active structural work. Keep contract docs/checkers current as new HAL labels are added. |
+| Phase 3: Non-Storage HAL Migration | Done | No active phase work. |
+| Phase 4: Storage HAL Migration | Structurally done | Backlog polish only: richer unknown-failure diagnostics and disk image manifest checks. |
+| Phase 4A: Asset Loader HAL Boundary | Done | No active phase work. |
+| Phase 5: Common-Code Purity Ratchet | Active | Shrink `docs/hal_boundary_allowlist.txt` one file/slice at a time. |
+
+## Active Work Queue
+
+1. Continue Phase 5 by removing remaining target-conditionals from
+   `commodore/common/`.
+2. Prefer lower-risk slices before touching high-risk memory/banking paths:
+   `game_loop.s` and small `disk_swap.s` clusters are better next targets than
+   `reu.s`, `save.s`, or `tier_manager.s`.
+3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
+   HAL export checker, and this state section.
+4. Do not move to a new phase without explicitly recording that the current
+   phase is complete.
+
+## Active Boundary Allowlist
+
+`docs/hal_boundary_allowlist.txt` is the authoritative list of remaining
+common-code boundary violations. Current files still listed there:
+
+- `commodore/common/disk_setup_banked.s`
+- `commodore/common/disk_setup_runtime128.s`
+- `commodore/common/disk_swap.s`
+- `commodore/common/game_loop.s`
+- `commodore/common/monster.s`
+- `commodore/common/overlay.s`
+- `commodore/common/reu.s`
+- `commodore/common/save.s`
+- `commodore/common/tier_manager.s`
+
+Current violation classes:
+
+- remaining `#if C64`, `#if C128`, `#if PLUS4`, and negated target-conditionals
+  in common code.
+- `REU` platform-name use in `commodore/common/reu.s`.
+
+## Backlog, Not Blocking HAL Completion
+
+- Add richer friendly text for still-unknown save/load/storage failures.
+- Add disk image manifest checks for C64, C128, and Plus/4 product disks.
+- Restore or replace direct Plus/4 marker-init smoke only if it can be made
+  reliable without bypassing required runtime IRQ/banking setup.
+- Make C64 `S)TART` preserve valid REU overlay cache contents like C128.
+
+## Historical Detail
+
+The remainder of this document is the migration record and detailed phase notes.
+
+## Historical Failure Context
 
 - [x] Plus/4 disk setup/save/load has one manual success pass after commit
       `bd43365 Fix Plus/4 save disk marker validation`.
@@ -21,17 +88,17 @@ code should own hardware execution.
       a generated Plus/4 save fixture.
 - [x] `make testplus4` runs the Plus/4 runtime smoke gate. The old build-only
       target is preserved as `make testplus4-build`.
-- [ ] Manual screenshots and VICE monitor traces are diagnostic evidence, not
-      release gates.
+- Manual screenshots and VICE monitor traces are diagnostic evidence, not
+  release gates.
 - [x] Resolved Plus/4 disk failure: `Disk code $00 phase $83` during save disk
       initialization/readback. Root cause was Plus/4 KERNAL calls clobbering
       `X` while marker read/write loops used `X` as the persistent marker
       index.
-- [ ] Previous Plus/4 failures included C64 leakage through `$01` banking,
-      `$dd00` VIC/CIA assumptions, raw KERNAL calls, hidden filename buffers,
-      IRQ state drift, TED color mapping, and input repeat/release behavior.
+- Previous Plus/4 failures included C64 leakage through `$01` banking,
+  `$dd00` VIC/CIA assumptions, raw KERNAL calls, hidden filename buffers, IRQ
+  state drift, TED color mapping, and input repeat/release behavior.
 
-## Current HAL Position
+## Historical HAL Position Snapshot
 
 - [x] HAL contract skeleton exists in `commodore/hal/`.
 - [x] Platform HAL placeholder directories exist for C64, C128, and Plus/4.
@@ -41,15 +108,14 @@ code should own hardware execution.
       checked by `tools/check_hal_storage_exports.py`.
 - [x] Plus/4 storage has been stabilized enough for manual disk initialize,
       save, and load.
-- [ ] Storage is still the highest-risk platform boundary because common code
-      and platform code still share too much disk state, filename policy,
-      logical file policy, status reporting, and platform-specific KERNAL
-      assumptions.
+- [x] Structural storage HAL migration is complete. Storage remains a sensitive
+      platform boundary, but the remaining storage work is quality/policy
+      backlog rather than structural migration.
 - [x] Plus/4 resident space was reclaimed by replacing the linked C64 REU
       implementation with a Plus/4-owned no-REU stub. The product build now
       fits below `MAP_BASE`.
-- [x] Current concrete HAL step completed: save-write/load-resume runtime gates
-      are enabled before migrating more storage behavior out of common code.
+- [x] Save-write/load-resume runtime gates are enabled across the supported
+      platforms before further storage or common-code cleanup.
 
 ## C64/C128 Storage Baseline Gates
 
@@ -346,7 +412,7 @@ Required services:
 - [x] Add missing save media smoke.
 - [x] Add wrong save media smoke.
 - [x] Add product Disk Setup smoke for the marker create/readback path.
-- [ ] Restore or replace the direct marker-init smoke. The product Disk Setup
+- [ ] Optional: restore or replace the direct marker-init smoke. The product Disk Setup
       smoke currently covers the real path; the direct `$F000` call harness is
       too sensitive to bank/IRQ setup to keep as a default gate.
 - [x] Add save-write smoke using the product `save_game` routine after title
@@ -375,7 +441,7 @@ Gate to leave Phase 1:
 - [x] Plus/4 resident size pressure is cleared for the next runtime gate work:
       the product build now ends at `$C50E`, below `MAP_BASE=$C800`, after
       removing accidental C64 REU linkage from the Plus/4 resident image.
-- [ ] Direct Plus/4 marker-initialization smoke must explicitly install RAM IRQ
+- [ ] Optional direct Plus/4 marker-initialization smoke must explicitly install RAM IRQ
       vectors and enter all-RAM mode before calling the banked
       `disk_marker_init` routine. Product Disk Setup is the active marker gate
       until that direct harness is reliable again.
@@ -411,10 +477,13 @@ Gate to leave Phase 1:
       service.
 - [x] Wire C64 with thin adapters first.
 - [x] Wire C128 with thin adapters second.
-- [ ] Wire Plus/4 independently; do not use `c64_*` aliases for storage,
-      banking, input, sound, or TED display services.
+- [x] Wire Plus/4 independently; do not use `c64_*` aliases for storage,
+      banking, input, sound, or TED display services. Storage and the major
+      lifecycle/input/sound/display boundaries are no longer C64-shaped from
+      the Plus/4 side; remaining common-code target conditionals are tracked
+      under Phase 5.
 
-Phase 2 next task:
+Phase 2 completed follow-up tasks:
 
 - [x] Write `commodore/hal/hal_storage.s` as the authoritative storage ABI:
       status codes, phase bands, required labels, register conventions,
@@ -581,8 +650,9 @@ Storage adapter note:
       C64 keeps C64-named routines inside its own implementation and C64 unit
       fixtures; Plus/4 no longer exports C64-shaped storage compatibility
       labels.
-- [ ] Replace remaining aliases with real platform-owned routines only one slice at a
-      time, with C64/C128/Plus4 runtime gates named before each migration.
+- [x] Replace remaining Plus/4 storage aliases with real platform-owned
+      routines. Remaining common-code platform conditionals are Phase 5
+      cleanup, not storage-alias work.
 
 ### Phase 3: Non-Storage HAL Migration
 
@@ -792,8 +862,9 @@ Storage adapter note:
       media after a successful init. `disk_swap128` covers the failure case so
       a failed save-drive re-init clears `c128_media_state` instead of letting
       save continue into the overwrite probe.
-- [ ] Continue richer save/load diagnostics beyond the first friendly-message
-      mappings, especially raw diagnostic display for still-unknown failures.
+- [ ] Backlog: continue richer save/load diagnostics beyond the first
+      friendly-message mappings, especially raw diagnostic display for
+      still-unknown failures.
 - [x] Require runtime proof for setup/save/load on C64, C128, and Plus/4 before
       accepting the storage HAL migration.
       Current C128 runtime coverage protects title load missing/mounted save,
@@ -1222,7 +1293,10 @@ target-bank setup, and post-load channel cleanup.
 - [ ] Delete compatibility aliases that make one platform look like another
       platform, especially C64-style banking aliases for Plus/4.
 
-## Gate Checklist
+## Verification Gate Catalog
+
+These are gates to select from for each change. They are not phase-state
+checkboxes; the active gate depends on the files and behavior touched.
 
 ### Every HAL Change
 
