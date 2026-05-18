@@ -98,20 +98,12 @@ show_inv_and_select:
     sta piw_return_overlay
 !sias_return_resident:
 #endif
-#if C128
-    jsr input_prepare_followup_key
-#else
-    jsr input_prepare_modal_dismiss_key
-#endif
+    jsr input_prepare_selectable_overlay_key
     jsr tramp_ui_inv_select_display
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_BOOK_OVERLAY
     jmp test_assert_book_overlay
 #endif
-#if C128
-    jsr input_get_key_fast
-#else
-    jsr hal_input_get_key
-#endif
+    jsr input_get_followup_key
     pha
     jsr ui_view_restore_modal_overlay
 #if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)

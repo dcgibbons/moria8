@@ -1159,6 +1159,12 @@ target-bank setup, and post-load channel cleanup.
       platforms, and the lifecycle backend compile-time policy
       `HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL` preserves C128's low-runtime
       helper placement and C64/Plus/4's local common helper.
+      Fifty-sixth slice: common inventory selection no longer branches on
+      `C128` to choose selectable-overlay key preparation or fast follow-up
+      reads. `show_inv_and_select` now uses the existing input HAL helpers
+      `input_prepare_selectable_overlay_key` and `input_get_followup_key`,
+      preserving C128's release/fast-key path and the 40-column modal/GETIN
+      path.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.
