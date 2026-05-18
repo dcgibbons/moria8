@@ -149,6 +149,13 @@ c64_disk_marker_present:
     sec
     rts
 
+#define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+#define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
+#define HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
+#define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
+#define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
+#define HAL_STORAGE_MARKER_PRESENT_DIRECT
+
 ui_disk_setup_dispatch:
     lda $01
     sta ui_seen_bank

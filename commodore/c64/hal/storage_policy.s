@@ -15,3 +15,10 @@
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_detail_status_phase = 0
+
+#define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+#define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
+#define HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
+#define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
+#define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
+#define HAL_STORAGE_MARKER_PRESENT_DIRECT

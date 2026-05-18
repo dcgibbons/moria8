@@ -58,6 +58,13 @@
 .label hal_storage_clrchn = kernal_clrchn
 .label hal_storage_readst = kernal_readst
 
+#define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+#define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
+#define HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
+#define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
+#define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
+#define HAL_STORAGE_MARKER_PRESENT_DIRECT
+
 screen_put_string_calls: .byte 0
 screen_clear_calls:      .byte 0
 ui_clear_calls:          .byte 0

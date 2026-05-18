@@ -307,6 +307,7 @@ tramp_dig_ability:
 #import "../common/runtime_ui_strings.s"
 #import "../common/compat/io_kernal_consts.s"
 #import "../common/save.s"
+#import "hal/storage_policy.s"
 #import "../common/disk_swap.s"
 #import "../common/score_io.s"
 #import "../common/title_screen.s"

@@ -35,7 +35,7 @@ disk_ui_value:     .byte 0
 disk_temp:         .byte 0
 disk_status:       .byte 0
 disk_prompt_device:.byte 8
-#if PLUS4
+#if HAL_STORAGE_EXTENDED_DISK_DIAG
 disk_error_phase:  .byte 0
 disk_error_readst: .byte 0
 disk_error_dos0:   .byte 0
@@ -51,7 +51,7 @@ disk_error_index:  .byte 0
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
-#if C128 || PLUS4
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
 .const DISK_ERR_NONE              = $00
 .const DISK_ERR_MARKER_OPEN       = $81
 .const DISK_ERR_MARKER_CHKIN      = $82
@@ -102,7 +102,7 @@ disk_reset_session_state:
     lda #8
     sta program_device
     sta save_device
-#if PLUS4
+#if HAL_STORAGE_EXTENDED_DISK_DIAG
     sta disk_error_device
     lda #0
     sta disk_error_phase
@@ -113,13 +113,13 @@ disk_reset_session_state:
     sta disk_error_expect
     sta disk_error_index
 #endif
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda #C128_MEDIA_UNKNOWN
     sta c128_media_state
 #endif
     rts
 
-#if PLUS4
+#if HAL_STORAGE_EXTENDED_DISK_DIAG
 disk_error_clear:
     lda #0
     sta disk_error_phase
@@ -160,16 +160,16 @@ disk_error_set_dos_status:
     rts
 #endif
 
-#if C128 || PLUS4
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
 // disk_command_status
 // Output: A = HAL_STORAGE_STATUS_* for the most recently captured DOS command
 // channel status. Raw diagnostic bytes remain platform-owned.
 disk_command_status:
-#if C128
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     lda disk_diag_cmd_status0
     ldx disk_diag_cmd_status1
     jmp storage_status_from_dos_digits
-#elif PLUS4
+#elif HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
     lda disk_error_dos0
     bne !digits+
     ldx disk_error_dos1
@@ -186,7 +186,7 @@ disk_command_status:
 // Output: A = HAL_STORAGE_STATUS_* for the most recent save-media failure.
 //         Raw platform diagnostics remain in disk_status/disk_error_*.
 disk_save_media_status:
-#if !C128 && !PLUS4
+#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
     lda disk_status
     cmp #2                      // 0/1 = wrong media; >=2 = I/O/device.
     bcs !ioerr+
@@ -195,7 +195,7 @@ disk_save_media_status:
 !ioerr:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
-#elif PLUS4
+#elif HAL_STORAGE_SAVE_MEDIA_STATUS_ERROR_DIAG
     lda disk_status
     cmp #74
     bne !check_readst+
@@ -215,7 +215,7 @@ disk_save_media_status:
 !unknown:
     lda #HAL_STORAGE_STATUS_UNKNOWN
     rts
-#elif C128
+#elif HAL_STORAGE_SAVE_MEDIA_STATUS_MARKER_DOS
     lda disk_status
     cmp #$83                    // Marker bytes read, but contents mismatch.
     beq !wrong+
@@ -237,19 +237,19 @@ disk_save_media_status:
     rts
 #endif
 
-#if C128 || PLUS4 || STORAGE_SETUP_STATUS_HELPER
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG || STORAGE_SETUP_STATUS_HELPER
 // disk_setup_status
 // Output: A = HAL_STORAGE_STATUS_* for the most recent Disk Setup init failure.
 //         Raw platform diagnostics remain in disk_status/disk_error_*.
 disk_setup_status:
-#if C128
+#if HAL_STORAGE_SETUP_STATUS_COMMAND_FIRST
     jsr hal_storage_command_status
     cmp #HAL_STORAGE_STATUS_UNKNOWN
     bne !done+
     jmp disk_setup_status_from_raw
 !done:
     rts
-#elif PLUS4
+#elif HAL_STORAGE_SETUP_STATUS_ERROR_FIRST
     lda disk_error_dos0
     beq !raw+
     jsr hal_storage_command_status
@@ -304,7 +304,7 @@ disk_require_save_media:
 disk_prompt_save:
     lda save_device
     sta disk_prompt_device
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     // In one-drive mode, setup completion does not prove which disk is
     // currently mounted. Prompt only when the media-state owner says save
     // media is not already current.
@@ -327,7 +327,7 @@ disk_prompt_save:
     clc
     rts
 !dps_prompt:
-#else
+#elif HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
     // On C64, the first one-drive save/load transaction after Disk Setup
     // already has the save disk mounted from the setup UI. Consume that
     // fresh-setup state once so the player is not asked to press a second key
@@ -341,7 +341,7 @@ disk_prompt_save:
     dec disk_setup_done
     rts
 #endif
-#if !C128
+#if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN || HAL_STORAGE_MEDIA_STATE_TRACKING
 !dps_prompt:
 #endif
     lda #<ds_save_str
@@ -351,7 +351,7 @@ disk_prompt_save:
 disk_prompt_game:
     lda program_device
     sta disk_prompt_device
-#if C128
+#if HAL_STORAGE_MEDIA_STATE_TRACKING
     lda disk_mode
     cmp #1
     bne !dpg_prompt+
@@ -373,7 +373,7 @@ disk_prompt:
     beq !dp_show+
     rts
 !dp_show:
-#if !C128
+#if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
     jsr ui_clear_full_screen_safe
     jsr msg_init
 #endif
@@ -395,22 +395,22 @@ disk_prompt:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
-#if C128
+#if HAL_STORAGE_SWAP_PROMPT_MODAL_DISMISS
     jsr input_get_modal_dismiss_key
-#else
+#elif HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
     jsr hal_input_get_key
     jsr ui_clear_full_screen_safe
     jsr msg_init
 #endif
     jsr hal_storage_init_selected_drive
 
-#if !C128 && !PLUS4
+#if HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
     rts
-#elif PLUS4
+#elif HAL_STORAGE_SWAP_PROMPT_RETURN_AFTER_INIT
     rts
-#else
+#elif HAL_STORAGE_SWAP_PROMPT_CLEAR_ROWS_AND_TRACK_MEDIA
     php
     lda #10
     jsr hal_screen_clear_row
@@ -444,7 +444,7 @@ disk_prompt:
 #endif
     rts
 
-#if C128
+#if HAL_STORAGE_DIR_READ_FNAME
 disk_dir_read_fname:
     .byte $24                           // "$"
 .label disk_dir_read_fname_len = * - disk_dir_read_fname
@@ -454,13 +454,13 @@ disk_dir_read_fname:
 // KERNAL access wrappers
 // ============================================================
 disk_kernal_enter:
-#if C128
+#if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     :EnterKernal()
 #endif
     rts
 
 disk_kernal_exit:
-#if C128
+#if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     :ExitKernal()
 #else
     sei
@@ -480,10 +480,10 @@ disk_init_drive:
 // Output: carry clear = valid marker found, carry set = invalid/missing
 // ============================================================
 disk_marker_present:
-#if !C128
+#if HAL_STORAGE_MARKER_PRESENT_DIRECT
     jsr hal_storage_marker_present
     rts
-#else
+#elif HAL_STORAGE_MARKER_PRESENT_INLINE
     lda #$81
     sta disk_status
     sta disk_diag_phase
