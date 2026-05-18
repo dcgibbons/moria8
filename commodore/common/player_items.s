@@ -40,7 +40,7 @@ piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
 piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
-#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if hal_platform_item_prompt_overlay_runtime
 piw_return_overlay: .byte 0    // Product overlay to restore after prompt-time modal UI
 #endif
 
@@ -80,7 +80,7 @@ equip_slot_for_cat:
 // Preserves: nothing
 show_inv_and_select:
     sta piw_filter
-#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if hal_platform_item_prompt_overlay_runtime
     lda #OVL_NONE
     sta piw_return_overlay
     // Only restore an overlay when the immediate return target is inside the
@@ -106,7 +106,7 @@ show_inv_and_select:
     jsr input_get_followup_key
     pha
     jsr ui_view_restore_modal_overlay
-#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128 && C128_PRODUCT_OVERLAY_RUNTIME)
+#if hal_platform_item_prompt_overlay_runtime
     // Prompt-time inventory can be opened from OVL.ITEMS command handlers.
     // Reload the caller overlay before returning to code in the $E000 window.
     lda piw_return_overlay
@@ -115,13 +115,13 @@ show_inv_and_select:
     lda #OVL_ITEMS
     jsr overlay_load
     bcs !sias_no_items_reload+
-#if C128
+#if hal_platform_item_prompt_reload_resync
     jsr hal_platform_runtime_resync
     lda #MMU_ALL_RAM
     sta hal_memory_mmu_config_register
 #endif
     sei
-#if !C128 && PLATFORM_PRODUCT_IRQ_VECTOR_RUNTIME
+#if hal_platform_item_prompt_reload_installs_irq
     jsr hal_irq_install_runtime
 #endif
 #if hal_memory_has_cpu_port
@@ -137,7 +137,7 @@ show_inv_and_select:
 // Used by item_takeoff when player presses '?'.
 // Preserves: nothing
 show_equip_and_restore:
-#if !C128
+#if hal_platform_equip_prepare_key_before_display
     jsr input_prepare_modal_dismiss_key
 #endif
     jsr tramp_ui_equip_display

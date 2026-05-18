@@ -1202,6 +1202,16 @@ target-bank setup, and post-load channel cleanup.
       behavior while C64 and Plus/4 keep the previous unmasked describe path;
       the look-flash helper is imported unconditionally through its
       `#importonce` guard.
+      Sixty-fifth slice: common filtered item/equipment prompt handling no
+      longer branches directly on `C128` to choose product overlay restore
+      state, post-reload C128 runtime resync, C64 IRQ-vector reinstall, or
+      equipment-modal key preparation timing. Lifecycle policy constants now
+      preserve those platform differences at the call sites.
+      C128 title regression fix: title and sysinfo preprocessor policies now
+      use platform-owned `#define` flags imported directly by each platform
+      main. This prevents common title code from silently taking the default
+      40-column/C64 branches when the `.const` policy value is not visible to
+      Kick Assembler's `#if` preprocessor.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

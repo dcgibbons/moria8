@@ -60,6 +60,10 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_title_sysinfo_sx64_probe",
     "hal_platform_player_move_diag_labels",
     "hal_platform_describe_look_masks_irq",
+    "hal_platform_item_prompt_overlay_runtime",
+    "hal_platform_item_prompt_reload_installs_irq",
+    "hal_platform_item_prompt_reload_resync",
+    "hal_platform_equip_prepare_key_before_display",
 )
 
 
@@ -109,26 +113,38 @@ def main() -> int:
             if name not in labels:
                 direct_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
     policy_consumers = {
-        "hal_platform_reassert_before_message_render": COMMON_DIR / "ui_messages.s",
-        "hal_platform_restore_tier_after_overlay": COMMON_DIR / "ui_restore.s",
-        "hal_platform_string_bank_load_invalidates_tier": COMMON_DIR / "string_bank.s",
-        "hal_platform_mark_modal_restore_perf": COMMON_DIR / "ui_restore.s",
-        "hal_platform_perf_p1_command_instrumentation": COMMON_DIR / "game_loop_helpers.s",
-        "hal_platform_render_ball_effect_direct_perf": COMMON_DIR / "player_magic_ball.s",
-        "hal_platform_levelup_magic_uses_trampoline": COMMON_DIR / "combat.s",
-        "hal_platform_character_background_resync": COMMON_DIR / "player.s",
-        "hal_platform_player_magic_helpers_external": COMMON_DIR / "player_magic.s",
-        "hal_platform_item_action_key_restores_bank": COMMON_DIR / "item_actions_overlay.s",
-        "hal_platform_chargen_runtime_resync": COMMON_DIR / "player_create.s",
-        "hal_platform_chargen_cutpoint": COMMON_DIR / "player_create.s",
-        "hal_platform_title_sysinfo_80col": COMMON_DIR / "title_sysinfo_banked.s",
-        "hal_platform_title_sysinfo_sx64_probe": COMMON_DIR / "title_sysinfo_banked.s",
-        "hal_platform_player_move_diag_labels": COMMON_DIR / "player_move.s",
-        "hal_platform_describe_look_masks_irq": COMMON_DIR / "player_move.s",
+        "hal_platform_reassert_before_message_render": (COMMON_DIR / "ui_messages.s",),
+        "hal_platform_restore_tier_after_overlay": (COMMON_DIR / "ui_restore.s",),
+        "hal_platform_string_bank_load_invalidates_tier": (COMMON_DIR / "string_bank.s",),
+        "hal_platform_mark_modal_restore_perf": (COMMON_DIR / "ui_restore.s",),
+        "hal_platform_perf_p1_command_instrumentation": (COMMON_DIR / "game_loop_helpers.s",),
+        "hal_platform_render_ball_effect_direct_perf": (COMMON_DIR / "player_magic_ball.s",),
+        "hal_platform_levelup_magic_uses_trampoline": (COMMON_DIR / "combat.s",),
+        "hal_platform_character_background_resync": (COMMON_DIR / "player.s",),
+        "hal_platform_player_magic_helpers_external": (COMMON_DIR / "player_magic.s",),
+        "hal_platform_item_action_key_restores_bank": (COMMON_DIR / "item_actions_overlay.s",),
+        "hal_platform_chargen_runtime_resync": (COMMON_DIR / "player_create.s",),
+        "hal_platform_chargen_cutpoint": (COMMON_DIR / "player_create.s",),
+        "hal_platform_title_sysinfo_80col": (
+            COMMON_DIR / "title_sysinfo_banked.s",
+            "HAL_PLATFORM_TITLE_SYSINFO_80COL",
+        ),
+        "hal_platform_title_sysinfo_sx64_probe": (
+            COMMON_DIR / "title_sysinfo_banked.s",
+            "HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE",
+        ),
+        "hal_platform_player_move_diag_labels": (COMMON_DIR / "player_move.s",),
+        "hal_platform_describe_look_masks_irq": (COMMON_DIR / "player_move.s",),
+        "hal_platform_item_prompt_overlay_runtime": (COMMON_DIR / "player_items.s",),
+        "hal_platform_item_prompt_reload_installs_irq": (COMMON_DIR / "player_items.s",),
+        "hal_platform_item_prompt_reload_resync": (COMMON_DIR / "player_items.s",),
+        "hal_platform_equip_prepare_key_before_display": (COMMON_DIR / "player_items.s",),
     }
-    for name, consumer_path in policy_consumers.items():
+    for name, consumer_spec in policy_consumers.items():
+        consumer_path = consumer_spec[0]
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")
-        if name not in consumer_text:
+        accepted_names = (name, *consumer_spec[1:])
+        if not any(accepted_name in consumer_text for accepted_name in accepted_names):
             policy_missing.append(f"{consumer_path.relative_to(ROOT)} does not consume {name}")
 
     wizard_text = (COMMON_DIR / "wizard.s").read_text(

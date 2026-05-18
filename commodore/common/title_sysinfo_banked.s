@@ -11,7 +11,7 @@ title_show_sysinfo_banked:
     lda #23
     sta zp_cursor_row
     // Start column: centered baseline; shift left when REU info is shown.
-#if hal_platform_title_sysinfo_80col
+#if HAL_PLATFORM_TITLE_SYSINFO_80COL
     ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
 #else
     ldx #12
@@ -26,12 +26,12 @@ title_show_sysinfo_banked:
 !:  stx zp_cursor_col
 
     // Machine type
-#if hal_platform_title_sysinfo_80col
+#if HAL_PLATFORM_TITLE_SYSINFO_80COL
     lda #<tsi_c128_str
     ldy #>tsi_c128_str
 #else
     ldx #0                      // C64 default; check for SX-64
-#if hal_platform_title_sysinfo_sx64_probe
+#if HAL_PLATFORM_TITLE_SYSINFO_SX64_PROBE
     // C64 — check for SX-64 (KERNAL_REV = $43)
     lda tsi_krev_cached         // Cached by trampoline before banking
     cmp #$43

@@ -18,9 +18,6 @@ commodore/common/monster.s	target-conditional	#if C128
 commodore/common/overlay.s	target-conditional	#if !C128
 commodore/common/overlay.s	target-conditional	#if !C128 && !PLUS4
 commodore/common/overlay.s	target-conditional	#if C128
-commodore/common/player_items.s	target-conditional	#if !C128
-commodore/common/player_items.s	target-conditional	#if (!C128 && PLATFORM_PRODUCT_OVERLAY_RUNTIME) || (C128
-commodore/common/player_items.s	target-conditional	#if C128
 commodore/common/reu.s	platform-name	REU
 commodore/common/reu.s	target-conditional	#if C128
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4

@@ -15,7 +15,7 @@
 // Clobbers: A, X, Y, zp_ptr0, zp_ptr1, zp_cursor_row/col, zp_text_color
 // ============================================================
 title_load_and_draw:
-#if hal_layout_title_load_uses_cache
+#if HAL_LAYOUT_TITLE_LOAD_USES_CACHE
     jmp c128_title_load_and_draw_cached
 #else
     jsr hal_asset_load_title
@@ -66,7 +66,7 @@ title_render_data:
 !trd_loop:
     // Read first byte: row or $FF (end marker)
     ldy #0
-#if hal_layout_title_art_bank1_source
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
 #else
     lda (zp_ptr1),y
@@ -77,7 +77,7 @@ title_render_data:
 
     // Read col
     iny
-#if hal_layout_title_art_bank1_source
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
 #else
     lda (zp_ptr1),y
@@ -88,7 +88,7 @@ title_render_data:
 
     // Read color
     iny
-#if hal_layout_title_art_bank1_source
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     jsr mmu_safe_map_read_ptr1
 #else
     lda (zp_ptr1),y
@@ -104,7 +104,7 @@ title_render_data:
     adc #0
     sta zp_ptr1_hi
 
-#if hal_layout_title_art_bank1_source
+#if HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
     // C128: segment text lives in Bank 1 MAP_BASE; render directly using
     // mmu-safe reads so we never pass Bank 1 pointers into Bank 0 string code.
 !trd_draw_bank1:
@@ -162,7 +162,7 @@ title_render_data:
 !trd_done:
     rts
 
-#if hal_layout_title_reverse_space_attr
+#if HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR
 // C64 title data uses $A0 as reverse-space solid blocks. On the C128 VDC
 // path, write a plain space and set reverse-video in the attribute byte so
 // the block glyph survives the 80-column character mapping.

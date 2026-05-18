@@ -258,6 +258,8 @@ tramp_dig_ability:
 
 #import "../common/zeropage.s"
 #import "memory.s"
+#import "hal/layout.s"
+#import "hal/lifecycle_policy.s"
 #import "reu_stub.s"
 #import "screen.s"
 #import "../common/color.s"

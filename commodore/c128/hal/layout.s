@@ -54,8 +54,11 @@
 .const hal_layout_status_row23_au_col = 44
 .const hal_layout_status_row23_hunger_col = 63
 .const hal_layout_status_row23_state_col = 70
-.const hal_layout_status_searching_on_row21 = false
-.const hal_layout_status_searching_on_row23 = true
-.const hal_layout_title_load_uses_cache = true
-.const hal_layout_title_art_bank1_source = true
-.const hal_layout_title_reverse_space_attr = true
+.const hal_layout_status_searching_on_row21 = 0
+.const hal_layout_status_searching_on_row23 = 1
+.const hal_layout_title_load_uses_cache = 1
+.const hal_layout_title_art_bank1_source = 1
+.const hal_layout_title_reverse_space_attr = 1
+#define HAL_LAYOUT_TITLE_LOAD_USES_CACHE
+#define HAL_LAYOUT_TITLE_ART_BANK1_SOURCE
+#define HAL_LAYOUT_TITLE_REVERSE_SPACE_ATTR

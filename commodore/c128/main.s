@@ -315,6 +315,8 @@ c128_town_dump_buf:
 // Core System & UI Routines — MUST live in Safe Zone (<$C000)
 // ============================================================
 #import "memory128.s"
+#import "hal/layout.s"
+#import "hal/lifecycle_policy.s"
 #import "../common/color.s"
 #import "../common/sound.s"
 #import "config128.s"

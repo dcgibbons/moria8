@@ -53,3 +53,11 @@
 //   product runtime diagnostic labels for platform smoke tests.
 // - hal_platform_describe_look_masks_irq: boolean; true when the look/describe
 //   message path must mask IRQs while printing the inline object description.
+// - hal_platform_item_prompt_overlay_runtime: boolean; true when filtered
+//   item prompts can be invoked from reloadable product overlay code.
+// - hal_platform_item_prompt_reload_installs_irq: boolean; true when reloading
+//   an item prompt caller overlay must reinstall runtime IRQ vectors.
+// - hal_platform_item_prompt_reload_resync: boolean; true when reloading an
+//   item prompt caller overlay must resync platform runtime state.
+// - hal_platform_equip_prepare_key_before_display: boolean; true when the
+//   equipment modal must prepare the dismiss key before drawing the view.
