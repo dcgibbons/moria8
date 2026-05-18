@@ -1177,6 +1177,11 @@ target-bank setup, and post-load channel cleanup.
       `commodore/common/compat/`. Platform code and tests still import the
       same constants, but ordinary common game code no longer carries raw
       `KERNAL_*` symbols in the boundary audit.
+      Sixtieth slice: standalone title-art data no longer branches on C128 or
+      Plus/4 symbols. The build now passes neutral `TITLE_PLATFORM_*`
+      selectors for the title PRG, preserving the emitted platform-specific
+      title text and C128 load address while removing target-name conditionals
+      from `title_data.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

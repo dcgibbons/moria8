@@ -10,7 +10,7 @@
 //   $2D = '-', $21 = '!', $2B = '+'
 //   Box borders: + for corners, - for horizontal, ! for vertical
 
-#if C128
+#if TITLE_PLATFORM_128
 .pc = $4000 "Title Art"
 #else
 .pc = $C000 "Title Art"
@@ -194,10 +194,10 @@
 .byte 12, 1, TC_LGREY
 .byte $21
 .byte $00
-#if C128
+#if TITLE_PLATFORM_128
 .byte 12, 9, TC_CYAN
 .text "Commodore 128 Edition"
-#elif PLUS4
+#elif TITLE_PLATFORM_4
 .byte 12, 8, TC_CYAN
 .text "Commodore Plus/4 Edition"
 #else
@@ -235,10 +235,10 @@
 .byte 15, 1, TC_LGREY
 .byte $21
 .byte $00
-#if C128
+#if TITLE_PLATFORM_128
 .byte 15, 7, TC_DGREY
 .text "C128 port by Chad Gibbons"
-#elif PLUS4
+#elif TITLE_PLATFORM_4
 .byte 15, 6, TC_DGREY
 .text "Plus/4 port by Chad Gibbons"
 #else
