@@ -51,6 +51,7 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_ego_holy_avenger_string_external",
     "hal_platform_ego_ac_bonus_external",
     "hal_platform_chargen_runtime_resync",
+    "hal_platform_chargen_cutpoint",
     "hal_platform_wizard_entry_uses_overlay",
     "hal_platform_wizard_40col_resident_enabled",
     "hal_platform_wizard_reveal_uses_trampoline",
@@ -115,6 +116,7 @@ def main() -> int:
         "hal_platform_player_magic_helpers_external": COMMON_DIR / "player_magic.s",
         "hal_platform_item_action_key_restores_bank": COMMON_DIR / "item_actions_overlay.s",
         "hal_platform_chargen_runtime_resync": COMMON_DIR / "player_create.s",
+        "hal_platform_chargen_cutpoint": COMMON_DIR / "player_create.s",
     }
     for name, consumer_path in policy_consumers.items():
         consumer_text = consumer_path.read_text(encoding="utf-8", errors="replace")
@@ -166,6 +168,10 @@ def main() -> int:
     ):
         policy_missing.append(
             "commodore/common/player_create.s still gates chargen runtime resync on C128"
+        )
+    if "C128_CHARGEN_CUTPOINT" in player_create_text:
+        policy_missing.append(
+            "commodore/common/player_create.s still owns the C128 chargen cutpoint name"
         )
 
     if missing or violations or policy_missing or direct_missing:

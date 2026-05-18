@@ -1148,6 +1148,11 @@ target-bank setup, and post-load channel cleanup.
       title renderer still applies that offset only inside its existing C128
       Bank-1 title-art path; dynamic title-menu positioning remains separate
       and unchanged.
+      Fifty-fourth slice: common character creation no longer defines or
+      consumes the C128-named chargen cutpoint diagnostic. Each lifecycle
+      backend exports `hal_platform_chargen_cutpoint`, preserving C128's
+      `C128_TEST_CHARGEN_CUTPOINT` diagnostic knob and the disabled default on
+      C64/Plus/4.
 - [x] Remove raw KERNAL calls from common storage paths.
       The remaining common `KERNAL_*` allowlist entries are
       `io_kernal_consts.s` ABI constants, not active storage behavior.

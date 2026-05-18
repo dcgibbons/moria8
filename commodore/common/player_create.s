@@ -26,34 +26,31 @@
 //
 // Incident-scoped cutpoints are kept here for chargen bisection because they
 // were high-signal during the overlay/payload failure investigation. The normal
-// build uses C128_CHARGEN_CUTPOINT=-1, so none of these early returns fire.
-#if !C128
-.const C128_CHARGEN_CUTPOINT = -1
-#endif
+// build uses hal_platform_chargen_cutpoint=-1, so none of these early returns fire.
 
 player_create:
 #if C128_TEST_TOWN_SELF_DUMP
     lda #$72
     jsr c128_town_dump_mark
 #endif
-    .if (C128_CHARGEN_CUTPOINT == -2) { rts }
+    .if (hal_platform_chargen_cutpoint == -2) { rts }
     jsr player_init
-    .if (C128_CHARGEN_CUTPOINT == 0) { rts }
+    .if (hal_platform_chargen_cutpoint == 0) { rts }
 
     jsr create_select_race
-    .if (C128_CHARGEN_CUTPOINT == 1) { rts }
+    .if (hal_platform_chargen_cutpoint == 1) { rts }
     jsr create_roll_stats
-    .if (C128_CHARGEN_CUTPOINT == 2) { rts }
+    .if (hal_platform_chargen_cutpoint == 2) { rts }
     jsr create_select_class
-    .if (C128_CHARGEN_CUTPOINT == 3) { rts }
+    .if (hal_platform_chargen_cutpoint == 3) { rts }
     jsr create_enter_name
-    .if (C128_CHARGEN_CUTPOINT == 4) { rts }
+    .if (hal_platform_chargen_cutpoint == 4) { rts }
     jsr create_select_gender
-    .if (C128_CHARGEN_CUTPOINT == 5) { rts }
+    .if (hal_platform_chargen_cutpoint == 5) { rts }
 #if hal_platform_chargen_runtime_resync
     jsr hal_platform_runtime_resync
 #endif
-    .if (C128_CHARGEN_CUTPOINT == 6) { rts }
+    .if (hal_platform_chargen_cutpoint == 6) { rts }
     jsr create_gen_background
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($89)
@@ -61,7 +58,7 @@ player_create:
 #if hal_platform_chargen_runtime_resync
     jsr hal_platform_runtime_resync
 #endif
-    .if (C128_CHARGEN_CUTPOINT == 7) { rts }
+    .if (hal_platform_chargen_cutpoint == 7) { rts }
     jsr create_init_character
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($8a)
@@ -75,7 +72,7 @@ player_create:
     :C128FinalReturnCapture($93)
 #endif
 #endif
-    .if (C128_CHARGEN_CUTPOINT == 8) { jmp player_create_epilogue }
+    .if (hal_platform_chargen_cutpoint == 8) { jmp player_create_epilogue }
 
 player_create_epilogue:
 #if C128_TEST_FINAL_RETURN_DIAG
