@@ -23,6 +23,14 @@
 .const hal_platform_title_sysinfo_sx64_probe = 0
 .const hal_platform_player_move_diag_labels = 0
 .const hal_platform_describe_look_masks_irq = 0
+.const hal_platform_game_loop_runtime_resync = 0
+.const hal_platform_game_loop_main_loop_begin = 0
+.const hal_platform_game_loop_restore_generation_overlay = 0
+.const hal_platform_game_loop_save_clears_screen = 1
+.const hal_platform_game_loop_save_return_view = 0
+.const hal_platform_game_loop_run_stop_reset_input = 0
+.const hal_platform_game_loop_scroll_delta_render = 0
+.const hal_platform_game_loop_item_actions_trampolined = 0
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
 #else
@@ -34,3 +42,4 @@
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
+#define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN

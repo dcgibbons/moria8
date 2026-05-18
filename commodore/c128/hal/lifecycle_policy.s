@@ -27,6 +27,14 @@
 .const hal_platform_title_sysinfo_sx64_probe = 0
 .const hal_platform_player_move_diag_labels = 1
 .const hal_platform_describe_look_masks_irq = 1
+.const hal_platform_game_loop_runtime_resync = 1
+.const hal_platform_game_loop_main_loop_begin = 1
+.const hal_platform_game_loop_restore_generation_overlay = 1
+.const hal_platform_game_loop_save_clears_screen = 0
+.const hal_platform_game_loop_save_return_view = 1
+.const hal_platform_game_loop_run_stop_reset_input = 1
+.const hal_platform_game_loop_scroll_delta_render = 1
+.const hal_platform_game_loop_item_actions_trampolined = 1
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
@@ -40,3 +48,13 @@
 #define HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
 #define HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL
 #define HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL
+#define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
+#define HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
+#define HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
+#define HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY
+#define HAL_PLATFORM_GAME_LOOP_SAVE_RETURN_VIEW
+#define HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
+#define HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
+#define HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
+#define HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
+#define HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS

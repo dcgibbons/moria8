@@ -36,8 +36,8 @@ historical note or move it to backlog before continuing.
 1. Continue Phase 5 by removing remaining target-conditionals from
    `commodore/common/`.
 2. Prefer lower-risk slices before touching high-risk memory/banking paths:
-   `game_loop.s` and small `disk_swap.s` clusters are better next targets than
-   `reu.s`, `save.s`, or `tier_manager.s`.
+   small `disk_swap.s` clusters are better next targets than `reu.s`,
+   `save.s`, or `tier_manager.s`.
 3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
    HAL export checker, and this state section.
 4. Do not move to a new phase without explicitly recording that the current
@@ -51,7 +51,6 @@ common-code boundary violations. Current files still listed there:
 - `commodore/common/disk_setup_banked.s`
 - `commodore/common/disk_setup_runtime128.s`
 - `commodore/common/disk_swap.s`
-- `commodore/common/game_loop.s`
 - `commodore/common/monster.s`
 - `commodore/common/overlay.s`
 - `commodore/common/reu.s`

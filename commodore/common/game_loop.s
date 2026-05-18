@@ -392,7 +392,7 @@ game_new_start:
     // Initialize message system
     jsr msg_init
 
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     // Reset movement responsiveness counters for new sessions.
     jsr perf_p1_reset
@@ -420,7 +420,7 @@ game_new_start:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($86)
 #endif
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
 
@@ -519,7 +519,7 @@ game_new_start:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($87)
 #endif
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
 
@@ -557,7 +557,7 @@ game_new_start:
 #if C128_TEST_STACK_SLOT_DIAG
     :C128StackSlotGuardCheck($88)
 #endif
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
 #if C128_REAL_BOOT_DIAG
@@ -593,7 +593,7 @@ game_new_start:
 	    // Clear screen and do initial render
 	    jsr hal_screen_clear
 	    jsr viewport_update
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_reason_transition
 #endif
@@ -697,7 +697,7 @@ load_resume_game:
     // Re-init SID
     jsr hal_sound_init
 
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     // Reset movement responsiveness counters after restore.
     jsr perf_p1_reset
@@ -715,7 +715,7 @@ load_resume_game:
 	    jsr hal_screen_clear
 	    jsr update_visibility
 	    jsr viewport_update
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_reason_transition
 #endif
@@ -740,7 +740,7 @@ load_resume_game:
 c64_test_after_load_resume_game:
 #endif
 main_loop:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 c128_town_move_diag_loop_top:
     jsr hal_platform_main_loop_begin
 #endif
@@ -918,7 +918,7 @@ c128_town_move_diag_loop_top:
     ldx zp_view_y
     stx old_view_y
     jsr hal_input_get_command
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_input_get_command:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -944,7 +944,7 @@ c128_test_after_save_game:
 #endif
 #else
     jsr disk_prompt_save        // Swap to save disk if dual
-#if !C128
+#if HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
     jsr ui_clear_full_screen_safe
     jsr ui_reset_message_state
 #endif
@@ -966,7 +966,7 @@ plus4_test_after_save_game:
     beq !save_return_main+
     jmp !quit+
 !save_return_main:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SAVE_RETURN_VIEW
     jsr hal_platform_runtime_resync
     jsr hal_input_wait_release
     jmp ui_view_return_to_gameplay_view
@@ -975,7 +975,7 @@ plus4_test_after_save_game:
     jmp main_loop
 #endif
 !save_return_view:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SAVE_RETURN_VIEW
     jsr hal_platform_runtime_resync
     jsr hal_input_wait_release
 #endif
@@ -1028,7 +1028,7 @@ plus4_test_after_save_game:
     jmp !not_move+
 !mv_cmd_ok:
 
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_move_start
 #endif
@@ -1044,7 +1044,7 @@ plus4_test_after_save_game:
     pla                         // Restore command ID for player_try_move
 
     // Try to move
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_player_try_move:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1052,7 +1052,7 @@ c128_town_move_diag_before_player_try_move:
     jsr c128_town_dump_log
 #endif
     jsr player_try_move
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_player_try_move:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1070,7 +1070,7 @@ c128_town_move_diag_after_player_try_move:
     jsr c128_town_dump_log
 #endif
     jsr trap_check_at_player
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_trap_check:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1081,7 +1081,7 @@ c128_town_move_diag_after_trap_check:
     jsr player_move_maybe_passive_search
 !move_trap_fired:
     jsr turn_post_action_searchable_or_die
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_turn_post_action:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1104,7 +1104,7 @@ c128_town_move_diag_after_turn_post_action:
     // Did viewport scroll?
     lda zp_view_x
     cmp old_view_x
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
 	    beq !mv_chk_y+
     jsr perf_p1_mark_scroll_reason_fallback
@@ -1118,7 +1118,7 @@ c128_town_move_diag_after_turn_post_action:
 #endif
     lda zp_view_y
     cmp old_view_y
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
 	    beq !mv_chk_reveal+
     jsr perf_p1_mark_scroll_reason_fallback
@@ -1134,7 +1134,7 @@ c128_town_move_diag_after_turn_post_action:
 	    // Did a room get revealed?
 	    lda vis_room_revealed
     beq !no_room_reveal+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_set_reason_room_reveal
 #endif
@@ -1145,7 +1145,7 @@ c128_town_move_diag_after_turn_post_action:
 	    // Did monsters or other scene elements move this turn?
 	    lda turn_scene_dirty
     beq !no_scene_dirty+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_set_reason_scene_dirty
 #endif
@@ -1159,7 +1159,7 @@ c128_town_move_diag_after_turn_post_action:
     jsr c128_town_dump_log
 #endif
     jsr render_local_area
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_local
     jsr perf_p1_move_end
@@ -1168,7 +1168,7 @@ c128_town_move_diag_after_turn_post_action:
     jmp !post_move+
 
 !scene_dirty_redraw:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 	    jmp !full_draw_fallback+
 #else
 	    jsr render_viewport
@@ -1176,7 +1176,7 @@ c128_town_move_diag_after_turn_post_action:
 #endif
 
 !full_redraw:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 	    lda turn_scene_dirty
     beq !full_not_scene_dirty+
 #if PERF_P1
@@ -1196,7 +1196,7 @@ c128_town_move_diag_after_turn_post_action:
     jsr c128_town_dump_log
 #endif
     jsr render_local_area
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_scroll_delta
     jsr perf_p1_move_end
@@ -1210,7 +1210,7 @@ c128_town_move_diag_after_turn_post_action:
     jsr c128_town_dump_log
 #endif
 	    jsr render_viewport
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
 	    jsr perf_p1_mark_full_scroll_fallback_current_reason
 	    jsr perf_p1_move_end
@@ -1226,14 +1226,14 @@ c128_town_move_diag_after_turn_post_action:
 	    sta zp_store_idx
 	    jsr tramp_store_enter
 	    jsr viewport_update
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_reason_modal_restore
 #endif
 #endif
 	    jsr render_viewport
 !not_store_entry:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_status_draw:
 #endif
 #if C128_TEST_TOWN_SELF_DUMP
@@ -1253,7 +1253,7 @@ c128_town_move_diag_before_status_draw:
     lda #$1f
     jsr c128_town_dump_log
 #endif
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_after_status_draw:
 #endif
 #if C128_TEST_PERF_P1_TRACE
@@ -1651,13 +1651,13 @@ level_change_generate_current:
     bcc !lcgc_ovl_ok+
     jmp entry_main
 !lcgc_ovl_ok:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
     jsr tier_check_transition
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY
     jsr platform_restore_generation_overlay
 #endif
     jsr monster_spawn_level
@@ -1677,7 +1677,7 @@ level_change_generate_current:
 	    sta zp_view_x
 	    sta zp_view_y
 	    jsr viewport_update
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_reason_transition
 #endif
@@ -1698,7 +1698,7 @@ level_change_generate_current:
 #endif
     rts
 
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY
 // tier_load reuses the $E000 overlay window for tier payloads. Restore the
 // dungeon-generation overlay before any post-generation special-room helpers
 // jump back into overlay-resident code.
@@ -1790,7 +1790,7 @@ cmd_equipment:
 
 cmd_wear:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
     jsr tramp_item_wear
 #else
     jsr item_wear
@@ -1799,7 +1799,7 @@ cmd_wear:
 
 cmd_takeoff:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
     jsr tramp_item_takeoff
 #else
     jsr item_takeoff
@@ -1808,7 +1808,7 @@ cmd_takeoff:
 
 cmd_eat:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
     jsr tramp_item_eat
 #else
     jsr item_eat
@@ -1817,7 +1817,7 @@ cmd_eat:
 
 cmd_quaff:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED
     jsr tramp_item_quaff
 #else
     jsr item_quaff
@@ -1842,7 +1842,7 @@ cmd_use:
 
 cmd_cast:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
     jsr tramp_player_cast_spell
 #else
     jsr player_cast_spell
@@ -1851,7 +1851,7 @@ cmd_cast:
 
 cmd_pray:
     jsr msg_clear
-#if C128
+#if HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
     jsr tramp_player_pray
 #else
     jsr player_pray
@@ -1905,7 +1905,7 @@ cmd_run:
     jsr input_run_cancel_reset
     jmp run_step                // Take first step
 
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
 run_stop_reset_input_state:
     lda #0
     sta run_input_armed
@@ -1925,7 +1925,7 @@ run_step:
     stx old_view_x
 	    ldx zp_view_y
 	    stx old_view_y
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_move_start
 #endif
@@ -1979,7 +1979,7 @@ run_step:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !run_chk_y+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_scroll_reason_fallback
 #endif
@@ -1989,7 +1989,7 @@ run_step:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !run_chk_reveal+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_scroll_reason_fallback
 #endif
@@ -1998,7 +1998,7 @@ run_step:
 !run_chk_reveal:
 	    lda vis_room_revealed
     beq !run_local+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_set_reason_room_reveal
 #endif
@@ -2007,7 +2007,7 @@ run_step:
 
 !run_local:
 	    jsr render_local_area
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_local
     jsr perf_p1_move_end
@@ -2016,7 +2016,7 @@ run_step:
 	    jmp !run_post+
 
 !run_full_redraw:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 	    jsr render_viewport_scroll_delta
 	    bcc !run_full_fallback+
 	    jsr render_local_area
@@ -2028,7 +2028,7 @@ run_step:
 !run_full_fallback:
 #endif
 	    jsr render_viewport
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_scroll_fallback_current_reason
     jsr perf_p1_move_end
@@ -2041,7 +2041,7 @@ run_step:
     beq !run_keep_running+
     lda #$ff
     sta zp_run_dir
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
     jsr run_stop_reset_input_state
 #endif
 !run_keep_running:
@@ -2050,7 +2050,7 @@ run_step:
 !run_blocked:
     lda #$ff
     sta zp_run_dir
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
     jsr run_stop_reset_input_state
 #endif
     jmp main_loop
@@ -2058,7 +2058,7 @@ run_step:
 !run_trap_stop:
     lda #$ff
     sta zp_run_dir
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
     jsr run_stop_reset_input_state
 #endif
     jsr turn_post_action_searchable_or_die
@@ -2071,7 +2071,7 @@ run_step:
 !run_stop_move:
     lda #$ff
     sta zp_run_dir
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
     jsr run_stop_reset_input_state
 #endif
     jsr player_move_maybe_passive_search
@@ -2086,7 +2086,7 @@ run_step:
 	    lda zp_view_x
 	    cmp old_view_x
     beq !rsm_chk_y+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_scroll_reason_fallback
 #endif
@@ -2096,7 +2096,7 @@ run_step:
 	    lda zp_view_y
 	    cmp old_view_y
     beq !rsm_chk_reveal+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_scroll_reason_fallback
 #endif
@@ -2105,7 +2105,7 @@ run_step:
 !rsm_chk_reveal:
 	    lda vis_room_revealed
     beq !rsm_chk_scene+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_set_reason_room_reveal
 #endif
@@ -2114,7 +2114,7 @@ run_step:
 !rsm_chk_scene:
 	    lda turn_scene_dirty
     beq !rsm_local+
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_set_reason_scene_dirty
 #endif
@@ -2123,7 +2123,7 @@ run_step:
 
 !rsm_local:
 	    jsr render_local_area
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_local
     jsr perf_p1_move_end
@@ -2132,7 +2132,7 @@ run_step:
 	    jmp !rsm_post+
 !rsm_scene_full:
 	    jsr render_viewport
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_current_reason
     jsr perf_p1_move_end
@@ -2140,7 +2140,7 @@ run_step:
 #endif
 	    jmp !rsm_post+
 !rsm_full:
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_SCROLL_DELTA_RENDER
 	    jsr render_viewport_scroll_delta
 	    bcc !rsm_full_fallback+
 	    jsr render_local_area
@@ -2152,7 +2152,7 @@ run_step:
 !rsm_full_fallback:
 #endif
 	    jsr render_viewport
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_scroll_fallback_current_reason
     jsr perf_p1_move_end
@@ -2171,7 +2171,7 @@ player_died:
     // All death paths skip the normal post-AI render, leaving stale monster
 	    // positions on screen. Render now so the killing blow is visible.
 	    jsr viewport_update
-#if C128
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
 #if PERF_P1
     jsr perf_p1_mark_full_reason_transition
 #endif
