@@ -45,6 +45,9 @@ test_finish:
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
+#define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
+#define HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 
 player_cast_spell:
 player_pray:
@@ -130,6 +133,7 @@ random_floor_in_room:
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
+.const hal_storage_save_version = $0f
 .const KERNAL_ERR_DEVICE_NOT_PRESENT = 5
 .const KERNAL_SETNAM = test_save_setnam
 .const KERNAL_SETLFS = test_save_setlfs

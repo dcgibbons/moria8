@@ -18,6 +18,7 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 1
 .const hal_storage_disk_setup_commit_sets_ui_ok = 1
+.const hal_storage_save_version = $10
 
 #define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
@@ -31,3 +32,11 @@
 #define HAL_STORAGE_KERNAL_ENTER_REQUIRED
 #define HAL_STORAGE_MARKER_PRESENT_INLINE
 #define HAL_STORAGE_DISK_SETUP_UI_TRAMPOLINE
+#define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
+#define HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
+#define HAL_STORAGE_STREAM_STATUS_HELPERS
+#define HAL_STORAGE_STREAM_CHUNKED
+#define HAL_STORAGE_MAP_BANKED
+#define HAL_STORAGE_RETURN_DIRECT
+#define HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
+#define HAL_STORAGE_RESTORE_VIC_BANK_AFTER_SAVE_PROBE

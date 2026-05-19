@@ -14,16 +14,8 @@
 // Constants
 // ============================================================
 .const SAVE_MAGIC_SIZE = 8
-#if C128
-.const SAVE_VERSION    = $10
+.const SAVE_VERSION    = hal_storage_save_version
 .const OLDEST_SAVE_VERSION = SAVE_VERSION
-#elif PLUS4
-.const SAVE_VERSION    = $01
-.const OLDEST_SAVE_VERSION = SAVE_VERSION
-#else
-.const SAVE_VERSION    = $0f
-.const OLDEST_SAVE_VERSION = SAVE_VERSION
-#endif
 .const SAVE_FLOOR42_VERSION = SAVE_VERSION
 .const LOAD_RESULT_OK        = 0
 .const LOAD_RESULT_NOTFOUND  = 1
@@ -61,7 +53,7 @@
 .const SAVE_CHRIN  = hal_storage_chrin
 .const SAVE_READST = hal_storage_readst
 
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
 .const SAVE_IO_CHUNK_SIZE = 128
 #endif
 
@@ -92,7 +84,7 @@ plus4_test_file_cksum_hi: .byte 0
 plus4_test_read_count_lo: .byte 0
 plus4_test_read_count_hi: .byte 0
 #endif
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
 save_chunk_len: .byte 0
 save_chunk_idx: .byte 0
 save_chunk_status: .byte 0
@@ -109,7 +101,7 @@ rle_lit_buf:    .fill 128, 0
 #endif
 
 save_magic:
-#if PLUS4
+#if HAL_STORAGE_SAVE_MAGIC_ALT_SIGNATURE
     .byte $4d, $4f, $52, $49, $41, $2b, $34  // "MORIA+4"
 #else
     .byte $4d, $4f, $52, $49, $41, $30, $31  // "MORIA01"
@@ -119,7 +111,7 @@ save_magic:
 
 #import "storage_status.s"
 
-#if C128 || PLUS4 || STORAGE_STREAM_STATUS_HELPER
+#if HAL_STORAGE_STREAM_STATUS_HELPERS || STORAGE_STREAM_STATUS_HELPER
 // save_stream_status
 // Output: A = HAL_STORAGE_STATUS_* for the most recent save-record stream.
 save_stream_status:
@@ -178,7 +170,7 @@ load_stream_status_message:
     rts
 #endif
 
-#if C128 || PLUS4
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
 // save_print_storage_status
 // Input: A = HAL_STORAGE_STATUS_*.
 // Prints a friendly direct storage-status message when the semantic status is
@@ -204,7 +196,7 @@ save_print_storage_status:
 !generic:
     ldx #HSTR_SAVE_IOERR
     jsr huff_print_msg
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     jsr save_append_disk_detail_plus4
 #endif
     rts
@@ -255,7 +247,7 @@ save_drive_not_ready_str:
 // Syncs ZP→struct, writes all blocks + raw map + checksum, closes
 // Clobbers: A, X, Y, all scratch
 // ============================================================
-#if C128 || PLUS4
+#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
 save_confirm_overwrite:
     lda #hal_storage_save_probe_name_len
     sta save_count_lo
@@ -270,7 +262,7 @@ save_confirm_overwrite:
 #if PLUS4_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
 plus4_test_save_overwrite_prompt:
 #endif
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     jsr input_prepare_followup_key
 #endif
 !save_confirm_loop:
@@ -323,7 +315,7 @@ save_game:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !save_bad_media+
-#if C128 || PLUS4
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr save_print_storage_status
     jmp !save_media_after_print+
 #else
@@ -333,12 +325,12 @@ save_game:
 !save_bad_media:
     ldx #HSTR_SAVE_BAD_SAVE
 !save_media_fail:
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     txa
     pha
 #endif
     jsr huff_print_msg
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     pla
     tax
     cpx #HSTR_SAVE_IOERR
@@ -349,7 +341,7 @@ save_game:
 !save_media_after_print:
     jsr input_get_modal_dismiss_key
 save_return_fail:
-#if !C128 && !PLUS4
+#if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     clc
 save_return_c64_with_carry:
     lda #BANK_NO_BASIC
@@ -361,11 +353,11 @@ save_return_c64_with_carry:
 #endif
 
 !save_media_ok:
-#if !C128 && !PLUS4
+#if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
 #endif
-#if C128 || PLUS4
+#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     jsr save_confirm_overwrite
     bcc save_return_fail
 #else
@@ -391,13 +383,13 @@ save_return_c64_with_carry:
     sta plus4_test_read_count_lo
     sta plus4_test_read_count_hi
 #endif
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     jsr disk_error_clear
 #endif
 
     // Open file for writing
     // SETNAM
-#if C128
+#if HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE
     lda save_count_lo
     ldx save_block_lo
     ldy save_block_hi
@@ -414,7 +406,7 @@ save_return_c64_with_carry:
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
     bcc !save_open_ok+
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     pha
     lda #$a1
     jsr disk_error_set_phase
@@ -428,7 +420,7 @@ save_return_c64_with_carry:
     ldx #hal_storage_save_file_num
     jsr SAVE_CHKOUT
     bcc !save_chkout_ok+
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     pha
     lda #$a2
     jsr disk_error_set_phase
@@ -522,7 +514,7 @@ save_return_c64_with_carry:
     :save_block(recall_data_start, RECALL_DATA_SIZE)
 
     // 17. Map data (`MAP_SIZE` bytes raw)
-#if C128
+#if HAL_STORAGE_MAP_BANKED
     jsr save_write_map_c128
 #else
     :save_block(MAP_BASE, MAP_SIZE)
@@ -544,19 +536,19 @@ save_return_c64_with_carry:
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr SAVE_READST
     and #$83
     bne !save_error+
 #endif
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
 
     // Show success
     ldx #HSTR_SAVE_DONE
     jsr huff_print_msg
-#if !C128 && !PLUS4
+#if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
 #endif
@@ -567,23 +559,23 @@ save_return_c64_with_carry:
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
 !save_error:
-#if C128 || PLUS4
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr hal_storage_save_stream_status
     jsr save_print_storage_status
     jmp !save_error_after_print+
 #else
     ldx #HSTR_SAVE_IOERR
 #endif
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     txa
     pha
 #endif
     jsr huff_print_msg
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     pla
     tax
     cpx #HSTR_SAVE_IOERR
@@ -616,7 +608,7 @@ load_game:
     jsr hal_storage_save_media_status
     cmp #HAL_STORAGE_STATUS_WRONG_MEDIA
     beq !load_bad_media+
-#if C128 || PLUS4
+#if HAL_STORAGE_FRIENDLY_STATUS_MESSAGES
     jsr save_print_storage_status
     jmp !load_media_after_print+
 #else
@@ -634,7 +626,7 @@ plus4_test_load_media_fail:
     clc
     rts
 !load_media_ok:
-#if !C128 && !PLUS4
+#if HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
     lda #BANK_NO_BASIC
     sta hal_memory_cpu_port
 #endif
@@ -649,7 +641,7 @@ plus4_test_load_media_fail:
     sta save_cksum_hi
     sta save_io_error
 
-#if PLUS4
+#if HAL_STORAGE_CLOSE_SAVE_FILE_BEFORE_LOAD
     jsr SAVE_CLRCHN
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
@@ -667,7 +659,7 @@ plus4_test_load_media_fail:
     jsr SAVE_OPEN
     bcc !load_open_ok+
     // OPEN failed — file not found is the most common cause
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
     jmp !load_notfound+
@@ -678,7 +670,7 @@ plus4_test_load_media_fail:
     // CHKIN failed — close and bail
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
     jmp !load_fail+
@@ -694,7 +686,7 @@ plus4_test_after_load_magic:
     // succeed but first CHRINs return immediate EOF/timeout (STATUS = $42).
     // Any non-zero STATUS this early means the file doesn't exist.
     jsr SAVE_READST
-#if PLUS4
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     and #$fe                // Plus/4 KERNAL may leave write-timeout bit set after CHRIN
 #endif
     beq !load_magic_check+
@@ -800,7 +792,7 @@ plus4_test_after_load_magic:
     :load_block(recall_data_start, RECALL_DATA_SIZE)
 
     // 17. Map data (`MAP_SIZE` bytes raw)
-#if C128
+#if HAL_STORAGE_MAP_BANKED
     jsr load_read_map_c128
 #else
     :load_block(MAP_BASE, MAP_SIZE)
@@ -811,7 +803,7 @@ plus4_test_after_load_magic:
 
     // 19. Read stored checksum (2 bytes, NOT accumulated into save_cksum)
 !load_read_checksum:
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
     jsr SAVE_CHRIN        // Stored checksum lo (not accumulated)
     sta zp_temp0
     jsr SAVE_READST
@@ -828,7 +820,7 @@ plus4_test_after_load_magic:
 !load_checksum_status_ok:
 #else
     jsr SAVE_READST
-#if PLUS4
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     sta disk_error_readst
     and #$fe
 #endif
@@ -841,7 +833,7 @@ plus4_test_after_load_magic:
     sta plus4_test_file_cksum_lo
 #endif
     jsr SAVE_READST
-#if PLUS4
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     sta disk_error_readst
     and #$fe
 #endif
@@ -887,7 +879,7 @@ plus4_test_load_success:
 
     lda #LOAD_RESULT_OK
     sta load_result
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     sec
     rts
 #else
@@ -905,7 +897,7 @@ plus4_test_load_corrupt:
     jsr load_close_file_restore
     ldx #HSTR_SAVE_CORRUPT
     jsr huff_print_msg
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     clc
     rts
 #else
@@ -919,14 +911,14 @@ plus4_test_load_unsupported:
     lda #LOAD_RESULT_UNSUPPORTED
     sta load_result
     jsr load_close_file_restore
-#if C128 || PLUS4
+#if HAL_STORAGE_STREAM_STATUS_HELPERS
     jsr hal_storage_load_stream_status
     jsr load_stream_status_message
 #else
     ldx #HSTR_SAVE_UNSUPPORTED
 #endif
     jsr huff_print_msg
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     clc
     rts
 #else
@@ -943,14 +935,14 @@ plus4_test_load_notfound:
     // OPEN-fail path also jumps here (file was never opened, no close needed)
     lda #LOAD_RESULT_NOTFOUND
     sta load_result
-#if C128 || PLUS4
+#if HAL_STORAGE_STREAM_STATUS_HELPERS
     jsr hal_storage_load_stream_status
     jsr load_stream_status_message
 #else
     ldx #HSTR_SAVE_NOTFOUND
 #endif
     jsr huff_print_msg
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     clc
     rts
 #else
@@ -963,7 +955,7 @@ plus4_test_load_ioerr:
 #endif
     lda #LOAD_RESULT_IOERR
     sta load_result
-#if C128 || PLUS4
+#if HAL_STORAGE_STREAM_STATUS_HELPERS
     jsr hal_storage_load_stream_status
     jsr save_print_storage_status
     jmp !load_fail_after_print+
@@ -972,12 +964,12 @@ plus4_test_load_ioerr:
 #endif
     jsr huff_print_msg
 !load_fail_after_print:
-#if C128
+#if HAL_STORAGE_RETURN_DIRECT
     clc
     rts
 #else
 !load_return_fail:
-#if !PLUS4
+#if !HAL_STORAGE_RETURN_LOCAL_STATUS
     jmp save_return_fail
 !load_return_ok:
     sec
@@ -1001,12 +993,12 @@ load_close_file_restore:
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
     jsr c64_restore_vic_bank0_after_serial
 #endif
     rts
 
-#if !C128 && !PLUS4
+#if HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
 c64_restore_vic_bank0_after_serial:
     lda hal_memory_vic_bank_select
     ora #hal_memory_vic_bank0_mask
@@ -1015,7 +1007,7 @@ c64_restore_vic_bank0_after_serial:
 #endif
 
 save_write_block:
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
     lda save_block_lo
     sta zp_ptr0
     lda save_block_hi
@@ -1059,7 +1051,7 @@ save_write_block:
     and #$03                // Timeout or error bits
     beq !swb_ok+
     inc save_io_error
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     lda #$a3
     jsr disk_error_set_phase
     lda zp_temp0
@@ -1089,7 +1081,7 @@ save_write_block:
 // Clobbers: flags
 // ============================================================
 save_write_byte:
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
     txa
     pha
@@ -1104,7 +1096,7 @@ save_write_byte:
     bcc !swby_no_carry+
     inc save_cksum_hi
 !swby_no_carry:
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     lda zp_temp0
 #else
     pla
@@ -1116,7 +1108,7 @@ save_write_byte:
     and #$03
     beq !swby_ok+
     inc save_io_error
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     lda #$a3
     jsr disk_error_set_phase
     lda zp_temp0
@@ -1124,7 +1116,7 @@ save_write_byte:
 #endif
 !swby_ok:
     pla
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
     pla
     tax
@@ -1137,7 +1129,7 @@ save_write_byte:
 // Input: A = byte to write
 // ============================================================
 save_write_byte_raw:
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
     txa
     pha
@@ -1150,7 +1142,7 @@ save_write_byte_raw:
     and #$03
     beq !swbr_ok+
     inc save_io_error
-#if PLUS4
+#if HAL_STORAGE_APPEND_DISK_DETAIL
     lda #$a3
     jsr disk_error_set_phase
     lda zp_temp0
@@ -1158,7 +1150,7 @@ save_write_byte_raw:
 #endif
 !swbr_ok:
     pla
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
     pla
     tax
@@ -1231,7 +1223,7 @@ save_write_floor_items:
 // Clobbers: A, X, Y
 // ============================================================
 load_read_block:
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
 !lrb_c128_loop:
     lda save_io_error
     bne !lrb_c128_done+
@@ -1280,7 +1272,7 @@ load_read_block:
 // Clobbers: A, flags
 // ============================================================
 load_read_byte:
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     txa
     pha
 #endif
@@ -1293,12 +1285,12 @@ load_read_byte:
 !lrby_count_ok:
 #endif
     jsr SAVE_READST
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
     beq !lrby_status_ok+
     inc save_io_error
     jmp !lrby_status_done+
 #else
-#if PLUS4
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
     sta disk_error_readst
     and #$02
 #else
@@ -1319,7 +1311,7 @@ load_read_byte:
     inc save_cksum_hi
 !lrby_no_carry:
     pla                     // A = original byte
-#if C128
+#if HAL_STORAGE_PRESERVE_X_DURING_BYTE_STREAM
     sta zp_temp0
     pla
     tax
@@ -1327,7 +1319,7 @@ load_read_byte:
 #endif
     rts
 
-#if C128
+#if HAL_STORAGE_STREAM_CHUNKED
 // ============================================================
 // C128 chunk staging helpers — keep game zero page out of open KERNAL windows.
 // The low-memory streaming helpers enter KERNAL once per staged chunk.
@@ -1588,7 +1580,7 @@ save_version_uses_legacy_floor_layout:
     sec
     rts
 
-#if C128
+#if HAL_STORAGE_MAP_BANKED
 // ============================================================
 // C128 map I/O helpers — MAP_BASE is in Bank 1 RAM on C128.
 // Save/load all non-map blocks through normal bank0 pointers; map bytes
@@ -1713,7 +1705,7 @@ save_file_exists:
     ldy #hal_storage_check_sec_read
     jsr SAVE_SETLFS
     jsr SAVE_OPEN
-#if !C128 && !PLUS4
+#if HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
     bcc !sfe_exists+
     clc
     rts
@@ -1745,7 +1737,7 @@ save_file_exists:
     lda #hal_storage_check_file_num
     jsr SAVE_CLOSE
     jsr save_restore_channels
-#if C128
+#if HAL_STORAGE_RESTORE_VIC_BANK_AFTER_SAVE_PROBE
     lda hal_memory_vic_bank_select
     ora #hal_memory_vic_bank0_mask
     sta hal_memory_vic_bank_select
@@ -1760,7 +1752,7 @@ save_file_exists:
 // C64 path keeps CLRCHN behavior.
 // ============================================================
 save_restore_channels:
-#if C128
+#if HAL_STORAGE_KERNAL_ENTER_REQUIRED
     // Restore default channels through the resident C128 KERNAL wrapper before
     // returning to runtime/program-file LOADs.
     jmp w_clrchn

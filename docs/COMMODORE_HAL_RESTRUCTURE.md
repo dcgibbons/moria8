@@ -33,10 +33,10 @@ historical note or move it to backlog before continuing.
 
 ## Active Work Queue
 
-1. Continue Phase 5 by removing remaining target-conditionals from
-   `commodore/common/`.
-2. Remaining slices are all storage, REU, or tier/banking sensitive:
-   `save.s` target-conditionals, plus the `reu.s` subsystem-name audit entry.
+1. Continue Phase 5 by removing the remaining common-code boundary allowlist
+   entry.
+2. The remaining slice is REU-sensitive: the `reu.s` subsystem-name audit
+   entry.
 3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
    HAL export checker, and this state section.
 4. Do not move to a new phase without explicitly recording that the current
@@ -48,12 +48,9 @@ historical note or move it to backlog before continuing.
 common-code boundary violations. Current files still listed there:
 
 - `commodore/common/reu.s`
-- `commodore/common/save.s`
 
 Current violation classes:
 
-- remaining `#if C64`, `#if C128`, `#if PLUS4`, and negated target-conditionals
-  in common code.
 - `REU` platform-name use in `commodore/common/reu.s`.
 
 ## Backlog, Not Blocking HAL Completion
@@ -1287,6 +1284,13 @@ target-bank setup, and post-load channel cleanup.
       C128 resident disk-I/O import site and segment definition, so the common
       boundary no longer needs a target conditional inside
       `disk_setup_runtime128.s`.
+      Sixty-eighth slice: common save/load no longer branches directly on
+      `C128` or `PLUS4`. Save-format version, alternate save signature,
+      overwrite probe behavior, friendly status printing, Plus/4 disk-detail
+      handling, C128 chunked/map streaming, return behavior, and C64 CPU/VIC
+      restore behavior are now selected by platform-owned storage policy
+      symbols. The C64 standalone save unit fixture declares the same policy
+      surface so `test_save.s` continues to exercise the shared code.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

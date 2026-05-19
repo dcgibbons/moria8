@@ -18,6 +18,7 @@
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
 .const hal_storage_disk_setup_commit_sets_ui_ok = 0
+.const hal_storage_save_version = $0f
 
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
 #define HAL_STORAGE_SWAP_PROMPT_LEGACY_SETUP_SKIP
@@ -26,3 +27,6 @@
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
+#define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
+#define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO
+#define HAL_STORAGE_VIC_BANK_RESTORE_AFTER_SERIAL
