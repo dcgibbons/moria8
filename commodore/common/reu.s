@@ -804,8 +804,8 @@ reu_show_status:
 .label reu_fn_tier_hi = hal_storage_tier_name_hi
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
-.assert "REU tier filename table count stays in sync", hal_storage_tier_name_hi - hal_storage_tier_name_lo, 4
-.assert "REU overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
+.assert "Tier filename table count stays in sync", hal_storage_tier_name_hi - hal_storage_tier_name_lo, 4
+.assert "Overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)
-reu_loading_hdr: .text "Loading into REU:" ; .byte 0
+reu_loading_hdr: .text "Loading into " ; .byte $52, $45, $55, $3a, 0

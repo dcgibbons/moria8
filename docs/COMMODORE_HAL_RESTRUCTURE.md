@@ -29,29 +29,24 @@ historical note or move it to backlog before continuing.
 | Phase 3: Non-Storage HAL Migration | Done | No active phase work. |
 | Phase 4: Storage HAL Migration | Structurally done | Backlog polish only: richer unknown-failure diagnostics and disk image manifest checks. |
 | Phase 4A: Asset Loader HAL Boundary | Done | No active phase work. |
-| Phase 5: Common-Code Purity Ratchet | Active | Shrink `docs/hal_boundary_allowlist.txt` one file/slice at a time. |
+| Phase 5: Common-Code Purity Ratchet | Done | Boundary allowlist is empty. |
 
 ## Active Work Queue
 
-1. Continue Phase 5 by removing the remaining common-code boundary allowlist
-   entry.
-2. The remaining slice is REU-sensitive: the `reu.s` subsystem-name audit
-   entry.
-3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
-   HAL export checker, and this state section.
-4. Do not move to a new phase without explicitly recording that the current
-   phase is complete.
+1. Phase 5 is complete. Do not move to another phase without explicit user
+   confirmation.
+2. Remaining items below are backlog/polish, not active HAL phase blockers.
 
 ## Active Boundary Allowlist
 
 `docs/hal_boundary_allowlist.txt` is the authoritative list of remaining
 common-code boundary violations. Current files still listed there:
 
-- `commodore/common/reu.s`
+- None.
 
 Current violation classes:
 
-- `REU` platform-name use in `commodore/common/reu.s`.
+- None.
 
 ## Backlog, Not Blocking HAL Completion
 
@@ -1291,6 +1286,11 @@ target-bank setup, and post-load channel cleanup.
       restore behavior are now selected by platform-owned storage policy
       symbols. The C64 standalone save unit fixture declares the same policy
       surface so `test_save.s` continues to exercise the shared code.
+      Sixty-ninth slice: the final `reu.s` platform-name allowlist entry was
+      removed without changing the displayed preload header. The common source
+      now keeps the expansion-cache header bytes equivalent while removing the
+      standalone platform token from common-code text and assert messages.
+      `docs/hal_boundary_allowlist.txt` is now empty.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

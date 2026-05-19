@@ -1,5 +1,3 @@
 # Current common-code HAL boundary violations.
 # Format: path<TAB>rule<TAB>token
 # Do not add entries casually; remove entries as code migrates behind HAL.
-
-commodore/common/reu.s	platform-name	REU
