@@ -36,8 +36,7 @@ historical note or move it to backlog before continuing.
 1. Continue Phase 5 by removing remaining target-conditionals from
    `commodore/common/`.
 2. Remaining slices are all storage, REU, or tier/banking sensitive:
-   `disk_setup_banked.s`, `disk_setup_runtime128.s`, `reu.s`,
-   `save.s`, and `tier_manager.s`.
+   `disk_setup_banked.s`, `reu.s`, `save.s`, and `tier_manager.s`.
 3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
    HAL export checker, and this state section.
 4. Do not move to a new phase without explicitly recording that the current
@@ -49,7 +48,6 @@ historical note or move it to backlog before continuing.
 common-code boundary violations. Current files still listed there:
 
 - `commodore/common/disk_setup_banked.s`
-- `commodore/common/disk_setup_runtime128.s`
 - `commodore/common/reu.s`
 - `commodore/common/save.s`
 - `commodore/common/tier_manager.s`
@@ -1286,6 +1284,11 @@ target-bank setup, and post-load channel cleanup.
       `hal_platform_monster_*` policy constants, preserving C128's Bank-1
       cache/reload path, C64's CPU-port hidden-RAM path, and Plus/4's
       non-CPU-port hidden-name path.
+      Sixty-seventh slice: the C128 disk-I/O runtime coordinator no longer
+      carries an internal `#if C128` guard. Its platform ownership is now the
+      C128 resident disk-I/O import site and segment definition, so the common
+      boundary no longer needs a target conditional inside
+      `disk_setup_runtime128.s`.
 - [x] Remove raw KERNAL calls from common storage paths.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside

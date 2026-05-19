@@ -48,6 +48,11 @@
 .const C128_MEDIA_UNKNOWN = 0
 .const C128_MEDIA_PROGRAM = 1
 .const C128_MEDIA_SAVE    = 2
+.const hal_memory_bank_all_ram   = $30
+.const hal_memory_bank_all_rom   = $37
+.const hal_memory_bank_no_basic  = $36
+.const hal_memory_bank_no_kernal = $35
+.const hal_memory_bank_no_roms   = $34
 
 .const KERNAL_SETNAM = w_setnam
 .const KERNAL_SETLFS = w_setlfs
@@ -79,6 +84,8 @@
 
 screen_put_string_calls: .byte 0
 screen_clear_row_calls:  .byte 0
+full_screen_clear_calls: .byte 0
+msg_init_calls:          .byte 0
 input_modal_calls:       .byte 0
 save_prompt_count:       .byte 0
 game_prompt_count:       .byte 0
@@ -246,6 +253,14 @@ screen_put_char:
 
 screen_clear_row:
     inc screen_clear_row_calls
+    rts
+
+ui_clear_full_screen_safe:
+    inc full_screen_clear_calls
+    rts
+
+msg_init:
+    inc msg_init_calls
     rts
 
 .label hal_screen_put_string = screen_put_string
@@ -497,6 +512,13 @@ test_start:
     beq *+5
     jmp test_fail
     lda screen_clear_row_calls
+    beq *+5
+    jmp test_fail
+    lda full_screen_clear_calls
+    cmp #2
+    beq *+5
+    jmp test_fail
+    lda msg_init_calls
     cmp #2
     beq *+5
     jmp test_fail

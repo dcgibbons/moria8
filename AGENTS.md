@@ -69,18 +69,31 @@ verification gate until it passes. Direct harness runs, monitor traces, narrower
 filters, or partial suites are diagnostics only unless the user named them as
 the gate.
 
+If a product-code task exposes a test, harness, tooling, or infrastructure
+defect, do not expand the task by editing that infrastructure automatically.
+Stop and report the product change, the infrastructure defect, why it blocks or
+does not block validation, and the smallest proposed follow-up. Ask whether to
+backlog it or fix it now. Only edit infrastructure without asking when the user
+explicitly requested infrastructure work or the product fix cannot be validated
+at all without that infrastructure change.
+
 Use VICE warp mode for headless tests. Do not raise runtime test timeouts above
 30 seconds. For broad C128 banking, loader, layout, or memory changes, run
 `make test128` before declaring completion.
 
-VICE runtime harnesses use localhost remote-monitor sockets. In the Codex
-sandbox, those socket connections may fail with `PermissionError`. Run known
-VICE runtime gates with escalation immediately instead of first trying a
-sandboxed run. This applies to targets such as `make testplus4-runtime`,
-`make test128-fast`, `make test128-fast-smoke`, `make test128`, and any
-filtered runtime harness target that launches `x64sc`, `x128`, or `xplus4`.
-Do not escalate static/build-only checks such as `make build`,
-`make check-hal-boundaries`, Python static checkers, or `git diff`.
+VICE runtime harnesses use localhost monitor automation and must run with
+escalated permissions on the first attempt. Do not try a sandboxed run first.
+The sandbox blocks local monitor/socket access and produces known false
+failures such as `PermissionError`.
+
+Escalate any verification command that launches VICE or a VICE harness,
+including commands that invoke `x64sc`, `x128`, or `xplus4`; `make test64`;
+`make testplus4`; `make testplus4-runtime`; `make test128-fast`;
+`make test128-fast-smoke`; `make test128`; direct `harness128.py`,
+`harness128_batch.py`, or `harnessplus4.py` runs; and filtered runtime harness
+targets. Static/build-only checks stay sandboxed: `make build`,
+`make check-hal-boundaries`, Python static checkers, `git diff`, and similar
+commands that do not launch VICE.
 
 ## Memory And Banking Contracts
 Memory layout violations usually cause silent corruption, wild jumps, CPU JAMs,

@@ -3,7 +3,6 @@
 // points loaded into the dedicated disk-I/O runtime below ROM-shadowed regions
 // so title-time disk setup is callable regardless of the current C128 banking state.
 
-#if C128
 tramp_disk_setup_ui_action:
     lda #C128_HELP_OVERLAY_ID
     jsr overlay_load
@@ -71,4 +70,3 @@ title_draw_save_disk_indicator:
     rts
 
     #import "disk_setup_banked.s"
-#endif

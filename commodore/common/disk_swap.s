@@ -49,6 +49,8 @@ disk_error_index:  .byte 0
 .const DS_PROMPT_COL = (SCREEN_COLS - 19) / 2
 .const DS_PRESS_ANY_KEY_COL = (SCREEN_COLS - 13) / 2
 .const DS_DRIVE_IND_COL = (SCREEN_COLS - 10) / 2
+.const DS_PROMPT_ROW = 10
+.const DS_PROMPT_KEY_ROW = 11
 .const DS_TITLE_MENU_ROW = STATUS_ROW
 .const DS_TITLE_PROMPT_ROW = STATUS_ROW + 1
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG || HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
@@ -376,16 +378,19 @@ disk_prompt:
 #if HAL_STORAGE_SWAP_PROMPT_FULLSCREEN
     jsr ui_clear_full_screen_safe
     jsr msg_init
+#elif HAL_STORAGE_SWAP_PROMPT_CLEAR_ROWS_AND_TRACK_MEDIA
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
 #endif
     lda #COL_WHITE
     sta zp_text_color
-    lda #10
+    lda #DS_PROMPT_ROW
     sta zp_cursor_row
     lda #DS_PROMPT_COL
     sta zp_cursor_col
     jsr hal_screen_put_string
 
-    lda #11
+    lda #DS_PROMPT_KEY_ROW
     sta zp_cursor_row
     lda #DS_PRESS_ANY_KEY_COL
     sta zp_cursor_col
@@ -412,10 +417,8 @@ disk_prompt:
     rts
 #elif HAL_STORAGE_SWAP_PROMPT_CLEAR_ROWS_AND_TRACK_MEDIA
     php
-    lda #10
-    jsr hal_screen_clear_row
-    lda #11
-    jsr hal_screen_clear_row
+    jsr ui_clear_full_screen_safe
+    jsr msg_init
     plp
     bcc !dp_init_ok+
     lda #C128_MEDIA_UNKNOWN
