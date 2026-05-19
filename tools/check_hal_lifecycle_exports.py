@@ -80,6 +80,11 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_item_prompt_reload_installs_irq",
     "hal_platform_item_prompt_reload_resync",
     "hal_platform_equip_prepare_key_before_display",
+    "hal_platform_monster_bank1_tier_names",
+    "hal_platform_monster_hidden_name_pool",
+    "hal_platform_monster_cpu_port_bank",
+    "hal_platform_monster_overlay_stale_name",
+    "hal_platform_monster_stale_tier_reload",
 )
 
 
@@ -228,6 +233,26 @@ def main() -> int:
         "hal_platform_item_prompt_reload_installs_irq": (COMMON_DIR / "player_items.s",),
         "hal_platform_item_prompt_reload_resync": (COMMON_DIR / "player_items.s",),
         "hal_platform_equip_prepare_key_before_display": (COMMON_DIR / "player_items.s",),
+        "hal_platform_monster_bank1_tier_names": (
+            COMMON_DIR / "monster.s",
+            "HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES",
+        ),
+        "hal_platform_monster_hidden_name_pool": (
+            COMMON_DIR / "monster.s",
+            "HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL",
+        ),
+        "hal_platform_monster_cpu_port_bank": (
+            COMMON_DIR / "monster.s",
+            "HAL_PLATFORM_MONSTER_CPU_PORT_BANK",
+        ),
+        "hal_platform_monster_overlay_stale_name": (
+            COMMON_DIR / "monster.s",
+            "HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME",
+        ),
+        "hal_platform_monster_stale_tier_reload": (
+            COMMON_DIR / "monster.s",
+            "HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD",
+        ),
     }
     for name, consumer_spec in policy_consumers.items():
         consumer_path = consumer_spec[0]

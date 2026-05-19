@@ -52,11 +52,18 @@
 .const hal_platform_item_prompt_reload_installs_irq = 0
 .const hal_platform_item_prompt_reload_resync = 1
 .const hal_platform_equip_prepare_key_before_display = 0
+.const hal_platform_monster_bank1_tier_names = 1
+.const hal_platform_monster_hidden_name_pool = 0
+.const hal_platform_monster_cpu_port_bank = 0
+.const hal_platform_monster_overlay_stale_name = 0
+.const hal_platform_monster_stale_tier_reload = 1
 #define HAL_PLATFORM_WIZARD_ENTRY_OVERLAY
 #define HAL_PLATFORM_EGO_HOLY_AVENGER_STRING_EXTERNAL
 #define HAL_PLATFORM_EGO_AC_BONUS_EXTERNAL
 #define HAL_PLATFORM_CURE_POISON_MSG_EXTERNAL
 #define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
+#define HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
+#define HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD
 #define HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
 #define HAL_PLATFORM_GAME_LOOP_MAIN_LOOP_BEGIN
 #define HAL_PLATFORM_GAME_LOOP_RESTORE_GENERATION_OVERLAY

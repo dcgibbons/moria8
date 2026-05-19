@@ -51,11 +51,19 @@
 #endif
 .const hal_platform_item_prompt_reload_resync = 0
 .const hal_platform_equip_prepare_key_before_display = 1
+.const hal_platform_monster_bank1_tier_names = 0
+.const hal_platform_monster_hidden_name_pool = 1
+.const hal_platform_monster_cpu_port_bank = 1
+.const hal_platform_monster_overlay_stale_name = 1
+.const hal_platform_monster_stale_tier_reload = 0
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
 #define HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
 #define HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER
+#define HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
+#define HAL_PLATFORM_MONSTER_CPU_PORT_BANK
+#define HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
 #define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
 #define HAL_PLATFORM_OVERLAY_STATE_LOCAL
 #define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT

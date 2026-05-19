@@ -5,9 +5,6 @@
 commodore/common/disk_setup_banked.s	target-conditional	#if C128
 commodore/common/disk_setup_banked.s	target-conditional	#if PLUS4
 commodore/common/disk_setup_runtime128.s	target-conditional	#if C128
-commodore/common/monster.s	target-conditional	#if !C128
-commodore/common/monster.s	target-conditional	#if !PLUS4
-commodore/common/monster.s	target-conditional	#if C128
 commodore/common/reu.s	platform-name	REU
 commodore/common/reu.s	target-conditional	#if C128
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4

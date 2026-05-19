@@ -1000,7 +1000,7 @@ ltb_dst_hi:
 // normal RAM, or copies via banking if under KERNAL ROM.
 // Clobbers: A, Y, zp_ptr1
 creature_get_name:
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     lda #0
     sta cgn_src_banked
 #endif
@@ -1024,12 +1024,12 @@ creature_get_name:
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     jmp !cgn_do_bank_c128+
 #else
     jmp !cgn_do_bank_c64+
 #endif
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 !cgn_do_bank_c128:
     lda #1
     sta cgn_src_banked
@@ -1040,7 +1040,7 @@ creature_get_name:
     // --- Tier creature: read ptr from active tier name tables ---
     // C128: read from the active Bank 1 tier cache slot via helper wrappers.
     // C64: existing $E000 banked read path.
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     php
     sei
     txa
@@ -1068,7 +1068,7 @@ creature_get_name:
 #endif
 
 !cgn_translate_b1_ptr:
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     // C128 tier name pointers are typically encoded as historical $E0xx
     // payload addresses; convert those to the active Bank 1 tier cache slot.
     // Do not assume every cached tier lives at $8000. Tier 2/3/4 occupy later
@@ -1105,7 +1105,7 @@ creature_get_name:
 #endif
     jmp !cgn_copy+
 
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 !cgn_tier_c64:
     // C64 active tier names are copied to hidden RAM under I/O during tier
     // activation. Use the resident cr_name pointer; do not depend on the
@@ -1116,11 +1116,11 @@ creature_get_name:
 #endif
 
 !cgn_do_bank_c64:
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     // C64/Plus4: bank out KERNAL for $E0xx pointer reads.
     php
     sei
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda hal_memory_cpu_port
     sta cgn_saved_p01
 #endif
@@ -1138,7 +1138,7 @@ creature_get_name:
     bcs !+
     jmp !cgn_setup_normal+      // Normal RAM pointer — use directly
 !:  // Stale $E0xx pointer: tier was previously loaded but current_tier was reset.
-#if !C128
+#if HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
     // If an overlay is currently executing from $E000, reloading tier names
     // would overwrite the running overlay before the caller returns. Use a
     // generic monster name for overlay-local combat messages instead.
@@ -1147,7 +1147,7 @@ creature_get_name:
     jmp !cgn_overlay_name+
 !cgn_reload_allowed:
 #endif
-#if !C128
+#if !HAL_PLATFORM_MONSTER_STALE_TIER_RELOAD
     // C64 active tier names are no longer owned by $E000. A stale $E0xx
     // pointer means old state, not a recoverable gameplay owner.
     jmp !cgn_stale+
@@ -1187,7 +1187,7 @@ creature_get_name:
 #endif
 
 !cgn_setup_normal:
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     cmp #>PLATFORM_TIER_NAME_POOL_BASE
     bcc !cgn_setup_linear_c64+
     cmp #>(PLATFORM_TIER_NAME_POOL_END + 1)
@@ -1198,10 +1198,10 @@ creature_get_name:
     sta zp_ptr1_hi
     lda cr_name_lo,x
     sta zp_ptr1
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     php
     sei
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda hal_memory_cpu_port
     sta cgn_saved_p01           // Save bank config without using stack
 #endif
@@ -1209,7 +1209,7 @@ creature_get_name:
 #endif
     // C128 falls through to shared copy loop.
 
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 !cgn_setup_hidden_c64:
     // Hidden $D000-$D7FF RAM is only visible with I/O banked out.
     sta zp_ptr1_hi
@@ -1217,7 +1217,7 @@ creature_get_name:
     sta zp_ptr1
     php
     sei
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda hal_memory_cpu_port
     sta cgn_saved_p01
     lda #BANK_ALL_RAM
@@ -1227,7 +1227,7 @@ creature_get_name:
 #endif
 
 !cgn_copy:
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
     // C128 Bank 1 cache copy path (no $01 banking required).
     lda cgn_src_banked
     beq !cgn_copy_linear+
@@ -1267,8 +1267,8 @@ creature_get_name:
     lda #0
     sta creature_name_buf,y
 !cgn_done:
-#if !C128
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda cgn_saved_p01
     sta hal_memory_cpu_port
 #endif
@@ -1288,23 +1288,23 @@ creature_get_name:
     ldy #>creature_name_buf
     rts
 
-#if !C128
+#if HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
 !cgn_overlay_name:
     lda #<cgn_monster_str
     ldy #>cgn_monster_str
     rts
 #endif
 
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 tier_name_lo_addr: .word 0
 tier_name_hi_addr: .word 0
 #endif
 creature_name_buf: .fill 32, 0
 cgn_saved_x: .byte 0           // scratch: saved creature index for tier reload
-#if C128
+#if HAL_PLATFORM_MONSTER_BANK1_TIER_NAMES
 cgn_src_banked: .byte 0        // 1 = copy name via C128 Bank 1 DB helper
 #endif
 cgn_saved_p01: .byte 0         // saved $01 for linear copy restore (stack-free)
-#if !C128
+#if HAL_PLATFORM_MONSTER_OVERLAY_STALE_NAME
 cgn_monster_str: .text "monster" ; .byte 0
 #endif
