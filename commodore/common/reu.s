@@ -278,7 +278,7 @@ reu_probe_xfer:
     sta REU_COMMAND         // Execute DMA
     rts
 
-#if C128
+#if HAL_MEMORY_PRELOAD_ASSET_LOAD
 // ============================================================
 // c128_preload_asset_load — Shared preload-only LOAD transaction
 // ============================================================
@@ -655,12 +655,8 @@ reu_stash_overlays:
     // Keep this local count explicit because reu.s is imported before overlay.s.
     // The filename tables below are asserted against it so overlay additions must
     // update this contract deliberately.
-#if C128
-    .const REU_OVERLAY_COUNT = 7
-#else
-    .const REU_OVERLAY_COUNT = 8
-#endif
 #import "compat/hal_storage_overlay_test_stub.s"
+    .const REU_OVERLAY_COUNT = hal_storage_overlay_name_hi - hal_storage_overlay_name_lo
     ldx #1                      // Start with overlay 1 (OVL_STARTUP)
 !rso_loop:
     stx reu_ovl_idx
@@ -762,7 +758,7 @@ reu_show_file:
     sta zp_cursor_row
     lda #2
     sta zp_cursor_col
-#if C128
+#if HAL_PLATFORM_REU_SHOW_FILE_USES_PUT_STRING
     jsr hal_screen_put_string
 #else
     jsr hal_screen_set_cursor

@@ -29,3 +29,5 @@
 
 .const hal_memory_mmu_config_register = $ff00
 .const hal_memory_mmu_preconfig_a     = $d501
+
+#define HAL_MEMORY_PRELOAD_ASSET_LOAD

@@ -3,7 +3,6 @@
 # Do not add entries casually; remove entries as code migrates behind HAL.
 
 commodore/common/reu.s	platform-name	REU
-commodore/common/reu.s	target-conditional	#if C128
 commodore/common/save.s	target-conditional	#if !C128 && !PLUS4
 commodore/common/save.s	target-conditional	#if !PLUS4
 commodore/common/save.s	target-conditional	#if C128

@@ -43,6 +43,7 @@
 .const hal_platform_overlay_reu_stash_enabled = 0
 .const hal_platform_overlay_prompt_program_media = 0
 .const hal_platform_overlay_cpu_port_dma_bank = 0
+#define HAL_PLATFORM_REU_SHOW_FILE_USES_PUT_STRING
 #define HAL_PLATFORM_TITLE_SYSINFO_80COL
 #if C128_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1

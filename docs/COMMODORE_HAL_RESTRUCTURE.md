@@ -36,7 +36,8 @@ historical note or move it to backlog before continuing.
 1. Continue Phase 5 by removing remaining target-conditionals from
    `commodore/common/`.
 2. Remaining slices are all storage, REU, or tier/banking sensitive:
-   `reu.s`, `save.s`, and `tier_manager.s`.
+   `save.s` and `tier_manager.s` target-conditionals, plus the `reu.s`
+   subsystem-name audit entry.
 3. After each slice, update `docs/hal_boundary_allowlist.txt`, the relevant
    HAL export checker, and this state section.
 4. Do not move to a new phase without explicitly recording that the current
