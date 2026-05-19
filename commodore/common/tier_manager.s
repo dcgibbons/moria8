@@ -39,7 +39,7 @@ c128_tier_cache_size_lo: .byte 0
 c128_tier_cache_size_hi: .byte 0
 c128_tier_soa_end_lo: .byte 0
 c128_tier_soa_end_hi: .byte 0
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 platform_tier_name_src_lo: .byte 0
 platform_tier_name_src_hi: .byte 0
 #endif
@@ -54,13 +54,13 @@ tier_invalidate_state:
     sta tier_silent_restore
     sta c128_tier_cache_size_lo
     sta c128_tier_cache_size_hi
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     sta tier_name_lo_addr
     sta tier_name_lo_addr+1
     sta tier_name_hi_addr
     sta tier_name_hi_addr+1
 #endif
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
     sta platform_tier_name_src_lo
     sta platform_tier_name_src_hi
 #endif
@@ -98,7 +98,7 @@ tier_size_hi:
     .byte 0
     .byte >TIER1_SIZE, >TIER2_SIZE, >TIER3_SIZE, >TIER4_SIZE
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 .const C128_TIER1_CACHE_BASE = BANK1_TIER_CACHE_BASE
 .const C128_TIER2_CACHE_BASE = C128_TIER1_CACHE_BASE + TIER1_SIZE
 .const C128_TIER3_CACHE_BASE = C128_TIER2_CACHE_BASE + TIER2_SIZE
@@ -127,7 +127,7 @@ c128_tier_cache_slot_hi:
 tier_init:
     jsr tier_invalidate_state
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     lda #0
     sta c128_cache_tiers_ready
     sta c128_cache_overlays_ready
@@ -297,7 +297,7 @@ tier_load:
     jsr msg_print
 !tl_skip_loading_msg:
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     lda c128_cache_tiers_ready
     beq !tl_check_reu+
     ldx current_tier
@@ -330,7 +330,7 @@ tier_load:
 !tl_disk_ok:
     jmp !tl_activate+
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 !tl_cache_ok:
     jmp !tl_activate+
 #endif
@@ -343,10 +343,10 @@ tier_load:
 !tl_activate:
     // Data is now in RAM at $E000 (under KERNAL ROM).
     // Bank out KERNAL to read, copy SoA to active buffer.
-#if !C128
+#if !HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     php
     sei
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda hal_memory_cpu_port
     pha                         // Save bank config
 #endif
@@ -361,7 +361,7 @@ tier_load:
     lda tier_count_table,x      // A = creature count for this tier
     jsr load_tier_to_buffer
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     // Compute tier name table addresses in $E000 region.
     // After load_tier_to_buffer, zp_ptr0 is past all 22 arrays.
     // name_hi starts at zp_ptr0 - count, name_lo at zp_ptr0 - 2*count.
@@ -388,7 +388,7 @@ tier_load:
     sta c128_tier_soa_end_hi
 #endif
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     lda c128_cache_tiers_ready
     beq !tl_keep_e000_names+
     ldx current_tier
@@ -401,8 +401,8 @@ tier_load:
     jsr platform_copy_tier_names_to_pool
 #endif
 
-#if !C128
-#if !PLUS4
+#if !HAL_PLATFORM_OVERLAY_CACHE_ENABLED
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     pla
     sta hal_memory_cpu_port     // Restore bank config
 #endif
@@ -434,7 +434,7 @@ tier_load:
     jsr tier_invalidate_state
     rts
 
-#if !C128
+#if HAL_PLATFORM_MONSTER_HIDDEN_NAME_POOL
 // platform_copy_tier_names_to_pool — Copy the active tier name block
 // from the staged $E000 tier PRG into hidden RAM under I/O, then rewrite
 // cr_name pointers. Called while interrupts are masked and $E000 RAM is visible.
@@ -460,7 +460,7 @@ platform_copy_tier_names_to_pool:
     sta zp_ptr1_hi
 
     // C64 only: hide I/O so writes to $D000-$D7FF reach RAM, not registers.
-#if !PLUS4
+#if HAL_PLATFORM_MONSTER_CPU_PORT_BANK
     lda #BANK_ALL_RAM
     sta hal_memory_cpu_port
 #endif
@@ -508,7 +508,7 @@ platform_copy_tier_names_to_pool:
 .assert "Platform tier name pool fits largest name blob", TIER4_SIZE - (TIER4_COUNT * 22) <= (PLATFORM_TIER_NAME_POOL_END - PLATFORM_TIER_NAME_POOL_BASE + 1), true
 #endif
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 c128_preload_all_tiers:
     ldx #1
 !cpat_loop:
@@ -640,7 +640,7 @@ tier_load_disk:
 tier_loading_str:
     .text "Loading..." ; .byte 0
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 // ============================================================
 // c128_stage_tier_to_bank1 — Legacy entry name, now writes to the high Bank 1 cache slot
 // ============================================================
