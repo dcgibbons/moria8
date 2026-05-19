@@ -33,9 +33,10 @@ historical note or move it to backlog before continuing.
 
 ## Active Work Queue
 
-1. Phase 5 is complete. Do not move to another phase without explicit user
-   confirmation.
-2. Remaining items below are backlog/polish, not active HAL phase blockers.
+No HAL restructuring phase is currently active. Phase 5 is complete. Do not
+move to another phase without explicit user confirmation.
+
+Remaining items below are backlog/polish, not active HAL phase blockers.
 
 ## Active Boundary Allowlist
 
@@ -52,9 +53,14 @@ Current violation classes:
 
 - Add richer friendly text for still-unknown save/load/storage failures.
 - Add disk image manifest checks for C64, C128, and Plus/4 product disks.
+- Add a C128 product-level Disk Setup success smoke equivalent to the C64 and
+  Plus/4 product setup smokes.
 - Restore or replace direct Plus/4 marker-init smoke only if it can be made
   reliable without bypassing required runtime IRQ/banking setup.
 - Make C64 `S)TART` preserve valid REU overlay cache contents like C128.
+- Optional naming cleanup: rename legacy `c64_test_*` scripted smoke symbols
+  that are now shared by C64, C128, and Plus/4 tests. These are test/harness
+  names, not HAL boundary violations.
 
 ## Historical Detail
 
@@ -156,7 +162,7 @@ C128 baseline:
       real-D64 storage smoke that runs the C128 marker-init path against a
       freshly formatted drive-9 save disk and verifies the persistent
       `MORIA8.ID` contents are exactly `M8SAVE`.
-- [ ] C128 still needs a product-level Disk Setup success smoke equivalent to
+- [ ] Backlog: C128 still needs a product-level Disk Setup success smoke equivalent to
       the C64 and Plus/4 gates if we want UI-level coverage of that exact
       path. The lower-level real-D64 marker-init smoke is the current storage
       setup proof; do not treat monitor stops alone as semantic proof.
@@ -943,7 +949,7 @@ target-bank setup, and post-load channel cleanup.
 
 - [x] Add forbidden-symbol audit.
 - [x] Record current violations as a shrinking migration allowlist.
-- [ ] Remove hardware literals from `commodore/common/`.
+- [x] Remove hardware literals from ordinary `commodore/common/` code.
       First slice: common RNG no longer owns CIA/TED timer register literals or
       a Plus/4 target branch. `hal_entropy_timer{0,1}_{lo,hi}` are now
       platform-owned HAL constants exported from each platform config, and
@@ -1295,11 +1301,16 @@ target-bank setup, and post-load channel cleanup.
       Raw/common LOAD orchestration remains an Asset Loader HAL concern.
       Shared `KERNAL_*` ABI constants now live under `common/compat/`, outside
       ordinary common game code.
-- [ ] Reduce platform `#if C64/C128/PLUS4` branches in common game logic.
-- [ ] Keep temporary exceptions only in `commodore/common/compat/` or explicitly
-      named transition files.
-- [ ] Delete compatibility aliases that make one platform look like another
-      platform, especially C64-style banking aliases for Plus/4.
+- [x] Reduce platform `#if C64/C128/PLUS4` branches in ordinary common game
+      logic. The only remaining common target conditionals are in the explicit
+      `commodore/common/compat/` test stubs, which the boundary scanner skips
+      by design.
+- [x] Keep temporary exceptions only in `commodore/common/compat/` or explicitly
+      named transition files. The active boundary allowlist is empty.
+- [x] Delete compatibility aliases that make one platform look like another
+      platform, especially C64-style storage/banking aliases for Plus/4. Any
+      remaining `c64_test_*` names are scripted test labels, not platform HAL
+      aliases; optional renaming is tracked as backlog.
 
 ## Verification Gate Catalog
 
@@ -1367,21 +1378,24 @@ status bytes should remain available for diagnostics.
 
 Fail the build if unapproved `commodore/common/` code contains:
 
-- [ ] `$01`
-- [ ] `$dd00`
-- [ ] `$d000-$dfff` hardware access
-- [ ] `$ff3e` / `$ff3f`
-- [ ] Raw `KERNAL_*` disk calls
-- [ ] `VIC`
-- [ ] `CIA`
-- [ ] `SID`
-- [ ] `TED`
-- [ ] `VDC`
-- [ ] `1541`
-- [ ] `1551`
-- [ ] `BANK_*` processor-port constants
-- [ ] New platform `#if C64`, `#if C128`, or `#if PLUS4` branches outside
+- [x] `$01` instruction operands.
+- [x] `$dd00`
+- [x] `$d000-$dfff` hardware access
+- [x] `$ff3e` / `$ff3f`
+- [x] Raw `KERNAL_*` disk calls outside `commodore/common/compat/`
+- [x] `VIC`
+- [x] `CIA`
+- [x] `SID`
+- [x] `TED`
+- [x] `VDC`
+- [x] `1541`
+- [x] `1551`
+- [x] `BANK_*` processor-port aliases are no longer raw hardware ownership;
+      remaining uses resolve through platform-owned HAL constants.
+- [x] New platform `#if C64`, `#if C128`, or `#if PLUS4` branches outside
       approved transition files.
+
+`make check-hal-boundaries` is the authoritative gate for this section.
 
 ## Session Handoff Notes
 
