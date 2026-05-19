@@ -35,7 +35,7 @@ bank_load_recall:
     // 40-column ports use the $E000 tier window; C128 tier metadata points to Bank 1 DB.
     lda #OVL_NONE
     sta current_overlay
-#if hal_platform_string_bank_load_invalidates_tier
+#if HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER
     jsr tier_invalidate_state
 #endif
 

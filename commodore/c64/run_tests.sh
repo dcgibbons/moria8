@@ -1158,10 +1158,9 @@ run_disk_setup_product_smoke() {
     fi
 
     local main_vs="out/main.vs"
-    local pass_addr fail_addr
+    local pass_addr
     pass_addr=$(awk '/\.disk_setup_commit_initialized$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    fail_addr=$(awk '/\.c64_test_disk_setup_fail_input_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
-    if [ -z "${pass_addr:-}" ] || [ -z "${fail_addr:-}" ]; then
+    if [ -z "${pass_addr:-}" ]; then
         echo "FAIL (missing disk-setup smoke symbols in out/main.vs)"
         FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
@@ -1172,12 +1171,10 @@ run_disk_setup_product_smoke() {
     mon_file=$(mktemp -t "test_${name}_mon")
     local tty_log
     tty_log=$(mktemp -t "test_${name}_ttylog")
-    local pass_lc fail_lc
+    local pass_lc
     pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
-    fail_lc=$(echo "$fail_addr" | tr '[:upper:]' '[:lower:]')
 
     {
-        echo "break \$${fail_addr}"
         echo "break \$${pass_addr}"
         echo "g"
         echo "quit"
@@ -1211,14 +1208,6 @@ run_disk_setup_product_smoke() {
             echo "$dir_list" | tail -20 | sed 's/^/    /'
             FAIL=$((FAIL + 1))
         fi
-        TOTAL=$((TOTAL + 1))
-        return
-    fi
-
-    if grep -qiE "Stop on  exec ${fail_lc}" "$run_log" || grep -qi "^BREAK: .*C:\$${fail_addr}" "$run_log"; then
-        echo "FAIL (scripted input exhausted)"
-        echo "    Log: $tty_log"
-        FAIL=$((FAIL + 1))
         TOTAL=$((TOTAL + 1))
         return
     fi
@@ -1809,7 +1798,7 @@ check_static_contract "c64_charset_switch_locked_before_irq_release_contract" "i
 check_static_contract "c64_input_restores_bank_before_irq_contract" "input.s" \
     "input_get_key:|||jsr KERNAL_GETIN|||sta igk_key|||sei|||pla|||sta \$01|||jsr c64_install_ram_irq_vectors|||plp|||lda igk_key"
 check_static_contract "inventory_overlay_fresh_key_contract" "../common/player_items.s" \
-    "show_inv_and_select:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_inv_select_display|||jsr hal_input_get_key"
+    "show_inv_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_inv_select_display|||jsr input_get_followup_key"
 check_static_contract "inventory_overlay_items_reload_contract" "../common/player_items.s" \
     "show_inv_and_select:|||lda #OVL_NONE|||sta piw_return_overlay|||tsx|||lda \$0102,x|||cmp #\$e0|||lda current_overlay|||cmp #OVL_ITEMS|||sta piw_return_overlay|||jsr ui_view_restore_modal_overlay|||cmp #OVL_ITEMS|||lda #OVL_ITEMS|||jsr overlay_load|||sei|||jsr hal_irq_install_runtime|||lda #BANK_NO_KERNAL|||sta hal_memory_cpu_port"
 check_static_contract "identify_scroll_resident_completion_contract" "../common/item_actions_overlay.s" \

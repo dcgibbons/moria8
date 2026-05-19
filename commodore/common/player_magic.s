@@ -611,7 +611,7 @@ pm_consume_mana:
 !pm_cm_done:
     rts
 
-#if !hal_platform_player_magic_helpers_external
+#if !HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
     #import "player_magic_levelup.s"
     #import "player_magic_display.s"
     #import "player_magic_tail.s"

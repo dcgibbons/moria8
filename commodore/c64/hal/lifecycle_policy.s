@@ -31,6 +31,14 @@
 .const hal_platform_game_loop_run_stop_reset_input = 0
 .const hal_platform_game_loop_scroll_delta_render = 0
 .const hal_platform_game_loop_item_actions_trampolined = 0
+.const hal_platform_overlay_count = 8
+.const hal_platform_overlay_state_external = 0
+.const hal_platform_overlay_force_reload = 0
+.const hal_platform_overlay_tier_cache_guard = 0
+.const hal_platform_overlay_cache_enabled = 0
+.const hal_platform_overlay_reu_stash_enabled = 1
+.const hal_platform_overlay_prompt_program_media = 1
+.const hal_platform_overlay_cpu_port_dma_bank = 1
 #if PLATFORM_PRODUCT_OVERLAY_RUNTIME
 .const hal_platform_item_prompt_overlay_runtime = 1
 #else
@@ -46,4 +54,12 @@
 #define HAL_PLATFORM_WIZARD_40COL_RESIDENT
 #define HAL_PLATFORM_WIZARD_REVEAL_TRAMPOLINE
 #define HAL_PLATFORM_EGO_AC_BONUS_LOCAL
+#define HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
+#define HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER
 #define HAL_PLATFORM_GAME_LOOP_SAVE_CLEARS_SCREEN
+#define HAL_PLATFORM_OVERLAY_STATE_LOCAL
+#define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
+#define HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
+#define HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA
+#define HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
+#define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES

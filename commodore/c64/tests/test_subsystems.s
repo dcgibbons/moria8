@@ -91,6 +91,16 @@ kernal_load:
 kernal_load_safe:
     jmp kernal_load
 
+.const hal_platform_overlay_count = 8
+.const hal_platform_string_bank_load_invalidates_tier = 1
+#define HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER
+#define HAL_PLATFORM_OVERLAY_STATE_LOCAL
+#define HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
+#define HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
+#define HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA
+#define HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
+#define HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
+
 #import "../../common/overlay.s"
 #import "../../common/string_bank.s"
 

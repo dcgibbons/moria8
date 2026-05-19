@@ -641,6 +641,7 @@ recall_deaths: .fill MAX_CREATURES, 0
 recall_attacks: .fill MAX_CREATURES, 0
 recall_spells: .fill MAX_CREATURES, 0
 .label c128_kernal_irq_tail_runtime_owned = $03fd
+#define HAL_PLATFORM_PLAYER_MAGIC_HELPERS_EXTERNAL
 
 #import "../../common/zeropage.s"
 #import "../memory128.s"

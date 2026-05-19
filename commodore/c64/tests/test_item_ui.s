@@ -74,7 +74,9 @@ test_finish:
 #import "../../common/player_items.s"
 #import "../../common/spell_data.s"
 #import "../../common/projectile.s"
+#define SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../common/spell_effects.s"
+#undef SPELL_EFFECTS_INCLUDE_IDENTIFY
 #import "../../common/player_magic_state.s"
 #import "../../common/player_magic_state_ops.s"
 #import "../../common/player_magic.s"

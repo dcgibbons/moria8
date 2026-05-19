@@ -164,6 +164,7 @@ eff_teleport_apply_target:
 !ets_fail:
     rts
 
+#if SPELL_EFFECTS_INCLUDE_IDENTIFY
 // ============================================================
 // eff_identify_prompt — Interactive item identification
 // Input: none (prompts user for slot)
@@ -257,6 +258,11 @@ eff_identify_scroll_resident:
     jsr eff_identify_prompt
     sec
     rts
+#else
+eff_identify_prompt:
+eff_identify_scroll_resident:
+    rts
+#endif
 
 // ============================================================
 // eff_cure_poison — Clear poison status

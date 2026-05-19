@@ -68,6 +68,14 @@ REQUIRED_POLICY_CONSTANTS = (
     "hal_platform_game_loop_run_stop_reset_input",
     "hal_platform_game_loop_scroll_delta_render",
     "hal_platform_game_loop_item_actions_trampolined",
+    "hal_platform_overlay_count",
+    "hal_platform_overlay_state_external",
+    "hal_platform_overlay_force_reload",
+    "hal_platform_overlay_tier_cache_guard",
+    "hal_platform_overlay_cache_enabled",
+    "hal_platform_overlay_reu_stash_enabled",
+    "hal_platform_overlay_prompt_program_media",
+    "hal_platform_overlay_cpu_port_dma_bank",
     "hal_platform_item_prompt_overlay_runtime",
     "hal_platform_item_prompt_reload_installs_irq",
     "hal_platform_item_prompt_reload_resync",
@@ -122,8 +130,14 @@ def main() -> int:
                 direct_missing.append(f"{platform}: missing {name} in {path.relative_to(ROOT)}")
     policy_consumers = {
         "hal_platform_reassert_before_message_render": (COMMON_DIR / "ui_messages.s",),
-        "hal_platform_restore_tier_after_overlay": (COMMON_DIR / "ui_restore.s",),
-        "hal_platform_string_bank_load_invalidates_tier": (COMMON_DIR / "string_bank.s",),
+        "hal_platform_restore_tier_after_overlay": (
+            COMMON_DIR / "ui_restore.s",
+            "HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY",
+        ),
+        "hal_platform_string_bank_load_invalidates_tier": (
+            COMMON_DIR / "string_bank.s",
+            "HAL_PLATFORM_STRING_BANK_LOAD_INVALIDATES_TIER",
+        ),
         "hal_platform_mark_modal_restore_perf": (COMMON_DIR / "ui_restore.s",),
         "hal_platform_perf_p1_command_instrumentation": (COMMON_DIR / "game_loop_helpers.s",),
         "hal_platform_render_ball_effect_direct_perf": (COMMON_DIR / "player_magic_ball.s",),
@@ -180,6 +194,35 @@ def main() -> int:
         "hal_platform_game_loop_item_actions_trampolined": (
             COMMON_DIR / "game_loop.s",
             "HAL_PLATFORM_GAME_LOOP_ITEM_ACTIONS_TRAMPOLINED",
+        ),
+        "hal_platform_overlay_count": (COMMON_DIR / "overlay.s",),
+        "hal_platform_overlay_state_external": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_STATE_LOCAL",
+        ),
+        "hal_platform_overlay_force_reload": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_FORCE_RELOAD",
+        ),
+        "hal_platform_overlay_tier_cache_guard": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD",
+        ),
+        "hal_platform_overlay_cache_enabled": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_CACHE_ENABLED",
+        ),
+        "hal_platform_overlay_reu_stash_enabled": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED",
+        ),
+        "hal_platform_overlay_prompt_program_media": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA",
+        ),
+        "hal_platform_overlay_cpu_port_dma_bank": (
+            COMMON_DIR / "overlay.s",
+            "HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK",
         ),
         "hal_platform_item_prompt_overlay_runtime": (COMMON_DIR / "player_items.s",),
         "hal_platform_item_prompt_reload_installs_irq": (COMMON_DIR / "player_items.s",),

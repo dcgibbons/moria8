@@ -340,6 +340,11 @@ huff_print_msg:
     inc test_huff_calls
     rts
 
+// The dispatch table imported by this focused test references every spell
+// target. Genocide coverage does not execute this product-resident target.
+pmx_cure_poison_msg:
+    rts
+
 recall_key_to_screen_code:
     cmp #$41
     bcc !try_shifted+

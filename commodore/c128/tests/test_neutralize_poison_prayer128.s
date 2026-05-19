@@ -182,6 +182,16 @@ huff_print_msg:
     inc test_huff_calls
     rts
 
+pmx_cure_poison_msg:
+    lda zp_eff_poison
+    beq !done+
+    lda #0
+    sta zp_eff_poison
+    ldx #HSTR_EFF_POISON_END
+    jmp huff_print_msg
+!done:
+    rts
+
 test_tramp_neutralize_poison_execute:
     inc test_spell_exec_calls
     lda pm_spell_idx

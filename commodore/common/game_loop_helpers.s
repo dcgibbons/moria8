@@ -16,7 +16,7 @@ cmd_show_character_view:
     jsr tramp_ui_char_display
     jsr input_prepare_followup_key
     jsr hal_input_get_key
-#if hal_platform_restore_tier_after_overlay
+#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
     // C64 character view is overlay-backed and returns through a custom
     // full-screen redraw path, so it must also re-establish the active tier.
     jsr tier_restore_after_overlay

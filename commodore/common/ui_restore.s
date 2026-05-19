@@ -12,7 +12,7 @@ ui_reset_message_state:
 // Preserves: nothing
 ui_view_restore_modal_overlay:
     jsr ui_reset_message_state
-#if hal_platform_restore_tier_after_overlay
+#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay
@@ -36,7 +36,7 @@ ui_view_restore_modal_overlay:
 // Preserves: nothing
 ui_view_redraw_gameplay_view:
     jsr ui_reset_message_state
-#if hal_platform_restore_tier_after_overlay
+#if HAL_PLATFORM_RESTORE_TIER_AFTER_OVERLAY
     // C64 overlays overwrite the live tier window at $E000, so gameplay-view
     // restore must re-establish the current dungeon tier before redraw.
     jsr tier_restore_after_overlay

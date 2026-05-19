@@ -53,7 +53,16 @@ BATCH_TESTS: dict[str, TestCase] = {
     "input128": TestCase("input128", SCRIPT_DIR / "tests" / "test_input128.s", 5.0, 20000000, True),
     "db128": TestCase("db128", SCRIPT_DIR / "tests" / "test_db128.s", 5.0, 20000000, True),
     "msg_prompt128": TestCase("msg_prompt128", SCRIPT_DIR / "tests" / "test_msg_prompt128.s", 5.0, 120000000, True, False, True, True),
-    "main_loop128": TestCase("main_loop128", SCRIPT_DIR / "tests" / "test_main_loop128.s", 5.0),
+    # The fail-loop address collides with ROM-visible startup code before the
+    # test has banked all RAM in. Treat lack of pass as failure instead.
+    "main_loop128": TestCase(
+        "main_loop128",
+        SCRIPT_DIR / "tests" / "test_main_loop128.s",
+        5.0,
+        20000000,
+        True,
+        False,
+    ),
     "status_coherence128": TestCase("status_coherence128", SCRIPT_DIR / "tests" / "test_status_coherence128.s", 5.0),
     "tier128": TestCase("tier128", SCRIPT_DIR / "tests" / "test_tier128.s", 5.0, 20000000, True, False, True, True),
     "dungeon128": TestCase("dungeon128", SCRIPT_DIR / "tests" / "test_dungeon128.s", 5.0),
@@ -317,7 +326,7 @@ def run_one_test(
         prg_path=prg_path,
         start_addr=symbols.start_addr,
         pass_addr=symbols.pass_addr,
-        fail_addr=symbols.fail_addr,
+        fail_addr=symbols.fail_addr if break_on_fail else None,
         timeout=timeout,
         reset_environment=(snapshot_path is None) if reset_environment is None else reset_environment,
         debug=verbose,

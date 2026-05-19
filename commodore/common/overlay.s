@@ -32,18 +32,14 @@
 .const OVL_UI          = 6
 .const OVL_ITEMS       = 7
 .const OVL_SPELL       = 8
-#if C128
-.const OVL_COUNT       = 7
-#else
-.const OVL_COUNT       = 8
-#endif
+.const OVL_COUNT       = hal_platform_overlay_count
 
 #import "compat/hal_storage_overlay_test_stub.s"
 
 // ============================================================
 // State
 // ============================================================
-#if !C128
+#if HAL_PLATFORM_OVERLAY_STATE_LOCAL
 current_overlay: .byte 0
 #endif
 
@@ -55,7 +51,7 @@ current_overlay: .byte 0
 // Output: carry clear = success, carry set = error (disk only)
 // Clobbers: A, X, Y
 overlay_load:
-#if C128 && C128_TEST_OVERLAY_LOAD_FAIL_TRAP
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED && C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_entry_req
 #endif
 #if C128_TEST_OVERLAY_FN_GUARD
@@ -64,7 +60,7 @@ overlay_load:
     jsr c128_overlay_fn_guard_check
     pla
 #endif
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     // C128 overlay transitions are cache-backed and cheap. Always resolve the
     // requested overlay instead of trusting current_overlay, because stale
     // overlay-state bytes can otherwise skip the load and execute whatever
@@ -73,7 +69,7 @@ overlay_load:
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_overlay_load_entry_target
 #endif
-#elif PLUS4
+#elif HAL_PLATFORM_OVERLAY_FORCE_RELOAD
     // Plus/4 shares $E000 between overlays, tier staging, and KERNAL-loaded
     // assets. Until the port has a stronger ownership guard, prefer a fresh
     // 1551 reload over trusting stale overlay state.
@@ -88,8 +84,7 @@ overlay_load:
     // overlay load no longer invalidates the logical tier. C128 keeps the
     // existing cache-backed guard because its tier pointers may resolve through
     // Bank 1 overlay/tier ownership.
-#if !C128
-#else
+#if HAL_PLATFORM_OVERLAY_TIER_CACHE_GUARD
     lda current_tier
     beq !ol_invalidate_tier+
     tax
@@ -103,7 +98,7 @@ overlay_load:
 !ol_keep_tier_state:
 #endif
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     // C128 preloads all overlays, including the Disk Setup/help UI, into the
     // Bank 1 overlay cache at boot. Title-time Disk Setup must use that cache
     // so one-drive users can swap program media out of drive 8 before pressing L.
@@ -120,7 +115,7 @@ overlay_load:
     sta c128_cache_overlay_bits
     sta c128_cache_failed
 ol_check_disk:
-#else
+#elif HAL_PLATFORM_OVERLAY_REU_STASH_ENABLED
 !ol_check_reu:
     lda reu_overlays_stashed
     bne !ol_reu+
@@ -128,7 +123,7 @@ ol_check_disk:
 #endif
 
     // --- Disk path: KERNAL LOAD overlay PRG ---
-#if !C128 && OVERLAY_LOAD_PROMPT_GAME
+#if HAL_PLATFORM_OVERLAY_PROMPT_PROGRAM_MEDIA && OVERLAY_LOAD_PROMPT_GAME
     jsr disk_prompt_game
 #endif
 #if C128_CACHE_TEST_SKIP_OVERLAY
@@ -161,7 +156,7 @@ ol_check_disk:
     clc                     // REU always succeeds
     rts
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 !ol_cache_ok:
     lda ol_target
     sta current_overlay
@@ -169,7 +164,7 @@ ol_check_disk:
     rts
 #endif
 
-#if !C128
+#if HAL_PLATFORM_OVERLAY_SKIP_IF_CURRENT
 !ol_skip:
     clc
     rts
@@ -211,7 +206,7 @@ c128_overlay_fn_guard_check:
     rts
 
 ovl_fn_guard_expected:
-#if C128
+#if HAL_PLATFORM_OVERLAY_FN_GUARD_CACHE_NAMES
     .byte $31,$32,$38,$2e,$53,$54,$41,$52,$54,$00
     .byte $31,$32,$38,$2e,$54,$4f,$57,$4e,$00
     .byte $31,$32,$38,$2e,$44,$45,$41,$54,$48,$00
@@ -232,7 +227,7 @@ ovl_fn_guard_expected:
     .byte >hal_storage_overlay_start_name, >hal_storage_overlay_town_name, >hal_storage_overlay_death_name, >hal_storage_overlay_gen_name, >hal_storage_overlay_help_name, >hal_storage_overlay_ui_name, >hal_storage_overlay_items_name
     .byte hal_storage_overlay_start_name_len, hal_storage_overlay_town_name_len, hal_storage_overlay_death_name_len, hal_storage_overlay_gen_name_len, hal_storage_overlay_help_name_len, hal_storage_overlay_ui_name_len, hal_storage_overlay_items_name_len
 ovl_fn_guard_expected_end:
-#if !C128
+#if HAL_PLATFORM_OVERLAY_FN_GUARD_LEGACY_NAMES
 c128_overlay_fn_guard_stage:   .byte 0
 c128_overlay_fn_guard_index:   .byte 0
 c128_overlay_fn_guard_actual:  .byte 0
@@ -252,7 +247,7 @@ overlay_load_disk:
     lda #$b2
     jsr c128_overlay_fn_guard_check
 #endif
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
     // C128: delegate to hal_asset_load_prg_header which handles the full
     // KERNAL environment setup (SETBNK Bank 0, ROM banking, IRQ enable,
     // SETNAM/SETLFS/LOAD/CLOSE/CLRCHN, and runtime restore).
@@ -319,7 +314,7 @@ overlay_load_disk:
 overlay_fetch_reu:
     php
     sei
-#if !C128 && !PLUS4
+#if HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
     lda hal_memory_cpu_port
     pha
     lda #$35                // Bank out KERNAL for DMA to write RAM at $E000
@@ -347,14 +342,14 @@ overlay_fetch_reu:
     lda #REU_CMD_FETCH
     sta REU_COMMAND         // DMA completes before next instruction
 
-#if !C128 && !PLUS4
+#if HAL_PLATFORM_OVERLAY_CPU_PORT_DMA_BANK
     pla
     sta hal_memory_cpu_port
 #endif
     plp
     rts
 
-#if !C128
+#if HAL_PLATFORM_OVERLAY_STATE_LOCAL
 
 // ============================================================
 // REU overlay offset tables (populated by reu_stash_overlays)
@@ -372,12 +367,12 @@ c128_overlay_load_disk_len:    .byte 0
 c128_overlay_load_disk_lo:     .byte 0
 c128_overlay_load_disk_hi:     .byte 0
 #endif
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 ol_status_p:      .byte 0
 #endif
 #endif
 
-#if C128
+#if HAL_PLATFORM_OVERLAY_CACHE_ENABLED
 c128_preload_all_overlays:
     lda #0
     sta c128_cache_overlays_ready
