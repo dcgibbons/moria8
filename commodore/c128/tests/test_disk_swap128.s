@@ -32,6 +32,9 @@
 #define HAL_STORAGE_DIR_READ_FNAME
 #define HAL_STORAGE_KERNAL_ENTER_REQUIRED
 #define HAL_STORAGE_MARKER_PRESENT_INLINE
+#define HAL_STORAGE_DISK_SETUP_UI_TRAMPOLINE
+#define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
+#define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
 
 #import "../../common/zeropage.s"
 
@@ -43,6 +46,11 @@
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
+.const hal_storage_disk_setup_supports_other_drive = 1
+.const hal_storage_disk_setup_detail_dos_drive = 0
+.const hal_storage_disk_setup_marker_write_status_required = 0
+.const hal_storage_disk_setup_done_value = 1
+.const hal_storage_disk_setup_commit_sets_ui_ok = 1
 .const CMD_CHANNEL = hal_storage_cmd_channel
 .const DISK_MARKER_FILE_NUM = hal_storage_marker_file_num
 .const C128_MEDIA_UNKNOWN = 0

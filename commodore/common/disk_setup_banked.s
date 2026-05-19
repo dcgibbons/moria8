@@ -14,7 +14,7 @@
 .const FEAT_CHKOUT = hal_storage_chkout
 .const FEAT_CHROUT = hal_storage_chrout
 
-#if C128
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
 disk_diag_phase:       .byte 0
 disk_diag_carry:       .byte 0
 disk_diag_readst:      .byte 0
@@ -34,7 +34,7 @@ disk_diag_write_status1:.byte 0
 #endif
 
 disk_marker_init:
-#if C128
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     lda #$90
     sta disk_diag_phase
     lda save_device
@@ -260,7 +260,7 @@ disk_setup_capture_init_status:
     jsr hal_storage_marker_write_resident
 !dmi_done:
     jsr disk_kernal_exit
-#if PLUS4
+#if HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
     lda disk_status
     bne !dmi_fail+
 #endif
@@ -275,11 +275,11 @@ disk_setup_capture_init_status:
 #endif
 
 disk_setup_call_ui:
-#if C128
+#if HAL_STORAGE_DISK_SETUP_UI_TRAMPOLINE
     sta disk_ui_action
     jsr tramp_disk_setup_ui_action
     rts
-#elif PLUS4
+#elif HAL_STORAGE_DISK_SETUP_UI_PLUS4_BANK_RAM
     sta disk_ui_action
     jsr plus4_bank_ram
     jsr ui_disk_setup_dispatch
@@ -293,25 +293,17 @@ disk_setup_call_ui:
 #endif
 
 disk_setup_commit_ready:
-#if C128
-    lda #1
+    lda #hal_storage_disk_setup_done_value
     sta disk_setup_done
-#else
-    lda #2
-    sta disk_setup_done
-#endif
     clc
     rts
 
 disk_setup_commit_initialized:
-#if C128
-    lda #1
+    lda #hal_storage_disk_setup_done_value
     sta disk_setup_done
+#if HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
     lda #DISK_UI_RES_OK
     sta disk_ui_result
-#else
-    lda #2
-    sta disk_setup_done
 #endif
     clc
     rts
@@ -321,12 +313,12 @@ disk_setup_prepare_selected:
     lda #DISK_UI_ACT_INSERT_DISK
     jsr disk_setup_call_ui
     jsr disk_init_drive
-#if C128
+#if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     jsr disk_setup_capture_init_status
 #endif
     jsr disk_marker_present
     bcc disk_setup_commit_ready
-#if PLUS4
+#if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
     jsr disk_setup_plus4_marker_missing
     bcs !show_marker_probe_fail+
 #endif
@@ -342,7 +334,7 @@ disk_setup_prepare_selected:
 !fail:
     sec
     rts
-#if PLUS4
+#if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 !show_marker_probe_fail:
     lda #DISK_UI_ACT_SHOW_INIT_FAIL
     jsr disk_setup_call_ui
@@ -373,13 +365,8 @@ disk_setup_use_drive9:
 disk_setup_run:
     lda disk_setup_done
     bne !menu+
-#if C128
     ldx #9
     jsr hal_storage_probe_media
-#else
-    ldx #9
-    jsr hal_storage_probe_media
-#endif
     bcs !menu+
     lda #DISK_UI_ACT_CONFIRM_DRIVE9
     jsr disk_setup_call_ui
@@ -393,7 +380,7 @@ disk_setup_run:
     lda #DISK_UI_ACT_MENU
     jsr disk_setup_call_ui
     lda disk_ui_result
-#if C128
+#if HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
     cmp #DISK_UI_RES_OTHER_DRIVE
     beq !other_drive+
 #endif
@@ -424,7 +411,7 @@ disk_setup_run:
     clc
     rts
 
-#if C128
+#if HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 !other_drive:
     lda #DISK_UI_ACT_ENTER_DEVICE
     jsr disk_setup_call_ui

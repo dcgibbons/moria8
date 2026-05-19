@@ -15,7 +15,12 @@
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 1
 .const hal_storage_disk_setup_detail_status_phase = 1
+.const hal_storage_disk_setup_marker_write_status_required = 1
+.const hal_storage_disk_setup_done_value = 2
+.const hal_storage_disk_setup_commit_sets_ui_ok = 0
 
+#define HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
+#define HAL_STORAGE_DISK_SETUP_MARKER_WRITE_STATUS_REQUIRED
 #define HAL_STORAGE_EXTENDED_DISK_DIAG
 #define HAL_STORAGE_COMMAND_STATUS_FROM_ERROR_DIAG
 #define HAL_STORAGE_SETUP_STATUS_ERROR_FIRST
@@ -24,3 +29,4 @@
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_RETURN_AFTER_INIT
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_UI_PLUS4_BANK_RAM

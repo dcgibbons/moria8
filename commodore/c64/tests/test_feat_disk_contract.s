@@ -26,6 +26,11 @@ test_exit_trampoline:
 .const STATUS_ROW = 21
 .const COL_WHITE = $01
 .const hal_storage_cmd_channel = 15
+.const hal_storage_disk_setup_supports_other_drive = 0
+.const hal_storage_disk_setup_detail_dos_drive = 0
+.const hal_storage_disk_setup_marker_write_status_required = 0
+.const hal_storage_disk_setup_done_value = 2
+.const hal_storage_disk_setup_commit_sets_ui_ok = 0
 
 .const KERNAL_SETNAM = kernal_setnam
 .const KERNAL_SETLFS = kernal_setlfs
@@ -155,6 +160,7 @@ c64_disk_marker_present:
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 
 ui_disk_setup_dispatch:
     lda $01

@@ -15,7 +15,12 @@
 .const hal_storage_disk_setup_detail_command_status = 1
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_detail_status_phase = 0
+.const hal_storage_disk_setup_marker_write_status_required = 0
+.const hal_storage_disk_setup_done_value = 1
+.const hal_storage_disk_setup_commit_sets_ui_ok = 1
 
+#define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
+#define HAL_STORAGE_DISK_SETUP_COMMIT_SETS_UI_OK
 #define HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
 #define HAL_STORAGE_SETUP_STATUS_COMMAND_FIRST
 #define HAL_STORAGE_SAVE_MEDIA_STATUS_MARKER_DOS
@@ -25,3 +30,4 @@
 #define HAL_STORAGE_DIR_READ_FNAME
 #define HAL_STORAGE_KERNAL_ENTER_REQUIRED
 #define HAL_STORAGE_MARKER_PRESENT_INLINE
+#define HAL_STORAGE_DISK_SETUP_UI_TRAMPOLINE

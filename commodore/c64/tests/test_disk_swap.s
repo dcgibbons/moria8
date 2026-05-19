@@ -35,6 +35,11 @@
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
+.const hal_storage_disk_setup_supports_other_drive = 0
+.const hal_storage_disk_setup_detail_dos_drive = 0
+.const hal_storage_disk_setup_marker_write_status_required = 0
+.const hal_storage_disk_setup_done_value = 2
+.const hal_storage_disk_setup_commit_sets_ui_ok = 0
 
 .const KERNAL_SETNAM = kernal_setnam
 .const KERNAL_SETLFS = kernal_setlfs
@@ -64,6 +69,7 @@
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 
 screen_put_string_calls: .byte 0
 screen_clear_calls:      .byte 0
