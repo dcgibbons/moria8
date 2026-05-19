@@ -58,6 +58,8 @@ screen_put_string:
 .label hal_screen_put_string = screen_put_string
 screen_clear_row:
 .label hal_screen_clear_row = screen_clear_row
+ui_clear_full_screen_safe:
+msg_init:
 input_prepare_modal_dismiss_key:
 .label hal_input_modal_prepare = input_prepare_modal_dismiss_key
 input_get_modal_dismiss_key:
