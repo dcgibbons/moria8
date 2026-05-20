@@ -38,6 +38,18 @@ move to another phase without explicit user confirmation.
 
 Remaining items below are backlog/polish, not active HAL phase blockers.
 
+## Plus/4 Port State
+
+Assumption for current work: the Plus/4 port is functionally good for
+pre-release testing. It boots to title, supports disk setup, save initialization,
+save write, load resume, wrong-media handling, input, colors, overlays, and
+gameplay smoke paths under the current automated and manual gates.
+
+Plus/4 intentionally has no boot-art asset. The boot loader uses a simple
+loading text display before chaining into the main program. Do not reintroduce
+Plus/4 boot art unless that becomes an explicit release goal with its own
+memory/display contract.
+
 ## Active Boundary Allowlist
 
 `docs/hal_boundary_allowlist.txt` is the authoritative list of remaining

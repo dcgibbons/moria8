@@ -225,7 +225,7 @@ run128: $(DISK128_IMAGE)
 	$(VICE128) -drive8truedrive -drive8type 1571 +busdevice8 $(RUN_FLAGS128) $(DISK128_IMAGE)
 
 runplus4: $(DISKPLUS4_IMAGE)
-	$(VICEPLUS4) -drive8truedrive -drive8type 1551 $(RUN_FLAGSPLUS4) -autostart $(DISKPLUS4_IMAGE)
+	$(VICEPLUS4) -drive8truedrive -drive8type 1541 $(RUN_FLAGSPLUS4) -autostart $(DISKPLUS4_IMAGE)
 
 bootart128-charset-demo: $(C128_CHARSET_DEMO_PRG)
 

@@ -1,8 +1,9 @@
 # Moria8
 
 Moria8 is a port of the classic roguelike game, Moria, for 8-bit platforms
-written in platform-specific assembly. Current releases target the Commodore 64,
-Commodore 128, and Commodore Plus/4, with additional 8-bit ports planned.
+written in platform-specific assembly. Current releases target the Commodore 64
+and Commodore 128. A Commodore Plus/4 port is in active pre-release testing,
+with additional 8-bit ports planned.
 
 ![Animated GIF of Commodore 64 Play Testing](docs/assets/moria8-c64-gameplay.gif)
 
@@ -12,7 +13,7 @@ Commodore 128, and Commodore Plus/4, with additional 8-bit ports planned.
 | -------- | ------ | -------- |
 | Commodore 64 (C64) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c64.d64](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c64.d64) |
 | Commodore 128 (C128) | Released ([notes](docs/release_notes/commodore.md)) | [moria8-c128.d71](https://github.com/dcgibbons/moria8/releases/download/v1.0.0/moria8-c128.d71) |
-| Commodore Plus/4 | In development | |
+| Commodore Plus/4 | Pre-release testing | |
 | Commodore PET | Maybe | |
 | Commodore VIC-20 | Maybe | |
 | Commander X16 | Planned | |
@@ -77,8 +78,8 @@ make runplus4
 ```
 
 `make run` and `make run64` launch the C64 disk. `make run128` launches the
-C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with drive 8
-configured as a 1551.
+C128 disk. `make runplus4` launches the Plus/4 disk in `xplus4` with a 1541
+drive configuration. The Plus/4 artifact is a standard Commodore D64 image.
 
 ### Test
 

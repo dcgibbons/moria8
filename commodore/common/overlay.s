@@ -72,7 +72,7 @@ overlay_load:
 #elif HAL_PLATFORM_OVERLAY_FORCE_RELOAD
     // Plus/4 shares $E000 between overlays, tier staging, and KERNAL-loaded
     // assets. Until the port has a stronger ownership guard, prefer a fresh
-    // 1551 reload over trusting stale overlay state.
+    // disk reload over trusting stale overlay state.
     sta ol_target
 #else
     cmp current_overlay
