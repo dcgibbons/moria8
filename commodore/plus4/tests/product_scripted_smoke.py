@@ -21,6 +21,7 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-console",
         "-nativemonitor",
         "-warp",
+        "+saveres",
         "+sound",
         "-sounddev",
         "dummy",

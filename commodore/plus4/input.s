@@ -76,6 +76,7 @@ plus4_test_key_script:
 #else
     php
     sei
+input_get_key_poll:
 !poll:
     inc zp_entropy
     sta PLUS4_ROM_ENABLE

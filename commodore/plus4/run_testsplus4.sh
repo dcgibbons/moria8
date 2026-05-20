@@ -132,7 +132,7 @@ run_boot_title_smoke() {
 
     if python3 -u tests/product_scripted_smoke.py \
         --name "$name" \
-        --pass-symbol ".title_menu_loop" \
+        --pass-symbol ".input_get_key_poll" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \

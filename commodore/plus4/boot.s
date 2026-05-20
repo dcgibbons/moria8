@@ -24,7 +24,7 @@ boot_entry:
     lda #$93
     jsr $ffd2
 
-    jsr load_boot_art
+    jsr print_loading_msg
 
 load_main_program:
     lda #game_filename_end - game_filename
@@ -44,23 +44,26 @@ load_main_program:
     bpl !copy_stub-
     jmp $0340
 
-load_boot_art:
-    lda #art_filename_end - art_filename
-    ldx #<art_filename
-    ldy #>art_filename
-    jsr $ffbd
-    lda #LOGICAL_FILE
-    ldx #DEVICE_NUM
-    ldy #LOAD_USE_HEADER
-    jsr $ffba
-    lda #0
-    jsr $ffd5
-    php
-    lda #LOGICAL_FILE
-    jsr $ffc3
-    jsr $ffcc
-    plp
+print_loading_msg:
+    lda #$05            // White color code
+    jsr $ffd2
+    clc
+    ldx #12             // Row 12
+    ldy #11             // Column 11
+    jsr $fff0           // KERNAL PLOT
+    ldx #0
+!loop:
+    lda loading_msg,x
+    beq !done+
+    jsr $ffd2           // KERNAL CHROUT
+    inx
+    jmp !loop-
+!done:
     rts
+
+loading_msg:
+    .text "LOADING MORIA8..."
+    .byte 0
 
 chain_stub:
     lda #0
@@ -80,10 +83,6 @@ chain_stub:
 !spin:
     jmp !spin-
 chain_stub_end:
-
-art_filename:
-    .byte $42,$4f,$4f,$54,$41,$52,$54,$34  // "BOOTART4"
-art_filename_end:
 
 game_filename:
     .byte $4d,$4f,$52,$49,$41,$34          // "MORIA4"
