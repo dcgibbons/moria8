@@ -1068,7 +1068,7 @@ c128_test_town_fail_sym:
     brk
 c128_test_town_pass_sym:
     brk
-#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+#elif C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR
 c128_test_spell_fail_no_cast_sym:
     brk
 c128_test_spell_fail_level_sym:
@@ -1097,6 +1097,12 @@ c128_test_book_overlay_pass_sym:
 c128_test_spell_list_overlay_fail_sym:
     brk
 c128_test_spell_list_overlay_pass_sym:
+    brk
+#endif
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+c128_test_scroll_selector_fail_sym:
+    brk
+c128_test_scroll_selector_pass_sym:
     brk
 #endif
 #elif C128_TEST_CACHE_SURVIVAL

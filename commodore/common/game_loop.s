@@ -15,6 +15,23 @@
 c128_test_force_death_pending: .byte 1
 #endif
 
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+c128_test_scroll_selector_return_pending: .byte 0
+c128_test_scroll_selector_return_count:   .byte 0
+c128_test_seed_scroll_selector_state:
+    lda #0
+    sta c128_test_scroll_selector_return_pending
+    sta c128_test_scroll_selector_return_count
+    lda #34                 // Enchant Weapon scroll
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
+    rts
+#endif
+
 #if C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY
 c128_test_seed_scripted_spell_state:
     lda #0
@@ -138,6 +155,23 @@ c128_test_prayer_history_has_bless:
     rts
 !c128_tp_found:
     sec
+    rts
+#endif
+
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+c64_test_scroll_selector_return_pending: .byte 0
+c64_test_scroll_selector_return_count:   .byte 0
+c64_test_seed_scroll_selector_state:
+    lda #0
+    sta c64_test_scroll_selector_return_pending
+    sta c64_test_scroll_selector_return_count
+    lda #34                 // Enchant Weapon scroll
+    sta inv_item_id + 2
+    lda #1
+    sta inv_qty + 2
+    lda #0
+    sta inv_p1 + 2
+    sta inv_flags + 2
     rts
 #endif
 
@@ -437,8 +471,14 @@ game_new_start:
 #if C128_TEST_SCRIPTED_PRAYER
     jsr c128_test_seed_scripted_prayer_state
 #endif
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+    jsr c128_test_seed_scroll_selector_state
+#endif
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
     jsr c64_test_seed_scripted_spell_state
+#endif
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    jsr c64_test_seed_scroll_selector_state
 #endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jsr c64_test_seed_scripted_spell_state
@@ -794,6 +834,17 @@ c128_town_move_diag_loop_top:
     jmp c128_test_spell_pass_sym
 !c128_test_prayer_return_done:
 #endif
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda c128_test_scroll_selector_return_pending
+    beq !c128_test_scroll_selector_return_done+
+    dec c128_test_scroll_selector_return_pending
+    inc c128_test_scroll_selector_return_count
+    lda c128_test_scroll_selector_return_count
+    cmp #8
+    bcc !c128_test_scroll_selector_return_done+
+    jmp c128_test_scroll_selector_pass_sym
+!c128_test_scroll_selector_return_done:
+#endif
 #if C64_TEST_SCRIPTED_SPELL
     lda c64_test_spell_return_pending
     beq !c64_test_spell_return_done+
@@ -804,6 +855,17 @@ c128_town_move_diag_loop_top:
     bcc !c64_test_spell_return_done+
     jmp c64_test_spell_pass_sym
 !c64_test_spell_return_done:
+#endif
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda c64_test_scroll_selector_return_pending
+    beq !c64_test_scroll_selector_return_done+
+    dec c64_test_scroll_selector_return_pending
+    inc c64_test_scroll_selector_return_count
+    lda c64_test_scroll_selector_return_count
+    cmp #8
+    bcc !c64_test_scroll_selector_return_done+
+    jmp c64_test_scroll_selector_pass_sym
+!c64_test_scroll_selector_return_done:
 #endif
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     lda c64_test_spell_return_pending
@@ -958,11 +1020,11 @@ plus4_test_after_save_game:
 #endif
     lda #0
     adc #0
-    sta zp_temp0
+    pha
 #if !C128_PRODUCT_MODAL_PERSIST
     jsr disk_prompt_game        // Swap back to game disk if dual
 #endif
-    lda zp_temp0
+    pla
     beq !save_return_main+
     jmp !quit+
 !save_return_main:

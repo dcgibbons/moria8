@@ -40,7 +40,7 @@ piw_ego:      .byte 0          // Item ego type being processed
 piw_filter:   .byte $ff        // Active inventory filter for prompt/select helpers
 piw_visible_count: .byte 0     // Number of cached visible slots
 piw_visible_slots: .fill MAX_INV_SLOTS, 0  // Absolute carried/equipped slot indices
-#if hal_platform_item_prompt_overlay_runtime
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
 piw_return_overlay: .byte 0    // Product overlay to restore after prompt-time modal UI
 #endif
 
@@ -80,7 +80,7 @@ equip_slot_for_cat:
 // Preserves: nothing
 show_inv_and_select:
     sta piw_filter
-#if hal_platform_item_prompt_overlay_runtime
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     lda #OVL_NONE
     sta piw_return_overlay
     // Only restore an overlay when the immediate return target is inside the
@@ -106,7 +106,7 @@ show_inv_and_select:
     jsr input_get_followup_key
     pha
     jsr ui_view_restore_modal_overlay
-#if hal_platform_item_prompt_overlay_runtime
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
     // Prompt-time inventory can be opened from OVL.ITEMS command handlers.
     // Reload the caller overlay before returning to code in the $E000 window.
     lda piw_return_overlay
@@ -115,16 +115,16 @@ show_inv_and_select:
     lda #OVL_ITEMS
     jsr overlay_load
     bcs !sias_no_items_reload+
-#if hal_platform_item_prompt_reload_resync
+#if C128_PRODUCT_OVERLAY_RUNTIME
     jsr hal_platform_runtime_resync
     lda #MMU_ALL_RAM
     sta hal_memory_mmu_config_register
 #endif
     sei
-#if hal_platform_item_prompt_reload_installs_irq
+#if C64_PRODUCT_IRQ_VECTOR_RUNTIME
     jsr hal_irq_install_runtime
 #endif
-#if hal_memory_has_cpu_port
+#if !PLUS4
     lda #BANK_NO_KERNAL
     sta hal_memory_cpu_port
 #endif
@@ -263,6 +263,7 @@ piw_prompt_filtered_inv:
 // Output: carry set on success, X = carried slot, A = item type ID
 //         carry clear if key is outside the visible filtered range
 piw_pick_filtered_inv_key:
+    jsr input_normalize_inventory_letter_key
     sec
     sbc #$41
     bcc !piw_pick_inv_fail+
@@ -308,6 +309,7 @@ piw_build_visible_equip_cache:
 // Output: carry set on success, X = absolute equipment slot, A = item type ID
 //         carry clear if key is outside the visible equipped-item range
 piw_pick_visible_equip_key:
+    jsr input_normalize_inventory_letter_key
     sec
     sbc #$41
     bcc !piw_pick_eq_fail+

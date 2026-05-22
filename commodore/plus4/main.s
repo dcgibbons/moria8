@@ -10,6 +10,7 @@
 // Overlay segments: produce separate PRGs at $E000.
 // Assembled in same pass as main program — full symbol access.
 // Only ONE overlay is active at a time (they share $E000-$EFFF).
+#define PLUS4_PRODUCT_OVERLAY_RUNTIME
 #define PLATFORM_PRODUCT_OVERLAY_RUNTIME
 #define STORAGE_STATUS_HELPER
 .segmentdef StartupOverlay    [outPrg="out/ovl.start", start=$e000, min=$e000, max=$efff]

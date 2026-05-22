@@ -619,6 +619,159 @@ run_scripted_book_overlay_smoke() {
     TOTAL=$((TOTAL + 1))
 }
 
+run_scripted_scroll_selector_smoke() {
+    local name="scripted_scroll_selector_smoke"
+    echo -n "  $name: "
+
+    local build_log
+    build_log=$(mktemp -t "build_${name}_log")
+    mkdir -p out
+
+    if ! make -s -C .. out/c64/boot.prg out/c64/bootart64.prg out/c64/title \
+            out/c64/monster.db.1 out/c64/monster.db.2 out/c64/monster.db.3 out/c64/monster.db.4 \
+            >"$build_log" 2>&1; then
+        echo "FAIL (asset build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if ! java -jar "$KICKASS" "${KICKASS_TRACE_DEFINE[@]}" main.s -showmem -vicesymbols \
+            -define C64_TEST_SCRIPTED_SCROLL_SELECTOR \
+            -o out/moria_scroll_selector_smoke.prg >"$build_log" 2>&1; then
+        echo "FAIL (assembly error)"
+        grep -i error "$build_log" | head -5
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local scripted_d64="out/moria_scroll_selector_smoke.d64"
+    rm -f "$scripted_d64"
+    if ! "$C1541" -format "moria8 c64,m8" d64 "$scripted_d64" \
+            -attach "$scripted_d64" \
+            -write ../out/c64/boot.prg "moria8" \
+            -write ../out/c64/boot.prg "boot64" \
+            -write ../out/c64/bootart64.prg "bootart64" \
+            -write out/moria_scroll_selector_smoke.prg "moria64" \
+            -write out/64.bank "64.bank" \
+            -write ../out/c64/title "t64" \
+            -write ../out/c64/monster.db.1 "monster.db.1" \
+            -write ../out/c64/monster.db.2 "monster.db.2" \
+            -write ../out/c64/monster.db.3 "monster.db.3" \
+            -write ../out/c64/monster.db.4 "monster.db.4" \
+            -write out/ovl.start "64.start" \
+            -write out/ovl.town "64.town" \
+            -write out/ovl.death "64.death" \
+            -write out/ovl.gen "64.gen" \
+            -write out/ovl.help "64.help" \
+            -write out/ovl.ui "64.ui" \
+            -write out/ovl.items "64.items" \
+            -write out/ovl.spell "64.spell" >>"$build_log" 2>&1; then
+        echo "FAIL (disk build error)"
+        tail -20 "$build_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local main_vs="out/main.vs"
+    local pass_addr
+    local -a fail_labels=(
+        "c64_test_scroll_selector_fail_sym"
+        "c64_test_scroll_selector_fail_input_sym"
+    )
+    local -a fail_addrs=()
+    local label addr
+
+    pass_addr=$(awk '/\.c64_test_scroll_selector_pass_sym$/ { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+    for label in "${fail_labels[@]}"; do
+        addr=$(awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$main_vs")
+        if [ -z "${addr:-}" ]; then
+            echo "FAIL (missing ${label} in out/main.vs)"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+        fail_addrs+=("$addr")
+    done
+    if [ -z "${pass_addr:-}" ]; then
+        echo "FAIL (missing scripted scroll selector pass symbol in out/main.vs)"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    local mon_file
+    mon_file=$(mktemp -t "test_${name}_mon")
+    local tty_log
+    tty_log=$(mktemp -t "test_${name}_ttylog")
+    local pass_lc
+    local pass_hit
+    pass_lc=$(echo "$pass_addr" | tr '[:upper:]' '[:lower:]')
+
+    {
+        for addr in "${fail_addrs[@]}"; do
+            echo "break \$${addr}"
+        done
+        echo "break \$${pass_addr}"
+        echo "g"
+        echo "quit"
+    } > "$mon_file"
+
+    script -q "$tty_log" \
+        "$VICE" -warp -config /dev/null -default -console -nativemonitor -autostartprgmode 1 \
+        -autostart "$scripted_d64" -moncommands "$mon_file" \
+        -limitcycles 700000000 +sound -sounddev dummy \
+        +remotemonitor +binarymonitor > /dev/null 2>&1
+
+    pass_hit=0
+    if grep -qiE "Stop on  exec ${pass_lc}" "$tty_log" || grep -qi "^BREAK: .*C:\$${pass_addr}" "$tty_log"; then
+        pass_hit=1
+    fi
+
+    if [ "$pass_hit" -eq 1 ]; then
+        echo "PASS"
+        PASS=$((PASS + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    for idx in "${!fail_labels[@]}"; do
+        addr="${fail_addrs[$idx]}"
+        if grep -qiE "Stop on  exec $(echo "$addr" | tr '[:upper:]' '[:lower:]')" "$tty_log" || \
+           grep -qi "^BREAK: .*C:\$${addr}" "$tty_log"; then
+            echo "FAIL (scroll selector hit ${fail_labels[$idx]})"
+            echo "    Log: $tty_log"
+            FAIL=$((FAIL + 1))
+            TOTAL=$((TOTAL + 1))
+            return
+        fi
+    done
+
+    if grep -qiE "JAM|Invalid opcode" "$tty_log"; then
+        echo "FAIL (scroll selector flow hung or jammed)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    if grep -qi "cycle limit reached" "$tty_log"; then
+        echo "FAIL (scroll selector flow timed out)"
+        echo "    Log: $tty_log"
+        FAIL=$((FAIL + 1))
+        TOTAL=$((TOTAL + 1))
+        return
+    fi
+
+    echo "FAIL (did not reach scripted scroll selector pass trap)"
+    echo "    Log: $tty_log"
+    FAIL=$((FAIL + 1))
+    TOTAL=$((TOTAL + 1))
+}
+
 run_scripted_spell_list_overlay_smoke() {
     local name="scripted_spell_list_overlay_smoke"
     echo -n "  $name: "
@@ -1952,6 +2105,7 @@ run_test "tunnel" "tests/test_tunnel.s" "0400 0407" 8 500000000
 run_test "background" "tests/test_background.s" "0400 0407" 8
 run_scripted_spell_cast_smoke
 run_scripted_book_overlay_smoke
+run_scripted_scroll_selector_smoke
 run_scripted_spell_list_overlay_smoke
 run_scripted_dungeon_target_spell_smoke
 run_disk_setup_product_smoke

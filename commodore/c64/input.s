@@ -68,7 +68,7 @@ input_run_key_held:
     lda #0
     rts
 #else
-#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
     lda #0
     rts
 #else
@@ -192,11 +192,15 @@ input_get_key:
     stx c64_test_input_idx
     rts
 #else
-#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
     ldx c64_test_input_idx
     lda c64_test_input_script,x
     bne !igk_book_script_ok+
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    jmp c64_test_scroll_selector_fail_input_sym
+#else
     jmp c64_test_book_overlay_fail_input_sym
+#endif
 !igk_book_script_ok:
     inx
     stx c64_test_input_idx
@@ -272,7 +276,7 @@ input_wait_release:
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     rts
 #else
-#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
     rts
 #else
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
@@ -401,9 +405,23 @@ c64_test_input_script:
 #endif
 #endif
 
-#if C64_TEST_SCRIPTED_BOOK_OVERLAY
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
 c64_test_input_idx: .byte 0
 c64_test_input_script:
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    .byte $4e              // N = New
+    .byte $41              // A = race
+    .byte $0d              // RETURN = accept stats
+    .byte $42              // B = mage
+    .byte $41              // A = first name character
+    .byte $0d              // RETURN = finish name
+    .byte $42              // B = female
+    .byte $20              // SPACE = dismiss summary
+    .byte $52              // R = read scroll
+    .byte $3f              // ? = inventory overlay from scroll prompt
+    .byte $41              // A = first visible scroll
+    .byte $00
+#else
     .byte $4e              // N = New
     .byte $41              // A = race
     .byte $0d              // RETURN = accept stats
@@ -415,6 +433,7 @@ c64_test_input_script:
     .byte $4d              // M = cast
     .byte $3f              // ? = inventory overlay from book prompt
     .byte $00
+#endif
 #endif
 
 #if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY

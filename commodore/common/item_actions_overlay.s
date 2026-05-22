@@ -199,6 +199,14 @@ irs_effect_enchant_weapon:
 !irs_ew_msg:
     ldx #HSTR_PIQ_WPN_GLOW
     jsr huff_print_msg
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda #8
+    sta c64_test_scroll_selector_return_pending
+#endif
+#if C128_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda #8
+    sta c128_test_scroll_selector_return_pending
+#endif
     sec
     rts
 

@@ -1138,6 +1138,7 @@ test_assert_spell_list_overlay:
 !list_fail:
     jmp c64_test_spell_list_overlay_fail_sym
 #endif
+
 #endif
 
 #if C64_TEST_SCRIPTED_SPELL
@@ -1172,6 +1173,14 @@ c64_test_spell_list_overlay_fail_sym:
 c64_test_spell_list_overlay_fail_input_sym:
     brk
 c64_test_spell_list_overlay_pass_sym:
+    brk
+#else
+#if C64_TEST_SCRIPTED_SCROLL_SELECTOR
+c64_test_scroll_selector_fail_sym:
+    brk
+c64_test_scroll_selector_fail_input_sym:
+    brk
+c64_test_scroll_selector_pass_sym:
     brk
 #else
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
@@ -1209,6 +1218,7 @@ c64_test_spell_fail_input_sym:
     brk
 c64_test_spell_pass_sym:
     brk
+#endif
 #endif
 #endif
 #endif
