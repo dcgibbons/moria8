@@ -33,3 +33,5 @@ node_modules/
 
 # Local assistant/editor state
 .claude/
+.antigravity/
+.antigravitycli/
