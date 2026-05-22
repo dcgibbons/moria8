@@ -388,7 +388,7 @@ itn_21: .text "Identify" ; .byte 0
 itn_22: .text "Teleportation" ; .byte 0
 itn_23: .text "Protection" ; .byte 0
 itn_24: .text "Strength" ; .byte 0
-itn_25: .text "Cure Serious Wounds potion" ; .byte 0
+itn_25: .text "Cure Serious Wounds" ; .byte 0
 itn_26: .text "Restore Mana" ; .byte 0
 itn_27: .text "Heroism" ; .byte 0
 itn_28: .text "Blindness" ; .byte 0
@@ -410,8 +410,8 @@ itn_43: .text "Staff of Light" ; .byte 0
 itn_44: .text "Staff of Detect Monsters" ; .byte 0
 itn_45: .text "Staff of Teleportation" ; .byte 0
 itn_46: .text "Staff of Cure Light Wounds" ; .byte 0
-itn_47: .text "Beginner's Spellbook" ; .byte 0
-itn_48: .text "Holy Prayer Book" ; .byte 0
+itn_47: .text "Beginners-Magick" ; .byte 0
+itn_48: .text "Beginners Handbook" ; .byte 0
 itn_49: .text "Short Bow" ; .byte 0
 itn_50: .text "Light Crossbow" ; .byte 0
 itn_51: .text "Sling" ; .byte 0
@@ -420,7 +420,7 @@ itn_53: .text "Bolt" ; .byte 0
 itn_54: .text "Rock" ; .byte 0
 itn_55: .text "Magick I" ; .byte 0
 itn_56: .text "Magick II" ; .byte 0
-itn_57: .text "The Mages Guide" ; .byte 0
+itn_57: .text "The Mages Guide to Power" ; .byte 0
 itn_58: .text "Words of Wisdom" ; .byte 0
 itn_59: .text "Chants and Blessings" ; .byte 0
 itn_60: .text "Exorcism" ; .byte 0

@@ -46,6 +46,7 @@
 .const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
 .const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
 .const DUNGEON_GEN_DOOR_SCAN_BASE = $033c
+.const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0400
 
 // ZP save buffer — stores $02–$8F during game, restored on exit
 // Allocated as program data so it can't collide with code.

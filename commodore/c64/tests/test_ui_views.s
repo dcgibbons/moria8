@@ -248,6 +248,7 @@ test_start:
     jsr test_status_redraw_shrinks_numbers
     jsr test_screen_clear_forces_status_redraw
     jsr test_inventory_identify_select_view_six_items
+    jsr test_screen_put_string_clamps_to_row
 
     jmp test_exit_trampoline
 
@@ -1108,6 +1109,50 @@ test_inventory_identify_select_view_six_items:
     sta tc_results + 13
     rts
 
+test_screen_put_string_clamps_to_row:
+    jsr reset_shared_state
+
+    lda #<long_row_string
+    sta zp_ptr0
+    lda #>long_row_string
+    sta zp_ptr0_hi
+    lda #2
+    sta zp_cursor_row
+    lda #1
+    sta zp_cursor_col
+    jsr screen_put_string
+    lda zp_cursor_col
+    cmp #40
+    bne !fail+
+
+    lda #2
+    sta zp_cursor_row
+    lda #39
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldy #0
+    lda (zp_screen_lo),y
+    cmp #$39
+    bne !fail+
+
+    lda #3
+    sta zp_cursor_row
+    lda #0
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldy #0
+    lda (zp_screen_lo),y
+    cmp #$20
+    bne !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 14
+    rts
+
 assert_screen_string:
     sta zp_cursor_row
     stx zp_cursor_col
@@ -1201,10 +1246,10 @@ expected_filtered_inv_line_b:
     .text ") " ; .byte 0
 expected_filtered_book_line_a:
     .byte $01
-    .text ") Holy Prayer Book" ; .byte 0
+    .text ") Holy Book of Prayers Beginners Handb" ; .byte 0
 expected_filtered_book_line_b:
     .byte $02
-    .text ") Words of Wisdom" ; .byte 0
+    .text ") Holy Book of Prayers Words of Wisdom" ; .byte 0
 expected_store_line:
     .byte $01
     .text ") Ration of Food" ; .byte 0
@@ -1222,7 +1267,7 @@ expected_equip_line:
     .byte $01
     .text ") Weapon: Long Sword (Slay Evil) (mag" ; .byte 0
 expected_recall_lv:
-    .text "LV 1" ; .byte 0
+    .text "LV 7" ; .byte 0
 expected_recall_hp:
     .byte $31, $44, $38, 0
 expected_recall_atk:
@@ -1236,6 +1281,8 @@ expected_status_hp_after_clear:
     .text "HP:21/34" ; .byte 0
 expected_status_hp_after_modal_clear:
     .text "HP:21/34" ; .byte 0
+long_row_string:
+    .text "1234567890123456789012345678901234567890" ; .byte 0
 
 ui_views_part1_end:
 .assert "UI views part 1 stays below MAP_BASE", ui_views_part1_end <= MAP_BASE, true

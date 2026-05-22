@@ -1079,6 +1079,7 @@ test_beginner_book_str:   .text "Beginner's Spellbook" ; .byte 0
 test_mage_book_title_str: .text "Mage Book" ; .byte 0
 test_magic_missile_str:   .text "Magic Missile" ; .byte 0
 test_phase_door_str:      .text "Phase Door" ; .byte 0
+#endif
 
 #if C64_TEST_SCRIPTED_BOOK_OVERLAY
 test_assert_book_overlay:
@@ -1137,8 +1138,6 @@ test_assert_spell_list_overlay:
     jmp c64_test_spell_list_overlay_pass_sym
 !list_fail:
     jmp c64_test_spell_list_overlay_fail_sym
-#endif
-
 #endif
 
 #if C64_TEST_SCRIPTED_SPELL

@@ -10,8 +10,20 @@
 hd_cur_byte:   .byte 0        // Current byte being read
 hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 
-// Decode output buffer (42 bytes, matches combat_msg_buf size)
-hd_decode_buf: .fill 42, 0
+// Decode output buffer. Also used by item_get_name_ptr for composed known
+// item names such as "Spellbook The Mages Guide to Power".
+// This is transient scratch, so keep it in the platform scratch window rather
+// than spending resident program bytes.
+.const HD_DECODE_BUF_SIZE = 64
+#if C128
+.const HD_DECODE_BUF_BASE = $0400
+.const HD_DECODE_BUF_LIMIT = $0800
+#else
+.const HD_DECODE_BUF_BASE = $033c
+.const HD_DECODE_BUF_LIMIT = $0400
+#endif
+.label hd_decode_buf = HD_DECODE_BUF_BASE
+.assert "Huffman decode buffer fits platform scratch window", hd_decode_buf + HD_DECODE_BUF_SIZE <= HD_DECODE_BUF_LIMIT, true
 
 // ============================================================
 // huff_decode_string — Decode a Huffman-compressed string
@@ -112,7 +124,7 @@ hd_cur_node_smc:
     beq !done+                 // Null terminator = end of string
     sta hd_decode_buf,x
     inx
-    cpx #41                    // Safety: don't overflow buffer
+    cpx #HD_DECODE_BUF_SIZE - 1 // Safety: don't overflow buffer
     bcc !decode_loop-
 
 !done:

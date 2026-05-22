@@ -169,6 +169,8 @@
 .const DUNGEON_GEN_BFS_QUEUE_BASE = SCREEN_RAM
 .const DUNGEON_GEN_BFS_QUEUE_MAX  = 512
 .const DUNGEON_GEN_BFS_QUEUE_END  = DUNGEON_GEN_BFS_QUEUE_BASE + (DUNGEON_GEN_BFS_QUEUE_MAX * 2) - 1
+.const DUNGEON_GEN_DOOR_SCAN_BASE = $0400
+.const DUNGEON_GEN_DOOR_SCAN_LIMIT = $0800
 
 // ZP save buffer — stores $02–$8F during game, restored on exit.
 // Keep this as owned program data (not a fixed low-RAM page), because

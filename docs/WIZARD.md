@@ -52,14 +52,14 @@ Behavior:
 
 ### Spawn specific books
 
-- Mage book 1: `Ctrl+W`, `G`, `47`
-- Priest book 1: `Ctrl+W`, `G`, `48`
-- Mage book 2: `Ctrl+W`, `G`, `55`
-- Mage book 3: `Ctrl+W`, `G`, `56`
-- Mage book 4: `Ctrl+W`, `G`, `57`
-- Priest book 2: `Ctrl+W`, `G`, `58`
-- Priest book 3: `Ctrl+W`, `G`, `59`
-- Priest book 4: `Ctrl+W`, `G`, `60`
+- Spellbook Beginners-Magick: `Ctrl+W`, `G`, `47`
+- Holy Book of Prayers Beginners Handbook: `Ctrl+W`, `G`, `48`
+- Spellbook Magick I: `Ctrl+W`, `G`, `55`
+- Spellbook Magick II: `Ctrl+W`, `G`, `56`
+- Spellbook The Mages Guide to Power: `Ctrl+W`, `G`, `57`
+- Holy Book of Prayers Words of Wisdom: `Ctrl+W`, `G`, `58`
+- Holy Book of Prayers Chants and Blessings: `Ctrl+W`, `G`, `59`
+- Holy Book of Prayers Exorcism: `Ctrl+W`, `G`, `60`
 
 ### Jump to a dungeon level
 
@@ -94,9 +94,9 @@ or `Neutralize Poison` feedback:
 
 ### Generate common test items
 
-- Cure Light Wounds potion: `17`
-- Cure Serious Wounds potion: `25`
-- Restore Mana potion: `26`
+- Potion of Cure Light Wounds: `17`
+- Potion of Cure Serious Wounds: `25`
+- Potion of Restore Mana: `26`
 - Wand of Lightning: `40`
 - Wand of Frost: `41`
 - Staff of Detect Monsters: `44`
@@ -130,28 +130,28 @@ or `Neutralize Poison` feedback:
 | 14 | Brass lantern |
 | 15 | Ration of food |
 | 16 | Slime mold |
-| 17 | Cure light wounds |
-| 18 | Speed |
-| 19 | Poison |
-| 20 | Light |
-| 21 | Identify |
-| 22 | Teleportation |
-| 23 | Protection |
-| 24 | Strength |
-| 25 | Cure Serious Wounds |
-| 26 | Restore Mana |
-| 27 | Heroism |
-| 28 | Blindness |
-| 29 | Confusion |
-| 30 | Detect Monsters |
-| 31 | Infravision |
-| 32 | Word of Recall |
-| 33 | Remove Curse |
-| 34 | Enchant Weapon |
-| 35 | Enchant Armor |
-| 36 | Monster Confusion |
-| 37 | Aggravate |
-| 38 | Protect from Evil |
+| 17 | Potion of Cure Light Wounds |
+| 18 | Potion of Speed |
+| 19 | Potion of Poison |
+| 20 | Scroll of Light |
+| 21 | Scroll of Identify |
+| 22 | Scroll of Teleportation |
+| 23 | Ring of Protection |
+| 24 | Ring of Strength |
+| 25 | Potion of Cure Serious Wounds |
+| 26 | Potion of Restore Mana |
+| 27 | Potion of Heroism |
+| 28 | Potion of Blindness |
+| 29 | Potion of Confusion |
+| 30 | Potion of Detect Monsters |
+| 31 | Potion of Infravision |
+| 32 | Scroll of Word of Recall |
+| 33 | Scroll of Remove Curse |
+| 34 | Scroll of Enchant Weapon |
+| 35 | Scroll of Enchant Armor |
+| 36 | Scroll of Monster Confusion |
+| 37 | Scroll of Aggravate |
+| 38 | Scroll of Protect from Evil |
 | 39 | Wand of Light |
 | 40 | Wand of Lightning |
 | 41 | Wand of Frost |
@@ -160,20 +160,20 @@ or `Neutralize Poison` feedback:
 | 44 | Staff of Detect Monsters |
 | 45 | Staff of Teleportation |
 | 46 | Staff of Cure Light Wounds |
-| 47 | Beginner's Spellbook (Mage Book 1) |
-| 48 | Holy Prayer Book (Priest Book 1) |
+| 47 | Spellbook Beginners-Magick |
+| 48 | Holy Book of Prayers Beginners Handbook |
 | 49 | Short Bow |
 | 50 | Light Crossbow |
 | 51 | Sling |
 | 52 | Arrow |
 | 53 | Bolt |
 | 54 | Rock |
-| 55 | Magick I (Mage Book 2) |
-| 56 | Magick II (Mage Book 3) |
-| 57 | The Mages Guide to Power (Mage Book 4) |
-| 58 | Words of Wisdom (Priest Book 2) |
-| 59 | Chants and Blessings (Priest Book 3) |
-| 60 | Exorcism and Dispelling (Priest Book 4) |
+| 55 | Spellbook Magick I |
+| 56 | Spellbook Magick II |
+| 57 | Spellbook The Mages Guide to Power |
+| 58 | Holy Book of Prayers Words of Wisdom |
+| 59 | Holy Book of Prayers Chants and Blessings |
+| 60 | Holy Book of Prayers Exorcism |
 | 61 | Flask of Oil |
 | 62 | Shovel |
 | 63 | Pick |

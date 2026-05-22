@@ -1,6 +1,6 @@
 // test_item_desc.s — Runtime tests for the real item description formatter
 //
-// Results at $0400-$0403: $01 = pass, $00 = fail per test (4 tests)
+// Results at $0400-$0405: $01 = pass, $00 = fail per test (6 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -10,7 +10,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_finish:
-    ldx #3
+    ldx #5
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -29,6 +29,8 @@ test_finish:
 #import "../../common/rng.s"
 #import "../../common/numeric_format.s"
 #import "../../common/item_defs.s"
+.const HD_DECODE_BUF_SIZE = 64
+hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
 .const ICAT_NONE     = 0
 .const ICAT_GOLD     = 1
@@ -78,7 +80,7 @@ fi_add_ego:   .byte 0
 test_start:
     jsr screen_clear
 
-    ldx #3
+    ldx #5
     lda #$ff
 !clr:
     sta tc_results,x
@@ -215,10 +217,68 @@ test_start:
     bcc !t4_fail+
     lda #$01
     sta tc_results+3
-    jmp !tests_done+
+    jmp !t5+
 !t4_fail:
     lda #$00
     sta tc_results+3
+
+    // Test 5: known scrolls use Umoria-style category names.
+!t5:
+    jsr test_prepare_row0
+    lda #1
+    sta id_known + 21
+    lda #21                         // Identify
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_qty
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_identify_scroll_desc
+    sta zp_ptr0
+    lda #>expected_identify_scroll_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t5_fail+
+    lda #$01
+    sta tc_results+4
+    jmp !t6+
+!t5_fail:
+    lda #$00
+    sta tc_results+4
+
+    // Test 6: known prayer books include the book category text.
+!t6:
+    jsr test_prepare_row0
+    lda #48                         // Priest book 1
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_qty
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_prayer_book_desc
+    sta zp_ptr0
+    lda #>expected_prayer_book_desc
+    sta zp_ptr0_hi
+    jsr assert_row0_prefix
+    bcc !t6_fail+
+    lda #$01
+    sta tc_results+5
+    jmp !tests_done+
+!t6_fail:
+    lda #$00
+    sta tc_results+5
 
 !tests_done:
     jmp test_finish
@@ -253,8 +313,12 @@ expected_sensed_desc:
     .text "Dagger (magik)" ; .byte 0
 expected_bolt_stack_desc:
     .text "6 Bolt" ; .byte 0
+expected_identify_scroll_desc:
+    .text "Scroll of Identify" ; .byte 0
+expected_prayer_book_desc:
+    .text "Holy Book of Prayers Beginners Handbook" ; .byte 0
 
-tc_results: .fill 4, $ff
+tc_results: .fill 6, $ff
 
 item_desc_test_body_end:
 .assert "Item desc test stays below MAP_BASE", item_desc_test_body_end <= MAP_BASE, true

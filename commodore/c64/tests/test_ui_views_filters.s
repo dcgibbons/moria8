@@ -778,10 +778,10 @@ expected_filtered_inv_line_b:
     .text ") " ; .byte 0
 expected_filtered_book_line_a:
     .byte $01
-    .text ") Holy Prayer Book" ; .byte 0
+    .text ") Holy Book of Prayers Beginners Handb" ; .byte 0
 expected_filtered_book_line_b:
     .byte $02
-    .text ") Words of Wisdom" ; .byte 0
+    .text ") Holy Book of Prayers Words of Wisdom" ; .byte 0
 expected_store_line:
     .byte $01
     .text ") Ration of Food" ; .byte 0

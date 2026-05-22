@@ -63,7 +63,6 @@ ui_recall_display:
     jsr hal_screen_put_string
 
     // --- LV / AC / HP (row 4) ---
-    ldx recall_found_type
     lda #4
     sta zp_cursor_row
     lda #2
@@ -74,6 +73,7 @@ ui_recall_display:
     ldy #>rcl_s_lv
     jsr rcl_put_str
     jsr rcl_white
+    ldx recall_found_type
     lda cr_level,x
     jsr screen_put_decimal
 

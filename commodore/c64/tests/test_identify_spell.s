@@ -7,7 +7,7 @@
 tid_results: .fill 4, $ff
 tid_msg_buf: .fill 42, 0
 tid_expected_identify:
-    .text "This is a Cure Serious Wounds potion." ; .byte 0
+    .text "This is a Potion of Cure Serious Wounds." ; .byte 0
 
 .pc = $080E "Bootstrap"
 

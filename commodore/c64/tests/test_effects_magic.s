@@ -7,7 +7,7 @@
 tc_results: .fill 52, $ff
 tpm_msg_buf:  .fill 42, 0
 tpm_expected_identify_csw:
-    .text "This is a Cure Serious Wounds potion." ; .byte 0
+    .text "This is a Potion of Cure Serious Wounds." ; .byte 0
 
 .pc = $080E "Test Code"
 

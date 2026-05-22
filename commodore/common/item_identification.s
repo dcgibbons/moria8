@@ -36,26 +36,6 @@ ring_shuffle:   .fill 4, 0
 wand_shuffle:   .fill 5, 0
 staff_shuffle:  .fill 5, 0
 
-// Lookup tables: item type ID → local category index ($FF = not that category)
-potion_local_idx:
-    .fill 17, $ff       // 0-16: not potions
-    .byte 0, 1, 2       // 17-19: CLW, Speed, Poison
-    .fill 5, $ff        // 20-24: not potions
-    .byte 3, 4, 5, 6, 7, 8, 9  // 25-31: CSW, RestMana, Hero, Blind, Conf, DetMon, Infra
-    .fill 18, $ff       // 32-48: not potions
-    .fill 6, $ff        // 49-54: not potions
-    .fill 6, $ff        // 55-60: not potions (books)
-
-scroll_local_idx:
-    .fill 20, $ff       // 0-19: not scrolls
-    .byte 0, 1, 2       // 20-22: Light, Identify, Teleport
-    .fill 2, $ff        // 23-24: not scrolls
-    .fill 7, $ff        // 25-31: not scrolls
-    .byte 3, 4, 5, 6, 7, 8, 9  // 32-38: WoR, RemCurse, EnchW, EnchA, MonConf, Aggrav, ProtEvil
-    .fill 10, $ff       // 39-48: not scrolls
-    .fill 6, $ff        // 49-54: not scrolls
-    .fill 7, $ff        // 55-61: not scrolls (books + flask)
-
 // Unidentified name strings (screen codes, null-terminated)
 pn_0:  .text "a Blue Potion" ; .byte 0
 pn_1:  .text "a Red Potion" ; .byte 0
@@ -99,12 +79,14 @@ potion_name_hi:
 scroll_name_lo:
     .byte <sn_0, <sn_1, <sn_2, <sn_3, <sn_4, <sn_5
     .byte <sn_6, <sn_7, <sn_8, <sn_9, <sn_10, <sn_11
-scroll_name_hi:
-    .byte >sn_0, >sn_1, >sn_2, >sn_3, >sn_4, >sn_5
-    .byte >sn_6, >sn_7, >sn_8, >sn_9, >sn_10, >sn_11
 
 ring_name_lo: .byte <rn_0, <rn_1, <rn_2, <rn_3
 ring_name_hi: .byte >rn_0, >rn_1, >rn_2, >rn_3
+
+.assert "Scroll unidentified names stay within two pages", floor(sn_11 / 256) - floor(sn_0 / 256) <= 1, true
+#if !(C128 || PLUS4 || C64_UNIT_TEST)
+.assert "Wand unidentified names stay on one page", >wn_0, >wn_4
+#endif
 
 // Unidentified color tables (indexed by shuffle output)
 potion_colors:
@@ -123,7 +105,9 @@ wn_3: .text "a Bone Wand" ; .byte 0
 wn_4: .text "an Oak Wand" ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
+#if C128 || PLUS4 || C64_UNIT_TEST
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
+#endif
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
@@ -187,106 +171,67 @@ item_init_identification:
     dex
     bpl !iid_init_ws-
 
-    // Fisher-Yates shuffle: potions (12 elements)
-    ldx #11                         // i = 11 down to 1
-!iid_pot_loop:
-    txa
-    clc
-    adc #1                          // rng_range(i+1) → [0, i]
-    stx iid_save_x
-    jsr rng_range
-    ldx iid_save_x
-    tay                             // Y = j = random index
-    // Swap potion_shuffle[i] and potion_shuffle[j]
-    lda potion_shuffle,x
-    pha
-    lda potion_shuffle,y
-    sta potion_shuffle,x
-    pla
-    sta potion_shuffle,y
-    dex
-    bne !iid_pot_loop-
-
-    // Fisher-Yates shuffle: scrolls (12 elements)
+    lda #<potion_shuffle
+    sta zp_ptr0
+    lda #>potion_shuffle
+    sta zp_ptr0_hi
     ldx #11
-!iid_scr_loop:
-    txa
-    clc
-    adc #1
-    stx iid_save_x
-    jsr rng_range
-    ldx iid_save_x
-    tay
-    // Swap scroll_shuffle[i] and scroll_shuffle[j]
-    lda scroll_shuffle,x
-    pha
-    lda scroll_shuffle,y
-    sta scroll_shuffle,x
-    pla
-    sta scroll_shuffle,y
-    dex
-    bne !iid_scr_loop-
+    jsr iid_shuffle_ptr
 
-    // Fisher-Yates shuffle: rings (4 elements)
+    lda #<scroll_shuffle
+    sta zp_ptr0
+    lda #>scroll_shuffle
+    sta zp_ptr0_hi
+    ldx #11
+    jsr iid_shuffle_ptr
+
+    lda #<ring_shuffle
+    sta zp_ptr0
+    lda #>ring_shuffle
+    sta zp_ptr0_hi
     ldx #3
-!iid_ring_loop:
-    txa
-    clc
-    adc #1
-    stx iid_save_x
-    jsr rng_range
-    ldx iid_save_x
-    tay
-    lda ring_shuffle,x
-    pha
-    lda ring_shuffle,y
-    sta ring_shuffle,x
-    pla
-    sta ring_shuffle,y
-    dex
-    bne !iid_ring_loop-
+    jsr iid_shuffle_ptr
 
-    // Fisher-Yates shuffle: wands (5 elements)
+    lda #<wand_shuffle
+    sta zp_ptr0
+    lda #>wand_shuffle
+    sta zp_ptr0_hi
     ldx #4
-!iid_wand_loop:
-    txa
-    clc
-    adc #1
-    stx iid_save_x
-    jsr rng_range
-    ldx iid_save_x
-    tay
-    lda wand_shuffle,x
-    pha
-    lda wand_shuffle,y
-    sta wand_shuffle,x
-    pla
-    sta wand_shuffle,y
-    dex
-    bne !iid_wand_loop-
+    jsr iid_shuffle_ptr
 
-    // Fisher-Yates shuffle: staves (5 elements)
+    lda #<staff_shuffle
+    sta zp_ptr0
+    lda #>staff_shuffle
+    sta zp_ptr0_hi
     ldx #4
-!iid_staff_loop:
+    jmp iid_shuffle_ptr
+
+iid_shuffle_ptr:
+!iid_shuffle_loop:
     txa
     clc
     adc #1
     stx iid_save_x
     jsr rng_range
-    ldx iid_save_x
-    tay
-    lda staff_shuffle,x
+    sta iid_rand_y
+    ldy iid_save_x
+    lda (zp_ptr0),y
     pha
-    lda staff_shuffle,y
-    sta staff_shuffle,x
+    ldy iid_rand_y
+    lda (zp_ptr0),y
+    ldy iid_save_x
+    sta (zp_ptr0),y
     pla
-    sta staff_shuffle,y
+    ldy iid_rand_y
+    sta (zp_ptr0),y
+    ldx iid_save_x
     dex
-    bne !iid_staff_loop-
+    bne !iid_shuffle_loop-
 
     rts
 
 iid_save_x: .byte 0                // Scratch for Fisher-Yates
+iid_rand_y: .byte 0
 
 // ============================================================
 // item_get_name_ptr — Get name string pointer for an item type
@@ -298,32 +243,50 @@ item_get_name_ptr:
     tax
     // Check if this type is known
     lda id_known,x
-    bne !ignp_known+
+    beq !ignp_unknown+
+    jmp !ignp_known+
 
     // Unknown — look up randomized description
-    lda it_category,x
-    cmp #ICAT_POTION
-    beq !ignp_potion+
-    cmp #ICAT_SCROLL
-    beq !ignp_scroll+
-    cmp #ICAT_RING
-    beq !ignp_ring+
-    cmp #ICAT_WAND
-    beq !ignp_wand+
-    cmp #ICAT_STAFF
-    beq !ignp_staff+
+!ignp_unknown:
+    cpx #20
+    bcc !ignp_potion_low+
+    cpx #23
+    bcc !ignp_scroll_low+
+    cpx #25
+    bcc !ignp_ring+
+    cpx #32
+    bcc !ignp_potion_high+
+    cpx #39
+    bcc !ignp_scroll_high+
+    cpx #43
+    bcc !ignp_wand+
 
-    // Fallback (shouldn't happen): return real name
-!ignp_known:
-    lda it_name_lo,x
+!ignp_staff:
+    // Local index = type - 43
+    txa
+    sec
+    sbc #43
+    tax
+    lda staff_shuffle,x
+    tax
+    lda staff_name_lo,x
     sta zp_ptr0
-    lda it_name_hi,x
+    lda staff_name_hi,x
     sta zp_ptr0_hi
     rts
 
-!ignp_potion:
-    lda potion_local_idx,x          // Local index for this potion type
+!ignp_potion_high:
+    txa
+    sec
+    sbc #22                        // 25-31 -> 3-9
     tax
+    bcs !ignp_potion_have_idx+
+!ignp_potion_low:
+    txa
+    sec
+    sbc #17                        // 17-19 -> 0-2
+    tax
+!ignp_potion_have_idx:
     lda potion_shuffle,x            // Shuffled description index
     tax
     lda potion_name_lo,x
@@ -332,14 +295,28 @@ item_get_name_ptr:
     sta zp_ptr0_hi
     rts
 
-!ignp_scroll:
-    lda scroll_local_idx,x          // Local index for this scroll type
+!ignp_scroll_high:
+    txa
+    sec
+    sbc #29                        // 32-38 -> 3-9
     tax
+    bcs !ignp_scroll_have_idx+
+!ignp_scroll_low:
+    txa
+    sec
+    sbc #20                        // 20-22 -> 0-2
+    tax
+!ignp_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_name_lo,x
     sta zp_ptr0
-    lda scroll_name_hi,x
+    lda #>sn_0
+    ldy zp_ptr0
+    cpy #<sn_0
+    bcs !ignp_scroll_same_page+
+    adc #1
+!ignp_scroll_same_page:
     sta zp_ptr0_hi
     rts
 
@@ -367,23 +344,100 @@ item_get_name_ptr:
     tax
     lda wand_name_lo,x
     sta zp_ptr0
+#if C128 || PLUS4 || C64_UNIT_TEST
     lda wand_name_hi,x
+#else
+    lda #>wn_0
+#endif
     sta zp_ptr0_hi
     rts
 
-!ignp_staff:
-    // Local index = type - 43
-    txa
-    sec
-    sbc #43
-    tax
-    lda staff_shuffle,x
-    tax
-    lda staff_name_lo,x
+    // Fallback (shouldn't happen): return real name
+!ignp_known:
+    stx item_display_id
+    lda it_category,x
+    cmp #ICAT_POTION
+    beq !ignp_potion_prefix+
+    cmp #ICAT_SCROLL
+    beq !ignp_scroll_prefix+
+    cmp #ICAT_RING
+    beq !ignp_ring_prefix+
+    cmp #ICAT_BOOK
+    beq !ignp_book_prefix+
+!ignp_raw_known:
+    lda it_name_lo,x
     sta zp_ptr0
-    lda staff_name_hi,x
+    lda it_name_hi,x
     sta zp_ptr0_hi
     rts
+!ignp_qualified:
+    ldy #0
+!ignp_copy_prefix:
+    lda (zp_ptr0),y
+    beq !ignp_prefix_done+
+    sta hd_decode_buf,y
+    iny
+    bne !ignp_copy_prefix-
+!ignp_prefix_done:
+    tya
+    pha
+    ldx item_display_id
+    lda it_name_lo,x
+    sta zp_ptr0
+    lda it_name_hi,x
+    sta zp_ptr0_hi
+    pla
+    tax
+    ldy #0
+!ignp_copy_base:
+    lda (zp_ptr0),y
+    sta hd_decode_buf,x
+    beq !ignp_return_buf+
+    iny
+    inx
+    bne !ignp_copy_base-
+!ignp_return_buf:
+    lda #<hd_decode_buf
+    sta zp_ptr0
+    lda #>hd_decode_buf
+    sta zp_ptr0_hi
+    rts
+
+!ignp_potion_prefix:
+    lda #<idgp_potion_prefix
+    ldx #>idgp_potion_prefix
+    bne !ignp_prefix_set+
+!ignp_scroll_prefix:
+    lda #<idgp_scroll_prefix
+    ldx #>idgp_scroll_prefix
+    bne !ignp_prefix_set+
+!ignp_ring_prefix:
+    lda #<idgp_ring_prefix
+    ldx #>idgp_ring_prefix
+    bne !ignp_prefix_set+
+!ignp_book_prefix:
+    ldx item_display_id
+    cpx #48
+    beq !ignp_priest_prefix+
+    cpx #58
+    bcs !ignp_priest_prefix+
+    lda #<idgp_mage_book_prefix
+    ldx #>idgp_mage_book_prefix
+    bne !ignp_prefix_set+
+!ignp_priest_prefix:
+    lda #<idgp_priest_book_prefix
+    ldx #>idgp_priest_book_prefix
+!ignp_prefix_set:
+    sta zp_ptr0
+    stx zp_ptr0_hi
+    jmp !ignp_qualified-
+
+idgp_potion_prefix:      .text "Potion of " ; .byte 0
+idgp_scroll_prefix:      .text "Scroll of " ; .byte 0
+idgp_ring_prefix:        .text "Ring of " ; .byte 0
+idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
+idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
+item_display_id: .byte 0
 
 // ============================================================
 // item_get_floor_color — Get display color for a floor item
@@ -398,33 +452,62 @@ item_get_floor_color:
     bne !igfc_known+
 
     // Unknown — return randomized color
-    lda it_category,x
-    cmp #ICAT_POTION
-    beq !igfc_potion+
-    cmp #ICAT_SCROLL
-    beq !igfc_scroll+
-    cmp #ICAT_RING
-    beq !igfc_ring+
-    cmp #ICAT_WAND
-    beq !igfc_wand+
-    cmp #ICAT_STAFF
-    beq !igfc_staff+
+    cpx #20
+    bcc !igfc_potion_low+
+    cpx #23
+    bcc !igfc_scroll_low+
+    cpx #25
+    bcc !igfc_ring+
+    cpx #32
+    bcc !igfc_potion_high+
+    cpx #39
+    bcc !igfc_scroll_high+
+    cpx #43
+    bcc !igfc_wand+
+
+!igfc_staff:
+    txa
+    sec
+    sbc #43
+    tax
+    lda staff_shuffle,x
+    tax
+    lda staff_colors,x
+    rts
 
 !igfc_known:
     lda it_color,x
     rts
 
-!igfc_potion:
-    lda potion_local_idx,x
+!igfc_potion_high:
+    txa
+    sec
+    sbc #22
     tax
+    bcs !igfc_potion_have_idx+
+!igfc_potion_low:
+    txa
+    sec
+    sbc #17
+    tax
+!igfc_potion_have_idx:
     lda potion_shuffle,x
     tax
     lda potion_colors,x
     rts
 
-!igfc_scroll:
-    lda scroll_local_idx,x
+!igfc_scroll_high:
+    txa
+    sec
+    sbc #29
     tax
+    bcs !igfc_scroll_have_idx+
+!igfc_scroll_low:
+    txa
+    sec
+    sbc #20
+    tax
+!igfc_scroll_have_idx:
     lda scroll_shuffle,x
     tax
     lda scroll_colors,x
@@ -448,14 +531,4 @@ item_get_floor_color:
     lda wand_shuffle,x
     tax
     lda wand_colors,x
-    rts
-
-!igfc_staff:
-    txa
-    sec
-    sbc #43
-    tax
-    lda staff_shuffle,x
-    tax
-    lda staff_colors,x
     rts

@@ -75,12 +75,12 @@ itn_30:
 
 tid_msg_buf: .fill 42, 0
 tid_expected_identify:
-    .text "This is a Cure Serious Wounds potion." ; .byte 0
+    .text "This is a Potion of Cure Serious Wounds." ; .byte 0
 combat_msg_buf: .fill 42, 0
 tid_this_is_str:
     .text "This is a " ; .byte 0
 tid_item25_name:
-    .text "Cure Serious Wounds potion" ; .byte 0
+    .text "Potion of Cure Serious Wounds" ; .byte 0
 
 msg_row1_col: .byte 0
 cmb_slot: .byte 0

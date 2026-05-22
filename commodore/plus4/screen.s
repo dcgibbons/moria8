@@ -253,6 +253,7 @@ screen_put_char:
 screen_put_string:
     jsr screen_set_cursor
     ldy #0
+    ldx zp_cursor_col       // Stop when the cursor would reach next row
 !loop:
     lda (zp_ptr0),y
     beq !done+              // Null terminator
@@ -260,8 +261,9 @@ screen_put_string:
     jsr plus4_color_from_zp
     sta (zp_color_lo),y
     iny
-    cpy #SCREEN_COLS        // Safety: don't overflow row
-    bcc !loop-
+    inx
+    cpx #SCREEN_COLS
+    bne !loop-
 !done:
     tya
     clc

@@ -7,6 +7,8 @@
 #import "../../common/rng.s"
 #import "../../common/math.s"
 #import "../../common/item_defs.s"
+.const HD_DECODE_BUF_SIZE = 64
+hd_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
 
 .const ICAT_NONE     = 0
 .const ICAT_GOLD     = 1
@@ -150,6 +152,54 @@ test_start:
     jmp test_fail
 !sensed_ok:
 
+    // Test 4: known scrolls use Umoria-style category names.
+    jsr test_prepare_row0
+    lda #1
+    sta id_known + 21
+    lda #21
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_identify_scroll_vdc
+    sta zp_ptr0
+    lda #>expected_identify_scroll_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !scroll_ok+
+    jmp test_fail
+!scroll_ok:
+
+    // Test 5: known prayer books include the book category text.
+    jsr test_prepare_row0
+    lda #48
+    sta itemdesc_item_id
+    lda #0
+    sta itemdesc_p1
+    sta itemdesc_to_hit
+    sta itemdesc_to_dam
+    sta itemdesc_to_ac
+    sta itemdesc_ego
+    sta itemdesc_flags
+    jsr itemdesc_put_staged
+
+    lda #<expected_prayer_book_vdc
+    sta zp_ptr0
+    lda #>expected_prayer_book_vdc
+    sta zp_ptr0_hi
+    lda #0
+    jsr assert_row0_from_col
+    bcs !book_ok+
+    jmp test_fail
+!book_ok:
+
     jmp test_pass
 
 test_prepare_row0:
@@ -215,6 +265,10 @@ expected_armor_suffix_vdc:
     .byte $1b, $34, $2c, $2b, $31, $1d, 0
 expected_sensed_vdc:
     .byte $44, $01, $07, $07, $05, $12, $20, $28, $0d, $01, $07, $09, $0b, $29, 0
+expected_identify_scroll_vdc:
+    .byte $53, $03, $12, $0f, $0c, $0c, $20, $0f, $06, $20, $49, $04, $05, $0e, $14, $09, $06, $19, 0
+expected_prayer_book_vdc:
+    .byte $48, $0f, $0c, $19, $20, $42, $0f, $0f, $0b, $20, $0f, $06, $20, $50, $12, $01, $19, $05, $12, $13, $20, $42, $05, $07, $09, $0e, $0e, $05, $12, $13, $20, $48, $01, $0e, $04, $02, $0f, $0f, $0b, 0
 
 assert_col: .byte 0
 assert_idx: .byte 0
