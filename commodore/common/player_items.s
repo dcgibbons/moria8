@@ -133,17 +133,17 @@ show_inv_and_select:
     pla
     rts
 
-// show_equip_and_restore — Show equipment overlay, wait for key, restore screen
-// Used by item_takeoff when player presses '?'.
+// show_equip_and_select — Show equipment overlay and return the chosen key
+// after restoring gameplay. Used by item_takeoff when player presses '?'.
 // Preserves: nothing
-show_equip_and_restore:
-#if hal_platform_equip_prepare_key_before_display
-    jsr input_prepare_modal_dismiss_key
-#endif
-    jsr tramp_ui_equip_display
-    jsr input_get_modal_dismiss_key
+show_equip_and_select:
+    jsr input_prepare_selectable_overlay_key
+    jsr tramp_ui_equip_select_display
+    jsr input_get_followup_key
+    pha
     jsr ui_view_restore_modal_overlay
-    jmp hal_input_wait_release
+    pla
+    rts
 
 // piw_inv_slot_matches_filter — check whether a carried slot is visible
 // Input: X = carried slot index, piw_filter = active filter

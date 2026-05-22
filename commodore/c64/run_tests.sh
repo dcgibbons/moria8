@@ -1967,7 +1967,7 @@ check_static_contract "equip_action_messages_stat_desc_contract" "../common/play
 check_static_contract "throw_action_messages_stat_desc_contract" "../common/throw.s" \
     "tw_msg_item_prefix:|||jsr tw_stage_saved_item_fields|||lda tw_item_id|||jsr item_append_desc|||tw_stage_saved_item_fields:|||lda tw_save_to_hit|||sta fi_add_to_hit|||lda tw_save_to_dam|||sta fi_add_to_dam|||lda tw_save_flags|||sta fi_add_flags"
 check_static_contract "equip_overlay_fresh_key_contract" "../common/player_items.s" \
-    "show_equip_and_restore:|||jsr input_prepare_modal_dismiss_key|||jsr tramp_ui_equip_display|||jsr input_get_modal_dismiss_key"
+    "show_equip_and_select:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_ui_equip_select_display|||jsr input_get_followup_key"
 check_static_contract "spell_list_overlay_fresh_key_contract" "../common/player_magic.s" \
     "!pm_psc_show_list:|||jsr input_prepare_selectable_overlay_key|||jsr tramp_spell_list_display|||jsr input_get_followup_key"
 check_static_contract "overcast_faint_more_contract" "../common/player_magic.s" \
@@ -2086,7 +2086,7 @@ run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
 run_test "item_desc" "tests/test_item_desc.s" "0400 0405" 6 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
 run_test "store" "tests/test_store.s" "0400 0426" 39 1000000000
-run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 15 500000000
+run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 16 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10
 run_sound_monitor_test

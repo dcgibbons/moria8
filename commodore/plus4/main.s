@@ -923,6 +923,14 @@ tramp_ui_equip_display:
 !done:
     jmp tramp_sr_epilogue
 
+tramp_ui_equip_select_display:
+    lda #OVL_HELP
+    jsr overlay_load_no_kernal
+    bcs !done+
+    jsr ui_equip_select_display
+!done:
+    jmp tramp_sr_epilogue
+
 tramp_ui_recall:
     lda #OVL_DEATH
     jsr overlay_load_no_kernal

@@ -200,8 +200,8 @@ item_takeoff:
     // '?' shows equipment and re-prompts
     cmp #$3f
     bne !ito_not_inv+
-    jsr show_equip_and_restore
-    jmp item_takeoff
+    jsr show_equip_and_select
+    and #$7f
 !ito_not_inv:
 
     // Check for ESC or space -> cancel

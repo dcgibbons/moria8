@@ -38,6 +38,7 @@
 :C128AuditBelowIo("tramp_ui_inv_display", tramp_ui_inv_display)
 :C128AuditBelowIo("tramp_ui_inv_select_display", tramp_ui_inv_select_display)
 :C128AuditBelowIo("tramp_ui_equip_display", tramp_ui_equip_display)
+:C128AuditBelowIo("tramp_ui_equip_select_display", tramp_ui_equip_select_display)
 :C128AuditBelowIo("tramp_ui_recall", tramp_ui_recall)
 :C128AuditBelowIo("tramp_ui_wizard_display", tramp_ui_wizard_display)
 :C128AuditBelowIo("tramp_item_gain_spell", tramp_item_gain_spell)
@@ -121,7 +122,7 @@
 // banked item/spell command paths, so they must stay in Bank 0 executable RAM
 // below the I/O hole rather than in an overlay window.
 :C128AuditBelowIo("show_inv_and_select", show_inv_and_select)
-:C128AuditBelowIo("show_equip_and_restore", show_equip_and_restore)
+:C128AuditBelowIo("show_equip_and_select", show_equip_and_select)
 :C128AuditBelowIo("piw_inv_slot_matches_filter", piw_inv_slot_matches_filter)
 :C128AuditBelowIo("piw_build_visible_inv_cache", piw_build_visible_inv_cache)
 :C128AuditBelowIo("piw_prompt_filtered_inv", piw_prompt_filtered_inv)
@@ -144,6 +145,7 @@
 :C128AuditHelpOverlay("ui_inv_display", ui_inv_display)
 :C128AuditHelpOverlay("ui_inv_select_display", ui_inv_select_display)
 :C128AuditHelpOverlay("ui_equip_display", ui_equip_display)
+:C128AuditHelpOverlay("ui_equip_select_display", ui_equip_select_display)
 :C128AuditUiOverlay("ui_char_display", ui_char_display)
 :C128AuditUiOverlay("ui_recall_display", ui_recall_display)
 :C128AuditUiOverlay("ui_wizard_display", ui_wizard_display)

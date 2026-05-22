@@ -10,6 +10,20 @@
 // 8 slots: WEAPON, BODY, SHIELD, HEAD, HANDS, FEET, LIGHT, RING
 // Preserves: nothing
 ui_equip_display:
+    lda #<press_key_str
+    ldx #>press_key_str
+    bne ui_equip_display_common
+
+// ui_equip_select_display — Show equipped items with selectable footer.
+// Used by prompt-time take-off `?` overlays.
+// Preserves: nothing
+ui_equip_select_display:
+    lda #<ueq_select_str
+    ldx #>ueq_select_str
+
+ui_equip_display_common:
+    sta ueq_footer_lo
+    stx ueq_footer_hi
     lda #COL_WHITE
     sta zp_text_color
     jsr ui_help_clear_all
@@ -124,9 +138,9 @@ ui_equip_display:
     sta zp_cursor_row
     lda #UEQ_FOOTER_COL
     sta zp_cursor_col
-    lda #<press_key_str
+    lda ueq_footer_lo
     sta zp_ptr0
-    lda #>press_key_str
+    lda ueq_footer_hi
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
@@ -138,6 +152,8 @@ ui_equip_display:
 ueq_slot:      .byte 0
 ueq_equip_idx: .byte 0
 ueq_visible:   .byte 0
+ueq_footer_lo: .byte 0
+ueq_footer_hi: .byte 0
 
 // ============================================================
 // String data (screen codes via inherited encoding)
@@ -145,6 +161,7 @@ ueq_visible:   .byte 0
 ueq_title_str: .text "Equipment" ; .byte 0
 ueq_sep_str:   .text "---------" ; .byte 0
 ueq_none_str:  .text "(none)" ; .byte 0
+ueq_select_str: .text "Select item" ; .byte 0
 
 // Equipment slot label strings
 ueq_lbl_weapon: .text "Weapon: " ; .byte 0

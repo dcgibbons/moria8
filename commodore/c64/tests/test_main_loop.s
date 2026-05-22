@@ -123,6 +123,9 @@ tramp_ui_help_display:
 tramp_ui_equip_display:
     rts
 
+tramp_ui_equip_select_display:
+    rts
+
 tramp_store_init_all:
     rts
 

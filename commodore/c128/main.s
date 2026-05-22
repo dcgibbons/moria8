@@ -1729,10 +1729,18 @@ tramp_ui_inv_common:
     jmp tramp_ui_exit
 
 tramp_ui_equip_display:
+    lda #<ui_equip_display
+    jmp tramp_ui_equip_common
+
+tramp_ui_equip_select_display:
+    lda #<ui_equip_select_display
+tramp_ui_equip_common:
+    sta !equip_target+ + 1
     jsr tramp_ui_enter
     lda #C128_HELP_OVERLAY_ID
     jsr overlay_load
     bcs !done+
+!equip_target:
     jsr ui_equip_display
 !done:
     jmp tramp_ui_exit

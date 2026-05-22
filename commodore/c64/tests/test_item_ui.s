@@ -347,10 +347,13 @@ test_start:
     lda #$00
     sta tc_results + 0
 
-    // Test 2: item_takeoff maps contiguous letters over equipped items
+    // Test 2: item_takeoff '?' overlay accepts equipment-list selection
 !t2:
     jsr item_init_inventory
+    :PatchJump(input_get_key, test_input_get_key_script)
+    :PatchJump(input_wait_release, test_input_wait_release)
     lda #0
+    sta test_key_idx
     sta zp_msg_flags
 
     lda #4
@@ -370,12 +373,12 @@ test_start:
     lda #0
     sta inv_flags + EQUIP_LIGHT
 
-    lda #2
-    sta $c6
+    lda #$3f
+    sta test_key_script + 0
     lda #$42
-    sta $0277
-    lda #$20
-    sta $0278
+    sta test_key_script + 1
+    lda #0
+    sta test_key_script + 2
 
     jsr item_takeoff
     bcc !t2_fail+
@@ -399,6 +402,7 @@ test_start:
 !t3:
     jsr item_init_inventory
     lda #0
+    sta test_key_idx
     sta zp_msg_flags
 
     lda #ITEM_FLASK_OIL
@@ -418,12 +422,10 @@ test_start:
     sta inv_p1 + 4
     sta inv_flags + 4
 
-    lda #2
-    sta $c6
     lda #$41
-    sta $0277
-    lda #$20
-    sta $0278
+    sta test_key_script + 0
+    lda #0
+    sta test_key_script + 1
 
     jsr item_wear
     bcc !t3_fail+

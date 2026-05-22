@@ -249,6 +249,7 @@ test_start:
     jsr test_screen_clear_forces_status_redraw
     jsr test_inventory_identify_select_view_six_items
     jsr test_screen_put_string_clamps_to_row
+    jsr test_equipment_select_view
 
     jmp test_exit_trampoline
 
@@ -715,6 +716,33 @@ test_equipment_view:
     lda #$00
 !store:
     sta tc_results + 6
+    rts
+
+test_equipment_select_view:
+    jsr reset_shared_state
+
+    lda #4
+    sta inv_item_id + EQUIP_WEAPON
+    lda #1
+    sta inv_qty + EQUIP_WEAPON
+
+    jsr ui_equip_select_display
+
+    lda #<ueq_select_str
+    sta zp_ptr0
+    lda #>ueq_select_str
+    sta zp_ptr0_hi
+    lda #24
+    ldx #12
+    jsr assert_screen_string
+    bcc !fail+
+
+    lda #$01
+    bne !store+
+!fail:
+    lda #$00
+!store:
+    sta tc_results + 15
     rts
 
 test_recall_view:

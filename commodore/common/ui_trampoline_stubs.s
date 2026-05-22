@@ -36,6 +36,7 @@ priest_spell_name_hi: .fill 31, >stub_spell_name_empty
 .label tramp_ui_inv_select_display = ui_inv_select_display
 .label tramp_ui_help_display = ui_help_display
 .label tramp_ui_equip_display = ui_equip_display
+.label tramp_ui_equip_select_display = tramp_ui_equip_display
 .label tramp_spell_list_display = test_spell_list_display
 .label tramp_spell_execute_selected = test_spell_execute_selected
 .label tramp_item_gain_spell = item_gain_spell
