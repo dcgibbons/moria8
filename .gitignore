@@ -4,7 +4,7 @@ commodore/*/out/
 
 # Assembly artifacts (outside build dir)
 *.prg
-# *.sym
+*.sym
 *.vs
 *.dbg
 
