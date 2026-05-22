@@ -2696,7 +2696,7 @@ tramp_ego_append_suffix:
     sta combat_msg_buf,x
     inx
     iny
-    cpx #41
+    cpx #81
     bcs !teas_end+
     jmp !teas_loop-
 !teas_end:

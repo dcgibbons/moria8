@@ -741,6 +741,35 @@ dl_print_you_see:
 #endif
     rts
 
+// dl_print_item_you_see — Print "YOU SEE A <item>."
+// Input: A = item type ID
+// item_get_name_ptr may return hd_decode_buf, so copy the resolved name into
+// combat_msg_buf before any later Huffman decode can reuse that scratch buffer.
+dl_print_item_you_see:
+    sta dl_scratch
+    jsr look_flash_target
+#if hal_platform_describe_look_masks_irq
+    php
+    sei
+#endif
+    lda #0
+    sta cmb_buf_idx
+    ldx #HSTR_DL_YOU_SEE
+    jsr huff_append_combat
+    lda dl_scratch
+    jsr item_get_name_ptr
+    lda zp_ptr0
+    ldy zp_ptr0_hi
+    jsr combat_append_str
+    lda #<cmb_period
+    ldy #>cmb_period
+    jsr combat_append_str
+    jsr cmb_term_and_print
+#if hal_platform_describe_look_masks_irq
+    plp
+#endif
+    rts
+
 // dl_print_tile — Print a tile description message
 // Input: X = Huffman string ID (HSTR_*)
 dl_print_tile:
@@ -767,12 +796,7 @@ dl_print_tile_no_flash:
     // Found an item on floor — get its name
 !dl_item:
     lda fi_item_id,x
-    jsr item_get_name_ptr
-    lda zp_ptr0
-    sta dl_name_lo
-    lda zp_ptr0_hi
-    sta dl_name_hi
-    jsr dl_print_you_see
+    jsr dl_print_item_you_see
     clc
     rts
 

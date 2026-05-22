@@ -686,7 +686,7 @@ tramp_ego_append_suffix:
     sta combat_msg_buf,x
     inx
     iny
-    cpx #41                     // Buffer overflow protection
+    cpx #COMBAT_MSG_BUF_LAST    // Buffer overflow protection
     bcs !teas_end+
     jmp !teas_loop-
 !teas_end:

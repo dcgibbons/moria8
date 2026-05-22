@@ -1023,6 +1023,9 @@ plus4_test_after_save_game:
     pha
 #if !C128_PRODUCT_MODAL_PERSIST
     jsr disk_prompt_game        // Swap back to game disk if dual
+#if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
+    jsr hal_platform_runtime_resync
+#endif
 #endif
     pla
     beq !save_return_main+

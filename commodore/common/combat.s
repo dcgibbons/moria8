@@ -15,8 +15,15 @@ cmb_dead:        .byte 0        // Monster died flag
 cmb_any_hit:     .byte 0        // Any blow connected this round
 cmb_buf_idx:     .byte 0        // Buffer write index for msg builder
 
-// Message composition buffer (42 bytes for longest msg)
-combat_msg_buf:  .fill 42, 0
+#if C128
+.const COMBAT_MSG_BUF_SIZE = 82
+#else
+.const COMBAT_MSG_BUF_SIZE = 42
+#endif
+.const COMBAT_MSG_BUF_LAST = COMBAT_MSG_BUF_SIZE - 1
+
+// Message composition buffer. C128 uses the full 80-column message row.
+combat_msg_buf:  .fill COMBAT_MSG_BUF_SIZE, 0
 
 // ============================================================
 // Combat strings (screen codes via inherited encoding)
@@ -1196,7 +1203,7 @@ combat_append_str:
     ldx cmb_buf_idx
     ldy #0
 !cas_loop:
-    cpx #41                     // Keep slot 41 reserved for null terminator
+    cpx #COMBAT_MSG_BUF_LAST    // Keep final slot reserved for null terminator
     bcs !cas_done+
     lda (zp_ptr1),y
     beq !cas_done+
@@ -1207,7 +1214,7 @@ combat_append_str:
 !cas_done:
     stx cmb_buf_idx
     lda #0
-    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
+    sta combat_msg_buf + COMBAT_MSG_BUF_LAST // Keep terminator slot clear.
     rts
 
 // combat_append_char — Append one screen-code byte to combat_msg_buf
@@ -1215,14 +1222,14 @@ combat_append_str:
 // Clobbers: X
 combat_append_char:
     ldx cmb_buf_idx
-    cpx #41                     // Keep slot 41 reserved for null terminator
+    cpx #COMBAT_MSG_BUF_LAST    // Keep final slot reserved for null terminator
     bcs !cac_done+
     sta combat_msg_buf,x
     inx
     stx cmb_buf_idx
 !cac_done:
     lda #0
-    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
+    sta combat_msg_buf + COMBAT_MSG_BUF_LAST // Keep terminator slot clear.
     rts
 
 // combat_append_monster_name — Append current monster's name to buffer
@@ -1251,7 +1258,7 @@ combat_append_digits:
     ldx cmb_buf_idx
     ldy #0
 !cad_emit:
-    cpx #41                     // Keep slot 41 reserved for null terminator
+    cpx #COMBAT_MSG_BUF_LAST    // Keep final slot reserved for null terminator
     bcs !cad_done+
     lda nf_digit_buf,y
     sta combat_msg_buf,x
@@ -1262,14 +1269,14 @@ combat_append_digits:
 !cad_done:
     stx cmb_buf_idx
     lda #0
-    sta combat_msg_buf + 41    // Keep the reserved terminator slot clear.
+    sta combat_msg_buf + COMBAT_MSG_BUF_LAST // Keep terminator slot clear.
     rts
 
 combat_clamp_msg_idx:
     lda cmb_buf_idx
-    cmp #42
+    cmp #COMBAT_MSG_BUF_SIZE
     bcc !ccmi_done+
-    lda #41
+    lda #COMBAT_MSG_BUF_LAST
     sta cmb_buf_idx
 !ccmi_done:
     rts
@@ -1277,4 +1284,4 @@ combat_clamp_msg_idx:
 // ============================================================
 // Compile-time validation
 // ============================================================
-.assert "combat_msg_buf size", cmb_you_str - combat_msg_buf, 42
+.assert "combat_msg_buf size", cmb_you_str - combat_msg_buf, COMBAT_MSG_BUF_SIZE
