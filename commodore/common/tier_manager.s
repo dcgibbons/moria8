@@ -831,5 +831,5 @@ c128_tier_ready_mask_minus1:
     .byte 0, %00000001, %00000010, %00000100, %00001000
 
 c128_cache_loading_hdr:
-    .text "Preloading files:" ; .byte 0
+    .text "Loading:" ; .byte 0
 #endif

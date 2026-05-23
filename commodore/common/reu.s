@@ -808,4 +808,4 @@ reu_show_status:
 .assert "Overlay filename table count stays in sync", hal_storage_overlay_name_hi - hal_storage_overlay_name_lo, REU_OVERLAY_COUNT
 
 // Header string (displayed by tier_init)
-reu_loading_hdr: .text "Loading into " ; .byte $52, $45, $55, $3a, 0
+reu_loading_hdr: .text "Loading:" ; .byte 0

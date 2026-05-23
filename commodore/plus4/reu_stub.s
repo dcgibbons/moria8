@@ -53,4 +53,4 @@ reu_show_status:
 .label reu_fn_ovl_lo = hal_storage_overlay_name_lo
 .label reu_fn_ovl_hi = hal_storage_overlay_name_hi
 
-reu_loading_hdr: .text "Loading into REU:" ; .byte 0
+reu_loading_hdr: .text "Loading:" ; .byte 0

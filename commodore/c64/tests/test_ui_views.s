@@ -25,7 +25,7 @@ reu_present:     .byte 0
 reu_loading_row: .byte 0
 
 reu_loading_hdr:
-    .text "Loading into REU:" ; .byte 0
+    .text "Loading:" ; .byte 0
 reu_fn_t1: .text "MONSTER.DB.1" ; .byte 0
 reu_fn_t2: .text "MONSTER.DB.2" ; .byte 0
 reu_fn_t3: .text "MONSTER.DB.3" ; .byte 0
