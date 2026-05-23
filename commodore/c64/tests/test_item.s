@@ -1239,16 +1239,30 @@ test_start:
     lda #1
     sta id_known + 2
 
+    lda #$12
+    sta zp_ptr1
+    lda #$34
+    sta zp_ptr1_hi
     lda #2                          // Dagger
     jsr item_get_name_ptr
-    // zp_ptr0 should point to itn_2 ("DAGGER")
-    lda zp_ptr0
-    cmp #<itn_2
+    lda zp_ptr1
+    cmp #$12
     bne !t27_fail+
-    lda zp_ptr0_hi
-    cmp #>itn_2
+    lda zp_ptr1_hi
+    cmp #$34
     bne !t27_fail+
+    // zp_ptr0 should resolve to the known display name.
+    ldy #0
+!t27_cmp:
+    lda (zp_ptr0),y
+    cmp t27_expected_name,y
+    bne !t27_fail+
+    cmp #0
+    beq !t27_pass+
+    iny
+    bne !t27_cmp-
 
+!t27_pass:
     lda #$01
     sta tc_results + 26
     jmp !t28+
@@ -2283,6 +2297,9 @@ test_start:
 !tests_done:
     // Jump to trampoline at $033C (below $A000) to copy results + BRK
     jmp test_exit_trampoline
+
+t27_expected_name:
+    .text "Dagger" ; .byte 0
 
 item_test_body_end:
 

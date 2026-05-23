@@ -362,68 +362,134 @@ it_name_hi:
     .byte >itn_55, >itn_56, >itn_57, >itn_58, >itn_59, >itn_60
     .byte >itn_61, >itn_62, >itn_63
 
-// Name strings (screen codes, null-terminated)
-itn_0:  .text "Gold (small)" ; .byte 0
-itn_1:  .text "Gold (large)" ; .byte 0
+// Tokenized item-name string pool.
+// Bytes below $80 are literal screen codes; bytes $80-$95 expand through
+// item_name_token_lo/hi. item_get_name_ptr decodes streams into its resident
+// item-name buffer.
+.const ITOK_SCROLL_OF_ART     = $80
+.const ITOK_POTION_SUFFIX     = $81
+.const ITOK_OF                = $82
+.const ITOK_SCROLL            = $83
+.const ITOK_LIGHT             = $84
+.const ITOK_WAND              = $85
+.const ITOK_A_SILVER          = $86
+.const ITOK_LEATHER           = $87
+.const ITOK_DETECT_MONSTERS   = $88
+.const ITOK_STAFF             = $89
+.const ITOK_RING_SUFFIX       = $8a
+.const ITOK_TELEPORTATION     = $8b
+.const ITOK_WOUNDS_SUFFIX     = $8c
+.const ITOK_MAGICK            = $8d
+.const ITOK_GOLD              = $8e
+.const ITOK_CONFUSION         = $8f
+.const ITOK_CURE              = $90
+.const ITOK_BEGINNERS         = $91
+.const ITOK_ENCHANT           = $92
+.const ITOK_A_COPPER          = $93
+.const ITOK_CLOUD_SUFFIX      = $94
+.const ITOK_SWORD_SUFFIX      = $95
+.const ITEM_NAME_TOKEN_COUNT  = $16
+
+item_name_token_lo:
+    .byte <itok_scroll_of_art, <itok_potion_suffix, <itok_of, <itok_scroll
+    .byte <itok_light, <itok_wand, <itok_a_silver, <itok_leather
+    .byte <itok_detect_monsters, <itok_staff, <itok_ring_suffix, <itok_teleportation
+    .byte <itok_wounds_suffix, <itok_magick, <itok_gold, <itok_confusion
+    .byte <itok_cure, <itok_beginners, <itok_enchant, <itok_a_copper
+    .byte <itok_cloud_suffix, <itok_sword_suffix
+item_name_token_hi:
+    .byte >itok_scroll_of_art, >itok_potion_suffix, >itok_of, >itok_scroll
+    .byte >itok_light, >itok_wand, >itok_a_silver, >itok_leather
+    .byte >itok_detect_monsters, >itok_staff, >itok_ring_suffix, >itok_teleportation
+    .byte >itok_wounds_suffix, >itok_magick, >itok_gold, >itok_confusion
+    .byte >itok_cure, >itok_beginners, >itok_enchant, >itok_a_copper
+    .byte >itok_cloud_suffix, >itok_sword_suffix
+
+itok_scroll_of_art:   .text "a Scroll of " ; .byte 0
+itok_potion_suffix:   .text " Potion" ; .byte 0
+itok_of:              .text " of " ; .byte 0
+itok_scroll:          .text "Scroll" ; .byte 0
+itok_light:           .text "Light" ; .byte 0
+itok_wand:            .text "Wand" ; .byte 0
+itok_a_silver:        .text "a Silver" ; .byte 0
+itok_leather:         .text "Leather " ; .byte 0
+itok_detect_monsters: .text "Detect Monsters" ; .byte 0
+itok_staff:           .text "Staff" ; .byte 0
+itok_ring_suffix:     .text " Ring" ; .byte 0
+itok_teleportation:   .text "Teleportation" ; .byte 0
+itok_wounds_suffix:   .text " Wounds" ; .byte 0
+itok_magick:          .text "Magick" ; .byte 0
+itok_gold:            .text "Gold" ; .byte 0
+itok_confusion:       .text "Confusion" ; .byte 0
+itok_cure:            .text "Cure " ; .byte 0
+itok_beginners:       .text "Beginners" ; .byte 0
+itok_enchant:         .text "Enchant " ; .byte 0
+itok_a_copper:        .text "a Copper" ; .byte 0
+itok_cloud_suffix:    .text " Cloud" ; .byte 0
+itok_sword_suffix:    .text " Sword" ; .byte 0
+
+// Name streams (screen codes plus item-name tokens, null-terminated)
+itn_0:  .byte ITOK_GOLD ; .text " (small)" ; .byte 0
+itn_1:  .byte ITOK_GOLD ; .text " (large)" ; .byte 0
 itn_2:  .text "Dagger" ; .byte 0
-itn_3:  .text "Short Sword" ; .byte 0
-itn_4:  .text "Long Sword" ; .byte 0
+itn_3:  .text "Short" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
+itn_4:  .text "Long" ; .byte ITOK_SWORD_SUFFIX ; .byte 0
 itn_5:  .text "Mace" ; .byte 0
 itn_6:  .text "Robe" ; .byte 0
-itn_7:  .text "Leather Armor" ; .byte 0
+itn_7:  .byte ITOK_LEATHER ; .text "Armor" ; .byte 0
 itn_8:  .text "Chain Mail" ; .byte 0
 itn_9:  .text "Small Shield" ; .byte 0
 itn_10: .text "Iron Helm" ; .byte 0
-itn_11: .text "Leather Gloves" ; .byte 0
-itn_12: .text "Leather Boots" ; .byte 0
+itn_11: .byte ITOK_LEATHER ; .text "Gloves" ; .byte 0
+itn_12: .byte ITOK_LEATHER ; .text "Boots" ; .byte 0
 itn_13: .text "Wooden Torch" ; .byte 0
 itn_14: .text "Brass Lantern" ; .byte 0
-itn_15: .text "Ration of Food" ; .byte 0
+itn_15: .text "Ration" ; .byte ITOK_OF ; .text "Food" ; .byte 0
 itn_16: .text "Slime Mold" ; .byte 0
-itn_17: .text "Cure Light Wounds" ; .byte 0
+itn_17: .byte ITOK_CURE ; .byte ITOK_LIGHT ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
 itn_18: .text "Speed" ; .byte 0
 itn_19: .text "Poison" ; .byte 0
-itn_20: .text "Light" ; .byte 0
+itn_20: .byte ITOK_LIGHT ; .byte 0
 itn_21: .text "Identify" ; .byte 0
-itn_22: .text "Teleportation" ; .byte 0
+itn_22: .byte ITOK_TELEPORTATION ; .byte 0
 itn_23: .text "Protection" ; .byte 0
 itn_24: .text "Strength" ; .byte 0
-itn_25: .text "Cure Serious Wounds" ; .byte 0
+itn_25: .byte ITOK_CURE ; .text "Serious" ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
 itn_26: .text "Restore Mana" ; .byte 0
 itn_27: .text "Heroism" ; .byte 0
 itn_28: .text "Blindness" ; .byte 0
-itn_29: .text "Confusion" ; .byte 0
-itn_30: .text "Detect Monsters" ; .byte 0
+itn_29: .byte ITOK_CONFUSION ; .byte 0
+itn_30: .byte ITOK_DETECT_MONSTERS ; .byte 0
 itn_31: .text "Infravision" ; .byte 0
-itn_32: .text "Word of Recall" ; .byte 0
+itn_32: .text "Word" ; .byte ITOK_OF ; .text "Recall" ; .byte 0
 itn_33: .text "Remove Curse" ; .byte 0
-itn_34: .text "Enchant Weapon" ; .byte 0
-itn_35: .text "Enchant Armor" ; .byte 0
-itn_36: .text "Monster Confusion" ; .byte 0
+itn_34: .byte ITOK_ENCHANT ; .text "Weapon" ; .byte 0
+itn_35: .byte ITOK_ENCHANT ; .text "Armor" ; .byte 0
+itn_36: .text "Monster " ; .byte ITOK_CONFUSION ; .byte 0
 itn_37: .text "Aggravate" ; .byte 0
 itn_38: .text "Protect from Evil" ; .byte 0
-itn_39: .text "Wand of Light" ; .byte 0
-itn_40: .text "Wand of Lightning" ; .byte 0
-itn_41: .text "Wand of Frost" ; .byte 0
-itn_42: .text "Wand of Stinking Cloud" ; .byte 0
-itn_43: .text "Staff of Light" ; .byte 0
-itn_44: .text "Staff of Detect Monsters" ; .byte 0
-itn_45: .text "Staff of Teleportation" ; .byte 0
-itn_46: .text "Staff of Cure Light Wounds" ; .byte 0
-itn_47: .text "Beginners-Magick" ; .byte 0
-itn_48: .text "Beginners Handbook" ; .byte 0
+itn_39: .byte ITOK_WAND ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .byte 0
+itn_40: .byte ITOK_WAND ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .text "ning" ; .byte 0
+itn_41: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Frost" ; .byte 0
+itn_42: .byte ITOK_WAND ; .byte ITOK_OF ; .text "Stinking" ; .byte ITOK_CLOUD_SUFFIX ; .byte 0
+itn_43: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_LIGHT ; .byte 0
+itn_44: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_DETECT_MONSTERS ; .byte 0
+itn_45: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_TELEPORTATION ; .byte 0
+itn_46: .byte ITOK_STAFF ; .byte ITOK_OF ; .byte ITOK_CURE ; .byte ITOK_LIGHT ; .byte ITOK_WOUNDS_SUFFIX ; .byte 0
+itn_47: .byte ITOK_BEGINNERS ; .text "-" ; .byte ITOK_MAGICK ; .byte 0
+itn_48: .byte ITOK_BEGINNERS ; .text " Handbook" ; .byte 0
 itn_49: .text "Short Bow" ; .byte 0
-itn_50: .text "Light Crossbow" ; .byte 0
+itn_50: .byte ITOK_LIGHT ; .text " Crossbow" ; .byte 0
 itn_51: .text "Sling" ; .byte 0
 itn_52: .text "Arrow" ; .byte 0
 itn_53: .text "Bolt" ; .byte 0
 itn_54: .text "Rock" ; .byte 0
-itn_55: .text "Magick I" ; .byte 0
-itn_56: .text "Magick II" ; .byte 0
+itn_55: .byte ITOK_MAGICK ; .text " I" ; .byte 0
+itn_56: .byte ITOK_MAGICK ; .text " II" ; .byte 0
 itn_57: .text "The Mages Guide to Power" ; .byte 0
-itn_58: .text "Words of Wisdom" ; .byte 0
+itn_58: .text "Words" ; .byte ITOK_OF ; .text "Wisdom" ; .byte 0
 itn_59: .text "Chants and Blessings" ; .byte 0
 itn_60: .text "Exorcism" ; .byte 0
-itn_61: .text "Flask of Oil" ; .byte 0
+itn_61: .text "Flask" ; .byte ITOK_OF ; .text "Oil" ; .byte 0
 itn_62: .text "Shovel" ; .byte 0
 itn_63: .text "Pick" ; .byte 0

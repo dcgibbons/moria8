@@ -743,8 +743,8 @@ dl_print_you_see:
 
 // dl_print_item_you_see — Print "YOU SEE A <item>."
 // Input: A = item type ID
-// item_get_name_ptr may return hd_decode_buf, so copy the resolved name into
-// combat_msg_buf before any later Huffman decode can reuse that scratch buffer.
+// item_get_name_ptr returns a shared item-name buffer, so copy the resolved
+// name into combat_msg_buf before composing the message.
 dl_print_item_you_see:
     sta dl_scratch
     jsr look_flash_target

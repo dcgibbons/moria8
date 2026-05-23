@@ -2083,9 +2083,9 @@ run_test "orb_of_draining_prayer" "tests/test_orb_of_draining_prayer.s" "0400 04
     run_test "prayer_feedback" "tests/test_prayer_feedback.s" "0400 040c" 13 500000000
 run_test "detect_feedback" "tests/test_detect_feedback.s" "0400 0403" 4 500000000
 run_test "item" "tests/test_item.s" "0400 042e" 47 1000000000
-run_test "item_desc" "tests/test_item_desc.s" "0400 0405" 6 500000000
+run_test "item_desc" "tests/test_item_desc.s" "0400 0406" 7 500000000
 run_test "item_ui" "tests/test_item_ui.s" "0400 040f" 16 1000000000
-run_test "store" "tests/test_store.s" "0400 0426" 39 1000000000
+run_test "store" "tests/test_store.s" "0400 0427" 40 1000000000
 run_test "ui_views" "tests/test_ui_views.s" "0400 0413" 16 500000000
 run_test "ui_views_filters" "tests/test_ui_views_filters.s" "0400 0413" 7 500000000
 run_test "subsystems" "tests/test_subsystems.s" "0400 0409" 10

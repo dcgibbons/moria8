@@ -135,14 +135,16 @@ sro_set_p1:
     beq !sro_book+
     cmp #ICAT_RING
     beq !sro_ring+
+    cmp #ICAT_LIGHT
+    bne !sro_not_light+
+    jmp !sro_light+
+!sro_not_light:
     cmp #ICAT_WAND
     bcc !sro_default+
     cmp #ICAT_STAFF + 1
     bcc !sro_charges+
 
-    cmp #ICAT_LIGHT
-    bne !sro_default+
-    jmp !sro_light+
+    jmp !sro_default+
 
 !sro_default:
     lda #0

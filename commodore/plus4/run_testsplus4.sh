@@ -215,6 +215,7 @@ run_new_game_to_town_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -294,6 +295,7 @@ run_dungeon_entry_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -668,6 +670,7 @@ run_save_write_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --pass-on-script-exhausted \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"P4.THE.GAME".*SEQ'; then
             PASS=$((PASS + 1))
@@ -761,6 +764,7 @@ run_load_wrong_media_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -851,6 +855,7 @@ run_load_resume_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else

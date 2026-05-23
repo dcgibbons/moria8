@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0426: $01 = pass, $00 = fail per test (39 tests)
+// Results at $0400-$0427: $01 = pass, $00 = fail per test (40 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #38
+    ldx #39
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -89,7 +89,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 39, $ff
+tc_results: .fill 40, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -103,7 +103,7 @@ tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #38
+    ldx #39
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1245,6 +1245,45 @@ test_start:
     lda #$00
 !t39_store:
     sta tc_results + 38
+
+    // ============================================================
+    // Test 40: sro_set_p1 initializes light fuel for store stock
+    // ============================================================
+    lda #13                     // Wooden Torch
+    sta si_item_id + 0
+    lda #0
+    sta srr_abs_slot
+    lda #ICAT_LIGHT
+    jsr sro_set_p1
+    lda si_p1 + 0
+    cmp #134
+    bne !t40_fail+
+
+    lda #14                     // Brass Lantern
+    sta si_item_id + 1
+    lda #1
+    sta srr_abs_slot
+    lda #ICAT_LIGHT
+    jsr sro_set_p1
+    lda si_p1 + 1
+    cmp #LANTERN_MAX_CHARGES
+    bne !t40_fail+
+
+    lda #ITEM_FLASK_OIL
+    sta si_item_id + 2
+    lda #2
+    sta srr_abs_slot
+    lda #ICAT_LIGHT
+    jsr sro_set_p1
+    lda si_p1 + 2
+    cmp #LANTERN_MAX_CHARGES
+    bne !t40_fail+
+    lda #$01
+    jmp !t40_store+
+!t40_fail:
+    lda #$00
+!t40_store:
+    sta tc_results + 39
 
     jmp test_exit_trampoline
 

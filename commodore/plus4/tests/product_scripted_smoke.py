@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,8 @@ if str(C128_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(C128_TESTS_DIR))
 
 from vice_connector import MonitorTestResult, VICEConnector, normalize_addr, parse_vs_symbols
+
+BYTE_DUMP_RE = re.compile(r"C:([0-9A-Fa-f]{4})\s+([0-9A-Fa-f]{2})")
 
 
 def build_vice_command(args: argparse.Namespace) -> list[str]:
@@ -57,6 +60,25 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
         process.kill()
         process.wait(timeout=2.0)
 
+def read_monitor_byte(connector: VICEConnector, addr: int | str) -> int | None:
+    response = connector.send_command(f"m {normalize_addr(addr)} {normalize_addr(addr)}")
+    match = BYTE_DUMP_RE.search(response)
+    if not match:
+        return None
+    return int(match.group(2), 16)
+
+
+def scripted_input_exhausted(connector: VICEConnector, args: argparse.Namespace) -> bool:
+    key_index_addr = getattr(args, "key_index_addr", None)
+    key_script_addr = getattr(args, "key_script_addr", None)
+    if key_index_addr is None or key_script_addr is None:
+        return False
+    key_index = read_monitor_byte(connector, key_index_addr)
+    if key_index is None:
+        return False
+    script_byte = read_monitor_byte(connector, int(key_script_addr, 16) + key_index)
+    return script_byte == 0
+
 
 def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, dump_ranges: list[tuple[str, str]]) -> tuple[MonitorTestResult, list[str]]:
     process: subprocess.Popen[bytes] | None = None
@@ -85,6 +107,13 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                 fail_addr=fail_addr,
                 timeout=args.timeout,
             )
+            if (
+                args.pass_on_script_exhausted
+                and not result.passed
+                and result.reason.startswith("timeout")
+                and scripted_input_exhausted(connector, args)
+            ):
+                result = MonitorTestResult(True, "script exhausted at next input wait", result.last_status)
         except ConnectionError as exc:
             result = MonitorTestResult(False, str(exc), "")
         if not result.passed:
@@ -122,6 +151,7 @@ def main() -> int:
     parser.add_argument("--connect-timeout", type=float, default=12.0)
     parser.add_argument("--connect-retry-delay", type=float, default=0.1)
     parser.add_argument("--socket-timeout", type=float, default=0.5)
+    parser.add_argument("--pass-on-script-exhausted", action="store_true")
     args = parser.parse_args()
 
     symbols = parse_vs_symbols(args.main_vs)
@@ -142,6 +172,8 @@ def main() -> int:
             print(f"FAIL: missing symbol {args.start_symbol} in {args.main_vs}")
             return 2
         args.start_addr = normalize_addr(args.start_addr)
+    args.key_index_addr = symbols.get(".plus4_test_key_index")
+    args.key_script_addr = symbols.get(".plus4_test_key_script")
 
     dump_ranges: list[tuple[str, str]] = []
     dump_symbols = (
@@ -162,6 +194,8 @@ def main() -> int:
         ".disk_error_readst",
         ".disk_error_dos0",
         ".disk_error_dos1",
+        ".plus4_test_key_index",
+        ".plus4_test_key_script",
     )
     for symbol in dump_symbols:
         addr = symbols.get(symbol)

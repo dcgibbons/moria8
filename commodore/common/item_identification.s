@@ -37,36 +37,36 @@ wand_shuffle:   .fill 5, 0
 staff_shuffle:  .fill 5, 0
 
 // Unidentified name strings (screen codes, null-terminated)
-pn_0:  .text "a Blue Potion" ; .byte 0
-pn_1:  .text "a Red Potion" ; .byte 0
-pn_2:  .text "a Green Potion" ; .byte 0
-pn_3:  .text "a Yellow Potion" ; .byte 0
-pn_4:  .text "a Clear Potion" ; .byte 0
-pn_5:  .text "an Azure Potion" ; .byte 0
-pn_6:  .text "a Smoky Potion" ; .byte 0
-pn_7:  .text "a Brown Potion" ; .byte 0
-pn_8:  .text "a Silver Potion" ; .byte 0
-pn_9:  .text "a Pink Potion" ; .byte 0
-pn_10: .text "a Cloudy Potion" ; .byte 0
-pn_11: .text "a Golden Potion" ; .byte 0
+pn_0:  .text "a Blue" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_1:  .text "a Red" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_2:  .text "a Green" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_3:  .text "a Yellow" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_4:  .text "a Clear" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_5:  .text "an Azure" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_6:  .text "a Smoky" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_7:  .text "a Brown" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_8:  .byte ITOK_A_SILVER ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_9:  .text "a Pink" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_10: .text "a" ; .byte ITOK_CLOUD_SUFFIX ; .text "y" ; .byte ITOK_POTION_SUFFIX ; .byte 0
+pn_11: .text "a " ; .byte ITOK_GOLD ; .text "en" ; .byte ITOK_POTION_SUFFIX ; .byte 0
 
-sn_0:  .text "a White Scroll" ; .byte 0
-sn_1:  .text "a Brown Scroll" ; .byte 0
-sn_2:  .text "a Grey Scroll" ; .byte 0
-sn_3:  .text "a Faded Scroll" ; .byte 0
-sn_4:  .text "a Glowing Scroll" ; .byte 0
-sn_5:  .text "a Scroll of Lumen" ; .byte 0
-sn_6:  .text "a Scroll of Veritas" ; .byte 0
-sn_7:  .text "a Scroll of Dura" ; .byte 0
-sn_8:  .text "a Scroll of Libera" ; .byte 0
-sn_9:  .text "a Scroll of Acuta" ; .byte 0
-sn_10: .text "a Scroll of Ferox" ; .byte 0
-sn_11: .text "a Scroll of Tutela" ; .byte 0
+sn_0:  .text "a White " ; .byte ITOK_SCROLL ; .byte 0
+sn_1:  .text "a Brown " ; .byte ITOK_SCROLL ; .byte 0
+sn_2:  .text "a Grey " ; .byte ITOK_SCROLL ; .byte 0
+sn_3:  .text "a Faded " ; .byte ITOK_SCROLL ; .byte 0
+sn_4:  .text "a Glowing " ; .byte ITOK_SCROLL ; .byte 0
+sn_5:  .byte ITOK_SCROLL_OF_ART ; .text "Lumen" ; .byte 0
+sn_6:  .byte ITOK_SCROLL_OF_ART ; .text "Veritas" ; .byte 0
+sn_7:  .byte ITOK_SCROLL_OF_ART ; .text "Dura" ; .byte 0
+sn_8:  .byte ITOK_SCROLL_OF_ART ; .text "Libera" ; .byte 0
+sn_9:  .byte ITOK_SCROLL_OF_ART ; .text "Acuta" ; .byte 0
+sn_10: .byte ITOK_SCROLL_OF_ART ; .text "Ferox" ; .byte 0
+sn_11: .byte ITOK_SCROLL_OF_ART ; .text "Tutela" ; .byte 0
 
-rn_0: .text "a Gold Ring" ; .byte 0
-rn_1: .text "a Silver Ring" ; .byte 0
-rn_2: .text "a Bronze Ring" ; .byte 0
-rn_3: .text "a Copper Ring" ; .byte 0
+rn_0: .text "a " ; .byte ITOK_GOLD ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_1: .byte ITOK_A_SILVER ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_2: .text "a Bronze" ; .byte ITOK_RING_SUFFIX ; .byte 0
+rn_3: .byte ITOK_A_COPPER ; .byte ITOK_RING_SUFFIX ; .byte 0
 
 // Pointer tables for unidentified names
 potion_name_lo:
@@ -95,22 +95,22 @@ scroll_colors:
 ring_colors:   .byte COL_YELLOW, COL_LGREY, COL_BROWN, COL_ORANGE
 
 // Wand identification
-wn_0: .text "an Iron Wand" ; .byte 0
-wn_1: .text "a Copper Wand" ; .byte 0
-wn_2: .text "a Silver Wand" ; .byte 0
-wn_3: .text "a Bone Wand" ; .byte 0
-wn_4: .text "an Oak Wand" ; .byte 0
+wn_0: .text "an Iron " ; .byte ITOK_WAND ; .byte 0
+wn_1: .byte ITOK_A_COPPER ; .text " " ; .byte ITOK_WAND ; .byte 0
+wn_2: .byte ITOK_A_SILVER ; .text " " ; .byte ITOK_WAND ; .byte 0
+wn_3: .text "a Bone " ; .byte ITOK_WAND ; .byte 0
+wn_4: .text "an Oak " ; .byte ITOK_WAND ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
-sfn_0: .text "a Birch Staff" ; .byte 0
-sfn_1: .text "a Pine Staff" ; .byte 0
-sfn_2: .text "a Maple Staff" ; .byte 0
-sfn_3: .text "a Willow Staff" ; .byte 0
-sfn_4: .text "an Ash Staff" ; .byte 0
+sfn_0: .text "a Birch " ; .byte ITOK_STAFF ; .byte 0
+sfn_1: .text "a Pine " ; .byte ITOK_STAFF ; .byte 0
+sfn_2: .text "a Maple " ; .byte ITOK_STAFF ; .byte 0
+sfn_3: .text "a Willow " ; .byte ITOK_STAFF ; .byte 0
+sfn_4: .text "an Ash " ; .byte ITOK_STAFF ; .byte 0
 
 staff_name_lo: .byte <sfn_0, <sfn_1, <sfn_2, <sfn_3, <sfn_4
 staff_name_hi: .byte >sfn_0, >sfn_1, >sfn_2, >sfn_3, >sfn_4
@@ -268,7 +268,7 @@ item_get_name_ptr:
     sta zp_ptr0
     lda staff_name_hi,x
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 
 !ignp_potion_high:
     txa
@@ -288,7 +288,7 @@ item_get_name_ptr:
     sta zp_ptr0
     lda potion_name_hi,x
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 
 !ignp_scroll_high:
     txa
@@ -313,7 +313,7 @@ item_get_name_ptr:
     adc #1
 !ignp_scroll_same_page:
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 
 !ignp_ring:
     // Local index = type - 23
@@ -327,7 +327,7 @@ item_get_name_ptr:
     sta zp_ptr0
     lda ring_name_hi,x
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 
 !ignp_wand:
     // Local index = type - 39
@@ -341,7 +341,7 @@ item_get_name_ptr:
     sta zp_ptr0
     lda wand_name_hi,x
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 
     // Fallback (shouldn't happen): return real name
 !ignp_known:
@@ -360,39 +360,23 @@ item_get_name_ptr:
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr
 !ignp_qualified:
     ldy #0
 !ignp_copy_prefix:
     lda (zp_ptr0),y
     beq !ignp_prefix_done+
-    sta hd_decode_buf,y
+    sta item_name_decode_buf,y
     iny
     bne !ignp_copy_prefix-
 !ignp_prefix_done:
-    tya
-    pha
+    sty item_name_dst_idx
     ldx item_display_id
     lda it_name_lo,x
     sta zp_ptr0
     lda it_name_hi,x
     sta zp_ptr0_hi
-    pla
-    tax
-    ldy #0
-!ignp_copy_base:
-    lda (zp_ptr0),y
-    sta hd_decode_buf,x
-    beq !ignp_return_buf+
-    iny
-    inx
-    bne !ignp_copy_base-
-!ignp_return_buf:
-    lda #<hd_decode_buf
-    sta zp_ptr0
-    lda #>hd_decode_buf
-    sta zp_ptr0_hi
-    rts
+    jmp item_decode_name_ptr_at_dst
 
 !ignp_potion_prefix:
     lda #<idgp_potion_prefix
@@ -429,6 +413,67 @@ idgp_ring_prefix:        .text "Ring of " ; .byte 0
 idgp_mage_book_prefix:   .text "Spellbook " ; .byte 0
 idgp_priest_book_prefix: .text "Holy Book of Prayers " ; .byte 0
 item_display_id: .byte 0
+
+// Decode an item-name token stream from zp_ptr0 into item_name_decode_buf.
+// Bytes below $80 copy literally; bytes $80+ index item_name_token_lo/hi.
+item_decode_name_ptr:
+    lda #0
+    sta item_name_dst_idx
+item_decode_name_ptr_at_dst:
+    lda zp_ptr1
+    sta item_name_save_ptr1
+    lda zp_ptr1_hi
+    sta item_name_save_ptr1_hi
+    lda #0
+    sta item_name_src_idx
+!idnp_loop:
+    ldy item_name_src_idx
+    lda (zp_ptr0),y
+    beq !idnp_done+
+    bmi !idnp_token+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_token:
+    and #$7f
+    tax
+    lda item_name_token_lo,x
+    sta zp_ptr1
+    lda item_name_token_hi,x
+    sta zp_ptr1_hi
+    ldy #0
+!idnp_copy_token:
+    lda (zp_ptr1),y
+    beq !idnp_token_done+
+    ldx item_name_dst_idx
+    sta item_name_decode_buf,x
+    inc item_name_dst_idx
+    iny
+    bne !idnp_copy_token-
+!idnp_token_done:
+    inc item_name_src_idx
+    bne !idnp_loop-
+!idnp_done:
+    ldx item_name_dst_idx
+    lda #0
+    sta item_name_decode_buf,x
+    lda item_name_save_ptr1
+    sta zp_ptr1
+    lda item_name_save_ptr1_hi
+    sta zp_ptr1_hi
+    lda #<item_name_decode_buf
+    sta zp_ptr0
+    lda #>item_name_decode_buf
+    sta zp_ptr0_hi
+    rts
+
+item_name_decode_buf: .fill HD_DECODE_BUF_SIZE, 0
+item_name_src_idx: .byte 0
+item_name_dst_idx: .byte 0
+item_name_save_ptr1: .byte 0
+item_name_save_ptr1_hi: .byte 0
 
 // ============================================================
 // item_get_floor_color — Get display color for a floor item

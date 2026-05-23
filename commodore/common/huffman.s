@@ -10,10 +10,8 @@
 hd_cur_byte:   .byte 0        // Current byte being read
 hd_bit_mask:   .byte 0        // Bits remaining in current byte (counter)
 
-// Decode output buffer. Also used by item_get_name_ptr for composed known
-// item names such as "Spellbook The Mages Guide to Power".
-// This is transient scratch, so keep it in the platform scratch window rather
-// than spending resident program bytes.
+// Decode output buffer. This is transient scratch, so keep it in the platform
+// scratch window rather than spending resident program bytes.
 .const HD_DECODE_BUF_SIZE = 64
 #if C128
 .const HD_DECODE_BUF_BASE = $0400
