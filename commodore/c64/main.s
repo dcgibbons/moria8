@@ -77,6 +77,14 @@ exit_trampoline:
 
 c64_disk_call_saved_bank: .byte 0
 ultimate_model_present: .byte 0
+.label c64_hw_flags = ultimate_model_present
+.const C64_HW_C64U        = $01
+.const C64_HW_TURBO_AVAIL = $02
+.const C64_HW_TURBO_ON    = $04
+.const C64U_TURBO_CONTROL = $d031
+.const C64U_TURBO_DISABLED = $ff
+.const C64U_TURBO_NORMAL  = $00
+.const C64U_TURBO_FAST    = $0f
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
@@ -416,6 +424,7 @@ entry_main:
     sta $d021               // Background
 
     jsr ultimate_detect
+    jsr c64u_turbo_detect
 
 restart_entry:
     // --- Initialize subsystems ---
@@ -589,7 +598,9 @@ tramp_level_generate:
     sei
     lda #BANK_NO_ROMS           // $34 — KERNAL off, I/O on; $E000 = overlay RAM
     sta $01
+    jsr c64u_turbo_fast
     jsr level_generate          // executes from DungeonGenOverlay at $E000
+    jsr c64u_turbo_normal
     lda #BANK_NO_BASIC          // $36 — KERNAL back on; restore normal game banking
     sta $01
     cli
@@ -1359,13 +1370,28 @@ program_end:
 .const UCI_ID_MASKED      = $49
 ultimate_detect:
     lda #0
-    sta ultimate_model_present
+    sta c64_hw_flags
     lda UCI_DATA_ID
     and #$7f                    // $c9 normally, $49 while UCI IRQ is active
     cmp #UCI_ID_MASKED
     bne !done+
-    lda #1
-    sta ultimate_model_present
+    lda #C64_HW_C64U
+    sta c64_hw_flags
+!done:
+    rts
+
+// c64u_turbo_detect — C64U can be present while software turbo control is off.
+// $D031 reads $FF unless the Ultimate turbo-control mode exposes registers.
+c64u_turbo_detect:
+    lda c64_hw_flags
+    and #C64_HW_C64U
+    beq !done+
+    lda C64U_TURBO_CONTROL
+    cmp #C64U_TURBO_DISABLED
+    beq !done+
+    lda c64_hw_flags
+    ora #C64_HW_TURBO_AVAIL
+    sta c64_hw_flags
 !done:
     rts
 
@@ -1763,6 +1789,31 @@ ovl_items_end:
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay
     #import "../common/dungeon_gen.s"
+
+c64u_turbo_fast:
+    lda c64_hw_flags
+    and #C64_HW_TURBO_AVAIL
+    beq !done+
+    lda #C64U_TURBO_FAST
+    sta C64U_TURBO_CONTROL
+    lda c64_hw_flags
+    ora #C64_HW_TURBO_ON
+    sta c64_hw_flags
+!done:
+    rts
+
+c64u_turbo_normal:
+    lda c64_hw_flags
+    and #C64_HW_TURBO_ON
+    beq !done+
+    lda #C64U_TURBO_NORMAL
+    sta C64U_TURBO_CONTROL
+    lda c64_hw_flags
+    and #($ff - C64_HW_TURBO_ON)
+    sta c64_hw_flags
+!done:
+    rts
+
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)
 .assert "DungeonGen overlay fits in $E000-$EFFF", ovl_gen_end <= $F000, true
