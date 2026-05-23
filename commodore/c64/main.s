@@ -421,6 +421,7 @@ restart_entry:
     // --- Initialize subsystems ---
     jsr detect_machine
     jsr reu_detect
+    jsr reu_detect_extended_c64
     jsr tier_init
     jsr hal_sound_init
     jsr rng_seed
@@ -1365,6 +1366,145 @@ ultimate_detect:
     bne !done+
     lda #1
     sta ultimate_model_present
+!done:
+    rts
+
+// reu_detect_extended_c64 — Extend display size detection above 2MB.
+// The resident REU path only needs bank 0, so this init-only probe updates
+// reu_size_kb for title/loading display without changing cache placement.
+reu_detect_extended_c64:
+    lda reu_present
+    bne !has_reu+
+    jmp !done+
+!has_reu:
+    lda reu_size_kb
+    beq !size_lo_ok+
+    jmp !done+
+!size_lo_ok:
+    lda reu_size_kb + 1
+    cmp #$08                    // Existing probe capped at 2048KB.
+    beq !probe+
+    jmp !done+
+!probe:
+
+    // Stage 4: banks 32-63 -> 32 or 64+ banks.
+    ldy #32
+!write_s4:
+    tya
+    clc
+    adc #1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
+    iny
+    cpy #64
+    bne !write_s4-
+
+    lda #0
+    sta reu_probe_byte
+    tay
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    beq !s4_bank0_ok+
+    jmp !done+                  // Bank 32 aliased: 2048KB.
+!s4_bank0_ok:
+
+    lda #0
+    sta reu_probe_byte
+    ldy #32
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$21
+    beq !s4_bank32_ok+
+    jmp !done+                  // Bank 32 discarded: 2048KB.
+!s4_bank32_ok:
+
+    // Stage 5: banks 64-127 -> 64 or 128+ banks.
+    ldy #64
+!write_s5:
+    tya
+    clc
+    adc #1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
+    iny
+    cpy #128
+    bne !write_s5-
+
+    lda #0
+    sta reu_probe_byte
+    tay
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    bne !is_64+                 // Bank 64 aliased.
+
+    lda #0
+    sta reu_probe_byte
+    ldy #64
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$41
+    bne !is_64+                 // Bank 64 discarded.
+
+    // Stage 6: banks 128-255 -> 128 or 256 banks.
+    ldy #128
+!write_s6:
+    tya
+    clc
+    adc #1
+    sta reu_probe_byte
+    lda #REU_CMD_STASH
+    jsr reu_probe_xfer
+    iny
+    bne !write_s6-
+
+    lda #0
+    sta reu_probe_byte
+    tay
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$01
+    bne !is_128+                // Bank 128 aliased.
+
+    lda #0
+    sta reu_probe_byte
+    ldy #128
+    lda #REU_CMD_FETCH
+    jsr reu_probe_xfer
+    lda reu_probe_byte
+    cmp #$81
+    bne !is_128+                // Bank 128 discarded.
+
+    lda #0
+    sta reu_banks               // 256 banks does not fit in one byte.
+    sta reu_size_kb
+    lda #$40                    // 16384KB = $4000.
+    sta reu_size_kb + 1
+    rts
+
+!is_128:
+    ldy #128
+    bne !found+
+!is_64:
+    ldy #64
+!found:
+    sty reu_banks
+    tya
+    sta reu_size_kb + 1
+    lda #0
+    sta reu_size_kb
+    lsr reu_size_kb + 1
+    ror reu_size_kb
+    lsr reu_size_kb + 1
+    ror reu_size_kb
 !done:
     rts
 
