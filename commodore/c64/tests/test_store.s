@@ -3,7 +3,7 @@
 // Tests: category check, restocking, math_mul_16x8, buy/sell price calc,
 // gold operations, store door detection, find empty slot, and haggle flow.
 //
-// Results at $0400-$0427: $01 = pass, $00 = fail per test (40 tests)
+// Results at $0400-$0428: $01 = pass, $00 = fail per test (41 tests)
 
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_bootstrap)
@@ -13,7 +13,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #39
+    ldx #40
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -89,7 +89,7 @@ press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
 
 // Test result buffer — copy to $0400 at end (msg_print clobbers $0400)
-tc_results: .fill 40, $ff
+tc_results: .fill 41, $ff
 tc_count: .byte 0
 
 .macro PatchJump(target, replacement) {
@@ -103,7 +103,7 @@ tc_count: .byte 0
 
 test_start:
     // Initialize result area to $ff (untested)
-    ldx #39
+    ldx #40
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1284,6 +1284,48 @@ test_start:
     lda #$00
 !t40_store:
     sta tc_results + 39
+
+    // ============================================================
+    // Test 41: store_draw_screen clears long names before price field
+    // ============================================================
+    jsr reset_haggle_fixture
+    lda #0
+    sta zp_store_idx
+    lda #57                     // Spellbook The Mages Guide to Power
+    sta si_item_id + 0
+    lda #1
+    sta si_qty + 0
+    lda #IF_IDENTIFIED
+    sta si_meta + 0
+    jsr store_draw_screen
+    lda #3
+    sta zp_cursor_row
+    lda #30
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldy #0
+    lda (zp_screen_lo),y
+    cmp #$20
+    bne !t41_fail+
+    lda #3
+    sta zp_cursor_row
+    lda #37
+    sta zp_cursor_col
+    jsr screen_set_cursor
+    ldy #0
+    lda (zp_screen_lo),y
+    cmp #$20
+    bne !t41_fail+
+    iny
+    lda (zp_screen_lo),y
+    cmp #$20
+    bne !t41_fail+
+    lda #$01
+    jmp !t41_store+
+!t41_fail:
+    lda #$00
+!t41_store:
+    sta tc_results + 40
 
     jmp test_exit_trampoline
 

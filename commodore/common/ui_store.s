@@ -205,10 +205,12 @@ store_draw_screen:
     // Price column is platform-tuned (C128 uses wider right anchor).
     lda sd_row
     sta zp_cursor_row
-    lda #USTORE_PRICE_COL
+    lda #USTORE_PRICE_COL - 1
     sta zp_cursor_col
     lda #COL_YELLOW
     sta zp_text_color
+    lda #$20
+    jsr hal_screen_put_char
 
     ldy sb_abs_slot
     :LoadStoreEgoY()
@@ -230,13 +232,11 @@ store_draw_screen:
     sta zp_temp1
     jsr screen_put_decimal_16
 
-    // "GP" label
-    lda #$20                    // Space
-    jsr hal_screen_put_char
-    lda #$07                    // Screen code 'G'
-    jsr hal_screen_put_char
-    lda #$10                    // Screen code 'P'
-    jsr hal_screen_put_char
+    lda #<uis_store_gp_pad_str
+    sta zp_ptr0
+    lda #>uis_store_gp_pad_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
 
     jmp !sds_next_slot+
 
@@ -1677,6 +1677,8 @@ uis_gold_str:
     .text "Gold: " ; .byte 0
 uis_big_gold_str:
     .text ">65535" ; .byte 0
+uis_store_gp_pad_str:
+    .text " GP    " ; .byte 0
 uis_menu_str:
     .text "B)uy  S)ell  Q)uit" ; .byte 0
 uis_buy_which_str:
