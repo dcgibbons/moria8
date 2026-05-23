@@ -10,19 +10,15 @@ title_show_sysinfo_banked:
     sta zp_text_color
     lda #23
     sta zp_cursor_row
-    // Start column: centered baseline; shift left when REU info is shown.
+    // Start column: compact 40-column centering.
 #if HAL_PLATFORM_TITLE_SYSINFO_80COL
     ldx #((SCREEN_COLS - 15) / 2)   // "C128  KERNAL R1"
 #else
-    ldx #12
+    ldx #16
 #endif
     lda reu_present
     beq !+
-    dex
-    dex
-    dex
-    dex
-    dex
+    ldx #10
 !:  stx zp_cursor_col
 
     // Machine type
