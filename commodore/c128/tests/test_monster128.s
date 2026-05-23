@@ -11,6 +11,8 @@
 #import "../../common/mmu_macros.s"
 #import "../../common/dungeon_data.s"
 
+#define COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
+
 .pc = $0801 "BASIC Stub"
 :BasicUpstart2(test_start)
 

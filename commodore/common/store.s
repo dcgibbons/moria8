@@ -9,8 +9,8 @@
 
 // Constants defined in store_data.s (imported in main RAM before overlay)
 
-// Store name/owner strings moved to store_data.s (main RAM)
-// to save overlay space. Labels are accessible from overlay code.
+// Product builds keep store text in TownOverlay. Unit tests keep fixture text
+// in store_data.s so tests can import store_data without overlay ownership.
 
 // ============================================================
 // Scratch variables
@@ -416,3 +416,28 @@ store_find_empty_slot:
 !sfes_full:
     clc
     rts
+
+#if C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME
+// ============================================================
+// Store name/owner strings (screen codes, null-terminated)
+// ============================================================
+// Keep these after store code/scratch. store_restock_overlay.s shares store.s
+// scratch label addresses while running from ItemActionsOverlay.
+sn_general:  .text "General Store"  ; .byte 0
+sn_armory:   .text "Armory"         ; .byte 0
+sn_weapon:   .text "Weaponsmith"    ; .byte 0
+sn_temple:   .text "Temple"         ; .byte 0
+sn_alchemy:  .text "Alchemy Shop"   ; .byte 0
+sn_magic:    .text "Magic Shop"     ; .byte 0
+sn_bmarket:  .text "Black Market"   ; .byte 0
+sn_home:     .text "Home"            ; .byte 0
+
+so_0: .text "BILBO THE FRIENDLY"    ; .byte 0
+so_1: .text "GORN THE ARMORER"      ; .byte 0
+so_2: .text "BRYN THE FORGEMASTER"  ; .byte 0
+so_3: .text "GARATH THE HEALER"     ; .byte 0
+so_4: .text "ELARA THE ALCHEMIST"   ; .byte 0
+so_5: .text "ZOLAN THE ENCHANTER"   ; .byte 0
+so_6: .text "THE FENCE"             ; .byte 0
+so_7: .byte 0                        // Home has no owner
+#endif

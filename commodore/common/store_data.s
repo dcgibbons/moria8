@@ -52,7 +52,8 @@ store_base_idx:
 // ============================================================
 // Store name strings (screen codes, null-terminated)
 // ============================================================
-// In main RAM so they don't consume overlay space at $E000.
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
+// Unit-test fixture strings. Product builds define these labels in TownOverlay.
 sn_general:  .text "General Store"  ; .byte 0
 sn_armory:   .text "Armory"         ; .byte 0
 sn_weapon:   .text "Weaponsmith"    ; .byte 0
@@ -61,6 +62,7 @@ sn_alchemy:  .text "Alchemy Shop"   ; .byte 0
 sn_magic:    .text "Magic Shop"     ; .byte 0
 sn_bmarket:  .text "Black Market"   ; .byte 0
 sn_home:     .text "Home"            ; .byte 0
+#endif
 
 store_name_lo:
     .byte <sn_general, <sn_armory, <sn_weapon, <sn_temple, <sn_alchemy, <sn_magic, <sn_bmarket, <sn_home
@@ -70,6 +72,7 @@ store_name_hi:
 // ============================================================
 // Store owner strings (screen codes, null-terminated)
 // ============================================================
+#if !(C64_PRODUCT_OVERLAY_RUNTIME || C128_PRODUCT_OVERLAY_RUNTIME || PLUS4_PRODUCT_OVERLAY_RUNTIME)
 so_0: .text "BILBO THE FRIENDLY"    ; .byte 0
 so_1: .text "GORN THE ARMORER"      ; .byte 0
 so_2: .text "BRYN THE FORGEMASTER"  ; .byte 0
@@ -78,6 +81,7 @@ so_4: .text "ELARA THE ALCHEMIST"   ; .byte 0
 so_5: .text "ZOLAN THE ENCHANTER"   ; .byte 0
 so_6: .text "THE FENCE"             ; .byte 0
 so_7: .byte 0                        // Home has no owner
+#endif
 
 store_owner_lo:
     .byte <so_0, <so_1, <so_2, <so_3, <so_4, <so_5, <so_6, <so_7

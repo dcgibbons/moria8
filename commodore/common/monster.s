@@ -1,7 +1,10 @@
 #importonce
 // monster.s — Creature data & active monster table
 //
-// Embedded creature types for dungeon levels 1-5 (26 types).
+// Embedded creature stats for dungeon levels 1-5 (26 types).
+// Production tier loads replace dungeon creature rows before dungeon generation.
+// C64/C128 omit the raw embedded names except in tests; Plus/4 retains them
+// until its product scripted startup path is audited for the same layout shift.
 // Active monster table: 32 slots x 12 bytes each.
 // Spawn, find, remove subroutines for the monster system.
 
@@ -240,24 +243,33 @@ cr_spell_flags:
 
 // Name pointer tables (lo/hi)
 cr_name_lo:
+#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte <crn_0,  <crn_1,  <crn_2,  <crn_3,  <crn_4       // 0-4
     .byte <crn_5,  <crn_6,  <crn_7,  <crn_8,  <crn_9       // 5-9
     .byte <crn_10, <crn_11, <crn_12, <crn_13, <crn_14       // 10-14
     .byte <crn_15, <crn_16, <crn_17, <crn_18, <crn_19       // 15-19
     .byte <crn_20, <crn_21, <crn_22, <crn_23, <crn_24, <crn_25  // 20-25
+#else
+    .fill 26, 0                                              // 0-25: loaded from tier data in production
+#endif
     .fill 31, 0                                              // 26-56
     .byte <crn_t0, <crn_t1, <crn_t2, <crn_t3, <crn_t4, <crn_t5, <crn_t6, <crn_t7 // 57-64: town
 cr_name_hi:
+#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
     .byte >crn_0,  >crn_1,  >crn_2,  >crn_3,  >crn_4       // 0-4
     .byte >crn_5,  >crn_6,  >crn_7,  >crn_8,  >crn_9       // 5-9
     .byte >crn_10, >crn_11, >crn_12, >crn_13, >crn_14       // 10-14
     .byte >crn_15, >crn_16, >crn_17, >crn_18, >crn_19       // 15-19
     .byte >crn_20, >crn_21, >crn_22, >crn_23, >crn_24, >crn_25  // 20-25
+#else
+    .fill 26, 0                                              // 0-25: loaded from tier data in production
+#endif
     .fill 31, 0                                              // 26-56
     .byte >crn_t0, >crn_t1, >crn_t2, >crn_t3, >crn_t4, >crn_t5, >crn_t6, >crn_t7 // 57-64: town
 
 // Name strings (screen codes, null-terminated)
 // Dungeon creatures
+#if PLUS4 || C64_UNIT_TEST || COMPILE_EMBEDDED_DUNGEON_TEST_ROSTER
 crn_0:  .text "White Harpy" ; .byte 0
 crn_1:  .text "Giant White Mouse" ; .byte 0
 crn_2:  .text "White Worm Mass" ; .byte 0
@@ -284,6 +296,7 @@ crn_22: .text "Novice Mage" ; .byte 0
 crn_23: .text "Novice Priest" ; .byte 0
 crn_24: .text "Giant Salamander" ; .byte 0
 crn_25: .text "Orc Shaman" ; .byte 0
+#endif
 // Town creatures (referenced from indices 57-64)
 crn_t0: .text "Filthy Street Urchin" ; .byte 0
 crn_t1: .text "Blubbering Idiot" ; .byte 0

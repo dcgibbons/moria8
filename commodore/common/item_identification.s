@@ -84,9 +84,6 @@ ring_name_lo: .byte <rn_0, <rn_1, <rn_2, <rn_3
 ring_name_hi: .byte >rn_0, >rn_1, >rn_2, >rn_3
 
 .assert "Scroll unidentified names stay within two pages", floor(sn_11 / 256) - floor(sn_0 / 256) <= 1, true
-#if !(C128 || PLUS4 || C64_UNIT_TEST)
-.assert "Wand unidentified names stay on one page", >wn_0, >wn_4
-#endif
 
 // Unidentified color tables (indexed by shuffle output)
 potion_colors:
@@ -105,9 +102,7 @@ wn_3: .text "a Bone Wand" ; .byte 0
 wn_4: .text "an Oak Wand" ; .byte 0
 
 wand_name_lo: .byte <wn_0, <wn_1, <wn_2, <wn_3, <wn_4
-#if C128 || PLUS4 || C64_UNIT_TEST
 wand_name_hi: .byte >wn_0, >wn_1, >wn_2, >wn_3, >wn_4
-#endif
 wand_colors:  .byte COL_LGREY, COL_ORANGE, COL_WHITE, COL_LGREY, COL_BROWN
 
 // Staff identification
@@ -344,11 +339,7 @@ item_get_name_ptr:
     tax
     lda wand_name_lo,x
     sta zp_ptr0
-#if C128 || PLUS4 || C64_UNIT_TEST
     lda wand_name_hi,x
-#else
-    lda #>wn_0
-#endif
     sta zp_ptr0_hi
     rts
 
