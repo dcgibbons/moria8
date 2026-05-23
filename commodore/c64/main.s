@@ -76,6 +76,7 @@ exit_trampoline:
 #import "../common/zeropage.s"
 
 c64_disk_call_saved_bank: .byte 0
+ultimate_model_present: .byte 0
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c64_test_save_media_fail_armed: .byte 0
 #endif
@@ -414,15 +415,9 @@ entry_main:
     sta $d020               // Border
     sta $d021               // Background
 
+    jsr ultimate_detect
+
 restart_entry:
-#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
-    lda c64_test_restart_after_save_armed
-    beq !restart_test_done+
-c64_test_after_save_restart_start:
-    lda #0
-    sta c64_test_restart_after_save_armed
-!restart_test_done:
-#endif
     // --- Initialize subsystems ---
     jsr detect_machine
     jsr reu_detect
@@ -431,6 +426,14 @@ c64_test_after_save_restart_start:
     jsr rng_seed
 
 title_enter_menu:
+#if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
+    lda c64_test_restart_after_save_armed
+    beq !restart_test_done+
+c64_test_after_save_restart_start:
+    lda #0
+    sta c64_test_restart_after_save_armed
+!restart_test_done:
+#endif
     // Set default text color
     lda #COL_LGREY
     sta zp_text_color
@@ -1347,6 +1350,24 @@ program_end:
 // are used. Overwritten during normal gameplay.
 // ============================================================
 
+// ultimate_detect — One-shot C64 Ultimate / Ultimate-family title marker.
+// Full UCI model queries do not fit the current resident/banked layout. This
+// passive ID-byte check is only used for title display and runs before MAP_BASE
+// owns this init-only tail.
+.const UCI_DATA_ID        = $df1d
+.const UCI_ID_MASKED      = $49
+ultimate_detect:
+    lda #0
+    sta ultimate_model_present
+    lda UCI_DATA_ID
+    and #$7f                    // $c9 normally, $49 while UCI IRQ is active
+    cmp #UCI_ID_MASKED
+    bne !done+
+    lda #1
+    sta ultimate_model_present
+!done:
+    rts
+
 // init_load_banked — Load banked runtime payload to $F000.
 // Called once at startup before any $F000 trampoline is used.
 // Clobbers: A, X, Y
@@ -1527,9 +1548,9 @@ game_restart_overlay:
     lda #1
     sta c64_test_restart_after_save_armed
 #endif
-    lda #>(restart_entry - 1)
+    lda #>(title_enter_menu - 1)
     pha
-    lda #<(restart_entry - 1)
+    lda #<(title_enter_menu - 1)
     pha
     jmp platform_runtime_resync_c64
 

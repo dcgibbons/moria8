@@ -61,8 +61,16 @@ error text is still too developer-oriented on space-constrained targets. For
 example, `Disk error! 74` correctly reports the drive status code, but it should
 also tell a player that the drive is not ready and what to check.
 
+The C64 bootloader has an even earlier version of this problem: it hardcodes
+the program disk to device 8, so booting with the disk attached as drive 9 can
+fall back to BASIC with no useful explanation before the main game's disk setup
+or storage diagnostics exist.
+
 Required work:
 
+- Add a compact C64 bootloader error path for main-program load failure that
+  tells the player to attach the boot disk as drive 8, or otherwise reports a
+  clear load failure before returning to BASIC.
 - Keep raw diagnostic bytes available: DOS status, KERNAL `$ST`, phase, and
   device number.
 - Add a compact platform-owned classifier that maps common storage failures to
