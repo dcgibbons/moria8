@@ -5,6 +5,35 @@ unreleased for release notes.
 
 ## Commodore Ports
 
+### Audit screen clear and shared-screen ownership paths
+
+The Home screen currently reuses the store renderer, then overrides the store
+footer. That produced stale footer text such as `Q)uituit` because the store
+renderer drew row 18 first and Home replaced it with shorter text afterward.
+The immediate fix clears row 18 before drawing the Home footer, but the cleaner
+design is to stop making Home call a renderer that draws the wrong footer in the
+first place.
+
+Required work:
+
+- Split shared store/Home drawing so the item/body layout and footer/menu
+  drawing have separate ownership.
+- Replace local row-clearing patches with explicit draw contracts where a view
+  owns each row it writes.
+- Audit all screen clear, row clear, modal redraw, and overlay redraw paths
+  across C64, C128, and Plus/4 for similar stale-text or inherited-state
+  behavior.
+- Pay special attention to code that writes shorter text over longer text,
+  reuses another view's renderer, or relies on prior full-screen clears to make
+  later partial redraws safe.
+- Add focused regression coverage for any discovered cases where stale text,
+  color residue, or previous-view state can survive a redraw.
+
+Acceptance target:
+
+- Screen redraw behavior is owned by explicit view contracts, not incidental
+  cleanup, and no UI path depends on hidden stale-text assumptions.
+
 ### Audit identified item names for missing category text
 
 Wizard-generating item `18` marks the item identified and displays the raw known

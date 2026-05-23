@@ -36,6 +36,8 @@ home_enter:
     lda #COL_WHITE
     sta zp_text_color
     lda #18
+    jsr hal_screen_clear_row
+    lda #18
     sta zp_cursor_row
     lda #1
     sta zp_cursor_col
@@ -97,6 +99,9 @@ home_retrieve:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
+#if C128
+    jsr input_prepare_followup_key
+#endif
     jsr hal_input_get_key
 
     // Q/ESC/space = cancel
@@ -286,6 +291,9 @@ home_deposit:
     sta zp_ptr0_hi
     jsr hal_screen_put_string
 
+#if C128
+    jsr input_prepare_followup_key
+#endif
     jsr hal_input_get_key
 
     // Q/escape-equivalent/space = cancel
@@ -375,6 +383,5 @@ home_deposit:
 
     lda #SFX_PICKUP
     jsr hal_sound_play
-    jsr hal_input_get_key
 !hd_cancel:
     rts
