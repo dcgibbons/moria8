@@ -242,6 +242,70 @@ save_drive_not_ready_str:
     jsr load_read_block
 }
 
+.macro save_block_desc(addr, size) {
+    .word addr
+    .word size
+}
+
+.const SAVE_BLOCK_DESC_SIZE = 4
+
+save_block_table_pre_floor:
+    :save_block_desc(player_data, PL_STRUCT_SIZE)
+    :save_block_desc(player_background, 160)
+    :save_block_desc(ZP_STATE_START, ZP_STATE_SIZE)
+    :save_block_desc(eff_fear_timer, 1)
+    :save_block_desc(ZP_RNG_START, ZP_RNG_SIZE)
+    :save_block_desc(inv_item_id, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_qty, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_p1, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_hit, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_dam, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_to_ac, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_flags, TOTAL_INV_SLOTS)
+    :save_block_desc(inv_ego, TOTAL_INV_SLOTS)
+    :save_block_desc(id_known, ITEM_TYPE_COUNT)
+    :save_block_desc(potion_shuffle, 12)
+    :save_block_desc(scroll_shuffle, 12)
+    :save_block_desc(ring_shuffle, 4)
+    :save_block_desc(wand_shuffle, 5)
+    :save_block_desc(staff_shuffle, 5)
+    :save_block_desc(si_item_id, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_qty, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_p1, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_hit, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_dam, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_to_ac, STORE_TOTAL_SLOTS)
+    :save_block_desc(si_meta, STORE_TOTAL_SLOTS)
+    :save_block_desc(stairs_up_x, 6)
+    :save_block_desc(level_entry_dir, 1)
+    :save_block_desc(room_count, 1)
+    :save_block_desc(room_x, MAX_ROOMS)
+    :save_block_desc(room_y, MAX_ROOMS)
+    :save_block_desc(room_w, MAX_ROOMS)
+    :save_block_desc(room_h, MAX_ROOMS)
+    :save_block_desc(room_lit, MAX_ROOMS)
+    :save_block_desc(room_type, MAX_ROOMS)
+    :save_block_desc(trap_count, 1)
+    :save_block_desc(trap_x, MAX_TRAPS)
+    :save_block_desc(trap_y, MAX_TRAPS)
+    :save_block_desc(trap_type, MAX_TRAPS)
+    :save_block_desc(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
+save_block_table_pre_floor_end:
+
+save_block_table_post_floor:
+    :save_block_desc(recall_data_start, RECALL_DATA_SIZE)
+#if !HAL_STORAGE_MAP_BANKED
+    :save_block_desc(MAP_BASE, MAP_SIZE)
+#endif
+save_block_table_post_floor_end:
+
+.const SAVE_BLOCK_PRE_FLOOR_COUNT = (save_block_table_pre_floor_end - save_block_table_pre_floor) / SAVE_BLOCK_DESC_SIZE
+.const SAVE_BLOCK_POST_FLOOR_COUNT = (save_block_table_post_floor_end - save_block_table_post_floor) / SAVE_BLOCK_DESC_SIZE
+.assert "Pre-floor save block table entries are 4 bytes", SAVE_BLOCK_PRE_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_pre_floor_end - save_block_table_pre_floor
+.assert "Post-floor save block table entries are 4 bytes", SAVE_BLOCK_POST_FLOOR_COUNT * SAVE_BLOCK_DESC_SIZE, save_block_table_post_floor_end - save_block_table_post_floor
+.assert "Pre-floor save block table count fits in one page", SAVE_BLOCK_PRE_FLOOR_COUNT < 64, true
+.assert "Post-floor save block table count fits in one page", SAVE_BLOCK_POST_FLOOR_COUNT < 64, true
+
 // ============================================================
 // save_game — Top-level save routine
 // Syncs ZP→struct, writes all blocks + raw map + checksum, closes
@@ -435,89 +499,26 @@ save_return_c64_with_carry:
     // 1. Magic header (8 bytes)
     :save_block(save_magic, SAVE_MAGIC_SIZE)
 
-    // 2. Player data (80 bytes)
-    :save_block(player_data, PL_STRUCT_SIZE)
-
-    // 2b. Player background text (160 bytes)
-    :save_block(player_background, 160)
-
-    // 3. ZP game state $40-$5f (32 bytes)
-    :save_block(ZP_STATE_START, ZP_STATE_SIZE)
-
-    // 3b. Static effect timers
-    :save_block(eff_fear_timer, 1)
-
-    // 4. RNG state $1a-$1d (4 bytes)
-    :save_block(ZP_RNG_START, ZP_RNG_SIZE)
-
-    // 5. Inventory (5 × 30 = 150 bytes)
-    :save_block(inv_item_id, TOTAL_INV_SLOTS)
-    :save_block(inv_qty, TOTAL_INV_SLOTS)
-    :save_block(inv_p1, TOTAL_INV_SLOTS)
-    :save_block(inv_to_hit, TOTAL_INV_SLOTS)
-    :save_block(inv_to_dam, TOTAL_INV_SLOTS)
-    :save_block(inv_to_ac, TOTAL_INV_SLOTS)
-    :save_block(inv_flags, TOTAL_INV_SLOTS)
-    :save_block(inv_ego, TOTAL_INV_SLOTS)
-
-    // 6. id_known (49 bytes)
-    :save_block(id_known, ITEM_TYPE_COUNT)
-
-    // 7. Shuffle tables (12+12+4+5+5 = 38 bytes)
-    :save_block(potion_shuffle, 12)
-    :save_block(scroll_shuffle, 12)
-    :save_block(ring_shuffle, 4)
-    :save_block(wand_shuffle, 5)
-    :save_block(staff_shuffle, 5)
-
-    // 8. Store inventory
-    :save_block(si_item_id, STORE_TOTAL_SLOTS)
-    :save_block(si_qty, STORE_TOTAL_SLOTS)
-    :save_block(si_p1, STORE_TOTAL_SLOTS)
-    :save_block(si_to_hit, STORE_TOTAL_SLOTS)
-    :save_block(si_to_dam, STORE_TOTAL_SLOTS)
-    :save_block(si_to_ac, STORE_TOTAL_SLOTS)
-    :save_block(si_meta, STORE_TOTAL_SLOTS)
-
-    // 9. Stairs (6 bytes)
-    :save_block(stairs_up_x, 6)
-
-    // 10. Level entry dir (1 byte)
-    :save_block(level_entry_dir, 1)
-
-    // 11. Room count (1 byte)
-    :save_block(room_count, 1)
-
-    // 12. Room arrays (5 × 8 = 40 bytes)
-    :save_block(room_x, MAX_ROOMS)
-    :save_block(room_y, MAX_ROOMS)
-    :save_block(room_w, MAX_ROOMS)
-    :save_block(room_h, MAX_ROOMS)
-    :save_block(room_lit, MAX_ROOMS)
-    :save_block(room_type, MAX_ROOMS)
-
-    // 13. Trap count (1 byte)
-    :save_block(trap_count, 1)
-
-    // 14. Trap arrays (3 × 16 = 48 bytes)
-    :save_block(trap_x, MAX_TRAPS)
-    :save_block(trap_y, MAX_TRAPS)
-    :save_block(trap_type, MAX_TRAPS)
-
-    // 15. Monster table (32 × 12 = 384 bytes)
-    :save_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
+    // 2-15. Regular resident state blocks through monster table
+    lda #<save_block_table_pre_floor
+    sta zp_ptr1
+    lda #>save_block_table_pre_floor
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    jsr save_write_block_table
 
     // 16. Floor items (logical 8-field layout, serialized from packed RAM)
     jsr save_write_floor_items
 
-    // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
-    :save_block(recall_data_start, RECALL_DATA_SIZE)
-
-    // 17. Map data (`MAP_SIZE` bytes raw)
+    // 16b-17. Recall data plus non-banked map data.
+    lda #<save_block_table_post_floor
+    sta zp_ptr1
+    lda #>save_block_table_post_floor
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_FLOOR_COUNT
+    jsr save_write_block_table
 #if HAL_STORAGE_MAP_BANKED
     jsr save_write_map_c128
-#else
-    :save_block(MAP_BASE, MAP_SIZE)
 #endif
 
     // Check for I/O errors
@@ -713,89 +714,26 @@ plus4_test_after_load_magic:
 
     // --- Read all blocks in same order as save ---
 
-    // 2. Player data
-    :load_block(player_data, PL_STRUCT_SIZE)
-
-    // 2b. Player background text (160 bytes)
-    :load_block(player_background, 160)
-
-    // 3. ZP game state
-    :load_block(ZP_STATE_START, ZP_STATE_SIZE)
-
-    // 3b. Static effect timers
-    :load_block(eff_fear_timer, 1)
-
-    // 4. RNG state
-    :load_block(ZP_RNG_START, ZP_RNG_SIZE)
-
-    // 5. Inventory
-    :load_block(inv_item_id, TOTAL_INV_SLOTS)
-    :load_block(inv_qty, TOTAL_INV_SLOTS)
-    :load_block(inv_p1, TOTAL_INV_SLOTS)
-    :load_block(inv_to_hit, TOTAL_INV_SLOTS)
-    :load_block(inv_to_dam, TOTAL_INV_SLOTS)
-    :load_block(inv_to_ac, TOTAL_INV_SLOTS)
-    :load_block(inv_flags, TOTAL_INV_SLOTS)
-    :load_block(inv_ego, TOTAL_INV_SLOTS)
-
-    // 6. id_known
-    :load_block(id_known, ITEM_TYPE_COUNT)
-
-    // 7. Shuffle tables
-    :load_block(potion_shuffle, 12)
-    :load_block(scroll_shuffle, 12)
-    :load_block(ring_shuffle, 4)
-    :load_block(wand_shuffle, 5)
-    :load_block(staff_shuffle, 5)
-
-    // 8. Store inventory
-    :load_block(si_item_id, STORE_TOTAL_SLOTS)
-    :load_block(si_qty, STORE_TOTAL_SLOTS)
-    :load_block(si_p1, STORE_TOTAL_SLOTS)
-    :load_block(si_to_hit, STORE_TOTAL_SLOTS)
-    :load_block(si_to_dam, STORE_TOTAL_SLOTS)
-    :load_block(si_to_ac, STORE_TOTAL_SLOTS)
-    :load_block(si_meta, STORE_TOTAL_SLOTS)
-
-    // 9. Stairs
-    :load_block(stairs_up_x, 6)
-
-    // 10. Level entry dir
-    :load_block(level_entry_dir, 1)
-
-    // 11. Room count
-    :load_block(room_count, 1)
-
-    // 12. Room arrays
-    :load_block(room_x, MAX_ROOMS)
-    :load_block(room_y, MAX_ROOMS)
-    :load_block(room_w, MAX_ROOMS)
-    :load_block(room_h, MAX_ROOMS)
-    :load_block(room_lit, MAX_ROOMS)
-    :load_block(room_type, MAX_ROOMS)
-
-    // 13. Trap count
-    :load_block(trap_count, 1)
-
-    // 14. Trap arrays
-    :load_block(trap_x, MAX_TRAPS)
-    :load_block(trap_y, MAX_TRAPS)
-    :load_block(trap_type, MAX_TRAPS)
-
-    // 15. Monster table
-    :load_block(monster_table, MAX_MONSTERS * MONSTER_ENTRY_SIZE)
+    // 2-15. Regular resident state blocks through monster table
+    lda #<save_block_table_pre_floor
+    sta zp_ptr1
+    lda #>save_block_table_pre_floor
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_PRE_FLOOR_COUNT
+    jsr load_read_block_table
 
     // 16. Floor items
     jsr load_read_floor_items
 
-    // 16b. Recall data (4 x MAX_CREATURES = 260 bytes)
-    :load_block(recall_data_start, RECALL_DATA_SIZE)
-
-    // 17. Map data (`MAP_SIZE` bytes raw)
+    // 16b-17. Recall data plus non-banked map data.
+    lda #<save_block_table_post_floor
+    sta zp_ptr1
+    lda #>save_block_table_post_floor
+    sta zp_ptr1_hi
+    lda #SAVE_BLOCK_POST_FLOOR_COUNT
+    jsr load_read_block_table
 #if HAL_STORAGE_MAP_BANKED
     jsr load_read_map_c128
-#else
-    :load_block(MAP_BASE, MAP_SIZE)
 #endif
     lda save_io_error
     beq !load_read_checksum+
@@ -983,6 +921,68 @@ plus4_test_load_ioerr:
     rts
 #endif
 #endif
+
+// ============================================================
+// Table-driven regular block I/O
+// Input: zp_ptr1/hi = descriptor table, A = descriptor count
+// Descriptor: .word address, .word size
+// Clobbers: A, X, Y, zp_temp2, zp_ptr0/hi for load
+// ============================================================
+save_write_block_table:
+    sta zp_temp2
+    ldy #0
+!swbt_loop:
+    lda zp_temp2
+    beq !swbt_done+
+    lda (zp_ptr1),y
+    sta save_block_lo
+    iny
+    lda (zp_ptr1),y
+    sta save_block_hi
+    iny
+    lda (zp_ptr1),y
+    sta save_count_lo
+    iny
+    lda (zp_ptr1),y
+    sta save_count_hi
+    iny
+    tya
+    pha
+    jsr save_write_block
+    pla
+    tay
+    dec zp_temp2
+    jmp !swbt_loop-
+!swbt_done:
+    rts
+
+load_read_block_table:
+    sta zp_temp2
+    ldy #0
+!lrbt_loop:
+    lda zp_temp2
+    beq !lrbt_done+
+    lda (zp_ptr1),y
+    sta zp_ptr0
+    iny
+    lda (zp_ptr1),y
+    sta zp_ptr0_hi
+    iny
+    lda (zp_ptr1),y
+    sta save_count_lo
+    iny
+    lda (zp_ptr1),y
+    sta save_count_hi
+    iny
+    tya
+    pha
+    jsr load_read_block
+    pla
+    tay
+    dec zp_temp2
+    jmp !lrbt_loop-
+!lrbt_done:
+    rts
 
 // ============================================================
 // save_write_block — Write N bytes from addr to file with checksum
