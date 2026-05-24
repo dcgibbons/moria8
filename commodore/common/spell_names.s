@@ -23,10 +23,10 @@ priest_spell_name_hi:
     .byte >psn_24, >psn_25, >psn_26, >psn_27, >psn_28, >psn_29, >psn_30
 
 msn_0:  .text "Magic Missile" ; .byte 0
-.label msn_1 = itn_30
+.label msn_1 = itok_detect_monsters
 msn_2:  .text "Phase Door" ; .byte 0
 msn_3:  .text "Light Area" ; .byte 0
-.label msn_4 = itn_17
+.label msn_4 = spell_name_cure_light_wounds
 msn_5:  .text "Find Hidden Traps/Doors" ; .byte 0
 msn_6:  .text "Stinking Cloud" ; .byte 0
 msn_7:  .text "Confusion" ; .byte 0
@@ -55,7 +55,7 @@ msn_29: .text "Word of Destruction" ; .byte 0
 msn_30: .text "Genocide" ; .byte 0
 
 psn_0:  .text "Detect Evil" ; .byte 0
-.label psn_1 = itn_17
+.label psn_1 = spell_name_cure_light_wounds
 psn_2:  .text "Bless" ; .byte 0
 psn_3:  .text "Remove Fear" ; .byte 0
 psn_4:  .text "Call Light" ; .byte 0
@@ -85,6 +85,9 @@ psn_27: .text "Heal" ; .byte 0
 psn_28: .text "Dispel Evil" ; .byte 0
 psn_29: .text "Glyph of Warding" ; .byte 0
 psn_30: .text "Holy Word" ; .byte 0
+
+spell_name_cure_light_wounds:
+    .text "Cure Light Wounds" ; .byte 0
 
 .assert "Mage names", mage_spell_name_hi - mage_spell_name_lo, SPELL_CATALOG_COUNT
 .assert "Priest names", priest_spell_name_hi - priest_spell_name_lo, SPELL_CATALOG_COUNT

@@ -180,10 +180,16 @@ eff_turn_undead_core:
     rts
 
 eff_destroy_area:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
     lda #15
     ldx #8
     jsr eff_damage_adjacent
     jsr eff_destroy_traps_doors
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
     rts
 
 eff_holy_word:

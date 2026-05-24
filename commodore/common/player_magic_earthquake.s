@@ -16,6 +16,9 @@ eff_earthquake_banked:
 #else
 eff_earthquake:
 #endif
+#if C64_PRODUCT_OVERLAY_RUNTIME && !PM_EQ_BANKED
+    jsr c64u_turbo_fast
+#endif
     lda #<eq_cast_msg
     sta zp_ptr0
     lda #>eq_cast_msg
@@ -70,6 +73,9 @@ eff_earthquake:
     sta vis_room_revealed
     sta turn_scene_dirty
 !eq_done:
+#if C64_PRODUCT_OVERLAY_RUNTIME && !PM_EQ_BANKED
+    jsr c64u_turbo_normal
+#endif
     rts
 
 eq_cast_msg:

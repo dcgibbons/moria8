@@ -483,6 +483,9 @@ eff_find_traps:
 eff_fd_row: .byte 0
 
 eff_find_doors:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
     lda #1
     sta eff_fd_row
 !efd_row_loop:
@@ -512,6 +515,9 @@ eff_find_doors:
     inc eff_fd_row
     jmp !efd_row_loop-
 !efd_done:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
     lda #1
     sta vis_room_revealed
     rts

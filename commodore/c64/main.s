@@ -586,6 +586,33 @@ kernal_load_safe:
     rts
 
 // ============================================================
+// C64 Ultimate turbo wrappers — resident, callable from any overlay
+// ============================================================
+c64u_turbo_fast:
+    lda c64_hw_flags
+    and #C64_HW_TURBO_AVAIL
+    beq !done+
+    lda #C64U_TURBO_FAST
+    sta C64U_TURBO_CONTROL
+    lda c64_hw_flags
+    ora #C64_HW_TURBO_ON
+    sta c64_hw_flags
+!done:
+    rts
+
+c64u_turbo_normal:
+    lda c64_hw_flags
+    and #C64_HW_TURBO_ON
+    beq !done+
+    lda #C64U_TURBO_NORMAL
+    sta C64U_TURBO_CONTROL
+    lda c64_hw_flags
+    and #($ff - C64_HW_TURBO_ON)
+    sta c64_hw_flags
+!done:
+    rts
+
+// ============================================================
 // Dungeon gen overlay trampoline — bank KERNAL out, call $E000 overlay
 // ============================================================
 // KERNAL must be off ($34) while executing overlay code at $E000.
@@ -936,7 +963,9 @@ tramp_eff_earthquake:
     sei
     lda #BANK_NO_KERNAL
     sta $01
+    jsr c64u_turbo_fast
     jsr eff_earthquake_banked
+    jsr c64u_turbo_normal
     rts
 
 tramp_item_refuel:
@@ -1588,7 +1617,9 @@ c64_banked_fname:
     #import "../common/item_desc_banked.s"
     #import "../common/disk_setup_banked.s"
     #import "../common/player_magic_learn_op.s"
+    #define PM_MAP_BANKED
     #import "../common/player_magic_map.s"
+    #undef PM_MAP_BANKED
     #import "../common/player_magic_turn_banked.s"
     #import "../common/player_magic_slow_runtime.s"
     #define PM_EQ_BANKED
@@ -1789,30 +1820,6 @@ ovl_items_end:
 // Shared constants and data tables stay in dungeon_data.s (main segment).
 .segment DungeonGenOverlay
     #import "../common/dungeon_gen.s"
-
-c64u_turbo_fast:
-    lda c64_hw_flags
-    and #C64_HW_TURBO_AVAIL
-    beq !done+
-    lda #C64U_TURBO_FAST
-    sta C64U_TURBO_CONTROL
-    lda c64_hw_flags
-    ora #C64_HW_TURBO_ON
-    sta c64_hw_flags
-!done:
-    rts
-
-c64u_turbo_normal:
-    lda c64_hw_flags
-    and #C64_HW_TURBO_ON
-    beq !done+
-    lda #C64U_TURBO_NORMAL
-    sta C64U_TURBO_CONTROL
-    lda c64_hw_flags
-    and #($ff - C64_HW_TURBO_ON)
-    sta c64_hw_flags
-!done:
-    rts
 
 ovl_gen_end:
 .print "DungeonGen overlay: " + (ovl_gen_end - $e000) + " bytes at $E000-$" + toHexString(ovl_gen_end)

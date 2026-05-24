@@ -7,6 +7,9 @@ pm_map_min_y: .byte 0
 pm_map_max_y: .byte 0
 
 eff_map_area:
+#if C64_PRODUCT_OVERLAY_RUNTIME && !PM_MAP_BANKED
+    jsr c64u_turbo_fast
+#endif
     lda zp_player_dlvl
     beq !emap_town+
 
@@ -236,6 +239,9 @@ eff_map_area:
     inx
     jmp !emap_row-
 !emap_done:
+#if C64_PRODUCT_OVERLAY_RUNTIME && !PM_MAP_BANKED
+    jsr c64u_turbo_normal
+#endif
     lda #1
     sta vis_room_revealed
     rts
