@@ -547,9 +547,15 @@ petscii_to_command:
 
 key_map_petscii:
     :EmitBasePetsciiKeyMap()
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    .byte $56   // V — C64U turbo timing probe
+#endif
 
 key_map_cmd:
     :EmitBaseCommandKeyMap()
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    .byte CMD_VERSION
+#endif
 
 key_map_end:
 .label key_map_count = key_map_cmd - key_map_petscii

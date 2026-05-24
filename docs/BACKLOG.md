@@ -114,6 +114,38 @@ Acceptance target:
   missing file, and wrong save disk show clear end-user messages while retaining
   enough diagnostic detail for debugging.
 
+### Promote `V` to an in-game Version/System Info command
+
+The C64 product currently has a hidden `V` diagnostic command for proving C64
+Ultimate turbo behavior. That key was previously unused in gameplay and maps to
+the dormant `CMD_VERSION` command slot. This should eventually become a real
+cross-platform Version/System Info command instead of a one-off C64U probe.
+
+The command is likely text-heavy enough to justify a platform-owned overlay or
+paged modal rather than forcing all details into resident message-line code.
+
+Required work:
+
+- Define the shared `V` command behavior across C64, C128, and Plus/4.
+- Show game version/build identity, platform, save-format version, and relevant
+  runtime hardware details.
+- On C64, include machine identity, KERNAL revision, REU size, C64 Ultimate
+  detection, turbo-register availability, and optionally the measured turbo
+  probe result.
+- On C128 and Plus/4, show platform-appropriate equivalents without implying
+  unsupported C64U/REU capabilities.
+- Decide whether the implementation lives in an existing UI overlay or a new
+  dedicated diagnostics/version overlay.
+- Preserve the current hidden C64U timing probe until it is replaced by the
+  polished command.
+- Add focused tests for command routing and platform-specific displayed fields.
+
+Acceptance target:
+
+- Pressing `V` in gameplay opens a clear Version/System Info view on every
+  supported Commodore platform, with enough diagnostic detail for user support
+  and hardware-feature verification.
+
 ### Expand monster catalog toward full Umoria roster
 
 Moria8 currently ships with 120 selected creatures from Umoria's 279-creature

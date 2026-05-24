@@ -46,6 +46,9 @@ pmu_find_visible_flagged:
 #endif
 
 eff_reveal_floorplan:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
     ldx #0
 !erf_row:
     lda map_row_lo,x
@@ -78,7 +81,11 @@ eff_reveal_floorplan:
 !erf_done:
     lda #1
     sta vis_room_revealed
-    jmp eff_find_doors
+    jsr eff_find_doors
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
+    rts
 
 pmu_create_food:
     lda zp_player_x

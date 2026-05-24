@@ -1416,7 +1416,11 @@ command_dispatch_lo_quit:
 command_dispatch_lo_help:
     .byte <cmd_dispatch_ignore    // CMD_HELP handled above
 command_dispatch_lo_version:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    .byte <cmd_c64u_turbo_probe
+#else
     .byte <cmd_dispatch_ignore    // CMD_VERSION handled above / ignored
+#endif
 command_dispatch_lo_run_n:
     .byte <cmd_dispatch_ignore    // CMD_RUN_N handled above
 command_dispatch_lo_run_s:
@@ -1502,7 +1506,11 @@ command_dispatch_hi_quit:
 command_dispatch_hi_help:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_version:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    .byte >cmd_c64u_turbo_probe
+#else
     .byte >cmd_dispatch_ignore
+#endif
 command_dispatch_hi_run_n:
     .byte >cmd_dispatch_ignore
 command_dispatch_hi_run_s:
@@ -1623,6 +1631,12 @@ command_dispatch_hi_end:
 cmd_dispatch_ignore:
     jmp main_loop
 
+#if C64_PRODUCT_OVERLAY_RUNTIME
+cmd_c64u_turbo_probe:
+    jsr c64u_turbo_probe
+    jmp main_loop
+#endif
+
 cmd_stairs_dn:
     jsr check_stairs_at_player
     cmp #9                  // Stairs down type
@@ -1719,6 +1733,9 @@ level_change_generate_current:
 #if HAL_PLATFORM_GAME_LOOP_RUNTIME_RESYNC
     jsr hal_platform_runtime_resync
 #endif
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
     jsr tramp_level_generate
     jsr generation_busy_tick_if_dungeon_api
     jsr tier_check_transition
@@ -1754,6 +1771,9 @@ level_change_generate_current:
     jsr c128_stack_guard_begin
 #endif
     jsr status_draw
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
 #if C128_REAL_BOOT_DIAG || C128_STATUS_SP_CANARY_DIAG
     ldx #$98
     jsr c128_stack_guard_check

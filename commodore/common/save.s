@@ -429,6 +429,9 @@ save_return_c64_with_carry:
 #endif
     jmp !save_error_close+
 !save_chkout_ok:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
 
     // --- Write blocks in order ---
 
@@ -533,6 +536,9 @@ save_return_c64_with_carry:
     jsr save_write_byte_raw
 
     // Close and clean up
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
@@ -556,6 +562,9 @@ save_return_c64_with_carry:
     rts
 
 !save_error_close:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
@@ -675,6 +684,9 @@ plus4_test_load_media_fail:
 #endif
     jmp !load_fail+
 !load_chkin_ok:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_fast
+#endif
 
     // --- Read and verify magic header ---
     // Read 8 bytes to temp area and compare
@@ -990,6 +1002,9 @@ plus4_test_load_ioerr:
 // Clobbers: A, X, Y, zp_ptr0/hi
 // ============================================================
 load_close_file_restore:
+#if C64_PRODUCT_OVERLAY_RUNTIME
+    jsr c64u_turbo_normal
+#endif
     jsr save_restore_channels
     lda #hal_storage_save_file_num
     jsr SAVE_CLOSE
