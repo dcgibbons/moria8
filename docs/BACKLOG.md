@@ -146,6 +146,52 @@ Acceptance target:
   supported Commodore platform, with enough diagnostic detail for user support
   and hardware-feature verification.
 
+### Investigate C64U SoftwareIEC fast runtime asset loading
+
+Hardware testing showed that C64U SoftwareIEC/UCI fast-loading is not safe
+enough to ship. Early REU preload experiments appeared dramatically faster, but
+later real-hardware tests produced corrupted dungeon/runtime assets: unknown
+monster names rendered as `?`, and changing dungeon levels could show a
+checkerboard-corrupted screen with overlay filenames such as `64.start`,
+`64.town`, and `64.spell`.
+
+Boot-time UCI `LOAD_SU` was also tested against a loose-file C64U package on
+USB. BASIC could load `UCIPROBE` from SoftwareIEC device 11, proving the visible
+SoftwareIEC directory was correct, but UCI `LOAD_SU` returned status `$01`
+(`FILE NOT FOUND`) for all tested request forms, including `MORIA64`,
+`UCIPROBE`, and `$`. This means BASIC device-11 visibility does not imply that
+UCI target `$05` can resolve the same file context on the tested C64U
+configuration/firmware.
+
+Observed monitor state while testing:
+
+```text
+m 0852 0856
+0852: 0B 00 00 00 0C
+```
+
+Required work:
+
+- Prefer hyperspeed KERNAL/JiffyDOS-style loading on C64U instead of UCI
+  `LOAD_SU`/`LOAD_EX` unless new firmware documentation or example code proves a
+  working path.
+- Keep the product runtime loader on the known-good KERNAL path.
+- If UCI loading is revisited, start from a standalone probe that validates both
+  file resolution and byte-for-byte RAM/REU contents against known-good
+  KERNAL-loaded data before enabling it in product.
+- Confirm the exact command sequence, status handling, response acceptance, DMA
+  mode, target address behavior, banking state, and SoftwareIEC filesystem
+  context on real C64U hardware.
+- Add an explicit hardware-test checklist covering REU preload, dungeon
+  transition, visible monster names, stores, spells, and overlay-heavy actions.
+
+Acceptance target:
+
+- C64U SoftwareIEC/UCI loading is only re-enabled after real hardware shows
+  working file resolution, clean byte validation, and normal gameplay across
+  runtime overlay/tier transitions. Until then, C64U acceleration should use the
+  hyperspeed KERNAL path.
+
 ### Expand monster catalog toward full Umoria roster
 
 Moria8 currently ships with 120 selected creatures from Umoria's 279-creature
