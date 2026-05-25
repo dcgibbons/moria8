@@ -462,6 +462,8 @@ test_start:
     sta save_device
     lda #1
     sta disk_setup_done
+    lda #8
+    sta $ba
     jsr disk_reset_session_state
     lda disk_mode
     bne !t1_fail+

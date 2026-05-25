@@ -28,12 +28,20 @@ disk_mode:         .byte 0             // 0=unset, 1=one-drive swap, 2=save driv
 program_device:    .byte 8             // Device# for program/runtime PRG I/O
 save_device:       .byte 8             // Device# for save/score I/O
 disk_setup_done:   .byte 0             // 0 until the session finishes Disk Setup
+
+#if PLUS4
 disk_ui_result:    .byte 1             // 0=success, 1=cancel/failure
 disk_ui_action:    .byte 0
 disk_ui_value:     .byte 0
-
 disk_temp:         .byte 0
 disk_status:       .byte 0
+#else
+disk_temp:         .byte 0
+.label disk_ui_action = disk_temp
+.label disk_ui_value = disk_temp
+disk_status:       .byte 0
+.label disk_ui_result = disk_status    // 0=success, 1=cancel/failure
+#endif
 disk_prompt_device:.byte 8
 #if HAL_STORAGE_EXTENDED_DISK_DIAG
 disk_error_phase:  .byte 0
@@ -101,10 +109,22 @@ disk_reset_session_state:
     sta disk_setup_done
     lda #1
     sta disk_ui_result
+#if PLUS4
+    lda $ae                     // Plus/4 KERNAL current device from the boot/load path
+    cmp #8
+    bcc !default_program_device+
+    cmp #31
+    bcc !store_program_device+
+!default_program_device:
     lda #8
+!store_program_device:
+#else
+    lda $ba                     // KERNAL current device from the boot/load path
+#endif
     sta program_device
     sta save_device
 #if HAL_STORAGE_EXTENDED_DISK_DIAG
+    lda #8
     sta disk_error_device
     lda #0
     sta disk_error_phase

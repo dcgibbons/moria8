@@ -87,7 +87,10 @@ hal_storage_init_selected_drive:
     jsr c64_disk_close
 !done:
     jsr c64_disk_clrchn
+    jsr c64_storage_read_command_status
     jsr disk_kernal_exit
+    lda disk_status
+    cmp #2
     rts
 
 // Platform-owned save-disk marker filenames and marker bytes. PETSCII bytes

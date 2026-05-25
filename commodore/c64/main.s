@@ -212,8 +212,7 @@ c64_disk_marker_present:
     jsr $ffcc
     lda #hal_storage_marker_file_num
     jsr $ffc3
-    lda #2
-    sta disk_status
+    jsr c64_storage_read_command_status
     jmp !cdmp_status_done+
 !cdmp_marker_fail:
     jsr $ffcc
@@ -223,8 +222,7 @@ c64_disk_marker_present:
     jmp !cdmp_status_done+
 !cdmp_open_fail:
     jsr $ffcc
-    lda #2
-    sta disk_status
+    jsr c64_storage_read_command_status
 !cdmp_status_done:
 !cdmp_done:
     sei
@@ -348,12 +346,20 @@ c64_disk_marker_write_resident:
     ora #%00000011
     sta $dd00
     lda disk_status
-    beq !cdmw_ok+
+    bne !cdmw_fail+
+    clc
+    rts
+!cdmw_fail:
     sec
     rts
 c64_storage_read_command_status:
     lda #2
     sta disk_status
+    lda $01
+    pha
+    lda #$36
+    sta $01
+    cli
     lda #0
     tax
     tay
@@ -370,11 +376,40 @@ c64_storage_read_command_status:
     jsr KERNAL_CHRIN
     cmp #$30
     beq !cdrs_wrong_media+
+    cmp #$32
+    beq !cdrs_check_26+
+    cmp #$36
+    beq !cdrs_check_62+
+    cmp #$37
+    beq !cdrs_check_7x+
+    jmp !cdrs_close+
+!cdrs_check_26:
+    jsr KERNAL_CHRIN
     cmp #$36
     bne !cdrs_close+
+    lda #26
+    sta disk_status
+    jmp !cdrs_close+
+!cdrs_check_62:
     jsr KERNAL_CHRIN
     cmp #$32
     bne !cdrs_close+
+    jmp !cdrs_wrong_media+
+!cdrs_check_7x:
+    jsr KERNAL_CHRIN
+    cmp #$32
+    beq !cdrs_disk_full+
+    cmp #$33
+    beq !cdrs_wrong_media+
+    cmp #$34
+    bne !cdrs_close+
+    lda #74
+    sta disk_status
+    jmp !cdrs_close+
+!cdrs_disk_full:
+    lda #72
+    sta disk_status
+    jmp !cdrs_close+
 !cdrs_wrong_media:
     lda #1
     sta disk_status
@@ -382,11 +417,13 @@ c64_storage_read_command_status:
     jsr KERNAL_CLRCHN
     lda #15
     jsr KERNAL_CLOSE
+    sei
+    lda $dd00
+    ora #%00000011
+    sta $dd00
+    pla
+    sta $01
     rts
-!cdmw_ok:
-    clc
-    rts
-
 // ============================================================
 // Entry point
 // ============================================================
@@ -1717,7 +1754,7 @@ init_load_banked:
     ldy #>c64_banked_fname
     jsr KERNAL_SETNAM
     lda #2
-    ldx #SAVE_DEVICE
+    ldx program_device
     ldy #1                      // Use PRG header address ($F000)
     jsr KERNAL_SETLFS
     lda #0

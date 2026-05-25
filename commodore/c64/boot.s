@@ -53,6 +53,7 @@
 
 .pc = $080E "Boot"
 boot_entry:
+    jsr capture_boot_device
     lda #$93
     jsr $ffd2               // Clear screen
     lda #0
@@ -70,7 +71,7 @@ load_main_program:
     jsr $ffbd               // KERNAL SETNAM
 
     lda #LOGICAL_FILE
-    ldx #DEVICE_NUM
+    ldx boot_device
     ldy #LOAD_USE_HEADER
     jsr $ffba               // KERNAL SETLFS
 
@@ -93,7 +94,7 @@ load_boot_art:
     jsr $ffbd               // KERNAL SETNAM
 
     lda #LOGICAL_FILE
-    ldx #DEVICE_NUM
+    ldx boot_device
     ldy #LOAD_USE_HEADER
     jsr $ffba               // KERNAL SETLFS
 
@@ -106,6 +107,16 @@ load_boot_art:
     jsr $ffcc               // CLRCHN
 
     plp
+    rts
+
+capture_boot_device:
+    lda $ba                 // KERNAL current device from LOAD/RUN path
+    cmp #8
+    bcc !done+
+    cmp #31
+    bcs !done+
+    sta boot_device
+!done:
     rts
 
 display_boot_art:
@@ -280,6 +291,17 @@ chain_stub:
     sta $d016
     lda #TEXT_D011
     sta $d011
+    lda #$0e
+    sta $d020
+    lda #$06
+    sta $d021
+    lda #LOGICAL_FILE
+    jsr $ffc3               // CLOSE file after failed LOAD
+    jsr $ffcc               // CLRCHN before returning to BASIC
+    cld
+    cli
+    ldx #$ff
+    txs
     jmp ($A002)             // BASIC warm start on error
 chain_stub_end:
 
@@ -293,3 +315,6 @@ art_filename_end:
 game_filename:
     .byte $4D, $4F, $52, $49, $41, $36, $34             // "MORIA64"
 game_filename_end:
+
+boot_device:
+    .byte DEVICE_NUM

@@ -346,14 +346,20 @@ c64_test_input_idx: .byte 0
 c64_test_input_script:
 #if C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT
     .byte $44              // D = Disk Setup from title
-    .byte $59              // Y = use drive 9
+    .byte $32              // 2 = save drive
+    .byte $39              // 9
+    .byte $0d              // RETURN
+    .byte $33              // 3 = done
     .byte $20              // SPACE = inserted save disk prompt
     .byte $59              // Y = initialize missing marker
     .byte $00
 #else
 #if C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT
     .byte $4c              // L = load from title
-    .byte $59              // Y = use drive 9 if Disk Setup prompts
+    .byte $32              // 2 = save drive if Disk Setup prompts
+    .byte $39              // 9
+    .byte $0d              // RETURN
+    .byte $33              // 3 = done
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
     .byte $53              // S = start over from save/quit prompt
@@ -372,8 +378,10 @@ c64_test_input_script:
 #else
 #if C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
     .byte $4c              // L = load from title
-    .byte $59              // Y = use drive 9 if Disk Setup prompts
-    .byte $32              // 2 = two-drive fallback if setup returns to menu
+    .byte $32              // 2 = save drive if Disk Setup prompts
+    .byte $39              // 9
+    .byte $0d              // RETURN
+    .byte $33              // 3 = done
     .byte $00
 #else
     .byte $4e              // N = New

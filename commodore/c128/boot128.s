@@ -99,6 +99,7 @@ loader_start:
     sta $ff00
     lda #COL_BLACK
     sta $d020
+    jsr capture_boot_device
     
     lda #$ff
     sta SCREEN_EDITOR_MODE  // 80-column mode defense
@@ -131,7 +132,7 @@ loader_start:
     jsr KERNAL_SETNAM
     
     lda #2
-    ldx #8
+    ldx boot_device
     ldy #1
     jsr KERNAL_SETLFS
 
@@ -187,7 +188,7 @@ bootart_try_show:
     jsr KERNAL_SETNAM
 
     lda #2
-    ldx #8
+    ldx boot_device
     ldy #1
     jsr KERNAL_SETLFS
 
@@ -230,6 +231,16 @@ bootart_try_restore:
 !done:
     rts
 
+capture_boot_device:
+    lda $ba                 // KERNAL current device from BOOT/LOAD path
+    cmp #8
+    bcc !done+
+    cmp #31
+    bcs !done+
+    sta boot_device
+!done:
+    rts
+
 loading_msg:
     .text "LOADING MORIA8..."
     .byte $0d, 0            // CR, null
@@ -244,6 +255,8 @@ bootart_filename:
 bootart_filename_end:
 bootart_active:
     .byte 0
+boot_device:
+    .byte 8
 
 .label stub_reloc_src_relocated = *
 }

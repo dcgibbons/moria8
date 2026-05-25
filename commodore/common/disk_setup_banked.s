@@ -313,6 +313,9 @@ disk_setup_prepare_selected:
     lda #DISK_UI_ACT_INSERT_DISK
     jsr disk_setup_call_ui
     jsr disk_init_drive
+#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+    bcs !show_marker_probe_fail+
+#endif
 #if HAL_STORAGE_COMMAND_STATUS_FROM_DISK_DIAG
     jsr disk_setup_capture_init_status
 #endif
@@ -329,18 +332,14 @@ disk_setup_prepare_selected:
     bne !fail+
     jsr disk_marker_init
     bcc disk_setup_commit_initialized
+!show_marker_probe_fail:
     lda #DISK_UI_ACT_SHOW_INIT_FAIL
     jsr disk_setup_call_ui
 !fail:
     sec
     rts
-#if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
-!show_marker_probe_fail:
-    lda #DISK_UI_ACT_SHOW_INIT_FAIL
-    jsr disk_setup_call_ui
-    sec
-    rts
 
+#if HAL_STORAGE_DISK_SETUP_MARKER_PROBE_DOS
 disk_setup_plus4_marker_missing:
     lda disk_error_dos0
     cmp #$36                    // 62,FILE NOT FOUND.
@@ -355,64 +354,26 @@ disk_setup_plus4_marker_missing:
     rts
 #endif
 
-disk_setup_use_drive9:
-    lda #9
-    sta save_device
-    lda #2
-    sta disk_mode
-    jmp disk_setup_prepare_selected
-
 disk_setup_run:
-    lda disk_setup_done
-    bne !menu+
-    ldx #9
-    jsr hal_storage_probe_media
-    bcs !menu+
-    lda #DISK_UI_ACT_CONFIRM_DRIVE9
-    jsr disk_setup_call_ui
-    lda disk_ui_result
-    cmp #DISK_UI_RES_YES
-    bne !menu+
-    jsr disk_setup_use_drive9
-    bcc !done+
-
 !menu:
     lda #DISK_UI_ACT_MENU
     jsr disk_setup_call_ui
     lda disk_ui_result
-#if HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
-    cmp #DISK_UI_RES_OTHER_DRIVE
-    beq !other_drive+
-#endif
     cmp #DISK_UI_RES_TWO_DRIVE
-    beq !two_drive+
+    beq !pick_drive+
     cmp #DISK_UI_RES_ONE_DRIVE
+    beq !same_drive+
+    cmp #DISK_UI_RES_OK
+    beq !prepare+
     bne !fail+
-    lda #8
-    sta save_device
-    lda #1
-    sta disk_mode
-    jsr disk_setup_prepare_selected
-    bcs !menu-
-!done:
-    clc
-    rts
 
-!two_drive:
-    ldx #9
-    jsr hal_storage_probe_media
-    bcc !drive9_present+
-    lda #DISK_UI_ACT_SHOW_NO_DRIVE9
-    jsr disk_setup_call_ui
+!same_drive:
+    lda program_device
+    sta save_device
     jmp !menu-
-!drive9_present:
-    jsr disk_setup_use_drive9
-    bcs !menu-
-    clc
-    rts
 
 #if HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
-!other_drive:
+!pick_drive:
     lda #DISK_UI_ACT_ENTER_DEVICE
     jsr disk_setup_call_ui
     lda disk_ui_result
@@ -427,19 +388,21 @@ disk_setup_run:
 !other_probe_ok:
     lda disk_ui_value
     sta save_device
-    cmp #8
-    bne !other_two_drive+
+    jmp !menu-
+#endif
+
+!prepare:
     lda #1
-    bne !other_mode_set+
-!other_two_drive:
+    ldx save_device
+    cpx program_device
+    beq !mode_set+
     lda #2
-!other_mode_set:
+!mode_set:
     sta disk_mode
     jsr disk_setup_prepare_selected
     bcs !menu-
     clc
     rts
-#endif
 
 !fail:
     sec

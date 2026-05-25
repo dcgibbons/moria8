@@ -11,7 +11,7 @@
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_disk_setup_supports_other_drive = 0
+.const hal_storage_disk_setup_supports_other_drive = 1
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_detail_status_phase = 0
@@ -26,6 +26,7 @@
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 #define HAL_STORAGE_SAVE_SELECT_OUTPUT_NAME_LEGACY
 #define HAL_STORAGE_CPU_PORT_RESTORE_AFTER_IO

@@ -166,6 +166,8 @@ C128_BOOTART_PREVIEW_PPM = $(OUT128)/bootart128_preview.ppm
 DISK64_IMAGE       = $(OUT)/moria8-c64.d64
 DISK128_IMAGE      = $(OUT)/moria8-c128.d71
 DISKPLUS4_IMAGE    = $(OUT)/moria8-plus4.d64
+C64_DIST_DIR       = $(OUT)/c64-dist
+C64_DIST_STAMP     = $(C64_DIST_DIR)/.stamp
 EMPTY_PRG          = $(OUT)/empty.prg
 DISK64_LABEL       = "moria8 c64,m8"
 DISK128_LABEL      = "moria8 c128,m8"
@@ -189,7 +191,7 @@ C128_MAIN_OUTPUTS = $(C128_MAIN_PRG) $(C128_OVL_START) $(C128_OVL_TOWN) $(C128_O
 	$(C128_RESIDENT_WORLD) $(C128_RESIDENT_ITEMS) $(C128_RESIDENT_SELECT) \
 	$(C128_RESIDENT_PERSIST) $(C128_RESIDENT_PLAY) $(C128_RUNTIME_BANKED)
 
-.PHONY: all build build64 build128 buildplus4 disk disk64 disk128 diskplus4 run run64 run128 runplus4 \
+.PHONY: all build build64 build128 buildplus4 disk disk64 c64-dist disk128 diskplus4 run run64 run128 runplus4 \
 	bootart128-charset-demo \
 	test test64 test128 test128-fast test128-fast-smoke testplus4 testplus4-build testplus4-runtime clean \
 	check-zp check-6502-lint check-hal-boundaries ensure-kickass kickass
@@ -210,9 +212,11 @@ buildplus4: $(PLUS4_BUILD_ARTIFACTS)
 	mkdir -p plus4/out
 	cp -f $(OUTPLUS4)/* plus4/out/
 
-disk: $(DISK64_IMAGE) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
+disk: $(DISK64_IMAGE) $(C64_DIST_STAMP) $(DISK128_IMAGE) $(DISKPLUS4_IMAGE)
 
-disk64: $(DISK64_IMAGE)
+disk64: $(DISK64_IMAGE) $(C64_DIST_STAMP)
+
+c64-dist: $(C64_DIST_STAMP)
 
 disk128: $(DISK128_IMAGE)
 
@@ -446,6 +450,36 @@ $(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUT)
 $(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUT)
 	LC_ALL=C tr '\012' '\015' < $< > $@
 
+$(C64_DIST_STAMP): $(C64_BUILD_ARTIFACTS) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) $(EMPTY_PRG) | $(OUT)
+	rm -rf $(C64_DIST_DIR)
+	mkdir -p $(C64_DIST_DIR)
+	cp -f $(EMPTY_PRG) "$(C64_DIST_DIR)/art1"
+	cp -f $(EMPTY_PRG) "$(C64_DIST_DIR)/art2"
+	cp -f $(EMPTY_PRG) "$(C64_DIST_DIR)/art3"
+	cp -f $(EMPTY_PRG) "$(C64_DIST_DIR)/art4"
+	cp -f $(EMPTY_PRG) "$(C64_DIST_DIR)/art5"
+	cp -f $(C64_BOOT_PRG) "$(C64_DIST_DIR)/moria8"
+	cp -f $(C64_BOOT_PRG) "$(C64_DIST_DIR)/boot64"
+	cp -f $(C64_BOOTART_PRG) "$(C64_DIST_DIR)/bootart64"
+	cp -f $(C64_MAIN_PRG) "$(C64_DIST_DIR)/moria64"
+	cp -f $(C64_TITLE_PRG) "$(C64_DIST_DIR)/t64"
+	cp -f $(OUT64)/monster.db.1 "$(C64_DIST_DIR)/monster.db.1"
+	cp -f $(OUT64)/monster.db.2 "$(C64_DIST_DIR)/monster.db.2"
+	cp -f $(OUT64)/monster.db.3 "$(C64_DIST_DIR)/monster.db.3"
+	cp -f $(OUT64)/monster.db.4 "$(C64_DIST_DIR)/monster.db.4"
+	cp -f $(C64_OVL_START) "$(C64_DIST_DIR)/64.start"
+	cp -f $(C64_OVL_TOWN) "$(C64_DIST_DIR)/64.town"
+	cp -f $(C64_OVL_DEATH) "$(C64_DIST_DIR)/64.death"
+	cp -f $(C64_OVL_GEN) "$(C64_DIST_DIR)/64.gen"
+	cp -f $(C64_OVL_HELP) "$(C64_DIST_DIR)/64.help"
+	cp -f $(C64_OVL_UI) "$(C64_DIST_DIR)/64.ui"
+	cp -f $(C64_OVL_ITEMS) "$(C64_DIST_DIR)/64.items"
+	cp -f $(C64_OVL_SPELL) "$(C64_DIST_DIR)/64.spell"
+	cp -f $(C64_RUNTIME_BANKED) "$(C64_DIST_DIR)/64.bank"
+	cp -f $(LICENSE_DISK_FILE) "$(C64_DIST_DIR)/license"
+	cp -f $(SOURCE_OFFER_DISK_FILE) "$(C64_DIST_DIR)/source-offer"
+	touch $(C64_DIST_STAMP)
+
 $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK64_IMAGE)
@@ -526,6 +560,7 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 		-write $(C128_BOOTSECT_PRG) "art3" \
 		-write $(C128_BOOTSECT_PRG) "art4" \
 		-write $(C128_BOOTSECT_PRG) "art5" \
+		-write $(C128_BOOT_PRG) "moria8" \
 		-write $(C128_BOOT_CHAIN_PRG) "boot128" \
 		-write $(C128_BOOTART_DIAG_PRG) "bootart128" \
 		-write $(C128_MAIN_PRG) "moria128" \

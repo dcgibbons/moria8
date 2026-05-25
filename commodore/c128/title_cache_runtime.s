@@ -36,7 +36,7 @@ c128_title_asset_load:
     jsr hal_storage_setnam
 
     lda #2
-    ldx #SAVE_DEVICE
+    ldx $ba
     ldy #1
     jsr hal_storage_setlfs
 

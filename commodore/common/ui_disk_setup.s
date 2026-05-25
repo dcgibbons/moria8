@@ -49,9 +49,7 @@ ui_disk_setup_dispatch:
     cmp #DISK_UI_ACT_SHOW_INIT_FAIL
     beq !dispatch_init_fail+
     cmp #DISK_UI_ACT_ENTER_DEVICE
-#if hal_storage_disk_setup_supports_other_drive
     beq !dispatch_enter_device+
-#endif
     lda #DISK_UI_RES_CANCEL
     sta disk_ui_result
     rts
@@ -80,11 +78,9 @@ ui_disk_setup_dispatch:
 !dispatch_init_fail:
     jsr uds_show_init_fail
     jmp !dispatch_done+
-#if hal_storage_disk_setup_supports_other_drive
 !dispatch_enter_device:
     jsr uds_enter_device
     jmp !dispatch_done+
-#endif
 !dispatch_done:
     rts
 
@@ -99,20 +95,11 @@ uds_print_loaded:
 uds_menu_only:
     jsr ui_clear_full_screen_safe
     :UDSPrint(0, UDS_TITLE_COL, uds_title_str)
-    :UDSPrint(2, UDS_LINE_COL, uds_menu_head_str)
-    :UDSPrint(4, UDS_LINE_COL, uds_one_drive_str)
-    :UDSPrint(5, UDS_LINE_COL, uds_two_drive_str)
-#if hal_storage_disk_setup_supports_other_drive
-    :UDSPrint(6, UDS_LINE_COL, uds_other_drive_str)
-    :UDSPrint(7, UDS_LINE_COL, uds_back_str)
-    :UDSPrint(9, UDS_NOTE_COL, uds_note_str)
-#else
-    :UDSPrint(6, UDS_LINE_COL, uds_back_str)
-    :UDSPrint(8, UDS_NOTE_COL, uds_note_str)
-#endif
-    lda disk_setup_done
-    beq !menu_key+
-    jsr uds_draw_current_indicator
+    jsr uds_draw_drive_summary
+    :UDSPrint(5, UDS_LINE_COL, uds_one_drive_str)
+    :UDSPrint(6, UDS_LINE_COL, uds_two_drive_str)
+    :UDSPrint(7, UDS_LINE_COL, uds_done_str)
+    :UDSPrint(8, UDS_LINE_COL, uds_back_str)
 !menu_key:
     jsr hal_input_get_key
     cmp #$31                    // '1'
@@ -127,14 +114,12 @@ uds_menu_only:
     sta disk_ui_result
     rts
 !menu_not_two:
-#if hal_storage_disk_setup_supports_other_drive
-    cmp #$4f                    // 'O'
-    bne !menu_not_other+
-    lda #DISK_UI_RES_OTHER_DRIVE
+    cmp #$33                    // '3'
+    bne !menu_not_done+
+    lda #DISK_UI_RES_OK
     sta disk_ui_result
     rts
-!menu_not_other:
-#endif
+!menu_not_done:
     cmp #$51                    // 'Q'
     bne !menu_key-
     lda #DISK_UI_RES_CANCEL
@@ -169,10 +154,10 @@ uds_show_insert_prompt:
     cmp #1
     bne !prep_drive_msg+
     :UDSPrint(3, UDS_LINE_COL, uds_insert_one_drive_str)
-    :UDSPrint(4, UDS_LINE_COL, uds_insert_drive8_str)
-    jmp !prep_wait+
+    jmp !prep_drive_line+
 !prep_drive_msg:
     :UDSPrint(3, UDS_LINE_COL, uds_insert_other_drive_str)
+!prep_drive_line:
     lda #4
     sta zp_cursor_row
     lda #UDS_IND_COL
@@ -215,7 +200,6 @@ uds_show_init_prompt:
     jsr uds_clear_after_modal
     rts
 
-#if hal_storage_disk_setup_supports_other_drive
 uds_enter_device:
     jsr ui_clear_full_screen_safe
     :UDSPrint(0, UDS_TITLE_COL, uds_title_str)
@@ -300,10 +284,11 @@ uds_enter_device:
     lda uds_device
     cmp #8
     bcc !de_bad+
-    cmp #31
+    cmp #12
     bcs !de_bad+
     lda #DISK_UI_RES_OK
     sta disk_ui_result
+    lda uds_device
     sta disk_ui_value
     clc
     rts
@@ -319,7 +304,6 @@ uds_enter_device:
     sta disk_ui_result
     sec
     rts
-#endif
 
 uds_show_no_drive9:
     jsr ui_clear_full_screen_safe
@@ -371,6 +355,11 @@ uds_clear_after_modal:
     jmp msg_init
 
 uds_show_init_detail:
+#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+    lda disk_status
+    cmp #2
+    bcs !show_c64_not_ready+
+#endif
     jsr hal_storage_setup_status
     cmp #HAL_STORAGE_STATUS_WRITE_PROTECTED
     bne !check_full+
@@ -416,6 +405,11 @@ uds_show_init_detail:
 #endif
     :UDSPrint(4, UDS_LINE_COL, uds_dos_generic_str)
     rts
+#if HAL_STORAGE_SAVE_MEDIA_STATUS_LEGACY
+!show_c64_not_ready:
+    :UDSPrint(4, UDS_LINE_COL, uds_dos_not_ready_str)
+    rts
+#endif
 
 #if hal_storage_disk_setup_detail_command_status
 uds_show_c128_status_error:
@@ -497,38 +491,48 @@ uds_show_plus4_status_error:
     rts
 #endif
 
-uds_draw_current_indicator:
+uds_draw_drive_summary:
     lda #COL_CYAN
     sta zp_text_color
-    lda #11
+    lda #2
     sta zp_cursor_row
-    lda #UDS_IND_COL
+    lda #UDS_LINE_COL
     sta zp_cursor_col
-    lda #<ds_ind_pfx
+    lda #<uds_program_drive_str
     sta zp_ptr0
-    lda #>ds_ind_pfx
+    lda #>uds_program_drive_str
+    sta zp_ptr0_hi
+    jsr hal_screen_put_string
+    lda program_device
+    jsr screen_put_decimal_rj2
+    lda #3
+    sta zp_cursor_row
+    lda #UDS_LINE_COL
+    sta zp_cursor_col
+    lda #<uds_save_drive_str
+    sta zp_ptr0
+    lda #>uds_save_drive_str
     sta zp_ptr0_hi
     jsr hal_screen_put_string
     lda save_device
     jsr screen_put_decimal_rj2
-    lda #$1d
+    lda #$20
     jsr hal_screen_put_char
     lda #COL_WHITE
     sta zp_text_color
     rts
 
 uds_title_str:             .text "Disk Setup" ; .byte 0
-uds_menu_head_str:         .text "Choose your Save Disk" ; .byte 0
-uds_one_drive_str:         .text "1) One drive" ; .byte 0
-uds_two_drive_str:         .text "2) Two drives (9)" ; .byte 0
-uds_other_drive_str:       .text "O) Other drive" ; .byte 0
+uds_program_drive_str:     .text "Program: " ; .byte 0
+uds_save_drive_str:        .text "Save:    " ; .byte 0
+uds_one_drive_str:         .text "1) Same as program" ; .byte 0
+uds_two_drive_str:         .text "2) Pick save drive" ; .byte 0
+uds_done_str:              .text "3) Done" ; .byte 0
 uds_back_str:              .text "Q) Back" ; .byte 0
-uds_note_str:              .text "Load, save, and scores use Save Disk." ; .byte 0
 uds_drive9_hint_str:       .text "Drive 9 is ready for saves." ; .byte 0
 uds_use_drive9_str:        .text "Use drive 9? (Y/N)" ; .byte 0
-uds_no_drive9_str:         .text "Drive 9 did not respond." ; .byte 0
+uds_no_drive9_str:         .text "Drive did not respond." ; .byte 0
 uds_insert_one_drive_str:  .text "Insert a separate Save Disk" ; .byte 0
-uds_insert_drive8_str:     .text "in drive 8." ; .byte 0
 uds_insert_other_drive_str:.text "Insert a Save Disk in" ; .byte 0
 uds_drive_prefix_str:      .text "drive " ; .byte 0
 uds_no_marker_str:         .text "No Save Disk marker found." ; .byte 0
@@ -551,6 +555,6 @@ uds_disk_status_str:       .text "Disk code $" ; .byte 0
 #if hal_storage_disk_setup_detail_command_status || hal_storage_disk_setup_detail_status_phase
 uds_phase_str:             .text " phase $" ; .byte 0
 #endif
-uds_device_prompt_str:     .text "Save drive (8-30): " ; .byte 0
+uds_device_prompt_str:     .text "Save drive (8-11): " ; .byte 0
 uds_no_device_str:         .text "Drive not found." ; .byte 0
 uds_program_disk_str:      .text "Program disk cannot hold saves." ; .byte 0

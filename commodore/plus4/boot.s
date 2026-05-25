@@ -16,8 +16,10 @@ basic_stub_end:
 .const LOAD_USE_HEADER = 1
 .const TED_BG          = $ff15
 .const TED_BORDER      = $ff19
+.const CHAIN_STUB_ADDR = $0500
 
 boot_entry:
+    jsr capture_boot_device
     lda #0
     sta TED_BG
     sta TED_BORDER
@@ -27,22 +29,16 @@ boot_entry:
     jsr print_loading_msg
 
 load_main_program:
-    lda #game_filename_end - game_filename
-    ldx #<game_filename
-    ldy #>game_filename
-    jsr $ffbd
-    lda #LOGICAL_FILE
-    ldx #DEVICE_NUM
-    ldy #LOAD_USE_HEADER
-    jsr $ffba
-
     ldx #chain_stub_end - chain_stub - 1
 !copy_stub:
     lda chain_stub,x
-    sta $0340,x
+    sta CHAIN_STUB_ADDR,x
     dex
     bpl !copy_stub-
-    jmp $0340
+
+    lda boot_device
+    sta chain_boot_device
+    jmp chain_entry
 
 print_loading_msg:
     lda #$05            // White color code
@@ -61,11 +57,33 @@ print_loading_msg:
 !done:
     rts
 
+capture_boot_device:
+    lda $ae                 // Plus/4 KERNAL current device from LOAD/RUN path
+    cmp #8
+    bcc !done+
+    cmp #31
+    bcs !done+
+    sta boot_device
+!done:
+    rts
+
 loading_msg:
     .text "LOADING MORIA8..."
     .byte 0
 
 chain_stub:
+.pseudopc CHAIN_STUB_ADDR {
+chain_entry:
+    lda #chain_game_filename_end - chain_game_filename
+    ldx #<chain_game_filename
+    ldy #>chain_game_filename
+    jsr $ffbd
+
+    lda #LOGICAL_FILE
+    ldx chain_boot_device
+    ldy #LOAD_USE_HEADER
+    jsr $ffba
+
     lda #0
     jsr $ffd5
     bcs !err+
@@ -75,19 +93,27 @@ chain_stub:
     jsr $ffd2
     ldx #0
 !msg:
-    lda load_error_msg,x
+    lda chain_load_error_msg,x
     beq !spin+
     jsr $ffd2
     inx
     bne !msg-
 !spin:
     jmp !spin-
-chain_stub_end:
-
-game_filename:
+chain_game_filename:
     .byte $4d,$4f,$52,$49,$41,$34          // "MORIA4"
-game_filename_end:
+chain_game_filename_end:
 
-load_error_msg:
+chain_boot_device:
+    .byte DEVICE_NUM
+
+chain_load_error_msg:
     .byte $4c,$4f,$41,$44,$20,$45,$52,$52,$4f,$52
     .byte 0
+}
+chain_stub_end:
+
+boot_device:
+    .byte DEVICE_NUM
+
+.assert "Plus/4 boot chain stub stays in low RAM", CHAIN_STUB_ADDR + (chain_stub_end - chain_stub) <= $0800, true

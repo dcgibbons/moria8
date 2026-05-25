@@ -11,7 +11,7 @@
 .const hal_storage_marker_sec_read = 2
 .const hal_storage_marker_sec_write = 2
 .const hal_storage_program_file_num = 7
-.const hal_storage_disk_setup_supports_other_drive = 0
+.const hal_storage_disk_setup_supports_other_drive = 1
 .const hal_storage_disk_setup_detail_command_status = 0
 .const hal_storage_disk_setup_detail_dos_drive = 1
 .const hal_storage_disk_setup_detail_status_phase = 1
@@ -30,6 +30,7 @@
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_RETURN_AFTER_INIT
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_PLUS4_BANK_RAM
 #define HAL_STORAGE_SAVE_MAGIC_ALT_SIGNATURE
 #define HAL_STORAGE_SAVE_CONFIRM_OVERWRITE_PROBE

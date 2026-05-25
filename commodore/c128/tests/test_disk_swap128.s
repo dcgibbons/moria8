@@ -107,6 +107,7 @@ w_close_calls:           .byte 0
 w_clrchn_calls:          .byte 0
 marker_write_count:      .byte 0
 marker_read_count:       .byte 0
+marker_read_pos:         .byte 0
 command_read_count:      .byte 0
 marker_readst_override:  .byte 0
 marker_bad_byte:         .byte 0
@@ -120,6 +121,7 @@ ui_action_log:           .fill 8, 0
 ui_menu_result:          .byte 3      // DISK_UI_RES_TWO_DRIVE
 ui_confirm_result:       .byte 5      // DISK_UI_RES_YES
 ui_init_result:          .byte 5      // DISK_UI_RES_YES
+ui_device_result:        .byte 8
 
 press_key_str:
     .text "PRESS ANY KEY" ; .byte 0
@@ -213,9 +215,18 @@ reset_harness_state:
     sta state_start,x
     dex
     bpl !clr-
+    lda #$30
+    sta cmd_status_bytes
+    lda #$31
+    sta cmd_status_bytes + 1
+    lda #$30
+    sta cmd_status_bytes + 2
+    sta cmd_status_bytes + 3
+    sta cmd_status_bytes + 4
+    sta cmd_status_bytes + 5
     rts
 .label state_start = screen_put_string_calls
-.label state_end = ui_init_result + 1
+.label state_end = ui_device_result + 1
 
 input_get_modal_dismiss_key:
     inc input_modal_calls
@@ -294,8 +305,11 @@ w_open:
     cmp #CMD_CHANNEL
     bne !check_marker+
     lda command_open_fail
-    beq !ok+
+    beq !command_ok+
     sec
+    rts
+!command_ok:
+    clc
     rts
 !check_marker:
     clc
@@ -318,7 +332,7 @@ w_readst:
     beq !marker_default+
     rts
 !marker_default:
-    lda marker_read_count
+    lda marker_read_pos
     cmp #DISK_MARKER_MAGIC_LEN
     bne !ok+
     lda #$40
@@ -329,6 +343,11 @@ w_readst:
 
 w_chkin:
     stx w_chkin_lfn_seen
+    cpx #DISK_MARKER_FILE_NUM
+    bne !done+
+    lda #0
+    sta marker_read_pos
+!done:
     clc
     rts
 
@@ -346,7 +365,7 @@ w_chrin:
     clc
     rts
 !marker:
-    ldx marker_read_count
+    ldx marker_read_pos
     lda disk_marker_magic,x
     ldx marker_missing_until_write
     beq !check_bad+
@@ -359,6 +378,7 @@ w_chrin:
     beq !marker_ok+
     eor #$ff
 !marker_ok:
+    inc marker_read_pos
     inc marker_read_count
     ldx #$a5
     clc
@@ -417,6 +437,12 @@ tramp_disk_setup_ui_action:
     cmp #DISK_UI_ACT_MENU
     bne !not_menu+
     lda ui_menu_result
+    cmp #DISK_UI_RES_TWO_DRIVE
+    bne !menu_store+
+    lda #DISK_UI_RES_OK
+    sta ui_menu_result
+    lda #DISK_UI_RES_TWO_DRIVE
+!menu_store:
     sta disk_ui_result
     clc
     rts
@@ -428,6 +454,15 @@ tramp_disk_setup_ui_action:
     clc
     rts
 !not_confirm:
+    cmp #DISK_UI_ACT_ENTER_DEVICE
+    bne !not_enter_device+
+    lda ui_device_result
+    sta disk_ui_value
+    lda #DISK_UI_RES_OK
+    sta disk_ui_result
+    clc
+    rts
+!not_enter_device:
     cmp #DISK_UI_ACT_INIT_PROMPT
     bne !not_init+
     lda ui_init_result
@@ -454,6 +489,8 @@ test_start:
     sta save_device
     lda #1
     sta disk_setup_done
+    lda #8
+    sta $ba
     jsr disk_reset_session_state
     lda disk_mode
     beq *+5
@@ -474,6 +511,8 @@ test_start:
     jsr reset_harness_state
     lda #1
     sta disk_mode
+    lda #C128_MEDIA_PROGRAM
+    sta c128_media_state
     jsr disk_prompt_game
     lda game_prompt_count
     beq *+5
@@ -539,6 +578,8 @@ test_start:
     sta disk_setup_done
     lda #9
     sta save_device
+    lda #C128_MEDIA_SAVE
+    sta c128_media_state
     jsr disk_prompt_save
     lda screen_put_string_calls
     beq *+5
@@ -1012,13 +1053,16 @@ test_start:
     beq *+5
     jmp test_fail
 
-    // Test 13: Disk Setup's initial drive-9 confirmation path initializes a
-    // missing marker and commits drive 9 as the save device.
+    // Test 13: Disk Setup can select drive 9 for saves when the program is
+    // on drive 8, then initialize the missing save marker after Done.
     jsr reset_harness_state
     lda #1
     sta marker_missing_until_write
+    lda #DISK_UI_RES_TWO_DRIVE
+    sta ui_menu_result
+    lda #9
+    sta ui_device_result
     lda #DISK_UI_RES_YES
-    sta ui_confirm_result
     sta ui_init_result
     sec
     jsr disk_setup_run
@@ -1044,31 +1088,41 @@ test_start:
     beq *+5
     jmp test_fail
     lda ui_action_count
-    cmp #3
+    cmp #5
     beq *+5
     jmp test_fail
     lda ui_action_log
-    cmp #DISK_UI_ACT_CONFIRM_DRIVE9
+    cmp #DISK_UI_ACT_MENU
     beq *+5
     jmp test_fail
     lda ui_action_log + 1
-    cmp #DISK_UI_ACT_INSERT_DISK
+    cmp #DISK_UI_ACT_ENTER_DEVICE
     beq *+5
     jmp test_fail
     lda ui_action_log + 2
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 4
     cmp #DISK_UI_ACT_INIT_PROMPT
     beq *+5
     jmp test_fail
 
-    // Test 14: if the initial drive-9 prompt is declined, the menu path can
-    // still choose the separate save drive and initialize the marker.
+    // Test 14: the selected save drive can be any supported device 8-11,
+    // independent of the program drive.
     jsr reset_harness_state
+    lda #11
+    sta program_device
     lda #1
     sta marker_missing_until_write
-    lda #DISK_UI_RES_NO
-    sta ui_confirm_result
     lda #DISK_UI_RES_TWO_DRIVE
     sta ui_menu_result
+    lda #10
+    sta ui_device_result
     lda #DISK_UI_RES_YES
     sta ui_init_result
     sec
@@ -1084,7 +1138,7 @@ test_start:
     beq *+5
     jmp test_fail
     lda save_device
-    cmp #9
+    cmp #10
     beq *+5
     jmp test_fail
     lda marker_write_count
@@ -1095,22 +1149,84 @@ test_start:
     beq *+5
     jmp test_fail
     lda ui_action_count
-    cmp #4
+    cmp #5
     beq *+5
     jmp test_fail
     lda ui_action_log
-    cmp #DISK_UI_ACT_CONFIRM_DRIVE9
-    beq *+5
-    jmp test_fail
-    lda ui_action_log + 1
     cmp #DISK_UI_ACT_MENU
     beq *+5
     jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_ENTER_DEVICE
+    beq *+5
+    jmp test_fail
     lda ui_action_log + 2
-    cmp #DISK_UI_ACT_INSERT_DISK
+    cmp #DISK_UI_ACT_MENU
     beq *+5
     jmp test_fail
     lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 4
+    cmp #DISK_UI_ACT_INIT_PROMPT
+    beq *+5
+    jmp test_fail
+
+    // Test 15: selecting the same save drive as the program drive commits
+    // one-drive mode.
+    jsr reset_harness_state
+    lda #11
+    sta program_device
+    lda #1
+    sta marker_missing_until_write
+    lda #DISK_UI_RES_TWO_DRIVE
+    sta ui_menu_result
+    lda #11
+    sta ui_device_result
+    lda #DISK_UI_RES_YES
+    sta ui_init_result
+    sec
+    jsr disk_setup_run
+    bcc *+5
+    jmp test_fail
+    lda disk_setup_done
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda disk_mode
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda save_device
+    cmp #11
+    beq *+5
+    jmp test_fail
+    lda marker_write_count
+    cmp #DISK_MARKER_MAGIC_LEN
+    beq *+5
+    jmp test_fail
+    lda ui_action_count
+    cmp #5
+    beq *+5
+    jmp test_fail
+    lda ui_action_log
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 1
+    cmp #DISK_UI_ACT_ENTER_DEVICE
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 2
+    cmp #DISK_UI_ACT_MENU
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 3
+    cmp #DISK_UI_ACT_INSERT_DISK
+    beq *+5
+    jmp test_fail
+    lda ui_action_log + 4
     cmp #DISK_UI_ACT_INIT_PROMPT
     beq *+5
     jmp test_fail

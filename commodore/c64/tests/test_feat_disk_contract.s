@@ -7,7 +7,7 @@ test_bootstrap:
     jmp test_start
 
 test_exit_trampoline:
-    ldx #2
+    ldx #3
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -26,7 +26,7 @@ test_exit_trampoline:
 .const STATUS_ROW = 21
 .const COL_WHITE = $01
 .const hal_storage_cmd_channel = 15
-.const hal_storage_disk_setup_supports_other_drive = 0
+.const hal_storage_disk_setup_supports_other_drive = 1
 .const hal_storage_disk_setup_detail_dos_drive = 0
 .const hal_storage_disk_setup_marker_write_status_required = 0
 .const hal_storage_disk_setup_done_value = 2
@@ -72,7 +72,7 @@ press_key_str:
 
 #import "../../common/runtime_ui_strings.s"
 
-tc_results: .fill 3, $ff
+tc_results: .fill 4, $ff
 
 reu_overlays_stashed: .byte 0
 ti_calls:            .byte 0
@@ -84,6 +84,8 @@ ui_seen_p:           .byte 0
 sp_before:           .byte 0
 sp_after_ui:         .byte 0
 sp_after_disk:       .byte 0
+ui_menu_result:      .byte 5      // DISK_UI_RES_YES
+ui_device_result:    .byte 8
 zp_save_ptr0:        .byte 0
 zp_save_ptr0_hi:     .byte 0
 zp_save_cursor_row:  .byte 0
@@ -160,6 +162,7 @@ c64_disk_marker_present:
 #define HAL_STORAGE_SWAP_PROMPT_SIMPLE_KEY
 #define HAL_STORAGE_SWAP_PROMPT_CPU_PORT_RESTORE
 #define HAL_STORAGE_MARKER_PRESENT_DIRECT
+#define HAL_STORAGE_DISK_SETUP_OTHER_DRIVE
 #define HAL_STORAGE_DISK_SETUP_UI_CPU_PORT
 
 ui_disk_setup_dispatch:
@@ -168,7 +171,26 @@ ui_disk_setup_dispatch:
     php
     pla
     sta ui_seen_p
-    lda #5
+    lda disk_ui_action
+    cmp #0                    // DISK_UI_ACT_MENU
+    bne !not_menu+
+    lda ui_menu_result
+    cmp #DISK_UI_RES_TWO_DRIVE
+    bne !store+
+    lda #DISK_UI_RES_OK
+    sta ui_menu_result
+    lda #DISK_UI_RES_TWO_DRIVE
+    bne !store+
+!not_menu:
+    cmp #DISK_UI_ACT_ENTER_DEVICE
+    bne !yes+
+    lda ui_device_result
+    sta disk_ui_value
+    lda #DISK_UI_RES_OK
+    bne !store+
+!yes:
+    lda #5                    // DISK_UI_RES_YES
+!store:
     sta disk_ui_result
     rts
 
@@ -253,7 +275,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #2
+    ldx #3
     lda #$ff
 !init:
     sta tc_results,x
@@ -376,5 +398,28 @@ test_start:
     lda #0
 !t3_store:
     sta tc_results + 2
+
+    // Test 4: setup can select an explicit save drive independent of the
+    // program drive.
+    lda #11
+    sta program_device
+    lda #10
+    sta ui_device_result
+    lda #DISK_UI_RES_TWO_DRIVE
+    sta ui_menu_result
+    jsr disk_setup_run
+    bcs !t4_fail+
+    lda save_device
+    cmp #10
+    bne !t4_fail+
+    lda disk_mode
+    cmp #2
+    bne !t4_fail+
+    lda #1
+    bne !t4_store+
+!t4_fail:
+    lda #0
+!t4_store:
+    sta tc_results + 3
 
     jmp test_exit_trampoline

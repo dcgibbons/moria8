@@ -79,7 +79,11 @@ hal_asset_load_prg_header:
     php
     jsr $ffbd               // SETNAM
     lda #2
+#if C64_UNIT_TEST
     ldx #8
+#else
+    ldx program_device
+#endif
     ldy #1                  // Use PRG header address
     jsr $ffba               // SETLFS
     lda #0
@@ -110,7 +114,11 @@ hal_asset_load_title:
     ldy #>hal_storage_title_name
     jsr $ffbd               // SETNAM
     lda #2
+#if C64_UNIT_TEST
     ldx #8
+#else
+    ldx program_device
+#endif
     ldy #0                  // Use caller destination at MAP_BASE
     jsr $ffba               // SETLFS
     lda #0

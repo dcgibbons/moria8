@@ -1470,7 +1470,7 @@ init_load_banked:
     ldy #>plus4_banked_fname
     jsr plus4_kernal_setnam
     lda #2
-    ldx #SAVE_DEVICE
+    ldx program_device
     ldy #1                      // Use PRG header address ($F000)
     jsr plus4_kernal_setlfs
     lda #0

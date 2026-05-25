@@ -335,7 +335,7 @@ c128_preload_asset_load:
     jsr w_setnam
 
     lda #2
-    ldx #8
+    ldx program_device
     ldy #1
 #if C128_TEST_OVERLAY_LOAD_FAIL_TRAP
     sta c128_preload_diag_a
