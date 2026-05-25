@@ -35,36 +35,8 @@ throw_item:
     // 1. Prompt for item
     lda #$ff
     ldx #HSTR_TW_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !tw_have_choices+
-    clc
-    rts
-!tw_have_choices:
-
-    jsr input_prepare_followup_key
-
-    jsr hal_input_get_key
-
-    // '?' shows inventory (all items) and re-prompts
-    cmp #$3f
-    bne !tw_not_inv+
-    lda #$ff                    // Filter: show all items
-    jsr show_inv_and_select
-!tw_not_inv:
-
-    // ESC ($03) or space ($20) → cancel
-    cmp #$03
-    beq !tw_cancel+
-    cmp #$20
-    beq !tw_cancel+
-
-    jsr piw_pick_filtered_inv_key
+    jsr piw_select_filtered_inv
     bcs !tw_slot_ok+
-
-!tw_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
     rts
 
 !tw_slot_ok:

@@ -1940,8 +1940,8 @@ check_static_contract "load_resume_suppresses_tier_loading_message_contract" "..
     "load_resume_game:|||jsr tier_invalidate_state|||jsr tier_restore_after_overlay"
 check_static_contract "learn_spell_followup_contract" "../common/player_gain_spell_impl.s" \
     "item_gain_spell:|||jsr input_prepare_modal_dismiss_key|||jsr spell_list_display|||jsr hal_input_get_key|||jsr pm_pick_visible_spell"
-check_static_contract "book_prompt_fresh_key_contract" "../common/player_magic.s" \
-    "pm_select_book:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_modal_dismiss_key|||jsr hal_input_get_key|||jsr piw_pick_filtered_inv_key"
+check_static_contract "book_prompt_fresh_key_contract" "../common/player_item_select.s" \
+    "piw_select_filtered_inv:|||jsr piw_prompt_filtered_inv|||jsr input_prepare_followup_key|||jsr hal_input_get_key|||piw_select_filtered_inv_key:|||jsr piw_pick_filtered_inv_key"
 check_static_contract "c64_wait_release_physical_key_contract" "input.s" \
     "input_wait_release:|||!iwr_wait:|||lda KBDBUF_COUNT|||bne !iwr_drain-|||jsr input_run_key_held|||bne !iwr_wait-|||lda KBDBUF_COUNT"
 check_static_contract "c64_charset_switch_locked_before_irq_input_contract" "input.s" \

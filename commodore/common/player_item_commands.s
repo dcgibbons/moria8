@@ -11,33 +11,9 @@
 item_wear:
     lda #$fe
     ldx #HSTR_PIW_WEAR_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !iw_have_choices+
-    clc
-    rts
-!iw_have_choices:
-    jsr input_prepare_followup_key
-
-    // Wait for keypress
-    jsr hal_input_get_key
-
-    // '?' shows inventory (wearable items only) and re-prompts
-    cmp #$3f
-    bne !iw_not_inv+
-    lda #$fe                    // Filter: wearable items
-    jsr show_inv_and_select
-!iw_not_inv:
-
-    // Check for ESC ($03) or space ($20) -> cancel
-    cmp #$03
-    beq !iw_cancel_tramp+
-    cmp #$20
-    beq !iw_cancel_tramp+
-
-    jsr piw_pick_filtered_inv_key
+    jsr piw_select_filtered_inv
     bcs !iw_in_range+
-!iw_cancel_tramp:
-    jmp !iw_cancel+
+    rts
 !iw_in_range:
     stx piw_slot
 
@@ -169,12 +145,6 @@ item_wear:
     jsr hal_sound_play
 
     sec                         // Turn consumed
-    rts
-
-!iw_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
     rts
 
 // item_takeoff — Remove an equipped item back to carried inventory
@@ -456,33 +426,9 @@ item_eat:
 item_quaff:
     lda #ICAT_POTION
     ldx #HSTR_PIQ_QUAFF_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !iq_have_choices+
-    clc
-    rts
-!iq_have_choices:
-    jsr input_prepare_followup_key
-
-    // Wait for keypress
-    jsr hal_input_get_key
-
-    // '?' shows inventory (potions only) and re-prompts
-    cmp #$3f
-    bne !iq_not_inv+
-    lda #ICAT_POTION
-    jsr show_inv_and_select
-!iq_not_inv:
-
-    // Check for ESC ($03) or space ($20) -> cancel
-    cmp #$03
-    beq !iq_cancel_tramp+
-    cmp #$20
-    beq !iq_cancel_tramp+
-
-    jsr piw_pick_filtered_inv_key
+    jsr piw_select_filtered_inv
     bcs !iq_in_range+
-!iq_cancel_tramp:
-    jmp iq_cancel
+    rts
 !iq_in_range:
     stx piw_slot
     sta piw_item_id
@@ -721,10 +667,4 @@ iq_effect_generic:
     ldx #HSTR_PIQ_NOTHING
     jsr huff_print_msg
     sec
-    rts
-
-iq_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
     rts

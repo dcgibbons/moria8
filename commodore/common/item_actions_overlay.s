@@ -6,6 +6,8 @@
 // below the overlay window. Unit tests still import them directly through
 // player_items.s unless the platform build defines ITEM_ACTIONS_OVERLAY_EXTERNAL.
 
+#import "player_item_select.s"
+
 #if ITEM_ACTIONS_EARTHQUAKE_OWNER
     #import "player_magic_earthquake.s"
 #endif
@@ -38,6 +40,16 @@ item_action_get_key:
 iagk_key: .byte 0
 #endif
 
+item_action_select_filtered_inv:
+    jsr piw_prompt_filtered_inv
+    bcs !ias_have_choices+
+    clc
+    rts
+!ias_have_choices:
+    jsr input_prepare_followup_key
+    jsr item_action_get_key
+    jmp piw_select_filtered_inv_key
+
 // ============================================================
 // item_read_scroll — Read a scroll from inventory
 // Prompts "READ WHICH SCROLL (A-V)?", waits for keypress.
@@ -55,30 +67,9 @@ item_read_scroll:
 !irs_can_see:
     lda #ICAT_SCROLL
     ldx #HSTR_PIQ_READ_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !irs_have_choices+
-    clc
-    rts
-!irs_have_choices:
-    jsr input_prepare_followup_key
-
-    jsr item_action_get_key
-
-    cmp #$3f
-    bne !irs_not_inv+
-    lda #ICAT_SCROLL
-    jsr show_inv_and_select
-!irs_not_inv:
-
-    jsr input_is_modal_escape_key
-    beq !irs_cancel_tramp+
-    cmp #$20
-    beq !irs_cancel_tramp+
-
-    jsr piw_pick_filtered_inv_key
+    jsr item_action_select_filtered_inv
     bcs !irs_in_range+
-!irs_cancel_tramp:
-    jmp irs_cancel
+    rts
 !irs_in_range:
     stx piw_slot
     sta piw_item_id
@@ -305,39 +296,15 @@ irs_effect_generic:
     sec
     rts
 
-irs_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
-    rts
-
 // ============================================================
 // item_aim_wand — Aim a wand from inventory
 // ============================================================
 item_aim_wand:
     lda #ICAT_WAND
     ldx #HSTR_PIW_AIM_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !iaw_have_choices+
-    clc
-    rts
-!iaw_have_choices:
-    jsr input_prepare_followup_key
-    jsr item_action_get_key
-    cmp #$3f
-    bne !iaw_not_inv+
-    lda #ICAT_WAND
-    jsr show_inv_and_select
-!iaw_not_inv:
-    jsr input_is_modal_escape_key
-    beq !iaw_cancel_tramp+
-    cmp #$20
-    beq !iaw_cancel_tramp+
-
-    jsr piw_pick_filtered_inv_key
+    jsr item_action_select_filtered_inv
     bcs !iaw_in_range+
-!iaw_cancel_tramp:
-    jmp !iaw_cancel+
+    rts
 !iaw_in_range:
     stx piw_slot
     sta piw_item_id
@@ -414,39 +381,15 @@ item_aim_wand:
     sec
     rts
 
-!iaw_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
-    rts
-
 // ============================================================
 // item_use_staff — Use a staff from inventory
 // ============================================================
 item_use_staff:
     lda #ICAT_STAFF
     ldx #HSTR_PIW_USE_PROMPT
-    jsr piw_prompt_filtered_inv
-    bcs !ius_have_choices+
-    clc
-    rts
-!ius_have_choices:
-    jsr input_prepare_followup_key
-    jsr item_action_get_key
-    cmp #$3f
-    bne !ius_not_inv+
-    lda #ICAT_STAFF
-    jsr show_inv_and_select
-!ius_not_inv:
-    jsr input_is_modal_escape_key
-    beq !ius_cancel_tramp+
-    cmp #$20
-    beq !ius_cancel_tramp+
-
-    jsr piw_pick_filtered_inv_key
+    jsr item_action_select_filtered_inv
     bcs !ius_in_range+
-!ius_cancel_tramp:
-    jmp !ius_cancel+
+    rts
 !ius_in_range:
     stx piw_slot
     sta piw_item_id
@@ -508,12 +451,6 @@ item_use_staff:
     lda zp_math_a
     jsr pmx_heal_and_report
     sec
-    rts
-
-!ius_cancel:
-    ldx #HSTR_PIW_NEVERMIND
-    jsr huff_print_msg
-    clc
     rts
 
 // ============================================================

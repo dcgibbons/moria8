@@ -5,6 +5,7 @@
 
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
+#import "player_item_select.s"
 
 .encoding "screencode_mixed"
 
@@ -147,7 +148,6 @@ player_cast_spell:
 #if C64_TEST_SCRIPTED_DUNGEON_SPELL
     jmp c64_test_spell_fail_cancel_sym
 #endif
-    jsr msg_clear
     clc
     rts
 
@@ -255,7 +255,6 @@ player_pray:
 #if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
     jmp c64_test_spell_fail_cancel_sym
 #endif
-    jsr msg_clear
     clc
     rts
 
@@ -328,24 +327,8 @@ pm_select_book:
     lda #PIW_FILTER_MAGE_BOOK + 1
     sec
     sbc pm_spell_type
-    jsr piw_prompt_filtered_inv
-    bcc !pm_book_cancel+
-!pm_have_books:
-    jsr input_prepare_modal_dismiss_key
-    jsr hal_input_get_key
-    cmp #$3f
-    bne !pm_not_inv+
-    lda piw_filter
-    jsr show_inv_and_select
-!pm_not_inv:
-    cmp #$20
-    beq !pm_book_cancel+
-    jsr input_is_modal_escape_key
-    beq !pm_book_cancel+
-    jsr piw_pick_filtered_inv_key
+    jsr piw_select_filtered_inv
     bcs !pm_book_slot_ok+
-!pm_book_cancel:
-    clc
     rts
 !pm_book_slot_ok:
     jsr book_find_index
@@ -481,11 +464,9 @@ pm_prompt_visible_spell_choice:
     cmp #$3f
     beq !pm_psc_show_list+
     jsr pm_pick_visible_spell
-    bcc !pm_psc_done+
+    bcc !pm_psc_cancel+
     jsr msg_clear
     sec
-    rts
-!pm_psc_done:
     rts
 
 !pm_psc_show_list:
@@ -510,6 +491,8 @@ pm_prompt_visible_spell_choice:
     sec
     rts
 !pm_psc_cancel:
+    ldx #HSTR_PIW_NEVERMIND
+    jsr huff_print_msg
     clc
     rts
 

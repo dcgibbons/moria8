@@ -10,6 +10,7 @@
 #import "ui_restore.s"
 #import "input_ui_helpers.s"
 #import "player_heal_feedback.s"
+#import "player_item_select.s"
 
 // ============================================================
 // Constants
