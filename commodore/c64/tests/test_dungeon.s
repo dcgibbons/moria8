@@ -1410,19 +1410,19 @@ test_start:
 !t23_done:
 
     // ==========================================
-    // Test 24: trap_check_at_player sets carry on trap
-    // Place a trap at player position, verify carry is set.
+    // Test 24: search reveals a trap without disarming it; stepping on that
+    // revealed trap sets carry and removes it from the trap table.
     // ==========================================
 
     jsr fill_map_rock
 
-    // Set up a floor tile at player position
+    // Set up the player adjacent to a hidden trap.
     lda #20
     sta zp_player_x
-    lda #20
+    lda #19
     sta zp_player_y
 
-    // Write floor tile at player position
+    // Write floor tile at trap position
     ldx #20
     lda map_row_lo,x
     sta zp_ptr0
@@ -1432,7 +1432,7 @@ test_start:
     lda #TILE_FLOOR
     sta (zp_ptr0),y
 
-    // Place trap at player's position in the trap table
+    // Place trap in the trap table.
     lda #1
     sta trap_count
     lda #20
@@ -1440,6 +1440,28 @@ test_start:
     sta trap_y
     lda #TRAP_OPEN_PIT
     sta trap_type
+
+    lda #0
+    sta zp_msg_flags
+    lda #100
+    jsr search_scan_adjacent_silent
+    bcc !t24_fail+
+    lda trap_count
+    cmp #1
+    bne !t24_fail+
+    ldx #20
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #20
+    lda (zp_ptr0),y
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
+    bne !t24_fail+
+
+    lda #20
+    sta zp_player_y
 
     // Set up enough player state so trap_apply_damage won't crash
     lda #50
@@ -1470,8 +1492,15 @@ test_start:
 !t24_no_carry:
     sta t24_carry_result
 
-    // Now write test 24 result
     lda t24_carry_result
+    beq !t24_fail+
+    lda trap_count
+    bne !t24_fail+
+    lda #$01
+    jmp !t24_store+
+!t24_fail:
+    lda #$00
+!t24_store:
     sta tc_results+23
 
     // ==========================================

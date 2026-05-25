@@ -907,6 +907,12 @@ search_scan_adjacent_silent:
     cmp df_target_y
     bne !ds_trap_next+
 
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
+    beq !ds_trap_next+
+
     txa
     pha                     // Save trap index on stack
 
@@ -933,15 +939,6 @@ search_scan_adjacent_silent:
     ora #TILE_TRAP
     ora #FLAG_VISITED
     :MapWrite_ptr0_y()
-
-    dec trap_count
-    ldy trap_count
-    lda trap_x,y
-    sta trap_x,x
-    lda trap_y,y
-    sta trap_y,x
-    lda trap_type,y
-    sta trap_type,x
 
     ldx #HSTR_DF_FOUND_TRAP
     jsr huff_print_msg
