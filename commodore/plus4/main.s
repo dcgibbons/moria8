@@ -553,14 +553,33 @@ title_menu_loop:
     lda disk_setup_done
     bne !load_now+
     jsr tramp_disk_setup
-    bcs title_enter_menu
+    bcs plus4_title_redraw_cached
 !load_now:
     jmp title_load_game
 !not_l:
     cmp #$44                // 'D' — disk setup
     bne title_menu_loop
     jsr tramp_disk_setup
-    jmp title_enter_menu
+    jmp plus4_title_redraw_cached
+
+plus4_title_redraw_cached:
+    lda plus4_title_art_cached
+    beq title_enter_menu
+    lda #COL_LGREY
+    sta zp_text_color
+    jsr screen_clear
+    jsr title_render_data
+    lda #STATUS_ROW
+    jsr screen_clear_row
+    lda #STATUS_ROW + 1
+    jsr screen_clear_row
+    lda #STATUS_ROW + 2
+    jsr screen_clear_row
+    jsr msg_init
+    jsr title_show_sysinfo
+    jsr title_draw_menu
+    jsr plus4_title_clear_lower_rows
+    jmp title_menu_loop
 
 title_draw_menu:
     // --- Show title menu: N)EW  L)OAD  D)ISK SETUP ---
@@ -592,6 +611,7 @@ plus4_title_clear_lower_rows:
     rts
 
 plus4_title_clear_row: .byte 0
+plus4_title_art_cached: .byte 0
 
 #if PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT
 plus4_test_overlay_load_all:

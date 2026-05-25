@@ -9,15 +9,12 @@
 .encoding "screencode_mixed"
 
 .macro UDSPrint(row, col, label) {
-    lda #row
-    sta zp_cursor_row
-    lda #col
-    sta zp_cursor_col
+    ldx #row
+    ldy #col
     lda #<label
     sta zp_ptr0
     lda #>label
-    sta zp_ptr0_hi
-    jsr hal_screen_put_string
+    jsr uds_print_loaded
 }
 
 uds_digits: .byte 0, 0
@@ -90,6 +87,14 @@ ui_disk_setup_dispatch:
 #endif
 !dispatch_done:
     rts
+
+// Complete a compact UDSPrint call.
+// Input: X = row, Y = col, zp_ptr0 = string lo, A = string hi.
+uds_print_loaded:
+    sta zp_ptr0_hi
+    stx zp_cursor_row
+    sty zp_cursor_col
+    jmp hal_screen_put_string
 
 uds_menu_only:
     jsr ui_clear_full_screen_safe

@@ -31,6 +31,10 @@ title_load_and_draw:
 
     // Render the loaded art data
     jsr title_render_data
+#if PLUS4
+    lda #1
+    sta plus4_title_art_cached
+#endif
     rts
 #endif
 
