@@ -248,6 +248,7 @@ input_get_key:
     cli                     // Enable IRQ — keyboard scan needs it
 !igk_poll:
     inc zp_entropy
+    jsr input_sound_update
     lda KBDBUF_COUNT        // Keyboard buffer count (filled by IRQ handler)
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
@@ -302,6 +303,7 @@ input_wait_release:
     // Drain any already-buffered keypresses.
 !iwr_drain:
     inc zp_entropy
+    jsr input_sound_update
     lda KBDBUF_COUNT
     beq !iwr_wait+
     jsr KERNAL_GETIN
@@ -310,6 +312,7 @@ input_wait_release:
     // Require two consecutive empty-buffer polls for stability.
 !iwr_wait:
     inc zp_entropy
+    jsr input_sound_update
     lda KBDBUF_COUNT
     bne !iwr_drain-
     jsr input_run_key_held
@@ -329,6 +332,13 @@ input_wait_release:
 #endif
 #endif
 #endif
+#endif
+
+input_sound_update:
+#if C64_PRODUCT_SOUND_UPDATE_FROM_INPUT
+    jmp hal_sound_update
+#else
+    rts
 #endif
 
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT

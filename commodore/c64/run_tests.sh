@@ -217,7 +217,7 @@ run_sound_monitor_test() {
         awk -v label="$label" '$3 == "." label { split($2,a,":"); print toupper(a[2]); exit }' "$sym_file"
     }
 
-    local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail hunger_warn hunger_faint)
+    local stages=(init none invalid bump hit miss pickup death levelup spell spell_fail hunger_warn hunger_faint update_gateoff)
 
     {
         local stage addr
@@ -265,6 +265,7 @@ expected = [
     ("spell_fail",["00","0C","00","00","81","06","00"], "0F", "07"),
     ("hunger_warn", ["00","08","00","02","41","27","00"], "0F", "08"),
     ("hunger_faint",["00","05","00","01","41","3A","00"], "0F", "09"),
+    ("update_gateoff",["00","04","00","00","00","08","00"], "0F", "FF"),
 ]
 
 lines = Path(sys.argv[1]).read_text(encoding="latin-1").splitlines()

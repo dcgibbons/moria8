@@ -29,6 +29,7 @@
 .const CF_ATTACK_ONLY = $80
 .const ICAT_WAND = 14
 .const ICAT_STAFF = 15
+.const PIW_FILTER_RECHARGE = $fa
 .const PIW_FILTER_PRAYER_BOOK = $fb
 .const PIW_FILTER_MAGE_BOOK = $fc
 
@@ -61,7 +62,7 @@ player_data:
 
 itn_17:
     .text "Cure Light Wounds" ; .byte 0
-itn_30:
+itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
 #import "../../common/huffman_data.s"
@@ -185,6 +186,7 @@ tunnel_spawn_gold:
 combat_award_xp:
 combat_check_levelup:
 find_random_floor:
+piw_build_visible_inv_cache:
 piw_prompt_filtered_inv:
 piw_pick_filtered_inv_key:
 piw_print_prompt_with_count:

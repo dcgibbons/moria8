@@ -47,7 +47,7 @@ player_data:
 
 itn_17:
     .text "Cure Light Wounds" ; .byte 0
-itn_30:
+itok_detect_monsters:
     .text "Detect Monsters" ; .byte 0
 
 #import "../../common/huffman_data.s"

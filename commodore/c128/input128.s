@@ -138,6 +138,7 @@ input_get_key:
 
 !igk_wait:
     inc zp_entropy
+    jsr input_sound_update
     jsr cia_scan_petscii
     jsr input_process_sample_strict
     beq !igk_wait-          // Wait for key-up -> key-down edge
@@ -179,6 +180,7 @@ input_wait_release:
 #endif
 !iwr_wait:
     inc zp_entropy
+    jsr input_sound_update
     jsr cia_scan_petscii
     jsr input_process_sample
     lda igk_stable
@@ -258,6 +260,13 @@ input_process_sample_strict:
 !ipss_none:
     lda #0
     rts
+
+input_sound_update:
+#if C128_PRODUCT_SOUND_UPDATE_FROM_INPUT
+    jmp hal_sound_update
+#else
+    rts
+#endif
 
 #if C128_TEST_SCRIPTED_INPUT || C128_TEST_SCRIPTED_SPELL || C128_TEST_SCRIPTED_PRAYER || C128_TEST_SCRIPTED_SPELL_CANCEL || C128_TEST_SCRIPTED_BOOK_OVERLAY || C128_TEST_SCRIPTED_SPELL_LIST_OVERLAY || C128_TEST_SCRIPTED_SCROLL_SELECTOR || C128_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C128_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
 c128_test_input_idx: .byte 0

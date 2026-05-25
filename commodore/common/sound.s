@@ -6,10 +6,9 @@
 // (voices 1 and 2 reserved).
 //
 // Each effect sets waveform, ADSR, frequency, then gates on.
-// The SID hardware handles the envelope — no per-frame update needed
-// for simple effects. The timer in zp_snd_timer can be used to
-// gate off after a duration if needed, but most effects use
-// short envelopes that self-release.
+// The software timer gates voice 3 off after the initial sound. Do not rely on
+// sustain=0 alone; keeping the SID gate bit high can leave a residual voice on
+// some SID/emulator combinations.
 
 // SID registers
 .const SID_BASE     = hal_sound_sid_base
@@ -67,6 +66,8 @@ sound_init:
     sta SID_V3_SR
     sta SID_V3_FREQ_LO
     sta SID_V3_FREQ_HI
+    sta zp_snd_timer
+    sta zp_snd_phase
     lda #SFX_NONE
     sta zp_snd_effect
     rts
@@ -140,6 +141,11 @@ sound_play:
     jsr sfx_hunger_warn
 
 !restore:
+    ldx zp_snd_effect
+    lda sfx_duration,x
+    sta zp_snd_timer
+    lda #0
+    sta zp_snd_phase
     pla
     tay
     pla
@@ -150,8 +156,31 @@ sound_play:
 .label hal_sound_play = sound_play
 
 hal_sound_update:
+    lda zp_snd_timer
+    beq !done+
+    dec zp_snd_phase
+    bne !done+
+    dec zp_snd_timer
+    bne !done+
+    lda #0
+    sta SID_V3_CTRL
+    lda #SFX_NONE
+    sta zp_snd_effect
+!done:
     clc
     rts
+
+sfx_duration:
+    .byte 8   // bump
+    .byte 10  // hit
+    .byte 6   // miss
+    .byte 10  // pickup
+    .byte 24  // death
+    .byte 14  // level up
+    .byte 8   // spell
+    .byte 6   // spell fail
+    .byte 10  // hunger warn
+    .byte 16  // hunger faint
 
 // --- Individual effect setups ---
 // Each sets frequency, ADSR, waveform, then gates on.

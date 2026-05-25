@@ -323,6 +323,7 @@ c128_town_dump_buf:
 #import "screen_vdc.s"
 #import "../common/title_sysinfo_banked.s"
 #import "../common/reu_loading_banked.s"
+#define C128_PRODUCT_SOUND_UPDATE_FROM_INPUT
 #import "input128.s"
 
 // Bootstrap — sets up MMU and processor port, jumps to main code

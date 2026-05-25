@@ -120,4 +120,15 @@ sound_stage_hunger_warn:
     lda #SFX_HUNGER_FAINT
     jsr hal_sound_play
 sound_stage_hunger_faint:
+    nop
+
+    jsr reset_sid_window
+    jsr hal_sound_init
+    lda #SFX_BUMP
+    jsr hal_sound_play
+    lda #1
+    sta zp_snd_timer
+    sta zp_snd_phase
+    jsr hal_sound_update
+sound_stage_update_gateoff:
     brk

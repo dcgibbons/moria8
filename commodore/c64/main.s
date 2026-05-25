@@ -256,6 +256,7 @@ tramp_dig_ability:
 #import "screen.s"
 #import "../common/color.s"
 #import "config.s"
+#define C64_PRODUCT_SOUND_UPDATE_FROM_INPUT
 #import "input.s"
 #import "../common/rng.s"
 #import "../common/math.s"
