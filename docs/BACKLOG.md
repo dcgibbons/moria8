@@ -5,6 +5,44 @@ unreleased for release notes.
 
 ## Commodore Ports
 
+### Add the canonical `D <Dir>` disarm command
+
+Moria8 has trap discovery and triggering, and it carries race/class disarm
+statistics, but it does not currently expose the canonical Moria disarm action.
+This is a missing gameplay feature, especially for rogues.
+
+Upstream behavior:
+
+- Umoria and VMS-Moria bind `D <Dir>` to disarm an adjacent floor trap or
+  trapped chest.
+- A floor trap must already be found/visible before it can be disarmed.
+- Success removes the trap, grants experience, and moves the player onto the
+  trap square.
+- Failure can either leave the trap intact or set it off.
+- Chance is based on disarm skill, level, DEX/disarm adjustment, INT
+  adjustment, and penalties for blind/no-light/confused/image states.
+- Rogues are best because their class search/perception/disarm values are high,
+  not because the command is rogue-only.
+
+Required work:
+
+- Add a shared `CMD_DISARM` input contract and map `D`/platform equivalents to
+  it without colliding with existing drop/help flows.
+- Implement `D <Dir>` for visible adjacent floor traps first; chest traps can
+  follow when chest support exists.
+- Consume the existing race/class disarm data instead of inventing a parallel
+  rogue-only rule.
+- Remove a disarmed trap from both the visible map tile and the hidden trap
+  table.
+- On failed disarm, preserve the upstream chance of setting the trap off.
+- Add tests for success, safe failure, triggered failure, no visible trap, and
+  rogue/higher-disarm advantage.
+
+Acceptance target:
+
+- A player can search to reveal a trap, press `D` plus a direction, and either
+  disarm it, fail safely, or set it off using Moria-compatible disarm odds.
+
 ### Audit screen clear and shared-screen ownership paths
 
 The Home screen currently reuses the store renderer, then overrides the store
