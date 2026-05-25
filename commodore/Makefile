@@ -50,6 +50,8 @@ RESERVE_SECTOR = ../tools/reserve_cbm_sector.py
 VERSION_FILE = ../version.json
 LICENSE_FILE = ../data/LICENSE
 SOURCE_OFFER = ../data/SOURCE-OFFER
+LICENSE_DISK_FILE = $(OUT)/license.seq
+SOURCE_OFFER_DISK_FILE = $(OUT)/source-offer.seq
 RUN_FLAGS64  = -autostartprgmode 1 -sound -sounddev coreaudio
 RUN_FLAGS128 = -80col -sound -sounddev coreaudio
 RUN_FLAGSPLUS4 = -autostartprgmode 1 -sound -sounddev coreaudio
@@ -438,9 +440,13 @@ $(C128_BOOTSECT_PRG): $(C128_BOOTSECT_SRC) | ensure-kickass $(OUT128)
 $(EMPTY_PRG): | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 
+$(LICENSE_DISK_FILE): $(LICENSE_FILE) | $(OUT)
+	LC_ALL=C tr '\012' '\015' < $< > $@
 
+$(SOURCE_OFFER_DISK_FILE): $(SOURCE_OFFER) | $(OUT)
+	LC_ALL=C tr '\012' '\015' < $< > $@
 
-$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_OFFER) | $(OUT)
+$(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK64_IMAGE)
 	$(C1541) -format $(DISK64_LABEL) d64 $(DISK64_IMAGE) \
@@ -468,14 +474,14 @@ $(DISK64_IMAGE): $(C64_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FIL
 			-write $(C64_OVL_ITEMS) "64.items" \
 			-write $(C64_OVL_SPELL) "64.spell" \
 			-write $(C64_RUNTIME_BANKED) "64.bank" \
-			-write $(LICENSE_FILE) "license,s" \
-			-write $(SOURCE_OFFER) "source-offer,s"
+			-write $(LICENSE_DISK_FILE) "license,s" \
+			-write $(SOURCE_OFFER_DISK_FILE) "source-offer,s"
 	python3 $(DISKART) $(DISK64_IMAGE) c64
 	mkdir -p c64/out
 	cp -f $(DISK64_IMAGE) c64/out/moria8-c64.d64
 	rm -f $(EMPTY_PRG)
 
-$(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_OFFER) | $(OUT)
+$(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISKPLUS4_IMAGE)
 	$(C1541) -format $(DISKPLUS4_LABEL) d64 $(DISKPLUS4_IMAGE) \
@@ -502,14 +508,14 @@ $(DISKPLUS4_IMAGE): $(PLUS4_BUILD_ARTIFACTS) $(DISKART) $(VERSION_FILE) $(LICENS
 		-write $(PLUS4_OVL_ITEMS) "4.items" \
 		-write $(PLUS4_OVL_SPELL) "4.spell" \
 		-write $(PLUS4_RUNTIME_BANKED) "4.bank" \
-		-write $(LICENSE_FILE) "license,s" \
-		-write $(SOURCE_OFFER) "source-offer,s"
+		-write $(LICENSE_DISK_FILE) "license,s" \
+		-write $(SOURCE_OFFER_DISK_FILE) "source-offer,s"
 	python3 $(DISKART) $(DISKPLUS4_IMAGE) plus4
 	mkdir -p plus4/out
 	cp -f $(DISKPLUS4_IMAGE) plus4/out/moria8-plus4.d64
 	rm -f $(EMPTY_PRG)
 
-$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_FILE) $(SOURCE_OFFER) | $(OUT)
+$(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT_PRG) $(DISKART) $(RESERVE_SECTOR) $(VERSION_FILE) $(LICENSE_DISK_FILE) $(SOURCE_OFFER_DISK_FILE) | $(OUT)
 	printf '\x01\x08' > $(EMPTY_PRG)
 	rm -f $(DISK128_IMAGE)
 	$(C1541) -format $(DISK128_LABEL) d71 $(DISK128_IMAGE)
@@ -546,8 +552,8 @@ $(DISK128_IMAGE): $(C128_BUILD_ARTIFACTS) $(C128_BOOT_CHAIN_PRG) $(C128_BOOTSECT
 			-write $(C128_RESIDENT_PERSIST) "128.persist" \
 			-write $(C128_RESIDENT_PLAY) "128.play" \
 			-write $(C128_RUNTIME_BANKED) "128.bank" \
-			-write $(LICENSE_FILE) "license,s" \
-			-write $(SOURCE_OFFER) "source-offer,s"
+			-write $(LICENSE_DISK_FILE) "license,s" \
+			-write $(SOURCE_OFFER_DISK_FILE) "source-offer,s"
 	python3 $(PATCH_D64) $(DISK128_IMAGE) 1 0 $(C128_BOOTSECT_PRG) 0x0b00
 	python3 $(DISKART) $(DISK128_IMAGE) c128
 	mkdir -p c128/out
