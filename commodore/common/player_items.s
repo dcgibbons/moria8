@@ -47,6 +47,7 @@ piw_return_overlay: .byte 0    // Product overlay to restore after prompt-time m
 
 .const PIW_FILTER_PRAYER_BOOK = $fb
 .const PIW_FILTER_MAGE_BOOK   = $fc
+.const PIW_FILTER_RECHARGE    = $fa
 
 // ============================================================
 // Category -> equipment slot mapping table
@@ -166,6 +167,8 @@ piw_inv_slot_matches_filter:
     beq !piw_inv_match+
     tax
     lda it_category,x
+    cpy #PIW_FILTER_RECHARGE
+    beq !piw_inv_recharge+
     cpy #$fe
     beq !piw_inv_wearable+
     cmp piw_filter
@@ -182,6 +185,13 @@ piw_inv_slot_matches_filter:
     cmp #3
     bcs !piw_inv_fail+
     bcc !piw_inv_match+
+
+!piw_inv_recharge:
+    cmp #ICAT_WAND
+    beq !piw_inv_match+
+    cmp #ICAT_STAFF
+    beq !piw_inv_match+
+    bne !piw_inv_fail+
 
 !piw_inv_wearable:
     tax

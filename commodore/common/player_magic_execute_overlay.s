@@ -22,39 +22,12 @@ pmx_find_stairs_row: .byte 0
 
 #import "player_magic_ball.s"
 
-pmx_build_recharge_cache:
-    lda #0
-    sta piw_visible_count
-    ldx #0
-!pmx_recharge_scan:
-    cpx #MAX_INV_SLOTS
-    bcs !pmx_recharge_done+
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pmx_recharge_next+
-    tay
-    lda it_category,y
-    cmp #ICAT_WAND
-    beq !pmx_recharge_store+
-    cmp #ICAT_STAFF
-    bne !pmx_recharge_next+
-!pmx_recharge_store:
-    txa
-    ldy piw_visible_count
-    sta piw_visible_slots,y
-    iny
-    sty piw_visible_count
-!pmx_recharge_next:
-    inx
-    jmp !pmx_recharge_scan-
-!pmx_recharge_done:
-    lda piw_visible_count
-    rts
-
 pmx_pick_recharge_item:
-    jsr pmx_build_recharge_cache
+    lda #PIW_FILTER_RECHARGE
+    jsr piw_build_visible_inv_cache
     bne !pmx_recharge_have_choices+
-    lda #$ff
+    ldx #HSTR_PIW_NOTHING
+    jsr huff_print_msg
     clc
     rts
 !pmx_recharge_have_choices:
@@ -70,47 +43,7 @@ pmx_pick_recharge_item:
     jsr msg_print
     jsr input_prepare_followup_key
     jsr hal_input_get_key
-    cmp #$3f
-    bne !pmx_recharge_not_inv+
-    lda #$ff
-    jsr show_inv_and_select
-    cmp #$03
-    beq !pmx_recharge_cancel+
-    cmp #$20
-    beq !pmx_recharge_cancel+
-    sec
-    sbc #$41
-    bcc !pmx_recharge_cancel+
-    cmp #MAX_INV_SLOTS
-    bcs !pmx_recharge_cancel+
-    tax
-    lda inv_item_id,x
-    cmp #FI_EMPTY
-    beq !pmx_recharge_cancel+
-    tay
-    lda it_category,y
-    cmp #ICAT_WAND
-    beq !pmx_recharge_ok+
-    cmp #ICAT_STAFF
-    beq !pmx_recharge_ok+
-    lda #0
-    clc
-    rts
-!pmx_recharge_not_inv:
-    cmp #$03
-    beq !pmx_recharge_cancel+
-    cmp #$20
-    beq !pmx_recharge_cancel+
-    jsr piw_pick_filtered_inv_key
-    bcs !pmx_recharge_ok+
-!pmx_recharge_cancel:
-    lda #0
-    clc
-    rts
-!pmx_recharge_ok:
-    lda inv_item_id,x
-    sec
-    rts
+    jmp piw_select_filtered_inv_key
 
 pmx_print_recharged_item:
     lda #0
@@ -539,8 +472,6 @@ eff_recharge_item:
     sta pmx_work_damage
     jsr pmx_pick_recharge_item
     bcs !eri_found+
-    cmp #$ff
-    beq !eri_none+
     rts
 !eri_found:
     stx pmx_target_slot
@@ -582,10 +513,6 @@ eff_recharge_item:
     jsr pmx_print_recharged_item
 !eri_done:
     rts
-!eri_none:
-    ldx #HSTR_PIW_NOTHING
-    jmp huff_print_msg
-
 eff_polymorph_other:
     jsr eff_directional_monster
     bcc !epo_done+

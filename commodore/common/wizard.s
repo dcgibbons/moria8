@@ -403,7 +403,7 @@ wizard_cmd_level_jump:
 
 wizard_prompt_two_digit:
     sta wizard_prompt_max
-    jsr hal_screen_clear
+    jsr ui_help_clear_all
     lda #COL_WHITE
     sta zp_text_color
     lda #5
