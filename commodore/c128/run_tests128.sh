@@ -1081,7 +1081,7 @@ overlay_text = (common / "overlay.s").read_text()
 storage_overlay_text = (Path("hal") / "storage_overlay_names.s").read_text()
 storage_tier_text = (Path("hal") / "storage_tier_names.s").read_text()
 required = {
-    "death/restart prompt exact copy": 'game_over_str:\n    .text "R)eboot S)tart Q)uit" ; .byte 0\ngame_over_str_end:',
+    "death/restart prompt exact copy": 'game_over_str:\n    .text "R)eboot S)tart" ; .byte 0\ngame_over_str_end:',
     "runtime_low_filename/display alias": 'runtime_low_filename:\nruntime_low_display_str:\n    .text "128.RUNTIME"\nruntime_low_filename_end:\n    .byte 0\n.const RUNTIME_LOW_FILENAME_LEN = runtime_low_filename_end - runtime_low_filename',
     "runtime_input null-terminated load filename": 'runtime_input_filename_end:\n    .byte 0\n.const RUNTIME_INPUT_FILENAME_LEN = runtime_input_filename_end - runtime_input_filename',
     "runtime_common null-terminated load filename": 'runtime_common_filename_end:\n    .byte 0\n.const RUNTIME_COMMON_FILENAME_LEN = runtime_common_filename_end - runtime_common_filename',

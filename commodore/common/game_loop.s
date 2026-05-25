@@ -2295,7 +2295,7 @@ player_died:
     jmp !quit+
 
 !quit:
-    jsr game_over_prompt    // R)EBOOT / S)TART OVER / Q)UIT — Q falls through
+    jsr game_over_prompt    // R)EBOOT returns here; S)TART jumps to title
 
     // --- Clean exit to BASIC ---
 exit:

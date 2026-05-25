@@ -1954,7 +1954,8 @@ tramp_reu_show_status:
     :C128BankedStatusTrampoline(reu_show_status_banked)
 
 // ============================================================
-.const GAME_OVER_COL = (SCREEN_COLS - 23) / 2
+.const GAME_OVER_COL = (SCREEN_COLS - 15) / 2
+.const GAME_OVER_REBOOT_MSG_COL = (SCREEN_COLS - 33) / 2
 .const TITLE_MENU_COL = (SCREEN_COLS - 25) / 2
 .const SAVE_DISK_IND_COL = (SCREEN_COLS - 10) / 2
 
@@ -1973,20 +1974,23 @@ game_over_prompt:
     jsr screen_put_string
 !gop_loop:
     jsr input_get_key
-    cmp #$52                    // 'R' — reboot (same path as quit)
-    beq !gop_quit+
+    cmp #$52                    // 'R' — reboot
+    beq !gop_reboot+
     cmp #$53                    // 'S' — start over (restart to title)
     beq !gop_restart+
-    cmp #$51                    // 'Q' — quit to BASIC
     bne !gop_loop-
-!gop_quit:
-    jmp exit_trampoline         // Unified C128 behavior: R == Q
+!gop_reboot:
+    jsr game_over_reboot_confirm
+    rts
 !gop_restart:
     jmp game_restart
 game_over_prompt_end:
 
+game_over_reboot_confirm:
+    :C128BankedStatusTrampoline(game_over_reboot_confirm_banked)
+
 game_over_str:
-    .text "R)eboot S)tart Q)uit" ; .byte 0
+    .text "R)eboot S)tart" ; .byte 0
 game_over_str_end:
 
 // ============================================================
@@ -3820,6 +3824,32 @@ first_banked_function:
     #import "../common/player_recalc_equipment.s"
     #import "../common/player_item_commands.s"
 
+game_over_reboot_confirm_banked:
+    jsr screen_clear
+    lda #COL_WHITE
+    sta zp_text_color
+    lda #12
+    sta zp_cursor_row
+    lda #GAME_OVER_REBOOT_MSG_COL
+    sta zp_cursor_col
+    lda #<game_over_reboot_str
+    sta zp_ptr0
+    lda #>game_over_reboot_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    lda #GAME_OVER_REBOOT_MSG_COL + 26
+    sta zp_cursor_col
+    lda #<more_str
+    sta zp_ptr0
+    lda #>more_str
+    sta zp_ptr0_hi
+    jsr screen_put_string
+    jmp input_get_modal_dismiss_key
+
+game_over_reboot_str:
+    .text "Please remove program disk" ; .byte 0
+game_over_reboot_str_end:
+
 banked_code_end:
 banked_payload_end:
 .segment Default
@@ -3934,6 +3964,7 @@ program_end:
 .assert "Game-over prompt end stays below I/O hole", game_over_prompt_end < $D000, true
 .assert "Game-over prompt text stays below I/O hole", game_over_str < $D000, true
 .assert "Game-over prompt text end stays below I/O hole", game_over_str_end < $D000, true
+.assert "Game-over reboot text stays in banked code", game_over_reboot_str >= $F000 && game_over_reboot_str_end <= banked_code_end, true
 .assert "Message history buffer matches configured width", (msg_hist_idx - msg_history) == MSG_HIST_BYTES, true
 .assert "VDC attribute mode keeps alternate charset enabled", VDC_ATTR_MODE == $80, true
 
