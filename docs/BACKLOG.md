@@ -34,55 +34,6 @@ Acceptance target:
 - Screen redraw behavior is owned by explicit view contracts, not incidental
   cleanup, and no UI path depends on hidden stale-text assumptions.
 
-### Audit identified item names for missing category text
-
-Wizard-generating item `18` marks the item identified and displays the raw known
-name as `Speed`. That is inconsistent with player expectations and other potion
-names such as `Cure Serious Wounds potion`. This may be one instance of a
-broader item-name compression problem where identified names lost category text
-or other clarifying words.
-
-Required work:
-
-- Audit all known item names in `commodore/common/item_tables.s` for missing or
-  ambiguous category text after identification.
-- Pay special attention to potions, scrolls, rings, wands, staves, and books,
-  because Wizard Mode can generate identified items directly and expose raw
-  names.
-- Restore clear player-facing names where prior byte-saving shortened them too
-  aggressively, starting with item type `18` (`Speed` -> `Speed potion`).
-- Build-check all Commodore targets after the text change because item strings
-  live in constrained product images.
-
-Acceptance target:
-
-- Identified inventory, store, prompt, and Wizard-generated item names are clear
-  enough for players to understand item category without relying on glyphs or
-  prior knowledge.
-
-### Restore direct letter selection from takeoff equipment screen
-
-The takeoff command's `?` equipment screen regressed to a view-only modal: it
-shows equipped items, but pressing an item letter on that screen no longer
-selects the item to remove. The expected behavior is consistent with inventory
-selection prompts: the player should be able to press the displayed letter
-directly from the equipment screen instead of pressing any key to return and
-then entering the letter at a second prompt.
-
-Required work:
-
-- Make `item_takeoff`'s `?` equipment overlay return the selected equipment
-  letter when the player presses a valid displayed item letter.
-- Preserve cancel/dismiss behavior for escape, space, and non-selection keys.
-- Keep the prompt/display behavior consistent across C64, C128, and Plus/4.
-- Add or update focused coverage for the direct-select path.
-
-Acceptance target:
-
-- In the takeoff flow, pressing `?` displays equipment, and pressing the letter
-  shown next to an equipped item removes that item without an extra prompt
-  round-trip.
-
 ### Friendlier Commodore I/O error messages
 
 The current storage HAL diagnostics preserve useful raw data, but the in-game
