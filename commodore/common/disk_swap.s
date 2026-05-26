@@ -110,18 +110,59 @@ disk_reset_session_state:
     lda #1
     sta disk_ui_result
 #if PLUS4
-    lda $aa                     // Plus/4 retains the BASIC LOAD device here through RUN
-    cmp #8
-    bcc !default_program_device+
-    cmp #31
-    bcc !store_program_device+
+    lda #0
+    sta program_device
+    jsr disk_accept_plus4_chain_device
+    lda $aa                     // Plus/4 retained BASIC LOAD device on some ROMs
+    jsr disk_accept_plus4_program_device
+    lda $ae                     // Current I/O device on other Plus/4 ROM paths
+    jsr disk_accept_plus4_program_device
+    lda program_device
+    bne !program_device_ready+
 !default_program_device:
     lda #8
+    sta program_device
+!program_device_ready:
+    lda program_device
+    jmp !store_program_device+
+disk_accept_plus4_chain_device:
+    lda $0644                   // Chain stub filename signature: "MORIA4"
+    cmp #'M'
+    bne !done+
+    lda $0645
+    cmp #'O'
+    bne !done+
+    lda $0646
+    cmp #'R'
+    bne !done+
+    lda $0647
+    cmp #'I'
+    bne !done+
+    lda $0648
+    cmp #'A'
+    bne !done+
+    lda $0649
+    cmp #'4'
+    bne !done+
+    lda $064a                   // Plus/4 boot chain shadow: actual MORIA4 load device
+    jmp disk_accept_plus4_program_device
+!done:
+    rts
+disk_accept_plus4_program_device:
+    ldx program_device
+    bne !done+
+    cmp #8
+    bcc !done+
+    cmp #31
+    bcs !done+
+    sta program_device
+!done:
+    rts
 !store_program_device:
 #else
     lda $ba                     // KERNAL current device from the boot/load path
-#endif
     sta program_device
+#endif
     ldx #9
     cmp #9
     bne !store_save_device+

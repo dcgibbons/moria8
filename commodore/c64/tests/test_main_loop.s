@@ -1513,7 +1513,7 @@ test_start:
     jmp !t22+
 
     // Test 22: a single CMD_SAVE performs on-demand Disk Setup, then a failed
-    // save returns to gameplay instead of dropping into the quit prompt.
+    // save returns to gameplay instead of taking the game-over path.
 !t22:
     jsr reset_state
     lda #21

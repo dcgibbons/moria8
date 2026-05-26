@@ -362,7 +362,7 @@ c64_test_input_script:
     .byte $33              // 3 = done
     .byte $d3              // SHIFT+S = save in gameplay
     .byte $59              // Y = overwrite existing save
-    .byte $53              // S = start over from save/quit prompt
+    .byte $53              // S = start from title after save
 #else
 #if C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT
     .byte $4e              // N = New

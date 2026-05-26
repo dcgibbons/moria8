@@ -665,6 +665,15 @@ plus4_test_load_media_fail:
 #endif
     jmp !load_notfound+
 !load_open_ok:
+#if HAL_STORAGE_READST_AFTER_LOAD_OPEN
+    jsr SAVE_READST
+#if HAL_STORAGE_MASK_CHRIN_WRITE_TIMEOUT_STATUS
+    and #$fe
+#endif
+    beq !load_open_status_ok+
+    jmp !load_close_notfound+
+!load_open_status_ok:
+#endif
     ldx #hal_storage_save_file_num
     jsr SAVE_CHKIN
     bcc !load_chkin_ok+

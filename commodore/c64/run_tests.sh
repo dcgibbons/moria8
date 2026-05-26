@@ -1981,14 +1981,14 @@ check_static_contract "spell_execute_dedicated_overlay_contract" "main.s" \
     "tramp_spell_execute_selected:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr spell_execute_selected|||jmp tramp_sr_epilogue"
 check_static_contract "wizard_reveal_uses_spell_overlay_contract" "main.s" \
     "tramp_reveal_floorplan:|||lda #OVL_SPELL|||jsr overlay_load_no_kernal|||jsr eff_reveal_floorplan|||jmp tramp_sr_epilogue"
-check_static_contract "c64_game_over_prompt_spacing_contract" "main.s" \
-    "game_over_prompt:|||lda #8                      // Col 8: (40-24)/2 = 8|||game_over_str:|||.text \"R)EBOOT  S)TART  Q)UIT\""
+check_static_contract "c64_game_over_returns_to_title_contract" "main.s" \
+    "game_over_prompt:|||lda #OVL_DEATH|||jsr overlay_load|||sei|||lda #BANK_NO_KERNAL|||sta \$01|||jmp game_restart_overlay"
 check_static_contract "c64_hidden_kernal_irq_vector_contract" "main.s" \
     "c64_irq_hidden_rom:|||lda \$dc0d|||lda \$dd0d|||lda \$d019|||sta \$d019|||rti|||c64_install_ram_irq_vectors:|||lda #BANK_NO_KERNAL|||sta \$01|||sta \$fffa|||sta \$fffe|||sta \$fffb|||sta \$ffff|||overlay_load_no_kernal:|||pha|||lda #BANK_NO_BASIC|||sta \$01|||cli|||pla|||jsr overlay_load|||sei|||jsr c64_install_ram_irq_vectors|||lda #BANK_NO_KERNAL"
 check_static_contract "c64_disk_call_preserves_args_contract" "main.s" \
     "c64_disk_call:|||lda \$01|||sta c64_disk_call_saved_bank|||lda #\$36|||sta \$01|||cli|||pla|||tay|||pla|||tax|||pla|||!cdc_jsr:|||jsr \$ffff"
 check_static_contract "c64_game_over_overlay_exit_contract" "main.s" \
-    "!gop_restart:|||jmp game_restart_overlay|||game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
+    "game_restart_overlay:|||lda #>(title_enter_menu - 1)|||pha|||lda #<(title_enter_menu - 1)|||pha|||jmp platform_runtime_resync_c64"
 check_static_contract "c64_save_media_hal_contract" "../common/save.s" \
     "!save_wrong_media:|||jsr hal_storage_save_media_status|||cmp #HAL_STORAGE_STATUS_WRONG_MEDIA|||beq !save_bad_media+|||ldx #HSTR_SAVE_IOERR"
 check_static_contract "c64_storage_classifier_export_contract" "hal/storage.s" \

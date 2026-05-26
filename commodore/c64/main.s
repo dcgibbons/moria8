@@ -1547,9 +1547,8 @@ tramp_game_over:
     rts
 
 // ============================================================
-// game_over_prompt — R)EBOOT / S)TART OVER / Q)UIT prompt
+// game_over_prompt — return to title/menu after save, quit, or death.
 // Shown at all exit points (save+quit, voluntary quit, death).
-// Q falls through; R and S branch internally.
 // ============================================================
 game_over_prompt:
     lda #OVL_DEATH
@@ -1557,8 +1556,7 @@ game_over_prompt:
     sei
     lda #BANK_NO_KERNAL
     sta $01
-    jsr game_over_prompt_overlay
-    jmp tramp_sr_epilogue
+    jmp game_restart_overlay
 
 // Safety: ensure runtime code doesn't overlap runtime data areas
 program_end:
@@ -1843,47 +1841,6 @@ ovl_start_end:
 // Used once at game over. Contains scoring math, death screen display,
 // and high score insertion/display. KERNAL I/O stays in score_io.s.
 .segment DeathOverlay
-game_over_prompt_overlay:
-    // Hide the previous gameplay/death frame before preparing the full-screen
-    // quit/restart prompt so stale status rows do not remain visible.
-    jsr screen_blank
-    lda #COL_BLACK
-    sta zp_text_color
-    jsr ui_help_clear_all
-    lda #COL_WHITE
-    sta zp_text_color
-    lda #12                     // Row 12 (center)
-    sta zp_cursor_row
-    lda #8                      // Col 8: (40-24)/2 = 8
-    sta zp_cursor_col
-    lda #<game_over_str
-    sta zp_ptr0
-    lda #>game_over_str
-    sta zp_ptr0_hi
-    jsr screen_put_string
-    jsr screen_unblank
-    lda #0
-    sta zp_kbdbuf_count         // Flush keyboard buffer
-!gop_loop:
-    jsr input_get_key
-    cmp #$52                    // 'R' — reboot (reload from disk)
-    beq !gop_reboot+
-    cmp #$53                    // 'S' — start over (restart to title)
-    beq !gop_restart+
-    cmp #$51                    // 'Q' — quit to BASIC
-    bne !gop_loop-
-    rts                         // Q: fall through to exit_trampoline
-!gop_reboot:
-    lda #BANK_NO_BASIC
-    sta $01
-    cli
-    jmp ($fffc)
-!gop_restart:
-    jmp game_restart_overlay
-
-game_over_str:
-    .text "R)EBOOT  S)TART  Q)UIT" ; .byte 0
-
 // game_restart_overlay — reset game state, return to title screen.
 game_restart_overlay:
     lda #0

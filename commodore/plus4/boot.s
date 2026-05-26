@@ -13,7 +13,6 @@ basic_stub_end:
 
 .const LOGICAL_FILE    = 2
 .const DEVICE_NUM      = 8
-.const DEVICE_MAX_SCAN = 12
 .const LOAD_USE_HEADER = 1
 .const TED_BG          = $ff15
 .const TED_BORDER      = $ff19
@@ -58,11 +57,22 @@ print_loading_msg:
     rts
 
 capture_boot_device:
-    lda $aa                 // Plus/4 retains the BASIC LOAD device here through RUN
+    lda $aa                 // Plus/4 retained BASIC LOAD device on some ROMs
+    jsr use_boot_device_if_valid_nondefault
+    lda $ae                 // Current I/O device on other Plus/4 ROM paths
+    jsr use_boot_device_if_valid_nondefault
+    rts
+
+use_boot_device_if_valid_nondefault:
+    ldx boot_device
+    cpx #DEVICE_NUM
+    bne !done+
     cmp #8
     bcc !done+
     cmp #31
     bcs !done+
+    cmp #DEVICE_NUM
+    beq !done+
     sta boot_device
 !done:
     rts
@@ -78,20 +88,6 @@ chain_entry:
     sta chain_probe_device
     jsr chain_try_load
     bcc !loaded+
-
-    ldx #DEVICE_NUM
-!scan:
-    cpx chain_boot_device
-    beq !next+
-    stx chain_probe_device
-    jsr chain_try_load
-    bcc !loaded+
-    ldx chain_probe_device
-!next:
-    inx
-    cpx #DEVICE_MAX_SCAN
-    bne !scan-
-
     jmp !err+
 
 chain_try_load:
@@ -112,6 +108,9 @@ chain_try_load:
     rts
 
 !loaded:
+    lda #LOGICAL_FILE
+    jsr $ffc3
+    jsr $ffcc
     jmp $100e
 !err:
     lda #$93

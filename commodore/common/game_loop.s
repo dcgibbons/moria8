@@ -2295,11 +2295,7 @@ player_died:
     jmp !quit+
 
 !quit:
-    jsr game_over_prompt    // R)EBOOT returns here; S)TART jumps to title
-
-    // --- Clean exit to BASIC ---
-exit:
-    jmp exit_trampoline     // Must run from below $A000 (banks in BASIC ROM)
+    jmp game_over_prompt    // Platform hook returns to title/menu.
 
 #import "ui_restore.s"
 #import "game_loop_helpers.s"
