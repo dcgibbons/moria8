@@ -13,10 +13,11 @@ basic_stub_end:
 
 .const LOGICAL_FILE    = 2
 .const DEVICE_NUM      = 8
+.const DEVICE_MAX_SCAN = 12
 .const LOAD_USE_HEADER = 1
 .const TED_BG          = $ff15
 .const TED_BORDER      = $ff19
-.const CHAIN_STUB_ADDR = $0500
+.const CHAIN_STUB_ADDR = $0600
 
 boot_entry:
     jsr capture_boot_device
@@ -35,7 +36,6 @@ load_main_program:
     sta CHAIN_STUB_ADDR,x
     dex
     bpl !copy_stub-
-
     lda boot_device
     sta chain_boot_device
     jmp chain_entry
@@ -58,7 +58,7 @@ print_loading_msg:
     rts
 
 capture_boot_device:
-    lda $ae                 // Plus/4 KERNAL current device from LOAD/RUN path
+    lda $aa                 // Plus/4 retains the BASIC LOAD device here through RUN
     cmp #8
     bcc !done+
     cmp #31
@@ -74,19 +74,44 @@ loading_msg:
 chain_stub:
 .pseudopc CHAIN_STUB_ADDR {
 chain_entry:
+    lda chain_boot_device
+    sta chain_probe_device
+    jsr chain_try_load
+    bcc !loaded+
+
+    ldx #DEVICE_NUM
+!scan:
+    cpx chain_boot_device
+    beq !next+
+    stx chain_probe_device
+    jsr chain_try_load
+    bcc !loaded+
+    ldx chain_probe_device
+!next:
+    inx
+    cpx #DEVICE_MAX_SCAN
+    bne !scan-
+
+    jmp !err+
+
+chain_try_load:
     lda #chain_game_filename_end - chain_game_filename
     ldx #<chain_game_filename
     ldy #>chain_game_filename
     jsr $ffbd
 
     lda #LOGICAL_FILE
-    ldx chain_boot_device
+    ldx chain_probe_device
     ldy #LOAD_USE_HEADER
     jsr $ffba
 
+    ldx chain_probe_device
+    stx $aa
     lda #0
     jsr $ffd5
-    bcs !err+
+    rts
+
+!loaded:
     jmp $100e
 !err:
     lda #$93
@@ -107,13 +132,17 @@ chain_game_filename_end:
 chain_boot_device:
     .byte DEVICE_NUM
 
+chain_probe_device:
+    .byte DEVICE_NUM
+}
+chain_stub_end:
+
 chain_load_error_msg:
     .byte $4c,$4f,$41,$44,$20,$45,$52,$52,$4f,$52
     .byte 0
-}
-chain_stub_end:
 
 boot_device:
     .byte DEVICE_NUM
 
+.assert "Plus/4 boot chain stub starts after Plus/4 KERNAL file tables", CHAIN_STUB_ADDR >= $0600, true
 .assert "Plus/4 boot chain stub stays in low RAM", CHAIN_STUB_ADDR + (chain_stub_end - chain_stub) <= $0800, true

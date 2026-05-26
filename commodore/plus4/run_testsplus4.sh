@@ -87,6 +87,7 @@ run_boot_title_smoke() {
         KICKASS="$KICKASS" \
         OUT="$smoke_out_rel" \
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4" \
+        "$smoke_out_rel/plus4/boot4.prg" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
         "$smoke_out_rel/plus4/monster.db.1" \
@@ -102,7 +103,8 @@ run_boot_title_smoke() {
     rm -f "$boot_d64"
     if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
-        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.db.1" "monster.db.1" \
@@ -325,6 +327,7 @@ run_overlay_load_smoke() {
         KICKASS="$KICKASS" \
         OUT="$smoke_out_rel" \
         KA_FLAGSPLUS4="-showmem -vicesymbols -libdir c64 -define PLUS4 -define PLUS4_TEST_SCRIPTED_OVERLAY_LOAD_PRODUCT" \
+        "$smoke_out_rel/plus4/boot4.prg" \
         "$smoke_out_rel/plus4/moria4.prg" \
         "$smoke_out_rel/plus4/title" \
         "$smoke_out_rel/plus4/monster.db.1" \
@@ -340,7 +343,8 @@ run_overlay_load_smoke() {
     rm -f "$boot_d64"
     if ! "$C1541" -format "moria8 plus4,m8" d64 "$boot_d64" \
         -attach "$boot_d64" \
-        -write "$smoke_plus4/moria4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "moria8" \
+        -write "$smoke_plus4/boot4.prg" "boot4" \
         -write "$smoke_plus4/moria4.prg" "moria4" \
         -write "$smoke_plus4/title" "t64" \
         -write "$smoke_plus4/monster.db.1" "monster.db.1" \

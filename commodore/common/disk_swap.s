@@ -110,7 +110,7 @@ disk_reset_session_state:
     lda #1
     sta disk_ui_result
 #if PLUS4
-    lda $ae                     // Plus/4 KERNAL current device from the boot/load path
+    lda $aa                     // Plus/4 retains the BASIC LOAD device here through RUN
     cmp #8
     bcc !default_program_device+
     cmp #31
@@ -122,7 +122,12 @@ disk_reset_session_state:
     lda $ba                     // KERNAL current device from the boot/load path
 #endif
     sta program_device
-    sta save_device
+    ldx #9
+    cmp #9
+    bne !store_save_device+
+    dex
+!store_save_device:
+    stx save_device
 #if HAL_STORAGE_EXTENDED_DISK_DIAG
     lda #8
     sta disk_error_device
@@ -450,18 +455,15 @@ disk_prompt:
     cmp program_device
     bne !dp_not_program+
     lda #C128_MEDIA_PROGRAM
-    sta c128_media_state
-    clc
-    rts
+    bne !dp_set_media_state+
 !dp_not_program:
     cmp save_device
     bne !dp_media_unknown+
     lda #C128_MEDIA_SAVE
-    sta c128_media_state
-    clc
-    rts
+    bne !dp_set_media_state+
 !dp_media_unknown:
     lda #C128_MEDIA_UNKNOWN
+!dp_set_media_state:
     sta c128_media_state
     clc
 #endif

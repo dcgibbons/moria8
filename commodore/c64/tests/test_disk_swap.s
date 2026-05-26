@@ -468,6 +468,16 @@ test_start:
     lda disk_mode
     bne !t1_fail+
     lda save_device
+    cmp #9
+    bne !t1_fail+
+    jsr reset_harness_state
+    lda #9
+    sta $ba
+    jsr disk_reset_session_state
+    lda program_device
+    cmp #9
+    bne !t1_fail+
+    lda save_device
     cmp #8
     bne !t1_fail+
     lda disk_setup_done

@@ -496,6 +496,18 @@ test_start:
     beq *+5
     jmp test_fail
     lda save_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    jsr reset_harness_state
+    lda #9
+    sta $ba
+    jsr disk_reset_session_state
+    lda program_device
+    cmp #9
+    beq *+5
+    jmp test_fail
+    lda save_device
     cmp #8
     beq *+5
     jmp test_fail
