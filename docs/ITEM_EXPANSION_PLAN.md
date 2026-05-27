@@ -420,6 +420,70 @@ Good 128-item target mix:
 
 This gets most of the gameplay feel without forcing a full source-catalog port.
 
+## Meaningful-Only Catalog Cut
+
+The original ports contain many rows that add flavor, price spread, or
+stat-gradation without changing player decisions much. For Moria8 product
+planning, "meaningful" should mean a new verb, effect, risk, equipment role,
+tactical answer, build choice, or save-relevant state.
+
+| Bucket | Approx Umoria rows | Product value |
+|---|---:|---|
+| Meaningful inventory/loot items | ~110-140 | worth considering |
+| Color/stat variants | ~170-220 | mostly compressible |
+| Fixtures/sentinels/traps/store doors | ~40-70 | not item catalog work |
+| Duplicate/store/template/source rows | variable | do not port literally |
+
+Rows that should usually be collapsed or skipped:
+
+| Source family | Product read |
+|---|---|
+| 24 sword/dagger rows | collapse to 4-6 weapon roles |
+| 22+ hafted/polearm rows | collapse to 4-6 roles |
+| 20+ armor rows | collapse by slot/weight/AC tier |
+| 18 gold/gem rows | collapse to 3-5 value tiers |
+| Junk/skeletons | mostly flavor, skip unless room exists |
+| Store doors, stairs, doors, rubble | map features, not item catalog |
+| Many mushrooms | duplicate potion effects, optional flavor |
+| Full trap rows | map/trap system, not item catalog |
+
+Meaningful-only target shape:
+
+| Family | Current | Meaningful target | Why |
+|---|---:|---:|---|
+| Gold/value | 2 | 4-5 | economy variety, low code cost |
+| Melee weapons | 4 | 8-10 | damage/weight/progression choices |
+| Ranged/ammo | 6 | 6-8 | already mostly covered |
+| Armor slots | 7 | 14-18 | equipment progression |
+| Light/food/digging | 7 | 10-12 | utility/survival |
+| Potions | 10 | 18-22 | major tactical effects |
+| Scrolls | 10 | 18-22 | utility/mobility/detection |
+| Rings | 2 | 10-12 | persistent build decisions |
+| Amulets | 0 | 6-8 | meaningful if an amulet slot is added |
+| Wands | 4 | 10-12 | tactical targeted effects |
+| Staves | 4 | 10-12 | area/utility effects |
+| Books | 8 | 8 | already complete enough |
+| Chests | 0 | 7 | source-faithful new gameplay |
+
+Recommended meaningful additions:
+
+| Family | Candidate additions |
+|---|---|
+| Chests | Small/Large Wooden, Iron, and Steel Chests; Ruined Chest |
+| Rings | Resist Fire, Resist Cold, See Invisible, Feather Falling, Slow Digestion, Teleportation, Damage, To-Hit, Slaying, Sustain Stat |
+| Amulets | Wisdom, Charisma, Searching, Slow Digestion, Resist Acid, the Magi, DOOM |
+| Potions | Cure Critical Wounds, Healing, Restore Life Levels, Gain Experience, Neutralize Poison, Resist Heat, Resist Cold, Invulnerability, selected stat gain/restore effects |
+| Scrolls | Phase Door, Teleport Level, Magic Mapping, Treasure/Object/Trap Detection, Door/Stair Location, Recharging, Genocide, Mass Genocide, Rune of Protection, Trap/Door Destruction, Destruction |
+| Wands | Magic Missile, Stone-to-Mud, Polymorph, Teleport Away, Disarming, Trap/Door Destruction, Drain Life, Fire/Cold/Lightning Balls |
+| Staves | Object Location, Trap Location, Door/Stair Location, Speed, Slow Monsters, Sleep Monsters, Detect Evil, Curing, Earthquakes, Destruction |
+| Equipment | Cloak, Gauntlets, Hard Boots, heavy armor, plate armor, better shield, soft/hard cap, Steel Helm |
+| Weapons | Heavy sword, axe, spear/polearm, war hammer/flail, heavy bow/crossbow |
+
+Product recommendation: port roles, not every source row. Keep source names
+where they add flavor, but collapse rows that only change dice, AC, cost, or
+weight unless they create a real equipment choice. A meaningful-only catalog of
+about 128 item IDs is the best near-term target.
+
 ## Final Judgment
 
 - Full catalog using current resident table model: no.
