@@ -90,7 +90,11 @@ help_lines:
     .byte $fe
     .text "."
     .byte $ff
-    .text " Rest"
+    .text " Rest "
+    .byte $fe
+    .text "CTRL+R"
+    .byte $ff
+    .text " Rest*"
     .byte 0
 
 // Row 6: Cursor info + Stairs

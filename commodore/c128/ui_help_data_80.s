@@ -40,7 +40,8 @@ help_lines:
     .byte 0
     .byte $fe ; .text "J" ; .byte $ff ; .text " Down"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "." ; .byte $ff ; .text " Rest"
+    .byte $fe ; .text "." ; .byte $ff ; .text " Rest  "
+    .byte $fe ; .text "CTRL+R" ; .byte $ff ; .text " Rest*"
     .byte 0
 
     .byte 0

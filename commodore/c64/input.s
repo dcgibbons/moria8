@@ -249,10 +249,17 @@ input_get_key:
 !igk_poll:
     inc zp_entropy
     jsr input_sound_update
+    jsr input_ctrl_r_held
+    beq !igk_no_ctrl_r+
+    lda #$12
+    sta igk_key
+    jmp !igk_done+
+!igk_no_ctrl_r:
     lda KBDBUF_COUNT        // Keyboard buffer count (filled by IRQ handler)
     beq !igk_poll-          // No key yet, keep polling
     jsr KERNAL_GETIN        // Read key ($CC set to non-zero = blink suppressed)
     sta igk_key
+!igk_done:
     sei
     pla
     sta $01                 // Restore original banking state
@@ -340,6 +347,79 @@ input_sound_update:
 #else
     rts
 #endif
+
+// input_ctrl_r_held — Detect physical C64 CTRL+R regardless of KERNAL PETSCII.
+// The KERNAL keyboard buffer does not provide a reliable command code for this
+// chord across real hardware/emulator keymaps, so command input checks the CIA
+// matrix directly while polling.
+// Output: A = 1 when both CTRL and R are down, 0 otherwise
+// Preserves: X, Y
+input_ctrl_r_held:
+#if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_BOOK_OVERLAY || C64_TEST_SCRIPTED_SCROLL_SELECTOR
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_SPELL_LIST_OVERLAY
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_DUNGEON_SPELL
+    lda #0
+    rts
+#else
+#if C64_TEST_SCRIPTED_DETECT_EVIL_PRODUCT
+    lda #0
+    rts
+#else
+    lda CIA1_PORTA
+    pha
+    lda CIA1_DDRA
+    pha
+    lda CIA1_DDRB
+    pha
+
+    lda #$ff
+    sta CIA1_DDRA
+    lda #$00
+    sta CIA1_DDRB
+
+    lda #$fb                // Row 2: R is column 1
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    and #%00000010
+    bne !not_held+
+
+    lda #$7f                // Row 7: CTRL is column 2
+    sta CIA1_PORTA
+    lda CIA1_PORTB
+    and #%00000100
+    bne !not_held+
+
+    lda #1
+    bne !done+
+!not_held:
+    lda #0
+!done:
+    sta icr_result
+    pla
+    sta CIA1_DDRB
+    pla
+    sta CIA1_DDRA
+    pla
+    sta CIA1_PORTA
+    lda icr_result
+    rts
+#endif
+#endif
+#endif
+#endif
+#endif
+
+icr_result: .byte 0
 
 #if C64_TEST_SCRIPTED_SPELL || C64_TEST_SCRIPTED_DISK_SETUP_PRODUCT || C64_TEST_SCRIPTED_SAVE_WRITE_PRODUCT || C64_TEST_SCRIPTED_SAVE_MEDIA_FAIL_PRODUCT || C64_TEST_SCRIPTED_LOAD_RESUME_PRODUCT
 c64_test_input_idx: .byte 0

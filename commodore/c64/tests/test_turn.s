@@ -882,7 +882,7 @@ t21_test:
 !t1_seq:
     jsr install_turn_patches
 
-    // Test 1: turn_post_action sequencing + counter + restock + dirty flag.
+    // Test 1: turn_post_action sequencing + counter + dirty flag.
     jsr reset_state
     lda #$ff
     sta zp_turn_lo
@@ -916,7 +916,6 @@ t21_test:
     cmp #4
     bne !t1_fail+
     lda test_store_restock_calls
-    cmp #1
     bne !t1_fail+
     lda #$01
     sta tc_results + 0

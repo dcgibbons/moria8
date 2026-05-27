@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #32
+    ldx #36
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -247,7 +247,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 33, $ff
+tc_results: .fill 37, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -320,6 +320,10 @@ test_move_relocated: .byte 0
 test_move_disturbs_search: .byte 0
 test_scene_dirty: .byte 0
 test_turn_sets_message: .byte 0
+test_turn_heal_hp: .byte 0
+test_turn_heal_mp: .byte 0
+test_any_key_held_sample: .byte 0
+test_cancel_key_sample: .byte 0
 test_update_clears_reveal: .byte 0
 test_stairs_tile: .byte 0
 test_save_success: .byte 0
@@ -340,6 +344,9 @@ install_jump_patch:
     :PatchJump(generation_busy_end_api, test_generation_busy_end_api)
     :PatchJump(input_get_command, test_input_get_command)
     :PatchJump(input_get_key, test_input_get_key)
+    :PatchJump(input_wait_release, test_input_wait_release)
+    :PatchJump(input_run_key_held, test_input_run_key_held)
+    :PatchJump(input_run_cancel_check, test_input_run_cancel_check)
     :PatchJump(msg_clear, test_msg_clear)
     :PatchJump(turn_post_action, test_turn_post_action)
     :PatchJump(status_draw, test_status_draw)
@@ -458,6 +465,10 @@ reset_state:
     sta test_move_disturbs_search
     sta test_scene_dirty
     sta test_turn_sets_message
+    sta test_turn_heal_hp
+    sta test_turn_heal_mp
+    sta test_any_key_held_sample
+    sta test_cancel_key_sample
     sta test_update_clears_reveal
     sta test_stairs_tile
     sta test_save_success
@@ -479,6 +490,7 @@ reset_state:
     sta zp_search_count
     sta disk_setup_done
     sta player_data + PL_FLAGS
+    sta auto_rest_active
     lda #10
     sta zp_player_x
     sta zp_player_y
@@ -486,6 +498,15 @@ reset_state:
     sta zp_view_y
     lda #1
     sta zp_player_dlvl
+    lda #10
+    sta zp_player_hp_lo
+    sta zp_player_mhp_lo
+    lda #0
+    sta zp_player_hp_hi
+    sta zp_player_mhp_hi
+    lda #5
+    sta zp_player_mp
+    sta zp_player_mmp
     rts
 
 run_case:
@@ -521,6 +542,17 @@ test_input_get_key:
     bcc !script_ok+
     lda #$20
     rts
+
+test_input_wait_release:
+    rts
+
+test_input_run_key_held:
+    lda test_any_key_held_sample
+    rts
+
+test_input_run_cancel_check:
+    lda test_cancel_key_sample
+    rts
 !script_ok:
     lda test_key_script,x
     inx
@@ -538,6 +570,14 @@ test_msg_clear:
 
 test_turn_post_action:
     inc test_turn_calls
+    lda test_turn_heal_hp
+    beq !no_hp+
+    inc zp_player_hp_lo
+!no_hp:
+    lda test_turn_heal_mp
+    beq !no_mp+
+    inc zp_player_mp
+!no_mp:
     lda test_scene_dirty
     sta turn_scene_dirty
     lda test_turn_sets_message
@@ -2009,8 +2049,123 @@ test_start:
     bne !t33_fail+
     lda #$01
     sta tc_results + 32
-    jmp test_finish
+    jmp !t34+
 !t33_fail:
     lda #$00
     sta tc_results + 32
+    jmp !t34+
+
+    // Test 34: CTRL+R at full recovery consumes no turn and clears search mode.
+!t34:
+    jsr install_jump_patch
+    jsr reset_state
+    lda #33
+    sta test_case_idx
+    lda #PLF_SEARCHING
+    sta player_data + PL_FLAGS
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    bne !t34_fail+
+    lda auto_rest_active
+    bne !t34_fail+
+    lda player_data + PL_FLAGS
+    and #PLF_SEARCHING
+    bne !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !t35+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
+    jmp !t35+
+
+    // Test 35: auto-rest advances turns until HP/mana recover.
+!t35:
+    jsr reset_state
+    lda #34
+    sta test_case_idx
+    lda #9
+    sta zp_player_hp_lo
+    lda #4
+    sta zp_player_mp
+    lda #1
+    sta test_turn_heal_hp
+    sta test_turn_heal_mp
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t35_fail+
+    lda auto_rest_active
+    bne !t35_fail+
+    lda zp_player_hp_lo
+    cmp #10
+    bne !t35_fail+
+    lda zp_player_mp
+    cmp #5
+    bne !t35_fail+
+    lda #$01
+    sta tc_results + 34
+    jmp !t36+
+!t35_fail:
+    lda #$00
+    sta tc_results + 34
+    jmp !t36+
+
+    // Test 36: an attention message stops auto-rest after one turn.
+!t36:
+    jsr reset_state
+    lda #35
+    sta test_case_idx
+    lda #9
+    sta zp_player_hp_lo
+    lda #1
+    sta test_turn_sets_message
+    lda #CMD_AUTOREST
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_turn_calls
+    cmp #1
+    bne !t36_fail+
+    lda auto_rest_active
+    bne !t36_fail+
+    lda #$01
+    sta tc_results + 35
+    jmp !t37+
+!t36_fail:
+    lda #$00
+    sta tc_results + 35
+    jmp !t37+
+
+    // Test 37: any held key stops active auto-rest before a turn.
+!t37:
+    jsr reset_state
+    lda #36
+    sta test_case_idx
+    lda #1
+    sta auto_rest_active
+    sta run_input_armed
+    sta test_any_key_held_sample
+    lda #9
+    sta zp_player_hp_lo
+    jsr run_case
+    lda test_turn_calls
+    bne !t37_fail+
+    lda auto_rest_active
+    bne !t37_fail+
+    lda #$01
+    sta tc_results + 36
+    jmp test_finish
+!t37_fail:
+    lda #$00
+    sta tc_results + 36
     jmp test_finish

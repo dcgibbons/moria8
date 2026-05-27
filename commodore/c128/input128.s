@@ -743,12 +743,20 @@ input_normalize_ctrl_chords_with_state:
     cmp #$42
     beq !inct_ctrl_b+
     cmp #$c2
-    bne !inct_done+
+    beq !inct_ctrl_b+
+    cmp #$52
+    beq !inct_ctrl_r+
+    cmp #$d2
+    beq !inct_ctrl_r+
+    rts
 !inct_ctrl_w:
     lda #$17
     rts
 !inct_ctrl_b:
     lda #$02
+    rts
+!inct_ctrl_r:
+    lda #$12
 !inct_done:
     rts
 #endif

@@ -577,6 +577,7 @@ game_new_start:
     lda #$ff
     sta zp_run_dir              // Not running
     lda #0
+    sta auto_rest_active
     sta zp_view_x
     sta zp_view_y
     sta old_view_x
@@ -733,6 +734,8 @@ load_resume_game:
     // Stop any running
     lda #$ff
     sta zp_run_dir
+    lda #0
+    sta auto_rest_active
 
     // Re-init SID
     jsr hal_sound_init
@@ -932,6 +935,24 @@ c128_town_move_diag_loop_top:
     sta run_input_armed
     jsr input_run_cancel_reset
 !not_running:
+    // --- Auto-rest continuation ---
+    lda auto_rest_active
+    beq !not_auto_rest+
+
+    jsr auto_rest_should_stop
+    bcc !auto_rest_keep+
+    lda #0
+    sta auto_rest_active
+    jmp !not_auto_rest+
+!auto_rest_keep:
+    jsr hal_input_any_key_held
+    bne !auto_rest_cancel+
+    jmp cmd_rest
+!auto_rest_cancel:
+    jsr input_flush_run_cancel_buffer
+    lda #0
+    sta auto_rest_active
+!not_auto_rest:
     // Paralysis check — skip input, just tick the turn
     lda zp_eff_paralyze
     beq !not_paralyzed+
@@ -1080,6 +1101,11 @@ plus4_test_after_save_game:
     bne !not_disarm+
     jmp cmd_disarm
 !not_disarm:
+
+    cmp #CMD_AUTOREST
+    bne !not_autorest_cmd+
+    jmp cmd_autorest
+!not_autorest_cmd:
 
     // Monster recall?
     cmp #CMD_RECALL
@@ -1860,6 +1886,22 @@ cmd_rest:
     jsr msg_clear
     jmp post_turn_status_only_or_die
 
+cmd_autorest:
+    jsr msg_clear
+    jsr player_search_mode_off
+    lda #$ff
+    sta zp_run_dir
+    jsr input_run_cancel_reset
+
+    jsr auto_rest_check_recovered
+    bcc !start+
+    jmp main_loop
+!start:
+    jsr hal_input_wait_release
+    lda #1
+    sta auto_rest_active
+    jmp main_loop
+
 cmd_pickup:
     jsr msg_clear
     jsr item_pickup
@@ -1987,6 +2029,37 @@ cmd_look:
     jsr msg_clear
     jsr do_look
     jmp main_loop
+
+// auto_rest_check_recovered — Carry set if HP and mana are both full.
+auto_rest_check_recovered:
+    lda zp_player_hp_hi
+    cmp zp_player_mhp_hi
+    bne !not_recovered+
+    lda zp_player_hp_lo
+    cmp zp_player_mhp_lo
+    bne !not_recovered+
+    lda zp_player_mp
+    cmp zp_player_mmp
+    bne !not_recovered+
+    sec
+    rts
+!not_recovered:
+    clc
+    rts
+
+// auto_rest_should_stop — Carry set if auto-rest must stop.
+auto_rest_should_stop:
+    jsr auto_rest_check_recovered
+    bcs !stop+
+
+    lda zp_msg_flags
+    bne !stop+
+
+    clc
+    rts
+!stop:
+    sec
+    rts
 
 cmd_run:
     pha                         // Save command ID — msg_clear clobbers A
@@ -2353,6 +2426,7 @@ recall_found_type: .byte 0             // Creature type index found
 recall_last_sc:    .byte 0             // Screen code of last recall shown (0 = none)
 recall_last_idx:   .byte 0             // Creature index last shown (for cycling)
 run_input_armed:   .byte 0             // Running cancel armed after first neutral scan
+auto_rest_active:  .byte 0             // Auto-rest is repeating ordinary rest turns
 
 #if C128_TEST_FORCE_DUNGEON_MELEE
 c128_test_force_dungeon_melee_pending: .byte 1

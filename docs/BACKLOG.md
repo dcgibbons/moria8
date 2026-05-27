@@ -5,60 +5,27 @@ unreleased for release notes.
 
 ## Commodore Ports
 
-### Add `CTRL+R` rest-until-recovered
+### Harden auto-rest disturbance coverage
 
-Moria8 currently supports `.` as a one-turn rest/stay command, but it has no
-auto-rest command. Umoria's `R` rest command supports both numeric rest counts
-and `*` rest-until-recovered. Moria8 cannot use plain `R` because it already
-means Read Scroll, and `SHIFT+R` already means Refuel.
+Moria8 now has a first-pass `CTRL+R` rest-until-recovered command. It keeps `.`
+as one-turn rest, `R` as Read Scroll, and `SHIFT+R` as Refuel. The current
+implementation advances ordinary rest turns until HP and mana are full, clears
+search mode when started, stops on cancel input, and stops when a message asks
+for player attention.
 
-First version:
+Remaining polish:
 
-- Add a new shared command, tentatively `CMD_AUTOREST`, bound to `CTRL+R`.
-- Keep `.` as one-turn rest.
-- Keep `R` as Read Scroll.
-- Keep `SHIFT+R` as Refuel.
-- Implement only rest-until-recovered first: repeat turns until HP is full and
-  mana is full.
-- Do not add numeric rest counts in the first version.
-
-Required behavior:
-
-- Starting auto-rest turns off search mode if it is active.
-- While auto-resting, the game advances ordinary turns: hunger, light, effect
-  timers, HP regen, mana regen, monster AI, store restock timing, and death
-  checks still run.
-- Auto-rest stops when current HP equals max HP and current mana equals max
-  mana. Warriors with zero max mana should stop based on HP alone.
-- Auto-rest must stop on danger or player interruption:
-  - keypress/cancel input,
-  - player damage,
-  - visible hostile monster activity,
-  - monster spell/effect disturbance,
-  - teleport/random movement,
-  - discovered trap/object/interesting event,
-  - hunger/starvation warning or other status that should demand attention.
-- Auto-rest must not hide death, save/load prompts, disk errors, or blocking
-  message prompts.
-- Auto-rest should show compact status text such as `Rest *` or `Resting`.
-
-Implementation notes:
-
-- Umoria uses `py.flags.rest < 0` for rest-until-recovered and clears it through
-  `playerDisturb`. Moria8 does not need to copy that representation exactly,
-  but it should copy the observable semantics.
-- C128 currently has special Ctrl-chord normalization for `CTRL+B` and
-  `CTRL+W`. Adding `CTRL+R` likely needs matching C128 normalization so the
-  binding works reliably across live keyboard scan paths.
-- Keep the first implementation byte-conscious. Prefer a small resident
-  auto-rest state byte/counter and reuse existing turn/post-action paths rather
-  than adding a new scheduler.
-
-Acceptance target:
-
-- A player can press `CTRL+R` while wounded or down mana, the game advances
-  turns until HP/mana recover, and the rest immediately stops on recovery,
-  keypress, danger, damage, or another attention-worthy event.
+- Add an explicit disturbance flag so auto-rest can stop on silent-but-dangerous
+  state changes without relying on `zp_msg_flags`.
+- Stop on visible hostile monster activity even when the monster only moves and
+  no attack/spell message is generated.
+- Stop on player displacement, newly discovered objects/features, hunger
+  warnings, and other attention-worthy events through one shared disturbance
+  path.
+- Add compact status text such as `Rest *` or `Resting` if resident memory or an
+  overlay-owned display path can afford it.
+- Keep C128 resident play below `$CF00`; the first implementation fits by only a
+  few bytes.
 
 ### Align melee multi-blow feedback and blow counts with Umoria
 

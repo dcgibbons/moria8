@@ -429,12 +429,6 @@ turn_post_action:
     inc zp_turn_hi
 !no_hi:
 
-    // Periodic store restock every 256 turns (when lo byte wraps to 0)
-    lda zp_turn_lo
-    bne !no_restock+
-    jsr tramp_store_restock_all
-!no_restock:
-
     // Mark status bar as dirty so it redraws
     jmp status_mark_dirty
 

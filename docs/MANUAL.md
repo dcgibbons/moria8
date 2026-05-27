@@ -65,6 +65,7 @@ authoritative quick reference: press `?`.
 | `B` | Move southwest. |
 | `N` | Move southeast. |
 | `.` | Rest or stay for one turn. |
+| `CTRL+R` | Rest until HP and mana are recovered. |
 | `SHIFT` + direction | Run in that direction. |
 | `<` | Go up stairs. |
 | `>` | Go down stairs. |
