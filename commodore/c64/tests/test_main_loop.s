@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #31
+    ldx #32
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -247,7 +247,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 32, $ff
+tc_results: .fill 33, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -379,6 +379,15 @@ restore_real_input_get_command:
     sta input_get_command + 1
     lda #$85
     sta input_get_command + 2
+    rts
+
+restore_real_player_try_move:
+    lda #$a2                    // ldx #0
+    sta player_try_move
+    lda #$00
+    sta player_try_move + 1
+    lda #$8e                    // stx player_move_relocated
+    sta player_try_move + 2
     rts
 
 reset_state:
@@ -787,7 +796,7 @@ test_start:
     ldx #$ff
     txs
 
-    ldx #28
+    ldx #32
     lda #$ff
 !clr:
     sta tc_results,x
@@ -1915,8 +1924,93 @@ test_start:
     bne !t32_fail+
     lda #$01
     sta tc_results + 31
-    jmp test_finish
+    jmp !t33+
 !t32_fail:
     lda #$00
     sta tc_results + 31
+    jmp !t33+
+
+    // Test 33: SHIFT+J run south stops before a revealed trap.
+!t33:
+    jsr restore_real_player_try_move
+    jsr reset_state
+    lda #32
+    sta test_case_idx
+
+    lda #27
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda #28
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+
+    ldx #28
+!t33_floor_loop:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #26
+    lda #TILE_WALL_H | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldy #27
+    lda #TILE_FLOOR | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldy #28
+    lda #TILE_WALL_H | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    inx
+    cpx #31
+    bne !t33_floor_loop-
+
+    ldx #31
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #26
+    lda #TILE_WALL_H | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldy #27
+    lda #TILE_TRAP | FLAG_VISITED
+    :MapWrite_ptr0_y()
+    ldy #28
+    lda #TILE_WALL_H | FLAG_VISITED
+    :MapWrite_ptr0_y()
+
+    lda #1
+    sta trap_count
+    lda #27
+    sta trap_x
+    lda #31
+    sta trap_y
+    lda #0
+    sta trap_type
+
+    lda #$ca                    // SHIFT+J
+    sta test_key_script + 0
+    lda #$d1                    // Q after run stops
+    sta test_key_script + 1
+    lda #2
+    sta test_key_len
+    jsr run_case
+
+    lda zp_player_x
+    cmp #27
+    bne !t33_fail+
+    lda zp_player_y
+    cmp #30
+    bne !t33_fail+
+    lda zp_run_dir
+    cmp #$ff
+    bne !t33_fail+
+    lda test_turn_calls
+    cmp #2
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 32
+    jmp test_finish
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
     jmp test_finish

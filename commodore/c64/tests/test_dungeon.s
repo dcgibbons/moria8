@@ -17,7 +17,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #38
+    ldx #39
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -127,7 +127,7 @@ t29_retry:     .byte 0                   // Retry counter for test 29
 t32_pre_count: .byte 0                   // Pre-spawn monster count for test 32
 t32_post_count:.byte 0                   // Post-spawn monster count for test 32
 t32_check_type:.byte 0                   // Saved creature type for test 32
-tc_results: .fill 39, $ff              // Test results buffer (copied to $0400 before brk)
+tc_results: .fill 40, $ff              // Test results buffer (copied to $0400 before brk)
 t38_rockfall_name: .text "falling rock." ; .byte 0
 
 test_start:
@@ -2296,6 +2296,62 @@ test_start:
     lda #$00
     sta tc_results + 38
 !t39_done:
+
+    // ============================================================
+    // Test 40: running south stops before a known trap
+    // ============================================================
+    jsr fill_map_rock
+
+    // Straight north-south corridor at x=27, y=29..31.
+    ldx #29
+!t40_corridor_rows:
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #27
+    lda #TILE_FLOOR
+    sta (zp_ptr0),y
+    inx
+    cpx #32
+    bne !t40_corridor_rows-
+
+    // Revealed trap directly south at (27,31), matching SHIFT+J running.
+    ldx #31
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy #27
+    lda #TILE_TRAP | FLAG_VISITED
+    sta (zp_ptr0),y
+
+    lda #27
+    sta zp_player_x
+    lda #30
+    sta zp_player_y
+    lda #1                      // DIR_S
+    sta zp_run_dir
+
+    lda #CMD_MOVE_S
+    jsr player_try_move
+    bcc !t40_blocked+
+    jmp !t40_fail+
+!t40_blocked:
+    lda zp_player_x
+    cmp #27
+    bne !t40_fail+
+    lda zp_player_y
+    cmp #30
+    bne !t40_fail+
+!t40_pass:
+    lda #$01
+    sta tc_results + 39
+    jmp !t40_done+
+!t40_fail:
+    lda #$00
+    sta tc_results + 39
+!t40_done:
 
     // Done — jump to exit trampoline (copies tc_results to $0400, then brk)
     jmp test_exit_trampoline

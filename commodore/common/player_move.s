@@ -103,8 +103,21 @@ c128_town_move_diag_after_map_ptr_setup:
 #if hal_platform_player_move_diag_labels
 c128_town_move_diag_after_map_read:
 #endif
+    sta zp_temp0
+
+    // Running should stop before stepping onto a known trap. Hidden traps stay
+    // normal: they are still floor until search/find/tripping reveals them.
+    lda zp_run_dir
+    cmp #$ff
+    beq !not_running_trap+
+    lda zp_temp0
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
+    beq !blocked+
+!not_running_trap:
 
     // Extract tile type (bits 7-4 → 0-15)
+    lda zp_temp0
     lsr
     lsr
     lsr
