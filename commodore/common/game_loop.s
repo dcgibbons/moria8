@@ -1076,6 +1076,11 @@ plus4_test_after_save_game:
     jmp cmd_search_mode
 !not_search_mode:
 
+    cmp #CMD_DISARM
+    bne !not_disarm+
+    jmp cmd_disarm
+!not_disarm:
+
     // Monster recall?
     cmp #CMD_RECALL
     beq !+
@@ -1966,6 +1971,11 @@ cmd_refuel:
 cmd_bash:
     jsr msg_clear
     jsr tramp_bash_command
+    jmp command_result_main_or_update_visibility
+
+cmd_disarm:
+    jsr msg_clear
+    jsr disarm_command
     jmp command_result_main_or_update_visibility
 
 cmd_tunnel:

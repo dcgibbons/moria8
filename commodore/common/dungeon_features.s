@@ -38,6 +38,8 @@ df_found:    .byte 0   // Search found-something flag
 df_search_chance: .byte 0
 df_death_source: .byte 0 // Trap death source for lethal trap damage
 df_death_hstr:   .byte 0 // Trap death cause string for lethal trap damage
+df_disarm_chance: .byte 0
+df_disarm_trap_idx: .byte 0
 
 // ============================================================
 // Trap name Huffman indices (indexed by trap type 0-5)
@@ -45,6 +47,23 @@ df_death_hstr:   .byte 0 // Trap death cause string for lethal trap damage
 trap_name_huff_idx:
     .byte HSTR_DF_TRAP_0, HSTR_DF_TRAP_1, HSTR_DF_TRAP_2
     .byte HSTR_DF_TRAP_3, HSTR_DF_TRAP_4, HSTR_DF_TRAP_5
+
+#if !C128 && !DISARM_COMMAND_EXTERNAL
+trap_difficulty:
+    .byte 5, 15, 10, 20, 20, 25
+
+trap_disarm_xp:
+    .byte 1, 3, 2, 5, 6, 8
+
+disarm_no_visible_str:
+    .text "I do not see anything to disarm there." ; .byte 0
+disarm_success_str:
+    .text "You have disarmed the trap." ; .byte 0
+disarm_fail_str:
+    .text "You failed to disarm the trap." ; .byte 0
+disarm_bad_fail_str:
+    .text "You set the trap off!" ; .byte 0
+#endif
 
 
 // ============================================================
@@ -288,9 +307,10 @@ place_secrets:
     rts
 
 // ============================================================
-// trap_check_at_player — Check if player stepped on a hidden trap
-// Scans trap table for player's (x, y). If found: trigger trap,
-// reveal trap on map, remove from trap table.
+// trap_check_at_player — Check if player stepped on a trap
+// Scans trap table for player's (x, y). If found: reveal trap on map and
+// trigger it. Matching umoria, ordinary triggered floor traps remain live and
+// can still be disarmed later.
 // Called from main.s after successful move.
 // ============================================================
 trap_check_at_player:
@@ -330,17 +350,6 @@ trap_check_at_player:
     ldx df_dir_idx
     jsr trap_trigger
 
-    // Remove trap from table: swap with last entry, decrement count
-    ldx df_dir_idx
-    dec trap_count
-    ldy trap_count          // Y = index of last entry
-    lda trap_x,y
-    sta trap_x,x
-    lda trap_y,y
-    sta trap_y,x
-    lda trap_type,y
-    sta trap_type,x
-
     // Done (only one trap per tile)
     sec                     // Carry set = trap fired
     rts
@@ -352,6 +361,299 @@ trap_check_at_player:
 !tcp_done:
     clc                     // Carry clear = no trap
     rts
+
+// trap_remove_at_index — Remove trap table entry X by swapping with the last.
+trap_remove_at_index:
+    dec trap_count
+    ldy trap_count
+    lda trap_x,y
+    sta trap_x,x
+    lda trap_y,y
+    sta trap_y,x
+    lda trap_type,y
+    sta trap_type,x
+    rts
+
+// trap_find_target_visible — Find a visible target trap with matching table entry.
+// Requires df_target_x/df_target_y from get_direction_target.
+// Output: carry set = found, X/index stored in df_disarm_trap_idx.
+trap_find_target_visible:
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #TILE_TYPE_MASK
+    cmp #TILE_TRAP
+    bne !not_found+
+
+    ldx #0
+!scan:
+    cpx trap_count
+    bcs !not_found+
+    lda trap_x,x
+    cmp df_target_x
+    bne !next+
+    lda trap_y,x
+    cmp df_target_y
+    bne !next+
+    stx df_disarm_trap_idx
+    sec
+    rts
+!next:
+    inx
+    jmp !scan-
+!not_found:
+    clc
+    rts
+
+#if !C128 && !DISARM_COMMAND_EXTERNAL
+// disarm_command — Direct visible floor-trap disarm command.
+// Output: carry set = turn consumed, carry clear = no turn.
+disarm_command:
+    jsr get_direction_target
+    bcc !no_turn+
+    jsr trap_find_target_visible
+    bcs !has_trap+
+    lda #<disarm_no_visible_str
+    sta zp_ptr0
+    lda #>disarm_no_visible_str
+    sta zp_ptr0_hi
+    jsr msg_print
+!no_turn:
+    clc
+    rts
+
+!has_trap:
+    jsr player_disarm_get_effective_chance
+    sta df_disarm_chance
+    ldx df_disarm_trap_idx
+    lda trap_type,x
+    tax
+    lda df_disarm_chance
+    clc
+    adc #100
+    bcs !chance_cap+
+    sec
+    sbc trap_difficulty,x
+    bcs !chance_ok+
+    lda #0
+    beq !chance_ok+
+!chance_cap:
+    lda #255
+!chance_ok:
+    sta df_disarm_chance
+    lda #100
+    jsr rng_range
+    cmp df_disarm_chance
+    bcc !success+
+
+    lda #5
+    jsr rng_range
+    beq !bad_fail+
+    lda #<disarm_fail_str
+    sta zp_ptr0
+    lda #>disarm_fail_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    sec
+    rts
+
+!success:
+    lda #<disarm_success_str
+    sta zp_ptr0
+    lda #>disarm_success_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jsr disarm_award_trap_xp
+    jsr disarm_restore_target_floor
+    ldx df_disarm_trap_idx
+    jsr trap_remove_at_index
+    jsr disarm_move_player_to_target
+    sec
+    rts
+
+!bad_fail:
+    lda #<disarm_bad_fail_str
+    sta zp_ptr0
+    lda #>disarm_bad_fail_str
+    sta zp_ptr0_hi
+    jsr msg_print
+    jsr disarm_move_player_to_target
+    ldx df_disarm_trap_idx
+    jsr trap_trigger
+    sec
+    rts
+
+disarm_restore_target_floor:
+    ldx df_target_y
+    lda map_row_lo,x
+    sta zp_ptr0
+    lda map_row_hi,x
+    sta zp_ptr0_hi
+    ldy df_target_x
+    :MapRead_ptr0_y()
+    and #TILE_FLAG_MASK
+    ora #TILE_FLOOR
+    ora #FLAG_VISITED
+    :MapWrite_ptr0_y()
+    rts
+
+disarm_move_player_to_target:
+    lda df_target_x
+    sta zp_player_x
+    sta player_data + PL_MAP_X
+    lda df_target_y
+    sta zp_player_y
+    sta player_data + PL_MAP_Y
+    rts
+
+disarm_award_trap_xp:
+    ldx df_disarm_trap_idx
+    lda trap_type,x
+    tax
+    lda player_data + PL_XP_0
+    clc
+    adc trap_disarm_xp,x
+    sta player_data + PL_XP_0
+    bcc !done+
+    inc player_data + PL_XP_1
+    bne !done+
+    inc player_data + PL_XP_2
+!done:
+    rts
+
+#endif
+
+#if !DISARM_COMMAND_EXTERNAL
+player_disarm_get_effective_chance:
+    lda player_data + PL_CLASS
+    ldx #CLASS_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #5
+    tax
+    lda class_properties,x
+    sta df_disarm_chance
+
+    lda player_data + PL_RACE
+    ldx #RACE_PROP_SIZE
+    jsr math_multiply
+    clc
+    adc #3
+    tax
+    lda race_properties,x
+    clc
+    adc df_disarm_chance
+    sta df_disarm_chance
+
+    jsr player_disarm_dex_adj
+    asl
+    clc
+    adc df_disarm_chance
+    sta df_disarm_chance
+
+    jsr player_disarm_int_adj
+    clc
+    adc df_disarm_chance
+    sta df_disarm_chance
+
+    lda player_data + PL_CLASS
+    ldx #CLASS_LVL_SIZE
+    jsr math_multiply
+    clc
+    adc #3
+    tax
+    lda class_level_adj,x
+    ldx zp_player_lvl
+    jsr math_multiply
+    ldx #3
+    jsr math_div_16x8
+    lda df_disarm_chance
+    clc
+    adc zp_math_a
+    sta df_disarm_chance
+
+    lda zp_eff_confuse
+    beq !not_confused+
+    lda df_disarm_chance
+    jsr player_search_divide_by_10
+    sta df_disarm_chance
+!not_confused:
+    lda zp_eff_blind
+    bne !dim+
+    jsr player_search_has_no_light
+    bcc !done+
+!dim:
+    lda df_disarm_chance
+    jsr player_search_divide_by_10
+    sta df_disarm_chance
+!done:
+    lda df_disarm_chance
+    rts
+
+player_disarm_dex_adj:
+    lda player_data + PL_DEX_CUR
+    cmp #19
+    bcs !dex18xx+
+    tax
+    dex
+    dex
+    dex
+    lda dex_disarm_bonus,x
+    rts
+!dex18xx:
+    cmp #69
+    bcc !dex5+
+    cmp #109
+    bcc !dex6+
+    lda #8
+    rts
+!dex6:
+    lda #6
+    rts
+!dex5:
+    lda #5
+    rts
+
+player_disarm_int_adj:
+    lda player_data + PL_INT_CUR
+    cmp #8
+    bcs !ge8+
+    cmp #6
+    bcs !zero+
+    sec
+    sbc #6
+    rts
+!zero:
+    lda #0
+    rts
+!ge8:
+    cmp #15
+    bcs !ge15+
+    lda #1
+    rts
+!ge15:
+    cmp #18
+    bcs !ge18+
+    lda #2
+    rts
+!ge18:
+    cmp #19
+    bcs !int18xx+
+    lda #3
+    rts
+!int18xx:
+    cmp #69
+    bcc !int4+
+    lda #5
+    rts
+!int4:
+    lda #4
+    rts
+#endif
 
 // ============================================================
 // trap_trigger — Execute a trap's effect

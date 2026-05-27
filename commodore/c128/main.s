@@ -3227,6 +3227,7 @@ c128_resident_world_end:
 c128_resident_items_start:
 #import "../common/item.s"
 #import "../common/store_data.s"
+#import "../common/disarm.s"
 c128_resident_items_end:
 
 .segment C128ResidentSelect

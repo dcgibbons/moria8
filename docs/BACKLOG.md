@@ -43,6 +43,41 @@ Acceptance target:
 - A player can search to reveal a trap, press `D` plus a direction, and either
   disarm it, fail safely, or set it off using Moria-compatible disarm odds.
 
+### Add classic Moria chests
+
+Moria8 currently has floor objects, traps, doors, searching, opening, bashing,
+and direct floor-trap disarm, but it does not yet implement gameplay chests.
+This is a real gap against both local upstream references: Umoria and VMS-Moria
+have chest object types, locked/trapped chest state, chest trap effects, open
+and bash handling, and `D <Dir>` disarm support for found trapped chests.
+
+Required work:
+
+- Add chest object definitions and generation/drop rules matching classic Moria
+  scale: small/large wooden, iron, and steel chests.
+- Represent chest state compactly: locked, trapped, found trap, opened/ruined,
+  trap payload flags, and any contents/depth data needed for rewards.
+- Extend Search/Find Traps so trapped chests can reveal their trap state.
+- Extend Open so locked chests use disarm/pick-lock ability and trapped chests
+  can trigger their trap when opened.
+- Extend Bash so chests can be forced open, with the classic risk of ruining
+  contents and without implicitly disarming traps.
+- Extend Disarm so `D <Dir>` handles visible/found trapped chests separately
+  from floor traps.
+- Implement chest trap effects from the classic set where feasible: lose STR,
+  poison, paralysis, summon, explosion, and multi-trap combinations.
+- Decide and document how chest contents are stored within current floor-item
+  constraints before adding broad generation.
+- Add C64/C128 focused coverage for search reveal, open locked chest, open
+  trapped chest trigger, successful disarm, failed disarm, bad-failure trigger,
+  bash open/ruin behavior, and save/load persistence.
+
+Acceptance target:
+
+- A generated or placed chest can be found, searched, opened, bashed, disarmed,
+  trapped, looted, ruined, and saved/loaded with behavior consistent with
+  Umoria/VMS-Moria within Moria8 memory limits.
+
 ### Audit screen clear and shared-screen ownership paths
 
 The Home screen currently reuses the store renderer, then overrides the store

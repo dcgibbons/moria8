@@ -100,7 +100,8 @@ The C128 help screen also shows numeric keypad movement: `7 8 9 / 4 5 6 /
 | `SHIFT+T` | Throw an item. |
 | `SHIFT+E` | Eat food. |
 | `SHIFT+R` | Refuel light. |
-| `SHIFT+D` | Bash or dig, depending on context. |
+| `SHIFT+D` | Disarm a visible adjacent trap. |
+| `CTRL+B` | Bash a door or monster. |
 | `+` | Tunnel. |
 | `SHIFT+S` | Save and quit after a successful save. |
 | `SHIFT+Q` | Quit. |
@@ -169,7 +170,7 @@ effects are valuable because unknown items are a major source of risk.
 ## Combat
 
 Melee is automatic when you move into a monster. Ranged combat uses
-`SHIFT+F` to fire a missile weapon or `SHIFT+T` to throw an item. `SHIFT+D`
+`SHIFT+F` to fire a missile weapon or `SHIFT+T` to throw an item. `CTRL+B`
 can bash; `+` tunnels through rock.
 
 Armor class reduces your chance of being hit. Weapon bonuses, strength,

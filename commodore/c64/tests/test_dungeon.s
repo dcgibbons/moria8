@@ -1411,7 +1411,7 @@ test_start:
 
     // ==========================================
     // Test 24: search reveals a trap without disarming it; stepping on that
-    // revealed trap sets carry and removes it from the trap table.
+    // revealed trap sets carry and leaves it live for later disarm.
     // ==========================================
 
     jsr fill_map_rock
@@ -1495,6 +1495,7 @@ test_start:
     lda t24_carry_result
     beq !t24_fail+
     lda trap_count
+    cmp #1
     bne !t24_fail+
     lda #$01
     jmp !t24_store+

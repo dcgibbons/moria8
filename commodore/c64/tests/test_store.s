@@ -51,7 +51,9 @@ test_exit_trampoline:
 #import "../../common/dungeon_data.s"
 #import "../../common/dungeon_gen.s"
 #import "../../common/huffman.s"
+#define DISARM_COMMAND_EXTERNAL
 #import "../../common/dungeon_features.s"
+#undef DISARM_COMMAND_EXTERNAL
 #import "../../common/monster.s"
 #import "../../common/tier_manager.s"
 #import "../../common/overlay.s"

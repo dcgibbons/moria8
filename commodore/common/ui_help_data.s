@@ -187,7 +187,7 @@ help_lines:
     .text " Eat"
     .byte 0
 
-// Row 15: Wear/Wield + Refuel
+// Row 15: Wear/Wield + Disarm
     .byte 0
     .byte $fe
     .text "W"
@@ -195,20 +195,22 @@ help_lines:
     .text " Wear/Wield"
     .byte $fc, 20
     .byte $fe
-    .text "SHIFT+R"
+    .text "SHIFT+D"
     .byte $ff
-    .text " Refuel"
+    .text " Disarm"
     .byte 0
 
-// Row 16: Take off + Information header
+// Row 16: Take off + Refuel
     .byte 0
     .byte $fe
     .text "T"
     .byte $ff
     .text " Take Off"
     .byte $fc, 20
-    .byte $fd
-    .text "Information"
+    .byte $fe
+    .text "SHIFT+R"
+    .byte $ff
+    .text " Refuel"
     .byte 0
 
 // Row 17: Quaff potion + Character
@@ -292,9 +294,9 @@ help_lines:
 // Row 23: Bash + Tunnel + Quit
     .byte 0
     .byte $fe
-    .text "SHIFT+D"
+    .text "CTRL+B"
     .byte $ff
-    .text " Bash/Dig "
+    .text " Bash "
     .byte $fe
     .text "+"
     .byte $ff

@@ -710,11 +710,26 @@ eff_da_sides: .byte 0
 eff_damage_adjacent:
     sta eff_da_dice
     stx eff_da_sides
-    lda #<!eda_cb+
-    sta adj_callback
-    lda #>!eda_cb+
-    sta adj_callback+1
-    jmp for_each_adjacent
+    lda #0
+    sta adj_dir_idx
+!eda_loop:
+    lda adj_dir_idx
+    cmp #8
+    bcs !eda_done+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta df_target_y
+    jsr !eda_cb+
+    inc adj_dir_idx
+    jmp !eda_loop-
+!eda_done:
+    rts
 !eda_cb:
     lda df_target_x
     ldy df_target_y
@@ -775,17 +790,28 @@ eff_directional_monster:
 // ============================================================
 eff_destroy_traps_doors:
     // First pass: modify map tiles
-    lda #<!edtd_tile_cb+
-    sta adj_callback
-    lda #>!edtd_tile_cb+
-    sta adj_callback+1
-    jsr for_each_adjacent
-    // Second pass: remove from trap table
-    lda #<!edtd_trap_cb+
-    sta adj_callback
-    lda #>!edtd_trap_cb+
-    sta adj_callback+1
-    jsr for_each_adjacent
+    lda #0
+    sta adj_dir_idx
+!edtd_tile_loop:
+    lda adj_dir_idx
+    cmp #8
+    bcs !edtd_tiles_done+
+    tax
+    lda zp_player_x
+    clc
+    adc dir_dx,x
+    sta df_target_x
+    lda zp_player_y
+    clc
+    adc dir_dy,x
+    sta df_target_y
+    jsr !edtd_tile_cb+
+    inc adj_dir_idx
+    jmp !edtd_tile_loop-
+!edtd_tiles_done:
+    // Second pass: remove adjacent traps from the trap table. Do this from the
+    // table itself so hidden adjacent traps are destroyed too.
+    jsr !edtd_remove_adjacent_traps+
     lda #1
     sta vis_room_revealed
     rts
@@ -830,21 +856,34 @@ eff_destroy_traps_doors:
 !edtd_tile_done:
     rts
 
-!edtd_trap_cb:
-    // Scan trap table for match at df_target_x/df_target_y
+!edtd_remove_adjacent_traps:
     ldx #0
 !edtd_scan:
     cpx trap_count
     bcs !edtd_scan_done+
 
     lda trap_x,x
-    cmp df_target_x
-    bne !edtd_scan_next+
+    sec
+    sbc zp_player_x
+    clc
+    adc #1
+    cmp #3
+    bcs !edtd_scan_next+
     lda trap_y,x
-    cmp df_target_y
-    bne !edtd_scan_next+
+    sec
+    sbc zp_player_y
+    clc
+    adc #1
+    cmp #3
+    bcs !edtd_scan_next+
+    lda trap_x,x
+    cmp zp_player_x
+    bne !edtd_remove+
+    lda trap_y,x
+    cmp zp_player_y
+    beq !edtd_scan_next+
 
-    // Match — swap with last entry, decrement count
+!edtd_remove:
     dec trap_count
     ldy trap_count
     lda trap_x,y

@@ -56,54 +56,67 @@ help_more_lines:
     .text " Wizard"
     .byte 0
 
-// Row 6: blank
+// Row 6
+    .byte 0
+    .byte $fe
+    .text "CTRL+B"
+    .byte $ff
+    .text " Bash"
+    .byte $fc, 20
+    .byte $fe
+    .text "SHIFT+D"
+    .byte $ff
+    .text " Disarm"
+    .byte 0
+
+// Row 7: blank
     .byte 2
     .byte 0
 
-// Row 7: movement diagram header
+// Row 8: movement diagram header
     .byte 1
     .text "Movement Keys"
     .byte 0
 
-// Row 8
+// Row 9
     .byte 0
     .text "     Y K U"
     .byte 0
 
-// Row 9
+// Row 10
     .byte 0
     .text "     H . L"
     .byte 0
 
-// Row 10
+// Row 11
     .byte 0
     .text "     B J N"
     .byte 0
 
-// Row 11
+// Row 12
     .byte 0
     .text "     . = stay"
     .byte 0
 
-// Row 12
+// Row 13
     .byte 0
     .text "   Y=NW U=NE"
     .byte 0
 
-// Row 13
+// Row 14
     .byte 0
     .text "   B=SW N=SE"
     .byte 0
 
-// Row 14: blank
+// Row 15: blank
     .byte 2
     .byte 0
 
-// Row 15: headers
+// Row 16: headers
     .byte 1
     .text "Prompts" ; .byte $fc, 20 ; .text "Selection" ; .byte 0
 
-// Row 16
+// Row 17
     .byte 0
     .byte $fe
     .text "ESC/Q"
@@ -113,7 +126,7 @@ help_more_lines:
     .text "Letters Pick"
     .byte 0
 
-// Row 17
+// Row 18
     .byte 0
     .byte $fe
     .text "SPACE"
@@ -123,7 +136,7 @@ help_more_lines:
     .text "RETURN Accept"
     .byte 0
 
-// Row 18
+// Row 19
     .byte 0
     .byte $fe
     .text "/"
@@ -133,8 +146,8 @@ help_more_lines:
     .text "then symbol"
     .byte 0
 
-// Rows 19-23: reserved blank lines to keep the frame layout fixed
-    .for (var i = 0; i < 5; i++) {
+// Rows 20-23: reserved blank lines to keep the frame layout fixed
+    .for (var i = 0; i < 4; i++) {
         .byte 2
         .byte 0
     }

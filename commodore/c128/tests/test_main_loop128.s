@@ -527,6 +527,9 @@ tramp_throw_item:
 tramp_bash_command:
     rts
 
+disarm_command:
+    rts
+
 player_search_mode_off:
     lda player_data + 54
     and #$ef

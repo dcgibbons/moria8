@@ -99,17 +99,19 @@ help_lines:
     .byte 0
     .byte $fe ; .text "E" ; .byte $ff ; .text " Equipment"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "SHIFT+D" ; .byte $ff ; .text " Bash"
+    .byte $fe ; .text "SHIFT+D" ; .byte $ff ; .text " Disarm"
     .byte 0
 
     .byte 0
     .byte $fe ; .text "W" ; .byte $ff ; .text " Wear/Wield"
     .byte $fc, HELP80_COL2
-    .byte $fe ; .text "+" ; .byte $ff ; .text " Tunnel"
+    .byte $fe ; .text "CTRL+B" ; .byte $ff ; .text " Bash"
     .byte 0
 
     .byte 0
     .byte $fe ; .text "T" ; .byte $ff ; .text " Take Off"
+    .byte $fc, HELP80_COL2
+    .byte $fe ; .text "+" ; .byte $ff ; .text " Tunnel"
     .byte 0
 
     .byte 0

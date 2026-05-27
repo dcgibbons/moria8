@@ -1,8 +1,8 @@
 #importonce
-// bash.s — Bash command (SHIFT+D)
+// bash.s — Bash command (CTRL+B)
 //
 // Bash doors open, stun monsters with shield attacks. Core umoria command.
-// SHIFT+D + direction: bash doors (break open stuck/closed doors),
+// CTRL+B + direction: bash doors (break open stuck/closed doors),
 // monsters (shield bash + stun check). Tunnelable terrain hands off to
 // the digging path so the dig intent reaches player_tunnel.
 // Reference: umoria playerBash() in player.cpp
