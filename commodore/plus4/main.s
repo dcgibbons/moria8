@@ -142,6 +142,7 @@ plus4_kernal_call:
     sta $0102,x
     sei
     jsr plus4_bank_ram
+    jsr plus4_display_resync
     pla
     plp
     rts
@@ -713,6 +714,8 @@ plus4_install_ram_irq_vectors:
     php
     sei
     jsr plus4_bank_ram
+    lda #0
+    sta TED_IRQ_ENABLE
     lda TED_IRQ_STATUS
     sta TED_IRQ_STATUS
     lda #<plus4_irq_hidden_rom

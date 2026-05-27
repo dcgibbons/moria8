@@ -1,7 +1,7 @@
 #importonce
 // Plus/4 lifecycle HAL policy constants.
 
-.const hal_platform_reassert_before_message_render = 0
+.const hal_platform_reassert_before_message_render = 1
 .const hal_platform_restore_tier_after_overlay = 1
 .const hal_platform_string_bank_load_invalidates_tier = 1
 .const hal_platform_mark_modal_restore_perf = 0

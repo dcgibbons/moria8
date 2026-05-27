@@ -92,6 +92,13 @@ plus4_color_from_zp:
 plus4_color_result: .byte 0
 
 plus4_display_resync:
+    lda TED_CR1
+    and #%11011111              // KERNAL GETIN can leave TED bitmap mode set.
+    sta TED_CR1
+    lda TED_BMP_SOUND
+    and #%11000111              // Clear bitmap base bits, preserve sound flags.
+    ora #%00000100              // Select character ROM for TED fetches.
+    sta TED_BMP_SOUND
     lda #TED_SCREEN_DEFAULT
     sta TED_SCREEN_ADDR
     lda TED_CHARPTR
