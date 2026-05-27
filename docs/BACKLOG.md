@@ -5,43 +5,115 @@ unreleased for release notes.
 
 ## Commodore Ports
 
-### Add the canonical `D <Dir>` disarm command
+### Add `CTRL+R` rest-until-recovered
 
-Moria8 has trap discovery and triggering, and it carries race/class disarm
-statistics, but it does not currently expose the canonical Moria disarm action.
-This is a missing gameplay feature, especially for rogues.
+Moria8 currently supports `.` as a one-turn rest/stay command, but it has no
+auto-rest command. Umoria's `R` rest command supports both numeric rest counts
+and `*` rest-until-recovered. Moria8 cannot use plain `R` because it already
+means Read Scroll, and `SHIFT+R` already means Refuel.
 
-Upstream behavior:
+First version:
 
-- Umoria and VMS-Moria bind `D <Dir>` to disarm an adjacent floor trap or
-  trapped chest.
-- A floor trap must already be found/visible before it can be disarmed.
-- Success removes the trap, grants experience, and moves the player onto the
-  trap square.
-- Failure can either leave the trap intact or set it off.
-- Chance is based on disarm skill, level, DEX/disarm adjustment, INT
-  adjustment, and penalties for blind/no-light/confused/image states.
-- Rogues are best because their class search/perception/disarm values are high,
-  not because the command is rogue-only.
+- Add a new shared command, tentatively `CMD_AUTOREST`, bound to `CTRL+R`.
+- Keep `.` as one-turn rest.
+- Keep `R` as Read Scroll.
+- Keep `SHIFT+R` as Refuel.
+- Implement only rest-until-recovered first: repeat turns until HP is full and
+  mana is full.
+- Do not add numeric rest counts in the first version.
 
-Required work:
+Required behavior:
 
-- Add a shared `CMD_DISARM` input contract and map `D`/platform equivalents to
-  it without colliding with existing drop/help flows.
-- Implement `D <Dir>` for visible adjacent floor traps first; chest traps can
-  follow when chest support exists.
-- Consume the existing race/class disarm data instead of inventing a parallel
-  rogue-only rule.
-- Remove a disarmed trap from both the visible map tile and the hidden trap
-  table.
-- On failed disarm, preserve the upstream chance of setting the trap off.
-- Add tests for success, safe failure, triggered failure, no visible trap, and
-  rogue/higher-disarm advantage.
+- Starting auto-rest turns off search mode if it is active.
+- While auto-resting, the game advances ordinary turns: hunger, light, effect
+  timers, HP regen, mana regen, monster AI, store restock timing, and death
+  checks still run.
+- Auto-rest stops when current HP equals max HP and current mana equals max
+  mana. Warriors with zero max mana should stop based on HP alone.
+- Auto-rest must stop on danger or player interruption:
+  - keypress/cancel input,
+  - player damage,
+  - visible hostile monster activity,
+  - monster spell/effect disturbance,
+  - teleport/random movement,
+  - discovered trap/object/interesting event,
+  - hunger/starvation warning or other status that should demand attention.
+- Auto-rest must not hide death, save/load prompts, disk errors, or blocking
+  message prompts.
+- Auto-rest should show compact status text such as `Rest *` or `Resting`.
+
+Implementation notes:
+
+- Umoria uses `py.flags.rest < 0` for rest-until-recovered and clears it through
+  `playerDisturb`. Moria8 does not need to copy that representation exactly,
+  but it should copy the observable semantics.
+- C128 currently has special Ctrl-chord normalization for `CTRL+B` and
+  `CTRL+W`. Adding `CTRL+R` likely needs matching C128 normalization so the
+  binding works reliably across live keyboard scan paths.
+- Keep the first implementation byte-conscious. Prefer a small resident
+  auto-rest state byte/counter and reuse existing turn/post-action paths rather
+  than adding a new scheduler.
 
 Acceptance target:
 
-- A player can search to reveal a trap, press `D` plus a direction, and either
-  disarm it, fail safely, or set it off using Moria-compatible disarm odds.
+- A player can press `CTRL+R` while wounded or down mana, the game advances
+  turns until HP/mana recover, and the rest immediately stops on recovery,
+  keypress, danger, damage, or another attention-worthy event.
+
+### Align melee multi-blow feedback and blow counts with Umoria
+
+Moria8 currently performs multiple melee blows inside one attack command, but
+the player-facing message is collapsed into one summary. This makes combat feel
+too swingy and can make a multi-blow kill look like a one-hit kill. A saved C128
+gnome rogue on dungeon level 3 showed this ambiguity clearly: the character had
+a plain dagger and could appear to kill a high-HP nearby monster in "one hit",
+when the engine may have resolved several blows under one command.
+
+Upstream behavior:
+
+- Umoria calculates blows from weapon weight, STR, and DEX before the attack.
+- Umoria loops once per blow during a single attack command.
+- Each blow rolls to hit independently.
+- Each miss prints `You miss the <monster>.`
+- Each hit prints `You hit the <monster>.`
+- If a blow kills the monster, Umoria prints `You have slain the <monster>.`
+  and stops the remaining blow loop.
+- Bare hands get 2 blows with a to-hit penalty; missile/ammo melee attacks are
+  forced to 1 blow.
+
+Known Moria8 gaps:
+
+- Moria8 currently prints one aggregate attack result instead of per-blow
+  messages.
+- The saved/displayed `PL_BLOWS` value can be stale or misleading because the
+  runtime combat loop recalculates blows separately.
+- Moria8's blow table is coarser than Umoria's 7x6 STR/DEX table and may grant
+  too many blows for some light-weapon stat combinations.
+- For the observed level-3 gnome rogue with dagger, Umoria-style bucketing
+  likely yields 3 blows, while the current Moria8 table can yield 4.
+
+Required work:
+
+- Audit `combat_calc_blows` against Umoria's `playerAttackBlows`,
+  `playerAttackBlowsStrength`, `playerAttackBlowsDexterity`, and
+  `blows_table`.
+- Decide whether Moria8 should exactly port the 7x6 Umoria table or use a
+  compressed equivalent with documented deviations.
+- Make the character sheet/displayed blows match the runtime calculation, or
+  explicitly stop displaying a value that is not authoritative.
+- Change melee feedback so multiple blows are visible to the player. The
+  simplest parity target is one message per blow, with kill stopping the loop.
+- Preserve existing critical-hit and ego-damage behavior unless the audit finds
+  a specific upstream mismatch worth fixing in the same pass.
+- Add focused tests for a light weapon/high DEX case, a normal one-blow case,
+  too-heavy weapon forcing one blow, ammo forced to one blow, and per-blow
+  message/kill-loop behavior.
+
+Acceptance target:
+
+- A multi-blow attack can no longer look like a single-hit kill, and Moria8's
+  blow count for representative STR/DEX/weapon-weight combinations matches
+  Umoria or a documented intentional approximation.
 
 ### Add classic Moria chests
 
