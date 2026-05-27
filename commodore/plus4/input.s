@@ -71,7 +71,7 @@ plus4_test_key_script:
 #elif PLUS4_TEST_SCRIPTED_DUNGEON_ENTRY_PRODUCT
     .byte $4e, $41, $0d, $41, $41, $0d, $41, $20, $4c, $3e, 0 // New game, move east to stairs, descend
 #else
-    .byte $44, $59, $20, $59, 0       // D, Y, SPACE, Y
+    .byte $44, $32, $39, $0d, $33, $20, $59, 0 // D, 2, 9, RETURN, 3, SPACE, Y
 #endif
 #else
     php

@@ -223,7 +223,7 @@ plus4_storage_marker_present:
     jsr plus4_kernal_open
     bcc !cdmp_open_ok+
     sta disk_error_readst
-    jmp !cdmp_done+
+    jmp !cdmp_close+
 !cdmp_open_ok:
     jsr plus4_kernal_readst
     sta disk_error_readst
@@ -272,8 +272,6 @@ plus4_storage_marker_present:
 !cdmp_done:
     lda disk_status
     beq !cdmp_status_done+
-    lda disk_error_readst
-    bne !cdmp_status_done+
     jsr plus4_disk_read_command_status
 !cdmp_status_done:
     lda disk_status
@@ -366,12 +364,10 @@ plus4_storage_marker_write_resident:
     jsr plus4_kernal_clrchn
     lda #hal_storage_marker_file_num
     jsr plus4_kernal_close
-    // Use DOS replace syntax here. The preceding scratch is still useful for
-    // compatibility, but a stale marker file must not survive if scratch fails
-    // silently on a particular IEC drive implementation.
-    lda #hal_storage_marker_write_name_len
-    ldx #<hal_storage_marker_write_name
-    ldy #>hal_storage_marker_write_name
+    // Disk Setup already scratched any stale marker; create a fresh marker.
+    lda #hal_storage_marker_write_name_len - 1
+    ldx #<(hal_storage_marker_write_name + 1)
+    ldy #>(hal_storage_marker_write_name + 1)
     jsr plus4_kernal_setnam
     lda #hal_storage_marker_file_num
     ldx save_device

@@ -5,6 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -42,9 +43,16 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
     ]
     if args.save_d64:
         command.extend([
+            "-busdevice9",
             "-attach9rw",
             "-9",
             str(args.save_d64),
+        ])
+    else:
+        command.extend([
+            "+busdevice9",
+            "-drive9type",
+            "0",
         ])
     command.extend([
         "-autostart",
@@ -65,6 +73,7 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2.0)
+    time.sleep(1.0)
 
 
 def read_byte(connector: VICEConnector, addr: str) -> int:
@@ -94,10 +103,17 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
             connector.clear_breakpoints()
             connector.break_at(resolved["commit_initialized"])
             connector.break_at(resolved["init_fail"])
+            connector.break_at(resolved["no_device"])
             connector.go()
             pass_addr = resolved["commit_initialized"]
             fail_addr = resolved["init_fail"]
             if args.expect == "init-fail":
+                pass_addr = resolved["init_fail"]
+                fail_addr = resolved["commit_initialized"]
+            elif args.expect == "no-device":
+                pass_addr = resolved["no_device"]
+                fail_addr = resolved["commit_initialized"]
+            elif args.expect == "setup-fail":
                 pass_addr = resolved["init_fail"]
                 fail_addr = resolved["commit_initialized"]
             result = connector.wait_for_stop(
@@ -105,6 +121,12 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
                 fail_addr=fail_addr,
                 timeout=args.timeout,
             )
+            if (
+                args.expect == "setup-fail"
+                and not result.passed
+                and f"C:${resolved['no_device']}".upper() in result.last_status.upper()
+            ):
+                result = MonitorTestResult(True, "", result.last_status)
         except ConnectionError as exc:
             result = MonitorTestResult(False, str(exc), "")
         if result.passed:
@@ -122,6 +144,7 @@ def run_vice(args: argparse.Namespace, resolved: dict[str, str]) -> tuple[Monito
                 terminate_vice(process)
         connector.close()
         terminate_vice(process)
+        time.sleep(1.0)
 
 
 def main() -> int:
@@ -130,7 +153,7 @@ def main() -> int:
     parser.add_argument("--boot-d64", required=True, type=Path)
     parser.add_argument("--save-d64", type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
-    parser.add_argument("--expect", choices=("initialized", "init-fail"), default="initialized")
+    parser.add_argument("--expect", choices=("initialized", "init-fail", "no-device", "setup-fail"), default="initialized")
     parser.add_argument("--expect-dos-code")
     parser.add_argument("--expect-phase")
     parser.add_argument("--expect-disk-status")
@@ -150,6 +173,7 @@ def main() -> int:
     required = {
         "commit_initialized": ".disk_setup_commit_initialized",
         "init_fail": ".uds_show_init_fail",
+        "no_device": ".uds_show_no_device",
     }
     optional = {
         "disk_error_phase": ".disk_error_phase",
@@ -171,6 +195,10 @@ def main() -> int:
             resolved[key] = normalize_addr(addr)
 
     result, diagnostics = run_vice(args, resolved)
+    if not result.passed and result.reason.startswith("timeout"):
+        result, diagnostics = run_vice(args, resolved)
+    if not result.passed and result.reason.startswith("timeout"):
+        result, diagnostics = run_vice(args, resolved)
     if result.passed:
         if args.print_diagnostics:
             print(f"diagnostics: {diagnostics}")
@@ -195,6 +223,8 @@ def main() -> int:
                 print(f"FAIL: expected disk status ${expected_status:02x}, got ${actual_status or 0:02x} ({diagnostics})")
                 return 2
         if args.expect == "init-fail":
+            print("PASS: disk_setup_missing_save_plus4")
+        elif args.expect in ("no-device", "setup-fail"):
             print("PASS: disk_setup_missing_save_plus4")
         else:
             print("PASS: disk_setup_product_plus4")

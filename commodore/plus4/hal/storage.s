@@ -58,12 +58,17 @@ hal_storage_probe_media:
     jsr plus4_kernal_setlfs
     jsr plus4_kernal_open
     bcs !absent+
+    jsr plus4_kernal_readst
+    bne !close_absent+
     lda #hal_storage_cmd_channel
     jsr plus4_kernal_close
     jsr plus4_kernal_clrchn
     jsr plus4_bank_ram
     clc
     rts
+!close_absent:
+    lda #hal_storage_cmd_channel
+    jsr plus4_kernal_close
 !absent:
     jsr plus4_kernal_clrchn
     jsr plus4_bank_ram

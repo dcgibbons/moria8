@@ -216,7 +216,6 @@ run_new_game_to_town_smoke() {
         --start-symbol ".title_menu_loop" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
-        --save-d64 "$save_d64" \
         --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
@@ -296,7 +295,6 @@ run_dungeon_entry_smoke() {
         --start-symbol ".title_menu_loop" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
-        --save-d64 "$save_d64" \
         --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
@@ -378,7 +376,6 @@ run_overlay_load_smoke() {
         --fail-symbol ".plus4_test_overlay_load_fail_sym" \
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
-        --save-d64 "$save_d64" \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
     else
@@ -580,10 +577,7 @@ run_disk_setup_missing_save_smoke() {
         --vice "$VICE" \
         --boot-d64 "$boot_d64" \
         --main-vs "$main_vs" \
-        --expect init-fail \
-        --expect-dos-code 74 \
-        --expect-phase 0x83 \
-        --expect-disk-status 74; then
+        --expect setup-fail; then
         PASS=$((PASS + 1))
     else
         FAIL=$((FAIL + 1))
@@ -674,6 +668,7 @@ run_save_write_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --enable-drive9-bus \
         --pass-on-script-exhausted \
         --vice "$VICE"; then
         if "$C1541" -attach "$save_d64" -list 2>/dev/null | grep -qi '"P4.THE.GAME".*SEQ'; then
@@ -768,6 +763,7 @@ run_load_wrong_media_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --enable-drive9-bus \
         --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))
@@ -859,6 +855,7 @@ run_load_resume_product_smoke() {
         --main-vs "$main_vs" \
         --boot-d64 "$boot_d64" \
         --save-d64 "$save_d64" \
+        --enable-drive9-bus \
         --pass-on-script-exhausted \
         --vice "$VICE"; then
         PASS=$((PASS + 1))

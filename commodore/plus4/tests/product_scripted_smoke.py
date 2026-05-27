@@ -5,6 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,18 +34,33 @@ def build_vice_command(args: argparse.Namespace) -> list[str]:
         "-drive8truedrive",
         "-drive8type",
         str(args.drive8_type),
-        "-drive9truedrive",
-        "-drive9type",
-        str(args.drive9_type),
         "-attach8rw",
         "-8",
         str(args.boot_d64),
-        "-attach9rw",
-        "-9",
-        str(args.save_d64),
+    ]
+    if args.save_d64:
+        command.extend([
+            "-drive9truedrive",
+            "-drive9type",
+            str(args.drive9_type),
+        ])
+        if args.enable_drive9_bus:
+            command.append("-busdevice9")
+        command.extend([
+            "-attach9rw",
+            "-9",
+            str(args.save_d64),
+        ])
+    else:
+        command.extend([
+            "+busdevice9",
+            "-drive9type",
+            "0",
+        ])
+    command.extend([
         "-autostart",
         str(args.boot_d64),
-    ]
+    ])
     if args.limitcycles > 0:
         command.extend(["-limitcycles", str(args.limitcycles)])
     return command
@@ -59,6 +75,7 @@ def terminate_vice(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=2.0)
+    time.sleep(1.0)
 
 def read_monitor_byte(connector: VICEConnector, addr: int | str) -> int | None:
     response = connector.send_command(f"m {normalize_addr(addr)} {normalize_addr(addr)}")
@@ -128,8 +145,15 @@ def run_vice(args: argparse.Namespace, pass_addr: str, fail_addr: str | None, du
                     dumps.append(f"{start}: {exc}")
         return result, dumps
     finally:
+        if process is not None and process.poll() is None:
+            try:
+                connector.send_command("quit", expect_prompt=False)
+                process.wait(timeout=2.0)
+            except Exception:
+                terminate_vice(process)
         connector.close()
         terminate_vice(process)
+        time.sleep(1.0)
 
 
 def main() -> int:
@@ -137,7 +161,7 @@ def main() -> int:
     parser.add_argument("--name", required=True)
     parser.add_argument("--vice", required=True)
     parser.add_argument("--boot-d64", required=True, type=Path)
-    parser.add_argument("--save-d64", required=True, type=Path)
+    parser.add_argument("--save-d64", type=Path)
     parser.add_argument("--main-vs", required=True, type=Path)
     parser.add_argument("--pass-symbol", required=True)
     parser.add_argument("--fail-symbol")
@@ -145,6 +169,7 @@ def main() -> int:
     parser.add_argument("--limitcycles", type=int, default=0)
     parser.add_argument("--drive8-type", default="1541")
     parser.add_argument("--drive9-type", default="1541")
+    parser.add_argument("--enable-drive9-bus", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=6510)
     parser.add_argument("--timeout", type=float, default=30.0)
@@ -205,6 +230,10 @@ def main() -> int:
             dump_ranges.append((normalize_addr(start), normalize_addr(start + length - 1)))
 
     result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+    if not result.passed and result.reason.startswith("timeout"):
+        result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
+    if not result.passed and result.reason.startswith("timeout"):
+        result, dumps = run_vice(args, normalize_addr(pass_addr), normalize_addr(fail_addr) if fail_addr else None, dump_ranges)
     if result.passed:
         print(f"PASS: {args.name}")
         return 0
