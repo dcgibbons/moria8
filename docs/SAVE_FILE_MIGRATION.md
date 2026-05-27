@@ -16,6 +16,29 @@ later block is read at the wrong offset.
 
 Confidence: high.
 
+## Shipping Save Contract
+
+Moria8 v1.1.0 ships Save Format V1.
+
+V1 means:
+
+| Contract | Value |
+|---|---|
+| Item catalog size | `ITEM_TYPE_COUNT = 64` |
+| Permanent item ID range | `0-63` |
+| Known-item save shape | fixed 64-byte `id_known` block |
+| Chest state | none |
+| Extended catalog state | none |
+
+Item IDs `0-63` are the shipped catalog ABI. They must not be renumbered,
+reused for different items, or reinterpreted in later releases. Existing IDs
+may be deprecated, hidden, or made unobtainable, but their saved meaning must
+remain stable.
+
+Future item expansion must either load V1 saves through an explicit migration
+path or reject them with a clear incompatible-save message. It must not change
+`ITEM_TYPE_COUNT` and rely on the current fixed block loader to read old saves.
+
 ## Compatibility Risks
 
 | Change | Breaks old saves today? | Why |

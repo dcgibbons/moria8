@@ -146,6 +146,10 @@ Recommended conceptual structure:
 
 ## Item ID Strategy
 
+Item IDs `0-63` are the shipped v1.1.0 Save Format V1 catalog contract. They
+are append-only after v1.1.0. Full catalog work must preserve those IDs and use
+the migration rules in `docs/SAVE_FILE_MIGRATION.md`.
+
 | Approach | Max catalog | Runtime cost | Implementation risk | Verdict |
 |---|---:|---:|---:|---|
 | Keep 1-byte item IDs | 255 | low | moderate | best for abbreviated catalog |

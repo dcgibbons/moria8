@@ -39,4 +39,5 @@
 .const ICAT_DIGGING = 0
 
 // Master Item Type Count
+// Save Format V1 serializes 64 known-item bytes. Do not renumber IDs 0-63.
 .const ITEM_TYPE_COUNT = 64
