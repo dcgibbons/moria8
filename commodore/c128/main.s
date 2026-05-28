@@ -1710,7 +1710,9 @@ tramp_ui_ui_overlay_common:
     jmp tramp_ui_exit
 
 tramp_ui_char_display:
-    jmp tramp_ui_ui_overlay_common
+    lda #<ui_char_display
+    ldx #>ui_char_display
+    jmp tramp_ui_ui_overlay_patch_target
 
 tramp_ui_inv_display:
     lda #<ui_inv_display
