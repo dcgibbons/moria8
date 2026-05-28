@@ -18,7 +18,7 @@ test_bootstrap:
     :BankOutBasic()
     jmp test_start
 test_exit_trampoline:
-    ldx #29
+    ldx #33
 !tc_copy:
     lda tc_results,x
     sta $0400,x
@@ -137,7 +137,7 @@ press_key_str:
 // Test scratch
 tc_loop:    .byte 0
 tc_ok:      .byte 0
-tc_results: .fill 30, $ff      // Result buffer (copied to $0400 at end)
+tc_results: .fill 34, $ff      // Result buffer (copied to $0400 at end)
 
 test_start:
     // Seed RNG deterministically
@@ -155,6 +155,11 @@ test_start:
 
     // Initialize sound (needed to avoid crash on sound_play)
     jsr hal_sound_init
+
+    // Default to an equipped dagger so generic melee to-hit tests do not
+    // include the bare-hand penalty unless a test explicitly clears weapon.
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
 
     // ==========================================
     // Test 1: combat_calc_tohit for Warrior level 1, TOHIT=0
@@ -207,16 +212,18 @@ test_start:
 
     // ==========================================
     // Test 3: combat_calc_blows with DEX 12 (unarmed)
-    // DEX 12 → bracket 1 → blows_table[16+1] = 3 (row 4=unarmed, col 1)
+    // Umoria bare hands get exactly 2 blows.
     // ==========================================
 !t3:
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_WEAPON
     lda #12
     sta player_data + PL_DEX_CUR
 
     jsr combat_calc_blows
 
     lda zp_combat_blows
-    cmp #3
+    cmp #2
     bne !t3_fail+
     lda #$01
     sta tc_results + 2
@@ -227,16 +234,18 @@ test_start:
 
     // ==========================================
     // Test 4: combat_calc_blows with DEX 18 (unarmed)
-    // DEX 18 → bracket 3 → blows_table[16+3] = 4
+    // Umoria bare hands get exactly 2 blows.
     // ==========================================
 !t4:
+    lda #FI_EMPTY
+    sta inv_item_id + EQUIP_WEAPON
     lda #18
     sta player_data + PL_DEX_CUR
 
     jsr combat_calc_blows
 
     lda zp_combat_blows
-    cmp #4
+    cmp #2
     bne !t4_fail+
     lda #$01
     sta tc_results + 3
@@ -557,10 +566,10 @@ test_start:
     sta tc_results + 11
 
     // ==========================================
-    // Test 13: combat_critical_blow — guaranteed crit
+    // Test 13: combat_critical_blow — high plus-to-hit can crit
     // Equip heavy weapon (type 8, weight=120), high tohit (255),
-    // high level (50). Chance = 120 + 5*255 + 4*50 = 120+1275+200 = 1595.
-    // rng_range_word(5000) returns [0,4999], so ~32% chance per call.
+    // high level (50). Chance = 120 + 5*100 + 4*50 = 820.
+    // rng_range_word(5000) returns [0,4999], so ~16% chance per call.
     // Run 20 iterations — at least one should produce damage > base.
     // ==========================================
 !t13:
@@ -572,6 +581,8 @@ test_start:
 
     lda #255
     sta zp_combat_tohit
+    lda #100
+    sta player_data + PL_TOHIT
     lda #50
     sta zp_player_lvl
     sta player_data + PL_LEVEL
@@ -628,8 +639,8 @@ test_start:
     // ==========================================
     // Test 15: combat_calc_blows — STR 18 with light weapon
     // STR 18, Dagger (type 2, weight=12), DEX 18
-    // adj_weight = (18*10)/12 = 15 → bracket 4 (>=13)
-    // Row 4, Col 3 (DEX 18+) = 4 blows
+    // adj_weight = (18*10)/12 = 15 → row 6 (>=9)
+    // DEX 18 is still the <19 bucket, so this is 2 blows.
     // ==========================================
 !t15:
     lda #18
@@ -642,7 +653,7 @@ test_start:
     jsr combat_calc_blows
 
     lda zp_combat_blows
-    cmp #4
+    cmp #2
     bne !t15_fail+
     lda #$01
     sta tc_results + 14
@@ -683,7 +694,7 @@ test_start:
     // STR 14, Short Sword (type 3, weight=30), DEX 15
     // STR*15 = 210 >= 30 → ok
     // adj_weight = (14*10)/30 = 4 → bracket 1 (3-4)
-    // Row 1, Col 2 (DEX 15-17) = 2 blows
+    // Umoria row 3 (<5), col 1 (<19) = 1 blow
     // ==========================================
 !t17:
     lda #14
@@ -696,7 +707,7 @@ test_start:
     jsr combat_calc_blows
 
     lda zp_combat_blows
-    cmp #2
+    cmp #1
     bne !t17_fail+
     lda #$01
     sta tc_results + 16
@@ -707,8 +718,8 @@ test_start:
 
     // ==========================================
     // Test 18: AC from DEX only (no equipment)
-    // DEX 18 → dex_ac_bonus index 15 = 3
-    // No armor equipped → AC = 3
+    // DEX 18 -> Umoria AC adjustment 2.
+    // No armor equipped -> AC = 2
     // ==========================================
 !t18:
     // Clear all equipment slots
@@ -728,7 +739,7 @@ test_start:
     jsr player_calc_combat
 
     lda player_data + PL_AC
-    cmp #3
+    cmp #2
     bne !t18_fail+
     lda #$01
     sta tc_results + 17
@@ -774,10 +785,10 @@ test_start:
 
     // ==========================================
     // Test 20: AC from DEX + multiple armor + enchantment
-    // DEX 18 → bonus 3
+    // DEX 18 -> bonus 2
     // Chain mail (type 8, base_ac=6) in EQUIP_BODY, p1=+2
     // Iron helm (type 10, base_ac=1) in EQUIP_HEAD, p1=0
-    // AC = 3 + 6 + 2 + 1 = 12
+    // AC = 2 + 6 + 2 + 1 = 11
     // ==========================================
 !t20:
     // Clear all equipment slots
@@ -803,7 +814,7 @@ test_start:
     jsr player_calc_combat
 
     lda player_data + PL_AC
-    cmp #12
+    cmp #11
     bne !t20_fail+
     lda #$01
     sta tc_results + 19
@@ -1167,6 +1178,21 @@ test_start:
     jsr monster_init_table
     lda #0
     sta zp_dirty_count
+    lda #CLASS_WARRIOR
+    sta player_data + PL_CLASS
+    lda #50
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #18
+    sta player_data + PL_STR_CUR
+    lda #118
+    sta player_data + PL_DEX_CUR
+    lda #127
+    sta player_data + PL_TOHIT
+    lda #10
+    sta player_data + PL_TODMG
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
 
     // Place a floor tile with an occupied monster at (20,15).
     ldx #15
@@ -1209,10 +1235,120 @@ test_start:
     bne !t30_fail+
     lda #$01
     sta tc_results + 29
-    jmp !tests_done+
+    jmp !t31+
 !t30_fail:
     lda #$00
     sta tc_results + 29
+
+    // ==========================================
+    // Test 31: reported gnome rogue case uses Umoria blow buckets.
+    // STR 16, DEX 18/36 (54), dagger weight 12:
+    // adj_weight=13 -> row 6, DEX<68 -> col 2, so 3 blows.
+    // ==========================================
+!t31:
+    lda #16
+    sta player_data + PL_STR_CUR
+    lda #54
+    sta player_data + PL_DEX_CUR
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #3
+    bne !t31_fail+
+    jsr player_calc_combat
+    lda player_data + PL_TODMG
+    cmp #1                      // STR 16 -> Umoria damage adjustment +1.
+    bne !t31_fail+
+    lda #$01
+    sta tc_results + 30
+    jmp !t32+
+!t31_fail:
+    lda #$00
+    sta tc_results + 30
+
+    // ==========================================
+    // Test 32: maximum exceptional DEX reaches Umoria top bucket.
+    // STR 16, DEX 18/100 (118), dagger -> row 6, col 5 = 4 blows.
+    // ==========================================
+!t32:
+    lda #16
+    sta player_data + PL_STR_CUR
+    lda #118
+    sta player_data + PL_DEX_CUR
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #4
+    bne !t32_fail+
+    lda #$01
+    sta tc_results + 31
+    jmp !t33+
+!t32_fail:
+    lda #$00
+    sta tc_results + 31
+
+    // ==========================================
+    // Test 33: ranged launcher used in melee is forced to one blow.
+    // ==========================================
+!t33:
+    lda #18
+    sta player_data + PL_STR_CUR
+    lda #118
+    sta player_data + PL_DEX_CUR
+    lda #49                     // Short Bow
+    sta inv_item_id + EQUIP_WEAPON
+
+    jsr combat_calc_blows
+
+    lda zp_combat_blows
+    cmp #1
+    bne !t33_fail+
+    lda #$01
+    sta tc_results + 32
+    jmp !t34+
+!t33_fail:
+    lda #$00
+    sta tc_results + 32
+
+    // ==========================================
+    // Test 34: critical chance uses PL_TOHIT, not full zp_combat_tohit.
+    // Dagger + rogue level 3 + PL_TOHIT 0 -> chance 12 + 0 + 9 = 21.
+    // ==========================================
+!t34:
+    lda #2
+    sta inv_item_id + EQUIP_WEAPON
+    lda #0
+    sta inv_ego + EQUIP_WEAPON
+    sta player_data + PL_TOHIT
+    lda #255
+    sta zp_combat_tohit
+    lda #3
+    sta zp_player_lvl
+    sta player_data + PL_LEVEL
+    lda #CLASS_ROGUE
+    sta player_data + PL_CLASS
+    lda #5
+    sta cmb_damage
+
+    jsr combat_critical_blow
+
+    lda ccb_chance_lo
+    cmp #21
+    bne !t34_fail+
+    lda ccb_chance_hi
+    bne !t34_fail+
+    lda #$01
+    sta tc_results + 33
+    jmp !tests_done+
+!t34_fail:
+    lda #$00
+    sta tc_results + 33
 
 !tests_done:
     jmp test_exit_trampoline

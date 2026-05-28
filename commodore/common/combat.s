@@ -16,13 +16,14 @@ cmb_any_hit:     .byte 0        // Any blow connected this round
 cmb_buf_idx:     .byte 0        // Buffer write index for msg builder
 
 #if C128
-.const COMBAT_MSG_BUF_SIZE = 82
+.const COMBAT_MSG_BUF_SIZE = 54
 #else
 .const COMBAT_MSG_BUF_SIZE = 42
 #endif
 .const COMBAT_MSG_BUF_LAST = COMBAT_MSG_BUF_SIZE - 1
 
-// Message composition buffer. C128 uses the full 80-column message row.
+// Message composition buffer. C128 is sized for the longest current
+// combat feedback string plus a 31-byte monster name and terminator.
 combat_msg_buf:  .fill COMBAT_MSG_BUF_SIZE, 0
 
 // ============================================================
@@ -188,6 +189,19 @@ cct_lvl_offset: .byte 0
 combat_calc_tohit:
     lda #3                          // Melee BTH offset in class_properties
     ldx #0                          // Melee level adj offset
+    jsr combat_calc_tohit_common
+    lda inv_item_id + EQUIP_WEAPON
+    cmp #FI_EMPTY
+    bne !cct_done+
+    lda zp_combat_tohit
+    sec
+    sbc #9                          // Bare-hand total_to_hit penalty -3.
+    bcs !cct_store_unarmed+
+    lda #0
+!cct_store_unarmed:
+    sta zp_combat_tohit
+!cct_done:
+    rts
 
 // combat_calc_tohit_common — Shared hit chance calculation
 // Input: A = class property offset (3=melee BTH, 4=bow BTH_BOW)
@@ -297,39 +311,37 @@ combat_calc_tohit_common:
 // Uses STR-adjusted weapon weight: adj_weight = (STR * 10) / weapon_weight
 // Then indexes blows_table[adj_weight_bracket][dex_bracket].
 // Too-heavy check: if STR * 15 < weapon_weight, force 1 blow.
-// Unarmed = weight class 4 (lightest).
+// Unarmed = 2 blows. Ranged launchers/ammo used in melee = 1 blow.
 // Output: zp_combat_blows
 // Clobbers: A, X, Y, zp_math_a/b
 combat_calc_blows:
-    // DEX bracket: <10→0, 10-14→1, 15-17→2, 18+→3
+    // DEX bracket: <10, <19, <68, <108, <118, else
     lda player_data + PL_DEX_CUR
-    cmp #18
-    bcs !ccb_dex3+
-    cmp #15
-    bcs !ccb_dex2+
-    cmp #10
-    bcs !ccb_dex1+
-    // DEX < 10
     ldx #0
-    jmp !ccb_weight+
-!ccb_dex1:
-    ldx #1
-    jmp !ccb_weight+
-!ccb_dex2:
-    ldx #2
-    jmp !ccb_weight+
-!ccb_dex3:
-    ldx #3
+!ccb_dex_loop:
+    cmp blow_dex_thresholds,x
+    bcc !ccb_weight+
+    inx
+    cpx #5
+    bcc !ccb_dex_loop-
 !ccb_weight:
-    // X = dex bracket (0-3). Save it.
+    // X = dex bracket (0-5). Save it.
     stx zp_temp0
 
     // Check for weapon
-    ldy #EQUIP_WEAPON
-    lda inv_item_id,y
+    lda inv_item_id + EQUIP_WEAPON
     cmp #FI_EMPTY
     beq !ccb_unarmed+
 
+    // Ranged launchers/ammo used as melee are forced to one blow.
+    cmp #IT_MISSILE_BASE
+    bcc !ccb_get_weight+
+    cmp #55
+    bcs !ccb_get_weight+
+    lda #1
+    bne !ccb_store_blows+
+
+!ccb_get_weight:
     // Get weapon weight
     tay                         // Y = weapon type
     lda it_weight,y             // A = weapon weight (1/10 lbs)
@@ -349,8 +361,7 @@ combat_calc_blows:
     bcs !ccb_not_heavy+         // STR*15 >= weapon_weight → ok
     // Too heavy: force 1 blow
     lda #1
-    sta zp_combat_blows
-    rts
+    bne !ccb_store_blows+
 
 !ccb_not_heavy:
     // Compute adj_weight = (STR * 10) / weapon_weight
@@ -360,38 +371,29 @@ combat_calc_blows:
     ldx ccb_wt_save             // X = weapon weight (divisor)
     jsr math_div_16x8           // zp_math_a = quotient lo (adj_weight)
 
-    // Map adj_weight to bracket (0-4)
-    // adj_weight < 3 → 0, 3-4 → 1, 5-7 → 2, 8-12 → 3, >= 13 → 4
+    // Map adj_weight to Umoria bracket (0-6)
+    // <2, <3, <4, <5, <7, <9, else
     lda zp_math_a
-    cmp #13
-    bcs !ccb_br4+
-    cmp #8
-    bcs !ccb_br3+
-    cmp #5
-    bcs !ccb_br2+
-    cmp #3
-    bcs !ccb_br1+
-    lda #0
-    beq !ccb_lookup+
-!ccb_br1:
-    lda #1
-    bne !ccb_lookup+
-!ccb_br2:
-    lda #2
-    bne !ccb_lookup+
-!ccb_br3:
-    lda #3
-    bne !ccb_lookup+
-!ccb_br4:
-    lda #4
-    bne !ccb_lookup+
+    ldx #0
+!ccb_weight_loop:
+    cmp blow_weight_thresholds,x
+    bcc !ccb_weight_done+
+    inx
+    cpx #6
+    bcc !ccb_weight_loop-
+!ccb_weight_done:
+    txa
+    jmp !ccb_lookup+
 !ccb_unarmed:
-    lda #4                      // Weight class 4 (lightest)
+    lda #2
+!ccb_store_blows:
+    sta zp_combat_blows
+    rts
 !ccb_lookup:
     // A = weight class (row), zp_temp0 = dex bracket (col)
-    // Offset = weight_class * 4 + dex_bracket
-    asl
-    asl                         // * 4
+    // Offset = weight_class * 6 + dex_bracket
+    tax
+    lda blow_row_offsets,x
     clc
     adc zp_temp0
     tax
@@ -504,15 +506,14 @@ combat_roll_damage:
 
 // combat_critical_blow — Chance for weapon hits to deal 2-5x damage
 // Based on umoria playerWeaponCriticalBlow.
-// Trigger: randint(5000) <= (weapon_weight + 5*tohit + class_bth_per_level * level)
+// Trigger: randint(5000) <= (weapon_weight + 5*plus_to_hit + class_bth_per_level * level)
 // Damage tiers by (weight + randint(650)):
 //   < 400: 2x + 5, 400-699: 3x + 10, 700-899: 4x + 15, >= 900: 5x + 20
 // Input/Output: cmb_damage modified in place
 // Clobbers: A, X, Y, zp_temp0-3, zp_math_a/b
 combat_critical_blow:
     // Guard: no weapon = no crit
-    ldy #EQUIP_WEAPON
-    lda inv_item_id,y
+    lda inv_item_id + EQUIP_WEAPON
     cmp #FI_EMPTY
     bne !ccb_armed+
     rts
@@ -538,18 +539,6 @@ combat_critical_blow:
     lda #0
     sta ccb_chance_hi
 
-    // Add 5 * zp_combat_tohit
-    lda zp_combat_tohit
-    ldx #5
-    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
-    lda ccb_chance_lo
-    clc
-    adc zp_math_a
-    sta ccb_chance_lo
-    lda ccb_chance_hi
-    adc zp_math_b
-    sta ccb_chance_hi
-
     // Add class_level_adj[class*5+0] * player_level
     lda player_data + PL_CLASS
     ldx #CLASS_LVL_SIZE
@@ -565,6 +554,41 @@ combat_critical_blow:
     lda ccb_chance_hi
     adc zp_math_b
     sta ccb_chance_hi
+
+    // Add signed 5 * PL_TOHIT. This is the player's plus-to-hit, not the
+    // full BTH hit chance in zp_combat_tohit.
+    lda player_data + PL_TOHIT
+    bpl !ccb_pos_plus+
+!ccb_neg_plus:
+    eor #$ff
+    clc
+    adc #1                      // abs(PL_TOHIT)
+    ldx #5
+    jsr math_multiply
+    lda zp_math_b
+    bne !ccb_neg_floor+
+    lda ccb_chance_lo
+    sec
+    sbc zp_math_a
+    sta ccb_chance_lo
+    bcs !ccb_plus_done+
+!ccb_neg_floor:
+    lda #0
+    sta ccb_chance_lo
+    sta ccb_chance_hi
+    jmp !ccb_plus_done+
+
+!ccb_pos_plus:
+    ldx #5
+    jsr math_multiply           // zp_math_a = lo, zp_math_b = hi
+    lda ccb_chance_lo
+    clc
+    adc zp_math_a
+    sta ccb_chance_lo
+    lda ccb_chance_hi
+    adc zp_math_b
+    sta ccb_chance_hi
+!ccb_plus_done:
 
     // Roll rng_range_word(5000) — result in zp_temp2/3
     lda #<5000

@@ -6,7 +6,8 @@
 //
 // Stat encoding: values 3–18 stored as-is. 18/01–18/100 stored as 19–118.
 // Bonus tables indexed by stat-3 (16 entries for stats 3-18).
-// Stats above 18 (18/xx) use the same bonus as stat 18 (index 15).
+// Combat stat bonus tables cover plain stats 3-18. Current bonus lookup
+// treats exceptional stats (18/xx) as plain 18.
 
 // ============================================================
 // Race indices
@@ -170,27 +171,27 @@ xp_level_late_div100_hi:
 // STR to-hit bonus
 str_tohit_bonus:
     .byte <-3, <-2, <-1, <-1, 0, 0, 0, 0  // STR 3-10
-    .byte   0,   0,   0,   0, 0, 1, 1, 1  // STR 11-18
+    .byte   0,   0,   0,   0, 0, 0, 0, 1  // STR 11-18
 
 // STR damage bonus
 str_damage_bonus:
     .byte <-2, <-1, 0, 0, 0, 0, 0, 0      // STR 3-10
-    .byte   0,   0, 0, 1, 2, 3, 3, 3      // STR 11-18
+    .byte   0,   0, 0, 0, 0, 1, 2, 3      // STR 11-18
 
 // DEX to-hit bonus
 dex_tohit_bonus:
     .byte <-3, <-2, <-2, <-1, <-1, 0, 0, 0  // DEX 3-10
-    .byte   0,   0,   0,   1,   2, 3, 3, 3  // DEX 11-18
+    .byte   0,   0,   0,   0,   0, 1, 2, 3  // DEX 11-18
 
 // DEX AC bonus (positive = better AC)
 dex_ac_bonus:
     .byte <-4, <-3, <-2, <-1, 0, 0, 0, 0  // DEX 3-10
-    .byte   0,   0,   1,   2, 2, 2, 3, 3  // DEX 11-18
+    .byte   0,   0,   0,   0, 1, 1, 1, 2  // DEX 11-18
 
 // CON HP bonus (per level)
 con_hp_bonus:
     .byte <-4, <-3, <-2, <-1, 0, 0, 0, 0  // CON 3-10
-    .byte   0,   0,   0,   0, 0, 1, 2, 2  // CON 11-18
+    .byte   0,   0,   0,   0, 0, 0, 1, 2  // CON 11-18
 
 // DEX disarm bonus
 dex_disarm_bonus:
@@ -216,18 +217,26 @@ chr_sell_adj:
 // ============================================================
 // Attack blows table (STR-adjusted, umoria-faithful)
 // Rows: STR-adjusted weight bracket (adj_weight = STR*10/weapon_weight)
-//   0: adj<3 (too weak), 1: 3-4, 2: 5-7, 3: 8-12, 4: >=13 / unarmed
-// Cols: DEX bracket (0=<10, 1=10-14, 2=15-17, 3=18+)
+//   0: <2, 1: <3, 2: <4, 3: <5, 4: <7, 5: <9, 6: >=9
+// Cols: DEX bracket (<10, <19, <68, <108, <118, else)
 // Returns number of blows per round (1-4)
 // ============================================================
-.const BLOWS_COLS = 4
+.const BLOWS_COLS = 6
+blow_dex_thresholds:
+    .byte 10, 19, 68, 108, 118
+blow_weight_thresholds:
+    .byte 2, 3, 4, 5, 7, 9
+blow_row_offsets:
+    .byte 0, 6, 12, 18, 24, 30, 36
 blows_table:
-    //       DEX<10  10-14  15-17   18+
-    .byte      1,     1,     1,    1   // row 0: weak for weapon
-    .byte      1,     1,     2,    2   // row 1: fair
-    .byte      1,     2,     2,    3   // row 2: good
-    .byte      2,     2,     3,    3   // row 3: strong
-    .byte      2,     3,     3,    4   // row 4: mighty / unarmed
+    //       <10   <19   <68  <108  <118  >=118
+    .byte     1,    1,    1,    1,    1,     1  // row 0: adj <2
+    .byte     1,    1,    1,    1,    2,     2  // row 1: adj <3
+    .byte     1,    1,    1,    2,    2,     3  // row 2: adj <4
+    .byte     1,    1,    2,    2,    3,     3  // row 3: adj <5
+    .byte     1,    2,    2,    3,    3,     4  // row 4: adj <7
+    .byte     1,    2,    2,    3,    4,     4  // row 5: adj <9
+    .byte     2,    2,    3,    3,    4,     4  // row 6: adj >=9
 
 // ============================================================
 // Race name strings (screen codes, null-terminated)
