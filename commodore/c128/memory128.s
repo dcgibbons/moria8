@@ -77,13 +77,14 @@
 //   - live map span:           $4000-$730B (Phase 10.3 = 198x66)
 //   - DB/data region:          $7400-$7FFF
 //   - tier cache window:       $8000-$94F7
-//   - reserved gap 0:          $94F8-$9FFF
+//   - title-art cache:         $94F8-$9CFF
+//   - small overlay cache:     $9D00-$9FFF
 //   - overlay cache STARTUP:   $A000-$AFFF
 //   - overlay cache TOWN:      $B000-$BFFF
 //   - overlay cache DEATH:     $C000-$CFFF
 //   - reserved I/O-visible gap:$D000-$DFFF
 //   - overlay cache DUNGEON:   $E000-$EFFF
-//   - reserved top gap:        $F000-$FEFF
+//   - top common RAM:          $F000-$FEFF (shared with Bank 0; not cache-safe)
 //
 // boot128 staging source span before scrub:
 //   - $1C01-$FEFF in Bank 1, copied into Bank 0 and scrubbed page-by-page.
@@ -117,9 +118,11 @@
 .const C128_TITLE_CACHE_VALID_MARKER = $a5
 .const BANK1_TITLE_CACHE_MARKER_BASE = BANK1_RESERVED_GAP0_BASE
 .const BANK1_TITLE_CACHE_DATA_BASE   = BANK1_TITLE_CACHE_MARKER_BASE + 1
-.const BANK1_TITLE_CACHE_END         = BANK1_RESERVED_GAP0_END
+.const BANK1_TITLE_CACHE_END         = $9cff
 .const BANK1_TITLE_CACHE_MAX_LEN     = BANK1_TITLE_CACHE_END - BANK1_TITLE_CACHE_DATA_BASE + 1
 .const C128_TITLE_CACHE_MIN_REQUIRED = 593
+.const BANK1_OVERLAY_DISARM_BASE  = $9d00
+.const BANK1_OVERLAY_DISARM_END   = $9fff
 .const BANK1_OVERLAY_STARTUP_BASE = $a000
 .const BANK1_OVERLAY_STARTUP_END  = $afff
 .const BANK1_OVERLAY_TOWN_BASE    = $b000
@@ -133,7 +136,7 @@
 .const BANK1_RESERVED_TOP_BASE    = $f000
 .const BANK1_RESERVED_TOP_END     = $feff
 .const BANK1_CACHE_OWNED_BASE     = BANK1_TIER_CACHE_BASE
-.const BANK1_CACHE_OWNED_END      = BANK1_RESERVED_TOP_END
+.const BANK1_CACHE_OWNED_END      = BANK1_OVERLAY_DUNGEON_END
 
 .const MMU_SAVE_01           = $0c00
 .const MMU_SAVE_FF00         = $0c01
@@ -158,6 +161,9 @@
 .const OVERLAY_CACHE_DEATH_BASE = BANK1_OVERLAY_DEATH_BASE
 .const OVERLAY_CACHE_GEN_BASE   = BANK1_OVERLAY_DUNGEON_BASE
 .const OVERLAY_CACHE_GEN_END    = BANK1_OVERLAY_DUNGEON_END
+.const OVERLAY_CACHE_DISARM_BASE = BANK1_OVERLAY_DISARM_BASE
+.const OVERLAY_CACHE_DISARM_END  = BANK1_OVERLAY_DISARM_END
+.const C128_OVERLAY_DISARM_CACHE_PAGES = 3
 .const FLOOR_ITEM_BASE  = $1a00 // Floor item table (Bank 0)
 .const FLOOR_ITEM_END   = $1aff
 .const CREATURE_BASE    = $1b00 // Runtime scratch area (Bank 0)
@@ -571,9 +577,11 @@ c128_vdc_reg25_cached: .byte $40
 c128_vdc_reg26_cached: .byte $f0
 
 bank1_overlay_cache_slot_lo:
-    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE
+    .byte 0, <BANK1_OVERLAY_STARTUP_BASE, <BANK1_OVERLAY_TOWN_BASE, <BANK1_OVERLAY_DEATH_BASE, <BANK1_OVERLAY_DUNGEON_BASE, <BANK1_OVERLAY_HELP_BASE, <BANK1_OVERLAY_UI_BASE, <BANK1_OVERLAY_ITEMS_BASE, <BANK1_OVERLAY_DISARM_BASE
 bank1_overlay_cache_slot_hi:
-    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE
+    .byte 0, >BANK1_OVERLAY_STARTUP_BASE, >BANK1_OVERLAY_TOWN_BASE, >BANK1_OVERLAY_DEATH_BASE, >BANK1_OVERLAY_DUNGEON_BASE, >BANK1_OVERLAY_HELP_BASE, >BANK1_OVERLAY_UI_BASE, >BANK1_OVERLAY_ITEMS_BASE, >BANK1_OVERLAY_DISARM_BASE
+bank1_overlay_cache_pages:
+    .byte 0, $10, $10, $10, $10, $10, $10, $10, C128_OVERLAY_DISARM_CACHE_PAGES
 
 // Common-RAM MMU helpers copied to $0C06 at startup.
 // Labels inside the pseudopc block resolve to their runtime common addresses.
@@ -883,14 +891,17 @@ copy_to_e000:
 .assert "Title cache marker starts inside reserved gap 0", BANK1_TITLE_CACHE_MARKER_BASE >= BANK1_RESERVED_GAP0_BASE && BANK1_TITLE_CACHE_MARKER_BASE <= BANK1_RESERVED_GAP0_END, true
 .assert "Title cache data ends inside reserved gap 0", BANK1_TITLE_CACHE_DATA_BASE <= BANK1_TITLE_CACHE_END && BANK1_TITLE_CACHE_END <= BANK1_RESERVED_GAP0_END, true
 .assert "Title cache exceeds current title-art minimum", BANK1_TITLE_CACHE_MAX_LEN >= C128_TITLE_CACHE_MIN_REQUIRED, true
+:AssertRegionBefore("Title cache ends before DISARM small-overlay cache", BANK1_TITLE_CACHE_END, BANK1_OVERLAY_DISARM_BASE)
+:AssertRegionBefore("DISARM small-overlay cache ends before STARTUP overlay slot", BANK1_OVERLAY_DISARM_END, BANK1_OVERLAY_STARTUP_BASE)
 :AssertRegionBefore("STARTUP overlay slot ends before TOWN overlay slot", BANK1_OVERLAY_STARTUP_END, BANK1_OVERLAY_TOWN_BASE)
 :AssertRegionBefore("TOWN overlay slot ends before DEATH overlay slot", BANK1_OVERLAY_TOWN_END, BANK1_OVERLAY_DEATH_BASE)
 :AssertRegionBefore("DEATH overlay slot ends before reserved I/O window", BANK1_OVERLAY_DEATH_END, BANK1_RESERVED_IO_BASE)
 :AssertRegionBefore("Reserved I/O window ends before DUNGEON overlay slot", BANK1_RESERVED_IO_END, BANK1_OVERLAY_DUNGEON_BASE)
-:AssertRegionBefore("DUNGEON overlay slot ends before reserved top gap", BANK1_OVERLAY_DUNGEON_END, BANK1_RESERVED_TOP_BASE)
+.assert "DISARM small-overlay cache stays inside Bank1 cache span", BANK1_OVERLAY_DISARM_END <= BANK1_CACHE_OWNED_END, true
+.assert "DISARM small-overlay cache does not use top common RAM", BANK1_OVERLAY_DISARM_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache window matches required preload footprint", BANK1_TIER_CACHE_SIZE, TIER_PRELOAD_REQUIRED
-.assert "Cache-owned Bank1 span stays below $FF00", BANK1_CACHE_OWNED_END <= BANK1_RESERVED_TOP_END, true
+.assert "Cache-owned Bank1 span stays below top common RAM", BANK1_CACHE_OWNED_END < BANK1_RESERVED_TOP_BASE, true
 .assert "Tier cache stays below overlay cache", BANK1_TIER_CACHE_END < BANK1_OVERLAY_STARTUP_BASE, true
 .assert "Overlay cache avoids $D000-$DFFF", BANK1_OVERLAY_DEATH_END < BANK1_RESERVED_IO_BASE, true
 .assert "DUNGEON overlay slot starts after $DFFF", BANK1_OVERLAY_DUNGEON_BASE > BANK1_RESERVED_IO_END, true
-.assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_GEN_END <= BANK1_CACHE_OWNED_END, true
+.assert "Overlay cache fits in named owned Bank1 span", OVERLAY_CACHE_DISARM_END <= BANK1_CACHE_OWNED_END, true

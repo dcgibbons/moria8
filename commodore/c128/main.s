@@ -1668,8 +1668,7 @@ tramp_ui_exit:
 .const C128_UI_OVERLAY_ID = 6
 .const C128_ITEMS_OVERLAY_ID = 7
 // C128 does not use the common OVL_SPELL slot; spell execution lives in other
-// C128 payloads. Overlay ID 8 is a disk-loaded direct-disarm overlay, not a
-// Bank 1 cached overlay slot.
+// C128 payloads. Overlay ID 8 is the cached direct-disarm overlay.
 .const C128_DISARM_OVERLAY_ID = 8
 
 .macro C128UIOverlayDisplayTrampoline(target) {
@@ -3235,6 +3234,7 @@ c128_overlay_fn_guard_expect:  .byte 0
 overlay_state_block_end:
 ovl_cache_base_lo: .byte 0
 ovl_cache_base_hi: .byte 0
+ovl_cache_pages:   .byte 0
 ovl_ready_mask:
     .byte 0, %00000001, %00000010, %00000100, %00001000, %00010000, %00100000, %01000000, %10000000
 c128_cache_state_end:
@@ -3519,6 +3519,7 @@ c128_test_cache_probe_ovl_start:   .byte 0
 c128_test_cache_probe_ovl_town:    .byte 0
 c128_test_cache_probe_ovl_death:   .byte 0
 c128_test_cache_probe_ovl_gen:     .byte 0
+c128_test_cache_probe_ovl_disarm:  .byte 0
 
 c128_test_read_bank1_probe_ptr1:
     ldy #0
@@ -3563,6 +3564,13 @@ c128_test_snapshot_cache_probes:
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     sta c128_test_cache_probe_ovl_gen
+
+    lda #<BANK1_OVERLAY_DISARM_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DISARM_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    sta c128_test_cache_probe_ovl_disarm
     clc
     rts
 #endif
@@ -3579,7 +3587,7 @@ c128_test_expected_tier_bits:
     rts
 
 c128_test_expected_overlay_bits:
-    lda #%01111111
+    lda #%11111111
 #if C128_CACHE_TEST_SKIP_OVERLAY
     ldx c128_cache_test_skip_overlay
     beq !cteo_done+
@@ -3684,7 +3692,7 @@ c128_test_verify_cache_survival:
     cmp #1
     bne !ctcs_fail+
     lda c128_cache_overlay_bits
-    cmp #%01111111
+    cmp #%11111111
     bne !ctcs_fail+
 
     lda MMU_COMMON_HELPERS_BASE
@@ -3729,6 +3737,14 @@ c128_test_verify_cache_survival:
     sta zp_ptr1_hi
     jsr c128_test_read_bank1_probe_ptr1
     cmp c128_test_cache_probe_ovl_gen
+    bne !ctcs_fail+
+
+    lda #<BANK1_OVERLAY_DISARM_BASE
+    sta zp_ptr1
+    lda #>BANK1_OVERLAY_DISARM_BASE
+    sta zp_ptr1_hi
+    jsr c128_test_read_bank1_probe_ptr1
+    cmp c128_test_cache_probe_ovl_disarm
     bne !ctcs_fail+
     clc
     rts
@@ -4303,6 +4319,8 @@ ovl_items_end:
 ovl_disarm_end:
 .print "Disarm overlay: " + (ovl_disarm_end - $e000) + " bytes at $E000-$" + toHexString(ovl_disarm_end)
 .assert "Disarm overlay fits in $E000-$EFFF", ovl_disarm_end <= $f000, true
+.assert "Disarm overlay fits in small Bank 1 cache pages", (ovl_disarm_end - $e000) <= (C128_OVERLAY_DISARM_CACHE_PAGES * $100), true
+.assert "Disarm small cache pages fit non-common Bank 1 region", (BANK1_OVERLAY_DISARM_BASE + (C128_OVERLAY_DISARM_CACHE_PAGES * $100) - 1) <= BANK1_OVERLAY_DISARM_END, true
 
 // ============================================================
 // Dungeon generation overlay

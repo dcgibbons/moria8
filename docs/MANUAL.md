@@ -179,6 +179,10 @@ dexterity, class, and level affect your offense. Some monsters attack with
 status effects, spells, breath, corrosion, fear, or other dangerous abilities.
 If a new monster is hurting you faster than you can hurt it, leave.
 
+Some weapons and stat combinations give more than one melee blow in a single
+attack command. When a melee message ends with a count such as `(2/3)`, the
+first number is successful hits and the second number is total blows attempted.
+
 Monster recall display exists, but recall persistence is not complete in the
 current Commodore builds. See [MONSTERS.md](MONSTERS.md) for the shipped
 monster roster and threat notes.

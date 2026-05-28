@@ -63,8 +63,8 @@ start addresses and all cross-boundary limits.
 | `$1000-$19EC` | `128.runtime` low runtime payload |
 | `$1A00-$1AFF` | Floor-item table |
 | `$1B00-$1BFF` | Creature scratch |
-| `$1C01-$5F84` | Main program image: boot path, loaders, trampolines, wrappers |
-| `$6000-$8C33` | `128.world` resident world payload, including C128 cache/overlay state and overlay filename tables |
+| `$1C01-$5F8F` | Main program image: boot path, loaders, trampolines, wrappers |
+| `$6000-$8C3D` | `128.world` resident world payload, including C128 cache/overlay state and overlay filename tables |
 | `$8D00-$A686` | `128.item` resident item payload |
 | `$A800-$AAE8` | `128.select` resident selector payload |
 | `$AB00-$AEFF` | `128.diskio` payload |
@@ -84,8 +84,8 @@ Recent size pressure in `128.play` was handled by moving data, not by weakening
 the boundary. Combat message strings and the C128 overlay/cache state now live
 in `128.world`, while shared combat/stat helpers are externalized from the play
 payload where needed. Direct trap disarm is a separate `128.disarm` overlay
-loaded into `$E000-$EFFF`; it is intentionally disk-loaded on demand rather
-than preloaded into the seven-slot Bank 1 overlay cache.
+loaded into `$E000-$EFFF`; C128 preloads it into the small Bank 1 cache region
+at startup so gameplay disarm does not touch disk.
 
 The C128 segment definition maxima are:
 
@@ -113,19 +113,21 @@ The C128 segment definition maxima are:
 | `$4000-$730B` | Reserved future map span / live dungeon-town map ownership |
 | `$7400-$7FFF` | Bank 1 DB/data region |
 | `$8000-$94F7` | Active monster tier-cache window, 5368 bytes |
-| `$94F8-$9FFF` | C128 title cache / reserved gap |
+| `$94F8-$9CFF` | Title-art session cache |
+| `$9D00-$9FFF` | Small overlay cache region, currently `OVL_DISARM` |
 | `$A000-$AFFF` | Overlay cache slot for `OVL_STARTUP` |
 | `$B000-$BFFF` | Overlay cache slot for `OVL_TOWN` |
 | `$C000-$CFFF` | Overlay cache slot for `OVL_DEATH` |
 | `$D000-$DFFF` | I/O-visible gap; not cache-safe |
 | `$E000-$EFFF` | Overlay cache slot for `OVL_DUNGEON_GEN` |
-| `$F000-$FEFF` | Reserved top gap |
+| `$F000-$FEFF` | Top common RAM shared with Bank 0; not cache-safe |
 
 The C128 product disk carries eight overlay files: `128.start`, `128.town`,
 `128.death`, `128.gen`, `128.help`, `128.ui`, `128.items`, and `128.disarm`.
-Only the first seven have Bank 1 cache slots. `128.disarm` still executes in
-the normal `$E000-$EFFF` overlay window, but the trampoline loads it from disk
-when the player invokes direct disarm.
+All eight are preloaded into Bank 1 before gameplay. The first seven use full
+4 KB cache slots; `128.disarm` uses a page-counted small cache slot at `$9D00`
+because it currently needs only three pages. Runtime overlay fetches copy the
+descriptor's page count, not an unconditional 4 KB.
 
 The source of truth for C128 ownership constants and overlap assertions is
 `commodore/c128/memory128.s`; the product segment definitions and Bank 0

@@ -232,6 +232,7 @@ tramp_store_restock_all:
     rts
 
 tramp_store_enter:
+    inc test_store_enter_calls
     rts
 
 tramp_player_create:
@@ -698,6 +699,8 @@ test_disk_prompt_game_calls: .byte 0
 test_tramp_disk_setup_calls: .byte 0
 test_tramp_game_over_calls: .byte 0
 test_delete_savefile_calls: .byte 0
+test_store_enter_calls: .byte 0
+test_store_door_idx: .byte $ff
 msg_row1_col: .byte 0
 eff_detect_timer: .byte 0
 piw_filter: .byte 0
@@ -792,6 +795,7 @@ reset_state:
     sta test_tramp_disk_setup_calls
     sta test_tramp_game_over_calls
     sta test_delete_savefile_calls
+    sta test_store_enter_calls
     sta test_cast_ok
     sta test_save_success
     sta test_load_success
@@ -825,6 +829,7 @@ reset_state:
     sta vis_room_revealed
     lda #$ff
     sta zp_run_dir
+    sta test_store_door_idx
     lda #10
     sta zp_player_x
     sta zp_player_y
@@ -925,6 +930,12 @@ test_trap_check:
     rts
 
 test_check_store_door:
+    lda test_store_door_idx
+    cmp #$ff
+    beq !none+
+    sec
+    rts
+!none:
     clc
     rts
 
@@ -1544,8 +1555,41 @@ test_entry:
     beq *+5
     jmp test_fail
 
-    // Test 17: load_resume_game clears transient search mode state.
+    // Test 17: running onto a town store door enters the store.
     lda #17
+    sta test_case_id
+    jsr reset_state
+    lda #0
+    sta zp_player_dlvl
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    lda #4
+    sta test_store_door_idx
+    lda #CMD_RUN_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_player_try_move_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda test_store_enter_calls
+    cmp #1
+    beq *+5
+    jmp test_fail
+    lda zp_store_idx
+    cmp #4
+    beq *+5
+    jmp test_fail
+    lda zp_run_dir
+    cmp #$ff
+    beq *+5
+    jmp test_fail
+
+    // Test 18: load_resume_game clears transient search mode state.
+    lda #18
     sta test_case_id
     jsr reset_state
     lda #PLF_SEARCHING

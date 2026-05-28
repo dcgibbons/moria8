@@ -465,6 +465,8 @@ c128_select_overlay_cache_slot:
     sta ovl_cache_base_lo
     lda bank1_overlay_cache_slot_hi,x
     sta ovl_cache_base_hi
+    lda bank1_overlay_cache_pages,x
+    sta ovl_cache_pages
     rts
 
 c128_stage_overlay_to_cache:
@@ -481,7 +483,7 @@ c128_stage_overlay_to_cache:
     sta zp_ptr1_hi
     lda #$00
     sta zp_temp0
-    lda #$10
+    lda ovl_cache_pages
     sta zp_temp1
     ldy #0
 !csoc_page_loop:
@@ -516,7 +518,7 @@ c128_verify_overlay_cache_slot:
     sta zp_ptr1
     lda ovl_cache_base_hi
     sta zp_ptr1_hi
-    lda #$10
+    lda ovl_cache_pages
     sta zp_temp1
     ldy #0
 !cvoc_page_loop:
@@ -554,7 +556,7 @@ c128_fetch_overlay_from_cache:
     sta zp_ptr0
     lda #>$e000
     sta zp_ptr0_hi
-    lda #$10
+    lda ovl_cache_pages
     sta zp_temp1
     ldy #0
 !cfoc_page_loop:

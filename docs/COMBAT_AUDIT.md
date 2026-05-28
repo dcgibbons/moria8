@@ -163,7 +163,7 @@ Moria8.
 | Damage order multiplies `PL_TODMG` through ego/critical. | Fixed | Add slay/brand/critical integration regression tests. |
 | Too-heavy weapon to-hit penalty is not applied. | Fixed | Covered by focused combat test. |
 | Monster confuse-on-hit uses fixed 20 turns and lacks Umoria resistance/random stacking. | Partially fixed | Duration/stacking fixed; add resistant monster test. |
-| Direct trap disarm used flattened chance and always-safe failure. | Fixed | Formula, threshold, and bad-fail helper tests added; C128 uses disk-loaded `128.disarm` overlay. |
+| Direct trap disarm used flattened chance and always-safe failure. | Fixed | Formula, threshold, and bad-fail helper tests added; C128 preloads cached `128.disarm` overlay. |
 | Unsupported monster attack types. | Missing | Backlog as content expansion, not a combat core blocker. |
 | Aggregate melee feedback hides multiple blows. | Acceptable approximation mechanically, UX mismatch | Backlog per-blow messages if player-facing clarity is desired. |
 

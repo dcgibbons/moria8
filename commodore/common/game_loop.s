@@ -1314,21 +1314,7 @@ c128_town_move_diag_after_turn_post_action:
 #endif
 
 !post_move:
-    // Check if player stepped on a store door (town only)
-    lda zp_player_dlvl
-    bne !not_store_entry+
-    jsr check_player_on_store_door
-    bcc !not_store_entry+
-	    sta zp_store_idx
-	    jsr tramp_store_enter
-	    jsr viewport_update
-#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
-#if PERF_P1
-    jsr perf_p1_mark_full_reason_modal_restore
-#endif
-#endif
-	    jsr render_viewport
-!not_store_entry:
+    jsr try_store_entry
 #if HAL_PLATFORM_GAME_LOOP_PLAYER_MOVE_DIAG_LABELS
 c128_town_move_diag_before_status_draw:
 #endif
@@ -2079,8 +2065,6 @@ cmd_run:
 
 #if HAL_PLATFORM_GAME_LOOP_RUN_STOP_RESET_INPUT
 run_stop_reset_input_state:
-    lda #0
-    sta run_input_armed
     jmp input_run_cancel_reset
 #endif
 
@@ -2128,9 +2112,14 @@ run_step:
 	    // Check trap
 	    jsr msg_clear
 	    jsr trap_check_at_player
-	    bcc !run_no_trap+
-    jmp !run_trap_stop+         // Trap fired → stop, turn consumed
-!run_no_trap:
+    bcs !run_trap_stop+         // Trap fired → stop, turn consumed
+
+    // Town store doors are floor-position metadata, not tile types.
+    lda zp_player_dlvl
+    bne !run_not_store+
+    jsr check_player_on_store_door
+    bcs !run_stop_move+
+!run_not_store:
 
 	    // Check other stop conditions
 	    jsr run_check_stop
@@ -2331,8 +2320,26 @@ run_step:
 #endif
 #endif
 !rsm_post:
+    jsr try_store_entry
     jsr status_draw
     jmp main_loop
+
+try_store_entry:
+    lda zp_player_dlvl
+    bne !no_store+
+    jsr check_player_on_store_door
+    bcc !no_store+
+    sta zp_store_idx
+    jsr tramp_store_enter
+    jsr viewport_update
+#if HAL_PLATFORM_GAME_LOOP_PERF_P1_INSTRUMENTATION
+#if PERF_P1
+    jsr perf_p1_mark_full_reason_modal_restore
+#endif
+#endif
+    jmp render_viewport
+!no_store:
+    rts
 
 player_died:
 !player_died:

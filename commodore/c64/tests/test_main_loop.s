@@ -17,7 +17,7 @@ bootstrap:
     jmp test_start
 
 test_finish:
-    ldx #36
+    ldx #37
 !copy:
     lda tc_results,x
     sta $0400,x
@@ -133,6 +133,7 @@ tramp_store_restock_all:
     rts
 
 tramp_store_enter:
+    inc test_store_enter_calls
     rts
 
 .label tramp_item_read_scroll = item_read_scroll
@@ -247,7 +248,7 @@ random_floor_in_room:
 save_welcome_str:
     .text "WELCOME BACK" ; .byte 0
 
-tc_results: .fill 37, $ff
+tc_results: .fill 38, $ff
 
 test_cmd_idx: .byte 0
 test_cmd_len: .byte 0
@@ -302,6 +303,8 @@ test_ui_step_4: .byte 0
 test_ui_step_5: .byte 0
 test_recall_ui_calls: .byte 0
 test_help_calls: .byte 0
+test_store_enter_calls: .byte 0
+test_store_door_idx: .byte $ff
 test_key_idx: .byte 0
 test_key_len: .byte 0
 test_key_script: .fill 4, 0
@@ -449,6 +452,7 @@ reset_state:
     sta test_ui_step_5
     sta test_recall_ui_calls
     sta test_help_calls
+    sta test_store_enter_calls
     sta test_key_idx
     sta test_key_len
     sta test_last_string_lo
@@ -485,6 +489,7 @@ reset_state:
     sta recall_last_idx
     lda #$ff
     sta zp_run_dir
+    sta test_store_door_idx
     lda #0
     sta player_move_relocated
     sta zp_search_count
@@ -654,6 +659,12 @@ test_trap_check:
     rts
 
 test_check_store_door:
+    lda test_store_door_idx
+    cmp #$ff
+    beq !none+
+    sec
+    rts
+!none:
     clc
     rts
 
@@ -2164,8 +2175,45 @@ test_start:
     bne !t37_fail+
     lda #$01
     sta tc_results + 36
-    jmp test_finish
+    jmp !t38+
 !t37_fail:
     lda #$00
     sta tc_results + 36
+    jmp !t38+
+
+    // Test 38: running onto a town store door stops and enters the store.
+!t38:
+    jsr reset_state
+    lda #37
+    sta test_case_idx
+    lda #0
+    sta zp_player_dlvl
+    lda #1
+    sta test_move_ok
+    sta test_move_relocated
+    lda #4
+    sta test_store_door_idx
+    lda #CMD_RUN_E
+    sta test_cmd_script
+    lda #1
+    sta test_cmd_len
+    jsr run_case
+    lda test_player_try_move_calls
+    cmp #1
+    bne !t38_fail+
+    lda test_store_enter_calls
+    cmp #1
+    bne !t38_fail+
+    lda zp_store_idx
+    cmp #4
+    bne !t38_fail+
+    lda zp_run_dir
+    cmp #$ff
+    bne !t38_fail+
+    lda #$01
+    sta tc_results + 37
+    jmp test_finish
+!t38_fail:
+    lda #$00
+    sta tc_results + 37
     jmp test_finish
